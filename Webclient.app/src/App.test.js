@@ -17,6 +17,10 @@ jest.mock('./Components/Common/ExperienceUXLayer', () => ({
   ExperienceUXLayer: () => <div data-testid="experience-layer" />,
 }));
 
+jest.mock('./Components/Common/Loading', () => ({
+  FullScreenLoading: () => <div data-testid="loading">Yükleniyor</div>,
+}));
+
 jest.mock('./Store/Managers/WindowManager', () => ({
   WindowManager: function WindowManager() {},
 }));
