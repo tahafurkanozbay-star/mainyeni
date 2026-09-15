@@ -17,14 +17,16 @@ test('runtime config defaults to same-origin API', () => {
     expect(() => assertSafeRuntimeConfig(config)).not.toThrow();
 });
 
-test('runtime config rejects cross-origin absolute API endpoints', () => {
-    const config = createRuntimeConfig({ REACT_APP_API_URL: 'https://outside.example/api' });
-    expect(config.apiBaseUrl).toBe('/api');
+test('runtime config rejects cross-origin URLs', () => {
+    expect(createRuntimeConfig({ REACT_APP_API_URL: 'https://outside.example/api' }).apiBaseUrl).toBe('/api');
+    expect(createRuntimeConfig({ REACT_APP_API_URL: '//outside.example/api' }).apiBaseUrl).toBe('/api');
 });
 
-test('application endpoint policy accepts relative paths only', () => {
+test('application endpoint policy accepts normalized same-origin paths only', () => {
     expect(normalizeApplicationPath('/api/Gis/ConfigService/List')).toBe('/api/Gis/ConfigService/List');
+    expect(normalizeApplicationPath('api//Health')).toBe('/api/Health');
     expect(() => assertApplicationEndpoint('https://outside.example')).toThrow(AppError);
+    expect(() => assertApplicationEndpoint('//outside.example')).toThrow(AppError);
 });
 
 test('request cache is bounded and evicts oldest entries', () => {
@@ -51,7 +53,7 @@ test('safe storage removes expired entries', () => {
     expect(safeStorage.get(storage, 'temporaryState')).toBeUndefined();
 });
 
-test('normalizes common HTTP failures without exposing raw server details', () => {
+test('HTTP failures become safe application errors', () => {
     const error = normalizeAxiosError({ response: { status: 500, data: { message: 'sql password leaked' } } });
     expect(error.code).toBe('SERVER_ERROR');
     expect(error.message).not.toMatch(/sql password/i);

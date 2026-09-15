@@ -10,10 +10,8 @@ export const AppConfig = {
     },
 
     Api: {
-        // Kept as a compatibility facade for legacy modules. New code should use
-        // the platform apiClient/runtimeConfig boundary directly.
         BaseUrl: runtimeConfig.apiBaseUrl,
-        TkgmCityId: process.env.REACT_APP_TKGM_CITY_ID
+        TkgmCityId: runtimeConfig.tkgmCityId
     },
 
     Keys: {

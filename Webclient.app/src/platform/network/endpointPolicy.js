@@ -1,13 +1,7 @@
 import { AppError } from '../errors/appError';
 
-/**
- * Browser network boundary. Application API traffic should stay same-origin.
- * ArcGIS layer traffic is managed by the GIS engine and is intentionally not
- * routed through this generic application client.
- */
-
 export const isSameOriginPath = (value) =>
-    typeof value === 'string' && value.trim().startsWith('/');
+    typeof value === 'string' && value.trim().startsWith('/') && !value.trim().startsWith('//');
 
 export const assertApplicationEndpoint = (value) => {
     if (!isSameOriginPath(value)) {
@@ -20,7 +14,9 @@ export const assertApplicationEndpoint = (value) => {
 };
 
 export const normalizeApplicationPath = (value) => {
-    const path = String(value || '').trim();
-    if (!path) return '/';
-    return assertApplicationEndpoint(path.replace(/\/{2,}/g, '/'));
+    const raw = String(value || '').trim();
+    if (!raw) return '/';
+    if (/^[a-z][a-z\d+.-]*:/i.test(raw) || raw.startsWith('//')) return assertApplicationEndpoint(raw);
+    const path = `/${raw.replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
+    return assertApplicationEndpoint(path);
 };

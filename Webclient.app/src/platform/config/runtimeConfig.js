@@ -1,11 +1,3 @@
-/**
- * Public runtime configuration boundary.
- *
- * Values compiled into a browser bundle are public. This module therefore
- * accepts only routing, feature and performance configuration. Secrets,
- * passwords and privileged tokens must remain server-side.
- */
-
 const DEFAULT_API_BASE_URL = '/api';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_CACHE_TTL_MS = 30000;
@@ -16,12 +8,6 @@ const getProcessEnv = () => {
     return process.env;
 };
 
-const readEnv = (key, fallback = '') => {
-    const env = getProcessEnv();
-    const value = env[key];
-    return typeof value === 'string' ? value.trim() : fallback;
-};
-
 const parseInteger = (value, fallback, min, max) => {
     const parsed = Number.parseInt(value, 10);
     if (!Number.isFinite(parsed)) return fallback;
@@ -30,49 +16,41 @@ const parseInteger = (value, fallback, min, max) => {
 
 const normalizeApiBaseUrl = (value) => {
     const candidate = String(value || DEFAULT_API_BASE_URL).trim();
-
-    // Relative paths are always same-origin and are the preferred deployment
-    // mode for the public client.
-    if (candidate.startsWith('/')) {
+    if (candidate.startsWith('/') && !candidate.startsWith('//')) {
         return candidate.replace(/\/$/, '') || '/';
     }
 
-    // An absolute public URL is accepted only when it resolves to the current
-    // browser origin. Cross-origin API traffic must be an explicit server-side
-    // deployment concern, not a hidden client configuration escape hatch.
     try {
         const origin = typeof window !== 'undefined' ? window.location.origin : null;
         const parsed = new URL(candidate, origin || 'http://localhost');
-        if (origin && parsed.origin === origin) {
+        if (origin && parsed.origin === origin && !parsed.pathname.startsWith('//')) {
             return `${parsed.pathname}${parsed.search}`.replace(/\/$/, '') || '/';
         }
     } catch (error) {
-        // Invalid values intentionally fall back to same-origin routing.
+        // Public configuration is untrusted; invalid values intentionally fall back.
     }
-
     return DEFAULT_API_BASE_URL;
 };
 
 export const createRuntimeConfig = (source = getProcessEnv()) => {
     const env = source || {};
-    const apiBaseUrl = normalizeApiBaseUrl(env.REACT_APP_API_URL || env.REACT_APP_API_BASE_URL);
-
     return Object.freeze({
-        apiBaseUrl,
+        apiBaseUrl: normalizeApiBaseUrl(env.REACT_APP_API_URL || env.REACT_APP_API_BASE_URL),
         requestTimeoutMs: parseInteger(env.REACT_APP_API_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS, 1000, 60000),
         cacheTtlMs: parseInteger(env.REACT_APP_API_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS, 0, 600000),
         maxRetries: parseInteger(env.REACT_APP_API_MAX_RETRIES, DEFAULT_MAX_RETRIES, 0, 4),
         environment: String(env.REACT_APP_ENV || 'production').trim() || 'production',
         release: String(env.REACT_APP_VERSION || env.REACT_APP_RELEASE || 'local').trim() || 'local',
         telemetryEnabled: String(env.REACT_APP_ENABLE_TELEMETRY || 'false').toLowerCase() === 'true',
-        esriApiVersion: String(env.REACT_APP_ESRI_API_VERSION || '').trim()
+        esriApiVersion: String(env.REACT_APP_ESRI_API_VERSION || '').trim(),
+        tkgmCityId: String(env.REACT_APP_TKGM_CITY_ID || '').trim()
     });
 };
 
 export const runtimeConfig = createRuntimeConfig();
 
 export const assertSafeRuntimeConfig = (config = runtimeConfig) => {
-    if (!config.apiBaseUrl.startsWith('/')) {
+    if (!config.apiBaseUrl.startsWith('/') || config.apiBaseUrl.startsWith('//')) {
         throw new Error('API base URL must resolve to a same-origin relative path');
     }
     if (config.requestTimeoutMs < 1000 || config.requestTimeoutMs > 60000) {
