@@ -1,62 +1,65 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
+using System.Net;
 using System.Net.Mail;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Toolbox.Generic
 {
-    public class RelayMailUtility
+    public sealed class RelayMailUtility
     {
-        private string smtpServer { get; }
-        private string smtpUserName { get; }
-        private string smtpUserPass { get; }
-        private int smtpPort { get; }
+        private readonly string _smtpServer;
+        private readonly string _smtpUserName;
+        private readonly string _smtpUserPass;
+        private readonly int _smtpPort;
 
         public RelayMailUtility(string smtpServer, string smtpUserName, string smtpUserPass, int smtpPort)
         {
-            this.smtpServer = smtpServer;
-            this.smtpUserName = smtpUserName;
-            this.smtpUserPass = smtpUserPass;
-            this.smtpPort = smtpPort;
+            if (string.IsNullOrWhiteSpace(smtpServer))
+            {
+                throw new ArgumentException("SMTP server is required.", nameof(smtpServer));
+            }
+            if (smtpPort < 1 || smtpPort > 65535)
+            {
+                throw new ArgumentOutOfRangeException(nameof(smtpPort));
+            }
+
+            _smtpServer = smtpServer.Trim();
+            _smtpUserName = smtpUserName ?? string.Empty;
+            _smtpUserPass = smtpUserPass ?? string.Empty;
+            _smtpPort = smtpPort;
         }
 
-
-        public void SendMail(string _fromAdress, string _toAdress,
-                                    string _subject, string _body)
+        public void SendMail(string fromAddress, string toAddress, string subject, string body)
         {
-            try
+            if (string.IsNullOrWhiteSpace(fromAddress))
             {
-                MailMessage mail = new MailMessage();
-                
-                
-                SmtpClient SmtpServer = new SmtpClient(this.smtpServer,this.smtpPort);
-                
-                SmtpServer.UseDefaultCredentials = false;
-
-                mail.From = new MailAddress(_fromAdress);
-                mail.To.Add(_toAdress);
-                mail.Subject = _subject;
-                mail.Body = _body;
-                mail.BodyEncoding = Encoding.UTF8;
-                mail.IsBodyHtml = true;
-
-                
-                mail.Priority = MailPriority.Normal;
-                SmtpServer.DeliveryMethod = SmtpDeliveryMethod.Network;
-                SmtpServer.Port = Convert.ToInt32(this.smtpPort);
-                SmtpServer.Host = this.smtpServer;
-                
-                SmtpServer.Credentials = new System.Net.NetworkCredential(smtpUserName, smtpUserPass);
-                SmtpServer.EnableSsl = true;
-                SmtpServer.Send(mail);
+                throw new ArgumentException("Sender address is required.", nameof(fromAddress));
             }
-            catch (Exception ex)
+            if (string.IsNullOrWhiteSpace(toAddress))
             {
-                throw ex;
+                throw new ArgumentException("Recipient address is required.", nameof(toAddress));
             }
-           
 
+            using var mail = new MailMessage
+            {
+                From = new MailAddress(fromAddress),
+                Subject = subject ?? string.Empty,
+                Body = body ?? string.Empty,
+                BodyEncoding = Encoding.UTF8,
+                IsBodyHtml = true,
+                Priority = MailPriority.Normal
+            };
+            mail.To.Add(toAddress);
+
+            using var smtpClient = new SmtpClient(_smtpServer, _smtpPort)
+            {
+                UseDefaultCredentials = false,
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                Credentials = new NetworkCredential(_smtpUserName, _smtpUserPass),
+                EnableSsl = true
+            };
+
+            smtpClient.Send(mail);
         }
     }
 }

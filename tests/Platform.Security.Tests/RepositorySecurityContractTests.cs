@@ -43,24 +43,30 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void LegacyUserApiClientSecret_IsNotEmbeddedInSource()
+    public void LegacyUserApiClientSecret_IsNotEmbeddedOrSynthesizedInBrowserSource()
     {
         var apiConfiguration = Read("Api.User/Controllers/Base/ApiConfiguration.cs");
-        var authBusiness = TryRead("Webclient.app/src/Business/AuthBusiness.js");
+        var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.js");
         var env = Read("Webclient.app/.env");
 
         Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Authorization'", authBusiness, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\s*=\s*[^\s#]+", RegexOptions.IgnoreCase), env);
+        Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\s*=", RegexOptions.IgnoreCase), env);
     }
 
     [Fact]
-    public void AdminSessionStorage_DoesNotPretendBundleKeyEncryptionProtectsBearerToken()
+    public void AdminSessionStorage_DoesNotPersistBearerTokenAcrossBrowserSessions()
     {
         var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.js");
         var constants = Read("Webclient.admin/src/Core/Constants.js");
 
-        Assert.DoesNotContain("localStorage", authBusiness, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage.getItem", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage.setItem", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS.AES", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Session.Pk", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Pk:", constants, StringComparison.Ordinal);
@@ -141,11 +147,11 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void BackendCi_RestoresAuditsBuildsTestsAndPublishesOnNet10()
+    public void BackendCi_RestoresAuditsBuildsTestsAndPublishesOnPinnedNet10Sdk()
     {
         var workflow = Read(".github/workflows/platform-backend-validation.yml");
 
-        Assert.Contains("dotnet-version: '10.0.x'", workflow, StringComparison.Ordinal);
+        Assert.Contains("global-json-file: global.json", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet restore CityWorks.NetCore.sln", workflow, StringComparison.Ordinal);
         Assert.Contains("--vulnerable --include-transitive", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet build CityWorks.NetCore.sln --configuration Release --no-restore", workflow, StringComparison.Ordinal);
@@ -180,24 +186,31 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void PublicConfigurationEndpoint_IsRestrictedToGisBootstrapKey()
+    public void PublicConfigurationEndpoint_IsRestrictedToSingleServerOwnedGisBootstrapKey()
     {
         var controller = Read("Api.User/Controllers/Core/AppSettingsController.cs");
 
-        Assert.Contains("ConfigKey_GisMapConfig", controller, StringComparison.Ordinal);
-        Assert.DoesNotContain("ops.GetConfig(key)", controller, StringComparison.Ordinal);
+        Assert.Contains("private const string PublicMapConfigKey = \"GisMapConfig\"", controller, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(key?.Trim(), PublicMapConfigKey", controller, StringComparison.Ordinal);
+        Assert.Contains("operations.GetConfig(PublicMapConfigKey)", controller, StringComparison.Ordinal);
+        Assert.DoesNotContain("operations.GetConfig(key)", controller, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ApplicationApiClient_DefaultsToSameOrigin()
+    public void ApplicationApiClient_DefaultsToSameOriginThroughCentralRuntimeConfiguration()
     {
         var env = Read("Webclient.app/.env");
         var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
+        var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.js");
         var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.js");
 
         Assert.Contains("REACT_APP_API_URL=/api", env, StringComparison.Ordinal);
-        Assert.Contains("/api", appConfig, StringComparison.Ordinal);
-        Assert.Contains("same-origin", endpointPolicy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
+        Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
+        Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("CROSS_ORIGIN_BLOCKED", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("!trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)

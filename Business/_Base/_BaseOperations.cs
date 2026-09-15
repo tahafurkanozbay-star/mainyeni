@@ -1,168 +1,159 @@
-using Business.Core.Common;
 using Business.Core.Model;
-using Business.Core.ViewModel;
-using Business.Core.Context;
-using Toolbox.Security.Url;
 using Microsoft.EntityFrameworkCore;
-using Nest;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
-using Toolbox.Generic;
-using Toolbox.Serialization;
-using Toolbox.Text;
-using System.Threading.Tasks;
+using Toolbox.Security.Url;
 
 namespace Business._Base
 {
     public abstract class _BaseOperations
-    {        
-    
+    {
         #region Common Methods For Db Access
 
         /// <summary>
-        /// Returns field names for an entity
+        /// Returns field names for an entity.
         /// </summary>
-        /// <typeparam name="T">Entity Class</typeparam>
-        /// <param name="Entity">Entity</param>
-        /// <returns></returns>
-        public String[] GetFieldNames<T>(T Entity)
+        public string[] GetFieldNames<T>(T entity)
         {
-            var names = typeof(T).GetProperties()
-                        .Select(property => property.Name)
-                        .ToArray();
-
-            return names;
+            return typeof(T)
+                .GetProperties()
+                .Select(property => property.Name)
+                .ToArray();
         }
 
         /// <summary>
-        /// Gets an item from DbContext in a given expression and navigation property
+        /// Gets an item from DbContext using the given expression and navigation properties.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="db"></param>
-        /// <param name="exp"></param>
-        /// <returns></returns>
-        public T GetSingleItem<T>(DbContext db, Expression<Func<T, bool>> exp, params Expression<Func<T, object>>[] navigationProperties) where T : class
+        public T GetSingleItem<T>(
+            DbContext db,
+            Expression<Func<T, bool>> exp,
+            params Expression<Func<T, object>>[] navigationProperties)
+            where T : class
         {
-            T item = null;
-            try
+            if (db == null)
             {
-                IQueryable<T> dbQuery = db.Set<T>();
-
-                foreach (Expression<Func<T, object>> navigationProperty in navigationProperties)
-                {
-                    dbQuery = dbQuery.Include<T, object>(navigationProperty);
-                }
-                    
-                item = dbQuery
-                    .Where(exp)
-                    //                .AsNoTracking() //Don't track any changes for the selected item
-                    .FirstOrDefault(); //Apply where clause
+                throw new ArgumentNullException(nameof(db));
             }
-            catch (Exception ex)
+            if (exp == null)
             {
-                throw ex;
+                throw new ArgumentNullException(nameof(exp));
             }
 
-         
+            IQueryable<T> query = db.Set<T>();
+            foreach (var navigationProperty in navigationProperties ?? Array.Empty<Expression<Func<T, object>>>())
+            {
+                query = query.Include(navigationProperty);
+            }
 
-            return item;
+            return query.FirstOrDefault(exp);
         }
 
         /// <summary>
-        /// Gets item list from DbContext in a given expression and navigation property
+        /// Gets an item list from DbContext using the optional expression and navigation properties.
+        /// Read-only list queries are no-tracking by default.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="db"></param>
-        /// <param name="exp"></param>
-        /// <returns></returns>
-        public List<T> GetItemList<T>(DbContext db, Expression<Func<T, bool>> exp, params Expression<Func<T, object>>[] navigationProperties) where T : class
+        public List<T> GetItemList<T>(
+            DbContext db,
+            Expression<Func<T, bool>> exp,
+            params Expression<Func<T, object>>[] navigationProperties)
+            where T : class
         {
-            List<T> list = null;
-
-            try
+            if (db == null)
             {
-                IQueryable<T> dbQuery = db.Set<T>();
-
-                foreach (Expression<Func<T, object>> navigationProperty in navigationProperties)
-                    dbQuery = dbQuery.Include<T, object>(navigationProperty);
-
-                if (exp != null)
-                {
-                    list = dbQuery
-                    .Where(exp)
-                    .AsNoTracking()
-                    .ToList<T>();
-                }
-                else
-                {
-                    list = dbQuery
-                    .AsNoTracking()
-                    .ToList<T>();
-                }
-            }
-            catch (Exception ex)
-            {
-                throw ex;
+                throw new ArgumentNullException(nameof(db));
             }
 
-            return list;
+            IQueryable<T> query = db.Set<T>();
+            foreach (var navigationProperty in navigationProperties ?? Array.Empty<Expression<Func<T, object>>>())
+            {
+                query = query.Include(navigationProperty);
+            }
+
+            query = query.AsNoTracking();
+            if (exp != null)
+            {
+                query = query.Where(exp);
+            }
+
+            return query.ToList();
         }
 
-        /// <summary>
-        /// Returns true if there exists any item in DbContext
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="db"></param>
-        /// <param name="exp"></param>
-        /// <returns></returns>
-        public bool IsItemExist<T>(DbContext db, Expression<Func<T, bool>> exp, params Expression<Func<T, object>>[] navigationProperties) where T : class
+        public bool IsItemExist<T>(
+            DbContext db,
+            Expression<Func<T, bool>> exp,
+            params Expression<Func<T, object>>[] navigationProperties)
+            where T : class
         {
-            List<T> list = GetItemList(db, exp, navigationProperties);
-            if (list.Count > 0)
+            if (db == null)
             {
-                return true;
+                throw new ArgumentNullException(nameof(db));
             }
-            else
+
+            IQueryable<T> query = db.Set<T>();
+            foreach (var navigationProperty in navigationProperties ?? Array.Empty<Expression<Func<T, object>>>())
             {
-                return false;
+                query = query.Include(navigationProperty);
             }
+
+            return exp == null ? query.Any() : query.Any(exp);
         }
 
-
-        public T GetEntityByGuid<T>(DbContext db, string guid, params Expression<Func<T, object>>[] navigationProperties) where T : _BaseModel
+        public T GetEntityByGuid<T>(
+            DbContext db,
+            string guid,
+            params Expression<Func<T, object>>[] navigationProperties)
+            where T : _BaseModel
         {
-            var item=GetSingleItem<T>(db, e => !e.IsDeleted && e.Guid == guid, navigationProperties);
-            return item;
+            if (string.IsNullOrWhiteSpace(guid))
+            {
+                return null;
+            }
+
+            return GetSingleItem<T>(
+                db,
+                entity => !entity.IsDeleted && entity.Guid == guid,
+                navigationProperties);
         }
 
-        public T GetEntityByEncryptedGuid<T>(DbContext db, String encryptedGuid, params Expression<Func<T, object>>[] navigationProperties) where T : _BaseModel
+        public T GetEntityByEncryptedGuid<T>(
+            DbContext db,
+            string encryptedGuid,
+            params Expression<Func<T, object>>[] navigationProperties)
+            where T : _BaseModel
         {
-            Guid guid = ParameterEncryptionUtils.DecryptGuid(encryptedGuid);
+            var guid = ParameterEncryptionUtils.DecryptGuid(encryptedGuid);
             return GetEntityByGuid<T>(db, guid.ToString(), navigationProperties);
         }
 
-        public T GetEntityById<T>(DbContext db, int Id, params Expression<Func<T, object>>[] navigationProperties) where T : _BaseModel
+        public T GetEntityById<T>(
+            DbContext db,
+            int id,
+            params Expression<Func<T, object>>[] navigationProperties)
+            where T : _BaseModel
         {
-            return GetSingleItem<T>(db, e => !e.IsDeleted && e.Id == Id, navigationProperties);
+            return GetSingleItem<T>(
+                db,
+                entity => !entity.IsDeleted && entity.Id == id,
+                navigationProperties);
         }
 
         public void DeleteEntryPermanent(DbContext db, _BaseModel entry)
         {
-           
-                db.Entry(entry).State = EntityState.Deleted;
-                db.SaveChanges();
-            
+            if (db == null)
+            {
+                throw new ArgumentNullException(nameof(db));
+            }
+            if (entry == null)
+            {
+                throw new ArgumentNullException(nameof(entry));
+            }
+
+            db.Entry(entry).State = EntityState.Deleted;
+            db.SaveChanges();
         }
 
-        #endregion Common Methods For Db Access
-
-
-
-
-
+        #endregion
     }
 }
