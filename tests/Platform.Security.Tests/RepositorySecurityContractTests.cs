@@ -43,24 +43,30 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void LegacyUserApiClientSecret_IsNotEmbeddedInSource()
+    public void LegacyUserApiClientSecret_IsNotEmbeddedOrSynthesizedInBrowserSource()
     {
         var apiConfiguration = Read("Api.User/Controllers/Base/ApiConfiguration.cs");
-        var authBusiness = TryRead("Webclient.app/src/Business/AuthBusiness.js");
+        var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.js");
         var env = Read("Webclient.app/.env");
 
         Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\s*=\s*[^\s#]+", RegexOptions.IgnoreCase), env);
+        Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("Authorization", authBusiness, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Bearer", authBusiness, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\s*=", RegexOptions.IgnoreCase), env);
     }
 
     [Fact]
-    public void AdminSessionStorage_DoesNotPretendBundleKeyEncryptionProtectsBearerToken()
+    public void AdminSessionStorage_DoesNotPersistBearerTokenAcrossBrowserSessions()
     {
         var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.js");
         var constants = Read("Webclient.admin/src/Core/Constants.js");
 
-        Assert.DoesNotContain("localStorage", authBusiness, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage.getItem", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage.setItem", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS.AES", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Session.Pk", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Pk:", constants, StringComparison.Ordinal);
@@ -69,13 +75,16 @@ public sealed class RepositorySecurityContractTests
     [Theory]
     [InlineData("Api.Admin/Startup.cs")]
     [InlineData("Api.User/Startup.cs")]
-    public void ApiCorsPolicies_DoNotAllowArbitraryOrigins(string relativePath)
+    public void ApiCorsPolicies_AreDelegatedToCentralAllowListPlatform(string relativePath)
     {
         var startup = Read(relativePath);
+        var platform = Read("Api.Core/Platform/ApiPlatformServiceCollectionExtensions.cs");
 
         Assert.DoesNotContain("AllowAnyOrigin", startup, StringComparison.Ordinal);
         Assert.DoesNotContain("Access-Control-Allow-Origin\", \"*", startup, StringComparison.Ordinal);
-        Assert.Contains("Cors:AllowedOrigins", startup, StringComparison.Ordinal);
+        Assert.Contains("AddKentRehberiApiPlatform(Configuration)", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowAnyOrigin", platform, StringComparison.Ordinal);
+        Assert.Contains("policy.WithOrigins(origins)", platform, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -141,11 +150,11 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void BackendCi_RestoresAuditsBuildsTestsAndPublishesOnNet10()
+    public void BackendCi_RestoresAuditsBuildsTestsAndPublishesOnPinnedNet10Sdk()
     {
         var workflow = Read(".github/workflows/platform-backend-validation.yml");
 
-        Assert.Contains("dotnet-version: '10.0.x'", workflow, StringComparison.Ordinal);
+        Assert.Contains("global-json-file: global.json", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet restore CityWorks.NetCore.sln", workflow, StringComparison.Ordinal);
         Assert.Contains("--vulnerable --include-transitive", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet build CityWorks.NetCore.sln --configuration Release --no-restore", workflow, StringComparison.Ordinal);
@@ -180,23 +189,28 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void PublicConfigurationEndpoint_IsRestrictedToGisBootstrapKey()
+    public void PublicConfigurationEndpoint_UsesSingleServerOwnedGisBootstrapKey()
     {
         var controller = Read("Api.User/Controllers/Core/AppSettingsController.cs");
+        var configuration = Read("Business/Core/Common/Configuration.cs");
 
-        Assert.Contains("ConfigKey_GisMapConfig", controller, StringComparison.Ordinal);
-        Assert.DoesNotContain("ops.GetConfig(key)", controller, StringComparison.Ordinal);
+        Assert.Contains("ConfigKey_GisMapConfig", configuration, StringComparison.Ordinal);
+        Assert.Contains("Configuration.ConfigKey_GisMapConfig", controller, StringComparison.Ordinal);
+        Assert.Contains("operations.GetConfig(Configuration.ConfigKey_GisMapConfig)", controller, StringComparison.Ordinal);
+        Assert.DoesNotContain("operations.GetConfig(key)", controller, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ApplicationApiClient_DefaultsToSameOrigin()
+    public void ApplicationApiClient_DefaultsToSameOriginThroughCentralRuntimeConfiguration()
     {
         var env = Read("Webclient.app/.env");
         var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
+        var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.js");
         var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.js");
 
         Assert.Contains("REACT_APP_API_URL=/api", env, StringComparison.Ordinal);
-        Assert.Contains("/api", appConfig, StringComparison.Ordinal);
+        Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
+        Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
         Assert.Contains("same-origin", endpointPolicy, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -205,12 +219,6 @@ public sealed class RepositorySecurityContractTests
         var path = Path.Combine(RepositoryRoot.Value, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Assert.True(File.Exists(path), $"Expected repository file was not found: {relativePath} ({path})");
         return File.ReadAllText(path);
-    }
-
-    private static string TryRead(string relativePath)
-    {
-        var path = Path.Combine(RepositoryRoot.Value, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
     }
 
     private static string FindRepositoryRoot()
