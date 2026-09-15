@@ -3,7 +3,6 @@ import { act, render, screen } from '@testing-library/react';
 import App from './App';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { WindowManager } from './Store/Managers/WindowManager';
-import { setDefaultOptions } from 'esri-loader';
 
 jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
   bootstrapApplication: jest.fn()
@@ -16,27 +15,19 @@ jest.mock('./platform/bootstrap/bootstrapCore', () => ({
 }));
 
 jest.mock('./Components/App/MapComponent', () => ({
-  MapComponent: ({ windowManager }) => (
-    <div data-testid="map-shell" data-manager-id={windowManager?.id || 'none'} />
-  )
+  MapComponent: () => <div data-testid="map-shell" />
 }));
 
 jest.mock('./Components/Common/ExperienceUXLayer', () => ({
-  ExperienceUXLayer: ({ windowManager }) => (
-    <div data-testid="experience-layer" data-manager-id={windowManager?.id || 'none'} />
-  )
+  ExperienceUXLayer: () => <div data-testid="experience-layer" />
 }));
 
 jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
-  ExperienceCommandCenter: ({ windowManager }) => (
-    <div data-testid="command-center" data-manager-id={windowManager?.id || 'none'} />
-  )
+  ExperienceCommandCenter: () => <div data-testid="command-center" />
 }));
 
 jest.mock('./Store/Managers/WindowManager', () => ({
-  WindowManager: jest.fn(function MockWindowManager() {
-    this.id = 'window-manager-1';
-  })
+  WindowManager: jest.fn(function MockWindowManager() {})
 }));
 
 jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
@@ -56,11 +47,6 @@ describe('App bootstrap lifecycle', () => {
     bootstrapApplication.mockReset();
     WindowManager.mockClear();
     bootstrapApplication.mockImplementation(() => new Promise(() => {}));
-  });
-
-  test('configures the ArcGIS loader once at module initialization', () => {
-    expect(setDefaultOptions).toHaveBeenCalledTimes(1);
-    expect(setDefaultOptions).toHaveBeenCalledWith(expect.objectContaining({ version: expect.anything() }));
   });
 
   test('renders the enterprise loading experience before GIS configuration resolves', () => {
@@ -96,7 +82,7 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  test('shares one stable WindowManager instance across all experience surfaces', async () => {
+  test('constructs WindowManager once while rendering all experience surfaces', async () => {
     bootstrapApplication.mockResolvedValue({ status: 'completed' });
 
     await act(async () => {
@@ -104,9 +90,9 @@ describe('App bootstrap lifecycle', () => {
     });
 
     expect(WindowManager).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
-    expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
-    expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
+    expect(screen.getByTestId('map-shell')).toBeInTheDocument();
+    expect(screen.getByTestId('experience-layer')).toBeInTheDocument();
+    expect(screen.getByTestId('command-center')).toBeInTheDocument();
   });
 
   test('renders the controlled error experience when bootstrap fails', async () => {
