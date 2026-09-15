@@ -11,15 +11,14 @@ import { MapComponent } from './Components/App/MapComponent';
 import { Constants_LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
-import { ConfigurationBusiness } from './Business/ConfigurationBusiness';
-import MapManager from './Store/Managers/MapManager';
 import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
-import { CommonBusiness } from './Business/CommonBusiness';
 import { setDefaultOptions } from 'esri-loader';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
+import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
+import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
 
 function App() {
   const windowManager = useWindowManager();
@@ -27,36 +26,21 @@ function App() {
 
   useEffect(() => {
     setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
-  }, []);
+    const controller = new AbortController();
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadConfiguration = async () => {
-      try {
-        const [mapConfigResult, configServicesResult] = await Promise.all([
-          ConfigurationBusiness.GetMapConfiguration(),
-          ConfigurationBusiness.GetConfigServices()
-        ]);
-
-        if (cancelled) return;
-
-        if (mapConfigResult.isSuccess && configServicesResult.isSuccess) {
-          MapManager.SetMapConfiguration(JSON.parse(mapConfigResult.data.configValue));
-          const configServices = configServicesResult.data || [];
-          configServices.forEach(service => CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service), "Appjs"));
-          MapManager.SetConfigurationServices(configServices);
+    bootstrapApplication({ signal: controller.signal })
+      .then(() => {
+        if (!controller.signal.aborted) {
           setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
-        } else {
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted && !isBootstrapAbortError(error)) {
           setConfigLoadStatus(Constants_LoadingStatus.ERROR);
         }
-      } catch (error) {
-        if (!cancelled) setConfigLoadStatus(Constants_LoadingStatus.ERROR);
-      }
-    };
+      });
 
-    loadConfiguration();
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, []);
 
   return (

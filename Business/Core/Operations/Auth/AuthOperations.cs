@@ -1,259 +1,217 @@
-﻿using System.Data;
-using System;
-using System.Linq;
 using Business._Base;
 using Business.Core.Common;
 using Business.Core.Context;
 using Business.Core.Model;
 using Business.Core.ViewModel;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
 using Toolbox.Generic;
-using Toolbox.Security;
-using Toolbox.Security.Cryptography;
 using Toolbox.Security.Jwt;
-using Toolbox.Security.Password;
 using Toolbox.Security.Url;
 using Toolbox.Text;
-using System.Threading.Tasks;
-using Toolbox.Date;
 
 namespace Business.Core.Operations
 {
     public class AuthOperations : _BaseOperations
     {
-        private BusinessContext db;
-        private AuthPasswordOperations authPasswordOperations;
+        private readonly BusinessContext db;
+        private readonly AuthPasswordOperations authPasswordOperations;
 
         public AuthOperations(BusinessContext context)
         {
-            this.db = context;
-            this.authPasswordOperations=new AuthPasswordOperations(context);
+            db = context ?? throw new ArgumentNullException(nameof(context));
+            authPasswordOperations = new AuthPasswordOperations(context);
         }
 
-        ///User Login - Kullanıcı Girişi
+        /// <summary>User Login - Kullanıcı Girişi</summary>
         public ServiceResult<SessionInfo> LoginUser(UserAccountLoginViewModel viewModel)
         {
             var validationResult = validateLoginViewModel(viewModel);
-
             if (!validationResult.IsSuccess)
             {
-                return new ServiceResult<SessionInfo>(ServiceResultType.Error,validationResult.Message,null);
+                return new ServiceResult<SessionInfo>(ServiceResultType.Error, validationResult.Message, null);
             }
 
-            bool isAuthenticated = false;
+            var username = TextUtils.CleanString(viewModel.UserName.Trim().ToLowerInvariant());
+            var accounts = db.UserAccounts
+                .Where(x => x.UserName.ToLower().Trim() == username && !x.IsDeleted && x.IsActive)
+                .ToList();
 
-            var username = TextUtils.CleanString(viewModel.UserName.Trim().ToLower());
+            var atIndex = username.LastIndexOf('@');
+            var ldapUsername = atIndex > 0 ? username.Substring(0, atIndex) : username;
+            var domainName = atIndex > 0 && atIndex < username.Length - 1
+                ? username.Substring(atIndex + 1)
+                : string.Empty;
 
-            int c = db.UserAccounts.Count();
-            var list = db.UserAccounts
-                        .Where(x =>x.UserName.ToLower().Trim() == username && !x.IsDeleted && x.IsActive)
-                        .ToList();
-
-            //LDAP Kontrolü
-            string ldapUsername = username.Split('@')[0];
-            string domainName = username.Split('@')[1];
-            if (domainName == Configuration.LDAP_DOMAIN)
+            var ldapDomain = Configuration.LDAP_DOMAIN?.Trim();
+            if (!string.IsNullOrWhiteSpace(ldapDomain) &&
+                !string.IsNullOrWhiteSpace(Configuration.LDAP_SERVER) &&
+                string.Equals(domainName, ldapDomain, StringComparison.OrdinalIgnoreCase))
             {
-                //LDAP User
-                var ldapUtility =new LdapUtility(new LdapConfig(){
-                        
-                        UserDomainName = Configuration.LDAP_DOMAIN,
-                        Path = "/"
-                    });
-
-                isAuthenticated = ldapUtility.Login(ldapUsername, viewModel.Password);
-
-                if (isAuthenticated)
+                var ldapUtility = new LdapUtility(new LdapConfig
                 {
-                    if (list?.Count() == 0) //Eğer ldap kullanıcısı sistemde yoksa sisteme tanımlanır
+                    UserDomainName = ldapDomain,
+                    Server = Configuration.LDAP_SERVER,
+                    Port = Configuration.LDAP_PORT,
+                    SecureSocketLayer = Configuration.LDAP_USE_SSL,
+                    BindDomain = Configuration.LDAP_BIND_DOMAIN
+                });
+
+                if (ldapUtility.Login(ldapUsername, viewModel.Password))
+                {
+                    var userAccount = accounts.FirstOrDefault();
+                    if (userAccount == null)
                     {
-                        //if user not exists in db create new record
-                        var model = new Model.UserAccount();
-                        model.UserName = TextUtils.CleanString(username);
-                        model.FirstName = TextUtils.CleanString(TextUtils.Capitalize(username.Trim().ToLower()));
-                        model.LastName = "";
-                        model.IsSuperUser = false;
-                        model.AccountType = UserAccountType.LDAP;
-                        model.IsActive = true; //Kurum içi kullanıcılar otomatik olarak onaylanacaktır
-                        model.Roles = ""; //Kurum içi kullanıcılar seçilen role atanacaktır
-                        var salt = CryptoUtils.CreateRandomSalt();
-                        model.Salt = salt;
-                        model.Password = "-";
-                        using (db)
+                        userAccount = new UserAccount
                         {
-                            model.SetCreate(-2);
-                            db.UserAccounts.Add(model);
-                            db.SaveChanges();
-                        }
+                            UserName = username,
+                            FirstName = TextUtils.Capitalize(ldapUsername.Trim().ToLowerInvariant()),
+                            LastName = string.Empty,
+                            IsSuperUser = false,
+                            AccountType = UserAccountType.LDAP,
+                            IsActive = true,
+                            Roles = string.Empty,
+                            Salt = string.Empty,
+                            Password = "-"
+                        };
+                        userAccount.SetCreate(-2);
+                        db.UserAccounts.Add(userAccount);
+                        db.SaveChanges();
                     }
 
-                    var userAccount =db.UserAccounts
-                            .Where(x =>x.UserName.ToLower().Trim() == username &&!x.IsDeleted)
-                            .ToList()
-                            .FirstOrDefault();
-
-                    var sessionInfo = createSession(userAccount);
-                    return new ServiceResult<SessionInfo>(ServiceResultType.Success,sessionInfo);
+                    return new ServiceResult<SessionInfo>(
+                        ServiceResultType.Success,
+                        createSession(userAccount));
                 }
             }
 
-
-            //EXTERNAL USER
-            //Eğer ldap kullanıcısı değilse
-            if (list?.Count() > 0)
+            var externalAccount = accounts.FirstOrDefault(x => x.AccountType == UserAccountType.EXTERNAL);
+            if (externalAccount == null)
             {
-                var userAccount = list.FirstOrDefault();
+                return InvalidCredentials();
+            }
 
-                var encryptedPassword = authPasswordOperations.EncryptPassword(viewModel.Password, userAccount.Salt);
-                if (encryptedPassword == userAccount.Password)
-                {
-                    var sessionInfo = createSession(userAccount);
-                    return new ServiceResult<SessionInfo>(ServiceResultType
-                            .Success,
-                        sessionInfo);
-                }
-                else
-                {
-                    return new ServiceResult<SessionInfo>(ServiceResultType.Error,"Wrong username or password",null);
-                }
-            }
-            else
+            if (!authPasswordOperations.VerifyPassword(
+                    viewModel.Password,
+                    externalAccount.Password,
+                    externalAccount.Salt,
+                    out var needsRehash))
             {
-                return new ServiceResult<SessionInfo>(ServiceResultType.Error,
-                    "Wrong username or password",
-                    null);
+                return InvalidCredentials();
             }
+
+            if (needsRehash)
+            {
+                externalAccount.Password = authPasswordOperations.HashPassword(viewModel.Password);
+                externalAccount.Salt = string.Empty;
+                db.Entry(externalAccount).Property(x => x.Password).IsModified = true;
+                db.Entry(externalAccount).Property(x => x.Salt).IsModified = true;
+                db.SaveChanges();
+            }
+
+            return new ServiceResult<SessionInfo>(
+                ServiceResultType.Success,
+                createSession(externalAccount));
         }
 
-
-        ///User Logout - Kullanıcı sistemden çıkış
         public ServiceResult LogoutUser(UserSessionViewModel session)
         {
-            //TODO: Invalidate token
-            //TODO: Log logout process
+            // Access tokens are short-lived and signed. Server-side revocation/session persistence
+            // is intentionally tracked as a separate migration before refresh tokens are relied on.
             return new ServiceResult(ServiceResultType.Success);
         }
 
-
-        
-        public ServiceResult ChangePasswordFromProfile( UserAccountChangePasswordViewModel viewModel, ClientRequestInfo info, UserSessionViewModel session)
+        public ServiceResult ChangePasswordFromProfile(
+            UserAccountChangePasswordViewModel viewModel,
+            ClientRequestInfo info,
+            UserSessionViewModel session)
         {
-            var userAccount = db.UserAccounts.Where(x => x.Id == session.UserId).ToList().FirstOrDefault();
-
-            if (userAccount == null)
+            if (viewModel == null || session == null)
             {
-                return new ServiceResult(ServiceResultType.Error, "");
+                return new ServiceResult(ServiceResultType.Error, "Geçersiz istek");
             }
 
-             var encryptedPassword = authPasswordOperations.EncryptPassword(viewModel.OldPassword, userAccount.Salt);
-                if (encryptedPassword != userAccount.Password)
-                {
-                    return new ServiceResult(ServiceResultType.Error,"Wrong username or password");
-                }
-        
-            //Şifreyi değiştir
-            var salt = CryptoUtils.CreateRandomSalt();
-            userAccount.Password = authPasswordOperations.EncryptPassword(viewModel.NewPassword, salt);
-            userAccount.Salt = salt;
+            var newPasswordValidation = authPasswordOperations.ValidatePassword(viewModel.NewPassword);
+            if (!newPasswordValidation.IsSuccess)
+            {
+                return newPasswordValidation;
+            }
 
-            db.Entry(userAccount).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+            if (!string.Equals(viewModel.NewPassword, viewModel.NewPasswordRepeat, StringComparison.Ordinal))
+            {
+                return new ServiceResult(ServiceResultType.Error, "Şifre ve tekrarı birbiriyle uyuşmuyor");
+            }
 
+            var userAccount = db.UserAccounts
+                .FirstOrDefault(x => x.Id == session.UserId && !x.IsDeleted && x.IsActive);
+            if (userAccount == null)
+            {
+                return new ServiceResult(ServiceResultType.Error, "Kullanıcı bulunamadı");
+            }
+
+            if (!authPasswordOperations.VerifyPassword(
+                    viewModel.OldPassword,
+                    userAccount.Password,
+                    userAccount.Salt,
+                    out _))
+            {
+                return new ServiceResult(ServiceResultType.Error, "Wrong username or password");
+            }
+
+            userAccount.Password = authPasswordOperations.HashPassword(viewModel.NewPassword);
+            userAccount.Salt = string.Empty;
+            db.Entry(userAccount).State = EntityState.Modified;
             db.SaveChanges();
-            //Task.Run(() => { authMailOperations.SendPasswordChangeEmail(info, userAccount); });
-            
+
             return new ServiceResult(ServiceResultType.Success, "");
         }
 
-
-        private ServiceResult validateCreateViewModel(UserAccountCreateViewModel viewModel)
-        {
-            if (String.IsNullOrEmpty(viewModel.username))
-            {
-                return new ServiceResult(ServiceResultType.Error,
-                    "Kullanıcı adı boş olamaz");
-            }
-            else
-            {
-                if (
-                    viewModel
-                        .username
-                        .Trim()
-                        .ToLower()
-                        .Contains(Configuration.LDAP_DOMAIN)
-                )
-                {
-                    return new ServiceResult(ServiceResultType.Error,
-                        "Bu kullanıcı ile buradan kayıt olamazsınız, lütfen yöneticinize başvurun");
-                }
-            }
-
-            if (!String.IsNullOrEmpty(viewModel.password))
-            {
-                var passwordValidationResult= authPasswordOperations.ValidatePassword(viewModel.password);
-
-                if(!passwordValidationResult.IsSuccess){
-                    return passwordValidationResult;
-                }
-
-                if (!String.IsNullOrEmpty(viewModel.passwordrepeat))
-                {
-                    if (viewModel.password != viewModel.passwordrepeat)
-                    {
-                        return new ServiceResult(ServiceResultType.Error,"Şifre ve tekrarı birbiriyle uyuşmuyor");
-                    }
-                }
-                else
-                {
-                    return new ServiceResult(ServiceResultType.Error,"Şifre tekrarı boş olamaz");
-                }
-            }
-            else
-            {
-                return new ServiceResult(ServiceResultType.Error, "Şifre boş olamaz");
-            }
-
-            return new ServiceResult(ServiceResultType.Success);
-        }
-
-
         private ServiceResult validateLoginViewModel(UserAccountLoginViewModel viewModel)
         {
-            if (String.IsNullOrEmpty(viewModel.UserName))
+            if (viewModel == null || string.IsNullOrWhiteSpace(viewModel.UserName))
             {
                 return new ServiceResult(ServiceResultType.Error, "Kullanıcı adı boş olamaz");
             }
 
-            var passwordValidationResult= authPasswordOperations.ValidatePassword(viewModel.Password);
-
-            if(!passwordValidationResult.IsSuccess){
-                return passwordValidationResult;
+            // Login accepts legacy password lengths so an existing account can authenticate once
+            // and be transparently rehashed. New password writes use the stronger policy.
+            if (string.IsNullOrEmpty(viewModel.Password) || viewModel.Password.Length > Configuration.MAX_PASSWORD_LENGTH)
+            {
+                return new ServiceResult(ServiceResultType.Error, "Wrong username or password");
             }
 
             return new ServiceResult(ServiceResultType.Success);
         }
 
-
+        private static ServiceResult<SessionInfo> InvalidCredentials()
+        {
+            return new ServiceResult<SessionInfo>(
+                ServiceResultType.Error,
+                "Wrong username or password",
+                null);
+        }
 
         private SessionInfo createSession(UserAccount userAccount)
         {
-            //TODO: Halihazırda son 1 saatte açık session varsa o bilgileri döndür
-            var encryptedGuid =ParameterEncryptionUtils.EncryptGuid(Guid.Parse(userAccount.Guid));
+            if (userAccount == null || string.IsNullOrWhiteSpace(userAccount.Guid))
+            {
+                throw new InvalidOperationException("Cannot create a session for an invalid user account.");
+            }
 
-            //Yoksa yeni session oluştur
-            var sessionInfo =
-                new SessionInfo()
-                {
-                    AccessToken = JwtUtils.GenerateToken(encryptedGuid),
-                    RefreshToken = JwtUtils.GenerateToken(encryptedGuid),
-                    FirstName = userAccount.FirstName,
-                    LastName = userAccount.LastName,
-                    SessionId = Guid.NewGuid().ToString(),
-                    SessionStart = DateTime.Now.ToString(),
-                    UserName = userAccount.UserName,
-                    AccountType = userAccount.AccountType,
-                    Roles = userAccount.Roles
-                };
-            
-            return sessionInfo;
+            var encryptedGuid = ParameterEncryptionUtils.EncryptGuid(Guid.Parse(userAccount.Guid));
+            return new SessionInfo
+            {
+                AccessToken = JwtUtils.GenerateToken(encryptedGuid),
+                RefreshToken = JwtUtils.GenerateToken(encryptedGuid),
+                FirstName = userAccount.FirstName,
+                LastName = userAccount.LastName,
+                SessionId = Guid.NewGuid().ToString(),
+                SessionStart = DateTime.UtcNow.ToString("O"),
+                UserName = userAccount.UserName,
+                AccountType = userAccount.AccountType,
+                Roles = userAccount.Roles
+            };
         }
     }
 }
