@@ -14,7 +14,7 @@ jest.mock('esri-loader', () => ({
     }
     if (name === 'esri/tasks/support/Query') return class Query { };
     return class Module { };
-  })),
+  }))),
 }));
 
 jest.mock('../Business/CommonBusiness', () => ({
