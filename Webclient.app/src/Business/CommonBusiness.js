@@ -32,6 +32,12 @@ const findService = title => {
         || ArrayHelper.Find(services, "Title", title);
 };
 
+const createServiceError = title => {
+    const error = new Error(`Servis bulunamadı (${title})`);
+    error.type = Constants_ServiceResultType.Error;
+    return error;
+};
+
 const escapeSqlLiteral = value => String(value ?? "").replace(/'/g, "''");
 
 const safeObjectIds = values => (values || [])
@@ -87,7 +93,7 @@ const addWebsiteSection = (parent, value) => {
 
 const createFeatureLayer = async serviceTitle => {
     const service = findService(serviceTitle);
-    if (!service) throw new Error(`Servis bulunamadı (${serviceTitle})`);
+    if (!service) throw createServiceError(serviceTitle);
     const [FeatureLayer] = await loadModules(["esri/layers/FeatureLayer"]);
     return new FeatureLayer({ url: CommonBusiness.GenerateUrl(service) });
 };
@@ -104,6 +110,53 @@ const buildPopupActions = () => ([
         image: "images/icons/map/streetView.png"
     }
 ]);
+
+const buildDefinitionExpression = query => {
+    let expression = "1=1";
+    if (!query) return expression;
+
+    if (!IsNull(query.name) && String(query.name).trim()) {
+        const searchText = escapeSqlLiteral(
+            TextHelper.RemoveTurkishChars(TextHelper.TurkishToUpper(String(query.name).trim()))
+        );
+        expression += ` AND UPPER(adi) LIKE '%${searchText}%'`;
+    }
+
+    if (!query.showNearby) {
+        if (!IsNull(query.districtId) && String(query.districtId) !== "") {
+            expression += ` AND ilceid = '${escapeSqlLiteral(query.districtId)}'`;
+        }
+        if (!IsNull(query.nbhoodId) && String(query.nbhoodId) !== "") {
+            expression += ` AND mahalleid = '${escapeSqlLiteral(query.nbhoodId)}'`;
+        }
+    }
+
+    return expression;
+};
+
+const applyQueryToFeatureLayer = async (layer, query) => {
+    if (!layer) return layer;
+    layer.definitionExpression = buildDefinitionExpression(query);
+
+    if (!query?.showNearby) return layer;
+    if (!query.userLocation || !Number.isFinite(Number(query.bufferDistance))) {
+        layer.definitionExpression += " AND 1=0";
+        return layer;
+    }
+
+    const objectIds = safeObjectIds(await layer.queryObjectIds({
+        where: "1=1",
+        geometry: query.userLocation,
+        distance: Number(query.bufferDistance) * 100,
+        units: "meters",
+        spatialRelationship: "intersects"
+    }));
+
+    layer.definitionExpression += objectIds.length
+        ? ` AND objectid IN (${objectIds.join(",")})`
+        : " AND 1=0";
+    return layer;
+};
 
 export const CommonBusiness = {
     _Cache: {
@@ -421,9 +474,7 @@ export const CommonBusiness = {
             attachmentQueryUrl
         ) => {
             const queryService = findService(queryServiceTitle);
-            if (!queryService) {
-                throw { type: Constants_ServiceResultType.Error, message: `Servis bulunamadı (${queryServiceTitle})` };
-            }
+            if (!queryService) throw createServiceError(queryServiceTitle);
 
             await CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(queryService));
             if (showAttachments && attachmentQueryUrl) {
@@ -448,6 +499,8 @@ export const CommonBusiness = {
                     actions: buildPopupActions()
                 }
             });
+
+            await applyQueryToFeatureLayer(layer, query);
             return { layerObj: layer };
         },
 
@@ -460,9 +513,7 @@ export const CommonBusiness = {
             attachmentQueryUrl
         ) => {
             const queryService = findService(queryServiceTitle);
-            if (!queryService) {
-                throw { type: Constants_ServiceResultType.Error, message: `Servis bulunamadı (${queryServiceTitle})` };
-            }
+            if (!queryService) throw createServiceError(queryServiceTitle);
 
             await CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(queryService));
             if (showAttachments && attachmentQueryUrl) {
@@ -491,36 +542,7 @@ export const CommonBusiness = {
 
             const layer = await CommonBusiness.CreateLayer(layerProperties);
             if (!layer) throw new Error("Harita katmanı oluşturulamadı.");
-            layer.definitionExpression = "1=1";
-
-            const options = { where: "1=1" };
-            if (query) {
-                if (!IsNull(query.name)) {
-                    const searchText = escapeSqlLiteral(
-                        TextHelper.RemoveTurkishChars(TextHelper.TurkishToUpper(String(query.name).trim()))
-                    );
-                    layer.definitionExpression += ` AND UPPER(adi) LIKE '%${searchText}%'`;
-                }
-
-                if (query.showNearby) {
-                    options.geometry = query.userLocation;
-                    options.distance = Number(query.bufferDistance || 0) * 100;
-                    options.units = "meters";
-                    options.spatialRelationship = "intersects";
-                } else {
-                    if (!IsNull(query.districtId)) {
-                        layer.definitionExpression += ` AND ilceid = '${escapeSqlLiteral(query.districtId)}'`;
-                    }
-                    if (!IsNull(query.nbhoodId)) {
-                        layer.definitionExpression += ` AND mahalleid = '${escapeSqlLiteral(query.nbhoodId)}'`;
-                    }
-                }
-            }
-
-            const objectIds = safeObjectIds(await layer.queryObjectIds(options));
-            layer.definitionExpression += objectIds.length
-                ? ` AND objectid IN (${objectIds.join(",")})`
-                : " AND 1=0";
+            await applyQueryToFeatureLayer(layer, query);
 
             return {
                 id: layerProperties.id,
@@ -533,9 +555,7 @@ export const CommonBusiness = {
     Attachments: {
         QueryAttachments: async (queryServiceTitle, id) => {
             const queryService = findService(queryServiceTitle);
-            if (!queryService) {
-                throw { type: Constants_ServiceResultType.Error, message: `Servis bulunamadı (${queryServiceTitle})` };
-            }
+            if (!queryService) throw createServiceError(queryServiceTitle);
 
             return GisQueryHelper.ExecuteQuery({
                 url: CommonBusiness.GenerateUrl(queryService),
