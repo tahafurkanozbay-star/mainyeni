@@ -35,7 +35,7 @@ const LEGACY_PATTERNS = [
   ['abortcontroller-polyfill', /abortcontroller-polyfill/g],
 ];
 
-function rel(file) { return path.relative(ROOT, file).split(path.sep).join('/'); }
+function rel(root, file) { return path.relative(root, file).split(path.sep).join('/'); }
 function countLines(text) { return text === '' ? 0 : text.split(/\r?\n/).length; }
 function matchCount(text, regex) { const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`; return [...text.matchAll(new RegExp(regex.source, flags))].length; }
 function pushFinding(bucket, item) { bucket.push(item); }
@@ -72,27 +72,27 @@ function packageRisk(name, version) {
   return null;
 }
 
-async function inspectPackages(files, report) {
+async function inspectPackages(root, files, report) {
   for (const file of files.filter(f => path.basename(f) === 'package.json')) {
     const json = await readJson(file);
     if (!json) continue;
     const deps = { ...(json.dependencies || {}), ...(json.devDependencies || {}) };
     const risks = Object.entries(deps).map(([name, version]) => ({ name, version, severity: packageRisk(name, version) })).filter(x => x.severity);
-    report.packages.push({ file: rel(file), name: json.name || null, scripts: Object.keys(json.scripts || {}).sort(), dependencyCount: Object.keys(deps).length, risks });
+    report.packages.push({ file: rel(root, file), name: json.name || null, scripts: Object.keys(json.scripts || {}).sort(), dependencyCount: Object.keys(deps).length, risks });
   }
 }
 
-async function inspectDotnet(files, report) {
+async function inspectDotnet(root, files, report) {
   for (const file of files.filter(f => f.endsWith('.csproj') || f.endsWith('.props'))) {
     const text = await fs.readFile(file, 'utf8');
     const frameworks = parseTargetFramework(text);
     const packages = [...text.matchAll(/<PackageReference\s+Include="([^"]+)"(?:\s+Version="([^"]+)")?/g)].map(m => ({ name: m[1], version: m[2] || null }));
-    if (frameworks.length || packages.length) report.dotnet.push({ file: rel(file), frameworks, packages });
+    if (frameworks.length || packages.length) report.dotnet.push({ file: rel(root, file), frameworks, packages });
   }
 }
 
-function inspectText(file, text, report) {
-  const relative = rel(file);
+function inspectText(root, file, text, report) {
+  const relative = rel(root, file);
   const ext = path.extname(file).toLowerCase();
   const lines = countLines(text);
   report.metrics.textFiles += 1;
@@ -145,26 +145,23 @@ function markdown(report) {
 }
 
 export async function runAudit(root = ROOT) {
-  const previous = process.cwd();
-  if (root !== ROOT) process.chdir(root);
-  try {
-    const files = await walk(root);
-    const report = { metrics: { textFiles: 0, textLines: 0, codeFiles: 0, codeLines: 0 }, packages: [], dotnet: [], network: [], security: [], legacy: [], externalAssets: [] };
-    for (const file of files) {
-      const ext = path.extname(file).toLowerCase();
-      if (!TEXT_EXT.has(ext) && !['package.json','Directory.Build.props'].includes(path.basename(file))) continue;
-      let text;
-      try { text = await fs.readFile(file, 'utf8'); } catch { continue; }
-      inspectText(file, text, report);
-    }
-    await inspectPackages(files, report);
-    await inspectDotnet(files, report);
-    report.summary = summarize(report);
-    report.network.sort((a,b) => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind));
-    report.security.sort((a,b) => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind));
-    report.legacy.sort((a,b) => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind));
-    return report;
-  } finally { if (root !== ROOT) process.chdir(previous); }
+  const auditRoot = path.resolve(root);
+  const files = await walk(auditRoot);
+  const report = { metrics: { textFiles: 0, textLines: 0, codeFiles: 0, codeLines: 0 }, packages: [], dotnet: [], network: [], security: [], legacy: [], externalAssets: [] };
+  for (const file of files) {
+    const ext = path.extname(file).toLowerCase();
+    if (!TEXT_EXT.has(ext) && !['package.json','Directory.Build.props'].includes(path.basename(file))) continue;
+    let text;
+    try { text = await fs.readFile(file, 'utf8'); } catch { continue; }
+    inspectText(auditRoot, file, text, report);
+  }
+  await inspectPackages(auditRoot, files, report);
+  await inspectDotnet(auditRoot, files, report);
+  report.summary = summarize(report);
+  report.network.sort((a,b) => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind));
+  report.security.sort((a,b) => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind));
+  report.legacy.sort((a,b) => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind));
+  return report;
 }
 
 async function main() {
