@@ -57,7 +57,7 @@ namespace Toolbox.Serialization
         {
             return JsonConvert.SerializeObject(
                 model,
-                Formatting.Indented,
+                Newtonsoft.Json.Formatting.Indented,
                 new JsonSerializerSettings
                 {
                     ReferenceLoopHandling = ReferenceLoopHandling.Ignore
