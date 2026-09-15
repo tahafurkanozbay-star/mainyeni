@@ -1,11 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace api.user
 {
@@ -20,13 +14,14 @@ namespace api.user
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseStartup<Startup>().UseKestrel(o =>
-                    {
-                        o.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(30);
-                        o.Limits.MaxResponseBufferSize= 99999999;
-                        o.AddServerHeader = false; //Kullanılan Teknoloji Bilgisinin Kısıtlanmaması güvenlik açığı çözümü 
-
-                    });;
+                    webBuilder
+                        .UseStartup<Startup>()
+                        .UseKestrel(options =>
+                        {
+                            // Keep framework defaults for request/connection limits unless a measured endpoint
+                            // requires a narrower, explicitly documented override.
+                            options.AddServerHeader = false;
+                        });
                 });
     }
 }

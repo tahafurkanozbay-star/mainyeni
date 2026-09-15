@@ -1,22 +1,26 @@
+using Api.Admin.Filters;
+using Business.Core.Context;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Cors.Infrastructure;
-using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.OpenApi.Models;
-using System.Text;
-using Api.Admin.Filters;
-using Business.Core.Context;
-using System.IO;
+using Microsoft.Extensions.Logging;
+using Microsoft.OpenApi;
+using System;
+using System.Linq;
+using System.Text.Json;
 
 namespace api.admin
 {
     public class Startup
     {
+        private const string CorsPolicyName = "SiteCorsPolicy";
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -24,176 +28,150 @@ namespace api.admin
 
         public IConfiguration Configuration { get; }
 
-        // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            ConfigureCors(services);
+            ConfigureDatabase(services);
 
-            // ********************
-            // Setup CORS
-            // ********************
-            var corsBuilder = new CorsPolicyBuilder();
-            //corsBuilder.AllowAnyHeader();
-            
-            corsBuilder.WithHeaders("Authorization", "Accept", "Content-Type", "Connection", "Culture", "Referer", "User-Agent" ,"Origin", "origin");
-            corsBuilder.WithMethods("GET","POST","PUT","OPTIONS");
-            //corsBuilder.AllowAnyMethod();
-            
-            //TODO: Prod-Test
-            corsBuilder.WithOrigins("http://localhost","http://localhost:3000","http://localhost:3001"); // for a specific url. Don't add a forward slash on the end!
-            //corsBuilder.AllowAnyOrigin(); // For anyone access.
-
-            corsBuilder.AllowCredentials();
-
-            var policy = corsBuilder.Build();
-            services.AddCors(options =>
-            {
-                options.AddPolicy("SiteCorsPolicy", policy);
-            });
-
-            /*
-            var modules = Configuration.GetSection("Modules").GetChildren();
-            foreach (var module in modules)
-            {
-                string moduleName = module.GetValue<string>("Name");
-                System.Console.WriteLine("moduleName: " + moduleName);
-            }
-            */
-
-            //Configure Db -- START
-            var dbConfig = getDbConfig();
-            string dbType = dbConfig.GetValue<string>("Type");
-            string dbConnectionString = dbConfig.GetValue<string>("ConnectionString");
-
-            if(dbType=="PGSQL"){
-                services.AddDbContextPool<BusinessContext>(options => options.UseNpgsql(dbConnectionString));
-                System.Console.WriteLine("PGSQL Connection: "+dbConnectionString);
-            }
-            else if(dbType=="MYSQL"){
-                services.AddDbContextPool<BusinessContext>(options => options.UseMySql(dbConnectionString, ServerVersion.AutoDetect(dbConnectionString)));
-                System.Console.WriteLine("MYSQL Connection: "+dbConnectionString);
-            }
-            //Configure Db -- END
-            
             services.AddScoped<AdminRequestFilterAttribute>();
             services.AddControllers();
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_3_0);
-
-            //swagger
-            services.AddSwaggerGen(c =>
+            services.AddAuthorization();
+            services.AddSwaggerGen(options =>
             {
-                var filePath = "admin.api.xml";
-                c.IncludeXmlComments(filePath);
-
-                c.SwaggerDoc("CoreSwagger", new OpenApiInfo
+                options.IncludeXmlComments("admin.api.xml");
+                options.SwaggerDoc("CoreSwagger", new OpenApiInfo
                 {
                     Title = "Ankara Kent Rehberi Admin API",
                     Version = "1.0.0",
-                    Description = "Ankara Kent Rehberi Admin API v1",
-                    Contact = new OpenApiContact()
+                    Description = "Ankara Kent Rehberi Admin API v1"
+                });
+            });
+        }
+
+        private void ConfigureCors(IServiceCollection services)
+        {
+            var origins = Configuration.GetSection("Cors:AllowedOrigins")
+                .GetChildren()
+                .Select(section => section.Value?.Trim())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.TrimEnd('/'))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            services.AddCors(options =>
+            {
+                options.AddPolicy(CorsPolicyName, policy =>
+                {
+                    policy.WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                        .WithHeaders("Authorization", "Accept", "Content-Type", "Culture", "Origin", "User-Agent");
+
+                    if (origins.Length > 0)
                     {
-                        Name = "Ankara Kent Rehberi Admin API .Net Core | Swagger Implementation",
-                        Email = "proje@shkbilisim.com"
+                        policy.WithOrigins(origins).AllowCredentials();
                     }
                 });
             });
-
         }
 
+        private void ConfigureDatabase(IServiceCollection services)
+        {
+            var provider = Configuration["Database:Provider"]?.Trim().ToUpperInvariant() ?? "PGSQL";
+            var connectionString = Configuration.GetConnectionString("Primary")?.Trim();
 
-        private IConfigurationSection getDbConfig(){
+            // Temporary compatibility for deployments that still inject the legacy section names.
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                var legacySection = IsProductionConfiguration()
+                    ? Configuration.GetSection("DbConfigProd")
+                    : Configuration.GetSection("DbConfigTest");
+                connectionString = legacySection["ConnectionString"]?.Trim();
+                provider = legacySection["Type"]?.Trim().ToUpperInvariant() ?? provider;
+            }
 
-            var environment=Configuration.GetValue<string>("Environment");  
-            IConfigurationSection dbConfig = null;
-            
-            System.Console.WriteLine("environment: "+environment);
-            if(environment=="prod"){
-                dbConfig =Configuration.GetSection("DbConfigProd");
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "Database connection string is not configured. Set ConnectionStrings__Primary in the server secret store/environment.");
             }
-            else{
-                dbConfig =Configuration.GetSection("DbConfigTest");
+
+            if (!string.Equals(provider, "PGSQL", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Unsupported database provider '{provider}'. This deployment is hardened for PostgreSQL; migrate other providers explicitly before enabling them.");
             }
-             return dbConfig;
+
+            services.AddDbContextPool<BusinessContext>(options =>
+            {
+                options.UseNpgsql(connectionString, npgsql =>
+                {
+                    npgsql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
+                    npgsql.CommandTimeout(30);
+                });
+            });
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        private bool IsProductionConfiguration()
+        {
+            var legacyEnvironment = Configuration["Environment"]?.Trim();
+            return string.Equals(legacyEnvironment, "prod", StringComparison.OrdinalIgnoreCase);
+        }
+
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            //app.UseHttpsRedirection();
-
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
-
             app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
-                ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+                ForwardLimit = 1
             });
 
-            //app.UseOptions();
-            app.UseCors("SiteCorsPolicy");
-            app.UseRouting();
-
-            app.UseAuthentication();
-
-            app.UseAuthorization();
-
-            //DATABASE CONFIGURATION
-            var dbConfig = getDbConfig();
-            bool recreateDatabase = dbConfig.GetValue<bool>("RecreateDatabase"); //Recreate database
-            
-            if (recreateDatabase)
+            app.Use(async (context, next) =>
             {
-                using (var serviceScope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope())
+                context.Response.OnStarting(() =>
                 {
-                    var context = serviceScope.ServiceProvider.GetRequiredService<BusinessContext>();
-                    
-                    context.Database.EnsureDeleted();
-                    context.Database.EnsureCreated();
-                    context.Database.Migrate();
+                    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                    context.Response.Headers["X-Frame-Options"] = "DENY";
+                    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+                    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+                    context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
+                    return System.Threading.Tasks.Task.CompletedTask;
+                });
 
-                    //string script = context.Database.GenerateCreateScript();
-                    //File.WriteAllText(@"/home/bekir/Documents/db-create-script.sql", script);
-                }
-            }
-
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
+                await next();
             });
-
 
             app.UseExceptionHandler(errorApp =>
             {
                 errorApp.Run(async context =>
                 {
-                    var errorFeature = context.Features.Get<IExceptionHandlerFeature>();
-                    var exception = errorFeature.Error;
+                    var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+                    var logger = context.RequestServices.GetRequiredService<ILogger<Startup>>();
+                    logger.LogError(exception, "Unhandled admin API exception. TraceId: {TraceId}", context.TraceIdentifier);
 
-                    var problemDetails = new ProblemDetails
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                    context.Response.ContentType = "application/problem+json";
+                    await context.Response.WriteAsync(JsonSerializer.Serialize(new
                     {
-                        Title = "Hata",
-                        Status = 500,
-                        Detail =
-                          $"{exception.Message} {exception.InnerException?.Message}"
-                    };
-
-                    context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                    context.Response.StatusCode = problemDetails.Status.GetValueOrDefault();
-                    context.Response.Body.Write(Encoding.ASCII.GetBytes(problemDetails.ToString()));
+                        type = "about:blank",
+                        title = "Internal Server Error",
+                        status = StatusCodes.Status500InternalServerError,
+                        traceId = context.TraceIdentifier
+                    }));
                 });
             });
 
-            var environment = Configuration.GetValue<string>("Environment") ?? "test";
-            if (environment=="test")
+            app.UseRouting();
+            app.UseCors(CorsPolicyName);
+            app.UseAuthorization();
+
+            var swaggerEnabled = Configuration.GetValue<bool>("Swagger:Enabled") || env.IsDevelopment();
+            if (swaggerEnabled)
             {
                 app.UseSwagger();
                 app.UseSwaggerUI(options =>
-                {
-                    options.SwaggerEndpoint("CoreSwagger/swagger.json", "Ankara Kent Rehberi User Api V1");
-                });
+                    options.SwaggerEndpoint("CoreSwagger/swagger.json", "Ankara Kent Rehberi Admin API V1"));
             }
 
+            app.UseEndpoints(endpoints => endpoints.MapControllers());
         }
     }
 }
