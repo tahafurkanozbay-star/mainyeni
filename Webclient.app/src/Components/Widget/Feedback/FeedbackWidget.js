@@ -1,36 +1,30 @@
-import React, { useEffect, useImperativeHandle } from "react"
+import React, { useEffect, useImperativeHandle } from "react";
 import FeedbackForm from "./FeedbackForm";
 import "./FeedbackWidget.css";
 
 export const FeedbackWidget = React.forwardRef((props, ref) => {
-
     useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            
-        },
-        OnClose: () => {
-            
-        }
-    }));
+        id: props.id,
+        visible: false,
+        minimized: false,
+        OnShow: () => {},
+        OnClose: () => {}
+    }), [props.id]);
 
     useEffect(() => {
         props.windowManager.RegisterWindow(ref);
-    }, []);
+    }, [props.windowManager, ref]);
 
-
-    const closeWindow=(e)=>{
+    const closeWindow = () => {
         props.windowManager.HideWindow(props.id);
-    }
+    };
 
-    return (<>
+    return (
         <FeedbackForm
-            show={props.windowManager.IsVisible(props.id) ? true : false}
-            closeWindow={(e)=>closeWindow(e)}></FeedbackForm>
+            show={props.windowManager.IsVisible(props.id)}
+            closeWindow={closeWindow}
+        />
+    );
+});
 
-    </>);
-
-
-}
-);
+FeedbackWidget.displayName = "FeedbackWidget";
