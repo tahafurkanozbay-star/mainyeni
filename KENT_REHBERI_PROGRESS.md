@@ -54,5 +54,16 @@
 - Test/build: connector turunda lokal checkout/komut çalıştırma olmadığından npm test/build/lint/typecheck çalıştırılamadı.
 - Sonraki Platform adımı: dış endpoint envanteri, API client ve error model, same-origin proxy/BFF doğrulaması, config separation, shared types ve ölçüm tabanlı modül bazlı modernizasyon planı.
 
+## GIS Engine Tur 2 — 2026-09-15
+- İşlem: Ortak GIS servis yönetişimi ve JSON ikon çözümleyici temeli
+- Commitler:
+  - `66cd1e9e5e3552785dde9e64329fb5bc06f018c1` — `Webclient.app/src/gis-engine/serviceRegistry.js`
+  - `b8dac96c371fcdee180e810aa5fb413fa4d25215` — `Webclient.app/src/gis-engine/iconResolver.js`
+- Özellikler: merkezi servis kaydı, timeout, sınırlı retry/backoff, health state, kontrollü GIS hata modeli; tür/kategori/kind/className/iconKey/id alanlarından deterministik JSON ikon eşleştirme, alias ve fallback.
+- WMS/WFS: eklenmedi.
+- Merge: commitler varsayılan `main` branch'ına işlendi; ayrı PR açılmadı.
+- Test/build: bu connector turunda lokal npm komutları çalıştırılamadı; sonraki turda gerçek import noktaları, JSON ikon kaynağı ve test harness bağlanacak.
+- Sonraki GIS adımı: gerçek servis URL envanteri, resolver'ın 2D/3D/table bileşenlerine entegrasyonu ve smoke/regression testleri.
+
 ## Kurallar
 Her görev önce `KENT_REHBERI_AGENT_RULES.md`, ardından kendi görev kuralını ve bu dosyayı okumalıdır. Önceki değişiklikler korunmalı; çakışma ve overwrite önlenmelidir.
