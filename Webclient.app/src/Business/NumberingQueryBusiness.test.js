@@ -121,6 +121,23 @@ describe("NumberingQueryBusiness address hardening", () => {
         expect(GisQueryHelper.ExecuteQuery).toHaveBeenCalledTimes(1);
     });
 
+    test("preserves zero-valued identifiers across the centerline and door cascade", async () => {
+        GisQueryHelper.ExecuteQuery
+            .mockResolvedValueOnce(success([{ attr: { id: 0, ad: "Hat" } }]))
+            .mockResolvedValueOnce(success([{ attr: { id: 0 } }]))
+            .mockResolvedValueOnce(success([{ attr: { id: "door-1", kapino: "1" } }]));
+
+        const result = await NumberingQueryBusiness.GetDoors("street-zero");
+
+        expect(GisQueryHelper.ExecuteQuery).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            where: "yolortahatid IN ('0')"
+        }));
+        expect(GisQueryHelper.ExecuteQuery).toHaveBeenNthCalledWith(3, expect.objectContaining({
+            where: "yolortahatyonid IN ('0')"
+        }));
+        expect(result.data).toEqual([{ attr: { id: "door-1", kapino: "1" } }]);
+    });
+
     test("uses the same-origin platform client with bounded cache and dedupe for building documents", async () => {
         const documents = [{ id: 1 }];
         const callback = jest.fn();
