@@ -1,6 +1,6 @@
 import React, { useEffect, useImperativeHandle, useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLayerGroup } from '@fortawesome/free-solid-svg-icons';
+import { faTimes, faLayerGroup, faChevronDown, faChevronUp, faCheckSquare, faMinusSquare, faSquare } from "@fortawesome/free-solid-svg-icons";
 import { LayerBusiness } from "../../../Business/LayerBusiness";
 import { Constants_ServiceResultType } from "../../../Core/Constants";
 import { MapManager } from "../../../Store/Managers/MapManager";
@@ -23,7 +23,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
             mapView?.map?.removeAll();
             fetchQueryResults();
         },
-        OnClose: () => undefined
+        OnClose: () => {}
     }));
 
     const [LayerGroups, setLayerGroups] = useState(null);
@@ -40,31 +40,28 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
 
     const fetchQueryResults = () => {
         const _mapView = MapManager.GetMapView();
-        if (!_mapView?.map) {
-            setLayerGroups([]);
-            return;
-        }
+        if (!_mapView?.map) { setLayerGroups([]); return; }
         setMapView(_mapView);
         _mapView.map.removeAll();
         LayerBusiness.GetLayers().then((_result) => {
-            if (_result?.type !== Constants_ServiceResultType.Success) {
-                setLayerGroups([]);
-                return;
-            }
-            const layerGroups = _result?.data ?? [];
-            const firstGroup = layerGroups[2];
-            const layerCount = firstGroup?.layers?.length || 0;
-            firstGroup?.layers?.forEach(_layerItem => {
-                CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(_layerItem), "LayerListWidget");
-                CommonBusiness.CreateLayer(_layerItem).then((_layerObj) => {
-                    if (_layerObj != null) {
-                        _layerItem.priority = layerCount - parseInt(_layerItem.priority, 10);
-                        _layerItem.layerObj = _layerObj;
-                        _mapView.map.add(_layerObj, _layerItem.priority);
-                    }
-                });
-            });
-            setLayerGroups(layerGroups);
+            if (_result?.type == Constants_ServiceResultType.Success) {
+                const layerGroups = _result?.data ?? [];
+                if (layerGroups.length > 0) {
+                    const firstGroup = layerGroups[2];
+                    const layerCount = firstGroup?.layers?.length || 0;
+                    firstGroup?.layers?.forEach(_layerItem => {
+                        CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(_layerItem), "LayerListWidget");
+                        CommonBusiness.CreateLayer(_layerItem).then((_layerObj) => {
+                            if (_layerObj != null) {
+                                _layerItem.priority = layerCount - parseInt(_layerItem.priority, 10);
+                                _layerItem.layerObj = _layerObj;
+                                _mapView.map.add(_layerObj, _layerItem.priority);
+                            }
+                        });
+                    });
+                }
+                setLayerGroups(layerGroups);
+            } else setLayerGroups([]);
         }).catch(() => setLayerGroups([]));
     };
 
@@ -73,8 +70,9 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
         const _LayerGroups = [...LayerGroups];
         const _visible = !_LayerGroups[_groupIndex].visible;
         _LayerGroups[_groupIndex].layers.forEach(_layer => {
+            const layerObj = _layer.layerObj;
             _layer.visible = _visible;
-            if (_layer.layerObj) _layer.layerObj.visible = _visible;
+            if (layerObj) layerObj.visible = _visible;
         });
         _LayerGroups[_groupIndex].visible = _visible;
         _LayerGroups[_groupIndex].semiVisible = false;
@@ -83,28 +81,26 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
 
     const toggleLayerVisibility = (e, layer, _groupIndex, _layerIndex) => {
         e.stopPropagation();
-        if (!layer?.layerObj) return;
-        const visible = !layer.layerObj.visible;
-        layer.layerObj.visible = visible;
-        const _LayerGroups = [...LayerGroups];
-        const _LayerGroup = { ..._LayerGroups[_groupIndex], layers: [..._LayerGroups[_groupIndex].layers] };
-        _LayerGroup.layers[_layerIndex] = { ..._LayerGroup.layers[_layerIndex], visible };
-        _LayerGroups[_groupIndex] = evaluateGroupVisibility(_LayerGroup);
-        setLayerGroups(_LayerGroups);
+        const layerObj = layer?.layerObj;
+        if (layerObj != null) {
+            layerObj.visible = !layerObj.visible;
+            const _LayerGroups = [...LayerGroups];
+            const _LayerGroup = { ..._LayerGroups[_groupIndex], layers: [..._LayerGroups[_groupIndex].layers] };
+            _LayerGroup.layers[_layerIndex] = { ..._LayerGroup.layers[_layerIndex], visible: layerObj.visible };
+            _LayerGroups[_groupIndex] = evaluateGroupVisibility(_LayerGroup);
+            setLayerGroups(_LayerGroups);
+        }
     };
 
     const evaluateGroupVisibility = (_layerGroup) => {
         const visibleLayersCount = _layerGroup?.layers?.filter(_layer => _layer.visible).length || 0;
-        return {
-            ..._layerGroup,
-            visible: visibleLayersCount === (_layerGroup?.layers?.length || 0),
-            semiVisible: visibleLayersCount > 0 && visibleLayersCount < (_layerGroup?.layers?.length || 0)
-        };
+        return { ..._layerGroup, visible: visibleLayersCount === (_layerGroup?.layers?.length || 0), semiVisible: visibleLayersCount > 0 && visibleLayersCount < (_layerGroup?.layers?.length || 0) };
     };
 
     const changeLayerOpacity = (e, layer, _groupIndex, _layerIndex) => {
         const opacity = Number(e.target.value);
-        if (layer?.layerObj) layer.layerObj.opacity = opacity / 100;
+        const layerObj = layer?.layerObj;
+        if (layerObj) layerObj.opacity = opacity / 100;
         const _LayerGroups = [...LayerGroups];
         const _layerGroup = { ..._LayerGroups[_groupIndex], layers: [..._LayerGroups[_groupIndex].layers] };
         _layerGroup.layers[_layerIndex] = { ..._layerGroup.layers[_layerIndex], opacity };
@@ -113,8 +109,9 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
     };
 
     const refreshLegend = () => {
-        if (legend != null || !mapView) return;
-        loadModules(["esri/widgets/Legend"]).then(([Legend]) => setLegend(new Legend({ view: mapView, container: "legendDiv" })));
+        if (legend == null && mapView) {
+            loadModules(["esri/widgets/Legend"]).then(([Legend]) => setLegend(new Legend({ view: mapView, container: "legendDiv" })));
+        }
     };
 
     return (
@@ -129,7 +126,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
                     <Tabs defaultActiveKey="layers" onSelect={(key) => { if (key === "legend") refreshLegend(); }}>
                         <Tab eventKey="layers" title="Katmanlar">
                             <div>
-                                {DynamicLayerManager.List?.length > 0 && <Accordion defaultActiveKey="dynamiclayers"><Accordion.Item eventKey="dynamiclayers"><Accordion.Header><div className="row w-100"><div className="col-1"><SharedGISIcon record={{ category: "default" }} size={24} /></div><div className="col-11 layer-list-group-title"><span>Özel Katmanlar</span></div></div></Accordion.Header><Accordion.Body>{DynamicLayerManager.List.map(layer => <div className="layer-list-item" key={layer.id || layer.title}><div className="col-1"><SharedGISIcon record={layer} size={24} /></div><button type="button" className="col-11 layer-list-item-title" onClick={() => layer.layerObj && (layer.layerObj.visible = !layer.layerObj.visible)} title={layer.title}>{layer.title}</button></div>)}</Accordion.Body></Accordion.Item></Accordion>}
+                                {DynamicLayerManager.List?.length > 0 ? <Accordion defaultActiveKey="dynamiclayers"><Accordion.Item eventKey="dynamiclayers"><Accordion.Header><div className="row w-100"><div className="col-1"><SharedGISIcon record={{ category: "default" }} size={24} /></div><div className="col-11 layer-list-group-title"><span>Özel Katmanlar</span></div></div></Accordion.Header><Accordion.Body>{DynamicLayerManager.List.map((layer, _layerIndex) => <div className="layer-list-item" key={layer.id || layer.title}><div className="col-1"><SharedGISIcon record={layer} size={24} /></div><button type="button" className="col-8 layer-list-item-title" onClick={(e) => toggleLayerVisibility(e, layer, 2, _layerIndex)} title={layer.title}>{layer.title}</button><div className="col-3" /></div>)}</Accordion.Body></Accordion.Item></Accordion> : null}
                                 <Accordion defaultActiveKey={activeGroup}>
                                     {LayerGroups.length === 0 ? <NoResultsFound message="Gösterilecek katman bulunmuyor" /> : LayerGroups.map((_group, _groupIndex) => {
                                         const _groupKey = _group.id || `group-${_groupIndex}`;
@@ -137,7 +134,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
                                             <Accordion.Header className="layer-list-group-accordion-item-header">
                                                 <div className="row w-100">
                                                     <div className="col-1">
-                                                        <button type="button" className="kr-layer-toggle" onClick={(e) => toggleGroupVisibility(e, _groupIndex)} aria-label={`${_group.title} katman grubunu ${_group.visible ? "gizle" : "göster"}`} aria-pressed={Boolean(_group.visible)}>
+                                                        <button type="button" className="kr-layer-toggle" onClick={(e) => toggleGroupVisibility(e, _groupIndex)} aria-label={`${_group.title} grubunu ${_group.visible ? "gizle" : "göster"}`} aria-pressed={Boolean(_group.visible)}>
                                                             {_group.visible ? <BiCheckCircle aria-hidden="true" /> : _group.semiVisible ? <BiMinusCircle aria-hidden="true" /> : <BiCircle aria-hidden="true" />}
                                                         </button>
                                                     </div>
