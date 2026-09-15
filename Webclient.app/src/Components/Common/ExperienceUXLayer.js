@@ -37,7 +37,7 @@ export function ExperienceUXLayer({ windowManager }) {
         const onCommand = event => {
             const name = event?.detail?.name;
             if (name === "help") setHelpOpen(true);
-            if ((name === "layers" || name === "legend") && layerListRef.current?.OnShow) layerListRef.current.OnShow();
+            if ((name === "layers" || name === "legend") && layerListRef.current?.OnShow) layerListRef.current.OnShow(name === "legend" ? "legend" : "layers");
             if (name === "search" && windowManager?.ShowWindow) windowManager.ShowWindow("genelarama-query-window");
         };
         window.addEventListener("kentrehberi:command", onCommand);
@@ -46,10 +46,7 @@ export function ExperienceUXLayer({ windowManager }) {
 
     useEffect(() => {
         const onKeyDown = event => {
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-                event.preventDefault();
-                dispatchCommand("command-palette");
-            }
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); dispatchCommand("command-palette"); }
             if (event.key === "?" && !event.altKey && !event.ctrlKey && !event.metaKey) {
                 const tag = event.target?.tagName;
                 if (!["INPUT", "TEXTAREA", "SELECT"].includes(tag)) { event.preventDefault(); setHelpOpen(true); }
@@ -76,9 +73,7 @@ export function ExperienceUXLayer({ windowManager }) {
                 </nav>
                 <button className="experience-utility__collapse" type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? "Yardımcı araçları genişlet" : "Yardımcı araçları daralt"} title={collapsed ? "Genişlet" : "Daralt"}><span aria-hidden="true">{collapsed ? "›" : "‹"}</span></button>
             </aside>
-
             <LayerListWidget id="layerlist-widget" windowManager={windowManager} ref={layerListRef} />
-
             {helpOpen && (
                 <div className="experience-help-backdrop" role="presentation" onMouseDown={() => setHelpOpen(false)}>
                     <section className="experience-help" role="dialog" aria-modal="true" aria-labelledby="experience-help-title" aria-describedby="experience-help-description" onMouseDown={event => event.stopPropagation()}>
