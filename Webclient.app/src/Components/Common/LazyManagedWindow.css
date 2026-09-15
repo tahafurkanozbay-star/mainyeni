@@ -1,0 +1,68 @@
+.kr-lazy-window {
+  position: absolute;
+  z-index: var(--experience-z-panel, 30);
+  top: calc(var(--mainbar-height, 64px) + 12px);
+  left: calc(var(--sidebar-width, 360px) + 12px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: min(320px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--experience-border, rgb(15 23 42 / 14%));
+  border-radius: 14px;
+  background: var(--experience-surface, rgb(255 255 255 / 96%));
+  color: var(--experience-text, #142033);
+  box-shadow: var(--experience-shadow-lg, 0 18px 50px rgb(15 23 42 / 16%));
+}
+
+.kr-lazy-window > div {
+  display: grid;
+  gap: 2px;
+}
+
+.kr-lazy-window strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.kr-lazy-window span:not(.kr-lazy-window__spinner) {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--experience-text-muted, #526174);
+}
+
+.kr-lazy-window__spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: kr-lazy-window-spin 650ms linear infinite;
+}
+
+@keyframes kr-lazy-window-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 780px) {
+  .kr-lazy-window {
+    position: fixed;
+    inset: auto 12px 12px 12px;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kr-lazy-window__spinner {
+    animation-duration: 1400ms;
+  }
+}
+
+@media (forced-colors: active) {
+  .kr-lazy-window {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+}
