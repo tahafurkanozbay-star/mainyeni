@@ -133,7 +133,7 @@ export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
 
     return (
         <section className="sidebar-container" aria-label="Genel arama sonuçları" style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-            <header className="common-query-window-header"><img className="common-query-window-header-icon" src={windowLogo} alt="" /><span>{windowTitle}</span><CommonQueryResultItemTools /></header>
+            <header className="common-query-window-header"><img className="common-query-window-header-icon" src={windowLogo} alt="" /><span>{windowTitle}</span></header>
             <div className="results-container" aria-live="polite">
                 <div className="results-container-toolbar">
                     <button className="results-container-back-button" type="button" onClick={() => { removeLastClusterLayer(); props.windowManager.ShowWindow("sidebar"); }}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button>
