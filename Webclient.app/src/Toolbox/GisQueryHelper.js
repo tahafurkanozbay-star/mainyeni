@@ -1,112 +1,47 @@
-import React, { Component } from 'react';
 import { loadModules } from "esri-loader";
-import { Constants_ServiceResultType } from '../Core/Constants';
-import { DebugHelper } from './DebugHelper';
+import { Constants_ServiceResultType } from "../Core/Constants";
+
+const toServiceResult = (_response) => ({
+    type: Constants_ServiceResultType.Success,
+    data: (_response?.features ?? []).map((feature) => ({
+        attr: feature.attributes,
+        geometry: feature.geometry
+    })),
+    fields: _response?.fields ?? []
+});
+
+const toErrorResult = (error) => ({
+    error,
+    type: Constants_ServiceResultType.Error,
+    data: null,
+    fields: null
+});
+
+const executeQuery = async (options, useOptionsConstructor = false) => {
+    try {
+        const [QueryTask, Query] = await loadModules([
+            "esri/tasks/QueryTask",
+            "esri/tasks/support/Query"
+        ]);
+
+        const queryTask = new QueryTask({ url: options.url });
+        const query = useOptionsConstructor ? new Query(options) : new Query();
+
+        if (!useOptionsConstructor) {
+            query.returnDistinctValues = Boolean(options.returnDistinctValues);
+            query.orderByFields = options.orderByFields ?? null;
+            query.returnGeometry = Boolean(options.returnGeometry);
+            query.outFields = options.outFields ?? ["*"];
+            query.where = options.where ?? "1=1";
+        }
+
+        return toServiceResult(await queryTask.execute(query));
+    } catch (error) {
+        return toErrorResult(error);
+    }
+};
 
 export const GisQueryHelper = {
-
-    ExecuteQuery: async (_options) => {
-
-        //DebugHelper.Log("[GIS-QUERY] querying - " + _options.url);
-
-        return new Promise((resolve, reject) => {
-
-            loadModules(["esri/tasks/QueryTask", "esri/tasks/support/Query"]).then(([QueryTask, Query]) => {
-
-                // Represents the REST endpoint for a layer of cities.
-                var queryTask = new QueryTask({
-                    url: _options.url
-                });
-                var query = new Query();
-                query.returnDistinctValues = _options.returnDistinctValues || false;
-                query.orderByFields = _options.orderByFields || null;
-                query.returnGeometry = _options.returnGeometry || false;
-                query.outFields = _options.outFields; //["*"];
-                query.where = _options.where || null;//"1=1";  
-
-                return queryTask.execute(query).then(function (_response) {
-
-                    let response = {};
-                    let resultArray = _response?.features.map(x => {
-                        return ({
-                            attr: x.attributes,
-                            geometry: x.geometry
-                        });
-                    });
-                    response.type = Constants_ServiceResultType.Success;
-                    response.data = resultArray;
-                    response.fields = _response.fields;
-
-                    //DebugHelper.Log("[GIS-QUERY] response - " + _options.url);
-                    //DebugHelper.Log(response);
-                    resolve(response);
-
-                }, function (error) {
-                    let response = {
-                        error,
-                        type: Constants_ServiceResultType.Error,
-                        data: null,
-                        fields: null
-                    };
-                    
-                    //DebugHelper.Log("[GIS-QUERY] response error - " + _options.url);
-                    //DebugHelper.Log(response);
-
-                    resolve(response);
-                });
-
-
-
-            });
-
-        });
-    },
-
-    ExecuteSpatialQuery: async (_options) => {
-        return new Promise((resolve, reject) => {
-
-            loadModules(["esri/tasks/QueryTask", "esri/tasks/support/Query"]).then(([QueryTask, Query]) => {
-
-                // Represents the REST endpoint for a layer of cities.
-                var queryTask = new QueryTask({
-                    url: _options.url
-                });
-                var query = new Query(_options);
-
-                return queryTask.execute(query).then(function (_response) {
-
-                    let response = {};
-                    let resultArray = _response?.features.map(x => {
-                        return ({
-                            attr: x.attributes,
-                            geometry: x.geometry
-                        });
-                    });
-                    response.type = Constants_ServiceResultType.Success;
-                    response.data = resultArray;
-                    response.fields = _response.fields;
-
-                    //DebugHelper.Log("[GIS-QUERY] response - " + _options.url);
-                    //DebugHelper.Log(response);
-                    resolve(response);
-
-                }, function (error) {
-
-                    let response = {
-                        error,
-                        type: Constants_ServiceResultType.Error,
-                        data: null,
-                        fields: null
-                    };
-                    //DebugHelper.Log("[GIS-QUERY] response error - " + _options.url);
-                    //DebugHelper.Log(response);
-
-                    resolve(response);
-                });
-
-            });
-
-        });
-
-    }
-}
+    ExecuteQuery: async (options) => executeQuery(options, false),
+    ExecuteSpatialQuery: async (options) => executeQuery(options, true)
+};
