@@ -5,69 +5,129 @@
 - Ana kural dosyası: `KENT_REHBERI_AGENT_RULES.md`
 - Görev sırası: Architecture / Platform → UI/UX → 2D GIS + 3D GIS + Spatial Engine → GIS Data/Services → Search/Address → Performance → Security → Accessibility/Responsive → Testing/Observability → Final QA/Release
 
-## Platform Tur 2 — 2026-09-15
-- Güvenli yapılandırma temeli tamamlandı.
-- `.gitignore` local environment dosyalarını ignore ediyor; `.env.example` eklendi; client key/debug/source map riskleri azaltıldı; API base same-origin `/api` oldu.
+## Platform / GIS geçmişi
+- Platform Tur 2: local `.env` ignore, `.env.example`, same-origin API yaklaşımı, client-key/debug/source-map risklerinin azaltılması.
+- GIS Engine Tur 2-3: `serviceRegistry.js`, `iconResolver.js`, `serviceCatalog.js`, `layerRuntime.js`, `spatialEngine.js`; backend-owned service configuration; ArcGIS REST/MapServer/FeatureServer/VectorTile/Image/Scene destekleri; WMS/WFS/WMTS/OGC varyantları reddediliyor.
+- PR #2 merge commit: `1140467cfe88e73f5fdae1fd112f1862949d0d12`.
+- Sonraki GIS çalışmasında `iconRegistry.json`, `iconPresentation.js`, `sceneRuntime.js`, shared 2D/3D view-state ve icon registry testleri main üzerinde ilerledi.
 
-## GIS Engine Tur 2 — 2026-09-15
-- `Webclient.app/src/gis-engine/serviceRegistry.js` ve `iconResolver.js` eklendi.
-- Servis timeout/retry/health state ve deterministik tür/kategori ikon çözümleme temeli kuruldu.
-- WMS/WFS eklenmedi.
+## Experience/UI Quality önceki tur
+- PR #4 squash-merge edildi.
+- Merge commit: `06463c64ea02d6a2d99c3e504f7e66c55fc0e138`.
+- İlk Experience turu token tabanlı surface/focus, responsive desktop/tablet/mobile, dark/light, reduced-motion, forced-colors, utility rail, command center ve loading/error/empty primitives oluşturdu.
+- WMS/WFS eklenmedi; yeni remote UI font/CDN/analytics/asset çağrısı eklenmedi.
 
-## GIS Engine Tur 3 — 2026-09-15
-- Branch: `agent/gis-engine-2026-09-15`
-- PR: `#2`
-- Head commit: `a32f6f2f7a66a8c14b60a322953dca4e509f8d7d`
-- Merge commit: `1140467cfe88e73f5fdae1fd112f1862949d0d12`
-- Merge durumu: PR #2 kapalı ve gerçekten merged.
-- Eklenen dosyalar:
-  - `Webclient.app/src/gis-engine/serviceCatalog.js`
-  - `Webclient.app/src/gis-engine/layerRuntime.js`
-  - `Webclient.app/src/gis-engine/spatialEngine.js`
-- Gerçek mimari bulgusu: GIS servis kayıtları backend `GisConfigServiceOperations` üzerinden yönetiliyor; public modelde servis URL'si doğrudan gönderilmiyor, şifrelenmiş `Eg` kimliği dönüyor. Varsayımsal dış servis URL'si eklenmedi.
-- Servis yaklaşımı: ArcGIS MapServer, FeatureServer, VectorTileServer, ImageServer, SceneServer ve ArcGIS REST tipleri tanımlandı; WMS/WFS/WMTS/OGC varyantları reddediliyor.
-- Network: hard-coded yeni üçüncü taraf endpoint/CDN/analytics eklenmedi; same-origin/proxy guard mevcut.
-- 2D: layer lifecycle, visibility, opacity, min/max scale ve serializable layer-tree state eklendi.
-- Spatial: ArcGIS `geometryEngine` tabanlı distance, geodesic area, buffer, nearest, proximity, spatial relation, projection ve geometry query yardımcıları ile time extent/time slider ve dedupe primitive'leri eklendi.
-- 3D: bu turda renderer/engine göçü yapılmadı; mevcut esri-loader/ArcGIS mimarisine uyumlu extension noktası bırakıldı.
-- İkon: layer descriptor `iconKey` alanı shared resolver ile uyumlu hale getirildi; gerçek JSON ikon dosyası code-search ile bulunamadığından sahte mapping üretilmedi.
-- Test/build: connector çalışma alanında Node/npm runtime olmadığı için lokal komutlar çalıştırılamadı.
-- Sonraki GIS işi: `MapComponent.js` + gerçek LayerList/Identify/Measurement/Query bileşenlerine shared runtime ve resolver entegrasyonu; 2D↔3D state sync, 3D SceneView, picking/measurement ve smoke/regression testleri.
+## Deep Experience/UI Quality Tur — 2026-09-15
+- Amaç: mevcut Kent Rehberi'ni ekran ve bileşen düzeyinde derin UX/UI kalite denetiminden geçirip enterprise GIS seviyesinde tutarlı, hızlı, erişilebilir ve yüksek veri yoğunluğuna uygun bir deneyim oluşturmak.
+- Başlangıç main HEAD: `71d8d54f9bae4e8ce8ee740aabee56cf5d6f203f`.
+- Çalışma branch: `agent/experience-ui-deep-2026-09-15`.
+- Branch son reconcile sonrası `main`den geride değil (`behind_by=0`); paralel GIS çalışmalarını force-push ile ezmeden ikinci parent merge commit ile korundu.
 
-## Experience/UI Quality Tur — 2026-09-15
-- İşlem: Enterprise GIS deneyim yüzeyinin çalışan React uygulamasına kontrollü uygulanması.
-- Önceki UI branch'ı `agent/experience-ui-2026-09-15` üzerinde PR #3 açıldı ancak `main` ilerlediği için merge conflict oluştu; PR #3 kapatıldı ve force-push yapılmadı.
-- Güncel main çalışma tabanı: `53911f83cc071ce1dbbac860e2b688bd3fda2c00`.
-- Güncel branch: `agent/experience-ui-2026-09-15-r2`.
-- Eklenen dosyalar:
-  - `Webclient.app/src/Components/Common/ExperienceUXLayer.js`
-  - `Webclient.app/src/Components/Common/experience-ui.css`
-  - `Webclient.app/src/Components/Common/ExperienceUXLayer.test.js`
-  - `.github/workflows/webclient-quality.yml`
-- Güncellenen dosyalar:
-  - `Webclient.app/src/App.js`
-  - `Webclient.app/src/Core/Constants.js`
-  - `KENT_REHBERI_PROGRESS.md`
-- Yaklaşık değişiklik: 1,800+ anlamlı UI/UX, responsive, accessibility, test ve CI satırı/eklemesi. 4,000 satır yapay boilerplate ile zorlanmadı.
-- Görsel kazanımlar: token tabanlı yüzey/border/radius/elevation/focus sistemi; modern header/search/sidebar/query/table/card/ArcGIS widget yüzeyleri; 3 breakpoint responsive tasarım; dark/light CSS token altyapısı; reduced-motion; forced-colors; daha belirgin focus state; daha tutarlı scrollbar ve form kontrolleri; düşük hareketli mikro-etkileşimler.
-- Harita deneyimi: pan/harita alanını boğmayan sağ-alt utility rail; arama/katman/lejand/kısayol/tema hızlı erişimi; mevcut ArcGIS popup/layer-list yüzeyleriyle ortak tipografi ve yüzey dili.
-- Erişilebilirlik: semantik aside/dialog/button kullanımı; erişilebilir adlar; Escape kapatma; klavye kısayolları; focus-visible; reduced-motion; forced-colors; renk tek başına olmayan status desenleri; screen-reader için aria-label/aria-modal/aria-labelledby.
-- Tema: `THEME_CHOICE` configuration key'i tanımlandı; yeni experience katmanı ayrıca kendi tema seçimini localStorage'da saklıyor ve `data-experience-theme` üzerinden tokenları uygular.
-- İkon: UI chrome için harici asset yerine inline SVG kullanıldı. GIS tür/kategori ikonları mevcut `gis-engine/iconResolver.js` üzerinden değiştirilmedi; gerçek JSON ikon kaynağı ve tüm tablo/liste/2D/3D yüzey entegrasyonu sonraki entegrasyon işidir.
-- Network: bu tur yeni remote font/CDN/analytics/3rd-party asset isteği eklenmedi. Experience katmanı browser içi localStorage ve `CustomEvent` command bridge kullanıyor. Browser Network verisinin tamamen gizlenemeyeceği kabul ediliyor.
-- WMS/WFS: yeni WMS/WFS UI, seçim veya entegrasyon eklenmedi.
-- Test: `ExperienceUXLayer.test.js` ile hızlı erişim, tema persistence, Escape dialog davranışı ve command event testleri eklendi.
-- CI: `Webclient Quality` workflow'u Node 18 ile `npm ci`, `npm run lint --if-present`, `npm run typecheck --if-present`, `npm test -- --watchAll=false --runInBand`, `npm run build` çalıştıracak şekilde eklendi. Mevcut `package.json` doğrudan `lint` veya `typecheck` script'i tanımlamıyor; bu nedenle bu iki aşama `--if-present` ile bilinçli olarak opsiyonel.
-- CI durumu: PR #3'ün eski workflow run'ı `34954221529` bu çalışma sırasında tamamlanmamıştı. Yeni r2 branch'ı için PR/CI sonucu bu kayıt güncellenmeden önce henüz yok.
-- Build/lint/typecheck: connector üzerinde lokal Node/npm çalıştırma yok; bu nedenle lokal doğrulama yapılamadı.
-- Bilinen riskler: `color-mix()` ve `backdrop-filter` gibi modern CSS özellikleri eski tarayıcılarda fallback gerektirebilir; Bootstrap/ArcGIS selector çakışmaları gerçek browser smoke ile kontrol edilmeli. Utility command bridge henüz NavigationBar/LayerList gerçek action handlerlarına doğrudan bağlı değil.
-- Merge: PR #3 merge edilmedi; çatışma nedeniyle kapatıldı. r2 için yeni PR açılacak ve güncel main ile mergeability yeniden doğrulanacak.
+### İncelenen yüzeyler
+- `App.js` global shell ve config loading
+- `NavigationBar.js/.css` header, global search, command shortcut
+- Sidebar / query-window shell
+- `ToolbarWidget.css` map tool chrome
+- `LayerListWidget.js/.css` layer tree, visibility, opacity, legend
+- `GenelAramaQeryWindow.js` search results
+- shared loading/error/empty primitives
+- ArcGIS popup surface CSS
+- Experience utility rail + keyboard help + command center
+- responsive/mobile/tablet/desktop CSS ve touch targets
+- shared GIS icon resolver/presentation
+- 3D `sceneRuntime.js` ve mevcut 3D entrypoint durumu
 
-## Sonraki Ekip Notu
-- Utility command bridge'i mevcut `WindowManager`/NavigationBar/LayerList/Legend handlerlarına doğrudan bağla.
-- Gerçek JSON icon kaynağını bulup `iconResolver`ı table/list/2D marker/3D renderer ile ortak kullan.
-- Browser responsive/görsel regresyon smoke yap; CI test/build sonucunu kayda geçir.
-- Tema state'ini NavigationBar ile tek kaynağa indir ve legacy light stylesheet ile çakışmayı kontrol et.
+### Design-system çıkarımı
+- Spacing: 4px tabanlı `4/8/12/16/20/24/32` ritmi.
+- Kontroller: desktop yaklaşık 40px; touch target en az 44px.
+- Radius: control 8px, card 12px, panel 14-16px, dialog 16-18px, pill 999px.
+- Typography: page title 20-28px, section 15px, body/control 12-13px, meta 10-11px.
+- Surface modeli: background → surface → secondary/tertiary surface; ince border + düşük elevation; modal/drawer en güçlü elevation.
+- Focus: yalnız renge bağlı olmayan görünür focus ring.
+- Motion: ölçülü background/border/transform/opacity; reduced-motion altında animasyonlar kapatılıyor.
+- Responsive: 1100 / 900 / 780 / 680 / 520 / 420px kademeleriyle grid, toolbar, panel, drawer ve command palette davranışı.
+- Tema: ExperienceThemeProvider + `data-experience-theme`; NavigationBar eski dinamik light stylesheet üretmiyor.
+
+### Yüksek öncelikli UX düzeltmeleri
+- Header search state string/object karmaşası kaldırıldı; semantik `form role=search`, Enter submit ve Escape davranışı eklendi.
+- Utility rail gerçek LayerList lifecycle'ına bağlandı; `layers` ve `legend` komutları gerçek `activeTab` ile işliyor.
+- Layer tree görünürlük kontrolleri semantic button + `aria-pressed` oldu; stable keys kullanılıyor.
+- Layer opacity slider erişilebilir etiketlerle 0-100 aralığında çalışıyor.
+- Search results artık loading / success / empty / error+retry durumlarını açık biçimde gösteriyor.
+- ArcGIS popup ve query-window yüzeyleri ortak enterprise tokenlarına getirildi.
+- Shared loading katmanı GIF yerine CSS spinner kullanıyor; `role=status`, `aria-busy` vb. semantics eklendi.
+- Global focus, touch target, forced-colors ve reduced-motion sözleşmesi legacy kontrolleri kapsayacak biçimde güçlendirildi.
+
+### İkon mimarisi
+- Gerçek `Webclient.app/src/gis-engine/iconRegistry.json` bulundu ve `iconPresentation.js` zinciri doğrulandı.
+- UI tarafında ikinci GIS icon mapping authority oluşturulmadı.
+- `SharedGISIcon.js`, `createListIconModel()` üzerinden ortak JSON resolver'ı kullanıyor.
+- Layer group/layer ve dinamik layer yüzeyleri aynı resolver ile icon gösteriyor.
+- Unknown/broken icon için registry default + yerel `pictureMarker.png` fallback kullanılıyor.
+- Aynı resolver zinciri 2D picture-marker ve 3D graphic model sözleşmesiyle paylaşılabiliyor.
+
+### 3D
+- `sceneRuntime.js` mevcut: SceneView oluşturma, lazy module cache, ground, picking, camera/selection sync, bookmark ve measurement contract içeriyor.
+- Kullanıcıya dönük 3D shell entrypoint'i mevcut UI içinde net olmadığı için bu UI turu yeni bir paralel 3D ekran icat etmedi; tasarım sistemi 2D/3D parity için ortak sözleşme sağlıyor.
+
+### Network / performance
+- Bu deep tur yeni remote font, CDN, analytics veya üçüncü taraf UI asset çağrısı eklemedi.
+- Generic UI iconları inline SVG; GIS record iconları mevcut local JSON registry + local asset path üzerinden çözülüyor.
+- Loading asset bağımlılığı CSS spinner'a taşındı.
+- Search/layer/command surfaces'te gereksiz perpetual JS animation eklenmedi; DOM reconciliation için stable keys kullanıldı.
+- Browser Network panelinden veri tamamen gizlenemeyeceği varsayımı korunuyor; privacy garantisi verilmedi.
+- Legacy `styles.css` içinde `https://fonts.googleapis.com/css?family=Mukta` import'u halen mevcut. Kaldırılması bir sonraki izole CSS cleanup işi; mevcut legacy ekranları körlemesine rewrite etmeden önce browser regression gerekir.
+
+### Accessibility
+- semantic header/aside/nav/form/section/dialog/button
+- icon controls için accessible name
+- `aria-pressed`, `aria-busy`, `role=status`, `role=alert`
+- focus-visible / visible keyboard focus
+- reduced-motion
+- forced-colors
+- 44px touch targets
+- command palette keyboard navigation + active descendant
+- Escape close behavior
+- form/search error and retry feedback
+
+### Responsive smoke yaklaşımı
+- Desktop: map-primary layout; query windows viewport-safe.
+- Tablet: panels narrow, toolbar compact, layer rows remain touch-safe.
+- Mobile: header simplifies, query/drawer surfaces become bottom-sheet style; command center bottom aligned; layer opacity control hides while visibility remains accessible.
+- Gerçek browser/device visual regression connector ortamında çalıştırılamadı; CSS/DOM smoke sözleşmesi ve interaction tests eklendi.
+
+### Test / build
+- `ExperienceUXLayer.test.js` ve `experience-quality.test.js` branch'e eklendi/güncellendi.
+- `.github/workflows/webclient-quality.yml`: Node 18 + `npm ci` + `npm run lint --if-present` + `npm run typecheck --if-present` + `npm test -- --watchAll=false --runInBand` + `npm run build`.
+- Lokal Node/npm bu connector ortamında mevcut değildi; dolayısıyla lokal test/build/lint/typecheck çalıştırılamadı.
+- GitHub Actions ile doğrulama başlatıldı; CI sonucu bu kayıt oluşturulurken tamamlanmış kabul edilmedi.
+
+### Değişiklik hacmi
+- `compare_commits` deep branch → main sonucu 17 önemli UI/audit dosyasında değişiklik.
+- Toplam yaklaşık 752 ekleme + 1.229 silme = 1.981 anlamlı satır değişimi.
+- 4.000 satır yapay boilerplate ile zorlanmadı; hedef kalite ve mevcut GIS davranışını koruma lehine bilinçli olarak daha düşük tutuldu.
+
+### Audit dokümanı
+- `docs/experience-ui-deep-audit-2026-09-15.md` ayrıntılı tasarım sistemi, yüksek öncelikli sorunlar, icon architecture, network/performance, accessibility, 2D/3D durumu ve sonraki geçişleri kaydediyor.
+
+### Kalan riskler
+- Legacy Google Fonts import'u kaldırılmalı; ancak browser regression sonrası.
+- `color-mix()` / `backdrop-filter` eski tarayıcı fallback'leri browser testinde doğrulanmalı.
+- Full application screen-reader pass ve gerçek responsive visual regression henüz bu runtime'da yapılamadı.
+- Command center daha fazla mevcut WindowManager aracıyla genişletilebilir.
+- `SharedGISIcon` sonuç/table/card yüzeylerinde gerçek record shape erişimi olan componentlere yayılmalı.
+
+## Tur Sonu / PR
+- Deep branch HEAD: `9b9c390b2c083020f6adbd782a77c0b7dc0af566` (progress kaydından önceki not). Sonraki branch commitleri UI/icon/audit reconciliation için devam etti; PR head oluşturulmadan önce branch yeniden doğrulanmalıdır.
+- `main` HEAD: `71d8d54f9bae4e8ce8ee740aabee56cf5d6f203f`.
+- Önceki PR #4 merged; deep tur için yeni PR oluşturulacak.
+
+## Sonraki ekip notu
+- Legacy Google Fonts import'unu browser doğrulamasıyla kaldır.
+- Command center'ı mevcut `WindowManager` tool actions ile genişlet.
+- `SharedGISIcon` gerçek sonuç/table/card surfaces'e yay.
+- 3D shell entrypoint ve 2D↔3D geçişini GIS/engine ekibiyle ortak ele al.
+- Browser visual regression + screen-reader smoke tamamla.
 
 ## Kurallar
 - Çalışan davranışlar korunur; WMS/WFS eklenmez; gerçek servis ve response şeması incelenmeden endpoint varsayılmaz.
