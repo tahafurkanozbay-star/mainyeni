@@ -1,0 +1,49 @@
+name: Platform Backend Validation
+
+on:
+  pull_request:
+    paths:
+      - 'Api.User/**'
+      - 'Api.Admin/**'
+      - 'Api.Core/**'
+      - 'Business/**'
+      - 'Toolbox/**'
+      - '.github/workflows/platform-backend-validation.yml'
+  push:
+    branches: [main, 'agent/**']
+    paths:
+      - 'Api.User/**'
+      - 'Api.Admin/**'
+      - 'Api.Core/**'
+      - 'Business/**'
+      - 'Toolbox/**'
+      - '.github/workflows/platform-backend-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+      - name: Restore User API
+        run: dotnet restore Api.User/Api.User.csproj
+      - name: Build User API
+        run: dotnet build Api.User/Api.User.csproj --configuration Release --no-restore
+      - name: Restore Admin API
+        run: dotnet restore Api.Admin/Api.Admin.csproj
+      - name: Build Admin API
+        run: dotnet build Api.Admin/Api.Admin.csproj --configuration Release --no-restore
+      - name: Dependency vulnerability advisory
+        run: dotnet list Api.User/Api.User.csproj package --vulnerable --include-transitive
+        continue-on-error: true
