@@ -13,9 +13,11 @@ import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { ButtonLoading } from "../../Common/Loading";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
+import { createPictureMarkerSymbol } from "../../../gis-engine/iconPresentation";
 
 const DEFAULT_QUERY = Object.freeze({ name: "", districtId: "", districtName: "", nbhoodId: "", nbhoodName: "", showMapSelect: false, showNearby: false });
-const TAXI_SYMBOL = Object.freeze({ type: "picture-marker", url: "images/icons/sidebar/taksi.png", width: "48px", height: "48px" });
+const TAXI_ICON_RECORD = Object.freeze({ type: "TaxiQueryUrl", category: "Taksi", title: "Taksi Durağı" });
+const TAXI_SYMBOL = Object.freeze(createPictureMarkerSymbol(TAXI_ICON_RECORD, 12, { minSize: 48, maxSize: 48 }));
 
 const openRoute = geometry => {
     const latitude = Number(geometry?.latitude ?? geometry?.y);
