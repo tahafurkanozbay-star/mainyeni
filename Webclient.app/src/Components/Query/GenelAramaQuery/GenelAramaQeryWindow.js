@@ -87,10 +87,12 @@ export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
     useEffect(() => {
         mountedRef.current = true;
         windowManager.RegisterWindow(ref);
+        const queryGate = queryGateRef.current;
+        const detailGate = detailGateRef.current;
         return () => {
             mountedRef.current = false;
-            queryGateRef.current.invalidate();
-            detailGateRef.current.invalidate();
+            queryGate.invalidate();
+            detailGate.invalidate();
         };
     }, [ref, windowManager]);
 
