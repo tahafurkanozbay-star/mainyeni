@@ -138,6 +138,11 @@ namespace Business.Core.Operations
                 return newPasswordValidation;
             }
 
+            if (!string.Equals(viewModel.NewPassword, viewModel.NewPasswordRepeat, StringComparison.Ordinal))
+            {
+                return new ServiceResult(ServiceResultType.Error, "Şifre ve tekrarı birbiriyle uyuşmuyor");
+            }
+
             var userAccount = db.UserAccounts
                 .FirstOrDefault(x => x.Id == session.UserId && !x.IsDeleted && x.IsActive);
             if (userAccount == null)
