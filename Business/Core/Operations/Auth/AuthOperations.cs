@@ -7,8 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using Toolbox.Generic;
-using Toolbox.Security;
-using Toolbox.Security.Cryptography;
 using Toolbox.Security.Jwt;
 using Toolbox.Security.Url;
 using Toolbox.Text;
@@ -48,12 +46,16 @@ namespace Business.Core.Operations
 
             var ldapDomain = Configuration.LDAP_DOMAIN?.Trim();
             if (!string.IsNullOrWhiteSpace(ldapDomain) &&
+                !string.IsNullOrWhiteSpace(Configuration.LDAP_SERVER) &&
                 string.Equals(domainName, ldapDomain, StringComparison.OrdinalIgnoreCase))
             {
                 var ldapUtility = new LdapUtility(new LdapConfig
                 {
                     UserDomainName = ldapDomain,
-                    Path = "/"
+                    Server = Configuration.LDAP_SERVER,
+                    Port = Configuration.LDAP_PORT,
+                    SecureSocketLayer = Configuration.LDAP_USE_SSL,
+                    BindDomain = Configuration.LDAP_BIND_DOMAIN
                 });
 
                 if (ldapUtility.Login(ldapUsername, viewModel.Password))
