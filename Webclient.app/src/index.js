@@ -1,16 +1,22 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
 import 'react-app-polyfill/ie9';
+import 'react-app-polyfill/ie11';
 import 'react-app-polyfill/stable';
-import 'abortcontroller-polyfill/dist/polyfill-patch-fetch';
-import App from './App';
+import 'core-js/features/string/repeat';
+import 'abortcontroller-polyfill';
+
+import React from "react";
+import ReactDOM from "react-dom";
+
+import App from "./App";
+import "./styles.css";
+import reportWebVitals, { logWebVital } from './reportWebVitals';
+import { logger } from './platform/observability/logger';
 import * as serviceWorker from './platform/pwa/serviceWorkerRegistration';
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+const rootElement = document.getElementById("root");
+ReactDOM.render(<App />, rootElement);
 
-serviceWorker.registerServiceWorker();
+reportWebVitals(logWebVital);
+serviceWorker.registerServiceWorker().catch((error) => {
+  logger.warn('service_worker_registration_failed', { message: error?.message });
+});
