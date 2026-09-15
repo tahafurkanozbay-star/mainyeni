@@ -16,6 +16,7 @@ describe('shared GIS icon registry', () => {
     ['YeniSosyalHizmetlerQueryUrl', 'sosyal'],
     ['YeniTeknolojiMerkezleriQueryUrl', 'teknoloji'],
     ['AssemblyAreaQueryUrl', 'aciltoplanma'],
+    ['EventQueryUrl', 'etkinlik'],
     ['PharmacyQueryUrl', 'eczane'],
     ['TaxiQueryUrl', 'taksi']
   ])('uses the JSON registry for service key %s', (serviceKey, expectedId) => {
@@ -25,6 +26,7 @@ describe('shared GIS icon registry', () => {
   test.each([
     ['YeniKadinDanismaQueryUrl', 'kadin'],
     ['AssemblyAreaQueryUrl', 'aciltoplanma'],
+    ['EventQueryUrl', 'etkinlik'],
     ['PharmacyQueryUrl', 'eczane'],
     ['TaxiQueryUrl', 'taksi']
   ])('keeps list, 2D and 3D icon identity aligned for %s', (type, expectedKey) => {
