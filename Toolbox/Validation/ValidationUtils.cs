@@ -6,16 +6,18 @@ namespace Toolbox.Validation
     public static class ValidationUtils
     {
         /// <summary>
-        /// Verilen emailAddress in geçerli olup olmadığını kontrol eder
+        /// Verilen emailAddress in geçerli olup olmadığını kontrol eder.
         /// </summary>
-        /// <param name="emailAddress">Geçerlenecek email adresi</param>
-        /// <returns>true ya da false döndürür</returns>
-        public static bool ValidateEmail(String emailAddress)
+        public static bool ValidateEmail(string emailAddress)
         {
+            if (string.IsNullOrWhiteSpace(emailAddress))
+            {
+                return false;
+            }
+
             try
             {
-                //TODO: bekir@as geçiyor, düşünülmeli
-                MailAddress m = new MailAddress(emailAddress);
+                _ = new MailAddress(emailAddress);
                 return true;
             }
             catch (FormatException)
@@ -24,69 +26,70 @@ namespace Toolbox.Validation
             }
         }
 
-        public static bool ValidateUrl(String url)
+        public static bool ValidateUrl(string url)
         {
-            if (Uri.IsWellFormedUriString(url, UriKind.Absolute))
-            {
-                return true;
-            }
-            else
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             {
                 return false;
             }
+
+            return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
-        /// Verilen şifrenin geçerli olup olmadığını kontrol eder
+        /// Verilen şifrenin geçerli olup olmadığını kontrol eder.
         /// </summary>
-        /// <param name="password">şifre açık metni</param>
-        /// <param name="minLength">en küçük şifre uzunluğu</param>
-        /// <param name="maxLength">en büyük şifre uzunluğu</param>
-        /// <returns>true ya da false döndürür</returns>
-        public static bool ValidatePassword(string password, int minLength,
-         int maxLength, bool mustHaveUpperCaseLetter,
-          bool mustHaveLowerCaseLetter, bool mustHaveDecimalDigit)
+        public static bool ValidatePassword(
+            string password,
+            int minLength,
+            int maxLength,
+            bool mustHaveUpperCaseLetter,
+            bool mustHaveLowerCaseLetter,
+            bool mustHaveDecimalDigit)
         {
-            bool isValid = false;
-
-            try
+            if (password == null)
             {
-                if (password == null) throw new ArgumentNullException();
+                throw new ArgumentNullException(nameof(password));
+            }
+            if (minLength < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(minLength));
+            }
+            if (maxLength < minLength)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxLength));
+            }
 
-                //Remove unexpected spaces
-                password = password.Trim();
-                bool meetsLengthRequirements = password.Length >= minLength && password.Length <= maxLength;
-                bool hasUpperCaseLetter = false;
-                bool hasLowerCaseLetter = false;
-                bool hasDecimalDigit = false;
+            var normalized = password.Trim();
+            if (normalized.Length < minLength || normalized.Length > maxLength)
+            {
+                return false;
+            }
 
-                if (meetsLengthRequirements)
+            var hasUpperCaseLetter = false;
+            var hasLowerCaseLetter = false;
+            var hasDecimalDigit = false;
+
+            foreach (var character in normalized)
+            {
+                if (char.IsUpper(character))
                 {
-                    foreach (char c in password)
-                    {
-                        if (char.IsUpper(c)) hasUpperCaseLetter = true;
-                        else if (char.IsLower(c)) hasLowerCaseLetter = true;
-                        else if (char.IsDigit(c)) hasDecimalDigit = true;
-                    }
+                    hasUpperCaseLetter = true;
                 }
-
-                bool upperCaseValidation = false;
-                bool lowerCaseValidation = false;
-                bool decimalValidation = false;
-
-                if (!hasUpperCaseLetter && mustHaveUpperCaseLetter) { upperCaseValidation = false; } else { upperCaseValidation = true; }
-                if (!hasLowerCaseLetter && mustHaveLowerCaseLetter) { lowerCaseValidation = false; } else { lowerCaseValidation = true; }
-                if (!hasDecimalDigit && mustHaveDecimalDigit) { decimalValidation = false; } else { decimalValidation = true; }
-
-                //Last check
-                isValid = meetsLengthRequirements && upperCaseValidation && lowerCaseValidation && decimalValidation;
-            }
-            catch (Exception ex)
-            {
-                throw ex;
+                else if (char.IsLower(character))
+                {
+                    hasLowerCaseLetter = true;
+                }
+                else if (char.IsDigit(character))
+                {
+                    hasDecimalDigit = true;
+                }
             }
 
-            return isValid;
+            return (!mustHaveUpperCaseLetter || hasUpperCaseLetter) &&
+                   (!mustHaveLowerCaseLetter || hasLowerCaseLetter) &&
+                   (!mustHaveDecimalDigit || hasDecimalDigit);
         }
     }
 }
