@@ -1,43 +1,22 @@
 import "./CommonQueryResultItemTools.css";
+import { BiZoomIn } from "react-icons/bi";
+import { TbRoute } from "react-icons/tb";
 
-import { BiCaretRightCircle, BiZoomIn } from "react-icons/bi";
-import {TbRoute} from "react-icons/tb";
-import { useEffect } from "react";
+export const CommonQueryResultItemTools = ({ item, zoomCallback, showRouteCallback }) => {
+    const invoke = (event, callback) => {
+        event.preventDefault();
+        event.stopPropagation();
+        callback?.(event, item);
+    };
 
-export const CommonQueryResultItemTools = (props) => {
-
-    useEffect(() => {
-
-
-    }, [props]);
-
-    const handleEventPropagation=(e)=>{
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    const showOnMap=(e)=>{
-        handleEventPropagation(e);
-        props?.zoomCallback(e, props.item)
-    }
-
-    const showRoute=(e)=>{
-        handleEventPropagation(e);
-        props?.showRouteCallback(e, props.item)
-    }
-
-    const showStreetView=(e)=>{
-        handleEventPropagation(e);
-    }
-
-    return (<>
-        <div className="result-item-tools-container">
-            <div className="result-item-tool-button" onClick={(e)=>showOnMap(e)}>
-                <BiZoomIn className="result-item-tool-button-icon" title="Haritada Göster" />
-            </div>
-            <div className="result-item-tool-button" onClick={(e)=>showRoute(e)}>
-                <TbRoute className="result-item-tool-button-icon" title="Yol Tarifi Al" />
-            </div>
+    return (
+        <div className="result-item-tools-container" aria-label="Sonuç işlemleri">
+            <button type="button" className="result-item-tool-button" onClick={event => invoke(event, zoomCallback)} aria-label="Haritada göster">
+                <BiZoomIn className="result-item-tool-button-icon" aria-hidden="true" />
+            </button>
+            <button type="button" className="result-item-tool-button" onClick={event => invoke(event, showRouteCallback)} aria-label="Yol tarifi al">
+                <TbRoute className="result-item-tool-button-icon" aria-hidden="true" />
+            </button>
         </div>
-    </>);
-}
+    );
+};
