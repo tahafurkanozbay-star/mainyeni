@@ -1,0 +1,10 @@
+.esri-ui .esri-popup{
+    height: 60vh;
+    width: 40vw;
+}
+
+.esri-popup__main-container{
+    max-height: fit-content !important;
+    height: 60vh !important;
+    width: 50vw !important;
+}

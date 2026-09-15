@@ -1,0 +1,86 @@
+/*overrides:esri*/
+.esri-popup__button--dock {
+  display: none;
+}
+
+.esri-widget {
+  overflow-x: hidden;
+}
+
+.esri-basemap-gallery {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.esri-basemap-gallery__item-title {
+  font-size: 1.15em !important;
+}
+
+
+.esri-select {
+  font-size: 1.5rem;
+}
+
+.esri-distance-measurement-2d__units-label {
+  display: none;
+}
+
+.esri-distance-measurement-2d__measurement,
+.esri-area-measurement-2d__measurement {
+  padding: 10px;
+  border: 1px solid gray;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.esri-distance-measurement-2d__measurement-item-title,
+.esri-area-measurement-2d__measurement-item-title {
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.esri-view .esri-view-surface--inset-outline:focus::after {
+  outline: none !important;
+}
+
+.esri-swipe__container:focus {
+  outline: none !important;
+}
+
+.esri-map {
+  height: 100vh;
+}
+
+.esri-popup__main-container
+{
+  border-radius: var(--common-query-window-border-radius);
+}
+
+.esri-popup__header{
+  border-top-left-radius: var(--common-query-window-border-radius) !important;
+  border-top-right-radius: var(--common-query-window-border-radius) !important;
+}
+
+.esri-ui .esri-popup{
+  border-radius: var(--common-query-window-border-radius) !important;
+  z-index: 999 !important;
+}
+
+.esri-popup__button{
+  border: 1px solid #DDD;
+  padding: 10px;
+  margin-left: 10px;
+  border-radius: var(--common-query-window-border-radius);
+}
+
+.esri-popup__icon{
+  font-weight: bold;
+}
+
+.esri-popup__navigation{
+  display: none;
+}
+
+.esri-basemap-gallery__item-container{
+  max-height: 500px;
+}

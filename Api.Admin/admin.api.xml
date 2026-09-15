@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ankara-rehber-api-admin</name>
+    </assembly>
+    <members>
+        <member name="M:CityWorks.AdminApi.Config.AppSettingsController.List(System.String)">
+            <summary>
+            Returns Application Settings with Key 
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Config.AppSettingsController.Save(Business.Core.Model.AppConfig)">
+            <summary>
+            Save Application config with Key 
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.SystemService.SystemController.Check(System.String)">
+            <summary>
+            Returns status of the system components (db etc.) 
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Feedback.FeedbackController.List(Business._Base._BaseSearchViewModel)">
+            <summary>
+            Search the BasemapLayers
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Feedback.FeedbackController.Update(System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Search the Feedbacks
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.BasemapLayerController.List(Business._Base._BaseSearchViewModel)">
+            <summary>
+            Search the BasemapLayers
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.BasemapLayerController.Save(Business.Extensions.Gis.Model.GisBasemapLayer)">
+            <summary>
+            Creates/updates BasemapLayer
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.BasemapLayerController.Delete(Business.Extensions.Gis.Model.GisBasemapLayer)">
+            <summary>
+            Deletes BasemapLayer
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.GisConfigServiceController.Delete(Business.Extensions.Gis.Model.GisConfigService)">
+            <summary>
+            Deletes a configuration service
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.GisConfigServiceController.List">
+            <summary>
+            Gets the list for configuration services
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.GisConfigServiceController.Save(Business.Extensions.Gis.Model.GisConfigService)">
+            <summary>
+            Creates or update a configuration service
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.GisConfigServiceController.Import">
+            <summary>
+            Creates or update a configuration service
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.GisConfigServiceController.Export(System.String)">
+            <summary>
+            Gets the list for configuration services
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerController.List(Business._Base._BaseSearchViewModel)">
+            <summary>
+            Search the layers
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerController.Save(Business.Extensions.Gis.ViewModel.GisLayerAdminViewModel)">
+            <summary>
+            Creates/updates layer
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerController.Delete(Business.Extensions.Gis.ViewModel.GisLayerAdminViewModel)">
+            <summary>
+            Deletes layer
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerGroupController.Save(Business.Extensions.Gis.Model.GisLayerGroup)">
+            <summary>
+            Creates/updates layer
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerGroupController.Delete(Business.Extensions.Gis.Model.GisLayerGroup)">
+            <summary>
+            Deletes layer
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerGroupController.List">
+            <summary>
+            Search the layers
+            </summary>
+        </member>
+        <member name="M:CityWorks.AdminApi.Gis.LayerGroupController.ListWithLayers">
+            <summary>
+            Search the layers
+            </summary>
+        </member>
+        <member name="M:Api.Admin.Core.Controllers.AuthController.Login(Business.Core.ViewModel.UserAccountLoginViewModel)">
+            <summary>
+            Provide Login facility for the users 
+            </summary>
+        </member>
+        <member name="M:Api.Admin.Core.Controllers.AuthController.Logout">
+            <summary>
+            Provides logout facility for the user 
+            </summary>
+        </member>
+        <member name="T:Api.Admin.Filters.AdminRequestFilterAttribute">
+            Bu attribute admin tarafındaki requestleri filtrelemeye yarar
+        </member>
+    </members>
+</doc>

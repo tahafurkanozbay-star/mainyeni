@@ -1,0 +1,37 @@
+.login,
+.image {
+  min-height: 100vh;
+}
+
+.bg-image {
+  background-image: url('loginbg.jpg');
+  background-size: cover;
+  background-position: center center;
+  /*filter: sepia(1);*/
+}
+
+.display-4 {
+  font-size: 3rem;
+}
+
+.LoginHeader {
+  border-bottom: 1px solid gray;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  font-size: 2rem;
+}
+
+.LoginSection {
+  background: var(--alternativeblack);
+}
+
+.LoginTitle {
+  font-size: 24px;
+  color: var(--text-main-color);
+  vertical-align: -1px;
+}
+
+.LoginLogo{
+  width: 64px;
+  filter:brightness(5);
+}

@@ -1,0 +1,27 @@
+.FullScreenLoading_Logo{
+  width: 32px;
+  filter: grayscale(1);
+  margin:5px;
+}
+.FullScreenLoading{
+  width: 100vw;
+  height: 100vh;
+  background:white;
+  color: #666;
+  text-align: center;
+  padding-top: 10%;
+  font-size: 1.5rem;
+}
+.ContainerLoading
+{
+  text-align: center;
+  padding: 20px;
+}
+
+.NoResultsFound{
+  text-align: center;
+  padding: 20px;
+  width:100%;
+  color:var(--themeBackground);
+  font-size: 1.25rem;
+}

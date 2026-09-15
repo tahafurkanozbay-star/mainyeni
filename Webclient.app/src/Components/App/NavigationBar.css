@@ -1,0 +1,95 @@
+
+
+/* mainbar -- start*/
+
+@font-face {
+  font-family: 'ankara';
+  src: url('./AnkaraDisplay-Regular.ttf');
+}
+
+:root{
+    --mainbar-height:60px;
+    --mainbar-background:#f9fbf4;
+  }
+  
+  .mainbar-container {
+    padding-bottom: 5px;
+    background: var(--mainbar-background);
+    padding-top: 8px;
+    padding-left: 5px;
+    height: var(--mainbar-height);
+    position: absolute;
+    width: 100%;
+  }
+
+  /* mainbar -- end*/
+  
+  /*mainbar left -- start*/
+  :root{
+    --mainbar-item-height:35px;
+    --mainbar-item-width:130px;
+    --mainbar-item-margin-top:2px;
+    
+  }
+  .mainbar{
+    display: flex;
+    align-items: flex-start;
+    position: relative;
+  }
+
+  
+  .mainbar-logo {
+    display: flex;
+    align-items: center;
+    align-content: center;
+    align-self: center;
+    flex-direction: row;
+    width: 82px;
+  }
+  
+  .mainbar-logo img {
+    height: 58px;
+    margin-left: 5px;
+  }
+  
+
+  .mainbar-text{
+    display: inline-block;
+    font-weight: 600;
+    font-size: 28px;
+    color: #23397d;
+    position: absolute;
+    left: 120px;
+    top:5px;
+    padding-left: 30px;
+    border-left: 1px solid gray;
+    font-family: 'ankara';
+  }
+
+
+  
+  /*mainbar left -- end*/
+  .ns-input{
+    position: absolute;
+    left: 50%;
+    top: 38%;
+    transform: translate(-50%, -50%);
+  }
+  
+  /*mainbar right -- start*/
+
+  .mainbar-right{
+    display: contents;
+    align-items: center;
+    float: right;
+    flex: 20% 1;
+  }
+
+  @media (max-width:960px) {
+    .mainbar-right-button span{
+      display: none;
+  }
+}
+  /*mainbar right -- end*/
+  
+  

@@ -1,0 +1,189 @@
+@import url('https://fonts.googleapis.com/css2?family=Mukta&display=swap');
+
+/*TODO: sunucu dışarı açıldığında aktive edilecek*/
+* {
+    font-family: 'Mukta', 'Segoe UI', 'Trebuchet MS', 'Ubuntu', sans-serif;
+}
+
+:root {
+    --nav-background: #364b5a;
+    --primary-color: #4487b8;
+    --secondary-color: #1b5b89;
+    --border-color: #DDD;
+    --text-main-color: #444;
+    --colors-red:#ad0000;
+    --beige:#f3f3f3;
+}
+
+body {
+    background-color: whitesmoke;
+    color: var(--text-main-color);
+}
+
+
+
+.btn-grid-icon {
+    color: var(--primary-color);
+    font-size: 1.25rem;
+}
+
+
+.btn-grid {
+    cursor: pointer;
+    color: var(--primary-color);
+    margin-right: 5px;
+}
+
+.btn-grid:hover {
+    background-color: var(--secondary-color) !important;
+    color:white !important;
+}
+
+.btn-grid:hover > .btn-grid-icon {
+    color:white !important;
+}
+
+.btn-danger {   
+    color: #d95151;
+}
+
+.mainbar {
+    background-color: var(--nav-background);
+    color: #DDD;
+}
+
+.page-body {
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 10px;
+    margin-top: 20px;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.page-title>span {
+    vertical-align: -2px;
+}
+
+.page-tools-button {
+    margin-right: 10px;
+}
+
+.checkbox {
+    font-size: 2rem;
+}
+
+.footer {
+    bottom: 0;
+    position: absolute;
+    background: #3e3e3e;
+    height: 50px;
+    padding: 10px;
+    width: 100%;
+    color: white;
+}
+
+
+.big-modal {
+    width: 60vw !important;
+    max-width: 90vw !important;
+}
+
+.checkbox-label{
+    margin-left: 2px;
+    vertical-align: -1px;    
+    cursor: pointer;
+}
+.checkbox-label:hover{
+    color: var(--nav-background);
+}
+
+/*bootstrap overrides*/
+.btn-primary {
+    border-color: var(--primary-color) !important;
+    background-color: var(--primary-color) !important;
+}
+.btn-primary:hover{
+    border-color: var(--secondary-color) !important;
+    background-color: var(--secondary-color) !important;
+}
+.btn-danger{
+    color:white;
+}
+
+.form-label {
+    font-weight: bold;
+    color: var(--text-main-color);
+}
+
+
+.app-version{  
+    position: absolute;
+    background-color: #DDD;
+    color:#444;
+    bottom: 0;
+    right: 0;
+    padding: 10px;
+    font-size: 1rem;
+}
+
+.confirm-dialog-container{
+    padding: 10px;
+    border: 1px solid #ad0000;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    font-size: 1.15rem;
+}
+
+
+.icon-8x{
+    font-size: 4rem;
+}
+
+.btn-label{
+    display: none;
+}
+
+.grid-tools-column{
+     
+}
+
+
+
+.main-page-card {
+    border: 1px solid var(--beige);
+    margin: 10px;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.main-page-card-title {
+    font-size: 1.25rem;
+}
+
+.main-page-card-link {
+    background: var(--beige);
+    height: 40px;
+    padding: 10px;
+    margin: 0;
+}
+
+.layerlist-group-title{
+    font-size: 1.25rem;
+}
+
+.form-section {
+    border: 1px solid #cfcfcf;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 5px;
+    margin-top: 5px;
+}
+

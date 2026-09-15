@@ -1,0 +1,83 @@
+.transit-route-query-tab-icon{
+    font-size: 2.5rem;
+}
+
+.transit-route-query-tab-title{
+    font-size: 2rem;
+    border-bottom: 1px solid #747474;
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    margin-top: 10px;
+}
+
+.transit-route-query-stop-container{
+    display: flex;
+    flex-direction: row;
+    flex: 1 10 1 1;
+    align-content: flex-end;
+    margin-top: 10px;
+}
+
+.transit-route-query-stop-textbox{
+    border: none;
+    border-bottom: 1px solid gray;
+    height: 40px;
+    font-size: 2rem;
+    padding: 10px;
+}
+
+.transit-route-query-stop-icon{
+    font-size: 1.5rem;
+    margin-top: 30px;
+}
+
+
+.transit-route-query-stop-icon-button{
+    font-size: 3rem;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.transit-route-query-stop-icon-button:hover{
+    color:var(--common-query-window-header-text-color);
+}
+
+.transit-route-query-exchange-icon-button{
+    font-size: 2rem;
+    position: absolute;
+    margin-right: 0;
+    right: 55px;
+}
+.transit-route-query-remove-icon-button{
+    font-size: 3rem;
+    margin-top: 10px;
+    cursor: pointer;
+}
+.transit-route-query-remove-icon-button:hover{
+    color:var(--common-query-window-header-text-color);
+}
+
+.transit-route-query-add-stop-button{
+    background-color: transparent;
+    border: none;
+    color: #444;
+    margin-top: 10px;
+}
+
+.transit-route-query-add-stop-button svg{
+    font-size: 1.5rem;
+    vertical-align: -3px;
+}
+
+.transit-route-query-add-stop-button span{
+    font-size: 1.5rem;
+}
+
+
+.transit-route-query-stop-dots{
+    border-left: 1px dashed #444;
+    height: 40px;
+    margin-left: 7px;
+    margin-bottom: 10px;
+    position: absolute;
+}

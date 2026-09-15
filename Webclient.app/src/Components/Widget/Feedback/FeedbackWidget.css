@@ -1,0 +1,26 @@
+.feedback-widget-logo{
+    flex: 1;
+}
+.feedback-widget-title{
+    flex: 20;
+}
+
+.feedback-widget-logo img{
+    width: 32px;
+}
+
+.feedback-widget-title span{
+    font-size: 2rem;
+    margin-left: 10px;
+}
+
+.feedback-form-label
+{
+    font-weight: 600;
+    text-align: right;
+    color: #444;
+}
+
+.feedback-form-row{
+    margin-top: 5px;
+}

@@ -1,0 +1,17 @@
+Api.Core/bin
+Api.Core/obj
+Api.Admin/bin
+Api.Admin/obj
+Api.User/bin
+Api.User/obj
+Business/bin
+Business/obj
+Business.Gis/bin
+Business.Gis/obj
+Toolbox/bin
+Toolbox/obj
+Webclient.admin/node_modules
+Webclient.app/node_modules
+Webclient.admin/build
+Webclient.app/build
+/.config

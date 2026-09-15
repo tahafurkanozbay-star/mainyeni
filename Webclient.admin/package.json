@@ -1,0 +1,54 @@
+{
+  "homepage": ".",
+  "name": "webclient-admin",
+  "version": "1.0.6",
+  "private": true,
+  "dependencies": {
+    "@terraformer/arcgis": "^2.1.2",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.1.2",
+    "bootstrap": "^5.2.2",
+    "crypto-js": "^4.0.0",
+    "esri-loader": "^3.0.0",
+    "file-saver": "^2.0.5",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.5.28",
+    "multiselect-react-dropdown": "^2.0.25",
+    "react": "^18.2.0",
+    "react-bootstrap": "^2.5.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^4.4.0",
+    "react-router-dom": "^5.3.0",
+    "react-scripts": "4.0.3",
+    "tokml": "^0.4.0",
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5",
+    "xml-js": "^1.6.11"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+:root{
+    --layer-list-item-hover-bg-color:rgb(200 200 210 / 30%);
+}
+
+
+.layer-list-container{
+
+
+}
+
+.layergroup-title-container {
+    cursor: pointer;
+    color: gray;
+  }
+  
+  .layergroup-title-container.card:hover {
+    background: #EEE;
+  }
+  
+  .layerlist-item {
+    padding: 5px;
+    cursor: pointer;
+    font-size: 1.15em;
+  }
+  
+  .layerlist-item:hover {
+    background-color: #DDD;
+  }
+  
+  .legend-container{
+    height: auto;
+    overflow-y: auto;
+    max-height: 500px;
+  }
+  
+.layer-list-group-accordion-item{
+    
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+
+.layer-list-group-accordion-item-header button.accordion-button.collapsed::after {
+    background-image: var(--bs-accordion-btn-icon) !important;
+}
+.layer-list-group-accordion-item-header button.accordion-button :not(.collapsed){
+    color:var(--common-query-window-header-text-color);
+    font-weight: 600;
+}
+
+
+.layer-list-group-title{
+    font-size: 1.75rem !important;
+    padding-bottom: 5px;
+}
+.layer-list-group-title-icon{
+    margin-top: -2px;
+    font-size: 2.5rem;
+}
+
+.layer-list-item{
+    padding-top: 10px;
+    cursor: pointer;
+}
+
+.layer-list-item-title
+{
+    font-size: 1.75rem !important;
+    padding-bottom: 5px;
+}
+.layer-list-item:hover{
+    background-color: var(--layer-list-item-hover-bg-color);
+    border-radius: 10px;
+}
+
+
+.layer-list-window-body .tab-content{
+    background-color: rgba(255,255,255,0.5);
+}

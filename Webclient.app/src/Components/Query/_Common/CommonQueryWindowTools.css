@@ -1,0 +1,90 @@
+.common-query-window-tools {
+    display: flex;
+    flex-direction: row;
+    
+}
+
+.common-query-window-tools-body{
+  width: 100%;
+  padding: 10px;
+}
+
+.common-query-window-tools-buffer-distance-indicator{
+    font-size: 1.25rem;
+    font-weight: bold;
+    padding: 2px;
+    border-radius: var(--primary-button-radius);
+    flex:2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.common-query-window-tools-mapselect-message{
+  padding: 10px;
+  font-size: 1.75rem;
+  background: #EEE;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+}
+
+
+
+
+.common-query-window-tool {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  align-items: center;
+  margin: 5px;
+  padding: 5px;
+}
+
+.common-query-window-tool>span{
+  font-size: 1.25rem;
+}
+.common-query-window-tool>img{
+  width: 12px;
+}
+.common-query-window-tool-icon{
+  font-size: 2rem;
+}
+
+.common-query-window-tool:hover{
+  border: 0px solid gray;
+  background: var(--mainbar-background);
+  border-radius: 10px;
+  color:white;
+  transition: 0.25s;
+}
+.common-query-window-tool:hover>img{
+  filter:brightness(50);
+  
+}
+.common-query-window-tool.danger {
+  border-radius: 8px;
+  background: var(--colors-red);
+  color: white;
+}
+
+.common-query-window-tool-minimise-button{
+  display: none;
+}
+
+
+.common-query-window-tool-close-button {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  font-size: 3rem;
+  color: var(--common-query-window-header-text-color);
+  cursor: pointer;
+  border-radius: 20px;
+  border: 1px solid white;
+  background: white;
+}
+.common-query-window-tool-close-button:hover{
+  color: var(--colors-red);
+}

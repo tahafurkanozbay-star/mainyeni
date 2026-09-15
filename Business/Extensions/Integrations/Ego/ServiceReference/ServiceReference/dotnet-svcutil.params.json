@@ -1,0 +1,12 @@
+{
+  "providerId": "Microsoft.Tools.ServiceModel.Svcutil",
+  "version": "2.1.0",
+  "options": {
+    "inputs": [
+      "https://baskentmblws.ego.gov.tr/WSDL/IMAR_CBS/HatDurakBilgiServis.asmx?wsdl"
+    ],
+    "outputFile": "Reference.cs",
+    "targetFramework": "net7.0",
+    "typeReuseMode": "All"
+  }
+}

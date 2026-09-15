@@ -1,0 +1,39 @@
+.query-cityblockparcel-window{
+
+    z-index: 3;
+    position: absolute;
+    top: var(--mainbar-height);
+    left: var(--sidebar-width);
+    width: 296px;
+    background-color: var(--sidebar-background);
+    padding: 10px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.query-cityblockparcel-window-title{
+    display: none;
+}
+
+@media screen and (max-width:780px) {
+    .query-cityblockparcel-window-title{
+        display: block !important;
+        font-size: 1.5rem;
+        padding: 4px;
+        color: white;
+        font-weight: 600;
+    }
+
+    .query-cityblockparcel-window{
+        width: calc(100vw - var(--sidebar-width)) !important;
+    }
+}
+
+.cityblockparcel-query-window-close-button{
+    top: 5px;
+    right: 5px;
+    font-size: 3rem;
+}
+
+

@@ -1,0 +1,29 @@
+.Message_Container{
+    border: 1px solid #efefef !important;
+    text-align: left;
+    background-color: #efefef !important;
+}
+
+.Message_Container_Icon{
+    font-size: 1.5rem;
+}
+
+.Message_Container_Text{
+    font-size: 1rem;
+    margin-left: 5px;
+    vertical-align: -1px;
+}
+
+.Message_Dismiss_Button{
+    color: #afafaf;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+.Message_Dismiss_Button:hover{
+    color:#444;
+}
+
+.toast-header .btn-close {
+    right: 15px !important;
+    position: absolute !important;
+}
