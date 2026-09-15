@@ -2,7 +2,7 @@ import React, { useEffect, useImperativeHandle, useState, useRef } from "react";
 import { Button, Form } from "react-bootstrap";
 import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
-import { MapManager } from "../../../Store/Managers/MapManager";
+import MapManager from "../../../Store/Managers/MapManager";
 import { FiMapPin, FiPhone } from "react-icons/fi";
 import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
 import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
@@ -15,21 +15,15 @@ import { LayerBusiness } from "../../../Business/LayerBusiness";
 import { GenelAramaQeryBusiness } from "../../../Business/GenelAramaQeryBusiness";
 
 export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
+
     const windowTitle = "ARAMA SONUÇLARI";
     const windowLogo = "images/search.svg";
     const [query, setQuery] = useState({ name: "" });
     const defaultQuery = props.windowManager.GetQueryParams(props.id);
-    const commonToolsComponentRef = useRef();
-    const [mapView, setMapView] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [resultList, setResultList] = useState(null);
-    const [errorMessage, setErrorMessage] = useState("");
-    const [clusterLayer, setClusterLayer] = useState(null);
-    const [activeTab, setActiveTab] = useState("form");
 
     useImperativeHandle(ref, () => ({
         id: props.id, visible: false, minimized: false,
-        OnShow: () => { DebugHelper.Log("show " + props.id); fetchQueryResults(); },
+        OnShow: () => { DebugHelper.Log("show " + props.id); fetchQueryResults(query.name); },
         OnClose: () => {
             DebugHelper.Log("closing " + props.id);
             setQuery(defaultQuery || { name: "" });
@@ -41,13 +35,26 @@ export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
         }
     }));
 
+    const commonToolsComponentRef = useRef();
+    const [mapView, setMapView] = useState(null);
+    const [districtList, setDistrictList] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [clusterLayer, setClusterLayer] = useState(null);
+    const [resultList, setResultList] = useState(null);
+    const [activeTab, setActiveTab] = useState("form");
+    const [errorMessage, setErrorMessage] = useState("");
+
     useEffect(() => {
         props.windowManager.RegisterWindow(ref);
         const _mapView = MapManager.GetMapView();
         setMapView(_mapView);
-        if (_mapView) fetchQueryResults();
+        if (_mapView) fetchQueryResults(_mapView);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mapView]);
+
+    const setQueryField = (_field, _value) => {
+        setQuery(query => ({ ...query, [_field]: _value }));
+    };
 
     const removeLastClusterLayer = () => {
         if (clusterLayer != null && mapView?.map) {
@@ -56,11 +63,16 @@ export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
         }
     };
 
+    const btnBack_OnClick = () => {
+        removeLastClusterLayer();
+        props.windowManager.ShowWindow("sidebar");
+    };
+
     const fetchQueryResults = async () => {
         setLoading(true);
         setErrorMessage("");
         setResultList(null);
-        const searchQuery = props.windowManager.GetQueryParams(props.id) || { name: "" };
+        const searchQuery = props.windowManager.GetQueryParams(props.id) || query || { name: "" };
         setQuery(searchQuery);
         LoggingBusiness.CreateClientLog("Genel Arama/Sorgu", searchQuery);
         try {
@@ -71,11 +83,11 @@ export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
                 props.windowManager.ShowMessage(Constants_MessageType.Error, message);
                 return;
             }
-            const list = (result.data || []).map((_item) => ({
-                ObjectId: _item?.attr?.objectid,
-                Title: _item?.attr?.adi || "İsimsiz kayıt",
-                Phone: _item?.attr?.telefon || "",
-                Address: _item?.attr?.adres || "Adres bilgisi bulunmuyor"
+            const list = (result.data || []).map(item => ({
+                ObjectId: item?.attr?.objectid,
+                Title: item?.attr?.adi || "İsimsiz kayıt",
+                Phone: item?.attr?.telefon || "",
+                Address: item?.attr?.adres || "Adres bilgisi bulunmuyor"
             }));
             setResultList(list);
         } catch (error) {
@@ -136,7 +148,7 @@ export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
             <header className="common-query-window-header"><img className="common-query-window-header-icon" src={windowLogo} alt="" /><span>{windowTitle}</span></header>
             <div className="results-container" aria-live="polite">
                 <div className="results-container-toolbar">
-                    <button className="results-container-back-button" type="button" onClick={() => { removeLastClusterLayer(); props.windowManager.ShowWindow("sidebar"); }}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button>
+                    <button className="results-container-back-button" type="button" onClick={btnBack_OnClick}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button>
                     <div className="results-container-count"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div>
                 </div>
                 {resultContent}
