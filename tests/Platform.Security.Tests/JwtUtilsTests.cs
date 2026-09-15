@@ -65,7 +65,7 @@ public sealed class JwtUtilsTests
         Assert.Equal(environment.Issuer, jwt.Issuer);
         Assert.Contains(environment.Audience, jwt.Audiences);
         Assert.Equal(SecurityAlgorithms.HmacSha256, jwt.Header.Alg);
-        Assert.Equal(subject, jwt.Claims.Single(x => x.Type == ClaimTypes.Name).Value);
+        Assert.Equal(subject, jwt.Claims.Single(x => x.Type == JwtRegisteredClaimNames.UniqueName).Value);
         Assert.False(string.IsNullOrWhiteSpace(jwt.Id));
         Assert.True(jwt.ValidFrom <= DateTime.UtcNow.AddSeconds(5));
         Assert.True(jwt.ValidTo > DateTime.UtcNow.AddMinutes(25));
@@ -228,7 +228,7 @@ public sealed class JwtUtilsTests
 
         Assert.NotNull(decoded);
         Assert.Equal(environment.Issuer, decoded!.Issuer);
-        Assert.Equal("encrypted-guid", decoded.Claims.Single(x => x.Type == ClaimTypes.Name).Value);
+        Assert.Equal("encrypted-guid", decoded.Claims.Single(x => x.Type == JwtRegisteredClaimNames.UniqueName).Value);
     }
 
     [Theory]

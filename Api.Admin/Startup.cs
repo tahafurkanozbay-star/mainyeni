@@ -20,6 +20,8 @@ namespace api.admin
 
         public void ConfigureServices(IServiceCollection services)
         {
+            // CORS allowlists are resolved centrally by AddKentRehberiApiPlatform from
+            // Platform:Cors:AllowedOrigins and the temporary legacy Cors:AllowedOrigins bridge.
             services.AddKentRehberiApiPlatform(Configuration);
             services.AddScoped<AdminRequestFilterAttribute>();
             services.AddControllers();

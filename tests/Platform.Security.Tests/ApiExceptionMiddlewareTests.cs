@@ -1,6 +1,7 @@
 using Api.Core.Platform;
 using Api.Core.Platform.Middleware;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.IO;
@@ -81,12 +82,8 @@ public sealed class ApiExceptionMiddlewareTests
     [Fact]
     public async Task Invoke_RethrowsUnhandledExceptionAfterResponseHasStarted()
     {
-        var context = CreateContext();
-        var middleware = CreateMiddleware(async httpContext =>
-        {
-            await httpContext.Response.StartAsync();
-            throw new InvalidOperationException("late failure");
-        });
+        var context = CreateStartedContext();
+        var middleware = CreateMiddleware(_ => throw new InvalidOperationException("late failure"));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.Invoke(context));
 
@@ -159,6 +156,13 @@ public sealed class ApiExceptionMiddlewareTests
         return context;
     }
 
+    private static DefaultHttpContext CreateStartedContext()
+    {
+        var features = new FeatureCollection();
+        features.Set<IHttpResponseFeature>(new StartedResponseFeature());
+        return new DefaultHttpContext(features);
+    }
+
     private static async Task<string> ReadBody(HttpContext context)
     {
         context.Response.Body.Position = 0;
@@ -168,5 +172,26 @@ public sealed class ApiExceptionMiddlewareTests
             detectEncodingFromByteOrderMarks: false,
             leaveOpen: true);
         return await reader.ReadToEndAsync();
+    }
+
+    private sealed class StartedResponseFeature : IHttpResponseFeature
+    {
+        public int StatusCode { get; set; } = StatusCodes.Status200OK;
+
+        public string? ReasonPhrase { get; set; }
+
+        public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
+
+        public Stream Body { get; set; } = new MemoryStream();
+
+        public bool HasStarted => true;
+
+        public void OnStarting(Func<object, Task> callback, object state)
+        {
+        }
+
+        public void OnCompleted(Func<object, Task> callback, object state)
+        {
+        }
     }
 }

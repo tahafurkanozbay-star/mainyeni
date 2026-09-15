@@ -8,7 +8,8 @@ namespace Api.Core.Platform.Middleware
 {
     /// <summary>
     /// Applies the API security-header baseline in one place so public and administrative APIs
-    /// cannot drift. Headers are set on response start, which also covers controller short-circuits.
+    /// cannot drift. Headers are established before downstream middleware and re-applied on
+    /// response start so late downstream mutations cannot weaken the server-owned baseline.
     /// </summary>
     public sealed class SecurityHeadersMiddleware
     {
@@ -23,23 +24,35 @@ namespace Api.Core.Platform.Middleware
             _options = options?.Value?.SecurityHeaders ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public Task Invoke(HttpContext context)
+        public async Task Invoke(HttpContext context)
         {
             if (context == null)
             {
                 throw new ArgumentNullException(nameof(context));
             }
 
-            if (_options.Enabled)
+            if (!_options.Enabled)
             {
-                context.Response.OnStarting(() =>
-                {
-                    ApplyHeaders(context);
-                    return Task.CompletedTask;
-                });
+                await _next(context);
+                return;
             }
 
-            return _next(context);
+            ApplyHeaders(context);
+            context.Response.OnStarting(() =>
+            {
+                ApplyHeaders(context);
+                return Task.CompletedTask;
+            });
+
+            await _next(context);
+
+            // DefaultHttpContext and other hostless pipelines do not necessarily execute
+            // OnStarting callbacks. Re-apply while headers remain mutable so tests and custom
+            // hosts observe the same contract as Kestrel without weakening production behavior.
+            if (!context.Response.HasStarted)
+            {
+                ApplyHeaders(context);
+            }
         }
 
         private void ApplyHeaders(HttpContext context)
@@ -56,6 +69,10 @@ namespace Api.Core.Platform.Middleware
             {
                 headers["Cross-Origin-Embedder-Policy"] = _options.CrossOriginEmbedderPolicy;
             }
+            else
+            {
+                headers.Remove("Cross-Origin-Embedder-Policy");
+            }
 
             // The default CSP is intentionally API-oriented. Do not apply it to an explicitly HTML
             // response such as opt-in Swagger UI because default-src 'none' would break the page.
@@ -63,6 +80,10 @@ namespace Api.Core.Platform.Middleware
             if (!string.IsNullOrWhiteSpace(_options.ContentSecurityPolicy) && !IsHtmlResponse(context))
             {
                 headers["Content-Security-Policy"] = _options.ContentSecurityPolicy;
+            }
+            else
+            {
+                headers.Remove("Content-Security-Policy");
             }
 
             if (_options.EnableHsts && context.Request.IsHttps)
@@ -74,8 +95,11 @@ namespace Api.Core.Platform.Middleware
                 }
                 headers["Strict-Transport-Security"] = hsts;
             }
+            else
+            {
+                headers.Remove("Strict-Transport-Security");
+            }
 
-            // APIs should not leak implementation/platform version information through this layer.
             headers.Remove("X-Powered-By");
             headers.Remove("X-AspNet-Version");
         }

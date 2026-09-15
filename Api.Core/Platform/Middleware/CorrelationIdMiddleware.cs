@@ -61,6 +61,10 @@ namespace Api.Core.Platform.Middleware
 
             context.Items[ApiPlatformDefaults.TraceIdItemKey] = correlationId;
 
+            // Set the value immediately so middleware/tests that inspect the response before the
+            // server starts it observe the same contract. Re-apply on start so downstream code
+            // cannot accidentally replace the server-owned correlation identifier.
+            context.Response.Headers[headerName] = correlationId;
             context.Response.OnStarting(() =>
             {
                 context.Response.Headers[headerName] = correlationId;
