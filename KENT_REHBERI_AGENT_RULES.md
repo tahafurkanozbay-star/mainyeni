@@ -10,12 +10,38 @@ Bu repository kurumsal Kent Rehberi/CBS uygulamasıdır. Amaç uygulamayı moder
 4. `git status`, mevcut branch, son commit ve açık PR/merge durumunu kontrol et.
 5. Önceki turun değişikliklerini ezme. Aynı dosya/alan üzerinde paralel iş varsa mevcut yapıya entegre ol.
 
+## Bütün kod tabanı modernizasyon standardı
+- Amaç yalnızca birkaç dosyayı yamamak değildir; repository'nin tüm aktif kod tabanı zaman içinde güncel, hızlı, güvenli ve bakımı kolay bir yapıya taşınmalıdır.
+- Kullanılan programlama dilleri, runtime'lar, framework'ler, build araçları, bağımlılıklar ve kod kalıpları her turda ilgili alan için gözden geçirilmelidir.
+- Güncel ve stabil sürümler tercih edilmelidir; beta/deneysel teknoloji ancak açık performans veya işlev gerekçesi varsa ve geri dönüş planı bulunuyorsa kullanılmalıdır.
+- Büyük sürüm veya dil/framework geçişleri körlemesine yapılmaz. Önce mevcut davranış, bağımlılıklar, tarayıcı desteği, build/test durumu ve migration riski çıkarılır; sonra kontrollü aşamalar halinde uygulanır.
+- Eski/deprecated API, framework pattern'i, syntax, polyfill, paket, build zinciri veya güvenlik riski tespit edilirse uyumlu modern karşılığına geçirilmesi değerlendirilir.
+- Kod tabanının yalnızca frontend'i değil; backend/BFF/proxy, API contracts, shared types, testler, CI/CD, config, asset pipeline, security headers ve veri erişim modeli de modernizasyon kapsamındadır.
+- Modernizasyon kararı ölçülebilir kazanıma dayanmalıdır: runtime performansı, bundle boyutu, memory kullanımı, build süresi, test güvenilirliği, güvenlik, geliştirilebilirlik veya bakım maliyeti.
+- 'En güncel' olmak tek başına amaç değildir; hedef en güncel STABIL ve bu proje için en hızlı/güvenilir çözümdür.
+- Çalışan işlevleri koru. Büyük rewrite gerekiyorsa feature-by-feature migration, adapter veya compatibility layer kullan; tek hamlede riskli rewrite yapma.
+
 ## Kod kalitesi ve yeniden geliştirme
 - Mevcut kodu körlemesine yamamak yerine, gerektiğinde modül veya özellik bazında modern mimariyle yeniden tasarla; ancak çalışan işlevleri gerekçesiz kaldırma.
 - Güncel, hızlı ve bakımı kolay dil/çerçeve özelliklerini mevcut stack ile uyumlu şekilde kullan; gereksiz teknoloji göçü yapma.
-- Her tur yaklaşık 4000 anlamlı satır değişikliği/eklemesi hedefle; sırf sayı doldurmak için boilerplate üretme.
+- 4000 anlamlı satır bir hedef/referanstır, üst sınır değildir. Gerçek iş paketi gerekiyorsa 4000 satırı anlamlı biçimde aş; sırf sayı doldurmak için boilerplate üretme ve 4000'e ulaştın diye durma.
+- Birkaç kolay değişiklik bulduysan turu kapatma; kendi uzmanlık alanındaki kalan yüksek etkili sorunları araştır.
 - Console error, kırık import, kullanılmayan değişken/import, duplicate code, race condition ve memory leak bırakma.
 - Güvenlik, performans, responsive ve accessibility gerekliliklerini birlikte gözet.
+
+## Derin çalışma döngüsü — her turda zorunlu
+1. Repository ve ilgili veri/uygulama akışlarını geniş biçimde analiz et.
+2. Önceki tur ve mevcut davranışları envanterle.
+3. Yüksek etkili işleri önceliklendir.
+4. Değişiklikleri kontrollü uygula.
+5. İlk test/lint/typecheck/build/smoke doğrulamasını çalıştır.
+6. Bulunan sorunları aynı tur içinde düzelt.
+7. İkinci doğrulama turunu çalıştır.
+8. Security/performance/regression/data-integrity incelemesi yap.
+9. Gerekirse ikinci veya üçüncü geliştirme geçişi yap.
+10. Final test/build/regression doğrulamasını yap.
+11. Commit/PR/merge durumunu gerçekten doğrula.
+12. `KENT_REHBERI_PROGRESS.md` içinde net sonraki tur başlangıcı bırak.
 
 ## Network / Veri Erişimi Güvenlik Politikası
 - Dış kullanıcı tarayıcısının gereksiz veya kontrolsüz üçüncü taraf network çağrısı yapmasını engelle. Mümkün olan veri akışlarını same-origin backend/BFF/proxy/server-side katmana taşı.
@@ -54,7 +80,7 @@ Core Web Vitals, bundle size, lazy loading, code splitting, memoization, virtual
 `KENT_REHBERI_PROGRESS.md` içinde tamamlanan işler, devam eden işler, bilinen sorunlar, test/build sonucu, son commit/PR/merge durumu ve sonraki görev için notları güncelle.
 
 ## Tur sonu raporu
-TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU / ÖNEMLİ ÖZELLİKLER / DEĞİŞEN DOSYALAR / YAKLAŞIK SATIR / TESTLER / BUILD / NETWORK DEĞİŞİKLİKLERİ / GÜVENLİK KONTROLLERİ / İKON EŞLEŞTİRME / ÇÖZÜLEN HATALAR / KALAN SORUNLAR / SONRAKİ GÖREV NOTU alanlarını kaydet.
+TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU / ÖNEMLİ ÖZELLİKLER / DEĞİŞEN DOSYALAR / YAKLAŞIK SATIR / TESTLER / BUILD / NETWORK DEĞİŞİKLİKLERİ / GÜVENLİK KONTROLLERİ / İKON EŞLEŞTİRME / MODERNİZASYON KARARLARI / PERFORMANS ETKİSİ / ÇÖZÜLEN HATALAR / KALAN SORUNLAR / SONRAKİ GÖREV NOTU alanlarını kaydet.
 
 ## Görev sırası
 1 Architecture / Platform
