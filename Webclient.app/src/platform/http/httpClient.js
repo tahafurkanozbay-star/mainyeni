@@ -15,10 +15,19 @@ const client = axios.create({
 });
 
 const waitForRetry = (ms, signal) => new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    if (!signal) return;
-    const abort = () => {
+    let timer;
+    let abort;
+    const cleanup = () => {
         clearTimeout(timer);
+        if (signal && abort) signal.removeEventListener('abort', abort);
+    };
+    timer = setTimeout(() => {
+        cleanup();
+        resolve();
+    }, ms);
+    if (!signal) return;
+    abort = () => {
+        cleanup();
         reject(Object.assign(new Error('Request cancelled'), { name: 'AbortError', code: 'ABORTED' }));
     };
     if (signal.aborted) {
@@ -35,18 +44,12 @@ const stableSerialize = (value) => {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
 };
 
-const cacheKey = (config) => [
-    String(config.method || 'get').toLowerCase(),
-    config.url,
-    stableSerialize(config.params)
-].join('|');
-
+const cacheKey = (config) => [String(config.method || 'get').toLowerCase(), config.url, stableSerialize(config.params)].join('|');
 const isRetryable = (error) => {
     if (isAbortError(error)) return false;
     const status = error?.response?.status;
     return !status || status === 408 || status === 429 || status >= 500;
 };
-
 const retryDelay = (attempt) => Math.min(250 * 2 ** attempt, 2000) + Math.round(Math.random() * 100);
 
 const createCancelToken = (signal) => {
@@ -55,10 +58,7 @@ const createCancelToken = (signal) => {
     const abort = () => source.cancel('Request cancelled');
     if (signal.aborted) abort();
     signal.addEventListener('abort', abort, { once: true });
-    return {
-        token: source.token,
-        cleanup: () => signal.removeEventListener('abort', abort)
-    };
+    return { token: source.token, cleanup: () => signal.removeEventListener('abort', abort) };
 };
 
 const request = async (config = {}) => {
@@ -66,8 +66,6 @@ const request = async (config = {}) => {
     const url = normalizeApplicationPath(config.url || '/');
     const merged = { ...config, method, url, timeout: config.timeout ?? runtimeConfig.requestTimeoutMs };
     const cacheable = SAFE_METHODS.has(method) && config.cache === true;
-    // A caller-bound cancellation signal cannot safely be shared by a deduped
-    // promise. Dedupe is therefore limited to requests without per-caller abort.
     const dedupe = SAFE_METHODS.has(method) && config.dedupe === true && !config.signal;
     const key = cacheKey(merged);
 
@@ -90,9 +88,7 @@ const request = async (config = {}) => {
                     return response.data;
                 } catch (error) {
                     const normalized = normalizeAxiosError(error);
-                    if (attempt >= (config.maxRetries ?? runtimeConfig.maxRetries) || !isRetryable(error)) {
-                        throw normalized;
-                    }
+                    if (attempt >= (config.maxRetries ?? runtimeConfig.maxRetries) || !isRetryable(error)) throw normalized;
                     await waitForRetry(retryDelay(attempt), config.signal);
                     attempt += 1;
                 }

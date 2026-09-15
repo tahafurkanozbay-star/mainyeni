@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
 import './styles.css';
@@ -24,12 +23,12 @@ function App() {
   useEffect(() => {
     setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
 
-    const cancelSource = axios.CancelToken.source();
+    const controller = new AbortController();
     let active = true;
 
     Promise.all([
-      ConfigurationBusiness.GetMapConfiguration({ cancelToken: cancelSource.token, cache: true, dedupe: false }),
-      ConfigurationBusiness.GetConfigServices({ cancelToken: cancelSource.token, cache: true, dedupe: false })
+      ConfigurationBusiness.GetMapConfiguration({ signal: controller.signal, cache: true, dedupe: false }),
+      ConfigurationBusiness.GetConfigServices({ signal: controller.signal, cache: true, dedupe: false })
     ])
       .then(([mapConfigResult, configServicesResult]) => {
         if (!active) return;
@@ -55,13 +54,13 @@ function App() {
         }
       })
       .catch((error) => {
-        if (!active || axios.isCancel(error)) return;
+        if (!active || error?.code === 'ABORTED') return;
         setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       });
 
     return () => {
       active = false;
-      cancelSource.cancel('Application bootstrap cancelled');
+      controller.abort();
     };
   }, []);
 
