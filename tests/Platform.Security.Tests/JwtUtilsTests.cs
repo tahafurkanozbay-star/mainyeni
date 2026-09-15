@@ -84,6 +84,21 @@ public sealed class JwtUtilsTests
     }
 
     [Fact]
+    public void GenerateToken_FallsBackToDefaultIssuerAndAudience_WhenOverridesAreWhitespace()
+    {
+        using var environment = new TestEnvironment();
+        Environment.SetEnvironmentVariable("KENT_REHBERI_JWT_ISSUER", "   ");
+        Environment.SetEnvironmentVariable("KENT_REHBERI_JWT_AUDIENCE", "\t");
+
+        var token = JwtUtils.GenerateToken("encrypted-guid");
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+
+        Assert.Equal("kent-rehberi-api", jwt.Issuer);
+        Assert.Contains("kent-rehberi-admin", jwt.Audiences);
+        Assert.NotNull(JwtUtils.GetPrincipal(token));
+    }
+
+    [Fact]
     public void GetPrincipal_ValidatesToken_AndMapsNameClaim()
     {
         using var environment = new TestEnvironment();
@@ -149,6 +164,17 @@ public sealed class JwtUtilsTests
         Assert.Null(JwtUtils.GetPrincipal(token));
     }
 
+    [Fact]
+    public void GetPrincipal_ReturnsNull_WhenSigningKeyConfigurationBecomesInvalid()
+    {
+        using var environment = new TestEnvironment();
+        var token = JwtUtils.GenerateToken("encrypted-guid");
+        environment.SetJwtSigningKeyRaw("not-valid-base64");
+
+        Assert.Null(JwtUtils.GetPrincipal(token));
+        Assert.False(JwtUtils.ValidateToken(token));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -172,6 +198,9 @@ public sealed class JwtUtilsTests
     [InlineData("Basic abc")]
     [InlineData("Token abc")]
     [InlineData("Bearer one two")]
+    [InlineData("Bearer one\ttwo")]
+    [InlineData("Bearer one\ntwo")]
+    [InlineData("Bearer one\rtwo")]
     public void TryGetBearerToken_RejectsInvalidAuthorizationHeaders(string? header)
     {
         Assert.False(JwtUtils.TryGetBearerToken(header!, out var token));
@@ -206,6 +235,8 @@ public sealed class JwtUtilsTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("invalid")]
+    [InlineData("a.b")]
+    [InlineData("a.b.c")]
     public void ReadToken_ReturnsNull_ForUnreadableInput(string? token)
     {
         Assert.Null(JwtUtils.ReadToken(token!));
