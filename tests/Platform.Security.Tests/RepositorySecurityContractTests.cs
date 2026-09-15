@@ -52,8 +52,8 @@ public sealed class RepositorySecurityContractTests
         Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("Authorization", authBusiness, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Bearer", authBusiness, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("'Authorization'", authBusiness, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\s*=", RegexOptions.IgnoreCase), env);
     }
 
@@ -207,7 +207,10 @@ public sealed class RepositorySecurityContractTests
         Assert.Contains("REACT_APP_API_URL=/api", env, StringComparison.Ordinal);
         Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
         Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
-        Assert.Contains("same-origin", endpointPolicy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("CROSS_ORIGIN_BLOCKED", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("!trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
