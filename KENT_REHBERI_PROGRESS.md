@@ -40,5 +40,19 @@
 - GIS Engine: icon resolver/registry ve gerçek JSON ikon kaynağını bulup ortaklaştırmak; WMS/WFS eklememek.
 - Platform: Network çağrıları, .env, same-origin/BFF uygunluğu ve build/test otomasyonunu doğrulamak.
 
+## Platform Tur 2 — 2026-09-15
+- İşlem: Güvenli yapılandırma ve network politikası temeli
+- Commitler:
+  - `b706a8c4a217add97919400b444c915b7828eceb` — `.gitignore` ile local environment dosyaları ignore edildi.
+  - `decf93e85dd5bfeed363b5b357ca6cc8d0a0f035` — `Webclient.app/.env.example` eklendi.
+  - `0d90226b91cbed46a041e2cd0c4f3a083d705537` — committed client key kaldırıldı, debug/source map kapatıldı, API base same-origin `/api` yapıldı.
+- Merge: değişiklikler varsayılan `main` branch'ına işlendi; ayrı PR açılmadı.
+- Doğrulanan riskler: `Webclient.app/.env` sürümleniyordu; client-exposed key, debug ve source-map ayarları vardı. `Webclient.app/package.json` React 17 + react-scripts 4 ve eski dependency/IE hedefleri içeriyor; ölçmeden kör migration yapılmamalı.
+- Network: browser'a ulaşan verinin Network panelinden tamamen gizlenemeyeceği kabul edildi. Aynı-origin/BFF, server-side authorization, data minimization, least privilege, cache, deduplication, timeout ve cancellation sonraki uygulama işlerinin temeli olacak.
+- WMS/WFS: yeni entegrasyon eklenmedi. Gerçek kullanılan ArcGIS REST/MapServer/FeatureServer endpointleri sonraki kod envanterinde doğrulanacak.
+- İkon: runtime resolver henüz uygulanmadı; gerçek JSON ikon kaynağı bulunduğunda shared deterministic registry/resolver oluşturulacak.
+- Test/build: connector turunda lokal checkout/komut çalıştırma olmadığından npm test/build/lint/typecheck çalıştırılamadı.
+- Sonraki Platform adımı: dış endpoint envanteri, API client ve error model, same-origin proxy/BFF doğrulaması, config separation, shared types ve ölçüm tabanlı modül bazlı modernizasyon planı.
+
 ## Kurallar
 Her görev önce `KENT_REHBERI_AGENT_RULES.md`, ardından kendi görev kuralını ve bu dosyayı okumalıdır. Önceki değişiklikler korunmalı; çakışma ve overwrite önlenmelidir.
