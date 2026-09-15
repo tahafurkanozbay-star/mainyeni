@@ -63,11 +63,16 @@
 - Bilinen riskler: `color-mix()` ve `backdrop-filter` gibi modern CSS özellikleri eski tarayıcılarda fallback gerektirebilir; Bootstrap/ArcGIS selector çakışmaları gerçek browser smoke ile kontrol edilmeli. Utility command bridge henüz NavigationBar/LayerList gerçek action handlerlarına doğrudan bağlı değil.
 - Merge: PR #3 merge edilmedi; çatışma nedeniyle kapatıldı. r2 için yeni PR açılacak ve güncel main ile mergeability yeniden doğrulanacak.
 
-## Sonraki Ekip Notu
-- Utility command bridge'i mevcut `WindowManager`/NavigationBar/LayerList/Legend handlerlarına doğrudan bağla.
-- Gerçek JSON icon kaynağını bulup `iconResolver`ı table/list/2D marker/3D renderer ile ortak kullan.
-- Browser responsive/görsel regresyon smoke yap; CI test/build sonucunu kayda geçir.
-- Tema state'ini NavigationBar ile tek kaynağa indir ve legacy light stylesheet ile çakışmayı kontrol et.
+## Platform Deep Engineering Tur 1 — 2026-09-15
+- Branch: `agent/platform-deep-2026-09-15`
+- Güvenlik bulgusu: `Api.Admin/appsettings.json` içinde gerçek PostgreSQL kullanıcı/parolaları repoda düz metin bulunuyordu.
+- Düzeltme: commit edilmiş connection string'ler kaldırıldı; `Cors:AllowedOrigins` yapılandırması eklendi; secret değerlerinin environment/secret storage üzerinden sağlanması zorunlu hale getirildi.
+- `Api.Admin/Startup.cs` kontrollü biçimde sertleştirildi: yapılandırılabilir CORS allowlist, desteklenmeyen DB tipi reddi, production'da otomatik DB silme/yeniden oluşturma davranışının kaldırılması, production-safe problem response, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` başlıkları.
+- Network: yeni üçüncü taraf endpoint/CDN/analytics eklenmedi; browser Network gizliliği varsayılmadı.
+- WMS/WFS: eklenmedi.
+- Test/build: GitHub connector ortamında lokal dotnet/node runtime ve workflow çalıştırma yeteneği bulunmadığı için gerçek build/test sonucu alınamadı; değişiklikler sözdizimi/bağımlılık yüzeyine göre gözden geçirildi.
+- Açık risk: aynı secret'lar commit geçmişinde daha önce görünmüş olabilir; repository secret rotation ve Git geçmişi temizliği ayrı bir operasyon olarak yapılmalı.
+- Sonraki tur: `Api.User`/diğer appsettings dosyalarında secret taraması, gerçek env binding standardı, CI üzerinde backend build/test, frontend API client cancellation/dedupe doğrulaması, merged branch ile tekrar entegrasyon.
 
 ## Kurallar
 - Çalışan davranışlar korunur; WMS/WFS eklenmez; gerçek servis ve response şeması incelenmeden endpoint varsayılmaz.
