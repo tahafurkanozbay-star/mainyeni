@@ -188,3 +188,5 @@ export const createGeolocationRequest = ({ geolocation, timeout = 10000 } = {}) 
         );
     });
 };
+
+export { isSmallViewport } from "./QuerySearchRuntime";
