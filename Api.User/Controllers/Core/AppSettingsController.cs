@@ -1,26 +1,24 @@
+using System;
 using Api.Core.Base;
 using Api.User.Filters;
 using Business.Core.Context;
 using Business.Core.Operations;
 using Microsoft.AspNetCore.Mvc;
-using System;
 
 namespace Api.User.Core.Controllers
 {
     public class AppSettingsController : _BaseUserApiController
     {
-        private AppConfigOperations ops;
+        private const string PublicMapConfigKey = "GisMapConfig";
+        private readonly AppConfigOperations ops;
 
         public AppSettingsController(BusinessContext context)
         {
-            this.dbContext = context;
+            dbContext = context;
             ops = new AppConfigOperations(context);
         }
 
-
-        /// <summary>
-        /// Returns Application Settings with Key 
-        /// </summary>
+        /// <summary>Returns the single application setting explicitly approved for public bootstrap.</summary>
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("[controller]/List")]
@@ -28,19 +26,17 @@ namespace Api.User.Core.Controllers
         {
             try
             {
-                if (!ValidateAuthToken())
+                if (!string.Equals(key?.Trim(), PublicMapConfigKey, StringComparison.Ordinal))
                 {
-                  return UnAuthorizedResult();
+                    return NotFound();
                 }
 
-                //TODO: check keys (tüm setting ler user apiye dönmemelidir)
-                var result = ops.GetConfig(key);
-                return new JsonResult(result);
+                return new JsonResult(ops.GetConfig(PublicMapConfigKey));
             }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
-                return new JsonResult(exceptionResult(ex));
+                return StatusCode(500, new { message = "Configuration could not be loaded." });
             }
         }
     }

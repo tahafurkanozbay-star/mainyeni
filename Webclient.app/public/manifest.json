@@ -1,0 +1,13 @@
+{
+  "short_name": "Kent Rehberi",
+  "name": "Ankara Büyükşehir Belediyesi Kent Rehberi",
+  "lang": "tr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "theme_color": "#0b5cab",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "images/logo.png", "type": "image/png" }
+  ]
+}

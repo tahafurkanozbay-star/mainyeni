@@ -1,0 +1,52 @@
+name: Platform Webclient Validation
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/**'
+      - '.github/workflows/platform-webclient-validation.yml'
+  push:
+    branches: [main, 'agent/**']
+    paths:
+      - 'Webclient.app/**'
+      - '.github/workflows/platform-webclient-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-webclient-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Webclient.app
+    env:
+      CI: true
+      NODE_OPTIONS: --openssl-legacy-provider
+      GENERATE_SOURCEMAP: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Lint when configured
+        run: npm run lint --if-present
+      - name: Typecheck when configured
+        run: npm run typecheck --if-present
+      - name: Unit and regression tests
+        run: npm test -- --watchAll=false --runInBand
+      - name: Production build
+        run: npm run build
+      - name: Dependency vulnerability advisory
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true

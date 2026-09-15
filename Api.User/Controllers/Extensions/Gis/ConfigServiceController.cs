@@ -1,10 +1,7 @@
 using System;
-using System.IO;
 using Api.Core.Base;
 using Api.User.Filters;
-using Business.Core.Common;
 using Business.Core.Context;
-using Business.Extensions.Gis.Model;
 using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,18 +9,15 @@ namespace Api.User.Extensions.Controllers
 {
     public class ConfigServiceController : _BaseUserApiController
     {
-        private GisConfigServiceOperations GisConfigOperations;
+        private readonly GisConfigServiceOperations operations;
 
         public ConfigServiceController(BusinessContext context)
         {
-            this.dbContext = context;
-            GisConfigOperations = new GisConfigServiceOperations(context);
+            dbContext = context;
+            operations = new GisConfigServiceOperations(context);
         }
 
-
-        /// <summary>
-        /// Gets the list for configuration services
-        /// </summary>
+        /// <summary>Returns sanitized GIS service descriptors intended for public map bootstrap.</summary>
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/ConfigService/List")]
@@ -31,21 +25,13 @@ namespace Api.User.Extensions.Controllers
         {
             try
             {
-
-                if (!ValidateAuthToken())
-                {
-                  return UnAuthorizedResult();
-                }
-
-                var result = GisConfigOperations.GetAllForPublic();
-                return new JsonResult(result);
+                return new JsonResult(operations.GetAllForPublic());
             }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
-                return new JsonResult(exceptionResult(ex));
+                return StatusCode(500, new { message = "GIS service configuration could not be loaded." });
             }
         }
-
     }
 }
