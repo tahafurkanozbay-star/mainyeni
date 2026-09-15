@@ -5,7 +5,7 @@
 - Ana kural dosyası: `KENT_REHBERI_AGENT_RULES.md`
 - Sıralı görev alanları: Architecture → UI/UX → 2D GIS → 3D GIS → GIS Data/Services → Search/Address → Performance → Security → Accessibility/Responsive → Final QA/Release
 
-## Son İşlem
+## Önceki Experience Turu
 - İşlem: Experience UI temelinin ve kurumsal GIS tasarım sözleşmesinin eklenmesi
 - Durum: tamamlandı
 - Eklenen belge: `docs/experience-ui-foundation.md`
@@ -64,6 +64,27 @@
 - Merge: commitler varsayılan `main` branch'ına işlendi; ayrı PR açılmadı.
 - Test/build: bu connector turunda lokal npm komutları çalıştırılamadı; sonraki turda gerçek import noktaları, JSON ikon kaynağı ve test harness bağlanacak.
 - Sonraki GIS adımı: gerçek servis URL envanteri, resolver'ın 2D/3D/table bileşenlerine entegrasyonu ve smoke/regression testleri.
+
+## Experience/UI Quality Tur 3 — 2026-09-15
+- İşlem: Enterprise GIS görsel sisteminin gerçek uygulamaya kontrollü uygulanması.
+- Branch: `agent/experience-ui-2026-09-15`
+- Başlangıç doğrulaması: `main` güncel commit `9bdf752c4dfd5d0d542d0a73258514c759ab16ca`; açık PR yok; `main` branch korumasız.
+- Eklenen dosyalar:
+  - `Webclient.app/src/Components/Common/ExperienceUXLayer.js`
+  - `Webclient.app/src/Components/Common/experience-ui.css`
+- Güncellenen dosyalar:
+  - `Webclient.app/src/App.js`
+  - `Webclient.app/src/Core/Constants.js`
+  - `KENT_REHBERI_PROGRESS.md`
+- Yaklaşık değişiklik: 600+ satır anlamlı UI/UX, erişilebilirlik ve responsive kodu. Sayısal hedef bilinçli olarak zorlanmadı; mevcut çalışan GIS kodunu gereksiz büyütmeden yüksek etkili yüzeylere odaklanıldı.
+- UX kazanımları: ortak renk/yüzey/border/radius/elevation/focus tokenları; modern header/search/sidebar/card/form/table/popup/ArcGIS widget yüzeyleri; responsive desktop/tablet/mobile; dark/light token altyapısı; reduced-motion; forced-colors; klavye erişimi; görünür focus; erişilebilir hızlı erişim utility rail; `Ctrl/Cmd+K`, `?`, `Esc`; arama/katman/lejand komut köprüsü; loading/skeleton/empty/error primitives.
+- Tema: `Constants_ConfigKeys.THEME_CHOICE` tanımlandı ve kalıcı tema seçimi için `ExperienceUXLayer` localStorage anahtarı eklendi. Eski NavigationBar tema mekanizması korunarak yeni token sistemi onun üzerine uygulanıyor.
+- Network: yeni remote font, CDN, analytics veya dış asset çağrısı eklenmedi. UI katmanı yalnızca browser içi state/localStorage ve CustomEvent command bridge kullanıyor.
+- WMS/WFS: yeni UI, seçim veya entegrasyon eklenmedi.
+- İkon: Experience utility rail ikonları harici asset yerine küçük inline SVG kullanıyor; GIS feature/tür ikon resolver'ı mevcut `gis-engine/iconResolver.js` ile değiştirilmedi veya ezilmedi.
+- Test/build: GitHub connector ortamında lokal Node/npm çalışma ortamı bulunmadığı için `npm test`, lint, typecheck ve production build komutları çalıştırılamadı. Kod yazımında eski React/JS sözdizimi uyumluluğu korunmaya çalışıldı. Gerçek browser responsive/görsel regresyon smoke testi bu turda yapılamadı.
+- Bilinen riskler: `color-mix()` gibi modern CSS fonksiyonları eski tarayıcılar için fallback gerektirebilir; ArcGIS/Bootstrap stilleriyle bazı özgül selector çakışmaları gerçek browser testinde doğrulanmalı. Experience command bridge için mevcut map/sidebar event abonelikleri sonraki turda gerçek action handler'lara bağlanabilir.
+- Sonraki ekip notu: Utility rail komutlarını mevcut NavigationBar/LayerList/Legend pencerelerine doğrudan bağla; gerçek JSON ikon kaynağını table/list/marker/3D renderer ile ortaklaştır; browser smoke ve npm build/test/lint/typecheck çalıştır; theme state'i mevcut uygulama temasına tek kaynaktan bağla.
 
 ## Kurallar
 Her görev önce `KENT_REHBERI_AGENT_RULES.md`, ardından kendi görev kuralını ve bu dosyayı okumalıdır. Önceki değişiklikler korunmalı; çakışma ve overwrite önlenmelidir.
