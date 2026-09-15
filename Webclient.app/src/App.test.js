@@ -10,7 +10,9 @@ jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
 }));
 
 jest.mock('./platform/bootstrap/bootstrapCore', () => ({
-  isBootstrapAbortError: jest.fn((error) => error?.code === 'BOOTSTRAP_ABORTED')
+  isBootstrapAbortError: (error) => Boolean(
+    error && (error.code === 'BOOTSTRAP_ABORTED' || error.name === 'AbortError')
+  )
 }));
 
 jest.mock('./Components/App/MapComponent', () => ({
@@ -32,7 +34,9 @@ jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
 }));
 
 jest.mock('./Store/Managers/WindowManager', () => ({
-  WindowManager: jest.fn(() => ({ id: 'window-manager-1' }))
+  WindowManager: jest.fn(function MockWindowManager() {
+    this.id = 'window-manager-1';
+  })
 }));
 
 jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
@@ -49,7 +53,8 @@ const deferred = () => {
 
 describe('App bootstrap lifecycle', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    bootstrapApplication.mockReset();
+    WindowManager.mockClear();
     bootstrapApplication.mockImplementation(() => new Promise(() => {}));
   });
 
