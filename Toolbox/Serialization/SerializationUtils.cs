@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Text;
@@ -16,79 +16,62 @@ namespace Toolbox.Serialization
                 return null;
             }
 
-            try
+            var serializer = new XmlSerializer(typeof(T));
+            var settings = new XmlWriterSettings
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(T));
+                Encoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: false),
+                Indent = false,
+                OmitXmlDeclaration = false
+            };
 
-                XmlWriterSettings settings = new XmlWriterSettings();
-                settings.Encoding = new UnicodeEncoding(false, false); // no BOM in a .NET string
-                settings.Indent = false;
-                settings.OmitXmlDeclaration = false;
-
-                using (StringWriter textWriter = new StringWriter())
-                {
-                    using (XmlWriter xmlWriter = XmlWriter.Create(textWriter, settings))
-                    {
-                        serializer.Serialize(xmlWriter, @object);
-                    }
-                    return textWriter.ToString();
-                }
-            }
-            catch (Exception ex)
+            using var textWriter = new StringWriter();
+            using (var xmlWriter = XmlWriter.Create(textWriter, settings))
             {
-                throw ex;
+                serializer.Serialize(xmlWriter, @object);
             }
+
+            return textWriter.ToString();
         }
 
-        public static T DeserializeFromXml<T>(string Xml)
+        public static T DeserializeFromXml<T>(string xml)
         {
-            if (string.IsNullOrEmpty(Xml))
+            if (string.IsNullOrWhiteSpace(xml))
             {
-                return default(T);
+                return default;
             }
 
-            try
+            var serializer = new XmlSerializer(typeof(T));
+            var settings = new XmlReaderSettings
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(T));
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersFromEntities = 0
+            };
 
-                XmlReaderSettings settings = new XmlReaderSettings();
-                // No settings need modifying here
-
-                using (StringReader textReader = new StringReader(Xml))
-                {
-                    using (XmlReader xmlReader = XmlReader.Create(textReader, settings))
-                    {
-                        return (T)serializer.Deserialize(xmlReader);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
+            using var textReader = new StringReader(xml);
+            using var xmlReader = XmlReader.Create(textReader, settings);
+            return (T)serializer.Deserialize(xmlReader);
         }
 
         public static string ObjectToJson<T>(T model)
         {
-            var list = JsonConvert.SerializeObject(model, Newtonsoft.Json.Formatting.Indented, new JsonSerializerSettings()
-            {
-                ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
-            });
-
-            return list;
+            return JsonConvert.SerializeObject(
+                model,
+                Formatting.Indented,
+                new JsonSerializerSettings
+                {
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+                });
         }
 
-        public static T JsonToObject<T>(string Json)
+        public static T JsonToObject<T>(string json)
         {
-            try
+            if (json == null)
             {
-                T obj= JsonConvert.DeserializeObject<T>(Json);
-                return obj;
+                throw new ArgumentNullException(nameof(json));
             }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
+
+            return JsonConvert.DeserializeObject<T>(json);
         }
     }
 }
