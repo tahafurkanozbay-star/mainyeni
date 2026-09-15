@@ -4,14 +4,14 @@ import { inferServiceType, isDisallowedServiceType, sanitizeService } from './se
 import { create2DLayer, create3DLayer } from './layerFactory';
 
 jest.mock('esri-loader', () => ({
-  loadModules: jest.fn((modules) => Promise.resolve(modules.map((name) => {
+  loadModules: (modules) => Promise.resolve(modules.map((name) => {
     if (name === 'esri/layers/FeatureLayer') return class FeatureLayer { constructor(options) { Object.assign(this, options); this.type = 'feature'; } };
     if (name === 'esri/layers/MapImageLayer') return class MapImageLayer { constructor(options) { Object.assign(this, options); } };
     if (name === 'esri/layers/VectorTileLayer') return class VectorTileLayer { constructor(options) { Object.assign(this, options); } };
     if (name === 'esri/layers/ImageryLayer') return class ImageryLayer { constructor(options) { Object.assign(this, options); } };
     if (name === 'esri/layers/SceneLayer') return class SceneLayer { constructor(options) { Object.assign(this, options); } };
     return class Module {};
-  }))),
+  })),
 }));
 
 describe('GIS runtime regression contracts', () => {
