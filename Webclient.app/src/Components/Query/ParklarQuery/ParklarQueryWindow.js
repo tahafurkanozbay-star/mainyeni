@@ -1,5 +1,4 @@
 import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
-import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
 import { ParklarQeryBusiness } from "../../../Business/ParklarQeryBusiness";
@@ -29,11 +28,6 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
     const windowLogo = "images/Sidebar/ABB/park.png";
     const windowLogoIcon = "images/icons/map/ABB/parklar.svg";
 
-    const [mapView, setMapView] = useState(null);
-    const [extentHistory, setExtentHistory] = useState([]);
-    const [extentIndex, setExtentIndex] = useState(0);
-    const [districtList, setDistrictList] = useState(null);
-    const [nbhoodList, setNbhoodList] = useState(null);
     const [query, setQuery] = useState(defaultQuery);
     const [resultList, setResultList] = useState(null);
     const [activeTab, setActiveTab] = useState("form");
@@ -47,7 +41,6 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
     const lifecycleRef = useRef(createDisposableBag());
     const queryVersionRef = useRef(0);
     const mountedRef = useRef(true);
-    const commonToolsComponentRef = useRef();
 
     const getOwner = (view = mapViewRef.current || MapManager.GetMapView()) => {
         if (!view?.map) return null;
@@ -56,18 +49,15 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
     };
 
     const removeLastClusterLayer = () => {
-        const owner = getOwner();
-        owner?.clear();
+        getOwner()?.clear();
         clusterLayerRef.current = null;
-    };
-
-    const setQueryField = (field, value) => {
-        setQuery((current) => ({ ...current, [field]: value }));
     };
 
     const getSymbolBasedOnZoom = (zoomLevel) => {
         const zoom = Number(zoomLevel);
-        const size = Number.isFinite(zoom) && zoom > 10 ? { width: 30, height: 35 } : { width: 80, height: 80 };
+        const size = Number.isFinite(zoom) && zoom > 10
+            ? { width: 30, height: 35 }
+            : { width: 80, height: 80 };
         return {
             type: "picture-marker",
             url: windowLogoIcon,
@@ -82,24 +72,18 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
         if (!view?.extent) return;
 
         const history = [...extentHistoryRef.current, view.extent];
-        const bounded = history.length > 30 ? history.slice(history.length - 30) : history;
-        extentHistoryRef.current = bounded;
-        if (mountedRef.current) {
-            setExtentHistory(bounded);
-            setExtentIndex(bounded.length - 1);
-        }
+        extentHistoryRef.current = history.length > 30
+            ? history.slice(history.length - 30)
+            : history;
     };
 
     const installViewWatchers = async (view) => {
+        if (!view) return;
         try {
             const [watchUtils] = await loadModules(["esri/core/watchUtils"]);
             if (!mountedRef.current || mapViewRef.current !== view) return;
 
-            if (view.extent) {
-                extentHistoryRef.current = [view.extent];
-                setExtentHistory([view.extent]);
-                setExtentIndex(0);
-            }
+            if (view.extent) extentHistoryRef.current = [view.extent];
 
             const readyHandle = watchUtils.when(view, "ready", () => {
                 const extentHandle = watchUtils.whenOnce(view, "extent", () => {
@@ -123,7 +107,7 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
                 lifecycleRef.current.add(zoomHandle);
             }
         } catch (_) {
-            // Query results can still be used when optional watch utilities are unavailable.
+            // Query results remain usable if optional watch utilities fail.
         }
     };
 
@@ -132,7 +116,6 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
         props.windowManager.RegisterWindow(ref);
         const view = MapManager.GetMapView();
         mapViewRef.current = view;
-        setMapView(view);
         installViewWatchers(view);
 
         return () => {
@@ -161,45 +144,13 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
             setActiveTab("form");
             setResultList(null);
             removeLastClusterLayer();
-            commonToolsComponentRef.current?.OnClose?.();
         },
     }));
-
-    const cmbDistrict_OnChange = (event) => {
-        const districtId = event.target.value;
-        const districtName = event.target.selectedOptions?.[0]?.text || null;
-        setQuery((current) => ({
-            ...current,
-            districtId,
-            districtName,
-            nbhoodId: null,
-            nbhoodName: null,
-        }));
-        setNbhoodList(null);
-
-        NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId).then((result) => {
-            if (mountedRef.current && result?.type === Constants_ServiceResultType.Success) {
-                setNbhoodList(result.data || []);
-            }
-        }).catch(() => {
-            if (mountedRef.current) setNbhoodList([]);
-        });
-    };
-
-    const cmbNbhood_OnChange = (event) => {
-        const nbhoodId = event.target.value;
-        setQuery((current) => ({
-            ...current,
-            nbhoodId,
-            nbhoodName: event.target.selectedOptions?.[0]?.text || null,
-        }));
-    };
 
     const fetchQueryResults = async () => {
         const view = mapViewRef.current || MapManager.GetMapView();
         if (!view?.map) return;
         mapViewRef.current = view;
-        setMapView(view);
 
         const requestVersion = ++queryVersionRef.current;
         setLoading(true);
@@ -225,12 +176,11 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
             }
             if (!mountedRef.current || requestVersion !== queryVersionRef.current) return;
 
-            const initialSymbol = getSymbolBasedOnZoom(view.zoom);
             const clusterLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
                 "YeniParklarQeryUrl",
                 props.windowTitle || windowTitle,
                 query,
-                initialSymbol,
+                getSymbolBasedOnZoom(view.zoom),
             );
             if (!mountedRef.current || requestVersion !== queryVersionRef.current) {
                 clusterLayer?.layerObj?.destroy?.();
@@ -257,17 +207,19 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
                 }
             } catch (_) {}
 
-            const list = (Array.isArray(result.data) ? result.data : []).map((item) => ({
+            setResultList((Array.isArray(result.data) ? result.data : []).map((item) => ({
                 ObjectId: item?.attr?.objectid,
                 Title: item?.attr?.adi,
                 Phone: item?.attr?.telefon,
                 Address: item?.attr?.adres,
                 AddressDescription: "Adres tarifi bulunmuyor",
-            }));
-            setResultList(list);
+            })));
         } catch (error) {
             if (mountedRef.current && requestVersion === queryVersionRef.current) {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "Park sorgusu başarısız oldu");
+                props.windowManager.ShowMessage(
+                    Constants_MessageType.Error,
+                    error?.message || "Park sorgusu başarısız oldu",
+                );
                 setResultList([]);
             }
         } finally {
@@ -277,7 +229,11 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
 
     const getItemDetailsById = async (item) => {
         const result = await ParklarQeryBusiness.Query({ ObjectId: item.ObjectId }, true);
-        if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data) || !result.data.length) {
+        if (
+            result?.type !== Constants_ServiceResultType.Success ||
+            !Array.isArray(result.data) ||
+            !result.data.length
+        ) {
             throw new Error("Öğe detayları bulunamadı");
         }
         return result.data[0];
@@ -285,11 +241,16 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
 
     const item_OnClick = async (event, item) => {
         event?.stopPropagation?.();
-        LoggingBusiness.CreateClientLog("Parklar/Detay Göster", `${item.ObjectId || ''}/${item.Address || ''}`);
+        LoggingBusiness.CreateClientLog(
+            "Parklar/Detay Göster",
+            `${item.ObjectId || ''}/${item.Address || ''}`,
+        );
         try {
             const itemDetails = await getItemDetailsById(item);
             const view = mapViewRef.current;
-            if (view && itemDetails?.geometry) GisGraphicsHelper.ZoomToGeometry(view, itemDetails.geometry, 18);
+            if (view && itemDetails?.geometry) {
+                GisGraphicsHelper.ZoomToGeometry(view, itemDetails.geometry, 18);
+            }
             if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id);
         } catch (error) {
             props.windowManager.ShowMessage(Constants_MessageType.Error, error.message);
@@ -302,11 +263,20 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
             const itemDetails = await getItemDetailsById(item);
             const lat = itemDetails?.geometry?.latitude;
             const lng = itemDetails?.geometry?.longitude;
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("Koordinat bilgisi bulunamadı");
-            const url = `https://www.google.com.tr/maps?saddr=My+Location&daddr=${encodeURIComponent(`${lat},${lng}`)}`;
-            window.open(url, "_blank", "noopener,noreferrer");
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                throw new Error("Koordinat bilgisi bulunamadı");
+            }
+            const destination = encodeURIComponent(`${lat},${lng}`);
+            window.open(
+                `https://www.google.com.tr/maps?saddr=My+Location&daddr=${destination}`,
+                "_blank",
+                "noopener,noreferrer",
+            );
         } catch (_) {
-            props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
+            props.windowManager.ShowMessage(
+                Constants_MessageType.Error,
+                "Yol tarifi alınamadı - öğe detayları bulunamadı",
+            );
         }
     };
 
