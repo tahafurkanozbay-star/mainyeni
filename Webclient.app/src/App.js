@@ -10,7 +10,7 @@ import './Components/Common/experience-data-ux.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { Constants_LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
-import { WindowManager } from './Store/Managers/WindowManager';
+import { useWindowManager } from './Store/Managers/WindowManager';
 import { ConfigurationBusiness } from './Business/ConfigurationBusiness';
 import MapManager from './Store/Managers/MapManager';
 import { FullScreenLoading } from './Components/Common/Loading';
@@ -22,20 +22,25 @@ import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCe
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 
 function App() {
-  const windowManager = new WindowManager();
+  const windowManager = useWindowManager();
   const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
 
-  setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
+  useEffect(() => {
+    setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+
     const loadConfiguration = async () => {
       try {
         const [mapConfigResult, configServicesResult] = await Promise.all([
           ConfigurationBusiness.GetMapConfiguration(),
           ConfigurationBusiness.GetConfigServices()
         ]);
+
         if (cancelled) return;
+
         if (mapConfigResult.isSuccess && configServicesResult.isSuccess) {
           MapManager.SetMapConfiguration(JSON.parse(mapConfigResult.data.configValue));
           const configServices = configServicesResult.data || [];
@@ -49,6 +54,7 @@ function App() {
         if (!cancelled) setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       }
     };
+
     loadConfiguration();
     return () => { cancelled = true; };
   }, []);
