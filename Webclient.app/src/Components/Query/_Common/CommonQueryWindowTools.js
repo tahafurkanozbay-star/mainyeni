@@ -19,6 +19,14 @@ import "./CommonQueryWindowTools.css";
 const LOCATION_GRAPHIC_LIFETIME_MS = 30000;
 
 export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
+    const {
+        setQueryField: onSetQueryField,
+        showNearbySearch,
+        showMapSelect,
+        windowManager,
+        windowId
+    } = props;
+
     const [nearbyActive, setNearbyActive] = useState(false);
     const [mapSelectActive, setMapSelectActive] = useState(false);
     const [bufferDistance, setBufferDistance] = useState(DEFAULT_BUFFER_UNITS);
@@ -29,8 +37,8 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
     const mountedRef = useRef(true);
 
     const setQueryField = useCallback((field, value) => {
-        props.setQueryField?.(field, value);
-    }, [props.setQueryField]);
+        onSetQueryField?.(field, value);
+    }, [onSetQueryField]);
 
     const clearLocationTimer = useCallback(() => {
         if (locationTimerRef.current) {
@@ -100,7 +108,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
     };
 
     const enableNearby = async () => {
-        if (!props.showNearbySearch || locating) return;
+        if (!showNearbySearch || locating) return;
 
         setLocating(true);
         setNearbyActive(true);
@@ -117,14 +125,14 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
 
             setQueryField("showNearby", true);
             setQueryField("userLocation", point);
-            props.windowManager.ShowMessage(
+            windowManager.ShowMessage(
                 Constants_MessageType.Success,
                 Constants_UserMesssages.LOCATION_ALLOWED
             );
         } catch (error) {
             if (!mountedRef.current) return;
             disableNearby();
-            props.windowManager.ShowMessage(
+            windowManager.ShowMessage(
                 Constants_MessageType.Error,
                 error?.message || Constants_UserMesssages.LOCATION_REJECTED
             );
@@ -142,7 +150,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
     };
 
     const changeMapSelect = value => {
-        if (!props.showMapSelect) return;
+        if (!showMapSelect) return;
         setMapSelectActive(value);
         setQueryField("mapSelect", value);
         if (value) disableNearby();
@@ -160,17 +168,17 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
         setQueryField("bufferDistance", next);
     };
 
-    const minimized = props.windowManager.IsMinimized(props.windowId);
+    const minimized = windowManager.IsMinimized(windowId);
     const bufferMeters = bufferUnitsToMeters(bufferDistance);
-    const distanceId = `${props.windowId}-nearby-distance`;
-    const meterId = `${props.windowId}-nearby-distance-meters`;
+    const distanceId = `${windowId}-nearby-distance`;
+    const meterId = `${windowId}-nearby-distance-meters`;
 
     return (
         <>
             <button
                 type="button"
                 className="common-query-window-tool-button"
-                onClick={() => props.windowManager.ToggleMinimiseWindow(props.windowId)}
+                onClick={() => windowManager.ToggleMinimiseWindow(windowId)}
                 title="Pencereyi küçült"
                 aria-label="Pencereyi küçült"
                 aria-expanded={!minimized}
@@ -180,7 +188,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
             <button
                 type="button"
                 className="common-query-window-tool-button"
-                onClick={() => props.windowManager.HideWindow(props.windowId)}
+                onClick={() => windowManager.HideWindow(windowId)}
                 title="Pencereyi kapat"
                 aria-label="Pencereyi kapat"
             >
@@ -189,7 +197,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
 
             {!minimized && (
                 <div className="common-query-window-tools" aria-label="Sorgu araçları">
-                    {props.showNearbySearch && (
+                    {showNearbySearch && (
                         nearbyActive ? (
                             <button
                                 type="button"
@@ -213,7 +221,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
                         )
                     )}
 
-                    {props.showMapSelect && (
+                    {showMapSelect && (
                         mapSelectActive ? (
                             <button
                                 type="button"
@@ -237,7 +245,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
                 </div>
             )}
 
-            {props.showNearbySearch && nearbyActive && !locating && (
+            {showNearbySearch && nearbyActive && !locating && (
                 <div className="common-query-window-tools-body">
                     <div className="common-query-window-tools-distance-row">
                         <div className="common-query-window-tools-distance-range">
@@ -272,7 +280,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
                 </div>
             )}
 
-            {props.showMapSelect && mapSelectActive && (
+            {showMapSelect && mapSelectActive && (
                 <div className="common-query-window-tools-body">
                     <div className="common-query-window-tools-mapselect-message" role="status">
                         <BiInfoCircle aria-hidden="true" />
