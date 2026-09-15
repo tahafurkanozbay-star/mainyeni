@@ -3,18 +3,21 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
 import './styles.css';
 import './styles.responsive.css';
+import './Components/Common/experience-ui.css';
+import './Components/Common/experience-quality.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { Constants_LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
 import { WindowManager } from './Store/Managers/WindowManager';
-import { ConfigurationBusiness } from "./Business/ConfigurationBusiness";
+import { ConfigurationBusiness } from './Business/ConfigurationBusiness';
 import MapManager from './Store/Managers/MapManager';
 import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
 import { CommonBusiness } from './Business/CommonBusiness';
 import { setDefaultOptions } from 'esri-loader';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
-import './Components/Common/experience-ui.css';
+import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
+import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 
 function App() {
   const windowManager = new WindowManager();
@@ -23,40 +26,47 @@ function App() {
   setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
 
   useEffect(() => {
-    const promises = [
-      ConfigurationBusiness.GetMapConfiguration(),
-      ConfigurationBusiness.GetConfigServices()
-    ];
+    let cancelled = false;
+    const loadConfiguration = async () => {
+      try {
+        const [mapConfigResult, configServicesResult] = await Promise.all([
+          ConfigurationBusiness.GetMapConfiguration(),
+          ConfigurationBusiness.GetConfigServices()
+        ]);
 
-    Promise.all(promises).then((_results) => {
-      const mapConfigResult = _results[0];
-      const configServicesResult = _results[1];
-
-      if (mapConfigResult.isSuccess && configServicesResult.isSuccess) {
-        MapManager.SetMapConfiguration(JSON.parse(mapConfigResult.data.configValue));
-        const configServices = configServicesResult.data;
-        configServices.forEach(service => {
-          CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service), "Appjs");
-        });
-        MapManager.SetConfigurationServices(configServices);
-        setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
-      } else {
-        setConfigLoadStatus(Constants_LoadingStatus.ERROR);
+        if (cancelled) return;
+        if (mapConfigResult.isSuccess && configServicesResult.isSuccess) {
+          MapManager.SetMapConfiguration(JSON.parse(mapConfigResult.data.configValue));
+          const configServices = configServicesResult.data || [];
+          configServices.forEach(service => {
+            CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service), "Appjs");
+          });
+          MapManager.SetConfigurationServices(configServices);
+          setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
+        } else {
+          setConfigLoadStatus(Constants_LoadingStatus.ERROR);
+        }
+      } catch (error) {
+        if (!cancelled) setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       }
-    });
+    };
+
+    loadConfiguration();
+    return () => { cancelled = true; };
   }, []);
 
   return (
-    <div id="root">
-      {
-        configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
+    <ExperienceThemeProvider>
+      <div id="root">
+        {configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
           configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError /> :
             <>
               <MapComponent windowManager={windowManager} />
-              <ExperienceUXLayer />
-            </>
-      }
-    </div>
+              <ExperienceUXLayer windowManager={windowManager} />
+              <ExperienceCommandCenter windowManager={windowManager} />
+            </>}
+      </div>
+    </ExperienceThemeProvider>
   );
 }
 
