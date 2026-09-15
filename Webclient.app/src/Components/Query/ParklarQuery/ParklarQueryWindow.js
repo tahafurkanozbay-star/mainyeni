@@ -1,374 +1,375 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
-import { Button, Form } from "react-bootstrap";
+import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
-import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
 import { ParklarQeryBusiness } from "../../../Business/ParklarQeryBusiness";
-import { BiSearch } from "react-icons/bi";
-import { FiMapPin, FiPhone } from "react-icons/fi";
+import { FiMapPin } from "react-icons/fi";
 import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
 import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
 import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { DebugHelper } from "../../../Toolbox/DebugHelper";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
-import { ButtonLoading } from "../../Common/Loading";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { useRef } from "react";
 import { loadModules } from "esri-loader";
+import { createDisposableBag, createLayerOwner } from "../../../gis-engine/layerOwnership";
+
+const OWNER_ID = 'parklar-query-window';
+const defaultQuery = {
+    name: null,
+    districtId: null,
+    districtName: null,
+    nbhoodId: null,
+    nbhoodName: null,
+    showMapSelect: false,
+    showNearby: false,
+};
 
 export const ParklarQueryWindow = React.forwardRef((props, ref) => {
-
     const windowTitle = "Parklar";
     const windowLogo = "images/Sidebar/ABB/park.png";
-    const windowLogoicon = "images/icons/map/ABB/parklar.svg";
- 
-    
+    const windowLogoIcon = "images/icons/map/ABB/parklar.svg";
+
+    const [mapView, setMapView] = useState(null);
     const [extentHistory, setExtentHistory] = useState([]);
-    const [addExtent, setAddExtent] = useState(true);
     const [extentIndex, setExtentIndex] = useState(0);
+    const [districtList, setDistrictList] = useState(null);
+    const [nbhoodList, setNbhoodList] = useState(null);
+    const [query, setQuery] = useState(defaultQuery);
+    const [resultList, setResultList] = useState(null);
+    const [activeTab, setActiveTab] = useState("form");
+    const [loading, setLoading] = useState(false);
+
+    const mapViewRef = useRef(null);
+    const extentHistoryRef = useRef([]);
+    const addExtentRef = useRef(true);
+    const clusterLayerRef = useRef(null);
+    const ownerRef = useRef(null);
+    const lifecycleRef = useRef(createDisposableBag());
+    const queryVersionRef = useRef(0);
+    const mountedRef = useRef(true);
+    const commonToolsComponentRef = useRef();
+
+    const getOwner = (view = mapViewRef.current || MapManager.GetMapView()) => {
+        if (!view?.map) return null;
+        if (!ownerRef.current) ownerRef.current = createLayerOwner(view, OWNER_ID);
+        return ownerRef.current;
+    };
+
+    const removeLastClusterLayer = () => {
+        const owner = getOwner();
+        owner?.clear();
+        clusterLayerRef.current = null;
+    };
+
+    const setQueryField = (field, value) => {
+        setQuery((current) => ({ ...current, [field]: value }));
+    };
+
+    const getSymbolBasedOnZoom = (zoomLevel) => {
+        const zoom = Number(zoomLevel);
+        const size = Number.isFinite(zoom) && zoom > 10 ? { width: 30, height: 35 } : { width: 80, height: 80 };
+        return {
+            type: "picture-marker",
+            url: windowLogoIcon,
+            width: `${size.width}px`,
+            height: `${size.height}px`,
+        };
+    };
+
+    const rememberExtent = () => {
+        if (!addExtentRef.current) return;
+        const view = mapViewRef.current;
+        if (!view?.extent) return;
+
+        const history = [...extentHistoryRef.current, view.extent];
+        const bounded = history.length > 30 ? history.slice(history.length - 30) : history;
+        extentHistoryRef.current = bounded;
+        if (mountedRef.current) {
+            setExtentHistory(bounded);
+            setExtentIndex(bounded.length - 1);
+        }
+    };
+
+    const installViewWatchers = async (view) => {
+        try {
+            const [watchUtils] = await loadModules(["esri/core/watchUtils"]);
+            if (!mountedRef.current || mapViewRef.current !== view) return;
+
+            if (view.extent) {
+                extentHistoryRef.current = [view.extent];
+                setExtentHistory([view.extent]);
+                setExtentIndex(0);
+            }
+
+            const readyHandle = watchUtils.when(view, "ready", () => {
+                const extentHandle = watchUtils.whenOnce(view, "extent", () => {
+                    const stationaryHandle = watchUtils.whenTrue(view, 'stationary', (stationary) => {
+                        if (stationary) rememberExtent();
+                    });
+                    lifecycleRef.current.add(stationaryHandle);
+                });
+                lifecycleRef.current.add(extentHandle);
+            });
+            lifecycleRef.current.add(readyHandle);
+
+            if (typeof view.watch === 'function') {
+                const zoomHandle = view.watch("zoom", (newZoomLevel) => {
+                    const cluster = clusterLayerRef.current;
+                    const renderer = cluster?.layerObj?.renderer;
+                    if (!renderer) return;
+                    renderer.symbol = getSymbolBasedOnZoom(newZoomLevel);
+                    cluster.layerObj.refresh?.();
+                });
+                lifecycleRef.current.add(zoomHandle);
+            }
+        } catch (_) {
+            // Query results can still be used when optional watch utilities are unavailable.
+        }
+    };
+
+    useEffect(() => {
+        mountedRef.current = true;
+        props.windowManager.RegisterWindow(ref);
+        const view = MapManager.GetMapView();
+        mapViewRef.current = view;
+        setMapView(view);
+        installViewWatchers(view);
+
+        return () => {
+            mountedRef.current = false;
+            queryVersionRef.current += 1;
+            lifecycleRef.current.dispose();
+            ownerRef.current?.clear();
+            ownerRef.current = null;
+            clusterLayerRef.current = null;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
+        id: props.id,
+        visible: false,
+        minimized: false,
         OnShow: () => {
-            DebugHelper.Log("show " + props.id);            
-     
+            DebugHelper.Log("show " + props.id);
             fetchQueryResults();
         },
         OnClose: () => {
             DebugHelper.Log("closing " + props.id);
+            queryVersionRef.current += 1;
             setQuery(defaultQuery);
             setActiveTab("form");
             setResultList(null);
             removeLastClusterLayer();
-            commonToolsComponentRef.current.OnClose();
-        }
+            commonToolsComponentRef.current?.OnClose?.();
+        },
     }));
 
-    const commonToolsComponentRef=useRef();
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
-    useEffect(() => {
-
-        props.windowManager.RegisterWindow(ref);        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);       
-        if (mapView?.map) {
-
-            fetchQueryResults();
-        }
-        
-        const extChangeHandler = extentChangeHandler;
-        return loadModules(["esri/core/watchUtils"]).then(([watchUtils]) => {
-
-            let mapView = MapManager.GetMapView();
-            setMapView(mapView);
-
-            let _extentHistory = [];
-            if (mapView.extent != null) {
-                _extentHistory.push(mapView.extent);
-                setExtentHistory(_extentHistory);
-            }
-
-            watchUtils.when(mapView, "ready", () => {
-                watchUtils.whenOnce(mapView, "extent", () => {
-                    watchUtils.whenTrue(mapView, 'stationary', (evt) => {
-
-                        if (evt) {
-                            extentChangeHandler();
-                        }
-                    });
-                });
-            });
-        });
-    }, []);
-    const extentChangeHandler = () => {
-
-        if (addExtent) {
-
-            let mapView = MapManager.GetMapView();
-
-            let _extent = mapView.extent;
-
-            let _exhistory = extentHistory;
-            _exhistory.push(_extent);
-
-            setExtentHistory(_exhistory);
-            setExtentIndex  (_exhistory.length - 1);
-        }
-    }
-
-
-    const cmbName_OnChange = (e) => {
-        const name = e.target.value;
-        setQueryField("name", name);
-    }
-
-    const [nbhoodList, setNbhoodList] = useState(null);
-    const cmbDistrict_OnChange = (e) => {
-
-        const districtId = e.target.value;
-        setQueryField("districtId", districtId);
-        setQueryField("districtName", e.target.selectedOptions[0].text);
-
+    const cmbDistrict_OnChange = (event) => {
+        const districtId = event.target.value;
+        const districtName = event.target.selectedOptions?.[0]?.text || null;
+        setQuery((current) => ({
+            ...current,
+            districtId,
+            districtName,
+            nbhoodId: null,
+            nbhoodName: null,
+        }));
         setNbhoodList(null);
 
-        NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId).then((_result) => {
+        NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId).then((result) => {
+            if (mountedRef.current && result?.type === Constants_ServiceResultType.Success) {
+                setNbhoodList(result.data || []);
+            }
+        }).catch(() => {
+            if (mountedRef.current) setNbhoodList([]);
+        });
+    };
 
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setNbhoodList(_result.data);
+    const cmbNbhood_OnChange = (event) => {
+        const nbhoodId = event.target.value;
+        setQuery((current) => ({
+            ...current,
+            nbhoodId,
+            nbhoodName: event.target.selectedOptions?.[0]?.text || null,
+        }));
+    };
+
+    const fetchQueryResults = async () => {
+        const view = mapViewRef.current || MapManager.GetMapView();
+        if (!view?.map) return;
+        mapViewRef.current = view;
+        setMapView(view);
+
+        const requestVersion = ++queryVersionRef.current;
+        setLoading(true);
+        LoggingBusiness.CreateClientLog(
+            "Parklar/Sorgu",
+            `${query.districtName || ''}/${query.nbhoodName || ''}/${query.name || ''}`,
+        );
+
+        try {
+            const result = await ParklarQeryBusiness.Query(query, false);
+            if (!mountedRef.current || requestVersion !== queryVersionRef.current) return;
+            if (result?.type !== Constants_ServiceResultType.Success) {
+                setResultList([]);
+                return;
             }
 
-        });
-    }
+            setActiveTab("query");
+            addExtentRef.current = false;
 
-    const cmbNbhood_OnChange = (e) => {
-        const nbhoodId = e.target.value;
-        setQueryField("nbhoodId", nbhoodId);
-        setQueryField("nbhoodName", e.target.selectedOptions[0].text);
-    }
+            const initialExtent = extentHistoryRef.current[0];
+            if (initialExtent) {
+                try { await view.goTo(initialExtent); } catch (_) {}
+            }
+            if (!mountedRef.current || requestVersion !== queryVersionRef.current) return;
 
-    const defaultQuery = { name: null, districtId: null, nbhoodId: null, showMapSelect: false, showNearby: false };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery( query => {
-            return { ...query,[_field]: _value}
-         })
-    }
+            const initialSymbol = getSymbolBasedOnZoom(view.zoom);
+            const clusterLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
+                "YeniParklarQeryUrl",
+                props.windowTitle || windowTitle,
+                query,
+                initialSymbol,
+            );
+            if (!mountedRef.current || requestVersion !== queryVersionRef.current) {
+                clusterLayer?.layerObj?.destroy?.();
+                return;
+            }
 
-    const [clusterLayer, setClusterLayer] = useState(null);
-    const removeLastClusterLayer = () => {
-        if (clusterLayer != null) {
-            mapView.map.remove(clusterLayer.layerObj);
-            setClusterLayer(null);
-        }
-    }
+            removeLastClusterLayer();
+            clusterLayerRef.current = clusterLayer;
+            getOwner(view)?.add(clusterLayer?.layerObj);
 
+            try {
+                const extentResponse = await clusterLayer?.layerObj?.queryExtent?.();
+                const extent = extentResponse?.extent;
+                if (extent && mountedRef.current && requestVersion === queryVersionRef.current) {
+                    const expandFactorX = (extent.xmax - extent.xmin) * 0.05;
+                    const expandFactorY = (extent.ymax - extent.ymin) * 0.1;
+                    await view.goTo({
+                        xmin: extent.xmin - expandFactorX,
+                        ymin: extent.ymin - expandFactorY,
+                        xmax: extent.xmax + expandFactorX,
+                        ymax: extent.ymax + expandFactorY,
+                        spatialReference: extent.spatialReference,
+                    });
+                }
+            } catch (_) {}
 
-    const [resultList, setResultList] = useState(null);
-    const [activeTab, setActiveTab] = useState("form");
-    const btnBack_OnClick = (e) => {
-        removeLastClusterLayer();
-        setAddExtent(false);
-
-        let targetExtent = extentHistory[0];
-        mapView.goTo(targetExtent);
-        props.windowManager.ShowWindow("sidebar")
-       
-    }
-
-
-    const [loading, setLoading]=useState(false);
-    const getSymbolBasedOnZoom = (zoomLevel) => {
-        if (zoomLevel >10) {
-            return {
-                type: "picture-marker",
-                url: windowLogoicon,
-                width: "30px",
-                height: "35px"
-            };
-        } else if(zoomLevel< 10){
-            return {
-                type: "picture-marker",
-                url: windowLogoicon,
-                width: "80px",
-                height: "80px"
-            };
+            const list = (Array.isArray(result.data) ? result.data : []).map((item) => ({
+                ObjectId: item?.attr?.objectid,
+                Title: item?.attr?.adi,
+                Phone: item?.attr?.telefon,
+                Address: item?.attr?.adres,
+                AddressDescription: "Adres tarifi bulunmuyor",
+            }));
+            setResultList(list);
+        } catch (error) {
+            if (mountedRef.current && requestVersion === queryVersionRef.current) {
+                props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "Park sorgusu başarısız oldu");
+                setResultList([]);
+            }
+        } finally {
+            if (mountedRef.current && requestVersion === queryVersionRef.current) setLoading(false);
         }
     };
-    
- 
-   const fetchQueryResults = () => {
 
-      
-        setLoading(true);
+    const getItemDetailsById = async (item) => {
+        const result = await ParklarQeryBusiness.Query({ ObjectId: item.ObjectId }, true);
+        if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data) || !result.data.length) {
+            throw new Error("Öğe detayları bulunamadı");
+        }
+        return result.data[0];
+    };
 
-        LoggingBusiness.CreateClientLog("ÇocukEtkinlik/Sorgu", query.districtName+"/"+query.nbhoodName+"/"+query.name);
+    const item_OnClick = async (event, item) => {
+        event?.stopPropagation?.();
+        LoggingBusiness.CreateClientLog("Parklar/Detay Göster", `${item.ObjectId || ''}/${item.Address || ''}`);
+        try {
+            const itemDetails = await getItemDetailsById(item);
+            const view = mapViewRef.current;
+            if (view && itemDetails?.geometry) GisGraphicsHelper.ZoomToGeometry(view, itemDetails.geometry, 18);
+            if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id);
+        } catch (error) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, error.message);
+        }
+    };
 
-        ParklarQeryBusiness.Query(query,false).then((_result) => {
+    const item_ShowRoute = async (event, item) => {
+        event?.stopPropagation?.();
+        try {
+            const itemDetails = await getItemDetailsById(item);
+            const lat = itemDetails?.geometry?.latitude;
+            const lng = itemDetails?.geometry?.longitude;
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("Koordinat bilgisi bulunamadı");
+            const url = `https://www.google.com.tr/maps?saddr=My+Location&daddr=${encodeURIComponent(`${lat},${lng}`)}`;
+            window.open(url, "_blank", "noopener,noreferrer");
+        } catch (_) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
+        }
+    };
 
-            if (_result.type == Constants_ServiceResultType.Success) {
+    const btnBack_OnClick = async () => {
+        removeLastClusterLayer();
+        addExtentRef.current = false;
+        const targetExtent = extentHistoryRef.current[0];
+        const view = mapViewRef.current;
+        if (view && targetExtent) {
+            try { await view.goTo(targetExtent); } catch (_) {}
+        }
+        props.windowManager.ShowWindow("sidebar");
+        setActiveTab("form");
+    };
 
-                setActiveTab("query");
-
-                const initialSymbol = getSymbolBasedOnZoom(mapView.zoom);
-
-                // İlk başlangıç extent'ine git
-                setAddExtent(false);
-                let targetExtent = extentHistory[0];
-                mapView.goTo(targetExtent).then(() => {
-                    
-                    // Katmanı oluştur ve haritaya ekle
-                    CommonBusiness.Clustering.CreateLayerWithoutClustering("YeniParklarQeryUrl", props.windowTitle, query, initialSymbol).then((_clusterLayer) => {
-                        removeLastClusterLayer();
-                        mapView.map.removeAll();
-                        setClusterLayer(_clusterLayer);
-                        mapView.map.add(_clusterLayer.layerObj);
-                
-                        // Layer yüklendikten sonra verilerin extent'ini al ve zoom yap
-                        _clusterLayer.layerObj.queryExtent().then((response) => {
-                            if (response.extent) {
-                                let extent = response.extent;
-
-                                // Sağa, sola, yukarı ve aşağı farklı oranlarda genişletme yapabilirsiniz
-                                let expandFactorX = (extent.xmax - extent.xmin) * 0.05; // X ekseninde %5 genişlet
-                                let expandFactorY = (extent.ymax - extent.ymin) * 0.1;  // Y ekseninde %10 genişlet
-                
-                                let newExtent = {
-                                    xmin: extent.xmin - expandFactorX,  // Sola genişlet
-                                    ymin: extent.ymin - expandFactorY,  // Aşağıya genişlet
-                                    xmax: extent.xmax + expandFactorX,  // Sağa genişlet
-                                    ymax: extent.ymax + expandFactorY,  // Yukarıya genişlet
-                                    spatialReference: extent.spatialReference
-                                };
-                            }
-                        });
-                    });
-    
-                });
-                
-
-    
-                        // Zoom değiştikçe ikonları güncelle
-                        mapView.watch("zoom", (newZoomLevel) => {
-                            const updatedSymbol = getSymbolBasedOnZoom(newZoomLevel);
-                    
-                            // Sembolü güncellemek için katmanın renderer'ını güncelleyin
-                            if (clusterLayer) {
-                                clusterLayer.layerObj.renderer.symbol = updatedSymbol;
-                                clusterLayer.layerObj.refresh();  // Katmanın güncellenmesi için refresh çağrılır
-                            }
-                        });
-
-                let list = [];
-
-                _result.data.forEach(_item => {
-                 
-                    list.push({
-                        ObjectId: _item.attr.objectid,
-                        Title: _item.attr.adi,
-                        Phone: _item.attr.telefon,
-                        Address: _item.attr.adres,
-                        AddressDescription: "Adres tarifi bulunmuyor"
-                    });
-                });
-
-
-
-
-                
-                setResultList(list);                
-                setLoading(false);
-
-            }
-        }).catch(error => {
-            props.windowManager.ShowMessage(Constants_MessageType.Error,error.message); 
-            setLoading(false);
-        });
-
-    }
-
-
-    const getItemDetailsById=async(_item)=>{
-
-        return new Promise((resolve, reject)=>{
-            ParklarQeryBusiness.Query({ObjectId: _item.ObjectId},true).then((_result) => {
-                if(_result.type==Constants_ServiceResultType.Success){
-                    if(_result.data!=null){
-                        const _resultItem=_result.data[0];
-                        resolve(_resultItem);
-                    }
-                    else{
-                        reject(null);
-                    }
-                }
-            });
-        });
-
-    }
-
-    const item_OnClick = (e, _item) => {
-
-        LoggingBusiness.CreateClientLog("Yaşlı Dostu/Detay Göster", _item.Id+"/"+_item.Address);
-
-        getItemDetailsById(_item).then(_itemDetails =>  {
-
-            GisGraphicsHelper.ZoomToGeometry(mapView, _itemDetails?.geometry, 18);
-            
-            if(window.screen.width<960){
-                props.windowManager.ToggleMinimiseWindow(props.id);
-            } 
-        });   
-    }
-
-    const item_ShowRoute=(e, _item)=>{
-        
-        getItemDetailsById(_item).then(_itemDetails =>  {
-
-            if(_itemDetails!=null){
-                const lat=_itemDetails.geometry.latitude;
-            const lng=_itemDetails.geometry.longitude;
-            let url = "https://www.google.com.tr/maps?saddr=My+Location&daddr=" + lat + "," + lng;
-            window.open(url, "_blank");
-            //TODO: create log
-            }
-            else{
-                props.windowManager.ShowMessage(Constants_MessageType.Error,"Yol tarifi alınamadı - öğe detayları bulunamadı");
-            }
-            
-        
-        });   
-    }
-
-    return (<>
-        <div className="sidebar-container"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>     
-
-<div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src={windowLogo}></img>
-                <span>{windowTitle}</span>      
-
+    return (
+        <div
+            className="sidebar-container"
+            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}
+            data-active-tab={activeTab}
+            data-loading={loading ? 'true' : 'false'}
+        >
+            <div className="common-query-window-header">
+                <img className="common-query-window-header-icon" src={windowLogo} alt="" />
+                <span>{windowTitle}</span>
             </div>
-           
-                  <div className="results-container">
-                            {
-                                <>
-                                    <div className="results-container-toolbar">
-                                        <div className="results-container-back-button" onClick={(e) => btnBack_OnClick(e)}>
-                                            <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" />
-                                            &nbsp;Geri Dön
-                                        </div>
-                                        <div className="results-container-count">
-                                            <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
-                                        </div>
-                                    </div>
-                                    {
-                                        resultList?.map(_item => {
-                                            return <div className="result-item-container" onClick={(e) => item_OnClick(e, _item)}>
-                                                <div className="result-item-info">
-                                                    <div className="result-item-info-title">
-                                                  {_item.Title}
-                                                    </div>
-                                                    <div className="result-item-info-address">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.Address}
-                                                    </div>
-                                           
-                                                 
-                                                </div>
-                                                <CommonQueryResultItemTools 
-                                                    item={_item}
-                                                    zoomCallback={(e)=>item_OnClick(e,_item)}
-                                                    showRouteCallback={(e)=>item_ShowRoute(e,_item)}
-                                                     />
-                                            </div>
-                                        })
-                                    }
-                                </>
-                       
-                }
+
+            <div className="results-container" aria-busy={loading}>
+                <div className="results-container-toolbar">
+                    <button type="button" className="results-container-back-button" onClick={btnBack_OnClick}>
+                        <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />
+                        &nbsp;Geri Dön
+                    </button>
+                    <div className="results-container-count">
+                        <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
+                    </div>
+                </div>
+
+                {resultList?.map((item, index) => (
+                    <div
+                        className="result-item-container"
+                        onClick={(event) => item_OnClick(event, item)}
+                        key={item.ObjectId ?? `${item.Title || 'park'}-${index}`}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') item_OnClick(event, item);
+                        }}
+                    >
+                        <div className="result-item-info">
+                            <div className="result-item-info-title">{item.Title}</div>
+                            <div className="result-item-info-address">
+                                <FiMapPin aria-hidden="true" />&nbsp;{item.Address}
+                            </div>
+                        </div>
+                        <CommonQueryResultItemTools
+                            item={item}
+                            zoomCallback={(event) => item_OnClick(event, item)}
+                            showRouteCallback={(event) => item_ShowRoute(event, item)}
+                        />
+                    </div>
+                ))}
             </div>
         </div>
-    </>);
+    );
 });
