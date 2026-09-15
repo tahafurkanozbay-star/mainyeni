@@ -146,6 +146,87 @@
 - Search/query performansını gerçek servis latency ve büyük sonuç setleriyle profile et.
 - Aktif 3D ürün entrypoint'i netleşirse mevcut `sceneRuntime` + shared icon registry üzerinden 2D↔3D parity'yi genişlet; ikinci state veya icon mapping sistemi oluşturma.
 
+## Deep Data / Search / Address Hardening — 2026-09-15
+
+### TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU
+- TUR: Deep Data/Search/Address hardening ve merge kapanış turu.
+- GÖREV: full-text ve fast-access sorgu üretimini veri bütünlüğü/güvenlik açısından sertleştirmek, GIS QueryTask sonuç-hata sözleşmesini normalize etmek, paralel Platform/UI modernizasyonunu ezmeden güncel `main` ile bütünleştirmek ve green kalite hattı sonrası merge etmek.
+- Branch: `agent/data-search-20260915`.
+- Son branch head: `ae8d81cf5116103f794e5a8d99d2f2545e4fcd43`.
+- Merge öncesi base: `a520ba91b9b802a65f0dcdc3a776f9345316cfe1`; branch `main`e göre 0 commit gerideydi.
+- PR: #9 `fix(search): harden data search query construction`.
+- Final PR durumu merge öncesi `mergeable=true`; review bekleyen thread yoktu.
+- MERGE: squash-merge tamamlandı.
+- Merge commit: `4a56c8448042a59dbc3451bb1cb390f9c3491a83`.
+- Connector çalışma alanında kalıcı bir local checkout/worktree bulunmadığı için uydurma `git status` raporlanmadı; branch/ref/compare durumu GitHub üzerinden ve temiz CI checkout'u (`actions/checkout clean=true`) üzerinden doğrulandı.
+
+### DEĞİŞEN DOSYALAR / SATIR HACMİ
+- PR #9 final diff: 3 dosya.
+- `Webclient.app/src/Business/FastAccessQueryBusiness.js`: 41 ekleme / 22 silme.
+- `Webclient.app/src/Business/FulltextSearchQueryBusiness.js`: 93 ekleme / 136 silme.
+- `Webclient.app/src/Toolbox/GisQueryHelper.js`: 36 ekleme / 27 silme.
+- Toplam: 170 ekleme / 185 silme; yaklaşık 355 anlamlı satır değişimi.
+- 4.000 satır hedefi bu turda bilinçli olarak zorlanmadı. Aynı gün merge edilen Whole-Code UI turu repository genelinde 34K+ satırlık query/runtime modernizasyonunu zaten gerçekleştirdi; bu PR'ı 4.000 satıra şişirmek paralel ekip alanına gereksiz müdahale, tekrar ve regression riski yaratacaktı. Doğruluk, veri bütünlüğü ve küçük güvenli merge yüzeyi önceliklendirildi; boilerplate veya yapay refactor eklenmedi.
+
+### DATA / SEARCH / SPATIAL DÜZELTMELERİ
+- ArcGIS SQL string literal değerlerinde tek tırnaklar deterministic biçimde escape ediliyor; full-text, district/neighborhood ve fast-access name filtreleri ham kullanıcı metnini doğrudan SQL literal içine bırakmıyor.
+- `ObjectId` ve numeric `Id` filtreleri yalnız finite number kabul ediyor; `NaN`/`Infinity` gibi geçersiz değerler sorguya taşınmıyor.
+- Boş/null arama metinleri trim sonrası filtre üretmiyor; Turkish case + diacritic/ascii eşleştirme davranışı korunuyor.
+- District/neighborhood kimlikleri trim + SQL literal escaping ile normalize ediliyor.
+- Nearby distance negatif/invalid değerlerde en az 0'a normalize ediliyor. Mevcut `bufferDistance * 100` birim sözleşmesi, gerçek caller/service semantiği ayrıca kanıtlanmadan değiştirilmedi.
+- Promise-constructor anti-patternleri kaldırıldı; async akış doğrudan Query helper sonucunu kullanıyor.
+- `GisQueryHelper` normal ve spatial sorguları ortak executor üzerinden çalıştırıyor; feature/field eksikliğinde stabil boş koleksiyonlar ve hata durumunda normalize `Error` service-result shape dönüyor.
+- `loadModules` ve QueryTask execution hataları aynı catch sınırında normalize ediliyor.
+- Mevcut ArcGIS servis URL üretimi ve endpoint sözleşmesi korundu; yeni endpoint icat edilmedi.
+
+### TEST / LINT / TYPECHECK / BUILD / İKİNCİ DOĞRULAMA
+- İlk güncel-main entegrasyon head'i için Webclient Quality run #453 (`34975529506`) install, non-blocking audit, lint, typecheck, test ve production build adımlarını geçti.
+- Son exact merge candidate head `ae8d81cf...` için Webclient Quality run #454 (`34975892617`) tekrar çalıştırıldı ve job `success` ile tamamlandı.
+- Runner: Ubuntu 24.04.5; Node v24.20.0; npm 11.19.0.
+- `npm ci`: PASS.
+- lint-if-present: PASS.
+- typecheck-if-present: PASS.
+- Test Suites: 14/14 PASS.
+- Tests: 307/307 PASS.
+- Snapshots: 0.
+- Test süresi: 4.729 s.
+- `CI=true npm run build`: PASS; `Compiled successfully.`.
+- Production main JS gzip: yaklaşık 39.42 KB; en büyük vendor chunk yaklaşık 116.76 KB.
+- `caniuse-lite` güncellik uyarısı build'i engellemiyor ve bakım borcu olarak kaldı.
+
+### DATA-INTEGRITY / SECURITY / REGRESSION REVIEW
+- SQL literal enjeksiyon yüzeyi azaltıldı; string ve numeric filter türleri ayrıştırıldı.
+- Null/empty/invalid numeric input davranışı deterministic hale getirildi.
+- Query response shape eksik `features`/`fields` değerlerinde stabil hale getirildi; UI katmanının null üzerinde dağılma riski azaltıldı.
+- Existing return contracts (`{Title, Data}` ve service-result shape) korunarak UI regression yüzeyi sınırlı tutuldu.
+- PR diff'i merge öncesi tekrar incelendi; yalnız üç Data/Search dosyası kaldığı doğrulandı.
+- Final branch güncel `main` ile 0 commit gerideydi; paralel Platform/UI ekip değişiklikleri iki-parent entegrasyon commit'leriyle branch'e alındı ve force-push kullanılmadı.
+- CI checkout merge ref'i de doğruladı; build merge-candidate ağacı üzerinde çalıştı.
+- Dependency audit mevcut legacy borcu tekrar doğruladı: 197 vulnerability = 10 low, 116 moderate, 53 high, 18 critical. Audit workflow'da görünür fakat kontrollü migration gerektirdiği için non-blocking; `npm audit fix --force` uygulanmadı.
+- Özellikle axios, DOMPurify, crypto-js, jsPDF ve CRA/react-scripts zinciri ayrı targeted dependency modernization turunda ele alınmalı.
+
+### NETWORK / ENDPOINT / İKON KARARLARI
+- WMS/WFS eklenmedi.
+- Gerçek servisler dışında endpoint uydurulmadı; mevcut `CommonBusiness.GenerateUrl`/ArcGIS QueryTask akışı korundu.
+- Yeni üçüncü taraf network, analytics, CDN veya font çağrısı eklenmedi.
+- Bu PR ikinci bir tür/kategori/icon authority oluşturmadı. `gis-engine/iconRegistry.json` + shared resolver/presentation tek authority olarak korundu.
+- Bu dar hardening paketinde result/table/card icon entegrasyonunu zorla genişletmek yerine, shared resolver'ın alias/case/diacritic/fallback testleriyle birlikte sonraki Data/Search turuna bırakıldı.
+
+### PERFORMANS / MODERNİZASYON KARARLARI
+- Promise wrapping ve tekrar eden QueryTask setup azaltılarak daha küçük, öngörülebilir async yol elde edildi.
+- Query helper'daki ortak executor bakım ve hata-handling tekrarını azalttı.
+- Kör React/CRA veya ArcGIS major rewrite yapılmadı; yalnız ölçülebilir veri bütünlüğü ve bakım kazanımı sağlayan dar modernizasyon uygulandı.
+- Bu PR yeni cache/indexing/pagination katmanı icat etmedi. Mevcut UI turundaki stale-request runtime korunurken backend/service semantiği doğrulanmadan query pagination contract'ı değiştirilmedi.
+
+### KALAN YÜKSEK ÖNCELİKLİ DATA / SEARCH / ADDRESS İŞLERİ
+- Address/geocoding adapter envanterini gerçek endpoint ve response şemalarıyla çıkar; same-origin/backend/BFF üzerinden adapter contract'ını normalize et.
+- Arama isteklerinde cancellation/deduplication/cache katmanını servis bazlı TTL ve stale-response kurallarıyla ölçümlü genişlet.
+- Büyük sonuç kümeleri için ArcGIS pagination/objectId paging ve server limit davranışını gerçek servis metadata'sıyla doğrula; varsayımsal limit veya endpoint kullanma.
+- Search/category/type normalizasyonunu shared icon resolver ile sonuç/table/card yüzeylerinde birleştir; alias/case/diacritic/unknown fallback testleri ekle.
+- Schema drift, duplicate records, encoding/locale, null geometry/invalid coordinate ve coordinate reference edge-case'leri için targeted data-integrity test paketi oluştur.
+- Büyük veri setlerinde debounce, indexing stratejisi, spatial filter ve pagination performansını gerçek latency/record-count ölçümüyle profile et.
+- Legacy dependency güvenlik borcunu ayrı kontrollü migration turunda, her paket yükseltmesinde test/build/bundle karşılaştırmasıyla kapat.
+
 ## Kurallar
 - Çalışan davranışlar korunur; WMS/WFS eklenmez; gerçek servis ve response şeması incelenmeden endpoint varsayılmaz.
 - Browser Network panelinin tamamen gizlenemeyeceği kabul edilir; güvenlik server-side authorization, least privilege ve data minimization ile kurulur.
