@@ -16,7 +16,6 @@ on:
   push:
     branches:
       - main
-      - 'agent/**'
     paths:
       - 'Api.Admin/**'
       - 'Api.Core/**'
@@ -33,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: platform-backend-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -66,10 +65,10 @@ jobs:
         run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test CityWorks.NetCore.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test CityWorks.NetCore.sln --configuration Release --no-build --no-restore --verbosity normal
 
       - name: Publish User API
-        run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --output artifacts/api-user
+        run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output artifacts/api-user
 
       - name: Publish Admin API
-        run: dotnet publish Api.Admin/Api.Admin.csproj --configuration Release --no-build --output artifacts/api-admin
+        run: dotnet publish Api.Admin/Api.Admin.csproj --configuration Release --no-build --no-restore --output artifacts/api-admin

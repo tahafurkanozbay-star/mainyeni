@@ -94,7 +94,7 @@ namespace CityWorks.UserApi.Gis
 
                 var client = new RestClient(new RestClientOptions
                 {
-                    MaxTimeout = RequestTimeoutMs
+                    Timeout = TimeSpan.FromMilliseconds(RequestTimeoutMs)
                 });
                 var request = new RestRequest(upstreamUri.ToString())
                 {
@@ -317,7 +317,10 @@ namespace CityWorks.UserApi.Gis
                 : "arcgis";
             var tokenUrl = $"{serviceUri.Scheme}://{serviceUri.Host}/{tokenHostPrefix}/tokens/generateToken";
 
-            var tokenClient = new RestClient(new RestClientOptions { MaxTimeout = RequestTimeoutMs });
+            var tokenClient = new RestClient(new RestClientOptions
+            {
+                Timeout = TimeSpan.FromMilliseconds(RequestTimeoutMs)
+            });
             var tokenRequest = new RestRequest(tokenUrl, Method.Post);
             tokenRequest.AddParameter("f", "json");
             tokenRequest.AddParameter("expiration", TokenLifetimeMinutes);
