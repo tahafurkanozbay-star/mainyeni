@@ -56,16 +56,15 @@ namespace Api.Core.Platform.Middleware
             }
 
             var correlationId = string.IsNullOrEmpty(inbound)
-                ? CreateCorrelationId(context)
+                ? CreateCorrelationId(context, requestOptions.MaxCorrelationIdLength)
                 : inbound;
 
             context.Items[ApiPlatformDefaults.TraceIdItemKey] = correlationId;
 
-            context.Response.OnStarting(() =>
-            {
-                context.Response.Headers[headerName] = correlationId;
-                return Task.CompletedTask;
-            });
+            // Set the header before invoking downstream middleware. This makes the correlation
+            // contract visible to short-circuiting middleware/controllers and avoids relying on
+            // server-specific OnStarting behavior for a security/observability invariant.
+            context.Response.Headers[headerName] = correlationId;
 
             using (_logger.BeginScope(new System.Collections.Generic.Dictionary<string, object>
             {
@@ -76,15 +75,18 @@ namespace Api.Core.Platform.Middleware
             }
         }
 
-        private static string CreateCorrelationId(HttpContext context)
+        private static string CreateCorrelationId(HttpContext context, int maxLength)
         {
             var traceIdentifier = context.TraceIdentifier?.Trim();
-            if (ApiPlatformDefaults.IsValidCorrelationId(traceIdentifier, 96))
+            if (ApiPlatformDefaults.IsValidCorrelationId(traceIdentifier, maxLength))
             {
                 return traceIdentifier;
             }
 
-            return Guid.NewGuid().ToString("N");
+            var generated = Guid.NewGuid().ToString("N");
+            return generated.Length <= maxLength
+                ? generated
+                : generated.Substring(0, maxLength);
         }
 
         private static async Task WriteInvalidCorrelationResponse(HttpContext context)
