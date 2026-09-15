@@ -15,9 +15,11 @@ import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { GoogleMapsBusiness } from "../../../Business/GoogleMapsBusiness";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
 import { TextHelper } from "../../../Toolbox/TextHelper";
+import { createPictureMarkerSymbol } from "../../../gis-engine/iconPresentation";
 
 const DEFAULT_QUERY = Object.freeze({ name: "", districtId: "", districtName: "", nbhoodId: "", nbhoodName: "", showPodOnDuty: false, showMapSelect: false, showNearby: false });
-const PHARMACY_SYMBOL = Object.freeze({ type: "picture-marker", url: "images/icons/sidebar/eczane.png", width: "48px", height: "48px" });
+const PHARMACY_ICON_RECORD = Object.freeze({ type: "PharmacyQueryUrl", category: "Eczaneler", title: "Eczane" });
+const PHARMACY_SYMBOL = Object.freeze(createPictureMarkerSymbol(PHARMACY_ICON_RECORD, 12, { minSize: 48, maxSize: 48 }));
 
 const normalizePharmacy = (item, onDuty = false) => {
     const attributes = item?.attr || item?.attributes || item || {};
