@@ -1,27 +1,34 @@
-﻿using System;
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Toolbox.Security
 {
-    public class SHA1Encryptor : IEncryptDecrypt
+    /// <summary>
+    /// Legacy SHA-1 password compatibility transform.
+    /// Do not use for new password writes; PBKDF2 is the current password format.
+    /// </summary>
+    public sealed class SHA1Encryptor : IEncryptDecrypt
     {
-        //TODO: bu algoritma simetrik olmayabilir bu fonksiyon çalışmıyor
-        public string Decrypt(string EncryptedText, string key)
+        public string Decrypt(string encryptedText, string key)
         {
-            throw new Exception("Cannot Decrypt SHA1");
+            throw new NotSupportedException("SHA-1 is a one-way hash and cannot be decrypted.");
         }
 
         public string Encrypt(string plainText, string key)
         {
-            byte[] bytes = Encoding.Unicode.GetBytes(plainText);
-            byte[] src = Encoding.Unicode.GetBytes(key);
-            byte[] dst = new byte[src.Length + bytes.Length];
-            Buffer.BlockCopy(src, 0, dst, 0, src.Length);
-            Buffer.BlockCopy(bytes, 0, dst, src.Length, bytes.Length);
-            HashAlgorithm algorithm = HashAlgorithm.Create("SHA1");
-            byte[] inarray = algorithm.ComputeHash(dst);
-            return Convert.ToBase64String(inarray);
+            if (plainText == null) throw new ArgumentNullException(nameof(plainText));
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            var plainBytes = Encoding.Unicode.GetBytes(plainText);
+            var keyBytes = Encoding.Unicode.GetBytes(key);
+            var input = new byte[keyBytes.Length + plainBytes.Length];
+            Buffer.BlockCopy(keyBytes, 0, input, 0, keyBytes.Length);
+            Buffer.BlockCopy(plainBytes, 0, input, keyBytes.Length, plainBytes.Length);
+
+            // SHA1.HashData preserves the exact legacy digest semantics without the obsolete
+            // name-based HashAlgorithm factory. This path exists only to verify historical hashes.
+            return Convert.ToBase64String(SHA1.HashData(input));
         }
     }
 }
