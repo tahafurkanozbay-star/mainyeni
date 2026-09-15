@@ -94,8 +94,38 @@ export const executeFeatureQuery = async (service, input = {}, options = {}) => 
   finally { if (inFlight.get(key) === work) inFlight.delete(key); }
 };
 export const executeFeatureCount = async (service, input = {}, options = {}) => {
-  const result = await executeFeatureQuery(service, { ...input, returnGeometry: false, outFields: ['OBJECTID'], resultRecordCount: 1 }, options);
-  return result?.features?.length || 0;
+  const url = resolveUrl(service, options);
+  if (!url) throw new Error('A GIS service URL is required.');
+  throwIfAborted(options.signal);
+  const [QueryTask, Query] = await Promise.all([load('esri/tasks/QueryTask'), load('esri/tasks/support/Query')]);
+  throwIfAborted(options.signal);
+  const task = new QueryTask({ url });
+  const query = normalizeQuery({ ...input, returnGeometry: false, outFields: ['OBJECTID'] });
+  const request = new Query();
+  Object.keys(query).forEach((property) => {
+    if (query[property] !== undefined && query[property] !== null) request[property] = query[property];
+  });
+  if (typeof task.executeForCount === 'function') {
+    const countPromise = task.executeForCount(request, options.signal ? { signal: options.signal } : undefined);
+    return await raceCancellation(Promise.resolve(countPromise), options.signal);
+  }
+  // Older ArcGIS runtimes may not expose executeForCount. Preserve correctness
+  // by paginating bounded OBJECTID queries rather than returning a false count of 0/1.
+  let offset = 0;
+  let total = 0;
+  const pageSize = 2000;
+  while (true) {
+    throwIfAborted(options.signal);
+    request.resultOffset = offset;
+    request.resultRecordCount = pageSize;
+    const page = await raceCancellation(Promise.resolve(task.execute(request, options.signal ? { signal: options.signal } : undefined)), options.signal);
+    const features = page?.features || [];
+    total += features.length;
+    if (!page?.exceededTransferLimit && features.length < pageSize) break;
+    if (!features.length) break;
+    offset += features.length;
+  }
+  return total;
 };
 export const invalidateServiceQueries = (service) => {
   const url = String(CommonBusiness.GenerateUrl(service) || service?.url || service || '');
