@@ -11,7 +11,7 @@ jest.mock('esri-loader', () => ({
     if (name === 'esri/layers/ImageryLayer') return class ImageryLayer { constructor(options) { Object.assign(this, options); } };
     if (name === 'esri/layers/SceneLayer') return class SceneLayer { constructor(options) { Object.assign(this, options); } };
     return class Module {};
-  })),
+  }))),
 }));
 
 describe('GIS runtime regression contracts', () => {
