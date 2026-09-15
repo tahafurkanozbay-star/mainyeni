@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Form } from "react-bootstrap";
 import { BiChevronUp, BiInfoCircle, BiX } from "react-icons/bi";
 import { RiCloseCircleFill } from "react-icons/ri";
@@ -28,24 +28,26 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
     const locationTimerRef = useRef(null);
     const mountedRef = useRef(true);
 
-    const setQueryField = (field, value) => props.setQueryField?.(field, value);
+    const setQueryField = useCallback((field, value) => {
+        props.setQueryField?.(field, value);
+    }, [props.setQueryField]);
 
-    const clearLocationTimer = () => {
+    const clearLocationTimer = useCallback(() => {
         if (locationTimerRef.current) {
             window.clearTimeout(locationTimerRef.current);
             locationTimerRef.current = null;
         }
-    };
+    }, []);
 
-    const clearLocationGraphic = () => {
+    const clearLocationGraphic = useCallback(() => {
         clearLocationTimer();
         if (locationGraphicRef.current) {
             MapManager.RemoveGraphics(locationGraphicRef.current);
             locationGraphicRef.current = null;
         }
-    };
+    }, [clearLocationTimer]);
 
-    const resetTools = () => {
+    const resetTools = useCallback(() => {
         clearLocationGraphic();
         setNearbyActive(false);
         setMapSelectActive(false);
@@ -55,9 +57,9 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
         setQueryField("mapSelect", false);
         setQueryField("userLocation", null);
         setQueryField("bufferDistance", DEFAULT_BUFFER_UNITS);
-    };
+    }, [clearLocationGraphic, setQueryField]);
 
-    useImperativeHandle(ref, () => ({ OnClose: resetTools }));
+    useImperativeHandle(ref, () => ({ OnClose: resetTools }), [resetTools]);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -65,7 +67,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
             mountedRef.current = false;
             clearLocationGraphic();
         };
-    }, []);
+    }, [clearLocationGraphic]);
 
     const createLocationGraphic = async coordinates => {
         const point = await GisGraphicsHelper.CreatePoint({
@@ -143,9 +145,7 @@ export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
         if (!props.showMapSelect) return;
         setMapSelectActive(value);
         setQueryField("mapSelect", value);
-        if (value) {
-            disableNearby();
-        }
+        if (value) disableNearby();
     };
 
     const updateBufferUnits = value => {
