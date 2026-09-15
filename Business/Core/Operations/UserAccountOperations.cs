@@ -111,21 +111,37 @@ namespace Business.Core.Operations
                 .ThenBy(x => x.LastName);
 
             var count = query.Count();
-            var resultList = query
+            var pageRows = query
                 .Skip(skipRows)
                 .Take(viewModel.PageSize)
-                .Select(user => new UserAccountListViewModel
+                .Select(user => new
                 {
-                    Eg = ParameterEncryptionUtils.EncryptGuid(Guid.Parse(user.Guid), Configuration.GENERIC_SALT),
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    UserName = user.UserName,
-                    Id = user.Id,
-                    Roles = user.Roles,
-                    AccountType = user.AccountType,
-                    CreateDate = user.CreateDate
+                    user.Guid,
+                    user.FirstName,
+                    user.LastName,
+                    user.UserName,
+                    user.Id,
+                    user.Roles,
+                    user.AccountType,
+                    user.CreateDate
                 })
                 .ToList();
+
+            // Opaque-id formatting is application code and must run after EF has materialized the
+            // SQL-translatable projection. Doing this inside Select causes provider translation errors.
+            var resultList = pageRows.Select(user => new UserAccountListViewModel
+            {
+                Eg = Guid.TryParse(user.Guid, out var guid)
+                    ? ParameterEncryptionUtils.EncryptGuid(guid, Configuration.GENERIC_SALT)
+                    : null,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                UserName = user.UserName,
+                Id = user.Id,
+                Roles = user.Roles,
+                AccountType = user.AccountType,
+                CreateDate = user.CreateDate
+            }).ToList();
 
             return new ServiceResult<DataList<UserAccountListViewModel>>(
                 ServiceResultType.Success,
