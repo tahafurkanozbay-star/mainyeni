@@ -24,12 +24,16 @@ const readInteger = (key, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } =
   return Math.min(Math.max(parsed, min), max);
 };
 
+const currentOrigin = () => (typeof window !== 'undefined' && window.location
+  ? window.location.origin
+  : 'http://localhost');
+
 const normalizeBasePath = (value) => {
   if (!value) return DEFAULT_API_BASE_URL;
   if (value.startsWith('/')) return value.replace(/\/$/, '') || '/';
 
   try {
-    const url = new URL(value, window?.location?.origin || 'http://localhost');
+    const url = new URL(value, currentOrigin());
     if (typeof window !== 'undefined' && url.origin === window.location.origin) {
       return `${url.pathname}${url.search}`.replace(/\/$/, '') || '/';
     }
@@ -41,8 +45,8 @@ const normalizeBasePath = (value) => {
   return DEFAULT_API_BASE_URL;
 };
 
-export const createRuntimeConfig = (source = process?.env || {}) => {
-  const env = source || {};
+export const createRuntimeConfig = (source) => {
+  const env = source || (typeof process !== 'undefined' ? process.env || {} : {});
   const apiBaseUrl = normalizeBasePath(env.REACT_APP_API_BASE_URL || readEnv('REACT_APP_API_BASE_URL'));
 
   return Object.freeze({
