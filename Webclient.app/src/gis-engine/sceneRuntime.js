@@ -10,20 +10,11 @@ const load = (name) => {
 
 export const createSceneView = async (container, options = {}) => {
   const [Map, SceneView] = await Promise.all([load('esri/Map'), load('esri/views/SceneView')]);
-  // No implicit ArcGIS Online basemap/ground is requested. The caller must pass
-  // an already approved/configured source so the GIS network policy stays intact.
   const mapOptions = {};
   if (options.basemap) mapOptions.basemap = options.basemap;
   if (options.ground) mapOptions.ground = options.ground;
   const map = new Map(mapOptions);
-  const view = new SceneView({
-    container,
-    map,
-    camera: options.camera,
-    qualityProfile: options.qualityProfile || 'medium',
-    environment: options.environment,
-    ui: { components: [] },
-  });
+  const view = new SceneView({ container, map, camera: options.camera, qualityProfile: options.qualityProfile || 'medium', environment: options.environment, ui: { components: [] } });
   return { map, view };
 };
 
@@ -44,11 +35,7 @@ export const addSceneLayer = async (view, service, options = {}) => {
 export const pickScene = async (view, screenPoint) => {
   if (!view?.hitTest || !screenPoint) return [];
   const response = await view.hitTest(screenPoint);
-  return (response?.results || []).map((result) => ({
-    graphic: result.graphic || null,
-    layer: result.graphic?.layer || null,
-    mapPoint: result.mapPoint || null,
-  }));
+  return (response?.results || []).map((result) => ({ graphic: result.graphic || null, layer: result.graphic?.layer || null, mapPoint: result.mapPoint || null }));
 };
 
 export const focusPickedGraphic = async (view, graphic, options = {}) => {
@@ -62,17 +49,12 @@ export const bindSceneState = (view, bridge, selectionCallback) => {
   const handles = [];
   const sync = () => {
     const camera = view.camera;
-    const next = updateCamera(bridge.getState(), {
-      center: camera?.position ? [camera.position.longitude, camera.position.latitude] : undefined,
-      heading: camera?.heading,
-      tilt: camera?.tilt,
-      scale: view.scale,
-    });
+    const next = updateCamera(bridge.getState(), { center: camera?.position ? [camera.position.longitude, camera.position.latitude] : undefined, heading: camera?.heading, tilt: camera?.tilt, scale: view.scale });
     bridge.setState({ ...next, mode: '3d' });
   };
   if (typeof view.watch === 'function') handles.push(view.watch('camera', sync));
   const clickHandle = view.on?.('click', async (event) => {
-    const hits = await pickScene(view, event.mapPoint || event);
+    const hits = await pickScene(view, event.screenPoint || event);
     const first = hits[0];
     if (!first?.graphic) {
       bridge.setState((state) => updateSelection(state, { layerId: null, objectId: null }));
@@ -89,16 +71,7 @@ export const bindSceneState = (view, bridge, selectionCallback) => {
 
 export const buildSceneBookmark = (view, id, title) => {
   const camera = view?.camera;
-  return {
-    id: String(id),
-    title: String(title || id),
-    mode: '3d',
-    camera: camera ? {
-      position: camera.position?.toJSON ? camera.position.toJSON() : camera.position,
-      heading: camera.heading,
-      tilt: camera.tilt,
-    } : null,
-  };
+  return { id: String(id), title: String(title || id), mode: '3d', camera: camera ? { position: camera.position?.toJSON ? camera.position.toJSON() : camera.position, heading: camera.heading, tilt: camera.tilt } : null };
 };
 
 export const applySceneBookmark = async (view, bookmark) => {
@@ -107,11 +80,6 @@ export const applySceneBookmark = async (view, bookmark) => {
   return true;
 };
 
-export const createSceneMeasureContract = (kind = 'distance') => Object.freeze({
-  kind,
-  supported: ['distance', 'area', 'height'].includes(kind),
-  useArcGISMeasurement: true,
-  units: kind === 'area' ? ['square-meters', 'square-kilometers'] : ['meters', 'kilometers'],
-});
+export const createSceneMeasureContract = (kind = 'distance') => Object.freeze({ kind, supported: ['distance', 'area', 'height'].includes(kind), useArcGISMeasurement: true, units: kind === 'area' ? ['square-meters', 'square-kilometers'] : ['meters', 'kilometers'] });
 
 export const create2D3DSyncState = (initial = {}) => createViewState({ ...initial, mode: initial.mode === '3d' ? '3d' : '2d' });
