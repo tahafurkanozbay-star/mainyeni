@@ -225,12 +225,16 @@ describe('identifyRuntime', () => {
     expect(loadModules).not.toHaveBeenCalled();
   });
 
-  test('identify session cancels stale runs when a newer run starts', async () => {
+  test('identify session cancels stale runs even when the SDK request ignores abort', async () => {
     const mapLayer = { id: 'map', type: 'map-image', url: '/map/MapServer' };
-    let resolveFirst;
+    let markFirstStarted;
+    const firstStarted = new Promise((resolve) => { markFirstStarted = resolve; });
     const identify = {
       identify: jest.fn()
-        .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+        .mockImplementationOnce(() => {
+          markFirstStarted();
+          return new Promise(() => {});
+        })
         .mockResolvedValueOnce({ results: [] }),
     };
     const IdentifyParameters = jest.fn().mockImplementation((initial) => ({ ...initial }));
@@ -241,11 +245,11 @@ describe('identifyRuntime', () => {
     const session = createIdentifySession();
 
     const first = session.run(view, { mapPoint: { x: 1, y: 1 } });
-    await Promise.resolve();
+    await firstStarted;
     const second = session.run(view, { mapPoint: { x: 2, y: 2 } });
-    resolveFirst?.({ results: [] });
 
     await expect(first).rejects.toMatchObject({ code: 'CANCELLED' });
     await expect(second).resolves.toMatchObject({ groups: [] });
+    expect(session.active).toBe(false);
   });
 });
