@@ -14,19 +14,25 @@ describe('shared GIS icon registry', () => {
     ['YeniKadinDanismaQueryUrl', 'kadin'],
     ['YeniWifiNoktalariQeryUrl', 'wifi'],
     ['YeniSosyalHizmetlerQueryUrl', 'sosyal'],
-    ['YeniTeknolojiMerkezleriQueryUrl', 'teknoloji']
+    ['YeniTeknolojiMerkezleriQueryUrl', 'teknoloji'],
+    ['PharmacyQueryUrl', 'eczane'],
+    ['TaxiQueryUrl', 'taksi']
   ])('uses the JSON registry for service key %s', (serviceKey, expectedId) => {
     expect(resolveIcon({ type: serviceKey }, registry).id).toBe(expectedId);
   });
 
-  test('keeps list, 2D and 3D icon identity aligned', () => {
-    const record = { type: 'YeniKadinDanismaQueryUrl', title: 'Kadın Danışma Merkezi' };
+  test.each([
+    ['YeniKadinDanismaQueryUrl', 'kadin'],
+    ['PharmacyQueryUrl', 'eczane'],
+    ['TaxiQueryUrl', 'taksi']
+  ])('keeps list, 2D and 3D icon identity aligned for %s', (type, expectedKey) => {
+    const record = { type, title: type };
     const list = createListIconModel(record);
     const marker = createPictureMarkerSymbol(record, 12);
     const scene = create3DGraphicModel(record);
 
-    expect(list.key).toBe('kadin');
-    expect(scene.iconKey).toBe('kadin');
+    expect(list.key).toBe(expectedKey);
+    expect(scene.iconKey).toBe(expectedKey);
     expect(marker.url).toBe(list.src);
     expect(scene.billboard).toBe(list.src);
   });
