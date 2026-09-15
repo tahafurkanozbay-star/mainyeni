@@ -6,144 +6,101 @@ import { IsNull } from "../Toolbox/ObjectHelper";
 import { TextHelper } from "../Toolbox/TextHelper";
 import { CommonBusiness } from "./CommonBusiness";
 
-export const FulltextSearchQueryBusiness = {
+const escapeSqlLiteral = (value) => String(value ?? "").replace(/'/g, "''");
 
-    QueryService:async(_configService, _query, _returnGeometry)=>{
+const toFiniteNumber = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+};
 
-        return new Promise((resolve, reject)=>{
+const buildTextFilter = (searchText) => {
+    if (IsNull(searchText)) return null;
+    const lower = escapeSqlLiteral(TextHelper.TurkishToLower(String(searchText).trim()));
+    if (!lower) return null;
+    const ascii = escapeSqlLiteral(TextHelper.RemoveTurkishChars(lower));
+    return `(LOWER(adi) LIKE '%${lower}%' OR LOWER(adi) LIKE '%${ascii}%')`;
+};
 
-            let options = {
-                url: CommonBusiness.GenerateUrl(_configService),
-                returnGeometry: _returnGeometry ?? false,
-                orderByFields: ["adi"],
-                outFields: ["*"]
-            };
+const appendIdFilter = (predicates, field, value) => {
+    if (IsNull(value)) return;
+    const normalized = String(value).trim();
+    if (!normalized) return;
+    predicates.push(`${field} = '${escapeSqlLiteral(normalized)}'`);
+};
 
-            let where = "1=1";
-            if (!IsNull(_query.searchText)) {
-                where += " AND ("
-                +" LOWER(adi) LIKE '%" + TextHelper.TurkishToLower(_query.searchText) + "%'"
-                +" OR LOWER(adi) LIKE '%" + TextHelper.RemoveTurkishChars(TextHelper.TurkishToLower(_query.searchText)) + "%'"
-                +")";
-            }
+const createOptions = (service, returnGeometry) => ({
+    url: CommonBusiness.GenerateUrl(service),
+    returnGeometry: Boolean(returnGeometry),
+    orderByFields: ["adi"],
+    outFields: ["*"]
+});
 
-
-            if (_query.showNearby) {
-                options.geometry = _query.userLocation;
-                options.distance = _query.bufferDistance * 100;
-                options.units = 'meters';
-                options.spatialRelationship = 'intersects';
-                options.where = where;
-
-                GisQueryHelper.ExecuteSpatialQuery(options).then(_result  => {
-                    resolve({
-                        Title: _configService.searchCategoryTitle,
-                        Data: _result.data
-                    })
-                });
-
-            }
-            else {
-
-                /*
-                if (_query != null) {
-    
-                    if (!IsNull(_query.districtId)) {
-                        where += " AND ILCEID = '" + _query.districtId+"'";
-                    }
-    
-                    if (!IsNull(_query.nbhoodId)) {
-                        where += " AND MAHALLEID = '" + _query.nbhoodId+"'";
-                    }
-
-                    if (!IsNull(_query.Id)) {
-                        where += " AND ID = '" + _query.Id+"'";
-                    }
-                }
-                */
-
-                options.where = where;
-
-                GisQueryHelper.ExecuteQuery(options).then(_result => {
-                    resolve({
-                        Title: _configService.searchCategoryTitle,
-                        Data: _result.data
-                    })
-                });
-            }
-
-         
-
+const execute = async (options, query) => {
+    if (query?.showNearby) {
+        const distance = Math.max(0, toFiniteNumber(query.bufferDistance) ?? 0);
+        return GisQueryHelper.ExecuteSpatialQuery({
+            ...options,
+            geometry: query.userLocation,
+            distance: distance * 100,
+            units: "meters",
+            spatialRelationship: "intersects"
         });
+    }
+    return GisQueryHelper.ExecuteQuery(options);
+};
 
+export const FulltextSearchQueryBusiness = {
+    QueryService: async (_configService, _query = {}, _returnGeometry = false) => {
+        const predicates = ["1=1"];
+        const textFilter = buildTextFilter(_query.searchText);
+        if (textFilter) predicates.push(textFilter);
+
+        const result = await execute(
+            {
+                ...createOptions(_configService, _returnGeometry),
+                where: predicates.join(" AND ")
+            },
+            _query
+        );
+
+        return {
+            Title: _configService.searchCategoryTitle,
+            Data: result.data
+        };
     },
 
+    Search: async (_query = {}, _returnGeometry = false) => {
+        const queryServiceTitle = "FullTextSearchQueryUrl";
+        const queryService = ArrayHelper.Find(
+            MapManager.GetConfigurationServices(),
+            "title",
+            queryServiceTitle
+        );
 
-    Search: async (_query, _returnGeometry) => {
+        if (queryService == null) {
+            return Promise.reject({
+                type: Constants_ServiceResultType.Error,
+                message: `Servis bulunamadı (${queryServiceTitle})`
+            });
+        }
 
-        return new Promise((resolve, reject) => {
+        const predicates = ["1=1"];
+        const textFilter = buildTextFilter(_query.searchText);
+        if (textFilter) predicates.push(textFilter);
 
-            const queryServiceTitle = "FullTextSearchQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", queryServiceTitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + queryServiceTitle + ")" })
-            };
+        if (!_query.showNearby) {
+            appendIdFilter(predicates, "ilceid", _query.districtId);
+            appendIdFilter(predicates, "mahalleid", _query.nbhoodId);
+            const id = toFiniteNumber(_query.Id);
+            if (id !== null) predicates.push(`id = ${id}`);
+        }
 
-            let options = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: _returnGeometry ?? false,
-                orderByFields: ["adi"],
-                outFields: ["*"]
-            };
-
-            let where = "1=1";
-            if (!IsNull(_query.searchText)) {
-                where += " AND ("
-                    + " LOWER(adi) LIKE '%" + TextHelper.TurkishToLower(_query.searchText) + "%'"
-                    + " OR LOWER(adi) LIKE '%" + TextHelper.RemoveTurkishChars(TextHelper.TurkishToLower(_query.searchText)) + "%'"
-                    + ")";
-            }
-
-
-            if (_query.showNearby) {
-                options.geometry = _query.userLocation;
-                options.distance = _query.bufferDistance * 100;
-                options.units = 'meters';
-                options.spatialRelationship = 'intersects';
-                options.where = where;
-
-                GisQueryHelper.ExecuteSpatialQuery(options).then(_result => {
-                    resolve(_result)
-                });
-
-            }
-            else {
-
-                if (_query != null) {
-
-                    if (!IsNull(_query.districtId)) {
-                        where += " AND ilceid = '" + _query.districtId + "'";
-                    }
-
-                    if (!IsNull(_query.nbhoodId)) {
-                        where += " AND mahalleid = '" + _query.nbhoodId + "'";
-                    }
-
-                    if (!IsNull(_query.Id)) {
-                        where += " AND id = " + _query.Id;
-                    }
-                }
-
-
-                options.where = where;
-
-                GisQueryHelper.ExecuteQuery(options).then(_result => {
-                    resolve(_result)
-                });
-            }
-
-
-        });
-
+        return execute(
+            {
+                ...createOptions(queryService, _returnGeometry),
+                where: predicates.join(" AND ")
+            },
+            _query
+        );
     }
-}
+};
