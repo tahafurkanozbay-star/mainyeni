@@ -1,7 +1,3 @@
-import 'react-app-polyfill/stable';
-import 'core-js/features/string/repeat';
-import 'abortcontroller-polyfill';
-
 import React from "react";
 import ReactDOM from "react-dom";
 
