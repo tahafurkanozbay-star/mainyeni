@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi.Models;
@@ -12,6 +12,7 @@ using Api.User.Filters;
 using Business.Core.Context;
 using System;
 using System.Linq;
+using System.Text.Json;
 
 namespace api.user
 {
@@ -27,7 +28,6 @@ namespace api.user
             services.AddScoped<AppRequestFilterAttribute>();
             services.AddMemoryCache();
             services.AddControllers();
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_3_0);
             services.AddSwaggerGen(c =>
             {
                 c.IncludeXmlComments("user.api.xml");
@@ -95,17 +95,18 @@ namespace api.user
             app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             {
                 var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-                var logger = context.RequestServices.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Startup>>();
+                var logger = context.RequestServices.GetRequiredService<ILogger<Startup>>();
                 logger.LogError(exception, "Unhandled user API exception. TraceId: {TraceId}", context.TraceIdentifier);
                 context.Response.StatusCode = 500;
                 context.Response.ContentType = "application/problem+json";
-                await context.Response.WriteAsJsonAsync(new
+                var payload = JsonSerializer.Serialize(new
                 {
                     type = "about:blank",
                     title = "Internal Server Error",
                     status = 500,
                     traceId = context.TraceIdentifier
                 });
+                await context.Response.WriteAsync(payload);
             }));
 
             app.UseRouting();
