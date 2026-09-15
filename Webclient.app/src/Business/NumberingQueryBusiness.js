@@ -30,6 +30,9 @@ const normalizeLegacyIdentifier = (value) => {
     return normalized;
 };
 
+const hasIdentifier = (value) =>
+    value !== null && value !== undefined && normalizeScalar(value) !== "";
+
 const quoteSqlLiteral = (value) => `'${escapeSqlLiteral(normalizeLegacyIdentifier(value))}'`;
 
 const normalizeIdentifierList = (values) => {
@@ -179,7 +182,7 @@ export const NumberingQueryBusiness = {
 
         const centerLineIds = (wayResult?.data ?? [])
             .map((item) => item?.attr?.yolortahatid)
-            .filter((value) => value !== null && value !== undefined && normalizeScalar(value));
+            .filter(hasIdentifier);
         const centerLineFilter = buildInFilter("id", centerLineIds);
         if (!centerLineFilter) return emptyResult();
 
@@ -225,13 +228,13 @@ export const NumberingQueryBusiness = {
 
     GetDoors: async (_streetId) => {
         const centerLines = await NumberingQueryBusiness.GetStreetCenterLines(_streetId);
-        const centerLineIds = centerLines.map((item) => item?.attr?.id).filter(Boolean);
+        const centerLineIds = centerLines.map((item) => item?.attr?.id).filter(hasIdentifier);
         if (!centerLineIds.length) return emptyResult();
 
         const wayResult = await NumberingQueryBusiness.GetStreetWaysofCenterLinesByCenterlineIDs(centerLineIds);
         if (wayResult?.type === Constants_ServiceResultType.Error) return wayResult;
 
-        const wayIds = (wayResult?.data ?? []).map((item) => item?.attr?.id).filter(Boolean);
+        const wayIds = (wayResult?.data ?? []).map((item) => item?.attr?.id).filter(hasIdentifier);
         if (!wayIds.length) return emptyResult();
         return NumberingQueryBusiness.GetDoorsByWayIDs(wayIds);
     },
