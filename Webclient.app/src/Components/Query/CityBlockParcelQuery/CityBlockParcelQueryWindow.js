@@ -65,6 +65,12 @@ export const CityBlockParcelQueryWindow = React.forwardRef((props, ref) => {
         };
     }, [props.windowManager, ref]);
 
+    const writeClientLog = (type, description) => {
+        LoggingBusiness.CreateClientLog(type, description).catch(error => {
+            console.warn("Parcel search client log could not be sent", error);
+        });
+    };
+
     const setQueryField = (field, value) => {
         setQuery(current => ({ ...current, [field]: value }));
     };
@@ -107,7 +113,7 @@ export const CityBlockParcelQueryWindow = React.forwardRef((props, ref) => {
     };
 
     const gotoParcel = async item => {
-        LoggingBusiness.CreateClientLog(
+        writeClientLog(
             "Ada Parsel/Detay Göster",
             `${query.districtName}/${query.nbhoodName}/${query.cityblock}/${query.parcel}`
         );
@@ -121,7 +127,7 @@ export const CityBlockParcelQueryWindow = React.forwardRef((props, ref) => {
         event?.preventDefault();
         if (!validateQuery() || loading) return;
         setLoading(true);
-        LoggingBusiness.CreateClientLog(
+        writeClientLog(
             "Ada Parsel/Sorgu",
             `${query.districtName}/${query.nbhoodName}/${query.cityblock}/${query.parcel}`
         );
