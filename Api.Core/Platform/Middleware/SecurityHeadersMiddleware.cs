@@ -8,7 +8,8 @@ namespace Api.Core.Platform.Middleware
 {
     /// <summary>
     /// Applies the API security-header baseline in one place so public and administrative APIs
-    /// cannot drift. Headers are set on response start, which also covers controller short-circuits.
+    /// cannot drift. Stable headers are written before downstream execution; the CSP is finalized
+    /// at response start because HTML surfaces such as opt-in Swagger own a separate policy.
     /// </summary>
     public sealed class SecurityHeadersMiddleware
     {
@@ -23,26 +24,41 @@ namespace Api.Core.Platform.Middleware
             _options = options?.Value?.SecurityHeaders ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public Task Invoke(HttpContext context)
+        public async Task Invoke(HttpContext context)
         {
             if (context == null)
             {
                 throw new ArgumentNullException(nameof(context));
             }
 
-            if (_options.Enabled)
+            if (!_options.Enabled)
             {
-                context.Response.OnStarting(() =>
-                {
-                    ApplyHeaders(context);
-                    return Task.CompletedTask;
-                });
+                await _next(context);
+                return;
             }
 
-            return _next(context);
+            ApplyStableHeaders(context);
+            ApplyContentSecurityPolicy(context);
+
+            // Content-Type can be assigned by downstream middleware/controllers. Re-evaluate CSP
+            // immediately before the server starts the response so HTML never inherits the strict
+            // API-only policy. The eager call above keeps the invariant deterministic for short
+            // circuits and test hosts that do not execute OnStarting callbacks like Kestrel does.
+            context.Response.OnStarting(() =>
+            {
+                ApplyContentSecurityPolicy(context);
+                return Task.CompletedTask;
+            });
+
+            await _next(context);
+
+            if (!context.Response.HasStarted)
+            {
+                ApplyContentSecurityPolicy(context);
+            }
         }
 
-        private void ApplyHeaders(HttpContext context)
+        private void ApplyStableHeaders(HttpContext context)
         {
             var headers = context.Response.Headers;
             headers["X-Content-Type-Options"] = "nosniff";
@@ -56,13 +72,9 @@ namespace Api.Core.Platform.Middleware
             {
                 headers["Cross-Origin-Embedder-Policy"] = _options.CrossOriginEmbedderPolicy;
             }
-
-            // The default CSP is intentionally API-oriented. Do not apply it to an explicitly HTML
-            // response such as opt-in Swagger UI because default-src 'none' would break the page.
-            // Product HTML surfaces should own their own CSP rather than weakening the API baseline.
-            if (!string.IsNullOrWhiteSpace(_options.ContentSecurityPolicy) && !IsHtmlResponse(context))
+            else
             {
-                headers["Content-Security-Policy"] = _options.ContentSecurityPolicy;
+                headers.Remove("Cross-Origin-Embedder-Policy");
             }
 
             if (_options.EnableHsts && context.Request.IsHttps)
@@ -74,10 +86,26 @@ namespace Api.Core.Platform.Middleware
                 }
                 headers["Strict-Transport-Security"] = hsts;
             }
+            else
+            {
+                headers.Remove("Strict-Transport-Security");
+            }
 
             // APIs should not leak implementation/platform version information through this layer.
             headers.Remove("X-Powered-By");
             headers.Remove("X-AspNet-Version");
+        }
+
+        private void ApplyContentSecurityPolicy(HttpContext context)
+        {
+            var headers = context.Response.Headers;
+            if (string.IsNullOrWhiteSpace(_options.ContentSecurityPolicy) || IsHtmlResponse(context))
+            {
+                headers.Remove("Content-Security-Policy");
+                return;
+            }
+
+            headers["Content-Security-Policy"] = _options.ContentSecurityPolicy;
         }
 
         private static bool IsHtmlResponse(HttpContext context)
