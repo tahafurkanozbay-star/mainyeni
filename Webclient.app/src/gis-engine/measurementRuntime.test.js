@@ -1,6 +1,7 @@
 import { loadModules } from 'esri-loader';
 import {
   MEASUREMENT_TOOLS,
+  clearMeasurementRuntimeCache,
   createMeasurementCapability,
   createMeasurementController,
   createMeasurementState,
@@ -14,6 +15,7 @@ jest.mock('esri-loader', () => ({
 
 describe('measurementRuntime', () => {
   beforeEach(() => {
+    clearMeasurementRuntimeCache();
     jest.clearAllMocks();
   });
 
