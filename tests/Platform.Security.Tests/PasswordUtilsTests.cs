@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Security.Cryptography;
 using Toolbox.Security.Password;
 using Xunit;
 
@@ -65,12 +66,40 @@ public sealed class PasswordUtilsTests
     }
 
     [Theory]
-    [InlineData("pbkdf2-sha256$99999$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")]
-    [InlineData("pbkdf2-sha256$2000001$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")]
-    [InlineData("pbkdf2-sha256$not-a-number$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")]
-    public void VerifyPassword_RejectsUnboundedOrInvalidIterationCounts(string encoded)
+    [InlineData(99_999)]
+    [InlineData(2_000_001)]
+    public void VerifyPassword_RejectsUnboundedIterationCounts(int iterations)
     {
+        var encoded = CreateStructurallyValidEncodedHash(iterations);
+
         Assert.False(PasswordUtils.VerifyPassword("password", encoded));
+    }
+
+    [Fact]
+    public void VerifyPassword_RejectsInvalidIterationText()
+    {
+        var encoded = CreateStructurallyValidEncodedHash(600_000)
+            .Replace("$600000$", "$not-a-number$", StringComparison.Ordinal);
+
+        Assert.False(PasswordUtils.VerifyPassword("password", encoded));
+    }
+
+    [Fact]
+    public void VerifyPassword_RejectsSaltThatIsLongerThanTheFormatContract()
+    {
+        var encoded = CreateStructurallyValidEncodedHash(600_000, saltLength: 17);
+
+        Assert.False(PasswordUtils.VerifyPassword("password", encoded));
+        Assert.True(PasswordUtils.NeedsRehash(encoded));
+    }
+
+    [Fact]
+    public void VerifyPassword_RejectsHashThatIsLongerThanTheFormatContract()
+    {
+        var encoded = CreateStructurallyValidEncodedHash(600_000, hashLength: 33);
+
+        Assert.False(PasswordUtils.VerifyPassword("password", encoded));
+        Assert.True(PasswordUtils.NeedsRehash(encoded));
     }
 
     [Theory]
@@ -78,23 +107,38 @@ public sealed class PasswordUtilsTests
     [InlineData("", false)]
     [InlineData("legacy-hash", false)]
     [InlineData("pbkdf2-sha256$600000$salt$hash", true)]
-    public void IsModernHash_DetectsOnlyVersionedPbkdf2(string? encoded, bool expected)
+    public void IsModernHash_DetectsOnlyVersionedPbkdf2Prefix(string? encoded, bool expected)
     {
         Assert.Equal(expected, PasswordUtils.IsModernHash(encoded!));
     }
 
     [Theory]
-    [InlineData(null, true)]
-    [InlineData("", true)]
-    [InlineData("legacy-hash", true)]
-    [InlineData("pbkdf2-sha256$100000$salt$hash", true)]
-    [InlineData("pbkdf2-sha256$599999$salt$hash", true)]
-    [InlineData("pbkdf2-sha256$600000$salt$hash", false)]
-    [InlineData("pbkdf2-sha256$700000$salt$hash", false)]
-    [InlineData("pbkdf2-sha256$invalid$salt$hash", true)]
-    public void NeedsRehash_TracksCurrentPasswordWorkFactor(string? encoded, bool expected)
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("legacy-hash")]
+    [InlineData("pbkdf2-sha256$100000$salt$hash")]
+    [InlineData("pbkdf2-sha256$599999$salt$hash")]
+    [InlineData("pbkdf2-sha256$600000$salt$hash")]
+    [InlineData("pbkdf2-sha256$700000$salt$hash")]
+    [InlineData("pbkdf2-sha256$invalid$salt$hash")]
+    public void NeedsRehash_ReturnsTrue_ForLegacyOrMalformedPayloads(string? encoded)
     {
-        Assert.Equal(expected, PasswordUtils.NeedsRehash(encoded!));
+        Assert.True(PasswordUtils.NeedsRehash(encoded!));
+    }
+
+    [Theory]
+    [InlineData(100_000, true)]
+    [InlineData(599_999, true)]
+    [InlineData(600_000, false)]
+    [InlineData(700_000, false)]
+    [InlineData(2_000_000, false)]
+    public void NeedsRehash_TracksWorkFactorOnlyAfterPayloadPassesStructuralValidation(
+        int iterations,
+        bool expected)
+    {
+        var encoded = CreateStructurallyValidEncodedHash(iterations);
+
+        Assert.Equal(expected, PasswordUtils.NeedsRehash(encoded));
     }
 
     [Theory]
@@ -121,6 +165,7 @@ public sealed class PasswordUtilsTests
         parts[2] = Convert.ToBase64String(new byte[4]);
 
         Assert.False(PasswordUtils.VerifyPassword("Long enough password! 123", string.Join('$', parts)));
+        Assert.True(PasswordUtils.NeedsRehash(string.Join('$', parts)));
     }
 
     [Fact]
@@ -131,5 +176,36 @@ public sealed class PasswordUtilsTests
         parts[3] = Convert.ToBase64String(new byte[8]);
 
         Assert.False(PasswordUtils.VerifyPassword("Long enough password! 123", string.Join('$', parts)));
+        Assert.True(PasswordUtils.NeedsRehash(string.Join('$', parts)));
+    }
+
+    [Fact]
+    public void NeedsRehash_RejectsInvalidBase64EvenAtCurrentWorkFactor()
+    {
+        Assert.True(PasswordUtils.NeedsRehash("pbkdf2-sha256$600000$***$***"));
+    }
+
+    [Fact]
+    public void NeedsRehash_RejectsAdditionalUnexpectedSegments()
+    {
+        var encoded = CreateStructurallyValidEncodedHash(600_000) + "$extra";
+
+        Assert.True(PasswordUtils.NeedsRehash(encoded));
+    }
+
+    private static string CreateStructurallyValidEncodedHash(
+        int iterations,
+        int saltLength = 16,
+        int hashLength = 32)
+    {
+        var salt = RandomNumberGenerator.GetBytes(saltLength);
+        var hash = RandomNumberGenerator.GetBytes(hashLength);
+
+        return string.Join(
+            '$',
+            "pbkdf2-sha256",
+            iterations.ToString(CultureInfo.InvariantCulture),
+            Convert.ToBase64String(salt),
+            Convert.ToBase64String(hash));
     }
 }
