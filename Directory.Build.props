@@ -11,6 +11,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <RestoreAuditMode>all</RestoreAuditMode>
     <RestoreAuditLevel>moderate</RestoreAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
