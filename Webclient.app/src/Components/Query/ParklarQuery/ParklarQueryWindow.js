@@ -201,8 +201,9 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
                     
                     // Katmanı oluştur ve haritaya ekle
                     CommonBusiness.Clustering.CreateLayerWithoutClustering("YeniParklarQeryUrl", props.windowTitle, query, initialSymbol).then((_clusterLayer) => {
+                        // Sadece bu sorgunun önceki geçici katmanını kaldır.
+                        // map.removeAll() kullanımı basemap ve operational layer'ları da silebilir.
                         removeLastClusterLayer();
-                        mapView.map.removeAll();
                         setClusterLayer(_clusterLayer);
                         mapView.map.add(_clusterLayer.layerObj);
                 
