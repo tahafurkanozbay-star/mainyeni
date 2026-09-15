@@ -5,11 +5,11 @@ jest.mock('esri-loader', () => ({
   loadModules: jest.fn(),
 }));
 
-const FeatureLayer = jest.fn().mockImplementation((options) => ({ ...options, type: 'feature' }));
-const MapImageLayer = jest.fn().mockImplementation((options) => ({ ...options, type: 'map-image' }));
-const VectorTileLayer = jest.fn().mockImplementation((options) => ({ ...options, type: 'vector-tile' }));
-const ImageryLayer = jest.fn().mockImplementation((options) => ({ ...options, type: 'imagery' }));
-const SceneLayer = jest.fn().mockImplementation((options) => ({ ...options, type: 'scene' }));
+const FeatureLayer = jest.fn().mockImplementation((options) => ({ ...options }));
+const MapImageLayer = jest.fn().mockImplementation((options) => ({ ...options }));
+const VectorTileLayer = jest.fn().mockImplementation((options) => ({ ...options }));
+const ImageryLayer = jest.fn().mockImplementation((options) => ({ ...options }));
+const SceneLayer = jest.fn().mockImplementation((options) => ({ ...options }));
 
 const sdkModules = {
   'esri/layers/FeatureLayer': FeatureLayer,
@@ -85,8 +85,10 @@ describe('layerFactory', () => {
     const first = await create3DLayer(service);
     const second = await create3DLayer({ ...service, id: 'buildings-copy' });
 
-    expect(first.type).toBe('scene');
-    expect(second.type).toBe('scene');
+    expect(SceneLayer).toHaveBeenCalledTimes(2);
+    expect(SceneLayer).toHaveBeenNthCalledWith(1, { url: absolute('/arcgis/rest/services/buildings/SceneServer') });
+    expect(first.id).toBe('buildings');
+    expect(second.id).toBe('buildings-copy');
     expect(loadModules.mock.calls.filter(([names]) => names[0] === 'esri/layers/SceneLayer')).toHaveLength(1);
   });
 
@@ -100,7 +102,9 @@ describe('layerFactory', () => {
     const layer2D = await create2DLayer(service);
     const layer3D = await create3DLayer({ ...service, id: 'boundaries-3d' });
 
-    expect(layer2D.type).toBe('map-image');
-    expect(layer3D.type).toBe('map-image');
+    expect(MapImageLayer).toHaveBeenCalledTimes(2);
+    expect(MapImageLayer).toHaveBeenNthCalledWith(1, { url: absolute('/arcgis/rest/services/boundaries/MapServer') });
+    expect(layer2D.id).toBe('boundaries');
+    expect(layer3D.id).toBe('boundaries-3d');
   });
 });
