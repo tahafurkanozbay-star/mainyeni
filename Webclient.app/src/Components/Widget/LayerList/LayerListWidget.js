@@ -1,4 +1,6 @@
 import React, { useEffect, useImperativeHandle, useState } from "react";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faLayerGroup } from '@fortawesome/free-solid-svg-icons';
 import { LayerBusiness } from "../../../Business/LayerBusiness";
 import { Constants_ServiceResultType } from "../../../Core/Constants";
 import { MapManager } from "../../../Store/Managers/MapManager";
@@ -13,138 +15,149 @@ import "./LayerListWidget.css";
 import { BiCheckCircle, BiCircle, BiMinusCircle } from "react-icons/bi";
 
 export const LayerListWidget = React.forwardRef((props, ref) => {
-    const [layerGroups, setLayerGroups] = useState(null);
-    const [mapView, setMapView] = useState(null);
-    const [activeGroup, setActiveGroup] = useState(null);
-    const [activeTab, setActiveTab] = useState("layers");
-    const [legend, setLegend] = useState(null);
-    const [loadingError, setLoadingError] = useState(false);
-
     useImperativeHandle(ref, () => ({
-        id: props.id,
-        visible: false,
-        minimized: false,
-        OnShow: (tab = "layers") => {
-            setActiveTab(tab === "legend" ? "legend" : "layers");
+        id: props.id, visible: false, minimized: false,
+        OnShow: () => {
             props.windowManager.ShowWindow("sidebar");
-            const view = MapManager.GetMapView();
-            if (view?.map) view.map.removeAll();
-            fetchLayerGroups();
+            const mapView = MapManager.GetMapView();
+            mapView?.map?.removeAll();
+            fetchQueryResults();
         },
         OnClose: () => undefined
     }));
 
+    const [LayerGroups, setLayerGroups] = useState(null);
+    const [mapView, setMapView] = useState(null);
+    const [activeGroup, setActiveGroup] = useState(null);
+    const [legend, setLegend] = useState(null);
+
     useEffect(() => {
         props.windowManager.RegisterWindow(ref);
-        fetchLayerGroups();
-        return () => { if (legend?.destroy) legend.destroy(); };
-        // Register once for the window lifecycle.
+        fetchQueryResults();
+        return () => legend?.destroy?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const fetchLayerGroups = () => {
-        const view = MapManager.GetMapView();
-        if (!view?.map) {
-            setLoadingError(true);
+    const fetchQueryResults = () => {
+        const _mapView = MapManager.GetMapView();
+        if (!_mapView?.map) {
             setLayerGroups([]);
             return;
         }
-        setMapView(view);
-        setLoadingError(false);
-        view.map.removeAll();
-        LayerBusiness.GetLayers().then(result => {
-            if (result?.type !== Constants_ServiceResultType.Success) {
+        setMapView(_mapView);
+        _mapView.map.removeAll();
+        LayerBusiness.GetLayers().then((_result) => {
+            if (_result?.type !== Constants_ServiceResultType.Success) {
                 setLayerGroups([]);
-                setLoadingError(true);
                 return;
             }
-            const groups = result.data || [];
-            const targetGroup = groups[2];
-            const layerCount = targetGroup?.layers?.length || 0;
-            targetGroup?.layers?.forEach(layerItem => {
-                CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(layerItem), "LayerListWidget");
-                CommonBusiness.CreateLayer(layerItem).then(layerObject => {
-                    if (!layerObject) return;
-                    layerItem.priority = layerCount - parseInt(layerItem.priority, 10);
-                    layerItem.layerObj = layerObject;
-                    view.map.add(layerObject, layerItem.priority);
+            const layerGroups = _result?.data ?? [];
+            const firstGroup = layerGroups[2];
+            const layerCount = firstGroup?.layers?.length || 0;
+            firstGroup?.layers?.forEach(_layerItem => {
+                CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(_layerItem), "LayerListWidget");
+                CommonBusiness.CreateLayer(_layerItem).then((_layerObj) => {
+                    if (_layerObj != null) {
+                        _layerItem.priority = layerCount - parseInt(_layerItem.priority, 10);
+                        _layerItem.layerObj = _layerObj;
+                        _mapView.map.add(_layerObj, _layerItem.priority);
+                    }
                 });
             });
-            setLayerGroups(groups);
-        }).catch(() => {
-            setLayerGroups([]);
-            setLoadingError(true);
+            setLayerGroups(layerGroups);
+        }).catch(() => setLayerGroups([]));
+    };
+
+    const toggleGroupVisibility = (e, _groupIndex) => {
+        e.stopPropagation();
+        const _LayerGroups = [...LayerGroups];
+        const _visible = !_LayerGroups[_groupIndex].visible;
+        _LayerGroups[_groupIndex].layers.forEach(_layer => {
+            _layer.visible = _visible;
+            if (_layer.layerObj) _layer.layerObj.visible = _visible;
         });
+        _LayerGroups[_groupIndex].visible = _visible;
+        _LayerGroups[_groupIndex].semiVisible = false;
+        setLayerGroups(_LayerGroups);
     };
 
-    const evaluateGroupVisibility = group => {
-        const visibleCount = group?.layers?.filter(layer => layer.visible).length || 0;
-        return { ...group, visible: visibleCount === group.layers.length, semiVisible: visibleCount > 0 && visibleCount < group.layers.length };
-    };
-
-    const toggleGroupVisibility = (event, groupIndex) => {
-        event.stopPropagation();
-        setLayerGroups(current => {
-            const next = [...(current || [])];
-            const group = { ...next[groupIndex], layers: [...(next[groupIndex]?.layers || [])] };
-            const visible = !group.visible;
-            group.layers = group.layers.map(layer => {
-                if (layer.layerObj) layer.layerObj.visible = visible;
-                return { ...layer, visible };
-            });
-            group.visible = visible;
-            group.semiVisible = false;
-            next[groupIndex] = group;
-            return next;
-        });
-    };
-
-    const toggleLayerVisibility = (event, layer, groupIndex, layerIndex) => {
-        event.stopPropagation();
+    const toggleLayerVisibility = (e, layer, _groupIndex, _layerIndex) => {
+        e.stopPropagation();
         if (!layer?.layerObj) return;
         const visible = !layer.layerObj.visible;
         layer.layerObj.visible = visible;
-        setLayerGroups(current => {
-            const next = [...(current || [])];
-            const group = { ...next[groupIndex], layers: [...next[groupIndex].layers] };
-            group.layers[layerIndex] = { ...group.layers[layerIndex], visible };
-            next[groupIndex] = evaluateGroupVisibility(group);
-            return next;
-        });
+        const _LayerGroups = [...LayerGroups];
+        const _LayerGroup = { ..._LayerGroups[_groupIndex], layers: [..._LayerGroups[_groupIndex].layers] };
+        _LayerGroup.layers[_layerIndex] = { ..._LayerGroup.layers[_layerIndex], visible };
+        _LayerGroups[_groupIndex] = evaluateGroupVisibility(_LayerGroup);
+        setLayerGroups(_LayerGroups);
     };
 
-    const changeLayerOpacity = (event, layer, groupIndex, layerIndex) => {
-        const opacity = Number(event.target.value);
+    const evaluateGroupVisibility = (_layerGroup) => {
+        const visibleLayersCount = _layerGroup?.layers?.filter(_layer => _layer.visible).length || 0;
+        return {
+            ..._layerGroup,
+            visible: visibleLayersCount === (_layerGroup?.layers?.length || 0),
+            semiVisible: visibleLayersCount > 0 && visibleLayersCount < (_layerGroup?.layers?.length || 0)
+        };
+    };
+
+    const changeLayerOpacity = (e, layer, _groupIndex, _layerIndex) => {
+        const opacity = Number(e.target.value);
         if (layer?.layerObj) layer.layerObj.opacity = opacity / 100;
-        setLayerGroups(current => {
-            const next = [...(current || [])];
-            const group = { ...next[groupIndex], layers: [...next[groupIndex].layers] };
-            group.layers[layerIndex] = { ...group.layers[layerIndex], opacity };
-            next[groupIndex] = group;
-            return next;
-        });
+        const _LayerGroups = [...LayerGroups];
+        const _layerGroup = { ..._LayerGroups[_groupIndex], layers: [..._LayerGroups[_groupIndex].layers] };
+        _layerGroup.layers[_layerIndex] = { ..._layerGroup.layers[_layerIndex], opacity };
+        _LayerGroups[_groupIndex] = _layerGroup;
+        setLayerGroups(_LayerGroups);
     };
 
     const refreshLegend = () => {
-        if (legend || !mapView) return;
+        if (legend != null || !mapView) return;
         loadModules(["esri/widgets/Legend"]).then(([Legend]) => setLegend(new Legend({ view: mapView, container: "legendDiv" })));
     };
 
-    const renderVisibilityIcon = visible => visible ? <BiCheckCircle aria-hidden="true" /> : <BiCircle aria-hidden="true" />;
-    const isVisible = props.windowManager.IsVisible(props.id);
-
     return (
-        <section className="common-query-window common-query-window-right" aria-label="Katman ve lejand yönetimi" style={{ visibility: isVisible ? "visible" : "hidden" }}>
-            <header className="common-query-window-header"><img className="common-query-window-header-icon" src="images/icons/toolbar/katmanyonetimi.png" alt="" /><span>Katmanlar ve lejand</span><CommonQueryWindowTools windowManager={props.windowManager} windowId={props.id} showNearbySearch={false} showMapSelect={false} setQueryField={() => {}} query={null} /></header>
+        <section className="common-query-window common-query-window-right" aria-label="Katman ve lejand yönetimi" style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src="images/icons/toolbar/katmanyonetimi.png" alt="" />
+                <span>Katmanlar</span>
+                <CommonQueryWindowTools windowManager={props.windowManager} windowId={props.id} showNearbySearch={false} showMapSelect={false} setQueryField={() => {}} query={null}/>
+            </header>
             <div className="common-query-window-body layer-list-window-body">
-                {layerGroups == null ? <ContainerLoading message="Katmanlar hazırlanıyor…" /> : props.windowManager.IsMinimized(props.id) ? <div aria-hidden="true" /> :
-                    <Tabs activeKey={activeTab} onSelect={key => { setActiveTab(key || "layers"); if (key === "legend") refreshLegend(); }}>
+                {LayerGroups == null ? <ContainerLoading message="Katmanlar hazırlanıyor…" /> : props.windowManager.IsMinimized(props.id) ? <div aria-hidden="true" /> :
+                    <Tabs defaultActiveKey="layers" onSelect={(key) => { if (key === "legend") refreshLegend(); }}>
                         <Tab eventKey="layers" title="Katmanlar">
-                            {loadingError && <div className="kr-status-banner kr-status-banner--warning" role="status">Katman servislerinden biri yanıt vermedi. Kullanılabilen katmanlar gösteriliyor.</div>}
-                            {DynamicLayerManager.List?.length > 0 && <div className="kr-layer-group"><div className="kr-layer-group__head"><span className="kr-layer-toggle" aria-hidden="true"><SharedGISIcon record={{ category: "default", title: "Katman grubu" }} size={24} /></span><strong className="kr-layer-row__title">Özel Katmanlar</strong><span className="kr-layer-row__meta">{DynamicLayerManager.List.length}</span></div>{DynamicLayerManager.List.map(layer => <div className="kr-layer-row" key={layer.id || layer.title}><span className="kr-layer-toggle" aria-hidden="true"><SharedGISIcon record={layer} size={24} /></span><span className="kr-table-icon" aria-hidden="true"><SharedGISIcon record={layer} size={24} /></span><span className="kr-layer-row__title" title={layer.title}>{layer.title}</span><span className="kr-layer-row__meta">Dinamik</span></div>)}</div>}
-                            {layerGroups.length === 0 ? <NoResultsFound message="Gösterilecek katman bulunmuyor" /> : <Accordion defaultActiveKey={activeGroup} className="kr-layer-tree">{layerGroups.map((group, groupIndex) => { const groupKey = group.id || `group-${groupIndex}`; return <Accordion.Item key={groupKey} eventKey={groupKey} className="layer-list-group-accordion-item"><Accordion.Header className="layer-list-group-accordion-item-header"><div className="kr-layer-group__head w-100"><button type="button" className="kr-layer-toggle" onClick={event => toggleGroupVisibility(event, groupIndex)} aria-label={`${group.title} katman grubunu ${group.visible ? "gizle" : "göster"}`} aria-pressed={Boolean(group.visible)}><span aria-hidden="true"><SharedGISIcon record={group} size={24} /></span></button><span className="layer-list-group-title" onClick={() => setActiveGroup(groupKey)}>{group.title}</span><span className="kr-layer-row__meta">{group.layers?.length || 0}</span></div></Accordion.Header><Accordion.Body>{(group.layers || []).map((layer, layerIndex) => <div className="layer-list-item row" key={layer.id || `${groupKey}-${layerIndex}`}><button type="button" className="kr-layer-toggle col-1" onClick={event => toggleLayerVisibility(event, layer, groupIndex, layerIndex)} aria-label={`${layer.title} katmanını ${layer.visible ? "gizle" : "göster"}`} aria-pressed={Boolean(layer.visible)}>{renderVisibilityIcon(layer.visible)}</button><span className="kr-layer-item-icon col-1"><SharedGISIcon record={layer} size={24} /></span><button type="button" className="layer-list-item-title col-7" onClick={event => toggleLayerVisibility(event, layer, groupIndex, layerIndex)} title={layer.title}>{layer.title}</button><div className="col-3"><label className="experience-sr-only" htmlFor={`layer-opacity-${groupKey}-${layer.id || layerIndex}`}>Katman opaklığı, {layer.title}</label><Form.Range id={`layer-opacity-${groupKey}-${layer.id || layerIndex}`} min="0" max="100" value={layer.opacity ?? 100} onChange={event => changeLayerOpacity(event, layer, groupIndex, layerIndex)} aria-valuetext={`${layer.opacity ?? 100} yüzde`} /></div></div>)}</Accordion.Body></Accordion.Item>; })}</Accordion>}
+                            <div>
+                                {DynamicLayerManager.List?.length > 0 && <Accordion defaultActiveKey="dynamiclayers"><Accordion.Item eventKey="dynamiclayers"><Accordion.Header><div className="row w-100"><div className="col-1"><SharedGISIcon record={{ category: "default" }} size={24} /></div><div className="col-11 layer-list-group-title"><span>Özel Katmanlar</span></div></div></Accordion.Header><Accordion.Body>{DynamicLayerManager.List.map(layer => <div className="layer-list-item" key={layer.id || layer.title}><div className="col-1"><SharedGISIcon record={layer} size={24} /></div><button type="button" className="col-11 layer-list-item-title" onClick={() => layer.layerObj && (layer.layerObj.visible = !layer.layerObj.visible)} title={layer.title}>{layer.title}</button></div>)}</Accordion.Body></Accordion.Item></Accordion>}
+                                <Accordion defaultActiveKey={activeGroup}>
+                                    {LayerGroups.length === 0 ? <NoResultsFound message="Gösterilecek katman bulunmuyor" /> : LayerGroups.map((_group, _groupIndex) => {
+                                        const _groupKey = _group.id || `group-${_groupIndex}`;
+                                        return <Accordion.Item key={_groupKey} eventKey={_groupKey} className="layer-list-group-accordion-item">
+                                            <Accordion.Header className="layer-list-group-accordion-item-header">
+                                                <div className="row w-100">
+                                                    <div className="col-1">
+                                                        <button type="button" className="kr-layer-toggle" onClick={(e) => toggleGroupVisibility(e, _groupIndex)} aria-label={`${_group.title} katman grubunu ${_group.visible ? "gizle" : "göster"}`} aria-pressed={Boolean(_group.visible)}>
+                                                            {_group.visible ? <BiCheckCircle aria-hidden="true" /> : _group.semiVisible ? <BiMinusCircle aria-hidden="true" /> : <BiCircle aria-hidden="true" />}
+                                                        </button>
+                                                    </div>
+                                                    <button type="button" className="col-11 s layer-list-group-title" onClick={() => setActiveGroup(_groupKey)} aria-expanded={activeGroup === _groupKey}><SharedGISIcon record={_group} size={24} /><span>{_group.title}</span></button>
+                                                </div>
+                                            </Accordion.Header>
+                                            <Accordion.Body>
+                                                {_group.layers.map((layer, _layerIndex) => <div className="layer-list-item row" key={layer.id || `${_groupKey}-${_layerIndex}`}>
+                                                    <div className="col-1"><button type="button" className="kr-layer-toggle" onClick={(e) => toggleLayerVisibility(e, layer, _groupIndex, _layerIndex)} aria-label={`${layer.title} katmanını ${layer.visible ? "gizle" : "göster"}`} aria-pressed={Boolean(layer.visible)}>{layer.visible ? <BiCheckCircle aria-hidden="true" /> : <BiCircle aria-hidden="true" />}</button></div>
+                                                    <div className="col-1 kr-layer-item-icon"><SharedGISIcon record={layer} size={24} /></div>
+                                                    <button type="button" className="col-7 layer-list-item-title" onClick={(e) => toggleLayerVisibility(e, layer, _groupIndex, _layerIndex)} title={layer.title}>{layer.title}</button>
+                                                    <div className="col-3"><label className="experience-sr-only" htmlFor={`layer-opacity-${_groupKey}-${layer.id || _layerIndex}`}>Katman opaklığı: {layer.title}</label><Form.Range id={`layer-opacity-${_groupKey}-${layer.id || _layerIndex}`} min="0" max="100" value={layer.opacity ?? 100} onChange={(e) => changeLayerOpacity(e, layer, _groupIndex, _layerIndex)} aria-valuetext={`${layer.opacity ?? 100} yüzde`} /></div>
+                                                </div>)}
+                                            </Accordion.Body>
+                                        </Accordion.Item>;
+                                    })}
+                                </Accordion>
+                            </div>
                         </Tab>
-                        <Tab eventKey="legend" title="Lejand"><div className="legend-container" aria-live="polite"><div id="legendDiv" aria-label="Harita lejandı" /></div></Tab>
+                        <Tab eventKey="legend" title="Lejant"><div className="legend-container"><div id="legendDiv" aria-label="Harita lejantı"></div></div></Tab>
                     </Tabs>}
             </div>
         </section>
