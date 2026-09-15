@@ -47,6 +47,17 @@ test('renders loading until GIS configuration settles, then exposes the configur
     await Promise.resolve();
   });
 
-  expect(screen.getByText(/harita yapılandırması yüklenemedi/i)).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent(/harita yapılandırması yüklenemedi/i);
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+
+test('turns configuration transport failures into a visible error instead of leaving loading pending', async () => {
+  ConfigurationBusiness.GetMapConfiguration.mockRejectedValue(new Error('network unavailable'));
+  ConfigurationBusiness.GetConfigServices.mockResolvedValue({ isSuccess: true, data: [] });
+
+  render(<App />);
+
+  expect(screen.getByRole('status')).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent(/harita yapılandırması yüklenemedi/i);
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
