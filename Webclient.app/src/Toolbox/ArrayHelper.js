@@ -6,7 +6,7 @@ export const ArrayHelper = {
     Filter: (array, prop, value) => {
 
         let foundArray = [];
-        if (array != null) {
+        if (array !== null && array !== undefined) {
 
             for (let i = 0, len = array.length; i < len; i++) {
                 if (array[i] && array[i][prop] === value) {
