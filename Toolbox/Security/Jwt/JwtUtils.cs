@@ -1,8 +1,8 @@
 using Microsoft.IdentityModel.Tokens;
 using System;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
-using System.Text;
 
 namespace Toolbox.Security.Jwt
 {
@@ -96,7 +96,7 @@ namespace Toolbox.Security.Jwt
             }
 
             var candidate = authorizationHeader.Substring(prefix.Length).Trim();
-            if (candidate.Length == 0 || candidate.Contains(' '))
+            if (candidate.Length == 0 || candidate.Any(char.IsWhiteSpace))
             {
                 return false;
             }
@@ -116,7 +116,10 @@ namespace Toolbox.Security.Jwt
             {
                 return new JwtSecurityTokenHandler().ReadJwtToken(token);
             }
-            catch (ArgumentException)
+            catch (Exception ex) when (
+                ex is ArgumentException ||
+                ex is SecurityTokenException ||
+                ex is FormatException)
             {
                 return null;
             }
@@ -171,12 +174,18 @@ namespace Toolbox.Security.Jwt
 
         private static string GetIssuer()
         {
-            return Environment.GetEnvironmentVariable(IssuerEnvironmentVariable)?.Trim() ?? DefaultIssuer;
+            return GetOptionalEnvironmentValue(IssuerEnvironmentVariable) ?? DefaultIssuer;
         }
 
         private static string GetAudience()
         {
-            return Environment.GetEnvironmentVariable(AudienceEnvironmentVariable)?.Trim() ?? DefaultAudience;
+            return GetOptionalEnvironmentValue(AudienceEnvironmentVariable) ?? DefaultAudience;
+        }
+
+        private static string GetOptionalEnvironmentValue(string variableName)
+        {
+            var value = Environment.GetEnvironmentVariable(variableName)?.Trim();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
     }
 }
