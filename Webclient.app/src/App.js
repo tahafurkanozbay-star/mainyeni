@@ -17,18 +17,20 @@ import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import './Components/Common/experience-ui.css';
 
 function App() {
-  const windowManager = new WindowManager();
+  const windowManager = WindowManager();
   const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
 
   setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
 
   useEffect(() => {
+    let cancelled = false;
     const promises = [
       ConfigurationBusiness.GetMapConfiguration(),
       ConfigurationBusiness.GetConfigServices()
     ];
 
     Promise.all(promises).then((_results) => {
+      if (cancelled) return;
       const mapConfigResult = _results[0];
       const configServicesResult = _results[1];
 
@@ -43,7 +45,11 @@ function App() {
       } else {
         setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       }
+    }).catch(() => {
+      if (!cancelled) setConfigLoadStatus(Constants_LoadingStatus.ERROR);
     });
+
+    return () => { cancelled = true; };
   }, []);
 
   return (
