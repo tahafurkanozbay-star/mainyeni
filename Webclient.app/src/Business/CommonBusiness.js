@@ -1,927 +1,555 @@
-import axios from "axios";
 import { loadModules } from "esri-loader";
-import { ArrayHelper } from "../Toolbox/ArrayHelper";
-import { Constants_LayerType, Constants_ServiceResultType } from "../Core/Constants";
 import { AppConfig } from "../Core/AppConfig";
+import { Constants_LayerType, Constants_ServiceResultType } from "../Core/Constants";
 import { MapManager } from "../Store/Managers/MapManager";
-import { GisGraphicsHelper } from "../Toolbox/GisGraphicsHelper";
-import { TextHelper } from "../Toolbox/TextHelper";
-import { IsNull } from "../Toolbox/ObjectHelper";
-import { GisQueryHelper } from "../Toolbox/GisQueryHelper";
-import Store from "../Store/Store";
 import { CommonReducer_ActionTypes } from "../Store/Reducers/CommonReducer";
+import Store from "../Store/Store";
+import { ArrayHelper } from "../Toolbox/ArrayHelper";
+import { GisGraphicsHelper } from "../Toolbox/GisGraphicsHelper";
+import { GisQueryHelper } from "../Toolbox/GisQueryHelper";
+import { IsNull } from "../Toolbox/ObjectHelper";
+import { TextHelper } from "../Toolbox/TextHelper";
 
+const DEFAULT_MARKER = Object.freeze({
+    type: "simple-marker",
+    style: "circle",
+    size: 12,
+    color: "#EEE",
+    outline: {
+        color: "#30598b",
+        width: 4
+    }
+});
+
+const getConfigurationServices = () => MapManager.GetConfigurationServices?.()
+    || MapManager.GetConfiguration?.()?.ConfigurationServices
+    || [];
+
+const findService = title => {
+    if (!title) return null;
+    const services = getConfigurationServices();
+    return ArrayHelper.Find(services, "title", title)
+        || ArrayHelper.Find(services, "Title", title);
+};
+
+const escapeSqlLiteral = value => String(value ?? "").replace(/'/g, "''");
+
+const safeObjectIds = values => (values || [])
+    .map(value => Number(value))
+    .filter(Number.isFinite);
+
+const setText = (element, value, fallback = "") => {
+    element.textContent = value === null || value === undefined || value === "" ? fallback : String(value);
+    return element;
+};
+
+const createDiv = className => {
+    const element = document.createElement("div");
+    if (className) element.className = className;
+    return element;
+};
+
+const appendTextBlock = (parent, className, value, fallback = "") => {
+    if (IsNull(value) && !fallback) return null;
+    const element = createDiv(className);
+    setText(element, value, fallback);
+    parent.appendChild(element);
+    return element;
+};
+
+const normalizeExternalUrl = value => {
+    if (!value) return null;
+    try {
+        const url = new URL(value, window.location.origin);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+        return url.href;
+    } catch (error) {
+        return null;
+    }
+};
+
+const addWebsiteSection = (parent, value) => {
+    const href = normalizeExternalUrl(value);
+    if (!href) return;
+
+    const section = createDiv("popup-section");
+    appendTextBlock(section, "popup-header", "Web sitesi");
+    const website = createDiv("popup-website");
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.textContent = "Web sitesine git";
+    website.appendChild(anchor);
+    section.appendChild(website);
+    parent.appendChild(section);
+};
+
+const createFeatureLayer = async serviceTitle => {
+    const service = findService(serviceTitle);
+    if (!service) throw new Error(`Servis bulunamadı (${serviceTitle})`);
+    const [FeatureLayer] = await loadModules(["esri/layers/FeatureLayer"]);
+    return new FeatureLayer({ url: CommonBusiness.GenerateUrl(service) });
+};
+
+const buildPopupActions = () => ([
+    {
+        title: "Yol Tarifi Al (Google)",
+        id: "show-on-google",
+        image: "images/icons/map/pictureMarker.png"
+    },
+    {
+        title: "Cadde/Sokak Görünümü (Google)",
+        id: "show-on-streetview",
+        image: "images/icons/map/streetView.png"
+    }
+]);
 
 export const CommonBusiness = {
-
     _Cache: {
-
+        locationGraphic: null,
+        uniqueValueLayer: null
     },
 
-    ShowUserLocationOnMap: (_mapView, _point) => {
-
+    ShowUserLocationOnMap: async (mapView, point) => {
+        if (!mapView || !point) return null;
         if (CommonBusiness._Cache.locationGraphic) {
-            GisGraphicsHelper.RemoveGraphics(_mapView, CommonBusiness._Cache.locationGraphic);
+            GisGraphicsHelper.RemoveGraphics(mapView, CommonBusiness._Cache.locationGraphic);
         }
 
-        GisGraphicsHelper.CreateCustomGraphicFromGeometry(_point, {
-
+        const graphic = await GisGraphicsHelper.CreateCustomGraphicFromGeometry(point, {
             type: "picture-marker",
             url: "images/location_ripple.gif",
             width: "64px",
             height: "64px"
-
-        }).then((_locationGraphic) => {
-
-            GisGraphicsHelper.AddGraphics(_mapView, _locationGraphic);
-            CommonBusiness._Cache.locationGraphic = _locationGraphic;
-
-            GisGraphicsHelper.ZoomToGeometry(_mapView, _point, 15);
-
         });
-
+        GisGraphicsHelper.AddGraphics(mapView, graphic);
+        CommonBusiness._Cache.locationGraphic = graphic;
+        GisGraphicsHelper.ZoomToGeometry(mapView, point, 15);
+        return graphic;
     },
 
+    GenerateUrl: queryService => queryService?.eg
+        ?? queryService?.Eg
+        ?? queryService?.url
+        ?? queryService?.Url,
 
-    /*Proxy kullanım durumuna göre url oluşturur */
-    GenerateUrl: (_queryService) => {
-        return _queryService?.eg ?? _queryService?.Eg;
+    AddProxyRule: async url => {
+        if (!url) return;
+        const [esriConfig, urlUtils] = await loadModules(["esri/config", "esri/core/urlUtils"]);
+        const proxyUrl = `${AppConfig.Api.BaseUrl}/Gis/Proxy`;
+        esriConfig.request.proxyUrl = proxyUrl;
+        esriConfig.request.forceProxy = true;
+        urlUtils.addProxyRule({ urlPrefix: url, proxyUrl });
     },
 
-   
-    AddProxyRule: (_url, _source) => {
-
-        return loadModules(["esri/config", "esri/core/urlUtils"])
-            .then(([esriConfig, urlUtils]) => {
-
-                let proxyUrl = AppConfig.Api.BaseUrl + "/Gis/Proxy";
-
-                esriConfig.request.proxyUrl = proxyUrl;
-                esriConfig.request.forceProxy = true;
-
-                urlUtils.addProxyRule({
-                    urlPrefix: _url,
-                    proxyUrl: proxyUrl
-                });
-
-            });
+    GetDomainValues: async (queryServiceTitle, fieldName) => {
+        const layer = await createFeatureLayer(queryServiceTitle);
+        await layer.load();
+        const field = (layer.fields || []).find(item => item.name === fieldName);
+        return field?.domain?.codedValues || null;
     },
 
-    //yapı düzeninde çalışıyor
-    GetDomainValues: async (_queryServiceTitle, _field) => {
-
-        return new Promise((resolve) => {
-
-            loadModules(["esri/layers/FeatureLayer"]).then(([FeatureLayer]) => {
-
-                let configServices = MapManager.GetConfiguration().ConfigurationServices;
-                let queryService = ArrayHelper.Find(configServices, "Title", _queryServiceTitle);
-
-                if (queryService == null) {
-                    resolve(null);
-                }
-
-                let url = CommonBusiness.GenerateUrl(queryService);
-                let layer = new FeatureLayer(url);
-
-                layer.load().then(function (p) {
-
-
-                    let fields = ArrayHelper.Filter(layer.fields, "name", _field);
-                    if (fields == null || fields?.length == 0) {
-                        resolve(null);
-                        return;
-                    }
-
-                    let field = fields[0];
-                    if (field?.domain == null) {
-                        resolve(null);
-                        return;
-                    }
-
-                    resolve(field?.domain?.codedValues);
-                });
+    GetCodedValueDomains: async (queryServiceTitle, fieldName) => {
+        const layer = await createFeatureLayer(queryServiceTitle);
+        await layer.load();
+        const values = [];
+        (layer.types || []).forEach(layerType => {
+            const codedValues = layerType?.domains?.[fieldName]?.codedValues || [];
+            codedValues.forEach(codedValue => {
+                values.push({ code: codedValue.code, name: codedValue.name });
             });
         });
+        return values;
     },
 
+    GetUniqueValueRenderers: async queryServiceTitle => {
+        const layer = await createFeatureLayer(queryServiceTitle);
+        await layer.load();
+        return layer.sourceJSON?.drawingInfo?.renderer?.uniqueValueInfos || [];
+    },
 
-    //altkullanım da çalışıyor
-    GetCodedValueDomains: async (_queryServiceTitle, _field) => {
+    GetUniqueValueAdd: async queryServiceTitle => {
+        const layer = await createFeatureLayer(queryServiceTitle);
+        await layer.load();
+        const mapView = MapManager.GetMapView();
+        const previousLayer = CommonBusiness._Cache.uniqueValueLayer;
+        if (mapView?.map && previousLayer) mapView.map.remove(previousLayer);
+        if (mapView?.map) mapView.map.add(layer);
+        CommonBusiness._Cache.uniqueValueLayer = layer;
+        return layer.sourceJSON?.drawingInfo?.renderer?.uniqueValueInfos || [];
+    },
 
-        return new Promise((resolve) => {
+    GetDomainTypes: async queryServiceTitle => {
+        const layer = await createFeatureLayer(queryServiceTitle);
+        await layer.load();
+        return layer.types || [];
+    },
 
-            loadModules(["esri/layers/FeatureLayer"]).then(([FeatureLayer]) => {
+    CreateLayer: async layerItem => {
+        if (!layerItem) return null;
+        const url = CommonBusiness.GenerateUrl(layerItem);
+        if (url) await CommonBusiness.AddProxyRule(url);
 
-                let configServices = MapManager.GetConfiguration().ConfigurationServices;
-                let queryService = ArrayHelper.Find(configServices, "Title", _queryServiceTitle);
+        const [FeatureLayer, WMSLayer, MapImageLayer, GeoJSONLayer] = await loadModules([
+            "esri/layers/FeatureLayer",
+            "esri/layers/WMSLayer",
+            "esri/layers/MapImageLayer",
+            "esri/layers/GeoJSONLayer"
+        ]);
 
-                if (queryService == null) {
-                    resolve(null);
-                }
+        const common = {
+            id: layerItem.id,
+            url,
+            title: layerItem.title,
+            visible: layerItem.visible,
+            opacity: Number.isFinite(layerItem.opacity) ? layerItem.opacity / 100 : 1
+        };
 
-                let codedValues = [];
+        if (layerItem.layerType === Constants_LayerType.MapImageLayer) {
+            return new MapImageLayer(common);
+        }
 
-                let url = CommonBusiness.GenerateUrl(queryService);
-                let layer = new FeatureLayer(url);
-
-                layer.load().then(function (p) {
-
-                    layer.types?.forEach(layer_type => {
-
-                        if (layer_type.domains[_field].codedValues != null) {
-                            layer_type.domains[_field].codedValues?.forEach(codedValue => {
-
-                                codedValues.push({
-                                    code: codedValue.code,
-                                    name: codedValue.name
-                                });
-
-                            });
-                        }
-
-                    });
-                    resolve(codedValues);
-                });
+        if (layerItem.layerType === Constants_LayerType.MapLayer) {
+            return new MapImageLayer({
+                ...common,
+                sublayers: [{ id: 3, visible: false }]
             });
-        });
-    },
+        }
 
-    GetUniqueValueRenderers: async (_queryServiceTitle) => {
-        return new Promise((resolve, reject) => {
-
-            let configServices = MapManager.GetConfiguration().ConfigurationServices;
-            let queryServiceList = ArrayHelper.Find(configServices, "Title", _queryServiceTitle);
-
-            if (queryServiceList.length == 0) {
-                reject(null);
-            }
-
-            loadModules(["esri/layers/FeatureLayer"]).then(([FeatureLayer]) => {
-
-
-                let queryService = queryServiceList[0];
-                let url = CommonBusiness.GenerateUrl(queryService);
-                let layer = new FeatureLayer(url);
-
-                layer.load().then(function () {
-                    resolve(layer.sourceJSON.drawingInfo.renderer.uniqueValueInfos);
-
-                 
-                  
-                });
+        if (layerItem.layerType === Constants_LayerType.FeatureLayer) {
+            return new FeatureLayer({
+                ...common,
+                renderer: layerItem.renderer ?? null,
+                featureReduction: layerItem.featureReduction ?? null,
+                popupTemplate: layerItem.popupTemplate ?? null
             });
+        }
 
+        if (layerItem.layerType === Constants_LayerType.WMSLayer) {
+            return new WMSLayer(common);
+        }
 
-        });
-
-    },
-    GetUniqueValueAdd: async (_queryServiceTitle) => {
-        return new Promise((resolve, reject) => {
-
-            let configServices = MapManager.GetConfiguration().ConfigurationServices;
-            let queryServiceList = ArrayHelper.Find(configServices, "Title", _queryServiceTitle);
-
-            if (queryServiceList.length === 0) {
-                reject(null);
-            }
-
-            // FeatureLayer modülünü esri-loader ile yükleyin
-            loadModules(["esri/layers/FeatureLayer"]).then(([FeatureLayer]) => {
-
-                let queryService = queryServiceList[0];
-                let url = CommonBusiness.GenerateUrl(queryService); // Correct the queryService variable usage
-                let layer = new FeatureLayer({ url });
-
-                // Layer yüklendikten sonra işlemleri gerçekleştir
-                layer.load().then(function () {
-                    // UniqueValueRenderers bilgilerini resolve et
-                    resolve(layer.sourceJSON.drawingInfo.renderer.uniqueValueInfos);
-
-                    // MapView'i al ve layer'ı ekle
-                    const _mapView = MapManager.GetMapView(); // MapView'i alın
-                    _mapView.map.removeAll(); // Tüm layer'ları temizleyin
-                    _mapView.map.add(layer); // Yeni layer'ı MapView'e ekleyin
-                }).catch(err => {
-                    reject(err); // Hata durumunda reject çalıştırın
-                });
-            }).catch(err => {
-                reject(err); // Hata durumunda reject çalıştırın
+        if (layerItem.layerType === Constants_LayerType.GeoJSONLayer) {
+            const blob = new Blob([JSON.stringify(layerItem)], { type: "application/json" });
+            const objectUrl = URL.createObjectURL(blob);
+            const layer = new GeoJSONLayer({
+                renderer: layerItem.renderer ?? null,
+                featureReduction: layerItem.featureReduction ?? null,
+                url: objectUrl,
+                popupTemplate: layerItem.popupTemplate ?? null,
+                title: layerItem.title
             });
-        });
+            Promise.resolve(layer.load?.()).finally(() => URL.revokeObjectURL(objectUrl));
+            return layer;
+        }
 
+        return null;
     },
-
-    GetDomainTypes: async (_queryServiceTitle) => {
-
-        return new Promise((resolve, reject) => {
-
-
-            let configServices = MapManager.GetConfiguration().ConfigurationServices;
-            let queryService = ArrayHelper.Find(configServices, "Title", _queryServiceTitle);
-
-            if (queryService == null) {
-                reject(null);
-            }
-
-            loadModules(["esri/layers/FeatureLayer"]).then(([FeatureLayer]) => {
-
-                let url = CommonBusiness.GenerateUrl(queryService);
-                let layer = new FeatureLayer(url);
-
-                layer.load().then(function () {
-                    resolve(layer.types);
-                });
-            });
-
-
-        });
-
-    },
-
-
-    CreateLayer: async (layerItem) => {
-
-        return new Promise((resolve, reject) => {
-
-            CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(layerItem), "CommonBusiness.CreateLayer");
-
-            return loadModules(["esri/layers/FeatureLayer", "esri/layers/WMSLayer",
-                "esri/layers/MapImageLayer", "esri/layers/BaseDynamicLayer", "esri/layers/GeoJSONLayer"])
-                .then(([FeatureLayer, WMSLayer, MapImageLayer, BaseDynamicLayer, GeoJSONLayer]) => {
-
-
-                    try {
-
-                        let layer = null;
-
-                        if (layerItem.layerType === Constants_LayerType.MapImageLayer) { //MapImageLayer
-                            layer = new MapImageLayer({
-                                id: layerItem.id,
-                                url: CommonBusiness.GenerateUrl(layerItem),
-                                title: layerItem.title,
-                                visible: layerItem.visible,
-                                opacity: layerItem.opacity / 100
-                            });
-                        }
-
-                        if (layerItem.layerType === Constants_LayerType.MapLayer) { //MapImageLayer
-                            layer = new MapImageLayer({
-                                id: layerItem.id,
-                                url: CommonBusiness.GenerateUrl(layerItem),
-                                title: layerItem.title,
-                                visible: layerItem.visible,
-                                opacity: layerItem.opacity / 100,
-                                sublayers: [
-                                    {
-                                        id: 3, // id
-                                        visible: false
-                                    }
-                                ]
-                            });
-                        }
-
-
-                        if (layerItem.layerType === Constants_LayerType.FeatureLayer) { //FeatureLayer
-                            layer = new FeatureLayer({
-                                id: layerItem.id,
-                                url: CommonBusiness.GenerateUrl(layerItem),
-                                title: layerItem.title,
-                                visible: layerItem.visible,
-                                opacity: layerItem.opacity / 100,
-                                renderer: layerItem.renderer ?? null,
-                                featureReduction: layerItem.featureReduction ?? null,
-                                popupTemplate: layerItem.popupTemplate ?? null
-
-                            });
-                        }
-
-                        if (layerItem.layerType === Constants_LayerType.WMSLayer) { //WMSLayer
-                            layer = new WMSLayer({
-                                id: layerItem.id,
-                                url: CommonBusiness.GenerateUrl(layerItem),
-                                title: layerItem.title,
-                                visible: layerItem.visible,
-                                opacity: layerItem.opacity / 100
-                            });
-                        }
-
-
-                        if (layerItem.layerType === Constants_LayerType.GeoJSONLayer) { //WMSLayer
-
-                            const blob = new Blob([JSON.stringify(layerItem)], {
-                                type: "application/json"
-                            });
-                            const geojsonurl = URL.createObjectURL(blob);
-
-                            layer = new GeoJSONLayer({
-                                renderer: layerItem.renderer ?? null,
-                                featureReduction: layerItem.featureReduction ?? null,
-                                url: geojsonurl,
-                                popupTemplate: layerItem.popupTemplate ?? null
-                            });
-                        }
-
-                        /*
-                        layer.when(function (err) {
-
-                        });
-                        */
-
-                        resolve(layer);
-
-                    } catch (error) {
-                        console.log(error);
-                        resolve(null);
-                    }
-
-
-                });
-
-        });
-    },
-
 
     Clustering: {
-
-        ChangePopup:(_showBigPopup)=>{
-        
-            if(_showBigPopup){
-                var head = document.head;
-                var link = document.createElement("link");
-                
+        ChangePopup: showBigPopup => {
+            const existing = Store.getState().Common.BigPopupLinkRef;
+            if (showBigPopup) {
+                if (existing?.isConnected) return;
+                const link = document.createElement("link");
                 link.type = "text/css";
                 link.rel = "stylesheet";
-                link.href =  process.env.PUBLIC_URL+"/BigPopupOverride.css";
-                
-                head.appendChild(link);
+                link.href = `${process.env.PUBLIC_URL}/BigPopupOverride.css`;
+                document.head.appendChild(link);
                 Store.dispatch({
                     type: CommonReducer_ActionTypes.SetBigPopupLinkRef,
                     payload: link
                 });
-            
+                return;
             }
-            else{
-                //remove big pop up link
-                var head = document.head;
-                var link=Store.getState().Common.BigPopupLinkRef;
-                if(link!=null){
 
-                    head.removeChild(link);
-                    Store.dispatch({
-                        type: CommonReducer_ActionTypes.SetBigPopupLinkRef,
-                        payload: null
-                    });
-                }
-               
-            }
-        
+            if (existing?.parentNode) existing.parentNode.removeChild(existing);
+            Store.dispatch({
+                type: CommonReducer_ActionTypes.SetBigPopupLinkRef,
+                payload: null
+            });
         },
 
-        CreateConfig: (_popupTemplate) => {
+        CreateConfig: () => ({
+            type: "cluster",
+            clusterRadius: "120px",
+            clusterMinSize: "32px",
+            clusterMaxSize: "84px",
+            labelingInfo: [{
+                deconflictionStrategy: "none",
+                labelExpressionInfo: { expression: "Text($feature.cluster_count, '#')" },
+                symbol: {
+                    type: "text",
+                    color: "#444",
+                    font: { weight: "bold", family: "Noto Sans", size: "16px" }
+                },
+                labelPlacement: "center-center"
+            }],
+            symbol: {
+                type: "simple-marker",
+                style: "circle",
+                size: 12,
+                color: "#EEE",
+                outline: { color: "rgba(8,143,188,1)", width: 4 }
+            }
+        }),
+
+        GetPopupInfo: async feature => {
+            if (!feature?.graphic) return null;
+            CommonBusiness.Clustering.ChangePopup(false);
+            const attributes = feature.graphic.attributes || {};
+            const root = createDiv("map-popup");
+
+            const titleSection = createDiv("popup-section");
+            appendTextBlock(titleSection, "popup-title", attributes.adi ?? attributes.title, "İsimsiz kayıt");
+            root.appendChild(titleSection);
+
+            const details = createDiv("popup-section");
+            appendTextBlock(details, "popup-nbhood", attributes.mahalleadi ?? attributes.districtName);
+            appendTextBlock(details, "popup-address", attributes.adres ?? attributes.address);
+            appendTextBlock(details, "popup-phone", attributes.telefon ?? attributes.phone);
+            if (details.childNodes.length) root.appendChild(details);
+
+            addWebsiteSection(root, attributes.websitesi);
+            return root;
+        },
+
+        GetInfoWithAttachments: async (feature, attachmentQueryUrl, queryServiceTitle) => {
+            if (!feature?.graphic) return null;
+            CommonBusiness.Clustering.ChangePopup(true);
+
+            const graphic = feature.graphic;
+            const attributes = graphic.attributes || {};
+            const root = createDiv("map-popup");
+            appendTextBlock(root, "popup-title", attributes.adi, "İsimsiz kayıt");
+
+            const sections = createDiv("popup-sections");
+            const mediaSection = createDiv("popup-section");
+            try {
+                const attachmentList = await CommonBusiness.Attachments.QueryAttachments(
+                    attachmentQueryUrl,
+                    attributes.globalid
+                );
+                if (attachmentList?.data?.length) {
+                    const slider = createDiv("slider");
+                    const slides = createDiv("slides");
+                    attachmentList.data.forEach((attachment, index) => {
+                        const slide = createDiv();
+                        slide.id = `slide-${index}`;
+                        const image = document.createElement("img");
+                        image.className = "attachments-image";
+                        image.alt = attributes.adi ? `${attributes.adi} görseli ${index + 1}` : `Ek görsel ${index + 1}`;
+                        image.loading = "lazy";
+                        image.src = CommonBusiness.Attachments.GetAttachmentUrl(
+                            queryServiceTitle,
+                            attributes.objectid,
+                            attachment?.attr?.attachmentid
+                        );
+                        slide.appendChild(image);
+                        slides.appendChild(slide);
+                    });
+                    slider.appendChild(slides);
+                    mediaSection.appendChild(slider);
+                }
+            } catch (error) {
+                appendTextBlock(mediaSection, "popup-description", "Görseller yüklenemedi.");
+            }
+            if (mediaSection.childNodes.length) sections.appendChild(mediaSection);
+
+            if (!IsNull(attributes.aciklama)) {
+                const about = createDiv("popup-section");
+                appendTextBlock(about, "popup-header", "Hakkında");
+                appendTextBlock(about, "popup-description", attributes.aciklama, "-");
+                sections.appendChild(about);
+            }
+
+            const address = createDiv("popup-section");
+            appendTextBlock(address, "popup-header", "Adres ve Ulaşım");
+            appendTextBlock(address, "popup-nbhood", attributes.mahalle_adi);
+            appendTextBlock(address, "popup-address", attributes.adres);
+            appendTextBlock(address, "popup-phone", attributes.telefon);
+            sections.appendChild(address);
+            root.appendChild(sections);
+            addWebsiteSection(root, attributes.websitesi);
+
+            window.setTimeout(() => {
+                const mapView = MapManager.GetMapView();
+                const geometry = graphic.geometry;
+                if (!mapView || !geometry) return;
+                const longitude = geometry.longitude ?? geometry.x;
+                const latitude = geometry.latitude ?? geometry.y;
+                if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+                    mapView.goTo({ center: [longitude, latitude + 0.005], zoom: 16 });
+                    if (mapView.popup) mapView.popup.location = geometry;
+                }
+            }, 100);
+
+            return root;
+        },
+
+        CreateGeoJsonClusterLayer: async (geojson, layerTitle, symbol) => {
+            if (!geojson) throw new Error("GeoJSON verisi bulunamadı.");
+            const layerDefinition = {
+                ...geojson,
+                title: layerTitle,
+                featureReduction: CommonBusiness.Clustering.CreateConfig(),
+                renderer: {
+                    type: "simple",
+                    symbol: symbol || DEFAULT_MARKER
+                },
+                popupTemplate: {
+                    outFields: ["*"],
+                    title: "",
+                    content: feature => CommonBusiness.Clustering.GetPopupInfo(feature),
+                    actions: [{
+                        title: "Cad./Sok.Görünümü",
+                        id: "show-on-streetview",
+                        image: "images/icons/map/streetView.png"
+                    }]
+                }
+            };
+            return CommonBusiness.CreateLayer(layerDefinition);
+        },
+
+        CreateLayerWithoutClustering: async (
+            queryServiceTitle,
+            layerTitle,
+            query,
+            symbol,
+            showAttachments,
+            attachmentQueryUrl
+        ) => {
+            const queryService = findService(queryServiceTitle);
+            if (!queryService) {
+                throw { type: Constants_ServiceResultType.Error, message: `Servis bulunamadı (${queryServiceTitle})` };
+            }
+
+            await CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(queryService));
+            if (showAttachments && attachmentQueryUrl) {
+                const attachmentService = findService(attachmentQueryUrl) || attachmentQueryUrl;
+                await CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(attachmentService));
+            }
+
+            const [FeatureLayer] = await loadModules(["esri/layers/FeatureLayer"]);
+            const layer = new FeatureLayer({
+                id: TextHelper.CreateGuid(),
+                title: layerTitle,
+                url: CommonBusiness.GenerateUrl(queryService),
+                visible: true,
+                opacity: 1,
+                renderer: { type: "simple", symbol: symbol || DEFAULT_MARKER },
+                popupTemplate: {
+                    outFields: ["*"],
+                    title: "",
+                    content: feature => showAttachments
+                        ? CommonBusiness.Clustering.GetInfoWithAttachments(feature, attachmentQueryUrl, queryServiceTitle)
+                        : CommonBusiness.Clustering.GetPopupInfo(feature),
+                    actions: buildPopupActions()
+                }
+            });
+            return { layerObj: layer };
+        },
+
+        CreateClusterLayer: async (
+            queryServiceTitle,
+            layerTitle,
+            query,
+            symbol,
+            showAttachments,
+            attachmentQueryUrl
+        ) => {
+            const queryService = findService(queryServiceTitle);
+            if (!queryService) {
+                throw { type: Constants_ServiceResultType.Error, message: `Servis bulunamadı (${queryServiceTitle})` };
+            }
+
+            await CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(queryService));
+            if (showAttachments && attachmentQueryUrl) {
+                const attachmentService = findService(attachmentQueryUrl) || attachmentQueryUrl;
+                await CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(attachmentService));
+            }
+
+            const layerProperties = {
+                id: TextHelper.CreateGuid(),
+                layerType: Constants_LayerType.FeatureLayer,
+                title: layerTitle,
+                eg: CommonBusiness.GenerateUrl(queryService),
+                visible: true,
+                opacity: 100,
+                featureReduction: CommonBusiness.Clustering.CreateConfig(),
+                renderer: { type: "simple", symbol: symbol || DEFAULT_MARKER },
+                popupTemplate: {
+                    outFields: ["*"],
+                    title: "",
+                    content: feature => showAttachments
+                        ? CommonBusiness.Clustering.GetInfoWithAttachments(feature, attachmentQueryUrl, queryServiceTitle)
+                        : CommonBusiness.Clustering.GetPopupInfo(feature),
+                    actions: buildPopupActions()
+                }
+            };
+
+            const layer = await CommonBusiness.CreateLayer(layerProperties);
+            if (!layer) throw new Error("Harita katmanı oluşturulamadı.");
+            layer.definitionExpression = "1=1";
+
+            const options = { where: "1=1" };
+            if (query) {
+                if (!IsNull(query.name)) {
+                    const searchText = escapeSqlLiteral(
+                        TextHelper.RemoveTurkishChars(TextHelper.TurkishToUpper(String(query.name).trim()))
+                    );
+                    layer.definitionExpression += ` AND UPPER(adi) LIKE '%${searchText}%'`;
+                }
+
+                if (query.showNearby) {
+                    options.geometry = query.userLocation;
+                    options.distance = Number(query.bufferDistance || 0) * 100;
+                    options.units = "meters";
+                    options.spatialRelationship = "intersects";
+                } else {
+                    if (!IsNull(query.districtId)) {
+                        layer.definitionExpression += ` AND ilceid = '${escapeSqlLiteral(query.districtId)}'`;
+                    }
+                    if (!IsNull(query.nbhoodId)) {
+                        layer.definitionExpression += ` AND mahalleid = '${escapeSqlLiteral(query.nbhoodId)}'`;
+                    }
+                }
+            }
+
+            const objectIds = safeObjectIds(await layer.queryObjectIds(options));
+            layer.definitionExpression += objectIds.length
+                ? ` AND objectid IN (${objectIds.join(",")})`
+                : " AND 1=0";
 
             return {
-                type: "cluster",
-                clusterRadius: "120px",
-
-                clusterMinSize: "32px",
-                clusterMaxSize: "84px",
-                labelingInfo: [{
-                    deconflictionStrategy: "none",
-                    labelExpressionInfo: {
-                        expression: "Text($feature.cluster_count, '#')"
-                    },
-                    symbol: {
-                        type: "text",
-                        color: "#444",
-                        font: {
-                            weight: "bold",
-                            family: "Noto Sans",
-                            size: "16px"
-                        }
-                    },
-                    labelPlacement: "center-center",
-                }],
-
-                symbol: {
-                    type: "simple-marker",
-                    style: "circle",
-                    size: 12,
-                    color: "#EEE",
-                    outline: {
-                        color: "rgba(8,143,188,1)",
-                        width: 4
-                    }
-                }
-
+                id: layerProperties.id,
+                title: layerProperties.title,
+                layerObj: layer
             };
-        },
-
-
-        GetPopupInfo:async(feature)=>{
-
-                if (feature) {
-
-                    CommonBusiness.Clustering.ChangePopup(false);
-                    const div=document.createElement("div");
-
-                    var graphic, attributes, html = "";
-                    graphic = feature.graphic;
-                    attributes = graphic.attributes;
-
-
-                    html += "<div class='map-popup'>";
-                    html += "<div class='popup-section'>";
-                    html += " <span class='popup-title'>";
-                    html += attributes["adi"] ?? attributes["title"];
-                    html += "</span>";
-                    html += "</div>";
-
-
-                    html += "<div class='popup-section'>";
-                    if (!IsNull(attributes['mahalleadi']) ||!IsNull(attributes['districtName'])) {
-                        html += "<div class='popup-nbhood'>";
-                        html +=  attributes['mahalleadi'] ?? attributes['districtName'] ?? "(Mahalle bilgisi yok)";
-                        html += "</div>";
-                    }
-
-                    if (!IsNull(attributes['adres']) || !IsNull(attributes['address'])) {
-                        html += "<div class='popup-address'>";
-                        html +=  attributes['adres'] ?? attributes['address'] ?? "(Mahalle bilgisi yok)";
-                        html += "</div>";
-                    }
-
-                    if (!IsNull(attributes['telefon']) ||!IsNull(attributes['phone'])) {
-                        html += "<div class='popup-phone'>";
-                        html +=  attributes['telefon'] ?? attributes['phone'] ?? "(Mahalle bilgisi yok)";
-                        html += "</div>";
-                    }
-                    html += "</div>";
-                    
-
-                    if (!IsNull(attributes['websitesi'])) {
-                        html += "<div class='popup-section'>";
-                        html += "<div class='popup-header'>Web sitesi</div>";
-                        html += "<div class='popup-website'><a href='" + attributes['websitesi']+"' target='_blank'>Buraya tıklayarak websitesine ulaşabilirsiniz</a></div>";
-                        html += "</div>";
-           
-                    }
-                    
-                    html += "</div>";
-
-
-                    div.innerHTML=html;
-                    
-                    return div;
-                }
-        
-
-        },
-
-
-        GetInfoWithAttachments:async(feature, _attachmentQueryUrl, _queryServiceTitle)=>{
-
-            if (feature) {
-
-                CommonBusiness.Clustering.ChangePopup(true);
-
-                const div=document.createElement("div");
-
-                var graphic, attributes, html = "";
-                graphic = feature.graphic;
-                attributes = graphic.attributes;
-
-
-                html += "<div class='map-popup'>";
-                html += ""
-                 
-                    + "<span class='popup-title'>" + attributes["adi"] + "</span>"
-
-                html += "<div class='popup-sections'>";
-
-                html += "<div class='popup-section'>";
-                //html += "<div class='popup-title'>" + attributes['ADI'] + "</div>";
-                
-                const _attachmentList=await  CommonBusiness.Attachments.QueryAttachments(_attachmentQueryUrl,attributes.globalid)
-      
-                if(_attachmentList.data?.length>0){
-
-                    html+="  <div class='slider'>";
-
-                    html+="     <div class='slides'>";
-                    _attachmentList.data.forEach((_attachment,_index) => {
-                      
-                        const imageurl=CommonBusiness.Attachments.GetAttachmentUrl(_queryServiceTitle,attributes.objectid,_attachment.attr.attachmentid);
-                        html+="<div id='slide-"+_index+"'>"
-                        +"<img class='attachments-image' src='"+imageurl+"'/>"
-                        +"</div>";
-                    });
-
-                    html+="     </div>";  
-
-                    /*
-                    _attachmentList.data.forEach((_attachment,_index) => {
-                        html+="<a class='slider-link' href='#slide-"+_index+"'></a>";
-                    });
-                    */
-
-                    html+=" </div>";                   
-                }
-                html += "</div>";
-                
-                html += "<div class='popup-section'>";
-                if (!IsNull(attributes['aciklama'])) {
-                    html += "<div class='popup-header'>Hakkında</div>";
-                    html += "<div class='popup-description'>" + (attributes['aciklama'] ?? "-") + "</div>";
-                }
-
-                html += "</div>";
-
-                html += "<div class='popup-section'>";
-                html += "   <div class='popup-header'>Adres ve Ulaşım</div>";
-                if (!IsNull(attributes['mahalle_adi'])) {
-                    html += "   <div class='popup-nbhood'>" + (attributes['mahalle_adi'] ?? "(Mahalle bilgisi yok)") + "</div>";
-                }
-
-                if (!IsNull(attributes['adres'])) {
-                    html += "   <div class='popup-address'>" + (attributes['adres'] ?? "(Adres bilgisi yok)") + "</div>";
-                }
-
-                if (!IsNull(attributes['telefon'])) {
-                    html += "   <div class='popup-phone'>" + (attributes['telefon'] ?? "(Telefon bilgisi yok)") + "</div>";
-                }
-   
-                html += "   </div>";
-                html += "</div>";
-
-
-                
-                if (!IsNull(attributes['websitesi'])) {
-                    html += "<div class='popup-section'>";
-                    html += "<div class='popup-header'>Web sitesi</div>";
-                    html += "<div class='popup-website'><a href='" + attributes['websitesi']+"' target='_blank'>Buraya tıklayarak websitesine ulaşabilirsiniz</a></div>";
-                    html += "</div>";
-                    html += "</div>";
-                }
-
-                html += "</div>";
-
-                div.innerHTML=html;
-                
-                           
-                /*
-                window.showAttachmentLarge=(_title,_url)=>{
-                    const imageDiv=document.createElement("div");
-                    const imageHtml="<div id='large-attachment-image-window' class='attachments-image-large-bg'>"
-                    +"<div  class='attachments-image-large-container'>"
-                    +"<div  class='attachments-image-large-container-header'>"
-                    +"<div  class='attachments-image-large-container-title'>"+_title+"</div>"
-                    +"  <div class='attachments-image-large-close-btn' onclick='window.removeAttachmentLarge()'>x</div>"
-                    +"</div>"
-                    +"<img class='attachments-image-large' src='"+_url+"'/></div></div>";
-
-                    imageDiv.innerHTML=imageHtml;
-                    document.body.append(imageDiv);
-                };
-
-                window.removeAttachmentLarge=()=>{
-                    document.getElementById('large-attachment-image-window').remove();
-                }
-                */
-
-                setTimeout(() => {
-                    
-                    const mapView=MapManager.GetMapView();
-                 
-                    var centerPoint=[
-                        (graphic.geometry.longitude),
-                        (graphic.geometry.latitude + 0.005),
-                    ];
-       
-                    mapView.goTo({
-                        center: centerPoint,
-                        zoom:16
-                    });
-                    mapView.popup.location=graphic.geometry;
-                    
-                }, 100);
-                
-              
-                return div;
-            }
-        },
-
-        CreateGeoJsonClusterLayer: async (_geojson, _layerTitle, _symbol) => {
-            return new Promise((resolve, reject) => {
-                const view = MapManager.GetMapView();
-        
-                _geojson.featureReduction = CommonBusiness.Clustering.CreateConfig();
-        
-                // Function to get symbol based on zoom level
-                const getSymbolBasedOnZoom = (zoomLevel) => {
-                    if (zoomLevel > 10) {
-                        return {
-                            type: "picture-marker",
-                            url: "images/icons/map/yasli.png",
-                            width: "48px",
-                            height: "48px"
-                        };
-                    } else {
-                        return {
-                            type: "picture-marker",
-                            url: "images/icons/map/yasli.png",
-                            width: "40px",
-                            height: "40px"
-                        };
-                    }
-                };
-        
-                // Function to update renderer based on zoom level
-                const updateRenderer = (zoomLevel) => {
-                    _geojson.renderer = {
-                        type: "simple",
-                        symbol: getSymbolBasedOnZoom(zoomLevel)
-                    };
-                    // Renderer'ı güncelle
-                    if (_geojson.layer) {
-                        _geojson.layer.renderer = _geojson.renderer;
-                    }
-                };
-        
-                // Initial setup
-                updateRenderer(view.zoom);
-        
-                // Add event listener to update symbol when zoom level changes
-                view.watch("zoom", (newZoomLevel) => {
-                    updateRenderer(newZoomLevel);
-                });
-        
-                _geojson.popupTemplate = {
-                    outFields: ['*'],
-                    title: "",
-                    content: (_feature) => CommonBusiness.Clustering.GetPopupInfo(_feature),
-                    actions: [
-                        {
-                            title: "Cad./Sok.Görünümü",
-                            id: "show-on-streetview",
-                            image: "images/icons/map/streetView.png"
-                        }
-                    ]
-                };
-        
-                CommonBusiness.CreateLayer(_geojson).then((_layer) => {
-                    // Layer'ı kaydet
-                    _geojson.layer = _layer; // Layer referansını sakla
-                    resolve(_layer);
-                }).catch(reject);
-            });
-        },
-        CreateLayerWithoutClustering: async (_queryServiceTitle, _layerTitle, _query, _symbol, _showAttachments, _attachmentQueryUrl) => {
-
-            return new Promise((resolve, reject) => {
-        
-                let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", _queryServiceTitle);
-                if (queryService == null) {
-                    reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + _queryServiceTitle + ")" });
-                    return;
-                }
-        
-                CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(queryService), "CommonBusiness.CreateLayerWithoutClustering");
-                
-                if (_showAttachments) {
-                    CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(_attachmentQueryUrl), "CommonBusiness.CreateLayerWithoutClustering");
-                }
-          
-        
-                const _layerProperties = {
-                    id: TextHelper.CreateGuid(),
-                    layerType: Constants_LayerType.FeatureLayer,
-                    title: _layerTitle,
-                    url: CommonBusiness.GenerateUrl(queryService),
-                    visible: true,
-                    opacity: 100,
-        
-                    // Kümeleme (featureReduction) olmadan sembol ayarları
-                    renderer: {
-                        type: "simple",
-                        symbol: _symbol ?? {
-                            type: "simple-marker",
-                            style: "circle",
-                            size: 12,
-                            color: "#EEE",
-                            outline: {
-                                color: "#30598b",
-                                width: 4
-                            }
-                        }
-                    },
-        
-                    popupTemplate: {
-                        outFields: ['*'],
-                        title: "",
-                        content: (_feature) => !_showAttachments 
-                            ? CommonBusiness.Clustering.GetPopupInfo(_feature) 
-                            : CommonBusiness.Clustering.GetInfoWithAttachments(_feature, _attachmentQueryUrl, _queryServiceTitle),
-                        actions: [
-                            {
-                                title: "Yol Tarifi Al (Google)",
-                                id: "show-on-google",
-                                image: "images/icons/map/pictureMarker.png"
-                            },
-                            {
-                                title: "Cadde/Sokak Görünümü (Google)",
-                                id: "show-on-streetview",
-                                image: "images/icons/map/streetView.png"
-                            }
-                        ]
-                    }
-                };
-        
-                // Layer ekleme işlemi
-                loadModules(["esri/layers/FeatureLayer"]).then(([FeatureLayer]) => {
-                    let layer = new FeatureLayer(_layerProperties);
-                    resolve({
-                        layerObj: layer
-                    });
-                }).catch(err => {
-                    reject(err);
-                });
-            });
-        },
-        
-
-
-        CreateClusterLayer: async (_queryServiceTitle, _layerTitle, _query, _symbol, _showAttachments, _attachmentQueryUrl) => {
-
-            return new Promise((resolve, reject) => {
-
-                let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", _queryServiceTitle);
-                if (queryService == null) {
-                    reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + _queryServiceTitle + ")" })
-                };
-
-                CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(queryService), "CommonBusiness.CreateClusterLayer");
-                
-                if(_showAttachments){
-                    CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(_attachmentQueryUrl), "CommonBusiness.CreateClusterLayer");
-                }
-
-                const _layerProperties = {
-
-                    id: TextHelper.CreateGuid(),
-                    layerType: Constants_LayerType.FeatureLayer,
-                    title: _layerTitle,
-                    url: CommonBusiness.GenerateUrl(queryService),
-                    eg: CommonBusiness.GenerateUrl(queryService),
-                    visible: true,
-                    opacity: 100,
-                    featureReduction: CommonBusiness.Clustering.CreateConfig(),
-
-                    renderer: {
-                        type: "simple",
-                        symbol: _symbol ?? {
-                            type: "simple-marker",
-                            style: "circle",
-                            size: 12,
-                            color: "#EEE",
-                            outline: {
-                                color: "#30598b",
-                                width: 4
-                            }
-                        }
-                    },
-
-                    popupTemplate: {
-                        outFields: ['*'],
-                        title: "",
-                        content: (_feature) => !_showAttachments ? CommonBusiness.Clustering.GetPopupInfo(_feature) : CommonBusiness.Clustering.GetInfoWithAttachments(_feature, _attachmentQueryUrl, _queryServiceTitle),
-                        actions: [
-                            {
-                                title: "Yol Tarifi Al (Google)",
-                                id: "show-on-google",
-                                image:
-                                    "images/icons/map/pictureMarker.png"
-                            },
-                            {
-                                title: "Cadde/Sokak Görünümü (Google)",
-                                id: "show-on-streetview",
-                                image:
-                                    "images/icons/map/streetView.png"
-                            }
-                        ]
-                    }
-                };
-
-
-                CommonBusiness.CreateLayer(_layerProperties).then((_layer) => {
-
-                    _layer.definitionExpression = "1=1";
-
-                    let options = {};
-                    options.where = "1=1";
-
-                    if (_query != null) {
-
-                        if (!IsNull(_query.name)) {
-                            _layer.definitionExpression += " AND UPPER(adi) LIKE '%" + TextHelper.RemoveTurkishChars(TextHelper.TurkishToUpper(_query.name)) + "%'";
-                        }
-
-
-                        if (_query.showNearby) {
-
-                            options.geometry = _query.userLocation;
-                            options.distance = _query.bufferDistance * 100;
-                            options.units = 'meters';
-                            options.spatialRelationship = 'intersects';
-
-                        }
-                        else {
-                            if (!IsNull(_query.districtId)) {
-                                _layer.definitionExpression += " AND ilceid = '" + _query.districtId + "'";
-                            }
-
-                            if (!IsNull(_query.nbhoodId)) {
-                                _layer.definitionExpression += " AND mahalleid = '" + _query.nbhoodId + "'";
-                            }
-                        }
-                    }
-
-
-                    _layer.queryObjectIds(options).then((_queryResults) => {
-                     
-                        if (!IsNull(_queryResults)) {
-                            _layer.definitionExpression += " AND objectid IN (" + _queryResults.join(",") + ")"
-                        }
-
-                        let _layerInfo = {
-                            id: _layerProperties.id,
-                            title: _layerProperties.title,
-                            layerObj: _layer
-                        };
-
-
-                        resolve(_layerInfo);
-                    });
-
-                });
-
-              
-
-
-            });
-
-
         }
     },
 
-
     Attachments: {
+        QueryAttachments: async (queryServiceTitle, id) => {
+            const queryService = findService(queryServiceTitle);
+            if (!queryService) {
+                throw { type: Constants_ServiceResultType.Error, message: `Servis bulunamadı (${queryServiceTitle})` };
+            }
 
-        QueryAttachments: async (_queryServiceTitle, _id) => {
-
-
-            return new Promise((resolve, reject) => {
-
-                let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", _queryServiceTitle);
-
-                if (queryService == null) {
-                    reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + _queryServiceTitle + ")" })
-                };
-
-                let options = {
-                    url: CommonBusiness.GenerateUrl(queryService),
-                    returnGeometry: false,
-                    outFields: ["*"]
-                };
-
-                let where = "rel_globalid='" + _id+"'";
-                options.where = where;
-
-                GisQueryHelper.ExecuteQuery(options).then(results => {
-                    resolve(results);
-                });
-
+            return GisQueryHelper.ExecuteQuery({
+                url: CommonBusiness.GenerateUrl(queryService),
+                returnGeometry: false,
+                outFields: ["*"],
+                where: `rel_globalid='${escapeSqlLiteral(id)}'`
             });
         },
 
-        GetAttachmentUrl: (_queryServiceTitle, _id, _attachmentId) => {
-
-
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", _queryServiceTitle);
-
-            if (queryService == null) {
-                return "#";
-            };
-
-
-            var baseUrl = queryService.url;
-
-            let url = baseUrl + "/" + _id + "/attachments/" + _attachmentId;
-
-            return url;
+        GetAttachmentUrl: (queryServiceTitle, id, attachmentId) => {
+            const queryService = findService(queryServiceTitle);
+            const baseUrl = CommonBusiness.GenerateUrl(queryService);
+            if (!baseUrl || IsNull(id) || IsNull(attachmentId)) return "#";
+            return `${String(baseUrl).replace(/\/$/, "")}/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`;
         }
-
-
     }
-
-}
+};
