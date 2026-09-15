@@ -1,116 +1,74 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
-import { Button, Form, InputGroup, Tab, Tabs } from "react-bootstrap";
-import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
-import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
+import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Tab, Tabs } from "react-bootstrap";
+import { Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
 import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
-import { HalkEkmekQueryBusiness } from "../../../Business/HalkEkmekQueryBusiness";
-import { BiSearch } from "react-icons/bi";
-import { FiMapPin, FiPhone } from "react-icons/fi";
-import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
-import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
-import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { DebugHelper } from "../../../Toolbox/DebugHelper";
-import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
-import { ButtonLoading, ContainerLoading, NoResultsFound } from "../../Common/Loading";
-import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { useRef } from "react";
 import { EgoQueryBusiness } from "../../../Business/EgoQueryBusiness";
 import "./EgoQueryWindow.css";
 import { EgoLinesQuery } from "./EgoLinesQuery";
 import { EgoStopsQuery } from "./EgoStopsQuery";
 
+const DEFAULT_QUERY = Object.freeze({ name: null, districtId: null, nbhoodId: null, showMapSelect: false, showNearby: false });
+
 export const EgoQueryWindow = React.forwardRef((props, ref) => {
-
-
     const windowTitle = "EGO / Otobüs Durakları";
     const windowLogo = "images/icons/sidebar/ulasimaglari.png";
+    const commonToolsComponentRef = useRef();
+    const [lineList, setLineList] = useState(null);
+    const [stopList, setStopList] = useState(null);
+    const [query, setQuery] = useState({ ...DEFAULT_QUERY });
 
     useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            DebugHelper.Log("show " + props.id);
-        },
+        id: props.id,
+        visible: false,
+        minimized: false,
+        OnShow: () => DebugHelper.Log("show " + props.id),
         OnClose: () => {
             DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery);
-
-            commonToolsComponentRef.current.OnClose();
+            setQuery({ ...DEFAULT_QUERY });
+            commonToolsComponentRef.current?.OnClose?.();
             MapManager.RemoveAllGraphics();
         }
-    }));
-
-    const commonToolsComponentRef = useRef();
-
+    }), [props.id]);
 
     useEffect(() => {
-
         props.windowManager.RegisterWindow(ref);
+        let active = true;
 
-        loadLineList();
-        loadStopList();
-    }, []);
+        const load = async () => {
+            const [linesResponse, stopsResponse] = await Promise.allSettled([
+                EgoQueryBusiness.GetActiveLines(),
+                EgoQueryBusiness.GetActiveStops()
+            ]);
+            if (!active) return;
+            setLineList(linesResponse.status === "fulfilled" && linesResponse.value?.type === Constants_ServiceResultType.Success ? linesResponse.value.data : []);
+            setStopList(stopsResponse.status === "fulfilled" && stopsResponse.value?.type === Constants_ServiceResultType.Success ? stopsResponse.value.data : []);
+        };
+        load();
 
+        return () => {
+            active = false;
+        };
+    }, [props.windowManager, ref]);
 
-    const [lineList, setLineList] = useState(null);
-    const loadLineList = async () => {
+    const setQueryField = (field, value) => setQuery(current => ({ ...current, [field]: value }));
 
-        const response = await EgoQueryBusiness.GetActiveLines();
-        if (response.type == Constants_ServiceResultType.Success) {
-            setLineList(response.data);
-        }
-    }
-
-
-    const [stopList, setStopList] = useState(null);
-    const loadStopList = async () => {
-
-        const response = await EgoQueryBusiness.GetActiveStops();
-        if (response.type == Constants_ServiceResultType.Success) {
-            setStopList(response.data);
-        }
-    }
-
-
-
-
-    const defaultQuery = { name: null, districtId: null, nbhoodId: null, showMapSelect: false, showNearby: false };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery(query => {
-            return { ...query, [_field]: _value }
-        })
-    }
-
-    return (<>
-        <div className="common-query-window"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
+    return (
+        <div className="common-query-window" style={{ visibility: props.windowManager.IsVisible(props.id) ? "visible" : "hidden" }}>
             <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src={windowLogo}></img>
+                <img className="common-query-window-header-icon" src={windowLogo} alt="" aria-hidden="true" />
                 <span>{windowTitle}</span>
-                <CommonQueryWindowTools
-                    ref={commonToolsComponentRef}
-                    windowManager={props.windowManager}
-                    windowId={props.id}
-                    setQueryField={setQueryField}
-                    query={query}
-                    showNearbySearch={false}
-                    showMapSelect={false} />
-
+                <CommonQueryWindowTools ref={commonToolsComponentRef} windowManager={props.windowManager} windowId={props.id} setQueryField={setQueryField} query={query} showNearbySearch={false} showMapSelect={false} />
             </div>
-            <div className={"common-query-window-body " + (props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : "")}>
-
+            <div className={`common-query-window-body ${props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : ""}`}>
                 <Tabs defaultActiveKey="activeLines">
-                    <Tab title="Hatlar" key="activeLines" eventKey="activeLines">
-                        <EgoLinesQuery lines={lineList} showAll={false} />
-                    </Tab>
-
-                    <Tab title="Duraklar" key="activeStops" eventKey="activeStops">
-                        <EgoStopsQuery stops={stopList} showAll={false} />
-                    </Tab>
+                    <Tab title="Hatlar" eventKey="activeLines"><EgoLinesQuery lines={lineList} showAll={false} /></Tab>
+                    <Tab title="Duraklar" eventKey="activeStops"><EgoStopsQuery stops={stopList} showAll={false} /></Tab>
                 </Tabs>
             </div>
         </div>
-    </>);
+    );
 });
+
+EgoQueryWindow.displayName = "EgoQueryWindow";
