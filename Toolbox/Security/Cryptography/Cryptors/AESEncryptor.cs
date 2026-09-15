@@ -1,106 +1,90 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Toolbox.Security
 {
-    public class AESEncryptor : IEncryptDecrypt
+    /// <summary>
+    /// Legacy deterministic AES compatibility implementation.
+    /// Existing ciphertext remains readable; new security-sensitive features should use a modern
+    /// authenticated encryption format with a random nonce instead of this compatibility class.
+    /// </summary>
+    public sealed class AESEncryptor : IEncryptDecrypt
     {
-        private byte[] AES_Encrypt(byte[] bytesToBeEncrypted, byte[] passwordBytes)
+        private static readonly byte[] LegacySalt = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        private const int LegacyIterations = 1000;
+        private const int KeyBytes = 32;
+        private const int IvBytes = 16;
+
+        public string Encrypt(string plainText, string key)
         {
-            byte[] encryptedBytes = null;
+            if (plainText == null) throw new ArgumentNullException(nameof(plainText));
+            if (key == null) throw new ArgumentNullException(nameof(key));
 
-            // Set your salt here, change it to meet your flavor:
-            // The salt bytes must be at least 8 bytes.
-            byte[] saltBytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+            var plaintextBytes = Encoding.UTF8.GetBytes(plainText);
+            var passwordBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            DeriveLegacyKeyMaterial(passwordBytes, out var encryptionKey, out var iv);
 
-            using (MemoryStream ms = new MemoryStream())
+            using var aes = Aes.Create();
+            aes.KeySize = 256;
+            aes.BlockSize = 128;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Key = encryptionKey;
+            aes.IV = iv;
+
+            using var output = new MemoryStream();
+            using (var crypto = new CryptoStream(output, aes.CreateEncryptor(), CryptoStreamMode.Write))
             {
-                using (RijndaelManaged AES = new RijndaelManaged())
-                {
-                    AES.KeySize = 256;
-                    AES.BlockSize = 128;
-
-                    var key = new Rfc2898DeriveBytes(passwordBytes, saltBytes, 1000);
-                    AES.Key = key.GetBytes(AES.KeySize / 8);
-                    AES.IV = key.GetBytes(AES.BlockSize / 8);
-
-                    AES.Mode = CipherMode.CBC;
-
-                    using (var cs = new CryptoStream(ms, AES.CreateEncryptor(), CryptoStreamMode.Write))
-                    {
-                        cs.Write(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-                        cs.Close();
-                    }
-                    encryptedBytes = ms.ToArray();
-                }
+                crypto.Write(plaintextBytes, 0, plaintextBytes.Length);
+                crypto.FlushFinalBlock();
             }
 
-            return encryptedBytes;
+            return Convert.ToBase64String(output.ToArray());
         }
 
-        private byte[] AES_Decrypt(byte[] bytesToBeDecrypted, byte[] passwordBytes)
+        public string Decrypt(string encryptedText, string key)
         {
-            byte[] decryptedBytes = null;
+            if (encryptedText == null) throw new ArgumentNullException(nameof(encryptedText));
+            if (key == null) throw new ArgumentNullException(nameof(key));
 
-            // Set your salt here, change it to meet your flavor:
-            // The salt bytes must be at least 8 bytes.
-            byte[] saltBytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+            var ciphertextBytes = Convert.FromBase64String(encryptedText);
+            var passwordBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            DeriveLegacyKeyMaterial(passwordBytes, out var encryptionKey, out var iv);
 
-            using (MemoryStream ms = new MemoryStream())
+            using var aes = Aes.Create();
+            aes.KeySize = 256;
+            aes.BlockSize = 128;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Key = encryptionKey;
+            aes.IV = iv;
+
+            using var output = new MemoryStream();
+            using (var crypto = new CryptoStream(output, aes.CreateDecryptor(), CryptoStreamMode.Write))
             {
-                using (RijndaelManaged AES = new RijndaelManaged())
-                {
-                    AES.KeySize = 256;
-                    AES.BlockSize = 128;
-
-                    var key = new Rfc2898DeriveBytes(passwordBytes, saltBytes, 1000);
-                    AES.Key = key.GetBytes(AES.KeySize / 8);
-                    AES.IV = key.GetBytes(AES.BlockSize / 8);
-
-                    AES.Mode = CipherMode.CBC;
-
-                    using (var cs = new CryptoStream(ms, AES.CreateDecryptor(), CryptoStreamMode.Write))
-                    {
-                        cs.Write(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
-                        cs.Close();
-                    }
-                    decryptedBytes = ms.ToArray();
-                }
+                crypto.Write(ciphertextBytes, 0, ciphertextBytes.Length);
+                crypto.FlushFinalBlock();
             }
 
-            return decryptedBytes;
+            return Encoding.UTF8.GetString(output.ToArray());
         }
 
-        public string Encrypt(string PlainText, string key)
+        private static void DeriveLegacyKeyMaterial(byte[] passwordBytes, out byte[] key, out byte[] iv)
         {
-            // Get the bytes of the string
-            byte[] bytesToBeEncrypted = Encoding.UTF8.GetBytes(PlainText);
-            byte[] passwordBytes = Encoding.UTF8.GetBytes(key);
+            // Rfc2898DeriveBytes(byte[], byte[], int) used HMAC-SHA1. Deriving one contiguous block
+            // and splitting it reproduces the historical sequential GetBytes(32), GetBytes(16) calls.
+            var keyMaterial = Rfc2898DeriveBytes.Pbkdf2(
+                passwordBytes,
+                LegacySalt,
+                LegacyIterations,
+                HashAlgorithmName.SHA1,
+                KeyBytes + IvBytes);
 
-            // Hash the password with SHA256
-            passwordBytes = SHA256.Create().ComputeHash(passwordBytes);
-
-            byte[] bytesEncrypted = AES_Encrypt(bytesToBeEncrypted, passwordBytes);
-
-            string result = Convert.ToBase64String(bytesEncrypted);
-
-            return result;
-        }
-
-        public string Decrypt(string EncryptedText, string key)
-        {
-            // Get the bytes of the string
-            byte[] bytesToBeDecrypted = Convert.FromBase64String(EncryptedText);
-            byte[] passwordBytes = Encoding.UTF8.GetBytes(key);
-            passwordBytes = SHA256.Create().ComputeHash(passwordBytes);
-
-            byte[] bytesDecrypted = AES_Decrypt(bytesToBeDecrypted, passwordBytes);
-
-            string result = Encoding.UTF8.GetString(bytesDecrypted);
-
-            return result;
+            key = keyMaterial.AsSpan(0, KeyBytes).ToArray();
+            iv = keyMaterial.AsSpan(KeyBytes, IvBytes).ToArray();
+            CryptographicOperations.ZeroMemory(keyMaterial);
         }
     }
 }
