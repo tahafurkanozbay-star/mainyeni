@@ -1,6 +1,18 @@
 import { createLayerDescriptor, createLayerTree, flattenLayerTree, isScaleVisible, layerReducer, LAYER_STATUS, serializeLayerRuntime } from './layerRuntime';
 import { createViewState, fromShareableQuery, toShareableQuery, updateCamera, updateSelection } from './viewState';
 import { inferServiceType, isDisallowedServiceType, sanitizeService } from './serviceCatalog';
+import { create2DLayer, create3DLayer } from './layerFactory';
+
+jest.mock('esri-loader', () => ({
+  loadModules: jest.fn((modules) => Promise.resolve(modules.map((name) => {
+    if (name === 'esri/layers/FeatureLayer') return class FeatureLayer { constructor(options) { Object.assign(this, options); this.type = 'feature'; } };
+    if (name === 'esri/layers/MapImageLayer') return class MapImageLayer { constructor(options) { Object.assign(this, options); } };
+    if (name === 'esri/layers/VectorTileLayer') return class VectorTileLayer { constructor(options) { Object.assign(this, options); } };
+    if (name === 'esri/layers/ImageryLayer') return class ImageryLayer { constructor(options) { Object.assign(this, options); } };
+    if (name === 'esri/layers/SceneLayer') return class SceneLayer { constructor(options) { Object.assign(this, options); } };
+    return class Module {};
+  })),
+}));
 
 describe('GIS runtime regression contracts', () => {
   test('keeps nested layer tree deterministic', () => {
@@ -56,5 +68,23 @@ describe('GIS runtime regression contracts', () => {
     expect(isDisallowedServiceType('WFS')).toBe(true);
     expect(inferServiceType({ url: 'https://example.test/arcgis/rest/services/parks/MapServer/0' })).toBe('MapServer');
     expect(() => sanitizeService({ id: 'wms', type: 'WMS', url: 'https://example.test/service' })).toThrow();
+  });
+
+  test('targets the real FeatureServer sublayer in both 2D and 3D factories', async () => {
+    const service = { id: 'parks', type: 'FeatureServer', url: 'https://gis.example.test/arcgis/rest/services/parks/FeatureServer', sublayerId: 0 };
+    const layer2d = await create2DLayer(service);
+    const layer3d = await create3DLayer(service);
+    expect(layer2d.url).toBe('https://gis.example.test/arcgis/rest/services/parks/FeatureServer/0');
+    expect(layer3d.url).toBe('https://gis.example.test/arcgis/rest/services/parks/FeatureServer/0');
+  });
+
+  test('does not duplicate an already-qualified FeatureServer URL', async () => {
+    const layer = await create2DLayer({
+      id: 'parks-0',
+      type: 'FeatureServer',
+      url: 'https://gis.example.test/arcgis/rest/services/parks/FeatureServer/0',
+      sublayerId: 0,
+    });
+    expect(layer.url).toBe('https://gis.example.test/arcgis/rest/services/parks/FeatureServer/0');
   });
 });
