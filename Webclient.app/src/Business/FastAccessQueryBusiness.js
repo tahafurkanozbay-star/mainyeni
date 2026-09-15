@@ -6,45 +6,64 @@ import { IsNull } from "../Toolbox/ObjectHelper";
 import { TextHelper } from "../Toolbox/TextHelper";
 import { CommonBusiness } from "./CommonBusiness";
 
-const escapeSqlLiteral = value => String(value ?? "").replace(/'/g, "''");
+const escapeSqlLiteral = (value) => String(value ?? "").replace(/'/g, "''");
+
+const toFiniteNumber = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+};
+
+const buildNameFilter = (name) => {
+    if (IsNull(name)) return null;
+
+    const normalized = escapeSqlLiteral(TextHelper.TurkishToUpper(String(name).trim()));
+    if (!normalized) return null;
+
+    const ascii = escapeSqlLiteral(TextHelper.RemoveTurkishChars(normalized));
+    return `(UPPER(adi) LIKE '%${ascii}%' OR UPPER(adi) LIKE '%${normalized}%')`;
+};
 
 export const FastAccessQueryBusiness = {
-    QueryFastAccessService: async (_queryServiceTitle, _query, _returnGeometry) => {
-        const queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", _queryServiceTitle);
-        if (queryService == null) {
+    QueryFastAccessService: async (_queryServiceTitle, _query = {}, _returnGeometry = false) => {
+        const queryService = ArrayHelper.Find(
+            MapManager.GetConfigurationServices(),
+            "title",
+            _queryServiceTitle
+        );
+
+        if (queryService === null || queryService === undefined) {
             return Promise.reject({
                 type: Constants_ServiceResultType.Error,
-                message: "Servis bulunamadı (" + _queryServiceTitle + ")"
+                message: `Servis bulunamadı (${_queryServiceTitle})`
             });
         }
 
         const options = {
             url: CommonBusiness.GenerateUrl(queryService),
-            returnGeometry: _returnGeometry ?? false,
+            returnGeometry: Boolean(_returnGeometry),
             orderByFields: ["adi"],
             outFields: ["*"]
         };
 
-        let where = "1=1";
-        if (_query != null) {
-            if (!IsNull(_query.ObjectId)) {
-                const objectId = Number(_query.ObjectId);
-                if (Number.isFinite(objectId)) where += " AND ObjectId =" + objectId;
-            }
-
-            if (!IsNull(_query.name)) {
-                const normalizedName = escapeSqlLiteral(TextHelper.RemoveTurkishChars(TextHelper.TurkishToUpper(_query.name)));
-                const turkishName = escapeSqlLiteral(TextHelper.TurkishToUpper(_query.name));
-                where += " AND (UPPER(adi) LIKE '%" + normalizedName + "%' OR UPPER(adi) LIKE '%" + turkishName + "%')";
-            }
+        const predicates = ["1=1"];
+        const objectId = toFiniteNumber(_query?.ObjectId);
+        if (objectId !== null) {
+            predicates.push(`ObjectId = ${objectId}`);
         }
 
-        options.where = where;
+        const nameFilter = buildNameFilter(_query?.name);
+        if (nameFilter) {
+            predicates.push(nameFilter);
+        }
+
+        options.where = predicates.join(" AND ");
+
         if (_query?.showNearby) {
+            const bufferDistance = Math.max(0, toFiniteNumber(_query.bufferDistance) ?? 0);
             options.geometry = _query.userLocation;
-            options.distance = Number(_query.bufferDistance || 0) * 100;
-            options.units = 'meters';
-            options.spatialRelationship = 'intersects';
+            options.distance = bufferDistance * 100;
+            options.units = "meters";
+            options.spatialRelationship = "intersects";
             return GisQueryHelper.ExecuteSpatialQuery(options);
         }
 
