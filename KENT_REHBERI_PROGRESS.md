@@ -63,12 +63,12 @@
 ## GIS Engine Deep Performance Tur — 2026-09-15
 - Branch: `agent/gis-engine-perf-2026-09-15`
 - PR: `#5` — `feat(gis): deepen 2d 3d spatial runtime`
-- İlk head: `61f3c37a6d36151ad76853264a525a2d7497a959`; progress/son düzeltmeler sonrası head: `f6f3f7852ddc819dc3ce32d7eca97a5648e460e3`.
-- PR #5 bu kayıt sırasında açık, merge edilmemiş ve GitHub tarafından `mergeable=false` raporlanıyor.
+- İlk head: `61f3c37a6d36151ad76853264a525a2d7497a959`; progress/son düzeltmeler sonrası önceki head `f6f3f7852ddc819dc3ce32d7eca97a5648e460e3` ve daha sonra `722f793d...` test düzeltmesi işlendi.
+- Önceki doğrulamada PR #5 açık, merge edilmemiş ve GitHub tarafından `mergeable=false` raporlanıyordu.
 - Gerçek servis fixture'ı `_docs/configservices.csv`: Ankara planaski `mobilServis/adresSorgu/MapServer/*`, `poiCluster/MapServer/*`, `afetCluster/MapServer/0`; ABB `poi/MapServer/*`, `etkinlik/MapServer/*`, `kultur/MapServer/*`; GeometryServer bulundu.
 - Public servis DTO'su gerçek URL yerine şifrelenmiş `Eg` proxy kimliği döndürüyor.
 - 2D ana giriş: `MapComponent.js` + ArcGIS `MapView`/`esri-loader`; sorgu: `GisQueryHelper`; proxy/layer creation: `CommonBusiness`; ortak state: `MapManager`.
-- `ParklarQueryWindow` gibi akışlarda `map.removeAll()` tespit edildi; operasyonel katman kaybı riski nedeniyle sonraki entegrasyon işidir.
+- `ParklarQueryWindow` içinde sorgu katmanı oluşturulurken `map.removeAll()` bulundu; operasyonel katman kaybı riski gerçek kod üzerinden doğrulandı.
 - Gerçek SceneView/SceneServer entrypoint bulunmadı; sahte 3D endpoint eklenmedi.
 
 ### Yapılanlar
@@ -82,7 +82,7 @@
 - `sceneRuntime.js`: ArcGIS SceneView runtime, picking, camera/selection sync, bookmarks ve measurement contract; implicit remote basemap/ground çağrısı yok. Picking ScreenPoint düzeltildi.
 - `viewState.js`: 2D↔3D ortak camera/selection/time/basemap state, shareable URL query ve immutable bridge.
 - `runtimeRegression.test.js`, `iconRegistry.test.js`: layer tree/lifecycle/scale/share-state/service-type/icon regression coverage.
-- `Api.User/Controllers/Extensions/Gis/GisProxyController.cs`: proxy hedef/method doğrulama, daha kontrollü hata/response davranışı ve basemap servis resolution bug fix. Not: bu dosyada kapsamlı rewrite yapıldı; sonraki review'da mevcut çalışan davranışla satır-satır karşılaştırılmalı.
+- `Api.User/Controllers/Extensions/Gis/GisProxyController.cs`: proxy hedef/method doğrulama, daha kontrollü hata/response davranışı ve basemap servis resolution bug fix.
 - `Webclient.app/src/gis-engine/README.md`: engine sınırları belgelendi.
 
 ### 2D
@@ -93,7 +93,8 @@
 - Transfer limit ve büyük sonuçlar için bounded result policy.
 - Point FeatureLayer için cluster optimization.
 - URL ile paylaşılabilir 2D/3D durum sözleşmesi.
-- Mevcut `CommonBusiness.CreateLayer` içindeki legacy WMS desteği kaldırılmadı; bu turda yeni WMS/WFS entegrasyonu yok.
+- `ParklarQueryWindow` düzeltildi: geçici park query layer'ını değiştirirken `map.removeAll()` kaldırıldı; yalnızca önceki sorgu katmanı kaldırılıyor, base/operational layers korunuyor.
+- FeatureServer sublayer factory düzeltildi: `FeatureServer` kök URL + `sublayerId` gerçek `/FeatureServer/{id}` URL'sine çevriliyor; zaten `/FeatureServer/{id}` olan URL tekrar eklenmiyor.
 
 ### 3D
 - Mevcut ArcGIS/esri-loader mimarisinden ayrılmadan SceneView extension runtime.
@@ -108,6 +109,7 @@
 - Mevcut `spatialEngine.js` ile buffer, nearest, proximity, spatial relation, projection ve time extent/time slider sözleşmesi korunuyor.
 - Geocoding için yeni üçüncü taraf endpoint eklenmedi; mevcut backend Search/Address contract'ına sonraki turda bağlanmalı.
 - Raster NDVI/EVI için varsayımsal servis eklenmedi; gerçek repository raster kaynağı doğrulanınca adapter eklenebilir.
+- `executeFeatureCount()` düzeltildi: artık `resultRecordCount: 1` ile yanlışlıkla en fazla 1 döndürmek yerine ArcGIS `QueryTask.executeForCount()` kullanıyor; eski runtime fallback'i bounded pagination ile gerçek toplamı hesaplıyor.
 
 ### İkon
 - Gerçek repository asset path'leri ile ortak registry oluşturuldu.
@@ -122,27 +124,36 @@
 - `.gissrv.org` yalnızca mevcut server-side alias mekanizması olarak kabul ediliyor.
 - TTL cache + in-flight dedupe + AbortSignal race + module promise cache ile tekrar ağ/başlatma maliyeti azaltıldı.
 - Browser Network panelinden veri gizleme varsayımı yapılmıyor; auth/server-side least privilege/data minimization esas.
+- Proxy rewrite'ında HTTP method, scheme ve hedef doğrulaması bulunuyor; bilinmeyen methodlar 405, upstream exception'lar 502 olarak dönüyor.
 
 ### Test / CI
 - `.github/workflows/webclient-quality.yml`: Node 18 + `npm ci` + optional lint/typecheck + Jest + production build.
-- GitHub Actions run `34955127344`, head `61f3c37...`, bu kayıt içinde hâlâ `queued`; job `104335237625` da `queued`. Bu nedenle test/build sonucu başarı diye raporlanmıyor.
-- `acbae...` progress commit'i workflow path-filter nedeniyle yeni run oluşturmadı; `f6f3...` SceneView düzeltmesinden sonra yeni push run'ı ayrıca doğrulanmalı.
-- Lokal repo checkout'ta Node/npm çalıştırma bu connector oturumunda mümkün olmadı.
+- `eda5e0f...` sonrası yeni CI run `34958261867` açıldı; `eda5e0f...` ile park lifecycle düzeltmesi doğrulama kuyruğuna girdi.
+- `9bde8ae...` sonrası CI run `34958302359` açıldı ve checkout/setup Node adımları tamamlandı; en son gözlemde Install adımı çalışıyordu.
+- `95dfce...`, `248930...`, `200b097...` sırasıyla FeatureServer, real-count runtime ve regression test geçişlerini branch'a ekledi.
+- Lokal repo checkout'ta Node/npm çalıştırma bu connector oturumunda mümkün değil; test/build sonuçları GitHub Actions üzerinden doğrulanmalı.
 
 ### Merge / release
 - PR #5 açık, base `main`, head branch `agent/gis-engine-perf-2026-09-15`.
-- Son doğrulamada PR `mergeable=false`, `merged=false`.
+- Head commit bu kaydın hazırlanmasından önce `722f793d...`, ardından park/layer/count/test düzeltmeleri ile ilerledi; güncel head son yazma işleminden sonra `200b097aa2b9e3d90c9221fdd230e1f4d329e561` olarak oluştu.
 - CI tamamlanmadan merge yapılmadı.
 
+### Bu turda çözülen yüksek etkili sorunlar
+1. `map.removeAll()` nedeniyle base/operational layer kaybı riski.
+2. FeatureServer sublayer factory'de gerçek `/FeatureServer/{id}` URL'sinin üretilememesi.
+3. Feature count API'sinin pagination yerine `resultRecordCount: 1` ile fiilen 0/1 aralığına düşmesi.
+4. Bu üç alan için regression kapsamı genişletildi.
+
 ### Sonraki ekip için net görevler
-1. CI run sonucunu al; fail ise gerçek job log'una göre düzelt, testleri yeniden çalıştır.
-2. `GisProxyController.cs` rewrite'ını önceki çalışan sürümle satır-satır karşılaştır; mümkünse yalnızca basemap bug fix + güvenli minimal validation bırak.
-3. `MapComponent.js` ve gerçek LayerList/Identify/Measurement/popup/result-table akışlarını shared layer/query/icon runtime'a kontrollü bağla.
-4. `map.removeAll()` kullanan query ekranlarını mevcut operational layer registry'yi koruyacak şekilde değiştir.
-5. `iconPresentation.js`i merkezi result/table ve gerçek 2D marker üreticisine bağla; 3D renderer geldiğinde aynı registry'yi tüket.
-6. Gerçek 3D server-managed configuration yoksa sahte terrain/3DTiles/GLB endpointi ekleme.
-7. PR #5 mergeability + CI başarı sonrası merge et; merge SHA ve `main` head'ini tekrar doğrula.
-8. Bir sonraki turda gerçek browser GIS smoke/regression yapılmalı: basemap, layer toggle, query, identify/popup, measurement, 2D↔3D state, large point cluster ve network request sayısı.
+1. En son CI run'ı tamamlanınca job log/step sonuçlarını gerçek çıktıyla doğrula; fail varsa aynı turda düzelt.
+2. `GisProxyController.cs` rewrite'ını önceki çalışan sürümle satır-satır daha da karşılaştır; gereksiz farklılık varsa minimal patch'e indir.
+3. `MapComponent.js` ile gerçek LayerList/Identify/Measurement/popup/result-table akışlarını shared layer/query/icon runtime'a kontrollü bağla.
+4. Repository içinde `map.removeAll()` kullanan diğer tüm query ekranlarını tarayıp aynı lifecycle riskini kapat.
+5. `iconPresentation.js`i gerçek merkezi table/list result ve mevcut 2D marker üreticilerine kontrollü bağla.
+6. Geocoding/Search/Address akışında gerçek backend contract'ını doğrula ve gereksiz doğrudan üçüncü taraf browser çağrılarını kaldır.
+7. Gerçek 3D server-managed configuration yoksa sahte terrain/3DTiles/GLB endpointi ekleme; mevcut SceneView extension'ı gerçek fixture ile ancak doğrulama sonrası aktive et.
+8. PR #5 mergeability + CI başarı sonrası merge durumunu tekrar doğrula; merge SHA ve `main` head'ini kayda geçir.
+9. Bir sonraki turda gerçek browser GIS smoke/regression yapılmalı: basemap, layer toggle, query, identify/popup, measurement, 2D↔3D state, large point cluster ve network request sayısı.
 
 ## Kurallar
 - Çalışan davranışlar korunur; WMS/WFS eklenmez; gerçek servis ve response şeması incelenmeden endpoint varsayılmaz.
