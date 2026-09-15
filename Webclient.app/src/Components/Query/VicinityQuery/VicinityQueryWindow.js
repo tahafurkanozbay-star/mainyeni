@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { loadModules } from "esri-loader";
 import { Accordion, Button, Form } from "react-bootstrap";
 import { BiLayer, BiSearch } from "react-icons/bi";
@@ -37,16 +37,16 @@ export const VicinityQueryWindow = React.forwardRef((props, ref) => {
     const selectedGraphicRef = useRef(null);
     const requestIdRef = useRef(0);
 
-    const removeGraphic = graphicRef => {
+    const removeGraphic = useCallback(graphicRef => {
         if (!graphicRef.current) return;
         MapManager.RemoveGraphics(graphicRef.current);
         graphicRef.current = null;
-    };
+    }, []);
 
-    const clearOwnedGraphics = () => {
+    const clearOwnedGraphics = useCallback(() => {
         removeGraphic(bufferGraphicRef);
         removeGraphic(selectedGraphicRef);
-    };
+    }, [removeGraphic]);
 
     const resetWindow = () => {
         requestIdRef.current += 1;
@@ -116,7 +116,7 @@ export const VicinityQueryWindow = React.forwardRef((props, ref) => {
             requestIdRef.current += 1;
             clearOwnedGraphics();
         };
-    }, [props.windowManager, ref]);
+    }, [clearOwnedGraphics, props.windowManager, ref]);
 
     const bufferDistanceChange = event => {
         const value = Number.parseInt(event?.target?.value ?? DEFAULT_BUFFER_DISTANCE, 10);
