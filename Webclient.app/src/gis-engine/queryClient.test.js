@@ -4,7 +4,7 @@ const mockExecuteForCount = jest.fn(() => Promise.resolve(37));
 const mockExecute = jest.fn(() => Promise.resolve({ features: new Array(37).fill({}), exceededTransferLimit: false }));
 
 jest.mock('esri-loader', () => ({
-  loadModules: jest.fn((modules) => Promise.resolve(modules.map((name) => {
+  loadModules: (modules) => Promise.resolve(modules.map((name) => {
     if (name === 'esri/tasks/QueryTask') {
       return class QueryTask {
         constructor(options) { Object.assign(this, options); }
@@ -14,11 +14,11 @@ jest.mock('esri-loader', () => ({
     }
     if (name === 'esri/tasks/support/Query') return class Query { };
     return class Module { };
-  }))),
+  })),
 }));
 
 jest.mock('../Business/CommonBusiness', () => ({
-  CommonBusiness: { GenerateUrl: jest.fn((service) => service.url) },
+  CommonBusiness: { GenerateUrl: jest.fn((service) => typeof service === 'string' ? service : service.url) },
 }));
 
 jest.mock('./networkPolicy', () => ({
