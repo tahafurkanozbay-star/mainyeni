@@ -18,6 +18,12 @@ const applyCommon = (layer, service) => {
   return layer;
 };
 
+const withFeatureServerSublayer = (url, sublayerId) => {
+  if (!Number.isInteger(sublayerId)) return url;
+  if (/\/FeatureServer\/\d+$/i.test(url)) return url;
+  return `${url}/FeatureServer/${sublayerId}`;
+};
+
 export const create2DLayer = async (service) => {
   const safe = sanitizeService(service);
   switch (inferServiceType(safe)) {
@@ -27,9 +33,10 @@ export const create2DLayer = async (service) => {
     }
     case 'FeatureServer': {
       const FeatureLayer = await load('esri/layers/FeatureLayer');
-      const options = { url: safe.url };
-      if (Number.isInteger(safe.sublayerId)) options.layerId = safe.sublayerId;
-      return applyCommon(new FeatureLayer(options), safe);
+      const url = /\/FeatureServer\/\d+$/i.test(safe.url)
+        ? safe.url
+        : withFeatureServerSublayer(safe.url, safe.sublayerId);
+      return applyCommon(new FeatureLayer({ url }), safe);
     }
     case 'VectorTileServer': {
       const VectorTileLayer = await load('esri/layers/VectorTileLayer');
@@ -57,7 +64,10 @@ export const create3DLayer = async (service) => {
     }
     case 'FeatureServer': {
       const FeatureLayer = await load('esri/layers/FeatureLayer');
-      return applyCommon(new FeatureLayer({ url: safe.url }), safe);
+      const url = /\/FeatureServer\/\d+$/i.test(safe.url)
+        ? safe.url
+        : withFeatureServerSublayer(safe.url, safe.sublayerId);
+      return applyCommon(new FeatureLayer({ url }), safe);
     }
     case 'MapServer': {
       const MapImageLayer = await load('esri/layers/MapImageLayer');
