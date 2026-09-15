@@ -8,16 +8,7 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageReference Include="RestSharp" Version="108.0.3" />
-    <PackageReference Include="System.Reflection.Emit" Version="4.7.0" />
+    <PackageReference Include="RestSharp" Version="114.0.0" />
     <PackageReference Include="Tesseract" Version="5.2.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.ServiceModel.Duplex" Version="4.10.3" />
-    <PackageReference Include="System.ServiceModel.Http" Version="4.10.3" />
-    <PackageReference Include="System.ServiceModel.NetTcp" Version="4.10.3" />
-    <PackageReference Include="System.ServiceModel.Security" Version="4.10.3" />
-    <PackageReference Include="System.ServiceModel.Federation" Version="4.10.3" />
   </ItemGroup>
 </Project>
