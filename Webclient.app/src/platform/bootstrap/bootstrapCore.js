@@ -194,6 +194,14 @@ export const normalizeConfigurationServices = (result) => {
   return services;
 };
 
+const containsControlCharacter = (value) => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+};
+
 export const normalizeProxyUrl = (value, options = {}) => {
   const { allowEmpty = false, serviceIndex = null } = options;
 
@@ -207,7 +215,7 @@ export const normalizeProxyUrl = (value, options = {}) => {
   }
 
   const rawUrl = String(value);
-  if (/[\u0000-\u001F\u007F]/.test(rawUrl)) {
+  if (containsControlCharacter(rawUrl)) {
     throw new AppError('CBS servis adresi geçersiz karakter içeriyor.', {
       code: BootstrapErrorCode.SERVICE_URL_INVALID,
       retryable: false,
