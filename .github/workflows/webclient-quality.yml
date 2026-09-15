@@ -13,29 +13,46 @@ on:
       - 'Webclient.app/**'
       - '.github/workflows/webclient-quality.yml'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: webclient-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: Webclient.app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 18
+          node-version: 22
           cache: npm
           cache-dependency-path: Webclient.app/package-lock.json
-      - name: Install
+
+      - name: Install from lockfile
         run: npm ci
-      - name: Lint (when configured)
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint when configured
         run: npm run lint --if-present
-      - name: Typecheck (when configured)
+
+      - name: Typecheck when configured
         run: npm run typecheck --if-present
+
       - name: Test
         run: npm test -- --watchAll=false --runInBand
+
       - name: Production build
         env:
           CI: true

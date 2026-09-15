@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using System.Net;
-using System.Text.Json;
-using System.Threading.Tasks;
 using Api.Core.Base;
 using Api.User.Filters;
 using Business.Core.Context;
@@ -11,495 +6,354 @@ using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Configuration;
 using RestSharp;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace CityWorks.UserApi.Gis
 {
-    /// <summary>
-    /// Server-owned proxy for configured ArcGIS REST services.
-    /// The browser receives an encrypted service identity (Eg) instead of the
-    /// configured upstream URL and all target resolution is repeated here.
-    /// </summary>
     public class GisProxyController : _BaseUserApiController
     {
-        private const string VirtualGisDomain = ".gissrv.org";
-        private const int TokenExpirationMinutes = 30;
+        private const string ServiceHostSuffix = ".gissrv.org";
+        private const int RequestTimeoutMs = 15_000;
+        private const int TokenLifetimeMinutes = 30;
+        private const long MaxRequestBodyBytes = 5 * 1024 * 1024;
+        private const int MaxForwardedQueryLength = 16 * 1024;
 
         private readonly GisConfigServiceOperations configServiceOperations;
         private readonly GisLayerOperations gisLayerOperations;
         private readonly GisBasemapLayerOperations gisBasemapLayerOperations;
         private readonly IMemoryCache memoryCache;
 
-        public GisProxyController(
-            IConfiguration configuration,
-            IMemoryCache memoryCache,
-            BusinessContext context)
+        public GisProxyController(IMemoryCache memoryCache, BusinessContext context)
         {
-            this.configuration = configuration;
-            this.dbContext = context;
-            this.configServiceOperations = new GisConfigServiceOperations(context);
-            this.gisLayerOperations = new GisLayerOperations(context);
-            this.gisBasemapLayerOperations = new GisBasemapLayerOperations(context);
-            this.memoryCache = memoryCache;
+            this.memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+            configServiceOperations = new GisConfigServiceOperations(context);
+            gisLayerOperations = new GisLayerOperations(context);
+            gisBasemapLayerOperations = new GisBasemapLayerOperations(context);
         }
 
-        /// <summary>
-        /// Proxies GET/POST requests only to GIS services already present in
-        /// server-side configuration. Arbitrary browser supplied hosts are not
-        /// accepted as proxy targets.
-        /// </summary>
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/Proxy")]
         [HttpGet]
         [HttpPost]
         public async Task<IActionResult> Process()
         {
-            if (!HttpMethods.IsGet(HttpContext.Request.Method) &&
-                !HttpMethods.IsPost(HttpContext.Request.Method))
-            {
-                return StatusCode(StatusCodes.Status405MethodNotAllowed);
-            }
-
             try
             {
-                if (!TryReadProxyTarget(out var target))
+                if (!HttpContext.Request.QueryString.HasValue)
                 {
-                    return BadRequest("Invalid GIS proxy target.");
+                    return BadRequest("Proxy target is required.");
                 }
 
-                var resolved = ResolveConfiguredService(target.BaseUrl);
-                if (resolved.Service == null)
+                if (HttpContext.Request.ContentLength.GetValueOrDefault() > MaxRequestBodyBytes)
+                {
+                    return StatusCode(StatusCodes.Status413PayloadTooLarge, "Proxy request body is too large.");
+                }
+
+                if (!TryParsePublicTarget(
+                        HttpContext.Request.QueryString.Value,
+                        out var publicTarget,
+                        out var serviceId,
+                        out var forwardedQuery))
+                {
+                    return BadRequest("Invalid proxy target.");
+                }
+
+                if (forwardedQuery.Length > MaxForwardedQueryLength)
+                {
+                    return BadRequest("Proxy query is too large.");
+                }
+
+                // The browser can address only an opaque service id that resolves to a server-owned
+                // database record. There is deliberately no raw URL lookup/bypass fallback.
+                var service = GetService(serviceId);
+                if (service == null)
                 {
                     return NotFound();
                 }
 
-                if (!TryBuildRequestUrl(target, resolved, out var requestUrl))
+                var upstreamUri = BuildUpstreamUri(service.Url, publicTarget, forwardedQuery);
+                if (upstreamUri == null)
                 {
-                    return BadRequest("Invalid GIS proxy request.");
+                    return BadRequest("Configured GIS service URL is invalid.");
                 }
 
-                if (resolved.Service.RequiresSC)
+                if (service.RequiresSC)
                 {
-                    var token = await GetServiceToken(resolved.Service);
-                    if (String.IsNullOrWhiteSpace(token))
+                    var token = await GetServiceToken(service);
+                    if (string.IsNullOrWhiteSpace(token))
                     {
-                        return StatusCode(
-                            StatusCodes.Status502BadGateway,
-                            "GIS service token could not be acquired.");
+                        return StatusCode(StatusCodes.Status502BadGateway, "GIS service authentication failed.");
                     }
-                    requestUrl = AppendQueryParameter(requestUrl, "token", token);
+                    upstreamUri = AppendQueryParameter(upstreamUri, "token", token);
                 }
 
-                return await ForwardRequest(requestUrl);
+                var client = new RestClient(new RestClientOptions
+                {
+                    MaxTimeout = RequestTimeoutMs
+                });
+                var request = new RestRequest(upstreamUri.ToString())
+                {
+                    Method = HttpContext.Request.Method == HttpMethods.Post ? Method.Post : Method.Get
+                };
+
+                if (!string.IsNullOrWhiteSpace(HttpContext.Request.Headers.Accept))
+                {
+                    request.AddHeader("Accept", HttpContext.Request.Headers.Accept.ToString());
+                }
+
+                if (request.Method == Method.Post)
+                {
+                    var body = await ReadBoundedBody();
+                    if (body == null)
+                    {
+                        return StatusCode(StatusCodes.Status413PayloadTooLarge, "Proxy request body is too large.");
+                    }
+
+                    var contentType = NormalizeContentType(HttpContext.Request.ContentType);
+                    request.AddParameter(contentType, body, ParameterType.RequestBody);
+                }
+
+                var response = await client.ExecuteAsync(request, HttpContext.RequestAborted);
+                if (response.ResponseStatus != ResponseStatus.Completed)
+                {
+                    return StatusCode(StatusCodes.Status502BadGateway, "GIS service request failed.");
+                }
+
+                var upstreamStatus = (int)response.StatusCode;
+                if (upstreamStatus < 200 || upstreamStatus >= 300)
+                {
+                    return StatusCode(
+                        upstreamStatus > 0 ? upstreamStatus : StatusCodes.Status502BadGateway,
+                        "GIS service request failed.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(response.ContentType) &&
+                    (response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+                     response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return File(response.RawBytes ?? Array.Empty<byte>(), response.ContentType);
+                }
+
+                var responseType = NormalizeResponseContentType(response.ContentType);
+                return Content(response.Content ?? string.Empty, responseType);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
             {
-                return StatusCode(499);
+                return new EmptyResult();
             }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
-                return StatusCode(
-                    StatusCodes.Status502BadGateway,
-                    "GIS proxy request failed.");
+                return StatusCode(StatusCodes.Status502BadGateway, "GIS service is temporarily unavailable.");
             }
         }
 
-        private bool TryReadProxyTarget(out ProxyTarget target)
+        private static bool TryParsePublicTarget(
+            string rawQueryString,
+            out Uri publicTarget,
+            out string serviceId,
+            out string forwardedQuery)
         {
-            target = null;
-            var raw = HttpContext.Request.QueryString.Value;
-            if (String.IsNullOrWhiteSpace(raw))
+            publicTarget = null;
+            serviceId = null;
+            forwardedQuery = string.Empty;
+
+            var raw = (rawQueryString ?? string.Empty).TrimStart('?').Trim();
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+
+            var querySeparator = raw.IndexOf('?');
+            var targetText = querySeparator >= 0 ? raw.Substring(0, querySeparator) : raw;
+            forwardedQuery = querySeparator >= 0 ? raw.Substring(querySeparator + 1) : string.Empty;
+
+            if (!Uri.TryCreate(targetText, UriKind.Absolute, out var target) ||
+                !string.Equals(target.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                !target.Host.EndsWith(ServiceHostSuffix, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            raw = raw.TrimStart('?').Trim();
-            if (String.IsNullOrWhiteSpace(raw))
+            var hostPrefix = target.Host
+                .Substring(0, target.Host.Length - ServiceHostSuffix.Length)
+                .TrimEnd('.');
+            if (string.IsNullOrWhiteSpace(hostPrefix) || hostPrefix.Contains('.'))
             {
                 return false;
             }
 
-            // ArcGIS JS proxy convention sends the upstream URL immediately
-            // after the proxy "?". Preserve the first '?' inside that URL as
-            // the beginning of the upstream query string.
-            var decoded = Uri.UnescapeDataString(raw);
-            var queryIndex = decoded.IndexOf('?');
-            var baseUrl = queryIndex >= 0 ? decoded.Substring(0, queryIndex) : decoded;
-            var upstreamQuery = queryIndex >= 0 && queryIndex + 1 < decoded.Length
-                ? decoded.Substring(queryIndex + 1)
-                : String.Empty;
-
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+            var decodedPath = Uri.UnescapeDataString(target.AbsolutePath);
+            if (decodedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == ".."))
             {
                 return false;
             }
 
-            if (!String.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
-                !String.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            target = new ProxyTarget
-            {
-                BaseUrl = uri.GetLeftPart(UriPartial.Path).TrimEnd('/'),
-                Query = upstreamQuery,
-                Uri = uri,
-            };
+            publicTarget = target;
+            serviceId = hostPrefix;
             return true;
         }
 
-        private ResolvedProxyService ResolveConfiguredService(string targetBaseUrl)
+        private static Uri BuildUpstreamUri(string configuredUrl, Uri publicTarget, string forwardedQuery)
         {
-            if (!Uri.TryCreate(targetBaseUrl, UriKind.Absolute, out var targetUri))
+            if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configured) ||
+                (configured.Scheme != Uri.UriSchemeHttps && configured.Scheme != Uri.UriSchemeHttp))
             {
-                return ResolvedProxyService.Empty;
+                return null;
             }
 
-            var host = targetUri.Host ?? String.Empty;
-            if (host.EndsWith(VirtualGisDomain, StringComparison.OrdinalIgnoreCase))
-            {
-                var encryptedGuid = host.Substring(0, host.Length - VirtualGisDomain.Length);
-                if (encryptedGuid.Contains('.'))
-                {
-                    return ResolvedProxyService.Empty;
-                }
+            var builder = new UriBuilder(configured);
+            var basePath = builder.Path.TrimEnd('/');
+            var suffixPath = publicTarget.AbsolutePath;
 
-                var service = GetService(encryptedGuid);
-                return service == null
-                    ? ResolvedProxyService.Empty
-                    : new ResolvedProxyService(service, true, targetUri.GetLeftPart(UriPartial.Authority));
+            // ArcGIS may append the layer id already present in a configured layer URL.
+            var baseLastSegment = basePath.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+            var suffixSegments = suffixPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (suffixSegments.Count > 0 &&
+                int.TryParse(baseLastSegment, out _) &&
+                string.Equals(baseLastSegment, suffixSegments[0], StringComparison.Ordinal))
+            {
+                suffixSegments.RemoveAt(0);
             }
 
-            // Backward compatibility for configured direct URLs. This does not
-            // create an open proxy: a database match is still mandatory.
-            var configuredService = GetServiceByUrl(targetBaseUrl);
-            return configuredService == null
-                ? ResolvedProxyService.Empty
-                : new ResolvedProxyService(configuredService, false, null);
+            builder.Path = suffixSegments.Count == 0
+                ? basePath
+                : basePath + "/" + string.Join('/', suffixSegments);
+
+            var existingQuery = builder.Query.TrimStart('?');
+            builder.Query = string.IsNullOrWhiteSpace(existingQuery)
+                ? forwardedQuery
+                : string.IsNullOrWhiteSpace(forwardedQuery)
+                    ? existingQuery
+                    : existingQuery + "&" + forwardedQuery;
+
+            return builder.Uri;
         }
 
-        private static bool TryBuildRequestUrl(
-            ProxyTarget target,
-            ResolvedProxyService resolved,
-            out string requestUrl)
+        private static Uri AppendQueryParameter(Uri uri, string name, string value)
         {
-            requestUrl = null;
-            var service = resolved.Service;
-            if (service == null || String.IsNullOrWhiteSpace(service.Url))
-            {
-                return false;
-            }
-
-            if (!Uri.TryCreate(service.Url.Trim(), UriKind.Absolute, out var configuredUri))
-            {
-                return false;
-            }
-
-            if (!String.Equals(configuredUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
-                !String.Equals(configuredUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            if (resolved.IsVirtualHost)
-            {
-                var virtualAuthority = resolved.VirtualAuthority;
-                if (String.IsNullOrWhiteSpace(virtualAuthority) ||
-                    !target.BaseUrl.StartsWith(virtualAuthority, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-
-                var suffix = target.BaseUrl.Substring(virtualAuthority.Length);
-                var configuredBase = service.Url.Trim().TrimEnd('/');
-
-                // Existing Eg URLs may be host-only aliases with operation path
-                // suffixes. Avoid duplicating the configured service path when
-                // the browser already carries it.
-                requestUrl = suffix.StartsWith(configuredUri.AbsolutePath, StringComparison.OrdinalIgnoreCase)
-                    ? configuredUri.GetLeftPart(UriPartial.Authority).TrimEnd('/') + suffix
-                    : configuredBase + suffix;
-            }
-            else
-            {
-                // Direct targets are accepted only after GetServiceByUrl found a
-                // configured service. Verify host equality before forwarding.
-                if (!String.Equals(target.Uri.Host, configuredUri.Host, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-                requestUrl = target.BaseUrl;
-            }
-
-            if (!String.IsNullOrWhiteSpace(target.Query))
-            {
-                requestUrl += "?" + target.Query.TrimStart('?');
-            }
-
-            return Uri.TryCreate(requestUrl, UriKind.Absolute, out _);
+            var builder = new UriBuilder(uri);
+            var existing = builder.Query.TrimStart('?');
+            var next = Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(value);
+            builder.Query = string.IsNullOrWhiteSpace(existing) ? next : existing + "&" + next;
+            return builder.Uri;
         }
 
-        private async Task<IActionResult> ForwardRequest(string requestUrl)
+        private async Task<string> ReadBoundedBody()
         {
-            var client = new RestClient(requestUrl);
-            var request = new RestRequest
+            using var reader = new StreamReader(HttpContext.Request.Body);
+            var body = await reader.ReadToEndAsync();
+            return System.Text.Encoding.UTF8.GetByteCount(body) <= MaxRequestBodyBytes ? body : null;
+        }
+
+        private static string NormalizeContentType(string contentType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType)) return "application/x-www-form-urlencoded";
+            var mediaType = contentType.Split(';')[0].Trim().ToLowerInvariant();
+            return mediaType switch
             {
-                Method = HttpMethods.IsPost(HttpContext.Request.Method)
-                    ? Method.Post
-                    : Method.Get,
+                "application/json" => "application/json",
+                "application/x-www-form-urlencoded" => "application/x-www-form-urlencoded",
+                "text/plain" => "text/plain",
+                _ => "application/octet-stream"
             };
-
-            CopyRequestHeader(request, "Accept");
-            CopyRequestHeader(request, "Accept-Charset");
-            CopyRequestHeader(request, "Content-Type");
-            CopyRequestHeader(request, "Pragma");
-
-            if (HttpMethods.IsPost(HttpContext.Request.Method))
-            {
-                using var reader = new StreamReader(HttpContext.Request.Body);
-                var body = await reader.ReadToEndAsync();
-                if (!String.IsNullOrEmpty(body))
-                {
-                    request.AddBody(body);
-                }
-            }
-
-            var response = await client.ExecuteAsync(
-                request,
-                HttpContext.RequestAborted);
-
-            var statusCode = response.StatusCode == 0
-                ? StatusCodes.Status502BadGateway
-                : (int)response.StatusCode;
-            HttpContext.Response.StatusCode = statusCode;
-
-            var contentType = String.IsNullOrWhiteSpace(response.ContentType)
-                ? "application/octet-stream"
-                : response.ContentType;
-
-            if (response.RawBytes != null && ShouldReturnBytes(contentType))
-            {
-                return File(response.RawBytes, contentType);
-            }
-
-            var textContentType = String.IsNullOrWhiteSpace(response.ContentType)
-                ? "application/json; charset=utf-8"
-                : response.ContentType;
-            return Content(response.Content ?? String.Empty, textContentType);
         }
 
-        private void CopyRequestHeader(RestRequest request, string headerName)
+        private static string NormalizeResponseContentType(string contentType)
         {
-            if (!HttpContext.Request.Headers.TryGetValue(headerName, out var value))
-            {
-                return;
-            }
-
-            var headerValue = value.ToString();
-            if (!String.IsNullOrWhiteSpace(headerValue))
-            {
-                request.AddHeader(headerName, headerValue);
-            }
+            if (string.IsNullOrWhiteSpace(contentType)) return "application/json; charset=utf-8";
+            return contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) ||
+                   contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
+                ? contentType
+                : "application/octet-stream";
         }
 
-        private static bool ShouldReturnBytes(string contentType)
+        private ProxyGisService GetService(string encryptedServiceId)
         {
-            return contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.StartsWith("application/vnd.", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.Contains("protobuf", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.Contains("pbf", StringComparison.OrdinalIgnoreCase);
+            try
+            {
+                var configService = configServiceOperations.GetByEncryptedGuid(encryptedServiceId).Data;
+                if (configService != null) return new ProxyGisService(configService);
+
+                var layer = gisLayerOperations.GetByEncryptedGuid(encryptedServiceId).Data;
+                if (layer != null) return new ProxyGisService(layer);
+
+                var basemap = gisBasemapLayerOperations.GetByEncryptedGuid(encryptedServiceId).Data;
+                if (basemap != null) return new ProxyGisService(basemap);
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                handleExceptionResult(ex);
+                return null;
+            }
         }
 
         private async Task<string> GetServiceToken(ProxyGisService service)
         {
-            if (service == null || !service.RequiresSC)
+            if (string.IsNullOrWhiteSpace(service.SCUserName) || string.IsNullOrWhiteSpace(service.SCPassword))
             {
-                return String.Empty;
+                return null;
             }
 
-            var cacheKey = $"gis-token:{service.Id}";
-            if (memoryCache.TryGetValue(cacheKey, out string cachedToken) &&
-                !String.IsNullOrWhiteSpace(cachedToken))
+            var cacheKey = $"gis-token:{service.Url}";
+            if (memoryCache.TryGetValue(cacheKey, out string cachedToken))
             {
                 return cachedToken;
             }
 
-            if (!Uri.TryCreate(service.Url, UriKind.Absolute, out var serviceUri))
+            if (!Uri.TryCreate(service.Url, UriKind.Absolute, out var serviceUri) ||
+                serviceUri.Scheme != Uri.UriSchemeHttps)
             {
-                return String.Empty;
+                // Never send upstream service credentials over clear-text HTTP.
+                return null;
             }
 
-            var tokenUrlPrefix = serviceUri.AbsolutePath.Contains("/webgis/", StringComparison.OrdinalIgnoreCase)
+            var tokenHostPrefix = service.Url.Contains("/webgis/", StringComparison.OrdinalIgnoreCase)
                 ? "webgis"
                 : "arcgis";
-            var tokenUrl = $"{serviceUri.Scheme}://{serviceUri.Host}/{tokenUrlPrefix}/tokens/generateToken";
-            var tokenClient = new RestClient(tokenUrl);
-            var tokenRequest = new RestRequest { Method = Method.Post };
-            tokenRequest.AddHeader("content-type", "application/x-www-form-urlencoded");
-            tokenRequest.AddParameter(
-                "application/x-www-form-urlencoded",
-                $"f=json&expiration={TokenExpirationMinutes}&username={Uri.EscapeDataString(service.SCUserName ?? String.Empty)}&password={Uri.EscapeDataString(service.SCPassword ?? String.Empty)}",
-                ParameterType.RequestBody);
+            var tokenUrl = $"{serviceUri.Scheme}://{serviceUri.Host}/{tokenHostPrefix}/tokens/generateToken";
 
-            var tokenResponse = await tokenClient.ExecuteAsync(
-                tokenRequest,
-                HttpContext.RequestAborted);
-            if (!tokenResponse.IsSuccessful || String.IsNullOrWhiteSpace(tokenResponse.Content))
+            var tokenClient = new RestClient(new RestClientOptions { MaxTimeout = RequestTimeoutMs });
+            var tokenRequest = new RestRequest(tokenUrl, Method.Post);
+            tokenRequest.AddParameter("f", "json");
+            tokenRequest.AddParameter("expiration", TokenLifetimeMinutes);
+            tokenRequest.AddParameter("username", service.SCUserName);
+            tokenRequest.AddParameter("password", service.SCPassword);
+
+            var response = await tokenClient.ExecuteAsync(tokenRequest, HttpContext.RequestAborted);
+            if (!response.IsSuccessful || string.IsNullOrWhiteSpace(response.Content))
             {
-                return String.Empty;
+                return null;
             }
 
-            var token = ExtractToken(tokenResponse.Content);
-            if (!String.IsNullOrWhiteSpace(token))
-            {
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(TokenExpirationMinutes - 1));
-                memoryCache.Set(cacheKey, token, cacheEntryOptions);
-            }
-            return token;
-        }
-
-        private static string ExtractToken(string content)
-        {
-            if (String.IsNullOrWhiteSpace(content))
-            {
-                return String.Empty;
-            }
-
+            string token;
             try
             {
-                using var document = JsonDocument.Parse(content);
-                if (document.RootElement.TryGetProperty("token", out var tokenElement))
-                {
-                    return tokenElement.GetString() ?? String.Empty;
-                }
-                return String.Empty;
+                using var document = JsonDocument.Parse(response.Content);
+                token = document.RootElement.TryGetProperty("token", out var tokenElement)
+                    ? tokenElement.GetString()
+                    : null;
             }
             catch (JsonException)
             {
-                // Preserve compatibility with token services that return the
-                // token as a plain string instead of ArcGIS JSON.
-                return content.Trim().Trim('"');
-            }
-        }
-
-        private static string AppendQueryParameter(string url, string key, string value)
-        {
-            var separator = url.Contains("?", StringComparison.Ordinal) ? "&" : "?";
-            return url + separator + Uri.EscapeDataString(key) + "=" + Uri.EscapeDataString(value);
-        }
-
-        private ProxyGisService GetService(string encryptedGuid)
-        {
-            if (String.IsNullOrWhiteSpace(encryptedGuid))
-            {
                 return null;
             }
 
-            try
-            {
-                var serviceResult = configServiceOperations.GetByEncryptedGuid(encryptedGuid);
-                if (serviceResult.Data != null)
-                {
-                    return new ProxyGisService(serviceResult.Data, false);
-                }
+            if (string.IsNullOrWhiteSpace(token)) return null;
 
-                var layerResult = gisLayerOperations.GetByEncryptedGuid(encryptedGuid);
-                if (layerResult.Data != null)
-                {
-                    return new ProxyGisService(layerResult.Data, false);
-                }
-
-                var basemapLayerResult = gisBasemapLayerOperations.GetByEncryptedGuid(encryptedGuid);
-                if (basemapLayerResult.Data != null)
-                {
-                    return new ProxyGisService(basemapLayerResult.Data, false);
-                }
-
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private ProxyGisService GetServiceByUrl(string url)
-        {
-            if (String.IsNullOrWhiteSpace(url))
-            {
-                return null;
-            }
-
-            try
-            {
-                var configService = configServiceOperations.GetServiceByUrl(url);
-                if (configService != null)
-                {
-                    return new ProxyGisService(configService, true);
-                }
-
-                var layerService = gisLayerOperations.GetLayerByUrl(url);
-                if (layerService != null)
-                {
-                    return new ProxyGisService(layerService, true);
-                }
-
-                var basemapLayer = gisBasemapLayerOperations.GetLayerByUrl(url);
-                if (basemapLayer != null)
-                {
-                    return new ProxyGisService(basemapLayer, true);
-                }
-            }
-            catch
-            {
-                return null;
-            }
-
-            return null;
-        }
-
-        private sealed class ProxyTarget
-        {
-            public string BaseUrl { get; set; }
-            public string Query { get; set; }
-            public Uri Uri { get; set; }
-        }
-
-        private sealed class ResolvedProxyService
-        {
-            public static readonly ResolvedProxyService Empty = new ResolvedProxyService(null, false, null);
-
-            public ResolvedProxyService(
-                ProxyGisService service,
-                bool isVirtualHost,
-                string virtualAuthority)
-            {
-                Service = service;
-                IsVirtualHost = isVirtualHost;
-                VirtualAuthority = virtualAuthority;
-            }
-
-            public ProxyGisService Service { get; }
-            public bool IsVirtualHost { get; }
-            public string VirtualAuthority { get; }
+            memoryCache.Set(cacheKey, token, TimeSpan.FromMinutes(TokenLifetimeMinutes - 2));
+            return token;
         }
     }
 
     public class ProxyGisService : _BaseGisService
     {
-        public ProxyGisService(_BaseGisService service, bool bypass)
+        public ProxyGisService(_BaseGisService service)
         {
-            if (service == null)
-            {
-                throw new ArgumentNullException(nameof(service));
-            }
-
-            Id = service.Id;
             Title = service.Title;
             Url = service.Url;
             RequiresSC = service.RequiresSC;
@@ -507,9 +361,6 @@ namespace CityWorks.UserApi.Gis
             SCPassword = service.SCPassword;
             Description = service.Description;
             AdditionalInfo = service.AdditionalInfo;
-            ByPassProxy = bypass;
         }
-
-        public bool ByPassProxy { get; set; }
     }
 }

@@ -1,102 +1,65 @@
-﻿using System;
-using System.Configuration;
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Toolbox.Security
 {
-    internal class MD5Encryptor : IEncryptDecrypt
+    /// <summary>
+    /// Legacy MD5 + TripleDES compatibility transform.
+    /// Retained only for historical data compatibility; do not use for new security-sensitive data.
+    /// </summary>
+    internal sealed class MD5Encryptor : IEncryptDecrypt
     {
-        private string Encrypt(string PlainText, string key, bool useHashing)
+        private static string TransformEncrypt(string plainText, string key, bool useHashing)
         {
-            byte[] keyArray;
-            byte[] toEncryptArray = UTF8Encoding.UTF8.GetBytes(PlainText);
+            if (plainText == null) throw new ArgumentNullException(nameof(plainText));
+            if (key == null) throw new ArgumentNullException(nameof(key));
 
-          
-            //System.Windows.Forms.MessageBox.Show(key);
-            //If hashing use get hashcode regards to your key
-            if (useHashing)
-            {
-                MD5CryptoServiceProvider hashmd5 = new MD5CryptoServiceProvider();
-                keyArray = hashmd5.ComputeHash(UTF8Encoding.UTF8.GetBytes(key));
-                //Always release the resources and flush data
-                // of the Cryptographic service provide. Best Practice
+            var input = Encoding.UTF8.GetBytes(plainText);
+            var keyBytes = BuildLegacyKey(key, useHashing);
 
-                hashmd5.Clear();
-            }
-            else
-                keyArray = UTF8Encoding.UTF8.GetBytes(key);
+            using var tripleDes = TripleDES.Create();
+            tripleDes.Key = keyBytes;
+            tripleDes.Mode = CipherMode.ECB;
+            tripleDes.Padding = PaddingMode.PKCS7;
 
-            TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
-            //set the secret key for the tripleDES algorithm
-            tdes.Key = keyArray;
-            //mode of operation. there are other 4 modes.
-            //We choose ECB(Electronic code Book)
-            tdes.Mode = CipherMode.ECB;
-            //padding mode(if any extra byte added)
-
-            tdes.Padding = PaddingMode.PKCS7;
-
-            ICryptoTransform cTransform = tdes.CreateEncryptor();
-            //transform the specified region of bytes array to resultArray
-            byte[] resultArray =
-              cTransform.TransformFinalBlock(toEncryptArray, 0,
-              toEncryptArray.Length);
-            //Release resources held by TripleDes Encryptor
-            tdes.Clear();
-            //Return the encrypted data into unreadable string format
-            return Convert.ToBase64String(resultArray, 0, resultArray.Length);
+            using var transform = tripleDes.CreateEncryptor();
+            var encrypted = transform.TransformFinalBlock(input, 0, input.Length);
+            return Convert.ToBase64String(encrypted);
         }
 
-        private string Decrypt(string EncryptedText, string key, bool useHashing)
+        private static string TransformDecrypt(string encryptedText, string key, bool useHashing)
         {
-            byte[] keyArray;
-            //get the byte code of the string
+            if (encryptedText == null) throw new ArgumentNullException(nameof(encryptedText));
+            if (key == null) throw new ArgumentNullException(nameof(key));
 
-            byte[] toEncryptArray = Convert.FromBase64String(EncryptedText);
+            var input = Convert.FromBase64String(encryptedText);
+            var keyBytes = BuildLegacyKey(key, useHashing);
 
-            if (useHashing)
-            {
-                //if hashing was used get the hash code with regards to your key
-                MD5CryptoServiceProvider hashmd5 = new MD5CryptoServiceProvider();
-                keyArray = hashmd5.ComputeHash(UTF8Encoding.UTF8.GetBytes(key));
-                //release any resource held by the MD5CryptoServiceProvider
+            using var tripleDes = TripleDES.Create();
+            tripleDes.Key = keyBytes;
+            tripleDes.Mode = CipherMode.ECB;
+            tripleDes.Padding = PaddingMode.PKCS7;
 
-                hashmd5.Clear();
-            }
-            else
-            {
-                //if hashing was not implemented get the byte code of the key
-                keyArray = UTF8Encoding.UTF8.GetBytes(key);
-            }
-
-            TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
-            //set the secret key for the tripleDES algorithm
-            tdes.Key = keyArray;
-            //mode of operation. there are other 4 modes.
-            //We choose ECB(Electronic code Book)
-
-            tdes.Mode = CipherMode.ECB;
-            //padding mode(if any extra byte added)
-            tdes.Padding = PaddingMode.PKCS7;
-
-            ICryptoTransform cTransform = tdes.CreateDecryptor();
-            byte[] resultArray = cTransform.TransformFinalBlock(
-                                 toEncryptArray, 0, toEncryptArray.Length);
-            //Release resources held by TripleDes Encryptor
-            tdes.Clear();
-            //return the Clear decrypted TEXT
-            return UTF8Encoding.UTF8.GetString(resultArray);
+            using var transform = tripleDes.CreateDecryptor();
+            var decrypted = transform.TransformFinalBlock(input, 0, input.Length);
+            return Encoding.UTF8.GetString(decrypted);
         }
 
-        public string Encrypt(string PlainText, string key)
+        private static byte[] BuildLegacyKey(string key, bool useHashing)
         {
-            return Encrypt(PlainText, key, true);
+            var bytes = Encoding.UTF8.GetBytes(key);
+            return useHashing ? MD5.HashData(bytes) : bytes;
         }
 
-        public string Decrypt(string EncryptedText, string key)
+        public string Encrypt(string plainText, string key)
         {
-            return Decrypt(EncryptedText, key, true);
+            return TransformEncrypt(plainText, key, useHashing: true);
+        }
+
+        public string Decrypt(string encryptedText, string key)
+        {
+            return TransformDecrypt(encryptedText, key, useHashing: true);
         }
     }
 }
