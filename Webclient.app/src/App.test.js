@@ -1,11 +1,12 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import App from './App';
+import { ConfigurationBusiness } from './Business/ConfigurationBusiness';
 
 jest.mock('./Business/ConfigurationBusiness', () => ({
   ConfigurationBusiness: {
-    GetMapConfiguration: jest.fn(() => new Promise(() => {})),
-    GetConfigServices: jest.fn(() => new Promise(() => {}))
+    GetMapConfiguration: jest.fn(),
+    GetConfigServices: jest.fn()
   }
 }));
 
@@ -19,9 +20,33 @@ jest.mock('./Store/Managers/WindowManager', () => ({
 
 jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
 
-test('renders the enterprise loading experience before GIS configuration resolves', () => {
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+test('renders loading until GIS configuration settles, then exposes the configuration error state', async () => {
+  let resolveMapConfiguration;
+  let resolveConfigServices;
+
+  ConfigurationBusiness.GetMapConfiguration.mockImplementation(() => new Promise(resolve => {
+    resolveMapConfiguration = resolve;
+  }));
+  ConfigurationBusiness.GetConfigServices.mockImplementation(() => new Promise(resolve => {
+    resolveConfigServices = resolve;
+  }));
+
   render(<App />);
+
   expect(screen.getByRole('status')).toBeInTheDocument();
   expect(screen.getByText(/lütfen bekleyin/i)).toBeInTheDocument();
   expect(screen.queryByTestId('map-shell')).not.toBeInTheDocument();
+
+  await act(async () => {
+    resolveMapConfiguration({ isSuccess: false });
+    resolveConfigServices({ isSuccess: false });
+    await Promise.resolve();
+  });
+
+  expect(screen.getByText(/harita yapılandırması yüklenemedi/i)).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
