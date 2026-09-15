@@ -40,6 +40,7 @@
   {"id":"portas","type":"portas asfalt","category":"İştirakler","aliases":["portas","asfalt üretim","YeniPortasAsfaltUretimQeryUrl"],"icon":"images/icons/map/ISTIRAK/portas.svg"},
   {"id":"segmen","type":"segmen su","category":"İştirakler","aliases":["segmen su","segmen su fabrikası","YeniSegmenSuFabrikalarıQeryUrl","YeniSegmenSuSatisBayileriQeryUrl"],"icon":"images/icons/map/ISTIRAK/segmensu.svg"},
   {"id":"aciltoplanma","type":"acil toplanma alanı","category":"Acil Toplanma Alanları","aliases":["acil toplanma alanı","acil toplanma alanları","assembly area","AssemblyAreaQueryUrl"],"icon":"images/icons/sidebar/aciltoplanmaalani.png"},
+  {"id":"etkinlik","type":"etkinlik","category":"Etkinlikler","aliases":["etkinlik","etkinlikler","event","EventQueryUrl"],"icon":"images/icons/sidebar/etkinlikler.png"},
   {"id":"eczane","type":"eczane","category":"Eczaneler","aliases":["eczane","eczaneler","pharmacy","PharmacyQueryUrl","nöbetçi eczane"],"icon":"images/icons/sidebar/eczane.png"},
   {"id":"taksi","type":"taksi durağı","category":"Taksi","aliases":["taksi","taksi durağı","taxi","TaxiQueryUrl"],"icon":"images/icons/sidebar/taksi.png"},
   {"id":"default","type":"default","category":"default","aliases":["unknown","bilinmeyen","fallback"],"icon":"images/icons/map/pictureMarker.png"}
