@@ -19,6 +19,8 @@ const sdkModules = {
   'esri/layers/SceneLayer': SceneLayer,
 };
 
+const absolute = (path) => new URL(path, window.location.origin).toString().replace(/\/+$/, '');
+
 describe('layerFactory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -38,7 +40,7 @@ describe('layerFactory', () => {
     });
 
     expect(FeatureLayer).toHaveBeenCalledWith({
-      url: '/arcgis/rest/services/parks/FeatureServer/3',
+      url: `${absolute('/arcgis/rest/services/parks/FeatureServer')}/3`,
     });
     expect(layer).toMatchObject({
       id: 'parks',
@@ -58,7 +60,7 @@ describe('layerFactory', () => {
       sublayerId: 7,
     });
 
-    expect(FeatureLayer).toHaveBeenLastCalledWith({ url: '/Gis/Proxy/places' });
+    expect(FeatureLayer).toHaveBeenLastCalledWith({ url: absolute('/Gis/Proxy/places') });
   });
 
   test('rejects WMS before attempting to load an ArcGIS layer module', async () => {
