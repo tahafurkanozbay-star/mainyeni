@@ -1,45 +1,12 @@
 /*toolbar -- start*/
-:root {
-    --toolbar-icon-width: 44px;
-    --toolbar-width: 48px;
-}
-
-.toolbarwidget {
-    z-index: 99;
-    position: absolute;
-    margin: 0;
-    right: 10px;
-    top: calc(var(--mainbar-height) + 10px);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: transparent;
-    padding: 0;
-    border-radius: 5px;
-    max-height: 90%;
-    width: var(--toolbar-width);
-    
-}
-
-.toolbarwidget-button {
-    width: var(--toolbar-icon-width);
-    cursor: pointer;
-    background-color: transparent !important;
-    border: none !important;
-}
-
-.toolbarwidget-button-icon {
-    width:var(--toolbar-icon-width);
-    filter: contrast(1);
-}
-
-.toolbarwidget-button-icon:hover {
-    border-radius: 60px;
-    padding: 0;
-    margin: 0;
-}
-.toolbarwidget-button-icon:hover{
-    filter: contrast(2)
-}
-
+:root { --toolbar-icon-width: 44px; --toolbar-width: 48px; }
+.toolbarwidget { z-index: 99; position: absolute; margin: 0; right: 10px; top: calc(var(--mainbar-height) + 10px); display: flex; flex-direction: column; align-items: center; background: color-mix(in srgb, var(--exp-surface) 94%, transparent); padding: 5px; border: 1px solid var(--exp-border); border-radius: 12px; max-height: calc(100% - var(--mainbar-height) - 20px); width: var(--toolbar-width); box-shadow: var(--exp-shadow-sm); backdrop-filter: blur(10px); }
+.toolbarwidget-button { width: var(--toolbar-icon-width); min-width: 44px; min-height: 44px; display: grid; place-items: center; cursor: pointer; background: transparent !important; border: none !important; border-radius: 9px; color: var(--exp-text-soft); transition: background var(--exp-transition-fast), transform var(--exp-transition-fast), color var(--exp-transition-fast); }
+.toolbarwidget-button:hover { background: var(--exp-surface-3) !important; color: var(--exp-text); transform: translateY(-1px); }
+.toolbarwidget-button:active { transform: translateY(0); }
+.toolbarwidget-button:focus-visible { outline: 0 !important; box-shadow: var(--exp-focus) !important; }
+.toolbarwidget-button-icon { width: 24px; height: 24px; filter: none; opacity: .82; transition: opacity var(--exp-transition-fast); }
+.toolbarwidget-button:hover .toolbarwidget-button-icon { opacity: 1; }
+@media (max-width: 780px) { .toolbarwidget { right: 8px; top: calc(var(--mainbar-height) + 8px); width: 46px; } }
+@media (max-width: 520px) { .toolbarwidget { bottom: 12px; top: auto; max-height: 52vh; } }
 /*toolbar -- end*/
