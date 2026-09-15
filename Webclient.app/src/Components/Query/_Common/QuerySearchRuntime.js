@@ -50,11 +50,17 @@ export const getRecordPhone = record => normalizeWhitespace(readFirstValue(
     ""
 ));
 
-export const getRecordCategory = record => normalizeWhitespace(readFirstValue(
-    record,
-    ["Category", "category", "kategori", "KATEGORI", "type", "Type"],
-    "Diğer"
-)) || "Diğer";
+export const getRecordCategory = record => {
+    const semanticCategory = normalizeWhitespace(readFirstValue(
+        record,
+        ["Category", "category", "kategori", "KATEGORI"],
+        ""
+    ));
+    if (semanticCategory) return semanticCategory;
+
+    const technicalType = normalizeWhitespace(readFirstValue(record, ["type", "Type"], ""));
+    return technicalType || "Diğer";
+};
 
 export const createStableResultKey = (record, fallbackIndex = 0) => {
     const id = getRecordId(record);
