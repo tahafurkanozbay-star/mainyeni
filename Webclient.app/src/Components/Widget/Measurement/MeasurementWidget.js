@@ -1,23 +1,63 @@
-import React, { useEffect, useImperativeHandle, useRef } from "react";
-import { loadModules } from "esri-loader";
+import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChartArea, faChartLine } from '@fortawesome/free-solid-svg-icons';
 import { CommonQueryWindowTools } from "../../Query/_Common/CommonQueryWindowTools";
 import MapManager from "../../../Store/Managers/MapManager";
+import { createMeasurementController, MEASUREMENT_TOOLS } from "../../../gis-engine/measurementRuntime";
 import "./MeasurementWidget.css";
 
 export const MeasurementWidget = React.forwardRef((props, ref) => {
-    const measurementRef = useRef(null);
-    const containerRef = useRef(null);
+    const [mapView, setMapView] = useState(null);
+    const [activeTool, setActiveToolState] = useState(MEASUREMENT_TOOLS.NONE);
+    const [measurementStatus, setMeasurementStatus] = useState('idle');
+    const controllerRef = useRef(null);
+    const unsubscribeRef = useRef(null);
+
+    const ensureController = () => {
+        const view = MapManager.GetMapView() || mapView;
+        if (!view) return null;
+
+        if (!controllerRef.current || controllerRef.current.destroyed) {
+            controllerRef.current = createMeasurementController({
+                view,
+                container: "measurementDiv",
+            });
+            unsubscribeRef.current?.();
+            unsubscribeRef.current = controllerRef.current.subscribe((state) => {
+                setActiveToolState(state.activeTool);
+                setMeasurementStatus(state.status);
+            });
+        } else {
+            controllerRef.current.setView(view);
+            controllerRef.current.setContainer("measurementDiv");
+        }
+        return controllerRef.current;
+    };
 
     const initialize = async () => {
-        if (measurementRef.current || !containerRef.current) return;
-        const [Measurement] = await loadModules(["esri/widgets/Measurement"]);
-        measurementRef.current = new Measurement({
-            view: MapManager.GetMapView(),
-            container: containerRef.current,
-            activeTool: ""
-        });
+        const view = MapManager.GetMapView();
+        setMapView(view);
+        const controller = ensureController();
+        if (!controller) return;
+        try {
+            await controller.ensureWidget();
+        } catch (_) {
+            // State subscription exposes the loading error; the widget shell stays usable.
+        }
+    };
+
+    const setActiveTool = async (toolName) => {
+        const controller = ensureController();
+        if (!controller) return;
+        try {
+            if (activeTool === toolName) {
+                controller.clear();
+                return;
+            }
+            await controller.setTool(toolName);
+        } catch (_) {
+            // Unsupported/load errors are reflected by controller state.
+        }
     };
 
     useImperativeHandle(ref, () => ({
@@ -26,39 +66,68 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
         minimized: false,
         OnShow: () => {
             props.windowManager.ShowWindow("sidebar");
-            initialize().catch(error => console.error("Measurement widget could not be initialized", error));
+            initialize();
         },
-        OnClose: () => measurementRef.current?.clear?.()
-    }), [props.id, props.windowManager]);
+        OnClose: () => {
+            controllerRef.current?.clear();
+        },
+    }));
 
     useEffect(() => {
         props.windowManager.RegisterWindow(ref);
-        return () => {
-            measurementRef.current?.destroy?.();
-            measurementRef.current = null;
-        };
-    }, [props.windowManager, ref]);
+        setMapView(MapManager.GetMapView());
 
-    const setActiveTool = toolName => {
-        if (measurementRef.current) measurementRef.current.activeTool = toolName;
-    };
+        return () => {
+            unsubscribeRef.current?.();
+            unsubscribeRef.current = null;
+            controllerRef.current?.destroy();
+            controllerRef.current = null;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
-        <div className="common-query-window common-query-window-right" style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
+        <div
+            className="common-query-window common-query-window-right"
+            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}
+        >
             <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src="images/icons/toolbar/olcumaraci.png" alt="" aria-hidden="true" />
+                <img className="common-query-window-header-icon" src="images/icons/toolbar/olcumaraci.png" alt="" />
                 <span>Ölçüm Araçları</span>
-                <CommonQueryWindowTools windowManager={props.windowManager} windowId={props.id} showNearbySearch={false} showMapSelect={false} setQueryField={() => {}} query={null} />
+                <CommonQueryWindowTools
+                    windowManager={props.windowManager}
+                    windowId={props.id}
+                    showNearbySearch={false}
+                    showMapSelect={false}
+                    setQueryField={() => {}}
+                    query={null}
+                />
             </div>
             <div className="common-query-window-body layer-list-window-body">
-                <div className="measurement-widget-tool-select">
-                    <button type="button" onClick={() => setActiveTool("area")} className="measurement-widget-tool-select-button" aria-label="Alan ölç"><FontAwesomeIcon icon={faChartArea} size="2x" aria-hidden="true" /></button>
-                    <button type="button" onClick={() => setActiveTool("distance")} className="measurement-widget-tool-select-button" aria-label="Mesafe ölç"><FontAwesomeIcon icon={faChartLine} size="2x" aria-hidden="true" /></button>
+                <div role="toolbar" aria-label="Ölçüm araçları">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTool(MEASUREMENT_TOOLS.AREA)}
+                        className="measurement-widget-tool-select-button"
+                        aria-pressed={activeTool === MEASUREMENT_TOOLS.AREA}
+                        aria-label="Alan ölç"
+                        disabled={measurementStatus === 'loading'}
+                    >
+                        <FontAwesomeIcon icon={faChartArea} size="2x" aria-hidden="true" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTool(MEASUREMENT_TOOLS.DISTANCE)}
+                        className="measurement-widget-tool-select-button"
+                        aria-pressed={activeTool === MEASUREMENT_TOOLS.DISTANCE}
+                        aria-label="Mesafe ölç"
+                        disabled={measurementStatus === 'loading'}
+                    >
+                        <FontAwesomeIcon icon={faChartLine} size="2x" aria-hidden="true" />
+                    </button>
                 </div>
-                <div ref={containerRef} />
+                <div id="measurementDiv" aria-live="polite" />
             </div>
         </div>
     );
 });
-
-MeasurementWidget.displayName = "MeasurementWidget";
