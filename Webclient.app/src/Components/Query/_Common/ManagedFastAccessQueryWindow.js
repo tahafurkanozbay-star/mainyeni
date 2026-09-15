@@ -128,7 +128,7 @@ export function createManagedFastAccessQueryWindow({
             setVisibleCount(pageSize);
             setLoading(false);
             setErrorMessage("");
-        }, [clearOwnedLayer, pageSize]);
+        }, [clearOwnedLayer]);
 
         const showError = useCallback(message => {
             const safeMessage = message || "Sorgu tamamlanamadı. Lütfen tekrar deneyin.";
@@ -169,7 +169,7 @@ export function createManagedFastAccessQueryWindow({
             } catch (error) {
                 DebugHelper.Log(error);
             }
-        }, [clearOwnedLayer, iconType, serviceKey, title]);
+        }, [clearOwnedLayer]);
 
         const fetchQueryResults = useCallback(async () => {
             const requestId = ++requestSequenceRef.current;
@@ -198,14 +198,14 @@ export function createManagedFastAccessQueryWindow({
             } finally {
                 if (mountedRef.current && requestId === requestSequenceRef.current) setLoading(false);
             }
-        }, [business, id, logName, pageSize, renderLayer, showError, windowManager]);
+        }, [id, renderLayer, showError, windowManager]);
 
         const getItemDetails = useCallback(async item => {
             if (item?.objectId === null || item?.objectId === undefined) return item?.raw || null;
             const result = await business.Query({ ObjectId: item.objectId }, true);
             if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data)) return null;
             return result.data[0] || null;
-        }, [business]);
+        }, []);
 
         const zoomToItem = useCallback(async item => {
             try {
@@ -221,7 +221,7 @@ export function createManagedFastAccessQueryWindow({
             } catch (error) {
                 showError(error?.message || "Kayıt konumu açılamadı.");
             }
-        }, [getItemDetails, id, logName, showError, windowManager]);
+        }, [getItemDetails, id, showError, windowManager]);
 
         const showRoute = useCallback(async item => {
             try {
