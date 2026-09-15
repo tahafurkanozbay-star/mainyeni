@@ -5,6 +5,7 @@ import './styles.css';
 import './styles.responsive.css';
 import './Components/Common/experience-ui.css';
 import './Components/Common/experience-quality.css';
+import './Components/Common/experience-shell.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { Constants_LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
@@ -33,14 +34,11 @@ function App() {
           ConfigurationBusiness.GetMapConfiguration(),
           ConfigurationBusiness.GetConfigServices()
         ]);
-
         if (cancelled) return;
         if (mapConfigResult.isSuccess && configServicesResult.isSuccess) {
           MapManager.SetMapConfiguration(JSON.parse(mapConfigResult.data.configValue));
           const configServices = configServicesResult.data || [];
-          configServices.forEach(service => {
-            CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service), "Appjs");
-          });
+          configServices.forEach(service => CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service), "Appjs"));
           MapManager.SetConfigurationServices(configServices);
           setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
         } else {
@@ -50,7 +48,6 @@ function App() {
         if (!cancelled) setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       }
     };
-
     loadConfiguration();
     return () => { cancelled = true; };
   }, []);
@@ -59,7 +56,7 @@ function App() {
     <ExperienceThemeProvider>
       <div id="root">
         {configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
-          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError /> :
+          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message="Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin." /> :
             <>
               <MapComponent windowManager={windowManager} />
               <ExperienceUXLayer windowManager={windowManager} />
