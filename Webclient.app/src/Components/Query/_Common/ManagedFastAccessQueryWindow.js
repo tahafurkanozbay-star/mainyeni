@@ -117,7 +117,6 @@ export function createManagedFastAccessQueryWindow({
         const layerRef = useRef(null);
         const requestSequenceRef = useRef(0);
         const initialExtentRef = useRef(null);
-        const queryRef = useRef(DEFAULT_QUERY);
 
         const [records, setRecords] = useState([]);
         const [filterText, setFilterText] = useState("");
@@ -134,7 +133,6 @@ export function createManagedFastAccessQueryWindow({
 
         const resetSurface = useCallback(() => {
             requestSequenceRef.current += 1;
-            queryRef.current = DEFAULT_QUERY;
             clearOwnedLayer();
             setRecords([]);
             setFilterText("");
@@ -142,7 +140,7 @@ export function createManagedFastAccessQueryWindow({
             setLoading(false);
             setErrorMessage("");
             setActiveActionKey("");
-        }, [clearOwnedLayer, pageSize]);
+        }, [clearOwnedLayer]);
 
         const showError = useCallback(error => {
             const message = normalizeErrorMessage(error, "Sorgu tamamlanamadı. Lütfen tekrar deneyin.");
@@ -183,12 +181,11 @@ export function createManagedFastAccessQueryWindow({
             } catch (error) {
                 DebugHelper.Log(error);
             }
-        }, [clearOwnedLayer, iconType, serviceKey, title]);
+        }, [clearOwnedLayer]);
 
         const fetchQueryResults = useCallback(async () => {
             const requestId = ++requestSequenceRef.current;
             const query = windowManager?.GetQueryParams?.(id) || DEFAULT_QUERY;
-            queryRef.current = query;
             setLoading(true);
             setErrorMessage("");
             setFilterText("");
@@ -215,7 +212,7 @@ export function createManagedFastAccessQueryWindow({
             } finally {
                 if (mountedRef.current && requestId === requestSequenceRef.current) setLoading(false);
             }
-        }, [business, id, logName, pageSize, renderLayer, showError, windowManager]);
+        }, [id, renderLayer, showError, windowManager]);
 
         const getItemDetails = useCallback(async item => {
             if (item?.objectId === null || item?.objectId === undefined || item?.objectId === "") {
@@ -224,7 +221,7 @@ export function createManagedFastAccessQueryWindow({
             const result = await business.Query({ ObjectId: item.objectId }, true);
             if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data)) return null;
             return result.data[0] || null;
-        }, [business]);
+        }, []);
 
         const runItemAction = useCallback(async (item, action, callback) => {
             const key = `${getFastAccessRecordKey(item)}-${action}`;
@@ -255,7 +252,7 @@ export function createManagedFastAccessQueryWindow({
                 windowManager?.ToggleMinimiseWindow?.(id);
             }
             return detail;
-        }), [getItemDetails, id, logName, runItemAction, windowManager]);
+        }), [getItemDetails, id, runItemAction, windowManager]);
 
         const showRoute = useCallback(item => runItemAction(item, "route", async () => {
             const detail = await getItemDetails(item);
@@ -268,7 +265,7 @@ export function createManagedFastAccessQueryWindow({
                 `${item.objectId ?? ""}/${item.address}`
             );
             return true;
-        }), [getItemDetails, logName, runItemAction]);
+        }), [getItemDetails, runItemAction]);
 
         useImperativeHandle(ref, () => ({
             id,
