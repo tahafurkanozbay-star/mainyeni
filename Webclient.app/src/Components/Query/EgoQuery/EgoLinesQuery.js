@@ -42,9 +42,10 @@ export const EgoLinesQuery = ({ lines, showAll = false }) => {
 
     useEffect(() => {
         mountedRef.current = true;
+        const requestGate = requestGateRef.current;
         return () => {
             mountedRef.current = false;
-            requestGateRef.current.invalidate();
+            requestGate.invalidate();
             clearOwnedGraphics();
         };
     }, [clearOwnedGraphics]);
