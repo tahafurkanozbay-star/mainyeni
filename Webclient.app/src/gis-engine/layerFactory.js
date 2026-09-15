@@ -21,6 +21,7 @@ const applyCommon = (layer, service) => {
 const withFeatureServerSublayer = (url, sublayerId) => {
   if (!Number.isInteger(sublayerId)) return url;
   if (/\/FeatureServer\/\d+$/i.test(url)) return url;
+  if (/\/FeatureServer$/i.test(url)) return `${url}/${sublayerId}`;
   return `${url}/FeatureServer/${sublayerId}`;
 };
 
