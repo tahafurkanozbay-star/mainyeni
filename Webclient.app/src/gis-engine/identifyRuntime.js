@@ -25,6 +25,30 @@ const throwIfAborted = (signal) => {
   if (signal?.aborted) throw cancelledError();
 };
 
+const raceCancellation = (promise, signal) => {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener?.('abort', onAbort);
+      reject(cancelledError());
+    };
+
+    signal.addEventListener?.('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener?.('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener?.('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+};
+
 const normalizeLayerUrl = (value) => String(value || '').trim().replace(/\/+$/, '');
 
 const isMapServiceUrl = (url) => /\/MapServer(?:\/\d+)?$/i.test(normalizeLayerUrl(url));
@@ -145,10 +169,13 @@ export const identifyMapServices = async (view, mapPoint, targets, options = {})
   const source = Array.isArray(targets) ? targets : collectIdentifyTargets(view).mapServices;
   if (!source.length) return { results: [], failures: [] };
 
-  const [identify, IdentifyParameters] = await Promise.all([
-    load('esri/rest/identify'),
-    load('esri/rest/support/IdentifyParameters'),
-  ]);
+  const [identify, IdentifyParameters] = await raceCancellation(
+    Promise.all([
+      load('esri/rest/identify'),
+      load('esri/rest/support/IdentifyParameters'),
+    ]),
+    options.signal,
+  );
   throwIfAborted(options.signal);
 
   const settled = await settleWithConcurrency(
@@ -157,7 +184,8 @@ export const identifyMapServices = async (view, mapPoint, targets, options = {})
       throwIfAborted(options.signal);
       const params = createIdentifyParameters(IdentifyParameters, view, mapPoint, options);
       const requestOptions = options.signal ? { signal: options.signal } : undefined;
-      const response = await identify.identify(target.url, params, requestOptions);
+      const execution = Promise.resolve(identify.identify(target.url, params, requestOptions));
+      const response = await raceCancellation(execution, options.signal);
       throwIfAborted(options.signal);
       return normalizeMapServiceResult(target, response);
     },
@@ -201,7 +229,10 @@ export const identifyFeatureLayers = async (view, screenEvent, targets, options 
 
   const include = source.map((target) => target.layer).filter(Boolean);
   const hitOptions = include.length ? { include } : undefined;
-  const response = await view.hitTest(screenEvent, hitOptions);
+  const response = await raceCancellation(
+    Promise.resolve(view.hitTest(screenEvent, hitOptions)),
+    options.signal,
+  );
   throwIfAborted(options.signal);
 
   const allowedLayers = new Set(include);
@@ -268,10 +299,13 @@ export const executeGlobalIdentify = async (view, event, options = {}) => {
   throwIfAborted(options.signal);
 
   const targets = collectIdentifyTargets(view);
-  const [mapServiceResponse, featureResults] = await Promise.all([
-    identifyMapServices(view, event.mapPoint, targets.mapServices, options),
-    identifyFeatureLayers(view, event, targets.featureLayers, options),
-  ]);
+  const [mapServiceResponse, featureResults] = await raceCancellation(
+    Promise.all([
+      identifyMapServices(view, event.mapPoint, targets.mapServices, options),
+      identifyFeatureLayers(view, event, targets.featureLayers, options),
+    ]),
+    options.signal,
+  );
   throwIfAborted(options.signal);
 
   const results = dedupeIdentifyResults([
@@ -301,11 +335,17 @@ export const createIdentifySession = () => {
   const run = async (view, event, options = {}) => {
     cancel();
     const localGeneration = generation;
-    controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const signal = controller?.signal;
-    const result = await executeGlobalIdentify(view, event, { ...options, signal });
-    if (generation !== localGeneration) throw cancelledError();
-    return result;
+    const localController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    controller = localController;
+    const signal = localController?.signal;
+
+    try {
+      const result = await executeGlobalIdentify(view, event, { ...options, signal });
+      if (generation !== localGeneration) throw cancelledError();
+      return result;
+    } finally {
+      if (controller === localController) controller = null;
+    }
   };
 
   return {
