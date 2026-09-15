@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
 import './styles.css';
@@ -10,7 +10,7 @@ import './Components/Common/experience-data-ux.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { Constants_LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
-import { WindowManager } from './Store/Managers/WindowManager';
+import { useWindowManager } from './Store/Managers/WindowManager';
 import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
 import { setDefaultOptions } from 'esri-loader';
@@ -20,13 +20,12 @@ import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSys
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
 
-setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
-
 function App() {
-  const windowManager = useMemo(() => new WindowManager(), []);
+  const windowManager = useWindowManager();
   const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
 
   useEffect(() => {
+    setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
     const controller = new AbortController();
 
     bootstrapApplication({ signal: controller.signal })

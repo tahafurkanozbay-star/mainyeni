@@ -2,12 +2,9 @@ import { IsNull } from "./ObjectHelper";
 import { TextHelper } from "./TextHelper";
 
 export const ArrayHelper = {
-
     Filter: (array, prop, value) => {
-
-        let foundArray = [];
-        if (array != null) {
-
+        const foundArray = [];
+        if (array !== null && array !== undefined) {
             for (let i = 0, len = array.length; i < len; i++) {
                 if (array[i] && array[i][prop] === value) {
                     array[i]._INDEX = i;
@@ -18,98 +15,43 @@ export const ArrayHelper = {
         return foundArray;
     },
 
-
     Find: (array, prop, value) => {
-
-        let arr=ArrayHelper.Filter(array, prop, value);
-        if(arr.length>0){
-            return arr[0];
-        }
-        else{
-            return null;
-        }
+        const matches = ArrayHelper.Filter(array, prop, value);
+        return matches.length > 0 ? matches[0] : null;
     },
 
-    OrderByTurkish: (a, b, _field) => {
-
-        if(IsNull(a[_field])){
-            _field=TextHelper.TurkishToUpper(_field);
+    OrderByTurkish: (a, b, field) => {
+        let targetField = field;
+        if (IsNull(a[targetField])) targetField = TextHelper.TurkishToUpper(targetField);
+        const aTitle = String(a[targetField] ?? "");
+        const bTitle = String(b[targetField] ?? "");
+        const alphabet = "0123456789AaBbCcÇçDdEeFfGgĞğHhIıİiJjKkLlMmNnOoÖöPpQqRrSsŞşTtUuÜüVvWwXxYyZz";
+        if (aTitle.length === 0 || bTitle.length === 0) return aTitle.length - bTitle.length;
+        for (let i = 0; i < aTitle.length && i < bTitle.length; i++) {
+            const aIndex = alphabet.indexOf(aTitle[i].toUpperCase());
+            const bIndex = alphabet.indexOf(bTitle[i].toUpperCase());
+            if (aIndex !== bIndex) return aIndex - bIndex;
         }
-        let atitle = a[_field];
-        let btitle = b[_field];
-        let alfabe = "0123456789AaBbCcÇçDdEeFfGgĞğHhIıİiJjKkLlMmNnOoÖöPpQqRrSsŞşTtUuÜüVvWwXxYyZz";
-        if (atitle.length === 0 || btitle.length === 0) {
-            return atitle.length - btitle.length;
-        }
-        for (let i = 0; i < atitle.length && i < btitle.length; i++) {
-            let ai = alfabe.indexOf(atitle[i].toUpperCase());
-            let bi = alfabe.indexOf(btitle[i].toUpperCase());
-            if (ai !== bi) {
-                return ai - bi;
-            }
-        }
+        return aTitle.length - bTitle.length;
     },
 
-    GroupBy: (array, key, hasAttr = false) => {
-
-        //usage GroupBy(['one', 'two', 'three'], 'length'));
-        // => {3: ["one", "two"], 5: ["three"]}
-        if (hasAttr) {
-            return array.reduce(function (rv, x) {
-                (rv[x.attr[key]] = rv[x.attr[key]] || []).push(x);
-                return rv;
-            }, {});
-        }
-        else {
-            return array.reduce(function (rv, x) {
-                (rv[x[key]] = rv[x[key]] || []).push(x);
-                return rv;
-            }, {});
-        }
-
-    },
+    GroupBy: (array, key, hasAttr = false) => array.reduce((result, item) => {
+        const groupKey = hasAttr ? item.attr[key] : item[key];
+        (result[groupKey] = result[groupKey] || []).push(item);
+        return result;
+    }, {}),
 
     GroupByCount: (array, key) => {
-
-        let counts = {};
-
-        for (let i = 0; i < array.length; i++) {
-
-            let keyx = array[i][key];
-
-            if (counts[keyx]) {
-
-                counts[keyx]++;
-            } else {
-                counts[keyx] = 1;
-            }
-        }
-
-        let final = [];
-        for (let keyxx in counts) {
-
-            final.push({ key: keyxx, count: counts[keyxx] });
-        }
-
-        return final;
+        const counts = {};
+        array.forEach(item => {
+            const groupKey = item[key];
+            counts[groupKey] = (counts[groupKey] || 0) + 1;
+        });
+        return Object.entries(counts).map(([groupKey, count]) => ({ key: groupKey, count }));
     },
 
-
-    Distinct: (_array) => {
-
-        const uniqueArray = _array.filter((value, index) => {
-
-            const _value = JSON.stringify(value);
-
-            return index === _array.findIndex(obj => {
-                return JSON.stringify(obj) === _value;
-            });
-
-        });
-
-        return uniqueArray;
-    }
-
-
-}
-
+    Distinct: array => array.filter((value, index) => {
+        const serialized = JSON.stringify(value);
+        return index === array.findIndex(item => JSON.stringify(item) === serialized);
+    })
+};

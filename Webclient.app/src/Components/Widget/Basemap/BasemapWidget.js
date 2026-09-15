@@ -1,107 +1,105 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useEffect, useImperativeHandle, useRef } from "react";
 import { loadModules } from "esri-loader";
-import { faChevronDown, faChevronUp, faLayerGroup, faTimes } from '@fortawesome/free-solid-svg-icons';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import MapManager from "../../../Store/Managers/MapManager";
 import { CommonQueryWindowTools } from "../../Query/_Common/CommonQueryWindowTools";
 
+const BASEMAP_IDS = [
+    "topo",
+    "streets",
+    "satellite",
+    "hybrid",
+    "dark-gray",
+    "gray",
+    "national-geographic",
+    "oceans",
+    "osm",
+    "terrain",
+    "dark-gray-vector",
+    "gray-vector",
+    "streets-vector",
+    "streets-night-vector",
+    "streets-navigation-vector",
+    "topo-vector",
+    "streets-relief-vector"
+];
+
 export const BasemapWidget = React.forwardRef((props, ref) => {
+    const galleryContainerRef = useRef(null);
 
     useImperativeHandle(ref, () => ({
-        id: props.id,visible:false, minimized:false,
-        OnShow:()=>{
-            props.windowManager.ShowWindow("sidebar")
-        },
-        OnClose: () => {
-            
-        }
-    }));
-
-    const [basemapGallery, setBasemapGallery] = useState(null);
+        id: props.id,
+        visible: false,
+        minimized: false,
+        OnShow: () => props.windowManager.ShowWindow("sidebar"),
+        OnClose: () => {}
+    }), [props.id, props.windowManager]);
 
     useEffect(() => {
-
-        //Window Manager register window
         props.windowManager.RegisterWindow(ref);
 
-        loadModules(["esri/config", "esri/widgets/BasemapGallery", "esri/Basemap", "esri/layers/MapImageLayer"])
-            .then(([esriConfig, BasemapGallery, Basemap, MapImageLayer]) => {
+        let disposed = false;
+        let gallery = null;
 
-                let basemapLayers = [];
+        const initialize = async () => {
+            const [BasemapGallery, Basemap] = await loadModules([
+                "esri/widgets/BasemapGallery",
+                "esri/Basemap"
+            ]);
 
-                /*
-                self.state.layerList.forEach(layerItem => {
-    
-                    let basemap = new Basemap({
-                        baseLayers: [
-                            new MapImageLayer({
-                                url: layerItem.Url,
-                                title: layerItem.Title
-                            })
-                        ],
-                        title: layerItem.Title,
-                        id: layerItem.Title
-                    });
-    
-                    basemapLayers.push(basemap);
-    
-                });
-                */
+            if (disposed || !galleryContainerRef.current) return;
 
-                let basemapLayerIds = ["topo",
-                    "streets",
-                    "satellite",
-                    "hybrid",
-                    "dark-gray",
-                    "gray",
-                    "national-geographic",
-                    "oceans",
-                    "osm",
-                    "terrain",
-                    "dark-gray-vector",
-                    "gray-vector",
-                    "streets-vector",
-                    "streets-night-vector",
-                    "streets-navigation-vector",
-                    "topo-vector",
-                    "streets-relief-vector"];
+            const source = BASEMAP_IDS
+                .map(id => Basemap.fromId(id))
+                .filter(Boolean);
 
-                basemapLayerIds.forEach(basemapLayerId => {
-                    basemapLayers.push(Basemap.fromId(basemapLayerId));
-                });
-
-
-                const basemapGallery = new BasemapGallery({
-                    view: MapManager.GetMapView(),
-                    container: "basemapGallery",
-                    source: basemapLayers
-                });
-
-                setBasemapGallery(basemapGallery);
-
-                return;
+            gallery = new BasemapGallery({
+                view: MapManager.GetMapView(),
+                container: galleryContainerRef.current,
+                source
             });
+        };
 
-    }, []);
+        initialize().catch(error => {
+            if (!disposed) console.error("Basemap gallery could not be initialized", error);
+        });
 
+        return () => {
+            disposed = true;
+            gallery?.destroy?.();
+            gallery = null;
+        };
+    }, [props.windowManager, ref]);
+
+    const isVisible = props.windowManager.IsVisible(props.id);
 
     return (
-        <div className="common-query-window common-query-window-right"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
+        <div
+            className="common-query-window common-query-window-right"
+            style={{ visibility: isVisible ? "visible" : "hidden" }}
+            aria-hidden={!isVisible}
+        >
             <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src="images/icons/toolbar/basemap.png"></img>
+                <img
+                    className="common-query-window-header-icon"
+                    src="images/icons/toolbar/basemap.png"
+                    alt=""
+                    aria-hidden="true"
+                />
                 <span>Altlık Haritalar</span>
-                <CommonQueryWindowTools 
+                <CommonQueryWindowTools
                     windowManager={props.windowManager}
                     windowId={props.id}
                     showNearbySearch={false}
                     showMapSelect={false}
-                    setQueryField={(e)=>{}}
-                    query={null}/>
+                    setQueryField={() => {}}
+                    query={null}
+                />
             </div>
             <div className="common-query-window-body">
-                <div id="basemapGallery"></div>
+                <div ref={galleryContainerRef} />
             </div>
         </div>
-        );
+    );
 });
+
+BasemapWidget.displayName = "BasemapWidget";

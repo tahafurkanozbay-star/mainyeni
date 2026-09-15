@@ -11,117 +11,140 @@
 - PR #2 merge commit: `1140467cfe88e73f5fdae1fd112f1862949d0d12`.
 - Sonraki GIS çalışmasında `iconRegistry.json`, `iconPresentation.js`, `sceneRuntime.js`, shared 2D/3D view-state ve icon registry testleri main üzerinde ilerledi.
 
-## Experience/UI Quality önceki tur
-- PR #4 squash-merge edildi.
-- Merge commit: `06463c64ea02d6a2d99c3e504f7e66c55fc0e138`.
-- İlk Experience turu token tabanlı surface/focus, responsive desktop/tablet/mobile, dark/light, reduced-motion, forced-colors, utility rail, command center ve loading/error/empty primitives oluşturdu.
-- WMS/WFS eklenmedi; yeni remote UI font/CDN/analytics/asset çağrısı eklenmedi.
+## Experience/UI Quality önceki turlar
+- PR #4 squash-merge edildi; merge commit `06463c64ea02d6a2d99c3e504f7e66c55fc0e138`.
+- PR #6 Deep Experience squash-merge edildi; merge commit `cdde26bc997e7d1b7c28f668412ab3087607d316`.
+- Token tabanlı surface/focus, responsive desktop/tablet/mobile, dark/light, reduced-motion, forced-colors, utility rail, command center, loading/error/empty primitives, semantic search/layer interactions ve shared GIS icon presentation oluşturuldu.
 
-## Deep Experience/UI Quality Tur — 2026-09-15
-- Amaç: mevcut Kent Rehberi'ni ekran ve bileşen düzeyinde derin UX/UI kalite denetiminden geçirip enterprise GIS seviyesinde tutarlı, hızlı, erişilebilir ve yüksek veri yoğunluğuna uygun bir deneyim oluşturmak.
-- Başlangıç main HEAD: `71d8d54f9bae4e8ce8ee740aabee56cf5d6f203f`.
-- Çalışma branch: `agent/experience-ui-deep-2026-09-15`.
-- PR #6 gerçek olarak merge edilebilir durumda doğrulandı ve squash-merge edildi.
-- Merge commit: `cdde26bc997e7d1b7c28f668412ab3087607d316`.
+## Kent Rehberi Deep Experience / Whole-Code Modernization — 2026-09-15
 
-### İncelenen yüzeyler
-- `App.js` global shell ve config loading
-- `NavigationBar.js/.css` header, global search, command shortcut
-- Sidebar / query-window shell
-- `ToolbarWidget.css` map tool chrome
-- `LayerListWidget.js/.css` layer tree, visibility, opacity, legend
-- `GenelAramaQeryWindow.js` search results
-- shared loading/error/empty primitives
-- ArcGIS popup surface CSS
-- Experience utility rail + keyboard help + command center
-- responsive/mobile/tablet/desktop CSS ve touch targets
-- shared GIS icon resolver/presentation
-- 3D `sceneRuntime.js` ve mevcut 3D entrypoint durumu
+### TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU
+- TUR: Whole-Code Experience/UI modernization devam turu.
+- GÖREV: repository genelinde aktif kullanıcı arayüzü, query-window mimarisi, browser baseline, navigation/sidebar, GIS search/result UX, lazy UI yükleme, GIS resource lifecycle ve erişilebilirlik standardizasyonu.
+- Başlangıç main HEAD: `ec38e15fd7bf346823c52032fd033f3bbb05f1ce` (Platform #10 merge sonrası).
+- Branch: `agent/experience-modernization-2026-09-15-r2`.
+- Doğrulanan son kod head: `211f9acce535b8fca9cdefd26f702c9565faeae5`.
+- PR: #8.
+- PR doğrulaması: base `main`, mergeable=true; son ölçüm 118 commit / 160 changed files.
+- CI: `Webclient Quality` run #444 (`34975156131`) completed / success.
+- MERGE: PR #8 squash-merge edildi.
+- Merge commit: `678267711588d98074510d3d67687ba11a340e0c`.
+- Platform/main ile oluşan çatışma force push yapılmadan gerçek iki-parent entegrasyon commit'leriyle çözüldü; paralel UX commit geçmişi korunarak nihai PR ağacına taşındı.
 
-### Design-system çıkarımı
-- Spacing: 4px tabanlı `4/8/12/16/20/24/32` ritmi.
-- Kontroller: desktop yaklaşık 40px; touch target en az 44px.
-- Radius: control 8px, card 12px, panel 14-16px, dialog 16-18px, pill 999px.
-- Typography: page title 20-28px, section 15px, body/control 12-13px, meta 10-11px.
-- Surface modeli: background → surface → secondary/tertiary surface; ince border + düşük elevation; modal/drawer en güçlü elevation.
-- Focus: yalnız renge bağlı olmayan görünür focus ring.
-- Motion: ölçülü background/border/transform/opacity; reduced-motion altında animasyonlar kapatılıyor.
-- Responsive: 1100 / 900 / 780 / 680 / 520 / 420px kademeleriyle grid, toolbar, panel, drawer ve command palette davranışı.
-- Tema: ExperienceThemeProvider + `data-experience-theme`; NavigationBar eski dinamik light stylesheet üretmiyor.
+### ÖNEMLİ ÖZELLİKLER / WHOLE-CODE MODERNIZATION
+- PR yalnız browser baseline değişikliği olarak kalmadı; repository'nin aktif Webclient Experience katmanında geniş kontrollü modernizasyon paketi içerdi.
+- `Sidebar.js` yüzlerce satırlık monolitik katalog/render yükünden çıkarıldı; `SidebarCatalog.js` ile deklaratif katalog ve `SidebarModern.css` ile ayrı responsive presentation katmanı oluşturuldu.
+- Query-window yükleme modeli `QueryWindowRegistry.js` + `LazyManagedWindow.js` ile merkezileştirildi; çok sayıdaki legacy query ekranı ortak managed pattern'e taşındı. Bu, ilk shell render'ında bütün query UI'larının eager yüklenmesi riskini azaltan code-splitting/lazy-loading yönüdür.
+- Duplicate fast-access business/query pencereleri `createFastAccessQueryBusiness.js` ve `ManagedFastAccessQueryWindow` üzerinden ortak factory/runtime yapısına taşındı.
+- `QueryInteractionRuntime` ve `QuerySearchRuntime` ile stale request gate, safe external navigation, viewport yardımcıları, owned resource cleanup ve search normalization ortaklaştırıldı.
+- `ExperienceCommandCenter.js` genişletildi; command/navigation yüzeyi gerçek uygulama aksiyonlarına daha yakın ortak yapıya getirildi.
+- `MapComponent.js`, `NavigationBar.js` ve shell bileşenlerinde legacy/tekrarlı UI davranışları azaltıldı.
+- Fulltext search, Genel Arama, Event, EGO, Numbering, Pod, Taxi, Vicinity, Route, Ada-Parsel ve Acil Toplanma Alanı gibi yüksek kullanımlı ekranlar modern loading/error/empty/result semantics, stale-response koruması ve daha tutarlı cleanup ile yenilendi.
+- `WindowManager` React lifecycle ile daha kararlı hale getirildi; `App.js` platform bootstrap + `AbortController` akışına geçirildi.
+- `ConfigurationBusiness` platform HTTP client ve normalize edilmiş hata/response sözleşmesiyle birleştirildi.
+- Popup içeriğinde string/unsafe HTML yerine DOM tabanlı üretim ve güvenli URL normalizasyonu tercih edildi.
+- Browser baseline modern evergreen/Firefox ESR hedeflerine taşındı; explicit IE9/IE11 bootstrap polyfill entrypoint baskısı kaldırıldı. Kör framework major rewrite yapılmadı; React/CRA borcu kontrollü migration konusu olarak bırakıldı.
 
-### Yüksek öncelikli UX düzeltmeleri
-- Header search state string/object karmaşası kaldırıldı; semantik `form role=search`, Enter submit ve Escape davranışı eklendi.
-- Utility rail gerçek LayerList lifecycle'ına bağlandı; `layers` ve `legend` komutları gerçek `activeTab` ile işliyor.
-- Layer tree görünürlük kontrolleri semantic button + `aria-pressed` oldu; stable keys kullanılıyor.
-- Layer opacity slider erişilebilir etiketlerle 0-100 aralığında çalışıyor.
-- Search results artık loading / success / empty / error+retry durumlarını açık biçimde gösteriyor.
-- ArcGIS popup ve query-window yüzeyleri ortak enterprise tokenlarına getirildi.
-- Shared loading katmanı GIF yerine CSS spinner kullanıyor; `role=status`, `aria-busy` vb. semantics eklendi.
-- Global focus, touch target, forced-colors ve reduced-motion sözleşmesi legacy kontrolleri kapsayacak biçimde güçlendirildi.
+### DEĞİŞEN DOSYALAR / YAKLAŞIK SATIR
+- PR #8: 160 changed files.
+- GitHub PR ölçümü: 10.442 additions / 23.768 deletions; toplam yaklaşık 34.210 satır değişim.
+- 4.000 anlamlı değişiklik kriteri rahat biçimde aşıldı.
+- Değişimin büyük kısmı anlamlı legacy query-window tekrarlarının kaldırılması, ortak runtime/component altyapısına geçiş, gerçek ekran modernizasyonu, platform entegrasyonu ve testlerden oluşuyor; boilerplate ile satır doldurma yapılmadı.
+- Öne çıkan dosyalar: `App.js`, `MapComponent.js`, `NavigationBar.js`, `Sidebar.js`, `SidebarCatalog.js`, `SidebarModern.css`, `ExperienceCommandCenter.js`, `LazyManagedWindow.js/.css`, `QueryWindowRegistry.js`, `CommonBusiness.js`, `QueryInteractionRuntime.js`, `QuerySearchRuntime.js`, `ManagedFastAccessQueryWindow.js`, fulltext/general search ve EGO query ekranları, çok sayıdaki fast-access query window, `iconRegistry.json`, `package.json`, `webclient-quality.yml`.
 
-### İkon mimarisi
-- Gerçek `Webclient.app/src/gis-engine/iconRegistry.json` bulundu ve `iconPresentation.js` zinciri doğrulandı.
-- UI tarafında ikinci GIS icon mapping authority oluşturulmadı.
-- `SharedGISIcon.js`, `createListIconModel()` üzerinden ortak JSON resolver'ı kullanıyor.
-- Layer group/layer ve dinamik layer yüzeyleri aynı resolver ile icon gösteriyor.
-- Unknown/broken icon için registry default + yerel `pictureMarker.png` fallback kullanılıyor.
-- Aynı resolver zinciri 2D picture-marker ve 3D graphic model sözleşmesiyle paylaşılabiliyor.
+### TESTLER / BUILD
+- GitHub Actions `Webclient Quality` run #444 başarıyla tamamlandı.
+- Workflow doğrulanan kod head `211f9acce535b8fca9cdefd26f702c9565faeae5` üzerinde çalıştı ve PR merge öncesi green doğrulandı.
+- Runner: Ubuntu 24.04.5, Node v24.20.0, npm 11.19.0.
+- `npm ci`: PASS.
+- lint-if-present: PASS.
+- typecheck-if-present: PASS.
+- Test suites: 14/14 PASS.
+- Tests: 307/307 PASS.
+- Snapshots: 0.
+- Test süresi: yaklaşık 5.2 saniye.
+- `CI=true npm run build`: PASS; sonuç `Compiled successfully.`.
+- Production main JS gzip yaklaşık 39.36 KB; en büyük vendor chunk yaklaşık 116.76 KB.
+- `caniuse-lite` veri tabanı güncelleme uyarısı build'i engellemiyor ancak bakım borcu olarak kaldı.
+- Connector runtime içinde gerçek Chrome/Firefox/Safari/device görsel testi çalıştırılamadığı için visual regression ayrıca yapılmalıdır.
 
-### 3D
-- `sceneRuntime.js` mevcut: SceneView oluşturma, lazy module cache, ground, picking, camera/selection sync, bookmark ve measurement contract içeriyor.
-- Kullanıcıya dönük 3D shell entrypoint'i mevcut UI içinde net olmadığı için bu UI turu yeni bir paralel 3D ekran icat etmedi; tasarım sistemi 2D/3D parity için ortak sözleşme sağlıyor.
+### RESPONSIVE / ACCESSIBILITY
+- Sidebar ve query surfaces için modern responsive presentation ayrıştırıldı.
+- Semantik search/navigation/query states, keyboard interaction, visible focus, ARIA/state feedback, reduced-motion/forced-colors ve touch-target yaklaşımı önceki Experience sözleşmesiyle korunup genişletildi.
+- Form/select/input label bağları ve sonuç/action buton semantics bespoke query ekranlarında güçlendirildi.
+- Tekrarlı legacy query ekranlarının ortak managed shell'e taşınması accessibility davranışının tek noktadan uygulanabilirliğini artırdı.
+- Gerçek screen-reader smoke ve browser/device matrisi connector ortamında çalıştırılamadı; sonraki QA turunda zorunlu.
 
-### Network / performance
-- Bu deep tur yeni remote font, CDN, analytics veya üçüncü taraf UI asset çağrısı eklemedi.
-- Generic UI iconları inline SVG; GIS record iconları mevcut local JSON registry + local asset path üzerinden çözülüyor.
-- Loading asset bağımlılığı CSS spinner'a taşındı.
-- Search/layer/command surfaces'te gereksiz perpetual JS animation eklenmedi; DOM reconciliation için stable keys kullanıldı.
-- Browser Network panelinden veri tamamen gizlenemeyeceği varsayımı korunuyor; privacy garantisi verilmedi.
-- Legacy `styles.css` içinde `https://fonts.googleapis.com/css?family=Mukta` import'u halen mevcut; izole CSS cleanup sonraki iştir.
+### NETWORK DEĞİŞİKLİKLERİ / ASSET STRATEGY
+- WMS/WFS eklenmedi.
+- Yeni remote font/CDN/analytics/third-party UI asset bağımlılığı eklenmedi.
+- Same-origin/BFF ve Platform hardening yönü korunuyor; browser Network panelinde görünen verinin gizli sayılmadığı güvenlik modeli devam ediyor.
+- GIS record iconları local asset path + merkezi JSON registry üzerinden çözülüyor.
+- `styles.css` içinde eski Google Fonts Mukta import'u main'de halen tespit edildi; font-family zincirinde Mukta kullanılmadığından kaldırılması yüksek öncelikli cleanup olarak kaldı. Green ve büyük PR merge'i sonrasında doğrulamasız ek kod değişikliğiyle paketi oynatmamak tercih edildi.
 
-### Accessibility / responsive
-- semantic header/aside/nav/form/section/dialog/button
-- icon controls için accessible name
-- `aria-pressed`, `aria-busy`, `role=status`, `role=alert`
-- focus-visible / visible keyboard focus
-- reduced-motion
-- forced-colors
-- 44px touch targets
-- command palette keyboard navigation + active descendant
-- Escape close behavior
-- form/search error and retry feedback
-- Desktop map-primary, tablet compact panels, mobile bottom-sheet/drawer uyarlamaları için CSS/interaction sözleşmesi
-- Gerçek browser/device visual regression ve tam screen-reader smoke bu connector çalışma alanında yürütülemedi.
+### GÜVENLİK KONTROLLERİ
+- Experience turu secret/token/client-key eklemedi; harici analytics veya yeni UI endpoint eklenmedi.
+- Platform bootstrap servis URL'lerinde control-character/newline enjeksiyonu `trim()` öncesinde reddediliyor; lint uyumu için kontrol regex yerine karakter kodu doğrulamasıyla yapılıyor.
+- Dış harita/yol tarifi pencerelerinde safe-open ve `noopener,noreferrer` yaklaşımı yaygınlaştırıldı.
+- Popup web URL'leri yalnız HTTP/HTTPS protokollerine normalize ediliyor.
+- CI'da `npm audit --omit=dev --audit-level=high` görünür hale getirildi fakat legacy kırıcı upgrade'i otomatik zorlamamak için non-blocking tutuldu.
+- Son audit: 197 vulnerability = 10 low, 116 moderate, 53 high, 18 critical.
+- Önemli borçlar arasında legacy `react-scripts` zinciri ile birlikte eski axios, DOMPurify, crypto-js ve jsPDF sürümleri bulunuyor.
+- `npm audit fix --force` uygulanmadı; önerilen react-scripts/axios/jsPDF sıçramaları breaking değişiklik içeriyor ve ayrı kontrollü dependency modernization turu gerektiriyor.
 
-### Test / build
-- `ExperienceUXLayer.test.js` ve `experience-quality.test.js` branch'e eklendi/güncellendi.
-- `.github/workflows/webclient-quality.yml`: Node 18 + `npm ci` + `npm run lint --if-present` + `npm run typecheck --if-present` + `npm test -- --watchAll=false --runInBand` + `npm run build`.
-- Lokal Node/npm bu connector ortamında mevcut değildi; lokal test/build/lint/typecheck çalıştırılamadı.
-- CI workflow'u gerçek runner doğrulaması için mevcut; PR merge öncesi burada sonuç okunamadı.
+### İKON EŞLEŞTİRME
+- İkinci GIS icon mapping sistemi oluşturulmadı.
+- Mevcut `Webclient.app/src/gis-engine/iconRegistry.json` + shared resolver/presentation tek GIS icon authority olarak korunuyor.
+- Eczane, Taksi ve Acil Toplanma Alanı gibi bespoke marker yüzeyleri registry/resolver zincirine alındı.
+- Registry testleri list/2D/3D modelin aynı icon key ve local asset'i çözmesini doğruluyor.
+- Aktif UI içinde bağımsız yeni SceneView entrypoint icat edilmedi; mevcut 3D contract/parity korundu.
 
-### Değişiklik hacmi
-- Deep Experience PR #6: 19 dosya, 895 ekleme, 1.178 silme.
-- Yaklaşık 2.073 satır net anlamlı değişiklik; 4.000 satır yapay boilerplate ile zorlanmadı.
+### MODERNİZASYON KARARLARI
+- En büyük kazanım, onlarca kopya query componentini ortak managed runtime/component yaklaşımına taşımak oldu; bakım maliyeti ve interaction drift azaltıldı.
+- React/CRA major migration bu pakette körlemesine yapılmadı. Mevcut stabil davranış ve CI korunarak browser baseline modernleştirildi; framework/runtime migration ayrı ölçümlü tur olmalı.
+- 21st.dev/shadcn yaklaşımından lisanslı kod kopyalamak yerine composable surface, command, lazy registry, focus/touch/responsive gibi desenler mevcut projeye adapte edildi.
+- Styling pipeline tamamen Tailwind'e zorla taşınmadı; mevcut CSS ile kontrollü modern component CSS birlikte kullanıldı. Büyük styling migration ancak bundle/build/browser ölçümüyle yapılmalı.
+- CI actions/checkout ve setup-node v7, Node 24 ve Ubuntu 24.04 tabanına taşındı.
 
-### Kalan riskler
-- Legacy Google Fonts import'u kaldırılmalı; browser regression sonrası.
-- `color-mix()` / `backdrop-filter` eski tarayıcı fallback'leri browser testinde doğrulanmalı.
-- Full application screen-reader pass ve gerçek responsive visual regression henüz bu runtime'da yapılamadı.
-- `SharedGISIcon` sonuç/table/card surfaces'e gerçek record shape erişimi olan componentlerde daha da yayılabilir.
-- Açık PR #7 Platform/Architecture hardening turudur; bu Experience turunda değiştirilmemiştir.
+### PERFORMANS ETKİSİ
+- Query windows için lazy managed registry, başlangıç render/import baskısını azaltacak mimari sağlar.
+- Sidebar monolitinin katalog/presentation ayrımı render ve bakım karmaşıklığını azaltır.
+- Tekrarlı query component kodunun büyük ölçüde kaldırılması bundle/source parse yükü ve future regression yüzeyini düşürür.
+- Stable React keys ve shared interaction runtime duplicated event/state logic maliyetini azaltır.
+- Owned-resource modeli sayesinde Rota/Global Identify/Ada-Parsel gibi ekranların başka araçlara ait tüm graphics'i global olarak temizlemesi engellendi.
+- Stale async sonuçların yeni sorguyu/selection state'ini ezmesi request gates ile önlendi.
+- Query layer filtreleri sonuç sorgusuyla aynı district/neighborhood/name/nearby semantiğini taşıyor.
+- Modern browser baseline gereksiz legacy transpilation/polyfill baskısını azaltmaya yöneliktir.
 
-## Son Tur Durumu
-- main HEAD: `cdde26bc997e7d1b7c28f668412ab3087607d316`.
-- PR #6: kapalı ve gerçekten merged.
-- Açık PR #7: `feat(platform): deep security, network and runtime hardening`; merge durumu bu Experience turunda değiştirilmedi.
-- WMS/WFS eklenmedi; remote font/CDN/analytics/third-party UI asset eklenmedi.
+### ÇÖZÜLEN HATALAR
+- CI=true altında lint/hook warning'lerinin build'i kırdığı tüm bilinen noktalar kapatıldı; final production build green.
+- Çok sayıda query ekranındaki kopya interaction/state kodu ortak sözleşmeye taşındı.
+- Shell/sidebar ve command/navigation coupling azaltıldı.
+- Search/query ekranlarında loading/error/empty/result durumlarının tutarlılığı iyileştirildi.
+- Literal object throw kullanımları typed Error'a geçirildi.
+- Fast-access katmanlarının form filtresini haritaya uygulamama regresyonu düzeltildi.
+- Route tarafındaki cross-window `RemoveAllGraphics()` yan etkisi scoped/owned cleanup'a dönüştürüldü.
+- Numbering/Pod/Taxi/Vicinity/EGO/Genel Arama'da hook cleanup, stale async ve erişilebilir interaction regresyonları kapatıldı.
+- Platform URL normalizer'ın leading newline/control karakterini `trim()` ile kaybetme açığı düzeltildi.
+- CRA `resetMocks` ile App bootstrap test mock'larının silinmesi giderildi.
+- Search category normalizasyonunda teknik type bilgisinin semantik kategoriyi ezmesi düzeltildi.
 
-## Sonraki ekip notu
-- Legacy Google Fonts import'unu browser doğrulamasıyla kaldır.
-- Command center'ı mevcut `WindowManager` tool actions ile genişlet.
-- `SharedGISIcon` gerçek sonuç/table/card surfaces'e yay.
-- 3D shell entrypoint ve 2D↔3D geçişini GIS/engine ekibiyle ortak ele al.
-- Browser visual regression + screen-reader smoke tamamla.
+### KALAN SORUNLAR
+- Son audit'teki 197 dependency bulgusu ayrı kontrollü dependency modernization turu gerektiriyor; özellikle axios, DOMPurify, crypto-js, jsPDF ve CRA toolchain öncelikli.
+- `Webclient.app/src/styles.css` Google Fonts Mukta import'u kaldırılmalı ve browser regression ile doğrulanmalı.
+- `caniuse-lite` veri tabanı güncellenmeli.
+- React 17/CRA-era dependency ve build zinciri kontrollü migration planı gerektiriyor; `npm audit fix --force` gibi kırıcı otomatik upgrade yapılmamalı.
+- Gerçek Chrome/Firefox/Safari responsive visual regression, touch-device smoke, screen-reader smoke, forced-colors ve reduced-motion device/browser matrisi çalıştırılmalı.
+- 2D↔3D kullanıcı entrypoint'i GIS/engine ekibiyle ortak tasarlanmalı; paralel 3D mapping/UI authority üretilmemeli.
+
+### SONRAKİ GÖREV NOTU
+- Dependency modernization için kırıcı olmayan paketleri önce izole et; axios/DOMPurify/crypto-js/jsPDF yükseltmelerini targeted testlerle yap.
+- Google Fonts Mukta import'unu kaldır; kullanılan font stack'i local/system fontlarla browser/device matrisinde ölç.
+- `caniuse-lite` verisini kontrollü güncelle ve build çıktısını karşılaştır.
+- SharedGISIcon'u gerçek record result/table/card surfaces'e merkezi resolver üzerinden yay.
+- Browser visual regression + keyboard + NVDA/VoiceOver smoke tamamla.
+- Search/query performansını gerçek servis latency ve büyük sonuç setleriyle profile et.
+- Aktif 3D ürün entrypoint'i netleşirse mevcut `sceneRuntime` + shared icon registry üzerinden 2D↔3D parity'yi genişlet; ikinci state veya icon mapping sistemi oluşturma.
 
 ## Kurallar
 - Çalışan davranışlar korunur; WMS/WFS eklenmez; gerçek servis ve response şeması incelenmeden endpoint varsayılmaz.

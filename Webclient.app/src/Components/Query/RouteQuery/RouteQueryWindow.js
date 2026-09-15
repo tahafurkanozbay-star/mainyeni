@@ -1,345 +1,310 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Button, Form } from "react-bootstrap";
+import { BiRadioCircle, BiRadioCircleMarked, BiSearch } from "react-icons/bi";
+import { BsToggleOff, BsToggleOn } from "react-icons/bs";
+import { FiArrowUp, FiMapPin } from "react-icons/fi";
+import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
+import { RiRouteFill } from "react-icons/ri";
+import { CommonBusiness } from "../../../Business/CommonBusiness";
+import { LoggingBusiness } from "../../../Business/LoggingBusiness";
 import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
+import { RouteQueryBusiness } from "../../../Business/RouteQueryBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
-import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
-import { RouteQueryBusiness } from "../../../Business/RouteQueryBusiness";
-import { BiRadioCircle, BiRadioCircleMarked, BiSearch } from "react-icons/bi";
-import { FiArrowUp, FiMapPin, FiPhone, FiType } from "react-icons/fi";
-import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
-import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
-import { CommonBusiness } from "../../../Business/CommonBusiness";
-import { DebugHelper } from "../../../Toolbox/DebugHelper";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
-import { ButtonLoading } from "../../Common/Loading";
-import { BsToggleOff, BsToggleOn } from "react-icons/bs";
-import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { RiRouteFill } from "react-icons/ri";
-import { useRef } from "react";
-import { TextHelper } from "../../../Toolbox/TextHelper";
+import { ButtonLoading, NoResultsFound } from "../../Common/Loading";
+import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
+import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
+
+const WINDOW_TITLE = "Rotalar";
+const WINDOW_LOGO = "images/icons/sidebar/rotalar.png";
+const DEFAULT_QUERY = Object.freeze({
+    name: "",
+    districtId: "",
+    districtName: "",
+    mapSelect: false,
+    showNearby: false,
+    userLocation: null,
+    bufferDistance: 20,
+    routeLevel: 3,
+    showCultureWalkingRoute: true,
+    showNatureWalkingRoute: true
+});
+
+const createDefaultQuery = () => ({ ...DEFAULT_QUERY });
+const getResultValue = (attributes, lower, upper) => attributes?.[lower] ?? attributes?.[upper];
+const getRouteTypeLabel = routeType => Number(routeType) === 1 ? "Kültürel Yürüyüş Rotası" : "Doğa Yürüyüş Rotası";
+const normalizeRoute = item => {
+    const attributes = item?.attr || {};
+    return {
+        Id: attributes.id ?? attributes.objectid,
+        Title: getResultValue(attributes, "adi", "ADI") || "İsimsiz rota",
+        Description: getResultValue(attributes, "aciklama", "ACIKLAMA") || "Açıklama bulunmuyor",
+        RouteLevel: getResultValue(attributes, "zorlukderecesi", "ZORLUKDERECESI") ?? "-",
+        District: getResultValue(attributes, "ilce", "ILCE") || "İlçe bilgisi bulunmuyor",
+        RouteType: getResultValue(attributes, "tip", "TIP")
+    };
+};
 
 export const RouteQueryWindow = React.forwardRef((props, ref) => {
-
-    const windowTitle = "Rotalar";
-    const windowLogo = "images/icons/sidebar/rotalar.png";
-
-    useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            DebugHelper.Log("show " + props.id);
-        },
-        OnClose: () => {
-            DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery);
-            setActiveTab("form");
-            setResultList(null);
-            removeLastClusterLayer();
-            MapManager.RemoveAllGraphics();
-            commonToolsComponentRef.current.OnClose();
-        }
-    }));
-
-    const commonToolsComponentRef=useRef();
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
-    useEffect(() => {
-
-        props.windowManager.RegisterWindow(ref);
-        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
-
-        NumberingQueryBusiness.GetDistricts().then(_result => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setDistrictList(_result.data);
-            }
-        });
-
-    }, []);
-
-
-    const cmbDistrict_OnChange = (e) => {
-
-        const districtId = e.target.value;
-        setQueryField("districtId", districtId);
-        setQueryField("districtName", e.target.selectedOptions[0].text);
-    }
-
-
-    const defaultQuery = { name: null, districtId: null, showMapSelect: false, showNearby: false, routeLevel: 3, showCultureWalkingRoute:true, showNatureWalkingRoute:true };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery(query => {
-            return { ...query, [_field]: _value }
-        })
-    }
-
-    const [clusterLayer, setClusterLayer] = useState(null);
-    const removeLastClusterLayer = () => {
-        if (clusterLayer != null) {
-            mapView.map.remove(clusterLayer.layerObj);
-            setClusterLayer(null);
-        }
-    }
-
-
+    const { id, queryServiceTitle, windowManager } = props;
+    const [districtList, setDistrictList] = useState([]);
+    const [query, setQuery] = useState(createDefaultQuery);
     const [resultList, setResultList] = useState(null);
     const [activeTab, setActiveTab] = useState("form");
-    const btnBack_OnClick = (e) => {
-        removeLastClusterLayer();
-        setActiveTab("form");
-    }
-
     const [loading, setLoading] = useState(false);
-    const btnSubmit_OnClick = (e) => {
+    const [errorMessage, setErrorMessage] = useState("");
 
-        e?.preventDefault();
+    const commonToolsComponentRef = useRef(null);
+    const mapViewRef = useRef(null);
+    const clusterLayerRef = useRef(null);
+    const routeGraphicRef = useRef(null);
+    const requestIdRef = useRef(0);
+
+    const showMessage = useCallback(message => {
+        windowManager.ShowMessage(Constants_MessageType.Error, message);
+    }, [windowManager]);
+
+    const logClientEvent = (eventName, payload) => {
+        Promise.resolve(LoggingBusiness.CreateClientLog(eventName, payload)).catch(() => {});
+    };
+
+    const removeLastClusterLayer = useCallback(() => {
+        const layer = clusterLayerRef.current?.layerObj || clusterLayerRef.current;
+        if (mapViewRef.current?.map && layer) mapViewRef.current.map.remove(layer);
+        clusterLayerRef.current = null;
+    }, []);
+
+    const removeRouteGraphic = useCallback(() => {
+        if (routeGraphicRef.current) {
+            MapManager.RemoveGraphics(routeGraphicRef.current);
+            routeGraphicRef.current = null;
+        }
+    }, []);
+
+    const resetWindow = useCallback(() => {
+        requestIdRef.current += 1;
+        removeLastClusterLayer();
+        removeRouteGraphic();
+        setQuery(createDefaultQuery());
+        setResultList(null);
+        setActiveTab("form");
+        setLoading(false);
+        setErrorMessage("");
+        commonToolsComponentRef.current?.OnClose?.();
+    }, [removeLastClusterLayer, removeRouteGraphic]);
+
+    useImperativeHandle(ref, () => ({
+        id,
+        visible: false,
+        minimized: false,
+        OnShow: () => {},
+        OnClose: resetWindow
+    }), [id, resetWindow]);
+
+    useEffect(() => {
+        windowManager.RegisterWindow(ref);
+        mapViewRef.current = MapManager.GetMapView();
+        let active = true;
+
+        NumberingQueryBusiness.GetDistricts()
+            .then(result => {
+                if (active && result?.type === Constants_ServiceResultType.Success) setDistrictList(result.data || []);
+            })
+            .catch(error => {
+                if (active) setErrorMessage(error?.message || "İlçe listesi alınamadı.");
+            });
+
+        return () => {
+            active = false;
+            requestIdRef.current += 1;
+            removeLastClusterLayer();
+            removeRouteGraphic();
+            mapViewRef.current = null;
+        };
+    }, [ref, removeLastClusterLayer, removeRouteGraphic, windowManager]);
+
+    const setQueryField = (field, value) => setQuery(current => ({ ...current, [field]: value }));
+
+    const districtOnChange = event => {
+        const districtId = event.target.value;
+        const districtName = districtId ? event.target.selectedOptions[0]?.text || "" : "";
+        setQuery(current => ({ ...current, districtId, districtName }));
+    };
+
+    const setRouteType = field => setQuery(current => ({ ...current, [field]: !current[field] }));
+
+    const loadRouteLayer = async (requestId, activeQuery) => {
+        const mapView = mapViewRef.current;
+        if (!mapView?.map || !queryServiceTitle) return;
+        try {
+            const clusterLayer = await CommonBusiness.Clustering.CreateClusterLayer(
+                queryServiceTitle,
+                WINDOW_TITLE,
+                activeQuery,
+                null
+            );
+            if (requestId !== requestIdRef.current) return;
+            removeLastClusterLayer();
+            if (clusterLayer?.layerObj) {
+                clusterLayerRef.current = clusterLayer;
+                mapView.map.add(clusterLayer.layerObj);
+            }
+        } catch (error) {
+            // Query results remain usable if the optional overview layer cannot be rendered.
+        }
+    };
+
+    const submitQuery = async event => {
+        event?.preventDefault?.();
+        if (loading) return;
+        const requestId = ++requestIdRef.current;
         setLoading(true);
+        setErrorMessage("");
+        logClientEvent("Rota/Sorgu", `${query.districtName}/${query.routeLevel}/${query.showCultureWalkingRoute}/${query.showNatureWalkingRoute}`);
 
-        RouteQueryBusiness.Query(query, false).then((_result) => {
+        try {
+            const result = await RouteQueryBusiness.Query(query, false);
+            if (requestId !== requestIdRef.current) return;
+            if (result?.type !== Constants_ServiceResultType.Success) throw new Error("Rota sonuçları alınamadı.");
+            setResultList((result.data || []).map(normalizeRoute));
+            setActiveTab("query");
+            await loadRouteLayer(requestId, query);
+        } catch (error) {
+            if (requestId !== requestIdRef.current) return;
+            const message = error?.message || "Rota sorgusu sırasında bir hata oluştu.";
+            setErrorMessage(message);
+            showMessage(message);
+        } finally {
+            if (requestId === requestIdRef.current) setLoading(false);
+        }
+    };
 
-            if (_result.type == Constants_ServiceResultType.Success) {
+    const getItemDetailsById = async item => {
+        const result = await RouteQueryBusiness.Query({ Id: item.Id }, true);
+        if (result?.type === Constants_ServiceResultType.Success && result.data?.length) return result.data[0];
+        throw new Error("Rota ayrıntıları bulunamadı.");
+    };
 
-                setActiveTab("query");
+    const showRouteOnMap = async (event, item) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        logClientEvent("Rota/Detay Göster", `${item.Id}/${item.Title}`);
+        try {
+            const itemDetails = await getItemDetailsById(item);
+            if (!itemDetails?.geometry) throw new Error("Rota geometrisi bulunamadı.");
+            const projectedGeometry = await GisGraphicsHelper.ProjectGeometry(itemDetails.geometry, "4326");
+            const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(projectedGeometry, null);
+            removeRouteGraphic();
+            routeGraphicRef.current = graphic;
+            MapManager.AddGraphics(graphic, true);
+            GisGraphicsHelper.ZoomToGeometryExtent(mapViewRef.current, projectedGeometry, 1.5);
+            if (window.matchMedia?.("(max-width: 959px)").matches) windowManager.ToggleMinimiseWindow(id);
+        } catch (error) {
+            showMessage(error?.message || "Rota haritada gösterilemedi.");
+        }
+    };
 
-                CommonBusiness.Clustering.CreateClusterLayer(props.queryServiceTitle, windowTitle, null, null).then((_clusterLayer) => {
+    const showDirections = async (event, item) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        try {
+            const itemDetails = await getItemDetailsById(item);
+            const geometry = itemDetails?.geometry;
+            const destination = geometry?.extent?.center || geometry?.centroid || geometry;
+            const latitude = Number(destination?.latitude ?? destination?.y);
+            const longitude = Number(destination?.longitude ?? destination?.x);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error("Yol tarifi için rota konumu bulunamadı.");
+            logClientEvent("Rota/Yol Tarifi", `${item.Id}/${item.Title}`);
+            const opened = window.open(`https://www.google.com.tr/maps?saddr=My+Location&daddr=${latitude},${longitude}`, "_blank", "noopener,noreferrer");
+            if (opened) opened.opener = null;
+        } catch (error) {
+            showMessage(error?.message || "Yol tarifi alınamadı.");
+        }
+    };
 
-                    removeLastClusterLayer();
+    const backToForm = () => {
+        requestIdRef.current += 1;
+        removeLastClusterLayer();
+        removeRouteGraphic();
+        setActiveTab("form");
+    };
 
-                    setClusterLayer(_clusterLayer);
-                    mapView.map.add(_clusterLayer.layerObj);
+    const renderForm = () => (
+        <Form onSubmit={submitQuery} aria-label="Rota filtreleri">
+            <fieldset className="horizontal-layout">
+                <legend className="visually-hidden">Rota türleri</legend>
+                <button type="button" className="form-checkbox form-checkbox-vertical" aria-pressed={query.showCultureWalkingRoute} onClick={() => setRouteType("showCultureWalkingRoute")}>
+                    <span>Kültürel Rotalar</span>
+                    {query.showCultureWalkingRoute ? <BsToggleOn aria-hidden="true" /> : <BsToggleOff aria-hidden="true" />}
+                </button>
+                <button type="button" className="form-checkbox form-checkbox-vertical" aria-pressed={query.showNatureWalkingRoute} onClick={() => setRouteType("showNatureWalkingRoute")}>
+                    <span>Doğal Yürüyüş Rotaları</span>
+                    {query.showNatureWalkingRoute ? <BsToggleOn aria-hidden="true" /> : <BsToggleOff aria-hidden="true" />}
+                </button>
+            </fieldset>
 
-                });
+            {!query.showNearby && !query.mapSelect && (
+                <Form.Group>
+                    <label className="form-label" htmlFor={`${id}-route-district`}>İlçe</label>
+                    <select id={`${id}-route-district`} className="form-select form-control" onChange={districtOnChange} value={query.districtId}>
+                        <option value="">Seçiniz..</option>
+                        {districtList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}
+                    </select>
+                </Form.Group>
+            )}
 
-                let list = [];
+            <Form.Group>
+                <fieldset className="route-level-fieldset">
+                    <legend className="form-label">Zorluk Derecesi</legend>
+                    <div className="radio-group" role="radiogroup" aria-label="Zorluk derecesi">
+                        {[1, 2, 3, 4, 5].map(level => (
+                            <button type="button" role="radio" aria-checked={query.routeLevel === level} className="radio-group-item" key={level} onClick={() => setQueryField("routeLevel", level)}>
+                                {query.routeLevel === level ? <BiRadioCircleMarked className="radio-group-item-icon" aria-hidden="true" /> : <BiRadioCircle className="radio-group-item-icon" aria-hidden="true" />}
+                                <span>{level}</span>
+                            </button>
+                        ))}
+                    </div>
+                </fieldset>
+            </Form.Group>
 
-                _result.data.forEach(_item => {
-                    list.push({
-                        Id: _item.attr.id ?? _item.attr.objectid,
-                        Title: _item.attr.ADI ?? _item.attr.adi,
-                        Description: _item.attr.ACIKLAMA ?? _item.attr.aciklama,
-                        RouteLevel: _item.attr.ZORLUKDERECESI ?? _item.attr.zorlukderecesi,
-                        District: _item.attr.ILCE ?? _item.attr.ilce,
-                        RouteType: _item.attr.TIP ?? _item.attr.tip,
-                    });
-                });
-                setResultList(list);
-                setLoading(false);
+            {!query.mapSelect && <Form.Group>{loading ? <ButtonLoading /> : <Button type="submit" className="form-button"><BiSearch className="form-button-icon" aria-hidden="true" /><span>Sorgula</span></Button>}</Form.Group>}
+            {errorMessage && <div className="kr-status-banner kr-status-banner--danger" role="alert">{errorMessage}</div>}
+        </Form>
+    );
 
-            }
-        });
-
-    }
-
-
-    const getItemDetailsById = async (_item) => {
-
-        return new Promise((resolve, reject) => {
-            RouteQueryBusiness.Query({ Id: _item.Id }, true).then((_result) => {
-                if (_result.type == Constants_ServiceResultType.Success) {
-                    if (_result.data != null) {
-                        const _resultItem = _result.data[0];
-                        resolve(_resultItem);
-                    }
-                    else {
-                        reject(null);
-                    }
-                }
-            });
-        });
-
-    }
-
-    const item_OnClick = (e, _item) => {
-
-        LoggingBusiness.CreateClientLog("Rota/Detay Göster", _item.Id + "/" + _item.Title);
-        getItemDetailsById(_item).then(_itemDetails => {
-
-            GisGraphicsHelper.ProjectGeometry(_itemDetails?.geometry, "4326").then((_pGeometry)=>{
-
-                GisGraphicsHelper.CreateGraphicFromGeometry(_pGeometry,null).then((_graphic)=>{
-                    MapManager.AddGraphics(_graphic,true);
-                    GisGraphicsHelper.ZoomToGeometryExtent(mapView, _pGeometry, 1.5);
-                
-                });
-
-                if (window.screen.width < 960) {
-                    props.windowManager.ToggleMinimiseWindow(props.id);
-                }
-
-
-            });
-
-        });
-    }
-
-    const item_ShowRoute = (e, _item) => {
-
-        getItemDetailsById(_item).then(_itemDetails => {
-
-            if (_itemDetails != null) {
-                const lat = _itemDetails.geometry.latitude;
-                const lng = _itemDetails.geometry.longitude;
-                let url = "https://www.google.com.tr/maps?saddr=My+Location&daddr=" + lat + "," + lng;
-                window.open(url, "_blank");
-                //TODO: create log
-            }
-            else {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
-            }
-
-
-        });
-    }
-
-    return (<>
-        <div className="common-query-window"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-            <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src={windowLogo}></img>
-                <span>{windowTitle}</span>
-                <CommonQueryWindowTools
-                    ref={commonToolsComponentRef}
-                    windowManager={props.windowManager}
-                    windowId={props.id}
-                    setQueryField={setQueryField}
-                    query={query}
-                    showNearbySearch={activeTab == "form"}
-                    showMapSelect={activeTab == "form"} />
-
+    const renderResults = () => (
+        <div className="results-container">
+            <div className="results-container-toolbar">
+                <button className="results-container-back-button" type="button" onClick={backToForm}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button>
+                <div className="results-container-count" aria-live="polite"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div>
             </div>
-            <div className={"common-query-window-body " + (props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : "")}>
-                {
-                    activeTab === "form" ?
-                        <>
-                            <Form onSubmit={(e) => btnSubmit_OnClick(e)}>
-                                <div className="horizontal-layout">
-                                    {<div onClick={(e) => setQueryField("showCultureWalkingRoute", !query.showCultureWalkingRoute)}
-                                        className="form-checkbox form-checkbox-vertical">
-                                        <span>Kültürel Rotalar</span>{
-                                            query && query.showCultureWalkingRoute ? <BsToggleOn /> : <BsToggleOff />
-                                        }
-                                    </div>
-                                    }
-
-                                    {<div onClick={(e) => setQueryField("showNatureWalkingRoute", !query.showNatureWalkingRoute)}
-                                        className="form-checkbox form-checkbox-vertical">
-                                        <span>Doğal Yürüyüş Rotaları</span>{
-                                            query && query.showNatureWalkingRoute ? <BsToggleOn /> : <BsToggleOff />
-                                        }
-                                    </div>
-                                    }
-                                </div>
-                                {
-                                    (!query.showNearby && !query.mapSelect) && <>
-                                        <Form.Group>
-                                            <label className="form-label">İlçe</label>
-                                            <select className="form-select form-control" onChange={((e) => cmbDistrict_OnChange(e))}
-                                                value={query.districtId}>
-                                                <option value="">Seçiniz..</option>
-                                                {
-                                                    districtList?.map(_item => {
-                                                        return <option key={TextHelper.CreateRandomNumber()} value={_item.attr.id}>{_item.attr.ad}</option>
-                                                    })
-                                                }
-                                            </select>
-                                        </Form.Group>
-                                    </>
-                                }
-
-                                <Form.Group>
-                                    
-                                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', marginTop: '20px' }}>
-                                    <label className="form-label">Zorluk Derecesi</label>
-                                        <div style={{ flexShrink: '0', flexGrow: '1' }}>
-
-                                            <div className="radio-group">
-                                                {
-                                                    
-                                                    [1, 2, 3, 4, 5].map(_level => {
-                                                        return <div className="radio-group-item" 
-                                                        key={TextHelper.CreateRandomNumber()}
-                                                        onClick={(e)=>setQueryField("routeLevel",_level)}>
-                                                            {
-                                                                query.routeLevel==_level ? <BiRadioCircleMarked className="radio-group-item-icon" />
-                                                                : <BiRadioCircle className="radio-group-item-icon" />
-                                                            }
-                                                            <span>{_level}</span>
-                                                        </div>
-                                                    })
-                                                }
-
-                                            </div>
-
-                                        </div>
-                                    
-                                    </div>
-
-                                </Form.Group>
-                                {
-                                    !query.mapSelect &&
-                                    <Form.Group>
-                                        {
-                                            loading ? <ButtonLoading />
-                                                : <Button type="button" className="form-button" onClick={(e) => btnSubmit_OnClick()}>
-                                                    <BiSearch className="form-button-icon" /><span>Sorgula</span>
-                                                </Button>
-                                        }
-                                    </Form.Group>
-                                }
-
-                            </Form>
-                        </> : <div className="results-container">
-                            {
-                                <>
-                                    <div className="results-container-toolbar">
-                                        <div className="results-container-back-button" onClick={(e) => btnBack_OnClick(e)}>
-                                            <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" />
-                                            &nbsp;Geri Dön
-                                        </div>
-                                        <div className="results-container-count">
-                                            <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
-                                        </div>
-                                    </div>
-                                    {
-                                        resultList?.map(_item => {
-                                            return <div className="result-item-container" key={TextHelper.CreateRandomNumber()} onClick={(e) => item_OnClick(e, _item)}>
-                                                <div className="result-item-info">
-                                                    <div className="result-item-info-title">
-                                                        {_item.Title}
-                                                    </div>
-                                                    <div className="result-item-info-address">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.District}
-                                                    </div>
-                                                    <div className="result-item-info-address-description">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.Description}
-                                                    </div>
-                                                    <div className="result-item-info-phone">
-                                                        <FiArrowUp />&nbsp;
-                                                        {_item.RouteLevel}
-                                                        &nbsp;&nbsp;&nbsp;&nbsp;
-                                                        <RiRouteFill />&nbsp;
-                                                        {_item.RouteType==1 ? "Kültürel Yürüyüş Rotası" : "Doğa Yürüyüş Rotası"}
-                                                    </div>
-                                                </div>
-                                                <CommonQueryResultItemTools
-                                                    item={_item}
-                                                    zoomCallback={(e) => item_OnClick(e, _item)}
-                                                    showRouteCallback={(e) => item_ShowRoute(e, _item)}
-                                                />
-                                            </div>
-                                        })
-                                    }
-                                </>
-                            }
-                        </div>
-                }
-            </div>
+            {resultList?.length === 0 ? <NoResultsFound /> : resultList?.map(item => (
+                <article className="result-item-container" key={item.Id ?? `${item.Title}-${item.District}`}>
+                    <button type="button" className="result-item-info" onClick={event => showRouteOnMap(event, item)} aria-label={`${item.Title} rotasını haritada göster`}>
+                        <span className="result-item-info-title">{item.Title}</span>
+                        <span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.District}</span>
+                        <span className="result-item-info-address-description"><FiMapPin aria-hidden="true" />&nbsp;{item.Description}</span>
+                        <span className="result-item-info-phone"><FiArrowUp aria-hidden="true" />&nbsp;{item.RouteLevel}&nbsp;&nbsp;&nbsp;&nbsp;<RiRouteFill aria-hidden="true" />&nbsp;{getRouteTypeLabel(item.RouteType)}</span>
+                    </button>
+                    <CommonQueryResultItemTools item={item} zoomCallback={event => showRouteOnMap(event, item)} showRouteCallback={event => showDirections(event, item)} />
+                </article>
+            ))}
         </div>
-    </>);
+    );
+
+    return (
+        <section className="common-query-window" aria-label={WINDOW_TITLE} style={{ visibility: windowManager.IsVisible(id) ? "visible" : "hidden" }}>
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src={WINDOW_LOGO} alt="" aria-hidden="true" />
+                <span>{WINDOW_TITLE}</span>
+                <CommonQueryWindowTools ref={commonToolsComponentRef} windowManager={windowManager} windowId={id} setQueryField={setQueryField} query={query} showNearbySearch={activeTab === "form"} showMapSelect={activeTab === "form"} />
+            </header>
+            <div className={`common-query-window-body ${windowManager.IsMinimized(id) ? "common-query-window-body-collapsed" : ""}`}>
+                {activeTab === "form" ? renderForm() : renderResults()}
+            </div>
+        </section>
+    );
 });
+
+RouteQueryWindow.displayName = "RouteQueryWindow";

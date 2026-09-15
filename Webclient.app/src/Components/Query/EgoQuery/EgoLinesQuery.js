@@ -1,158 +1,196 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
-import { Accordion, Button, Form, InputGroup, Tab, Tabs } from "react-bootstrap";
-import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Accordion, InputGroup } from "react-bootstrap";
 import { BiSearch } from "react-icons/bi";
-import { ButtonLoading, ContainerLoading, NoResultsFound } from "../../Common/Loading";
-import { LoggingBusiness } from "../../../Business/LoggingBusiness";
 import { EgoQueryBusiness } from "../../../Business/EgoQueryBusiness";
-import { IsNull } from "../../../Toolbox/ObjectHelper";
-import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
+import { LoggingBusiness } from "../../../Business/LoggingBusiness";
+import { Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
-import { TextHelper } from "../../../Toolbox/TextHelper";
+import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
+import { ContainerLoading, NoResultsFound } from "../../Common/Loading";
+import {
+    createLatestRequestGate,
+    createOwnedResourceRegistry,
+    normalizeErrorMessage,
+    safeClientLog
+} from "../_Common/QueryInteractionRuntime";
+import { filterEgoLines, parseRouteCoordinatePairs } from "../_Common/QuerySearchRuntime";
 import { EgoStopsQuery } from "./EgoStopsQuery";
 
-export const EgoLinesQuery = ({ lines , showAll }) => {
+const RESULT_LIMIT = 40;
+
+export const EgoLinesQuery = ({ lines, showAll = false }) => {
+    const requestGateRef = useRef(createLatestRequestGate());
+    const resourceRegistryRef = useRef(createOwnedResourceRegistry({
+        removeGraphic: graphic => MapManager.RemoveGraphics(graphic)
+    }));
+    const mountedRef = useRef(true);
+
+    const [searchText, setSearchText] = useState("");
+    const [stopsList, setStopsList] = useState([]);
+    const [activeLineKey, setActiveLineKey] = useState(null);
+    const [loadingLineKey, setLoadingLineKey] = useState(null);
+    const [errorMessage, setErrorMessage] = useState("");
+
+    const filteredList = useMemo(
+        () => filterEgoLines(lines, searchText, showAll).slice(0, RESULT_LIMIT),
+        [lines, searchText, showAll]
+    );
+
+    const clearOwnedGraphics = useCallback(() => {
+        resourceRegistryRef.current.clearGraphics();
+    }, []);
 
     useEffect(() => {
+        mountedRef.current = true;
+        const requestGate = requestGateRef.current;
+        return () => {
+            mountedRef.current = false;
+            requestGate.invalidate();
+            clearOwnedGraphics();
+        };
+    }, [clearOwnedGraphics]);
 
-        if(showAll){
-            setfilteredList([...lines]);
-        }
-    }, [lines]);
+    useEffect(() => {
+        requestGateRef.current.invalidate();
+        clearOwnedGraphics();
+        setSearchText("");
+        setStopsList([]);
+        setActiveLineKey(null);
+        setLoadingLineKey(null);
+        setErrorMessage("");
+    }, [clearOwnedGraphics, lines]);
 
+    const showDetails = useCallback(async line => {
+        if (!line?.lineNo) return;
+        const lineKey = `${line.lineNo}:${line.lineName}`;
+        const requestId = requestGateRef.current.next();
+        setActiveLineKey(lineKey);
+        setLoadingLineKey(lineKey);
+        setStopsList([]);
+        setErrorMessage("");
+        safeClientLog(LoggingBusiness, "EGO/Hat/Detay Göster", `${line.lineNo}/${line.lineName}`);
 
-    const [activeLineDetails, setActiveLineDetails] = useState(null);
-    const [filteredList, setfilteredList] = useState(null);
-    const [stopsList, setStopsList] = useState(null);
-
-
-    const showDetails = async (_line) => {
-
-        LoggingBusiness.CreateClientLog("EGO/Hat/Detay Göster", _line.haT_NO + "/" + _line.haT_ADI);
-
-        const response = await EgoQueryBusiness.GetLineInfo(_line.haT_NO);
-
-        if (response.type == Constants_ServiceResultType.Success) {
-
-            const _details = response.data;
-
-            const _stopsList = _details.duraklar;
-            setStopsList(_stopsList);
-
-            const _coordinates = _details.guzergah.split(" ");
-            const _points = [];
-            for (let index = 0; index < _coordinates.length; index = index + 2) {
-
-                const lat = parseFloat(_coordinates[index].replace(",", ""));
-                const lng = parseFloat(_coordinates[index + 1]);
-
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    _points.push([lng, lat]);
-                }
-
+        try {
+            const response = await EgoQueryBusiness.GetLineInfo(line.lineNo);
+            if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+            if (response?.type !== Constants_ServiceResultType.Success) {
+                throw new Error(response?.message || "Hat ayrıntıları alınamadı.");
             }
 
-            const _mapView = MapManager.GetMapView();
-            GisGraphicsHelper.CreatePolylineFromXYPoints([_points]).then(_polygon => {
+            const details = response?.data || {};
+            setStopsList(Array.isArray(details.duraklar) ? details.duraklar : []);
 
-                GisGraphicsHelper.CreateGraphicFromGeometry(_polygon).then(_graphic => {
-                    MapManager.AddGraphics(_graphic, true);
-                    GisGraphicsHelper.ZoomToGeometryExtent(_mapView, _polygon, 1.5)
-                });
-            });
+            const points = parseRouteCoordinatePairs(details.guzergah);
+            clearOwnedGraphics();
+            if (points.length < 2) return;
 
+            const mapView = MapManager.GetMapView();
+            if (!mapView) throw new Error("Harita görünümü hazır değil.");
+            const polyline = await GisGraphicsHelper.CreatePolylineFromXYPoints([points]);
+            if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+            const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(polyline);
+            if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
 
-            setActiveLineDetails(_details);
-
+            resourceRegistryRef.current.trackGraphic(graphic);
+            MapManager.AddGraphics(graphic, true);
+            GisGraphicsHelper.ZoomToGeometryExtent(mapView, polyline, 1.5);
+        } catch (error) {
+            if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+            setErrorMessage(normalizeErrorMessage(error, "Hat ayrıntıları gösterilemedi."));
+        } finally {
+            if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) setLoadingLineKey(null);
         }
-    }
+    }, [clearOwnedGraphics]);
 
+    const closeLine = useCallback(lineKey => {
+        if (activeLineKey !== lineKey) return;
+        requestGateRef.current.invalidate();
+        setActiveLineKey(null);
+        setLoadingLineKey(null);
+        setStopsList([]);
+        setErrorMessage("");
+        clearOwnedGraphics();
+    }, [activeLineKey, clearOwnedGraphics]);
 
-    const showStop = (_stop) => {
+    if (lines === null || lines === undefined) return <ContainerLoading />;
+    if (!Array.isArray(lines) || lines.length === 0) return <NoResultsFound message="Aktif EGO hattı bulunamadı." />;
 
-        const _mapView = MapManager.GetMapView();
+    const visibleCount = filteredList.length;
+    const totalCount = lines.length;
+    const searchActive = searchText.trim().length > 0;
 
-        const _lat = parseFloat(_stop.lat.replace(",", "."));
-        const _lng = parseFloat(_stop.lng.replace(",", "."));
+    return (
+        <section className="ego-query-window-items-container" aria-label="EGO hatları">
+            <div className="ego-query-window-items-search">
+                <InputGroup className="fulltextsearch-text-group ego-query-window-items-search-group">
+                    <label className="visually-hidden" htmlFor="ego-line-search">EGO hattı ara</label>
+                    <input
+                        id="ego-line-search"
+                        type="search"
+                        className="fulltextsearch-text-input"
+                        placeholder="Hat adıyla ya da numarasıyla arayın"
+                        value={searchText}
+                        onChange={event => setSearchText(event.target.value)}
+                        aria-describedby="ego-line-search-status"
+                        autoComplete="off"
+                    />
+                    <InputGroup.Text className="fulltextsearch-text-icon"><BiSearch size="2rem" aria-hidden="true" /></InputGroup.Text>
+                </InputGroup>
+                <div id="ego-line-search-status" className="ego-query-window-items-status" aria-live="polite">
+                    {searchActive
+                        ? `${visibleCount} hat eşleşti`
+                        : showAll
+                            ? `${Math.min(totalCount, RESULT_LIMIT)} hat gösteriliyor`
+                            : "Aramak için hat adı veya numarası yazın"}
+                </div>
+            </div>
 
-        GisGraphicsHelper.CreatePoint({ latitude: _lat, longitude: _lng }).then(_point => {
+            {errorMessage && (
+                <div className="kr-status-banner kr-status-banner--danger" role="alert">
+                    {errorMessage}
+                </div>
+            )}
 
-            GisGraphicsHelper.CreateGraphicFromGeometry(_point).then(_graphic => {
-                MapManager.AddGraphics(_graphic, false);
-                GisGraphicsHelper.ZoomToGeometry(_mapView, _point, 17)
-            });
-
-        });
-
-    }
-
-
-    const search = (e) => {
-
-        const text = e.target.value;
-
-        if (!IsNull(text) && text.length > 2) {
-            const filtered = lines.filter(line => line.haT_ADI.includes(TextHelper.TurkishToUpper(text.trim())) || line.haT_NO.includes(TextHelper.TurkishToUpper(text.trim())));
-            setfilteredList(filtered);
-        }
-        else {
-            setfilteredList([]);
-        }
-
-    }
-
-    return (<>
-        {
-            lines == null ? <ContainerLoading /> :
-                lines.length == 0 ? <NoResultsFound /> :
-                    <div className="ego-query-window-items-container">
-                        <div className="ego-query-window-items-search">
-                            <InputGroup className="fulltextsearch-text-group ego-query-window-items-search-group">
-                                <input
-                                    autoFocus
-                                    type="text"
-                                    className="fulltextsearch-text-input"
-                                    placeholder="Hat adıyla ya da numarasıyla arayın"
-                                    onChange={(e) => search(e)}
-                                />
-                                <InputGroup.Text className="fulltextsearch-text-icon">
-                                    <BiSearch size="2rem" />
-                                </InputGroup.Text>
-                            </InputGroup>
-
-
-                        </div>
-                        {
-                            filteredList?.length == 0 ? <NoResultsFound /> :
-                                <Accordion>
-                                    {
-                                        filteredList?.map((line, index) => {
-                                            return (index<20) && <Accordion.Item eventKey={index} key={index}>
-                                                <Accordion.Header onClick={(e) => { showDetails(line) }}>
-                                                    <div key={index} className="ego-query-window-item">
-                                                        <div className="ego-query-window-item-no">{line.haT_NO}</div>
-                                                        <div className="ego-query-window-item-name">{line.haT_ADI}</div>
-                                                        <div className="ego-query-window-item-type">{line.haT_TIPI}</div>
-                                                    </div>
-                                                </Accordion.Header>
-                                                <Accordion.Body>
-                                                    <div className="ego-query-window-item-details">
-                                                    <div className="ego-query-window-item-details-header">Hattın geçtiği duraklar</div>
-                                                        {
-                                                            stopsList == null ? <ContainerLoading /> :
-                                                                stopsList.length == 0 ? <NoResultsFound /> :
-                                                                   <EgoStopsQuery stops={stopsList} showAll={true}/>
-                                                        }
-                                                    </div>
-                                                </Accordion.Body>
-                                            </Accordion.Item>
-                                        })
-                                    }
-                                </Accordion>
-
-                        }
-                    </div>
-        }
-
-    </>);
-}
+            {visibleCount === 0 ? (
+                <NoResultsFound message={searchActive ? "Aramanızla eşleşen hat bulunamadı." : "Hat aramak için en az bir karakter yazın."} />
+            ) : (
+                <Accordion activeKey={activeLineKey || undefined} alwaysOpen={false}>
+                    {filteredList.map((line, index) => {
+                        const lineKey = `${line.lineNo || "line"}:${line.lineName || ""}:${index}`;
+                        const identityKey = `${line.lineNo || "line"}:${line.lineName || ""}`;
+                        const active = activeLineKey === identityKey;
+                        const busy = loadingLineKey === identityKey;
+                        return (
+                            <Accordion.Item eventKey={identityKey} key={lineKey}>
+                                <Accordion.Header
+                                    onClick={() => {
+                                        if (active) closeLine(identityKey);
+                                        else showDetails(line);
+                                    }}
+                                >
+                                    <span className="ego-query-window-item">
+                                        <span className="ego-query-window-item-no">{line.lineNo || "—"}</span>
+                                        <span className="ego-query-window-item-name">{line.lineName || "İsimsiz hat"}</span>
+                                        <span className="ego-query-window-item-type">{busy ? "Yükleniyor…" : line.lineType || "Hat"}</span>
+                                    </span>
+                                </Accordion.Header>
+                                <Accordion.Body>
+                                    <div className="ego-query-window-item-details" aria-busy={busy}>
+                                        <div className="ego-query-window-item-details-header">Hattın geçtiği duraklar</div>
+                                        {busy ? (
+                                            <ContainerLoading />
+                                        ) : stopsList.length === 0 ? (
+                                            <NoResultsFound message="Bu hat için durak bilgisi bulunamadı." />
+                                        ) : (
+                                            <EgoStopsQuery stops={stopsList} showAll />
+                                        )}
+                                    </div>
+                                </Accordion.Body>
+                            </Accordion.Item>
+                        );
+                    })}
+                </Accordion>
+            )}
+        </section>
+    );
+};

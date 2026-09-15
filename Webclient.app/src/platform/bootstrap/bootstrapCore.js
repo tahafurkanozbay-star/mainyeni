@@ -194,10 +194,18 @@ export const normalizeConfigurationServices = (result) => {
   return services;
 };
 
+const containsControlCharacter = (value) => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+};
+
 export const normalizeProxyUrl = (value, options = {}) => {
   const { allowEmpty = false, serviceIndex = null } = options;
 
-  if (value === null || value === undefined || String(value).trim() === '') {
+  if (value === null || value === undefined) {
     if (allowEmpty) return null;
     throw new AppError('CBS servis adresi eksik.', {
       code: BootstrapErrorCode.SERVICE_URL_INVALID,
@@ -206,9 +214,19 @@ export const normalizeProxyUrl = (value, options = {}) => {
     });
   }
 
-  const url = String(value).trim();
-  if (/^[\u0000-\u001F\u007F]/.test(url) || /[\r\n]/.test(url)) {
+  const rawUrl = String(value);
+  if (containsControlCharacter(rawUrl)) {
     throw new AppError('CBS servis adresi geçersiz karakter içeriyor.', {
+      code: BootstrapErrorCode.SERVICE_URL_INVALID,
+      retryable: false,
+      details: { serviceIndex }
+    });
+  }
+
+  const url = rawUrl.trim();
+  if (!url) {
+    if (allowEmpty) return null;
+    throw new AppError('CBS servis adresi eksik.', {
       code: BootstrapErrorCode.SERVICE_URL_INVALID,
       retryable: false,
       details: { serviceIndex }

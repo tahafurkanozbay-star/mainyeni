@@ -1,158 +1,260 @@
-import React, { useEffect, useImperativeHandle, useState, useRef } from "react";
-import { Button, Form } from "react-bootstrap";
-import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
-import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
-import MapManager from "../../../Store/Managers/MapManager";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { FiMapPin, FiPhone } from "react-icons/fi";
 import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
-import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
-import { CommonBusiness } from "../../../Business/CommonBusiness";
-import { DebugHelper } from "../../../Toolbox/DebugHelper";
+import { GenelAramaQeryBusiness } from "../../../Business/GenelAramaQeryBusiness";
+import { LoggingBusiness } from "../../../Business/LoggingBusiness";
+import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
+import MapManager from "../../../Store/Managers/MapManager";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { ButtonLoading, NoResultsFound } from "../../Common/Loading";
-import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { LayerBusiness } from "../../../Business/LayerBusiness";
-import { GenelAramaQeryBusiness } from "../../../Business/GenelAramaQeryBusiness";
+import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
+import {
+    buildGoogleDirectionsUrl,
+    createLatestRequestGate,
+    isSmallViewport,
+    normalizeErrorMessage,
+    openExternalSafely,
+    safeClientLog
+} from "../_Common/QueryInteractionRuntime";
+import { normalizeSearchCollection } from "../_Common/QuerySearchRuntime";
+import "./GenelAramaQeryWindow.css";
+
+const WINDOW_TITLE = "ARAMA SONUÇLARI";
+const WINDOW_LOGO = "images/search.svg";
+const EMPTY_QUERY = Object.freeze({ name: "" });
+
+const createEmptyQuery = () => ({ ...EMPTY_QUERY });
 
 export const GenelAramaQeryWindow = React.forwardRef((props, ref) => {
+    const { id, windowManager } = props;
+    const queryGateRef = useRef(createLatestRequestGate());
+    const detailGateRef = useRef(createLatestRequestGate());
+    const mountedRef = useRef(true);
 
-    const windowTitle = "ARAMA SONUÇLARI";
-    const windowLogo = "images/search.svg";
-    const [query, setQuery] = useState({ name: "" });
-    const defaultQuery = props.windowManager.GetQueryParams(props.id);
-
-    useImperativeHandle(ref, () => ({
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => { DebugHelper.Log("show " + props.id); fetchQueryResults(query.name); },
-        OnClose: () => {
-            DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery || { name: "" });
-            setActiveTab("form");
-            setResultList(null);
-            setErrorMessage("");
-            removeLastClusterLayer();
-            commonToolsComponentRef.current?.OnClose?.();
-        }
-    }));
-
-    const commonToolsComponentRef = useRef();
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
+    const [query, setQuery] = useState(createEmptyQuery);
     const [loading, setLoading] = useState(false);
-    const [clusterLayer, setClusterLayer] = useState(null);
     const [resultList, setResultList] = useState(null);
-    const [activeTab, setActiveTab] = useState("form");
+    const [detailLoadingKey, setDetailLoadingKey] = useState(null);
     const [errorMessage, setErrorMessage] = useState("");
 
-    useEffect(() => {
-        props.windowManager.RegisterWindow(ref);
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
-        if (_mapView) fetchQueryResults(_mapView);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mapView]);
+    const resetWindow = useCallback(() => {
+        queryGateRef.current.invalidate();
+        detailGateRef.current.invalidate();
+        setQuery(createEmptyQuery());
+        setResultList(null);
+        setLoading(false);
+        setDetailLoadingKey(null);
+        setErrorMessage("");
+    }, []);
 
-    const setQueryField = (_field, _value) => {
-        setQuery(query => ({ ...query, [_field]: _value }));
-    };
-
-    const removeLastClusterLayer = () => {
-        if (clusterLayer != null && mapView?.map) {
-            mapView.map.remove(clusterLayer.layerObj);
-            setClusterLayer(null);
-        }
-    };
-
-    const btnBack_OnClick = () => {
-        removeLastClusterLayer();
-        props.windowManager.ShowWindow("sidebar");
-    };
-
-    const fetchQueryResults = async () => {
+    const fetchQueryResults = useCallback(async () => {
+        const requestId = queryGateRef.current.next();
+        const searchQuery = windowManager.GetQueryParams(id) || query || createEmptyQuery();
+        setQuery(searchQuery);
         setLoading(true);
         setErrorMessage("");
         setResultList(null);
-        const searchQuery = props.windowManager.GetQueryParams(props.id) || query || { name: "" };
-        setQuery(searchQuery);
-        LoggingBusiness.CreateClientLog("Genel Arama/Sorgu", searchQuery);
+        setDetailLoadingKey(null);
+        safeClientLog(LoggingBusiness, "Genel Arama/Sorgu", searchQuery);
+
         try {
             const result = await GenelAramaQeryBusiness.Query(searchQuery, false);
+            if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
             if (result?.type !== Constants_ServiceResultType.Success) {
-                const message = "Arama sonuçları alınamadı. Lütfen tekrar deneyin.";
-                setErrorMessage(message);
-                props.windowManager.ShowMessage(Constants_MessageType.Error, message);
-                return;
+                throw new Error(result?.message || "Arama sonuçları alınamadı. Lütfen tekrar deneyin.");
             }
-            const list = (result.data || []).map(item => ({
-                ObjectId: item?.attr?.objectid,
-                Title: item?.attr?.adi || "İsimsiz kayıt",
-                Phone: item?.attr?.telefon || "",
-                Address: item?.attr?.adres || "Adres bilgisi bulunmuyor"
-            }));
-            setResultList(list);
+
+            setResultList(normalizeSearchCollection(result.data || []));
         } catch (error) {
-            const message = error?.message || "Arama sırasında beklenmeyen bir hata oluştu.";
+            if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
+            const message = normalizeErrorMessage(error, "Arama sırasında beklenmeyen bir hata oluştu.");
+            setResultList([]);
             setErrorMessage(message);
-            props.windowManager.ShowMessage(Constants_MessageType.Error, message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
         } finally {
-            setLoading(false);
+            if (mountedRef.current && queryGateRef.current.isCurrent(requestId)) setLoading(false);
         }
-    };
+    }, [id, query, windowManager]);
 
-    const getItemDetailsById = async (_item) => {
-        const result = await GenelAramaQeryBusiness.Query({ ObjectId: _item.ObjectId }, true);
-        if (result?.type === Constants_ServiceResultType.Success && result.data != null) return result.data[0];
-        throw new Error("Kayıt ayrıntıları bulunamadı.");
-    };
+    useImperativeHandle(ref, () => ({
+        id,
+        visible: false,
+        minimized: false,
+        OnShow: fetchQueryResults,
+        OnClose: resetWindow
+    }), [fetchQueryResults, id, resetWindow]);
 
-    const item_OnClick = (e, _item) => {
-        e?.preventDefault?.();
-        LoggingBusiness.CreateClientLog("Parklar/Detay Göster", `${_item.ObjectId || ""}/${_item.Address || ""}`);
-        getItemDetailsById(_item).then(_itemDetails => {
-            GisGraphicsHelper.ZoomToGeometry(mapView, _itemDetails?.geometry, 18);
-            if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id);
-        }).catch(error => props.windowManager.ShowMessage(Constants_MessageType.Error, error.message));
-    };
+    useEffect(() => {
+        mountedRef.current = true;
+        windowManager.RegisterWindow(ref);
+        const queryGate = queryGateRef.current;
+        const detailGate = detailGateRef.current;
+        return () => {
+            mountedRef.current = false;
+            queryGate.invalidate();
+            detailGate.invalidate();
+        };
+    }, [ref, windowManager]);
 
-    const item_ShowRoute = (e, _item) => {
-        e?.preventDefault?.();
-        getItemDetailsById(_item).then(_itemDetails => {
-            if (_itemDetails?.geometry) {
-                const lat = _itemDetails.geometry.latitude;
-                const lng = _itemDetails.geometry.longitude;
-                if (Number.isFinite(lat) && Number.isFinite(lng)) window.open(`https://www.google.com.tr/maps?saddr=My+Location&daddr=${lat},${lng}`, "_blank");
-                else props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - konum bilgisi bulunamadı");
-            } else props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
-        }).catch(error => props.windowManager.ShowMessage(Constants_MessageType.Error, error.message));
-    };
+    const getItemDetails = useCallback(async item => {
+        if (item?.id === null || item?.id === undefined || String(item.id).trim() === "") {
+            throw new Error("Kayıt kimliği bulunamadı.");
+        }
+
+        const requestId = detailGateRef.current.next();
+        const result = await GenelAramaQeryBusiness.Query({ ObjectId: item.id }, true);
+        if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) return null;
+        if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data) || !result.data[0]) {
+            throw new Error(result?.message || "Kayıt ayrıntıları bulunamadı.");
+        }
+        return result.data[0];
+    }, []);
+
+    const showItemOnMap = useCallback(async item => {
+        if (!item) return;
+        setDetailLoadingKey(item.key);
+        setErrorMessage("");
+        safeClientLog(LoggingBusiness, "Genel Arama/Detay Göster", `${item.id ?? ""}/${item.address || item.title}`);
+
+        try {
+            const itemDetails = await getItemDetails(item);
+            if (!itemDetails?.geometry) return;
+
+            const mapView = MapManager.GetMapView();
+            if (!mapView) throw new Error("Harita görünümü hazır değil.");
+            GisGraphicsHelper.ZoomToGeometry(mapView, itemDetails.geometry, 18);
+            if (isSmallViewport()) windowManager.ToggleMinimiseWindow(id);
+        } catch (error) {
+            const message = normalizeErrorMessage(error, "Kayıt konumu gösterilemedi.");
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
+        } finally {
+            if (mountedRef.current) setDetailLoadingKey(null);
+        }
+    }, [getItemDetails, id, windowManager]);
+
+    const showRoute = useCallback(async (event, item) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (!item) return;
+
+        setDetailLoadingKey(item.key);
+        setErrorMessage("");
+        safeClientLog(LoggingBusiness, "Genel Arama/Yol Tarifi", `${item.id ?? ""}/${item.title}`);
+
+        try {
+            const itemDetails = await getItemDetails(item);
+            if (!itemDetails?.geometry) return;
+            const url = buildGoogleDirectionsUrl(itemDetails.geometry);
+            if (!url) throw new Error("Yol tarifi için konum bilgisi bulunamadı.");
+            if (!openExternalSafely(url)) throw new Error("Tarayıcı yol tarifi penceresini açmayı engelledi.");
+        } catch (error) {
+            const message = normalizeErrorMessage(error, "Yol tarifi alınamadı.");
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
+        } finally {
+            if (mountedRef.current) setDetailLoadingKey(null);
+        }
+    }, [getItemDetails, windowManager]);
+
+    const backToSidebar = useCallback(() => {
+        queryGateRef.current.invalidate();
+        detailGateRef.current.invalidate();
+        setDetailLoadingKey(null);
+        setErrorMessage("");
+        windowManager.ShowWindow("sidebar");
+    }, [windowManager]);
 
     const resultContent = loading ? (
-        <div className="experience-search-state" role="status" aria-live="polite" aria-busy="true"><ButtonLoading message="Aranıyor…" /><div className="experience-search-state__hint">Sonuçlar getiriliyor, lütfen bekleyin.</div></div>
-    ) : errorMessage ? (
-        <div className="kr-status-banner kr-status-banner--danger" role="alert"><div><strong>Arama tamamlanamadı.</strong><div>{errorMessage}</div><button className="kr-btn kr-btn--secondary" type="button" onClick={fetchQueryResults}>Tekrar dene</button></div></div>
+        <div className="experience-search-state genel-arama-state" role="status" aria-live="polite" aria-busy="true">
+            <ButtonLoading message="Aranıyor…" />
+            <div className="experience-search-state__hint">Sonuçlar getiriliyor.</div>
+        </div>
+    ) : errorMessage && resultList === null ? (
+        <div className="kr-status-banner kr-status-banner--danger genel-arama-error" role="alert">
+            <div>
+                <strong>Arama tamamlanamadı.</strong>
+                <div>{errorMessage}</div>
+                <button className="kr-btn kr-btn--secondary" type="button" onClick={fetchQueryResults}>Tekrar dene</button>
+            </div>
+        </div>
     ) : resultList?.length === 0 ? (
         <NoResultsFound message="Bu arama için kayıt bulunamadı. Daha genel bir ifade deneyin." />
-    ) : resultList?.map(_item => (
-        <article className="result-item-container" key={_item.ObjectId || `${_item.Title}-${_item.Address}`}>
-            <button type="button" className="result-item-info" onClick={(e) => item_OnClick(e, _item)} aria-label={`${_item.Title} kaydını haritada göster`}>
-                <span className="result-item-info-title">{_item.Title}</span>
-                <span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{_item.Address}</span>
-                {_item.Phone && <span className="result-item-info-phone"><FiPhone aria-hidden="true" />&nbsp;{_item.Phone}</span>}
-            </button>
-            <CommonQueryResultItemTools item={_item} zoomCallback={(e) => item_OnClick(e, _item)} showRouteCallback={(e) => item_ShowRoute(e, _item)} />
-        </article>
-    ));
+    ) : resultList?.map(item => {
+        const busy = detailLoadingKey === item.key;
+        return (
+            <article className="result-item-container genel-arama-result" key={item.key} aria-busy={busy}>
+                <button
+                    type="button"
+                    className="result-item-info"
+                    onClick={() => showItemOnMap(item)}
+                    aria-label={`${item.title} kaydını haritada göster`}
+                    disabled={busy}
+                >
+                    <span className="result-item-info-title">{item.title}</span>
+                    {item.category && item.category !== "Diğer" && (
+                        <span className="genel-arama-result-category">{item.category}</span>
+                    )}
+                    {item.address && (
+                        <span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.address}</span>
+                    )}
+                    {item.phone && (
+                        <span className="result-item-info-phone"><FiPhone aria-hidden="true" />&nbsp;{item.phone}</span>
+                    )}
+                    {busy && <span className="genel-arama-result-status">İşlem sürüyor…</span>}
+                </button>
+                <CommonQueryResultItemTools
+                    item={item}
+                    zoomCallback={() => showItemOnMap(item)}
+                    showRouteCallback={event => showRoute(event, item)}
+                />
+            </article>
+        );
+    });
+
+    const queryLabel = String(query?.name || query?.searchText || "").trim();
 
     return (
-        <section className="sidebar-container" aria-label="Genel arama sonuçları" style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-            <header className="common-query-window-header"><img className="common-query-window-header-icon" src={windowLogo} alt="" /><span>{windowTitle}</span></header>
-            <div className="results-container" aria-live="polite">
-                <div className="results-container-toolbar">
-                    <button className="results-container-back-button" type="button" onClick={btnBack_OnClick}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button>
-                    <div className="results-container-count"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div>
+        <section
+            className="sidebar-container genel-arama-window"
+            aria-label="Genel arama sonuçları"
+            style={{ visibility: windowManager.IsVisible(id) ? "visible" : "hidden" }}
+        >
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src={WINDOW_LOGO} alt="" aria-hidden="true" />
+                <span>{WINDOW_TITLE}</span>
+            </header>
+
+            <div className="results-container genel-arama-results" aria-live="polite" aria-busy={loading}>
+                <div className="results-container-toolbar genel-arama-toolbar">
+                    <button className="results-container-back-button" type="button" onClick={backToSidebar}>
+                        <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />
+                        <span>Geri Dön</span>
+                    </button>
+                    <div className="results-container-count">
+                        <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
+                    </div>
                 </div>
-                {resultContent}
+
+                {queryLabel && (
+                    <div className="genel-arama-query-summary" role="status">
+                        <span>Aranan ifade</span>
+                        <strong>{queryLabel}</strong>
+                    </div>
+                )}
+
+                {errorMessage && resultList !== null && (
+                    <div className="kr-status-banner kr-status-banner--danger genel-arama-inline-error" role="alert">
+                        {errorMessage}
+                    </div>
+                )}
+
+                <div className="genel-arama-result-list">
+                    {resultContent}
+                </div>
             </div>
         </section>
     );
 });
+
+GenelAramaQeryWindow.displayName = "GenelAramaQeryWindow";
