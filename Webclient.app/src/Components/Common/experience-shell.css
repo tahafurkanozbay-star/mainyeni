@@ -58,10 +58,10 @@
 .fullscreenloading-spinner-text { color: var(--exp-text-muted); font-size: 12px; }
 .spinner-loading-container { width: 34px; height: 34px; }
 .spinner-loading { width: 34px; height: 34px; border: 3px solid var(--exp-border); border-top-color: var(--exp-accent); border-radius: 50%; animation: kr-spin .8s linear infinite; }
-@keyframes kr-spin { to { transform: rotate(360deg); } }
 .experience-spinner { width: 22px; height: 22px; display: inline-block; border: 2px solid var(--exp-border); border-top-color: var(--exp-accent); border-radius: 50%; animation: kr-spin .8s linear infinite; }
 .experience-spinner--small { width: 16px; height: 16px; border-width: 2px; margin-right: 8px; vertical-align: -3px; }
 .experience-container-loading { min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--exp-text-muted); font-size: 12px; }
+@keyframes kr-spin { to { transform: rotate(360deg); } }
 .ErrorFullScreenText { width: min(560px, calc(100vw - 32px)); padding: 24px; text-align: center; color: var(--exp-danger); background: var(--exp-danger-soft); border: 1px solid color-mix(in srgb, var(--exp-danger) 30%, var(--exp-border)); border-radius: 14px; box-shadow: var(--exp-shadow-sm); font-size: 13px; font-weight: 650; }
 .NoResultsFound { padding: 28px 16px; text-align: center; color: var(--exp-text-muted); background: var(--exp-surface-2); border: 1px dashed var(--exp-border-strong); border-radius: 10px; font-size: 12px; }
 button, a, input, select, textarea, [role="button"] { -webkit-tap-highlight-color: transparent; }
