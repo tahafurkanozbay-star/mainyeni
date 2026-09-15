@@ -1,6 +1,6 @@
-using Xunit;
+using Xunit.Sdk;
+using Xunit.v3;
 
 // These tests mutate process-wide environment variables and therefore must
-// remain serialized. CollectionBehavior is supported by xUnit v3 and avoids
-// relying on runner-specific parallelization attributes.
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+// remain serialized under xUnit v3's current parallelization contract.
+[assembly: Parallelization(Mode = ParallelMode.None)]
