@@ -1,242 +1,94 @@
-import { loadModules } from "esri-loader";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import MapManager from "../../../Store/Managers/MapManager";
+import { AppConfig } from "../../../Core/AppConfig";
+import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import "./ToolbarWidget.css";
 import { ToolbarWidgetButton } from "./ToolbarWidgetButton";
-import {Constants_MessageType} from "../../../Core/Constants";
-import { DatetimeHelper } from "../../../Toolbox/DatetimeHelper";
-import {AppConfig} from "../../../Core/AppConfig";
-//import { Constants_MessageType, Constants_UserMesssages } from "../../Core/Constants";
-import { BiAbacus, BiEnvelope, BiTargetLock } from "react-icons/bi";
-import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 
+const FALLBACK_LOCATION = { x: 32.80409955978453, y: 39.94494728389463 };
 
 export const ToolbarWidget = (props) => {
+    const initialExtentRef = useRef(null);
 
-    const [extentHistory, setExtentHistory] = useState([]);
-    const [extentIndex, setExtentIndex] = useState(0);
-    const [addExtent, setAddExtent] = useState(true);
-    const [mapView, setMapView] = useState(null);
-    
     useEffect(() => {
+        const mapView = MapManager.GetMapView();
+        if (!mapView) return undefined;
 
-        const extChangeHandler = extentChangeHandler;
-        return loadModules(["esri/core/watchUtils"]).then(([watchUtils]) => {
-
-            let mapView = MapManager.GetMapView();
-            setMapView(mapView);
-
-            let _extentHistory = [];
-            if (mapView.extent != null) {
-                _extentHistory.push(mapView.extent);
-                setExtentHistory(_extentHistory);
+        const captureInitialExtent = () => {
+            if (!initialExtentRef.current && mapView.extent) {
+                initialExtentRef.current = mapView.extent.clone?.() ?? mapView.extent;
             }
+        };
 
-            watchUtils.when(mapView, "ready", () => {
-                watchUtils.whenOnce(mapView, "extent", () => {
-                    watchUtils.whenTrue(mapView, 'stationary', (evt) => {
-
-                        if (evt) {
-                            extentChangeHandler();
-                        }
-                    });
-                });
-            });
+        captureInitialExtent();
+        const readyHandle = mapView.watch?.("ready", ready => {
+            if (ready) captureInitialExtent();
         });
 
+        return () => readyHandle?.remove?.();
     }, []);
 
+    const showWindow = windowId => {
+        props.windowManager.ShowWindow(windowId);
+    };
 
-    const extentChangeHandler = () => {
+    const createLocation = async location => {
+        const point = await GisGraphicsHelper.CreatePoint(location);
+        const mapView = MapManager.GetMapView();
+        if (!mapView) return;
 
-        if (addExtent) {
+        const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(point, null);
+        MapManager.AddGraphics(graphic, true);
+        GisGraphicsHelper.ZoomToGeometry(mapView, point, 15);
+    };
 
-            let mapView = MapManager.GetMapView();
-
-            let _extent = mapView.extent;
-
-            let _exhistory = extentHistory;
-            _exhistory.push(_extent);
-
-            setExtentHistory(_exhistory);
-            setExtentIndex  (_exhistory.length - 1);
+    const getUserLocation = () => {
+        if (!navigator.geolocation) {
+            createLocation(FALLBACK_LOCATION).catch(error => console.error("Location could not be shown", error));
+            props.windowManager.ShowWindow("sidebar");
+            return;
         }
-    }
 
-    const zoomIn = () => {
-
-        let zoomLevel = mapView.zoom;
-        zoomLevel++;
-
-        mapView.goTo({
-            zoom: zoomLevel
-        });
-    }
-
-    const zoomOut = () => {
-        let mapView = MapManager.GetMapView();
-        let zoomLevel = mapView.zoom;
-        zoomLevel--;
-        mapView.goTo({
-            zoom: zoomLevel
-        });
-    }
-
-
-    const toggleOverviewMap = () => {
-        let isVisible = props.getWindowVisibility("overviewmapwindow");
-        if (isVisible) {
-            props.hideWindow("overviewmapwindow");
-        }
-        else {
-            props.showWindow("overviewmapwindow");
-        }
-    }
-
-    const gotoPreviousView = () => {
-
-        setAddExtent(false);
-
-        let mapView = MapManager.GetMapView();
-
-        let targetIndex = extentIndex - 1;
-        if (targetIndex > 0 && targetIndex < extentHistory.length) {
-
-            setExtentIndex(targetIndex);
-
-            let targetExtent = extentHistory[targetIndex];
-            mapView.goTo(targetExtent);
-        }
-    }
-
-    const gotoNextView = () => {
-
-        setAddExtent(false);
-
-        let mapView = MapManager.GetMapView();
-
-        let targetIndex = extentIndex + 1;
-
-        if (targetIndex > 0 && targetIndex < extentHistory.length) {
-
-            setExtentIndex(targetIndex);
-            let targetExtent = extentHistory[targetIndex];
-            mapView.goTo(targetExtent);
-        }
-    }
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                createLocation({
+                    x: position.coords.longitude,
+                    y: position.coords.latitude
+                }).catch(error => console.error("Location could not be shown", error));
+            },
+            () => {
+                createLocation(FALLBACK_LOCATION).catch(error => console.error("Fallback location could not be shown", error));
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        );
+    };
 
     const gotoInitialView = () => {
-
-        setAddExtent(false);
-
-        let targetExtent = extentHistory[0];
-        mapView.goTo(targetExtent);
-        props.windowManager.ShowWindow("sidebar")
-
-    }
-
-    const clearMap = (e) => {
-        mapView.graphics.removeAll();
-    }
-
-    const printMap = () => {
-
-        let mapView = MapManager.GetMapView();
-
-        mapView.takeScreenshot({
-            width: 1920,
-            height: 1080
-        }).then(function (screenshot) {
-
-            let html="<html><head><script>function step1(){setTimeout('step2()', 10);}" +
-            "function step2(){window.print();window.close()}\n" +
-            "</script></head><body onload='step1()'>\n" +
-            "<div style='border:1px solid gray;'>" +
-            "<div style='font-size:24px;font-family:Ubuntu,SegoeUI;padding:5px;'>"+AppConfig.App.Title1+" | "+AppConfig.App.Title2+" (" + DatetimeHelper.GetFormatted(new Date()) + ")</div>" +
-            "<div style='border:1px solid gray;padding:0;margin:0;'>" +
-            "<img style='width:100%' src='" + screenshot.dataUrl + "' />" +
-            "</div>" +
-            "</div>" +
-            +"</body></html>";
-
-            let Pagelink = "about:blank";
-            let pwa = window.open(Pagelink, "_new");
-            pwa.document.open();
-            pwa.document.write(html);
-            pwa.document.close();
-            props.windowManager.ShowWindow("sidebar")
-
-        });
-
-    }
-
-    const showwindowCallback=(_windowid)=>{
-        props.windowManager.ShowWindow(_windowid)
-    }
-    const getUserLocation=()=>{
-        
-        const mapConfig = MapManager.GetMapConfiguration();
-        //let location = { x: mapConfig.Centerx, y: mapConfig.Centery }; //TODO: Geçici olarak gölbaşı merkeze ayarlandı değiştirilecek
-        let location = { x: 32.80409955978453, y: 39.94494728389463 };
-
-        if (!navigator.geolocation) {
-            //props.windowManager.ShowMessage(Constants_MessageType.Error, Constants_UserMesssages.LOCATION_REJECTED);
-            createLocation(location);
-            props.windowManager.ShowWindow("sidebar")
+        const mapView = MapManager.GetMapView();
+        const initialExtent = initialExtentRef.current;
+        if (mapView && initialExtent) {
+            mapView.goTo(initialExtent).catch?.(error => console.error("Initial map extent could not be restored", error));
         }
-        else{
-            //props.windowManager.ShowMessage(Constants_MessageType.Success, Constants_UserMesssages.LOCATION_ALLOWED);
+        props.windowManager.ShowWindow("sidebar");
+    };
 
-            navigator.geolocation.getCurrentPosition((_location) => {
+    const openFeedbackPortal = () => {
+        window.open("https://baskent153.ankara.bel.tr", "_blank", "noopener,noreferrer");
+    };
 
-                location = {
-                    x: _location.coords.longitude,
-                    y: _location.coords.latitude,
-                };
-
-                createLocation(location);
-                
-
-            }, (error) => {
-
-               // props.windowManager.ShowMessage(Constants_MessageType.Error, Constants_UserMesssages.LOCATION_REJECTED);
-                createLocation(location);
-            });
-        }
-    }
-
-    const createLocation = (_location) => {
-
-        GisGraphicsHelper.CreatePoint(_location).then((_point) => {
-
-            const mapView = MapManager.GetMapView();
-            GisGraphicsHelper.CreateGraphicFromGeometry(_point, null).then((_graphic) => {
-                MapManager.AddGraphics(_graphic, true);
-                GisGraphicsHelper.ZoomToGeometry(mapView, _point, 15);
-            });
-        });
-    }
-
-  
-
-
-
-
-    return (<>
-        <div className="toolbarwidget">
-       
-        <ToolbarWidgetButton onClick={(e) => window.open("https://baskent153.ankara.bel.tr", "_blank")}  image="baskent153.png" tooltipText="Geri Bildirim(Başkent 153)"/>         
-            <ToolbarWidgetButton onClick={()=>showwindowCallback("basemap-widget")} image="basemap.png" tooltipText="Altlık Haritalar"/>      
-            <ToolbarWidgetButton onClick={()=>showwindowCallback("numbering-query-window")} image="adresarama.png" tooltipText="Adres Arama"/>    
-            <ToolbarWidgetButton onClick={()=>getUserLocation()} image="konumbul.png" tooltipText="Konum Bul"/> 
-            <ToolbarWidgetButton onClick={()=>showwindowCallback("cityblockparcel-query-window")} image="adaparsel.png" tooltipText="Ada-Parsel Arama"/>           
-            <ToolbarWidgetButton onClick={()=>showwindowCallback("measurement-widget")} image="olcumaraci.png" tooltipText="Ölçüm Aracı"/>            
-            <ToolbarWidgetButton onClick={()=>showwindowCallback("streetview-widget")} image="sokakgoruntusu.png" tooltipText="Sokak Görüntüsü"/>
-            <ToolbarWidgetButton onClick={()=>gotoInitialView()} image="fullextent.png" tooltipText="Başlangıç görünümüne dön"/>           
-            {
-                AppConfig.App.IsFullVersion && false &&  <ToolbarWidgetButton onClick={()=>showwindowCallback("transit-route-query-window")} image="yoltarifi.png" tooltipText="Yol Tarifi"/>
-            }
-            
+    return (
+        <div className="toolbarwidget" aria-label="Harita araçları">
+            <ToolbarWidgetButton onClick={openFeedbackPortal} image="baskent153.png" tooltipText="Geri Bildirim (Başkent 153)" />
+            <ToolbarWidgetButton onClick={() => showWindow("basemap-widget")} image="basemap.png" tooltipText="Altlık Haritalar" />
+            <ToolbarWidgetButton onClick={() => showWindow("numbering-query-window")} image="adresarama.png" tooltipText="Adres Arama" />
+            <ToolbarWidgetButton onClick={getUserLocation} image="konumbul.png" tooltipText="Konum Bul" />
+            <ToolbarWidgetButton onClick={() => showWindow("cityblockparcel-query-window")} image="adaparsel.png" tooltipText="Ada-Parsel Arama" />
+            <ToolbarWidgetButton onClick={() => showWindow("measurement-widget")} image="olcumaraci.png" tooltipText="Ölçüm Aracı" />
+            <ToolbarWidgetButton onClick={() => showWindow("streetview-widget")} image="sokakgoruntusu.png" tooltipText="Sokak Görüntüsü" />
+            <ToolbarWidgetButton onClick={gotoInitialView} image="fullextent.png" tooltipText="Başlangıç görünümüne dön" />
+            {AppConfig.App.IsFullVersion && false && (
+                <ToolbarWidgetButton onClick={() => showWindow("transit-route-query-window")} image="yoltarifi.png" tooltipText="Yol Tarifi" />
+            )}
         </div>
-    </>);
-}
+    );
+};
