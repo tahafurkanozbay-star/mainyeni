@@ -1,5 +1,6 @@
 using Api.Core.Base;
 using Api.User.Filters;
+using Business.Core.Common;
 using Business.Core.Context;
 using Business.Core.Operations;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,6 @@ namespace Api.User.Core.Controllers
 {
     public class AppSettingsController : _BaseUserApiController
     {
-        private const string PublicMapConfigKey = "GisMapConfig";
         private readonly AppConfigOperations operations;
 
         public AppSettingsController(BusinessContext context)
@@ -28,12 +28,12 @@ namespace Api.User.Core.Controllers
         {
             try
             {
-                if (!string.Equals(key?.Trim(), PublicMapConfigKey, StringComparison.Ordinal))
+                if (!string.Equals(key?.Trim(), Configuration.ConfigKey_GisMapConfig, StringComparison.Ordinal))
                 {
                     return NotFound();
                 }
 
-                return new JsonResult(operations.GetConfig(PublicMapConfigKey));
+                return new JsonResult(operations.GetConfig(Configuration.ConfigKey_GisMapConfig));
             }
             catch (Exception ex)
             {
