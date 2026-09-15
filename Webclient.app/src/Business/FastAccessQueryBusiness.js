@@ -5,83 +5,68 @@ import { GisQueryHelper } from "../Toolbox/GisQueryHelper";
 import { IsNull } from "../Toolbox/ObjectHelper";
 import { TextHelper } from "../Toolbox/TextHelper";
 import { CommonBusiness } from "./CommonBusiness";
-import { loadModules } from "esri-loader";
+
+const escapeSqlLiteral = (value) => String(value ?? "").replace(/'/g, "''");
+
+const toFiniteNumber = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+};
+
+const buildNameFilter = (name) => {
+    if (IsNull(name)) return null;
+
+    const normalized = escapeSqlLiteral(TextHelper.TurkishToUpper(String(name).trim()));
+    if (!normalized) return null;
+
+    const ascii = escapeSqlLiteral(TextHelper.RemoveTurkishChars(normalized));
+    return `(UPPER(adi) LIKE '%${ascii}%' OR UPPER(adi) LIKE '%${normalized}%')`;
+};
 
 export const FastAccessQueryBusiness = {
-    
-    QueryFastAccessService: async (_queryServiceTitle, _query, _returnGeometry) => {
-         
-        return new Promise((resolve, reject) => {
+    QueryFastAccessService: async (_queryServiceTitle, _query = {}, _returnGeometry = false) => {
+        const queryService = ArrayHelper.Find(
+            MapManager.GetConfigurationServices(),
+            "title",
+            _queryServiceTitle
+        );
 
+        if (queryService == null) {
+            return Promise.reject({
+                type: Constants_ServiceResultType.Error,
+                message: `Servis bulunamadı (${_queryServiceTitle})`
+            });
+        }
 
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", _queryServiceTitle);
-            
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + _queryServiceTitle + ")" })
-            };
+        const options = {
+            url: CommonBusiness.GenerateUrl(queryService),
+            returnGeometry: Boolean(_returnGeometry),
+            orderByFields: ["adi"],
+            outFields: ["*"]
+        };
 
+        const predicates = ["1=1"];
+        const objectId = toFiniteNumber(_query?.ObjectId);
+        if (objectId !== null) {
+            predicates.push(`ObjectId = ${objectId}`);
+        }
 
+        const nameFilter = buildNameFilter(_query?.name);
+        if (nameFilter) {
+            predicates.push(nameFilter);
+        }
 
-             
+        options.where = predicates.join(" AND ");
 
+        if (_query?.showNearby) {
+            const bufferDistance = Math.max(0, toFiniteNumber(_query.bufferDistance) ?? 0);
+            options.geometry = _query.userLocation;
+            options.distance = bufferDistance * 100;
+            options.units = "meters";
+            options.spatialRelationship = "intersects";
+            return GisQueryHelper.ExecuteSpatialQuery(options);
+        }
 
-
-
-            let options = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: _returnGeometry ?? false,
-                orderByFields: ["adi"],
-                outFields: ["*"]
-            };
-
-            let where = "1=1";
-         
-            if (_query != null) {   
-
-
-                if (!IsNull(_query.ObjectId)) {
-                    where += " AND ObjectId =" + _query.ObjectId;
-                }
-
-                if (!IsNull(_query.name)) {
-                    where += " AND "
-                    +"(UPPER(adi) LIKE '%" + TextHelper.RemoveTurkishChars(TextHelper.TurkishToUpper(_query.name)) + "%'"
-                    +" OR UPPER(adi) LIKE '%" + TextHelper.TurkishToUpper(_query.name) + "%' )";
-                }
-            }
-            
-
-            if (_query.showNearby) {
-                
-                options.geometry = _query.userLocation;
-                options.distance = _query.bufferDistance * 100;
-                options.units = 'meters';
-                options.spatialRelationship = 'intersects';
-                options.where = where;
-
-                GisQueryHelper.ExecuteSpatialQuery(options).then(results  => {
-                    resolve(results);
-                });
-
-            }
-            else {
-
-           
-
-                options.where = where;
-
-                GisQueryHelper.ExecuteQuery(options).then(results => {
-                    resolve(results);
-                });
-            }
-           
-
-
-            
-        });
-      
-
+        return GisQueryHelper.ExecuteQuery(options);
     }
-
-
 };
