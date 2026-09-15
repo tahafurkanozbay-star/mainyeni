@@ -1,457 +1,231 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Button, Form } from "react-bootstrap";
 import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
 import { Constants_LayerType, Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
 import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
-import { BsToggleOff, BsToggleOn } from "react-icons/bs";
 import { PodQueryBusiness } from "../../../Business/PodQueryBusiness";
-import { BiCaretRightCircle, BiSearch } from "react-icons/bi";
-import { FiMapPin, FiPhone } from "react-icons/fi";
+import { BiSearch } from "react-icons/bi";
+import { FiMapPin } from "react-icons/fi";
 import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
 import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
 import { CommonBusiness } from "../../../Business/CommonBusiness";
-import { DebugHelper } from "../../../Toolbox/DebugHelper";
-import {ButtonLoading} from "../../../Components/Common/Loading";
+import { ButtonLoading } from "../../Common/Loading";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { GoogleMapsBusiness } from "../../../Business/GoogleMapsBusiness";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { loadModules } from "esri-loader";
-import { useRef } from "react";
-import DynamicLayerManager from "../../../Store/Managers/DynamicLayerManager";
 import { TextHelper } from "../../../Toolbox/TextHelper";
 
+const DEFAULT_QUERY = Object.freeze({ name: "", districtId: "", districtName: "", nbhoodId: "", nbhoodName: "", showPodOnDuty: false, showMapSelect: false, showNearby: false });
+const PHARMACY_SYMBOL = Object.freeze({ type: "picture-marker", url: "images/icons/sidebar/eczane.png", width: "48px", height: "48px" });
+
+const normalizePharmacy = (item, onDuty = false) => {
+    const attributes = item?.attr || item?.attributes || item || {};
+    return {
+        ObjectId: attributes.objectid ?? attributes.ObjectId ?? attributes.id ?? null,
+        Title: attributes.adi ?? attributes.title ?? attributes.name ?? "İsimsiz eczane",
+        Phone: attributes.telefon ?? attributes.phone ?? "",
+        Address: attributes.adres ?? attributes.address ?? "Adres bilgisi bulunmuyor",
+        AddressDescription: "Adres tarifi bulunmuyor",
+        Lat: Number(attributes.lat ?? attributes.latitude ?? item?.lat),
+        Lng: Number(attributes.lng ?? attributes.longitude ?? item?.lng),
+        onDuty,
+        raw: item
+    };
+};
+
+const openExternal = url => {
+    if (!url) return;
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (opened) opened.opener = null;
+};
+
 export const PodQueryWindow = React.forwardRef((props, ref) => {
+    const commonToolsComponentRef = useRef();
+    const [mapView, setMapView] = useState(null);
+    const [districtList, setDistrictList] = useState([]);
+    const [nbhoodList, setNbhoodList] = useState([]);
+    const [query, setQuery] = useState({ ...DEFAULT_QUERY });
+    const [clusterLayer, setClusterLayer] = useState(null);
+    const [resultList, setResultList] = useState(null);
+    const [activeTab, setActiveTab] = useState("form");
+    const [loading, setLoading] = useState(false);
+
+    const removeLastClusterLayer = () => {
+        if (clusterLayer && mapView?.map) mapView.map.remove(clusterLayer);
+        setClusterLayer(null);
+    };
 
     useImperativeHandle(ref, () => ({
-        
-        id: props.id,visible:false, minimized:false,
-        OnShow:()=>{
-            
-        },
+        id: props.id,
+        visible: false,
+        minimized: false,
+        OnShow: () => {},
         OnClose: () => {
-            DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery);
+            setQuery({ ...DEFAULT_QUERY });
             setActiveTab("form");
             setResultList(null);
             removeLastClusterLayer();
-            commonToolsComponentRef.current.OnClose();
+            commonToolsComponentRef.current?.OnClose?.();
         }
-    }));
-
-    const commonToolsComponentRef=useRef();
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
+    }), [props.id, clusterLayer, mapView]);
 
     useEffect(() => {
-
-
         props.windowManager.RegisterWindow(ref);
-        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
-
-        NumberingQueryBusiness.GetDistricts().then(_result => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setDistrictList(_result.data);
-            }
+        setMapView(MapManager.GetMapView());
+        let active = true;
+        NumberingQueryBusiness.GetDistricts().then(result => {
+            if (active && result?.type === Constants_ServiceResultType.Success) setDistrictList(result.data || []);
+        }).catch(() => {
+            if (active) setDistrictList([]);
         });
+        return () => {
+            active = false;
+        };
+    }, [props.windowManager, ref]);
 
-    }, []);
+    const setQueryField = (field, value) => setQuery(current => ({ ...current, [field]: value }));
 
+    const onDistrictChange = async event => {
+        const districtId = event.target.value;
+        const districtName = event.target.selectedOptions[0]?.text || "";
+        setQuery(current => ({ ...current, districtId, districtName, nbhoodId: "", nbhoodName: "" }));
+        setNbhoodList([]);
+        if (!districtId) return;
+        const result = await NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId);
+        if (result?.type === Constants_ServiceResultType.Success) setNbhoodList(result.data || []);
+    };
 
+    const onNeighborhoodChange = event => setQuery(current => ({ ...current, nbhoodId: event.target.value, nbhoodName: event.target.selectedOptions[0]?.text || "" }));
 
-    const cmbName_OnChange = (e) => {
-        const name = e.target.value;
-        setQueryField("name", name);
-    }
-
-    const [nbhoodList, setNbhoodList] = useState(null);
-    const cmbDistrict_OnChange = (e) => {
-
-        const districtId = e.target.value;
-        setQueryField("districtId", districtId);
-        setQueryField("districtName", e.target.selectedOptions[0].text);
-
-
-        setNbhoodList(null);
-
-        NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId).then((_result) => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setNbhoodList(_result.data);
-            }
-
-        });
-    }
-
-    const cmbNbhood_OnChange = (e) => {
-        const nbhoodId = e.target.value;
-        setQueryField("nbhoodId", nbhoodId);
-        setQueryField("nbhoodName", e.target.selectedOptions[0].text);
-
-    }
-
-    const defaultQuery = { name: null, districtId: null, nbhoodId: null, showPodOnDuty: false, showMapSelect: false, showNearby: false };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery( query => {
-            return { ...query,[_field]: _value}
-         })
-    }
-
-    const [clusterLayer, setClusterLayer] = useState(null);
-    const removeLastClusterLayer = () => {
-        if (clusterLayer != null) {
-            mapView.map.remove(clusterLayer);
-            setClusterLayer(null);
+    const showOnDutyLayer = async rawItems => {
+        const validItems = rawItems.map(item => normalizePharmacy(item, true)).filter(item => Number.isFinite(item.Lat) && Number.isFinite(item.Lng));
+        const points = await Promise.all(validItems.map(item => GisGraphicsHelper.CreatePoint({ latitude: item.Lat, longitude: item.Lng })));
+        const geoJson = {
+            type: "FeatureCollection",
+            features: points.map((point, index) => ({
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [point.x, point.y] },
+                id: TextHelper.CreateGuid(),
+                properties: validItems[index].raw
+            })),
+            layerType: Constants_LayerType.GeoJSONLayer
+        };
+        const layer = await CommonBusiness.Clustering.CreateGeoJsonClusterLayer(geoJson, "Nöbetçi Eczaneler", PHARMACY_SYMBOL);
+        removeLastClusterLayer();
+        if (layer && mapView?.map) {
+            setClusterLayer(layer);
+            mapView.map.add(layer);
         }
-    }
+    };
 
+    const submitQuery = async event => {
+        event?.preventDefault();
+        if (loading) return;
+        setLoading(true);
+        try {
+            if (query.showPodOnDuty) {
+                LoggingBusiness.CreateClientLog("Eczaneler/Sorgu (Nöbetçi)", query.name);
+                const result = await PodQueryBusiness.QueryPodOnDuty(query);
+                if (result?.type !== Constants_ServiceResultType.Success) throw new Error(result?.message || "Nöbetçi eczaneler alınamadı");
+                const rawItems = Array.isArray(result.data) ? result.data : [];
+                setResultList(rawItems.map(item => normalizePharmacy(item, true)));
+                setActiveTab("query");
+                await showOnDutyLayer(rawItems);
+            } else {
+                LoggingBusiness.CreateClientLog("Eczaneler/Sorgu (Tüm)", `${query.districtName}/${query.nbhoodName}/${query.name}`);
+                const result = await PodQueryBusiness.Query(query, false);
+                if (result?.type !== Constants_ServiceResultType.Success) throw new Error(result?.message || "Eczaneler alınamadı");
+                setResultList((result.data || []).map(item => normalizePharmacy(item, false)));
+                setActiveTab("query");
+                const nextCluster = await CommonBusiness.Clustering.CreateClusterLayer("PharmacyQueryUrl", "eczaneler", query, PHARMACY_SYMBOL);
+                removeLastClusterLayer();
+                if (nextCluster?.layerObj && mapView?.map) {
+                    setClusterLayer(nextCluster.layerObj);
+                    mapView.map.add(nextCluster.layerObj);
+                }
+            }
+        } catch (error) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "Eczane sorgusu tamamlanamadı");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const [resultList, setResultList] = useState(null);
-    const [activeTab, setActiveTab] = useState("form");
-    const btnBack_OnClick = (e) => {
+    const getItemDetails = async item => {
+        if (item.onDuty) return item;
+        const result = await PodQueryBusiness.Query({ ObjectId: item.ObjectId }, true);
+        if (result?.type !== Constants_ServiceResultType.Success || !result.data?.length) return null;
+        return result.data[0];
+    };
+
+    const showItem = async item => {
+        LoggingBusiness.CreateClientLog("Eczaneler/Detay Göster", `${item.ObjectId || ""}/${item.Title}`);
+        if (item.onDuty) {
+            if (!Number.isFinite(item.Lat) || !Number.isFinite(item.Lng)) return;
+            const point = await GisGraphicsHelper.CreatePoint({ latitude: item.Lat, longitude: item.Lng });
+            const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(point, PHARMACY_SYMBOL);
+            MapManager.AddGraphics(graphic, true);
+            GisGraphicsHelper.ZoomToGeometry(mapView, point, 16);
+        } else {
+            const details = await getItemDetails(item);
+            if (details?.geometry) GisGraphicsHelper.ZoomToGeometry(mapView, details.geometry, 18);
+        }
+        if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id);
+    };
+
+    const showRoute = async item => {
+        LoggingBusiness.CreateClientLog("Eczaneler/Yol Tarifi", `${item.ObjectId || ""}/${item.Title}`);
+        if (item.onDuty) {
+            if (!Number.isFinite(item.Lat) || !Number.isFinite(item.Lng)) return;
+            const point = await GisGraphicsHelper.CreatePoint({ latitude: item.Lat, longitude: item.Lng });
+            openExternal(GoogleMapsBusiness.CreateRoutesUrlFromPoint(point));
+            return;
+        }
+        const details = await getItemDetails(item);
+        if (!details?.geometry) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
+            return;
+        }
+        openExternal(GoogleMapsBusiness.CreateRoutesUrlFromPoint(details.geometry));
+    };
+
+    const backToForm = () => {
         removeLastClusterLayer();
         setActiveTab("form");
-    }
+    };
 
-    const [loading, setLoading] = useState(false);
-    const btnSubmit_OnClick = (e) => {
+    const isForm = activeTab === "form";
 
-        e?.preventDefault();
-        const _symbol={
-            type: "picture-marker",
-            url: "images/icons/sidebar/eczane.png",
-            width: "48px",
-            height: "48px"
-        };
-        setLoading(true);
-        if (query.showPodOnDuty) {
-
-            LoggingBusiness.CreateClientLog("Eczaneler/Sorgu (Nöbetçi)", query.name);
-
-            PodQueryBusiness.QueryPodOnDuty(query).then((_result) => {
-
-                setActiveTab("query");
-
-                if (_result.type == Constants_ServiceResultType.Success) {
-
-                    let list = [];
-
-                    _result.data.forEach(_item => {
-                        list.push({
-                            ObjectId: _item.attr.objectid,
-                            Title: _item.attr.adi,
-                            Phone: _item.attr.telefon,
-                            Address: _item.attr.adres,
-                            AddressDescription: "Adres tarifi bulunmuyor"
-                        });
-                    });
-                    setResultList(list);
-
-
-                    let promises=[];
-                    _result.data?.forEach(_pod => {
-                        promises.push(GisGraphicsHelper.CreatePoint({ latitude: _pod.lat, longitude: _pod.lng }));        
-                    });
-          
-                    Promise.all(promises).then((_geometries)=>{
-
-                        var geoJson={
-                            type: "FeatureCollection",
-                            features: [],
-                            layerType: Constants_LayerType.GeoJSONLayer
-                        };
-                        _geometries.forEach((_geometry,_index) => {
-                            geoJson.features.push({
-                                type:"feature",
-                                geometry:{
-                                    type:"Point",
-                                    coordinates:[_geometry.x,_geometry.y]
-                                },
-                                id: TextHelper.CreateGuid(),
-                                properties:_result.data[_index]
-                            });
-                        });
-
-                        /*
-                        CommonBusiness.CreateLayer(geoJson).then(_layer=>{
-
-                            mapView.map.add(_layer);
-                        });
-                        */
-
-                        CommonBusiness.Clustering.CreateGeoJsonClusterLayer(geoJson, "Nöbetçi Eczaneler", _symbol).then(_clusterLayer=>{
-
-                            removeLastClusterLayer();
-
-                            setClusterLayer(_clusterLayer);
-                            mapView.map.add(_clusterLayer);
-                        });
-                      
-                        setLoading(false);
-                        
-                    });
-
-                }
-            }).catch(error => {
-                props.windowManager.ShowMessage(Constants_MessageType.Error,error.message); 
-                setLoading(false);
-            });
-        }
-        else {
-
-            
-            LoggingBusiness.CreateClientLog("Eczaneler/Sorgu (Tüm)", query.districtName+"/"+query.nbhoodName+"/"+query.name);
-
-            PodQueryBusiness.Query(query, false).then((_result) => {
-
-                if (_result.type == Constants_ServiceResultType.Success) {
-
-                    setActiveTab("query");
-                    
-                    CommonBusiness.Clustering.CreateClusterLayer("PharmacyQueryUrl", "eczaneler", query, _symbol).then((_clusterLayer) => {
-
-                        removeLastClusterLayer();
-
-                        setClusterLayer(_clusterLayer.layerObj);
-                        mapView.map.add(_clusterLayer.layerObj);
-
-                    });
-
-                    let list = [];
-
-                    _result.data.forEach(_item => {
-                        list.push({
-                            ObjectId: _item.attr.objectid,
-                            Title: _item.attr.adi,
-                            Phone: _item.attr.telefon,
-                            Address: _item.attr.adres,
-                            AddressDescription: "Adres tarifi bulunmuyor"
-                        });
-                    });
-                    setResultList(list);
-                    setLoading(false);
-                }
-            }).catch(error => {
-                props.windowManager.ShowMessage(Constants_MessageType.Error,error.message); 
-                setLoading(false);
-            });
-        }
-    }
-
-
-    const getItemDetailsById=async(_item)=>{
-
-        return new Promise((resolve, reject)=>{
-
-            PodQueryBusiness.Query({ObjectId: _item.ObjectId},true).then((_result) => {
-                if(_result.type==Constants_ServiceResultType.Success){
-                    if(_result.data!=null){
-                        const _resultItem=_result.data[0];
-                        resolve(_resultItem);
-                    }
-                    else{
-                        reject(null);
-                    }
-                }
-            });
-        });
-
-    }
-
-
-    const item_OnClick=(e,_item)=>{
-
-        LoggingBusiness.CreateClientLog("Eczaneler/Detay Göster", _item.id +"/"+_item.title);
-
-        if (query.showPodOnDuty) {
-
-            GisGraphicsHelper.CreatePoint({ latitude: _item.Lat, longitude: _item.Lng }).then(_point=>{
-                
-                const _symbol={
-                    type: "picture-marker",
-                    url: "images/icons/sidebar/eczane.png",
-                    width: "48px",
-                    height: "48px"
-                };
-        
-                GisGraphicsHelper.CreateGraphicFromGeometry(_point, _symbol).then((_graphic)=>{
-                   
-                    MapManager.AddGraphics(_graphic, true);
-                    GisGraphicsHelper.ZoomToGeometry(mapView, _point, 16);
-
-
-                    if(window.screen.width<960){
-                        props.windowManager.ToggleMinimiseWindow(props.id);
-                    } 
-                });
-            });
-        }
-        else{
-        
-            //get details by id
-            getItemDetailsById(_item).then(_itemDetails =>  {
-                GisGraphicsHelper.ZoomToGeometry(mapView, _itemDetails?.geometry, 18);    
-            });   
-        }
-
-    }
-
-
-    const item_ShowRoute=(e, _item)=>{
-        
-        LoggingBusiness.CreateClientLog("Eczaneler/Yol Tarifi", _item.Id +"/"+_item.Title);
-        
-        if (query.showPodOnDuty) {
-            //convert from lat lng
-            GisGraphicsHelper.CreatePoint({ latitude: _item.Lat, longitude: _item.Lng }).then(_point=>{
-                
-                let url = GoogleMapsBusiness.CreateRoutesUrlFromPoint(_point);
-                window.open(url, "_blank");
-               
-            });
-        }
-        else{
-            //get details by id
-            getItemDetailsById(_item).then(_itemDetails =>  {
-                
-            if(_itemDetails!=null){
-                let url = GoogleMapsBusiness.CreateRoutesUrlFromPoint(_itemDetails.geometry);
-                window.open(url, "_blank");
-                //TODO: create log
-            }
-            else{
-                props.windowManager.ShowMessage(Constants_MessageType.Error,"Yol tarifi alınamadı - öğe detayları bulunamadı");
-            }
-            
-            });   
-        }
-
-    }
-
-
-    return (<>
-        <div className="common-query-window"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
+    return (
+        <div className="common-query-window" style={{ visibility: props.windowManager.IsVisible(props.id) ? "visible" : "hidden" }}>
             <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src="images/icons/sidebar/eczane.png"></img>
+                <img className="common-query-window-header-icon" src="images/icons/sidebar/eczane.png" alt="" aria-hidden="true" />
                 <span>Eczane</span>
-                <CommonQueryWindowTools
-                    ref={commonToolsComponentRef}
-                    windowManager={props.windowManager}
-                    windowId={props.id}
-                    setQueryField={setQueryField} 
-                    query={query}
-                    showNearbySearch={activeTab=="form"}
-                    showMapSelect={activeTab=="form"} />
-
+                <CommonQueryWindowTools ref={commonToolsComponentRef} windowManager={props.windowManager} windowId={props.id} setQueryField={setQueryField} query={query} showNearbySearch={isForm} showMapSelect={isForm} />
             </div>
-            <div className={"common-query-window-body "+ (props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : "")}>
-                {
-                    activeTab === "form" ?
-                        <>
-                            <Form onSubmit={(e) => btnSubmit_OnClick(e)}>
-                                <Form.Group>
-                                    {<div onClick={(e) => setQueryField("showPodOnDuty", !query.showPodOnDuty)}
-                                        className="form-checkbox">
-                                        <span>Nöbetçi Eczane Ara</span>{
-                                            query && query.showPodOnDuty ? <BsToggleOn /> : <BsToggleOff />
-                                        }
-                                    </div>
-                                    }
-                                </Form.Group>
-                                {
-                                    !query.mapSelect && <Form.Group>
-                                        <label className="form-label">Adı</label>
-                                        <input className="form-control" onChange={((e) => cmbName_OnChange(e))} value={query.name} />
-                                    </Form.Group>
-                                }
-
-                                {
-                                    (!query.showPodOnDuty && !query.showNearby && !query.mapSelect) && <>
-                                        <Form.Group>
-                                            <label className="form-label">İlçe</label>
-                                            <select className="form-select form-control" onChange={((e) => cmbDistrict_OnChange(e))}
-                                                value={query.districtId}>
-                                                <option value="">Seçiniz..</option>
-                                                {
-                                                    districtList?.map(_item => {
-                                                        return <option value={_item.attr.id}>{_item.attr.ad}</option>
-                                                    })
-                                                }
-                                            </select>
-                                        </Form.Group>
-                                        <Form.Group>
-                                            <label className="form-label">Mahalle</label>
-                                            <select className="form-select" onChange={((e) => cmbNbhood_OnChange(e))}
-                                                value={query.nbhoodId}>
-                                                <option value="">Seçiniz..</option>
-                                                {
-                                                    nbhoodList?.map(_item => {
-                                                        return <option value={_item.attr.id}>{_item.attr.ad}</option>
-                                                    })
-                                                }
-                                            </select>
-                                        </Form.Group></>
-                                }
-                                {
-                                    !query.mapSelect &&
-                                    <>
-                                    {
-                                        loading ? <ButtonLoading />
-                                            : <Button type="button" className="form-button" onClick={(e) => btnSubmit_OnClick()}>
-                                                <BiSearch className="form-button-icon" /><span>Sorgula</span>
-                                            </Button>
-                                    }
-                                    </>
-                                    
-                                }
-
-                            </Form>
-                        </> : <div className="results-container">
-                            {
-                                <>
-                                    <div className="results-container-toolbar">
-                                        <div className="results-container-back-button" onClick={(e) => btnBack_OnClick(e)}>
-                                            <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" />
-                                            &nbsp;Geri Dön
-                                        </div>
-                                        <div className="results-container-count">
-                                            <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
-                                        </div>
-                                    </div>
-                                    {
-                                        resultList?.map(_item => {
-                                            return <div className="result-item-container" onClick={(e)=>item_OnClick(e,_item)}>
-                                                <div className="result-item-info">
-                                                    <div className="result-item-info-title">
-                                                        {_item.Title}
-                                                    </div>
-                                                    <div className="result-item-info-address">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.Address}
-                                                    </div>
-                                                    <div className="result-item-info-address-description">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.AddressDescription}
-                                                    </div>
-                                                  
-                                                </div>
-                                                <CommonQueryResultItemTools 
-                                                item={_item} 
-                                                zoomCallback={(e)=>item_OnClick(e,_item)}
-                                                showRouteCallback={(e)=>item_ShowRoute(e,_item)}/>
-                                            </div>
-                                        })
-                                    }
-                                </>
-                            }
-                        </div>
-                }
+            <div className={`common-query-window-body ${props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : ""}`}>
+                {isForm ? (
+                    <Form onSubmit={submitQuery}>
+                        <Form.Group>
+                            <label className="form-checkbox"><span>Nöbetçi Eczane Ara</span><input type="checkbox" checked={query.showPodOnDuty} onChange={event => setQueryField("showPodOnDuty", event.target.checked)} /></label>
+                        </Form.Group>
+                        {!query.mapSelect && <Form.Group><label className="form-label" htmlFor={`${props.id}-name`}>Adı</label><input id={`${props.id}-name`} className="form-control" value={query.name} onChange={event => setQueryField("name", event.target.value)} /></Form.Group>}
+                        {!query.showPodOnDuty && !query.showNearby && !query.mapSelect && <>
+                            <Form.Group><label className="form-label" htmlFor={`${props.id}-district`}>İlçe</label><select id={`${props.id}-district`} className="form-select form-control" value={query.districtId} onChange={onDistrictChange}><option value="">Seçiniz..</option>{districtList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
+                            <Form.Group><label className="form-label" htmlFor={`${props.id}-neighborhood`}>Mahalle</label><select id={`${props.id}-neighborhood`} className="form-select" value={query.nbhoodId} onChange={onNeighborhoodChange}><option value="">Seçiniz..</option>{nbhoodList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
+                        </>}
+                        {!query.mapSelect && <Form.Group>{loading ? <ButtonLoading /> : <Button type="submit" className="form-button"><BiSearch className="form-button-icon" aria-hidden="true" /><span>Sorgula</span></Button>}</Form.Group>}
+                    </Form>
+                ) : (
+                    <div className="results-container">
+                        <div className="results-container-toolbar"><button type="button" className="results-container-back-button" onClick={backToForm}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button><div className="results-container-count"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div></div>
+                        {resultList?.map((item, index) => <article className="result-item-container" key={`${item.ObjectId ?? item.Title}-${index}`}><button type="button" className="result-item-info" onClick={() => showItem(item)}><span className="result-item-info-title">{item.Title}</span><span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.Address}</span><span className="result-item-info-address-description"><FiMapPin aria-hidden="true" />&nbsp;{item.AddressDescription}</span></button><CommonQueryResultItemTools item={item} zoomCallback={() => showItem(item)} showRouteCallback={() => showRoute(item)} /></article>)}
+                    </div>
+                )}
             </div>
         </div>
-    </>);
+    );
 });
+
+PodQueryWindow.displayName = "PodQueryWindow";
