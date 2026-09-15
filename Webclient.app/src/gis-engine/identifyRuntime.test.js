@@ -1,6 +1,7 @@
 import { loadModules } from 'esri-loader';
 import {
   classifyIdentifyLayer,
+  clearIdentifyRuntimeCache,
   collectIdentifyTargets,
   createIdentifySession,
   dedupeIdentifyResults,
@@ -24,6 +25,7 @@ const createView = (layers = []) => ({
 
 describe('identifyRuntime', () => {
   beforeEach(() => {
+    clearIdentifyRuntimeCache();
     jest.clearAllMocks();
   });
 
