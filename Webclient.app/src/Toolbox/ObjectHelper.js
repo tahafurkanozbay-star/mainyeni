@@ -1,5 +1,5 @@
 export function IsNull(obj) {
-    return obj == null || obj === "" || obj === "Null" || obj === "null";
+    return obj === null || obj === undefined || obj === "" || obj === "Null" || obj === "null";
 }
 
 export function HasNumeric(obj) {
@@ -23,7 +23,7 @@ export function IsAlphabetic(obj) {
 }
 
 export function clone(obj) {
-    if (obj == null || typeof obj !== "object") return obj;
+    if (obj === null || obj === undefined || typeof obj !== "object") return obj;
     const copy = {};
     for (const attr in obj) copy[attr] = Object.assign({}, obj[attr]);
     return copy;
