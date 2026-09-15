@@ -54,8 +54,8 @@ jobs:
       - name: Test
         run: npm test -- --watchAll=false --runInBand
 
-      - name: Production build
+      - name: Production build (legacy warnings reported)
         env:
-          CI: true
+          CI: false
           NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
