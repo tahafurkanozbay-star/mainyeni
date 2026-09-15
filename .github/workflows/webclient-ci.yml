@@ -6,7 +6,9 @@ on:
       - 'Webclient.app/**'
       - '.github/workflows/webclient-ci.yml'
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'agent/**'
     paths:
       - 'Webclient.app/**'
       - '.github/workflows/webclient-ci.yml'
