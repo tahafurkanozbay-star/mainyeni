@@ -13,6 +13,8 @@ import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
 import { CommonBusiness } from './Business/CommonBusiness';
 import { setDefaultOptions } from 'esri-loader';
+import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
+import './Components/Common/experience-ui.css';
 
 function App() {
 
@@ -20,51 +22,43 @@ function App() {
 
   const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
 
-
-  setDefaultOptions({ version: AppConfig.App.EsriApiVersion })
+  setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
 
   useEffect(() => {
-
-
     let promises = [];
 
     promises.push(ConfigurationBusiness.GetMapConfiguration());
     promises.push(ConfigurationBusiness.GetConfigServices());
 
     Promise.all(promises).then((_results) => {
-
       let mapConfigResult = _results[0];
       let configServicesResult = _results[1];
 
       if (mapConfigResult.isSuccess && configServicesResult.isSuccess) {
-
         MapManager.SetMapConfiguration(JSON.parse(mapConfigResult.data.configValue));
 
         let configServices = configServicesResult.data;
         configServices.forEach(service => {
-          CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service),"Appjs");
+          CommonBusiness.AddProxyRule(CommonBusiness.GenerateUrl(service), "Appjs");
         });
 
         MapManager.SetConfigurationServices(configServices);
-
         setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
       }
       else {
         setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       }
-
     });
-
   }, []);
 
   return (
     <div id="root">
-
       {
-        configLoadStatus == Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
-          configLoadStatus == Constants_LoadingStatus.ERROR ? <FullScreenError /> :
+        configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
+          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError /> :
             <>
-                <MapComponent windowManager={windowManager} />
+              <MapComponent windowManager={windowManager} />
+              <ExperienceUXLayer />
             </>
       }
     </div>
