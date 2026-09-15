@@ -1,568 +1,307 @@
-import { AppConfig } from "../Core/AppConfig";
-import { ArrayHelper } from '../Toolbox/ArrayHelper';
+import { ArrayHelper } from "../Toolbox/ArrayHelper";
 import { GisQueryHelper } from "../Toolbox/GisQueryHelper";
-import axios from 'axios';
-import { CommonBusiness } from './CommonBusiness';
 import { TextHelper } from "../Toolbox/TextHelper";
 import MapManager from "../Store/Managers/MapManager";
 import { Constants_ServiceResultType } from "../Core/Constants";
+import { apiClient } from "../platform/http/httpClient";
+import { CommonBusiness } from "./CommonBusiness";
+
+const SERVICE_TITLES = Object.freeze({
+    district: "NumberingDistrictQueryUrl",
+    neighborhood: "NumberingNeighborhoodQueryUrl",
+    street: "StreetQueryUrl",
+    streetCenterLine: "StreetCenterLineUrl",
+    streetCenterLineWay: "StreetCenterLineWayUrl",
+    door: "DoorQueryUrl",
+    building: "BuildingQueryUrl",
+    structure: "StructureQueryUrl",
+    numberingInfo: "NumberingInfoQueryUrl"
+});
+
+const escapeSqlLiteral = (value) => String(value ?? "").replace(/'/g, "''");
+
+const normalizeScalar = (value) => String(value ?? "").trim();
+
+const normalizeLegacyIdentifier = (value) => {
+    let normalized = normalizeScalar(value?.attr?.id ?? value);
+    if (normalized.length >= 2 && normalized.startsWith("'") && normalized.endsWith("'")) {
+        normalized = normalized.slice(1, -1);
+    }
+    return normalized;
+};
+
+const hasIdentifier = (value) =>
+    value !== null && value !== undefined && normalizeScalar(value) !== "";
+
+const quoteSqlLiteral = (value) => `'${escapeSqlLiteral(normalizeLegacyIdentifier(value))}'`;
+
+const normalizeIdentifierList = (values) => {
+    const source = Array.isArray(values)
+        ? values
+        : (values === null || values === undefined || values === "" ? [] : String(values).split(","));
+
+    return source
+        .map(normalizeLegacyIdentifier)
+        .filter(Boolean);
+};
+
+const buildInFilter = (field, values) => {
+    const normalized = normalizeIdentifierList(values);
+    if (!normalized.length) return null;
+    return `${field} IN (${normalized.map(quoteSqlLiteral).join(",")})`;
+};
+
+const buildEqualsFilter = (field, value) => `${field}=${quoteSqlLiteral(value)}`;
+
+const buildUpperContainsFilter = (field, value) => {
+    const normalized = normalizeScalar(value);
+    if (!normalized) return null;
+    return `UPPER(${field}) LIKE '%${escapeSqlLiteral(TextHelper.TurkishToUpper(normalized))}%'`;
+};
+
+const emptyResult = () => ({
+    type: Constants_ServiceResultType.Success,
+    data: [],
+    fields: []
+});
+
+const serviceError = (title) => ({
+    type: Constants_ServiceResultType.Error,
+    message: `Servis bulunamadı (${title})`
+});
+
+const getService = (title) => {
+    const service = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", title);
+    if (service === null || service === undefined) throw serviceError(title);
+    return service;
+};
+
+const createOptions = (title, options = {}) => ({
+    url: CommonBusiness.GenerateUrl(getService(title)),
+    returnGeometry: false,
+    outFields: ["*"],
+    ...options
+});
+
+const sortData = (result, field) => {
+    if (Array.isArray(result?.data) && field) {
+        result.data.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, field));
+    }
+    return result ?? emptyResult();
+};
+
+const executeQuery = async (title, options, sortField = null) => {
+    const result = await GisQueryHelper.ExecuteQuery(createOptions(title, options));
+    return sortData(result, sortField);
+};
+
+const readEntityId = (entity) => normalizeLegacyIdentifier(entity?.attr?.id ?? entity?.id ?? entity);
+
+const fileRequestOptions = (options = {}) => ({
+    ...options,
+    cache: true,
+    dedupe: !options.signal,
+    cacheTtlMs: options.cacheTtlMs ?? 30000
+});
+
+const returnWithCallback = (callback, value) => {
+    if (typeof callback === "function") callback(value);
+    return value;
+};
 
 export const NumberingQueryBusiness = {
+    GetDistrictById: async (_id) => executeQuery(SERVICE_TITLES.district, {
+        returnDistinctValues: false,
+        returnGeometry: true,
+        orderByFields: ["ad"],
+        outFields: ["*"],
+        where: buildEqualsFilter("id", _id)
+    }),
 
-    GetDistrictById: async (_id) => {
+    GetDistricts: async (_query = {}) => {
+        const predicates = ["1=1"];
+        const nameFilter = buildUpperContainsFilter("ad", _query?.DistrictName);
+        if (nameFilter) predicates.push(nameFilter);
 
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "NumberingDistrictQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let options = {
-                returnDistinctValues: false,
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                orderByFields: ["ad"],
-                outFields: ["*"],
-                where: "id='" + _id + "'"
-            };
-
-            GisQueryHelper.ExecuteQuery(options).then(results => {
-                resolve(results);
-            });
-
-        });
+        return executeQuery(SERVICE_TITLES.district, {
+            returnDistinctValues: true,
+            returnGeometry: false,
+            orderByFields: ["ad"],
+            outFields: ["id", "ad"],
+            where: predicates.join(" AND ")
+        }, "ad");
     },
 
-    GetDistricts: async (_query) => {
+    GetNeighborhoodById: async (_id) => executeQuery(SERVICE_TITLES.neighborhood, {
+        returnDistinctValues: false,
+        returnGeometry: true,
+        orderByFields: ["ad"],
+        outFields: ["*"],
+        where: buildEqualsFilter("id", _id)
+    }),
 
-        return new Promise((resolve, reject) => {
+    GetAllNeighborhoods: async (_query = {}) => {
+        const predicates = ["1=1"];
+        const nameFilter = buildUpperContainsFilter("ad", _query?.NeighborhoodName);
+        if (nameFilter) predicates.push(nameFilter);
 
-            let servicetitle = "NumberingDistrictQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let options = {
-                returnDistinctValues: true,
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: false,
-                orderByFields: ["ad"],
-                outFields: ["id", "ad"],
-                where: "1=1"
-            };
-
-            if (_query != null) {
-
-                if (_query.DistrictName != null) {
-                    options.where += " AND UPPER(ad) LIKE '%" + TextHelper.TurkishToUpper(_query.DistrictName) + "%'";
-                }
-            }
-
-
-            GisQueryHelper.ExecuteQuery(options).then(results => {
-
-
-                if (results == null) {
-                    reject({ type: Constants_ServiceResultType.Error, message: "Sonuç bulunamadı" })
-                }
-                else {
-                    results?.data?.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, "ad"));
-
-                    resolve(results);
-
-                }
-
-
-            });
-
-        });
+        return executeQuery(SERVICE_TITLES.neighborhood, {
+            returnDistinctValues: true,
+            returnGeometry: false,
+            orderByFields: ["ad"],
+            outFields: ["id", "ad"],
+            where: predicates.join(" AND ")
+        }, "ad");
     },
 
-    /* Mahalle Sorgulama*/
-    GetNeighborhoodById: async (_id) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "NumberingNeighborhoodQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let options = {
-                returnDistinctValues: false,
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                orderByFields: ["ad"],
-                outFields: ["*"],
-                where: "id='" + _id + "'"
-            };
-            GisQueryHelper.ExecuteQuery(options).then(results => {
-                resolve(results);
-            });
-
-        });
-    },
-
-    GetAllNeighborhoods: async (_query) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "NumberingNeighborhoodQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let options = {
-                returnDistinctValues: true,
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: false,
-                orderByFields: ["ad"],
-                outFields: ["id", "ad"],
-                where: "1=1"
-            };
-
-            if (_query != null) {
-
-                if (_query.NeighborhoodName != null) {
-                    options.where += " AND UPPER(ad) LIKE '%" + TextHelper.TurkishToUpper(_query.NeighborhoodName) + "%'";
-                }
-            }
-
-            GisQueryHelper.ExecuteQuery(options).then(results => {
-                if (results == null) {
-                    reject({ type: Constants_ServiceResultType.Error, message: "Sonuç bulunamadı" })
-                }
-                else {
-                    results?.data?.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, "ad"));
-
-                    resolve(results);
-
-                }
-
-            });
-
-
-        });
-    },
-
-    /* Mahalle Sorgulama*/
-    GetNeighborhoodsOfDistrict: (_districtId) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "NumberingNeighborhoodQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let options = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                orderByFields: ["ad"],
-                outFields: ["*"],
-                where: "ilceid='" + _districtId + "'"
-            };
-
-            return GisQueryHelper.ExecuteQuery(options).then(_results => {
-
-                if (_results == null) {
-                    reject({ type: Constants_ServiceResultType.Error, message: "Sonuç bulunamadı" })
-                }
-                else {
-                    _results?.data?.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, "ad"));
-
-                    resolve(_results);
-
-                }
-
-            });
-
-
-        });
-
-    },
-
-
+    GetNeighborhoodsOfDistrict: async (_districtId) => executeQuery(SERVICE_TITLES.neighborhood, {
+        returnGeometry: true,
+        orderByFields: ["ad"],
+        outFields: ["*"],
+        where: buildEqualsFilter("ilceid", _districtId)
+    }, "ad"),
 
     GetStreetsByName: async (_name) => {
-
-        return new Promise((resolve, reject) => {
-
-
-            let servicetitle = "StreetQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let options = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                orderByFields: ["ad"],
-                where: "UPPER(ad) LIKE '%" + TextHelper.TurkishToUpper(_name) + "%'",
-                outFields: ["ad", "id"]
-            };
-
-            //Yol orta hat sorgulaması
-            GisQueryHelper.ExecuteQuery(options).then(_results => {
-
-                if(_results!=null && Array.isArray(_results)){
-                    _results?.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, "ad"));
-                }
-                
-                resolve(_results);
-            });
-
-        });
-
+        const nameFilter = buildUpperContainsFilter("ad", _name);
+        return executeQuery(SERVICE_TITLES.street, {
+            returnGeometry: true,
+            orderByFields: ["ad"],
+            where: nameFilter ?? "1=0",
+            outFields: ["ad", "id"]
+        }, "ad");
     },
 
-
-    /* Cadde sokak sorgulama */
     GetStreets: async (_neighborhoodId) => {
-
-        return new Promise((resolve, reject) => {
-
-            try {
-                let streetCenterLineWay_QueryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", "StreetCenterLineWayUrl");
-                let streetCenterLine_QueryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", "StreetCenterLineUrl");
-
-                let where = " mahalleid='" + _neighborhoodId + "'";
-
-                let wayQueryOptions = {
-                    url: CommonBusiness.GenerateUrl(streetCenterLineWay_QueryService),
-                    returnGeometry: false,
-                    outFields: ["id", "yolortahatid"],
-                    where: where
-                };
-
-                //Yol orta hat yön sorgulaması
-                GisQueryHelper.ExecuteQuery(wayQueryOptions).then(wayResult => {
-
-                    let reducedCenterLineResults = wayResult.data?.map(x => "'" + x.attr.yolortahatid + "'");
-                    let reducedCenterLineResultsStr = reducedCenterLineResults.join(",");
-
-                    let centerLineQueryOptions = {
-                        url: CommonBusiness.GenerateUrl(streetCenterLine_QueryService),
-                        returnGeometry: false,
-                        orderByFields: ["ad"],
-                        returnDistinctValues: true,
-                        where: "id IN (" + reducedCenterLineResultsStr + ")",
-                        outFields: ["ad", "yolid"]
-                    };
-
-                    //Yol orta hat sorgulaması
-                    GisQueryHelper.ExecuteQuery(centerLineQueryOptions).then(_results => {
-
-                        if (_results == null) {
-                            reject({ type: Constants_ServiceResultType.Error, message: "Sonuç bulunamadı" })
-                        }
-                        else {
-                            _results?.data?.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, "ad"));
-
-                            resolve(_results);
-
-                        }
-
-                    });
-
-                });
-            } catch (error) {
-                console.log(error);
-                resolve(null);
-            }
-
+        const wayResult = await executeQuery(SERVICE_TITLES.streetCenterLineWay, {
+            returnGeometry: false,
+            outFields: ["id", "yolortahatid"],
+            where: buildEqualsFilter("mahalleid", _neighborhoodId)
         });
 
+        if (wayResult?.type === Constants_ServiceResultType.Error) return wayResult;
 
+        const centerLineIds = (wayResult?.data ?? [])
+            .map((item) => item?.attr?.yolortahatid)
+            .filter(hasIdentifier);
+        const centerLineFilter = buildInFilter("id", centerLineIds);
+        if (!centerLineFilter) return emptyResult();
+
+        return executeQuery(SERVICE_TITLES.streetCenterLine, {
+            returnGeometry: false,
+            orderByFields: ["ad"],
+            returnDistinctValues: true,
+            where: centerLineFilter,
+            outFields: ["ad", "yolid"]
+        }, "ad");
     },
 
-    /*Yollara ait orta hatları getirir*/
     GetStreetCenterLines: async (_streetId) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "StreetCenterLineUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-            let queryOptions = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                orderByFields: ["ad"],
-                where: "yolid='" + _streetId + "'",
-                outFields: ["ad", "id", "yolid"]
-            };
-
-            //Yol orta hat sorgulaması
-            GisQueryHelper.ExecuteQuery(queryOptions).then(queryResult => {
-
-                queryResult.data.sort((a, b) => ArrayHelper.OrderByTurkish(a.attr, b.attr, "ad"));
-                resolve(queryResult.data);
-
-            });
-        });
-
+        const result = await executeQuery(SERVICE_TITLES.streetCenterLine, {
+            returnGeometry: true,
+            orderByFields: ["ad"],
+            where: buildEqualsFilter("yolid", _streetId),
+            outFields: ["ad", "id", "yolid"]
+        }, "ad");
+        return result?.data ?? [];
     },
 
-    /*Yol orta hatlara ait yolortahat yönleri getirir*/
     GetStreetWaysofCenterLinesByCenterlineIDs: async (_centerlineIDs) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "StreetCenterLineWayUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-
-            let queryOptions = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: false,
-                outFields: ["id"],
-                where: "yolortahatid IN (" + _centerlineIDs + ")"
-            }
-            GisQueryHelper.ExecuteQuery(queryOptions).then(queryResults => {
-                resolve(queryResults);
-            });
-
+        const where = buildInFilter("yolortahatid", _centerlineIDs);
+        if (!where) return emptyResult();
+        return executeQuery(SERVICE_TITLES.streetCenterLineWay, {
+            returnGeometry: false,
+            outFields: ["id"],
+            where
         });
     },
 
-    /* yol orta hat yön id lere göre kapıları getirir*/
     GetDoorsByWayIDs: async (_wayIDs) => {
-
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "DoorQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-            let queryOptions = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                orderByFields: "kapino",
-                outFields: ["id", "kapino"],
-                where: "yolortahatyonid IN (" + _wayIDs + ")"
-            }
-
-            GisQueryHelper.ExecuteQuery(queryOptions).then(queryResults => {
-                resolve(queryResults);
-            });
-
+        const where = buildInFilter("yolortahatyonid", _wayIDs);
+        if (!where) return emptyResult();
+        return executeQuery(SERVICE_TITLES.door, {
+            returnGeometry: true,
+            orderByFields: ["kapino"],
+            outFields: ["id", "kapino"],
+            where
         });
-
-
     },
 
-    /* Kapı sorgulama */
     GetDoors: async (_streetId) => {
+        const centerLines = await NumberingQueryBusiness.GetStreetCenterLines(_streetId);
+        const centerLineIds = centerLines.map((item) => item?.attr?.id).filter(hasIdentifier);
+        if (!centerLineIds.length) return emptyResult();
 
-        return new Promise((resolve, reject) => {
+        const wayResult = await NumberingQueryBusiness.GetStreetWaysofCenterLinesByCenterlineIDs(centerLineIds);
+        if (wayResult?.type === Constants_ServiceResultType.Error) return wayResult;
 
-            NumberingQueryBusiness.GetStreetCenterLines(_streetId).then(centerLinesResult => {
+        const wayIds = (wayResult?.data ?? []).map((item) => item?.attr?.id).filter(hasIdentifier);
+        if (!wayIds.length) return emptyResult();
+        return NumberingQueryBusiness.GetDoorsByWayIDs(wayIds);
+    },
 
+    GetDoorById: async (_doorId) => executeQuery(SERVICE_TITLES.door, {
+        returnGeometry: true,
+        outFields: ["*"],
+        where: buildEqualsFilter("id", _doorId)
+    }),
 
-                if (centerLinesResult != null) {
+    IntersectBuildingsWithMapPoint: async (mapPoint) => GisQueryHelper.ExecuteSpatialQuery(
+        createOptions(SERVICE_TITLES.building, {
+            geometry: mapPoint,
+            distance: 1,
+            units: "meters",
+            spatialRelationship: "intersects",
+            returnGeometry: true,
+            outFields: ["*"]
+        })
+    ),
 
-                    let centerlineIDs = centerLinesResult?.map(x => "'" + x.attr.id + "'");
+    GetStructureInfoOfBuilding: async (_building) => executeQuery(SERVICE_TITLES.structure, {
+        returnGeometry: true,
+        outFields: ["*"],
+        where: buildEqualsFilter("id", readEntityId(_building))
+    }),
 
-                    NumberingQueryBusiness.GetStreetWaysofCenterLinesByCenterlineIDs(centerlineIDs).then(wayResult => {
+    GetNumberingInfoOfStructure: async (_structure) => executeQuery(SERVICE_TITLES.numberingInfo, {
+        returnGeometry: true,
+        outFields: ["*"],
+        where: buildEqualsFilter("yapi_id", readEntityId(_structure))
+    }),
 
-                        let wayIDs = wayResult.data?.map(x => "'" + x.attr.id + "'");
+    GetBuildingDocumentCategoryList: () => [
+        { Title: "Betonarme Projesi", Id: "betonarmeProjesi" },
+        { Title: "Elektrik Proje", Id: "elektrikProje" },
+        { Title: "İnşaat Ruhsatı", Id: "insaatRuhsati" },
+        { Title: "Isıtma Tesisat", Id: "isitmaTesisat" },
+        { Title: "İskan Ruhsatı", Id: "iskanRuhsati" },
+        { Title: "Sıhhi Tesisat", Id: "sihhiTesisat" },
+        { Title: "Statik Proje", Id: "statikProje" }
+    ],
 
-                        NumberingQueryBusiness.GetDoorsByWayIDs(wayIDs).then(doorResult => {
-                            resolve(doorResult);
-                        });
-                    });
+    GetBuildingDocumentList: async (_building, _category, _callback, options = {}) => {
+        try {
+            const result = await apiClient.get("/Common/FileService.svc/GetBuildingDocuments", {
+                ...fileRequestOptions(options),
+                params: {
+                    buildingId: readEntityId(_building),
+                    category: normalizeScalar(_category)
                 }
-                else {
-                    resolve(null);
-                }
-
             });
-
-        });
+            return returnWithCallback(_callback, result);
+        } catch (_error) {
+            return returnWithCallback(_callback, null);
+        }
     },
 
-    /*ID den kapı bilgisi getirir */
-    GetDoorById: async (_doorId) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "DoorQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-
-            let queryOptions = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                outFields: ["*"],
-                where: "id='" + _doorId + "'"
-            }
-
-            GisQueryHelper.ExecuteQuery(queryOptions).then(queryResults => {
-                resolve(queryResults);
+    GetBuildingPhotoList: async (_building, _callback, options = {}) => {
+        try {
+            const result = await apiClient.get("/Common/FileService.svc/GetBuildingPhotos", {
+                ...fileRequestOptions(options),
+                params: { buildingId: readEntityId(_building) }
             });
-
-        });
-
-    },
-
-    /*tıklanan noktayı bina ile kesiştirir*/
-    IntersectBuildingsWithMapPoint: (mapPoint) => {
-
-        return new Promise((resolve, reject) => {
-            let servicetitle = "BuildingQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-
-            let options = {
-                geometry: mapPoint,
-                url: CommonBusiness.GenerateUrl(queryService),
-                distance: 1,
-                units: 'meters',
-                spatialRelationship: 'intersects',
-                returnGeometry: true,
-                outFields: ["*"],
-            };
-
-            return GisQueryHelper.ExecuteSpatialQuery(options).then(_result => resolve(_result));
-
-
-
-        });
-
-    },
-
-    /*Binaya ait yapı bilgisini getirir*/
-    GetStructureInfoOfBuilding: async (_building) => {
-
-        return new Promise((resolve, reject) => {
-
-            let servicetitle = "StructureQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-
-            let queryOptions = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                outFields: ["*"],
-                where: "id='" + _building.attr.id + "'"
-            }
-
-            GisQueryHelper.ExecuteQuery(queryOptions).then(queryResults => {
-                resolve(queryResults);
-            });
-
-
-        });
-
-
-    },
-
-    /*Yapıya ait numarataj listesini getirir*/
-    GetNumberingInfoOfStructure: async (_structure) => {
-
-
-        return new Promise((resolve, reject) => {
-            let servicetitle = "NumberingInfoQueryUrl";
-            let queryService = ArrayHelper.Find(MapManager.GetConfigurationServices(), "title", servicetitle);
-            if (queryService == null) {
-                reject({ type: Constants_ServiceResultType.Error, message: "Servis bulunamadı (" + servicetitle + ")" })
-            };
-
-
-            let queryOptions = {
-                url: CommonBusiness.GenerateUrl(queryService),
-                returnGeometry: true,
-                outFields: ["*"],
-                where: "yapi_id='" + _structure.attr.id + "'"
-            }
-
-            GisQueryHelper.ExecuteQuery(queryOptions).then(queryResults => {
-                resolve(queryResults);
-            });
-        });
-
-    },
-
-
-    /**/
-    GetBuildingDocumentCategoryList: () => {
-
-        let list = [
-            { Title: "Betonarme Projesi", Id: "betonarmeProjesi" },
-            { Title: "Elektrik Proje", Id: "elektrikProje" },
-            { Title: "İnşaat Ruhsatı", Id: "insaatRuhsati" },
-            { Title: "Isıtma Tesisat", Id: "isitmaTesisat" },
-            { Title: "İskan Ruhsatı", Id: "iskanRuhsati" },
-            { Title: "Sıhhi Tesisat", Id: "sihhiTesisat" },
-            { Title: "Statik Proje", Id: "statikProje" }
-        ];
-        return list;
-    },
-
-    /* Binaya ait doküman listesinin getirir */
-    GetBuildingDocumentList: (_building, _category, _callback) => {
-
-        //http://localhost:5304/Common/FileService.svc/GetBuildingDocumentList?
-        //buildingId={720A4433-FA55-432F-92B2-247B48EBC446}&category=elektrikProje
-        let url = AppConfig.Api.Url + '/Common/FileService.svc/GetBuildingDocuments';
-        return axios.get(url, {
-            params: {
-                buildingId: _building.attr.id,
-                category: _category
-            }
-        }).then(function (response) {
-
-            let result = response.data;
-
-            _callback(result);
-        }).catch(function (error) {
-            console.log(error);
-            _callback(null);
-        });
-    },
-
-    /* Binaya ait fotoğraf listesinin getirir */
-    GetBuildingPhotoList: (_building, _callback) => {
-
-        //http://localhost:5304/Common/FileService.svc/GetBuildingDocumentList?
-        //buildingId={720A4433-FA55-432F-92B2-247B48EBC446}&category=elektrikProje
-        let url = AppConfig.Api.FileServiceUrl + '/Common/FileService.svc/GetBuildingPhotos';
-        return axios.get(url, {
-            params: {
-                buildingId: _building.attr.id
-            }
-        }).then(function (response) {
-
-            let result = response.data;
-
-            _callback(result);
-        }).catch(function (error) {
-            console.log(error);
-            _callback(null);
-        });
+            return returnWithCallback(_callback, result);
+        } catch (_error) {
+            return returnWithCallback(_callback, null);
+        }
     }
-}
+};
