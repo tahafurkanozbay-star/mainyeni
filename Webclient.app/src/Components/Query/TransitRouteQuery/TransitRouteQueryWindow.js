@@ -1,355 +1,479 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Button, Form, Tab, Tabs } from "react-bootstrap";
-import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
-import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
-import MapManager from "../../../Store/Managers/MapManager";
-import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
-import { TransitRouteQueryBusiness } from "../../../Business/TransitRouteQueryBusiness";
-import { BiBus, BiCar, BiCycling, BiMap, BiSearch, BiSort, BiTargetLock, BiWalk, BiXCircle } from "react-icons/bi";
+import { BiBus, BiCar, BiCycling, BiMap, BiPlus, BiSearch, BiSort, BiTargetLock, BiWalk, BiX } from "react-icons/bi";
 import { FiMapPin, FiPhone } from "react-icons/fi";
 import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
-import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
 import { CommonBusiness } from "../../../Business/CommonBusiness";
-import { DebugHelper } from "../../../Toolbox/DebugHelper";
+import { LoggingBusiness } from "../../../Business/LoggingBusiness";
+import { TransitRouteQueryBusiness } from "../../../Business/TransitRouteQueryBusiness";
+import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
+import MapManager from "../../../Store/Managers/MapManager";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
-import { ButtonLoading } from "../../Common/Loading";
+import { ButtonLoading, NoResultsFound } from "../../Common/Loading";
+import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
+import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
+import {
+    buildGoogleDirectionsUrl,
+    createLatestRequestGate,
+    createOwnedResourceRegistry,
+    isSmallViewport,
+    normalizeErrorMessage,
+    openExternalSafely,
+    safeClientLog
+} from "../_Common/QueryInteractionRuntime";
+import { normalizeSearchCollection } from "../_Common/QuerySearchRuntime";
 import "./TransitRouteQueryWindow.css";
-import { BsStoplights, BsToggleOff, BsToggleOn } from "react-icons/bs";
-import { TbPoint } from "react-icons/tb";
+
+const WINDOW_TITLE = "Ulaşım Ağları";
+const WINDOW_LOGO = "images/icons/sidebar/ulasimaglari.png";
+const MIN_STOP_COUNT = 2;
+const MAX_STOP_COUNT = 6;
+
+const TRANSIT_FILTERS = Object.freeze([
+    { field: "showBusLines", label: "Otobüs Hatları" },
+    { field: "showDolmusLines", label: "Dolmuş Hatları" },
+    { field: "showMetroLines", label: "Metro Hatları" },
+    { field: "showCablecarLines", label: "Teleferik Hatları" }
+]);
+
+const ROUTE_MODES = Object.freeze([
+    { key: "masstransit", title: "Toplu Taşıma", Icon: BiBus },
+    { key: "car", title: "Araç", Icon: BiCar },
+    { key: "bicycle", title: "Bisiklet", Icon: BiCycling },
+    { key: "walk", title: "Yürüme", Icon: BiWalk }
+]);
+
+const createStop = () => ({ address: "", coordinates: "" });
+const createDefaultQuery = () => ({
+    type: "masstransit",
+    showBusLines: true,
+    showDolmusLines: true,
+    showMetroLines: true,
+    showCablecarLines: true,
+    mapSelect: false,
+    showNearby: false,
+    userLocation: null,
+    bufferDistance: 20,
+    stops: [createStop(), createStop()]
+});
 
 export const TransitRouteQueryWindow = React.forwardRef((props, ref) => {
-
-    const windowTitle = "Ulaşım Ağları";
-    const windowLogo = "images/icons/sidebar/ulasimaglari.png";
-
-    useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            DebugHelper.Log("show " + props.id);
-        },
-        OnClose: () => {
-            DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery);
-            setActiveTab("form");
-            setResultList(null);
-            removeLastClusterLayer();
+    const { id, queryServiceTitle, windowManager } = props;
+    const mapViewRef = useRef(null);
+    const commonToolsRef = useRef(null);
+    const queryGateRef = useRef(createLatestRequestGate());
+    const detailGateRef = useRef(createLatestRequestGate());
+    const mountedRef = useRef(true);
+    const resourceRegistryRef = useRef(createOwnedResourceRegistry({
+        removeLayer: resource => {
+            const layer = resource?.layerObj || resource;
+            if (layer && mapViewRef.current?.map) mapViewRef.current.map.remove(layer);
         }
     }));
 
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
-    useEffect(() => {
+    const [query, setQuery] = useState(createDefaultQuery);
+    const [resultList, setResultList] = useState([]);
+    const [activeView, setActiveView] = useState("form");
+    const [loading, setLoading] = useState(false);
+    const [detailLoadingKey, setDetailLoadingKey] = useState(null);
+    const [errorMessage, setErrorMessage] = useState("");
 
-        props.windowManager.RegisterWindow(ref);
-        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
-
-        NumberingQueryBusiness.GetDistricts().then(_result => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setDistrictList(_result.data);
-            }
-        });
-
+    const setQueryField = useCallback((field, value) => {
+        setQuery(current => ({ ...current, [field]: value }));
     }, []);
 
+    const clearOwnedLayers = useCallback(() => {
+        resourceRegistryRef.current.clearLayers();
+    }, []);
 
-    const cmbDistrict_OnChange = (e) => {
+    const resetWindow = useCallback(() => {
+        queryGateRef.current.invalidate();
+        detailGateRef.current.invalidate();
+        clearOwnedLayers();
+        commonToolsRef.current?.OnClose?.();
+        setQuery(createDefaultQuery());
+        setResultList([]);
+        setActiveView("form");
+        setLoading(false);
+        setDetailLoadingKey(null);
+        setErrorMessage("");
+    }, [clearOwnedLayers]);
 
-        const districtId = e.target.value;
-        setQueryField("districtId", districtId);
-    }
+    useImperativeHandle(ref, () => ({
+        id,
+        visible: false,
+        minimized: false,
+        OnShow: () => {},
+        OnClose: resetWindow
+    }), [id, resetWindow]);
 
+    useEffect(() => {
+        mountedRef.current = true;
+        windowManager.RegisterWindow(ref);
+        mapViewRef.current = MapManager.GetMapView();
 
-    const defaultQuery = { stops: [{ address: "", coordinates: "" }, { address: "", coordinates: "" }] };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery( query => {
-            return { ...query,[_field]: _value}
-         })
-    }
-    
-    const [clusterLayer, setClusterLayer] = useState(null);
-    const removeLastClusterLayer = () => {
-        if (clusterLayer != null) {
-            mapView.map.remove(clusterLayer.layerObj);
-            setClusterLayer(null);
+        return () => {
+            mountedRef.current = false;
+            queryGateRef.current.invalidate();
+            detailGateRef.current.invalidate();
+            clearOwnedLayers();
+            commonToolsRef.current?.OnClose?.();
+            mapViewRef.current = null;
+        };
+    }, [clearOwnedLayers, ref, windowManager]);
+
+    const activeMode = useMemo(
+        () => ROUTE_MODES.find(mode => mode.key === query.type) || ROUTE_MODES[0],
+        [query.type]
+    );
+
+    const updateStop = useCallback((index, field, value) => {
+        setQuery(current => ({
+            ...current,
+            stops: current.stops.map((stop, stopIndex) => (
+                stopIndex === index ? { ...stop, [field]: value } : stop
+            ))
+        }));
+    }, []);
+
+    const addStop = useCallback(() => {
+        setQuery(current => {
+            if (current.stops.length >= MAX_STOP_COUNT) return current;
+            return { ...current, stops: [...current.stops, createStop()] };
+        });
+    }, []);
+
+    const removeStop = useCallback(index => {
+        setQuery(current => {
+            if (current.stops.length <= MIN_STOP_COUNT) return current;
+            return { ...current, stops: current.stops.filter((_, stopIndex) => stopIndex !== index) };
+        });
+    }, []);
+
+    const swapStops = useCallback(index => {
+        setQuery(current => {
+            if (index < 0 || index >= current.stops.length - 1) return current;
+            const stops = current.stops.map(stop => ({ ...stop }));
+            [stops[index], stops[index + 1]] = [stops[index + 1], stops[index]];
+            return { ...current, stops };
+        });
+    }, []);
+
+    const validateQuery = useCallback(() => {
+        if (!queryServiceTitle) return "Ulaşım ağı servisi tanımlı değil.";
+        if (!ROUTE_MODES.some(mode => mode.key === query.type)) return "Geçerli bir ulaşım türü seçin.";
+        if (query.type === "masstransit" && !TRANSIT_FILTERS.some(filter => query[filter.field])) {
+            return "En az bir toplu taşıma ağı seçin.";
         }
-    }
+        return "";
+    }, [query, queryServiceTitle]);
 
+    const submitQuery = useCallback(async event => {
+        event?.preventDefault?.();
+        if (loading) return;
 
-    const [resultList, setResultList] = useState(null);
-    const [activeTab, setActiveTab] = useState("form");
-    const btnBack_OnClick = (e) => {
-        removeLastClusterLayer();
-        setActiveTab("form");
-    }
+        const validationMessage = validateQuery();
+        if (validationMessage) {
+            setErrorMessage(validationMessage);
+            windowManager.ShowMessage(Constants_MessageType.Error, validationMessage);
+            return;
+        }
 
-    const [loading, setLoading] = useState(false);
-    const btnSubmit_OnClick = (e) => {
-
-        e?.preventDefault();
+        const requestId = queryGateRef.current.next();
         setLoading(true);
-
-        TransitRouteQueryBusiness.Query(query, false).then((_result) => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-
-                setActiveTab("query");
-
-                CommonBusiness.Clustering.CreateClusterLayer(props.queryServiceTitle, windowTitle, null, null).then((_clusterLayer) => {
-
-                    removeLastClusterLayer();
-
-                    setClusterLayer(_clusterLayer);
-                    mapView.map.add(_clusterLayer.layerObj);
-
-                });
-
-                let list = [];
-
-                _result.data.forEach(_item => {
-                    list.push({
-                        ObjectId: _item.attr.objectid,
-                        Title: _item.attr.adi,
-                        Phone: _item.attr.telefon,
-                        Address: _item.attr.adres,
-                        AddressDescription: "Adres tarifi bulunmuyor"
-                    });
-                });
-                setResultList(list);
-                setLoading(false);
-
-            }
+        setErrorMessage("");
+        safeClientLog(LoggingBusiness, "Ulaşım Ağları/Sorgu", {
+            type: query.type,
+            stopCount: query.stops.length,
+            filters: TRANSIT_FILTERS.filter(filter => query[filter.field]).map(filter => filter.field)
         });
 
-    }
-
-
-    const getItemDetailsById = async (_item) => {
-
-        return new Promise((resolve, reject) => {
-            TransitRouteQueryBusiness.Query({ Id: _item.Id }, true).then((_result) => {
-                if (_result.type == Constants_ServiceResultType.Success) {
-                    if (_result.data != null) {
-                        const _resultItem = _result.data[0];
-                        resolve(_resultItem);
-                    }
-                    else {
-                        reject(null);
-                    }
-                }
-            });
-        });
-
-    }
-
-    const item_OnClick = (e, _item) => {
-
-        getItemDetailsById(_item).then(_itemDetails => {
-            
-            GisGraphicsHelper.ZoomToGeometry(mapView, _itemDetails?.geometry, 18);
-
-            if(window.screen.width<960){
-                props.windowManager.ToggleMinimiseWindow(props.id);
-            } 
-        });
-    }
-
-    const item_ShowTransitRoute = (e, _item) => {
-
-        getItemDetailsById(_item).then(_itemDetails => {
-
-            if (_itemDetails != null) {
-                const lat = _itemDetails.geometry.latitude;
-                const lng = _itemDetails.geometry.longitude;
-                let url = "https://www.google.com.tr/maps?saddr=My+Location&daddr=" + lat + "," + lng;
-                window.open(url, "_blank");
-                //TODO: create log
-            }
-            else {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
+        try {
+            const result = await TransitRouteQueryBusiness.Query(query, false);
+            if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
+            if (result?.type !== Constants_ServiceResultType.Success) {
+                throw new Error(result?.message || "Ulaşım ağı sorgusu tamamlanamadı.");
             }
 
+            const nextResults = normalizeSearchCollection(result.data || []);
+            setResultList(nextResults);
+            setActiveView("results");
 
-        });
-    }
+            const clusterLayer = await CommonBusiness.Clustering.CreateClusterLayer(
+                queryServiceTitle,
+                WINDOW_TITLE,
+                query,
+                null
+            );
+            if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
 
-    const addStop=(e)=>{
-        const _query={...query};
-        _query.stops.push({ address: "", coordinates: "" });
-        setQuery(_query);
-    }
-
-    const removeStop=(e,_index)=>{
-
-        const _query={...query};
-            
-        if(_query.stops.length>2){
-            _query.stops.splice(_index,1);
-            setQuery(_query);
+            clearOwnedLayers();
+            if (clusterLayer?.layerObj && mapViewRef.current?.map) {
+                resourceRegistryRef.current.trackLayer(clusterLayer);
+                mapViewRef.current.map.add(clusterLayer.layerObj);
+            }
+        } catch (error) {
+            if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
+            const message = normalizeErrorMessage(error, "Ulaşım ağı sorgusu sırasında bir hata oluştu.");
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
+        } finally {
+            if (mountedRef.current && queryGateRef.current.isCurrent(requestId)) setLoading(false);
         }
-    }
+    }, [clearOwnedLayers, loading, query, queryServiceTitle, validateQuery, windowManager]);
 
-    return (<>
-        <div className="common-query-window"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-            <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src={windowLogo}></img>
-                <span>{windowTitle}</span>
+    const getItemDetails = useCallback(async item => {
+        if (item?.id === null || item?.id === undefined) throw new Error("Kayıt kimliği bulunamadı.");
+        const requestId = detailGateRef.current.next();
+        const result = await TransitRouteQueryBusiness.Query({ Id: item.id }, true);
+        if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) return null;
+        if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data) || !result.data[0]) {
+            throw new Error(result?.message || "Ulaşım ağı ayrıntıları bulunamadı.");
+        }
+        return result.data[0];
+    }, []);
+
+    const showItemOnMap = useCallback(async item => {
+        if (!item) return;
+        const itemKey = item.key;
+        setDetailLoadingKey(itemKey);
+        setErrorMessage("");
+        safeClientLog(LoggingBusiness, "Ulaşım Ağları/Detay Göster", `${item.id ?? ""}/${item.title}`);
+
+        try {
+            const detail = await getItemDetails(item);
+            if (!detail?.geometry) return;
+            const mapView = mapViewRef.current || MapManager.GetMapView();
+            if (!mapView) throw new Error("Harita görünümü hazır değil.");
+            GisGraphicsHelper.ZoomToGeometry(mapView, detail.geometry, 18);
+            if (isSmallViewport()) windowManager.ToggleMinimiseWindow(id);
+        } catch (error) {
+            const message = normalizeErrorMessage(error, "Ulaşım ağı konumu açılamadı.");
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
+        } finally {
+            if (mountedRef.current) setDetailLoadingKey(null);
+        }
+    }, [getItemDetails, id, windowManager]);
+
+    const showRoute = useCallback(async (event, item) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (!item) return;
+
+        safeClientLog(LoggingBusiness, "Ulaşım Ağları/Yol Tarifi", `${item.id ?? ""}/${item.title}`);
+        try {
+            const detail = await getItemDetails(item);
+            if (!detail?.geometry) return;
+            const url = buildGoogleDirectionsUrl(detail.geometry);
+            if (!url) throw new Error("Yol tarifi için konum bilgisi bulunamadı.");
+            if (!openExternalSafely(url)) throw new Error("Tarayıcı yol tarifi penceresini açmayı engelledi.");
+        } catch (error) {
+            const message = normalizeErrorMessage(error, "Yol tarifi alınamadı.");
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
+        }
+    }, [getItemDetails, windowManager]);
+
+    const backToForm = useCallback(() => {
+        queryGateRef.current.invalidate();
+        detailGateRef.current.invalidate();
+        clearOwnedLayers();
+        setResultList([]);
+        setActiveView("form");
+        setLoading(false);
+        setDetailLoadingKey(null);
+        setErrorMessage("");
+    }, [clearOwnedLayers]);
+
+    return (
+        <section
+            className="common-query-window transit-route-query-window"
+            aria-label={WINDOW_TITLE}
+            style={{ visibility: windowManager.IsVisible(id) ? "visible" : "hidden" }}
+        >
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src={WINDOW_LOGO} alt="" aria-hidden="true" />
+                <span>{WINDOW_TITLE}</span>
                 <CommonQueryWindowTools
-                    windowManager={props.windowManager}
-                    windowId={props.id}
+                    ref={commonToolsRef}
+                    windowManager={windowManager}
+                    windowId={id}
                     setQueryField={setQueryField}
                     query={query}
-                    showNearbySearch={activeTab == "form"}
-                    showMapSelect={activeTab == "form"} />
+                    showNearbySearch={activeView === "form"}
+                    showMapSelect={activeView === "form"}
+                />
+            </header>
 
-            </div>
-            <div className={"common-query-window-body "+ (props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : "")}>
-                {
-                    activeTab === "form" ?
-                        <>
-                            <Form onSubmit={(e) => btnSubmit_OnClick(e)}>
-                                <Tabs defaultActiveKey="masstransitTab">
-                                    <Tab eventKey="masstransitTab" title={<BiBus title="Toplu Taşıma" className="transit-route-query-tab-icon" />} onClick={(e) => setQueryField("type", "masstransit")}>
-                                        <div className="transit-route-query-tab-container">
-                                            <div className="transit-route-query-tab-title">Toplu Taşıma</div>
-                                            <div className="transit-route-query-tab-body">
+            <div className={`common-query-window-body ${windowManager.IsMinimized(id) ? "common-query-window-body-collapsed" : ""}`}>
+                {activeView === "form" ? (
+                    <Form onSubmit={submitQuery} aria-label="Ulaşım ağı filtreleri">
+                        <Tabs
+                            activeKey={query.type}
+                            onSelect={key => key && setQueryField("type", key)}
+                            className="transit-route-query-tabs"
+                            aria-label="Ulaşım türü"
+                        >
+                            {ROUTE_MODES.map(({ key, title, Icon }) => (
+                                <Tab
+                                    key={key}
+                                    eventKey={key}
+                                    title={<span className="transit-route-query-tab-label"><Icon aria-hidden="true" /><span>{title}</span></span>}
+                                >
+                                    {key === "masstransit" && (
+                                        <fieldset className="transit-route-query-network-options">
+                                            <legend>Gösterilecek ağlar</legend>
+                                            {TRANSIT_FILTERS.map(filter => (
+                                                <label className="transit-route-query-network-toggle" key={filter.field}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(query[filter.field])}
+                                                        onChange={event => setQueryField(filter.field, event.target.checked)}
+                                                    />
+                                                    <span>{filter.label}</span>
+                                                </label>
+                                            ))}
+                                        </fieldset>
+                                    )}
+                                </Tab>
+                            ))}
+                        </Tabs>
 
-                                                <div onClick={(e) => setQueryField("showBusLines", !query.showBusLines)}
-                                                    className="form-checkbox">
-                                                    <span>Otobüs Hatları</span>{
-                                                        query && query.showBusLines ? <BsToggleOn /> : <BsToggleOff />
-                                                    }
-                                                </div>
-
-                                                <div onClick={(e) => setQueryField("showDolmusLines", !query.showDolmusLines)}
-                                                    className="form-checkbox">
-                                                    <span>Dolmuş Hatları</span>{
-                                                        query && query.showDolmusLines ? <BsToggleOn /> : <BsToggleOff />
-                                                    }
-                                                </div>
-
-                                                <div onClick={(e) => setQueryField("showMetroLines", !query.showMetroLines)}
-                                                    className="form-checkbox">
-                                                    <span>Metro Hatları</span>{
-                                                        query && query.showMetroLines ? <BsToggleOn /> : <BsToggleOff />
-                                                    }
-                                                </div>
-
-                                                <div onClick={(e) => setQueryField("showCablecarLines", !query.showCablecarLines)}
-                                                    className="form-checkbox">
-                                                    <span>Teleferik Hatları</span>{
-                                                        query && query.showCablecarLines ? <BsToggleOn /> : <BsToggleOff />
-                                                    }
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Tab>
-
-                                    <Tab eventKey="carTab" title={<BiCar title="Araç" className="transit-route-query-tab-icon" />} onClick={(e) => setQueryField("type", "car")}>
-
-                                    </Tab>
-
-                                    <Tab eventKey="cycleTab" title={<BiCycling title="Bisiklet" className="transit-route-query-tab-icon" />} onClick={(e) => setQueryField("type", "bicycle")}>
-
-                                    </Tab>
-
-                                    <Tab eventKey="walkTab" title={<BiWalk title="Yürüme" className="transit-route-query-tab-icon" />} onClick={(e) => setQueryField("type", "walk")}>
-
-                                    </Tab>
-                                </Tabs>
-                                <div className="transit-route-query-stops-select-container">
-                                    <div>
-                                            {
-                                                query && query.stops.map((_stop,_index) => {
-                                                    return <>
-                                                    <div className="transit-route-query-stop-container">
-                                                        <BiTargetLock className="transit-route-query-stop-icon" />
-                                                        <input className="transit-route-query-stop-textbox" />
-                                                        <BiMap className="transit-route-query-stop-icon-button" />
-                                                        <BiXCircle className="transit-route-query-remove-icon-button" onClick={(e)=>removeStop(e,_index)} />
-                                                        
-                                                    </div>
-                                                    {
-                                                        _index != query.stops.length-1 && <>
-                                                            <div className="transit-route-query-stop-dots"></div>
-
-                                                        <BiSort className="transit-route-query-exchange-icon-button"/>
-                                                        </>
-                                                    }
-                                                    
-                                                    </>
-                                                    
-                                                })
-                                            } 
-                                        <div>
-                                        <Button type="button" className="transit-route-query-add-stop-button" onClick={(e)=>addStop(e)}>
-                                                <BiMap/> <span>Hedef Ekle</span>
-                                            </Button>
-                                        
-                                        </div>
-                                    </div>
-
+                        {!query.mapSelect && (
+                            <div className="transit-route-query-stops-select-container" aria-label="Rota noktaları">
+                                <div className="transit-route-query-mode-summary" aria-live="polite">
+                                    <activeMode.Icon aria-hidden="true" />
+                                    <span>{activeMode.title} modu · {query.stops.length} nokta</span>
                                 </div>
-                                {
-                                    !query.mapSelect &&
-                                    <Form.Group>
-                                        {
-                                            loading ? <ButtonLoading />
-                                                : <Button type="button" className="form-button" onClick={(e) => btnSubmit_OnClick()}>
-                                                    <BiSearch className="form-button-icon" /><span>Sorgula</span>
-                                                </Button>
-                                        }
-                                    </Form.Group>
-                                }
 
-                            </Form>
-                        </> : <div className="results-container">
-                            {
-                                <>
-                                    <div className="results-container-toolbar">
-                                        <div className="results-container-back-button" onClick={(e) => btnBack_OnClick(e)}>
-                                            <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" />
-                                            &nbsp;Geri Dön
-                                        </div>
-                                        <div className="results-container-count">
-                                            <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
-                                        </div>
-                                    </div>
-                                    {
-                                        resultList?.map(_item => {
-                                            return <div className="result-item-container" onClick={(e) => item_OnClick(e, _item)}>
-                                                <div className="result-item-info">
-                                                    <div className="result-item-info-title">
-                                                        {_item.Title}
-                                                    </div>
-                                                    <div className="result-item-info-address">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.Address}
-                                                    </div>
-                                          
-                                                    <div className="result-item-info-phone">
-                                                        <FiPhone />&nbsp;
-                                                        {_item.Phone}
-                                                    </div>
-                                                </div>
-                                                <CommonQueryResultItemTools
-                                                    item={_item}
-                                                    zoomCallback={(e) => item_OnClick(e, _item)}
-                                                    showTransitRouteCallback={(e) => item_ShowTransitRoute(e, _item)}
+                                <ol className="transit-route-query-stop-list">
+                                    {query.stops.map((stop, index) => {
+                                        const stopInputId = `${id}-route-stop-${index}`;
+                                        const canRemove = query.stops.length > MIN_STOP_COUNT;
+                                        return (
+                                            <li className="transit-route-query-stop-row" key={`route-stop-${index}`}>
+                                                <BiTargetLock className="transit-route-query-stop-icon" aria-hidden="true" />
+                                                <label className="visually-hidden" htmlFor={stopInputId}>
+                                                    {index === 0 ? "Başlangıç noktası" : index === query.stops.length - 1 ? "Varış noktası" : `${index + 1}. ara nokta`}
+                                                </label>
+                                                <input
+                                                    id={stopInputId}
+                                                    className="transit-route-query-stop-textbox"
+                                                    value={stop.address}
+                                                    onChange={event => updateStop(index, "address", event.target.value)}
+                                                    placeholder={index === 0 ? "Başlangıç noktası" : index === query.stops.length - 1 ? "Varış noktası" : "Ara nokta"}
+                                                    autoComplete="off"
                                                 />
-                                            </div>
-                                        })
-                                    }
-                                </>
-                            }
+                                                <button
+                                                    type="button"
+                                                    className="transit-route-query-stop-action"
+                                                    title="Haritadan nokta seç"
+                                                    aria-label={`${index + 1}. noktayı haritadan seç`}
+                                                    onClick={() => setQueryField("mapSelect", true)}
+                                                >
+                                                    <BiMap aria-hidden="true" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="transit-route-query-stop-action transit-route-query-stop-action--danger"
+                                                    onClick={() => removeStop(index)}
+                                                    disabled={!canRemove}
+                                                    aria-label={`${index + 1}. noktayı kaldır`}
+                                                    title={canRemove ? "Noktayı kaldır" : "En az iki nokta gerekli"}
+                                                >
+                                                    <BiX aria-hidden="true" />
+                                                </button>
+                                                {index < query.stops.length - 1 && (
+                                                    <button
+                                                        type="button"
+                                                        className="transit-route-query-swap-button"
+                                                        onClick={() => swapStops(index)}
+                                                        aria-label={`${index + 1}. ve ${index + 2}. noktaların sırasını değiştir`}
+                                                        title="Noktaların sırasını değiştir"
+                                                    >
+                                                        <BiSort aria-hidden="true" />
+                                                    </button>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
+                                </ol>
+
+                                <Button
+                                    type="button"
+                                    className="transit-route-query-add-stop-button"
+                                    onClick={addStop}
+                                    disabled={query.stops.length >= MAX_STOP_COUNT}
+                                >
+                                    <BiPlus aria-hidden="true" />
+                                    <span>{query.stops.length >= MAX_STOP_COUNT ? "En fazla 6 nokta" : "Ara Nokta Ekle"}</span>
+                                </Button>
+                            </div>
+                        )}
+
+                        {errorMessage && <div className="kr-status-banner kr-status-banner--danger" role="alert">{errorMessage}</div>}
+
+                        {!query.mapSelect && (
+                            <Form.Group>
+                                {loading ? (
+                                    <ButtonLoading />
+                                ) : (
+                                    <Button type="submit" className="form-button">
+                                        <BiSearch className="form-button-icon" aria-hidden="true" />
+                                        <span>Sorgula</span>
+                                    </Button>
+                                )}
+                            </Form.Group>
+                        )}
+                    </Form>
+                ) : (
+                    <div className="results-container">
+                        <div className="results-container-toolbar">
+                            <button type="button" className="results-container-back-button" onClick={backToForm}>
+                                <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />
+                                <span>Geri Dön</span>
+                            </button>
+                            <div className="results-container-count" aria-live="polite">
+                                <strong>{resultList.length}</strong> adet sonuç bulundu
+                            </div>
                         </div>
-                }
+
+                        {errorMessage && <div className="kr-status-banner kr-status-banner--danger" role="alert">{errorMessage}</div>}
+                        {resultList.length === 0 ? (
+                            <NoResultsFound message="Bu filtrelerle ulaşım ağı kaydı bulunamadı." />
+                        ) : (
+                            resultList.map(item => {
+                                const busy = detailLoadingKey === item.key;
+                                return (
+                                    <article className="result-item-container" key={item.key} aria-busy={busy}>
+                                        <button
+                                            type="button"
+                                            className="result-item-info"
+                                            onClick={() => showItemOnMap(item)}
+                                            disabled={busy}
+                                            aria-label={`${item.title} konumunu haritada göster`}
+                                        >
+                                            <span className="result-item-info-title">{item.title}</span>
+                                            {item.address && <span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.address}</span>}
+                                            {item.phone && <span className="result-item-info-phone"><FiPhone aria-hidden="true" />&nbsp;{item.phone}</span>}
+                                            {busy && <span className="transit-route-query-result-status">Konum açılıyor…</span>}
+                                        </button>
+                                        <CommonQueryResultItemTools
+                                            item={item}
+                                            zoomCallback={() => showItemOnMap(item)}
+                                            showTransitRouteCallback={event => showRoute(event, item)}
+                                            showRouteCallback={event => showRoute(event, item)}
+                                        />
+                                    </article>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
             </div>
-        </div>
-    </>);
+        </section>
+    );
 });
+
+TransitRouteQueryWindow.displayName = "TransitRouteQueryWindow";
