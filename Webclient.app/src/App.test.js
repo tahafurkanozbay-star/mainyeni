@@ -2,15 +2,16 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import App from './App';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
-import { WindowManager } from './Store/Managers/WindowManager';
 import { setDefaultOptions } from 'esri-loader';
 
 jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
   bootstrapApplication: jest.fn()
 }));
 
+// CRA enables resetMocks, so lifecycle-independent collaborators use plain functions here.
+// Otherwise Jest clears factory-provided jest.fn implementations before every test.
 jest.mock('./platform/bootstrap/bootstrapCore', () => ({
-  isBootstrapAbortError: jest.fn((error) => error?.code === 'BOOTSTRAP_ABORTED')
+  isBootstrapAbortError: (error) => error?.code === 'BOOTSTRAP_ABORTED'
 }));
 
 jest.mock('./Components/App/MapComponent', () => ({
@@ -32,7 +33,7 @@ jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
 }));
 
 jest.mock('./Store/Managers/WindowManager', () => ({
-  WindowManager: jest.fn(() => ({ id: 'window-manager-1' }))
+  useWindowManager: () => ({ id: 'window-manager-1' })
 }));
 
 jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
@@ -53,9 +54,15 @@ describe('App bootstrap lifecycle', () => {
     bootstrapApplication.mockImplementation(() => new Promise(() => {}));
   });
 
-  test('configures the ArcGIS loader once at module initialization', () => {
+  test('configures ArcGIS and starts bootstrap once with a cancellation signal', () => {
+    render(<App />);
+
     expect(setDefaultOptions).toHaveBeenCalledTimes(1);
     expect(setDefaultOptions).toHaveBeenCalledWith(expect.objectContaining({ version: expect.anything() }));
+    expect(bootstrapApplication).toHaveBeenCalledTimes(1);
+    expect(bootstrapApplication).toHaveBeenCalledWith({
+      signal: expect.objectContaining({ aborted: false })
+    });
   });
 
   test('renders the enterprise loading experience before GIS configuration resolves', () => {
@@ -65,14 +72,6 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.queryByTestId('map-shell')).not.toBeInTheDocument();
     expect(screen.queryByTestId('experience-layer')).not.toBeInTheDocument();
     expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
-  });
-
-  test('starts bootstrap exactly once with a cancellation signal', () => {
-    render(<App />);
-    expect(bootstrapApplication).toHaveBeenCalledTimes(1);
-    expect(bootstrapApplication).toHaveBeenCalledWith({
-      signal: expect.objectContaining({ aborted: false })
-    });
   });
 
   test('renders map, UX layer and command center after bootstrap completes', async () => {
@@ -85,23 +84,10 @@ describe('App bootstrap lifecycle', () => {
       await operation.promise;
     });
 
-    expect(screen.getByTestId('map-shell')).toBeInTheDocument();
-    expect(screen.getByTestId('experience-layer')).toBeInTheDocument();
-    expect(screen.getByTestId('command-center')).toBeInTheDocument();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  });
-
-  test('shares one stable WindowManager instance across all experience surfaces', async () => {
-    bootstrapApplication.mockResolvedValue({ status: 'completed' });
-
-    await act(async () => {
-      render(<App />);
-    });
-
-    expect(WindowManager).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   test('renders the controlled error experience when bootstrap fails', async () => {
@@ -114,11 +100,11 @@ describe('App bootstrap lifecycle', () => {
       try {
         await operation.promise;
       } catch (_error) {
-        // App owns the rejection; the await only drains the deferred promise for React act.
+        // App owns the rejection; this only drains the deferred promise for React act.
       }
     });
 
-    expect(screen.getByText(/harita yapılandırması yüklenemedi/i)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/harita yapılandırması yüklenemedi/i);
     expect(screen.queryByText(/network details/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('map-shell')).not.toBeInTheDocument();
   });

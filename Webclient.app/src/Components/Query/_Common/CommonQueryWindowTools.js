@@ -1,235 +1,295 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Form } from "react-bootstrap";
 import { BiChevronUp, BiInfoCircle, BiX } from "react-icons/bi";
 import { RiCloseCircleFill } from "react-icons/ri";
 import { Constants_MessageType, Constants_UserMesssages } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
-import { TextHelper } from "../../../Toolbox/TextHelper";
+import {
+    DEFAULT_BUFFER_UNITS,
+    MAX_BUFFER_UNITS,
+    MIN_BUFFER_UNITS,
+    bufferUnitsToMeters,
+    createGeolocationRequest,
+    metersToBufferUnits,
+    normalizeBufferUnits
+} from "./QueryInteractionRuntime";
 import "./CommonQueryWindowTools.css";
 
+const LOCATION_GRAPHIC_LIFETIME_MS = 30000;
+
 export const CommonQueryWindowTools = React.forwardRef((props, ref) => {
-
-    useImperativeHandle(ref, () => ({
-        OnClose: () => {
-            setNearbyActive(false);
-            setMapSelectActive(false);
-            setBufferDistance(defaultBufferDistance);
-        }
-    }));
-
-    useEffect(() => {
-
-    }, [props]);
-
-
-    const [x,setX]=useState(null);
-    const toggleMinimiseWindow = (e) => {
-        props.windowManager.ToggleMinimiseWindow(props.windowId);
-        setX(TextHelper.CreateRandomNumber());
-    }
-
-    const closeWindow = (e) => {
-        props.windowManager.HideWindow(props.windowId);
-    }
-
-
-    const defaultBufferDistance = 20;
+    const {
+        setQueryField: onSetQueryField,
+        showNearbySearch,
+        showMapSelect,
+        windowManager,
+        windowId
+    } = props;
 
     const [nearbyActive, setNearbyActive] = useState(false);
     const [mapSelectActive, setMapSelectActive] = useState(false);
-    const changeSearchNearby = (_value) => {
+    const [bufferDistance, setBufferDistance] = useState(DEFAULT_BUFFER_UNITS);
+    const [locating, setLocating] = useState(false);
 
-        if (props.showNearbySearch) {
+    const locationGraphicRef = useRef(null);
+    const locationTimerRef = useRef(null);
+    const mountedRef = useRef(true);
 
-            setNearbyActive(_value);
+    const setQueryField = useCallback((field, value) => {
+        onSetQueryField?.(field, value);
+    }, [onSetQueryField]);
 
-            if (_value) { //show
-                getUserLocation();
-            }
-
-            props.setQueryField("bufferDistance",defaultBufferDistance);
-            props.setQueryField( "showNearby",_value);
-
-            setBufferDistance(defaultBufferDistance);
-
-            if (mapSelectActive) {
-                setMapSelectActive(false);
-                props.setQueryField("mapSelect", false);
-            }
+    const clearLocationTimer = useCallback(() => {
+        if (locationTimerRef.current) {
+            window.clearTimeout(locationTimerRef.current);
+            locationTimerRef.current = null;
         }
-    }
+    }, []);
 
-
-    const changeMapSelect = (_value) => {
-
-        if (props.showMapSelect) {
-
-            setMapSelectActive(_value);
-            props.setQueryField("mapSelect", _value);
-
-            if (nearbyActive) {
-                setNearbyActive(false);
-                props.setQueryField("showNearby", false);
-            }
+    const clearLocationGraphic = useCallback(() => {
+        clearLocationTimer();
+        if (locationGraphicRef.current) {
+            MapManager.RemoveGraphics(locationGraphicRef.current);
+            locationGraphicRef.current = null;
         }
+    }, [clearLocationTimer]);
 
-    }
+    const resetTools = useCallback(() => {
+        clearLocationGraphic();
+        setNearbyActive(false);
+        setMapSelectActive(false);
+        setBufferDistance(DEFAULT_BUFFER_UNITS);
+        setLocating(false);
+        setQueryField("showNearby", false);
+        setQueryField("mapSelect", false);
+        setQueryField("userLocation", null);
+        setQueryField("bufferDistance", DEFAULT_BUFFER_UNITS);
+    }, [clearLocationGraphic, setQueryField]);
 
+    useImperativeHandle(ref, () => ({ OnClose: resetTools }), [resetTools]);
 
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            clearLocationGraphic();
+        };
+    }, [clearLocationGraphic]);
 
-    const [location, setLocation] = useState(null);
-    const getUserLocation = () => {
-
-        const mapConfig = MapManager.GetMapConfiguration();
-        //let location = { x: mapConfig.Centerx, y: mapConfig.Centery }; //TODO: Geçici olarak gölbaşı merkeze ayarlandı değiştirilecek
-        let location = { x: 32.80409955978453, y: 39.94494728389463 };
-
-        if (!navigator.geolocation) {
-            props.windowManager.ShowMessage(Constants_MessageType.Error, Constants_UserMesssages.LOCATION_REJECTED);
-            createLocation(location);
-        }
-        else {
-            props.windowManager.ShowMessage(Constants_MessageType.Success, Constants_UserMesssages.LOCATION_ALLOWED);
-
-            navigator.geolocation.getCurrentPosition((_location) => {
-
-                location = {
-                    x: _location.coords.longitude,
-                    y: _location.coords.latitude,
-                };
-
-                createLocation(location);
-
-            }, (error) => {
-
-                props.windowManager.ShowMessage(Constants_MessageType.Error, Constants_UserMesssages.LOCATION_REJECTED);
-                createLocation(location);
-            });
-        }
-    }
-
-    const createLocation = (_location) => {
-
-        GisGraphicsHelper.CreatePoint(_location).then((_point) => {
-
-            setLocation(location);
-            props.setQueryField("showNearby", true);
-            props.setQueryField("userLocation", _point);
-
-            const mapView = MapManager.GetMapView();
-            GisGraphicsHelper.CreateGraphicFromGeometry(_point, null).then((_graphic) => {
-                MapManager.AddGraphics(_graphic, true);
-                GisGraphicsHelper.ZoomToGeometry(mapView, _point, 12);
-
-                setTimeout(() => {
-                    MapManager.RemoveGraphics(_graphic);
-                }, 30000);
-            });
+    const createLocationGraphic = async coordinates => {
+        const point = await GisGraphicsHelper.CreatePoint({
+            x: coordinates.longitude,
+            y: coordinates.latitude
         });
-    }
+        if (!mountedRef.current) return null;
 
+        const mapView = MapManager.GetMapView();
+        const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(point, null);
+        if (!mountedRef.current) return null;
 
+        clearLocationGraphic();
+        locationGraphicRef.current = graphic;
+        MapManager.AddGraphics(graphic, true);
+        GisGraphicsHelper.ZoomToGeometry(mapView, point, 12);
+        locationTimerRef.current = window.setTimeout(() => {
+            if (locationGraphicRef.current === graphic) clearLocationGraphic();
+        }, LOCATION_GRAPHIC_LIFETIME_MS);
 
-    const [bufferDistance, setBufferDistance] = useState(20);
-    const bufferDistanceChange = (e) => {
+        return point;
+    };
 
-        const value = parseInt(e.target.value);
-        if (value >= 1) {
-            setBufferDistance(value);
-            props.setQueryField("bufferDistance", value);
+    const disableNearby = () => {
+        clearLocationGraphic();
+        setNearbyActive(false);
+        setLocating(false);
+        setQueryField("showNearby", false);
+        setQueryField("userLocation", null);
+    };
+
+    const enableNearby = async () => {
+        if (!showNearbySearch || locating) return;
+
+        setLocating(true);
+        setNearbyActive(true);
+        setMapSelectActive(false);
+        setBufferDistance(DEFAULT_BUFFER_UNITS);
+        setQueryField("bufferDistance", DEFAULT_BUFFER_UNITS);
+        setQueryField("mapSelect", false);
+
+        try {
+            const coordinates = await createGeolocationRequest();
+            if (!mountedRef.current) return;
+            const point = await createLocationGraphic(coordinates);
+            if (!mountedRef.current || !point) return;
+
+            setQueryField("showNearby", true);
+            setQueryField("userLocation", point);
+            windowManager.ShowMessage(
+                Constants_MessageType.Success,
+                Constants_UserMesssages.LOCATION_ALLOWED
+            );
+        } catch (error) {
+            if (!mountedRef.current) return;
+            disableNearby();
+            windowManager.ShowMessage(
+                Constants_MessageType.Error,
+                error?.message || Constants_UserMesssages.LOCATION_REJECTED
+            );
+        } finally {
+            if (mountedRef.current) setLocating(false);
         }
+    };
 
-    }
+    const changeSearchNearby = value => {
+        if (value) {
+            enableNearby();
+        } else {
+            disableNearby();
+        }
+    };
 
-    const bufferDistanceChangeRaw = (e) => {
-            
-            const value = parseInt(e.target.value);
-            if (value >= 1) {
-                setBufferDistance(value / 100);
-                props.setQueryField("bufferDistance", value / 100);
-            }
-    }
+    const changeMapSelect = value => {
+        if (!showMapSelect) return;
+        setMapSelectActive(value);
+        setQueryField("mapSelect", value);
+        if (value) disableNearby();
+    };
 
-    return (<>
+    const updateBufferUnits = value => {
+        const next = normalizeBufferUnits(value);
+        setBufferDistance(next);
+        setQueryField("bufferDistance", next);
+    };
 
-        <div onClick={(e) => toggleMinimiseWindow(e)} title="pencereyi küçült">
-            <BiChevronUp className="common-query-window-tool-minimise-button" />
-        </div>
+    const updateBufferMeters = value => {
+        const next = metersToBufferUnits(value);
+        setBufferDistance(next);
+        setQueryField("bufferDistance", next);
+    };
 
-        <div onClick={(e) => closeWindow(e)} title="pencereyi kapat">
-            <RiCloseCircleFill className="common-query-window-tool-close-button" />
-        </div>
+    const minimized = windowManager.IsMinimized(windowId);
+    const bufferMeters = bufferUnitsToMeters(bufferDistance);
+    const distanceId = `${windowId}-nearby-distance`;
+    const meterId = `${windowId}-nearby-distance-meters`;
 
-        {
-            props.windowManager.IsMinimized(props.id) ? <div></div> :
-            <div className="common-query-window-tools">
-                {props.showNearbySearch &&
-                    <>
-                        {nearbyActive ?
-                            <div className="common-query-window-tool danger" onClick={(e) => changeSearchNearby(false)}>
-                                <BiX className="common-query-window-tool-icon" />
-                                <span>İptal Et</span>
-                            </div>
-                            :
-                            <div className="common-query-window-tool" onClick={(e) => changeSearchNearby(true)}>
-                                <img src="images/icons/common/yakinimdaara.png"></img>
-                                <span>Yakınımda Ara</span>
-                            </div>
-                        }</>
-                }
-                <div>
+    return (
+        <>
+            <button
+                type="button"
+                className="common-query-window-tool-button"
+                onClick={() => windowManager.ToggleMinimiseWindow(windowId)}
+                title="Pencereyi küçült"
+                aria-label="Pencereyi küçült"
+                aria-expanded={!minimized}
+            >
+                <BiChevronUp className="common-query-window-tool-minimise-button" aria-hidden="true" />
+            </button>
+            <button
+                type="button"
+                className="common-query-window-tool-button"
+                onClick={() => windowManager.HideWindow(windowId)}
+                title="Pencereyi kapat"
+                aria-label="Pencereyi kapat"
+            >
+                <RiCloseCircleFill className="common-query-window-tool-close-button" aria-hidden="true" />
+            </button>
 
-                </div>
-                {false&&props.showMapSelect &&
-                    <>
-                        {mapSelectActive ?
-                            <div className="common-query-window-tool danger" onClick={(e) => changeMapSelect(false)}>
-                                <BiX className="common-query-window-tool-icon" />
-                                <span>İptal Et</span>
-                            </div>
-                            :
-                            <div className="common-query-window-tool" onClick={(e) => changeMapSelect(true)}>
-                                <img src="images/icons/common/haritadansec.png"></img>
+            {!minimized && (
+                <div className="common-query-window-tools" aria-label="Sorgu araçları">
+                    {showNearbySearch && (
+                        nearbyActive ? (
+                            <button
+                                type="button"
+                                className="common-query-window-tool danger"
+                                onClick={() => changeSearchNearby(false)}
+                                disabled={locating}
+                            >
+                                <BiX className="common-query-window-tool-icon" aria-hidden="true" />
+                                <span>{locating ? "Konum alınıyor…" : "İptal Et"}</span>
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className="common-query-window-tool"
+                                onClick={() => changeSearchNearby(true)}
+                                disabled={locating}
+                            >
+                                <img src="images/icons/common/yakinimdaara.png" alt="" aria-hidden="true" />
+                                <span>{locating ? "Konum alınıyor…" : "Yakınımda Ara"}</span>
+                            </button>
+                        )
+                    )}
+
+                    {showMapSelect && (
+                        mapSelectActive ? (
+                            <button
+                                type="button"
+                                className="common-query-window-tool danger"
+                                onClick={() => changeMapSelect(false)}
+                            >
+                                <BiX className="common-query-window-tool-icon" aria-hidden="true" />
+                                <span>Harita seçimini iptal et</span>
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className="common-query-window-tool"
+                                onClick={() => changeMapSelect(true)}
+                            >
+                                <img src="images/icons/common/haritadansec.png" alt="" aria-hidden="true" />
                                 <span>Haritadan Seç</span>
-                            </div>
-                        }</>
-                }
-            </div>
-
-        }
-
-
-        {
-            props.showNearbySearch && nearbyActive &&
-            <div className="common-query-window-tools-body">
-                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
-                    <div style={{ flexShrink: '0', flexGrow: '1', flex:'9' }}>
-                        <Form.Range value={bufferDistance}
-                            onInput={(e) => { bufferDistanceChange(e) }} />
-                    </div>
-                    <div className="common-query-window-tools-buffer-distance-indicator">
-                    <input type="number" 
-                            className="form-control" min="1" max="10000" step="1" style={{ width: '75px' }}
-                            value={bufferDistance*100} 
-                            onChange={(e) => bufferDistanceChangeRaw(e)} /> <span>&nbsp;m</span>
-                    </div>
-                    </div>
-                    <div>
-                 
+                            </button>
+                        )
+                    )}
                 </div>
-            </div>
-        }
+            )}
 
-        {
-            props.showMapSelect && mapSelectActive &&
-            <div className="common-query-window-tools-body">
-                <div className="common-query-window-tools-mapselect-message">
-                    <BiInfoCircle />
-                    <span>Lütfen haritaya tıklayarak bir öğe seçin..</span>
+            {showNearbySearch && nearbyActive && !locating && (
+                <div className="common-query-window-tools-body">
+                    <div className="common-query-window-tools-distance-row">
+                        <div className="common-query-window-tools-distance-range">
+                            <label htmlFor={distanceId} className="visually-hidden">Yakınlık mesafesi</label>
+                            <Form.Range
+                                id={distanceId}
+                                min={MIN_BUFFER_UNITS}
+                                max={MAX_BUFFER_UNITS}
+                                value={bufferDistance}
+                                onChange={event => updateBufferUnits(event.target.value)}
+                                aria-valuetext={`${bufferMeters} metre`}
+                            />
+                        </div>
+                        <div className="common-query-window-tools-buffer-distance-indicator">
+                            <label htmlFor={meterId} className="visually-hidden">Yakınlık mesafesi metre</label>
+                            <input
+                                id={meterId}
+                                type="number"
+                                className="form-control"
+                                min={MIN_BUFFER_UNITS * 100}
+                                max={MAX_BUFFER_UNITS * 100}
+                                step="100"
+                                value={bufferMeters}
+                                onChange={event => updateBufferMeters(event.target.value)}
+                            />
+                            <span>&nbsp;m</span>
+                        </div>
+                    </div>
+                    <p className="common-query-window-tools-distance-help">
+                        Seçilen konumun {bufferMeters.toLocaleString("tr-TR")} metre çevresindeki kayıtlar sorgulanır.
+                    </p>
                 </div>
-            </div>
-        }
+            )}
 
-    </>);
+            {showMapSelect && mapSelectActive && (
+                <div className="common-query-window-tools-body">
+                    <div className="common-query-window-tools-mapselect-message" role="status">
+                        <BiInfoCircle aria-hidden="true" />
+                        <span>Lütfen haritaya tıklayarak bir öğe seçin.</span>
+                    </div>
+                </div>
+            )}
+        </>
+    );
 });
+
+CommonQueryWindowTools.displayName = "CommonQueryWindowTools";
