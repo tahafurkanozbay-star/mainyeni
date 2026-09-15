@@ -1,65 +1,142 @@
-function Build-React($root_folder,$project_name,$app_folder,$deploy_file_name,$folder_suffix){
+[CmdletBinding()]
+param(
+    [Parameter()]
+    [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")),
 
-    #$root_folder="C:\Dev\Dev.Shk\Manisa.YapiRiskDenetim"
-    #$app_folder="Webclient.admin"
+    [Parameter()]
+    [string]$OutputRoot = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) "artifacts"),
 
-    $target_app_folder= -join($root_folder,"/",$app_folder)
+    [Parameter()]
+    [ValidateSet("User", "Admin", "All")]
+    [string]$Target = "All",
 
-    cd $target_app_folder
-    $publish_root_folder= -join("c:\Pub\",$project_name,"-",$folder_suffix)
-    
-    mkdir $publish_root_folder
-    #npm version patch
-    npm run build 
+    [Parameter()]
+    [ValidateSet("Release", "Debug")]
+    [string]$Configuration = "Release",
 
-    $build_folder= -join($root_folder,"/",$app_folder.ToString(),"/build")
+    [Parameter()]
+    [string]$RuntimeIdentifier = ""
+)
 
-    #$deploy_file_name="adminclient"
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
-    $target_zip_file= -join($deploy_file_name.ToString(),"-",$project_name,"-",$folder_suffix,".zip")
+function Invoke-CheckedCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory
+    )
 
-    Compress-Archive -Path $build_folder -DestinationPath $target_zip_file
-    
-    move $target_zip_file $publish_root_folder
+    Push-Location $WorkingDirectory
+    try {
+        Write-Host "> $Executable $($Arguments -join ' ')" -ForegroundColor Cyan
+        & $Executable @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "$Executable exited with code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
+function Reset-Directory {
+    param([Parameter(Mandatory = $true)][string]$Path)
 
-function Build-Dotnet($root_folder,$project_name,$app_folder,$deploy_file_name,$folder_suffix){
-
-    #$root_folder="C:\Dev\Dev.Shk\Manisa.YapiRiskDenetim"
-    #$app_folder="Webclient.admin"
-
-    $target_app_folder= -join($root_folder,"/",$app_folder)
-
-    cd $target_app_folder
-    $publish_root_folder= -join("c:\Pub\",$project_name,"-",$folder_suffix)
-    
-    mkdir $publish_root_folder
-    dotnet publish --os win
-
-    $build_folder= -join($root_folder,"/",$app_folder.ToString(),"/bin/Debug/net6.0/win-x64/publish")
-
-    #$deploy_file_name="adminclient"
-
-    $target_zip_file= -join($deploy_file_name.ToString(),"-",$project_name,"-",$folder_suffix,".zip")
-
-    Compress-Archive -Path $build_folder -DestinationPath $target_zip_file
-    
-    move $target_zip_file $publish_root_folder
+    if (Test-Path $Path) {
+        Remove-Item $Path -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $Path -Force | Out-Null
 }
 
-$date = Get-Date
-$project_folder="C:\Dev\Dev.Shk\ankara-kentrehberi"
-$project_name="ankara-kentrehberi"
-$folder_suffix = $date.ToString("ddMMyyyy-HHmm")
+function Compress-Directory {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
 
-Write-Output $folder_suffix 
+    if (Test-Path $Destination) {
+        Remove-Item $Destination -Force
+    }
 
-#admin
-#Build-React $project_folder $project_name "Webclient.admin" "client-admin" $folder_suffix
-#Build-Dotnet $project_folder $project_name "Api.Admin" "api-admin" $folder_suffix
+    Compress-Archive -Path (Join-Path $Source "*") -DestinationPath $Destination -CompressionLevel Optimal
+}
 
-#client
-Build-React $project_folder $project_name "Webclient.app" "client-user" $folder_suffix
-Build-Dotnet $project_folder $project_name "Api.User" "api-user" $folder_suffix
+function Build-WebClient {
+    param(
+        [Parameter(Mandatory = $true)][string]$Folder,
+        [Parameter(Mandatory = $true)][string]$ArtifactName
+    )
 
+    $projectPath = Join-Path $RepositoryRoot $Folder
+    $buildPath = Join-Path $projectPath "build"
+    $artifactDirectory = Join-Path $OutputRoot $ArtifactName
+    Reset-Directory $artifactDirectory
+
+    Invoke-CheckedCommand -Executable "npm" -Arguments @("ci") -WorkingDirectory $projectPath
+    Invoke-CheckedCommand -Executable "npm" -Arguments @("test", "--", "--watchAll=false", "--runInBand") -WorkingDirectory $projectPath
+
+    $previousCi = $env:CI
+    $previousNodeOptions = $env:NODE_OPTIONS
+    try {
+        $env:CI = "true"
+        # CRA 4/Webpack 4 still needs the OpenSSL compatibility provider on current Node LTS.
+        $env:NODE_OPTIONS = "--openssl-legacy-provider"
+        Invoke-CheckedCommand -Executable "npm" -Arguments @("run", "build") -WorkingDirectory $projectPath
+    }
+    finally {
+        $env:CI = $previousCi
+        $env:NODE_OPTIONS = $previousNodeOptions
+    }
+
+    Copy-Item -Path (Join-Path $buildPath "*") -Destination $artifactDirectory -Recurse -Force
+    Compress-Directory -Source $artifactDirectory -Destination (Join-Path $OutputRoot "$ArtifactName.zip")
+}
+
+function Build-DotnetApi {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProjectFile,
+        [Parameter(Mandatory = $true)][string]$ArtifactName
+    )
+
+    $projectPath = Join-Path $RepositoryRoot $ProjectFile
+    $artifactDirectory = Join-Path $OutputRoot $ArtifactName
+    Reset-Directory $artifactDirectory
+
+    $arguments = @(
+        "publish",
+        $projectPath,
+        "--configuration", $Configuration,
+        "--output", $artifactDirectory,
+        "--self-contained", "false"
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($RuntimeIdentifier)) {
+        $arguments += @("--runtime", $RuntimeIdentifier)
+    }
+
+    Invoke-CheckedCommand -Executable "dotnet" -Arguments $arguments -WorkingDirectory $RepositoryRoot
+    Compress-Directory -Source $artifactDirectory -Destination (Join-Path $OutputRoot "$ArtifactName.zip")
+}
+
+$RepositoryRoot = (Resolve-Path $RepositoryRoot).Path
+New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
+$OutputRoot = (Resolve-Path $OutputRoot).Path
+
+Write-Host "Repository: $RepositoryRoot"
+Write-Host "Artifacts:  $OutputRoot"
+Write-Host "Target:     $Target"
+Write-Host "Config:     $Configuration"
+
+if ($Target -in @("User", "All")) {
+    Build-WebClient -Folder "Webclient.app" -ArtifactName "webclient-user"
+    Build-DotnetApi -ProjectFile "Api.User/Api.User.csproj" -ArtifactName "api-user"
+}
+
+if ($Target -in @("Admin", "All")) {
+    Build-WebClient -Folder "Webclient.admin" -ArtifactName "webclient-admin"
+    Build-DotnetApi -ProjectFile "Api.Admin/Api.Admin.csproj" -ArtifactName "api-admin"
+}
+
+Write-Host "Release packaging completed successfully." -ForegroundColor Green

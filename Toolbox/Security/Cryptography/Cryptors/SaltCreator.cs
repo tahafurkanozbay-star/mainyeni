@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Security.Cryptography;
 
 namespace Toolbox.Security
@@ -6,16 +6,11 @@ namespace Toolbox.Security
     public static class SaltCreator
     {
         /// <summary>
-        /// Şifreleme için rastgele tuz oluşturur
+        /// Legacy callers receive a cryptographically random 32-byte salt encoded as Base64.
         /// </summary>
-        /// <returns>Tuz metni döndürür</returns>
         public static string CreateRandomSalt()
         {
-            var rng = new RNGCryptoServiceProvider();
-            var buff = new byte[32];
-            rng.GetBytes(buff);
-
-            return Convert.ToBase64String(buff);
+            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         }
     }
 }

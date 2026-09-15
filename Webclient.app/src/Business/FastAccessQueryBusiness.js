@@ -31,7 +31,7 @@ export const FastAccessQueryBusiness = {
             _queryServiceTitle
         );
 
-        if (queryService == null) {
+        if (queryService === null || queryService === undefined) {
             return Promise.reject({
                 type: Constants_ServiceResultType.Error,
                 message: `Servis bulunamadı (${_queryServiceTitle})`

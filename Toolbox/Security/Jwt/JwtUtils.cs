@@ -1,114 +1,191 @@
-﻿using Microsoft.IdentityModel.Tokens;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Toolbox.Security.Jwt
 {
-    public class JwtUtils
+    public static class JwtUtils
     {
-        private static string Secret = "jssHDIz/QKnOxuGcADMU98jHUx+OH1/jNHt+UsQkK/xG0Zznl2QoLSNhfzcMPHVpsewEAylzlJdZl4N6mSJaSA==";
-       
-        //getSecretKey();
-        private static string getSecretKey()
-        {
-            HMACSHA256 hmac = new HMACSHA256();
-            string key = Encoding.UTF8.GetString(hmac.Key);
-            return key;
-        }
+        private const string SigningKeyEnvironmentVariable = "KENT_REHBERI_JWT_SIGNING_KEY";
+        private const string IssuerEnvironmentVariable = "KENT_REHBERI_JWT_ISSUER";
+        private const string AudienceEnvironmentVariable = "KENT_REHBERI_JWT_AUDIENCE";
+        private const string DefaultIssuer = "kent-rehberi-api";
+        private const string DefaultAudience = "kent-rehberi-admin";
+        private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan AllowedClockSkew = TimeSpan.FromSeconds(30);
 
-        public static string GenerateToken(string eg)
+        public static string GenerateToken(string encryptedUserGuid)
         {
-            byte[] key = Convert.FromBase64String(Secret);
-            SymmetricSecurityKey securityKey = new SymmetricSecurityKey(key);
-            
-            SecurityTokenDescriptor descriptor = new SecurityTokenDescriptor
+            if (string.IsNullOrWhiteSpace(encryptedUserGuid))
             {
-                Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, eg) }),
-                Expires = DateTime.UtcNow.AddMinutes(30),
-                SigningCredentials = new SigningCredentials(securityKey,
-                SecurityAlgorithms.HmacSha256Signature)
+                throw new ArgumentException("Token subject cannot be empty.", nameof(encryptedUserGuid));
+            }
+
+            var now = DateTime.UtcNow;
+            var descriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.Name, encryptedUserGuid),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
+                }),
+                Issuer = GetIssuer(),
+                Audience = GetAudience(),
+                NotBefore = now,
+                IssuedAt = now,
+                Expires = now.Add(AccessTokenLifetime),
+                SigningCredentials = new SigningCredentials(GetSigningKey(), SecurityAlgorithms.HmacSha256)
             };
 
             var handler = new JwtSecurityTokenHandler();
-            JwtSecurityToken token = handler.CreateJwtSecurityToken(descriptor);
-            return handler.WriteToken(token);
+            return handler.WriteToken(handler.CreateJwtSecurityToken(descriptor));
         }
 
         public static ClaimsPrincipal GetPrincipal(string token)
         {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return null;
+            }
+
             try
             {
-                JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
-                JwtSecurityToken jwtToken = (JwtSecurityToken)tokenHandler.ReadToken(token);
-                if (jwtToken == null)
-                { 
-                    return null; 
+                var handler = new JwtSecurityTokenHandler
+                {
+                    MapInboundClaims = true
+                };
+
+                var principal = handler.ValidateToken(token, CreateValidationParameters(), out var validatedToken);
+                if (validatedToken is not JwtSecurityToken jwt ||
+                    !string.Equals(jwt.Header.Alg, SecurityAlgorithms.HmacSha256, StringComparison.Ordinal))
+                {
+                    return null;
                 }
 
-                byte[] key = Convert.FromBase64String(Secret);
-                TokenValidationParameters parameters = new TokenValidationParameters()
-                {
-                    RequireExpirationTime = true,
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                    IssuerSigningKey = new SymmetricSecurityKey(key)
-                };
-                
-                SecurityToken securityToken;
-                ClaimsPrincipal principal = tokenHandler.ValidateToken(token,
-                      parameters, out securityToken);
                 return principal;
             }
-            catch (Exception e)
+            catch (Exception ex) when (
+                ex is SecurityTokenException ||
+                ex is ArgumentException ||
+                ex is FormatException ||
+                ex is InvalidOperationException)
             {
                 return null;
             }
         }
 
-
-        public static JwtSecurityToken ReadToken(string token)
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtSecurityToken = handler.ReadJwtToken(token);
-            return jwtSecurityToken;
-        }
-
-        //validate request
-        //TODO: burada eğer varsa token ın expire olup olmadığı kontrol edilecek
         public static bool ValidateToken(string token)
         {
-            try
-            {
-                var tokenHandler = new JwtSecurityTokenHandler();
+            return GetPrincipal(token) != null;
+        }
 
-                return true;
-                //TODO: burası hata veriyor düzeltilecek
-                /*
-                tokenHandler.ValidateToken(token, new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = false,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(Secret)),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                    // set clockskew to zero so tokens expire exactly at token expiration time (instead of 5 minutes later)
-                    ClockSkew = TimeSpan.Zero
-                }, out SecurityToken validatedToken);
-                */
-
-                /*
-                var jwtToken = (JwtSecurityToken)validatedToken;
-                return (jwtToken != null);
-                */
-            }
-            catch (Exception ex)
+        public static bool TryGetBearerToken(string authorizationHeader, out string token)
+        {
+            token = null;
+            if (string.IsNullOrWhiteSpace(authorizationHeader))
             {
                 return false;
             }
-          
+
+            const string prefix = "Bearer ";
+            if (!authorizationHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var candidate = authorizationHeader.Substring(prefix.Length).Trim();
+            if (candidate.Length == 0 || candidate.Any(char.IsWhiteSpace))
+            {
+                return false;
+            }
+
+            token = candidate;
+            return true;
+        }
+
+        public static JwtSecurityToken ReadToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return null;
+            }
+
+            try
+            {
+                return new JwtSecurityTokenHandler().ReadJwtToken(token);
+            }
+            catch (Exception ex) when (
+                ex is ArgumentException ||
+                ex is SecurityTokenException ||
+                ex is FormatException)
+            {
+                return null;
+            }
+        }
+
+        private static TokenValidationParameters CreateValidationParameters()
+        {
+            return new TokenValidationParameters
+            {
+                RequireSignedTokens = true,
+                RequireExpirationTime = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = GetSigningKey(),
+                ValidateIssuer = true,
+                ValidIssuer = GetIssuer(),
+                ValidateAudience = true,
+                ValidAudience = GetAudience(),
+                ValidateLifetime = true,
+                ClockSkew = AllowedClockSkew,
+                ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }
+            };
+        }
+
+        private static SymmetricSecurityKey GetSigningKey()
+        {
+            var configured = Environment.GetEnvironmentVariable(SigningKeyEnvironmentVariable)?.Trim();
+            if (string.IsNullOrWhiteSpace(configured))
+            {
+                throw new InvalidOperationException(
+                    $"JWT signing key is not configured. Set {SigningKeyEnvironmentVariable} in the server secret store/environment.");
+            }
+
+            byte[] keyBytes;
+            try
+            {
+                keyBytes = Convert.FromBase64String(configured);
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException(
+                    $"{SigningKeyEnvironmentVariable} must be a base64-encoded random key.", ex);
+            }
+
+            if (keyBytes.Length < 32)
+            {
+                throw new InvalidOperationException(
+                    $"{SigningKeyEnvironmentVariable} must decode to at least 32 random bytes.");
+            }
+
+            return new SymmetricSecurityKey(keyBytes);
+        }
+
+        private static string GetIssuer()
+        {
+            return GetOptionalEnvironmentValue(IssuerEnvironmentVariable) ?? DefaultIssuer;
+        }
+
+        private static string GetAudience()
+        {
+            return GetOptionalEnvironmentValue(AudienceEnvironmentVariable) ?? DefaultAudience;
+        }
+
+        private static string GetOptionalEnvironmentValue(string variableName)
+        {
+            var value = Environment.GetEnvironmentVariable(variableName)?.Trim();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
     }
 }
