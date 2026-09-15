@@ -1,5 +1,7 @@
 /** Shared GIS service registry with timeout, retry and health state. */
 
+import { assertEndpointAllowed } from '../platform/network/endpointPolicy';
+
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_RETRIES = 2;
 
@@ -14,14 +16,32 @@ export class GisServiceError extends Error {
   }
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) {
+    reject(Object.assign(new Error('Request aborted'), { name: 'AbortError' }));
+    return;
+  }
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener('abort', () => {
+    clearTimeout(timer);
+    reject(Object.assign(new Error('Request aborted'), { name: 'AbortError' }));
+  }, { once: true });
+});
 
-const withTimeout = (promise, timeoutMs, serviceId) => {
+const withTimeout = (promise, timeoutMs, serviceId, signal) => {
   let timer;
+  let abortHandler;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new GisServiceError(`GIS request timed out after ${timeoutMs} ms`, { code: 'TIMEOUT', serviceId })), timeoutMs);
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  const abort = new Promise((_, reject) => {
+    abortHandler = () => reject(new GisServiceError('GIS request was aborted', { code: 'ABORTED', serviceId }));
+    signal?.addEventListener('abort', abortHandler, { once: true });
+  });
+  return Promise.race([promise, timeout, abort]).finally(() => {
+    clearTimeout(timer);
+    if (signal && abortHandler) signal.removeEventListener('abort', abortHandler);
+  });
 };
 
 const isRetryable = (error) => error?.code === 'TIMEOUT' || error?.code === 'NETWORK_ERROR' || error?.status === 408 || error?.status === 429 || error?.status >= 500;
@@ -48,6 +68,11 @@ export class GisServiceRegistry {
   register(service) {
     const normalized = normalizeService(service);
     if (!normalized.id || !normalized.url) throw new GisServiceError('A GIS service requires an id and url', { code: 'INVALID_SERVICE' });
+    try {
+      assertEndpointAllowed(normalized.url, { serviceType: normalized.type });
+    } catch (error) {
+      throw new GisServiceError(error.message, { code: error.code || 'UNAPPROVED_ENDPOINT', serviceId: normalized.id, cause: error });
+    }
     this.services.set(normalized.id, normalized);
     if (!this.health.has(normalized.id)) this.health.set(normalized.id, { status: 'unknown', checkedAt: null, latencyMs: null, error: null });
     return normalized;
@@ -81,14 +106,19 @@ export class GisServiceRegistry {
 
     while (attempt <= retries) {
       try {
-        const result = await withTimeout(Promise.resolve().then(() => requestFactory(service)), timeoutMs, serviceId);
+        const result = await withTimeout(
+          Promise.resolve().then(() => requestFactory(service, options.signal)),
+          timeoutMs,
+          serviceId,
+          options.signal,
+        );
         this.setHealth(serviceId, { status: 'healthy', latencyMs: Date.now() - startedAt, error: null });
         return result;
       } catch (error) {
         lastError = error instanceof GisServiceError ? error : new GisServiceError(error.message || 'GIS request failed', { code: 'NETWORK_ERROR', serviceId, cause: error });
         attempt += 1;
         if (attempt > retries || !isRetryable(lastError)) break;
-        await sleep(Math.min(1000 * (2 ** (attempt - 1)), 4000));
+        await sleep(Math.min(1000 * (2 ** (attempt - 1)), 4000), options.signal);
       }
     }
 
