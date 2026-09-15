@@ -8,8 +8,10 @@ jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
   bootstrapApplication: jest.fn()
 }));
 
+// CRA enables resetMocks, so lifecycle-independent collaborators use plain functions here.
+// Otherwise Jest clears factory-provided jest.fn implementations before every test.
 jest.mock('./platform/bootstrap/bootstrapCore', () => ({
-  isBootstrapAbortError: jest.fn((error) => error?.code === 'BOOTSTRAP_ABORTED')
+  isBootstrapAbortError: (error) => error?.code === 'BOOTSTRAP_ABORTED'
 }));
 
 jest.mock('./Components/App/MapComponent', () => ({
@@ -31,7 +33,7 @@ jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
 }));
 
 jest.mock('./Store/Managers/WindowManager', () => ({
-  useWindowManager: jest.fn(() => ({ id: 'window-manager-1' }))
+  useWindowManager: () => ({ id: 'window-manager-1' })
 }));
 
 jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
