@@ -3,6 +3,8 @@ import { ArrayHelper } from "./ArrayHelper";
 import { IsNull } from './ObjectHelper';
 import { TextHelper } from "./TextHelper";
 
+const isNil = value => value === null || value === undefined;
+
 export const GisGraphicsHelper = {
   RemoveAllGraphics: (_mapView) => {
     _mapView?.graphics?.items?.forEach(graphic => _mapView?.graphics?.remove(graphic));
@@ -41,13 +43,13 @@ export const GisGraphicsHelper = {
   }),
 
   CreateCustomGraphicFromGeometry: async (_geometry, _symbol) => {
-    if (_geometry == null) return Promise.reject(null);
+    if (isNil(_geometry)) return Promise.reject(null);
     const [Graphic] = await loadModules(["esri/Graphic"]);
     return new Graphic({ geometry: _geometry, symbol: _symbol });
   },
 
   CreateGraphicFromGeometry: async (_geometry, _symbol) => {
-    if (_geometry == null) return null;
+    if (isNil(_geometry)) return null;
     const [Graphic] = await loadModules(["esri/Graphic"]);
     const pointSymbol = { type: "picture-marker", url: "images/icons/map/pictureMarker.png", width: "48px", height: "48px" };
     const polylineSymbol = { type: "simple-line", color: [78, 229, 255], width: 4 };
@@ -63,7 +65,7 @@ export const GisGraphicsHelper = {
   ZoomToGeometries: async (_mapView, _geometries, _zoomLevel) => {
     if (!_geometries?.length) return _geometries;
     try {
-      if (_zoomLevel != null) await _mapView.goTo({ target: _geometries, zoom: _zoomLevel });
+      if (!isNil(_zoomLevel)) await _mapView.goTo({ target: _geometries, zoom: _zoomLevel });
       else await _mapView.goTo(_geometries);
     } catch (error) {
       console.error(error);
