@@ -15,3 +15,10 @@ Webclient.app/node_modules
 Webclient.admin/build
 Webclient.app/build
 /.config
+
+# Local environment and secret-bearing configuration
+.env
+.env.*
+!.env.example
+Webclient.app/.env
+Webclient.admin/.env
