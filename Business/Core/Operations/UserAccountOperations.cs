@@ -1,304 +1,270 @@
-using System.Security.AccessControl;
-using System;
 using Business._Base;
+using Business.Core.Common;
 using Business.Core.Context;
 using Business.Core.Model;
+using Business.Core.Resources;
 using Business.Core.ViewModel;
-using Business.Core.Common;
-using Toolbox.Security;
-using Toolbox.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
+using Toolbox.Generic;
 using Toolbox.Security.Password;
 using Toolbox.Security.Url;
 using Toolbox.Text;
-using System.Linq;
-using System.Collections.Generic;
-using System.Linq.Expressions;
-using Toolbox.Date;
-using Business.Core.Resources;
 
 namespace Business.Core.Operations
 {
-    
     public class UserAccountOperations : _BaseOperations
     {
-        private BusinessContext db;
+        private readonly BusinessContext db;
 
         public UserAccountOperations(BusinessContext context)
         {
-            this.db = context;
+            db = context ?? throw new ArgumentNullException(nameof(context));
         }
-        
+
         public ServiceResult Create(UserAccountUpdateViewModel viewModel, UserSessionViewModel session)
         {
-            //TODO: aynı username e sahip başka bir kullanıcı varsa tanımlanmaması lazım
-            var validateResult = validateModel(viewModel);
-            if (validateResult.IsSuccess)
+            var validation = validateModel(viewModel);
+            if (!validation.IsSuccess) return validation;
+            if (session == null) return new ServiceResult(ServiceResultType.Error, "Geçersiz oturum");
+
+            var normalizedUsername = viewModel.UserName.Trim().ToLowerInvariant();
+            if (db.UserAccounts.Any(x => !x.IsDeleted && x.UserName.ToLower().Trim() == normalizedUsername))
             {
-                var model = new UserAccount();
-                model.UserName = viewModel.UserName.Trim().ToLower();
-                model.FirstName = TextUtils.Capitalize(viewModel.FirstName.Trim().ToLower());
-                model.LastName = TextUtils.Capitalize(viewModel.LastName.Trim().ToLower());
-                
-                //Super user system üzerinden oluşturulamaz
-                model.IsSuperUser = false;
-                
-                if (viewModel.AccountType == 0) //LDAP User
-                {
-                    model.AccountType = UserAccountType.LDAP;
-                    model.IsActive = true; //Kurum içi kullanıcılar otomatik olarak onaylanacaktır
-                    model.Roles = viewModel.Roles; //Kurum içi kullanıcılar seçilen role atanacaktır
+                return new ServiceResult(ServiceResultType.Error, "Bu kullanıcı adı zaten kayıtlı");
+            }
 
-                    var ldapDomain= model.UserName.Split("@")[1];
-                    
-                    if(ldapDomain!=Configuration.LDAP_DOMAIN){
-                          return new ServiceResult(ServiceResultType.Error, "Kayıt oluşturulamadı, kurum kullanıcısı eposta adresi '"+Configuration.LDAP_DOMAIN+"' ile bitmelidir");
-                    }
-                }
-                else
-                {
-                    model.AccountType = UserAccountType.EXTERNAL;
-                    model.IsActive = false; //Kurum dışı kullanıcılar elle kullanıcı tarafından onaylanacaktır
-                    model.Roles = viewModel.Roles; //Kurum dışı tüm kullanıcılar harici user olarak kayıt edilecektir
+            var model = new UserAccount
+            {
+                UserName = normalizedUsername,
+                FirstName = TextUtils.Capitalize(viewModel.FirstName.Trim().ToLowerInvariant()),
+                LastName = TextUtils.Capitalize(viewModel.LastName.Trim().ToLowerInvariant()),
+                IsSuperUser = false,
+                Roles = viewModel.Roles
+            };
 
-                    var salt = CryptoUtils.CreateRandomSalt();
-                    model.Salt = salt;
-                    String cryptedPassword = GeneratePassword(Configuration.UserSettings_DefaultPassword, salt);
-                    model.Password = cryptedPassword;
+            if (viewModel.AccountType == (int)UserAccountType.LDAP)
+            {
+                var domainSeparator = normalizedUsername.LastIndexOf('@');
+                var domain = domainSeparator > 0 && domainSeparator < normalizedUsername.Length - 1
+                    ? normalizedUsername.Substring(domainSeparator + 1)
+                    : string.Empty;
+
+                if (string.IsNullOrWhiteSpace(Configuration.LDAP_DOMAIN) ||
+                    !string.Equals(domain, Configuration.LDAP_DOMAIN, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new ServiceResult(
+                        ServiceResultType.Error,
+                        "Kayıt oluşturulamadı, kurum kullanıcısı eposta adresi yapılandırılmış LDAP alan adı ile bitmelidir");
                 }
 
-
-                using (db)
-                {
-                    model.SetCreate(session.UserId);
-
-                    db.UserAccounts.Add(model);
-                    db.SaveChanges();
-
-                    return new ServiceResult(ServiceResultType.Success, "Kayıt oluşturuldu");
-                }
+                model.AccountType = UserAccountType.LDAP;
+                model.IsActive = true;
+                model.Salt = string.Empty;
+                model.Password = "-";
             }
             else
             {
-                return validateResult;
+                model.AccountType = UserAccountType.EXTERNAL;
+                model.IsActive = false;
+                model.Salt = string.Empty;
+                // Inactive external users receive an unguessable process-local bootstrap password.
+                // An administrator must explicitly set a real password before activation/use.
+                model.Password = GeneratePassword(Configuration.UserSettings_DefaultPassword, null);
             }
+
+            model.SetCreate(session.UserId);
+            db.UserAccounts.Add(model);
+            db.SaveChanges();
+
+            return new ServiceResult(ServiceResultType.Success, "Kayıt oluşturuldu");
         }
 
-        public ServiceResult<DataList<UserAccountListViewModel>> List(_BaseSearchViewModel viewModel, UserSessionViewModel session)
+        public ServiceResult<DataList<UserAccountListViewModel>> List(
+            _BaseSearchViewModel viewModel,
+            UserSessionViewModel session)
         {
-            using (db)
+            if (viewModel == null || session == null)
             {
-                int pageSize = 25;
-                if (viewModel.PageSize > pageSize || viewModel.PageSize <= 0)
+                return new ServiceResult<DataList<UserAccountListViewModel>>(
+                    ServiceResultType.Error,
+                    "Geçersiz istek",
+                    null);
+            }
+
+            const int maxPageSize = 25;
+            if (viewModel.PageSize > maxPageSize || viewModel.PageSize <= 0)
+            {
+                viewModel.PageSize = maxPageSize;
+            }
+            if (viewModel.PageNumber <= 0)
+            {
+                viewModel.PageNumber = 1;
+            }
+
+            var skipRows = (viewModel.PageNumber - 1) * viewModel.PageSize;
+            var query = db.UserAccounts
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.Id != session.UserId && !x.IsSuperUser)
+                .OrderBy(x => x.FirstName)
+                .ThenBy(x => x.LastName);
+
+            var count = query.Count();
+            var resultList = query
+                .Skip(skipRows)
+                .Take(viewModel.PageSize)
+                .Select(user => new UserAccountListViewModel
                 {
-                    viewModel.PageSize = pageSize;
-                }
+                    Eg = ParameterEncryptionUtils.EncryptGuid(Guid.Parse(user.Guid), Configuration.GENERIC_SALT),
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    UserName = user.UserName,
+                    Id = user.Id,
+                    Roles = user.Roles,
+                    AccountType = user.AccountType,
+                    CreateDate = user.CreateDate
+                })
+                .ToList();
 
-                if (viewModel.PageNumber == 0)
-                {
-                    viewModel.PageNumber = 1;
-                }
-                int skipRows = (viewModel.PageNumber- 1) * viewModel.PageSize;
-
-                var list = db.UserAccounts.Where(x => !x.IsDeleted && x.Id != session.UserId && !x.IsSuperUser).OrderBy(x => x.FirstName).ThenBy(x => x.LastName);
-
-                var count = list.Count();
-                
-                var resultList = list.Skip(skipRows).Take(viewModel.PageSize).Select(y => new UserAccountListViewModel()
-                {
-                    Eg = ParameterEncryptionUtils.EncryptGuid(Guid.Parse(y.Guid),Configuration.GENERIC_SALT),
-                    FirstName = y.FirstName,
-                    LastName = y.LastName,
-                    UserName = y.UserName,
-                    Id=y.Id,
-                    Roles=y.Roles,
-                    AccountType=y.AccountType,
-                    CreateDate=y.CreateDate
-                }).ToList();
-
-                var dataList = new DataList<UserAccountListViewModel>()
+            return new ServiceResult<DataList<UserAccountListViewModel>>(
+                ServiceResultType.Success,
+                new DataList<UserAccountListViewModel>
                 {
                     TotalRowCount = count,
                     CurrentPage = viewModel.PageNumber,
                     PageSize = viewModel.PageSize,
                     Data = resultList
-                };
-
-                return new ServiceResult<DataList<UserAccountListViewModel>>(ServiceResultType.Success, dataList);
-            }
-
+                });
         }
 
         public ServiceResult Update(UserAccountUpdateViewModel viewModel, UserSessionViewModel session)
         {
+            var validation = validateModel(viewModel);
+            if (!validation.IsSuccess) return validation;
+            if (session == null) return new ServiceResult(ServiceResultType.Error, "Geçersiz oturum");
 
-            //TODO: aynı username e sahip başka bir kullanıcı varsa tanımlanmaması lazım
-            var validateResult = validateModel(viewModel);
-            if (validateResult.IsSuccess)
+            var model = db.UserAccounts.FirstOrDefault(x => x.Id == viewModel.Id && !x.IsDeleted);
+            if (model == null)
             {
-                var model = db.UserAccounts.Where(x=>x.Id==viewModel.Id && !x.IsDeleted).FirstOrDefault();
+                return new ServiceResult(ServiceResultType.Error, "Record not found (useraccount)");
+            }
 
-                if (model!=null) {
+            var normalizedUsername = viewModel.UserName.Trim().ToLowerInvariant();
+            if (db.UserAccounts.Any(x =>
+                    x.Id != model.Id && !x.IsDeleted && x.UserName.ToLower().Trim() == normalizedUsername))
+            {
+                return new ServiceResult(ServiceResultType.Error, "Bu kullanıcı adı zaten kayıtlı");
+            }
 
-                    model.UserName = viewModel.UserName.Trim().ToLower();
-                    model.FirstName = TextUtils.Capitalize(viewModel.FirstName.Trim().ToLower());
-                    model.LastName = TextUtils.Capitalize(viewModel.LastName.Trim().ToLower());
+            model.UserName = normalizedUsername;
+            model.FirstName = TextUtils.Capitalize(viewModel.FirstName.Trim().ToLowerInvariant());
+            model.LastName = TextUtils.Capitalize(viewModel.LastName.Trim().ToLowerInvariant());
+            model.IsSuperUser = false;
+            model.Roles = viewModel.Roles;
 
-                    //Super user system üzerinden oluşturulamaz
-                    model.IsSuperUser = false;
-
-                    if (viewModel.AccountType == (int)UserAccountType.LDAP) //LDAP User
-                    {
-                        model.AccountType = UserAccountType.LDAP;
-                        model.IsActive = true; //Kurum içi kullanıcılar otomatik olarak onaylanacaktır
-                        model.Roles = viewModel.Roles; //Kurum içi kullanıcılar seçilen role atanacaktır
-                    }
-                    else
-                    {
-                      
-                        model.AccountType = UserAccountType.EXTERNAL;
-                        model.IsActive = false; //Kurum dışı kullanıcılar elle kullanıcı tarafından onaylanacaktır
-                        model.Roles = viewModel.Roles; //Kurum dışı tüm kullanıcılar harici user olarak kayıt edilecektir
-                    }
-
-                    using (db)
-                    {
-                        model.SetUpdate(session.UserId);
-                        db.Entry(model).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
-                        db.SaveChanges();
-
-                        return new ServiceResult(ServiceResultType.Success, "Record updated");
-                    }
-                }
-                else
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Record not found (useraccount)");
-                }
+            if (viewModel.AccountType == (int)UserAccountType.LDAP)
+            {
+                model.AccountType = UserAccountType.LDAP;
+                model.IsActive = true;
             }
             else
             {
-                return validateResult;
+                model.AccountType = UserAccountType.EXTERNAL;
+                model.IsActive = false;
             }
 
+            model.SetUpdate(session.UserId);
+            db.Entry(model).State = EntityState.Modified;
+            db.SaveChanges();
+
+            return new ServiceResult(ServiceResultType.Success, "Record updated");
         }
 
-
-        public ServiceResult UpdatePassword(UserAccount_AdminPasswordUpdateViewModel viewModel, UserSessionViewModel session)
+        public ServiceResult UpdatePassword(
+            UserAccount_AdminPasswordUpdateViewModel viewModel,
+            UserSessionViewModel session)
         {
-            //TODO: aynı username e sahip başka bir kullanıcı varsa tanımlanmaması lazım
-            var validateResult = validatePasswordUpdate(viewModel);
-            if (validateResult.IsSuccess)
+            var validation = validatePasswordUpdate(viewModel);
+            if (!validation.IsSuccess) return validation;
+            if (session == null) return new ServiceResult(ServiceResultType.Error, "Geçersiz oturum");
+
+            var model = db.UserAccounts.FirstOrDefault(x => x.Id == viewModel.Id && !x.IsDeleted);
+            if (model == null)
             {
-                var model = db.UserAccounts.Where(x => x.Id == viewModel.Id && !x.IsDeleted).FirstOrDefault();
-
-                if (model != null)
-                {
-
-                    if (model.AccountType == UserAccountType.EXTERNAL) 
-                    {
-                        using (db)
-                        {
-                            var salt = CryptoUtils.CreateRandomSalt();
-                            model.Salt = salt;
-                            String cryptedPassword = GeneratePassword(viewModel.password, salt);
-                            model.Password = cryptedPassword;
-
-                            model.SetUpdate(session.UserId);
-                            db.Entry(model).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
-                            db.SaveChanges();
-
-                            return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("UPDATED"));
-                        }
-                    }
-                    else
-                    {
-
-                        return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("CANNOT_BE_CHANGED"));
-                    }
-
-                   
-                }
-                else
-                {
-                    return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"));
-                }
+                return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"));
             }
-            else
+            if (model.AccountType != UserAccountType.EXTERNAL)
             {
-                return validateResult;
+                return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("CANNOT_BE_CHANGED"));
             }
+
+            model.Salt = string.Empty;
+            model.Password = GeneratePassword(viewModel.password, null);
+            model.SetUpdate(session.UserId);
+            db.Entry(model).State = EntityState.Modified;
+            db.SaveChanges();
+
+            return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("UPDATED"));
         }
-
 
         public ServiceResult Delete(UserAccountUpdateViewModel viewModel, UserSessionViewModel session)
         {
-            using (db)
+            if (viewModel == null || session == null)
             {
-                var model = GetEntityByEncryptedGuid<Model.UserAccount>(db, viewModel.Eg);
-                model.SetDelete(session.UserId);
-
-                db.Entry(model).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
-                db.SaveChanges();
-                return new ServiceResult(ServiceResultType.Success, "Kayıt silindi");
+                return new ServiceResult(ServiceResultType.Error, "Geçersiz istek");
             }
 
+            var model = GetEntityByEncryptedGuid<UserAccount>(db, viewModel.Eg);
+            if (model == null)
+            {
+                return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"));
+            }
+
+            model.SetDelete(session.UserId);
+            db.Entry(model).State = EntityState.Modified;
+            db.SaveChanges();
+            return new ServiceResult(ServiceResultType.Success, "Kayıt silindi");
         }
 
         private ServiceResult validateModel(UserAccountUpdateViewModel viewModel)
         {
-            if (String.IsNullOrEmpty(viewModel.UserName))
-            {
+            if (viewModel == null) return new ServiceResult(ServiceResultType.Error, "Geçersiz istek");
+            if (string.IsNullOrWhiteSpace(viewModel.UserName))
                 return new ServiceResult(ServiceResultType.Error, "Kullanıcı adı boş olamaz");
-            }
-            if (String.IsNullOrEmpty(viewModel.FirstName))
-            {
+            if (string.IsNullOrWhiteSpace(viewModel.FirstName))
                 return new ServiceResult(ServiceResultType.Error, "İsim boş olamaz");
-            }
-            if (String.IsNullOrEmpty(viewModel.LastName))
-            {
+            if (string.IsNullOrWhiteSpace(viewModel.LastName))
                 return new ServiceResult(ServiceResultType.Error, "Soyad boş olamaz");
-            }
-            
-            if (String.IsNullOrEmpty(viewModel.Roles))
-            {
+            if (string.IsNullOrWhiteSpace(viewModel.Roles))
                 return new ServiceResult(ServiceResultType.Error, "Kullanıcı rolleri boş olamaz");
-            }
-
             if (viewModel.AccountType <= 0)
-            {
                 return new ServiceResult(ServiceResultType.Error, "Kullanıcı tipi boş olamaz");
-            }
 
             return new ServiceResult(ServiceResultType.Success);
         }
 
         private ServiceResult validatePasswordUpdate(UserAccount_AdminPasswordUpdateViewModel viewModel)
         {
-            if (String.IsNullOrEmpty(viewModel.password))
-            {
+            if (viewModel == null || string.IsNullOrEmpty(viewModel.password))
                 return new ServiceResult(ServiceResultType.Error, "Şifre boş olamaz");
-            }
-            else
-            {
-                if (viewModel.password != viewModel.passwordRepeat)
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Şifre ve şifre tekrarı birbiriyle uyumlu değil");
-                }
-            }
+            if (viewModel.password != viewModel.passwordRepeat)
+                return new ServiceResult(ServiceResultType.Error, "Şifre ve şifre tekrarı birbiriyle uyumlu değil");
+            if (viewModel.password.Length < Configuration.MIN_PASSWORD_LENGTH)
+                return new ServiceResult(ServiceResultType.Error, $"Şifre en az {Configuration.MIN_PASSWORD_LENGTH} karakter olmalıdır");
+            if (viewModel.password.Length > Configuration.MAX_PASSWORD_LENGTH)
+                return new ServiceResult(ServiceResultType.Error, $"Şifre en fazla {Configuration.MAX_PASSWORD_LENGTH} karakter olmalıdır");
 
             return new ServiceResult(ServiceResultType.Success);
         }
 
         /// <summary>
-        /// Generates a unidirectional hashed password with a given plainText and salt
+        /// Generates the current versioned one-way password hash. The legacy salt argument is
+        /// retained for source compatibility and intentionally ignored for new writes.
         /// </summary>
-        /// <param name="plainText"></param>
-        /// <param name="salt"></param>
-        /// <returns></returns>
         public static string GeneratePassword(string plainText, string salt)
         {
-            string cryptedPassword = PasswordUtils.Encrypt(plainText, salt, new SHA1Encryptor());
-            return cryptedPassword;
+            return PasswordUtils.HashPassword(plainText);
         }
-
     }
 }
