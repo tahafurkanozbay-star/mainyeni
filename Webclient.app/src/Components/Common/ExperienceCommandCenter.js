@@ -21,6 +21,8 @@ export function ExperienceCommandCenter({ windowManager }) {
         return COMMANDS.filter(command => normalizeCommandQuery(`${command.label} ${command.group} ${command.id}`).includes(needle));
     }, [query]);
 
+    const activeCommand = filtered[activeIndex];
+
     useEffect(() => {
         const handler = event => {
             if (event?.detail?.name === "command-palette") setOpen(true);
@@ -35,6 +37,10 @@ export function ExperienceCommandCenter({ windowManager }) {
         setActiveIndex(0);
         requestAnimationFrame(() => inputRef.current?.focus());
     }, [open]);
+
+    useEffect(() => {
+        if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
+    }, [activeIndex, filtered.length]);
 
     const execute = command => {
         setOpen(false);
@@ -60,26 +66,29 @@ export function ExperienceCommandCenter({ windowManager }) {
             } else if (event.key === "ArrowUp") {
                 event.preventDefault();
                 setActiveIndex(index => filtered.length ? (index - 1 + filtered.length) % filtered.length : 0);
-            } else if (event.key === "Enter" && filtered[activeIndex]) {
+            } else if (event.key === "Enter" && activeCommand) {
                 event.preventDefault();
-                execute(filtered[activeIndex]);
+                execute(activeCommand);
+            } else if (event.key === "Tab") {
+                event.preventDefault();
+                inputRef.current?.focus();
             }
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [open, activeIndex, filtered]);
+    }, [open, activeCommand, filtered]);
 
     if (!open) return null;
 
     return <div className="kr-command-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
-        <section className="kr-command" role="dialog" aria-modal="true" aria-labelledby="kr-command-title" onMouseDown={event => event.stopPropagation()}>
+        <section className="kr-command" role="dialog" aria-modal="true" aria-labelledby="kr-command-title" aria-describedby="kr-command-description" onMouseDown={event => event.stopPropagation()}>
             <header className="kr-command__head">
-                <div><span className="experience-eyebrow">KENT REHBERİ</span><h2 id="kr-command-title">Komut merkezi</h2></div>
+                <div><span className="experience-eyebrow">KENT REHBERİ</span><h2 id="kr-command-title">Komut merkezi</h2><span id="kr-command-description" className="experience-sr-only">Harita, arama ve yardımcı araçlara hızlı erişim.</span></div>
                 <kbd>Esc</kbd>
             </header>
             <div className="kr-command__search">
                 <span aria-hidden="true">⌕</span>
-                <input ref={inputRef} value={query} onChange={event => { setQuery(event.target.value); setActiveIndex(0); }} aria-label="Komut veya işlem ara" aria-controls="kr-command-results" placeholder="Komut veya işlem ara…" autoComplete="off" />
+                <input ref={inputRef} value={query} onChange={event => { setQuery(event.target.value); setActiveIndex(0); }} aria-label="Komut veya işlem ara" aria-controls="kr-command-results" aria-activedescendant={activeCommand ? `kr-command-item-${activeCommand.id}` : undefined} placeholder="Komut veya işlem ara…" autoComplete="off" />
                 <kbd>Ctrl K</kbd>
             </div>
             <div id="kr-command-results" className="kr-command__body" role="listbox" aria-label="Komut sonuçları">
