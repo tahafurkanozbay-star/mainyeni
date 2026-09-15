@@ -3,7 +3,9 @@ import {
   area,
   createTimeSlider,
   distance,
+  project,
   queryByGeometry,
+  spatialFilter,
   stableQueryKey,
 } from './spatialEngine';
 
@@ -25,6 +27,15 @@ describe('spatialEngine runtime', () => {
 
     expect(loadModules).toHaveBeenCalledTimes(1);
     expect(loadModules).toHaveBeenCalledWith(['esri/geometry/geometryEngine']);
+  });
+
+  test('rejects invalid geometry before loading ArcGIS modules', async () => {
+    loadModules.mockClear();
+
+    await expect(distance(null, { id: 2 })).rejects.toThrow('Two geometries are required.');
+    await expect(area(null)).rejects.toThrow('Geometry is required.');
+
+    expect(loadModules).not.toHaveBeenCalled();
   });
 
   test('creates stable keys regardless of object property order', () => {
@@ -62,6 +73,35 @@ describe('spatialEngine runtime', () => {
       code: 'CANCELLED',
     });
     expect(layer.queryFeatures).not.toHaveBeenCalled();
+  });
+
+  test('rejects a query that becomes cancelled while the layer request is resolving', async () => {
+    const signal = { aborted: false };
+    const layer = {
+      queryFeatures: jest.fn().mockImplementation(async () => {
+        signal.aborted = true;
+        return { features: [{ id: 1 }] };
+      }),
+    };
+
+    await expect(queryByGeometry(layer, { signal })).rejects.toMatchObject({ code: 'CANCELLED' });
+  });
+
+  test('rejects arbitrary geometryEngine method access as a spatial relation', async () => {
+    loadModules.mockClear();
+
+    await expect(spatialFilter({ type: 'point' }, [], 'constructor')).rejects.toThrow(
+      'Unsupported relation: constructor',
+    );
+    expect(loadModules).not.toHaveBeenCalled();
+  });
+
+  test('validates projection WKID before loading projection modules', async () => {
+    loadModules.mockClear();
+
+    await expect(project({ type: 'point' }, 0)).rejects.toThrow('A valid positive integer WKID is required.');
+    await expect(project({ type: 'point' }, 4326.5)).rejects.toThrow('A valid positive integer WKID is required.');
+    expect(loadModules).not.toHaveBeenCalled();
   });
 
   test('clamps an invalid current time to the beginning of the time extent', () => {
