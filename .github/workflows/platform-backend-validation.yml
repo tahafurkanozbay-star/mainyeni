@@ -1,0 +1,75 @@
+name: Platform Backend Validation
+
+on:
+  pull_request:
+    paths:
+      - 'Api.Admin/**'
+      - 'Api.Core/**'
+      - 'Api.User/**'
+      - 'Business/**'
+      - 'Toolbox/**'
+      - 'tests/**'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - 'CityWorks.NetCore.sln'
+      - '.github/workflows/platform-backend-validation.yml'
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - 'Api.Admin/**'
+      - 'Api.Core/**'
+      - 'Api.User/**'
+      - 'Business/**'
+      - 'Toolbox/**'
+      - 'tests/**'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - 'CityWorks.NetCore.sln'
+      - '.github/workflows/platform-backend-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      NUGET_XMLDOC_MODE: skip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10 LTS
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: SDK diagnostics
+        run: dotnet --info
+
+      - name: Restore with NuGet audit
+        run: dotnet restore CityWorks.NetCore.sln
+
+      - name: Dependency vulnerability report
+        run: dotnet list CityWorks.NetCore.sln package --vulnerable --include-transitive
+
+      - name: Build Release
+        run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test CityWorks.NetCore.sln --configuration Release --no-build --verbosity normal
+
+      - name: Publish User API
+        run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --output artifacts/api-user
+
+      - name: Publish Admin API
+        run: dotnet publish Api.Admin/Api.Admin.csproj --configuration Release --no-build --output artifacts/api-admin

@@ -1,50 +1,41 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Api.Core.Base;
 using Api.User.Filters;
 using Business.Core.Context;
 using Business.Extensions.Gis._Base;
 using Business.Extensions.Gis.Operations;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Configuration;
 using RestSharp;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace CityWorks.UserApi.Gis
 {
     public class GisProxyController : _BaseUserApiController
     {
+        private const string ServiceHostSuffix = ".gissrv.org";
+        private const int RequestTimeoutMs = 15_000;
+        private const int TokenLifetimeMinutes = 30;
+        private const long MaxRequestBodyBytes = 5 * 1024 * 1024;
+        private const int MaxForwardedQueryLength = 16 * 1024;
 
-        private GisConfigServiceOperations configServiceOperations;
-        private GisLayerOperations gisLayerOperations;
-        private GisBasemapLayerOperations gisBasemapLayerOperations;
-        private readonly IMemoryCache _memoryCache;
+        private readonly GisConfigServiceOperations configServiceOperations;
+        private readonly GisLayerOperations gisLayerOperations;
+        private readonly GisBasemapLayerOperations gisBasemapLayerOperations;
+        private readonly IMemoryCache memoryCache;
 
-        public GisProxyController(IConfiguration configuration, IMemoryCache memoryCache ,BusinessContext context)
+        public GisProxyController(IMemoryCache memoryCache, BusinessContext context)
         {
-            this.configuration = configuration;
-            this.dbContext = context;
-            this.configServiceOperations = new GisConfigServiceOperations(context);
-            this.gisLayerOperations = new GisLayerOperations(context);
-            this.gisBasemapLayerOperations=new GisBasemapLayerOperations(context);
-            this._memoryCache=memoryCache;
+            this.memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+            configServiceOperations = new GisConfigServiceOperations(context);
+            gisLayerOperations = new GisLayerOperations(context);
+            gisBasemapLayerOperations = new GisBasemapLayerOperations(context);
         }
 
-
-        private void writeLog(string url, DateTime startTime, DateTime endTime, string description){
-            
-            var timeDiff=endTime-startTime;
-
-            var message="T: "+timeDiff.TotalSeconds+" / "+ description+" - " + url+ " / START: "+startTime.ToString("dd/MM/yyyy HH:mm:ss")+ " / END: "+endTime.ToString("dd/MM/yyyy HH:mm:ss");
-            handleExceptionResult(new Exception(message),-1);
-        }
-
-        /// <summary>
-        /// Gets the list for configuration services
-        /// </summary>
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/Proxy")]
         [HttpGet]
@@ -53,297 +44,323 @@ namespace CityWorks.UserApi.Gis
         {
             try
             {
-
-                /*
-                var sessionResult = GetSession(HttpContext);
-                if (!sessionResult.IsSuccess)
-                {
-                    return new JsonResult(sessionResult);
-                }
-                */
-
-             
-
                 if (!HttpContext.Request.QueryString.HasValue)
                 {
-                    return Ok("");
+                    return BadRequest("Proxy target is required.");
                 }
 
-                string rawUrl= HttpContext.Request.QueryString.Value.TrimStart('?');
-                string[] urlChunks = HttpContext.Request.QueryString.Value.Split("?");
-                string domainUrl = urlChunks[1];
+                if (HttpContext.Request.ContentLength.GetValueOrDefault() > MaxRequestBodyBytes)
+                {
+                    return StatusCode(StatusCodes.Status413PayloadTooLarge, "Proxy request body is too large.");
+                }
 
-                Uri uriResult;
-                Uri.TryCreate(domainUrl, UriKind.Absolute, out uriResult);
+                if (!TryParsePublicTarget(
+                        HttpContext.Request.QueryString.Value,
+                        out var publicTarget,
+                        out var serviceId,
+                        out var forwardedQuery))
+                {
+                    return BadRequest("Invalid proxy target.");
+                }
 
-                string eg = domainUrl.Split("https://")[1].Split(".")[0];
-                //string eg=uriResult.Host.Split(".")[0]; //base 64 stringi küçülttüğü için kullanmıyoruz
+                if (forwardedQuery.Length > MaxForwardedQueryLength)
+                {
+                    return BadRequest("Proxy query is too large.");
+                }
 
-                //TODO: Header auth check
-
-                //Find service from db with eg
-                var dbTime_Start= DateTime.Now;
-                
-                var service = GetService(eg);
+                // The browser can address only an opaque service id that resolves to a server-owned
+                // database record. There is deliberately no raw URL lookup/bypass fallback.
+                var service = GetService(serviceId);
                 if (service == null)
                 {
-                    service = GetServiceByUrl(domainUrl);
-
-                    if (service == null)
-                    {
-                        return NotFound();
-                    }
+                    return NotFound();
                 }
 
-                var dbTime_End= DateTime.Now;
-                //writeLog(eg,dbTime_Start,dbTime_End,"db request");
-
-                //Replace Eg with Actual Url 
-                var requestUrl = "";
-
-                if (service.ByPassProxy)
+                var upstreamUri = BuildUpstreamUri(service.Url, publicTarget, forwardedQuery);
+                if (upstreamUri == null)
                 {
-                    requestUrl= rawUrl;
+                    return BadRequest("Configured GIS service URL is invalid.");
                 }
-                else{
-                     requestUrl = domainUrl.Replace("https://" + eg + ".gissrv.org", service.Url.Trim());
 
-                    var tokenString = "";
-                    if (service.RequiresSC)
+                if (service.RequiresSC)
+                {
+                    var token = await GetServiceToken(service);
+                    if (string.IsNullOrWhiteSpace(token))
                     {
-                        if(_memoryCache.TryGetValue(service.Id, out string _tokenString)){
-                            tokenString=_tokenString;
-                        }
-                        else{
-                            var tokenClient = new RestClient();
-                            string tokenUrlPrefix = "arcgis";
+                        return StatusCode(StatusCodes.Status502BadGateway, "GIS service authentication failed.");
+                    }
+                    upstreamUri = AppendQueryParameter(upstreamUri, "token", token);
+                }
 
-                            if (service.Url.Contains("/webgis/"))
-                            {
-                                tokenUrlPrefix = "webgis";
-                            }
+                var client = new RestClient(new RestClientOptions
+                {
+                    MaxTimeout = RequestTimeoutMs
+                });
+                var request = new RestRequest(upstreamUri.ToString())
+                {
+                    Method = HttpContext.Request.Method == HttpMethods.Post ? Method.Post : Method.Get
+                };
 
-                            int expirationTime = 30;
-                            var _tokenUrl = new Uri(service.Url);
-                            var _tokenUrlProtocol = service.Url.Contains("https") ? "https://" : "http://";
-                            var tokenUrl = _tokenUrlProtocol + _tokenUrl.Host + "/" + tokenUrlPrefix + "/tokens/generateToken";
+                if (!string.IsNullOrWhiteSpace(HttpContext.Request.Headers.Accept))
+                {
+                    request.AddHeader("Accept", HttpContext.Request.Headers.Accept.ToString());
+                }
 
-                            var token = new
-                            {
-                                Username = service.SCUserName,
-                                Password = service.SCPassword
-                            };
-
-                            var tokenRequest = new RestRequest(tokenUrl);
-                            
-                            //System.Console.WriteLine(tokenUrl);
-                            tokenRequest.Method = Method.Post;
-                            tokenRequest.AddHeader("content-type", "application/x-www-form-urlencoded");
-
-                            tokenRequest.AddParameter("application/x-www-form-urlencoded", $"expiration={expirationTime}&username={service.SCUserName}&password={service.SCPassword}", ParameterType.RequestBody);
-
-                            var tokenResponse = await tokenClient.ExecuteAsync(tokenRequest);
-
-                            tokenString = tokenResponse.Content;
-
-                            var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(30));
-                            _memoryCache.Set(service.Id, tokenString, cacheEntryOptions);
-
-                            }
-                        
-                        //System.Console.WriteLine("tokenString: "+tokenString);
+                if (request.Method == Method.Post)
+                {
+                    var body = await ReadBoundedBody();
+                    if (body == null)
+                    {
+                        return StatusCode(StatusCodes.Status413PayloadTooLarge, "Proxy request body is too large.");
                     }
 
-
-                    //Add Query String
-                    if (urlChunks.Length >= 3)
-                    {
-                        var queryStr = urlChunks[2];
-                        requestUrl += "?" + queryStr;
-                    }
-
-                    //    ....url/2/2/query? ... şeklinde gelen url i ....url/2/query.... şekline dönüştürür 
-                    string regext = "/[0-9]+/[0-9]+";
-                    var matches = Regex.Matches(requestUrl, regext);
-                    if (matches?.Count > 0)
-                    {
-                        string matchValue = matches[0].Value;
-                        string replacementtext = "/" + matchValue.Split("/")[1];
-                        requestUrl = Regex.Replace(requestUrl, regext, replacementtext);
-                    }
-
-                    //If there is a token
-                    if (!String.IsNullOrEmpty(tokenString))
-                    {
-                        requestUrl += "&token=" + tokenString;
-                    }
+                    var contentType = NormalizeContentType(HttpContext.Request.ContentType);
+                    request.AddParameter(contentType, body, ParameterType.RequestBody);
                 }
 
-
-                var client = new RestClient(requestUrl);
-
-                var request = new RestRequest();
-                switch (HttpContext.Request.Method)
+                var response = await client.ExecuteAsync(request, HttpContext.RequestAborted);
+                if (response.ResponseStatus != ResponseStatus.Completed)
                 {
-                    case "GET":
-                        request.Method = Method.Get;
-                        break;
-
-                    case "POST":
-                        request.Method = Method.Post;
-                        request.AddHeader("Accept", HttpContext.Request.Headers.Accept);
-                        request.AddHeader("Accept-Charset", HttpContext.Request.Headers.AcceptCharset);
-                        request.AddHeader("Accept-Encoding", HttpContext.Request.Headers.AcceptEncoding);
-
-                        request.AddHeader("Pragma", HttpContext.Request.Headers.Pragma);
-                        request.AddHeader("Content-Type", HttpContext.Request.Headers.ContentType);
-                        request.AddHeader("Content-Length", HttpContext.Request.Headers.ContentLength.ToString());
-
-                        break;
-
-                    case "OPTIONS":
-                        request.Method = Method.Options;
-                        break;
-
-                    case "PUT":
-                        request.Method = Method.Put;
-                        break;
-                    default:
-                        break;
+                    return StatusCode(StatusCodes.Status502BadGateway, "GIS service request failed.");
                 }
 
-
-                //write request body
-                using (StreamReader stream = new StreamReader(HttpContext.Request.Body))
+                var upstreamStatus = (int)response.StatusCode;
+                if (upstreamStatus < 200 || upstreamStatus >= 300)
                 {
-                    string body = await stream.ReadToEndAsync();
-
-                    request.AddBody(body);
-
-                    //request.AddStringBody(body, DataFormat.Json);
+                    return StatusCode(
+                        upstreamStatus > 0 ? upstreamStatus : StatusCodes.Status502BadGateway,
+                        "GIS service request failed.");
                 }
 
-                var serviceTime_Start= DateTime.Now;
-                
-                var response = await client.ExecuteAsync(request);
-
-                var serviceTime_End= DateTime.Now;
-                //writeLog(requestUrl,serviceTime_Start,serviceTime_End,"service request");
-
-                if (response.ContentType != null && (response.ContentType.Contains("image") || response.ContentType.Contains("application")))
+                if (!string.IsNullOrWhiteSpace(response.ContentType) &&
+                    (response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+                     response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase)))
                 {
-                    HttpContext.Response.ContentLength = response.ContentLength;
-                    HttpContext.Response.ContentType = response.ContentType;
-                    var bytes = response.RawBytes;
-                    return File(bytes, response.ContentType);
+                    return File(response.RawBytes ?? Array.Empty<byte>(), response.ContentType);
                 }
-                else
-                {
 
-                    return Ok(response.Content);
-                }
+                var responseType = NormalizeResponseContentType(response.ContentType);
+                return Content(response.Content ?? string.Empty, responseType);
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                return new EmptyResult();
             }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
-                Console.WriteLine(ex.Message + " \r\n" + " -------------------------------- " + " \r\n");
-                Console.WriteLine(ex.StackTrace);
-                return Ok("An error occured");
+                return StatusCode(StatusCodes.Status502BadGateway, "GIS service is temporarily unavailable.");
             }
         }
 
-        private ProxyGisService GetService(string eg)
+        private static bool TryParsePublicTarget(
+            string rawQueryString,
+            out Uri publicTarget,
+            out string serviceId,
+            out string forwardedQuery)
         {
-            //TODO: find service
+            publicTarget = null;
+            serviceId = null;
+            forwardedQuery = string.Empty;
+
+            var raw = (rawQueryString ?? string.Empty).TrimStart('?').Trim();
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+
+            var querySeparator = raw.IndexOf('?');
+            var targetText = querySeparator >= 0 ? raw.Substring(0, querySeparator) : raw;
+            forwardedQuery = querySeparator >= 0 ? raw.Substring(querySeparator + 1) : string.Empty;
+
+            if (!Uri.TryCreate(targetText, UriKind.Absolute, out var target) ||
+                !string.Equals(target.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+                !target.Host.EndsWith(ServiceHostSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var hostPrefix = target.Host
+                .Substring(0, target.Host.Length - ServiceHostSuffix.Length)
+                .TrimEnd('.');
+            if (string.IsNullOrWhiteSpace(hostPrefix) || hostPrefix.Contains('.'))
+            {
+                return false;
+            }
+
+            var decodedPath = Uri.UnescapeDataString(target.AbsolutePath);
+            if (decodedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == ".."))
+            {
+                return false;
+            }
+
+            publicTarget = target;
+            serviceId = hostPrefix;
+            return true;
+        }
+
+        private static Uri BuildUpstreamUri(string configuredUrl, Uri publicTarget, string forwardedQuery)
+        {
+            if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configured) ||
+                (configured.Scheme != Uri.UriSchemeHttps && configured.Scheme != Uri.UriSchemeHttp))
+            {
+                return null;
+            }
+
+            var builder = new UriBuilder(configured);
+            var basePath = builder.Path.TrimEnd('/');
+            var suffixPath = publicTarget.AbsolutePath;
+
+            // ArcGIS may append the layer id already present in a configured layer URL.
+            var baseLastSegment = basePath.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+            var suffixSegments = suffixPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (suffixSegments.Count > 0 &&
+                int.TryParse(baseLastSegment, out _) &&
+                string.Equals(baseLastSegment, suffixSegments[0], StringComparison.Ordinal))
+            {
+                suffixSegments.RemoveAt(0);
+            }
+
+            builder.Path = suffixSegments.Count == 0
+                ? basePath
+                : basePath + "/" + string.Join('/', suffixSegments);
+
+            var existingQuery = builder.Query.TrimStart('?');
+            builder.Query = string.IsNullOrWhiteSpace(existingQuery)
+                ? forwardedQuery
+                : string.IsNullOrWhiteSpace(forwardedQuery)
+                    ? existingQuery
+                    : existingQuery + "&" + forwardedQuery;
+
+            return builder.Uri;
+        }
+
+        private static Uri AppendQueryParameter(Uri uri, string name, string value)
+        {
+            var builder = new UriBuilder(uri);
+            var existing = builder.Query.TrimStart('?');
+            var next = Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(value);
+            builder.Query = string.IsNullOrWhiteSpace(existing) ? next : existing + "&" + next;
+            return builder.Uri;
+        }
+
+        private async Task<string> ReadBoundedBody()
+        {
+            using var reader = new StreamReader(HttpContext.Request.Body);
+            var body = await reader.ReadToEndAsync();
+            return System.Text.Encoding.UTF8.GetByteCount(body) <= MaxRequestBodyBytes ? body : null;
+        }
+
+        private static string NormalizeContentType(string contentType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType)) return "application/x-www-form-urlencoded";
+            var mediaType = contentType.Split(';')[0].Trim().ToLowerInvariant();
+            return mediaType switch
+            {
+                "application/json" => "application/json",
+                "application/x-www-form-urlencoded" => "application/x-www-form-urlencoded",
+                "text/plain" => "text/plain",
+                _ => "application/octet-stream"
+            };
+        }
+
+        private static string NormalizeResponseContentType(string contentType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType)) return "application/json; charset=utf-8";
+            return contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) ||
+                   contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
+                ? contentType
+                : "application/octet-stream";
+        }
+
+        private ProxyGisService GetService(string encryptedServiceId)
+        {
             try
             {
-                var serviceResult = configServiceOperations.GetByEncryptedGuid(eg);
-                if (serviceResult.Data != null)
-                {
-                    return new ProxyGisService(serviceResult.Data, false);
-                }
+                var configService = configServiceOperations.GetByEncryptedGuid(encryptedServiceId).Data;
+                if (configService != null) return new ProxyGisService(configService);
 
-                var layerResult = gisLayerOperations.GetByEncryptedGuid(eg);
-                if (layerResult.Data != null)
-                {
-                    //bool bypass = layerResult.Data.IsCustomLayer;
-                    return new ProxyGisService(layerResult.Data, false);
-                }
+                var layer = gisLayerOperations.GetByEncryptedGuid(encryptedServiceId).Data;
+                if (layer != null) return new ProxyGisService(layer);
 
+                var basemap = gisBasemapLayerOperations.GetByEncryptedGuid(encryptedServiceId).Data;
+                if (basemap != null) return new ProxyGisService(basemap);
 
-                var basemaplayerResult = gisBasemapLayerOperations.GetByEncryptedGuid(eg);
-                if (basemaplayerResult.Data != null)
-                {
-                    return new ProxyGisService(layerResult.Data, false);
-                }
-
-                return null;    
+                return null;
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                return null;    
+                handleExceptionResult(ex);
+                return null;
             }
-        
         }
 
-
-        private static List<ProxyGisService> serviceCache=new List<ProxyGisService>();
-        private ProxyGisService GetServiceByUrl(string _url)
+        private async Task<string> GetServiceToken(ProxyGisService service)
         {
-            
-            ProxyGisService pService=null;
-            /*
-            var cacheHit= serviceCache.Where(x=> x.Url.Contains(_url) || _url.Contains(x.Url)).FirstOrDefault();
-            if(cacheHit!=null){
-                return cacheHit;
-            }
-            */
-
-            var configService = configServiceOperations.GetServiceByUrl(_url);
-            if (configService != null)
+            if (string.IsNullOrWhiteSpace(service.SCUserName) || string.IsNullOrWhiteSpace(service.SCPassword))
             {
-                pService=new ProxyGisService(configService, true);
+                return null;
             }
 
-            var layerService = gisLayerOperations.GetLayerByUrl(_url);
-            if (layerService != null)
+            var cacheKey = $"gis-token:{service.Url}";
+            if (memoryCache.TryGetValue(cacheKey, out string cachedToken))
             {
-                pService =new ProxyGisService(layerService, true);
+                return cachedToken;
             }
 
-            var basemaplayer = gisBasemapLayerOperations.GetLayerByUrl(_url);
-            if (basemaplayer!= null)
+            if (!Uri.TryCreate(service.Url, UriKind.Absolute, out var serviceUri) ||
+                serviceUri.Scheme != Uri.UriSchemeHttps)
             {
-                pService= new ProxyGisService(basemaplayer, true);
+                // Never send upstream service credentials over clear-text HTTP.
+                return null;
             }
 
-            /*
-            if(pService!=null){
-                serviceCache.Add(pService);
-            }
-            */
+            var tokenHostPrefix = service.Url.Contains("/webgis/", StringComparison.OrdinalIgnoreCase)
+                ? "webgis"
+                : "arcgis";
+            var tokenUrl = $"{serviceUri.Scheme}://{serviceUri.Host}/{tokenHostPrefix}/tokens/generateToken";
 
-            return pService;
+            var tokenClient = new RestClient(new RestClientOptions { MaxTimeout = RequestTimeoutMs });
+            var tokenRequest = new RestRequest(tokenUrl, Method.Post);
+            tokenRequest.AddParameter("f", "json");
+            tokenRequest.AddParameter("expiration", TokenLifetimeMinutes);
+            tokenRequest.AddParameter("username", service.SCUserName);
+            tokenRequest.AddParameter("password", service.SCPassword);
+
+            var response = await tokenClient.ExecuteAsync(tokenRequest, HttpContext.RequestAborted);
+            if (!response.IsSuccessful || string.IsNullOrWhiteSpace(response.Content))
+            {
+                return null;
+            }
+
+            string token;
+            try
+            {
+                using var document = JsonDocument.Parse(response.Content);
+                token = document.RootElement.TryGetProperty("token", out var tokenElement)
+                    ? tokenElement.GetString()
+                    : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(token)) return null;
+
+            memoryCache.Set(cacheKey, token, TimeSpan.FromMinutes(TokenLifetimeMinutes - 2));
+            return token;
         }
     }
-
 
     public class ProxyGisService : _BaseGisService
     {
-        public ProxyGisService(_BaseGisService _service, bool bypass)
+        public ProxyGisService(_BaseGisService service)
         {
-            Title = _service.Title;
-            Url = _service.Url;
-            RequiresSC = _service.RequiresSC;
-            SCUserName = _service.SCUserName;
-            SCPassword = _service.SCPassword;
-            Description = _service.Description;
-            AdditionalInfo = _service.AdditionalInfo;
-            ByPassProxy = bypass;
+            Title = service.Title;
+            Url = service.Url;
+            RequiresSC = service.RequiresSC;
+            SCUserName = service.SCUserName;
+            SCPassword = service.SCPassword;
+            Description = service.Description;
+            AdditionalInfo = service.AdditionalInfo;
         }
-
-        public bool ByPassProxy { get; set; }
-
     }
-
 }

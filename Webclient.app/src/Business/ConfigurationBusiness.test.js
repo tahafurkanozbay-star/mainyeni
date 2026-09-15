@@ -1,47 +1,58 @@
-import axios from "axios";
-import { AuthBusiness } from "./AuthBusiness";
 import { ConfigurationBusiness } from "./ConfigurationBusiness";
+import { apiClient } from "../platform/http/httpClient";
 
-jest.mock("axios", () => jest.fn());
-jest.mock("./AuthBusiness", () => ({
-    AuthBusiness: {
-        GetRequestHeaders: jest.fn()
+jest.mock("../platform/http/httpClient", () => ({
+    apiClient: {
+        get: jest.fn()
     }
 }));
 
-describe("ConfigurationBusiness", () => {
+describe("ConfigurationBusiness platform integration", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        AuthBusiness.GetRequestHeaders.mockResolvedValue({ Authorization: "Bearer test" });
     });
 
-    test("loads map configuration through the configured API base URL", async () => {
+    test("loads map configuration through the same-origin platform client with bounded cache", async () => {
         const response = { isSuccess: true, data: { configValue: "{}" } };
-        axios.mockResolvedValue({ data: response });
+        apiClient.get.mockResolvedValue(response);
 
         await expect(ConfigurationBusiness.GetMapConfiguration()).resolves.toEqual(response);
-        expect(axios).toHaveBeenCalledWith(expect.objectContaining({
-            method: "get",
-            url: expect.stringContaining("/AppSettings/List?key=GisMapConfig"),
-            headers: { Authorization: "Bearer test" }
+        expect(apiClient.get).toHaveBeenCalledWith("/AppSettings/List", expect.objectContaining({
+            params: { key: "GisMapConfig" },
+            cache: true,
+            dedupe: true,
+            cacheTtlMs: 120000
         }));
     });
 
-    test("loads GIS service configuration through the configured API base URL", async () => {
+    test("forwards abort signals and disables request deduplication for cancellable bootstrap calls", async () => {
+        const controller = new AbortController();
         const response = { isSuccess: true, data: [] };
-        axios.mockResolvedValue({ data: response });
+        apiClient.get.mockResolvedValue(response);
 
-        await expect(ConfigurationBusiness.GetConfigServices()).resolves.toEqual(response);
-        expect(axios).toHaveBeenCalledWith(expect.objectContaining({
-            method: "get",
-            url: expect.stringContaining("/Gis/ConfigService/List"),
-            headers: { Authorization: "Bearer test" }
+        await ConfigurationBusiness.GetConfigServices({ signal: controller.signal, cacheTtlMs: 5000 });
+
+        expect(apiClient.get).toHaveBeenCalledWith("/Gis/ConfigService/List", expect.objectContaining({
+            signal: controller.signal,
+            cache: true,
+            dedupe: false,
+            cacheTtlMs: 5000
         }));
     });
 
-    test("propagates transport failures instead of leaving configuration loading pending", async () => {
-        const failure = new Error("network unavailable");
-        axios.mockRejectedValue(failure);
+    test("rejects malformed service envelopes instead of accepting ambiguous configuration data", async () => {
+        apiClient.get.mockResolvedValue({ data: [] });
+
+        await expect(ConfigurationBusiness.GetConfigServices()).rejects.toMatchObject({
+            name: "AppError",
+            code: "INVALID_RESPONSE",
+            retryable: false
+        });
+    });
+
+    test("propagates normalized platform transport failures", async () => {
+        const failure = Object.assign(new Error("Ağ bağlantısı kurulamadı."), { code: "NETWORK_ERROR" });
+        apiClient.get.mockRejectedValue(failure);
 
         await expect(ConfigurationBusiness.GetMapConfiguration()).rejects.toBe(failure);
     });

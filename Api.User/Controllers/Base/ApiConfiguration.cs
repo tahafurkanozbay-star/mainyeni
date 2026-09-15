@@ -1,4 +1,5 @@
 public static class ApiConfiguration
 {
-    public const string SECRET="YpV0lECaM7sSw4US";
+    // Legacy compatibility only. New public endpoints must not depend on browser-held shared secrets.
+    public const string ApiRequestSecretConfigKey = "Security:ApiRequestSecret";
 }
