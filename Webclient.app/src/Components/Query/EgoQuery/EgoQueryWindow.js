@@ -57,6 +57,7 @@ export const EgoQueryWindow = React.forwardRef((props, ref) => {
         mountedRef.current = true;
         windowManager.RegisterWindow(ref);
         const sequence = ++loadSequenceRef.current;
+        const commonTools = commonToolsComponentRef.current;
 
         const load = async () => {
             const [linesResponse, stopsResponse] = await Promise.allSettled([
@@ -91,7 +92,7 @@ export const EgoQueryWindow = React.forwardRef((props, ref) => {
         return () => {
             mountedRef.current = false;
             loadSequenceRef.current += 1;
-            commonToolsComponentRef.current?.OnClose?.();
+            commonTools?.OnClose?.();
         };
     }, [ref, windowManager]);
 
