@@ -153,11 +153,6 @@ namespace api.user
                 await next();
             });
 
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapControllers();
-            });
-
             var environment = Configuration.GetValue<string>("Environment") ?? "test";
             if (env.IsDevelopment() || string.Equals(environment, "test", StringComparison.OrdinalIgnoreCase))
             {
@@ -167,6 +162,11 @@ namespace api.user
                     options.SwaggerEndpoint("CoreSwagger/swagger.json", "Ankara Kent Rehberi User API V1");
                 });
             }
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
         }
     }
 }
