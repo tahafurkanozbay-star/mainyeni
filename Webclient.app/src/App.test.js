@@ -13,7 +13,9 @@ jest.mock('./Components/App/MapComponent', () => ({ MapComponent: () => <div dat
 jest.mock('./Components/Common/ExperienceUXLayer', () => ({ ExperienceUXLayer: () => <div data-testid="experience-layer" /> }));
 jest.mock('./Components/Common/ExperienceCommandCenter', () => ({ ExperienceCommandCenter: () => null }));
 
-jest.mock('./Store/Managers/WindowManager', () => ({ WindowManager: function WindowManager() {} }));
+jest.mock('./Store/Managers/WindowManager', () => ({
+  useWindowManager: () => ({})
+}));
 
 jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
 
