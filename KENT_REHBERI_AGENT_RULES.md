@@ -76,6 +76,18 @@ Core Web Vitals, bundle size, lazy loading, code splitting, memoization, virtual
 ## Git / PR / Merge
 Çalışmayı mümkünse `agent/<alan>-<tarih>` branch'ında yap. Commit mesajı `feat(<alan>): <özet>` formatında olsun. PR oluşturulabilen ortamda PR aç. Merge öncesi build/test doğrula. Başka bir branch'ı force push veya ezme yapma.
 
+## Merge safety / branch lifecycle — ZORUNLU
+- Her turun başında `origin/main` yeniden fetch edilmelidir; çalışma branch'i o anki güncel `origin/main` commitinden oluşturulmalıdır.
+- Daha önce merge edilmiş, squash-merge edilmiş, rebase-merge edilmiş veya kapatılmış bir PR'ın branch'ini yeni tur için yeniden kullanma. Her yeni tur için benzersiz branch adı kullan: `agent/<alan>-<YYYYMMDD-HHMM>-<mainShortSha>` benzeri.
+- Aynı role ait açık PR varsa yeni iş eklemeden önce PR'ın `mergeable` durumu, CI sonucu, head SHA, base SHA ve gerçek merge-base'i kontrol edilmelidir. Branch `main`e göre `behind`/`diverged` ise veya merge-base güncel tur başlangıç SHA'sı değilse eski branch üzerine yeni iş yığma.
+- Squash merge sonrası eski commit zincirini yeni PR'a taşımak yasaktır. Gerekirse yalnızca `main`de bulunmayan doğrulanmış değişiklikleri temiz güncel `main` tabanına cherry-pick/yeniden uygulama ile taşı; eski branch'in tüm tree'sini körlemesine kopyalama.
+- PR açmadan hemen önce `origin/main` tekrar fetch edilmelidir. Base ilerlediyse branch'i güncelle, conflictleri branch üzerinde çöz ve test/lint/typecheck/build doğrulamasını tekrar çalıştır.
+- GitHub `mergeable=true` olmadan, gerekli CI/check'ler başarıyla tamamlanmadan ve regresyon kontrolü yapılmadan merge etme. Draft/conflicted PR merge edilmeye çalışılmamalıdır.
+- Merge işleminden sonra yalnızca GitHub `merged=true` sonucu ve `main` üzerinde beklenen değişikliğin bulunduğu doğrulanırsa tur merge edilmiş sayılır.
+- Stale/superseded PR'ları açık bırakıp yeni PR yığma. Önce hangi PR'ın kanonik olduğunu belirle; artık kullanılmayacak PR'ı açıkça superseded olarak kapat.
+- `KENT_REHBERI_PROGRESS.md` ortak dosyadır. Güncel `main` sürümünü baz al, mümkün olduğunca role-scoped append yap, diğer ekiplerin kayıtlarını silme veya tek taraflı overwrite etme; conflict varsa iki tarafın kayıtlarını koruyarak çöz.
+- Aynı dakikada çalışan otomasyonların aynı repo/ortak dosyalara yazabileceğini varsay. Her merge öncesi son bir `main` refresh + mergeability kontrolü zorunludur; zamanlama çakışması branch güvenliği yerine geçmez.
+
 ## Sonraki görev için durum bırakma
 `KENT_REHBERI_PROGRESS.md` içinde tamamlanan işler, devam eden işler, bilinen sorunlar, test/build sonucu, son commit/PR/merge durumu ve sonraki görev için notları güncelle.
 
