@@ -206,8 +206,8 @@ export const normalizeProxyUrl = (value, options = {}) => {
     });
   }
 
-  const url = String(value).trim();
-  if (/^[\u0000-\u001F\u007F]/.test(url) || /[\r\n]/.test(url)) {
+  const rawUrl = String(value);
+  if (/[\u0000-\u001F\u007F]/.test(rawUrl)) {
     throw new AppError('CBS servis adresi geçersiz karakter içeriyor.', {
       code: BootstrapErrorCode.SERVICE_URL_INVALID,
       retryable: false,
@@ -215,7 +215,7 @@ export const normalizeProxyUrl = (value, options = {}) => {
     });
   }
 
-  return url;
+  return rawUrl.trim();
 };
 
 export const createBootstrapPlan = ({
