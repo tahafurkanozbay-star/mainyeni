@@ -17,9 +17,12 @@ jest.mock('esri-loader', () => ({
   })),
 }));
 
-jest.mock('../Business/CommonBusiness', () => ({
-  CommonBusiness: { GenerateUrl: jest.fn((service) => typeof service === 'string' ? service : service.url) },
-}));
+jest.mock('../Business/CommonBusiness', () => {
+  const CommonBusiness = {
+    GenerateUrl: jest.fn((service) => typeof service === 'string' ? service : service?.url || ''),
+  };
+  return { CommonBusiness, default: CommonBusiness };
+});
 
 jest.mock('./networkPolicy', () => ({
   assertBrowserGisEndpoint: jest.fn((value) => value),
@@ -32,10 +35,10 @@ describe('GIS query count runtime', () => {
   });
 
   test('uses ArcGIS executeForCount instead of a one-feature query', async () => {
-    const count = await executeFeatureCount({
-      id: 'parks',
-      url: 'http://localhost/api/Gis/Proxy?https://eg.gissrv.org/parks/FeatureServer/0',
-    }, { where: '1=1' });
+    const count = await executeFeatureCount(
+      'http://localhost/api/Gis/Proxy?https://eg.gissrv.org/parks/FeatureServer/0',
+      { where: '1=1' },
+    );
 
     expect(count).toBe(37);
     expect(mockExecuteForCount).toHaveBeenCalledTimes(1);
