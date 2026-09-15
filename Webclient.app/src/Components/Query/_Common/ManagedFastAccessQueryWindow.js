@@ -19,22 +19,15 @@ const ATTRIBUTE_CANDIDATES = Object.freeze({
     phone: ["telefon", "phone", "tel", "telefon_no", "iletisim", "iletişim"]
 });
 
-const normalizeAttributeKey = value => String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/ı/g, "i")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "");
-
 const toSearchableEntries = attributes => Object.entries(attributes || {}).map(([key, value]) => [
-    normalizeAttributeKey(key),
+    String(key).trim().toLocaleLowerCase("tr-TR"),
     value
 ]);
 
 const readAttribute = (attributes, candidates) => {
     const entries = toSearchableEntries(attributes);
     for (const candidate of candidates) {
-        const normalizedCandidate = normalizeAttributeKey(candidate);
+        const normalizedCandidate = candidate.toLocaleLowerCase("tr-TR");
         const entry = entries.find(([key]) => key === normalizedCandidate);
         if (entry && entry[1] !== null && entry[1] !== undefined && String(entry[1]).trim() !== "") return entry[1];
     }
@@ -274,26 +267,91 @@ export function createManagedFastAccessQueryWindow({
         };
 
         return (
-            <section className="sidebar-container kr-fast-query" aria-labelledby={`${id}-title`} aria-busy={loading}>
+            <section
+                className="sidebar-container kr-fast-query"
+                aria-labelledby={`${id}-title`}
+                aria-busy={loading}
+            >
                 <header className="common-query-window-header kr-fast-query__header">
-                    <SharedGISIcon record={{ type: iconType || serviceKey, title, category: title }} size={34} className="common-query-window-header-icon" />
+                    <SharedGISIcon
+                        record={{ type: iconType || serviceKey, title, category: title }}
+                        size={34}
+                        className="common-query-window-header-icon"
+                    />
                     <h2 id={`${id}-title`}>{title}</h2>
-                    <button type="button" className="kr-fast-query__close" onClick={returnToServices} aria-label={`${title} penceresini kapat`}>×</button>
+                    <button
+                        type="button"
+                        className="kr-fast-query__close"
+                        onClick={returnToServices}
+                        aria-label={`${title} penceresini kapat`}
+                    >
+                        ×
+                    </button>
                 </header>
+
                 <div className="kr-fast-query__toolbar">
-                    <button type="button" className="kr-fast-query__back" onClick={returnToServices}><span aria-hidden="true">←</span><span>Hizmetlere dön</span></button>
-                    <span className="kr-fast-query__count" aria-live="polite"><strong>{filteredRecords.length}</strong> sonuç</span>
+                    <button type="button" className="kr-fast-query__back" onClick={returnToServices}>
+                        <span aria-hidden="true">←</span>
+                        <span>Hizmetlere dön</span>
+                    </button>
+                    <span className="kr-fast-query__count" aria-live="polite">
+                        <strong>{filteredRecords.length}</strong> sonuç
+                    </span>
                 </div>
-                {records.length > 12 && <div className="kr-fast-query__filter"><label htmlFor={`${id}-filter`}>Sonuçlarda filtrele</label><input id={`${id}-filter`} type="search" value={filterText} onChange={event => { setFilterText(event.target.value); setVisibleCount(pageSize); }} placeholder="Ad, adres veya telefon…" autoComplete="off" /></div>}
+
+                {records.length > 12 && (
+                    <div className="kr-fast-query__filter">
+                        <label htmlFor={`${id}-filter`}>Sonuçlarda filtrele</label>
+                        <input
+                            id={`${id}-filter`}
+                            type="search"
+                            value={filterText}
+                            onChange={event => {
+                                setFilterText(event.target.value);
+                                setVisibleCount(pageSize);
+                            }}
+                            placeholder="Ad, adres veya telefon…"
+                            autoComplete="off"
+                        />
+                    </div>
+                )}
+
                 <div className="kr-fast-query__status" role="status" aria-live="polite">
                     {loading && <span>Sonuçlar ve harita katmanı yükleniyor…</span>}
                     {!loading && errorMessage && <span className="kr-fast-query__error">{errorMessage}</span>}
                     {!loading && !errorMessage && records.length === 0 && <span>Gösterilecek kayıt bulunamadı.</span>}
                 </div>
+
                 <ul className="results-container kr-fast-query__results" aria-label={`${title} sonuçları`}>
-                    {visibleRecords.map((item, index) => <li className="result-item-container kr-fast-query__item" key={`${item.objectId ?? "item"}-${index}`}><SharedGISIcon record={{ type: iconType || serviceKey, title: item.title, category: title }} size={30} className="kr-fast-query__item-icon" /><div className="result-item-info kr-fast-query__copy"><h3 className="result-item-info-title">{item.title}</h3><p className="result-item-info-address">{item.address}</p>{item.phone && <a href={`tel:${item.phone.replace(/[^+\d]/g, "")}`}>{item.phone}</a>}</div><div className="kr-fast-query__actions" aria-label={`${item.title} işlemleri`}><button type="button" onClick={() => zoomToItem(item)}>Haritada göster</button><button type="button" onClick={() => showRoute(item)}>Yol tarifi</button></div></li>)}
+                    {visibleRecords.map((item, index) => (
+                        <li className="result-item-container kr-fast-query__item" key={`${item.objectId ?? "item"}-${index}`}>
+                            <SharedGISIcon
+                                record={{ type: iconType || serviceKey, title: item.title, category: title }}
+                                size={30}
+                                className="kr-fast-query__item-icon"
+                            />
+                            <div className="result-item-info kr-fast-query__copy">
+                                <h3 className="result-item-info-title">{item.title}</h3>
+                                <p className="result-item-info-address">{item.address}</p>
+                                {item.phone && <a href={`tel:${item.phone.replace(/[^+\d]/g, "")}`}>{item.phone}</a>}
+                            </div>
+                            <div className="kr-fast-query__actions" aria-label={`${item.title} işlemleri`}>
+                                <button type="button" onClick={() => zoomToItem(item)}>Haritada göster</button>
+                                <button type="button" onClick={() => showRoute(item)}>Yol tarifi</button>
+                            </div>
+                        </li>
+                    ))}
                 </ul>
-                {visibleCount < filteredRecords.length && <button type="button" className="kr-fast-query__more" onClick={() => setVisibleCount(count => Math.min(count + pageSize, filteredRecords.length))}>Daha fazla sonuç göster</button>}
+
+                {visibleCount < filteredRecords.length && (
+                    <button
+                        type="button"
+                        className="kr-fast-query__more"
+                        onClick={() => setVisibleCount(count => Math.min(count + pageSize, filteredRecords.length))}
+                    >
+                        Daha fazla sonuç göster
+                    </button>
+                )}
             </section>
         );
     });
