@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { Button, Form } from "react-bootstrap";
 import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
@@ -36,10 +36,10 @@ export const TaxiQueryWindow = React.forwardRef((props, ref) => {
     const [activeTab, setActiveTab] = useState("form");
     const [loading, setLoading] = useState(false);
 
-    const removeLastClusterLayer = () => {
+    const removeLastClusterLayer = useCallback(() => {
         if (clusterLayer?.layerObj && mapView?.map) mapView.map.remove(clusterLayer.layerObj);
         setClusterLayer(null);
-    };
+    }, [clusterLayer, mapView]);
 
     useImperativeHandle(ref, () => ({
         id: props.id,
@@ -52,7 +52,7 @@ export const TaxiQueryWindow = React.forwardRef((props, ref) => {
             setResultList(null);
             removeLastClusterLayer();
         }
-    }), [props.id, clusterLayer, mapView]);
+    }), [props.id, removeLastClusterLayer]);
 
     useEffect(() => {
         props.windowManager.RegisterWindow(ref);
@@ -140,30 +140,30 @@ export const TaxiQueryWindow = React.forwardRef((props, ref) => {
     const isForm = activeTab === "form";
 
     return (
-        <div className="common-query-window" style={{ visibility: props.windowManager.IsVisible(props.id) ? "visible" : "hidden" }}>
-            <div className="common-query-window-header">
+        <section className="common-query-window" aria-label="Taksi" style={{ visibility: props.windowManager.IsVisible(props.id) ? "visible" : "hidden" }}>
+            <header className="common-query-window-header">
                 <img className="common-query-window-header-icon" src="images/icons/sidebar/taksi.png" alt="" aria-hidden="true" />
                 <span>Taksi</span>
                 <CommonQueryWindowTools windowManager={props.windowManager} windowId={props.id} setQueryField={setQueryField} query={query} showNearbySearch={isForm} showMapSelect={isForm} />
-            </div>
+            </header>
             <div className={`common-query-window-body ${props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : ""}`}>
                 {isForm ? (
                     <Form onSubmit={submitQuery}>
                         {!query.mapSelect && <Form.Group><label className="form-label" htmlFor={`${props.id}-name`}>Adı</label><input id={`${props.id}-name`} className="form-control" value={query.name} onChange={event => setQueryField("name", event.target.value)} /></Form.Group>}
                         {!query.showNearby && !query.mapSelect && <>
                             <Form.Group><label className="form-label" htmlFor={`${props.id}-district`}>İlçe</label><select id={`${props.id}-district`} className="form-select form-control" value={query.districtId} onChange={onDistrictChange}><option value="">Seçiniz..</option>{districtList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
-                            <Form.Group><label className="form-label" htmlFor={`${props.id}-neighborhood`}>Mahalle</label><select id={`${props.id}-neighborhood`} className="form-select" value={query.nbhoodId} onChange={onNeighborhoodChange}><option value="">Seçiniz..</option>{nbhoodList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
+                            <Form.Group><label className="form-label" htmlFor={`${props.id}-neighborhood`}>Mahalle</label><select id={`${props.id}-neighborhood`} className="form-select" value={query.nbhoodId} onChange={onNeighborhoodChange} disabled={!query.districtId}><option value="">Seçiniz..</option>{nbhoodList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
                         </>}
                         {!query.mapSelect && <Form.Group>{loading ? <ButtonLoading /> : <Button type="submit" className="form-button"><BiSearch className="form-button-icon" aria-hidden="true" /><span>Sorgula</span></Button>}</Form.Group>}
                     </Form>
                 ) : (
                     <div className="results-container">
-                        <div className="results-container-toolbar"><button type="button" className="results-container-back-button" onClick={backToForm}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button><div className="results-container-count"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div></div>
-                        {resultList?.map((item, index) => <article className="result-item-container" key={`${item.ObjectId ?? item.Title}-${index}`}><button type="button" className="result-item-info" onClick={() => showItem(item)}><span className="result-item-info-title">{item.Title}</span><span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.Address}</span></button><CommonQueryResultItemTools item={item} zoomCallback={() => showItem(item)} showRouteCallback={() => showRoute(item)} /></article>)}
+                        <div className="results-container-toolbar"><button type="button" className="results-container-back-button" onClick={backToForm}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button><div className="results-container-count" aria-live="polite"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div></div>
+                        {resultList?.map((item, index) => <article className="result-item-container" key={`${item.ObjectId ?? item.Title}-${index}`}><button type="button" className="result-item-info" onClick={() => showItem(item)} aria-label={`${item.Title} konumunu haritada göster`}><span className="result-item-info-title">{item.Title}</span><span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.Address}</span></button><CommonQueryResultItemTools item={item} zoomCallback={() => showItem(item)} showRouteCallback={() => showRoute(item)} /></article>)}
                     </div>
                 )}
             </div>
-        </div>
+        </section>
     );
 });
 
