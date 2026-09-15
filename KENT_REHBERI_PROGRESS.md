@@ -3,7 +3,7 @@
 ## Başlangıç Durumu
 - Ortak agent kuralları repository'ye eklendi.
 - Ana kural dosyası: `KENT_REHBERI_AGENT_RULES.md`
-- Görev sırası: Architecture / Platform → UI/UX → 2D GIS + 3D GIS + Spatial Engine → GIS Data/Services → Search/Address → Performance → Security → Accessibility/Responsive → Testing/Observability → Final QA/Release
+- Görev sırası: Architecture / Platform → UI/UX → 2D/3D GIS + Spatial Engine → GIS Data/Services → Search/Address → Performance → Security → Accessibility/Responsive → Testing/Observability → Final QA/Release
 
 ## Platform / GIS geçmişi
 - Platform Tur 2: local `.env` ignore, `.env.example`, same-origin API yaklaşımı, client-key/debug/source-map risklerinin azaltılması.
@@ -21,7 +21,8 @@
 - Amaç: mevcut Kent Rehberi'ni ekran ve bileşen düzeyinde derin UX/UI kalite denetiminden geçirip enterprise GIS seviyesinde tutarlı, hızlı, erişilebilir ve yüksek veri yoğunluğuna uygun bir deneyim oluşturmak.
 - Başlangıç main HEAD: `71d8d54f9bae4e8ce8ee740aabee56cf5d6f203f`.
 - Çalışma branch: `agent/experience-ui-deep-2026-09-15`.
-- Branch son reconcile sonrası `main`den geride değil (`behind_by=0`); paralel GIS çalışmalarını force-push ile ezmeden ikinci parent merge commit ile korundu.
+- PR #6 gerçek olarak merge edilebilir durumda doğrulandı ve squash-merge edildi.
+- Merge commit: `cdde26bc997e7d1b7c28f668412ab3087607d316`.
 
 ### İncelenen yüzeyler
 - `App.js` global shell ve config loading
@@ -76,9 +77,9 @@
 - Loading asset bağımlılığı CSS spinner'a taşındı.
 - Search/layer/command surfaces'te gereksiz perpetual JS animation eklenmedi; DOM reconciliation için stable keys kullanıldı.
 - Browser Network panelinden veri tamamen gizlenemeyeceği varsayımı korunuyor; privacy garantisi verilmedi.
-- Legacy `styles.css` içinde `https://fonts.googleapis.com/css?family=Mukta` import'u halen mevcut. Kaldırılması bir sonraki izole CSS cleanup işi; mevcut legacy ekranları körlemesine rewrite etmeden önce browser regression gerekir.
+- Legacy `styles.css` içinde `https://fonts.googleapis.com/css?family=Mukta` import'u halen mevcut; izole CSS cleanup sonraki iştir.
 
-### Accessibility
+### Accessibility / responsive
 - semantic header/aside/nav/form/section/dialog/button
 - icon controls için accessible name
 - `aria-pressed`, `aria-busy`, `role=status`, `role=alert`
@@ -89,38 +90,31 @@
 - command palette keyboard navigation + active descendant
 - Escape close behavior
 - form/search error and retry feedback
-
-### Responsive smoke yaklaşımı
-- Desktop: map-primary layout; query windows viewport-safe.
-- Tablet: panels narrow, toolbar compact, layer rows remain touch-safe.
-- Mobile: header simplifies, query/drawer surfaces become bottom-sheet style; command center bottom aligned; layer opacity control hides while visibility remains accessible.
-- Gerçek browser/device visual regression connector ortamında çalıştırılamadı; CSS/DOM smoke sözleşmesi ve interaction tests eklendi.
+- Desktop map-primary, tablet compact panels, mobile bottom-sheet/drawer uyarlamaları için CSS/interaction sözleşmesi
+- Gerçek browser/device visual regression ve tam screen-reader smoke bu connector çalışma alanında yürütülemedi.
 
 ### Test / build
 - `ExperienceUXLayer.test.js` ve `experience-quality.test.js` branch'e eklendi/güncellendi.
 - `.github/workflows/webclient-quality.yml`: Node 18 + `npm ci` + `npm run lint --if-present` + `npm run typecheck --if-present` + `npm test -- --watchAll=false --runInBand` + `npm run build`.
-- Lokal Node/npm bu connector ortamında mevcut değildi; dolayısıyla lokal test/build/lint/typecheck çalıştırılamadı.
-- GitHub Actions ile doğrulama başlatıldı; CI sonucu bu kayıt oluşturulurken tamamlanmış kabul edilmedi.
+- Lokal Node/npm bu connector ortamında mevcut değildi; lokal test/build/lint/typecheck çalıştırılamadı.
+- CI workflow'u gerçek runner doğrulaması için mevcut; PR merge öncesi burada sonuç okunamadı.
 
 ### Değişiklik hacmi
-- `compare_commits` deep branch → main sonucu 17 önemli UI/audit dosyasında değişiklik.
-- Toplam yaklaşık 752 ekleme + 1.229 silme = 1.981 anlamlı satır değişimi.
-- 4.000 satır yapay boilerplate ile zorlanmadı; hedef kalite ve mevcut GIS davranışını koruma lehine bilinçli olarak daha düşük tutuldu.
-
-### Audit dokümanı
-- `docs/experience-ui-deep-audit-2026-09-15.md` ayrıntılı tasarım sistemi, yüksek öncelikli sorunlar, icon architecture, network/performance, accessibility, 2D/3D durumu ve sonraki geçişleri kaydediyor.
+- Deep Experience PR #6: 19 dosya, 895 ekleme, 1.178 silme.
+- Yaklaşık 2.073 satır net anlamlı değişiklik; 4.000 satır yapay boilerplate ile zorlanmadı.
 
 ### Kalan riskler
-- Legacy Google Fonts import'u kaldırılmalı; ancak browser regression sonrası.
+- Legacy Google Fonts import'u kaldırılmalı; browser regression sonrası.
 - `color-mix()` / `backdrop-filter` eski tarayıcı fallback'leri browser testinde doğrulanmalı.
 - Full application screen-reader pass ve gerçek responsive visual regression henüz bu runtime'da yapılamadı.
-- Command center daha fazla mevcut WindowManager aracıyla genişletilebilir.
-- `SharedGISIcon` sonuç/table/card yüzeylerinde gerçek record shape erişimi olan componentlere yayılmalı.
+- `SharedGISIcon` sonuç/table/card surfaces'e gerçek record shape erişimi olan componentlerde daha da yayılabilir.
+- Açık PR #7 Platform/Architecture hardening turudur; bu Experience turunda değiştirilmemiştir.
 
-## Tur Sonu / PR
-- Deep branch HEAD: `9b9c390b2c083020f6adbd782a77c0b7dc0af566` (progress kaydından önceki not). Sonraki branch commitleri UI/icon/audit reconciliation için devam etti; PR head oluşturulmadan önce branch yeniden doğrulanmalıdır.
-- `main` HEAD: `71d8d54f9bae4e8ce8ee740aabee56cf5d6f203f`.
-- Önceki PR #4 merged; deep tur için yeni PR oluşturulacak.
+## Son Tur Durumu
+- main HEAD: `cdde26bc997e7d1b7c28f668412ab3087607d316`.
+- PR #6: kapalı ve gerçekten merged.
+- Açık PR #7: `feat(platform): deep security, network and runtime hardening`; merge durumu bu Experience turunda değiştirilmedi.
+- WMS/WFS eklenmedi; remote font/CDN/analytics/third-party UI asset eklenmedi.
 
 ## Sonraki ekip notu
 - Legacy Google Fonts import'unu browser doğrulamasıyla kaldır.
