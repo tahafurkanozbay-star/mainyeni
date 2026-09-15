@@ -5,24 +5,25 @@ const ThemeContext = createContext(null);
 export const EXPERIENCE_TOKENS = Object.freeze({
     spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 },
     radius: { control: 8, card: 12, panel: 16, modal: 18, pill: 999 },
+    control: { height: 40, touchTarget: 44 },
     z: { map: 0, overlay: 10, controls: 20, panel: 30, dialog: 100 }
 });
 
-export function ExperienceThemeProvider({ children }) {
-    const [theme, setTheme] = useState(() => {
-        try {
-            const stored = window.localStorage.getItem("kent-rehberi-experience-theme");
-            if (stored === "light" || stored === "dark") return stored;
-        } catch (_) { /* storage unavailable */ }
-        return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    });
+const getStoredTheme = () => {
+    try {
+        const stored = window.localStorage.getItem("kent-rehberi-experience-theme");
+        if (stored === "light" || stored === "dark") return stored;
+    } catch (_) { /* storage unavailable */ }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+};
 
+export function ExperienceThemeProvider({ children }) {
+    const [theme, setTheme] = useState(getStoredTheme);
     const value = useMemo(() => ({
         theme,
-        toggleTheme: () => setTheme((current) => current === "dark" ? "light" : "dark"),
-        setTheme
+        toggleTheme: () => setTheme(current => current === "dark" ? "light" : "dark"),
+        setTheme: nextTheme => setTheme(nextTheme === "dark" ? "dark" : "light")
     }), [theme]);
-
     return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
@@ -33,7 +34,7 @@ export function useExperienceTheme() {
 }
 
 export function StatusPill({ tone = "neutral", children }) {
-    return <span className={`experience-status-pyl experience-status-pyl--${tone}`}><span aria-hidden="true" className="experience-status-pyl__dot" />{children}</span>;
+    return <span className={`experience-status-pill experience-status-pill--${tone}`}><span aria-hidden="true" className="experience-status-pill__dot" />{children}</span>;
 }
 
 export function EmptyState({ title, description, action, icon }) {
