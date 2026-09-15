@@ -12,8 +12,8 @@
 - Shared loading / error / empty primitives
 - Utility rail / help / command center
 - Responsive CSS paths and touch-target rules
-- GIS icon resolver and service policy
-- 3D entrypoint search
+- GIS icon resolver, JSON icon registry and service policy
+- 3D runtime / user-facing entrypoint
 
 ## Current architecture finding
 The application is React 17 + Bootstrap/react-bootstrap + ArcGIS `esri-loader`, with a large legacy global CSS layer. A full framework migration would be high risk for a live GIS product, so this audit applies a compatibility-first design-system overlay rather than replacing the application shell.
@@ -62,7 +62,7 @@ Dark uses deep blue-gray surfaces and high-contrast text with lighter accent ton
 - modal/drawer gets the strongest elevation
 
 ### Iconography
-The UI chrome added by Experience uses lightweight inline SVG only for generic chrome. GIS record/category icons are NOT re-mapped independently: the existing `gis-engine/iconResolver.js` remains the authority for JSON-driven GIS type/category resolution. The repository search did not expose a concrete JSON icon catalog path, so no fabricated mapping was added.
+The UI chrome added by Experience uses lightweight inline SVG only for generic chrome. GIS record/category icons now resolve through the existing JSON-driven `iconRegistry.json` + `iconResolver.js` + `iconPresentation.js` chain. The `SharedGISIcon` component consumes `createListIconModel`, so the UI does not create a second GIS mapping authority. Unknown items use the registry's default mapping and a local picture-marker fallback on broken image load.
 
 ### Interaction states
 Every deep-layer interactive component supports or documents:
@@ -89,7 +89,7 @@ Motion is limited to transform/opacity/background/border transitions. The loadin
 - ~420px: command palette becomes mobile bottom sheet-like surface
 
 ### Theme behavior
-The Experience layer uses `data-experience-theme` and localStorage. The deep tour also isolates theme ownership in `ExperienceThemeProvider`. Legacy NavigationBar dynamic stylesheet behavior was removed from the header implementation in favor of the unified token system.
+The Experience layer uses `data-experience-theme` and localStorage, with `ExperienceThemeProvider` as the primary runtime owner. The legacy NavigationBar no longer dynamically injects its old light stylesheet; it only preserves compatibility with the existing configuration key. The actual visual surface is controlled by Experience tokens.
 
 ## High-impact findings and fixes
 ### P0 — Header search state inconsistency
@@ -119,6 +119,7 @@ A final-loaded compatibility layer normalizes query windows, ArcGIS popup surfac
 ## Network / performance review
 - No new remote font, analytics, CDN or third-party UI asset was introduced.
 - Generic UI icons use inline SVG.
+- GIS list/marker icon resolution uses local JSON configuration and existing local icon assets rather than a second mapping service.
 - Loading primitives avoid the legacy GIF.
 - Existing ArcGIS SDK assets remain because they are functional platform dependencies, not decorative UI downloads.
 - `styles.css` still contains a legacy Google Fonts `@import`; it should be removed in a dedicated CSS cleanup after validating that no legacy screen depends on it. This deep tour deliberately avoids copying a 13KB legacy stylesheet into an automated rewrite without browser regression testing.
@@ -144,7 +145,7 @@ Remaining browser validation:
 - contrast measurement against every third-party ArcGIS theme state
 
 ## 2D / 3D
-No concrete `SceneView` / 3D UI entrypoint was found in repository code search during this tour. The deep tour therefore does not invent a new 3D experience. The design-system contract leaves room for 2D/3D parity when a real 3D entrypoint is introduced by the GIS/engine workstream.
+The repository now contains a shared `sceneRuntime.js` with SceneView creation, picking, camera/selection synchronization, bookmarks and measurement contracts. However, no user-facing 3D navigation entrypoint was wired into the main shell during this UI-only tour. The audit therefore improves the shared 2D/3D design contract without inventing a separate 3D UI that could conflict with the engine workstream.
 
 ## Acceptance checklist
 - [x] shared design tokens
@@ -155,6 +156,7 @@ No concrete `SceneView` / 3D UI entrypoint was found in repository code search d
 - [x] loading/error/empty semantics
 - [x] responsive desktop/tablet/mobile rules
 - [x] reduced motion / forced colors
+- [x] JSON-driven shared GIS icon presentation in layer surfaces
 - [x] no new WMS/WFS UI
 - [x] no new remote UI assets
 - [x] no second GIS icon mapping authority
@@ -164,7 +166,7 @@ No concrete `SceneView` / 3D UI entrypoint was found in repository code search d
 
 ## Next deep-pass priorities
 1. Remove the legacy Google Fonts import after an isolated browser verification.
-2. Replace duplicate theme ownership with one source of truth across Experience + NavigationBar + legacy light stylesheet.
-3. Bind more command-center actions to existing WindowManager tools instead of introducing parallel routing.
-4. Locate the actual JSON icon catalog and add integration tests around `resolveIcon` across table/list/2D/3D callers.
+2. Replace the remaining legacy theme compatibility read with a single shared persistence contract.
+3. Bind additional command-center actions to existing WindowManager tools rather than introducing parallel routing.
+4. Reuse `SharedGISIcon` in result/table/card feature surfaces as their existing record data becomes accessible.
 5. Add browser-level responsive and accessibility smoke coverage.
