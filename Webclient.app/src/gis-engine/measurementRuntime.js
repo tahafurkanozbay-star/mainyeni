@@ -2,6 +2,10 @@ import { loadModules } from 'esri-loader';
 
 const modulePromises = new Map();
 
+export const clearMeasurementRuntimeCache = () => {
+  modulePromises.clear();
+};
+
 const load = (name) => {
   if (!modulePromises.has(name)) {
     const promise = loadModules([name])
