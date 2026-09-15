@@ -3,234 +3,182 @@ import { Button, Form } from "react-bootstrap";
 import { TkgmQueryBusiness } from "../../../Business/TkgmQueryBusiness";
 import { AppConfig } from "../../../Core/AppConfig";
 import MapManager from "../../../Store/Managers/MapManager";
-import { IsNull } from "../../../Toolbox/ObjectHelper";
 import "./CityBlockParcelQueryWindow.css";
 import { BiSearch } from "react-icons/bi";
 import { Constants_MessageType } from "../../../Core/Constants";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { RiCloseCircleFill } from "react-icons/ri";
 import { ButtonLoading } from "../../Common/Loading";
-import { TextHelper } from "../../../Toolbox/TextHelper";
 import { CommonQueryWindowTools } from "../../Query/_Common/CommonQueryWindowTools";
 
+const INITIAL_QUERY = Object.freeze({
+    district: "",
+    districtName: "",
+    nbhood: "",
+    nbhoodName: "",
+    cityblock: "",
+    parcel: ""
+});
+
 export const CityBlockParcelQueryWindow = React.forwardRef((props, ref) => {
+    const [mapView, setMapView] = useState(null);
+    const [districtList, setDistrictList] = useState([]);
+    const [nbhoodList, setNbhoodList] = useState([]);
+    const [query, setQuery] = useState({ ...INITIAL_QUERY });
+    const [loading, setLoading] = useState(false);
 
     useImperativeHandle(ref, () => ({
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            props.windowManager.ShowWindow("sidebar")
-            
-        },
+        id: props.id,
+        visible: false,
+        minimized: false,
+        OnShow: () => props.windowManager.ShowWindow("sidebar"),
         OnClose: () => {
-            
+            setQuery({ ...INITIAL_QUERY });
+            setNbhoodList([]);
         }
-    }));
-
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
+    }), [props.id, props.windowManager]);
 
     useEffect(() => {
-
         props.windowManager.RegisterWindow(ref);
-        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
+        setMapView(MapManager.GetMapView());
+        let active = true;
 
-
-        TkgmQueryBusiness.GetDistricts(AppConfig.Api.TkgmCityId).then((_result) => {
-
-            var list = [];
-            if (Array.isArray(_result)) {
-                _result.forEach(_resultItem => {
-                    list.push({
-                        id: _resultItem.properties.id,
-                        title: _resultItem.properties.text,
-                    });
-                });
-
-                setDistrictList(list);
+        TkgmQueryBusiness.GetDistricts(AppConfig.Api.TkgmCityId).then(result => {
+            if (!active) return;
+            if (!Array.isArray(result)) {
+                setDistrictList([]);
+                props.windowManager.ShowMessage(Constants_MessageType.Error, "TKGM ilçe listesi alınamadı");
+                return;
             }
-            else {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, "Tkgm ilçe listesi alınamadı");
-            }
-
-        });
-    }, []);
-
-
-
-
-    const [nbhoodList, setNbhoodList] = useState(null);
-    const cmbDistrict_OnChange = (e) => {
-
-        if (!IsNull(e.target.value)) {
-
-            const _districtId=e.target.value;
-            const _districtName=e.target.selectedOptions[0].text;
-
-            TkgmQueryBusiness.GetNeighborhoodsOfDistrict(e.target.value).then((_result) => {
-
-                var list = [];
-                _result.forEach(_resultItem => {
-                    list.push({
-                        id: _resultItem.properties.id,
-                        title: _resultItem.properties.text,
-                    });
-                });
-                setNbhoodList(list);
-                setQueryField("district", _districtId);
-                setQueryField("districtName", _districtName);
-            });
-        }
-        else {
-            setNbhoodList(null);
-        }
-    }
-
-    const cmbNbhood_OnChange = (e) => {
-        
-        const nbhoodId = e.target.value;
-        const nbhoodName= e.target.selectedOptions[0].text;
-
-        setQueryField("nbhood", e.target.value);
-        setQueryField("nbhoodName", nbhoodName);
-    }
-
-    const [query, setQuery] = useState({ district: 0, nbhood: 0, cityblock: 0, parcel: 0 });
-    const setQueryField = (_field, _value) => {
-        setQuery( query => {
-            return { ...query,[_field]: _value}
-         })
-    }
-
-    const [loading, setLoading] = useState(false);
-    const btnSubmit_OnClick = () => {
-
-        if (validateQuery()) {
-
-            setLoading(true);
-
-            LoggingBusiness.CreateClientLog("Ada Parsel/Sorgu", query.districtName+"/"+query.nbhoodName+"/"+query.cityblock+"/"+query.parcel);
-
-            TkgmQueryBusiness.GetParcels(query).then((_result) => {
-
-                if (_result.geometry != null) {
-                    gotoParcel(_result);
-                }
-                else {
-                    props.windowManager.ShowMessage(Constants_MessageType.Error, "Parsel bulunamadı");
-                }
-
-                setLoading(false);
-                
-            }).catch(error => {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, error.message);
-                setLoading(false);
-            });
-        }
-    }
-
-    /*Business*/
-    const gotoParcel = (item) => {
-
-        LoggingBusiness.CreateClientLog("Ada Parsel/Detay Göster", query.districtName+"/"+query.nbhoodName+"/"+query.cityblock+"/"+query.parcel);
-
-        //self.removeLatestGraphics();
-        GisGraphicsHelper.CreatePolygonFromXYPoints(item.geometry.coordinates).then(_geometry => {
-
-            GisGraphicsHelper.CreateGraphicFromGeometry(_geometry).then(_graphic => {
-
-                GisGraphicsHelper.AddGraphics(mapView, _graphic);
-                GisGraphicsHelper.ZoomToGeometryExtent(mapView, _geometry, 3);
-                
-            });
-
+            setDistrictList(result.map(item => ({
+                id: item.properties.id,
+                title: item.properties.text
+            })));
+        }).catch(error => {
+            if (!active) return;
+            setDistrictList([]);
+            props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "TKGM ilçe listesi alınamadı");
         });
 
-    }
+        return () => {
+            active = false;
+        };
+    }, [props.windowManager, ref]);
+
+    const setQueryField = (field, value) => {
+        setQuery(current => ({ ...current, [field]: value }));
+    };
+
+    const onDistrictChange = async event => {
+        const district = event.target.value;
+        const districtName = event.target.selectedOptions[0]?.text || "";
+        setQuery(current => ({ ...current, district, districtName, nbhood: "", nbhoodName: "" }));
+        setNbhoodList([]);
+        if (!district) return;
+
+        try {
+            const result = await TkgmQueryBusiness.GetNeighborhoodsOfDistrict(district);
+            setNbhoodList(Array.isArray(result) ? result.map(item => ({
+                id: item.properties.id,
+                title: item.properties.text
+            })) : []);
+        } catch (error) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "TKGM mahalle listesi alınamadı");
+        }
+    };
+
+    const onNeighborhoodChange = event => {
+        setQuery(current => ({
+            ...current,
+            nbhood: event.target.value,
+            nbhoodName: event.target.selectedOptions[0]?.text || ""
+        }));
+    };
 
     const validateQuery = () => {
+        let message = "";
+        if (!String(query.district).trim()) message = "Lütfen ilçe seçiniz...";
+        else if (!String(query.nbhood).trim()) message = "Lütfen mahalle seçiniz...";
+        else if (!String(query.cityblock).trim() || String(query.cityblock).trim() === "0") message = "Lütfen ada no giriniz...";
+        else if (!String(query.parcel).trim() || String(query.parcel).trim() === "0") message = "Lütfen parsel no giriniz...";
 
-        var message = "";
-        if (query.parcel == 0) { message = "Lütfen parsel no giriniz..."; }
-        if (query.cityblock == 0) { message = "Lütfen ada no giriniz..."; }
-        if (query.nbhood == 0) { message = "Lütfen mahalle seçiniz..."; }
-        if (query.district == 0) { message = "Lütfen ilçe seçiniz..."; }
-        if (!IsNull(message)) {
-            props.windowManager.ShowMessage(Constants_MessageType.Error, message);
+        if (message) props.windowManager.ShowMessage(Constants_MessageType.Error, message);
+        return !message;
+    };
+
+    const gotoParcel = async item => {
+        LoggingBusiness.CreateClientLog(
+            "Ada Parsel/Detay Göster",
+            `${query.districtName}/${query.nbhoodName}/${query.cityblock}/${query.parcel}`
+        );
+        const geometry = await GisGraphicsHelper.CreatePolygonFromXYPoints(item.geometry.coordinates);
+        const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(geometry);
+        GisGraphicsHelper.AddGraphics(mapView, graphic);
+        GisGraphicsHelper.ZoomToGeometryExtent(mapView, geometry, 3);
+    };
+
+    const submitQuery = async event => {
+        event?.preventDefault();
+        if (!validateQuery() || loading) return;
+        setLoading(true);
+        LoggingBusiness.CreateClientLog(
+            "Ada Parsel/Sorgu",
+            `${query.districtName}/${query.nbhoodName}/${query.cityblock}/${query.parcel}`
+        );
+
+        try {
+            const result = await TkgmQueryBusiness.GetParcels(query);
+            if (!result?.geometry) {
+                props.windowManager.ShowMessage(Constants_MessageType.Error, "Parsel bulunamadı");
+                return;
+            }
+            await gotoParcel(result);
+        } catch (error) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "Parsel sorgusu tamamlanamadı");
+        } finally {
+            setLoading(false);
         }
-        return IsNull(message);
-    }
+    };
 
+    return (
+        <div className="common-query-window common-query-window-right" style={{ visibility: props.windowManager.IsVisible(props.id) ? "visible" : "hidden" }}>
+            <div className="common-query-window-header">
+                <img className="common-query-window-header-icon" src="images/icons/toolbar/adaparsel.png" alt="" aria-hidden="true" />
+                <span>Ada-Parsel Arama</span>
+                <CommonQueryWindowTools windowManager={props.windowManager} windowId={props.id} showNearbySearch={false} showMapSelect={false} setQueryField={() => {}} query={null} />
+            </div>
 
-    return (<>
-
-<div className="common-query-window common-query-window-right"
-        style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-        <div className="common-query-window-header">
-            <img className="common-query-window-header-icon" src="images/icons/toolbar/adaparsel.png"></img>
-            <span>Ada-Parsel Arama</span>
-            <CommonQueryWindowTools
-                windowManager={props.windowManager}
-                windowId={props.id}
-                showNearbySearch={false}
-                showMapSelect={false}
-                setQueryField={(e) => { }}
-                query={null} />
-        </div>
-       
-
-         
             <div className="common-query-window-body">
-                <Form>
+                <Form onSubmit={submitQuery}>
                     <Form.Group>
-                        <label className="form-label form-label-white">İlçe</label>
-                        <select className="form-select" onChange={(e) => cmbDistrict_OnChange(e)} value={query.district}>
+                        <label className="form-label form-label-white" htmlFor={`${props.id}-district`}>İlçe</label>
+                        <select id={`${props.id}-district`} className="form-select" onChange={onDistrictChange} value={query.district}>
                             <option value="">Seçiniz..</option>
-                            {
-                                districtList?.map(_item => {
-                                    return <option key={TextHelper.CreateRandomNumber()} value={_item.id}>{_item.title}</option>
-                                })
-                            }
+                            {districtList.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
                         </select>
                     </Form.Group>
                     <Form.Group>
-                        <label className="form-label form-label-white">Mahalle</label>
-                        <select className="form-select" value={query.nbhood}
-                            onChange={(e) => cmbNbhood_OnChange(e)}>
+                        <label className="form-label form-label-white" htmlFor={`${props.id}-neighborhood`}>Mahalle</label>
+                        <select id={`${props.id}-neighborhood`} className="form-select" value={query.nbhood} onChange={onNeighborhoodChange}>
                             <option value="">Seçiniz..</option>
-                            {
-                                nbhoodList?.map(_item => {
-                                    return <option key={TextHelper.CreateRandomNumber()} value={_item.id}>{_item.title}</option>
-                                })
-                            }
+                            {nbhoodList.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
                         </select>
                     </Form.Group>
-
                     <Form.Group>
-                        <label className="form-label form-label-white">Ada</label>
-                        <input type="text" className="form-control" onChange={(e) => setQueryField("cityblock", e.target.value)} />
+                        <label className="form-label form-label-white" htmlFor={`${props.id}-cityblock`}>Ada</label>
+                        <input id={`${props.id}-cityblock`} type="text" inputMode="numeric" className="form-control" value={query.cityblock} onChange={event => setQueryField("cityblock", event.target.value)} />
                     </Form.Group>
-
                     <Form.Group>
-                        <label className="form-label form-label-white">Parsel</label>
-                        <input type="text" className="form-control" onChange={(e) => setQueryField("parcel", e.target.value)} />
+                        <label className="form-label form-label-white" htmlFor={`${props.id}-parcel`}>Parsel</label>
+                        <input id={`${props.id}-parcel`} type="text" inputMode="numeric" className="form-control" value={query.parcel} onChange={event => setQueryField("parcel", event.target.value)} />
                     </Form.Group>
-
                     <Form.Group>
-                        {
-                            loading ? <ButtonLoading />
-                                : <Button type="button" className="form-button" onClick={(e) => btnSubmit_OnClick()}>
-                                    <BiSearch className="form-button-icon" /><span>Sorgula</span>
-                                </Button>
-                        }
-
+                        {loading ? <ButtonLoading /> : <Button type="submit" className="form-button"><BiSearch className="form-button-icon" aria-hidden="true" /><span>Sorgula</span></Button>}
                     </Form.Group>
                 </Form>
-
             </div>
-            </div>
-       
-    </>);
+        </div>
+    );
 });
+
+CityBlockParcelQueryWindow.displayName = "CityBlockParcelQueryWindow";
