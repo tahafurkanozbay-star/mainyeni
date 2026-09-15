@@ -1,8 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication;
 using Novell.Directory.Ldap;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Toolbox.Generic
 {
@@ -10,87 +7,61 @@ namespace Toolbox.Generic
     {
         public string Path { get; set; }
         public string UserDomainName { get; set; }
+        public string Server { get; set; }
+        public int Port { get; set; } = LdapConnection.DefaultPort;
+        public bool SecureSocketLayer { get; set; }
+        public string BindDomain { get; set; }
     }
 
     public class LdapUser
     {
         public string UserName { get; set; }
         public string DisplayName { get; set; }
-        // other properties
     }
 
     public class LdapUtility
     {
-        private const string DisplayNameAttribute = "DisplayName";
-        private const string SAMAccountNameAttribute = "SAMAccountName";
-
         private readonly LdapConfig config;
 
         public LdapUtility(LdapConfig config)
         {
-            this.config = config;
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
         }
-
 
         public bool Login(string userName, string password)
         {
+            if (string.IsNullOrWhiteSpace(config.Server) ||
+                string.IsNullOrWhiteSpace(userName) ||
+                string.IsNullOrEmpty(password))
+            {
+                return false;
+            }
 
-            var server = "10.0.1.11";
+            var port = config.Port > 0
+                ? config.Port
+                : config.SecureSocketLayer ? 636 : LdapConnection.DefaultPort;
+            var bindDomain = string.IsNullOrWhiteSpace(config.BindDomain)
+                ? config.UserDomainName
+                : config.BindDomain;
+            var userDn = string.IsNullOrWhiteSpace(bindDomain)
+                ? userName
+                : $"{bindDomain}\\{userName}";
 
-            //string userDn = $"{userName}@{domainName}";
-            string userDn = $"abb\\{userName}";
             try
             {
-                using (var connection = new LdapConnection { SecureSocketLayer = false })
+                using var connection = new LdapConnection
                 {
-                    connection.Connect(server, LdapConnection.DefaultPort);
-                    connection.Bind(userDn, password);
-
-                    if (connection.Bound)
-                        return true;
-                }
+                    SecureSocketLayer = config.SecureSocketLayer
+                };
+                connection.Connect(config.Server.Trim(), port);
+                connection.Bind(userDn, password);
+                return connection.Bound;
             }
-            catch (LdapException ex)
+            catch (LdapException)
             {
-                // Log exception
-                throw ex;
+                // Authentication/network failures are intentionally indistinguishable to callers.
+                return false;
             }
-            return false;
         }
-
-        /*
-        public LdapUser Login(string userName, string password)
-        {
-            try
-            {
-                using (DirectoryEntry entry = new DirectoryEntry(config.Path, config.UserDomainName + "\\" + userName, password))
-                {
-                    using (DirectorySearcher searcher = new DirectorySearcher(entry))
-                    {
-                        searcher.Filter = String.Format("({0}={1})", SAMAccountNameAttribute, userName);
-                        searcher.PropertiesToLoad.Add(DisplayNameAttribute);
-                        searcher.PropertiesToLoad.Add(SAMAccountNameAttribute);
-                        var result = searcher.FindOne();
-                        if (result != null)
-                        {
-                            var displayName = result.Properties[DisplayNameAttribute];
-                            var samAccountName = result.Properties[SAMAccountNameAttribute];
-
-                            return new LdapUser
-                            {
-                                DisplayName = displayName == null || displayName.Count <= 0 ? null : displayName[0].ToString(),
-                                UserName = samAccountName == null || samAccountName.Count <= 0 ? null : samAccountName[0].ToString()
-                            };
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-            return null;
-        
-        */
     }
 }
