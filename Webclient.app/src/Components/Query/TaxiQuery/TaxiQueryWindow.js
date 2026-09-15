@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { Button, Form } from "react-bootstrap";
 import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
@@ -6,319 +6,167 @@ import MapManager from "../../../Store/Managers/MapManager";
 import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
 import { TaxiQueryBusiness } from "../../../Business/TaxiQueryBusiness";
 import { BiSearch } from "react-icons/bi";
-import { FiMapPin, FiPhone } from "react-icons/fi";
+import { FiMapPin } from "react-icons/fi";
 import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
 import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
 import { CommonBusiness } from "../../../Business/CommonBusiness";
-import { DebugHelper } from "../../../Toolbox/DebugHelper";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { ButtonLoading } from "../../Common/Loading";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
+import { createPictureMarkerSymbol } from "../../../gis-engine/iconPresentation";
+
+const DEFAULT_QUERY = Object.freeze({ name: "", districtId: "", districtName: "", nbhoodId: "", nbhoodName: "", showMapSelect: false, showNearby: false });
+const TAXI_ICON_RECORD = Object.freeze({ type: "TaxiQueryUrl", category: "Taksi", title: "Taksi Durağı" });
+const TAXI_SYMBOL = Object.freeze(createPictureMarkerSymbol(TAXI_ICON_RECORD, 12, { minSize: 48, maxSize: 48 }));
+
+const openRoute = geometry => {
+    const latitude = Number(geometry?.latitude ?? geometry?.y);
+    const longitude = Number(geometry?.longitude ?? geometry?.x);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+    const opened = window.open(`https://www.google.com.tr/maps?saddr=My+Location&daddr=${latitude},${longitude}`, "_blank", "noopener,noreferrer");
+    if (opened) opened.opener = null;
+    return true;
+};
 
 export const TaxiQueryWindow = React.forwardRef((props, ref) => {
+    const [mapView, setMapView] = useState(null);
+    const [districtList, setDistrictList] = useState([]);
+    const [nbhoodList, setNbhoodList] = useState([]);
+    const [query, setQuery] = useState({ ...DEFAULT_QUERY });
+    const [clusterLayer, setClusterLayer] = useState(null);
+    const [resultList, setResultList] = useState(null);
+    const [activeTab, setActiveTab] = useState("form");
+    const [loading, setLoading] = useState(false);
 
-
-    const windowTitle = "Taksi";
-    const windowLogo = "images/icons/sidebar/taksi.png";
+    const removeLastClusterLayer = useCallback(() => {
+        if (clusterLayer?.layerObj && mapView?.map) mapView.map.remove(clusterLayer.layerObj);
+        setClusterLayer(null);
+    }, [clusterLayer, mapView]);
 
     useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            DebugHelper.Log("show " + props.id);
-        },
+        id: props.id,
+        visible: false,
+        minimized: false,
+        OnShow: () => {},
         OnClose: () => {
-            DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery);
+            setQuery({ ...DEFAULT_QUERY });
             setActiveTab("form");
             setResultList(null);
             removeLastClusterLayer();
         }
-    }));
+    }), [props.id, removeLastClusterLayer]);
 
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
     useEffect(() => {
-
         props.windowManager.RegisterWindow(ref);
-        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
-
-        NumberingQueryBusiness.GetDistricts().then(_result => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setDistrictList(_result.data);
-            }
+        setMapView(MapManager.GetMapView());
+        let active = true;
+        NumberingQueryBusiness.GetDistricts().then(result => {
+            if (active && result?.type === Constants_ServiceResultType.Success) setDistrictList(result.data || []);
+        }).catch(() => {
+            if (active) setDistrictList([]);
         });
+        return () => {
+            active = false;
+        };
+    }, [props.windowManager, ref]);
 
-    }, []);
+    const setQueryField = (field, value) => setQuery(current => ({ ...current, [field]: value }));
 
+    const onDistrictChange = async event => {
+        const districtId = event.target.value;
+        const districtName = event.target.selectedOptions[0]?.text || "";
+        setQuery(current => ({ ...current, districtId, districtName, nbhoodId: "", nbhoodName: "" }));
+        setNbhoodList([]);
+        if (!districtId) return;
+        const result = await NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId);
+        if (result?.type === Constants_ServiceResultType.Success) setNbhoodList(result.data || []);
+    };
 
+    const onNeighborhoodChange = event => setQuery(current => ({ ...current, nbhoodId: event.target.value, nbhoodName: event.target.selectedOptions[0]?.text || "" }));
 
-    const cmbName_OnChange = (e) => {
-        const name = e.target.value;
-        setQueryField("name", name);
-    }
+    const submitQuery = async event => {
+        event?.preventDefault();
+        if (loading) return;
+        setLoading(true);
+        LoggingBusiness.CreateClientLog("Taksi/Sorgu", `${query.districtName}/${query.nbhoodName}/${query.name}`);
+        try {
+            const result = await TaxiQueryBusiness.Query(query, false);
+            if (result?.type !== Constants_ServiceResultType.Success) throw new Error(result?.message || "Taksi durakları alınamadı");
+            setResultList((result.data || []).map(item => ({
+                ObjectId: item.attr?.objectid,
+                Title: item.attr?.adi || "İsimsiz taksi durağı",
+                Phone: item.attr?.telefon || "",
+                Address: item.attr?.adres || "Adres bilgisi bulunmuyor"
+            })));
+            setActiveTab("query");
 
-    const [nbhoodList, setNbhoodList] = useState(null);
-    const cmbDistrict_OnChange = (e) => {
-
-        const districtId = e.target.value;
-        setQueryField("districtId", districtId);
-        setQueryField("districtName", e.target.selectedOptions[0].text);
-
-        setNbhoodList(null);
-
-        NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId).then((_result) => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-                setNbhoodList(_result.data);
+            const nextCluster = await CommonBusiness.Clustering.CreateClusterLayer("TaxiQueryUrl", props.windowTitle || "Taksi", query, TAXI_SYMBOL);
+            removeLastClusterLayer();
+            if (nextCluster?.layerObj && mapView?.map) {
+                setClusterLayer(nextCluster);
+                mapView.map.add(nextCluster.layerObj);
             }
-
-        });
-    }
-
-    const cmbNbhood_OnChange = (e) => {
-        const nbhoodId = e.target.value;
-        setQueryField("nbhoodId", nbhoodId);
-        setQueryField("nbhoodName", e.target.selectedOptions[0].text);
-    }
-
-    const defaultQuery = { name: null, districtId: null, nbhoodId: null, showMapSelect: false, showNearby: false };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery( query => {
-            return { ...query,[_field]: _value}
-         })
-    }
-
-    const [clusterLayer, setClusterLayer] = useState(null);
-    const removeLastClusterLayer = () => {
-        if (clusterLayer != null) {
-            mapView.map.remove(clusterLayer.layerObj);
-            setClusterLayer(null);
+        } catch (error) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, error?.message || "Taksi sorgusu tamamlanamadı");
+        } finally {
+            setLoading(false);
         }
-    }
+    };
 
+    const getItemDetails = async item => {
+        const result = await TaxiQueryBusiness.Query({ ObjectId: item.ObjectId }, true);
+        if (result?.type !== Constants_ServiceResultType.Success || !result.data?.length) return null;
+        return result.data[0];
+    };
 
-    const [resultList, setResultList] = useState(null);
-    const [activeTab, setActiveTab] = useState("form");
-    const btnBack_OnClick = (e) => {
+    const showItem = async item => {
+        LoggingBusiness.CreateClientLog("Taksi/Detay Göster", `${item.ObjectId || ""}/${item.Title}`);
+        const details = await getItemDetails(item);
+        if (!details?.geometry) return;
+        GisGraphicsHelper.ZoomToGeometry(mapView, details.geometry, 18);
+        if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id);
+    };
+
+    const showRoute = async item => {
+        const details = await getItemDetails(item);
+        if (!details?.geometry || !openRoute(details.geometry)) {
+            props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı");
+        }
+    };
+
+    const backToForm = () => {
         removeLastClusterLayer();
         setActiveTab("form");
-    }
+    };
 
-    const [loading, setLoading]=useState(false);
-    const btnSubmit_OnClick = (e) => {
+    const isForm = activeTab === "form";
 
-        e?.preventDefault();
-        setLoading(true);
-
-        LoggingBusiness.CreateClientLog("Taksi/Sorgu", query.districtName+"/"+query.nbhoodName+"/"+query.name);
-
-        TaxiQueryBusiness.Query(query,false).then((_result) => {
-
-            if (_result.type == Constants_ServiceResultType.Success) {
-
-                setActiveTab("query");
-
-                const symbol={
-                    type: "picture-marker",
-                    url: windowLogo,
-                    width: "48px",
-                    height: "48px"
-                };
-
-                CommonBusiness.Clustering.CreateClusterLayer("TaxiQueryUrl", props.windowTitle, query, symbol).then((_clusterLayer) => {
-
-                    removeLastClusterLayer();
-
-                    setClusterLayer(_clusterLayer);
-                    mapView.map.add(_clusterLayer.layerObj);
-
-                });
-
-                let list = [];
-
-                _result.data.forEach(_item => {
-                    list.push({
-                        ObjectId: _item.attr.objectid,
-                        Title: _item.attr.adi,
-                        Phone: _item.attr.telefon,
-                        Address: _item.attr.adres,
-                        AddressDescription: "Adres tarifi bulunmuyor"
-                    });
-                });
-                setResultList(list);
-                setLoading(false);
-
-            }
-        }).catch(error => {
-            props.windowManager.ShowMessage(Constants_MessageType.Error,error.message); 
-            setLoading(false);
-        });
-
-    }
-
-
-    const getItemDetailsById=async(_item)=>{
-
-        return new Promise((resolve, reject)=>{
-            TaxiQueryBusiness.Query({ObjectId: _item.ObjectId},true).then((_result) => {
-                if(_result.type==Constants_ServiceResultType.Success){
-                    if(_result.data!=null){
-                        const _resultItem=_result.data[0];
-                        resolve(_resultItem);
-                    }
-                    else{
-                        reject(null);
-                    }
-                }
-            });
-        });
-
-    }
-
-    const item_OnClick = (e, _item) => {
-
-        LoggingBusiness.CreateClientLog("Taksi/Detay Göster", _item.Id+"/"+_item.Title);
-
-        getItemDetailsById(_item).then(_itemDetails =>  {
-            GisGraphicsHelper.ZoomToGeometry(mapView, _itemDetails?.geometry, 18);  
-            
-            if(window.screen.width<960){
-                props.windowManager.ToggleMinimiseWindow(props.id);
-            }   
-        });   
-    }
-
-    const item_ShowRoute=(e, _item)=>{
-        
-        getItemDetailsById(_item).then(_itemDetails =>  {
-
-            if(_itemDetails!=null){
-                const lat=_itemDetails.geometry.latitude;
-            const lng=_itemDetails.geometry.longitude;
-            let url = "https://www.google.com.tr/maps?saddr=My+Location&daddr=" + lat + "," + lng;
-            window.open(url, "_blank");
-            //TODO: create log
-            }
-            else{
-                props.windowManager.ShowMessage(Constants_MessageType.Error,"Yol tarifi alınamadı - öğe detayları bulunamadı");
-            }
-            
-        
-        });   
-    }
-
-    return (<>
-        <div className="common-query-window"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-            <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src={windowLogo}></img>
-                <span>{windowTitle}</span>
-                <CommonQueryWindowTools
-                    windowManager={props.windowManager}
-                    windowId={props.id}
-                    setQueryField={setQueryField}
-                    query={query}
-                    showNearbySearch={activeTab == "form"}
-                    showMapSelect={activeTab == "form"} />
-
+    return (
+        <section className="common-query-window" aria-label="Taksi" style={{ visibility: props.windowManager.IsVisible(props.id) ? "visible" : "hidden" }}>
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src="images/icons/sidebar/taksi.png" alt="" aria-hidden="true" />
+                <span>Taksi</span>
+                <CommonQueryWindowTools windowManager={props.windowManager} windowId={props.id} setQueryField={setQueryField} query={query} showNearbySearch={isForm} showMapSelect={isForm} />
+            </header>
+            <div className={`common-query-window-body ${props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : ""}`}>
+                {isForm ? (
+                    <Form onSubmit={submitQuery}>
+                        {!query.mapSelect && <Form.Group><label className="form-label" htmlFor={`${props.id}-name`}>Adı</label><input id={`${props.id}-name`} className="form-control" value={query.name} onChange={event => setQueryField("name", event.target.value)} /></Form.Group>}
+                        {!query.showNearby && !query.mapSelect && <>
+                            <Form.Group><label className="form-label" htmlFor={`${props.id}-district`}>İlçe</label><select id={`${props.id}-district`} className="form-select form-control" value={query.districtId} onChange={onDistrictChange}><option value="">Seçiniz..</option>{districtList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
+                            <Form.Group><label className="form-label" htmlFor={`${props.id}-neighborhood`}>Mahalle</label><select id={`${props.id}-neighborhood`} className="form-select" value={query.nbhoodId} onChange={onNeighborhoodChange} disabled={!query.districtId}><option value="">Seçiniz..</option>{nbhoodList.map(item => <option key={item.attr?.id} value={item.attr?.id}>{item.attr?.ad}</option>)}</select></Form.Group>
+                        </>}
+                        {!query.mapSelect && <Form.Group>{loading ? <ButtonLoading /> : <Button type="submit" className="form-button"><BiSearch className="form-button-icon" aria-hidden="true" /><span>Sorgula</span></Button>}</Form.Group>}
+                    </Form>
+                ) : (
+                    <div className="results-container">
+                        <div className="results-container-toolbar"><button type="button" className="results-container-back-button" onClick={backToForm}><HiOutlineArrowNarrowLeft className="results-container-back-button-icon" aria-hidden="true" />&nbsp;Geri Dön</button><div className="results-container-count" aria-live="polite"><strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu</div></div>
+                        {resultList?.map((item, index) => <article className="result-item-container" key={`${item.ObjectId ?? item.Title}-${index}`}><button type="button" className="result-item-info" onClick={() => showItem(item)} aria-label={`${item.Title} konumunu haritada göster`}><span className="result-item-info-title">{item.Title}</span><span className="result-item-info-address"><FiMapPin aria-hidden="true" />&nbsp;{item.Address}</span></button><CommonQueryResultItemTools item={item} zoomCallback={() => showItem(item)} showRouteCallback={() => showRoute(item)} /></article>)}
+                    </div>
+                )}
             </div>
-            <div className={"common-query-window-body "+ (props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : "")}>
-        
-                {
-                    activeTab === "form" ?
-                        <>
-                            <Form onSubmit={(e) => btnSubmit_OnClick(e)}>
-                                {
-                                    !query.mapSelect && <Form.Group>
-                                        <label className="form-label">Adı</label>
-                                        <input className="form-control" onChange={((e) => cmbName_OnChange(e))} value={query.name} />
-                                    </Form.Group>
-                                }
-
-                                {
-                                    (!query.showNearby && !query.mapSelect) && <>
-                                        <Form.Group>
-                                            <label className="form-label">İlçe</label>
-                                            <select className="form-select form-control" onChange={((e) => cmbDistrict_OnChange(e))}
-                                                value={query.districtId}>
-                                                <option value="">Seçiniz..</option>
-                                                {
-                                                    districtList?.map(_item => {
-                                                        return <option value={_item.attr.id}>{_item.attr.ad}</option>
-                                                    })
-                                                }
-                                            </select>
-                                        </Form.Group>
-                                        <Form.Group>
-                                            <label className="form-label">Mahalle</label>
-                                            <select className="form-select" onChange={((e) => cmbNbhood_OnChange(e))}
-                                                value={query.nbhoodId}>
-                                                <option value="">Seçiniz..</option>
-                                                {
-                                                    nbhoodList?.map(_item => {
-                                                        return <option value={_item.attr.id}>{_item.attr.ad}</option>
-                                                    })
-                                                }
-                                            </select>
-                                        </Form.Group></>
-                                }
-                                {
-                                    !query.mapSelect &&
-                                    <Form.Group>
-                                        {
-                                         loading ? <ButtonLoading/>
-                                         :<Button type="button" className="form-button" onClick={(e) => btnSubmit_OnClick()}>
-                                         <BiSearch className="form-button-icon" /><span>Sorgula</span>
-                                     </Button>
-                                        }
-                                    </Form.Group>
-                                }
-
-                            </Form>
-                        </> : <div className="results-container">
-                            {
-                                <>
-                                    <div className="results-container-toolbar">
-                                        <div className="results-container-back-button" onClick={(e) => btnBack_OnClick(e)}>
-                                            <HiOutlineArrowNarrowLeft className="results-container-back-button-icon" />
-                                            &nbsp;Geri Dön
-                                        </div>
-                                        <div className="results-container-count">
-                                            <strong>{resultList?.length ?? 0}</strong> adet sonuç bulundu
-                                        </div>
-                                    </div>
-                                    {
-                                        resultList?.map(_item => {
-                                            return <div className="result-item-container" onClick={(e) => item_OnClick(e, _item)}>
-                                                <div className="result-item-info">
-                                                    <div className="result-item-info-title">
-                                                        {_item.Title}
-                                                    </div>
-                                                    <div className="result-item-info-address">
-                                                        <FiMapPin />&nbsp;
-                                                        {_item.Address}
-                                                    </div>
-                                         
-                                             
-                                                </div>
-                                                <CommonQueryResultItemTools 
-                                                    item={_item}
-                                                    zoomCallback={(e)=>item_OnClick(e,_item)}
-                                                    showRouteCallback={(e)=>item_ShowRoute(e,_item)}
-                                                     />
-                                            </div>
-                                        })
-                                    }
-                                </>
-                            }
-                        </div>
-                }
-            </div>
-        </div>
-    </>);
+        </section>
+    );
 });
+
+TaxiQueryWindow.displayName = "TaxiQueryWindow";

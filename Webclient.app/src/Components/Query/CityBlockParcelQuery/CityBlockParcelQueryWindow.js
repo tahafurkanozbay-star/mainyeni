@@ -1,236 +1,222 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Button, Form } from "react-bootstrap";
-import { TkgmQueryBusiness } from "../../../Business/TkgmQueryBusiness";
-import { AppConfig } from "../../../Core/AppConfig";
-import MapManager from "../../../Store/Managers/MapManager";
-import { IsNull } from "../../../Toolbox/ObjectHelper";
-import "./CityBlockParcelQueryWindow.css";
 import { BiSearch } from "react-icons/bi";
-import { Constants_MessageType } from "../../../Core/Constants";
-import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
+import { TkgmQueryBusiness } from "../../../Business/TkgmQueryBusiness";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { RiCloseCircleFill } from "react-icons/ri";
+import { AppConfig } from "../../../Core/AppConfig";
+import { Constants_MessageType } from "../../../Core/Constants";
+import MapManager from "../../../Store/Managers/MapManager";
+import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { ButtonLoading } from "../../Common/Loading";
-import { TextHelper } from "../../../Toolbox/TextHelper";
 import { CommonQueryWindowTools } from "../../Query/_Common/CommonQueryWindowTools";
+import "./CityBlockParcelQueryWindow.css";
+
+const INITIAL_QUERY = Object.freeze({
+    district: "",
+    districtName: "",
+    nbhood: "",
+    nbhoodName: "",
+    cityblock: "",
+    parcel: ""
+});
+
+const createInitialQuery = () => ({ ...INITIAL_QUERY });
+const normalizeAdministrativeItem = item => ({ id: item?.properties?.id, title: item?.properties?.text || "" });
+const safeLog = (type, description) => Promise.resolve(LoggingBusiness.CreateClientLog(type, description)).catch(() => {});
 
 export const CityBlockParcelQueryWindow = React.forwardRef((props, ref) => {
+    const { id, windowManager } = props;
+    const mapViewRef = useRef(null);
+    const parcelGraphicRef = useRef(null);
+    const requestIdRef = useRef(0);
 
-    useImperativeHandle(ref, () => ({
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            props.windowManager.ShowWindow("sidebar")
-            
-        },
-        OnClose: () => {
-            
+    const [districtList, setDistrictList] = useState([]);
+    const [nbhoodList, setNbhoodList] = useState([]);
+    const [query, setQuery] = useState(createInitialQuery);
+    const [loading, setLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("");
+
+    const clearParcelGraphic = useCallback(() => {
+        if (parcelGraphicRef.current) {
+            GisGraphicsHelper.RemoveGraphics(mapViewRef.current, parcelGraphicRef.current);
+            parcelGraphicRef.current = null;
         }
-    }));
-
-    const [mapView, setMapView] = useState(null);
-    const [districtList, setDistrictList] = useState(null);
-
-    useEffect(() => {
-
-        props.windowManager.RegisterWindow(ref);
-        
-        const _mapView = MapManager.GetMapView();
-        setMapView(_mapView);
-
-
-        TkgmQueryBusiness.GetDistricts(AppConfig.Api.TkgmCityId).then((_result) => {
-
-            var list = [];
-            if (Array.isArray(_result)) {
-                _result.forEach(_resultItem => {
-                    list.push({
-                        id: _resultItem.properties.id,
-                        title: _resultItem.properties.text,
-                    });
-                });
-
-                setDistrictList(list);
-            }
-            else {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, "Tkgm ilçe listesi alınamadı");
-            }
-
-        });
     }, []);
 
+    const resetWindow = useCallback(() => {
+        requestIdRef.current += 1;
+        clearParcelGraphic();
+        setQuery(createInitialQuery());
+        setNbhoodList([]);
+        setLoading(false);
+        setErrorMessage("");
+    }, [clearParcelGraphic]);
 
+    useImperativeHandle(ref, () => ({
+        id,
+        visible: false,
+        minimized: false,
+        OnShow: () => windowManager.ShowWindow("sidebar"),
+        OnClose: resetWindow
+    }), [id, resetWindow, windowManager]);
 
+    useEffect(() => {
+        windowManager.RegisterWindow(ref);
+        mapViewRef.current = MapManager.GetMapView();
+        let active = true;
 
-    const [nbhoodList, setNbhoodList] = useState(null);
-    const cmbDistrict_OnChange = (e) => {
-
-        if (!IsNull(e.target.value)) {
-
-            const _districtId=e.target.value;
-            const _districtName=e.target.selectedOptions[0].text;
-
-            TkgmQueryBusiness.GetNeighborhoodsOfDistrict(e.target.value).then((_result) => {
-
-                var list = [];
-                _result.forEach(_resultItem => {
-                    list.push({
-                        id: _resultItem.properties.id,
-                        title: _resultItem.properties.text,
-                    });
-                });
-                setNbhoodList(list);
-                setQueryField("district", _districtId);
-                setQueryField("districtName", _districtName);
-            });
-        }
-        else {
-            setNbhoodList(null);
-        }
-    }
-
-    const cmbNbhood_OnChange = (e) => {
-        
-        const nbhoodId = e.target.value;
-        const nbhoodName= e.target.selectedOptions[0].text;
-
-        setQueryField("nbhood", e.target.value);
-        setQueryField("nbhoodName", nbhoodName);
-    }
-
-    const [query, setQuery] = useState({ district: 0, nbhood: 0, cityblock: 0, parcel: 0 });
-    const setQueryField = (_field, _value) => {
-        setQuery( query => {
-            return { ...query,[_field]: _value}
-         })
-    }
-
-    const [loading, setLoading] = useState(false);
-    const btnSubmit_OnClick = () => {
-
-        if (validateQuery()) {
-
-            setLoading(true);
-
-            LoggingBusiness.CreateClientLog("Ada Parsel/Sorgu", query.districtName+"/"+query.nbhoodName+"/"+query.cityblock+"/"+query.parcel);
-
-            TkgmQueryBusiness.GetParcels(query).then((_result) => {
-
-                if (_result.geometry != null) {
-                    gotoParcel(_result);
-                }
-                else {
-                    props.windowManager.ShowMessage(Constants_MessageType.Error, "Parsel bulunamadı");
-                }
-
-                setLoading(false);
-                
-            }).catch(error => {
-                props.windowManager.ShowMessage(Constants_MessageType.Error, error.message);
-                setLoading(false);
-            });
-        }
-    }
-
-    /*Business*/
-    const gotoParcel = (item) => {
-
-        LoggingBusiness.CreateClientLog("Ada Parsel/Detay Göster", query.districtName+"/"+query.nbhoodName+"/"+query.cityblock+"/"+query.parcel);
-
-        //self.removeLatestGraphics();
-        GisGraphicsHelper.CreatePolygonFromXYPoints(item.geometry.coordinates).then(_geometry => {
-
-            GisGraphicsHelper.CreateGraphicFromGeometry(_geometry).then(_graphic => {
-
-                GisGraphicsHelper.AddGraphics(mapView, _graphic);
-                GisGraphicsHelper.ZoomToGeometryExtent(mapView, _geometry, 3);
-                
+        TkgmQueryBusiness.GetDistricts(AppConfig.Api.TkgmCityId)
+            .then(result => {
+                if (!active) return;
+                if (!Array.isArray(result)) throw new Error("TKGM ilçe listesi alınamadı.");
+                setDistrictList(result.map(normalizeAdministrativeItem).filter(item => item.id !== undefined && item.id !== null));
+            })
+            .catch(error => {
+                if (!active) return;
+                setDistrictList([]);
+                const message = error?.message || "TKGM ilçe listesi alınamadı.";
+                setErrorMessage(message);
+                windowManager.ShowMessage(Constants_MessageType.Error, message);
             });
 
-        });
+        return () => {
+            active = false;
+            requestIdRef.current += 1;
+            clearParcelGraphic();
+            mapViewRef.current = null;
+        };
+    }, [clearParcelGraphic, ref, windowManager]);
 
-    }
+    const setQueryField = (field, value) => setQuery(current => ({ ...current, [field]: value }));
 
-    const validateQuery = () => {
+    const onDistrictChange = async event => {
+        const district = event.target.value;
+        const districtName = district ? event.target.selectedOptions[0]?.text || "" : "";
+        const requestId = ++requestIdRef.current;
+        setQuery(current => ({ ...current, district, districtName, nbhood: "", nbhoodName: "" }));
+        setNbhoodList([]);
+        setErrorMessage("");
+        if (!district) return;
 
-        var message = "";
-        if (query.parcel == 0) { message = "Lütfen parsel no giriniz..."; }
-        if (query.cityblock == 0) { message = "Lütfen ada no giriniz..."; }
-        if (query.nbhood == 0) { message = "Lütfen mahalle seçiniz..."; }
-        if (query.district == 0) { message = "Lütfen ilçe seçiniz..."; }
-        if (!IsNull(message)) {
-            props.windowManager.ShowMessage(Constants_MessageType.Error, message);
+        try {
+            const result = await TkgmQueryBusiness.GetNeighborhoodsOfDistrict(district);
+            if (requestId !== requestIdRef.current) return;
+            setNbhoodList(Array.isArray(result)
+                ? result.map(normalizeAdministrativeItem).filter(item => item.id !== undefined && item.id !== null)
+                : []);
+        } catch (error) {
+            if (requestId !== requestIdRef.current) return;
+            const message = error?.message || "TKGM mahalle listesi alınamadı.";
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
         }
-        return IsNull(message);
-    }
+    };
 
+    const onNeighborhoodChange = event => {
+        const nbhood = event.target.value;
+        const nbhoodName = nbhood ? event.target.selectedOptions[0]?.text || "" : "";
+        setQuery(current => ({ ...current, nbhood, nbhoodName }));
+    };
 
-    return (<>
+    const getValidationMessage = () => {
+        if (!String(query.district).trim()) return "Lütfen ilçe seçiniz.";
+        if (!String(query.nbhood).trim()) return "Lütfen mahalle seçiniz.";
+        if (!String(query.cityblock).trim() || String(query.cityblock).trim() === "0") return "Lütfen geçerli bir ada no giriniz.";
+        if (!String(query.parcel).trim() || String(query.parcel).trim() === "0") return "Lütfen geçerli bir parsel no giriniz.";
+        return "";
+    };
 
-<div className="common-query-window common-query-window-right"
-        style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-        <div className="common-query-window-header">
-            <img className="common-query-window-header-icon" src="images/icons/toolbar/adaparsel.png"></img>
-            <span>Ada-Parsel Arama</span>
-            <CommonQueryWindowTools
-                windowManager={props.windowManager}
-                windowId={props.id}
-                showNearbySearch={false}
-                showMapSelect={false}
-                setQueryField={(e) => { }}
-                query={null} />
-        </div>
-       
+    const showParcel = async item => {
+        const geometry = await GisGraphicsHelper.CreatePolygonFromXYPoints(item.geometry.coordinates);
+        const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(geometry);
+        clearParcelGraphic();
+        parcelGraphicRef.current = graphic;
+        GisGraphicsHelper.AddGraphics(mapViewRef.current, graphic);
+        GisGraphicsHelper.ZoomToGeometryExtent(mapViewRef.current, geometry, 3);
+    };
 
-         
+    const submitQuery = async event => {
+        event?.preventDefault();
+        if (loading) return;
+
+        const validationMessage = getValidationMessage();
+        if (validationMessage) {
+            setErrorMessage(validationMessage);
+            windowManager.ShowMessage(Constants_MessageType.Error, validationMessage);
+            return;
+        }
+
+        const requestId = ++requestIdRef.current;
+        const logPayload = `${query.districtName}/${query.nbhoodName}/${query.cityblock}/${query.parcel}`;
+        setLoading(true);
+        setErrorMessage("");
+        safeLog("Ada Parsel/Sorgu", logPayload);
+
+        try {
+            const result = await TkgmQueryBusiness.GetParcels(query);
+            if (requestId !== requestIdRef.current) return;
+            if (!result?.geometry?.coordinates) throw new Error("Parsel bulunamadı.");
+            safeLog("Ada Parsel/Detay Göster", logPayload);
+            await showParcel(result);
+        } catch (error) {
+            if (requestId !== requestIdRef.current) return;
+            const message = error?.message || "Parsel sorgusu tamamlanamadı.";
+            setErrorMessage(message);
+            windowManager.ShowMessage(Constants_MessageType.Error, message);
+        } finally {
+            if (requestId === requestIdRef.current) setLoading(false);
+        }
+    };
+
+    const districtId = `${id}-district`;
+    const neighborhoodId = `${id}-neighborhood`;
+    const cityBlockId = `${id}-cityblock`;
+    const parcelId = `${id}-parcel`;
+
+    return (
+        <section
+            className="common-query-window common-query-window-right"
+            aria-label="Ada-Parsel Arama"
+            style={{ visibility: windowManager.IsVisible(id) ? "visible" : "hidden" }}
+        >
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src="images/icons/toolbar/adaparsel.png" alt="" aria-hidden="true" />
+                <span>Ada-Parsel Arama</span>
+                <CommonQueryWindowTools windowManager={windowManager} windowId={id} showNearbySearch={false} showMapSelect={false} setQueryField={() => {}} query={null} />
+            </header>
+
             <div className="common-query-window-body">
-                <Form>
+                <Form onSubmit={submitQuery} aria-label="Ada parsel filtreleri" noValidate>
                     <Form.Group>
-                        <label className="form-label form-label-white">İlçe</label>
-                        <select className="form-select" onChange={(e) => cmbDistrict_OnChange(e)} value={query.district}>
+                        <label className="form-label form-label-white" htmlFor={districtId}>İlçe</label>
+                        <select id={districtId} className="form-select" onChange={onDistrictChange} value={query.district} aria-invalid={!query.district && Boolean(errorMessage)}>
                             <option value="">Seçiniz..</option>
-                            {
-                                districtList?.map(_item => {
-                                    return <option key={TextHelper.CreateRandomNumber()} value={_item.id}>{_item.title}</option>
-                                })
-                            }
+                            {districtList.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
                         </select>
                     </Form.Group>
                     <Form.Group>
-                        <label className="form-label form-label-white">Mahalle</label>
-                        <select className="form-select" value={query.nbhood}
-                            onChange={(e) => cmbNbhood_OnChange(e)}>
+                        <label className="form-label form-label-white" htmlFor={neighborhoodId}>Mahalle</label>
+                        <select id={neighborhoodId} className="form-select" value={query.nbhood} onChange={onNeighborhoodChange} disabled={!query.district}>
                             <option value="">Seçiniz..</option>
-                            {
-                                nbhoodList?.map(_item => {
-                                    return <option key={TextHelper.CreateRandomNumber()} value={_item.id}>{_item.title}</option>
-                                })
-                            }
+                            {nbhoodList.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
                         </select>
                     </Form.Group>
-
                     <Form.Group>
-                        <label className="form-label form-label-white">Ada</label>
-                        <input type="text" className="form-control" onChange={(e) => setQueryField("cityblock", e.target.value)} />
+                        <label className="form-label form-label-white" htmlFor={cityBlockId}>Ada</label>
+                        <input id={cityBlockId} type="text" inputMode="numeric" autoComplete="off" className="form-control" value={query.cityblock} onChange={event => setQueryField("cityblock", event.target.value)} />
                     </Form.Group>
-
                     <Form.Group>
-                        <label className="form-label form-label-white">Parsel</label>
-                        <input type="text" className="form-control" onChange={(e) => setQueryField("parcel", e.target.value)} />
+                        <label className="form-label form-label-white" htmlFor={parcelId}>Parsel</label>
+                        <input id={parcelId} type="text" inputMode="numeric" autoComplete="off" className="form-control" value={query.parcel} onChange={event => setQueryField("parcel", event.target.value)} />
                     </Form.Group>
-
+                    {errorMessage && <div className="kr-status-banner kr-status-banner--danger" role="alert">{errorMessage}</div>}
                     <Form.Group>
-                        {
-                            loading ? <ButtonLoading />
-                                : <Button type="button" className="form-button" onClick={(e) => btnSubmit_OnClick()}>
-                                    <BiSearch className="form-button-icon" /><span>Sorgula</span>
-                                </Button>
-                        }
-
+                        {loading ? <ButtonLoading /> : <Button type="submit" className="form-button"><BiSearch className="form-button-icon" aria-hidden="true" /><span>Sorgula</span></Button>}
                     </Form.Group>
                 </Form>
-
             </div>
-            </div>
-       
-    </>);
+        </section>
+    );
 });
+
+CityBlockParcelQueryWindow.displayName = "CityBlockParcelQueryWindow";

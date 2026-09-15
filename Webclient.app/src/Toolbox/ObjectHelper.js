@@ -1,21 +1,13 @@
 export function IsNull(obj) {
-    if (obj == null || obj == "" || obj == "Null" || obj == "null" || obj == undefined) {
-
-        return true;
-    }
-    else {
-
-        return false;
-    }
+    return obj === null || obj === undefined || obj === "" || obj === "Null" || obj === "null";
 }
 
 export function HasNumeric(obj) {
-
     return /\d/.test(obj);
 }
 
 export function IsNumeric(obj) {
-    return !isNaN(parseFloat(obj)) && isFinite(obj);
+    return !Number.isNaN(Number.parseFloat(obj)) && Number.isFinite(Number(obj));
 }
 
 export function IsInt(n) {
@@ -31,10 +23,8 @@ export function IsAlphabetic(obj) {
 }
 
 export function clone(obj) {
-    if (null == obj || "object" != typeof obj) return obj;
-    let copy = {};
-    for (let attr in obj) {
-        copy[attr] = Object.assign({}, obj[attr]);
-    }
+    if (obj === null || obj === undefined || typeof obj !== "object") return obj;
+    const copy = {};
+    for (const attr in obj) copy[attr] = Object.assign({}, obj[attr]);
     return copy;
 }

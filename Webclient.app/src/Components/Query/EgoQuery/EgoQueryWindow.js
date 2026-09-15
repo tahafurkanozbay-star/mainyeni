@@ -1,116 +1,150 @@
-import React, { useEffect, useImperativeHandle, useState } from "react";
-import { Button, Form, InputGroup, Tab, Tabs } from "react-bootstrap";
-import { NumberingQueryBusiness } from "../../../Business/NumberingQueryBusiness";
-import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
-import MapManager from "../../../Store/Managers/MapManager";
-import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
-import { HalkEkmekQueryBusiness } from "../../../Business/HalkEkmekQueryBusiness";
-import { BiSearch } from "react-icons/bi";
-import { FiMapPin, FiPhone } from "react-icons/fi";
-import { HiOutlineArrowNarrowLeft } from "react-icons/hi";
-import { CommonQueryResultItemTools } from "../_Common/CommonQueryResultItemTools";
-import { CommonBusiness } from "../../../Business/CommonBusiness";
-import { DebugHelper } from "../../../Toolbox/DebugHelper";
-import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
-import { ButtonLoading, ContainerLoading, NoResultsFound } from "../../Common/Loading";
-import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { useRef } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Tab, Tabs } from "react-bootstrap";
 import { EgoQueryBusiness } from "../../../Business/EgoQueryBusiness";
+import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
+import { ContainerLoading } from "../../Common/Loading";
+import { CommonQueryWindowTools } from "../_Common/CommonQueryWindowTools";
+import { normalizeErrorMessage } from "../_Common/QueryInteractionRuntime";
 import "./EgoQueryWindow.css";
 import { EgoLinesQuery } from "./EgoLinesQuery";
 import { EgoStopsQuery } from "./EgoStopsQuery";
 
+const WINDOW_TITLE = "EGO / Otobüs Durakları";
+const WINDOW_LOGO = "images/icons/sidebar/ulasimaglari.png";
+const DEFAULT_QUERY = Object.freeze({
+    name: "",
+    districtId: "",
+    nbhoodId: "",
+    mapSelect: false,
+    showNearby: false
+});
+
+const createDefaultQuery = () => ({ ...DEFAULT_QUERY });
+
 export const EgoQueryWindow = React.forwardRef((props, ref) => {
-
-
-    const windowTitle = "EGO / Otobüs Durakları";
-    const windowLogo = "images/icons/sidebar/ulasimaglari.png";
-
-    useImperativeHandle(ref, () => ({
-
-        id: props.id, visible: false, minimized: false,
-        OnShow: () => {
-            DebugHelper.Log("show " + props.id);
-        },
-        OnClose: () => {
-            DebugHelper.Log("closing " + props.id);
-            setQuery(defaultQuery);
-
-            commonToolsComponentRef.current.OnClose();
-            MapManager.RemoveAllGraphics();
-        }
-    }));
-
-    const commonToolsComponentRef = useRef();
-
-
-    useEffect(() => {
-
-        props.windowManager.RegisterWindow(ref);
-
-        loadLineList();
-        loadStopList();
-    }, []);
-
+    const { id, windowManager } = props;
+    const commonToolsComponentRef = useRef(null);
+    const mountedRef = useRef(true);
+    const loadSequenceRef = useRef(0);
 
     const [lineList, setLineList] = useState(null);
-    const loadLineList = async () => {
-
-        const response = await EgoQueryBusiness.GetActiveLines();
-        if (response.type == Constants_ServiceResultType.Success) {
-            setLineList(response.data);
-        }
-    }
-
-
     const [stopList, setStopList] = useState(null);
-    const loadStopList = async () => {
+    const [query, setQuery] = useState(createDefaultQuery);
+    const [activeTab, setActiveTab] = useState("activeLines");
+    const [errorMessage, setErrorMessage] = useState("");
 
-        const response = await EgoQueryBusiness.GetActiveStops();
-        if (response.type == Constants_ServiceResultType.Success) {
-            setStopList(response.data);
-        }
-    }
+    const setQueryField = useCallback((field, value) => {
+        setQuery(current => ({ ...current, [field]: value }));
+    }, []);
 
+    const resetWindow = useCallback(() => {
+        loadSequenceRef.current += 1;
+        setQuery(createDefaultQuery());
+        setActiveTab("activeLines");
+        setErrorMessage("");
+        commonToolsComponentRef.current?.OnClose?.();
+    }, []);
 
+    useImperativeHandle(ref, () => ({
+        id,
+        visible: false,
+        minimized: false,
+        OnShow: () => {},
+        OnClose: resetWindow
+    }), [id, resetWindow]);
 
+    useEffect(() => {
+        mountedRef.current = true;
+        windowManager.RegisterWindow(ref);
+        const sequence = ++loadSequenceRef.current;
+        const commonTools = commonToolsComponentRef.current;
 
-    const defaultQuery = { name: null, districtId: null, nbhoodId: null, showMapSelect: false, showNearby: false };
-    const [query, setQuery] = useState(defaultQuery);
-    const setQueryField = (_field, _value) => {
-        setQuery(query => {
-            return { ...query, [_field]: _value }
-        })
-    }
+        const load = async () => {
+            const [linesResponse, stopsResponse] = await Promise.allSettled([
+                EgoQueryBusiness.GetActiveLines(),
+                EgoQueryBusiness.GetActiveStops()
+            ]);
+            if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
 
-    return (<>
-        <div className="common-query-window"
-            style={{ visibility: props.windowManager.IsVisible(props.id) ? 'visible' : 'hidden' }}>
-            <div className="common-query-window-header">
-                <img className="common-query-window-header-icon" src={windowLogo}></img>
-                <span>{windowTitle}</span>
+            const linesSucceeded = linesResponse.status === "fulfilled"
+                && linesResponse.value?.type === Constants_ServiceResultType.Success;
+            const stopsSucceeded = stopsResponse.status === "fulfilled"
+                && stopsResponse.value?.type === Constants_ServiceResultType.Success;
+
+            setLineList(linesSucceeded && Array.isArray(linesResponse.value.data) ? linesResponse.value.data : []);
+            setStopList(stopsSucceeded && Array.isArray(stopsResponse.value.data) ? stopsResponse.value.data : []);
+
+            if (!linesSucceeded && !stopsSucceeded) {
+                const rejectedReason = linesResponse.status === "rejected"
+                    ? linesResponse.reason
+                    : stopsResponse.status === "rejected"
+                        ? stopsResponse.reason
+                        : null;
+                const message = normalizeErrorMessage(rejectedReason, "EGO hat ve durak bilgileri alınamadı.");
+                setErrorMessage(message);
+                windowManager.ShowMessage(Constants_MessageType.Error, message);
+            } else if (!linesSucceeded || !stopsSucceeded) {
+                setErrorMessage("EGO verilerinin bir bölümü şu anda kullanılamıyor; erişilebilen kayıtlar gösteriliyor.");
+            }
+        };
+
+        load();
+        return () => {
+            mountedRef.current = false;
+            loadSequenceRef.current += 1;
+            commonTools?.OnClose?.();
+        };
+    }, [ref, windowManager]);
+
+    const loading = lineList === null || stopList === null;
+
+    return (
+        <section
+            className="common-query-window ego-query-window"
+            aria-label={WINDOW_TITLE}
+            style={{ visibility: windowManager.IsVisible(id) ? "visible" : "hidden" }}
+        >
+            <header className="common-query-window-header">
+                <img className="common-query-window-header-icon" src={WINDOW_LOGO} alt="" aria-hidden="true" />
+                <span>{WINDOW_TITLE}</span>
                 <CommonQueryWindowTools
                     ref={commonToolsComponentRef}
-                    windowManager={props.windowManager}
-                    windowId={props.id}
+                    windowManager={windowManager}
+                    windowId={id}
                     setQueryField={setQueryField}
                     query={query}
                     showNearbySearch={false}
-                    showMapSelect={false} />
+                    showMapSelect={false}
+                />
+            </header>
 
+            <div className={`common-query-window-body ${windowManager.IsMinimized(id) ? "common-query-window-body-collapsed" : ""}`}>
+                {errorMessage && (
+                    <div className="kr-status-banner kr-status-banner--warning" role="status">
+                        {errorMessage}
+                    </div>
+                )}
+
+                {loading ? (
+                    <ContainerLoading />
+                ) : (
+                    <Tabs
+                        activeKey={activeTab}
+                        onSelect={key => setActiveTab(key || "activeLines")}
+                        className="ego-query-window-tabs"
+                        aria-label="EGO sorgu türü"
+                    >
+                        <Tab title={`Hatlar (${lineList.length})`} eventKey="activeLines">
+                            <EgoLinesQuery lines={lineList} showAll={false} />
+                        </Tab>
+                        <Tab title={`Duraklar (${stopList.length})`} eventKey="activeStops">
+                            <EgoStopsQuery stops={stopList} showAll={false} />
+                        </Tab>
+                    </Tabs>
+                )}
             </div>
-            <div className={"common-query-window-body " + (props.windowManager.IsMinimized(props.id) ? "common-query-window-body-collapsed" : "")}>
-
-                <Tabs defaultActiveKey="activeLines">
-                    <Tab title="Hatlar" key="activeLines" eventKey="activeLines">
-                        <EgoLinesQuery lines={lineList} showAll={false} />
-                    </Tab>
-
-                    <Tab title="Duraklar" key="activeStops" eventKey="activeStops">
-                        <EgoStopsQuery stops={stopList} showAll={false} />
-                    </Tab>
-                </Tabs>
-            </div>
-        </div>
-    </>);
+        </section>
+    );
 });
+
+EgoQueryWindow.displayName = "EgoQueryWindow";

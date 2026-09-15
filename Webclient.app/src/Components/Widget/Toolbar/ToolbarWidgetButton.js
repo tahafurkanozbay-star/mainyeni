@@ -1,19 +1,26 @@
-import { Button, OverlayTrigger, Tooltip } from "react-bootstrap"
+import { OverlayTrigger, Tooltip } from "react-bootstrap";
 
-export const ToolbarWidgetButton=(props)=>{
-    return <>
-     <OverlayTrigger
-          placement="left"
-          overlay={
-            <Tooltip id={`tooltip-left`}>
-              {props.tooltipText}
-            </Tooltip>
-          }
+export const ToolbarWidgetButton = ({ tooltipText, onClick, image }) => {
+    const tooltipId = `toolbar-tooltip-${String(image || tooltipText || "control").replace(/[^a-z0-9_-]/gi, "-")}`;
+
+    return (
+        <OverlayTrigger
+            placement="left"
+            overlay={<Tooltip id={tooltipId}>{tooltipText}</Tooltip>}
         >
-          <div className="toolbarwidget-button" onClick={(e)=>props.onClick()}>
-                <img className="toolbarwidget-button-icon" src={"images/icons/toolbar/"+props.image}></img>
-            </div>
-
+            <button
+                type="button"
+                className="toolbarwidget-button"
+                onClick={onClick}
+                aria-label={tooltipText}
+            >
+                <img
+                    className="toolbarwidget-button-icon"
+                    src={`images/icons/toolbar/${image}`}
+                    alt=""
+                    aria-hidden="true"
+                />
+            </button>
         </OverlayTrigger>
-    </>
-}
+    );
+};

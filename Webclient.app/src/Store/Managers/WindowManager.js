@@ -1,187 +1,195 @@
-import { useState } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import { DebugHelper } from "../../Toolbox/DebugHelper";
-import { TextHelper } from "../../Toolbox/TextHelper";
 import { CommonReducer_ActionTypes } from "../Reducers/CommonReducer";
 import { MapReducer_ActionTypes } from "../Reducers/MapReducer";
 import Store from "../Store";
 import { LoggingBusiness } from "../../Business/LoggingBusiness";
 
-export const WindowManager = () => {
+const noop = () => {};
 
-    const [x, setX] = useState();
-    
-    let obj = {};
+const callSafely = (callback) => {
+    try {
+        callback?.();
+    } catch (error) {
+        DebugHelper.Log(error);
+    }
+};
 
-    obj.RegisterWindow = (_windowRef) => {
+const schedule = (callback) => {
+    if (typeof queueMicrotask === "function") queueMicrotask(callback);
+    else Promise.resolve().then(callback);
+};
 
-        Store.dispatch(
-            {
+export const createWindowManager = (requestRender = noop) => {
+    let messageTimer = null;
+
+    const getWindowList = () => Store.getState().Common.WindowList || [];
+    const getWindow = (windowid) => getWindowList().find(item => item.id === windowid);
+    const refresh = () => requestRender();
+
+    const manager = {
+        RegisterPlaceholder: (windowid, defaults = {}) => {
+            if (!windowid || getWindow(windowid)) return false;
+
+            Store.dispatch({
                 type: CommonReducer_ActionTypes.RegisterWindow,
                 payload: {
-                    id: _windowRef.current.id,
-                    ref: _windowRef,
-                    visible: _windowRef?.current.visible,
-                    minimized: _windowRef?.current.minimized
-                }
-            }
-        );
-    };
-
-
-    obj.ToggleWindow = (_windowid) => {
-
-        let windowList = Store.getState().Common.WindowList;
-
-        const window = windowList.find(x => x.id == _windowid);
-        if (window != null) {
-
-            if (window.visible) {
-                obj.HideWindow(_windowid);
-            }
-            else {
-                obj.ShowWindow(_windowid);
-            }
-        }
-    };
-
-    obj.ShowWindow = (_windowid,query) => {
-
-        //Tıklanan pencere loglaması
-        LoggingBusiness.CreateClientLog("Pencere Aç", _windowid);
-
-        let windowList = Store.getState().Common.WindowList;
-
-        const window = windowList.find(x => x.id == _windowid);
-
-        if (window != null) {
-            windowList.forEach(_windowItem => {
-
-                if (_windowItem.id != _windowid) {
-
-                    if (_windowItem.visible) {
-                        try {
-                            _windowItem.ref.current.OnClose();
-                        } catch (ex) { DebugHelper.Log(ex) }
-                    }
-
-                    _windowItem.visible = false;
+                    id: windowid,
+                    ref: null,
+                    visible: Boolean(defaults.visible),
+                    minimized: Boolean(defaults.minimized),
+                    query: defaults.query ?? {},
+                    lazy: true
                 }
             });
-            
-            window.query = query
-            window.visible = true;
-            try { window.ref.current.OnShow() } catch (ex) { DebugHelper.Log(ex) }
+            return true;
+        },
 
-            Store.dispatch(
-                {
-                    type: CommonReducer_ActionTypes.SetWindowVisibility,
-                    payload: { windowid: _windowid, visible: true, query:query }
+        RegisterWindow: (windowRef) => {
+            const current = windowRef?.current;
+            if (!current?.id) return false;
+
+            const existing = getWindow(current.id);
+            Store.dispatch({
+                type: CommonReducer_ActionTypes.RegisterWindow,
+                payload: {
+                    id: current.id,
+                    ref: windowRef,
+                    visible: existing?.visible ?? Boolean(current.visible),
+                    minimized: existing?.minimized ?? Boolean(current.minimized),
+                    query: existing?.query ?? {},
+                    lazy: false
                 }
-            )
-            setX(TextHelper.CreateRandomNumber());
-        }
+            });
 
-    };
+            if (existing?.visible && existing.ref !== windowRef && current.OnShow) {
+                schedule(() => callSafely(current.OnShow));
+            }
+            return true;
+        },
 
-    obj.GetQueryParams = (_windowid) => {
-        let windowList = Store.getState().Common.WindowList;
-        const window = windowList.find(x => x.id == _windowid);
-        return window?.query;
-    };
+        UnregisterWindow: (windowid, windowRef = null) => {
+            const existing = getWindow(windowid);
+            if (!existing) return false;
+            if (windowRef && existing.ref && existing.ref !== windowRef) return false;
 
+            Store.dispatch({
+                type: CommonReducer_ActionTypes.RemoveWindow,
+                payload: { windowid }
+            });
+            return true;
+        },
 
+        ToggleWindow: (windowid, query) => {
+            const target = getWindow(windowid);
+            if (!target) return false;
+            return target.visible ? manager.HideWindow(windowid) : manager.ShowWindow(windowid, query);
+        },
 
-    obj.HideWindow = (_windowid) => {
+        ShowWindow: (windowid, query = {}) => {
+            const target = getWindow(windowid);
+            if (!target) {
+                DebugHelper.Log(`Window not registered: ${windowid}`);
+                return false;
+            }
 
-        let windowList = Store.getState().Common.WindowList;
-        const window = windowList.find(x => x.id == _windowid);
-        window.visible = true;
-        window.query = {}
-        try {
-            window.ref.current.OnClose();
-        } catch (ex) { DebugHelper.Log(ex) }
+            callSafely(() => LoggingBusiness.CreateClientLog("Pencere Aç", windowid));
 
+            getWindowList().forEach(item => {
+                if (item.id !== windowid && item.visible) callSafely(item.ref?.current?.OnClose);
+            });
 
-        Store.dispatch(
-            {
+            Store.dispatch({
+                type: CommonReducer_ActionTypes.ActivateWindow,
+                payload: { windowid, query: query ?? {} }
+            });
+
+            callSafely(target.ref?.current?.OnShow);
+            refresh();
+            return true;
+        },
+
+        GetQueryParams: (windowid) => getWindow(windowid)?.query,
+
+        HideWindow: (windowid) => {
+            const target = getWindow(windowid);
+            if (!target) return false;
+
+            callSafely(target.ref?.current?.OnClose);
+            Store.dispatch({
                 type: CommonReducer_ActionTypes.SetWindowVisibility,
-                payload: { windowid: _windowid, visible: false, query:{} }
-            }
-        );
-        setX(TextHelper.CreateRandomNumber());
+                payload: { windowid, visible: false, query: {} }
+            });
+            refresh();
+            return true;
+        },
 
-    };
+        ToggleMinimiseWindow: (windowid) => {
+            const target = getWindow(windowid);
+            if (!target) return false;
 
-    obj.ToggleMinimiseWindow = (_windowid) => {
-
-        let windowList = Store.getState().Common.WindowList;
-        const window = windowList.find(x => x.id == _windowid);
-
-        const _minimized = !window.minimized
-        window.minimized = _minimized;
-
-        Store.dispatch(
-            {
+            Store.dispatch({
                 type: CommonReducer_ActionTypes.SetWindowMinimized,
-                payload: { windowid: _windowid, minimized: _minimized }
+                payload: { windowid, minimized: !target.minimized }
+            });
+            refresh();
+            return true;
+        },
+
+        IsVisible: (windowid) => Boolean(getWindow(windowid)?.visible),
+        IsMinimized: (windowid) => Boolean(getWindow(windowid)?.minimized),
+        GetMessage: () => Store.getState().Common.Message,
+
+        ShowMessage: (type, text, durationSeconds = 5) => {
+            if (messageTimer) clearTimeout(messageTimer);
+
+            Store.dispatch({
+                type: CommonReducer_ActionTypes.SetMessage,
+                payload: {
+                    messageType: type,
+                    messageText: text
+                }
+            });
+            refresh();
+
+            messageTimer = setTimeout(() => {
+                manager.RemoveMessage();
+            }, Math.max(0, durationSeconds) * 1000);
+        },
+
+        RemoveMessage: () => {
+            if (messageTimer) {
+                clearTimeout(messageTimer);
+                messageTimer = null;
             }
-        );
-        setX(TextHelper.CreateRandomNumber());
+            Store.dispatch({ type: CommonReducer_ActionTypes.SetMessage, payload: null });
+            refresh();
+        },
 
+        SetMapUpdating: (value) => {
+            if (Store.getState().Map.IsUpdating === value) return;
+            Store.dispatch({ type: MapReducer_ActionTypes.SetMapUpdating, payload: value });
+            refresh();
+        },
+
+        GetMapUpdating: () => Boolean(Store.getState().Map.IsUpdating),
+
+        Dispose: () => {
+            if (messageTimer) clearTimeout(messageTimer);
+            messageTimer = null;
+        }
     };
 
-    obj.IsVisible = (_windowid) => {
-        let windowList = Store.getState().Common.WindowList;
-        const window = windowList.find(x => x.id == _windowid);
-        return window?.visible;
-    };
+    return manager;
+};
 
-    obj.IsMinimized = (_windowid) => {
-        let windowList = Store.getState().Common.WindowList;
-        const window = windowList.find(x => x.id == _windowid);
-        return window?.minimized;
-    }
+// Backward-compatible factory for non-React callers. React components should use useWindowManager.
+export const WindowManager = () => createWindowManager();
 
+export const useWindowManager = () => {
+    const [, forceRender] = useReducer(value => value + 1, 0);
+    const manager = useMemo(() => createWindowManager(forceRender), [forceRender]);
 
-    obj.GetMessage = () => {
-        return Store.getState().Common.Message;
-    };
-
-
-    obj.ShowMessage = (_type, _text, _durationSeconds = 5) => {
-        Store.dispatch({
-            type: CommonReducer_ActionTypes.SetMessage,
-            payload: {
-                messageType: _type,
-                messageText: _text
-            }
-        });
-        setX(TextHelper.CreateRandomNumber());
-        setTimeout(() => {
-            obj.RemoveMessage();
-        }, _durationSeconds * 1000);
-    };
-
-    obj.RemoveMessage = () => {
-        Store.dispatch({
-            type: CommonReducer_ActionTypes.SetMessage,
-            payload: null
-        });
-        setX(TextHelper.CreateRandomNumber());
-    };
-
-
-    obj.SetMapUpdating = (_value) => {
-        Store.dispatch({
-            type: MapReducer_ActionTypes.SetMapUpdating,
-            payload: _value
-        });
-        setX(TextHelper.CreateRandomNumber());
-    };
-
-    obj.GetMapUpdating = () => {
-        return Store.getState().Map.IsUpdating;
-    };
-
-    return obj;
-}
+    useEffect(() => () => manager.Dispose(), [manager]);
+    return manager;
+};
