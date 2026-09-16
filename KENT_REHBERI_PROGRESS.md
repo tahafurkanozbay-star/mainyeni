@@ -328,7 +328,7 @@
 - Full static scorecard'da defensive denylist/test fixture gibi tarihsel false-positive adayları görüldüğü için gate eşiği gevşetilmedi; exact-base delta modeli eklendi. Böylece tarihsel borç saklanmadan yeni regresyonlar deterministik biçimde bloke ediliyor.
 
 ### FINAL KOD-HEAD DOĞRULAMA
-- Exact kod head `482ed2db561a5b08f7b1b531d39308bf91107e539` üzerinde Platform Architecture Audit run #119 (`35069517480`) `completed/success`.
+- Exact kod head `482ed2db561a5b08f7b1e268e6cb7c4b41a65686` üzerinde Platform Architecture Audit run #119 (`35069517480`) `completed/success`.
 - Platform Backend Validation run #189 (`35069517342`) `completed/success`.
 - Release QA run #25 (`35069517347`) üç job ile `completed/success`.
 - TypeScript 7.0.2 strict typecheck: PASS.
