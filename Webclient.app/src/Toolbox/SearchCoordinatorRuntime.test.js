@@ -220,7 +220,8 @@ describe("SearchCoordinatorRuntime", () => {
             const response = coordinator.searchLocal("addresses", {
                 query: "tunalı hilmi caddesi",
                 mode: "address",
-                level: "door"
+                level: "door",
+                street: "Tunalı Hilmi Caddesi"
             });
             expect(response.records).toHaveLength(2);
             expect(response.records.every(record => record.canonicalAddress.includes("Tunalı Hilmi"))).toBe(true);
