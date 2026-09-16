@@ -242,16 +242,16 @@ namespace Platform.Security.Tests
             {
                 measurements.Add(new MeasurementRecord(
                     instrument.Name,
-                    longValue: measurement,
-                    doubleValue: null,
+                    LongValue: measurement,
+                    DoubleValue: null,
                     CopyTags(tags)));
             });
             listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
             {
                 measurements.Add(new MeasurementRecord(
                     instrument.Name,
-                    longValue: null,
-                    doubleValue: measurement,
+                    LongValue: null,
+                    DoubleValue: measurement,
                     CopyTags(tags)));
             });
             listener.Start();
