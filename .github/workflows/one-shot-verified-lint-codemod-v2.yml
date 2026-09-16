@@ -28,7 +28,9 @@ jobs:
         working-directory: Webclient.app
         run: npm ci
       - name: Apply targeted cleanup
-        run: python .github/scripts/verified-lint-cleanup.py
+        run: |
+          python .github/scripts/verified-lint-cleanup.py
+          python .github/scripts/verified-lint-cleanup-final.py
       - name: Apply Oxlint fixes and suggestions
         working-directory: Webclient.app
         run: npx --no-install oxlint --fix --fix-suggestions src tooling vite.config.ts vitest.config.ts || true
