@@ -54,8 +54,14 @@ jobs:
       - name: Test
         run: npm test -- --watchAll=false --runInBand
 
+      - name: Build budget script tests
+        run: node --test scripts/web-build-budget.test.mjs
+
       - name: Production build
         env:
           CI: true
           NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
+
+      - name: Enforce production build budgets
+        run: node scripts/web-build-budget.mjs build --strict
