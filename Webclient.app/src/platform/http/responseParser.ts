@@ -41,7 +41,7 @@ export interface ParseResponseOptions {
 }
 
 const normalizeContentType = (value: unknown): string =>
-  String(value || '').split(';')[0].trim().toLowerCase();
+  String(value || '').split(';', 1)[0]?.trim().toLowerCase() ?? '';
 
 export const isJsonContentType = (value: unknown): boolean => {
   const normalized = normalizeContentType(value);
