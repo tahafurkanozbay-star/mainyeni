@@ -218,7 +218,7 @@ public sealed class RepositorySecurityContractTests
         var envExample = Read("Webclient.app/.env.example");
         var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
         var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.ts");
-        var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.js");
+        var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.ts");
 
         Assert.Contains("VITE_API_URL=/api", envExample, StringComparison.Ordinal);
         Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
