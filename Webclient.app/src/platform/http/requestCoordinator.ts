@@ -3,24 +3,26 @@ import { createNetworkDiagnostics, recordNetworkEvent } from './networkDiagnosti
 import { createRequestKey, normalizeRequestConfig } from './requestPolicy';
 import { executeWithRetry } from './retryPolicy';
 import {
-  type CoordinatedClient,
-  type DiagnosticsSnapshotOptions,
-  type NetworkDiagnosticsLike,
-  type NormalizedRequestConfig,
-  type RawRequestConfig,
-  type RequestBody,
-  type RequestPriority,
-  type RuntimeTuningProfile,
-  type SchedulerLike,
-  type SchedulerSnapshot,
-  type Transport,
-  type TransportResult,
   getErrorCode,
   getErrorRetryable,
   getErrorStatus,
   isAbortSignalLike,
   normalizeRequestPriority,
   toBoundedInteger
+} from './contracts';
+import type {
+  CoordinatedClient,
+  DiagnosticsSnapshotOptions,
+  NetworkDiagnosticsLike,
+  NormalizedRequestConfig,
+  RawRequestConfig,
+  RequestBody,
+  RequestPriority,
+  RuntimeTuningProfile,
+  SchedulerLike,
+  SchedulerSnapshot,
+  Transport,
+  TransportResult
 } from './contracts';
 import {
   createRequestScheduler,
