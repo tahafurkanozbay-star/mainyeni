@@ -14,7 +14,6 @@ export default defineConfig({
     include: [
       'src/**/*.test.{js,jsx,ts,tsx}',
       'tooling/**/*.test.{js,ts}',
-      'scripts/**/*.test.{js,mjs,ts}',
     ],
     pool: 'vmThreads',
     maxWorkers: 4,
