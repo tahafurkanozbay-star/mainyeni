@@ -16,7 +16,6 @@
   font-size: 1.15em !important;
 }
 
-
 .esri-select {
   font-size: 1.5rem;
 }
@@ -39,48 +38,70 @@
   margin-right: 10px;
 }
 
-.esri-view .esri-view-surface--inset-outline:focus::after {
-  outline: none !important;
+/* Preserve ArcGIS keyboard focus instead of suppressing the SDK outline. */
+.esri-view .esri-view-surface--inset-outline:focus-visible::after,
+.esri-swipe__container:focus-visible {
+  outline: 3px solid var(--experience-focus, #4da3ff) !important;
+  outline-offset: -4px;
 }
 
-.esri-swipe__container:focus {
-  outline: none !important;
+.esri-view .esri-view-surface--inset-outline:focus:not(:focus-visible)::after,
+.esri-swipe__container:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .esri-map {
   height: 100vh;
 }
 
-.esri-popup__main-container
-{
+.esri-popup__main-container {
   border-radius: var(--common-query-window-border-radius);
 }
 
-.esri-popup__header{
+.esri-popup__header {
   border-top-left-radius: var(--common-query-window-border-radius) !important;
   border-top-right-radius: var(--common-query-window-border-radius) !important;
 }
 
-.esri-ui .esri-popup{
+.esri-ui .esri-popup {
   border-radius: var(--common-query-window-border-radius) !important;
   z-index: 999 !important;
 }
 
-.esri-popup__button{
+.esri-popup__button {
   border: 1px solid #DDD;
   padding: 10px;
   margin-left: 10px;
   border-radius: var(--common-query-window-border-radius);
 }
 
-.esri-popup__icon{
+.esri-popup__button:focus-visible,
+.esri-widget button:focus-visible,
+.esri-widget [tabindex]:focus-visible {
+  outline: 3px solid var(--experience-focus, #4da3ff);
+  outline-offset: 2px;
+}
+
+.esri-popup__icon {
   font-weight: bold;
 }
 
-.esri-popup__navigation{
+.esri-popup__navigation {
   display: none;
 }
 
-.esri-basemap-gallery__item-container{
+.esri-basemap-gallery__item-container {
   max-height: 500px;
+}
+
+@media (forced-colors: active) {
+  .esri-view .esri-view-surface--inset-outline:focus-visible::after,
+  .esri-swipe__container:focus-visible,
+  .esri-popup__button:focus-visible,
+  .esri-widget button:focus-visible,
+  .esri-widget [tabindex]:focus-visible {
+    outline: 2px solid CanvasText !important;
+    outline-offset: 2px;
+    forced-color-adjust: auto;
+  }
 }
