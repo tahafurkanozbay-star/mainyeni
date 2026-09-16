@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import re
 
 root = Path("Webclient.app/src")
@@ -11,6 +12,20 @@ def replace(path: str, old: str, new: str, count: int = -1) -> None:
         raise SystemExit(f"Expected cleanup pattern missing in {path}: {old!r}")
     file.write_text(text.replace(old, new, count))
 
+
+# Root application typecheck follows the same source/test boundary as the strict
+# domain configs. Vitest owns *.test.ts type context; production tsc remains strict.
+tsconfig_path = Path("Webclient.app/tsconfig.json")
+tsconfig = json.loads(tsconfig_path.read_text())
+tsconfig["compilerOptions"]["allowImportingTsExtensions"] = True
+tsconfig["exclude"] = [
+    "node_modules",
+    "build",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+]
+tsconfig_path.write_text(json.dumps(tsconfig, indent=2) + "\n")
 
 # Preserve snapshot semantics while avoiding unnecessary spread allocations.
 replace("platform/runtime/taskScheduler.ts", "for (const task of [...queue])", "for (const task of queue.slice())")
