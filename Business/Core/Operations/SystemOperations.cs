@@ -32,7 +32,7 @@ namespace Business.Core.Operations
                     connExists = db.Database.CanConnect();
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 connExists = false;
             }
