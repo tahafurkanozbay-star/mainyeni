@@ -29,8 +29,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Resolve deterministic lockfile
-        run: npm install --package-lock-only --ignore-scripts
+      - name: Resolve deterministic lockfile from clean manifest
+        shell: bash
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only --ignore-scripts
 
       - name: Commit lockfile when changed
         working-directory: .
