@@ -1,3 +1,12 @@
+import type {
+  GisRequestFactory,
+  GisRequestOptions,
+  GisServiceHealth,
+  GisServiceInput,
+  RegisteredGisService,
+  RuntimeErrorDetails,
+} from './contracts';
+
 /** Shared GIS service registry with timeout, retry, cancellation and health state. */
 
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -6,8 +15,17 @@ const MAX_RETRIES = 5;
 const MIN_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 120000;
 
+export interface GisServiceErrorDetails extends RuntimeErrorDetails {
+  serviceId?: string;
+}
+
 export class GisServiceError extends Error {
-  constructor(message, details = {}) {
+  code: string;
+  serviceId?: string;
+  status?: number;
+  cause?: unknown;
+
+  constructor(message: string, details: GisServiceErrorDetails = {}) {
     super(message);
     this.name = 'GisServiceError';
     this.code = details.code || 'GIS_SERVICE_ERROR';
@@ -17,41 +35,51 @@ export class GisServiceError extends Error {
   }
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-const normalizeTimeout = (value) => {
+const normalizeTimeout = (value: unknown): number => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return DEFAULT_TIMEOUT_MS;
   return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, numeric));
 };
 
-const normalizeRetries = (value) => {
+const normalizeRetries = (value: unknown): number => {
   if (!Number.isInteger(value)) return DEFAULT_RETRIES;
-  return Math.min(MAX_RETRIES, Math.max(0, value));
+  return Math.min(MAX_RETRIES, Math.max(0, Number(value)));
 };
 
-const cancelledError = (serviceId) => new GisServiceError('GIS request cancelled.', {
+const cancelledError = (serviceId: string): GisServiceError => new GisServiceError('GIS request cancelled.', {
   code: 'CANCELLED',
   serviceId,
 });
 
-const throwIfAborted = (signal, serviceId) => {
+const throwIfAborted = (signal: AbortSignal | undefined, serviceId: string): void => {
   if (signal?.aborted) throw cancelledError(serviceId);
 };
 
-const createAttemptController = () => (
+const createAttemptController = (): AbortController | null => (
   typeof AbortController !== 'undefined' ? new AbortController() : null
 );
 
-const runAttempt = (requestFactory, service, { timeoutMs, externalSignal, attempt }) => {
+interface RunAttemptOptions {
+  timeoutMs: number;
+  externalSignal?: AbortSignal;
+  attempt: number;
+}
+
+const runAttempt = <T>(
+  requestFactory: GisRequestFactory<T>,
+  service: RegisteredGisService,
+  { timeoutMs, externalSignal, attempt }: RunAttemptOptions,
+): Promise<T> => {
   throwIfAborted(externalSignal, service.id);
 
   const controller = createAttemptController();
   const requestSignal = controller?.signal || externalSignal;
-  let timer = null;
-  let abortHandler = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let abortHandler: (() => void) | null = null;
 
-  const timeout = new Promise((_, reject) => {
+  const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       controller?.abort();
       reject(new GisServiceError(`GIS request timed out after ${timeoutMs} ms`, {
@@ -62,7 +90,7 @@ const runAttempt = (requestFactory, service, { timeoutMs, externalSignal, attemp
   });
 
   const cancellation = externalSignal
-    ? new Promise((_, reject) => {
+    ? new Promise<never>((_, reject) => {
         abortHandler = () => {
           controller?.abort();
           reject(cancelledError(service.id));
@@ -79,23 +107,24 @@ const runAttempt = (requestFactory, service, { timeoutMs, externalSignal, attemp
   return Promise.race(cancellation ? [request, timeout, cancellation] : [request, timeout])
     .finally(() => {
       if (timer !== null) clearTimeout(timer);
-      if (abortHandler) externalSignal.removeEventListener('abort', abortHandler);
-    });
+      if (abortHandler && externalSignal) externalSignal.removeEventListener('abort', abortHandler);
+    }) as Promise<T>;
 };
 
-const isRetryable = (error) => (
+const isRetryable = (error: GisServiceError): boolean => (
   error?.code === 'TIMEOUT' ||
   error?.code === 'NETWORK_ERROR' ||
   error?.status === 408 ||
   error?.status === 429 ||
-  error?.status >= 500
+  (typeof error?.status === 'number' && error.status >= 500)
 );
 
-const normalizeService = (service = {}) => ({
-  id: service.id,
-  type: service.type || 'generic',
-  url: service.url,
-  title: service.title || service.id,
+const normalizeService = (service: GisServiceInput = {}): RegisteredGisService => ({
+  ...service,
+  id: String(service.id ?? ''),
+  type: String(service.type || 'generic'),
+  url: String(service.url || ''),
+  title: String(service.title || service.id || ''),
   enabled: service.enabled !== false,
   timeoutMs: normalizeTimeout(service.timeoutMs),
   retries: normalizeRetries(service.retries),
@@ -103,51 +132,63 @@ const normalizeService = (service = {}) => ({
   metadata: { ...(service.metadata || {}) },
 });
 
+const initialHealth = (): GisServiceHealth => ({
+  status: 'unknown',
+  checkedAt: null,
+  latencyMs: null,
+  attempts: 0,
+  error: null,
+});
+
+const asError = (error: unknown, serviceId: string): GisServiceError => {
+  if (error instanceof GisServiceError) return error;
+  const candidate = error as { message?: string; status?: number } | null;
+  return new GisServiceError(candidate?.message || 'GIS request failed', {
+    code: 'NETWORK_ERROR',
+    serviceId,
+    status: candidate?.status,
+    cause: error,
+  });
+};
+
 export class GisServiceRegistry {
-  constructor(initialServices = []) {
-    this.services = new Map();
-    this.health = new Map();
+  private services = new Map<string, RegisteredGisService>();
+  private health = new Map<string, GisServiceHealth>();
+
+  constructor(initialServices: GisServiceInput[] = []) {
     initialServices.forEach((service) => this.register(service));
   }
 
-  register(service) {
+  register(service: GisServiceInput): RegisteredGisService {
     const normalized = normalizeService(service);
     if (!normalized.id || !normalized.url) {
       throw new GisServiceError('A GIS service requires an id and url', { code: 'INVALID_SERVICE' });
     }
     this.services.set(normalized.id, normalized);
-    if (!this.health.has(normalized.id)) {
-      this.health.set(normalized.id, {
-        status: 'unknown',
-        checkedAt: null,
-        latencyMs: null,
-        attempts: 0,
-        error: null,
-      });
-    }
+    if (!this.health.has(normalized.id)) this.health.set(normalized.id, initialHealth());
     return normalized;
   }
 
-  unregister(serviceId) {
+  unregister(serviceId: string): boolean {
     this.health.delete(serviceId);
     return this.services.delete(serviceId);
   }
 
-  get(serviceId) {
+  get(serviceId: string): RegisteredGisService | null {
     return this.services.get(serviceId) || null;
   }
 
-  list() {
+  list(): RegisteredGisService[] {
     return Array.from(this.services.values());
   }
 
-  getHealth(serviceId) {
+  getHealth(serviceId: string): GisServiceHealth | null {
     return this.health.get(serviceId) || null;
   }
 
-  setHealth(serviceId, patch) {
-    const next = {
-      ...(this.health.get(serviceId) || {}),
+  setHealth(serviceId: string, patch: Partial<GisServiceHealth>): GisServiceHealth {
+    const next: GisServiceHealth = {
+      ...(this.health.get(serviceId) || initialHealth()),
       ...patch,
       checkedAt: new Date().toISOString(),
     };
@@ -155,7 +196,11 @@ export class GisServiceRegistry {
     return next;
   }
 
-  async request(serviceId, requestFactory, options = {}) {
+  async request<T>(
+    serviceId: string,
+    requestFactory: GisRequestFactory<T>,
+    options: GisRequestOptions = {},
+  ): Promise<T> {
     const service = this.get(serviceId);
     if (!service) {
       throw new GisServiceError(`Unknown GIS service: ${serviceId}`, {
@@ -184,7 +229,7 @@ export class GisServiceRegistry {
       : normalizeRetries(options.retries);
     const startedAt = Date.now();
     let attempt = 0;
-    let lastError;
+    let lastError: GisServiceError | undefined;
 
     while (attempt <= retries) {
       throwIfAborted(options.signal, serviceId);
@@ -203,46 +248,47 @@ export class GisServiceRegistry {
         });
         return result;
       } catch (error) {
-        lastError = error instanceof GisServiceError
-          ? error
-          : new GisServiceError(error?.message || 'GIS request failed', {
-              code: 'NETWORK_ERROR',
-              serviceId,
-              status: error?.status,
-              cause: error,
-            });
+        lastError = asError(error, serviceId);
         attempt += 1;
         if (attempt > retries || !isRetryable(lastError)) break;
         await sleep(Math.min(1000 * (2 ** (attempt - 1)), 4000));
       }
     }
 
+    const terminalError = lastError || new GisServiceError('GIS request failed', { serviceId });
     this.setHealth(serviceId, {
-      status: lastError?.code === 'CANCELLED' ? 'unknown' : 'unhealthy',
+      status: terminalError.code === 'CANCELLED' ? 'unknown' : 'unhealthy',
       latencyMs: Date.now() - startedAt,
       attempts: attempt,
       error: {
-        code: lastError?.code || 'GIS_SERVICE_ERROR',
-        message: lastError?.message || 'GIS request failed',
+        code: terminalError.code || 'GIS_SERVICE_ERROR',
+        message: terminalError.message || 'GIS request failed',
       },
     });
-    throw lastError;
+    throw terminalError;
   }
 
-  async checkHealth(serviceId, probe, options = {}) {
+  async checkHealth<T>(
+    serviceId: string,
+    probe: GisRequestFactory<T>,
+    options: GisRequestOptions = {},
+  ): Promise<GisServiceHealth | null> {
     try {
       await this.request(serviceId, probe, { ...options, retries: 0 });
       return this.getHealth(serviceId);
     } catch (error) {
+      const normalized = asError(error, serviceId);
       return this.setHealth(serviceId, {
-        status: error?.code === 'CANCELLED' ? 'unknown' : 'unhealthy',
+        status: normalized.code === 'CANCELLED' ? 'unknown' : 'unhealthy',
         error: {
-          code: error?.code || 'PROBE_FAILED',
-          message: error?.message || 'GIS health probe failed.',
+          code: normalized.code || 'PROBE_FAILED',
+          message: normalized.message || 'GIS health probe failed.',
         },
       });
     }
   }
 }
 
-export const createGisServiceRegistry = (services) => new GisServiceRegistry(services);
+export const createGisServiceRegistry = (
+  services: GisServiceInput[] = [],
+): GisServiceRegistry => new GisServiceRegistry(services);
