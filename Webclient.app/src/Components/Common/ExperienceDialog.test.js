@@ -49,7 +49,7 @@ describe("ExperienceDialog", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Kapat" }));
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        expect(opener).toHaveFocus();
+        await waitFor(() => expect(opener).toHaveFocus());
         expect(document.body.style.overflow).toBe("");
     });
 
@@ -76,7 +76,7 @@ describe("ExperienceDialog", () => {
 
         fireEvent.keyDown(document, { key: "Escape" });
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        expect(opener).toHaveFocus();
+        await waitFor(() => expect(opener).toHaveFocus());
 
         fireEvent.click(opener);
         const dialog = await screen.findByRole("dialog");
