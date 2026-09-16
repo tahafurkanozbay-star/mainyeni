@@ -255,7 +255,7 @@ export const parseAnalysisInput = (input: AnalysisInput = {}): ParsedAnalysisInp
 });
 
 export const summarizeFeatures = (result: ArcGisFeatureSetLike | null | undefined): FeatureSummary => {
-  const features = Array.isArray(result?.features) ? result.features : [];
+  const features = result && Array.isArray(result.features) ? result.features : [];
   return {
     count: features.length,
     exceededTransferLimit: Boolean(result?.exceededTransferLimit),
