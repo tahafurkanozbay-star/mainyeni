@@ -14,6 +14,7 @@
     "@fortawesome/free-regular-svg-icons": "^5.15.2",
     "@fortawesome/free-solid-svg-icons": "^5.15.2",
     "@fortawesome/react-fontawesome": "^0.1.14",
+    "@reduxjs/toolkit": "^2.12.0",
     "bootstrap": "^5.2.3",
     "esri-loader": "^3.0.0",
     "react": "^19.3.0",
@@ -44,9 +45,11 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest",
     "test:ci": "vitest run",
+    "test:budget": "node --test scripts/web-build-budget.test.mjs",
     "lint": "oxlint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "quality": "npm run lint && npm run typecheck && npm run test:ci && npm run build && node scripts/verify-build.mjs"
+    "verify:build": "node scripts/verify-build.mjs && node scripts/web-build-budget.mjs build --strict",
+    "quality": "npm run lint && npm run typecheck && npm run test:ci && npm run test:budget && npm run build && npm run verify:build"
   },
   "browserslist": {
     "production": [
