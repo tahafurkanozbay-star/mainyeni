@@ -150,9 +150,18 @@ export class RequestCoordinator {
   }
 
   request(rawConfig = {}) {
-    const config = this.normalize(rawConfig);
-    const key = this.getKey(config);
-    const cached = this.readCache(config, key);
+    let config;
+    let key;
+    let cached;
+
+    try {
+      config = this.normalize(rawConfig);
+      key = this.getKey(config);
+      cached = this.readCache(config, key);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+
     if (cached !== undefined) return Promise.resolve(cached);
 
     if (config.dedupe && this.inFlight.has(key)) {
