@@ -55,28 +55,22 @@ const normalizeDependencies = (
   dependencies: ComponentDescriptor['dependencies'],
 ): readonly NormalizedDependencyReference[] => {
   if (!dependencies?.length) return Object.freeze([]);
-  const byId = new Map<string, NormalizedDependencyReference>();
-
-  for (const raw of dependencies) {
+  const byId = dependencies.reduce<Map<string, NormalizedDependencyReference>>((result, raw) => {
     const id = normalizeIdentifier(raw.id, `dependency of ${componentId}`);
     if (id === componentId) {
       throw new DependencyCycleError(Object.freeze([componentId, componentId]));
     }
     const kind = normalizeDependencyKind(raw.kind);
-    const previous = byId.get(id);
-    if (!previous) {
-      byId.set(id, Object.freeze({ id, kind }));
-      continue;
-    }
-
-    if (previous.kind !== 'required' && kind === 'required') {
-      byId.set(id, Object.freeze({ id, kind }));
-      continue;
+    const previous = result.get(id);
+    if (!previous || (previous.kind !== 'required' && kind === 'required')) {
+      result.set(id, Object.freeze({ id, kind }));
+      return result;
     }
     if (previous.kind === 'after' && kind === 'optional') {
-      byId.set(id, Object.freeze({ id, kind }));
+      result.set(id, Object.freeze({ id, kind }));
     }
-  }
+    return result;
+  }, new Map<string, NormalizedDependencyReference>());
 
   return Object.freeze(
     [...byId.values()].sort((left, right) => left.id.localeCompare(right.id)),
@@ -109,40 +103,48 @@ const buildMutableGraph = (
   descriptors: readonly (ComponentDescriptor | NormalizedComponentDescriptor)[],
   options: DependencyGraphCompileOptions,
 ): Map<string, MutableGraphNode> => {
-  const graph = new Map<string, MutableGraphNode>();
-  for (const raw of descriptors) {
+  const graph = descriptors.reduce<Map<string, MutableGraphNode>>((result, raw) => {
     const descriptor = normalizeComponentDescriptor(raw);
-    if (graph.has(descriptor.id)) throw new DuplicateComponentError(descriptor.id);
-    graph.set(descriptor.id, {
+    if (result.has(descriptor.id)) throw new DuplicateComponentError(descriptor.id);
+    result.set(descriptor.id, {
       descriptor,
       dependencies: new Set<string>(),
       requiredDependencies: new Set<string>(),
       dependents: new Set<string>(),
       indegree: 0,
     });
-  }
+    return result;
+  }, new Map<string, MutableGraphNode>());
 
-  for (const node of graph.values()) {
-    for (const dependency of node.descriptor.dependencies) {
-      const target = graph.get(dependency.id);
-      if (!target) {
-        if (dependency.kind === 'required') {
-          throw new MissingDependencyError(node.descriptor.id, dependency.id);
-        }
-        if (dependency.kind === 'optional' && options.allowMissingOptional === false) {
-          throw new MissingDependencyError(node.descriptor.id, dependency.id);
-        }
-        if (dependency.kind === 'after' && options.allowMissingAfter === false) {
-          throw new MissingDependencyError(node.descriptor.id, dependency.id);
-        }
-        continue;
+  const edges = [...graph.values()].flatMap((node) => node.descriptor.dependencies.map((dependency) => ({
+    node,
+    dependency,
+  })));
+
+  edges.reduce((processed, { node, dependency }) => {
+    const target = graph.get(dependency.id);
+    if (!target) {
+      if (dependency.kind === 'required') {
+        throw new MissingDependencyError(node.descriptor.id, dependency.id);
       }
-      node.dependencies.add(target.descriptor.id);
-      if (dependency.kind === 'required') node.requiredDependencies.add(target.descriptor.id);
-      target.dependents.add(node.descriptor.id);
+      if (dependency.kind === 'optional' && options.allowMissingOptional === false) {
+        throw new MissingDependencyError(node.descriptor.id, dependency.id);
+      }
+      if (dependency.kind === 'after' && options.allowMissingAfter === false) {
+        throw new MissingDependencyError(node.descriptor.id, dependency.id);
+      }
+      return processed + 1;
     }
+    node.dependencies.add(target.descriptor.id);
+    if (dependency.kind === 'required') node.requiredDependencies.add(target.descriptor.id);
+    target.dependents.add(node.descriptor.id);
+    return processed + 1;
+  }, 0);
+
+  [...graph.values()].reduce((processed, node) => {
     node.indegree = node.dependencies.size;
-  }
+    return processed + 1;
+  }, 0);
 
   return graph;
 };
@@ -156,27 +158,27 @@ const cycleFromGraph = (graph: Map<string, MutableGraphNode>): readonly string[]
     stack.push(id);
     const node = graph.get(id);
     const dependencies = node ? [...node.dependencies].sort() : [];
-    for (const dependency of dependencies) {
+    const cycle = dependencies.reduce<readonly string[] | null>((found, dependency) => {
+      if (found) return found;
       const dependencyState = state.get(dependency);
-      if (dependencyState === 'visited') continue;
+      if (dependencyState === 'visited') return null;
       if (dependencyState === 'visiting') {
         const cycleStart = stack.lastIndexOf(dependency);
         return Object.freeze([...stack.slice(Math.max(0, cycleStart)), dependency]);
       }
-      const cycle = visit(dependency);
-      if (cycle) return cycle;
-    }
+      return visit(dependency);
+    }, null);
+    if (cycle) return cycle;
     stack.pop();
     state.set(id, 'visited');
     return null;
   };
 
-  for (const id of [...graph.keys()].sort()) {
-    if (state.has(id)) continue;
-    const cycle = visit(id);
-    if (cycle) return cycle;
-  }
-  return Object.freeze([]);
+  const cycle = [...graph.keys()].sort().reduce<readonly string[] | null>((found, id) => {
+    if (found || state.has(id)) return found;
+    return visit(id);
+  }, null);
+  return cycle ?? Object.freeze([]);
 };
 
 const sortedReadyNodes = (
@@ -190,8 +192,10 @@ const sortedReadyNodes = (
 });
 
 const compileLevels = (graph: Map<string, MutableGraphNode>): readonly (readonly string[])[] => {
-  const indegrees = new Map<string, number>();
-  for (const [id, node] of graph) indegrees.set(id, node.indegree);
+  const indegrees = [...graph.entries()].reduce<Map<string, number>>((result, [id, node]) => {
+    result.set(id, node.indegree);
+    return result;
+  }, new Map<string, number>());
   let ready = sortedReadyNodes(
     graph,
     [...indegrees.entries()].filter(([, degree]) => degree === 0).map(([id]) => id),
@@ -203,16 +207,16 @@ const compileLevels = (graph: Map<string, MutableGraphNode>): readonly (readonly
     const current = ready;
     levels.push(current);
     visited += current.length;
-    const next = new Set<string>();
-    for (const id of current) {
+    const next = current.reduce<Set<string>>((nextIds, id) => {
       const node = graph.get(id);
-      if (!node) continue;
-      for (const dependentId of node.dependents) {
+      if (!node) return nextIds;
+      return [...node.dependents].reduce<Set<string>>((result, dependentId) => {
         const degree = (indegrees.get(dependentId) ?? 0) - 1;
         indegrees.set(dependentId, degree);
-        if (degree === 0) next.add(dependentId);
-      }
-    }
+        if (degree === 0) result.add(dependentId);
+        return result;
+      }, nextIds);
+    }, new Set<string>());
     ready = sortedReadyNodes(graph, next);
   }
 
@@ -233,13 +237,13 @@ const transitiveDependenciesFor = (
   if (cached) return cached;
   const node = graph.get(id);
   if (!node) return Object.freeze([]);
-  const result = new Set<string>();
-  for (const dependencyId of node.dependencies) {
-    result.add(dependencyId);
-    for (const transitive of transitiveDependenciesFor(dependencyId, graph, memo)) {
-      result.add(transitive);
-    }
-  }
+  const result = [...node.dependencies].reduce<Set<string>>((collected, dependencyId) => {
+    collected.add(dependencyId);
+    return transitiveDependenciesFor(dependencyId, graph, memo).reduce<Set<string>>((target, transitive) => {
+      target.add(transitive);
+      return target;
+    }, collected);
+  }, new Set<string>());
   const normalized = Object.freeze([...result].sort());
   memo.set(id, normalized);
   return normalized;
@@ -253,60 +257,64 @@ const buildCriticalPath = (
   const distance = new Map<string, number>();
   const predecessor = new Map<string, string>();
 
-  for (const level of levels) {
-    for (const id of level) {
-      const node = graph.get(id);
-      if (!node) continue;
-      let bestDistance = 1;
-      let bestPredecessor: string | null = null;
-      for (const dependencyId of node.dependencies) {
+  levels.flatMap((level) => [...level]).reduce((processed, id) => {
+    const node = graph.get(id);
+    if (!node) return processed + 1;
+    const best = [...node.dependencies].reduce<{ distance: number; predecessor: string | null }>(
+      (candidate, dependencyId) => {
         const candidateDistance = (distance.get(dependencyId) ?? 0) + 1;
-        if (candidateDistance > bestDistance) {
-          bestDistance = candidateDistance;
-          bestPredecessor = dependencyId;
-        } else if (
-          candidateDistance === bestDistance
-          && bestPredecessor !== null
-          && dependencyId.localeCompare(bestPredecessor) < 0
-        ) {
-          bestPredecessor = dependencyId;
+        if (candidateDistance > candidate.distance) {
+          return { distance: candidateDistance, predecessor: dependencyId };
         }
+        if (
+          candidateDistance === candidate.distance
+          && candidate.predecessor !== null
+          && dependencyId.localeCompare(candidate.predecessor) < 0
+        ) {
+          return { distance: candidateDistance, predecessor: dependencyId };
+        }
+        return candidate;
+      },
+      { distance: 1, predecessor: null },
+    );
+    distance.set(id, best.distance);
+    if (best.predecessor) predecessor.set(id, best.predecessor);
+    return processed + 1;
+  }, 0);
+
+  const longest = [...distance.entries()].reduce<{ id: string | null; distance: number }>(
+    (candidate, [id, value]) => {
+      if (
+        value > candidate.distance
+        || (value === candidate.distance && candidate.id !== null && id.localeCompare(candidate.id) < 0)
+      ) {
+        return { id, distance: value };
       }
-      distance.set(id, bestDistance);
-      if (bestPredecessor) predecessor.set(id, bestPredecessor);
-    }
-  }
+      return candidate;
+    },
+    { id: null, distance: 0 },
+  );
+  if (!longest.id) return Object.freeze([]);
 
-  let tail: string | null = null;
-  let longest = 0;
-  for (const [id, value] of distance) {
-    if (value > longest || (value === longest && tail !== null && id.localeCompare(tail) < 0)) {
-      longest = value;
-      tail = id;
-    }
-  }
-  if (!tail) return Object.freeze([]);
-
-  const path: string[] = [];
-  let current: string | undefined = tail;
-  while (current) {
+  const collectPath = (current: string | undefined, path: string[]): readonly string[] => {
+    if (!current) return Object.freeze(path.reverse());
     path.push(current);
-    current = predecessor.get(current);
-  }
-  path.reverse();
-  return Object.freeze(path);
+    return collectPath(predecessor.get(current), path);
+  };
+  return collectPath(longest.id, []);
 };
 
 const recordFromGraph = (
   graph: Map<string, MutableGraphNode>,
   selector: (node: MutableGraphNode) => Iterable<string>,
-): Readonly<Record<string, readonly string[]>> => {
-  const record: Record<string, readonly string[]> = {};
-  for (const [id, node] of [...graph.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    record[id] = Object.freeze([...selector(node)].sort());
-  }
-  return Object.freeze(record);
-};
+): Readonly<Record<string, readonly string[]>> => Object.freeze(
+  [...graph.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .reduce<Record<string, readonly string[]>>((record, [id, node]) => {
+      record[id] = Object.freeze([...selector(node)].sort());
+      return record;
+    }, {}),
+);
 
 export const compileDependencyGraph = (
   descriptors: readonly (ComponentDescriptor | NormalizedComponentDescriptor)[],
@@ -318,10 +326,12 @@ export const compileDependencyGraph = (
   const startupOrder = Object.freeze(levels.flatMap((level) => [...level]));
   const shutdownOrder = Object.freeze([...startupOrder].reverse());
   const memo = new Map<string, readonly string[]>();
-  const transitiveDependencies: Record<string, readonly string[]> = {};
-  for (const id of [...graph.keys()].sort()) {
-    transitiveDependencies[id] = transitiveDependenciesFor(id, graph, memo);
-  }
+  const transitiveDependencies = Object.freeze(
+    [...graph.keys()].sort().reduce<Record<string, readonly string[]>>((record, id) => {
+      record[id] = transitiveDependenciesFor(id, graph, memo);
+      return record;
+    }, {}),
+  );
 
   return Object.freeze({
     revision,
@@ -332,7 +342,7 @@ export const compileDependencyGraph = (
     dependents: recordFromGraph(graph, (node) => node.dependents),
     requiredDependencies: recordFromGraph(graph, (node) => node.requiredDependencies),
     allDependencies: recordFromGraph(graph, (node) => node.dependencies),
-    transitiveDependencies: Object.freeze(transitiveDependencies),
+    transitiveDependencies,
     criticalPath: buildCriticalPath(levels, graph),
   });
 };
