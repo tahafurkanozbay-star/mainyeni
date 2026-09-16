@@ -1,36 +1,34 @@
 # Kent Rehberi — Geliştirme İlerleme Kaydı
 
-> Full historical progress remains available on `main` at the parent commit. This branch-scoped continuation record intentionally summarizes the current GIS turn to avoid duplicating a very large shared history while preserving the canonical parent.
+> Full historical progress remains available on `main` at the parent commit. This branch-scoped continuation record preserves the active role checkpoints needed for safe continuation.
 
 ## Deep GIS continuation — 2026-09-16 14:14 TRT
 - TUR / GÖREV: Deep GIS / Whole-Code Modernization continuation; bounded ArcGIS feature data lifecycle and integrity.
 - BASE MAIN: `c89ef2a5ab2fd1d633d10447c5db56f177811bed`.
-- BRANCH: `agent/gis-deep-20260916-1414-c89ef2a`.
-- PR: #66 `feat(gis): continue bounded ArcGIS data lifecycle modernization`.
-- HEAD before this progress commit: `cc845269ef4ecb2928800136474a828a3e007d46`.
-- MERGE DURUMU: OPEN / NOT MERGED. Base...head before progress = 146 additions, 0 deletions, 2 files; mandatory 4,000 meaningful-additions gate is not met, so merge is forbidden.
-- ÖNEMLİ ÖZELLİKLER: strict TypeScript `arcgisFeatureWindow` primitive; verified transport stays injected; page/feature memory bounds; AbortSignal cancellation; stable identity dedupe preserving numeric id 0; explicit transfer-limit completion/truncation evidence; fail-closed non-progressing pagination detection.
-- DEĞİŞEN DOSYALAR: `Webclient.app/src/gis-engine/arcgisFeatureWindow.ts`, `arcgisFeatureWindow.test.ts`, this progress record.
-- TESTLER / BUILD / CI: focused Vitest coverage was added for dedupe/id=0, progress failure, budgets, invalid configuration and cancellation. No GitHub Actions workflow run was yet associated with exact head `cc845269...`; therefore no test/lint/typecheck/build PASS is claimed. Exact-head CI remains mandatory before eventual merge.
-- NETWORK DEĞİŞİKLİKLERİ: none. No direct fetch, new endpoint, WMS/WFS/WMTS, CDN, analytics or remote asset.
-- GÜVENLİK / DATA INTEGRITY: bounded allocation, cancellation, duplicate suppression and pagination progress checks reduce runaway memory/loop and inconsistent feature-window risk; capability/transport facts are not guessed.
-- İKON EŞLEŞTİRME: unchanged; `iconRegistry.json` + shared resolver/presentation remains the single authority.
-- MODERNİZASYON KARARI: add a small composable strict-TS primitive on the current React 19/Vite 8/TS7 main rather than fork query transport or duplicate existing ArcGIS query executors.
-- PERFORMANS ETKİSİ: explicit maxFeatures/maxPages bounds and identity dedupe cap client memory growth and redundant downstream rendering; no new polling/timers.
-- ÇÖZÜLEN HATALAR: feature-window consumers now have a reusable fail-closed guard against repeated/non-advancing ArcGIS pages and duplicate stable identities.
-- KALAN SORUNLAR / SONRAKİ GÖREV: continue on PR #66 until >=4,000 meaningful additions with high-priority GIS work: capability-aware query/window composition, lifecycle/resource ownership, 2D/3D render-state parity, scene/LOD budgets, spatial utilities and targeted regressions. Refresh current main before adding work; if this branch becomes behind/diverged, follow branch lifecycle rules instead of force-updating. Run exact-head required CI, fix real failures, run second verification, performance/data-integrity/security review and final regression before any merge.
+- BRANCH: `agent/gis-deep-20260916-1414-c89ef2a`; PR #66.
+- MERGE DURUMU: historical open checkpoint; do not reuse without refreshing current main and PR state.
+- ÖNEMLİ ÖZELLİKLER: strict TypeScript ArcGIS feature-window primitive, bounded pagination, cancellation, stable identity dedupe, transfer-limit evidence and non-progress detection.
 
 ## Deep Platform / Architecture — 2026-09-16 17:00 TRT
-- TUR / GÖREV: Deep Platform / Whole-Code Modernization; current-main runtime supervision, bounded work coordination, toolchain and CI quality contracts.
+- TUR / GÖREV: Deep Platform / Whole-Code Modernization; runtime supervision, bounded work coordination, toolchain and CI quality contracts.
 - BASE MAIN: `3c6eaa8b35eca2da1219ddaab9f90d16a3255a79`.
-- BRANCH: `agent/platform-runtime-supervision-20260916-1626-3c6eaa8-r2`.
-- COMMIT / PR / MERGE DURUMU: PR #72 head `1e0b41d194cd9bea601b6123d60de4a764623aef`; 4,944 additions / 50 deletions / 30 files; squash merged successfully as `3660cc87bc51a09d94297d7d752dc4bc2bbaa1fe`. Verified current `main` equals that merge SHA before this progress-only commit.
-- ÖNEMLİ ÖZELLİKLER: deterministic dependency DAG/lifecycle coordination; bounded health/readiness registry; global/per-lane request coordination with deterministic priority, dedupe and subscriber-aware cancellation; runtime supervisor composition; hard deadline enforcement; observer isolation; bounded diagnostics/event history.
-- TOOLCHAIN / MODERNİZASYON: Node 24/npm 11 and native ESM contract; Vite-first environment contract; strict supervision TypeScript boundary; exact-base TypeScript/Vitest regression gates; changed-source strict lint; production dependency audit; release and architecture workflow hardening.
-- TESTLER / BUILD / CI: exact PR head `1e0b41d...` GitHub Actions completed successfully for Platform Architecture Audit, Platform Backend Validation, Webclient Quality and Release QA. No PASS is inferred from the post-merge progress-only documentation commit.
-- NETWORK DEĞİŞİKLİKLERİ: no new endpoint, WMS/WFS/WMTS, CDN, analytics, telemetry transport or remote runtime dependency.
-- GÜVENLİK KONTROLLERİ: no client secret/token introduced; bounded queues/history/diagnostics; hard timeouts and cancellation; Vite local-only environment contract; production dependency audit enforced.
+- PR #72: 4,944 additions / 50 deletions / 30 files; squash merged as `3660cc87bc51a09d94297d7d752dc4bc2bbaa1fe`.
+- ÖNEMLİ ÖZELLİKLER: dependency DAG/lifecycle coordination, bounded health/readiness, request coordination, runtime supervisor, deadline enforcement, observer isolation, bounded diagnostics; Node 24/npm 11 and strict release/toolchain gates.
+
+## Deep QA / Release — 2026-09-17 00:47 TRT
+- TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization; typed whole-repository release evidence and regression enforcement.
+- BASE MAIN: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`; verified unchanged at turn start.
+- BRANCH: `agent/deep-qa-release-20260916-1747-2dd3ce9`.
+- COMMIT / PR / MERGE DURUMU: PR #75 remains canonical and open. Pre-turn head `9e4dfded28254b3fa9634b8b1cd5cb96dc055af8` was mergeable=true, 14 commits ahead / 0 behind with merge-base exactly current main. Exact-head Release QA run `35148766670` completed successfully. This turn added CI integrity audit commits through `d6a4a250ed5fa0d2ad92fc6e97d3a3e9a76ecd69`; this progress commit advances head again, so a fresh exact-head CI result is required before any merge.
+- ÖNEMLİ ÖZELLİKLER: existing typed accessibility, security, responsive, observability and network regression audits are retained. New `ci-integrity-audit.mts` inventories GitHub Actions release evidence and detects missing pull-request validation, implicit permissions, missing job timeouts, absent dependency verification, absent production build evidence and absent executable test evidence. Pull-request validation absence is fail-closed/blocking for release-oriented workflows.
+- DEĞİŞEN DOSYALAR: `quality/release/ci-integrity-audit.mts`, `quality/release/ci-integrity-audit.test.mts`, `quality/release/release-engine.mts`, this progress record.
+- YAKLAŞIK SATIR: pre-turn PR base...head was 693 additions / 316 deletions. This turn adds roughly 150 additional typed QA/test lines plus release-engine wiring and progress documentation; exact GitHub compare must be refreshed next turn because the mandatory 4,000 meaningful-addition threshold is still far from satisfied.
+- TESTLER / BUILD / CI: pre-turn exact head `9e4dfded...` Release QA run `35148766670` = completed/success. New CI-integrity tests cover complete workflow acceptance and negative regression cases for PR trigger, permissions, timeout, dependency, build and test contracts. No PASS is claimed for the new head until GitHub Actions completes on that exact SHA.
+- NETWORK DEĞİŞİKLİKLERİ: none. No endpoint, WMS/WFS/WMTS, CDN, analytics, remote asset or runtime network transport added.
+- GÜVENLİK KONTROLLERİ: CI validation authority is now statically checked for explicit permissions and release evidence; existing source security audit remains active. No secret/token/client credential added.
 - İKON EŞLEŞTİRME: unchanged; existing shared GIS icon authority remains canonical.
-- PERFORMANS ETKİSİ: bounded global/lane concurrency and queue limits cap work/memory pressure; dedupe suppresses duplicate work; readiness-gated execution and deterministic lifecycle reduce race/restart amplification; no polling loop/background timer added.
-- ÇÖZÜLEN HATALAR: stale Platform PR #65 was superseded and is closed; runtime operations that ignore AbortSignal are now deadline-bounded; observer failures cannot replace business outcomes; CI distinguishes staged baseline debt from new exact-base regressions.
-- KALAN SORUNLAR / SONRAKİ GÖREV: PR #67 (strict Business/Core/Redux TypeScript migration) and PR #69 (Vite/debug/browser dependency hotfix) are now stale/non-mergeable against advanced `main`; do not stack new Platform work onto them. Next Platform turn must refresh `main`, determine which unmerged changes are still absent after #72, and reapply only non-overlapping validated work on a fresh current-main branch. Preserve concurrent GIS/Data/Experience ownership. Require >=4,000 meaningful additions on the canonical Platform PR plus exact-head completed+success CI, conflict-free mergeability, security/performance/regression review and final main refresh before merge.
+- MODERNİZASYON KARARLARI: extend the existing typed release engine instead of adding a second QA runner; keep checks deterministic and repository-local; treat CI configuration as production release code with executable regression coverage.
+- PERFORMANS ETKİSİ: audit is linear over workflow text and introduces no application runtime code, timers, polling or network work.
+- ÇÖZÜLEN HATALAR: release engine previously inspected application/build behavior but did not directly enforce core CI evidence contracts; that gap is now covered and regression-tested.
+- KALAN SORUNLAR: mandatory >=4,000 meaningful base...head additions is not met, therefore merge is forbidden regardless of prior green CI. New exact-head CI must complete successfully. Continue with substantive release-integrity, backend/API security regression, GIS release contracts, build artifact integrity and performance-budget QA rather than filler.
+- SONRAKİ GÖREV NOTU: refresh `main`, PR #75 mergeability/base/head/compare and exact-head workflow status first. If main advanced or merge-base diverged, follow branch lifecycle rules rather than stacking onto stale history. Otherwise continue #75 with real high-priority QA until >=4,000 meaningful additions, then run exact-head CI, second verification, security/performance/regression review, final main refresh and only then squash merge if every gate remains green.
