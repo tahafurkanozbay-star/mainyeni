@@ -230,7 +230,11 @@ describe('Turkish address query semantics', () => {
     test('parses door numbers deterministically', () => {
         expect(parseAddressNumberToken('12A')).toEqual(expect.objectContaining({ number: 12, suffix: 'a' }));
         expect(parseAddressNumberToken('10')).toEqual(expect.objectContaining({ number: 10, suffix: '' }));
-        expect(parseAddressNumberToken('12/A')).toBeNull();
+        expect(parseAddressNumberToken('12/A')).toEqual(expect.objectContaining({
+            number: 12,
+            suffix: 'a',
+            normalized: '12a'
+        }));
     });
 
     test('infers road and door intent while preserving strong terms', () => {
