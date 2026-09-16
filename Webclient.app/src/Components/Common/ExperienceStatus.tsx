@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 export type ExperienceStatusTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
@@ -44,14 +44,17 @@ export interface ExperienceEmptyStateProps {
   readonly secondaryAction?: ReactNode;
 }
 
-export const ExperienceEmptyState = ({ title, description, action, secondaryAction }: ExperienceEmptyStateProps): ReactNode => (
-  <section className="experience-empty" aria-labelledby="experience-empty-title">
-    <div className="experience-empty__symbol" aria-hidden="true">◇</div>
-    <h3 id="experience-empty-title" className="experience-empty__title">{title}</h3>
-    <div className="experience-empty__description">{description}</div>
-    {action || secondaryAction ? <div className="experience-empty__actions">{action}{secondaryAction}</div> : null}
-  </section>
-);
+export const ExperienceEmptyState = ({ title, description, action, secondaryAction }: ExperienceEmptyStateProps): ReactNode => {
+  const titleId = useId();
+  return (
+    <section className="experience-empty" aria-labelledby={titleId}>
+      <div className="experience-empty__symbol" aria-hidden="true">◇</div>
+      <h3 id={titleId} className="experience-empty__title">{title}</h3>
+      <div className="experience-empty__description">{description}</div>
+      {action || secondaryAction ? <div className="experience-empty__actions">{action}{secondaryAction}</div> : null}
+    </section>
+  );
+};
 
 export interface ExperienceProgressProps {
   readonly label: string;
@@ -61,22 +64,24 @@ export interface ExperienceProgressProps {
 }
 
 export const ExperienceProgress = ({ label, value, max = 100, description }: ExperienceProgressProps): ReactNode => {
-  const boundedValue = value === undefined ? undefined : Math.min(Math.max(value, 0), max);
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 100;
+  const boundedValue = value === undefined || !Number.isFinite(value) ? undefined : Math.min(Math.max(value, 0), safeMax);
+  const percentage = boundedValue === undefined ? undefined : (boundedValue / safeMax) * 100;
   return (
     <div className="experience-progress">
       <div className="experience-progress__header">
         <span className="experience-progress__label">{label}</span>
-        {boundedValue === undefined ? null : <span className="experience-progress__value">{Math.round((boundedValue / max) * 100)}%</span>}
+        {percentage === undefined ? null : <span className="experience-progress__value">{Math.round(percentage)}%</span>}
       </div>
       <div
         className={`experience-progress__track${boundedValue === undefined ? ' experience-progress__track--indeterminate' : ''}`}
         role="progressbar"
         aria-label={label}
         aria-valuemin={boundedValue === undefined ? undefined : 0}
-        aria-valuemax={boundedValue === undefined ? undefined : max}
+        aria-valuemax={boundedValue === undefined ? undefined : safeMax}
         aria-valuenow={boundedValue}
       >
-        {boundedValue === undefined ? <span className="experience-progress__indeterminate" /> : <span className="experience-progress__bar" style={{ inlineSize: `${(boundedValue / max) * 100}%` }} />}
+        {percentage === undefined ? <span className="experience-progress__indeterminate" /> : <span className="experience-progress__bar" style={{ inlineSize: `${percentage}%` }} />}
       </div>
       {description ? <p className="experience-progress__description">{description}</p> : null}
     </div>
