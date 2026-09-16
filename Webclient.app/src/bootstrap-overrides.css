@@ -32,123 +32,125 @@
 
 .btn {
     font-size: 1.35rem;
-  }
+}
 
-  .form-label {
+.form-label {
     font-size: 1.5rem;
     font-weight: bold;
     margin-top: 10px;
     padding-left: 10px;
-  }
-  
-  .form-control {
+}
+
+.form-control {
     font-size: 1.35rem;
     height: 30px;
-  }
-  .form-select {
+}
+.form-select {
     font-size: 1.35rem;
     height: 30px;
-  }
-  
-  .label {
+}
+
+.label {
     font-size: 1.5rem;
-  }
-  
+}
 
-
-
-  .nav-tabs .nav-link{
+.nav-tabs .nav-link{
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--common-query-window-header-text-color);
-  }
-  
-  .btn-primary.disabled,
-  .btn-primary:disabled {
+}
+
+.btn-primary.disabled,
+.btn-primary:disabled {
     color: #2b2b2b;
     background-color: #ffffff;
     border-color: #6f6f6f;
-  }
-  
-  .form-control:disabled,
-  .form-control[readonly] {
+}
+
+.form-control:disabled,
+.form-control[readonly] {
     background-color: transparent;
     opacity: 1;
     color: #444;
     border: none;
     text-shadow: none;
-  }
-  
-  
-  .table {
+}
+
+.table {
     font-size: 1.25rem;
-  }
-  
-  a {
+}
+
+a {
     font-size: 1.25em;
     color: #444;
-  }
-  
-  .btn-primary.focus,
-  .btn-primary:focus,
-  .btn-primary:not(:disabled):not(.disabled).active,
-  .btn-primary:not(:disabled):not(.disabled):active,
-  .show>.btn-primary.dropdown-toggle {
+}
+
+.btn-primary.focus,
+.btn-primary:focus,
+.btn-primary:not(:disabled):not(.disabled).active,
+.btn-primary:not(:disabled):not(.disabled):active,
+.show>.btn-primary.dropdown-toggle {
     color: #fff;
     background-color: rgb(31 72 105 / 81%);
     border-color: gray;
-  }
-  
-  .btn-primary {
+}
+
+.btn-primary {
     color: #fff;
     font-size: 1.25em;
     background-color: gray;
     border-color: gray;
-  }
-  
-  .btn-primary:hover {
+}
+
+.btn-primary:hover {
     color: #fff;
     background-color: rgb(31 72 105 / 81%);
     border-color: gray;
-  }
-  
-  
-  .toast {
-    font-size: 1.5em;
-  }
-  
+}
 
-  .btn-close
-  {
+.toast {
+    font-size: 1.5em;
+}
+
+.btn-close {
     right: 10px;
     position: absolute;
     border: 1px solid gray !important;
     padding: 10px !important;
-  }
-  
-  .modal-header{
+}
+
+.modal-header{
     display: flex;
-  }
-  
-  .modal-dialog {
+}
+
+.modal-dialog {
     min-width: 30%;
     max-width: 80%;
-  }
-  
-  .modal-body {
+}
+
+.modal-body {
     font-size: 1.5rem;
-  }
-  
-  .tab-content {
+}
+
+.tab-content {
     padding: 1rem;
-  }
+}
 
-  .tooltip{
+.tooltip{
     font-size: 1.65rem;
-  }
+}
 
+/* Do not suppress Bootstrap's keyboard indication globally. Keep a stable
+   fallback for custom controls that do not provide their own focus treatment. */
+:focus-visible {
+    outline: 3px solid var(--experience-focus, #4da3ff);
+    outline-offset: 2px;
+}
 
-
-  :focus-visible {
-    outline: none !important;
+@media (forced-colors: active) {
+    :focus-visible {
+        outline: 2px solid Highlight;
+        outline-offset: 2px;
+        forced-color-adjust: auto;
+    }
 }
