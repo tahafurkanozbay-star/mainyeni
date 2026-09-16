@@ -1,5 +1,4 @@
 import {
-    normalizeInteger,
     normalizeText
 } from "./DataIntegrityHelper";
 
@@ -11,8 +10,14 @@ export const MAX_DATASETS = 128;
 export const MAX_DATASET_RECORDS = 1000000;
 
 const asArray = value => Array.isArray(value) ? value : [];
-const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const isPromiseLike = value => value && typeof value.then === "function";
+
+const boundedPositiveInteger = (value, fallback, maximum) => {
+    if (value === undefined || value === null || value === "") return fallback;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric <= 0) return fallback;
+    return Math.min(maximum, numeric);
+};
 
 export const createSearchAbortError = (message = "Search dataset operation aborted") => {
     const error = new Error(message);
@@ -31,21 +36,9 @@ export const normalizeDatasetName = value => normalizeText(value)
     .slice(0, 120);
 
 export const normalizeDatasetOptions = options => ({
-    ttlMs: normalizeInteger(options?.ttlMs, {
-        min: 1,
-        max: MAX_DATASET_TTL_MS,
-        fallback: DEFAULT_DATASET_TTL_MS
-    }),
-    maxDatasets: normalizeInteger(options?.maxDatasets, {
-        min: 1,
-        max: MAX_DATASETS,
-        fallback: DEFAULT_MAX_DATASETS
-    }),
-    maxRecords: normalizeInteger(options?.maxRecords, {
-        min: 1,
-        max: MAX_DATASET_RECORDS,
-        fallback: DEFAULT_MAX_RECORDS
-    }),
+    ttlMs: boundedPositiveInteger(options?.ttlMs, DEFAULT_DATASET_TTL_MS, MAX_DATASET_TTL_MS),
+    maxDatasets: boundedPositiveInteger(options?.maxDatasets, DEFAULT_MAX_DATASETS, MAX_DATASETS),
+    maxRecords: boundedPositiveInteger(options?.maxRecords, DEFAULT_MAX_RECORDS, MAX_DATASET_RECORDS),
     rejectOversized: options?.rejectOversized !== false,
     freezeSnapshots: options?.freezeSnapshots !== false
 });
@@ -123,14 +116,14 @@ export const createDatasetSnapshot = ({
     stale = false
 }, options = {}) => {
     const normalizedOptions = normalizeDatasetOptions(options);
-    const normalizedName = normalizeDatasetName(name);
     const normalizedRecords = normalizeDatasetRecords(records, normalizedOptions);
     const safeMetadata = metadata && typeof metadata === "object" && !Array.isArray(metadata)
         ? { ...metadata }
         : {};
-    const snapshot = {
-        name: normalizedName,
-        revision: normalizeInteger(revision, { min: 1, fallback: 1 }),
+    const safeRevision = boundedPositiveInteger(revision, 1, Number.MAX_SAFE_INTEGER);
+    return freezeSnapshot({
+        name: normalizeDatasetName(name),
+        revision: safeRevision,
         fingerprint: fingerprint || createDatasetFingerprint(normalizedRecords, safeMetadata),
         records: normalizedRecords.slice(),
         recordCount: normalizedRecords.length,
@@ -139,8 +132,7 @@ export const createDatasetSnapshot = ({
         updatedAt,
         expiresAt,
         stale: stale === true
-    };
-    return freezeSnapshot(snapshot, normalizedOptions.freezeSnapshots);
+    }, normalizedOptions.freezeSnapshots);
 };
 
 const createStats = () => ({
@@ -161,31 +153,6 @@ const createStats = () => ({
     derivedInvalidations: 0
 });
 
-const createEntry = ({ name, records, metadata, now, options, previous }) => {
-    const normalizedRecords = normalizeDatasetRecords(records, options);
-    const revision = previous ? previous.revision + 1 : 1;
-    const createdAt = previous?.createdAt ?? now;
-    const fingerprint = createDatasetFingerprint(normalizedRecords, metadata);
-    return {
-        name,
-        records: normalizedRecords,
-        metadata: { ...(metadata || {}) },
-        revision,
-        fingerprint,
-        createdAt,
-        updatedAt: now,
-        expiresAt: now + options.ttlMs,
-        lastAccessAt: now,
-        stale: false,
-        derived: new Map()
-    };
-};
-
-const createPublicSnapshot = (entry, options, now) => createDatasetSnapshot({
-    ...entry,
-    stale: entry.stale || entry.expiresAt <= now
-}, options);
-
 const resolveLoaderPayload = payload => {
     if (Array.isArray(payload)) return { records: payload, metadata: {} };
     if (payload && typeof payload === "object" && Array.isArray(payload.records)) {
@@ -203,7 +170,6 @@ export const createSearchDatasetRegistry = (options = {}) => {
     const loaders = new Map();
     const inFlight = new Map();
     const stats = createStats();
-
     const nowValue = supplied => Number.isFinite(supplied) ? supplied : Date.now();
 
     const touch = (entry, now) => {
@@ -211,6 +177,31 @@ export const createSearchDatasetRegistry = (options = {}) => {
         entries.delete(entry.name);
         entries.set(entry.name, entry);
     };
+
+    const createEntry = ({ name, records, metadata, now, previous }) => {
+        const normalizedRecords = normalizeDatasetRecords(records, normalizedOptions);
+        const safeMetadata = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? { ...metadata }
+            : {};
+        return {
+            name,
+            records: normalizedRecords,
+            metadata: safeMetadata,
+            revision: previous ? previous.revision + 1 : 1,
+            fingerprint: createDatasetFingerprint(normalizedRecords, safeMetadata),
+            createdAt: previous?.createdAt ?? now,
+            updatedAt: now,
+            expiresAt: now + normalizedOptions.ttlMs,
+            lastAccessAt: now,
+            stale: false,
+            derived: new Map()
+        };
+    };
+
+    const publicSnapshot = (entry, now) => createDatasetSnapshot({
+        ...entry,
+        stale: entry.stale || entry.expiresAt <= now
+    }, normalizedOptions);
 
     const evictIfNeeded = () => {
         while (entries.size > normalizedOptions.maxDatasets) {
@@ -246,21 +237,14 @@ export const createSearchDatasetRegistry = (options = {}) => {
         if (!normalizedName) throw new TypeError("Dataset name is required");
         const now = nowValue(suppliedNow);
         const previous = entries.get(normalizedName) || null;
-        const entry = createEntry({
-            name: normalizedName,
-            records,
-            metadata,
-            now,
-            options: normalizedOptions,
-            previous
-        });
+        const entry = createEntry({ name: normalizedName, records, metadata, now, previous });
         entries.set(normalizedName, entry);
         touch(entry, now);
         evictIfNeeded();
         if (!previous) stats.registrations += 1;
         else if (mode === "append") stats.appends += 1;
         else stats.replacements += 1;
-        return createPublicSnapshot(entry, normalizedOptions, now);
+        return publicSnapshot(entry, now);
     };
 
     const registerLoader = (name, loader) => {
@@ -280,12 +264,11 @@ export const createSearchDatasetRegistry = (options = {}) => {
             allowStale: loadOptions.allowStale === true,
             touchEntry: true
         });
-        if (existing && loadOptions.force !== true) {
-            return createPublicSnapshot(existing, normalizedOptions, now);
-        }
+        if (existing && loadOptions.force !== true) return publicSnapshot(existing, now);
+
         const loader = loadOptions.loader || loaders.get(normalizedName);
         if (typeof loader !== "function") {
-            if (existing) return createPublicSnapshot(existing, normalizedOptions, now);
+            if (existing) return publicSnapshot(existing, now);
             const error = new Error(`No loader registered for dataset: ${normalizedName}`);
             error.code = "DATASET_LOADER_MISSING";
             throw error;
@@ -302,7 +285,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
             throwIfDatasetAborted(loadOptions.signal);
             const payload = loader({
                 name: normalizedName,
-                previous: existing ? createPublicSnapshot(existing, normalizedOptions, now) : null,
+                previous: existing ? publicSnapshot(existing, now) : null,
                 signal: loadOptions.signal
             });
             const resolved = isPromiseLike(payload) ? await payload : payload;
@@ -327,7 +310,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
         return operation;
     };
 
-    return {
+    const api = {
         options: normalizedOptions,
 
         register(name, records, metadata = {}, writeOptions = {}) {
@@ -341,12 +324,8 @@ export const createSearchDatasetRegistry = (options = {}) => {
         append(name, records, metadata = {}, writeOptions = {}) {
             const normalizedName = normalizeDatasetName(name);
             const previous = entries.get(normalizedName);
-            const nextRecords = previous
-                ? [...previous.records, ...asArray(records)]
-                : asArray(records);
-            const nextMetadata = previous
-                ? { ...previous.metadata, ...metadata }
-                : metadata;
+            const nextRecords = previous ? [...previous.records, ...asArray(records)] : asArray(records);
+            const nextMetadata = previous ? { ...previous.metadata, ...metadata } : metadata;
             return write(normalizedName, nextRecords, nextMetadata, writeOptions.now, "append");
         },
 
@@ -355,20 +334,16 @@ export const createSearchDatasetRegistry = (options = {}) => {
                 allowStale: readOptions.allowStale !== false,
                 touchEntry: readOptions.touch !== false
             });
-            if (!entry) return null;
-            return createPublicSnapshot(entry, normalizedOptions, nowValue(readOptions.now));
+            return entry ? publicSnapshot(entry, nowValue(readOptions.now)) : null;
         },
 
         peek(name, readOptions = {}) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
-            if (!entry) return null;
-            return createPublicSnapshot(entry, normalizedOptions, nowValue(readOptions.now));
+            const entry = entries.get(normalizeDatasetName(name));
+            return entry ? publicSnapshot(entry, nowValue(readOptions.now)) : null;
         },
 
         has(name, readOptions = {}) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
+            const entry = entries.get(normalizeDatasetName(name));
             if (!entry) return false;
             if (readOptions.allowStale === true) return true;
             const now = nowValue(readOptions.now);
@@ -377,7 +352,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
 
         list(readOptions = {}) {
             const now = nowValue(readOptions.now);
-            return Array.from(entries.values()).map(entry => createPublicSnapshot(entry, normalizedOptions, now));
+            return Array.from(entries.values()).map(entry => publicSnapshot(entry, now));
         },
 
         remove(name) {
@@ -398,61 +373,49 @@ export const createSearchDatasetRegistry = (options = {}) => {
         },
 
         markStale(name) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
+            const entry = entries.get(normalizeDatasetName(name));
             if (!entry) return false;
             entry.stale = true;
-            entry.derived.clear();
-            stats.derivedInvalidations += 1;
+            if (entry.derived.size) {
+                entry.derived.clear();
+                stats.derivedInvalidations += 1;
+            }
             return true;
         },
 
         refreshExpiry(name, ttlMs, suppliedNow) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
+            const entry = entries.get(normalizeDatasetName(name));
             if (!entry) return null;
             const now = nowValue(suppliedNow);
-            const normalizedTtl = normalizeInteger(ttlMs, {
-                min: 1,
-                max: MAX_DATASET_TTL_MS,
-                fallback: normalizedOptions.ttlMs
-            });
+            const normalizedTtl = boundedPositiveInteger(ttlMs, normalizedOptions.ttlMs, MAX_DATASET_TTL_MS);
             entry.expiresAt = now + normalizedTtl;
             entry.stale = false;
             touch(entry, now);
-            return createPublicSnapshot(entry, normalizedOptions, now);
+            return publicSnapshot(entry, now);
         },
 
         registerLoader,
         load,
 
         async ensure(name, ensureOptions = {}) {
-            const cached = this.get(name, {
-                now: ensureOptions.now,
-                allowStale: false
-            });
+            const cached = api.get(name, { now: ensureOptions.now, allowStale: false });
             if (cached && ensureOptions.force !== true) return cached;
             return load(name, ensureOptions);
         },
 
         getDerived(name, key) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
+            const entry = entries.get(normalizeDatasetName(name));
             if (!entry) return undefined;
             const derived = entry.derived.get(normalizeText(key));
-            if (!derived || derived.revision !== entry.revision || derived.fingerprint !== entry.fingerprint) {
-                return undefined;
-            }
+            if (!derived || derived.revision !== entry.revision || derived.fingerprint !== entry.fingerprint) return undefined;
             stats.derivedHits += 1;
             return derived.value;
         },
 
         setDerived(name, key, value) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
-            if (!entry) return undefined;
+            const entry = entries.get(normalizeDatasetName(name));
             const normalizedKey = normalizeText(key);
-            if (!normalizedKey) return undefined;
+            if (!entry || !normalizedKey) return undefined;
             entry.derived.set(normalizedKey, {
                 revision: entry.revision,
                 fingerprint: entry.fingerprint,
@@ -463,22 +426,24 @@ export const createSearchDatasetRegistry = (options = {}) => {
         },
 
         getOrBuildDerived(name, key, builder) {
-            const cached = this.getDerived(name, key);
+            const cached = api.getDerived(name, key);
             if (cached !== undefined) return cached;
             if (typeof builder !== "function") throw new TypeError("Derived dataset builder must be a function");
-            const snapshot = this.peek(name);
+            const snapshot = api.peek(name);
             if (!snapshot) return undefined;
-            const value = builder(snapshot);
-            return this.setDerived(name, key, value);
+            return api.setDerived(name, key, builder(snapshot));
         },
 
         invalidateDerived(name, key) {
-            const normalizedName = normalizeDatasetName(name);
-            const entry = entries.get(normalizedName);
+            const entry = entries.get(normalizeDatasetName(name));
             if (!entry) return false;
-            const removed = key === undefined
-                ? Boolean(entry.derived.size && entry.derived.clear() === undefined)
-                : entry.derived.delete(normalizeText(key));
+            let removed = false;
+            if (key === undefined) {
+                removed = entry.derived.size > 0;
+                entry.derived.clear();
+            } else {
+                removed = entry.derived.delete(normalizeText(key));
+            }
             if (removed) stats.derivedInvalidations += 1;
             return removed;
         },
@@ -494,10 +459,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
                 inFlightCount: inFlight.size,
                 loaderCount: loaders.size,
                 names: snapshots.map(entry => entry.name),
-                revisions: snapshots.reduce((result, entry) => ({
-                    ...result,
-                    [entry.name]: entry.revision
-                }), {})
+                revisions: snapshots.reduce((result, entry) => ({ ...result, [entry.name]: entry.revision }), {})
             };
         },
 
@@ -510,6 +472,8 @@ export const createSearchDatasetRegistry = (options = {}) => {
         _unsafeEntries: entries,
         _unsafeInFlight: inFlight
     };
+
+    return api;
 };
 
 export const SearchDatasetRegistry = {
