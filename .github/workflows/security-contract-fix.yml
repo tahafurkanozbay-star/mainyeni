@@ -1,0 +1,127 @@
+name: Temporary Security Contract Fix
+
+on:
+  push:
+    branches:
+      - agent/platform-runtime-supervision-20260916-1626-3c6eaa8-r2
+    paths:
+      - '.github/workflows/security-contract-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      NUGET_XMLDOC_MODE: skip
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/platform-runtime-supervision-20260916-1626-3c6eaa8-r2
+          fetch-depth: 0
+
+      - name: Setup .NET 10 LTS
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Align repository security contracts with Vite TypeScript policy
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/Platform.Security.Tests/RepositorySecurityContractTests.cs')
+          text = path.read_text()
+
+          old_secret = '''        var apiConfiguration = Read("Api.User/Controllers/Base/ApiConfiguration.cs");
+        var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.js");
+        var env = Read("Webclient.app/.env");
+
+        Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Authorization'", authBusiness, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\\s*=", RegexOptions.IgnoreCase), env);
+'''
+          new_secret = '''        var apiConfiguration = Read("Api.User/Controllers/Base/ApiConfiguration.cs");
+        var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.js");
+        var envExample = Read("Webclient.app/.env.example");
+        var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.app", ".env");
+
+        Assert.False(File.Exists(localEnvPath), "Webclient.app/.env must remain local-only and untracked.");
+        Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Authorization'", authBusiness, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotMatch(new Regex(@"(?:REACT_APP|VITE)_CLIENT_KEY\\s*=", RegexOptions.IgnoreCase), envExample);
+        Assert.DoesNotContain("SECRET", envExample, StringComparison.OrdinalIgnoreCase);
+'''
+
+          old_api = '''        var env = Read("Webclient.app/.env");
+        var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
+        var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.js");
+        var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.js");
+
+        Assert.Contains("REACT_APP_API_URL=/api", env, StringComparison.Ordinal);
+        Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
+        Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
+        Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("CROSS_ORIGIN_BLOCKED", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("!trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
+'''
+          new_api = '''        var envExample = Read("Webclient.app/.env.example");
+        var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
+        var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.ts");
+        var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.ts");
+        var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.app", ".env");
+
+        Assert.False(File.Exists(localEnvPath), "Webclient.app/.env must remain local-only and untracked.");
+        Assert.Contains("VITE_API_URL=/api", envExample, StringComparison.Ordinal);
+        Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
+        Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
+        Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("CROSS_ORIGIN_BLOCKED", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("!trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
+'''
+
+          for old, new, label in ((old_secret, new_secret, 'secret contract'), (old_api, new_api, 'same-origin contract')):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Restore and build Release
+        run: |
+          dotnet restore CityWorks.NetCore.sln
+          dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
+
+      - name: Run all Platform security contracts
+        run: dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore
+
+      - name: Publish both APIs
+        run: |
+          dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output /tmp/publish-user
+          dotnet publish Api.Admin/Api.Admin.csproj --configuration Release --no-build --no-restore --output /tmp/publish-admin
+
+      - name: Commit validated security contract fix and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/security-contract-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/Platform.Security.Tests/RepositorySecurityContractTests.cs .github/workflows/security-contract-fix.yml
+          git commit -m 'test(security): align env contracts with Vite local-only policy'
+          git push origin HEAD:agent/platform-runtime-supervision-20260916-1626-3c6eaa8-r2
