@@ -40,8 +40,10 @@ export interface ParseResponseOptions {
   includeHeaders?: boolean;
 }
 
-const normalizeContentType = (value: unknown): string =>
-  String(value || '').split(';')[0].trim().toLowerCase();
+const normalizeContentType = (value: unknown): string => {
+  const [mediaType = ''] = String(value || '').split(';', 1);
+  return mediaType.trim().toLowerCase();
+};
 
 export const isJsonContentType = (value: unknown): boolean => {
   const normalized = normalizeContentType(value);
