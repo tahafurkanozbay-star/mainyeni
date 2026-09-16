@@ -26,14 +26,18 @@ export const DURATION_BUCKETS = Object.freeze([
 ] as const);
 
 export type DurationBucket = typeof DURATION_BUCKETS[number];
+export interface SanitizedDiagnosticArray extends ReadonlyArray<SanitizedDiagnosticValue> {}
+export interface SanitizedDiagnosticObject {
+  readonly [key: string]: SanitizedDiagnosticValue;
+}
 export type SanitizedDiagnosticValue =
   | string
   | number
   | boolean
   | null
   | undefined
-  | readonly SanitizedDiagnosticValue[]
-  | Readonly<Record<string, SanitizedDiagnosticValue>>;
+  | SanitizedDiagnosticArray
+  | SanitizedDiagnosticObject;
 
 interface NetworkDiagnosticsOptions {
   capacity?: number;
