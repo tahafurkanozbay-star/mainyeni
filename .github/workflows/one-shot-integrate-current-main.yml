@@ -1,0 +1,67 @@
+name: One-shot Integrate Current Main
+
+on:
+  push:
+    branches:
+      - agent/data-search-production-v2-20260916-1246-851a5c9
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/data-search-production-v2-20260916-1246-851a5c9
+          fetch-depth: 0
+
+      - name: Integrate current main without force
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "Current main already incorporated."
+            exit 0
+          fi
+
+          cp KENT_REHBERI_PROGRESS.md /tmp/progress-ours.md
+          set +e
+          git merge --no-ff --no-commit origin/main
+          merge_status=$?
+          set -e
+
+          if [ "$merge_status" -ne 0 ]; then
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+            if [ "${#conflicts[@]}" -ne 1 ] || [ "${conflicts[0]}" != "KENT_REHBERI_PROGRESS.md" ]; then
+              printf 'Unexpected merge conflicts:\n%s\n' "${conflicts[*]:-<none>}"
+              git merge --abort || true
+              exit 1
+            fi
+          fi
+
+          cp /tmp/progress-ours.md KENT_REHBERI_PROGRESS.md
+          cat >> KENT_REHBERI_PROGRESS.md <<'EOF'
+
+## GIS PR #66 Main Entegrasyonu — 2026-09-16
+- Current `main`, GIS PR #66 squash merge'i ile `c89ef2a5ab2fd1d633d10447c5db56f177811bed` → `3c6eaa8b35eca2da1219ddaab9f90d16a3255a79` ilerledi.
+- PR #66 `feat(gis): continue bounded ArcGIS data lifecycle modernization` merge edilmiştir; strict TypeScript bounded ArcGIS feature-window/query runtime, geometry guard, query execution planner, request coordinator, layer lifecycle manager, renderer policy ve runtime configuration yüzeyleri main'e alınmıştır.
+- PR #66'nın shared progress dosyasını tarihçeyi kısaltan branch-scoped özetle değiştirmesi bu entegrasyonda taşınmadı; mevcut ortak progress tarihçesi korunup gerçek post-merge durumu burada append-only kaydedildi.
+- Network/GIS sınırları korunmuştur: yeni WMS/WFS/WMTS veya uydurma endpoint eklenmemiştir; `iconRegistry.json` + shared resolver/presentation tek GIS icon authority olmaya devam eder.
+- PR #59 entegrasyonu force push kullanmadan gerçek iki-parent merge ile yapılmıştır; final merge gate için bu entegrasyon sonrası exact-head CI yeniden zorunludur.
+EOF
+
+          git add KENT_REHBERI_PROGRESS.md
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit after integration."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(search): integrate current main GIS runtime"
+          git push origin HEAD:agent/data-search-production-v2-20260916-1246-851a5c9
