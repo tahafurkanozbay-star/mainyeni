@@ -1,4 +1,4 @@
-import { defineConfig, transformWithEsbuild, type Plugin } from 'vite';
+import { defineConfig, transformWithOxc, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const legacyJsxPlugin = (): Plugin => ({
@@ -6,11 +6,16 @@ const legacyJsxPlugin = (): Plugin => ({
   enforce: 'pre',
   async transform(code, id) {
     if (!id.includes('/src/') || !id.endsWith('.js')) return null;
-    return transformWithEsbuild(code, id, {
-      loader: 'jsx',
-      jsx: 'automatic',
-      target: 'es2022',
+    const result = await transformWithOxc(code, id, {
+      lang: 'jsx',
+      jsx: {
+        runtime: 'automatic',
+      },
     });
+    return {
+      code: result.code,
+      map: result.map,
+    };
   },
 });
 
@@ -33,13 +38,6 @@ export default defineConfig({
     legacyJsxPlugin(),
     react({ include: /\.[jt]sx?$/ }),
   ],
-  optimizeDeps: {
-    esbuildOptions: {
-      loader: {
-        '.js': 'jsx',
-      },
-    },
-  },
   build: {
     target: 'es2022',
     outDir: 'build',
