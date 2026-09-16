@@ -22,20 +22,22 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Resolve lockfile with npm 11
+      - name: Resolve lockfile from modern manifest with npm 11
         working-directory: Webclient.app
-        run: npm install --package-lock-only --ignore-scripts
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only --ignore-scripts
       - name: Verify clean install contract
         working-directory: Webclient.app
         run: npm ci --ignore-scripts
       - name: Commit generated lockfile
         run: |
-          if git diff --quiet -- Webclient.app/package-lock.json; then
-            echo 'Lockfile already current.'
-            exit 0
-          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add Webclient.app/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Lockfile already current.'
+            exit 0
+          fi
           git commit -m 'chore(web): regenerate npm 11 lockfile'
           git push origin HEAD:agent/platform-modernization-20260916-1045-f3f3c0f
