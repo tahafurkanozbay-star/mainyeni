@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from "../platform/http/legacyHttpClient";
 import { AppConfig } from "../Core/AppConfig";
 import { AuthBusiness } from "./AuthBusiness";
 
@@ -12,7 +12,7 @@ export const FeedbackBusiness={
             method: 'post',
             url: AppConfig.Api.BaseUrl + '/Feedback/Save',
             headers: _headers,
-            data: JSON.stringify(formData),
+            data: formData,
         };
     
         return new Promise((resolve) => {
@@ -22,7 +22,7 @@ export const FeedbackBusiness={
     
                     let result = response.data;
                     resolve(result);
-                }).catch(function (error) {
+                }).catch(function () {
                     resolve(null);
                 });
     
