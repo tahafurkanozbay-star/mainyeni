@@ -115,7 +115,7 @@ export const executeFetch = async (rawConfig, dependencies = {}) => {
   const defaults = dependencies.defaults || {};
   const config = normalizeRequestConfig(rawConfig, defaults);
   const fetchImpl = dependencies.fetchImpl || (
-    typeof fetch === 'function' ? fetch.bind(globalThis) : null
+    typeof fetch === 'function' ? fetch : null
   );
   assertFetchRuntime(fetchImpl);
 
