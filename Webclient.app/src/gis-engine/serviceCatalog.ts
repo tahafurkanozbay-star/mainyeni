@@ -1,17 +1,14 @@
-export const GIS_SERVICE_TYPES = Object.freeze({
-  MAP_SERVER: 'MapServer',
-  FEATURE_SERVER: 'FeatureServer',
-  VECTOR_TILE: 'VectorTileServer',
-  IMAGE_SERVER: 'ImageServer',
-  SCENE_SERVER: 'SceneServer',
-  TILES_3D: '3DTiles',
-  GLTF: 'GLTF',
-  ELEVATION: 'Elevation',
-  GENERIC_ARCGIS_REST: 'ArcGISREST',
-});
+import { GIS_SERVICE_TYPE } from './contracts';
+import type {
+  GisServiceInput,
+  GisServiceType,
+  SanitizedGisService,
+} from './contracts';
+
+export const GIS_SERVICE_TYPES = GIS_SERVICE_TYPE;
 
 const DISALLOWED_TYPES = new Set(['WMS', 'WFS', 'WMTS', 'OGC-WMS', 'OGC-WFS']);
-const TYPE_ALIASES = new Map([
+const TYPE_ALIASES = new Map<string, GisServiceType>([
   ['MAPSERVER', GIS_SERVICE_TYPES.MAP_SERVER],
   ['FEATURESERVER', GIS_SERVICE_TYPES.FEATURE_SERVER],
   ['VECTORTILESERVER', GIS_SERVICE_TYPES.VECTOR_TILE],
@@ -24,13 +21,13 @@ const TYPE_ALIASES = new Map([
   ['ARCGISREST', GIS_SERVICE_TYPES.GENERIC_ARCGIS_REST],
 ]);
 
-const browserOrigin = () => (
+const browserOrigin = (): string => (
   typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin
     : 'http://localhost'
 );
 
-export const normalizeServiceUrl = (url) => {
+export const normalizeServiceUrl = (url: unknown): string => {
   if (!url) return '';
   const raw = String(url).trim();
   try {
@@ -43,7 +40,7 @@ export const normalizeServiceUrl = (url) => {
   }
 };
 
-const canonicalizeType = (type) => {
+const canonicalizeType = (type: unknown): string => {
   const raw = String(type || '').trim();
   if (!raw) return '';
   const upper = raw.toUpperCase();
@@ -51,36 +48,36 @@ const canonicalizeType = (type) => {
   return TYPE_ALIASES.get(upper) || raw;
 };
 
-const inferTypeFromUrl = (url) => {
+const inferTypeFromUrl = (url: unknown): GisServiceType => {
   const normalized = normalizeServiceUrl(url);
   const match = normalized.match(
     /\/(MapServer|FeatureServer|VectorTileServer|ImageServer|SceneServer)(?:\/\d+)?$/i,
   );
-  return match ? canonicalizeType(match[1]) : GIS_SERVICE_TYPES.GENERIC_ARCGIS_REST;
+  return (match ? canonicalizeType(match[1]) : GIS_SERVICE_TYPES.GENERIC_ARCGIS_REST) as GisServiceType;
 };
 
-export const inferServiceType = (service = {}) => {
+export const inferServiceType = (service: GisServiceInput = {}): GisServiceType | string => {
   const explicitType = canonicalizeType(service?.type);
   return explicitType || inferTypeFromUrl(service?.url);
 };
 
-export const isDisallowedServiceType = (serviceOrType) => {
+export const isDisallowedServiceType = (serviceOrType: GisServiceInput | string): boolean => {
   const type = typeof serviceOrType === 'string'
     ? canonicalizeType(serviceOrType)
     : inferServiceType(serviceOrType);
   return DISALLOWED_TYPES.has(String(type).trim().toUpperCase());
 };
 
-export const isArcGISRestService = (service) => [
+export const isArcGISRestService = (service: GisServiceInput): boolean => ([
   GIS_SERVICE_TYPES.MAP_SERVER,
   GIS_SERVICE_TYPES.FEATURE_SERVER,
   GIS_SERVICE_TYPES.VECTOR_TILE,
   GIS_SERVICE_TYPES.IMAGE_SERVER,
   GIS_SERVICE_TYPES.SCENE_SERVER,
   GIS_SERVICE_TYPES.GENERIC_ARCGIS_REST,
-].includes(inferServiceType(service));
+] as string[]).includes(String(inferServiceType(service)));
 
-export const getServiceKindLabel = (service) => ({
+export const getServiceKindLabel = (service: GisServiceInput): string => ({
   MapServer: 'ArcGIS MapServer',
   FeatureServer: 'ArcGIS FeatureServer',
   VectorTileServer: 'ArcGIS VectorTileServer',
@@ -89,25 +86,26 @@ export const getServiceKindLabel = (service) => ({
   '3DTiles': '3D Tiles',
   GLTF: 'glTF / GLB',
   Elevation: 'Elevation',
-})[inferServiceType(service)] || 'ArcGIS REST';
+} as Record<string, string>)[String(inferServiceType(service))] || 'ArcGIS REST';
 
-const normalizeOpacity = (value) => {
+const normalizeOpacity = (value: unknown): number => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.min(1, Math.max(0, numeric)) : 1;
 };
 
-const normalizeScale = (value) => {
+const normalizeScale = (value: unknown): number => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
 };
 
-export const sanitizeService = (service = {}) => {
-  const type = inferServiceType(service);
-  if (isDisallowedServiceType(type)) {
-    throw new Error(`Service type ${type} is not supported by the GIS engine.`);
+export const sanitizeService = (service: GisServiceInput = {}): SanitizedGisService => {
+  const inferredType = inferServiceType(service);
+  if (isDisallowedServiceType(String(inferredType))) {
+    throw new Error(`Service type ${inferredType} is not supported by the GIS engine.`);
   }
 
-  const safe = {
+  const type = inferredType as GisServiceType;
+  const safe: SanitizedGisService = {
     id: String(service.id ?? '').trim(),
     title: String(service.title ?? service.name ?? service.id ?? 'GIS Layer').trim(),
     type,
@@ -117,7 +115,7 @@ export const sanitizeService = (service = {}) => {
     minScale: normalizeScale(service.minScale),
     maxScale: normalizeScale(service.maxScale),
     visible: service.visible !== false,
-    sublayerId: Number.isInteger(service.sublayerId) ? service.sublayerId : null,
+    sublayerId: Number.isInteger(service.sublayerId) ? Number(service.sublayerId) : null,
     proxy: service.proxy === true,
     metadata: { ...(service.metadata || {}) },
   };
@@ -127,9 +125,9 @@ export const sanitizeService = (service = {}) => {
   return safe;
 };
 
-export const sanitizeCatalog = (services = []) => {
-  const seen = new Set();
-  const result = [];
+export const sanitizeCatalog = (services: readonly GisServiceInput[] = []): SanitizedGisService[] => {
+  const seen = new Set<string>();
+  const result: SanitizedGisService[] = [];
 
   (Array.isArray(services) ? services : []).forEach((service) => {
     try {
@@ -145,11 +143,14 @@ export const sanitizeCatalog = (services = []) => {
   return result;
 };
 
-export const indexCatalog = (services = []) => new Map(
+export const indexCatalog = (services: readonly GisServiceInput[] = []): Map<string, SanitizedGisService> => new Map(
   sanitizeCatalog(services).map((service) => [service.id, service]),
 );
 
-export const mergeCatalog = (base = [], incoming = []) => {
+export const mergeCatalog = (
+  base: readonly GisServiceInput[] = [],
+  incoming: readonly GisServiceInput[] = [],
+): SanitizedGisService[] => {
   const map = indexCatalog(base);
   sanitizeCatalog(incoming).forEach((service) => {
     const previous = map.get(service.id);
@@ -165,38 +166,36 @@ export const mergeCatalog = (base = [], incoming = []) => {
   return [...map.values()];
 };
 
-export const selectOperationalServices = (services = []) => sanitizeCatalog(services)
+export const selectOperationalServices = (
+  services: readonly GisServiceInput[] = [],
+): SanitizedGisService[] => sanitizeCatalog(services)
   .filter((service) => service.enabled && service.visible);
 
-export const toRuntimeLayerOptions = (service) => {
-  const safe = sanitizeService(service);
-  return {
-    id: safe.id,
-    title: safe.title,
-    url: safe.url,
-    opacity: safe.opacity,
-    visible: safe.visible,
-    minScale: safe.minScale,
-    maxScale: safe.maxScale,
-    sublayerId: safe.sublayerId,
-    type: safe.type,
-    proxy: safe.proxy,
-  };
-};
+export const toRuntimeLayerOptions = (service: GisServiceInput): SanitizedGisService => sanitizeService(service);
 
-export const hasSameOrigin = (url) => {
+export const hasSameOrigin = (url: unknown): boolean => {
   if (!url) return false;
   try {
-    return new URL(url, browserOrigin()).origin === browserOrigin();
+    return new URL(String(url), browserOrigin()).origin === browserOrigin();
   } catch (_) {
     return false;
   }
 };
 
+export interface NetworkPolicyOptions {
+  allowSameOrigin?: boolean;
+  allowConfiguredRemote?: boolean;
+  allowProxy?: boolean;
+}
+
 export const enforceNetworkPolicy = (
-  service,
-  { allowSameOrigin = true, allowConfiguredRemote = false, allowProxy = true } = {},
-) => {
+  service: GisServiceInput,
+  {
+    allowSameOrigin = true,
+    allowConfiguredRemote = false,
+    allowProxy = true,
+  }: NetworkPolicyOptions = {},
+): boolean => {
   const safe = sanitizeService(service);
   if (hasSameOrigin(safe.url)) return true;
   if (safe.proxy && allowProxy) return true;
