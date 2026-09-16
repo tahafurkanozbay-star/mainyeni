@@ -44,3 +44,12 @@
 - DATA / SEARCH SCOPE: typed data integrity, schema evolution, bounded catalog, cursor pagination, query planning, search sessions, privacy-safe observability and provider-injected geocoding remain canonical; no endpoint, WMS/WFS/WMTS or autonomous external network call added.
 - GÜVENLİK / PERFORMANS: bounded caches/history/candidate budgets, cancellation, stale-response suppression, integrity quarantine and privacy-safe diagnostics remain in scope; shared GIS icon resolver authority unchanged.
 - SONRAKİ GÖREV: wait for and inspect fresh exact-head Webclient Quality, Release QA and Platform Architecture Audit. Fix any repository-caused failure on this same PR branch, then rerun exact-head validation. Merge only with additions>=4000, behind=0, merge-base=current main, mergeable=true, zero unresolved threads and all mandatory exact-head checks completed+success; refresh main immediately before expected-head squash merge.
+
+## Deep Data / Search / Address — 2026-09-16 23:36 TRT
+- TUR / GÖREV: PR #59 exact-head failure triage and merge-gate preservation.
+- VERIFIED STATE: main/merge-base `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`; pre-progress head `b6da5ea1cb71119a11cf3c0703637d78e6d3cfa1`; behind=0; mergeable=true; zero unresolved review threads; source/test additions remain >4,000.
+- EXACT-HEAD CI: Platform Architecture Audit completed/success. Webclient Quality and Release QA completed/failure. Webclient runner provisioned and executed normally; this is not an Actions-start/billing/provisioning failure.
+- ROOT CAUSE: exact-base TypeScript regression gate reports baseline 74 diagnostics, current 81, added 7. Added diagnostics are `geocodingRuntime.ts:331`, `productionRuntime.ts:188`, `productionRuntime.ts:222`, `productionRuntime.ts:232`, `queryPlanRuntime.ts:161`, `schemaEvolution.ts:531`, and `searchSession.ts:244`.
+- FIX PLAN: preserve exactOptionalPropertyTypes by conditionally including optional fields rather than passing `undefined`; narrow spatial bounds before indexed lookup; type schema alias callback explicitly; widen debounce cleanup local to `() => void`. Do not weaken the regression workflow or required checks.
+- NETWORK / SECURITY / ICONS: no network, endpoint, WMS/WFS/WMTS, secret, icon-authority, or security-policy change in this triage turn.
+- MERGE DURUMU: NOT MERGED. Fresh exact-head CI is mandatory after code fixes; merge only after all mandatory checks complete successfully and final current-main refresh remains behind=0/conflict-free.
