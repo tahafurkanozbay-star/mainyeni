@@ -1,3 +1,4 @@
+import { transformAsync } from '@babel/core';
 import { defineConfig } from 'vitest/config';
 import { transformWithOxc, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -32,9 +33,65 @@ const legacyJestCompatibilityPlugin = (): Plugin => ({
   },
 });
 
+const constructibleLegacyMocksPlugin = (): Plugin => ({
+  name: 'kent-rehberi-vitest-constructible-legacy-mocks',
+  enforce: 'pre',
+  async transform(code, id) {
+    if (!/\.test\.js$/.test(id)) return null;
+    if (!code.includes('vi.fn') && !code.includes('.mockImplementation')) return null;
+
+    const result = await transformAsync(code, {
+      filename: id,
+      babelrc: false,
+      configFile: false,
+      sourceMaps: true,
+      sourceType: 'module',
+      parserOpts: { plugins: ['jsx'] },
+      plugins: [({ types: t }) => ({
+        name: 'constructible-vitest-mock-implementations',
+        visitor: {
+          CallExpression(path: any) {
+            const callee = path.node.callee;
+            let methodName: string | null = null;
+
+            if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+              methodName = callee.property.name;
+            }
+
+            if (!['fn', 'mockImplementation', 'mockImplementationOnce'].includes(methodName || '')) {
+              return;
+            }
+
+            const implementation = path.node.arguments[0];
+            if (!t.isArrowFunctionExpression(implementation)) return;
+
+            const body = t.isBlockStatement(implementation.body)
+              ? implementation.body
+              : t.blockStatement([t.returnStatement(implementation.body)]);
+            const constructible = t.functionExpression(
+              null,
+              implementation.params,
+              body,
+              false,
+              implementation.async,
+            );
+            path.node.arguments[0] = constructible;
+          },
+        },
+      })],
+    });
+
+    if (!result?.code) return null;
+    return result.map
+      ? { code: result.code, map: result.map }
+      : { code: result.code };
+  },
+});
+
 export default defineConfig({
   plugins: [
     legacyJestCompatibilityPlugin(),
+    constructibleLegacyMocksPlugin(),
     legacyJsxPlugin(),
     react({ include: /\.[jt]sx?$/ }),
   ],
