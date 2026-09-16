@@ -16,14 +16,16 @@ export const DEFAULT_SESSION_HISTORY_SIZE = 20;
 export const MAX_SESSION_HISTORY_SIZE = 200;
 
 const noop = () => {};
-const hasAbortController = () => typeof AbortController !== "undefined";
 const asArray = value => Array.isArray(value) ? value : [];
+const hasAbortController = () => typeof AbortController !== "undefined";
 
-export const normalizeSearchDebounceMs = value => normalizeInteger(value, {
-    min: 0,
-    max: MAX_SEARCH_DEBOUNCE_MS,
-    fallback: DEFAULT_SEARCH_DEBOUNCE_MS
-});
+export const normalizeSearchDebounceMs = value => {
+    if (value === 0 || value === "0") return 0;
+    if (value === undefined || value === null || value === "") return DEFAULT_SEARCH_DEBOUNCE_MS;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) return DEFAULT_SEARCH_DEBOUNCE_MS;
+    return Math.min(MAX_SEARCH_DEBOUNCE_MS, numeric);
+};
 
 export const createSessionRequestKey = (datasetName, request = {}) => {
     const normalized = normalizeCoordinatorRequest(request);
@@ -116,6 +118,7 @@ export const createSearchSession = (coordinator, options = {}) => {
     if (!coordinator || typeof coordinator.search !== "function") {
         throw new TypeError("Search session requires a coordinator with a search function");
     }
+
     const scheduler = options.scheduler || createDefaultScheduler();
     const now = typeof options.now === "function" ? options.now : () => Date.now();
     const debounceMs = normalizeSearchDebounceMs(options.debounceMs);
@@ -142,7 +145,7 @@ export const createSearchSession = (coordinator, options = {}) => {
             try {
                 listener(snapshot);
             } catch (_error) {
-                // Listener failures must not break search execution.
+                // Consumer listeners are observational and cannot break search execution.
             }
         });
     };
@@ -163,8 +166,7 @@ export const createSearchSession = (coordinator, options = {}) => {
         scheduler.clear(scheduled.timerId);
         const pending = scheduled;
         scheduled = null;
-        const error = createSearchAbortError(reason || "Scheduled search superseded");
-        pending.reject(error);
+        pending.reject(createSearchAbortError(reason || "Scheduled search superseded"));
         transition({
             pendingRequestId: null,
             cancellationCount: state.cancellationCount + 1
@@ -285,7 +287,7 @@ export const createSearchSession = (coordinator, options = {}) => {
         });
     };
 
-    return {
+    const api = {
         search: execute,
         schedule,
 
@@ -300,22 +302,17 @@ export const createSearchSession = (coordinator, options = {}) => {
             if (!current || current?.page?.hasMore !== true || nextOffset === null || nextOffset === undefined) {
                 return { result: current, stale: false, requestId: state.committedRequestId, terminal: true };
             }
-            const request = {
+            return execute(state.dataset, {
                 ...(current.request || {}),
                 offset: nextOffset
-            };
-            return execute(state.dataset, request, searchOptions);
+            }, searchOptions);
         },
 
         cancel(reason = "Search cancelled") {
             const scheduledCancelled = cancelScheduled(reason);
             const activeCancelled = abortActive(reason);
             if (scheduledCancelled || activeCancelled) {
-                transition({
-                    status: "cancelled",
-                    pendingRequestId: null,
-                    error: null
-                });
+                transition({ status: "cancelled", pendingRequestId: null, error: null });
             }
             return scheduledCancelled || activeCancelled;
         },
@@ -345,7 +342,7 @@ export const createSearchSession = (coordinator, options = {}) => {
         },
 
         reset() {
-            this.cancel("Search session reset");
+            api.cancel("Search session reset");
             history.length = 0;
             sequence = 0;
             state = createSessionState();
@@ -354,7 +351,7 @@ export const createSearchSession = (coordinator, options = {}) => {
 
         dispose() {
             if (disposed) return false;
-            this.cancel("Search session disposed");
+            api.cancel("Search session disposed");
             disposed = true;
             listeners.clear();
             history.length = 0;
@@ -382,6 +379,8 @@ export const createSearchSession = (coordinator, options = {}) => {
             };
         }
     };
+
+    return api;
 };
 
 export const SearchSessionRuntime = {
