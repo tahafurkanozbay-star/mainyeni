@@ -65,6 +65,8 @@ export const parseRetryAfter = (value, options = {}) => {
   const text = String(value).trim();
   if (!text) return null;
 
+  if (/^-\d+(?:\.\d+)?$/.test(text)) return null;
+
   if (/^\d+(?:\.\d+)?$/.test(text)) {
     const seconds = Number(text);
     if (!Number.isFinite(seconds) || seconds < 0) return null;
