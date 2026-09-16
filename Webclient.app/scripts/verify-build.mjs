@@ -6,8 +6,15 @@ import {
   INTEGRITY_MANIFEST_FILE,
   verifyBuildIntegrityManifest,
 } from './build-integrity.mjs';
+import {
+  RELEASE_MANIFEST_FILE,
+  SBOM_FILE,
+  validateReleaseArtifacts,
+  verifyReleaseManifestAssets,
+} from './release-artifacts.mjs';
 
 const BUILD_DIR = new URL('../build/', import.meta.url);
+const PROJECT_ROOT = new URL('../', import.meta.url);
 const MAX_JS_GZIP_BYTES = 650 * 1024;
 const MAX_CSS_GZIP_BYTES = 250 * 1024;
 const MAX_TOTAL_GZIP_BYTES = 2.5 * 1024 * 1024;
@@ -43,6 +50,7 @@ const fail = (message) => {
 };
 
 const buildPath = fileURLToPath(BUILD_DIR);
+const projectPath = fileURLToPath(PROJECT_ROOT);
 try {
   const buildStats = await stat(buildPath);
   if (!buildStats.isDirectory()) throw new Error('build path is not a directory');
@@ -56,6 +64,12 @@ const relativeFiles = files.map((file) => normalizePath(relative(buildPath, file
 
 if (!relativeFiles.includes('index.html')) {
   fail('index.html is missing from the production bundle.');
+}
+if (!relativeFiles.includes(RELEASE_MANIFEST_FILE)) {
+  fail(`${RELEASE_MANIFEST_FILE} is missing; release provenance was not emitted.`);
+}
+if (!relativeFiles.includes(SBOM_FILE)) {
+  fail(`${SBOM_FILE} is missing; CycloneDX dependency inventory was not emitted.`);
 }
 if (!relativeFiles.includes(INTEGRITY_MANIFEST_FILE)) {
   fail(`${INTEGRITY_MANIFEST_FILE} is missing; production artifacts were not fingerprinted.`);
@@ -116,6 +130,26 @@ if (/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']https?:\/\//i.test(html
   fail('Production HTML must not load an uncontrolled remote stylesheet.');
 }
 
+if (relativeFiles.includes(RELEASE_MANIFEST_FILE) && relativeFiles.includes(SBOM_FILE)) {
+  try {
+    const [releaseManifest, sbom, packageJson, lockfile] = await Promise.all([
+      readFile(join(buildPath, RELEASE_MANIFEST_FILE), 'utf8').then(JSON.parse),
+      readFile(join(buildPath, SBOM_FILE), 'utf8').then(JSON.parse),
+      readFile(join(projectPath, 'package.json'), 'utf8').then(JSON.parse),
+      readFile(join(projectPath, 'package-lock.json'), 'utf8').then(JSON.parse),
+    ]);
+    const releaseErrors = validateReleaseArtifacts({ releaseManifest, sbom, packageJson, lockfile });
+    releaseErrors.push(...await verifyReleaseManifestAssets(buildPath, releaseManifest));
+    releaseErrors.forEach((error) => fail(error));
+    if (releaseErrors.length === 0) {
+      console.log(`[build:verify] Release assets: ${releaseManifest.assetCount}`);
+      console.log(`[build:verify] CycloneDX components: ${sbom.components.length}`);
+    }
+  } catch (error) {
+    fail(`Unable to validate release provenance/SBOM: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 if (relativeFiles.includes(INTEGRITY_MANIFEST_FILE)) {
   try {
     const integrityManifest = JSON.parse(
@@ -141,4 +175,4 @@ assets
 console.log(`[build:verify] Total JS/CSS gzip: ${formatBytes(totalGzipBytes)}`);
 
 if (failures.length > 0) process.exit(1);
-console.log('[build:verify] Production bundle passed integrity, origin and size budgets.');
+console.log('[build:verify] Production bundle passed provenance, SBOM, integrity, origin and size budgets.');

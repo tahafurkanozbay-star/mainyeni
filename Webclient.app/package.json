@@ -22,7 +22,7 @@
   "scripts": {
     "dev": "vite",
     "start": "vite --host 0.0.0.0",
-    "build": "vite build && node scripts/build-integrity.mjs",
+    "build": "vite build && node scripts/release-artifacts.mjs && node scripts/build-integrity.mjs",
     "build:verify": "node scripts/verify-build.mjs",
     "dependency:verify": "node scripts/dependency-contract.mjs",
     "lint": "oxlint src tooling vite.config.ts vitest.config.ts",
@@ -31,7 +31,7 @@
     "quality:vite": "node scripts/vite-migration-audit.mjs --self-test && node scripts/vite-migration-audit.mjs",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs",
+    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:gis && npm run typecheck:experience && npm run typecheck:data-search",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",

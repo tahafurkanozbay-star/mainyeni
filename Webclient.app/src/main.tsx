@@ -3,6 +3,7 @@ import App from './App';
 import './styles.css';
 import { AppErrorBoundary } from './platform/runtime/AppErrorBoundary';
 import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
+import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery';
 import { performanceMonitor } from './platform/performance/performanceMonitor';
 import { runtimeConfig } from './platform/config/runtimeConfig';
 
@@ -12,6 +13,7 @@ if (!(rootElement instanceof HTMLElement)) {
 }
 
 performanceMonitor.start();
+const deploymentRecoveryHandle = installDeploymentRecovery(runtimeDiagnostics);
 const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics);
 
 let disposeAdaptiveRuntime = (): void => undefined;
@@ -102,6 +104,7 @@ if (typeof requestAnimationFrame === 'function') {
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     disposeAdaptiveRuntime();
+    deploymentRecoveryHandle.dispose();
     runtimeObserverHandle.dispose();
     performanceMonitor.stop();
     root.unmount();
