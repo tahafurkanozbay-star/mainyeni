@@ -3,21 +3,21 @@ import {
   createHttpResponseError,
   createResponseMetadata,
   normalizeFetchFailure,
-  parseResponseBody,
-  type ResponseLike
+  parseResponseBody
 } from './responseParser.ts';
+import type { ResponseLike } from './responseParser.ts';
 import {
   joinApplicationUrl,
   normalizeRequestConfig,
   serializeRequestBody
 } from './requestPolicy.ts';
-import {
-  type NormalizedRequestConfig,
-  type RawRequestConfig,
-  type RequestBody,
-  type RuntimeDefaults,
-  type Transport,
-  type TransportResult
+import type {
+  NormalizedRequestConfig,
+  RawRequestConfig,
+  RequestBody,
+  RuntimeDefaults,
+  Transport,
+  TransportResult
 } from './contracts';
 
 const DEFAULT_FETCH_CREDENTIALS: RequestCredentials = 'same-origin';
