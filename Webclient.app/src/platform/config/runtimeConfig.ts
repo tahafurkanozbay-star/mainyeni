@@ -4,6 +4,7 @@ const DEFAULT_API_BASE_URL = '/api';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_CACHE_TTL_MS = 30000;
 const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_ESRI_API_VERSION = '4.21';
 
 export interface RuntimeEnvironmentSource {
   readonly [key: string]: unknown;
@@ -113,10 +114,23 @@ export const normalizeApiBaseUrl = (value: unknown): string => {
   return DEFAULT_API_BASE_URL;
 };
 
+/**
+ * esri-loader is still the compatibility transport for the existing GIS surface.
+ * Never allow a free-form build variable to become part of a CDN URL: only an
+ * explicit ArcGIS Maps SDK 4.x release token is accepted, otherwise the known
+ * project baseline is used.
+ */
+export const normalizeEsriApiVersion = (value: unknown): string => {
+  const normalized = safeText(value, DEFAULT_ESRI_API_VERSION, 16);
+  return /^4\.\d{1,3}$/.test(normalized) ? normalized : DEFAULT_ESRI_API_VERSION;
+};
+
 const detectBuildMode = (source: RuntimeEnvironmentSource): RuntimeConfig['buildMode'] => {
-  const hasVite = Object.keys(source).some((key) => key.startsWith('VITE_'));
+  const keys = Object.keys(source);
+  const hasVite = keys.some((key) => key.startsWith('VITE_'))
+    || ['MODE', 'DEV', 'PROD', 'SSR', 'BASE_URL'].some((key) => key in source);
   if (hasVite) return 'vite-ready';
-  const hasCra = Object.keys(source).some((key) => key.startsWith('REACT_APP_'));
+  const hasCra = keys.some((key) => key.startsWith('REACT_APP_'));
   if (hasCra) return 'legacy-cra';
   return 'unknown';
 };
@@ -157,7 +171,7 @@ export const createRuntimeConfig = (source: RuntimeEnvironmentSource = getDefaul
     ),
     environment: safeText(firstDefined(env, ['VITE_ENV', 'MODE', 'REACT_APP_ENV']), 'production', 40),
     release: safeText(firstDefined(env, ['VITE_VERSION', 'VITE_RELEASE', 'REACT_APP_VERSION', 'REACT_APP_RELEASE']), 'local', 120),
-    esriApiVersion: safeText(firstDefined(env, ['VITE_ESRI_API_VERSION', 'REACT_APP_ESRI_API_VERSION']), '', 40),
+    esriApiVersion: normalizeEsriApiVersion(firstDefined(env, ['VITE_ESRI_API_VERSION', 'REACT_APP_ESRI_API_VERSION'])),
     tkgmCityId: safeText(firstDefined(env, ['VITE_TKGM_CITY_ID', 'REACT_APP_TKGM_CITY_ID']), '', 40),
     buildMode: detectBuildMode(env),
     features,
@@ -177,6 +191,9 @@ export const assertSafeRuntimeConfig = (config: RuntimeConfig): true => {
   }
   if (config.maxRetries < 0 || config.maxRetries > 4) {
     throw new Error('API retry count is outside the supported range');
+  }
+  if (!/^4\.\d{1,3}$/.test(config.esriApiVersion)) {
+    throw new Error('ArcGIS Maps SDK version must be an explicit 4.x release');
   }
   return true;
 };
