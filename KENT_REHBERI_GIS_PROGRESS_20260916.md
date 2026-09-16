@@ -1,74 +1,76 @@
-# Kent Rehberi GIS Progress — 2026-09-16 12:45 TRT
+# Kent Rehberi GIS Progress — 2026-09-16 13:05 TRT
 
-> Role-scoped continuation record. Shared `KENT_REHBERI_PROGRESS.md` remains authoritative; reconcile this record into the shared file before a successful merge when GitHub Actions becomes executable again.
+> Role-scoped continuation record. Shared `KENT_REHBERI_PROGRESS.md` has also been reconciled on this branch.
 
 ## TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU
-- TUR: Deep GIS / Whole-Code Modernization continuation and merge-gate pass.
-- GÖREV: strict TypeScript ArcGIS runtime kernel, service health, adaptive 2D/3D rendering, scene streaming, lifecycle/query integration and privacy-safe observability.
+- TUR: Deep GIS / Whole-Code Modernization continuation, typed contract hardening and release-gate review.
+- GÖREV: strict TypeScript ArcGIS runtime kernel + metadata/identity/query/config/layer-lifecycle boundaries, adaptive 2D/3D rendering, scene streaming, service health and privacy-safe observability.
 - Verified current `main`: `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
 - Branch: `agent/gis-modernization-20260916-1214-851a5c9`.
-- Product-code head before this progress-only commit: `686e61a1c386b941b18368256f7324a587d79019`.
+- Latest product-code head: `ea780618bd3a7dbd8d4317e257ec37887bb0ce02`.
+- Shared progress reconciliation commit: `51a365e728eab30880ba47d4f1f5f0c96aa8e696`.
 - PR: #55 `feat(gis): continue typed ArcGIS runtime modernization`.
-- GitHub compare at product-code head: 6 commits ahead / 0 behind; merge-base exactly `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
-- PR status at product-code head: `mergeable=true`, draft=false.
-- GitHub `base...head`: 17 changed files, **4,794 additions / 0 deletions**.
+- Product-code compare: 8 commits ahead / 0 behind; merge-base exactly `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
+- Product-code `base...head`: 26 changed files, **7,588 additions / 0 deletions**.
 - Mandatory >=4,000 meaningful-addition gate: PASS.
-- MERGE: NOT performed. Exact-head required CI cannot currently execute successfully and is a hard merge blocker.
+- MERGE: NOT performed. Exact-head required CI cannot currently execute successfully and remains a hard merge blocker.
 
 ## ÖNEMLİ ÖZELLİKLER
-- `arcgisQueryContract.ts`: strict capability-driven ArcGIS FeatureServer/MapServer query boundary with bounded record windows and deterministic order only when advertised.
+- `arcgisQueryContract.ts`: capability-driven ArcGIS FeatureServer/MapServer query boundary with bounded record windows and deterministic ordering only when advertised.
+- `arcgisMetadataAdapter.ts`: typed field/domain/time/edit/render/spatial-reference metadata normalization plus schema-drift diagnostics.
+- `featureIdentity.ts`: object-id/global-id identity, `OBJECTID=0` preservation, bounded composite fallback, duplicate/conflict diagnostics and dedupe.
+- `arcgisQueryExecutor.ts`: injected network transport, deterministic request keys, existing scheduler cache/dedupe/cancellation integration, ArcGIS/HTTP error normalization and transfer-limit evidence.
 - `viewStateCoordinator.ts`: shared revisioned 2D/3D view state, camera/selection/visibility/tool coordination.
+- `layerLifecycleCoordinator.ts`: mode-aware handle ownership, generation-based stale-create rejection, abort, visibility/opacity/selection parity, suspend/resume and cleanup.
+- `gisJsonConfigContract.ts`: ArcGIS-only typed service/layer JSON contract, WMS/WFS rejection, concrete sublayer validation, hierarchy/cycle checks and shared icon-key validation.
 - `featureRenderPolicy.ts`: pressure-aware direct/cluster/paged/summary feature strategy.
-- `runtimeContracts.ts`: shared strict GIS contracts, deterministic fingerprints, bounded identifiers, spatial-reference/extent normalization, network/memory/frame pressure classification.
-- `serviceHealthRuntime.ts`: rolling service-health metrics, latency percentiles, timeout/cancel/transfer-limit evidence and closed/open/half-open circuit breaker.
-- `renderGovernorRuntime.ts`: adaptive economy/balanced/quality/ultra budgets driven by device memory/CPU/DPR, frame pressure, memory pressure and 2D/3D interaction state.
-- `sceneStreamingPlanner.ts`: deterministic 3D load/prefetch/retain/evict planning with memory, concurrency, stale-age and force-retain/load controls.
-- `gisObservabilityRuntime.ts`: bounded local observability, traces, p50/p95/p99 durations, error-rate health and privacy redaction.
-- `modernGisKernel.ts`: integrates existing ArcGIS request scheduler, layer lifecycle, capability contracts and spatial query planner with the new typed health/render/streaming/observability runtimes.
-- `modernGisKernel.js`: compatibility adapter keeps staged JavaScript consumers viable while canonical runtime logic moves to strict TypeScript.
+- `runtimeContracts.ts`: shared strict GIS contracts, deterministic fingerprints, bounded identifiers, spatial-reference/extent normalization and pressure classification.
+- `serviceHealthRuntime.ts`: rolling service-health metrics, percentiles, timeout/cancel/transfer-limit evidence and closed/open/half-open circuit breaker.
+- `renderGovernorRuntime.ts`: device/frame/memory-aware economy/balanced/quality/ultra rendering budgets.
+- `sceneStreamingPlanner.ts`: deterministic 3D load/prefetch/retain/evict planning with bounded memory and concurrency.
+- `gisObservabilityRuntime.ts`: bounded local traces, percentiles, health summaries and privacy redaction.
+- `modernGisKernel.ts`: typed GIS kernel integrating the existing request scheduler, lifecycle runtime, capability contracts and spatial planner.
+- `modernGisKernel.js`: staged JavaScript compatibility adapter while canonical GIS boundaries move to strict TypeScript.
+
+## PARALEL ÇALIŞMA UZLAŞTIRMASI
+- Branch çalışma sırasında `8137fda...` head'inden eşzamanlı olarak `0705988...` head'ine ilerledi; ilk ref update fast-forward korumasıyla reddedildi.
+- Force-push yapılmadı. Concurrent commit seti compare edilerek `modernGisKernel`, `serviceHealthRuntime`, render governor, scene planner, observability ve testleri korundu.
+- Çakışacak ikinci service-health/orchestrator taslakları branch'e taşınmadı; yalnız eksik metadata/identity/query/config/lifecycle typed sınırları güncel head üzerine fast-forward commit edildi.
 
 ## TESTLER / BUILD / CI
-- Focused regression suites were added for service health/circuit transitions, render pressure, clustering, 3D streaming, observability redaction, query dedupe/cache/invalidation, transfer-limit evidence, service/layer ownership, lifecycle attach/detach/visibility, diagnostics and shutdown.
-- Exact product-code head `686e61a1c386b941b18368256f7324a587d79019` triggered:
-  - Webclient Quality run #977 (`35081649361`) — completed/failure.
-  - Platform Architecture Audit run #171 (`35081649356`) — completed/failure.
-  - Release QA run #73 (`35081649345`) — completed/failure.
-- These failures occur before workflow steps execute: job step lists are empty and decoded job logs are unavailable with GitHub `BlobNotFound`.
-- Current `main` `851a5c93...` shows the same early Webclient Quality push-run failure pattern (run #959) within only a few seconds, so no code-level test/lint/typecheck/build assertion failure has been observed from these runs.
-- This is consistent with a GitHub Actions runner/account/infrastructure execution problem, but it is NOT treated as green CI. Exact-head successful CI remains mandatory before merge.
+- Focused regression coverage: metadata capability/SR/domain/drift; `OBJECTID=0`; duplicate identity; transfer-limit; service/HTTP error; cancellation; deterministic scheduler keys; 2D/3D lifecycle parity; stale handles; ArcGIS-only config; WMS/WFS rejection; directed hierarchy cycles.
+- Exact product-code head `ea780618bd3a7dbd8d4317e257ec37887bb0ce02` triggered:
+  - Webclient Quality #1062 (`35082584665`) — completed/failure.
+  - Release QA #110 (`35082584664`) — `typed-release-audit`, `webclient-release-validation`, `backend-release-validation` all completed/failure.
+  - Platform Architecture Audit #208 (`35082584645`) — completed/failure.
+- Every exact-head job reports `steps=null` and `logs_url=null`; no workflow command/test/typecheck/build assertion is observable.
+- Earlier PR heads and the current-main quality run show the same immediate pre-step failure pattern. This is consistent with a GitHub Actions runner/account/infrastructure execution problem, but it is NOT treated as green CI.
+- Successful exact-head CI remains mandatory before merge.
 
-## NETWORK DEĞİŞİKLİKLERİ
+## NETWORK / SECURITY / DATA INTEGRITY
 - No WMS/WFS/WMTS support added.
-- No invented service endpoint added.
-- No analytics, remote font, CDN or external telemetry dependency added.
-- Modern kernel itself does not introduce a direct fetch/network transport; query execution remains injected through the existing bounded scheduler contract after ArcGIS resource verification.
-- Request cache, dedupe, cancellation and tag invalidation remain bounded.
-
-## GÜVENLİK / DATA INTEGRITY
-- ArcGIS resource validation reuses the existing centralized capability policy and rejects OGC/WMS/WFS-like resources.
-- Generalization can be recommended under pressure, but a coordinate-unit tolerance is never fabricated; tolerance remains null until supplied from verified units.
-- Service/layer ownership fails closed; dependent layers block service removal.
-- Service health cancellation is distinguished from a backend failure; timeouts and transfer-limit evidence remain separately visible.
-- Observability redacts token/secret/password/authorization/cookie/API-key values and fingerprints coordinate/geometry/address/query/object-id fields.
-- Bounded event buffers, request/cache budgets, scene memory budgets and lifecycle budgets reduce uncontrolled CPU/memory/network growth.
+- No invented endpoint, analytics, remote font/CDN, external telemetry or browser secret added.
+- Query execution uses injected transport; existing bounded scheduler owns cache, dedupe, cancellation, backpressure and tag invalidation.
+- ArcGIS capabilities, pagination/order support and spatial references are never invented when metadata does not prove them.
+- Stable service identity and duplicate/conflict diagnostics reduce silent feature corruption.
+- Transfer-limit/incomplete evidence remains visible rather than being silently treated as complete.
+- Generation and abort semantics prevent stale asynchronous layer handles from overwriting newer 2D/3D state.
+- JSON configuration fails closed on missing references, self-links, directed cycles and invalid service/layer resources.
 
 ## İKON EŞLEŞTİRME
 - No second icon registry/resolver introduced.
-- Existing `Webclient.app/src/gis-engine/iconRegistry.json` plus shared resolver/presentation remain the single icon authority for list/2D/3D presentation.
+- Existing `Webclient.app/src/gis-engine/iconRegistry.json` plus shared resolver/presentation remain the single deterministic icon authority.
+- JSON config may validate a supplied set of known shared icon keys; it does not resolve or redefine icons itself.
 
-## MODERNİZASYON KARARLARI / PERFORMANS ETKİSİ
-- Continue feature-by-feature strict TypeScript migration rather than a blind whole-application rewrite.
-- Existing JavaScript consumers are preserved through compatibility adapters while new canonical GIS boundaries are strongly typed.
-- Render governor reduces feature/point/label/scene-node budgets during frame or memory pressure and suppresses expensive 3D extrusion/shadows during interaction.
-- Scene streaming prioritizes visible/high-importance/near resources, bounds prefetch, and evicts stale non-visible resources under memory pressure.
-- Service circuit breaker prevents repeated failing ArcGIS requests from amplifying outages.
-- Deterministic scheduler keys and tag invalidation support request dedupe and bounded cache reuse.
-
-## ÇÖZÜLEN HATALAR / RİSKLER
-- PR was originally below the required 4,000-addition gate; meaningful runtime and regression work raised it to 4,794 additions without filler.
-- Stale older GIS branch based on `a9c6f96...` was not resurrected; work continued on canonical PR #55 based on current `main`.
-- Query/resource behavior does not guess pagination, reprojection support, coordinate units or provider endpoints.
+## MODERNİZASYON / PERFORMANCE KARARLARI
+- Continue staged strict TypeScript migration rather than a blind whole-application rewrite.
+- Existing JavaScript consumers remain viable through compatibility adapters while new GIS contracts are strongly typed.
+- Render governor reduces feature/point/label/scene budgets under frame/memory pressure and suppresses expensive 3D work during interaction.
+- Scene streaming bounds prefetch/concurrency/memory and evicts stale non-visible resources.
+- Service circuit breaker prevents repeated failed ArcGIS requests from amplifying outages.
+- Deterministic request identities improve cache reuse/dedupe while cancellation prevents stale work from consuming CPU/network.
 
 ## KALAN SORUNLAR / SONRAKİ GÖREV NOTU
-- Merge remains blocked solely by the mandatory exact-head successful CI requirement; current GitHub Actions jobs fail before any step starts and produce no usable job logs.
-- When Actions execution is restored: rerun exact-head Webclient Quality, Platform Architecture Audit and Release QA; fix any real code failures on this same canonical branch; refresh `main`; verify behind=0, merge-base/current base, `mergeable=true`, additions >=4000 and security/performance/data-integrity regression status; reconcile this record into shared `KENT_REHBERI_PROGRESS.md`; then squash merge and verify `merged=true` plus the new `main` SHA.
+- Merge remains blocked by exact-head CI. Do not bypass the blocker merely because additions>=4000 and PR is mergeable.
+- When Actions execution is restored: rerun Webclient Quality, Platform Architecture Audit and Release QA on the then-current exact head; fix any real code failures on this same canonical branch; run a second exact-head verification.
+- Refresh `main`, verify behind=0, current merge-base, `mergeable=true`, additions>=4000, and no critical security/performance/data-integrity regression; then squash merge and verify merge SHA plus updated `main` SHA.
