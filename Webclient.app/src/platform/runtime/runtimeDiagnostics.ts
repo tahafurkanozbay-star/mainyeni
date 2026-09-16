@@ -25,6 +25,9 @@ export interface RuntimeDiagnosticsOptions {
 
 const DEFAULT_CAPACITY = 200;
 const MAX_CAPACITY = 2000;
+const MAX_OBJECT_KEYS = 80;
+const MAX_ARRAY_ITEMS = 50;
+const REDACTED = '[redacted]';
 const DEFAULT_REDACT_KEYS = [
   'authorization',
   'cookie',
@@ -35,23 +38,91 @@ const DEFAULT_REDACT_KEYS = [
   'api-key',
   'access_token',
   'refresh_token',
+  'address',
+  'coordinates',
+  'coordinate',
+  'latitude',
+  'longitude',
+  'search',
+  'query',
+  'searchterm',
+  'searchtext',
+  'email',
+  'phone',
+  'telephone',
 ] as const;
+
+const SENSITIVE_KEY_FRAGMENT_PATTERN = /(authorization|cookie|password|secret|token|credential|apikey|connectionstring|sessionid)/i;
+const ABSOLUTE_URL_PATTERN = /https?:\/\/[^\s<>"'`)\]]+/gi;
+const AUTHORIZATION_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi;
+const SENSITIVE_QUERY_PATTERN = /([?&](?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|key|password|secret|credential|authorization)=)[^&#\s]*/gi;
 
 const normalizeCapacity = (value: number | undefined): number => {
   if (!Number.isFinite(value)) return DEFAULT_CAPACITY;
   return Math.min(MAX_CAPACITY, Math.max(10, Math.floor(value as number)));
 };
 
-const safeString = (value: unknown, maxLength = 800): string | null => {
+const truncate = (value: string, maxLength: number): string => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
+};
+
+const stripAbsoluteUrlQuery = (value: string): string => {
+  try {
+    const parsed = new URL(value);
+    parsed.username = '';
+    parsed.password = '';
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return '[invalid-url]';
+  }
+};
+
+const stripRelativeUrlQuery = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('/') || (!trimmed.includes('?') && !trimmed.includes('#'))) return value;
+  try {
+    const parsed = new URL(trimmed, 'https://runtime.invalid');
+    return parsed.pathname;
+  } catch {
+    return value;
+  }
+};
+
+/**
+ * Runtime diagnostics are local support data, not analytics. Any free-form text
+ * can still contain a request URL or an authorization fragment, so text is
+ * sanitized independently from object-key redaction before being retained.
+ */
+export const sanitizeRuntimeDiagnosticText = (
+  value: unknown,
+  maxLength = 800,
+): string | null => {
   if (value === null || value === undefined) return null;
+
   let text: string;
   try {
     text = typeof value === 'string' ? value : String(value);
   } catch {
     return '[unprintable]';
   }
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}…`;
+
+  text = stripRelativeUrlQuery(text)
+    .replace(AUTHORIZATION_PATTERN, (_match, scheme: string) => `${scheme} ${REDACTED}`)
+    .replace(SENSITIVE_QUERY_PATTERN, (_match, prefix: string) => `${prefix}${REDACTED}`)
+    .replace(ABSOLUTE_URL_PATTERN, (url) => stripAbsoluteUrlQuery(url));
+
+  return truncate(text, maxLength);
+};
+
+const normalizeKey = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const isSensitiveKey = (key: string, redactKeys: Set<string>): boolean => {
+  const lower = key.toLowerCase();
+  if (redactKeys.has(lower)) return true;
+  return SENSITIVE_KEY_FRAGMENT_PATTERN.test(normalizeKey(key));
 };
 
 const redactValue = (
@@ -61,31 +132,49 @@ const redactValue = (
 ): unknown => {
   if (depth > 4) return '[max-depth]';
   if (value === null || value === undefined) return value;
-  if (typeof value === 'string') return safeString(value, 1200);
-  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return sanitizeRuntimeDiagnosticText(value, 1200);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'boolean') return value;
   if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'function' || typeof value === 'symbol') return undefined;
   if (value instanceof Date) return value.toISOString();
   if (value instanceof Error) {
-    return {
-      name: value.name,
-      message: safeString(value.message),
-      stack: safeString(value.stack, 2000),
+    const result: Record<string, unknown> = {
+      name: sanitizeRuntimeDiagnosticText(value.name, 120),
+      message: sanitizeRuntimeDiagnosticText(value.message, 800),
+      stack: sanitizeRuntimeDiagnosticText(value.stack, 2000),
     };
-  }
-  if (Array.isArray(value)) {
-    return value.slice(0, 50).map((item) => redactValue(item, redactKeys, depth + 1));
-  }
-  if (typeof value === 'object') {
-    const result: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 80)) {
-      result[key] = redactKeys.has(key.toLowerCase())
-        ? '[redacted]'
-        : redactValue(item, redactKeys, depth + 1);
+    if ('cause' in value && value.cause !== undefined) {
+      result.cause = redactValue(value.cause, redactKeys, depth + 1);
     }
     return result;
   }
-  return safeString(value);
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MAX_ARRAY_ITEMS)
+      .map((item) => redactValue(item, redactKeys, depth + 1));
+  }
+  if (typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    const entries = Object.entries(value as Record<string, unknown>).slice(0, MAX_OBJECT_KEYS);
+    for (const [key, item] of entries) {
+      const sanitized = isSensitiveKey(key, redactKeys)
+        ? REDACTED
+        : redactValue(item, redactKeys, depth + 1);
+      if (sanitized !== undefined) result[key] = sanitized;
+    }
+    return result;
+  }
+  return sanitizeRuntimeDiagnosticText(value);
 };
+
+export const sanitizeRuntimeDiagnosticValue = (
+  value: unknown,
+  redactKeys: readonly string[] = DEFAULT_REDACT_KEYS,
+): unknown => redactValue(
+  value,
+  new Set(redactKeys.map((key) => key.toLowerCase())),
+);
 
 export class RuntimeDiagnostics {
   readonly #capacity: number;
@@ -111,9 +200,9 @@ export class RuntimeDiagnostics {
     const event: RuntimeDiagnosticEvent = Object.freeze({
       id: this.#nextId++,
       timestamp: this.#now(),
-      type: safeString(type, 120) ?? 'runtime.event',
+      type: sanitizeRuntimeDiagnosticText(type, 120) ?? 'runtime.event',
       severity: options.severity ?? 'info',
-      message: safeString(options.message),
+      message: sanitizeRuntimeDiagnosticText(options.message),
       details: Object.freeze(
         (redactValue(details, this.#redactKeys) as Record<string, unknown>) ?? {},
       ),
@@ -134,7 +223,7 @@ export class RuntimeDiagnostics {
   ): RuntimeDiagnosticEvent {
     const normalized = error instanceof Error
       ? error
-      : new Error(safeString(error) ?? 'Unknown runtime error');
+      : new Error(sanitizeRuntimeDiagnosticText(error) ?? 'Unknown runtime error');
 
     return this.record('runtime.error', {
       ...context,
@@ -185,8 +274,25 @@ export const installBrowserRuntimeObservers = (
     }, 'error');
   };
 
+  const onOnline = (): void => {
+    diagnostics.record('network.connectivity', { online: true });
+  };
+
+  const onOffline = (): void => {
+    diagnostics.record('network.connectivity', { online: false }, { severity: 'warn' });
+  };
+
+  const onVisibilityChange = (): void => {
+    diagnostics.record('document.visibility', {
+      state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+    }, { severity: 'debug' });
+  };
+
   window.addEventListener('error', onError);
   window.addEventListener('unhandledrejection', onUnhandledRejection);
+  window.addEventListener('online', onOnline);
+  window.addEventListener('offline', onOffline);
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange);
 
   const observers: PerformanceObserver[] = [];
   if (typeof PerformanceObserver !== 'undefined') {
@@ -220,6 +326,9 @@ export const installBrowserRuntimeObservers = (
     dispose(): void {
       window.removeEventListener('error', onError);
       window.removeEventListener('unhandledrejection', onUnhandledRejection);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
       observers.forEach((observer) => observer.disconnect());
     },
   };
