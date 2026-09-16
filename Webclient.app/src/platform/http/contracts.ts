@@ -62,6 +62,7 @@ export interface RawRequestConfig<TBody = RequestBody> {
   headers?: RequestHeaders | Record<string, unknown>;
   timeout?: number;
   maxRetries?: number;
+  attempt?: number;
   cache?: boolean;
   dedupe?: boolean;
   retryUnsafe?: boolean;
