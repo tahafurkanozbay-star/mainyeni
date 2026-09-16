@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import {
   DEFAULT_THRESHOLDS,
   type Finding,
+  type FindingSnapshot,
   type RegressionDelta,
   type ReleaseContext,
   type ReleaseGateDecision,
@@ -26,6 +27,11 @@ export interface PullRequestGateResult {
   readonly regressionFindings: readonly Finding[];
   readonly decision: ReleaseGateDecision;
 }
+
+const JAVASCRIPT_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
+const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
+const LANGUAGE_EXTENSIONS = [...JAVASCRIPT_EXTENSIONS, ...TYPESCRIPT_EXTENSIONS]
+  .sort((left, right) => right.length - left.length);
 
 function valueAfter(args: readonly string[], name: string): string | undefined {
   const index = args.indexOf(name);
@@ -68,6 +74,87 @@ function severityEscalationFindings(delta: RegressionDelta): Finding[] {
     });
   }
   return findings;
+}
+
+function findingId(snapshot: FindingSnapshot): string {
+  return snapshot.key.split('|', 3)[1] ?? '';
+}
+
+function sourceExtension(file: string | undefined): string {
+  if (!file) return '';
+  const lower = file.toLowerCase();
+  return LANGUAGE_EXTENSIONS.find(extension => lower.endsWith(extension)) ?? '';
+}
+
+function sourceStem(file: string | undefined): string {
+  if (!file) return '';
+  const extension = sourceExtension(file);
+  return extension ? file.slice(0, -extension.length) : file;
+}
+
+function isJavaScriptToTypeScriptPair(
+  current: FindingSnapshot,
+  baseline: FindingSnapshot,
+): boolean {
+  const currentExtension = sourceExtension(current.file);
+  const baselineExtension = sourceExtension(baseline.file);
+  const crossesLanguageBoundary =
+    (JAVASCRIPT_EXTENSIONS.has(currentExtension) && TYPESCRIPT_EXTENSIONS.has(baselineExtension)) ||
+    (TYPESCRIPT_EXTENSIONS.has(currentExtension) && JAVASCRIPT_EXTENSIONS.has(baselineExtension));
+  if (!crossesLanguageBoundary) return false;
+  return current.domain === baseline.domain &&
+    current.severity === baseline.severity &&
+    findingId(current) === findingId(baseline) &&
+    sourceStem(current.file) === sourceStem(baseline.file);
+}
+
+/**
+ * Exact-base auditing intentionally keys findings by file/line/evidence. During a
+ * staged JS -> TS migration the same audited behavior can move from foo.js to
+ * foo.ts without changing its risk. Pair only one-for-one findings with the
+ * same audit id/domain/severity and source stem across the JS/TS boundary.
+ *
+ * This does not suppress findings newly introduced in TypeScript files: a
+ * matching removed JavaScript finding is required, and any unmatched addition
+ * remains a regression.
+ */
+export function reconcileLanguageMigrationDelta(delta: RegressionDelta): RegressionDelta {
+  if (!delta.added.length || !delta.removed.length) return delta;
+
+  const removed = [...delta.removed];
+  const added: FindingSnapshot[] = [];
+  const migrated: FindingSnapshot[] = [];
+
+  for (const current of delta.added) {
+    let candidateIndex = -1;
+    let candidateDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < removed.length; index += 1) {
+      const baseline = removed[index];
+      if (!baseline || !isJavaScriptToTypeScriptPair(current, baseline)) continue;
+      const distance = Math.abs((current.line ?? 0) - (baseline.line ?? 0));
+      if (distance < candidateDistance) {
+        candidateIndex = index;
+        candidateDistance = distance;
+      }
+    }
+
+    if (candidateIndex < 0) {
+      added.push(current);
+      continue;
+    }
+
+    removed.splice(candidateIndex, 1);
+    migrated.push(current);
+  }
+
+  if (!migrated.length) return delta;
+  return {
+    ...delta,
+    added,
+    removed,
+    unchanged: [...delta.unchanged, ...migrated],
+  };
 }
 
 export function decidePullRequestRegression(delta: RegressionDelta): {
@@ -134,7 +221,8 @@ export async function runPullRequestGate(options: {
     currentInventory,
     environmentContext(options.currentCommit, options.baselineCommit),
   );
-  const delta = compareBaseline(currentExecution.report, baseline);
+  const rawDelta = compareBaseline(currentExecution.report, baseline);
+  const delta = reconcileLanguageMigrationDelta(rawDelta);
   const gate = decidePullRequestRegression(delta);
   const result: PullRequestGateResult = {
     baselineCommit: options.baselineCommit,
