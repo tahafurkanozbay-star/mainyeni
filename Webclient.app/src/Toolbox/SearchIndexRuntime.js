@@ -24,7 +24,10 @@ export const tokenizeSearchText = value => unique(normalizeSearchText(value)
 export const createTokenPrefixes = (token, minimumLength = DEFAULT_PREFIX_LENGTH) => {
     const normalized = normalizeSearchText(token).replace(/[^a-z0-9]/g, "");
     if (!normalized) return [];
-    const min = Math.max(1, normalizeInteger(minimumLength, { min: 1, max: 20, fallback: DEFAULT_PREFIX_LENGTH }));
+    const requestedMinimum = normalizeFiniteNumber(minimumLength, null);
+    const min = requestedMinimum === null || requestedMinimum <= 0
+        ? DEFAULT_PREFIX_LENGTH
+        : normalizeInteger(requestedMinimum, { min: 1, max: 20, fallback: DEFAULT_PREFIX_LENGTH });
     if (normalized.length < min) return [normalized];
     const prefixes = [];
     for (let length = min; length <= normalized.length; length += 1) {
@@ -112,11 +115,10 @@ const addPosition = (map, key, position) => {
 
 export const createInvertedSearchIndex = (documents, options = {}) => {
     const input = Array.isArray(documents) ? documents : [];
-    const prefixLength = normalizeInteger(options.prefixLength, {
-        min: 1,
-        max: 20,
-        fallback: DEFAULT_PREFIX_LENGTH
-    });
+    const requestedPrefixLength = normalizeFiniteNumber(options.prefixLength, null);
+    const prefixLength = requestedPrefixLength === null || requestedPrefixLength <= 0
+        ? DEFAULT_PREFIX_LENGTH
+        : normalizeInteger(requestedPrefixLength, { min: 1, max: 20, fallback: DEFAULT_PREFIX_LENGTH });
     const normalized = input.map((document, index) => normalizeSearchDocument(document, index));
     const byId = new Map();
     const tokenPostings = new Map();
@@ -224,12 +226,9 @@ export const getFilterCandidatePositions = (index, filters = {}) => {
 export const getQueryCandidatePositions = (index, query) => {
     const tokens = tokenizeSearchText(query);
     if (!tokens.length) return null;
-    const postingSets = tokens.map(token => {
-        const exact = index.tokenPostings.get(token);
-        if (exact) return exact;
-        return index.prefixPostings.get(token) || new Set();
-    });
-    return intersectPostings(postingSets);
+    return intersectPostings(tokens.map(token => (
+        index.tokenPostings.get(token) || index.prefixPostings.get(token) || new Set()
+    )));
 };
 
 const scoreSingleToken = (documentToken, queryToken, fuzzyDistance) => {
@@ -248,11 +247,7 @@ export const scoreSearchDocument = (document, query, options = {}) => {
     if (!normalizedQuery) return 1;
     const queryTokens = tokenizeSearchText(normalizedQuery);
     if (!queryTokens.length) return 1;
-    const fuzzyDistance = normalizeInteger(options.fuzzyDistance, {
-        min: 0,
-        max: 3,
-        fallback: 1
-    });
+    const fuzzyDistance = normalizeInteger(options.fuzzyDistance, { min: 0, max: 3, fallback: 1 });
     let score = 0;
     let matched = 0;
     queryTokens.forEach(queryToken => {
@@ -292,17 +287,20 @@ export const createFacetSummary = (documents, fields = ["category", "type", "dis
 };
 
 export const normalizeIndexedSearchOptions = options => {
-    const page = normalizePagination({
-        offset: options?.offset,
-        limit: options?.limit ?? DEFAULT_SEARCH_LIMIT
-    });
+    const page = normalizePagination({ offset: options?.offset, limit: options?.limit ?? DEFAULT_SEARCH_LIMIT });
+    const rawLimit = normalizeFiniteNumber(options?.limit, null);
+    const limit = rawLimit === null || rawLimit <= 0
+        ? DEFAULT_SEARCH_LIMIT
+        : Math.min(MAX_SEARCH_LIMIT, Math.max(1, Math.trunc(rawLimit)));
     return {
         offset: page.offset,
-        limit: Math.min(page.limit, MAX_SEARCH_LIMIT),
+        limit,
         fuzzyDistance: normalizeInteger(options?.fuzzyDistance, { min: 0, max: 3, fallback: 1 }),
         minScore: Math.max(0, normalizeFiniteNumber(options?.minScore, 1) || 0),
         filters: normalizeSearchFilters(options?.filters),
-        facetFields: Array.isArray(options?.facetFields) ? options.facetFields.filter(Boolean) : ["category", "type", "district"]
+        facetFields: Array.isArray(options?.facetFields)
+            ? options.facetFields.filter(Boolean)
+            : ["category", "type", "district"]
     };
 };
 
@@ -344,10 +342,7 @@ export const searchInvertedIndex = (index, query, options = {}) => {
         });
 
     const matchedDocuments = scored.map(item => item.document);
-    const pageItems = scored.slice(
-        normalizedOptions.offset,
-        normalizedOptions.offset + normalizedOptions.limit
-    );
+    const pageItems = scored.slice(normalizedOptions.offset, normalizedOptions.offset + normalizedOptions.limit);
     const nextOffset = normalizedOptions.offset + pageItems.length;
     return {
         results: pageItems,
@@ -461,10 +456,7 @@ export const createCachedIndexSearcher = (index, options = {}) => {
 export const serializeSearchIndex = index => ({
     version: 1,
     prefixLength: index.prefixLength,
-    documents: index.documents.map(document => ({
-        ...document,
-        source: undefined
-    })),
+    documents: index.documents.map(document => ({ ...document, source: undefined })),
     diagnostics: index.diagnostics
 });
 
@@ -472,9 +464,7 @@ export const hydrateSearchIndex = serialized => {
     if (!serialized || serialized.version !== 1 || !Array.isArray(serialized.documents)) {
         return createInvertedSearchIndex([]);
     }
-    return createInvertedSearchIndex(serialized.documents, {
-        prefixLength: serialized.prefixLength
-    });
+    return createInvertedSearchIndex(serialized.documents, { prefixLength: serialized.prefixLength });
 };
 
 export const SearchIndexRuntime = {
