@@ -49,12 +49,25 @@ describe('geometryIntegrityRuntime', () => {
     expect(result.diagnostics.hasM).toBe(true);
   });
 
-  test('rejects a point with non-finite coordinates', () => {
+  test('preserves M without reinterpreting it as Z', () => {
+    const result = normalizeGeometry({ x: 32.85, y: 39.93, m: 77 });
+    expect(result.geometry).toEqual(expect.objectContaining({
+      type: 'point',
+      x: 32.85,
+      y: 39.93,
+      m: 77,
+    }));
+    expect(result.geometry).not.toHaveProperty('z');
+    expect(result.diagnostics.hasZ).toBe(false);
+    expect(result.diagnostics.hasM).toBe(true);
+  });
+
+  test('reports malformed point coordinates as coordinate integrity errors', () => {
     const result = normalizeGeometry({ x: 'not-a-number', y: 39.9 });
     expect(result.geometry).toBeNull();
     expect(result.diagnostics.valid).toBe(false);
     expect(result.diagnostics.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: GEOMETRY_ISSUE.UNKNOWN_TYPE }),
+      expect.objectContaining({ code: GEOMETRY_ISSUE.INVALID_COORDINATE }),
     ]));
   });
 
@@ -206,6 +219,7 @@ describe('geometryIntegrityRuntime', () => {
     expect(summary.valid).toBe(2);
     expect(summary.invalid).toBe(1);
     expect(summary.missing).toBe(1);
+    expect(summary.issueCounts[GEOMETRY_ISSUE.MISSING]).toBe(1);
     expect(summary.repaired).toBe(1);
     expect(summary.invalidIndexes).toEqual([1]);
     expect(summary.byKind.point).toBe(1);
