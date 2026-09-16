@@ -28,16 +28,7 @@ const PRIORITY_SCORE: Readonly<Record<RequestPriority, number>> = Object.freeze(
   background: 100
 });
 
-const EMPTY_PRIORITY_COUNTS: Readonly<Record<RequestPriority, number>> = Object.freeze({
-  critical: 0,
-  high: 0,
-  normal: 0,
-  low: 0,
-  background: 0
-});
-
 type TimerHandle = ReturnType<typeof setTimeout>;
-
 type SchedulerEventSink = (eventName: string, metadata: Record<string, unknown>) => void;
 
 interface QueuedTask<T = unknown> {
@@ -55,6 +46,8 @@ interface QueuedTask<T = unknown> {
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: unknown) => void;
 }
+
+type ErasedQueuedTask = QueuedTask<any>;
 
 const createSchedulerError = (
   message: string,
@@ -76,9 +69,6 @@ const safeClockValue = (clock: () => number): number => {
   return Number.isFinite(value) ? value : Date.now();
 };
 
-const cloneCounters = (counters: SchedulerCounters): Readonly<SchedulerCounters> =>
-  Object.freeze({ ...counters });
-
 const createCounters = (): SchedulerCounters => ({
   scheduled: 0,
   started: 0,
@@ -89,15 +79,15 @@ const createCounters = (): SchedulerCounters => ({
   bypassed: 0
 });
 
-const isHighPriority = (priority: RequestPriority): boolean =>
-  priority === 'critical' || priority === 'high';
-
 const removeArrayItem = <T>(items: T[], target: T): boolean => {
   const index = items.indexOf(target);
   if (index < 0) return false;
   items.splice(index, 1);
   return true;
 };
+
+const isHighPriority = (priority: RequestPriority): boolean =>
+  priority === 'critical' || priority === 'high';
 
 export class RequestScheduler {
   readonly maxConcurrent: number;
@@ -111,10 +101,9 @@ export class RequestScheduler {
   private readonly setTimer: typeof setTimeout;
   private readonly clearTimer: typeof clearTimeout;
   private readonly onEvent: SchedulerEventSink | null;
-  private readonly queue: QueuedTask[] = [];
+  private readonly queue: ErasedQueuedTask[] = [];
   private readonly runningByGroup = new Map<string, number>();
   private readonly counters: SchedulerCounters = createCounters();
-
   private running = 0;
   private sequence = 0;
   private peakRunning = 0;
@@ -123,12 +112,7 @@ export class RequestScheduler {
   private pumpRequested = false;
 
   constructor(options: SchedulerOptions = {}) {
-    this.maxConcurrent = toBoundedInteger(
-      options.maxConcurrent,
-      DEFAULT_MAX_CONCURRENT,
-      1,
-      32
-    );
+    this.maxConcurrent = toBoundedInteger(options.maxConcurrent, DEFAULT_MAX_CONCURRENT, 1, 32);
     this.maxConcurrentPerGroup = toBoundedInteger(
       options.maxConcurrentPerGroup,
       Math.min(DEFAULT_MAX_CONCURRENT_PER_GROUP, this.maxConcurrent),
@@ -169,7 +153,7 @@ export class RequestScheduler {
     try {
       this.onEvent(eventName, metadata);
     } catch (_error) {
-      // Diagnostics must never interfere with request delivery.
+      // Local diagnostics are best-effort and must never block delivery.
     }
   }
 
@@ -187,7 +171,7 @@ export class RequestScheduler {
     else this.runningByGroup.set(groupKey, next);
   }
 
-  private clearQueuedListeners(entry: QueuedTask): void {
+  private clearQueuedListeners(entry: ErasedQueuedTask): void {
     if (entry.timeoutHandle !== null) {
       this.clearTimer(entry.timeoutHandle);
       entry.timeoutHandle = null;
@@ -199,7 +183,7 @@ export class RequestScheduler {
   }
 
   private rejectQueued(
-    entry: QueuedTask,
+    entry: ErasedQueuedTask,
     error: unknown,
     reason: 'cancelled' | 'timeout' | 'queue-full'
   ): void {
@@ -207,10 +191,8 @@ export class RequestScheduler {
     entry.settled = true;
     removeArrayItem(this.queue, entry);
     this.clearQueuedListeners(entry);
-
     if (reason === 'cancelled') this.counters.cancelled += 1;
     else this.counters.rejected += 1;
-
     this.emit('network.scheduler.rejected', {
       taskId: entry.id,
       priority: entry.priority,
@@ -221,49 +203,40 @@ export class RequestScheduler {
       queued: this.queue.length,
       running: this.running
     });
-
     entry.reject(error);
     this.requestPump();
   }
 
-  private effectiveScore(entry: QueuedTask, now: number): number {
-    const waitMs = Math.max(0, now - entry.queuedAt);
+  private effectiveScore(entry: ErasedQueuedTask, timestamp: number): number {
+    const waitMs = Math.max(0, timestamp - entry.queuedAt);
     const agingSteps = Math.floor(waitMs / this.agingIntervalMs);
     const boundedAging = Math.min(150, agingSteps * 15);
     const starvationBoost = waitMs >= this.starvationThresholdMs ? 125 : 0;
     return PRIORITY_SCORE[entry.priority] + boundedAging + starvationBoost;
   }
 
-  private canRunGroup(entry: QueuedTask): boolean {
+  private canRunGroup(entry: ErasedQueuedTask): boolean {
     return this.getGroupRunning(entry.groupKey) < this.maxConcurrentPerGroup;
   }
 
-  private getRunnableEntries(): QueuedTask[] {
-    return this.queue.filter((entry) => !entry.settled && this.canRunGroup(entry));
-  }
-
-  private chooseNext(): QueuedTask | null {
-    const candidates = this.getRunnableEntries();
+  private chooseNext(): ErasedQueuedTask | null {
+    let candidates = this.queue.filter((entry) => !entry.settled && this.canRunGroup(entry));
     if (candidates.length === 0) return null;
 
     const reserveBoundary = Math.max(0, this.maxConcurrent - this.highPriorityReserve);
-    const inReservedCapacity = this.highPriorityReserve > 0 && this.running >= reserveBoundary;
-    let eligible = candidates;
-
-    if (inReservedCapacity) {
+    if (this.highPriorityReserve > 0 && this.running >= reserveBoundary) {
       const urgent = candidates.filter((entry) => isHighPriority(entry.priority));
-      if (urgent.length > 0) eligible = urgent;
+      if (urgent.length > 0) candidates = urgent;
     }
 
     const timestamp = this.now();
-    eligible.sort((left, right) => {
+    candidates.sort((left, right) => {
       const scoreDelta = this.effectiveScore(right, timestamp) - this.effectiveScore(left, timestamp);
       if (scoreDelta !== 0) return scoreDelta;
       if (left.queuedAt !== right.queuedAt) return left.queuedAt - right.queuedAt;
       return left.id - right.id;
     });
-
-    return eligible[0] || null;
+    return candidates[0] || null;
   }
 
   private requestPump(): void {
@@ -279,7 +252,6 @@ export class RequestScheduler {
       this.pumpRequested = true;
       return;
     }
-
     this.pumping = true;
     try {
       do {
@@ -295,24 +267,24 @@ export class RequestScheduler {
     }
   }
 
-  private start(entry: QueuedTask): void {
-    if (entry.settled) return;
-    if (!removeArrayItem(this.queue, entry)) return;
-
+  private start(entry: ErasedQueuedTask): void {
+    if (entry.settled || !removeArrayItem(this.queue, entry)) return;
     if (entry.signal?.aborted) {
-      this.rejectQueued(entry, createAbortError(), 'cancelled');
+      entry.settled = true;
+      this.clearQueuedListeners(entry);
+      this.counters.cancelled += 1;
+      entry.reject(createAbortError());
+      this.requestPump();
       return;
     }
 
     this.clearQueuedListeners(entry);
     const startedAt = this.now();
     const queueWaitMs = Math.max(0, startedAt - entry.queuedAt);
-
     this.running += 1;
     this.incrementGroup(entry.groupKey);
     this.peakRunning = Math.max(this.peakRunning, this.running);
     this.counters.started += 1;
-
     this.emit('network.scheduler.started', {
       taskId: entry.id,
       priority: entry.priority,
@@ -323,7 +295,7 @@ export class RequestScheduler {
       running: this.running
     });
 
-    let taskResult: Promise<unknown>;
+    let taskResult: Promise<any>;
     try {
       taskResult = Promise.resolve(entry.task());
     } catch (error) {
@@ -380,7 +352,6 @@ export class RequestScheduler {
       this.counters.cancelled += 1;
       return Promise.reject(createAbortError());
     }
-
     this.counters.scheduled += 1;
     this.counters.bypassed += 1;
     const startedAt = this.now();
@@ -423,7 +394,6 @@ export class RequestScheduler {
     if (typeof task !== 'function') {
       return Promise.reject(new TypeError('RequestScheduler.schedule requires a task function'));
     }
-
     const priority = normalizeRequestPriority(options.priority);
     const groupKey = normalizeSchedulerGroup(options.groupKey);
     const label = normalizeSchedulerLabel(options.label);
@@ -432,7 +402,6 @@ export class RequestScheduler {
     if (options.bypass === true) {
       return this.executeBypass(task, priority, groupKey, label, signal);
     }
-
     if (signal?.aborted) {
       this.counters.cancelled += 1;
       this.emit('network.scheduler.rejected', {
@@ -443,7 +412,6 @@ export class RequestScheduler {
       });
       return Promise.reject(createAbortError());
     }
-
     if (this.queue.length >= this.maxQueued) {
       this.counters.rejected += 1;
       this.emit('network.scheduler.rejected', {
@@ -464,12 +432,7 @@ export class RequestScheduler {
     this.counters.scheduled += 1;
     const id = ++this.sequence;
     const queuedAt = this.now();
-    const queueTimeoutMs = toBoundedInteger(
-      options.queueTimeoutMs,
-      0,
-      0,
-      MAX_QUEUE_TIMEOUT_MS
-    );
+    const queueTimeoutMs = toBoundedInteger(options.queueTimeoutMs, 0, 0, MAX_QUEUE_TIMEOUT_MS);
 
     return new Promise<T>((resolve, reject) => {
       const entry: QueuedTask<T> = {
@@ -487,18 +450,16 @@ export class RequestScheduler {
         resolve,
         reject
       };
+      const erased = entry as ErasedQueuedTask;
 
       if (signal) {
-        entry.abortHandler = () => {
-          this.rejectQueued(entry, createAbortError(), 'cancelled');
-        };
+        entry.abortHandler = () => this.rejectQueued(erased, createAbortError(), 'cancelled');
         signal.addEventListener('abort', entry.abortHandler, { once: true });
       }
-
       if (queueTimeoutMs > 0) {
         entry.timeoutHandle = this.setTimer(() => {
           this.rejectQueued(
-            entry,
+            erased,
             createSchedulerError(
               'Network request exceeded its queue wait budget.',
               'SCHEDULER_QUEUE_TIMEOUT',
@@ -509,7 +470,7 @@ export class RequestScheduler {
         }, queueTimeoutMs);
       }
 
-      this.queue.push(entry as QueuedTask);
+      this.queue.push(erased);
       this.peakQueued = Math.max(this.peakQueued, this.queue.length);
       this.emit('network.scheduler.queued', {
         taskId: id,
@@ -557,9 +518,15 @@ export class RequestScheduler {
       });
     });
 
-    const priorities: Record<RequestPriority, number> = { ...EMPTY_PRIORITY_COUNTS };
+    const priorities: Record<RequestPriority, number> = {
+      critical: 0,
+      high: 0,
+      normal: 0,
+      low: 0,
+      background: 0
+    };
     this.queue.forEach((entry) => {
-      priorities[entry.priority] += 1;
+      priorities[entry.priority] = (priorities[entry.priority] || 0) + 1;
     });
 
     return Object.freeze({
@@ -572,7 +539,7 @@ export class RequestScheduler {
       peakQueued: this.peakQueued,
       groups: Object.freeze(groups),
       priorities: Object.freeze(priorities),
-      counters: cloneCounters(this.counters)
+      counters: Object.freeze({ ...this.counters })
     });
   }
 }
@@ -586,7 +553,7 @@ export const getSchedulerGroupFromPath = (value: unknown): string => {
   const withoutQuery = text.split(/[?#]/, 1)[0] || '/';
   const segments = withoutQuery.split('/').filter(Boolean);
   if (segments.length === 0) return 'root';
-  if (segments[0].toLowerCase() === 'api' && segments.length > 1) {
+  if (segments[0]?.toLowerCase() === 'api' && segments.length > 1) {
     return normalizeSchedulerGroup(`api/${segments[1]}`);
   }
   return normalizeSchedulerGroup(segments[0]);
