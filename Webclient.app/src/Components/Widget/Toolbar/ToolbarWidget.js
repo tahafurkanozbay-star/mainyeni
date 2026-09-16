@@ -1,6 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import MapManager from "../../../Store/Managers/MapManager";
-import { AppConfig } from "../../../Core/AppConfig";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import "./ToolbarWidget.css";
 import { ToolbarWidgetButton } from "./ToolbarWidgetButton";
@@ -86,9 +85,6 @@ export const ToolbarWidget = (props) => {
             <ToolbarWidgetButton onClick={() => showWindow("measurement-widget")} image="olcumaraci.png" tooltipText="Ölçüm Aracı" />
             <ToolbarWidgetButton onClick={() => showWindow("streetview-widget")} image="sokakgoruntusu.png" tooltipText="Sokak Görüntüsü" />
             <ToolbarWidgetButton onClick={gotoInitialView} image="fullextent.png" tooltipText="Başlangıç görünümüne dön" />
-            {AppConfig.App.IsFullVersion && false && (
-                <ToolbarWidgetButton onClick={() => showWindow("transit-route-query-window")} image="yoltarifi.png" tooltipText="Yol Tarifi" />
-            )}
         </div>
     );
 };

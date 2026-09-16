@@ -23,7 +23,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: Webclient.app
@@ -31,37 +31,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
+      - name: Setup Node 24
         uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: Webclient.app/package-lock.json
 
+      - name: Verify Node toolchain contract
+        shell: bash
+        run: |
+          node --version
+          npm --version
+          node -e "const major = Number(process.versions.node.split('.')[0]); if (major !== 24) process.exit(1)"
+
       - name: Install from lockfile
         run: npm ci
 
-      - name: Production dependency audit (non-blocking legacy debt)
+      - name: Production dependency audit
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Lint when configured
-        run: npm run lint --if-present
+      - name: Lint
+        run: npm run lint
 
-      - name: Typecheck when configured
-        run: npm run typecheck --if-present
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Test
-        run: npm test -- --watchAll=false --runInBand
-
-      - name: Build budget script tests
-        run: node --test scripts/web-build-budget.test.mjs
+        run: npm run test:ci
 
       - name: Production build
         env:
           CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
 
-      - name: Enforce production build budgets
-        run: node scripts/web-build-budget.mjs build --strict
+      - name: Verify production bundle
+        run: node scripts/verify-build.mjs
