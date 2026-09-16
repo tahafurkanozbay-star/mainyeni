@@ -31,13 +31,14 @@
     "quality:vite": "node scripts/vite-migration-audit.mjs --self-test && node scripts/vite-migration-audit.mjs",
     "test": "vitest",
     "test:ci": "vitest run",
+    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:gis && npm run typecheck:experience && npm run typecheck:data-search",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",
     "typecheck:gis": "tsc --noEmit -p tsconfig.gis.json",
     "typecheck:experience": "tsc --noEmit -p tsconfig.experience.json",
     "typecheck:data-search": "tsc --noEmit -p tsconfig.data-search.json",
-    "verify": "npm run dependency:verify && npm run lint:strict && npm run quality:experience && npm run quality:vite && npm run typecheck && npm run test:ci && npm run test:build-budget && npm run build && npm run build:verify",
+    "verify": "npm run dependency:verify && npm run lint:strict && npm run quality:experience && npm run quality:vite && npm run typecheck && npm run test:ci && npm run test:tooling && npm run test:build-budget && npm run build && npm run build:verify",
     "preview": "vite preview --host 0.0.0.0"
   },
   "engines": {
