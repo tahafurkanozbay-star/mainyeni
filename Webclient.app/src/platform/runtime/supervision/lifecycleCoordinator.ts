@@ -152,7 +152,8 @@ const mapConcurrent = async <TValue, TResult>(
   worker: (value: TValue, index: number) => Promise<TResult>,
 ): Promise<readonly TResult[]> => {
   if (values.length === 0) return Object.freeze([]);
-  const output: TResult[] = new Array<TResult>(values.length);
+  const output: TResult[] = [];
+  output.length = values.length;
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
     while (true) {
@@ -220,9 +221,9 @@ export class LifecycleCoordinator {
     this.#records.set(normalized.id, createRecord());
     if (normalized.criticality === 'critical') {
       this.#health.setReadinessRequired(
-        Object.freeze([
-          ...this.#graph.list().filter((entry) => entry.criticality === 'critical').map((entry) => entry.id),
-        ]),
+        Object.freeze(
+          this.#graph.list().filter((entry) => entry.criticality === 'critical').map((entry) => entry.id),
+        ),
       );
     }
   }

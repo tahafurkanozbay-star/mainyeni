@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { LifecycleDeadlineError, type LifecycleComponent } from './contracts';
+import { type LifecycleComponent } from './contracts';
 import { LifecycleCoordinator } from './lifecycleCoordinator';
 
 const flush = async (): Promise<void> => {

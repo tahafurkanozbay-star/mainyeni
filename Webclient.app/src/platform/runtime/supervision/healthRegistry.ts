@@ -340,6 +340,6 @@ export class HealthRegistry {
   #emitSnapshot(): void {
     if (this.#listeners.size === 0) return;
     const snapshot = this.snapshot();
-    for (const listener of [...this.#listeners]) safeObserver(listener, snapshot);
+    for (const listener of this.#listeners) safeObserver(listener, snapshot);
   }
 }

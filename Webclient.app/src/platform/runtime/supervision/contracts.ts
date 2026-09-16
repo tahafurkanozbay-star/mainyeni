@@ -248,11 +248,14 @@ export const DEFAULT_RUNTIME_CLOCK: RuntimeClock = Object.freeze({
   clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
 });
 
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+const containsControlCharacter = (value: string): boolean => [...value].some((character) => {
+  const code = character.charCodeAt(0);
+  return code <= 0x1f || code === 0x7f;
+});
 
 export const normalizeIdentifier = (value: unknown, label = 'identifier'): string => {
   if (typeof value !== 'string') throw new TypeError(`${label} must be a string.`);
-  if (CONTROL_CHARACTER.test(value)) throw new TypeError(`${label} cannot contain control characters.`);
+  if (containsControlCharacter(value)) throw new TypeError(`${label} cannot contain control characters.`);
   const normalized = value.trim();
   if (!normalized) throw new TypeError(`${label} cannot be empty.`);
   if (normalized.length > 160) throw new TypeError(`${label} exceeds 160 characters.`);
@@ -262,7 +265,7 @@ export const normalizeIdentifier = (value: unknown, label = 'identifier'): strin
 export const normalizeOptionalText = (value: unknown, maxLength = 500): string | null => {
   if (value === null || value === undefined) return null;
   if (typeof value !== 'string') return null;
-  if (CONTROL_CHARACTER.test(value)) return null;
+  if (containsControlCharacter(value)) return null;
   const normalized = value.trim();
   if (!normalized) return null;
   return normalized.slice(0, Math.max(1, maxLength));
