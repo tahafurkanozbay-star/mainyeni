@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import {
   legacyEnvironmentGuardPlugin,
   legacyJsxPlugin,
+  legacyPresentationCleanupPlugin,
 } from './tooling/sourceTransforms';
 
 const manualChunk = (id: string): string | undefined => {
@@ -22,7 +23,12 @@ export default defineConfig({
     // a generic process.env object to browser code.
     'process.env.PUBLIC_URL': JSON.stringify('./'),
   },
-  plugins: [legacyEnvironmentGuardPlugin(), legacyJsxPlugin(), react({ include: /\.[jt]sx?$/ })],
+  plugins: [
+    legacyEnvironmentGuardPlugin(),
+    legacyPresentationCleanupPlugin(),
+    legacyJsxPlugin(),
+    react({ include: /\.[jt]sx?$/ }),
+  ],
   optimizeDeps: {
     // Keep core boot dependencies explicit for predictable warm startup while
     // allowing Vite 8 to discover the remaining legacy/CJS graph automatically.
