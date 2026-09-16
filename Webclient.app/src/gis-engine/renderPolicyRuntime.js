@@ -187,6 +187,13 @@ const generalizationTolerance = (geometryType, tier, performanceBudget) => {
   return Number((base * tierFactor * (1.15 - quality * 0.15)).toFixed(2));
 };
 
+const verifiedMaxAllowableOffset = (geometryType, options = {}) => {
+  if (geometryType === 'point' || geometryType === 'multipoint') return undefined;
+  if (options.allowGeneralization !== true) return undefined;
+  const explicitTolerance = finite(options.generalizationTolerance, null);
+  return explicitTolerance !== null && explicitTolerance > 0 ? explicitTolerance : undefined;
+};
+
 const recommendedOutFields = (options = {}) => {
   const fields = [
     options.objectIdField,
@@ -241,6 +248,7 @@ export const planLayerPresentation = ({
 
   const labels = labelConfig(options, lodBudget.labelDensity);
   const simplificationTolerance = generalizationTolerance(geometryType, tier, performanceBudget);
+  const maxAllowableOffset = verifiedMaxAllowableOffset(geometryType, options);
   const opacity = clamp(finite(layer.opacity ?? layer.runtime?.opacity, 1), 0, 1);
 
   return Object.freeze({
@@ -257,7 +265,7 @@ export const planLayerPresentation = ({
     request: Object.freeze({
       outFields: recommendedOutFields(options),
       returnGeometry: options.returnGeometry !== false,
-      maxAllowableOffset: simplificationTolerance > 0 ? simplificationTolerance : undefined,
+      maxAllowableOffset,
       resultRecordCount: renderPlan.pageSize || undefined,
     }),
     renderer: Object.freeze({
@@ -280,6 +288,7 @@ export const shouldRefreshPresentation = (previous, next) => {
   if (previous.lodBudget?.labelDensity !== next.lodBudget?.labelDensity) return true;
   if (previous.renderer?.allowExtrusion !== next.renderer?.allowExtrusion) return true;
   if (previous.simplificationTolerance !== next.simplificationTolerance) return true;
+  if (previous.request?.maxAllowableOffset !== next.request?.maxAllowableOffset) return true;
   return false;
 };
 
