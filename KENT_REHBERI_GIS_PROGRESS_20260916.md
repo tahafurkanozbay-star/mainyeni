@@ -1,59 +1,74 @@
-# Kent Rehberi GIS Progress — 2026-09-16 12:14 TRT
+# Kent Rehberi GIS Progress — 2026-09-16 12:45 TRT
 
-> Role-scoped continuation record. The shared `KENT_REHBERI_PROGRESS.md` remains authoritative and must be reconciled before merge; this sidecar avoids overwriting its large concurrent history while PR #55 is still below its merge gate.
+> Role-scoped continuation record. Shared `KENT_REHBERI_PROGRESS.md` remains authoritative; reconcile this record into the shared file before a successful merge when GitHub Actions becomes executable again.
 
 ## TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU
-- TUR: Deep GIS / Whole-Code Modernization continuation.
-- GÖREV: strict typed ArcGIS query contract, shared 2D/3D view-state coordination, adaptive feature rendering policy.
-- Verified start `main`: `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
+- TUR: Deep GIS / Whole-Code Modernization continuation and merge-gate pass.
+- GÖREV: strict TypeScript ArcGIS runtime kernel, service health, adaptive 2D/3D rendering, scene streaming, lifecycle/query integration and privacy-safe observability.
+- Verified current `main`: `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
 - Branch: `agent/gis-modernization-20260916-1214-851a5c9`.
-- Current code head before this record: `4c67c79c4bddf2f64fbb65565cabe3909d5819cb`.
+- Product-code head before this progress-only commit: `686e61a1c386b941b18368256f7324a587d79019`.
 - PR: #55 `feat(gis): continue typed ArcGIS runtime modernization`.
-- PR base/head at creation: base `851a5c93...`, head `4c67c79...`.
-- GitHub compare before PR: 4 commits ahead / 0 behind; merge-base exactly the verified turn-start main SHA.
-- Current PR additions at creation: 455 additions / 0 deletions across 4 files.
-- MERGE: intentionally NOT merged. Mandatory GIS additions gate is >=4000 meaningful additions.
+- GitHub compare at product-code head: 6 commits ahead / 0 behind; merge-base exactly `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
+- PR status at product-code head: `mergeable=true`, draft=false.
+- GitHub `base...head`: 17 changed files, **4,794 additions / 0 deletions**.
+- Mandatory >=4,000 meaningful-addition gate: PASS.
+- MERGE: NOT performed. Exact-head required CI cannot currently execute successfully and is a hard merge blocker.
 
 ## ÖNEMLİ ÖZELLİKLER
-- Added `arcgisQueryContract.ts`: strict TypeScript query-plan boundary for concrete ArcGIS FeatureServer/MapServer layer resources.
-- Query planning requires advertised query capability, bounds result windows to service maxRecordCount, uses POST URLSearchParams, and adds deterministic object-id ordering only when orderBy is advertised.
-- Pagination is never guessed; resultOffset/resultRecordCount are emitted only when service metadata says pagination is supported.
-- Spatial reference values are serialized only when explicitly provided; no automatic projection or coordinate-unit guess is introduced.
-- Added `viewStateCoordinator.ts`: deterministic shared state for 2D/3D mode, cameras, selection, visible layers and active tool, with revisioned subscriptions and cleanup.
-- Added `featureRenderPolicy.ts`: pressure-aware direct/cluster/paged/summary strategy using geometry complexity, 2D/3D mode, scale and service capabilities.
-- Added focused typed query contract tests.
+- `arcgisQueryContract.ts`: strict capability-driven ArcGIS FeatureServer/MapServer query boundary with bounded record windows and deterministic order only when advertised.
+- `viewStateCoordinator.ts`: shared revisioned 2D/3D view state, camera/selection/visibility/tool coordination.
+- `featureRenderPolicy.ts`: pressure-aware direct/cluster/paged/summary feature strategy.
+- `runtimeContracts.ts`: shared strict GIS contracts, deterministic fingerprints, bounded identifiers, spatial-reference/extent normalization, network/memory/frame pressure classification.
+- `serviceHealthRuntime.ts`: rolling service-health metrics, latency percentiles, timeout/cancel/transfer-limit evidence and closed/open/half-open circuit breaker.
+- `renderGovernorRuntime.ts`: adaptive economy/balanced/quality/ultra budgets driven by device memory/CPU/DPR, frame pressure, memory pressure and 2D/3D interaction state.
+- `sceneStreamingPlanner.ts`: deterministic 3D load/prefetch/retain/evict planning with memory, concurrency, stale-age and force-retain/load controls.
+- `gisObservabilityRuntime.ts`: bounded local observability, traces, p50/p95/p99 durations, error-rate health and privacy redaction.
+- `modernGisKernel.ts`: integrates existing ArcGIS request scheduler, layer lifecycle, capability contracts and spatial query planner with the new typed health/render/streaming/observability runtimes.
+- `modernGisKernel.js`: compatibility adapter keeps staged JavaScript consumers viable while canonical runtime logic moves to strict TypeScript.
 
 ## TESTLER / BUILD / CI
-- Local npm/test/build execution was not used; this turn is GitHub-native.
-- Immediately after PR creation, no GitHub Actions workflow run was yet associated with head `4c67c79...`.
-- CI therefore remains pending/not-started evidence, not green evidence. PR must remain open.
-- Subsequent turn must check exact-head workflow runs and fix any lint/typecheck/test/build errors on the same canonical branch if merge-base remains current.
+- Focused regression suites were added for service health/circuit transitions, render pressure, clustering, 3D streaming, observability redaction, query dedupe/cache/invalidation, transfer-limit evidence, service/layer ownership, lifecycle attach/detach/visibility, diagnostics and shutdown.
+- Exact product-code head `686e61a1c386b941b18368256f7324a587d79019` triggered:
+  - Webclient Quality run #977 (`35081649361`) — completed/failure.
+  - Platform Architecture Audit run #171 (`35081649356`) — completed/failure.
+  - Release QA run #73 (`35081649345`) — completed/failure.
+- These failures occur before workflow steps execute: job step lists are empty and decoded job logs are unavailable with GitHub `BlobNotFound`.
+- Current `main` `851a5c93...` shows the same early Webclient Quality push-run failure pattern (run #959) within only a few seconds, so no code-level test/lint/typecheck/build assertion failure has been observed from these runs.
+- This is consistent with a GitHub Actions runner/account/infrastructure execution problem, but it is NOT treated as green CI. Exact-head successful CI remains mandatory before merge.
 
 ## NETWORK DEĞİŞİKLİKLERİ
-- No new service endpoint configured.
 - No WMS/WFS/WMTS support added.
-- No analytics, remote font, CDN, telemetry or third-party GIS dependency added.
-- Query contract only derives `/query` from an already verified concrete ArcGIS FeatureServer/MapServer layer URL.
+- No invented service endpoint added.
+- No analytics, remote font, CDN or external telemetry dependency added.
+- Modern kernel itself does not introduce a direct fetch/network transport; query execution remains injected through the existing bounded scheduler contract after ArcGIS resource verification.
+- Request cache, dedupe, cancellation and tag invalidation remain bounded.
 
 ## GÜVENLİK / DATA INTEGRITY
-- Bounded where-clause length and strict field-name validation prevent unbounded/structurally invalid client query construction.
-- Service roots are rejected for feature queries; a concrete layer id is required.
-- Unsupported pagination/orderBy capabilities fail closed or are omitted rather than guessed.
-- Query envelopes require finite ordered bounds.
-- No token, secret, API key or privileged header is introduced.
+- ArcGIS resource validation reuses the existing centralized capability policy and rejects OGC/WMS/WFS-like resources.
+- Generalization can be recommended under pressure, but a coordinate-unit tolerance is never fabricated; tolerance remains null until supplied from verified units.
+- Service/layer ownership fails closed; dependent layers block service removal.
+- Service health cancellation is distinguished from a backend failure; timeouts and transfer-limit evidence remain separately visible.
+- Observability redacts token/secret/password/authorization/cookie/API-key values and fingerprints coordinate/geometry/address/query/object-id fields.
+- Bounded event buffers, request/cache budgets, scene memory budgets and lifecycle budgets reduce uncontrolled CPU/memory/network growth.
 
 ## İKON EŞLEŞTİRME
 - No second icon registry/resolver introduced.
-- Existing `iconRegistry.json` + shared resolver/presentation remain authoritative.
+- Existing `Webclient.app/src/gis-engine/iconRegistry.json` plus shared resolver/presentation remain the single icon authority for list/2D/3D presentation.
 
 ## MODERNİZASYON KARARLARI / PERFORMANS ETKİSİ
-- Continue staged strict TypeScript adoption at GIS contract boundaries instead of blind whole-app rewrite.
-- Rendering policy centralizes feature-count/geometry/pressure decisions so 2D and 3D can share deterministic budgets.
-- Stable pagination ordering reduces duplicate/missing records across page transitions when the service advertises orderBy.
-- View-state coordinator provides a bounded subscription lifecycle and avoids independent 2D/3D state forks.
+- Continue feature-by-feature strict TypeScript migration rather than a blind whole-application rewrite.
+- Existing JavaScript consumers are preserved through compatibility adapters while new canonical GIS boundaries are strongly typed.
+- Render governor reduces feature/point/label/scene-node budgets during frame or memory pressure and suppresses expensive 3D extrusion/shadows during interaction.
+- Scene streaming prioritizes visible/high-importance/near resources, bounds prefetch, and evicts stale non-visible resources under memory pressure.
+- Service circuit breaker prevents repeated failing ArcGIS requests from amplifying outages.
+- Deterministic scheduler keys and tag invalidation support request dedupe and bounded cache reuse.
+
+## ÇÖZÜLEN HATALAR / RİSKLER
+- PR was originally below the required 4,000-addition gate; meaningful runtime and regression work raised it to 4,794 additions without filler.
+- Stale older GIS branch based on `a9c6f96...` was not resurrected; work continued on canonical PR #55 based on current `main`.
+- Query/resource behavior does not guess pagination, reprojection support, coordinate units or provider endpoints.
 
 ## KALAN SORUNLAR / SONRAKİ GÖREV NOTU
-- PR #55 is far below the mandatory 4000-addition gate; continue meaningful GIS work on the same PR only while its merge-base remains current and non-diverged.
-- Next high-impact work: typed ArcGIS metadata adapter into query capabilities; cancellable/deduplicated query executor integration with existing request scheduler; renderer/LOD plan adapters; layer lifecycle 2D/3D ownership bridge; geometry normalization/integrity typed boundary; service health/cache semantics; regression tests for cancellation, stale pages, transfer limits, id=0 and selection parity.
-- Re-check current main and PR #55 merge-base before adding more work. If main advances and PR becomes behind/diverged, follow branch lifecycle rules and reconcile unique changes onto a fresh current-main GIS branch rather than force-pushing stale history.
-- Do not merge until additions >=4000, exact-head required CI is completed+successful, PR is mergeable/conflict-free, security/performance/data-integrity final review passes, and shared `KENT_REHBERI_PROGRESS.md` is reconciled.
+- Merge remains blocked solely by the mandatory exact-head successful CI requirement; current GitHub Actions jobs fail before any step starts and produce no usable job logs.
+- When Actions execution is restored: rerun exact-head Webclient Quality, Platform Architecture Audit and Release QA; fix any real code failures on this same canonical branch; refresh `main`; verify behind=0, merge-base/current base, `mergeable=true`, additions >=4000 and security/performance/data-integrity regression status; reconcile this record into shared `KENT_REHBERI_PROGRESS.md`; then squash merge and verify `merged=true` plus the new `main` SHA.
