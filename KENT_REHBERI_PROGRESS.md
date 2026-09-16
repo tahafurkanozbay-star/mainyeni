@@ -33,3 +33,13 @@
 - PERFORMANS ETKİSİ: identical reconciliations do not advance per-layer revision; sorted normalized identities avoid duplicate highlight work; removed layers are released immediately; no polling/timers.
 - ÇÖZÜLEN HATALAR: closes explicit 2D/3D state-parity gap and prevents duplicate logical layer ownership or stale selection/highlight state from becoming renderer-specific divergence.
 - KALAN SORUNLAR / SONRAKİ GÖREV: continue PR #73 while base remains current. Next: spatial extent/geometry normalization utilities, ArcGIS layer adapter composition, query/selection cancellation and renderer binding. Grow only through real GIS work to >=4,000 additions. Require exact-head CI success, second verification, performance/data-integrity/security review, final regression and fresh main/mergeability check before squash merge.
+
+## Deep GIS continuation — 2026-09-16 21:12 TRT
+- TUR / GÖREV: spatial extent normalization and coordinate-space integrity.
+- BASE MAIN / BRANCH: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0` / `agent/gis-deep-20260916-1710-2dd3ce9`; main was freshly verified unchanged and PR #73 mergeable=true before implementation.
+- ÖNEMLİ ÖZELLİKLER: added renderer/transport-neutral strict TypeScript `spatialExtent` utilities for finite-coordinate validation, reversed-bound normalization, Web Mercator WKID alias canonicalization, point-derived bounds, intersection/containment, deterministic padding and incremental extent accumulation.
+- DATA INTEGRITY / SECURITY: incompatible known spatial references fail closed for accumulation and are never numerically compared for intersection/containment; non-finite coordinates and invalid WKIDs are rejected; coordinate zero remains valid. No network, DOM, secret or parser surface added.
+- TESTLER: focused Vitest source covers WKID canonicalization, reversed extents, non-finite rejection, zero coordinates, mixed-reference rejection, edge intersection, incompatible coordinate spaces, containment, padding and accumulator lifecycle. Exact-head CI remains authoritative; no PASS is claimed until Actions completes on the new head.
+- NETWORK / İKON: no endpoint, transport, WMS/WFS/WMTS, dependency, telemetry or remote asset; shared icon resolver unchanged.
+- PERFORMANS: O(n) point-bound accumulation, constant-memory incremental accumulator, no projection guessing or hidden reprojection, no timers/polling.
+- SONRAKİ GÖREV: continue the same canonical PR while current: ArcGIS layer-adapter composition, query/selection cancellation and renderer binding, then geometry normalization beyond extents. Do not merge below 4,000 meaningful additions or without exact-head successful CI and final regression/security/performance review.
