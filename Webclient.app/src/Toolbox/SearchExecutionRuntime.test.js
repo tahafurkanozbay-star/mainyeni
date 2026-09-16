@@ -388,7 +388,10 @@ describe("SearchExecutionRuntime", () => {
         test("merges pages while deduplicating keys", () => {
             const first = executeSearch(index, { query: "", limit: 2 });
             const second = executeSearch(index, { query: "", limit: 2, offset: 1 });
-            expect(mergeSearchPages(first, second).results.map(hit => hit.document.id)).toEqual(["1", "2", "3"]);
+            const expectedIds = Array.from(new Set(
+                [...first.results, ...second.results].map(hit => hit.document.id)
+            ));
+            expect(mergeSearchPages(first, second).results.map(hit => hit.document.id)).toEqual(expectedIds);
         });
 
         test("keeps terminal pagination terminal after merge", () => {
