@@ -38,6 +38,13 @@ namespace Api.Core.Platform
                 });
             }
 
+            // Compression wraps the response before the error/security middleware writes a body,
+            // allowing large JSON/problem responses to benefit without changing controller code.
+            if (options.ResponseCompression.Enabled)
+            {
+                app.UseResponseCompression();
+            }
+
             // Correlation comes before the exception layer so every subsequent log/problem response
             // can reference the same safe request identifier.
             app.UseMiddleware<CorrelationIdMiddleware>();
@@ -49,8 +56,9 @@ namespace Api.Core.Platform
         }
 
         /// <summary>
-        /// Must be called after UseRouting because ASP.NET Core request-timeout middleware relies on
-        /// endpoint metadata. CORS also runs here so preflight behavior uses the centralized policy.
+        /// Must be called after UseRouting because request metrics and rate limiting deliberately use
+        /// endpoint metadata. CORS runs before rate limiting so ordinary preflight behavior remains
+        /// predictable; exempt OPTIONS requests never consume a limiter partition.
         /// </summary>
         public static IApplicationBuilder UseKentRehberiPlatformAfterRouting(
             this IApplicationBuilder app)
@@ -60,7 +68,22 @@ namespace Api.Core.Platform
                 throw new ArgumentNullException(nameof(app));
             }
 
+            var options = app.ApplicationServices
+                .GetRequiredService<IOptions<ApiPlatformOptions>>()
+                .Value;
+
             app.UseCors(ApiPlatformDefaults.CorsPolicyName);
+
+            if (options.Diagnostics.Enabled)
+            {
+                app.UseMiddleware<RequestMetricsMiddleware>();
+            }
+
+            if (options.RateLimiting.Enabled)
+            {
+                app.UseRateLimiter();
+            }
+
             app.UseRequestTimeouts();
             return app;
         }

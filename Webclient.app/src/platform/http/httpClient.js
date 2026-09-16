@@ -1,62 +1,32 @@
-import axios from 'axios';
 import { RequestCache } from '../cache/requestCache';
 import { runtimeConfig } from '../config/runtimeConfig';
-import { isAbortError, normalizeAxiosError } from '../errors/appError';
+import { isAbortError, normalizeHttpError } from '../errors/appError';
 import { normalizeApplicationPath } from '../network/endpointPolicy';
+import { requestTelemetry } from '../telemetry/requestTelemetry';
+import { createFetchTransport } from './fetchTransport';
+import { createRetryDecision, waitForRetryDelay } from './retryPolicy';
 
 export const SAFE_METHODS = new Set(['get', 'head']);
 
-const responseCache = new RequestCache({
-  ttlMs: runtimeConfig.cacheTtlMs,
-  maxEntries: 150
-});
-const inFlight = new Map();
-
-const client = axios.create({
-  baseURL: runtimeConfig.apiBaseUrl,
-  timeout: runtimeConfig.requestTimeoutMs,
-  headers: { Accept: 'application/json' },
-  withCredentials: true
-});
-
-const waitForRetry = (milliseconds, signal) => new Promise((resolve, reject) => {
-  let timer;
-  let abortHandler;
-
-  const cleanup = () => {
-    clearTimeout(timer);
-    if (signal && abortHandler) signal.removeEventListener('abort', abortHandler);
-  };
-
-  timer = setTimeout(() => {
-    cleanup();
-    resolve();
-  }, milliseconds);
-
-  if (!signal) return;
-
-  abortHandler = () => {
-    cleanup();
-    reject(Object.assign(new Error('Request cancelled'), { name: 'AbortError', code: 'ABORTED' }));
-  };
-
-  if (signal.aborted) {
-    abortHandler();
-    return;
-  }
-
-  signal.addEventListener('abort', abortHandler, { once: true });
-});
-
-export const stableSerialize = (value) => {
+export const stableSerialize = (value, seen = new WeakSet()) => {
   if (value === undefined) return '';
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (seen.has(value)) throw new TypeError('Circular request parameters are not supported.');
 
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
-    .join(',')}}`;
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`;
+    }
+
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key], seen)}`)
+      .join(',')}}`;
+  } finally {
+    seen.delete(value);
+  }
 };
 
 const cacheKey = (config) => [
@@ -65,108 +35,189 @@ const cacheKey = (config) => [
   stableSerialize(config.params)
 ].join('|');
 
-const hasAuthorizationHeader = (headers) => {
-  if (!headers) return false;
-  return Object.keys(headers).some((key) =>
-    key.toLowerCase() === 'authorization' && Boolean(headers[key]));
+const headerEntries = (headers) => {
+  if (!headers) return [];
+  if (typeof headers.entries === 'function') return Array.from(headers.entries());
+  return Object.entries(headers);
 };
 
-const isRetryableStatus = (error) => {
-  if (isAbortError(error)) return false;
-  const status = error?.response?.status;
-  return !status || status === 408 || status === 429 || status >= 500;
+const hasAuthorizationHeader = (headers) =>
+  headerEntries(headers).some(([key, value]) =>
+    String(key).toLowerCase() === 'authorization' && Boolean(value));
+
+const createDefaultCache = () => new RequestCache({
+  ttlMs: runtimeConfig.cacheTtlMs,
+  maxEntries: 150
+});
+
+const createDefaultTransport = () => createFetchTransport({
+  baseUrl: runtimeConfig.apiBaseUrl,
+  defaultTimeoutMs: runtimeConfig.requestTimeoutMs,
+  defaultHeaders: { Accept: 'application/json' },
+  credentials: 'include'
+});
+
+const normalizeRequest = (config = {}) => ({
+  ...config,
+  method: String(config.method || 'get').trim().toLowerCase(),
+  url: normalizeApplicationPath(config.url || '/'),
+  timeout: config.timeout ?? runtimeConfig.requestTimeoutMs
+});
+
+const createExecutionContext = (telemetry, merged) =>
+  telemetry?.start?.({ method: merged.method, url: merged.url }) || null;
+
+const completeTelemetry = (telemetry, context, response, details = {}) => {
+  if (!context || typeof telemetry?.complete !== 'function') return;
+  telemetry.complete(context, {
+    status: response?.status,
+    attempts: details.attempts,
+    cache: details.cache,
+    deduped: details.deduped
+  });
 };
 
-const retryDelay = (attempt) =>
-  Math.min(250 * (2 ** attempt), 2000) + Math.round(Math.random() * 100);
-
-const createCancelToken = (signal) => {
-  if (!signal) return { token: undefined, cleanup: () => {} };
-
-  const source = axios.CancelToken.source();
-  const abortHandler = () => source.cancel('Request cancelled');
-
-  if (signal.aborted) abortHandler();
-  else signal.addEventListener('abort', abortHandler, { once: true });
-
-  return {
-    token: source.token,
-    cleanup: () => signal.removeEventListener('abort', abortHandler)
-  };
+const failTelemetry = (telemetry, context, error, attempts) => {
+  if (!context || typeof telemetry?.fail !== 'function') return;
+  telemetry.fail(context, {
+    status: error?.status ?? error?.response?.status,
+    errorCode: error?.code,
+    aborted: isAbortError(error),
+    attempts
+  });
 };
 
-const request = async (config = {}) => {
-  const method = String(config.method || 'get').toLowerCase();
-  const url = normalizeApplicationPath(config.url || '/');
-  const merged = {
-    ...config,
-    method,
-    url,
-    timeout: config.timeout ?? runtimeConfig.requestTimeoutMs
-  };
+/**
+ * Creates the application HTTP boundary. Dependencies are injectable so retry/cancellation/cache
+ * behavior can be regression-tested without live network access. The default transport is the
+ * browser's native fetch API; no client secret or browser-only authorization boundary is added.
+ */
+export const createApiClient = (dependencies = {}) => {
+  const responseCache = dependencies.cache || createDefaultCache();
+  const transport = dependencies.transport || createDefaultTransport();
+  const telemetry = dependencies.telemetry === undefined
+    ? requestTelemetry
+    : dependencies.telemetry;
+  const retryWait = dependencies.retryWait || waitForRetryDelay;
+  const inFlight = new Map();
 
-  const safeMethod = SAFE_METHODS.has(method);
-  const publicRequest = !hasAuthorizationHeader(merged.headers);
-  const cacheable = safeMethod && publicRequest && config.cache === true;
-  const dedupe = safeMethod && publicRequest && config.dedupe === true && !config.signal;
-  const retryAllowed = safeMethod || config.retryUnsafe === true;
-  const key = cacheKey(merged);
-
-  if (cacheable) {
-    const cached = responseCache.get(key);
-    if (cached !== undefined) return cached;
+  if (typeof transport !== 'function') {
+    throw new TypeError('HTTP transport must be a function.');
   }
 
-  if (dedupe && inFlight.has(key)) {
-    return inFlight.get(key);
-  }
+  const request = async (config = {}) => {
+    const merged = normalizeRequest(config);
+    const safeMethod = SAFE_METHODS.has(merged.method);
+    const publicRequest = !hasAuthorizationHeader(merged.headers);
+    const cacheable = safeMethod && publicRequest && config.cache === true;
+    const dedupe = safeMethod && publicRequest && config.dedupe === true && !config.signal;
+    const key = cacheKey(merged);
 
-  const execute = async () => {
-    const cancellation = createCancelToken(config.signal);
-    let attempt = 0;
+    if (cacheable) {
+      const cached = responseCache.get(key);
+      if (cached !== undefined) {
+        telemetry?.cacheHit?.({ method: merged.method, url: merged.url });
+        return cached;
+      }
+    }
 
-    try {
+    if (dedupe && inFlight.has(key)) {
+      telemetry?.dedupeHit?.({ method: merged.method, url: merged.url });
+      return inFlight.get(key);
+    }
+
+    const execute = async () => {
+      const telemetryContext = createExecutionContext(telemetry, merged);
+      let attempt = 0;
+
       while (true) {
         try {
-          const response = await client.request({ ...merged, cancelToken: cancellation.token });
-          if (cacheable && response.status >= 200 && response.status < 300) {
-            responseCache.set(key, response.data, config.cacheTtlMs ?? runtimeConfig.cacheTtlMs);
+          const response = await transport(merged);
+          const successful = response?.status >= 200 && response?.status < 300;
+
+          if (cacheable && successful) {
+            responseCache.set(
+              key,
+              response.data,
+              config.cacheTtlMs ?? runtimeConfig.cacheTtlMs
+            );
           }
+
+          // A successful mutation can invalidate cached reads in ways the client cannot safely
+          // infer from URL prefixes. A bounded in-memory cache is cheap to clear and correctness
+          // is more important than retaining potentially stale data.
+          if (!safeMethod && successful) {
+            responseCache.clear();
+          }
+
+          completeTelemetry(telemetry, telemetryContext, response, {
+            attempts: attempt + 1
+          });
           return response.data;
         } catch (error) {
-          const normalized = normalizeAxiosError(error);
           const maxRetries = config.maxRetries ?? runtimeConfig.maxRetries;
+          const decision = createRetryDecision({
+            error,
+            method: merged.method,
+            attempt,
+            maxRetries,
+            retryUnsafe: config.retryUnsafe === true,
+            signal: config.signal,
+            baseDelayMs: config.retryBaseDelayMs,
+            maxDelayMs: config.retryMaxDelayMs,
+            jitterRatio: config.retryJitterRatio,
+            random: config.retryRandom
+          });
 
-          if (!retryAllowed || attempt >= maxRetries || !isRetryableStatus(error)) {
+          if (!decision.retry) {
+            const normalized = normalizeHttpError(error);
+            failTelemetry(telemetry, telemetryContext, normalized, attempt + 1);
             throw normalized;
           }
 
-          await waitForRetry(retryDelay(attempt), config.signal);
+          telemetry?.retry?.(telemetryContext, {
+            attempt: attempt + 1,
+            delayMs: decision.delayMs,
+            status: decision.status
+          });
+          await retryWait(decision.delayMs, config.signal);
           attempt += 1;
         }
       }
-    } finally {
-      cancellation.cleanup();
-    }
+    };
+
+    const promise = execute().finally(() => {
+      if (inFlight.get(key) === promise) inFlight.delete(key);
+    });
+
+    if (dedupe) inFlight.set(key, promise);
+    return promise;
   };
 
-  const promise = execute().finally(() => {
-    if (inFlight.get(key) === promise) inFlight.delete(key);
+  return Object.freeze({
+    request,
+    get: (url, config = {}) => request({ ...config, url, method: 'get' }),
+    head: (url, config = {}) => request({ ...config, url, method: 'head' }),
+    post: (url, data, config = {}) => request({
+      ...config, url, data, method: 'post', cache: false, dedupe: false
+    }),
+    put: (url, data, config = {}) => request({
+      ...config, url, data, method: 'put', cache: false, dedupe: false
+    }),
+    patch: (url, data, config = {}) => request({
+      ...config, url, data, method: 'patch', cache: false, dedupe: false
+    }),
+    delete: (url, config = {}) => request({
+      ...config, url, method: 'delete', cache: false, dedupe: false
+    }),
+    clearCache: () => responseCache.clear(),
+    invalidateCache: (prefix) => responseCache.invalidatePrefix(prefix),
+    getCacheSize: () => responseCache.size(),
+    getInFlightCount: () => inFlight.size,
+    getTelemetrySnapshot: () => telemetry?.snapshot?.() || [],
+    getTelemetrySummary: () => telemetry?.summary?.() || null,
+    clearTelemetry: () => telemetry?.clear?.()
   });
-
-  if (dedupe) inFlight.set(key, promise);
-  return promise;
 };
 
-export const apiClient = {
-  request,
-  get: (url, config = {}) => request({ ...config, url, method: 'get' }),
-  head: (url, config = {}) => request({ ...config, url, method: 'head' }),
-  post: (url, data, config = {}) => request({ ...config, url, data, method: 'post', cache: false, dedupe: false }),
-  put: (url, data, config = {}) => request({ ...config, url, data, method: 'put', cache: false, dedupe: false }),
-  patch: (url, data, config = {}) => request({ ...config, url, data, method: 'patch', cache: false, dedupe: false }),
-  delete: (url, config = {}) => request({ ...config, url, method: 'delete', cache: false, dedupe: false }),
-  clearCache: () => responseCache.clear(),
-  invalidateCache: (prefix) => responseCache.invalidatePrefix(prefix),
-  getCacheSize: () => responseCache.size()
-};
+export const apiClient = createApiClient();
