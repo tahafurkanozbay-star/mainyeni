@@ -1,0 +1,89 @@
+name: Temporary Supervision Lint Cleanup
+
+on:
+  push:
+    branches:
+      - 'agent/platform-runtime-supervision-20260916-3d116af-r1'
+    paths:
+      - '.github/workflows/supervision-lint-cleanup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/platform-runtime-supervision-20260916-3d116af-r1
+
+      - name: Apply deterministic lint cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+
+          contracts = Path('Webclient.app/src/platform/runtime/supervision/contracts.ts')
+          text = contracts.read_text()
+          old = "const CONTROL_CHARACTER = /[\\u0000-\\u001f\\u007f]/u;"
+          new = """const containsControlCharacter = (value: string): boolean => [...value].some((character) => {\n  const code = character.charCodeAt(0);\n  return code <= 0x1f || code === 0x7f;\n});"""
+          if old not in text:
+              raise SystemExit('contracts control-character pattern not found')
+          text = text.replace(old, new).replace('CONTROL_CHARACTER.test(value)', 'containsControlCharacter(value)')
+          contracts.write_text(text)
+
+          health = Path('Webclient.app/src/platform/runtime/supervision/healthRegistry.ts')
+          text = health.read_text()
+          old = 'for (const listener of [...this.#listeners]) safeObserver(listener, snapshot);'
+          if old not in text:
+              raise SystemExit('health listener pattern not found')
+          health.write_text(text.replace(old, 'for (const listener of this.#listeners) safeObserver(listener, snapshot);'))
+
+          lifecycle = Path('Webclient.app/src/platform/runtime/supervision/lifecycleCoordinator.ts')
+          text = lifecycle.read_text()
+          old_array = 'const output: TResult[] = new Array<TResult>(values.length);'
+          if old_array not in text:
+              raise SystemExit('lifecycle output array pattern not found')
+          text = text.replace(old_array, 'const output: TResult[] = [];\n  output.length = values.length;')
+          old_required = """Object.freeze([\n          ...this.#graph.list().filter((entry) => entry.criticality === 'critical').map((entry) => entry.id),\n        ]),"""
+          new_required = """Object.freeze(\n          this.#graph.list().filter((entry) => entry.criticality === 'critical').map((entry) => entry.id),\n        ),"""
+          if old_required not in text:
+              raise SystemExit('lifecycle readiness pattern not found')
+          lifecycle.write_text(text.replace(old_required, new_required))
+
+          test_file = Path('Webclient.app/src/platform/runtime/supervision/lifecycleCoordinator.test.ts')
+          text = test_file.read_text()
+          old_import = "import { LifecycleDeadlineError, type LifecycleComponent } from './contracts';"
+          if old_import not in text:
+              raise SystemExit('lifecycle test import pattern not found')
+          test_file.write_text(text.replace(old_import, "import { type LifecycleComponent } from './contracts';"))
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Install from lockfile
+        working-directory: Webclient.app
+        run: npm ci
+
+      - name: Verify changed Platform sources are warning-free
+        working-directory: Webclient.app
+        run: npx oxlint --deny-warnings src/platform/runtime/supervision src/Toolbox/DebugHelper.js src/reportWebVitals.js
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Webclient.app/src/platform/runtime/supervision
+          if git diff --cached --quiet; then
+            echo "No lint cleanup required."
+          else
+            git commit -m "fix(platform): clear supervision lint regressions"
+            git push origin HEAD:agent/platform-runtime-supervision-20260916-3d116af-r1
+          fi
