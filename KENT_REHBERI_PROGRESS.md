@@ -156,7 +156,7 @@
 - Merge öncesi base: `a520ba91b9b802a65f0dcdc3a776f9345316cfe1`; branch `main`e göre 0 commit gerideydi.
 - PR: #9 `fix(search): harden data search query construction`.
 - Final PR durumu merge öncesi `mergeable=true`; review bekleyen thread yoktu.
-- MERGE: squash-merge tamamlandı.
+- MERGE: PR #9 squash-merge tamamlandı.
 - Merge commit: `4a56c8448042a59dbc3451bb1cb390f9c3491a83`.
 - Connector çalışma alanında kalıcı bir local checkout/worktree bulunmadığı için uydurma `git status` raporlanmadı; branch/ref/compare durumu GitHub üzerinden ve temiz CI checkout'u (`actions/checkout clean=true`) üzerinden doğrulandı.
 
@@ -406,3 +406,13 @@
 
 ### PARALEL MAIN ENTEGRASYON NOTU
 - `main` `f3f3c0f3d82c832d70ee5304ee441ac1d759e5c6` ile adaptive ArcGIS runtime paketine ilerledi. Bu GIS ürün kodu ve yukarıdaki progress kaydı QA branch'inde korunarak iki-parent entegrasyona hazırlanmıştır; QA değişiklikleri GIS runtime dosyalarını yeniden yazmaz.
+
+### FINAL MERGE / POST-MERGE — TypeScript 7 QA
+- PR #40 final merge öncesi `main` `f3f3c0f3d82c832d70ee5304ee441ac1d759e5c6`, head `5e9d6625a3343123e4845f4a0ef751b23959b89d`, `mergeable=true`, 24 changed files ve **5.005 additions / 3 deletions** olarak doğrulandı.
+- Exact final candidate üzerinde Platform Architecture Audit #133 (`35070349683`), Platform Backend Validation #191 (`35070349677`) ve Release QA #30 (`35070349673`) tamamen `success` tamamlandı; Release QA typed/frontend/backend job'larının üçü de yeşildi.
+- PR #40 `squash` yöntemiyle merge edildi. Merge commit: `8a1267d57e359bb09b6d24c478d818cc3dfce738`; GitHub-signed commit olarak `main` HEAD üzerinde doğrulandı.
+- Merge'den hemen sonra ayrı Data/Search productionizasyon commit'i `1f324344aa8d607256b2dabdf9c687405fbb6749` merge commit'imizin doğrudan child'ı olarak `main`e geldi; dolayısıyla TypeScript QA merge'i güncel main geçmişinde korunuyor.
+- Güncel `main` `1f324344...` üzerinde Release QA #32 (`35070665296`) üç job ile **success**: TypeScript 7.0.2 strict typecheck/audit, Webclient full regression+production build ve .NET 10 restore/audit/build/xUnit v3 MTP/API publish tamamlandı.
+- Aynı güncel `main` üzerinde Webclient Quality #820 (`35070665352`) **success**: lint, typecheck, test, build-budget testleri, production build ve production build-budget enforcement geçti.
+- Merge sonrası ilk `8a1267d...` push koşularının frontend/backend lane'leri, hata nedeniyle değil hemen gelen `1f324344...` push'un concurrency cancellation'ı nedeniyle iptal edildi; yeni current-main koşuları bunların yerini aldı ve yeşil tamamlandı.
+- Bu final kayıt değişikliği yalnız Markdown progress dokümantasyonudur; ürün/runtime koduna yeni değişiklik eklemez.
