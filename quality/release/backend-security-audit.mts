@@ -28,7 +28,10 @@ const CSHARP_PATH = /\.cs$/i;
 const GENERATED_PATH = /(^|\/)(bin|obj|dist|coverage|node_modules)(\/|$)/i;
 const TEST_PATH = /(^|\/)(tests?|__tests__|fixtures?|mocks?)(\/|\.|$)/i;
 const CONTROLLER = /Controller\b|\[ApiController\]|Map(?:Get|Post|Put|Patch|Delete)\s*\(/i;
-const ENDPOINT = /\[(?:HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete|Route)\b|Map(?:Get|Post|Put|Patch|Delete)\s*\(/gi;
+// Route attributes describe routing metadata at controller/action scope; they are not
+// independently executable endpoints. Count only verb attributes/minimal-API handlers
+// so authorization evidence is compared against the real endpoint cardinality.
+const ENDPOINT = /\[(?:HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete)\b|Map(?:Get|Post|Put|Patch|Delete)\s*\(/gi;
 const AUTHORIZE = /\[Authorize(?:\([^\]]*\))?\]|RequireAuthorization\s*\(|AddAuthorization\s*\(/gi;
 const ANONYMOUS = /\[AllowAnonymous\]|AllowAnonymous\s*\(/gi;
 const VALIDATION = /ModelState\.IsValid|TryValidateModel|ValidateAsync\s*\(|IValidator<|FluentValidation|Results\.ValidationProblem|BadRequest\s*\(/gi;
