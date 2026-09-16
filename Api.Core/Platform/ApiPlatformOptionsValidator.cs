@@ -7,7 +7,7 @@ namespace Api.Core.Platform
 {
     /// <summary>
     /// Validates operational platform settings before request processing begins. Invalid security,
-    /// timeout or health endpoint configuration fails closed instead of degrading silently.
+    /// timeout, limiter or health endpoint configuration fails closed instead of degrading silently.
     /// </summary>
     public sealed class ApiPlatformOptionsValidator : IValidateOptions<ApiPlatformOptions>
     {
@@ -29,6 +29,9 @@ namespace Api.Core.Platform
             ValidateHeaders(options.SecurityHeaders, failures);
             ValidateHealth(options.Health, failures);
             ValidateForwardedHeaders(options.ForwardedHeaders, failures);
+            ValidateRateLimiting(options.RateLimiting, failures);
+            ValidateResponseCompression(options.ResponseCompression, failures);
+            ValidateDiagnostics(options.Diagnostics, failures);
 
             return failures.Count == 0
                 ? ValidateOptionsResult.Success
@@ -239,6 +242,71 @@ namespace Api.Core.Platform
             if (options.Enabled && (options.ForwardLimit < 1 || options.ForwardLimit > 5))
             {
                 failures.Add("Platform:ForwardedHeaders:ForwardLimit must be between 1 and 5.");
+            }
+        }
+
+        private static void ValidateRateLimiting(
+            ApiPlatformOptions.RateLimitOptions options,
+            ICollection<string> failures)
+        {
+            if (options == null)
+            {
+                failures.Add("Platform:RateLimiting configuration is required.");
+                return;
+            }
+
+            if (!options.Enabled)
+            {
+                return;
+            }
+
+            if (options.PermitLimit < 1 || options.PermitLimit > 10000)
+            {
+                failures.Add("Platform:RateLimiting:PermitLimit must be between 1 and 10000.");
+            }
+
+            if (options.WindowSeconds < 1 || options.WindowSeconds > 3600)
+            {
+                failures.Add("Platform:RateLimiting:WindowSeconds must be between 1 and 3600.");
+            }
+
+            if (options.SegmentsPerWindow < 1 || options.SegmentsPerWindow > 60)
+            {
+                failures.Add("Platform:RateLimiting:SegmentsPerWindow must be between 1 and 60.");
+            }
+            else if (options.WindowSeconds >= 1 && options.SegmentsPerWindow > options.WindowSeconds)
+            {
+                failures.Add("Platform:RateLimiting:SegmentsPerWindow cannot exceed WindowSeconds.");
+            }
+
+            if (options.QueueLimit < 0 || options.QueueLimit > 1000)
+            {
+                failures.Add("Platform:RateLimiting:QueueLimit must be between 0 and 1000.");
+            }
+
+            if (options.RetryAfterSeconds < 1 || options.RetryAfterSeconds > 3600)
+            {
+                failures.Add("Platform:RateLimiting:RetryAfterSeconds must be between 1 and 3600.");
+            }
+        }
+
+        private static void ValidateResponseCompression(
+            ApiPlatformOptions.ResponseCompressionOptions options,
+            ICollection<string> failures)
+        {
+            if (options == null)
+            {
+                failures.Add("Platform:ResponseCompression configuration is required.");
+            }
+        }
+
+        private static void ValidateDiagnostics(
+            ApiPlatformOptions.DiagnosticsOptions options,
+            ICollection<string> failures)
+        {
+            if (options == null)
+            {
+                failures.Add("Platform:Diagnostics configuration is required.");
             }
         }
 

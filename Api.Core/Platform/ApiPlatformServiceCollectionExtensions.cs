@@ -1,15 +1,24 @@
+using Api.Core.Platform.Diagnostics;
 using Api.Core.Platform.Health;
+using Api.Core.Platform.Middleware;
+using Api.Core.Platform.RateLimiting;
 using Business.Core.Context;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Timeouts;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using System;
+using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 
 namespace Api.Core.Platform
@@ -20,6 +29,12 @@ namespace Api.Core.Platform
     /// </summary>
     public static class ApiPlatformServiceCollectionExtensions
     {
+        private static readonly string[] AdditionalCompressibleMimeTypes =
+        {
+            "application/problem+json",
+            "application/geo+json"
+        };
+
         public static IServiceCollection AddKentRehberiApiPlatform(
             this IServiceCollection services,
             IConfiguration configuration)
@@ -45,6 +60,9 @@ namespace Api.Core.Platform
             AddCors(services, options);
             AddRequestTimeoutPolicy(services, options);
             AddHealthChecks(services, options);
+            AddResponseCompression(services, options);
+            AddRateLimiting(services, options);
+            AddDiagnostics(services, options);
 
             services.AddHttpContextAccessor();
             return services;
@@ -198,6 +216,98 @@ namespace Api.Core.Platform
                     ApiPlatformDefaults.DatabaseHealthCheckName,
                     failureStatus: HealthStatus.Unhealthy,
                     tags: new[] { ApiPlatformDefaults.ReadinessTag });
+        }
+
+        private static void AddResponseCompression(
+            IServiceCollection services,
+            ApiPlatformOptions options)
+        {
+            if (!options.ResponseCompression.Enabled)
+            {
+                return;
+            }
+
+            services.AddResponseCompression(compression =>
+            {
+                compression.EnableForHttps = options.ResponseCompression.EnableForHttps;
+                compression.Providers.Add<BrotliCompressionProvider>();
+                compression.Providers.Add<GzipCompressionProvider>();
+                compression.MimeTypes = ResponseCompressionDefaults.MimeTypes
+                    .Concat(AdditionalCompressibleMimeTypes)
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+            });
+
+            services.Configure<BrotliCompressionProviderOptions>(compression =>
+            {
+                compression.Level = CompressionLevel.Fastest;
+            });
+            services.Configure<GzipCompressionProviderOptions>(compression =>
+            {
+                compression.Level = CompressionLevel.Fastest;
+            });
+        }
+
+        private static void AddRateLimiting(
+            IServiceCollection services,
+            ApiPlatformOptions options)
+        {
+            if (!options.RateLimiting.Enabled)
+            {
+                return;
+            }
+
+            var limiter = options.RateLimiting;
+            services.AddRateLimiter(rateLimiterOptions =>
+            {
+                rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+                {
+                    if (ClientRateLimitPartitioner.ShouldBypass(context, options))
+                    {
+                        return RateLimitPartition.GetNoLimiter(
+                            ClientRateLimitPartitioner.ResolveBypassPartition(context, options));
+                    }
+
+                    var partitionKey = ClientRateLimitPartitioner.ResolvePartitionKey(context, options);
+                    return RateLimitPartition.GetSlidingWindowLimiter(
+                        partitionKey,
+                        _ => new SlidingWindowRateLimiterOptions
+                        {
+                            PermitLimit = limiter.PermitLimit,
+                            Window = TimeSpan.FromSeconds(limiter.WindowSeconds),
+                            SegmentsPerWindow = limiter.SegmentsPerWindow,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                            QueueLimit = limiter.QueueLimit,
+                            AutoReplenishment = true
+                        });
+                });
+
+                rateLimiterOptions.OnRejected = (context, cancellationToken) =>
+                {
+                    var runtimeMetrics = context.HttpContext.RequestServices
+                        .GetService<ApiRuntimeMetrics>();
+                    runtimeMetrics?.RateLimitRejected(
+                        context.HttpContext.Request.Method,
+                        RequestMetricsMiddleware.ResolveRoute(context.HttpContext));
+
+                    return ApiRateLimitResponseWriter.WriteAsync(
+                        context,
+                        cancellationToken,
+                        limiter.RetryAfterSeconds);
+                };
+            });
+        }
+
+        private static void AddDiagnostics(
+            IServiceCollection services,
+            ApiPlatformOptions options)
+        {
+            if (!options.Diagnostics.Enabled)
+            {
+                return;
+            }
+
+            services.AddSingleton<ApiRuntimeMetrics>();
         }
     }
 }
