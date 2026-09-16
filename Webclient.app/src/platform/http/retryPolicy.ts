@@ -1,12 +1,14 @@
 import { AppError, isAbortError } from '../errors/appError';
 import {
-  type RetryDecision,
-  type RetryExecutionConfiguration,
-  type RetryOptions,
   getErrorCode,
   getErrorRetryable,
   getErrorStatus,
   readErrorLike
+} from './contracts';
+import type {
+  RetryDecision,
+  RetryExecutionConfiguration,
+  RetryOptions
 } from './contracts';
 
 export const DEFAULT_RETRY_BASE_DELAY_MS = 250;
