@@ -75,6 +75,18 @@ export const validateViteConfigContract = (source) => {
   if (/define\s*:\s*\{[^}]*['"]?process\.env['"]?\s*:/s.test(source)) {
     findings.push('generic process.env browser polyfill is forbidden');
   }
+  if (!/target\s*:\s*['"]baseline-widely-available['"]/.test(source)) {
+    findings.push('Vite 8 production target must use baseline-widely-available');
+  }
+  if (/noDiscovery\s*:\s*true/.test(source)) {
+    findings.push('Vite dependency discovery must remain enabled during the legacy/CJS migration');
+  }
+  if (!source.includes("from './tooling/sourceTransforms'")) {
+    findings.push('Vite and Vitest must share the centralized legacy source transform boundary');
+  }
+  if (!/sourcemap\s*:\s*false/.test(source)) {
+    findings.push('production source maps must remain disabled');
+  }
   return findings;
 };
 
@@ -119,6 +131,19 @@ const selfTest = () => {
   assert(findUnsafeRootAssets('<link rel="preconnect" href="https://js.arcgis.com">').length === 0, 'preconnect should pass');
   assert(validateEnvironmentExample('VITE_API_URL=/api').length === 0, 'VITE example should pass');
   assert(validateEnvironmentExample('REACT_APP_API_URL=/api').length > 0, 'CRA key should fail');
+
+  const validConfig = `
+    import { legacyJsxPlugin } from './tooling/sourceTransforms';
+    export default {
+      envPrefix: ['VITE_'],
+      define: { 'process.env.PUBLIC_URL': JSON.stringify('./') },
+      optimizeDeps: { include: ['react'] },
+      build: { target: 'baseline-widely-available', sourcemap: false }
+    };
+  `;
+  assert(validateViteConfigContract(validConfig).length === 0, 'modern Vite 8 contract should pass');
+  assert(validateViteConfigContract(`${validConfig}\n// noDiscovery: true`).length > 0, 'disabled discovery should fail');
+  assert(validateViteConfigContract(validConfig.replace('baseline-widely-available', 'es2022')).length > 0, 'narrow build target should fail');
 };
 
 if (process.argv.includes('--self-test')) {
