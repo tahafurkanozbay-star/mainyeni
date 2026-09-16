@@ -167,7 +167,9 @@ public sealed class RepositorySecurityContractTests
         Assert.Contains("dotnet restore CityWorks.NetCore.sln", workflow, StringComparison.Ordinal);
         Assert.Contains("--vulnerable --include-transitive", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet build CityWorks.NetCore.sln --configuration Release --no-restore", workflow, StringComparison.Ordinal);
-        Assert.Contains("dotnet test CityWorks.NetCore.sln --configuration Release --no-build", workflow, StringComparison.Ordinal);
+        Assert.Contains("Run xUnit v3 tests through Microsoft.Testing.Platform", workflow, StringComparison.Ordinal);
+        Assert.Contains("dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet test CityWorks.NetCore.sln", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet publish Api.User/Api.User.csproj", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet publish Api.Admin/Api.Admin.csproj", workflow, StringComparison.Ordinal);
     }
