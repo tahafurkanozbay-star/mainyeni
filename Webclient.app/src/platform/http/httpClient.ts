@@ -3,15 +3,15 @@ import { createFetchTransport } from './fetchTransport';
 import { createNetworkDiagnostics } from './networkDiagnostics';
 import { createCoordinatedClient } from './requestCoordinator.ts';
 import { stableSerialize } from './requestPolicy';
-import {
-  type CoordinatedClient,
-  type DiagnosticsSnapshotOptions,
-  type RuntimeCapabilityReport,
-  type RuntimeTuningProfile,
-  type SchedulerLike,
-  type SchedulerOptions,
-  type Transport,
-  readErrorLike
+import { readErrorLike } from './contracts';
+import type {
+  CoordinatedClient,
+  DiagnosticsSnapshotOptions,
+  RuntimeCapabilityReport,
+  RuntimeTuningProfile,
+  SchedulerLike,
+  SchedulerOptions,
+  Transport
 } from './contracts';
 import {
   assertRequiredNetworkCapabilities,
