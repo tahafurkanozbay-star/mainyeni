@@ -18,6 +18,7 @@ import { GoogleMapsBusiness } from "../../Business/GoogleMapsBusiness";
 import { DebugHelper } from "../../Toolbox/DebugHelper";
 import { LazyManagedWindow } from "../Common/LazyManagedWindow";
 import { QUERY_WINDOW_DEFINITIONS } from "../Common/QueryWindowRegistry";
+import { ExperienceMapModeBridge } from "./ExperienceMapModeBridge";
 import { createViewStateBridge } from "../../gis-engine/viewState";
 import {
     bindMapViewState,
@@ -35,6 +36,7 @@ const openExternalMapUrl = (url) => {
 
 export const MapComponent = ({ windowManager }) => {
     const mapDiv = useRef(null);
+    const activeViewModeRef = useRef("2d");
     const [mapView, setMapView] = useState(null);
     const sidebarRef = useRef(null);
 
@@ -66,8 +68,8 @@ export const MapComponent = ({ windowManager }) => {
             if (disposed) return;
 
             // Preserve the application's existing OSM basemap contract. The
-            // shared 3D runtime can reuse this map rather than silently creating
-            // a second ArcGIS Online basemap/elevation dependency.
+            // shared 3D runtime reuses this exact map so layer visibility,
+            // basemap and selection state are not forked across view modes.
             const map = new Map({ basemap: "osm" });
             view = new MapView(createMapViewOptions({
                 container: mapDiv.current,
@@ -140,6 +142,7 @@ export const MapComponent = ({ windowManager }) => {
 
         return () => {
             disposed = true;
+            activeViewModeRef.current = "2d";
             unbindViewState();
             performanceMonitor?.dispose?.();
             MapManager.ClearViewPerformanceMonitor(performanceMonitor);
@@ -168,8 +171,15 @@ export const MapComponent = ({ windowManager }) => {
     }, [windowManager]);
 
     return (
-        <div className="esri-map" id="esri-map-container" ref={mapDiv}>
+        <div
+            className="esri-map"
+            id="esri-map-container"
+            ref={mapDiv}
+            tabIndex={-1}
+            aria-label="Kent Rehberi ana harita çalışma alanı"
+        >
             {mapView && <>
+                <ExperienceMapModeBridge mapView={mapView} modeRef={activeViewModeRef} />
                 <NavigationBar id="mainbar" windowManager={windowManager} />
                 <Sidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
                 <ToolbarWidget id="toolbar-widget" windowManager={windowManager} />

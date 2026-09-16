@@ -4,9 +4,7 @@ import type { FindingSnapshot, RegressionDelta, Severity } from './contracts.mts
 import {
   decidePullRequestRegression,
   reconcileLanguageMigrationDelta,
-  reconcileTypedRuntimeMigrationDelta,
 } from './pr-gate.mts';
-import { fixtureInventory } from './test-helpers.mts';
 
 function snapshot(
   key: string,
@@ -135,55 +133,4 @@ test('language reconciliation requires matching id domain severity and source st
   assert.equal(migrated.added.length, 1);
   assert.equal(migrated.removed.length, 3);
   assert.equal(migrated.unchanged.length, 0);
-});
-
-test('typed GIS runtime migration neutralizes legacy js-path audit false positives only with proven replacements', () => {
-  const inventory = fixtureInventory([
-    { path: 'Webclient.app/src/gis-engine/iconResolver.ts', text: 'export const resolve = () => true;' },
-    { path: 'Webclient.app/src/gis-engine/sceneRuntime.ts', text: 'export const createScene = () => true;' },
-  ]);
-  const missingResolver: FindingSnapshot = {
-    key: 'gis|gis-runtime-missing-iconResolver-js|Webclient.app/src/gis-engine/iconResolver.js:1|',
-    severity: 'critical',
-    domain: 'gis',
-    file: 'Webclient.app/src/gis-engine/iconResolver.js',
-    line: 1,
-  };
-  const missingSceneAuthority: FindingSnapshot = {
-    key: 'gis|gis-3d-without-shared-scene-runtime|-|',
-    severity: 'critical',
-    domain: 'gis',
-  };
-
-  const migrated = reconcileTypedRuntimeMigrationDelta(delta({
-    added: [missingResolver, missingSceneAuthority],
-    riskScoreDelta: 200,
-    severityDelta: { critical: 2, high: 0, medium: 0, low: 0, info: 0 },
-  }), inventory);
-
-  assert.equal(migrated.added.length, 0);
-  assert.equal(migrated.unchanged.length, 2);
-  assert.equal(migrated.riskScoreDelta, 0);
-  assert.equal(migrated.severityDelta.critical, 0);
-});
-
-test('typed GIS runtime reconciliation never hides a genuinely missing runtime', () => {
-  const inventory = fixtureInventory([]);
-  const missingRuntime: FindingSnapshot = {
-    key: 'gis|gis-runtime-missing-queryRuntime-js|Webclient.app/src/gis-engine/queryRuntime.js:1|',
-    severity: 'critical',
-    domain: 'gis',
-    file: 'Webclient.app/src/gis-engine/queryRuntime.js',
-    line: 1,
-  };
-
-  const migrated = reconcileTypedRuntimeMigrationDelta(delta({
-    added: [missingRuntime],
-    riskScoreDelta: 100,
-    severityDelta: { critical: 1, high: 0, medium: 0, low: 0, info: 0 },
-  }), inventory);
-
-  assert.equal(migrated.added.length, 1);
-  assert.equal(migrated.riskScoreDelta, 100);
-  assert.equal(migrated.severityDelta.critical, 1);
 });

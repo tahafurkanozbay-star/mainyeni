@@ -147,8 +147,14 @@
     font-size: 1.65rem;
   }
 
-
-
   :focus-visible {
-    outline: none !important;
-}
+    outline: 3px solid var(--exp-accent, #155eef) !important;
+    outline-offset: 2px !important;
+  }
+
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline-color: Highlight !important;
+      box-shadow: none !important;
+    }
+  }

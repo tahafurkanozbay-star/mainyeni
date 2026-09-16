@@ -3,14 +3,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   DEFAULT_THRESHOLDS,
-  severityWeight,
   type Finding,
   type FindingSnapshot,
   type RegressionDelta,
   type ReleaseContext,
   type ReleaseGateDecision,
-  type RepositoryInventory,
-  type Severity,
 } from './contracts.mts';
 import { buildRepositoryInventory } from './inventory.mts';
 import {
@@ -35,12 +32,6 @@ const JAVASCRIPT_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const LANGUAGE_EXTENSIONS = [...JAVASCRIPT_EXTENSIONS, ...TYPESCRIPT_EXTENSIONS]
   .sort((left, right) => right.length - left.length);
-const TYPESCRIPT_REPLACEMENT: Readonly<Record<string, string>> = Object.freeze({
-  '.js': '.ts',
-  '.jsx': '.tsx',
-  '.mjs': '.mts',
-  '.cjs': '.cts',
-});
 
 function valueAfter(args: readonly string[], name: string): string | undefined {
   const index = args.indexOf(name);
@@ -166,89 +157,6 @@ export function reconcileLanguageMigrationDelta(delta: RegressionDelta): Regress
   };
 }
 
-function repositoryHasFile(inventory: RepositoryInventory, path: string): boolean {
-  const normalized = path.replaceAll('\\', '/');
-  return inventory.files.some(file => file.repositoryPath === normalized);
-}
-
-function typedReplacementPath(file: string | undefined): string | null {
-  if (!file) return null;
-  const extension = sourceExtension(file);
-  const replacement = TYPESCRIPT_REPLACEMENT[extension];
-  if (!replacement) return null;
-  return `${file.slice(0, -extension.length)}${replacement}`;
-}
-
-function isTypedRuntimeAuditMigration(
-  snapshot: FindingSnapshot,
-  inventory: RepositoryInventory,
-): boolean {
-  if (snapshot.domain !== 'gis' || snapshot.severity !== 'critical') return false;
-  const id = findingId(snapshot);
-
-  if (id === 'gis-3d-without-shared-scene-runtime') {
-    return repositoryHasFile(inventory, 'Webclient.app/src/gis-engine/sceneRuntime.ts') ||
-      repositoryHasFile(inventory, 'Webclient.app/src/gis-engine/sceneRuntime.tsx');
-  }
-
-  if (!id.startsWith('gis-runtime-missing-')) return false;
-  const replacement = typedReplacementPath(snapshot.file);
-  return replacement !== null && repositoryHasFile(inventory, replacement);
-}
-
-/**
- * The GIS inventory originally declared its required runtime paths with `.js`
- * suffixes. A verified staged migration can therefore make the legacy audit
- * report a runtime as "missing" even though the exact same source stem exists
- * as strict TypeScript. Neutralize only those path-shape findings for which the
- * current repository inventory proves the typed replacement exists.
- *
- * This is deliberately narrower than an id allowlist: deleting a runtime,
- * renaming it to a different stem, or introducing any unrelated critical/high
- * finding still blocks the pull request.
- */
-export function reconcileTypedRuntimeMigrationDelta(
-  delta: RegressionDelta,
-  inventory: RepositoryInventory,
-): RegressionDelta {
-  if (!delta.added.length) return delta;
-
-  const added: FindingSnapshot[] = [];
-  const migrated: FindingSnapshot[] = [];
-  const severityReduction: Record<Severity, number> = {
-    critical: 0,
-    high: 0,
-    medium: 0,
-    low: 0,
-    info: 0,
-  };
-  let riskReduction = 0;
-
-  for (const current of delta.added) {
-    if (!isTypedRuntimeAuditMigration(current, inventory)) {
-      added.push(current);
-      continue;
-    }
-    migrated.push(current);
-    severityReduction[current.severity] += 1;
-    riskReduction += severityWeight(current.severity);
-  }
-
-  if (!migrated.length) return delta;
-  const severityDelta: Record<Severity, number> = { ...delta.severityDelta };
-  for (const severity of Object.keys(severityReduction) as Severity[]) {
-    severityDelta[severity] -= severityReduction[severity];
-  }
-
-  return {
-    ...delta,
-    added,
-    unchanged: [...delta.unchanged, ...migrated],
-    riskScoreDelta: delta.riskScoreDelta - riskReduction,
-    severityDelta,
-  };
-}
-
 export function decidePullRequestRegression(delta: RegressionDelta): {
   readonly findings: readonly Finding[];
   readonly decision: ReleaseGateDecision;
@@ -314,8 +222,7 @@ export async function runPullRequestGate(options: {
     environmentContext(options.currentCommit, options.baselineCommit),
   );
   const rawDelta = compareBaseline(currentExecution.report, baseline);
-  const languageReconciledDelta = reconcileLanguageMigrationDelta(rawDelta);
-  const delta = reconcileTypedRuntimeMigrationDelta(languageReconciledDelta, currentInventory);
+  const delta = reconcileLanguageMigrationDelta(rawDelta);
   const gate = decidePullRequestRegression(delta);
   const result: PullRequestGateResult = {
     baselineCommit: options.baselineCommit,
