@@ -6,6 +6,7 @@ import {
   type SchedulerOptions,
   type SchedulerSnapshot,
   type SchedulerTaskMetadata,
+  isAbortSignalLike,
   normalizeRequestPriority,
   normalizeSchedulerGroup,
   normalizeSchedulerLabel,
@@ -27,6 +28,10 @@ const PRIORITY_SCORE: Readonly<Record<RequestPriority, number>> = Object.freeze(
   low: 200,
   background: 100
 });
+
+const FROZEN_REQUEST_PRIORITIES: readonly RequestPriority[] = Object.freeze([
+  ...REQUEST_PRIORITIES
+]);
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 type SchedulerEventSink = (eventName: string, metadata: Record<string, unknown>) => void;
@@ -267,6 +272,12 @@ export class RequestScheduler {
     }
   }
 
+  private releaseRunningEntry(entry: ErasedQueuedTask): void {
+    this.running = Math.max(0, this.running - 1);
+    this.decrementGroup(entry.groupKey);
+    this.requestPump();
+  }
+
   private start(entry: ErasedQueuedTask): void {
     if (entry.settled || !removeArrayItem(this.queue, entry)) return;
     if (entry.signal?.aborted) {
@@ -302,8 +313,8 @@ export class RequestScheduler {
       taskResult = Promise.reject(error);
     }
 
-    taskResult
-      .then((value) => {
+    taskResult.then(
+      (value) => {
         if (entry.settled) return;
         entry.settled = true;
         this.counters.completed += 1;
@@ -315,9 +326,10 @@ export class RequestScheduler {
           queueWaitMs,
           runDurationMs: Math.max(0, this.now() - startedAt)
         });
+        this.releaseRunningEntry(entry);
         entry.resolve(value);
-      })
-      .catch((error) => {
+      },
+      (error) => {
         if (entry.settled) return;
         entry.settled = true;
         this.counters.failed += 1;
@@ -332,13 +344,10 @@ export class RequestScheduler {
             ? String((error as { code?: unknown }).code || '')
             : null
         });
+        this.releaseRunningEntry(entry);
         entry.reject(error);
-      })
-      .finally(() => {
-        this.running = Math.max(0, this.running - 1);
-        this.decrementGroup(entry.groupKey);
-        this.requestPump();
-      });
+      }
+    );
   }
 
   private executeBypass<T>(
@@ -397,7 +406,7 @@ export class RequestScheduler {
     const priority = normalizeRequestPriority(options.priority);
     const groupKey = normalizeSchedulerGroup(options.groupKey);
     const label = normalizeSchedulerLabel(options.label);
-    const signal = options.signal;
+    const signal = isAbortSignalLike(options.signal) ? options.signal : undefined;
 
     if (options.bypass === true) {
       return this.executeBypass(task, priority, groupKey, label, signal);
@@ -560,7 +569,7 @@ export const getSchedulerGroupFromPath = (value: unknown): string => {
 };
 
 export const RequestSchedulerPolicy = Object.freeze({
-  priorities: REQUEST_PRIORITIES,
+  priorities: FROZEN_REQUEST_PRIORITIES,
   getSchedulerGroupFromPath,
   createRequestScheduler
 });
