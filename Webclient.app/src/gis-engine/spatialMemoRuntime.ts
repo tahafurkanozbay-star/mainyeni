@@ -179,15 +179,16 @@ const stable = (value: unknown, seen: WeakSet<object> = new WeakSet<object>()): 
   if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (typeof value !== 'object') return JSON.stringify(value);
   const objectValue = value as Record<string, unknown>;
+  const objectReference = value as object;
   if (typeof objectValue.toJSON === 'function') {
     return stable((objectValue.toJSON as () => unknown)(), seen);
   }
-  if (seen.has(value)) return '"[Circular]"';
-  seen.add(value);
+  if (seen.has(objectReference)) return '"[Circular]"';
+  seen.add(objectReference);
   const result = Array.isArray(value)
     ? `[${value.map((item) => stable(item, seen)).join(',')}]`
     : `{${Object.keys(objectValue).sort().map((key) => `${JSON.stringify(key)}:${stable(objectValue[key], seen)}`).join(',')}}`;
-  seen.delete(value);
+  seen.delete(objectReference);
   return result;
 };
 
