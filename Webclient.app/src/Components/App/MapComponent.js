@@ -155,7 +155,6 @@ export const MapComponent = ({ windowManager }) => {
                 type: MapReducer_ActionTypes.SetMapView,
                 payload: null
             });
-            setMapView(null);
 
             if (view) {
                 try {
