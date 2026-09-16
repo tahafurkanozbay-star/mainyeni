@@ -28,7 +28,10 @@ jobs:
         working-directory: Webclient.app
         run: npm ci
       - name: Apply targeted cleanup
-        run: python .github/scripts/verified-lint-cleanup.py
+        run: |
+          python .github/scripts/verified-lint-cleanup.py
+          python .github/scripts/verified-lint-cleanup-final.py
+          python .github/scripts/strict-ts-contract-cleanup.py
       - name: Apply Oxlint fixes and suggestions
         working-directory: Webclient.app
         run: npx --no-install oxlint --fix --fix-suggestions src tooling vite.config.ts vitest.config.ts || true
@@ -47,5 +50,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Webclient.app/src Webclient.app/tooling Webclient.app/vite.config.ts Webclient.app/vitest.config.ts Webclient.app/tsconfig.json
-          git commit -m "chore(search): resolve strict lint debt with verified codemod"
+          git commit -m "chore(search): resolve strict lint and TypeScript debt with verified codemod"
           git push origin HEAD:agent/data-search-production-v2-20260916-1246-851a5c9
