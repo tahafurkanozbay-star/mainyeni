@@ -67,4 +67,4 @@ jobs:
         run: npm run build
 
       - name: Verify production bundle
-        run: npm run build:verify --if-present
+        run: node scripts/verify-build.mjs
