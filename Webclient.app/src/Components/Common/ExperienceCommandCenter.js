@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "./ExperienceDesignSystem";
+import { ExperienceDialog } from "./ExperienceDialog";
 import { normalizeCommandQuery } from "./experience-quality-utils";
 
 const COMMANDS = Object.freeze([
@@ -23,7 +24,6 @@ export function ExperienceCommandCenter({ windowManager }) {
     const [query, setQuery] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
     const inputRef = useRef(null);
-    const dialogRef = useRef(null);
 
     const filtered = useMemo(() => {
         const needle = normalizeCommandQuery(query);
@@ -32,7 +32,6 @@ export function ExperienceCommandCenter({ windowManager }) {
     }, [query]);
 
     const activeCommand = filtered[activeIndex];
-
     const close = useCallback(() => setOpen(false), []);
 
     const execute = useCallback(command => {
@@ -61,109 +60,120 @@ export function ExperienceCommandCenter({ windowManager }) {
         if (!open) return;
         setQuery("");
         setActiveIndex(0);
-        requestAnimationFrame(() => inputRef.current?.focus());
     }, [open]);
 
     useEffect(() => {
         if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
     }, [activeIndex, filtered.length]);
 
-    useEffect(() => {
-        if (!open) return undefined;
+    const moveActive = useCallback(direction => {
+        setActiveIndex(index => {
+            if (!filtered.length) return 0;
+            if (direction === "first") return 0;
+            if (direction === "last") return filtered.length - 1;
+            if (direction === "next") return (index + 1) % filtered.length;
+            if (direction === "previous") return (index - 1 + filtered.length) % filtered.length;
+            return index;
+        });
+    }, [filtered.length]);
 
-        const onKeyDown = event => {
-            if (event.key === "Escape") {
+    const handleInputKeyDown = event => {
+        switch (event.key) {
+            case "ArrowDown":
                 event.preventDefault();
-                close();
-            } else if (event.key === "ArrowDown") {
+                moveActive("next");
+                break;
+            case "ArrowUp":
                 event.preventDefault();
-                setActiveIndex(index => filtered.length ? (index + 1) % filtered.length : 0);
-            } else if (event.key === "ArrowUp") {
+                moveActive("previous");
+                break;
+            case "Home":
                 event.preventDefault();
-                setActiveIndex(index => filtered.length ? (index - 1 + filtered.length) % filtered.length : 0);
-            } else if (event.key === "Enter" && document.activeElement === inputRef.current && activeCommand) {
+                moveActive("first");
+                break;
+            case "End":
                 event.preventDefault();
-                execute(activeCommand);
-            } else if (event.key === "Tab" && dialogRef.current) {
-                const focusable = Array.from(dialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'));
-                if (!focusable.length) return;
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (event.shiftKey && document.activeElement === first) {
+                moveActive("last");
+                break;
+            case "Enter":
+                if (activeCommand) {
                     event.preventDefault();
-                    last.focus();
-                } else if (!event.shiftKey && document.activeElement === last) {
-                    event.preventDefault();
-                    first.focus();
+                    execute(activeCommand);
                 }
-            }
-        };
-
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [open, activeCommand, close, execute, filtered.length]);
-
-    if (!open) return null;
+                break;
+            default:
+                break;
+        }
+    };
 
     return (
-        <div className="kr-command-backdrop" role="presentation" onMouseDown={close}>
-            <section
-                ref={dialogRef}
-                className="kr-command"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="kr-command-title"
-                aria-describedby="kr-command-description"
-                onMouseDown={event => event.stopPropagation()}
-            >
-                <header className="kr-command__head">
-                    <div>
-                        <span className="experience-eyebrow">KENT REHBERİ</span>
-                        <h2 id="kr-command-title">Komut merkezi</h2>
-                        <span id="kr-command-description" className="experience-sr-only">Harita, arama ve yardımcı araçlara hızlı erişim.</span>
-                    </div>
-                    <button type="button" className="experience-close" onClick={close} aria-label="Komut merkezini kapat">×</button>
-                </header>
-                <div className="kr-command__search">
-                    <span aria-hidden="true">⌕</span>
-                    <input
-                        ref={inputRef}
-                        value={query}
-                        onChange={event => {
-                            setQuery(event.target.value);
-                            setActiveIndex(0);
-                        }}
-                        aria-label="Komut veya işlem ara"
-                        aria-controls="kr-command-results"
-                        aria-activedescendant={activeCommand ? `kr-command-item-${activeCommand.id}` : undefined}
-                        placeholder="Komut veya işlem ara…"
-                        autoComplete="off"
-                    />
-                    <kbd>Ctrl K</kbd>
+        <ExperienceDialog
+            open={open}
+            onClose={close}
+            labelledBy="kr-command-title"
+            describedBy="kr-command-description"
+            initialFocusRef={inputRef}
+            backdropClassName="kr-command-backdrop"
+            dialogClassName="kr-command"
+        >
+            <header className="kr-command__head">
+                <div>
+                    <span className="experience-eyebrow">KENT REHBERİ</span>
+                    <h2 id="kr-command-title">Komut merkezi</h2>
+                    <span id="kr-command-description" className="experience-sr-only">Harita, arama ve yardımcı araçlara hızlı erişim.</span>
                 </div>
-                <div id="kr-command-results" className="kr-command__body" role="listbox" aria-label="Komut sonuçları">
-                    {filtered.length ? filtered.map((command, index) => (
-                        <button
-                            key={command.id}
-                            id={`kr-command-item-${command.id}`}
-                            type="button"
-                            className={`kr-command__item ${index === activeIndex ? "is-active" : ""}`}
-                            onMouseEnter={() => setActiveIndex(index)}
-                            onFocus={() => setActiveIndex(index)}
-                            onClick={() => execute(command)}
-                            role="option"
-                            aria-selected={index === activeIndex}
-                        >
-                            <span className="kr-command__icon" aria-hidden="true">{command.icon}</span>
-                            <span className="kr-command__copy"><strong>{command.label}</strong><small>{command.group}</small></span>
-                            {command.shortcut ? <kbd>{command.shortcut}</kbd> : <span aria-hidden="true">↵</span>}
-                        </button>
-                    )) : <EmptyState title="Komut bulunamadı" description="Arama ifadenizi değiştirip tekrar deneyin." />}
-                </div>
-                <footer className="kr-command__foot" aria-live="polite">{filtered.length} işlem</footer>
-            </section>
-        </div>
+                <button type="button" className="experience-close" onClick={close} aria-label="Komut merkezini kapat">×</button>
+            </header>
+            <div className="kr-command__search">
+                <span aria-hidden="true">⌕</span>
+                <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={event => {
+                        setQuery(event.target.value);
+                        setActiveIndex(0);
+                    }}
+                    onKeyDown={handleInputKeyDown}
+                    role="combobox"
+                    aria-label="Komut veya işlem ara"
+                    aria-expanded="true"
+                    aria-haspopup="listbox"
+                    aria-autocomplete="list"
+                    aria-controls="kr-command-results"
+                    aria-activedescendant={activeCommand ? `kr-command-item-${activeCommand.id}` : undefined}
+                    aria-describedby="kr-command-hint"
+                    placeholder="Komut veya işlem ara…"
+                    autoComplete="off"
+                    spellCheck="false"
+                />
+                <kbd aria-hidden="true">Ctrl K</kbd>
+            </div>
+            <span id="kr-command-hint" className="experience-sr-only">Sonuçlarda gezinmek için yukarı ve aşağı ok tuşlarını, çalıştırmak için Enter tuşunu kullanın.</span>
+            <div id="kr-command-results" className="kr-command__body" role="listbox" aria-label="Komut sonuçları">
+                {filtered.length ? filtered.map((command, index) => (
+                    <button
+                        key={command.id}
+                        id={`kr-command-item-${command.id}`}
+                        type="button"
+                        className={`kr-command__item ${index === activeIndex ? "is-active" : ""}`}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        onFocus={() => setActiveIndex(index)}
+                        onClick={() => execute(command)}
+                        role="option"
+                        aria-selected={index === activeIndex}
+                        tabIndex={-1}
+                    >
+                        <span className="kr-command__icon" aria-hidden="true">{command.icon}</span>
+                        <span className="kr-command__copy"><strong>{command.label}</strong><small>{command.group}</small></span>
+                        {command.shortcut ? <kbd aria-hidden="true">{command.shortcut}</kbd> : <span aria-hidden="true">↵</span>}
+                    </button>
+                )) : <EmptyState title="Komut bulunamadı" description="Arama ifadenizi değiştirip tekrar deneyin." />}
+            </div>
+            <footer className="kr-command__foot" aria-live="polite" aria-atomic="true">{filtered.length} işlem</footer>
+        </ExperienceDialog>
     );
 }
+
+export const experienceCommandCenterInternals = Object.freeze({ COMMANDS });
 
 export default ExperienceCommandCenter;
