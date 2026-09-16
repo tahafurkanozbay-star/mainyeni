@@ -95,13 +95,15 @@ jobs:
         run: npm run typecheck --if-present
 
       - name: Full regression suite
-        run: npm test -- --watchAll=false --runInBand
+        run: npm run test:ci
 
       - name: Production build
         env:
           CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
+
+      - name: Verify production bundle when configured
+        run: npm run build:verify --if-present
 
   backend-release-validation:
     runs-on: ubuntu-24.04

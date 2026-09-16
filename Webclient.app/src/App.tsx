@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
 import './styles.css';
@@ -20,6 +20,7 @@ import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSys
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
+import { runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
 
 function App() {
   const windowManager = useWindowManager();
@@ -28,17 +29,27 @@ function App() {
   useEffect(() => {
     setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
     const controller = new AbortController();
+    const startedAt = performance.now();
+
+    runtimeDiagnostics.record('app.bootstrap.started', {
+      esriApiVersion: AppConfig.App.EsriApiVersion,
+    });
 
     bootstrapApplication({ signal: controller.signal })
       .then(() => {
-        if (!controller.signal.aborted) {
-          setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
-        }
+        if (controller.signal.aborted) return;
+        runtimeDiagnostics.record('app.bootstrap.completed', {
+          durationMs: Math.round(performance.now() - startedAt),
+        });
+        setConfigLoadStatus(Constants_LoadingStatus.COMPLETED);
       })
-      .catch((error) => {
-        if (!controller.signal.aborted && !isBootstrapAbortError(error)) {
-          setConfigLoadStatus(Constants_LoadingStatus.ERROR);
-        }
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || isBootstrapAbortError(error)) return;
+        runtimeDiagnostics.captureError(error, {
+          source: 'app.bootstrap',
+          durationMs: Math.round(performance.now() - startedAt),
+        });
+        setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       });
 
     return () => controller.abort();
@@ -46,7 +57,7 @@ function App() {
 
   return (
     <ExperienceThemeProvider>
-      <div id="root">
+      <div id="app-shell">
         {configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
           configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message="Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin." /> :
             <>
