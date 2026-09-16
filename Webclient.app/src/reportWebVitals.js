@@ -1,12 +1,9 @@
 const reportWebVitals = onPerfEntry => {
-  if (onPerfEntry && onPerfEntry instanceof Function) {
-    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-      getCLS(onPerfEntry);
-      getFID(onPerfEntry);
-      getFCP(onPerfEntry);
-      getLCP(onPerfEntry);
-      getTTFB(onPerfEntry);
-    });
+  if (typeof onPerfEntry !== "function") return;
+
+  if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
+    performance.getEntriesByType("navigation").forEach(onPerfEntry);
+    performance.getEntriesByType("paint").forEach(onPerfEntry);
   }
 };
 
