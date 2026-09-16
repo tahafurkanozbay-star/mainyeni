@@ -1,4 +1,3 @@
-import { performance } from 'node:perf_hooks';
 import type { AuditSection, Finding, RepositoryInventory, SourceFile } from './contracts.mts';
 
 export interface AccessibilityAuditSummary {
