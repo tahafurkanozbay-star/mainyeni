@@ -41,6 +41,12 @@ jobs:
       - name: Install from lockfile
         run: npm ci
 
+      - name: Experience quality guard self-test
+        run: npm run quality:experience:self-test
+
+      - name: Experience quality guard
+        run: npm run quality:experience
+
       - name: Production dependency audit (non-blocking legacy debt)
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
