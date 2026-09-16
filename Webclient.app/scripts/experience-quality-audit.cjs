@@ -18,8 +18,8 @@ const TEXT_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less", ".html", ".h
 const ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".otf"]);
 const LARGE_ASSET_BYTES = 1024 * 1024;
 const CANONICAL_ICON_REGISTRY = "src/gis-engine/iconRegistry.json";
-const ICON_RESOLVER = "src/gis-engine/iconResolver.js";
-const ICON_PRESENTATION = "src/gis-engine/iconPresentation.js";
+const ICON_RESOLVER = "src/gis-engine/iconResolver.ts";
+const ICON_PRESENTATION = "src/gis-engine/iconPresentation.ts";
 
 const LEGACY_DEBT = Object.freeze({
     remotePresentation: new Map([
