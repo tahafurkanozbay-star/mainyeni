@@ -1,13 +1,17 @@
-export const LAYER_STATUS = Object.freeze({
-  IDLE: 'idle',
-  LOADING: 'loading',
-  READY: 'ready',
-  EMPTY: 'empty',
-  ERROR: 'error',
-  DISABLED: 'disabled',
-});
+import { LAYER_RUNTIME_STATUS } from './contracts';
+import type {
+  FlattenedLayer,
+  LayerAction,
+  LayerDescriptor,
+  LayerDescriptorInput,
+  LayerRuntimeSnapshot,
+  LayerRuntimeState,
+  LayerTree,
+} from './contracts';
 
-export const DEFAULT_LAYER_RUNTIME = Object.freeze({
+export const LAYER_STATUS = LAYER_RUNTIME_STATUS;
+
+export const DEFAULT_LAYER_RUNTIME: Readonly<LayerRuntimeState> = Object.freeze({
   status: LAYER_STATUS.IDLE,
   visible: true,
   opacity: 1,
@@ -19,31 +23,33 @@ export const DEFAULT_LAYER_RUNTIME = Object.freeze({
   error: null,
 });
 
-const normalizeOpacity = (value) => {
+const normalizeOpacity = (value: unknown): number => {
   const numeric = Number(value);
   return Math.min(1, Math.max(0, Number.isFinite(numeric) ? numeric : 1));
 };
 
-const normalizeScale = (value) => {
+const normalizeScale = (value: unknown): number => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 };
 
-const normalizeScaleRange = (minScale, maxScale) => ({
+const normalizeScaleRange = (minScale: unknown, maxScale: unknown) => ({
   minScale: normalizeScale(minScale),
   maxScale: normalizeScale(maxScale),
 });
 
-const uniqueIds = (values = []) => Array.from(new Set(values.map(String).filter(Boolean)));
+const uniqueIds = (values: Array<string | number> = []): string[] => Array.from(
+  new Set(values.map(String).filter(Boolean)),
+);
 
-export const createLayerDescriptor = (config = {}) => ({
+export const createLayerDescriptor = (config: LayerDescriptorInput = {}): LayerDescriptor => ({
   id: String(config.id ?? ''),
   title: String(config.title ?? config.name ?? config.id ?? 'Katman'),
   type: String(config.type ?? 'operational'),
   serviceId: config.serviceId ?? config.id ?? null,
-  parentId: config.parentId ?? null,
+  parentId: config.parentId == null ? null : String(config.parentId),
   children: uniqueIds(Array.isArray(config.children) ? config.children : []),
-  iconKey: config.iconKey ?? config.category ?? config.type ?? 'default',
+  iconKey: String(config.iconKey ?? config.category ?? config.type ?? 'default'),
   metadata: { ...(config.metadata || {}) },
   runtime: {
     ...DEFAULT_LAYER_RUNTIME,
@@ -54,8 +60,8 @@ export const createLayerDescriptor = (config = {}) => ({
   sdkLayer: null,
 });
 
-export const createLayerTree = (layers = []) => {
-  const byId = new Map();
+export const createLayerTree = (layers: LayerDescriptorInput[] = []): LayerTree => {
+  const byId = new Map<string, LayerDescriptor>();
 
   layers.forEach((layer) => {
     const descriptor = createLayerDescriptor(layer);
@@ -70,17 +76,17 @@ export const createLayerTree = (layers = []) => {
     if (!layer.parentId || !byId.has(String(layer.parentId)) || String(layer.parentId) === layer.id) return;
     layer.parentId = String(layer.parentId);
     const parent = byId.get(layer.parentId);
-    parent.children = uniqueIds([...parent.children, layer.id]);
+    if (parent) parent.children = uniqueIds([...parent.children, layer.id]);
   });
 
-  byId.forEach((parent) => {
-    parent.children.forEach((childId) => {
+  byId.forEach((layer) => {
+    layer.children.forEach((childId) => {
       const child = byId.get(childId);
-      if (child && !child.parentId) child.parentId = parent.id;
+      if (child && !child.parentId) child.parentId = layer.id;
     });
   });
 
-  const roots = [];
+  const roots: string[] = [];
   byId.forEach((layer) => {
     if (!layer.parentId || !byId.has(String(layer.parentId))) roots.push(layer.id);
   });
@@ -88,7 +94,11 @@ export const createLayerTree = (layers = []) => {
   return { byId, roots: uniqueIds(roots) };
 };
 
-const updateNode = (state, layerId, update) => {
+const updateNode = (
+  state: LayerTree,
+  layerId: string,
+  update: (layer: LayerDescriptor) => LayerDescriptor,
+): LayerTree => {
   const current = state?.byId?.get(layerId);
   if (!current) return state;
   const next = update({ ...current, runtime: { ...current.runtime } });
@@ -98,18 +108,27 @@ const updateNode = (state, layerId, update) => {
   return { ...state, byId };
 };
 
-const requestMatches = (layer, action) => (
-  !action.requestId || layer.runtime.requestId === action.requestId
+const actionRequestId = (action: LayerAction): string | null | undefined => (
+  'requestId' in action ? action.requestId : undefined
 );
 
-const updateRequestedNode = (state, action, update) => updateNode(
+const requestMatches = (layer: LayerDescriptor, action: LayerAction): boolean => {
+  const requestId = actionRequestId(action);
+  return !requestId || layer.runtime.requestId === requestId;
+};
+
+const updateRequestedNode = (
+  state: LayerTree,
+  action: LayerAction,
+  update: (layer: LayerDescriptor) => LayerDescriptor,
+): LayerTree => updateNode(
   state,
   action.layerId,
   (layer) => requestMatches(layer, action) ? update(layer) : layer,
 );
 
-export const layerReducer = (state, action = {}) => {
-  if (!state?.byId) return state;
+export const layerReducer = (state: LayerTree, action?: LayerAction): LayerTree => {
+  if (!state?.byId || !action) return state;
 
   switch (action.type) {
     case 'LOAD_START':
@@ -128,7 +147,7 @@ export const layerReducer = (state, action = {}) => {
         runtime: {
           ...layer.runtime,
           status: action.featureCount === 0 ? LAYER_STATUS.EMPTY : LAYER_STATUS.READY,
-          featureCount: Number.isFinite(action.featureCount) ? action.featureCount : null,
+          featureCount: Number.isFinite(action.featureCount) ? Number(action.featureCount) : null,
           lastLoadedAt: action.loadedAt || new Date().toISOString(),
           requestId: null,
           error: null,
@@ -194,23 +213,19 @@ export const layerReducer = (state, action = {}) => {
   }
 };
 
-export const isScaleVisible = (scaleValue, layer) => {
+export const isScaleVisible = (scaleValue: unknown, layer: LayerDescriptor): boolean => {
   const viewScale = Number(scaleValue);
   if (!Number.isFinite(viewScale) || viewScale <= 0) return true;
 
   const { minScale = 0, maxScale = 0 } = layer?.runtime || {};
-
-  // ArcGIS scale denominators become larger while zooming out. A valid range
-  // therefore normally has minScale > maxScale. Invalid legacy ranges are
-  // treated as unrestricted rather than making a layer permanently invisible.
   if (minScale > 0 && maxScale > 0 && minScale <= maxScale) return true;
   if (minScale > 0 && viewScale > minScale) return false;
   if (maxScale > 0 && viewScale < maxScale) return false;
   return true;
 };
 
-const areAncestorsVisible = (tree, layer) => {
-  const visited = new Set([layer.id]);
+const areAncestorsVisible = (tree: LayerTree, layer: LayerDescriptor): boolean => {
+  const visited = new Set<string>([layer.id]);
   let parentId = layer.parentId;
 
   while (parentId && tree.byId.has(String(parentId))) {
@@ -218,18 +233,22 @@ const areAncestorsVisible = (tree, layer) => {
     if (visited.has(normalizedParentId)) return false;
     visited.add(normalizedParentId);
     const parent = tree.byId.get(normalizedParentId);
+    if (!parent) return true;
     if (parent.runtime.visible === false || parent.runtime.status === LAYER_STATUS.DISABLED) return false;
     parentId = parent.parentId;
   }
   return true;
 };
 
-export const flattenLayerTree = (tree, options = {}) => {
-  const output = [];
+export const flattenLayerTree = (
+  tree: LayerTree,
+  options: { includeGroups?: boolean } = {},
+): FlattenedLayer[] => {
+  const output: FlattenedLayer[] = [];
   const includeGroups = options.includeGroups !== false;
-  const visited = new Set();
+  const visited = new Set<string>();
 
-  const walk = (id, depth) => {
+  const walk = (id: string, depth: number): void => {
     if (visited.has(id)) return;
     const node = tree?.byId?.get(id);
     if (!node) return;
@@ -240,9 +259,6 @@ export const flattenLayerTree = (tree, options = {}) => {
   };
 
   (tree?.roots || []).forEach((id) => walk(id, 0));
-
-  // Malformed/cyclic configuration must not make otherwise valid layers vanish
-  // from diagnostics and serialization.
   tree?.byId?.forEach((_, id) => {
     if (!visited.has(id)) walk(id, 0);
   });
@@ -250,7 +266,7 @@ export const flattenLayerTree = (tree, options = {}) => {
   return output;
 };
 
-export const visibleLayersAtScale = (tree, scaleValue) =>
+export const visibleLayersAtScale = (tree: LayerTree, scaleValue: unknown): LayerDescriptor[] =>
   flattenLayerTree(tree, { includeGroups: false })
     .filter(({ node }) =>
       node.runtime.visible &&
@@ -260,7 +276,7 @@ export const visibleLayersAtScale = (tree, scaleValue) =>
     )
     .map(({ node }) => node);
 
-export const serializeLayerRuntime = (tree) => ({
+export const serializeLayerRuntime = (tree: LayerTree): LayerRuntimeSnapshot => ({
   layers: flattenLayerTree(tree).map(({ node }) => ({
     id: node.id,
     visible: node.runtime.visible,
@@ -271,23 +287,25 @@ export const serializeLayerRuntime = (tree) => ({
   })),
 });
 
-export const hydrateLayerRuntime = (tree, snapshot = {}) =>
-  (Array.isArray(snapshot.layers) ? snapshot.layers : []).reduce((state, persisted) => {
-    if (!persisted?.id || !state?.byId?.has(persisted.id)) return state;
-    let next = state;
-    if (typeof persisted.visible === 'boolean') {
-      next = layerReducer(next, { type: 'SET_VISIBLE', layerId: persisted.id, visible: persisted.visible });
-    }
-    if (Number.isFinite(Number(persisted.opacity))) {
-      next = layerReducer(next, { type: 'SET_OPACITY', layerId: persisted.id, opacity: Number(persisted.opacity) });
-    }
-    if (persisted.minScale !== undefined || persisted.maxScale !== undefined) {
-      next = layerReducer(next, {
-        type: 'SET_SCALE_RANGE',
-        layerId: persisted.id,
-        minScale: persisted.minScale,
-        maxScale: persisted.maxScale,
-      });
-    }
-    return next;
-  }, tree);
+export const hydrateLayerRuntime = (
+  tree: LayerTree,
+  snapshot: LayerRuntimeSnapshot = {},
+): LayerTree => (Array.isArray(snapshot.layers) ? snapshot.layers : []).reduce((state, persisted) => {
+  if (!persisted?.id || !state?.byId?.has(persisted.id)) return state;
+  let next = state;
+  if (typeof persisted.visible === 'boolean') {
+    next = layerReducer(next, { type: 'SET_VISIBLE', layerId: persisted.id, visible: persisted.visible });
+  }
+  if (Number.isFinite(Number(persisted.opacity))) {
+    next = layerReducer(next, { type: 'SET_OPACITY', layerId: persisted.id, opacity: Number(persisted.opacity) });
+  }
+  if (persisted.minScale !== undefined || persisted.maxScale !== undefined) {
+    next = layerReducer(next, {
+      type: 'SET_SCALE_RANGE',
+      layerId: persisted.id,
+      minScale: persisted.minScale,
+      maxScale: persisted.maxScale,
+    });
+  }
+  return next;
+}, tree);
