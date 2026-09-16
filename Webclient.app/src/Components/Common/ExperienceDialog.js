@@ -128,10 +128,10 @@ export function ExperienceDialog({
             }
         };
 
-        document.addEventListener("keydown", onKeyDown, true);
+        window.addEventListener("keydown", onKeyDown, true);
 
         return () => {
-            document.removeEventListener("keydown", onKeyDown, true);
+            window.removeEventListener("keydown", onKeyDown, true);
             if (frame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
             releaseScrollLock();
 
