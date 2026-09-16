@@ -171,3 +171,16 @@ export {
   createSearchHitPresentation,
   createSearchPresentations,
 } from './presentationAdapter';
+
+// Production v2 layers. Kept in the same strict TypeScript boundary so legacy
+// JavaScript callers can continue to use DataSearchNextRuntime while new code
+// adopts typed imports directly.
+export * from './schemaEvolution';
+export * from './dataIntegrity';
+export * from './cursorPagination';
+export * from './queryPlanRuntime';
+export * from './datasetCatalog';
+export * from './geocodingRuntime';
+export * from './searchSession';
+export * from './searchObservability';
+export * from './productionRuntime';
