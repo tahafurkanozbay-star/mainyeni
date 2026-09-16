@@ -37,9 +37,10 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "typecheck": "npm run typecheck:platform && npm run typecheck:gis && npm run typecheck:data-search",
+    "typecheck": "npm run typecheck:platform && npm run typecheck:gis && npm run typecheck:experience && npm run typecheck:data-search",
     "typecheck:platform": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.platform.json --noEmit",
     "typecheck:gis": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.gis.json --noEmit",
+    "typecheck:experience": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.experience.json --noEmit",
     "typecheck:data-search": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.data-search.json --noEmit",
     "eject": "react-scripts eject"
   },
