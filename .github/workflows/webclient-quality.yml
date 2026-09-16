@@ -51,10 +51,10 @@ jobs:
         run: npm run dependency:verify
 
       - name: Experience quality guard self-test
-        run: node scripts/experience-quality-audit.js --self-test
+        run: node scripts/experience-quality-audit.cjs --self-test
 
       - name: Experience quality guard
-        run: node scripts/experience-quality-audit.js
+        run: node scripts/experience-quality-audit.cjs
 
       - name: Vite migration contract
         run: npm run quality:vite
