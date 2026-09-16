@@ -47,6 +47,9 @@ export interface SearchPresentationModel {
 }
 
 const iconInputForRecord = (record: NormalizedRecord): Readonly<Record<string, unknown>> => Object.freeze({
+  ...record.fields,
+  // Canonical normalized values are authoritative. Raw/schema-drift fields may
+  // still help alias matching, but they must never overwrite normalized keys.
   id: record.id,
   title: record.title,
   name: record.title,
@@ -55,7 +58,6 @@ const iconInputForRecord = (record: NormalizedRecord): Readonly<Record<string, u
   type: record.type,
   typeKey: record.typeKey,
   address: record.address,
-  ...record.fields,
 });
 
 const normalizeListIcon = (value: unknown): SharedIconModel => {
