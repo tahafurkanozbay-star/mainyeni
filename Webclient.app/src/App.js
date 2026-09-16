@@ -17,6 +17,7 @@ import { setDefaultOptions } from 'esri-loader';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
+import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
 
@@ -50,6 +51,7 @@ function App() {
           configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message="Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin." /> :
             <>
               <MapComponent windowManager={windowManager} />
+              <ExperienceWorkspace />
               <ExperienceUXLayer windowManager={windowManager} />
               <ExperienceCommandCenter windowManager={windowManager} />
             </>}
