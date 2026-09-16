@@ -69,7 +69,7 @@ const sanitizeUrlLike = (value: unknown): string => {
   try {
     const base = typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
-      : 'http://localhost';
+      : 'https://localhost';
     const parsed = new URL(text, base);
     return parsed.pathname || '/';
   } catch (_error) {
