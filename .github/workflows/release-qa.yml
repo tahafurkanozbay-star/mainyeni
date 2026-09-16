@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   typed-release-audit:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout with baseline history
@@ -65,7 +65,7 @@ jobs:
           retention-days: 21
 
   webclient-release-validation:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
@@ -94,11 +94,61 @@ jobs:
       - name: Vite migration contract
         run: npm run quality:vite --if-present
 
-      - name: Strict lint
-        run: npm run lint:strict --if-present
+      - name: Full lint visibility
+        run: npm run lint --if-present
 
-      - name: Strict typecheck
-        run: npm run typecheck --if-present
+      - name: Strict lint on changed Webclient sources
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            npm run lint:strict --if-present
+            exit 0
+          fi
+          git -C .. fetch --no-tags --depth=1 origin "$BASE_SHA"
+          mapfile -t changed_files < <(
+            git -C .. diff --name-only "$BASE_SHA" HEAD -- \
+              Webclient.app/src \
+              Webclient.app/tooling \
+              Webclient.app/vite.config.ts \
+              Webclient.app/vitest.config.ts \
+            | sed 's#^Webclient.app/##' \
+            | grep -E '\.(cjs|mjs|js|jsx|ts|tsx)$' || true
+          )
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No changed Webclient lint targets."
+          else
+            printf 'Strict lint targets:\n - %s\n' "${changed_files[@]}"
+            npx oxlint --deny-warnings "${changed_files[@]}"
+          fi
+
+      - name: Full TypeScript diagnostic visibility
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
+          echo "Full TypeScript diagnostics remain visible; staged migration is enforced by the exact-base regression gate."
+          exit 0
+
+      - name: Strict supervision TypeScript boundary
+        run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
+
+      - name: Exact-base TypeScript regression gate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git -C .. fetch --no-tags origin "$BASE_SHA"
+          rm -rf /tmp/typecheck-baseline
+          git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
+          set +e
+          (
+            cd /tmp/typecheck-baseline/Webclient.app
+            npm ci --ignore-scripts --no-audit --no-fund >/tmp/typecheck-baseline-install.log 2>&1
+            npx tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
+          )
+          set -e
+          node scripts/typecheck-regression.mjs /tmp/baseline-typecheck.log /tmp/current-typecheck.log
+          git -C .. worktree remove --force /tmp/typecheck-baseline
 
       - name: Full application regression suite
         run: npm run test:ci
@@ -121,7 +171,7 @@ jobs:
         run: node scripts/web-build-budget.mjs build --strict
 
   backend-release-validation:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client", "vitest/globals"]
+  },
+  "include": ["src/platform/runtime/supervision/**/*.ts"],
+  "exclude": ["node_modules", "build", "dist"]
+}
