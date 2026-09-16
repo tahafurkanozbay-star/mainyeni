@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { auditAccessibility } from './accessibility-audit.mts';
 import type { FileKind, RepositoryInventory, SourceFile } from './contracts.mts';
-function source(path: string, text: string, kind: FileKind = 'typescript'): SourceFile { return { absolutePath: `/repo/${path}`, repositoryPath: path, extension: path.includes('.') ? `.${path.split('.').pop() ?? ''}` : '', kind, bytes: Buffer.byteLength(text), lines: text.split(/\r?\n/).length, text }; }
+function source(path: string, text: string, kind: FileKind = 'typescript'): SourceFile { return { absolutePath: `/repo/${path}`, repositoryPath: path, extension: path.includes('.') ? `.${path.split('.').pop() ?? ''}` : '', kind, bytes: new TextEncoder().encode(text).byteLength, lines: text.split(/\r?\n/).length, text }; }
 function inventory(files: readonly SourceFile[]): RepositoryInventory { return { root: '/repo', files, ignoredDirectories: [], languageStats: [], totalFiles: files.length, totalLines: files.reduce((sum, file) => sum + file.lines, 0), totalBytes: files.reduce((sum, file) => sum + file.bytes, 0), generatedAt: '2026-09-16T00:00:00.000Z' }; }
 function ids(section: ReturnType<typeof auditAccessibility>): string[] { return section.findings.map(item => item.id); }
 test('flags positive tabindex and preserves source line', () => { const section = auditAccessibility(inventory([source('Webclient.app/src/Panel.tsx', `export function Panel() {\n  return <div tabIndex={3}>A</div>;\n}`)])); const item = section.findings.find(candidate => candidate.id === 'a11y-positive-tabindex'); assert.ok(item); assert.equal(item.location?.line, 2); assert.equal(item.severity, 'high'); });
