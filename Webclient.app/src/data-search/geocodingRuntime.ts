@@ -41,14 +41,8 @@ export interface GeocodingProviderContext {
 export interface GeocodingProvider {
   readonly id: string;
   readonly priority?: number;
-  readonly forward?: (
-    request: ForwardGeocodeRequest,
-    context: GeocodingProviderContext,
-  ) => Promise<unknown> | unknown;
-  readonly reverse?: (
-    request: ReverseGeocodeRequest,
-    context: GeocodingProviderContext,
-  ) => Promise<unknown> | unknown;
+  readonly forward?: (request: ForwardGeocodeRequest, context: GeocodingProviderContext) => Promise<unknown> | unknown;
+  readonly reverse?: (request: ReverseGeocodeRequest, context: GeocodingProviderContext) => Promise<unknown> | unknown;
 }
 
 export interface GeocodingRuntimeOptions {
@@ -110,7 +104,7 @@ interface CacheEntry {
 
 interface InFlightEntry {
   readonly controller: AbortController;
-  readonly promise: Promise<GeocodingRuntimeResult>;
+  promise: Promise<GeocodingRuntimeResult>;
   subscribers: number;
   settled: boolean;
 }
@@ -206,14 +200,14 @@ const providerPriority = (provider: GeocodingProvider): number => {
   return Number.isFinite(value) ? value : 0;
 };
 
-const timeoutError = (): Error => {
+const createTimeoutError = (): Error => {
   const error = new Error('Geocoding provider timed out');
   error.name = 'TimeoutError';
   return error;
 };
 
-const isAbort = (error: unknown): boolean => error instanceof Error && error.name === 'AbortError';
-const isTimeout = (error: unknown): boolean => error instanceof Error && error.name === 'TimeoutError';
+const isAbortError = (error: unknown): boolean => error instanceof Error && error.name === 'AbortError';
+const isTimeoutError = (error: unknown): boolean => error instanceof Error && error.name === 'TimeoutError';
 
 export class GeocodingRuntime {
   private readonly options: NormalizedRuntimeOptions;
@@ -254,9 +248,8 @@ export class GeocodingRuntime {
     if (!this.providers.has(id) && this.providers.size >= this.options.maxProviders) {
       throw new Error(`Geocoding provider limit reached: ${this.options.maxProviders}`);
     }
-    const normalized = Object.freeze({ ...provider, id });
-    this.providers.set(id, normalized);
-    return () => this.unregister(id);
+    this.providers.set(id, Object.freeze({ ...provider, id }));
+    return () => { this.unregister(id); };
   }
 
   unregister(providerId: unknown): boolean {
@@ -288,7 +281,9 @@ export class GeocodingRuntime {
     operation: GeocodingOperation,
     providerId: string,
     request: ForwardGeocodeRequest | ReverseGeocodeRequest,
-  ): string => hashFingerprint(stableSerialize({ operation, providerId, request }));
+  ): string {
+    return hashFingerprint(stableSerialize({ operation, providerId, request }));
+  }
 
   private cacheKey(providerId: string, operation: GeocodingOperation, fingerprint: string): string {
     return `${providerId}|${operation}|${fingerprint}`;
@@ -337,7 +332,7 @@ export class GeocodingRuntime {
     controller: AbortController,
   ): Promise<unknown> {
     this.stats.providerCalls[provider.id] = (this.stats.providerCalls[provider.id] ?? 0) + 1;
-    const context = Object.freeze({
+    const context: GeocodingProviderContext = Object.freeze({
       signal: controller.signal,
       requestId,
       providerId: provider.id,
@@ -352,7 +347,7 @@ export class GeocodingRuntime {
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       timeoutHandle = setTimeout(() => {
         controller.abort();
-        reject(timeoutError());
+        reject(createTimeoutError());
       }, this.options.timeoutMs);
     });
     try {
@@ -367,7 +362,9 @@ export class GeocodingRuntime {
     signal: AbortSignal | null | undefined,
   ): Promise<GeocodingRuntimeResult> {
     entry.subscribers += 1;
-    if (!signal) return entry.promise.finally(() => { entry.subscribers = Math.max(0, entry.subscribers - 1); });
+    if (!signal) {
+      return entry.promise.finally(() => { entry.subscribers = Math.max(0, entry.subscribers - 1); });
+    }
     throwIfAborted(signal);
     return new Promise<GeocodingRuntimeResult>((resolve, reject) => {
       let finished = false;
@@ -443,8 +440,8 @@ export class GeocodingRuntime {
         return result;
       })
       .catch(error => {
-        if (isAbort(error) || controller.signal.aborted) this.stats.aborts += 1;
-        else if (isTimeout(error)) this.stats.timeouts += 1;
+        if (isTimeoutError(error)) this.stats.timeouts += 1;
+        else if (isAbortError(error) || controller.signal.aborted) this.stats.aborts += 1;
         else this.stats.failures += 1;
         throw error;
       })
@@ -528,13 +525,8 @@ export const createStaticGeocodingProvider = (
 ): GeocodingProvider => {
   const id = normalizeProviderId(idInput);
   if (!id) throw new TypeError('Static geocoding provider id is required');
-  return Object.freeze({
-    id,
-    forward: handler.forward
-      ? (request: ForwardGeocodeRequest) => handler.forward?.(request)
-      : undefined,
-    reverse: handler.reverse
-      ? (request: ReverseGeocodeRequest) => handler.reverse?.(request)
-      : undefined,
-  });
+  const provider: GeocodingProvider = { id };
+  if (handler.forward) provider.forward = request => handler.forward?.(request);
+  if (handler.reverse) provider.reverse = request => handler.reverse?.(request);
+  return Object.freeze(provider);
 };
