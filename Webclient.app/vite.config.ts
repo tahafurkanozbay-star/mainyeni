@@ -1,6 +1,9 @@
 import { defineConfig, transformWithOxc, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const SOURCE_FILE = /\/src\/.*\.[cm]?[jt]sx?$/;
+const LEGACY_PUBLIC_URL_REFERENCE = 'process.env.PUBLIC_URL';
+
 const legacyJsxPlugin = (): Plugin => ({
   name: 'kent-rehberi-legacy-jsx',
   enforce: 'pre',
@@ -11,6 +14,23 @@ const legacyJsxPlugin = (): Plugin => ({
       jsx: { runtime: 'automatic' },
     });
     return result.map ? { code: result.code, map: result.map } : { code: result.code };
+  },
+});
+
+const legacyEnvironmentGuardPlugin = (): Plugin => ({
+  name: 'kent-rehberi-legacy-environment-guard',
+  enforce: 'pre',
+  transform(code, id) {
+    if (!SOURCE_FILE.test(id) || !code.includes('process.env')) return null;
+    const references = code.match(/process\.env\.[A-Z0-9_]+/g) ?? [];
+    const disallowed = [...new Set(references.filter((reference) => reference !== LEGACY_PUBLIC_URL_REFERENCE))];
+    if (disallowed.length > 0) {
+      throw new Error(
+        `Legacy browser environment access is forbidden in ${id}: ${disallowed.join(', ')}. `
+        + 'Use the typed runtimeConfig/import.meta.env boundary instead.',
+      );
+    }
+    return null;
   },
 });
 
@@ -25,7 +45,13 @@ const manualChunk = (id: string): string | undefined => {
 
 export default defineConfig({
   base: './',
-  plugins: [legacyJsxPlugin(), react({ include: /\.[jt]sx?$/ })],
+  envPrefix: ['VITE_'],
+  define: {
+    // Narrow bridge for the one remaining public-asset call site. Do not expose
+    // a generic process.env object to browser code.
+    'process.env.PUBLIC_URL': JSON.stringify('./'),
+  },
+  plugins: [legacyEnvironmentGuardPlugin(), legacyJsxPlugin(), react({ include: /\.[jt]sx?$/ })],
   optimizeDeps: {
     noDiscovery: true,
     include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', 'esri-loader'],
