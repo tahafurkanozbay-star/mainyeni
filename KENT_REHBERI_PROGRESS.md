@@ -498,3 +498,39 @@
 ### SONRAKİ TUR
 - Merge edilmiş #54 branch'i yeniden kullanılmamalı; yeni Platform işi güncel `main` üzerinden benzersiz branch ile başlamalı.
 - Öncelik: Actions runner/provisioning normale döndüğünde post-merge full-stack doğrulama; ardından kalan JavaScript compatibility adapter'larını ölçümlü strict TypeScript migrasyonuyla azaltma ve gerçek browser/device performans-accessibility smoke matrisini tamamlama.
+
+## Platform Runtime Supervision / Merge Gate — 2026-09-16
+
+### TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU
+- TUR: Platform/Architecture runtime supervision ve merge-gate doğrulama turu.
+- GÖREV: dependency-aware lifecycle, fail-closed readiness/health, bounded request coordination ve runtime supervision katmanını current-main üzerinde tamamlayıp merge kapılarını doğrulamak.
+- Base `main`: `a8b4ea90a1225b4134e06e70545a96df52133a3a`.
+- Branch: `agent/platform-runtime-supervision-20260916-3d116af-r1`.
+- PR: #65 `feat(platform): supervise runtime lifecycle and bounded work`.
+- Progress öncesi ürün-kod head: `375e37603c5f7e76fb0955bb45ea9d103872af41`.
+- PR ölçümü: 15 changed files / **4.039 additions / 0 deletions**; zorunlu 4.000 meaningful-additions kapısı gerçek runtime/test kapsamıyla sağlandı.
+- PR progress öncesi `mergeable=true`; açık inline review thread yoktu.
+
+### UYGULANAN PLATFORM MODERNİZASYONU
+- Deterministik dependency DAG: required/optional/ordering-only edges, cycle/missing-dependency validation, startup levels, transitive dependents ve critical-path diagnostikleri.
+- Lifecycle coordinator: dependency-aware concurrent startup, reverse shutdown, hard start/stop deadline, critical failure rollback, optional/important continuation policy ve dependent-subgraph restart.
+- Health/readiness registry: bounded diagnostics, TTL/freshness/staleness semantiği ve required component'ler için fail-closed readiness.
+- Request coordinator: global/per-lane concurrency ve queue limitleri, priority scheduling, same-key dedupe, subscriber-aware cancellation ve bounded metrics.
+- Runtime supervisor: readiness-gated work, component-bound fail-closed execution ve bounded local event history.
+- İkinci review'da PR'ın daha önce #62 ile `main`e giren `resilience.ts` exactOptionalPropertyTypes düzeltmesini geri alma riski tespit edildi; branch `main`deki doğru resilience sürümüyle yeniden eşitlendi ve `resilience.ts` PR diff'inden çıkarıldı.
+- Yeni WMS/WFS/WMTS, endpoint, secret, remote asset, telemetry transport veya ikinci GIS icon authority eklenmedi.
+
+### TEST / CI / REGRESSION DURUMU
+- Yayın öncesi strict TypeScript production+test compilation: PASS.
+- Focused supervision smoke: DAG ordering, readiness/staleness, dedupe, cancellation, lifecycle startup/shutdown ve supervisor execution PASS.
+- İkinci smoke: active-cancellation accounting ve optional-failure continuation PASS.
+- Exact ürün-kod head için Webclient Quality `35088440718`, Platform Architecture Audit `35088440775`, Release QA `35088440636` tetiklendi.
+- Bu turda üç workflow da yeniden çalıştırıldı. Webclient `quality`, Architecture `audit`, Release QA `backend-release-validation`, `typed-release-audit` ve `webclient-release-validation` job'larının tamamı yeniden `steps=null` / `logs_url=null` ile checkout/test/build başlamadan `failure` tamamlandı.
+- Sonuç ürün kodu assertion failure değildir; fakat repository merge-safety kuralı `completed+success` istediği için CI gate yine de kapalıdır ve bypass edilmedi.
+
+### SECURITY / PERFORMANCE / SONRAKİ GÖREV
+- Kuyruk/event-history/diagnostic payload'ları bounded; yeni polling/background loop eklenmedi.
+- Observer/diagnostic failure business outcome'u değiştirmiyor; readiness gerekli component'lerde fail-closed.
+- `main` refresh, PR additions, review thread ve mergeability final merge öncesi tekrar doğrulanmalıdır.
+- GitHub Actions runner/account provisioning düzeldiğinde PR #65 exact head üzerinde Webclient Quality + Platform Architecture Audit + Release QA yeniden gerçek step execution ile çalıştırılmalı; tamamı `success` olursa squash merge ve merge/main SHA doğrulaması yapılmalıdır.
+- Bu turda merge yapılmadı; PR #65 açık bırakıldı.
