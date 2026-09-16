@@ -416,3 +416,55 @@
 - Aynı güncel `main` üzerinde Webclient Quality #820 (`35070665352`) **success**: lint, typecheck, test, build-budget testleri, production build ve production build-budget enforcement geçti.
 - Merge sonrası ilk `8a1267d...` push koşularının frontend/backend lane'leri, hata nedeniyle değil hemen gelen `1f324344...` push'un concurrency cancellation'ı nedeniyle iptal edildi; yeni current-main koşuları bunların yerini aldı ve yeşil tamamlandı.
 - Bu final kayıt değişikliği yalnız Markdown progress dokümantasyonudur; ürün/runtime koduna yeni değişiklik eklemez.
+
+## Deep GIS / Whole-Code Modernization Continuation — 2026-09-16 12:55 TRT
+
+### TUR / GÖREV / BRANCH / HEAD / PR / MERGE
+- TUR: PR #55 üzerinde strict TypeScript GIS contract genişletme, paralel aynı-rol değişikliklerini koruma ve release gate doğrulama turu.
+- GÖREV: ArcGIS metadata/field/domain adapter, stable feature identity, injected query executor, 2D/3D layer lifecycle ownership ve ArcGIS-only JSON configuration contract ile modern kernel kapsamını genişletmek.
+- Verified `main`: `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
+- Branch: `agent/gis-modernization-20260916-1214-851a5c9`.
+- PR: #55 `feat(gis): continue typed ArcGIS runtime modernization`.
+- Yeni ürün-kod head: `ea780618bd3a7dbd8d4317e257ec37887bb0ce02`.
+- GitHub compare: 8 commit ahead / 0 behind; merge-base tam olarak güncel `main` SHA.
+- `base...head`: 26 changed files, **7.588 additions / 0 deletions**; zorunlu `>=4000 additions` gate PASS.
+- MERGE: yapılmadı. Exact-head zorunlu CI başarılı değil.
+
+### PARALEL ÇALIŞMA UZLAŞTIRMASI
+- Branch çalışma sırasında `8137fda...` üzerinden eşzamanlı olarak `0705988...` head'ine ilerledi; ilk ref update fast-forward korumasıyla 422 aldı.
+- Force-push yapılmadı. Yeni head compare edilerek aynı-rolün `modernGisKernel`, `serviceHealthRuntime`, `renderGovernorRuntime`, `sceneStreamingPlanner`, `gisObservabilityRuntime` ve testleri korundu.
+- Çakışacak ikinci `serviceHealthRuntime` ve ikinci orchestration runtime taslağı bilerek branch'e taşınmadı; yeni commit yalnız eksik typed boundary'leri ekledi ve güncel head'in doğrudan child'ı olarak fast-forward edildi.
+
+### YENİ STRICT TYPESCRIPT GIS SINIRLARI
+- `arcgisMetadataAdapter.ts`: gerçek FeatureServer/MapServer layer metadata'sını typed contract'a çevirir; object/global id, geometry/SR, fields/domains, scales, time, editing, renderer ve query capabilities normalize edilir; metadata drift için breaking/warning diff üretir. Concrete layer URL dışına çıkmaz.
+- `featureIdentity.ts`: `OBJECTID=0` dahil object-id/global-id kimliklerini kayıpsız korur; bounded composite fallback, deterministic key, duplicate/conflicting identity diagnostikleri, dedupe ve quality assessment sağlar.
+- `arcgisQueryExecutor.ts`: network transport'u enjekte eder; direct `fetch` veya yeni endpoint eklemez. Existing scheduler contract ile cache/dedupe/cancellation/tag ownership kullanır; canonical request key secret parametrelerini fingerprint'ten çıkarır; HTTP/ArcGIS service error, transfer-limit, duplicate feature ve stable identity semantics'ini normalize eder.
+- `layerLifecycleCoordinator.ts`: 2D/3D handle factory, generation-based stale creation rejection, pending create abort, visibility/opacity/selection parity, suspend/resume, retain/destroy policy ve deterministic unregister/destroy ownership sağlar.
+- `gisJsonConfigContract.ts`: yalnız ArcGIS REST feature/map/image/scene/vector-tile config türlerini kabul eder; WMS/WFS reddeder; service/layer id, concrete sublayer, parent/child graph, cycle, scale, shared icon key ve config diff contract'larını doğrular. İkinci icon resolver oluşturmaz.
+
+### REGRESSION COVERAGE
+- `arcgisMetadataAdapter.test.ts`: capability/SR/field/domain/renderer normalization, missing SR, duplicate/invalid fields, concrete layer URL ve schema drift senaryoları.
+- `arcgisQueryExecutor.test.ts`: injected transport, `OBJECTID=0`, duplicate identity, transfer limit, ArcGIS/HTTP errors, cancellation, scheduler contract, deterministic request key ve page merge.
+- `layerLifecycleCoordinator.test.ts`: handle reuse, 2D/3D state parity, mismatched/stale handle rejection, mode restriction, suspend/destroy ve cleanup.
+- `gisJsonConfigContract.test.ts`: ArcGIS-only config, WMS/WFS rejection, missing concrete sublayer, directed parent cycle, shared icon registry key, duplicate id ve config diff.
+
+### CI / TEST / BUILD DOĞRULAMASI
+- Exact ürün-kod head `ea780618bd3a7dbd8d4317e257ec37887bb0ce02` için Webclient Quality #1062 (`35082584665`) completed/failure.
+- Release QA #110 (`35082584664`) içindeki `typed-release-audit`, `webclient-release-validation`, `backend-release-validation` job'larının tamamı completed/failure.
+- Platform Architecture Audit #208 (`35082584645`) completed/failure.
+- Tüm bu job kayıtlarında `steps=null` ve `logs_url=null`; workflow komutlarından herhangi birinin çalıştığına dair kanıt yok. Bu nedenle test/lint/typecheck/build assertion failure'ı gözlenmedi, ancak bu sonuç kesinlikle green sayılmadı.
+- Önceki exact-head ve current-main koşularında da aynı birkaç saniyelik pre-step failure paterni görüldü; Actions runner/account/infrastructure execution problemiyle tutarlı. Merge gate yine de başarılı exact-head CI gerektiriyor.
+
+### SECURITY / DATA-INTEGRITY / PERFORMANCE REVIEW
+- WMS/WFS/WMTS, uydurma endpoint, remote analytics/CDN/font/telemetry veya browser secret eklenmedi.
+- Shared `iconRegistry.json` + resolver/presentation tek icon authority olarak korunuyor.
+- Stable feature identity, duplicate/conflict diagnostics ve transfer-limit görünürlüğü silent data corruption riskini azaltıyor.
+- Query transport injection + existing scheduler ownership; request dedupe/cache/cancellation/backpressure modelini bozmaz.
+- Layer generation/abort semantics stale async handle'ların yeni 2D/3D state'i ezmesini engeller.
+- Config graph doğrulaması self/cycle/missing reference hatalarını runtime'a ulaşmadan fail-closed yapar.
+- ArcGIS capabilities, pagination/order ve spatial reference metadata'dan doğrulanmadan uydurulmaz.
+
+### KALAN / SONRAKİ TUR
+- PR #55 merge edilmemeli: exact final head üzerinde Webclient Quality, Platform Architecture Audit ve Release QA `completed/success` olmadan gate kapalıdır.
+- Actions execution düzeldiğinde aynı branch'te gerçek typecheck/test/build sonuçları alınmalı; gerçek kod failure'ı çıkarsa aynı turda düzeltilip ikinci exact-head doğrulama yapılmalı.
+- Son green candidate'da `main` yeniden okunmalı; behind=0, merge-base güncel main, `mergeable=true`, additions>=4000 ve kritik release riski yokluğu tekrar doğrulanmalı; ardından squash merge + merge SHA + güncel main SHA doğrulanmalıdır.
