@@ -1,14 +1,23 @@
 const DEFAULT_LOCALE = "tr-TR";
 const MAX_PAGE_SIZE = 1000;
+const MAX_CONTROL_CHARACTER_CODE = 31;
+const DELETE_CHARACTER_CODE = 127;
 
 const isNil = value => value === null || value === undefined;
 const isPlainObject = value => Object.prototype.toString.call(value) === "[object Object]";
 
+export const replaceControlCharacters = value => String(value)
+    .split("")
+    .map(character => {
+        const code = character.charCodeAt(0);
+        return code <= MAX_CONTROL_CHARACTER_CODE || code === DELETE_CHARACTER_CODE ? " " : character;
+    })
+    .join("");
+
 export const normalizeText = (value, { locale = DEFAULT_LOCALE, empty = "" } = {}) => {
     if (isNil(value)) return empty;
-    return String(value)
+    return replaceControlCharacters(value)
         .normalize("NFKC")
-        .replace(/[\u0000-\u001F\u007F]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
 };
@@ -158,6 +167,7 @@ export const sortRecords = (records, field = "title", locale = DEFAULT_LOCALE) =
     .sort((left, right) => normalizeText(left?.[field]).localeCompare(normalizeText(right?.[field]), locale, { sensitivity: "base", numeric: true }));
 
 export const DataIntegrityHelper = {
+    replaceControlCharacters,
     normalizeText,
     normalizeSearchText,
     normalizeCategoryKey,

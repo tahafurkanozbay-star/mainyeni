@@ -38,8 +38,11 @@ const isNil = value => value === null || value === undefined;
 const unique = values => Array.from(new Set(values.filter(Boolean)));
 
 export const normalizeAddressToken = value => normalizeSearchText(value)
-    .replace(/[.,;:()\[\]{}]/g, " ")
-    .replace(/[\/_-]+/g, " ")
+    .replace(/[.,;:(){}]/g, " ")
+    .split("[").join(" ")
+    .split("]").join(" ")
+    .split("/").join(" ")
+    .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
