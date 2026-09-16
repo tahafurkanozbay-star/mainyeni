@@ -63,6 +63,25 @@ describe('typed search presentation uses the single shared icon authority', () =
         expect(bus.iconKey).toBe('otobus');
     });
 
+    test('canonical normalized icon fields win over conflicting raw/schema-drift fields', () => {
+        const normalized = record({
+            category: 'Eczaneler',
+            type: 'eczane',
+            title: 'Merkez Eczanesi'
+        });
+        const conflicting = {
+            ...normalized,
+            fields: {
+                ...normalized.fields,
+                category: 'Tamamen Bilinmeyen Kategori',
+                type: 'Tanımsız Tip'
+            }
+        };
+        const presentation = createRecordPresentation(conflicting);
+        expect(presentation.iconKey).toBe('eczane');
+        expect(presentation.icon.isFallback).toBe(false);
+    });
+
     test('unknown categories use shared fallback instead of inventing a second mapping', () => {
         const unknown = createRecordPresentation(record({
             category: 'Tamamen Bilinmeyen Yeni Kategori',
