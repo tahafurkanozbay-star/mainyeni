@@ -353,3 +353,56 @@
 - Remote font, accessibility static adayları, doğrudan `window.open` çağrıları, bazı nested synchronous iteration ve global graphics cleanup adayları gerçek kullanım bağlamıyla kapatılmalı.
 - Full static scorecard'ın denylist/test-fixture false-positive sınıfları sonraki audit kalibrasyonunda kaynak-bağlamlı kurallarla azaltılmalı; PR regression gate bu arada exact-base delta ile güvenli merge kararını sağlıyor.
 - Gerçek Chrome/Firefox/Safari responsive/visual, screen-reader, forced-colors/reduced-motion ve gerçek servis latency/büyük veri performans smoke testleri connector ortamının dışında ayrıca çalıştırılmalı.
+
+## Deep GIS / Whole-Code Modernization — 2026-09-16
+
+### TUR / GÖREV / BRANCH / PR DURUMU
+- TUR: GIS Engine whole-code modernization, runtime bütünleştirme, performans/data-integrity/security ve release gate turu.
+- Branch: `agent/gis-20260916-1010-a6dcdee`.
+- PR: #38 `feat(gis): add adaptive rendering performance controls`.
+- Başlangıç `main`: `a6dcdee844902091430b2831c0cb3bf073d4017a`; tur sırasında Platform #39 merge'iyle güncel `main` `10c31c76a71903acb04a1443a2cc383b84603b32` oldu ve force-push yapılmadan gerçek iki-parent entegrasyon commit'iyle branch'e alındı.
+- Son ürün-kod head: `186ca03a60614f58bcbe91686a469db117000e63`; bu progress güncellemesi yalnız kayıt commit'i olarak bunun üzerine gelir.
+- Ürün-kod head ölçümü: 16 changed GIS files, 4.464 additions, 0 deletions; zorunlu `additions >= 4000` gate'i boilerplate/sahte özellik eklenmeden aşıldı.
+
+### UYGULANAN GIS RUNTIME MODERNİZASYONU
+- `adaptivePerformanceRuntime`: cihaz memory/core/network/reduced-motion sinyallerine göre `eco / balanced / quality` profilleri; frame-pressure sampling ile kontrollü kalite düşürme/iyileştirme; query-cache, layer concurrency/residency, visible-feature ve scene-quality bütçeleri.
+- `featureBudget`: feature yoğunluğu/geometri karmaşıklığı/label-picture baskısına göre deterministic `direct / cluster / paged / summary` render stratejisi.
+- `arcgisPaginationRuntime`: ArcGIS REST metadata'sındaki `maxRecordCount`, OID, pagination/order-by yeteneklerine göre bounded offset paging veya object-id chunking; transfer-limit görünürlüğü, duplicate feature dedupe, repeated-page/no-progress kesme, max-pages/max-features sınırları ve `AbortSignal` cancellation.
+- `serviceCapabilityRuntime`: FeatureServer/MapServer/ImageServer/SceneServer/VectorTileServer metadata'sından immutable capability contract; query/pagination/statistics/order/time/Z/M/attachment/editing/field/spatial-reference sözleşmeleri. WMS/WFS açıkça reddediliyor; generic veya uydurma endpoint üretimi yapılmıyor.
+- `geometryIntegrityRuntime`: point/multipoint/polyline/polygon/extent normalizasyonu; WKID/latestWKID/WKT, WGS84 range diagnostics, invalid vertex/part handling, polygon ring repair, extent/complexity/fingerprint ve collection quality assessment.
+- `renderPolicyRuntime`: 2D map scale ve 3D camera distance üzerinden hysteresis'li LOD; label density, cluster/summary/paging, extrusion/shadow bütçesi ve shared icon presentation. Point sunumu hem 2D hem 3D için mevcut `iconPresentation`/registry otoritesini kullanıyor.
+- `spatialMemoRuntime`: CPU-ağır spatial hesaplar için network query cache'den ayrı bounded TTL/LRU/memory cache, in-flight dedupe, subscriber cancellation, final-subscriber underlying abort, tag invalidation ve runtime metrics.
+- `gisRuntimeOrchestrator`: capability registry, query runtime, ArcGIS pagination, geometry integrity, spatial memo, layer scheduler, render presentation state ve adaptive performance budget'larını tek lifecycle altında birleştiriyor; layer unregister/destroy cache/resource cleanup sağlıyor.
+
+### İLK CI / HATA DÜZELTME / İKİNCİ DOĞRULAMA
+- İlk büyük exact head `34049f3b7f45d5950b9221c99686959afc0d67bb`: Platform Architecture Audit `success`; Webclient Quality Jest aşamasında 1 test failure ile kırmızı döndü (33 suite pass + 1 suite fail; 325/326 test pass).
+- Kök neden: `{ geometry: null }` kaydı nullish fallback nedeniyle explicit missing geometry yerine feature objesi olarak değerlendirilmişti. Collection source selection own-property semantics'e geçirildi ve `missing` diagnostiği düzeltildi.
+- Aynı review'da malformed point'lerin `UNKNOWN_TYPE` yerine `INVALID_COORDINATE` üretmesi sağlandı; M-only point değerinin yanlışlıkla Z slotuna taşınabileceği edge-case kapatıldı.
+- Data-integrity review ayrıca otomatik hesaplanan `maxAllowableOffset` değerinin spatial-reference unit'i doğrulanmadan ArcGIS query'ye gönderilmesinin riskli olduğunu tespit etti. Artık generalization yalnız `allowGeneralization=true` + explicit positive `generalizationTolerance` ile query contract'ına giriyor; otomatik tolerance yalnız presentation recommendation olarak kalıyor.
+- Düzeltmeler sonrası exact ürün-kod head `186ca03a60614f58bcbe91686a469db117000e63` için Platform Architecture Audit ve Webclient Quality `completed/success`.
+- Webclient Quality: lint-if-present PASS; typecheck-if-present PASS; 34/34 test suite PASS; 329/329 test PASS; `CI=true npm run build` PASS / `Compiled successfully.`.
+
+### PERFORMANCE / DATA-INTEGRITY / SECURITY REVIEW
+- Query ve spatial cache'ler bounded; TTL/entry/byte bütçeleri adaptive profile değişikliklerinde canlı küçültülüp büyütülebiliyor.
+- Network query ve CPU spatial memo sorumlulukları ayrıldı; ikisinde de layer-tag invalidation var.
+- Layer scheduler concurrency adaptive bütçeye bağlı; frame pressure quality profilini düşürerek GPU/CPU/memory baskısını azaltabiliyor.
+- ArcGIS pagination stable OID ordering'i yalnız service metadata destekliyorsa kullanıyor; unsupported pagination capability uydurulmuyor.
+- Transfer-limit ve incomplete sonuç state'i gizlenmiyor; repeated page/no-progress sonsuz döngüsü kesiliyor.
+- Geometry SR/range/null/invalid-part diagnostics release ve veri bütünlüğü katmanları için görünür hale getirildi.
+- Yeni doğrudan `fetch`/harici network çağrısı veya `eval` eklenmedi. WMS/WFS capability boundary'de reddediliyor.
+- Yeni üçüncü taraf CDN/font/analytics bağımlılığı veya ikinci icon registry/resolver oluşturulmadı.
+- Shared `iconRegistry.json` + `iconPresentation` 2D/3D point presentation için tek deterministic icon authority olarak korundu.
+
+### DİL / TOOLCHAIN MODERNİZASYON KARARI
+- Bu GIS PR'ında çalışan JavaScript/React yüzeyi kör biçimde toplu TypeScript rewrite'a zorlanmadı. Repository kuralı gereği çalışan davranış ve paralel ekip sahipliği korundu.
+- Tur sırasında aktif ayrı TypeScript modernization PR'ları bulunduğu için aynı dosyalarda duplicate language migration yaratılmadı; bunun yerine GIS çekirdeği immutable contracts, typed error classes, deterministic adapters, explicit capability/state boundaries ve kapsamlı testlerle TypeScript'e kontrollü geçişe hazır hale getirildi.
+- Backend Platform hattındaki güncel C# 14 modernizasyonu `main` entegrasyonuyla korunuyor; GIS tarafında dil/toolchain geçişi paralel TypeScript hattı merge edildikten sonra conflict-free staged migration olarak sürdürülmeli.
+
+### KALAN / SONRAKİ GIS ÖNCELİĞİ
+- Gerçek production ArcGIS service metadata örnekleriyle pagination/object-id fallback ve maxRecordCount davranışını integration/smoke seviyesinde doğrula; endpoint veya capability varsayma.
+- Gerçek cihaz/browser 2D↔3D frame-time, memory, GPU pressure ve cluster/LOD latency ölçümlerini topla; adaptive eşikleri ölçümle kalibre et.
+- TypeScript modernization hattı main'e girdikten sonra GIS runtime modüllerini `.ts` + strict contracts'e kademeli geçir; her modülde exact-head test/build ve bundle/performance karşılaştırması yap.
+- Legacy CRA/dependency güvenlik borcu ayrı kontrollü migration gerektiriyor; `npm audit fix --force` gibi kör kırıcı yükseltme uygulanmamalı.
+
+### PARALEL MAIN ENTEGRASYON NOTU
+- `main` `f3f3c0f3d82c832d70ee5304ee441ac1d759e5c6` ile adaptive ArcGIS runtime paketine ilerledi. Bu GIS ürün kodu ve yukarıdaki progress kaydı QA branch'inde korunarak iki-parent entegrasyona hazırlanmıştır; QA değişiklikleri GIS runtime dosyalarını yeniden yazmaz.
