@@ -1,6 +1,8 @@
+import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { describe, test } from 'node:test';
 import {
   INTEGRITY_MANIFEST_FILE,
   bundleDigest,
@@ -21,9 +23,9 @@ const temporaryBuild = async () => {
 
 describe('build integrity manifest', () => {
   test('creates deterministic SRI digests', () => {
-    expect(sriDigest('hello')).toBe(sriDigest(Buffer.from('hello')));
-    expect(sriDigest('hello')).toMatch(/^sha384-[A-Za-z0-9+/]+=*$/);
-    expect(sriDigest('hello')).not.toBe(sriDigest('world'));
+    assert.equal(sriDigest('hello'), sriDigest(Buffer.from('hello')));
+    assert.match(sriDigest('hello'), /^sha384-[A-Za-z0-9+/]+=*$/);
+    assert.notEqual(sriDigest('hello'), sriDigest('world'));
   });
 
   test('sorts file entries before computing the bundle fingerprint', () => {
@@ -32,24 +34,24 @@ describe('build integrity manifest', () => {
       { path: 'a.js', bytes: 1, integrity: sriDigest('a') },
     ];
     const second = [...first].reverse();
-    expect(bundleDigest(first)).toBe(bundleDigest(second));
-    expect(createIntegrityManifest(first).files.map((file) => file.path)).toEqual(['a.js', 'z.js']);
+    assert.equal(bundleDigest(first), bundleDigest(second));
+    assert.deepEqual(createIntegrityManifest(first).files.map((file) => file.path), ['a.js', 'z.js']);
   });
 
   test('generates and verifies a complete production manifest', async () => {
     const directory = await temporaryBuild();
     try {
       const manifest = await generateBuildIntegrityManifest(directory);
-      expect(manifest.fileCount).toBe(3);
-      expect(manifest.files.map((file) => file.path)).toEqual([
+      assert.equal(manifest.fileCount, 3);
+      assert.deepEqual(manifest.files.map((file) => file.path), [
         'assets/app.css',
         'assets/app.js',
         'index.html',
       ]);
 
       const persisted = JSON.parse(await readFile(join(directory, INTEGRITY_MANIFEST_FILE), 'utf8'));
-      expect(persisted.bundleIntegrity).toBe(manifest.bundleIntegrity);
-      await expect(verifyBuildIntegrityManifest(directory, persisted)).resolves.toEqual([]);
+      assert.equal(persisted.bundleIntegrity, manifest.bundleIntegrity);
+      assert.deepEqual(await verifyBuildIntegrityManifest(directory, persisted), []);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -61,8 +63,8 @@ describe('build integrity manifest', () => {
       const manifest = await generateBuildIntegrityManifest(directory);
       await writeFile(join(directory, 'assets', 'app.js'), 'console.log("tampered");');
       const errors = await verifyBuildIntegrityManifest(directory, manifest);
-      expect(errors.join('\n')).toMatch(/size changed|integrity changed/i);
-      expect(errors.join('\n')).toMatch(/bundle integrity fingerprint/i);
+      assert.match(errors.join('\n'), /size changed|integrity changed/i);
+      assert.match(errors.join('\n'), /bundle integrity fingerprint/i);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -74,8 +76,8 @@ describe('build integrity manifest', () => {
       const manifest = await generateBuildIntegrityManifest(directory);
       await writeFile(join(directory, 'assets', 'late.js'), 'export const late = true;');
       const errors = await verifyBuildIntegrityManifest(directory, manifest);
-      expect(errors).toContain('Unexpected build artifact missing from manifest: assets/late.js');
-      expect(errors.join('\n')).toMatch(/artifact count mismatch/i);
+      assert.ok(errors.includes('Unexpected build artifact missing from manifest: assets/late.js'));
+      assert.match(errors.join('\n'), /artifact count mismatch/i);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -87,7 +89,7 @@ describe('build integrity manifest', () => {
       const manifest = await generateBuildIntegrityManifest(directory);
       await rm(join(directory, 'assets', 'app.css'));
       const errors = await verifyBuildIntegrityManifest(directory, manifest);
-      expect(errors).toContain('Manifest references missing build artifact: assets/app.css');
+      assert.ok(errors.includes('Manifest references missing build artifact: assets/app.css'));
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
