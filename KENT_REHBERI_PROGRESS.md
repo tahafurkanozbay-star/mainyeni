@@ -8,20 +8,20 @@
 ## Deep Platform / Architecture — 2026-09-16 17:00 TRT
 - PR #72 delivered runtime supervision/toolchain/CI modernization with 4,944 additions and was squash merged as `3660cc87bc51a09d94297d7d752dc4bc2bbaa1fe`; the subsequent progress commit advanced main to `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`.
 
-## Deep Experience continuation — 2026-09-17 00:25 TRT
-- TUR / GÖREV: Deep Experience / Whole-Code Modernization; accessible responsive GIS feedback/state primitives continuation.
-- BASE MAIN: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`; current main reverified at the same SHA before this pass.
+## Deep Experience continuation — 2026-09-17 01:21 TRT
+- TUR / GÖREV: Deep Experience / Whole-Code Modernization; accessible GIS action/toolbar interaction continuation.
+- BASE MAIN: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`; compare confirms `behind_by=0` and merge-base equals current main.
 - BRANCH: `agent/experience-ui-20260916-1724-2dd3ce9`.
-- PR: #74 remains the canonical open Experience PR; GitHub reported `mergeable=true`, 261 additions before this pass, and no base drift.
-- HEAD BEFORE THIS PASS: `81ace8365c6b18ebb74b3eacdf0125b670338824`.
-- MERGE DURUMU: NOT MERGED. Mandatory 4,000 meaningful-additions gate remains unmet, so merge is forbidden.
-- ÖNEMLİ ÖZELLİKLER: existing accessibility/responsive surface layer, semantic form/table/disclosure primitives, plus reusable status, empty-state and determinate/indeterminate progress primitives for GIS query/loading/error/success feedback. Live-region behavior is opt-in and explicit; progress exposes native progressbar semantics; visual state never relies on color alone.
-- DEĞİŞEN DOSYALAR THIS PASS: added `Webclient.app/src/Components/Common/ExperienceStatus.tsx`; extended `Webclient.app/src/experience/experience-primitives.css`; updated this progress record.
-- TESTLER / BUILD / CI: exact pre-pass head `81ace8365c6b18ebb74b3eacdf0125b670338824` completed Webclient quality and release validation successfully (along with the associated release/audit checks). This pass creates a new head, so those results are not claimed for the new code; exact-head Actions must complete before merge consideration.
+- PR: #74 remains the canonical open Experience PR and was `mergeable=true` at turn start.
+- HEAD BEFORE THIS PASS: `f6c238fda61f4594afe14b12dcc5fa8c07a0288f`; exact-head Platform Architecture Audit, Release QA and Webclient Quality all completed successfully.
+- MERGE DURUMU: NOT MERGED. Base...head remains far below the mandatory 4,000 meaningful-additions gate.
+- ÖNEMLİ ÖZELLİKLER: existing form/table/disclosure/status/progress primitives plus new dependency-free `ExperienceToolbar` for GIS map actions. Toolbar exposes semantic `role=toolbar`, orientation, pressed/disabled states, 44px targets, roving-style arrow navigation, Home/End navigation, visible focus, responsive icon-label behavior and forced-colors support.
+- DEĞİŞEN DOSYALAR THIS PASS: added `Webclient.app/src/Components/Common/ExperienceToolbar.tsx`; extended `Webclient.app/src/experience/experience-primitives.css`; updated this progress record.
+- TESTLER / BUILD / CI: pre-pass head `f6c238f...` passed all three relevant Actions. New toolbar commits create a new exact head, so PASS is not claimed for the new code until Actions complete.
 - NETWORK DEĞİŞİKLİKLERİ: none. No endpoint, WMS/WFS/WMTS, analytics, CDN, dependency or remote asset added. Legacy remote Mukta import remains queued for safe removal.
-- GÜVENLİK / ACCESSIBILITY: no secret, unsafe HTML or dynamic remote content. Status announcements use semantic `status`/`alert` only when requested; empty state remains semantic content; progress supports screen readers, forced colors and reduced motion. Indeterminate animation becomes static under reduced motion.
-- İKON EŞLEŞTİRME: unchanged; shared deterministic resolver remains canonical. Empty-state symbol is presentation-only and hidden from assistive technology, not a GIS data icon resolver.
-- MODERNİZASYON KARARI: continue dependency-free typed React primitives rather than introduce another UI runtime; keep feedback semantics explicit so GIS screens can opt into announcements without accidental noisy live regions.
-- PERFORMANS ETKİSİ: render-only primitives; no polling, timers, network or observers. Progress animation is CSS-only and disabled under reduced motion.
-- ÇÖZÜLEN HATALAR / UX BORCU: establishes consistent accessible query/loading/error/empty feedback contracts instead of ad-hoc text/spinners with missing live-region or progress semantics.
-- KALAN SORUNLAR / SONRAKİ GÖREV: continue same PR while current/mergeable with real-screen integrations, panel/action primitives, 2D↔3D controls, remote-font cleanup and repo-native interaction/accessibility regressions until >=4,000 meaningful additions. Require completed+success exact-head CI, second interaction/regression review and final main refresh before squash merge.
+- GÜVENLİK / ACCESSIBILITY: no secret, unsafe HTML or dynamic remote content. Toolbar is native-button based, keyboard operable, focus-visible, touch-target sized and supports forced colors; badges/icons are presentation-only while accessible action names remain explicit.
+- İKON EŞLEŞTİRME: unchanged; shared deterministic resolver remains canonical. Toolbar accepts already-resolved presentation icons and does not create another resolver.
+- MODERNİZASYON KARARI: continue small typed React primitives using platform semantics rather than add a UI runtime; keep toolbar keyboard behavior explicit for dense enterprise GIS controls.
+- PERFORMANS ETKİSİ: render/event-only primitive; no polling, timers, observers, network or dependency cost.
+- ÇÖZÜLEN HATALAR / UX BORCU: establishes a reusable keyboard contract for map tool groups instead of relying on independent tab-only buttons and ad-hoc active-state semantics.
+- KALAN SORUNLAR / SONRAKİ GÖREV: verify new exact-head CI; continue same PR while current/mergeable with real-screen toolbar/panel integration, 2D↔3D controls, remote-font cleanup and repo-native interaction/accessibility regressions until >=4,000 meaningful additions. Require second interaction/regression review and final main refresh before squash merge.
