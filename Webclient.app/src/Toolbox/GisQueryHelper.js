@@ -31,24 +31,30 @@ const toNonNegativeInteger = (value, fallback = null) => {
     return Math.floor(number);
 };
 
+const toArray = (value) => Array.isArray(value) ? value : [];
+
 const toServiceResult = (response, options = {}) => {
     const resultOffset = toNonNegativeInteger(options.resultOffset, 0);
-    const data = (response?.features ?? []).map((feature) => ({
-        attr: feature.attributes,
-        geometry: feature.geometry
+    const features = toArray(response?.features);
+    const data = features.map((feature) => ({
+        attr: feature?.attributes ?? null,
+        geometry: feature?.geometry ?? null
     }));
+    const exceededTransferLimit = Boolean(response?.exceededTransferLimit);
+    const hasMore = exceededTransferLimit && data.length > 0;
 
     return {
         type: Constants_ServiceResultType.Success,
         data,
-        fields: response?.fields ?? [],
-        exceededTransferLimit: Boolean(response?.exceededTransferLimit),
+        fields: toArray(response?.fields),
+        exceededTransferLimit,
         geometryType: response?.geometryType ?? null,
         spatialReference: response?.spatialReference ?? null,
         page: {
             offset: resultOffset,
             count: data.length,
-            nextOffset: response?.exceededTransferLimit ? resultOffset + data.length : null
+            hasMore,
+            nextOffset: hasMore ? resultOffset + data.length : null
         }
     };
 };
