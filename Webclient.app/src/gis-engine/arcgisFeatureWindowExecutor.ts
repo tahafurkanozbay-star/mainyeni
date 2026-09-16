@@ -49,10 +49,7 @@ const windowSpec = (spec: ArcGisQuerySpec, offset: number, limit: number): ArcGi
   window: Object.freeze({ resultOffset: offset, resultRecordCount: limit }),
 });
 
-/**
- * Composes verified metadata, the existing query executor and the bounded feature-window primitive.
- * It deliberately owns no endpoint discovery or direct network transport.
- */
+/** Composes verified metadata, existing query execution and bounded feature-window ownership. */
 export const createArcGisFeatureWindowExecutor = (dependencies: Readonly<{
   transport: ArcGisQueryTransport;
   scheduler?: ArcGisScheduler;
@@ -60,11 +57,7 @@ export const createArcGisFeatureWindowExecutor = (dependencies: Readonly<{
   defaultMaxFeatures?: number;
   defaultMaxPages?: number;
 }>): Readonly<{
-  execute(
-    contract: ArcGisMetadataContract,
-    spec: ArcGisQuerySpec,
-    options?: ArcGisFeatureWindowExecutionOptions,
-  ): Promise<FeatureWindowResult<ArcGisFeature>>;
+  execute(contract: ArcGisMetadataContract, spec: ArcGisQuerySpec, options?: ArcGisFeatureWindowExecutionOptions): Promise<FeatureWindowResult<ArcGisFeature>>;
 }> => {
   const queryExecutor = createArcGisQueryExecutor(dependencies);
   const defaultPageSize = boundedPositiveInteger(dependencies.defaultPageSize, 500, 10_000);
@@ -79,17 +72,11 @@ export const createArcGisFeatureWindowExecutor = (dependencies: Readonly<{
     if (!contract.queryReady) {
       throw new ArcGisFeatureWindowExecutionError('ArcGIS metadata contract is not query-ready.', 'METADATA_NOT_QUERY_READY');
     }
-    if (!contract.supportsPagination) {
-      throw new ArcGisFeatureWindowExecutionError(
-        'Bounded feature-window execution requires verified ArcGIS pagination support.',
-        'PAGINATION_UNSUPPORTED',
-      );
+    if (!contract.capabilities.has('pagination')) {
+      throw new ArcGisFeatureWindowExecutionError('Bounded feature-window execution requires verified ArcGIS pagination support.', 'PAGINATION_UNSUPPORTED');
     }
-    if (!contract.objectIdField && !contract.globalIdField) {
-      throw new ArcGisFeatureWindowExecutionError(
-        'Bounded feature-window execution requires a verified stable service identity.',
-        'STABLE_IDENTITY_REQUIRED',
-      );
+    if (!contract.identityReady || (!contract.objectIdField && !contract.globalIdField)) {
+      throw new ArcGisFeatureWindowExecutionError('Bounded feature-window execution requires a verified stable service identity.', 'STABLE_IDENTITY_REQUIRED');
     }
 
     const pageSize = boundedPositiveInteger(options.pageSize, defaultPageSize, Math.max(1, contract.maxRecordCount));
