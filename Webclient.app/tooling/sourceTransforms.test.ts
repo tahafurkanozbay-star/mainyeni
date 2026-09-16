@@ -43,14 +43,14 @@ describe('shared source transforms', () => {
     ]);
   });
 
-  test('environment guard handles Vite query suffixed source ids', async () => {
+  test('environment guard handles Vite query suffixed source ids', () => {
     const plugin = legacyEnvironmentGuardPlugin();
     const transform = transformHandler(plugin);
 
-    await expect(Promise.resolve(transform.call({} as never,
+    expect(() => transform.call({} as never,
       'const value = process.env.REACT_APP_API_URL;',
       '/workspace/src/config.js?import',
-    ))).rejects.toThrow(/typed runtimeConfig\/import\.meta\.env boundary/i);
+    )).toThrow(/typed runtimeConfig\/import\.meta\.env boundary/i);
   });
 
   test('environment guard allows the narrow PUBLIC_URL compatibility bridge', async () => {
