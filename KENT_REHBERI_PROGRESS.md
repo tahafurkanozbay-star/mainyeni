@@ -328,7 +328,7 @@
 - Full static scorecard'da defensive denylist/test fixture gibi tarihsel false-positive adayları görüldüğü için gate eşiği gevşetilmedi; exact-base delta modeli eklendi. Böylece tarihsel borç saklanmadan yeni regresyonlar deterministik biçimde bloke ediliyor.
 
 ### FINAL KOD-HEAD DOĞRULAMA
-- Exact kod head `482ed2db561a5b08f7b1e268e6cb7c4b41a65686` üzerinde Platform Architecture Audit run #119 (`35069517480`) `completed/success`.
+- Exact kod head `482ed2db561a5b08f7b1b531d39308bf91107e539` üzerinde Platform Architecture Audit run #119 (`35069517480`) `completed/success`.
 - Platform Backend Validation run #189 (`35069517342`) `completed/success`.
 - Release QA run #25 (`35069517347`) üç job ile `completed/success`.
 - TypeScript 7.0.2 strict typecheck: PASS.
@@ -416,3 +416,58 @@
 - Aynı güncel `main` üzerinde Webclient Quality #820 (`35070665352`) **success**: lint, typecheck, test, build-budget testleri, production build ve production build-budget enforcement geçti.
 - Merge sonrası ilk `8a1267d...` push koşularının frontend/backend lane'leri, hata nedeniyle değil hemen gelen `1f324344...` push'un concurrency cancellation'ı nedeniyle iptal edildi; yeni current-main koşuları bunların yerini aldı ve yeşil tamamlandı.
 - Bu final kayıt değişikliği yalnız Markdown progress dokümantasyonudur; ürün/runtime koduna yeni değişiklik eklemez.
+
+## Next-Generation Platform + Typed Experience / Whole-Code Modernization — 2026-09-16
+
+### TUR / GÖREV / BRANCH / PR
+- TUR: React 19 / Vite / TypeScript platform modernizasyonu üzerinde Deep Experience UI-state ve accessibility entegrasyonu.
+- Doğrulanan base `main`: `851a5c93b58cc33e35de0be9e948c87c09ce6096`.
+- Branch: `agent/nextgen-platform-20260916-1143-851a5c9`.
+- PR: #54 `feat(platform): modernize Kent Rehberi to React 19 Vite 8 TypeScript 7 runtime`.
+- Experience kod paketi `61f2d0bc86e768f89184d787d256e179bdfbc98c` commit'iyle branch'e fast-forward edildi; ardından storage/live-region hardening commit'leri aynı devam eden PR'de ilerledi.
+- Progress güncellemesi öncesi doğrulanan head: `d4addff0646a7328e23eefdcb355e901a37bdd25`.
+- PR `mergeable=true`, `main`e göre 0 commit geride ve GitHub ölçümünde 79 changed files / **13.275 additions** / 35.004 deletions seviyesindedir. 4.000 meaningful-additions kapısı gerçek runtime, test, Experience ve tooling koduyla aşılmıştır.
+
+### NEXT-GEN DİL / RUNTIME / TOOLCHAIN
+- Webclient CRA/React 17 döneminden React 19.3 + Vite 8.x + TypeScript 7.0.2 + Vitest 5 + Oxlint + Node 24/npm 11 sözleşmesine taşınan aynı PR üzerinde ilerliyor.
+- Root `tsconfig.json` strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `useUnknownInCatchVariables` ve bundler module resolution ile yeni/yeniden yazılan TypeScript/TSX yüzeylerini denetliyor.
+- `main.tsx` React 19 root error hooks, application error boundary, runtime diagnostics ve performance monitor ile güçlendirildi.
+- Platform tarafında typed bootstrap/config/cache/endpoint/error/performance/runtime kernel; capability/resource-budget/task-scheduler/resilience/state-store ve privacy-safe diagnostics katmanları bulunuyor.
+- Paralel Platform commit'leri force-push yapılmadan korunmuş; Experience değişiklikleri en güncel branch ağacının üzerine fast-forward olarak uygulanmıştır.
+
+### TYPED EXPERIENCE / DESIGN SYSTEM / STATE
+- `experienceSession.ts` tek process-wide `ExperienceBus` + `PreferenceStore` otoritesi oluşturdu. Önceki `ExperienceDesignSystem.js` ile `ExperienceWorkspace.js` arasındaki bağımsız theme/preference state drift'i kaldırıldı.
+- Preference state React 19 `useSyncExternalStore` ile okunuyor; theme, density, motion, panel placement, last 2B/3B mode ve accessibility tercihleri tek merkezi store üzerinden ilerliyor.
+- Sandbox/privacy modunda `window.localStorage` erişiminin exception üretmesi durumunda Experience state güvenli biçimde in-memory çalışmaya devam ediyor.
+- `ExperienceDesignSystem.tsx` typed token/theme context, loading/error/empty/status/icon-button primitives ve merkezi preference-backed theme API getiriyor; eski `.js` dosyası kontrollü compatibility adapter olarak bırakıldı.
+- `ExperienceDialog.tsx`, mevcut typed accessibility runtime'ın focusable/focus-trap altyapısını kullanıyor; Escape, focus containment, focus restore, body scroll lock, backdrop semantics ve modal ARIA sözleşmesi tek ortak primitive üzerinde korunuyor.
+- `ExperienceWorkspace.tsx` typed responsive/connectivity/media hooks, skip links, settings dialog, live-region announcements, global Alt+M / Alt+S keyboard focus shortcuts ve semantic status surfaces ile yeniden yazıldı; `.js` entry adapter geriye uyumluluğu koruyor.
+
+### 2B ↔ 3B / RESPONSIVE / ACCESSIBILITY
+- `experienceWorkspaceModel.ts` ile 2B↔3B geçişi saf state machine'e alındı: duplicate/busy request rejection, request id, pending mode, authoritative completion, timeout/fail-closed ve mevcut görünümü koruma davranışı deterministik hale geldi.
+- Harita komutu mevcut `ExperienceMapModeBridge` ve `kentrehberi:command` / `kentrehberi:map-mode-changed` event contract'ını kullanıyor; ikinci SceneView authority veya ikinci GIS state modeli oluşturulmadı.
+- Presentation model sistem tema, compact/medium/wide viewport, auto panel placement, reduced-motion, forced-colors, coarse-pointer, connectivity ve high-contrast kararlarını tek yerde türetiyor.
+- Root document dataset contract'ı theme/density/panel/motion/contrast/pointer/forced-colors durumlarını CSS'e deterministik biçimde açıyor; browser theme-color da etkin tema ile senkronize ediliyor.
+- Settings switch/select kontrollerinde explicit label/description bağları; map-mode kontrollerinde `aria-pressed`/`aria-busy`; komut merkezinde `aria-keyshortcuts`; offline/live status ve skip-target davranışı korunup güçlendirildi.
+- WMS/WFS UI eklenmedi; ikinci ikon resolver/registry oluşturulmadı. Mevcut shared GIS icon authority korunuyor.
+
+### TEST / SECOND REVIEW
+- `experienceWorkspaceModel.test.ts` sistem tema/panel çözümü, forced-colors/coarse-pointer, reduced-motion, document contract, transition duplicate guard, complete, timeout/fail-closed ve theme toggle için 9 deterministik test senaryosu ekliyor.
+- Var olan `ExperienceDialog.test.js` typed dialog adapter üzerinden focus trap, Escape, backdrop ve focus restore regresyon sözleşmesini kullanmaya devam edecek şekilde compatibility yolu korundu.
+- İkinci statik review'da localStorage property access exception edge-case'i ve live-region cleanup sırasında gereksiz React state update'i tespit edilip aynı PR'de düzeltildi.
+- Map runtime incelendi: `MapComponent.js` mevcut `ExperienceMapModeBridge` ile aynı ArcGIS Map instance'ını 2B/3B arasında paylaştırıyor; Experience tarafı bu authority'yi yeniden üretmiyor.
+
+### CI / VALIDATION DURUMU
+- Exact Experience kod head `61f2d0bc...` için Webclient Quality #1026 (`35082255602`), Platform Architecture Audit #192 (`35082255616`) ve Release QA #94 (`35082255707`) `completed/failure` döndü; Webclient job'ında `steps=[]` idi ve checkout/npm/lint/typecheck/test/build adımlarının hiçbiri başlamadı.
+- Progress öncesi güncel `d4addff...` head'inde Webclient Quality #1075 (`35082656741`), Platform Architecture Audit #214 (`35082656736`), Release QA #116 (`35082656813`) ve Platform Backend Validation #196 (`35082656761`) yine `completed/failure`; Webclient job payload'ında adım listesi yok (`steps=null`) ve job-step sorgusu boş dönüyor.
+- 0-step job log endpoint'i `BlobNotFound` 404 döndürüyor; bu nedenle bu kırmızılar lint/typecheck/test/build assertion sonucu olarak raporlanamaz.
+- Geçici yerel shell Node 22/npm 10 sağlıyor ancak repository clone ağ erişimi DNS seviyesinde kapalı; Node 24/npm 11 kontratını yerel olarak taklit ederek sahte PASS üretilmedi.
+- Bu turda **merge yapılmadı**. Kullanıcı protokolü `completed+success` exact-head CI istediği için GitHub Actions runner/provisioning sorunu giderilip gerçek `npm ci → lint → strict typecheck → Vitest → Vite build → build integrity/budget` zinciri çalışmadan PR açık kalacak.
+
+### KALAN YÜKSEK ÖNCELİKLİ EXPERIENCE İŞLERİ
+- GitHub Actions 0-step runner/provisioning arızası giderildiğinde #54 exact head üzerinde zorunlu kalite ve release workflow'larını yeniden çalıştır; gerçek compiler/test/build hatası çıkarsa aynı PR'de düzelt.
+- `ExperienceCommandCenter.js` içindeki ayrı statik command kataloğunu mevcut typed `EXPERIENCE_COMMANDS` authority'sine taşı; mevcut WindowManager target davranışlarını kaybetmeden TSX'e geçir.
+- `ExperienceUXLayer.js` ve kalan aktif shared Experience surface'lerini kademeli TSX'e taşı; `.js` adapter'ları migration boyunca geriye uyumluluk için sınırlı tut.
+- `styles.css` içindeki kullanılmayan Google Fonts Mukta network import'unu kaldırıp Vite/browser regression ile doğrula; yeni remote font/CDN ekleme.
+- Responsive browser/device, keyboard-only, NVDA/VoiceOver, forced-colors ve reduced-motion smoke/regression matrisi gerçek browser ortamında tamamlanmalı.
+- CI yeşil, conflict yok, `mergeable=true`, additions >=4000 ve ikinci final regression/security review temiz olduğunda squash merge yap; merge SHA ve güncel `main` SHA'yı ayrıca doğrula.
