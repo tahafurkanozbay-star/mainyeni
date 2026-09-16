@@ -4,6 +4,7 @@ const SOURCE_FILE = /\/src\/.*\.[cm]?[jt]sx?$/;
 const LEGACY_JAVASCRIPT_FILE = /\/src\/.*\.js$/;
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
 const LEGACY_PUBLIC_URL_REFERENCE = 'process.env.PUBLIC_URL';
+const LEGACY_REMOTE_MUKTA_IMPORT = /@import\s+url\(["']https:\/\/fonts\.googleapis\.com\/css\?family=Mukta["']\);?\s*/gi;
 
 /** Vite/Rolldown plugin ids may include ?query or #fragment suffixes. */
 export const cleanModuleId = (id: string): string => {
@@ -51,6 +52,26 @@ export const legacyEnvironmentGuardPlugin = (): Plugin => ({
       );
     }
     return null;
+  },
+});
+
+/**
+ * Remove the historical remote Mukta stylesheet import from the compiled CSS.
+ * The font is not referenced by the application font stack and retaining the
+ * import causes an unnecessary third-party request. The transform is exact and
+ * intentionally narrow so no arbitrary CSS is rewritten.
+ */
+export const stripLegacyRemotePresentationImports = (code: string): string =>
+  code.replace(LEGACY_REMOTE_MUKTA_IMPORT, '');
+
+export const legacyPresentationCleanupPlugin = (): Plugin => ({
+  name: 'kent-rehberi-legacy-presentation-cleanup',
+  enforce: 'pre',
+  transform(code, id) {
+    const sourceId = cleanModuleId(id).replaceAll('\\', '/');
+    if (!sourceId.endsWith('/src/styles.css')) return null;
+    const cleaned = stripLegacyRemotePresentationImports(code);
+    return cleaned === code ? null : { code: cleaned, map: null };
   },
 });
 
