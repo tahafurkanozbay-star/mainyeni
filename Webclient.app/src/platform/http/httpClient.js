@@ -50,12 +50,23 @@ const createDefaultCache = () => new RequestCache({
   maxEntries: 150
 });
 
-const createDefaultTransport = () => createFetchTransport({
-  baseUrl: runtimeConfig.apiBaseUrl,
-  defaultTimeoutMs: runtimeConfig.requestTimeoutMs,
-  defaultHeaders: { Accept: 'application/json' },
-  credentials: 'include'
-});
+// Keep browser feature detection lazy. Test runners, SSR tooling and static analysis can import the
+// platform client without needing a fetch global; real browser requests still fail closed if fetch
+// is unavailable at execution time.
+const createDefaultTransport = () => {
+  let transport = null;
+  return (request) => {
+    if (!transport) {
+      transport = createFetchTransport({
+        baseUrl: runtimeConfig.apiBaseUrl,
+        defaultTimeoutMs: runtimeConfig.requestTimeoutMs,
+        defaultHeaders: { Accept: 'application/json' },
+        credentials: 'include'
+      });
+    }
+    return transport(request);
+  };
+};
 
 const normalizeRequest = (config = {}) => ({
   ...config,
@@ -143,9 +154,6 @@ export const createApiClient = (dependencies = {}) => {
             );
           }
 
-          // A successful mutation can invalidate cached reads in ways the client cannot safely
-          // infer from URL prefixes. A bounded in-memory cache is cheap to clear and correctness
-          // is more important than retaining potentially stale data.
           if (!safeMethod && successful) {
             responseCache.clear();
           }
