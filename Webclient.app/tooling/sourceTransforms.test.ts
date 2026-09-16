@@ -4,6 +4,8 @@ import {
   isLegacyJavascriptSource,
   legacyEnvironmentGuardPlugin,
   legacyJestCompatibilityPlugin,
+  legacyPresentationCleanupPlugin,
+  stripLegacyRemotePresentationImports,
 } from './sourceTransforms';
 
 const transformHandler = (plugin: ReturnType<typeof legacyEnvironmentGuardPlugin>) => {
@@ -61,6 +63,31 @@ describe('shared source transforms', () => {
       '/workspace/src/assets.js?v=1',
     ));
     expect(result).toBeNull();
+  });
+
+  test('strips only the unused legacy Mukta remote stylesheet import', () => {
+    const css = `@import url('https://fonts.googleapis.com/css?family=Mukta');\nbody { font-family: Arial; }`;
+    expect(stripLegacyRemotePresentationImports(css)).toBe('body { font-family: Arial; }');
+    expect(stripLegacyRemotePresentationImports('@import url("https://example.com/other.css");'))
+      .toBe('@import url("https://example.com/other.css");');
+  });
+
+  test('presentation cleanup is bounded to the canonical legacy stylesheet', async () => {
+    const plugin = legacyPresentationCleanupPlugin();
+    if (typeof plugin.transform !== 'function') throw new Error('Expected transform hook function');
+    const css = `@import url('https://fonts.googleapis.com/css?family=Mukta');\nbody { color: black; }`;
+
+    const cleaned = await Promise.resolve(plugin.transform.call({} as never,
+      css,
+      '/workspace/src/styles.css?direct',
+    ));
+    expect(cleaned).toEqual({ code: 'body { color: black; }', map: null });
+
+    const untouched = await Promise.resolve(plugin.transform.call({} as never,
+      css,
+      '/workspace/src/feature.css',
+    ));
+    expect(untouched).toBeNull();
   });
 
   test('Jest compatibility bridge is bounded to test files', async () => {
