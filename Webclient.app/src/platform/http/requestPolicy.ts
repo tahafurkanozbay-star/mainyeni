@@ -1,12 +1,12 @@
 import { AppError } from '../errors/appError';
 import { normalizeApplicationPath } from '../network/endpointPolicy';
-import {
-  type NormalizedRequestConfig,
-  type QueryParams,
-  type RawRequestConfig,
-  type RequestBody,
-  type RuntimeDefaults,
-  isPlainRecord
+import { isPlainRecord } from './contracts';
+import type {
+  NormalizedRequestConfig,
+  QueryParams,
+  RawRequestConfig,
+  RequestBody,
+  RuntimeDefaults
 } from './contracts';
 
 export const SAFE_HTTP_METHODS = Object.freeze(['get', 'head'] as const);
