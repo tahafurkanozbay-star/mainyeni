@@ -37,8 +37,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "typecheck": "npm run typecheck:platform",
+    "typecheck": "npm run typecheck:platform && npm run typecheck:data-search",
     "typecheck:platform": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.platform.json --noEmit",
+    "typecheck:data-search": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.data-search.json --noEmit",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
