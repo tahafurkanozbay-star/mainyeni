@@ -156,7 +156,7 @@
 - Merge öncesi base: `a520ba91b9b802a65f0dcdc3a776f9345316cfe1`; branch `main`e göre 0 commit gerideydi.
 - PR: #9 `fix(search): harden data search query construction`.
 - Final PR durumu merge öncesi `mergeable=true`; review bekleyen thread yoktu.
-- MERGE: squash-merge tamamlandı.
+- MERGE: PR #9 squash-merge tamamlandı.
 - Merge commit: `4a56c8448042a59dbc3451bb1cb390f9c3491a83`.
 - Connector çalışma alanında kalıcı bir local checkout/worktree bulunmadığı için uydurma `git status` raporlanmadı; branch/ref/compare durumu GitHub üzerinden ve temiz CI checkout'u (`actions/checkout clean=true`) üzerinden doğrulandı.
 
@@ -296,3 +296,123 @@
 
 ### SONRAKİ TUR ÖNCELİĞİ
 - Ayrı kontrollü turda production-facing axios/DOMPurify/crypto-js/jsPDF zincirini çağrı-site testleri ve bundle/build karşılaştırmasıyla modernize et; aynı zamanda SearchIndex/SearchExecution ortak primitive konsolidasyonunu gerçek performans ölçümüyle değerlendir.
+
+## TypeScript 7 Release Engineering / Whole-Code QA Modernization — 2026-09-16
+
+### TUR / GÖREV / BRANCH / PR / HEAD
+- TUR: repository genelinde modern dil/toolchain release-engineering katmanı, baseline-aware regresyon kapısı ve gerçek full-stack CI doğrulaması.
+- Başlangıç/güncel base: `main` `10c31c76a71903acb04a1443a2cc383b84603b32`; bu base C# 14 / .NET 10 platform modernizasyonunu içeriyor.
+- Branch: `agent/qa-modernization-20260916-fef6a46`.
+- PR: #40 `feat(qa): establish TypeScript 7 full-stack release engineering`.
+- Progress kaydı öncesi doğrulanmış kod head: `482ed2db561a5b08f7b1e268e6cb7c4b41a65686`.
+- Güncel `main` branch'e force-push olmadan gerçek iki-parent entegrasyon commit'i `a273b666c8c1c54642d6fb0344b2646e952f204e` ile alındı; PR tekrar `mergeable=true` ve `behind=0` duruma getirildi.
+
+### ANLAMLI KAPSAM / SATIR KAPISI
+- Progress kaydı öncesi PR ölçümü: 23 changed files, 4.945 additions / 3 deletions.
+- Zorunlu 4.000+ meaningful-additions kriteri typed runtime, audit motorları, regression tests ve CI koduyla sağlandı; boilerplate veya yapay refactor ile satır şişirilmedi.
+- Üretim uygulamasını tek hamlede yeniden yazmak yerine yeni/shared release mühendisliği yüzeyi strict TypeScript 7'ye geçirildi; mevcut davranış ve C# 14/.NET 10 backend korunarak kademeli frontend migration yolu oluşturuldu.
+
+### TYPESCRIPT 7 / NODE 24 RELEASE ENGINEERING
+- `quality/release/` altında strict TypeScript 7.0.2 + Node 24 native `.mts` çekirdeği kuruldu.
+- Typed repository inventory; source-security/architecture, dependency, network-boundary, GIS 2D/3D lifecycle/icon, accessibility/responsive, performance/large-data ve regression-contract auditleri eklendi.
+- Deterministic finding keys, stable sorting/dedup, severity/risk hesapları, SHA-256 report fingerprint, JSON/Markdown release artifacts ve baseline comparison eklendi.
+- `pr-gate.mts` exact PR base SHA'sını ayrı worktree olarak tarıyor ve merge-candidate ile karşılaştırıyor; tarihsel borç scorecard'da görünür kalırken yalnız yeni critical/high, severity escalation veya materyal risk artışı merge'i bloke ediyor.
+- `pr-gate.test.mts` unchanged historical critical debt, new critical/high, severity escalation, bounded medium ve aggregate-risk senaryolarını doğruluyor.
+- Modernizasyon sırası kör rewrite yerine ölçümlü olarak TypeScript 7 → Vite 8.x → React 19.3 olarak kodlandı; .NET 10/C#14 mevcut modern backend baseline olarak korunuyor.
+
+### CI'DA YAKALANAN VE AYNI TURDA DÜZELTİLEN HATALAR
+- İlk typed CI, yayımlanmamış `typescript@7.0.0` pini nedeniyle `ETARGET` verdi; gerçek stable npm paketi `typescript@7.0.2` ile düzeltildi.
+- Network audit aynı HTTP URL'yi iki regex yolundan iki kez sayıyordu; canonical line+URL dedup ile deterministik hale getirildi.
+- Eski solution-level `dotnet test CityWorks.NetCore.sln` Microsoft.Testing.Platform/xUnit v3 executable modelinde 0 test keşfedip exit code 5 üretiyordu. CI, test projesini doğrudan MTP/xUnit v3 executable olarak çalıştıracak şekilde değiştirildi.
+- Gerçek MTP koşusunda 462 test keşfedildi; ilk koşuda 461 pass / 1 fail oldu. Tek failure ürün davranışı değil, repository contract testinin eski `dotnet test ...sln` metnini zorunlu tutmasıydı. Contract yeni MTP komutunu zorunlu, eski komutu yasaklayacak şekilde güncellendi.
+- Full static scorecard'da defensive denylist/test fixture gibi tarihsel false-positive adayları görüldüğü için gate eşiği gevşetilmedi; exact-base delta modeli eklendi. Böylece tarihsel borç saklanmadan yeni regresyonlar deterministik biçimde bloke ediliyor.
+
+### FINAL KOD-HEAD DOĞRULAMA
+- Exact kod head `482ed2db561a5b08f7b1e268e6cb7c4b41a65686` üzerinde Platform Architecture Audit run #119 (`35069517480`) `completed/success`.
+- Platform Backend Validation run #189 (`35069517342`) `completed/success`.
+- Release QA run #25 (`35069517347`) üç job ile `completed/success`.
+- TypeScript 7.0.2 strict typecheck: PASS.
+- Native typed QA unit/regression: PASS; önceki exact candidate'da 83/83 test green doğrulandı, final head typed job da success.
+- Exact-base regression gate: PASS; baseline risk 3921 → candidate risk 3921, risk delta 0, added finding 0, removed finding 0, 170 unchanged finding; critical/high/medium delta 0.
+- Backend restore + NuGet vulnerability report: PASS; Business, Toolbox, Api.Core, Api.Admin, Api.User ve Platform.Security.Tests için kullanılan NuGet source'larında vulnerable package bulunmadı.
+- .NET 10 Release build: PASS, 0 error; 56 XML documentation warning'ı release blocker değil fakat bakım borcu olarak görünür.
+- xUnit v3 / Microsoft.Testing.Platform gerçek test execution: **462/462 PASS**, 0 failed, 0 skipped; yaklaşık 9.6 s.
+- `Api.User` Release publish: PASS. `Api.Admin` Release publish: PASS.
+- Webclient Release QA: `npm ci`, dependency-audit visibility, lint-if-present, typecheck-if-present, full regression suite ve production build adımlarının tamamı PASS.
+
+### SECURITY / GIS / PERFORMANCE / REGRESSION DEĞERLENDİRMESİ
+- Yeni WMS/WFS endpoint veya servis eklenmedi; gerçek servis dışında endpoint uydurulmadı.
+- İkinci GIS icon authority oluşturulmadı; `Webclient.app/src/gis-engine/iconRegistry.json` tek merkezi JSON icon authority olarak korunuyor.
+- Full scorecard mevcut tarihsel borcu saklamıyor: legacy CRA4/React17, react-scripts/axios/crypto-js/jsPDF borcu, bazı direct navigation/a11y/performance adayları ve eski WMS runtime desteği görünür kalıyor.
+- Özellikle backend `GisLayerType.WMSLayer` ile `CommonBusiness.CreateLayer` içindeki WMSLayer yolu, modern `serviceCatalog` WMS/WFS denylist yaklaşımıyla mimari olarak tutarsız tarihsel borçtur. Bu tur yeni WMS eklemedi; gerçek veri/servis kullanım kanıtı olmadan mevcut davranış silinmedi.
+- Exact-base gate bu PR'ın tarihsel risk skorunu artırmadığını doğruladı; 0 yeni static finding ile yeni QA altyapısı regression üretmedi.
+
+### KALAN RELEASE / MODERNİZASYON RİSKLERİ
+- Frontend hâlen React 17/CRA4 dönemindedir; Vite 8.x ve React 19.3 geçişi asset/env/ArcGIS/test/bundle baseline'ları korunarak ayrı kontrollü migration paketinde yapılmalı.
+- Production-facing axios/DOMPurify/crypto-js/jsPDF ve CRA dependency zinciri targeted upgrade/test gerektiriyor; `npm audit fix --force` uygulanmamalı.
+- Remote font, accessibility static adayları, doğrudan `window.open` çağrıları, bazı nested synchronous iteration ve global graphics cleanup adayları gerçek kullanım bağlamıyla kapatılmalı.
+- Full static scorecard'ın denylist/test-fixture false-positive sınıfları sonraki audit kalibrasyonunda kaynak-bağlamlı kurallarla azaltılmalı; PR regression gate bu arada exact-base delta ile güvenli merge kararını sağlıyor.
+- Gerçek Chrome/Firefox/Safari responsive/visual, screen-reader, forced-colors/reduced-motion ve gerçek servis latency/büyük veri performans smoke testleri connector ortamının dışında ayrıca çalıştırılmalı.
+
+## Deep GIS / Whole-Code Modernization — 2026-09-16
+
+### TUR / GÖREV / BRANCH / PR DURUMU
+- TUR: GIS Engine whole-code modernization, runtime bütünleştirme, performans/data-integrity/security ve release gate turu.
+- Branch: `agent/gis-20260916-1010-a6dcdee`.
+- PR: #38 `feat(gis): add adaptive rendering performance controls`.
+- Başlangıç `main`: `a6dcdee844902091430b2831c0cb3bf073d4017a`; tur sırasında Platform #39 merge'iyle güncel `main` `10c31c76a71903acb04a1443a2cc383b84603b32` oldu ve force-push yapılmadan gerçek iki-parent entegrasyon commit'iyle branch'e alındı.
+- Son ürün-kod head: `186ca03a60614f58bcbe91686a469db117000e63`; bu progress güncellemesi yalnız kayıt commit'i olarak bunun üzerine gelir.
+- Ürün-kod head ölçümü: 16 changed GIS files, 4.464 additions, 0 deletions; zorunlu `additions >= 4000` gate'i boilerplate/sahte özellik eklenmeden aşıldı.
+
+### UYGULANAN GIS RUNTIME MODERNİZASYONU
+- `adaptivePerformanceRuntime`: cihaz memory/core/network/reduced-motion sinyallerine göre `eco / balanced / quality` profilleri; frame-pressure sampling ile kontrollü kalite düşürme/iyileştirme; query-cache, layer concurrency/residency, visible-feature ve scene-quality bütçeleri.
+- `featureBudget`: feature yoğunluğu/geometri karmaşıklığı/label-picture baskısına göre deterministic `direct / cluster / paged / summary` render stratejisi.
+- `arcgisPaginationRuntime`: ArcGIS REST metadata'sındaki `maxRecordCount`, OID, pagination/order-by yeteneklerine göre bounded offset paging veya object-id chunking; transfer-limit görünürlüğü, duplicate feature dedupe, repeated-page/no-progress kesme, max-pages/max-features sınırları ve `AbortSignal` cancellation.
+- `serviceCapabilityRuntime`: FeatureServer/MapServer/ImageServer/SceneServer/VectorTileServer metadata'sından immutable capability contract; query/pagination/statistics/order/time/Z/M/attachment/editing/field/spatial-reference sözleşmeleri. WMS/WFS açıkça reddediliyor; generic veya uydurma endpoint üretimi yapılmıyor.
+- `geometryIntegrityRuntime`: point/multipoint/polyline/polygon/extent normalizasyonu; WKID/latestWKID/WKT, WGS84 range diagnostics, invalid vertex/part handling, polygon ring repair, extent/complexity/fingerprint ve collection quality assessment.
+- `renderPolicyRuntime`: 2D map scale ve 3D camera distance üzerinden hysteresis'li LOD; label density, cluster/summary/paging, extrusion/shadow bütçesi ve shared icon presentation. Point sunumu hem 2D hem 3D için mevcut `iconPresentation`/registry otoritesini kullanıyor.
+- `spatialMemoRuntime`: CPU-ağır spatial hesaplar için network query cache'den ayrı bounded TTL/LRU/memory cache, in-flight dedupe, subscriber cancellation, final-subscriber underlying abort, tag invalidation ve runtime metrics.
+- `gisRuntimeOrchestrator`: capability registry, query runtime, ArcGIS pagination, geometry integrity, spatial memo, layer scheduler, render presentation state ve adaptive performance budget'larını tek lifecycle altında birleştiriyor; layer unregister/destroy cache/resource cleanup sağlıyor.
+
+### İLK CI / HATA DÜZELTME / İKİNCİ DOĞRULAMA
+- İlk büyük exact head `34049f3b7f45d5950b9221c99686959afc0d67bb`: Platform Architecture Audit `success`; Webclient Quality Jest aşamasında 1 test failure ile kırmızı döndü (33 suite pass + 1 suite fail; 325/326 test pass).
+- Kök neden: `{ geometry: null }` kaydı nullish fallback nedeniyle explicit missing geometry yerine feature objesi olarak değerlendirilmişti. Collection source selection own-property semantics'e geçirildi ve `missing` diagnostiği düzeltildi.
+- Aynı review'da malformed point'lerin `UNKNOWN_TYPE` yerine `INVALID_COORDINATE` üretmesi sağlandı; M-only point değerinin yanlışlıkla Z slotuna taşınabileceği edge-case kapatıldı.
+- Data-integrity review ayrıca otomatik hesaplanan `maxAllowableOffset` değerinin spatial-reference unit'i doğrulanmadan ArcGIS query'ye gönderilmesinin riskli olduğunu tespit etti. Artık generalization yalnız `allowGeneralization=true` + explicit positive `generalizationTolerance` ile query contract'ına giriyor; otomatik tolerance yalnız presentation recommendation olarak kalıyor.
+- Düzeltmeler sonrası exact ürün-kod head `186ca03a60614f58bcbe91686a469db117000e63` için Platform Architecture Audit ve Webclient Quality `completed/success`.
+- Webclient Quality: lint-if-present PASS; typecheck-if-present PASS; 34/34 test suite PASS; 329/329 test PASS; `CI=true npm run build` PASS / `Compiled successfully.`.
+
+### PERFORMANCE / DATA-INTEGRITY / SECURITY REVIEW
+- Query ve spatial cache'ler bounded; TTL/entry/byte bütçeleri adaptive profile değişikliklerinde canlı küçültülüp büyütülebiliyor.
+- Network query ve CPU spatial memo sorumlulukları ayrıldı; ikisinde de layer-tag invalidation var.
+- Layer scheduler concurrency adaptive bütçeye bağlı; frame pressure quality profilini düşürerek GPU/CPU/memory baskısını azaltabiliyor.
+- ArcGIS pagination stable OID ordering'i yalnız service metadata destekliyorsa kullanıyor; unsupported pagination capability uydurulmuyor.
+- Transfer-limit ve incomplete sonuç state'i gizlenmiyor; repeated page/no-progress sonsuz döngüsü kesiliyor.
+- Geometry SR/range/null/invalid-part diagnostics release ve veri bütünlüğü katmanları için görünür hale getirildi.
+- Yeni doğrudan `fetch`/harici network çağrısı veya `eval` eklenmedi. WMS/WFS capability boundary'de reddediliyor.
+- Yeni üçüncü taraf CDN/font/analytics bağımlılığı veya ikinci icon registry/resolver oluşturulmadı.
+- Shared `iconRegistry.json` + `iconPresentation` 2D/3D point presentation için tek deterministic icon authority olarak korundu.
+
+### DİL / TOOLCHAIN MODERNİZASYON KARARI
+- Bu GIS PR'ında çalışan JavaScript/React yüzeyi kör biçimde toplu TypeScript rewrite'a zorlanmadı. Repository kuralı gereği çalışan davranış ve paralel ekip sahipliği korundu.
+- Tur sırasında aktif ayrı TypeScript modernization PR'ları bulunduğu için aynı dosyalarda duplicate language migration yaratılmadı; bunun yerine GIS çekirdeği immutable contracts, typed error classes, deterministic adapters, explicit capability/state boundaries ve kapsamlı testlerle TypeScript'e kontrollü geçişe hazır hale getirildi.
+- Backend Platform hattındaki güncel C# 14 modernizasyonu `main` entegrasyonuyla korunuyor; GIS tarafında dil/toolchain geçişi paralel TypeScript hattı merge edildikten sonra conflict-free staged migration olarak sürdürülmeli.
+
+### KALAN / SONRAKİ GIS ÖNCELİĞİ
+- Gerçek production ArcGIS service metadata örnekleriyle pagination/object-id fallback ve maxRecordCount davranışını integration/smoke seviyesinde doğrula; endpoint veya capability varsayma.
+- Gerçek cihaz/browser 2D↔3D frame-time, memory, GPU pressure ve cluster/LOD latency ölçümlerini topla; adaptive eşikleri ölçümle kalibre et.
+- TypeScript modernization hattı main'e girdikten sonra GIS runtime modüllerini `.ts` + strict contracts'e kademeli geçir; her modülde exact-head test/build ve bundle/performance karşılaştırması yap.
+- Legacy CRA/dependency güvenlik borcu ayrı kontrollü migration gerektiriyor; `npm audit fix --force` gibi kör kırıcı yükseltme uygulanmamalı.
+
+### PARALEL MAIN ENTEGRASYON NOTU
+- `main` `f3f3c0f3d82c832d70ee5304ee441ac1d759e5c6` ile adaptive ArcGIS runtime paketine ilerledi. Bu GIS ürün kodu ve yukarıdaki progress kaydı QA branch'inde korunarak iki-parent entegrasyona hazırlanmıştır; QA değişiklikleri GIS runtime dosyalarını yeniden yazmaz.
+
+### FINAL MERGE / POST-MERGE — TypeScript 7 QA
+- PR #40 final merge öncesi `main` `f3f3c0f3d82c832d70ee5304ee441ac1d759e5c6`, head `5e9d6625a3343123e4845f4a0ef751b23959b89d`, `mergeable=true`, 24 changed files ve **5.005 additions / 3 deletions** olarak doğrulandı.
+- Exact final candidate üzerinde Platform Architecture Audit #133 (`35070349683`), Platform Backend Validation #191 (`35070349677`) ve Release QA #30 (`35070349673`) tamamen `success` tamamlandı; Release QA typed/frontend/backend job'larının üçü de yeşildi.
+- PR #40 `squash` yöntemiyle merge edildi. Merge commit: `8a1267d57e359bb09b6d24c478d818cc3dfce738`; GitHub-signed commit olarak `main` HEAD üzerinde doğrulandı.
+- Merge'den hemen sonra ayrı Data/Search productionizasyon commit'i `1f324344aa8d607256b2dabdf9c687405fbb6749` merge commit'imizin doğrudan child'ı olarak `main`e geldi; dolayısıyla TypeScript QA merge'i güncel main geçmişinde korunuyor.
+- Güncel `main` `1f324344...` üzerinde Release QA #32 (`35070665296`) üç job ile **success**: TypeScript 7.0.2 strict typecheck/audit, Webclient full regression+production build ve .NET 10 restore/audit/build/xUnit v3 MTP/API publish tamamlandı.
+- Aynı güncel `main` üzerinde Webclient Quality #820 (`35070665352`) **success**: lint, typecheck, test, build-budget testleri, production build ve production build-budget enforcement geçti.
+- Merge sonrası ilk `8a1267d...` push koşularının frontend/backend lane'leri, hata nedeniyle değil hemen gelen `1f324344...` push'un concurrency cancellation'ı nedeniyle iptal edildi; yeni current-main koşuları bunların yerini aldı ve yeşil tamamlandı.
+- Bu final kayıt değişikliği yalnız Markdown progress dokümantasyonudur; ürün/runtime koduna yeni değişiklik eklemez.
