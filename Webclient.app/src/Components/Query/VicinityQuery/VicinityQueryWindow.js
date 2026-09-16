@@ -143,7 +143,7 @@ export const VicinityQueryWindow = React.forwardRef((props, ref) => {
                 Title: item?.attr?.[titleField] ?? item?.attr?.adi ?? item?.attr?.ad ?? title,
                 Geometry: item?.geometry,
                 attr: {
-                    ...item?.attr,
+                    ...(item?.attr || {}),
                     _MAHALLE_ADI: resolveNeighborhoodName(item)
                 }
             }))

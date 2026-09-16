@@ -209,8 +209,8 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
 
   const adaptersFor = (entry) => ({
     ...defaultAdapters,
-    ...configuration.adapters,
-    ...entry.descriptor.adapters,
+    ...(configuration.adapters || {}),
+    ...(entry.descriptor.adapters || {}),
   });
 
   const setState = (entry, state, details = {}) => {

@@ -367,19 +367,19 @@ export const createGisRuntimeOrchestrator = (configuration = {}) => {
     metrics.presentationPlans += 1;
     const result = presentationState.plan({
       layer: {
-        ...input.layer,
+        ...(input.layer || {}),
         id,
       },
       featureStats: {
         geometryType: contract.geometryType,
         serviceMaxRecordCount: contract.maxRecordCount,
-        ...input.featureStats,
+        ...(input.featureStats || {}),
       },
       view: input.view || {},
       performanceBudget: currentBudget,
       options: {
         objectIdField: contract.objectIdField,
-        ...input.options,
+        ...(input.options || {}),
       },
     });
     if (result.changed) {

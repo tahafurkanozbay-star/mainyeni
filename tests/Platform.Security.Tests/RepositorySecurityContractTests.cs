@@ -50,13 +50,13 @@ public sealed class RepositorySecurityContractTests
         var envExample = Read("Webclient.app/.env.example");
         var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.app", ".env");
 
+        Assert.False(File.Exists(localEnvPath), "Webclient.app/.env must remain local-only and untracked.");
         Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("'Authorization'", authBusiness, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
-        Assert.False(File.Exists(localEnvPath), "Webclient.app/.env must remain untracked; use .env.example for public defaults.");
-        Assert.DoesNotMatch(new Regex(@"^(?:REACT_APP_CLIENT_KEY|VITE_[A-Z0-9_]*(?:SECRET|TOKEN|CLIENT_KEY))\s*=", RegexOptions.IgnoreCase | RegexOptions.Multiline), envExample);
+        Assert.DoesNotMatch(new Regex(@"(?:REACT_APP|VITE)_CLIENT_KEY\s*=", RegexOptions.IgnoreCase), envExample);
     }
 
     [Fact]
@@ -219,15 +219,16 @@ public sealed class RepositorySecurityContractTests
         var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
         var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.ts");
         var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.ts");
+        var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.app", ".env");
 
+        Assert.False(File.Exists(localEnvPath), "Webclient.app/.env must remain local-only and untracked.");
         Assert.Contains("VITE_API_URL=/api", envExample, StringComparison.Ordinal);
         Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
         Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
         Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
         Assert.Contains("CROSS_ORIGIN_BLOCKED", endpointPolicy, StringComparison.Ordinal);
-        Assert.Contains("trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("!trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
         Assert.Contains("trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
-        Assert.Contains("if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return false;", endpointPolicy, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)

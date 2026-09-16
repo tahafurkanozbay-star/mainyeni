@@ -3,15 +3,18 @@
 /**
  * Kent Rehberi Experience quality guard.
  *
- * Dependency-free by design so it can run before CRA/Jest and during toolchain
+ * Dependency-free by design so it can run before Vitest and during toolchain
  * migrations. The guard blocks new remote presentation assets, destructive
  * keyboard-focus suppression and competing GIS icon registries. Existing debt
  * is explicit and narrow; removing an allowlisted item should remove its budget.
  */
-const fs = require("fs");
-const path = require("path");
-const assert = require("assert");
+import assert from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "..");
 const SOURCE_ROOTS = ["src", "public"];
 const TEXT_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less", ".html", ".htm"]);
@@ -134,7 +137,6 @@ function auditFocusVisibility(file, content) {
             `${allowed ? "Legacy allowlist" : "Keyboard focus suppressed"}: ${rule.selector.replace(/\s+/g, " ")}`
         ));
     }
-
     return findings;
 }
 

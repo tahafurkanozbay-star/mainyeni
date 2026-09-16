@@ -1,4 +1,4 @@
-import axios from '../platform/http/legacyHttpClient';
+import axios from 'axios';
 import { loadModules } from "esri-loader";
 import {AppConfig} from "../Core/AppConfig";
 import { IsNull } from "../Toolbox/ObjectHelper";

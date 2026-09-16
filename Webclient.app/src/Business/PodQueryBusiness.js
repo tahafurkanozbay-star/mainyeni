@@ -1,4 +1,4 @@
-import axios from "../platform/http/legacyHttpClient";
+import axios from "axios";
 import { AppConfig } from "../Core/AppConfig";
 import { IsNull } from "../Toolbox/ObjectHelper";
 import { TextHelper } from "../Toolbox/TextHelper";

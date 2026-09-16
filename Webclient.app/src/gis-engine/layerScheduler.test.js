@@ -35,7 +35,7 @@ const descriptor = (id, overrides = {}) => ({
     minScale: 0,
     maxScale: 0,
     status: LAYER_STATUS.IDLE,
-    ...overrides.runtime,
+    ...(overrides.runtime || {}),
   },
   sdkLayer: overrides.sdkLayer || null,
   ...overrides,

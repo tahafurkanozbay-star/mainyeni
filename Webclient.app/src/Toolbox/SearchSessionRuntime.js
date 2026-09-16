@@ -303,7 +303,7 @@ export const createSearchSession = (coordinator, options = {}) => {
                 return { result: current, stale: false, requestId: state.committedRequestId, terminal: true };
             }
             return execute(state.dataset, {
-                ...current.request,
+                ...(current.request || {}),
                 offset: nextOffset
             }, searchOptions);
         },

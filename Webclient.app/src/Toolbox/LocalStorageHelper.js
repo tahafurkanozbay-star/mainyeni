@@ -1,41 +1,32 @@
+import { AppConfig } from "../Core/AppConfig";
 import { IsNull } from "./ObjectHelper";
-
-const STORAGE_PREFIX = "kent-rehberi:v2:";
-
-const getStorage = () => {
-    try {
-        return typeof window !== "undefined" ? window.localStorage : null;
-    } catch {
-        return null;
-    }
-};
+import CryptoJS from 'crypto-js';
 
 export const LocalStorageHelper = {
 
     Get: (_key) => {
-        const storage = getStorage();
-        if (!storage) return null;
-        try {
-            const stored = storage.getItem(_key);
-            if (IsNull(stored) || typeof stored !== "string") return null;
-            if (!stored.startsWith(STORAGE_PREFIX)) return null;
-            return JSON.parse(stored.slice(STORAGE_PREFIX.length));
+        var encrypted = localStorage.getItem(_key);
+        if (!IsNull(encrypted)) {
+            try {
+
+                var bytes = CryptoJS.AES.decrypt(encrypted, AppConfig.Keys.LocalStorageKey);
+                var decryptedData = bytes.toString(CryptoJS.enc.Utf8);
+                return JSON.parse(decryptedData);
+            }
+            catch (ex) {
+                return null;
+            }
         }
-        catch {
+        else {
             return null;
         }
     },
 
     Set: (_key, _obj) => {
-        const storage = getStorage();
-        if (!storage) return null;
-        try {
-            const json = JSON.stringify(_obj);
-            storage.setItem(_key, STORAGE_PREFIX + json);
-            return undefined;
-        }
-        catch {
-            return null;
-        }
+
+        var json = JSON.stringify(_obj);
+        var encrypted = CryptoJS.AES.encrypt(json, AppConfig.Keys.LocalStorageKey);
+        return localStorage.setItem(_key, encrypted);
     }
 }
+
