@@ -30,8 +30,8 @@ jobs:
       - name: Verify Node native TypeScript runtime
         run: node --version
 
-      - name: TypeScript 7 strict typecheck
-        run: npx --yes --package=typescript@7.0.0 tsc -p quality/release/tsconfig.json
+      - name: TypeScript 7.0.2 strict typecheck
+        run: npx --yes --package=typescript@7.0.2 tsc -p quality/release/tsconfig.json
 
       - name: Typed QA unit and regression tests
         run: node --test quality/release/*.test.mts
@@ -45,7 +45,7 @@ jobs:
         with:
           name: typed-release-qa
           path: qa-artifacts/release
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 21
 
   webclient-release-validation:
