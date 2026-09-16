@@ -47,14 +47,14 @@ public sealed class RepositorySecurityContractTests
     {
         var apiConfiguration = Read("Api.User/Controllers/Base/ApiConfiguration.cs");
         var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.js");
-        var env = Read("Webclient.app/.env");
+        var envExample = Read("Webclient.app/.env.example");
 
         Assert.DoesNotContain("const string SECRET", apiConfiguration, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("REACT_APP_CLIENT_KEY", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("'Authorization'", authBusiness, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CryptoJS.AES.encrypt", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotMatch(new Regex(@"REACT_APP_CLIENT_KEY\s*=", RegexOptions.IgnoreCase), env);
+        Assert.DoesNotMatch(new Regex(@"(?:REACT_APP_|VITE_).*?(?:CLIENT_KEY|SECRET|TOKEN|PASSWORD|API_KEY)\s*=", RegexOptions.IgnoreCase), envExample);
     }
 
     [Fact]
@@ -213,12 +213,12 @@ public sealed class RepositorySecurityContractTests
     [Fact]
     public void ApplicationApiClient_DefaultsToSameOriginThroughCentralRuntimeConfiguration()
     {
-        var env = Read("Webclient.app/.env");
+        var envExample = Read("Webclient.app/.env.example");
         var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
-        var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.js");
+        var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.ts");
         var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.js");
 
-        Assert.Contains("REACT_APP_API_URL=/api", env, StringComparison.Ordinal);
+        Assert.Contains("VITE_API_URL=/api", envExample, StringComparison.Ordinal);
         Assert.Contains("const DEFAULT_API_BASE_URL = '/api'", runtimeConfig, StringComparison.Ordinal);
         Assert.Contains("BaseUrl: runtimeConfig.apiBaseUrl", appConfig, StringComparison.Ordinal);
         Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
