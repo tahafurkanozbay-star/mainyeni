@@ -37,7 +37,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "typecheck": "tsc -p tsconfig.modern.json --noEmit",
+    "typecheck": "npm run typecheck:gis",
+    "typecheck:gis": "npm exec --yes --package=typescript@7.0.2 -- tsc -p tsconfig.modern.json --noEmit",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
