@@ -2,6 +2,7 @@ import { runtimeConfig } from '../config/runtimeConfig';
 import { createFetchTransport } from './fetchTransport';
 import { createNetworkDiagnostics } from './networkDiagnostics';
 import { createCoordinatedClient } from './requestCoordinator';
+import { stableSerialize } from './requestPolicy';
 
 const createTransportDiagnosticHooks = (diagnostics) => ({
   onStart: ({ method, url, timeout }) => {
@@ -79,5 +80,6 @@ export const getApiClientDiagnosticSummary = () =>
 
 export {
   createCoordinatedClient,
-  createFetchTransport
+  createFetchTransport,
+  stableSerialize
 };
