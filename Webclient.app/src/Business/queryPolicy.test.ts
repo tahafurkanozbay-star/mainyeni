@@ -262,8 +262,8 @@ describe('service URL policy', () => {
   test.each([
     ['/api/gis/query'],
     ['https://maps.example.test/arcgis/rest/services/Parks/FeatureServer/0'],
-    ['http://localhost:8080/arcgis/rest/services/Test/FeatureServer/0'],
-  ])('accepts HTTP(S) URL/path %s', (value) => {
+    ['https://localhost:8443/arcgis/rest/services/Test/FeatureServer/0'],
+  ])('accepts HTTPS URL/path %s', (value) => {
     expect(validateServiceUrl(value)).toBe(value);
   });
 
