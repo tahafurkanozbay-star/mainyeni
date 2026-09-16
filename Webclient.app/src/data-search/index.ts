@@ -43,6 +43,14 @@ export type {
   SpatialIndexOptions,
 } from './contracts';
 
+export type {
+  IconCoverageReport,
+  SearchPresentationModel,
+  Shared3DModel,
+  SharedIconModel,
+  SharedMarkerModel,
+} from './presentationAdapter';
+
 export {
   assertNever,
   createAbortError,
@@ -156,3 +164,10 @@ export {
   matchesFilter,
   normalizeSearchRequest,
 } from './searchRuntime';
+
+export {
+  createIconCoverageReport,
+  createRecordPresentation,
+  createSearchHitPresentation,
+  createSearchPresentations,
+} from './presentationAdapter';
