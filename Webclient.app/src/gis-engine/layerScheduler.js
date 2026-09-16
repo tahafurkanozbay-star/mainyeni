@@ -58,10 +58,12 @@ const normalizePriority = (value, fallback = LAYER_LOAD_PRIORITY.VISIBLE) => {
 };
 
 const safeAbort = (controller) => {
+  if (!controller || controller.signal?.aborted) return false;
   try {
-    if (controller && !controller.signal.aborted) controller.abort();
+    controller.abort();
+    return true;
   } catch (_) {
-    // Abort is best-effort for SDK implementations that partially polyfill signals.
+    return false;
   }
 };
 
@@ -146,7 +148,9 @@ export const applyRuntimeToSdkLayer = (descriptor, sdkLayer = descriptor?.sdkLay
   if (!descriptor || !sdkLayer) return false;
   const runtime = descriptor.runtime || {};
   if (typeof runtime.visible === 'boolean') sdkLayer.visible = runtime.visible;
-  if (Number.isFinite(Number(runtime.opacity))) sdkLayer.opacity = Math.min(1, Math.max(0, Number(runtime.opacity)));
+  if (Number.isFinite(Number(runtime.opacity))) {
+    sdkLayer.opacity = Math.min(1, Math.max(0, Number(runtime.opacity)));
+  }
   if (Number.isFinite(Number(runtime.minScale)) && Number(runtime.minScale) >= 0) {
     sdkLayer.minScale = Number(runtime.minScale);
   }
@@ -176,21 +180,19 @@ export const createLayerResidencyTracker = (options = {}) => {
   };
 
   const pin = (layerId, pinned = true) => touch(layerId, { pinned: Boolean(pinned) });
-
   const forget = (layerId) => records.delete(normalizeLayerId(layerId));
-
   const get = (layerId) => {
     const record = records.get(normalizeLayerId(layerId));
     return record ? { ...record } : null;
   };
 
   const idleCandidates = (activeIds = []) => {
-    const active = new Set(activeIds.map(String));
+    const activeIdsSet = new Set(activeIds.map(String));
     const current = clock();
     return [...records.values()]
       .filter((record) => (
         !record.pinned &&
-        !active.has(record.layerId) &&
+        !activeIdsSet.has(record.layerId) &&
         current - record.lastUsedAt >= idleMs
       ))
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)
@@ -272,8 +274,7 @@ export const createLayerLoadScheduler = (configuration = {}) => {
         entry.state = 'cancelled';
         entry.settled = true;
         emit('cancelled', entry, { phase: 'queued' });
-      } else if (entry.state === 'running') {
-        safeAbort(entry.controller);
+      } else if (entry.state === 'running' && safeAbort(entry.controller)) {
         metrics.underlyingAborts += 1;
         emit('abort', entry, { phase: 'running' });
       }
@@ -290,7 +291,7 @@ export const createLayerLoadScheduler = (configuration = {}) => {
     };
     entry.subscribers.add(subscriber);
 
-    const cancel = () => finishSubscriber(
+    const cancelSubscriber = () => finishSubscriber(
       entry,
       subscriber,
       reject,
@@ -299,12 +300,12 @@ export const createLayerLoadScheduler = (configuration = {}) => {
     );
 
     if (signal) {
-      subscriber.abortHandler = cancel;
+      subscriber.abortHandler = cancelSubscriber;
       if (signal.aborted) {
-        cancel();
+        cancelSubscriber();
         return;
       }
-      signal.addEventListener('abort', cancel, { once: true });
+      signal.addEventListener('abort', cancelSubscriber, { once: true });
     }
 
     if (entry.settled) {
@@ -314,11 +315,12 @@ export const createLayerLoadScheduler = (configuration = {}) => {
   });
 
   const settleEntry = (entry, error, value) => {
+    if (entry.settled) return false;
     entry.settled = true;
     entry.error = error || null;
     entry.value = value;
     entry.completedAt = clock();
-    const duration = Math.max(0, entry.completedAt - entry.startedAt);
+    const duration = Math.max(0, entry.completedAt - (entry.startedAt ?? entry.enqueuedAt));
     metrics.totalLoadMs += duration;
     metrics.lastLoadMs = duration;
 
@@ -336,8 +338,9 @@ export const createLayerLoadScheduler = (configuration = {}) => {
       if (error) finishSubscriber(entry, subscriber, subscriber.reject, error);
       else finishSubscriber(entry, subscriber, subscriber.resolve, value);
     });
-    entries.delete(entry.layerId);
+    if (entries.get(entry.layerId) === entry) entries.delete(entry.layerId);
     emit(entry.state, entry, error ? { error } : { value });
+    return true;
   };
 
   const startEntry = (entry) => {
@@ -447,12 +450,10 @@ export const createLayerLoadScheduler = (configuration = {}) => {
       layerId: id,
     });
     if (entry.state === 'queued') removeFromQueue(entry);
-    if (entry.state === 'running') {
-      safeAbort(entry.controller);
+    if (entry.state === 'running' && safeAbort(entry.controller)) {
       metrics.underlyingAborts += 1;
     }
-    settleEntry(entry, error, undefined);
-    return true;
+    return settleEntry(entry, error, undefined);
   };
 
   const cancelExcept = (desiredIds = []) => {
@@ -500,8 +501,8 @@ export const createLayerLoadScheduler = (configuration = {}) => {
 
   const destroy = () => {
     if (destroyed) return;
-    destroyed = true;
     [...entries.keys()].forEach((id) => cancel(id, 'scheduler destroyed'));
+    destroyed = true;
     queue.length = 0;
     entries.clear();
   };
@@ -535,6 +536,7 @@ export const createLayerRuntimeLoader = ({
   if (typeof loadLayer !== 'function') throw new Error('A layer loader is required.');
 
   let requestSequence = 0;
+  const activeLoads = new Map();
 
   const update = (action) => {
     const current = getTree();
@@ -545,32 +547,41 @@ export const createLayerRuntimeLoader = ({
 
   const load = (layer, options = {}) => {
     const layerId = normalizeLayerId(layer);
+    const existing = activeLoads.get(layerId);
+    if (existing) return existing;
+
     const requestId = `${layerId}:${++requestSequence}`;
     update({ type: 'LOAD_START', layerId, requestId });
 
-    return scheduler.schedule(layer, async ({ signal, priority, metadata }) => {
+    const promise = scheduler.schedule(layer, async ({ signal, priority, metadata }) => {
       const sdkLayer = await loadLayer(layer, { signal, priority, metadata });
       if (signal?.aborted) throw cancelledError(layerId);
       applyRuntimeToSdkLayer(layer, sdkLayer);
       residency?.touch?.(layerId, { loadedAt: clock() });
       return sdkLayer;
     }, options).then((sdkLayer) => {
-      update({ type: 'SET_SDK_LAYER', layerId, sdkLayer });
+      update({ type: 'SET_SDK_LAYER', layerId, requestId, sdkLayer });
       update({
         type: 'LOAD_SUCCESS',
         layerId,
+        requestId,
         featureCount: Number.isFinite(options.featureCount) ? options.featureCount : null,
         loadedAt: new Date(clock()).toISOString(),
       });
       return sdkLayer;
     }).catch((error) => {
       if (error?.code === 'CANCELLED' || error?.name === 'AbortError') {
-        update({ type: 'SET_DISABLED', layerId, disabled: false });
+        update({ type: 'LOAD_CANCEL', layerId, requestId });
         throw error;
       }
-      update({ type: 'LOAD_ERROR', layerId, error });
+      update({ type: 'LOAD_ERROR', layerId, requestId, error });
       throw error;
+    }).finally(() => {
+      if (activeLoads.get(layerId) === promise) activeLoads.delete(layerId);
     });
+
+    activeLoads.set(layerId, promise);
+    return promise;
   };
 
   const unload = async (layerId, reason = 'idle') => {
@@ -578,6 +589,11 @@ export const createLayerRuntimeLoader = ({
     const tree = getTree();
     const descriptor = tree?.byId?.get(id);
     scheduler.cancel(id, reason);
+    try {
+      await activeLoads.get(id);
+    } catch (_) {
+      // Cancellation/failure state has already been reflected by load().
+    }
     if (descriptor?.sdkLayer && typeof unloadLayer === 'function') {
       await unloadLayer(descriptor.sdkLayer, descriptor, reason);
     }
@@ -611,5 +627,10 @@ export const createLayerRuntimeLoader = ({
     return { plan, loaded, unloaded };
   };
 
-  return { load, unload, reconcile };
+  return {
+    load,
+    unload,
+    reconcile,
+    hasActiveLoad: (layerId) => activeLoads.has(String(layerId)),
+  };
 };
