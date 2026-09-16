@@ -19,10 +19,12 @@ const ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".sv
 const LARGE_ASSET_BYTES = 1024 * 1024;
 const CANONICAL_ICON_REGISTRY = "src/gis-engine/iconRegistry.json";
 const ICON_RESOLVER = "src/gis-engine/iconResolver.js";
+const ICON_PRESENTATION = "src/gis-engine/iconPresentation.js";
 
 const LEGACY_DEBT = Object.freeze({
     remotePresentation: new Map([
-        ["src/styles.css", ["fonts.googleapis.com"]]
+        ["src/styles.css", ["fonts.googleapis.com"]],
+        ["public/index.html", ["js.arcgis.com/4.25/esri/css/main.css"]]
     ]),
     destructiveFocus: new Map([
         ["src/styles.css", [".btn:focus-visible"]]
@@ -56,17 +58,25 @@ function finding(kind, severity, file, line, message) {
     return { kind, severity, file, line, message };
 }
 
+function isPresentationElement(tag) {
+    if (/^<script\b/i.test(tag)) return true;
+    if (!/^<link\b/i.test(tag)) return false;
+    const rel = tag.match(/\brel=["']([^"']+)["']/i)?.[1] || "";
+    return rel.split(/\s+/).some(token => token.toLowerCase() === "stylesheet");
+}
+
 function auditRemotePresentationAssets(file, content) {
     const relativeFile = relativeToRoot(file);
     const findings = [];
     const patterns = [
-        /@import\s+(?:url\()?\s*["']?(https?:\/\/[^\s"')]+)["']?\s*\)?/gi,
-        /<(?:link|script)\b[^>]+(?:href|src)=["'](https?:\/\/[^"']+)["'][^>]*>/gi
+        { regex: /@import\s+(?:url\()?\s*["']?(https?:\/\/[^\s"')]+)["']?\s*\)?/gi, presentationOnly: false },
+        { regex: /<(?:link|script)\b[^>]+(?:href|src)=["'](https?:\/\/[^"']+)["'][^>]*>/gi, presentationOnly: true }
     ];
 
-    for (const pattern of patterns) {
+    for (const { regex, presentationOnly } of patterns) {
         let match;
-        while ((match = pattern.exec(content)) !== null) {
+        while ((match = regex.exec(content)) !== null) {
+            if (presentationOnly && !isPresentationElement(match[0])) continue;
             const target = match[1] || match[0];
             const line = lineNumber(content, match.index);
             const allowed = debtAllows("remotePresentation", relativeFile, target);
@@ -97,6 +107,14 @@ function isPointerOnlyFocusException(selector) {
     return selector.includes(":focus:not(:focus-visible)");
 }
 
+function hasVisibleOutline(body) {
+    return /outline\s*:\s*(?!\s*(?:0|none)\b)[^;]+/i.test(body);
+}
+
+function hasVisibleShadow(body) {
+    return /box-shadow\s*:\s*(?!\s*none\b)[^;]+/i.test(body);
+}
+
 function auditFocusVisibility(file, content) {
     if (path.extname(file).toLowerCase() !== ".css") return [];
     const relativeFile = relativeToRoot(file);
@@ -106,8 +124,10 @@ function auditFocusVisibility(file, content) {
         if (!/:focus(?:-visible)?\b/.test(rule.selector)) continue;
         if (isPointerOnlyFocusException(rule.selector)) continue;
 
-        const destructive = /outline\s*:\s*(?:0|none)\s*!important/i.test(rule.body)
-            || /box-shadow\s*:\s*none\s*!important/i.test(rule.body);
+        const removesOutline = /outline\s*:\s*(?:0|none)\s*!important/i.test(rule.body);
+        const removesShadow = /box-shadow\s*:\s*none\s*!important/i.test(rule.body);
+        const destructive = (removesOutline && !hasVisibleShadow(rule.body))
+            || (removesShadow && !hasVisibleOutline(rule.body));
         if (!destructive) continue;
 
         const line = lineNumber(content, rule.index);
@@ -183,7 +203,19 @@ function auditIconAuthority(allFiles) {
         findings.push(finding("icon-authority", "error", ICON_RESOLVER, 1, "Shared icon resolver is missing."));
     } else {
         const resolver = fs.readFileSync(resolverPath, "utf8");
-        if (!resolver.includes("iconRegistry")) findings.push(finding("icon-authority", "error", ICON_RESOLVER, 1, "Shared resolver must consume iconRegistry.json."));
+        if (!resolver.includes("buildIconRegistry") || !resolver.includes("resolveIcon")) {
+            findings.push(finding("icon-authority", "error", ICON_RESOLVER, 1, "Shared icon resolver must expose deterministic registry construction and resolution."));
+        }
+    }
+
+    const presentationPath = path.join(ROOT, ICON_PRESENTATION);
+    if (!fs.existsSync(presentationPath)) {
+        findings.push(finding("icon-authority", "error", ICON_PRESENTATION, 1, "Shared icon presentation adapter is missing."));
+    } else {
+        const presentation = fs.readFileSync(presentationPath, "utf8");
+        if (!presentation.includes("iconRegistry.json") || !presentation.includes("iconResolver")) {
+            findings.push(finding("icon-authority", "error", ICON_PRESENTATION, 1, "Shared presentation adapter must connect iconRegistry.json to iconResolver."));
+        }
     }
 
     return findings;
@@ -211,9 +243,14 @@ function selfTest() {
     const relativeVirtual = relativeToRoot(tempRoot);
 
     assert.strictEqual(auditRemotePresentationAssets(tempRoot, "@import url('https://cdn.example.com/ui.css');")[0].severity, "error");
+    assert.strictEqual(auditRemotePresentationAssets(tempRoot, '<link rel="canonical" href="https://example.com/">').length, 0);
+    assert.strictEqual(auditRemotePresentationAssets(tempRoot, '<link rel="stylesheet" href="https://cdn.example.com/ui.css">')[0].severity, "error");
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: none !important; }")[0].severity, "error");
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus:not(:focus-visible) { outline: none; }").length, 0);
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 2px solid blue; }").length, 0);
+    assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 0 !important; box-shadow: 0 0 0 3px blue !important; }").length, 0);
+    assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 2px solid blue !important; box-shadow: none !important; }").length, 0);
+    assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 0 !important; box-shadow: none !important; }")[0].severity, "error");
     assert.strictEqual(debtAllows("remotePresentation", "src/styles.css", "https://fonts.googleapis.com/css?family=Mukta"), true);
     assert.strictEqual(debtAllows("remotePresentation", relativeVirtual, "https://fonts.googleapis.com"), false);
     console.log("Experience quality audit self-test: PASS");
