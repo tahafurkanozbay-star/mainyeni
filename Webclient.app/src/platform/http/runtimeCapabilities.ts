@@ -1,11 +1,13 @@
 import { AppError } from '../errors/appError';
 import {
-  type CoarseConnectionProfile,
-  type NetworkQuality,
-  type RuntimeCapabilityReport,
-  type RuntimeTuningProfile,
   toBoundedInteger,
   toFiniteNumber
+} from './contracts';
+import type {
+  CoarseConnectionProfile,
+  NetworkQuality,
+  RuntimeCapabilityReport,
+  RuntimeTuningProfile
 } from './contracts';
 
 const REQUIRED_CAPABILITIES = Object.freeze([
