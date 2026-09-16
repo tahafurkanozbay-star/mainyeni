@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
-import './styles.css';
 import './styles.responsive.css';
 import './Components/Common/experience-ui.css';
 import './Components/Common/experience-quality.css';
@@ -27,12 +26,21 @@ function App() {
   const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
 
   useEffect(() => {
-    setDefaultOptions({ version: AppConfig.App.EsriApiVersion });
+    // esri-loader must own both SDK script and stylesheet resolution. Keeping the
+    // version in one runtime contract prevents a 4.x JavaScript/CSS mismatch and
+    // avoids an unconditional ArcGIS stylesheet request before configuration is ready.
+    setDefaultOptions({
+      version: AppConfig.App.EsriApiVersion,
+      css: true,
+      insertCssBefore: 'link[rel="stylesheet"]',
+    });
+
     const controller = new AbortController();
     const startedAt = performance.now();
 
     runtimeDiagnostics.record('app.bootstrap.started', {
       esriApiVersion: AppConfig.App.EsriApiVersion,
+      esriStylesheet: 'managed-by-esri-loader',
     });
 
     bootstrapApplication({ signal: controller.signal })
