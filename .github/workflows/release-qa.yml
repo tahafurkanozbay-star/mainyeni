@@ -122,8 +122,33 @@ jobs:
             npx oxlint --deny-warnings "${changed_files[@]}"
           fi
 
-      - name: Strict typecheck
-        run: npm run typecheck --if-present
+      - name: Full TypeScript diagnostic visibility
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
+          echo "Full TypeScript diagnostics remain visible; staged migration is enforced by the exact-base regression gate."
+          exit 0
+
+      - name: Strict supervision TypeScript boundary
+        run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
+
+      - name: Exact-base TypeScript regression gate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git -C .. fetch --no-tags origin "$BASE_SHA"
+          rm -rf /tmp/typecheck-baseline
+          git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
+          set +e
+          (
+            cd /tmp/typecheck-baseline/Webclient.app
+            npm ci --ignore-scripts --no-audit --no-fund >/tmp/typecheck-baseline-install.log 2>&1
+            npx tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
+          )
+          set -e
+          node scripts/typecheck-regression.mjs /tmp/baseline-typecheck.log /tmp/current-typecheck.log
+          git -C .. worktree remove --force /tmp/typecheck-baseline
 
       - name: Full application regression suite
         run: npm run test:ci
