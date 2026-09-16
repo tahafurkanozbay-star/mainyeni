@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -111,7 +112,7 @@ export interface ExperienceAnnouncer {
 }
 
 export const useExperienceAnnouncements = (): ExperienceAnnouncer => {
-  const [announce, setAnnounce] = useState<ExperienceAnnouncer>(() => () => undefined);
+  const regionRef = useRef<ReturnType<typeof createLiveRegion> | null>(null);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -120,10 +121,7 @@ export const useExperienceAnnouncements = (): ExperienceAnnouncer => {
       id: 'experience-global-live-region',
       politeness: 'polite',
     });
-    setAnnounce(() => (message: string, politeness: LivePoliteness = 'polite') => {
-      const normalized = String(message ?? '').trim();
-      if (normalized) liveRegion.announce(normalized, politeness);
-    });
+    regionRef.current = liveRegion;
 
     const release = experienceBus.on('kentrehberi:announcement', (detail) => {
       const message = String(detail?.message ?? '').trim();
@@ -133,14 +131,15 @@ export const useExperienceAnnouncements = (): ExperienceAnnouncer => {
 
     return () => {
       release();
+      if (regionRef.current === liveRegion) regionRef.current = null;
       liveRegion.destroy();
-      setAnnounce(() => () => undefined);
     };
   }, []);
 
   return useCallback((message: string, politeness: LivePoliteness = 'polite') => {
-    announce(message, politeness);
-  }, [announce]);
+    const normalized = String(message ?? '').trim();
+    if (normalized) regionRef.current?.announce(normalized, politeness);
+  }, []);
 };
 
 export const focusExperienceTarget = (selector: string): boolean => {
