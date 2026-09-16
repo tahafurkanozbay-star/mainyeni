@@ -471,3 +471,30 @@
 - `styles.css` içindeki kullanılmayan Google Fonts Mukta network import'unu kaldırıp Vite/browser regression ile doğrula; yeni remote font/CDN ekleme.
 - Responsive browser/device, keyboard-only, NVDA/VoiceOver, forced-colors ve reduced-motion smoke/regression matrisi gerçek browser ortamında tamamlanmalı.
 - CI yeşil, conflict yok, `mergeable=true`, additions >=4000 ve ikinci final regression/security review temiz olduğunda squash merge yap; merge SHA ve güncel `main` SHA'yı ayrıca doğrula.
+
+## Platform #54 Final Merge / Post-Merge Verification — 2026-09-16
+
+### TUR / GÖREV / PR / MERGE DURUMU
+- Canonical Platform PR #54 `feat(platform): modernize Kent Rehberi to React 19 Vite 8 TypeScript 7 runtime` final head `920a066f0b2c899851337e8fc343edfd048e3498`, base `4ebf87ab6f9d5424363ca4d86f63b04802ae058c` ile tamamlandı.
+- Final PR ölçümü: **85 changed files / 14.336 additions / 35.061 deletions**. 4.000 anlamlı satır hedefi boilerplate ile değil gerçek platform/runtime/toolchain/test/Experience değişiklikleriyle aşıldı.
+- PR #54 eşzamanlı GitHub işlemiyle 2026-09-16 10:27:07Z'de squash-merge edildi.
+- Squash merge commit ve ürün-kod `main` doğrulaması: `af5be0030323380fa480b27d51f7863db449fec5`; commit GitHub tarafından doğrulanmış imzalıdır.
+- Bu doğrulama remote GitHub state üzerindedir; bu tur için local dirty/clean working-tree durumu uydurulmadı.
+
+### MODERNİZASYON / SECURITY / PERFORMANCE
+- Webclient CRA/React 17 tabanından React 19.3 + Vite 8.3 + TypeScript 7.0.2 + Vitest 5 + Oxlint + Node 24/npm 11 sözleşmesine geçirildi; legacy `react-scripts` geri dönüşü dependency/toolchain contract ile yasaklandı.
+- React 19 root error hooks, typed bootstrap/config/cache/error/endpoint/performance katmanı, capability/resource-budget/task-scheduler/resilience/state-store runtime'ı ve bounded privacy-safe diagnostics eklendi.
+- Browser env erişimi `VITE_*` + typed runtimeConfig sınırına alındı; same-origin endpoint politikası malformed encoding, encoded separator ve traversal sınıflarına karşı fail-closed güçlendirildi.
+- Adaptive runtime kernel kritik başlangıç yolundan lazy import ile ayrıldı; production bundle için gzip budget, deterministic SHA-384 integrity/provenance manifest ve dependency/lockfile/source-import contract eklendi.
+- Typed Experience state/design-system/dialog/workspace, live-region/accessibility ve 2B↔3B state-machine entegrasyonu mevcut GIS authority'yi yeniden üretmeden korundu.
+- Yeni WMS/WFS/WMTS eklenmedi; uydurma endpoint, browser secret, harici analytics veya ikinci GIS icon authority oluşturulmadı.
+
+### POST-MERGE CI / VALIDATION GERÇEĞİ
+- Merge commit `af5be003...` push'u için Platform Backend Validation run `35085053018`, Webclient Quality run `35085053002` ve Release QA run `35085052981` tetiklendi.
+- Workflow'lar attempt 2'de ve bu turda yeniden tetiklenen attempt 3'te yine runner/provisioning aşamasında düştü; Webclient `quality`, backend `build-test-publish` ve Release QA'nın üç job'ı `steps=null` / logs yok durumunda tamamlandı.
+- Dolayısıyla post-merge kırmızılar bir lint/typecheck/test/build assertion sonucu değildir; aynı zamanda bu head için testlerin geçtiği anlamına da gelmez. GitHub Actions runner/account provisioning altyapısı bağımsız post-merge doğrulamayı şu anda engelliyor.
+- Altyapı düzelir düzelmez exact current-main üzerinde full Webclient + Release QA + Backend + Architecture zinciri gerçek step execution ile tekrar koşturulmalı; ortaya çıkan gerçek kod hatası varsa yeni benzersiz branch/PR üzerinde düzeltilmelidir.
+
+### SONRAKİ TUR
+- Merge edilmiş #54 branch'i yeniden kullanılmamalı; yeni Platform işi güncel `main` üzerinden benzersiz branch ile başlamalı.
+- Öncelik: Actions runner/provisioning normale döndüğünde post-merge full-stack doğrulama; ardından kalan JavaScript compatibility adapter'larını ölçümlü strict TypeScript migrasyonuyla azaltma ve gerçek browser/device performans-accessibility smoke matrisini tamamlama.
