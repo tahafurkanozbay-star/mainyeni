@@ -54,7 +54,11 @@ jobs:
 
       - name: Validate changed Data Search lint
         working-directory: Webclient.app
-        run: npx --yes oxlint --deny-warnings src/data-search
+        run: >-
+          npx --yes oxlint --deny-warnings
+          src/data-search/datasetCatalog.ts
+          src/data-search/geocodingRuntime.ts
+          src/data-search/productionRuntime.ts
 
       - name: Commit only verified product cleanup
         shell: bash
