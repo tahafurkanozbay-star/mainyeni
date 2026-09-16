@@ -26,6 +26,8 @@ export interface MessageState {
   readonly type?: string | number;
   readonly data?: unknown;
   readonly message?: string;
+  readonly messageType?: string | number;
+  readonly messageText?: string;
 }
 
 export interface CommonState {
@@ -203,6 +205,5 @@ export const upsertWindowRegistration = (
     minimized: incoming.minimized ?? current.minimized ?? false,
     query: incoming.query === undefined ? current.query : incoming.query,
   });
-
   return Object.freeze(windows.map((item, itemIndex) => itemIndex === index ? next : item));
 };
