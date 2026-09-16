@@ -37,8 +37,12 @@ const getProcessEnv = (): RuntimeEnvironmentSource => {
   return candidate.process?.env ?? {};
 };
 
-const getViteEnv = (): RuntimeEnvironmentSource =>
-  (import.meta.env ?? {}) as unknown as RuntimeEnvironmentSource;
+const getViteEnv = (): RuntimeEnvironmentSource => {
+  const meta = import.meta as ImportMeta & {
+    readonly env?: RuntimeEnvironmentSource;
+  };
+  return meta.env ?? {};
+};
 
 const getDefaultEnvironmentSource = (): RuntimeEnvironmentSource => Object.freeze({
   ...getProcessEnv(),
