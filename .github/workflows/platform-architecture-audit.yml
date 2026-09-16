@@ -1,0 +1,70 @@
+name: Platform Architecture Audit
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.cs'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '**/*.css'
+      - '.github/workflows/**'
+      - 'tools/platform-audit.mjs'
+      - 'tools/platform-audit.test.mjs'
+      - 'tools/package-lock-integrity.mjs'
+      - 'tools/package-lock-integrity.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-architecture-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Unit tests
+        run: node --test tools/platform-audit.test.mjs tools/package-lock-integrity.test.mjs
+
+      - name: Generate architecture inventory
+        run: node tools/platform-audit.mjs
+
+      - name: Audit package lock integrity
+        run: node tools/package-lock-integrity.mjs
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f artifacts/platform-audit/platform-audit.md ]; then
+            cat artifacts/platform-audit/platform-audit.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f artifacts/platform-audit/package-lock-integrity.md ]; then
+            printf '\n---\n\n' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/platform-audit/package-lock-integrity.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-architecture-audit
+          path: artifacts/platform-audit/
+          if-no-files-found: error
+          retention-days: 14

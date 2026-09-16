@@ -50,8 +50,96 @@ describe('GisQueryHelper runtime', () => {
       exceededTransferLimit: false,
       geometryType: 'esriGeometryPoint',
       spatialReference: { wkid: 4326 },
+      page: { offset: 0, count: 1, hasMore: false, nextOffset: null },
     });
     expect(getGisQueryRuntimeStats()).toEqual({ inFlight: 0, modulesLoaded: true });
+  });
+
+  test('passes normalized pagination to ArcGIS and exposes a deterministic next offset', async () => {
+    execute.mockResolvedValueOnce({
+      features: [
+        { attributes: { OBJECTID: 21 } },
+        { attributes: { OBJECTID: 22 } },
+      ],
+      exceededTransferLimit: true,
+    });
+
+    const result = await GisQueryHelper.ExecuteQuery({
+      url: '/arcgis/rest/services/places/FeatureServer/0',
+      where: '1=1',
+      orderByFields: ['OBJECTID ASC'],
+      resultOffset: '20',
+      resultRecordCount: 10.8,
+    });
+
+    expect(Query).toHaveBeenCalledWith(expect.objectContaining({
+      resultOffset: 20,
+      resultRecordCount: 10,
+      orderByFields: ['OBJECTID ASC'],
+    }));
+    expect(result.page).toEqual({ offset: 20, count: 2, hasMore: true, nextOffset: 22 });
+  });
+
+  test('stops pagination when a service reports a transfer limit without returning records', async () => {
+    execute.mockResolvedValueOnce({
+      features: [],
+      exceededTransferLimit: true,
+    });
+
+    const result = await GisQueryHelper.ExecuteQuery({
+      url: '/arcgis/rest/services/places/FeatureServer/0',
+      resultOffset: 40,
+      resultRecordCount: 20,
+    });
+
+    expect(result.exceededTransferLimit).toBe(true);
+    expect(result.page).toEqual({ offset: 40, count: 0, hasMore: false, nextOffset: null });
+  });
+
+  test('normalizes malformed ArcGIS collection fields instead of failing on schema drift', async () => {
+    execute.mockResolvedValueOnce({
+      features: { unexpected: true },
+      fields: 'OBJECTID',
+      exceededTransferLimit: false,
+    });
+
+    const result = await GisQueryHelper.ExecuteQuery({
+      url: '/arcgis/rest/services/places/FeatureServer/0',
+    });
+
+    expect(result.type).toBeDefined();
+    expect(result.data).toEqual([]);
+    expect(result.fields).toEqual([]);
+    expect(result.page).toEqual({ offset: 0, count: 0, hasMore: false, nextOffset: null });
+  });
+
+  test('normalizes sparse feature payloads without throwing', async () => {
+    execute.mockResolvedValueOnce({
+      features: [null, { attributes: null, geometry: undefined }],
+      fields: [],
+    });
+
+    const result = await GisQueryHelper.ExecuteQuery({
+      url: '/arcgis/rest/services/places/FeatureServer/0',
+    });
+
+    expect(result.data).toEqual([
+      { attr: null, geometry: null },
+      { attr: null, geometry: null },
+    ]);
+  });
+
+  test('drops invalid pagination values instead of forwarding unsafe query parameters', async () => {
+    await GisQueryHelper.ExecuteQuery({
+      url: '/arcgis/rest/services/places/FeatureServer/0',
+      resultOffset: -1,
+      resultRecordCount: 'not-a-number',
+    });
+
+    expect(Query).toHaveBeenCalledWith(expect.not.objectContaining({
+      resultOffset: expect.anything(),
+      resultRecordCount: expect.anything(),
+    }));
   });
 
   test('keeps caller-owned cancellation isolated from deduplication', async () => {

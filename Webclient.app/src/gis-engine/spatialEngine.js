@@ -1,6 +1,7 @@
 import { loadModules } from 'esri-loader';
 
 const modulePromises = new Map();
+const SPATIAL_RELATIONS = new Set(['contains', 'crosses', 'disjoint', 'equals', 'intersects', 'overlaps', 'touches', 'within']);
 
 const loadModule = (name) => {
   if (!modulePromises.has(name)) {
@@ -39,28 +40,32 @@ const cancelledError = () => Object.assign(new Error('Query cancelled.'), { code
 const throwIfAborted = (signal) => {
   if (signal?.aborted) throw cancelledError();
 };
+const requireGeometry = (geometry, message = 'Geometry is required.') => {
+  if (!geometry) throw new Error(message);
+};
 
 export const distance = async (a, b, unit = 'meters') => {
-  const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
   if (!a || !b) throw new Error('Two geometries are required.');
+  const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
   return geometryEngine.geodesicDistance(a, b, unit);
 };
 
 export const area = async (geometry, unit = 'square-meters') => {
+  requireGeometry(geometry);
   const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
-  if (!geometry) throw new Error('Geometry is required.');
   return geometryEngine.geodesicArea(geometry, unit);
 };
 
 export const buffer = async (geometry, distanceValue, unit = 'meters') => {
-  const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
   if (!geometry || !Number.isFinite(distanceValue) || distanceValue < 0) {
     throw new Error('Valid geometry and buffer distance are required.');
   }
+  const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
   return geometryEngine.buffer(geometry, distanceValue, unit);
 };
 
 export const nearest = async (source, candidates = [], unit = 'meters') => {
+  requireGeometry(source, 'Source geometry is required.');
   const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
   let best = null;
   (candidates || []).forEach((geometry, index) => {
@@ -80,12 +85,16 @@ export const proximity = async (source, candidates, distanceValue, unit = 'meter
 };
 
 export const spatialFilter = async (geometry, candidates = [], relation = 'intersects') => {
+  requireGeometry(geometry);
+  if (!SPATIAL_RELATIONS.has(relation)) throw new Error(`Unsupported relation: ${relation}`);
   const [geometryEngine] = await modules(['esri/geometry/geometryEngine']);
   if (typeof geometryEngine[relation] !== 'function') throw new Error(`Unsupported relation: ${relation}`);
   return candidates.filter((candidate) => candidate && geometryEngine[relation](geometry, candidate));
 };
 
 export const project = async (geometry, wkid) => {
+  requireGeometry(geometry);
+  if (!Number.isInteger(wkid) || wkid <= 0) throw new Error('A valid positive integer WKID is required.');
   const [projection, SpatialReference] = await modules([
     'esri/geometry/projection',
     'esri/geometry/SpatialReference',
@@ -103,14 +112,17 @@ export const queryByGeometry = async (
 
   const query = { geometry, where, outFields, returnGeometry };
   const requestOptions = signal ? { signal } : undefined;
-  return layer.queryFeatures(query, requestOptions);
+  const result = await layer.queryFeatures(query, requestOptions);
+  throwIfAborted(signal);
+  return result;
 };
 
-export const queryByDistance = async (layer, location, distanceValue, options = {}) =>
-  queryByGeometry(layer, {
-    ...options,
-    geometry: await buffer(location, distanceValue, options.unit || 'meters'),
-  });
+export const queryByDistance = async (layer, location, distanceValue, options = {}) => {
+  throwIfAborted(options.signal);
+  const geometry = await buffer(location, distanceValue, options.unit || 'meters');
+  throwIfAborted(options.signal);
+  return queryByGeometry(layer, { ...options, geometry });
+};
 
 export const createTimeExtent = (start, end) => {
   const startDate = new Date(start);
