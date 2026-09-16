@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const ROOT = resolve(dirname(CURRENT_FILE), '..');
-const SOURCE_ROOT = resolve(ROOT, 'src');
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts']);
 const ALLOWED_LEGACY_ENV = new Set(['process.env.PUBLIC_URL']);
 
@@ -80,6 +79,15 @@ export const validateEnvironmentExample = (source) => {
   return findings;
 };
 
+export const validateGitignoreContract = (source) => {
+  const patterns = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const protectsWebclientEnv = patterns.includes('Webclient.app/.env')
+    || patterns.includes('Webclient.app/.env*')
+    || patterns.includes('.env')
+    || patterns.includes('.env.*');
+  return protectsWebclientEnv ? [] : ['repository .gitignore must protect Webclient.app/.env'];
+};
+
 export const validateViteConfigContract = (source) => {
   const findings = [];
   if (!/envPrefix\s*:\s*\[\s*['"]VITE_['"]\s*\]/.test(source)) {
@@ -108,7 +116,12 @@ export const validateViteConfigContract = (source) => {
 
 export const auditViteMigration = async (root = ROOT) => {
   const findings = [];
-  if (existsSync(resolve(root, '.env'))) findings.push('tracked/local .env exists inside Webclient.app');
+
+  // Developers may create a git-ignored local .env. The repository contract is
+  // that it cannot be accidentally tracked, not that local configuration is forbidden.
+  const repositoryGitignore = resolve(root, '..', '.gitignore');
+  if (!existsSync(repositoryGitignore)) findings.push('repository .gitignore is missing');
+  else findings.push(...validateGitignoreContract(await readFile(repositoryGitignore, 'utf8')));
 
   const examplePath = resolve(root, '.env.example');
   if (!existsSync(examplePath)) findings.push('.env.example is required for local setup');
@@ -150,6 +163,8 @@ const selfTest = () => {
   assert(findUnsafeRootAssets('<script src="https://cdn.example.com/app.js"></script>').length === 1, 'remote executable script should fail');
   assert(validateEnvironmentExample('VITE_API_URL=/api').length === 0, 'VITE example should pass');
   assert(validateEnvironmentExample('REACT_APP_API_URL=/api').length > 0, 'CRA key should fail');
+  assert(validateGitignoreContract('Webclient.app/.env\n').length === 0, 'ignored local .env should pass');
+  assert(validateGitignoreContract('node_modules\n').length > 0, 'missing env protection should fail');
 
   const validConfig = `
     import { legacyJsxPlugin } from './tooling/sourceTransforms';
