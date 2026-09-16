@@ -14,9 +14,7 @@ internal sealed record HealthCheckResponsePayload(
     string Status,
     long DurationMs);
 
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    GenerationMode = JsonSourceGenerationMode.Serialization)]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(HealthResponsePayload))]
 internal sealed partial class HealthJsonSerializerContext : JsonSerializerContext
 {
