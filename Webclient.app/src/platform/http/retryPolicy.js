@@ -48,6 +48,8 @@ export const parseRetryAfterMs = (headers, options = {}) => {
   const raw = String(rawValue).trim();
   if (!raw) return null;
 
+  if (/^[+-]\d+(?:\.\d+)?$/.test(raw)) return null;
+
   if (/^\d+(?:\.\d+)?$/.test(raw)) {
     const seconds = Number(raw);
     if (!Number.isFinite(seconds) || seconds < 0) return null;
