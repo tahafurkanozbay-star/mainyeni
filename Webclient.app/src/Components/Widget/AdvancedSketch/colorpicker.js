@@ -1,79 +1,39 @@
-import React from "react";
-import reactCSS from "reactcss";
-import { SketchPicker } from "react-color";
+import React, { useState } from "react";
 
-class ColorPicker extends React.Component {
-  state = {
-    displayColorPicker: false,
-    color: {
-      r: "241",
-      g: "112",
-      b: "19",
-      a: "1"
-    }
+const DEFAULT_COLOR = "#f17013";
+
+const hexToRgb = hex => {
+  const normalized = String(hex || DEFAULT_COLOR).replace("#", "");
+  const value = Number.parseInt(normalized, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+    a: 1
+  };
+};
+
+const ColorPicker = ({ onChange, label = "Renk seç" }) => {
+  const [color, setColor] = useState(DEFAULT_COLOR);
+
+  const handleChange = event => {
+    const nextColor = event.target.value;
+    setColor(nextColor);
+    onChange?.({ hex: nextColor, rgb: hexToRgb(nextColor) });
   };
 
-  handleClick = () => {
-    this.setState({ displayColorPicker: !this.state.displayColorPicker });
-  };
-
-  handleClose = () => {
-    this.setState({ displayColorPicker: false });
-  };
-
-  handleChange = (color) => {
-    this.setState({ color: color.rgb });
-    this.props.onChange(color);
-  };
-
-  render() {
-    const styles = reactCSS({
-      default: {
-        color: {
-          width: "36px",
-          height: "14px",
-          borderRadius: "2px",
-          background: `rgba(${this.state.color.r}, ${this.state.color.g}, ${this.state.color.b}, ${this.state.color.a})`
-        },
-        swatch: {
-          padding: "5px",
-          background: "#fff",
-          borderRadius: "1px",
-          boxShadow: "0 0 0 1px rgba(0,0,0,.1)",
-          display: "inline-block",
-          cursor: "pointer"
-        },
-        popover: {
-          position: "absolute",
-          zIndex: "2"
-        },
-        cover: {
-          position: "fixed",
-          top: "0px",
-          right: "0px",
-          bottom: "0px",
-          left: "0px"
-        }
-      }
-    });
-
-    return (
-      <div>
-        <div style={styles.swatch} onClick={this.handleClick}>
-          <div style={styles.color} />
-        </div>
-        {this.state.displayColorPicker ? (
-          <div style={styles.popover}>
-            <div style={styles.cover} onClick={this.handleClose} />
-            <SketchPicker
-              color={this.state.color}
-              onChange={this.handleChange}
-            />
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-}
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+      <span className="visually-hidden">{label}</span>
+      <input
+        type="color"
+        value={color}
+        onChange={handleChange}
+        aria-label={label}
+        style={{ width: "46px", height: "32px", padding: "2px", cursor: "pointer" }}
+      />
+    </label>
+  );
+};
 
 export default ColorPicker;
