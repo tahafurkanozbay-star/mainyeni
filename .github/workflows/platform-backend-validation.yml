@@ -64,8 +64,8 @@ jobs:
       - name: Build Release
         run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test CityWorks.NetCore.sln --configuration Release --no-build --no-restore --verbosity normal
+      - name: Run xUnit v3 tests through Microsoft.Testing.Platform
+        run: dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore
 
       - name: Publish User API
         run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output artifacts/api-user

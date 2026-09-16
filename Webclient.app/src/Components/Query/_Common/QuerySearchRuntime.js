@@ -225,3 +225,128 @@ export const isSmallViewport = (matchMedia = typeof window !== "undefined" ? win
     if (typeof matchMedia !== "function") return false;
     return Boolean(matchMedia("(max-width: 959px)")?.matches);
 };
+
+/**
+ * Loads the large production search stack only when a query surface opts in.
+ * Existing lightweight query helpers therefore stay in the initial bundle,
+ * while dataset indexing/session/observability code is emitted as lazy chunks.
+ */
+export const loadProductionSearchRuntimeModules = async () => Promise.all([
+    import("../../../Toolbox/SearchCoordinatorRuntime"),
+    import("../../../Toolbox/SearchSessionRuntime"),
+    import("../../../Toolbox/SearchObservabilityRuntime")
+]);
+
+export const createProductionSearchRuntime = async (options = {}) => {
+    const modules = options.modules || await loadProductionSearchRuntimeModules();
+    const [coordinatorModule, sessionModule, observabilityModule] = modules;
+    const createCoordinator = coordinatorModule?.createSearchCoordinator;
+    const createSession = sessionModule?.createSearchSession;
+    const createObservability = observabilityModule?.createSearchObservability;
+    const measureAsync = observabilityModule?.measureAsyncOperation;
+
+    if (typeof createCoordinator !== "function"
+        || typeof createSession !== "function"
+        || typeof createObservability !== "function"
+        || typeof measureAsync !== "function") {
+        throw new Error("Production search runtime modules are incomplete");
+    }
+
+    const coordinator = options.coordinator || createCoordinator(options.coordinatorOptions);
+    const observability = options.observability || createObservability(options.observabilityOptions);
+    const session = options.session || createSession(coordinator, {
+        ...options.sessionOptions,
+        debounceMs: options.sessionOptions?.debounceMs
+            ?? observability.recommendDebounce({ queryLength: 0 })
+    });
+    const now = options.now;
+
+    const observeEnvelope = (envelope, measured, context = {}) => {
+        if (measured.error) {
+            observability.recordError(context);
+            throw measured.error;
+        }
+        const result = envelope?.result || envelope;
+        observability.recordSearch(result, measured.durationMs, context);
+        return envelope;
+    };
+
+    const measuredSearch = async (method, datasetName, request, searchOptions = {}) => {
+        const measured = await measureAsync(
+            () => method(datasetName, request, searchOptions),
+            { now: searchOptions.now || now }
+        );
+        return observeEnvelope(measured.value, measured, {
+            dataset: datasetName,
+            mode: request?.mode
+        });
+    };
+
+    return {
+        coordinator,
+        session,
+        observability,
+
+        ingest(datasetName, payload, ingestOptions = {}) {
+            const snapshot = coordinator.ingest(datasetName, payload, ingestOptions);
+            observability.recordDatasetSize(snapshot.recordCount, { dataset: snapshot.name });
+            return snapshot;
+        },
+
+        register(datasetName, records, metadata = {}, registerOptions = {}) {
+            const snapshot = coordinator.register(datasetName, records, metadata, registerOptions);
+            observability.recordDatasetSize(snapshot.recordCount, { dataset: snapshot.name });
+            return snapshot;
+        },
+
+        registerLoader(datasetName, loader) {
+            return coordinator.registerLoader(datasetName, loader);
+        },
+
+        search(datasetName, request = {}, searchOptions = {}) {
+            return measuredSearch(session.searchNow.bind(session), datasetName, request, searchOptions);
+        },
+
+        schedule(datasetName, request = {}, searchOptions = {}) {
+            return measuredSearch(session.schedule.bind(session), datasetName, request, searchOptions);
+        },
+
+        loadMore(searchOptions = {}) {
+            return measureAsync(() => session.loadMore(searchOptions), {
+                now: searchOptions.now || now
+            }).then(measured => observeEnvelope(measured.value, measured, {
+                dataset: session.getState().dataset,
+                mode: session.getState().result?.mode
+            }));
+        },
+
+        invalidate(datasetName) {
+            return coordinator.invalidate(datasetName);
+        },
+
+        getState() {
+            return session.getState();
+        },
+
+        diagnostics() {
+            return {
+                coordinator: coordinator.diagnostics(),
+                session: session.diagnostics(),
+                observability: observability.snapshot(),
+                performanceGate: observability.evaluate()
+            };
+        },
+
+        recommendDebounce(query = "") {
+            const datasetCount = coordinator.diagnostics().registry.totalRecords;
+            return observability.recommendDebounce({
+                queryLength: normalizeWhitespace(query).length,
+                recordCount: datasetCount
+            });
+        },
+
+        dispose() {
+            return session.dispose();
+        }
+    };
+};
