@@ -1,3 +1,5 @@
+import { createListIconModel } from "../../../gis-engine/iconPresentation";
+
 const TURKISH_LOCALE = "tr-TR";
 
 export const DEFAULT_GROUP_LIMIT = 10;
@@ -16,7 +18,7 @@ export const matchesSearchText = (value, searchText) => {
 };
 
 export const readFirstValue = (record, keys, fallback = "") => {
-    const sources = [record, record?.attr, record?.properties].filter(Boolean);
+    const sources = [record, record?.attr, record?.attributes, record?.properties].filter(Boolean);
     for (const source of sources) {
         for (const key of keys) {
             const value = source?.[key];
@@ -74,16 +76,30 @@ export const createStableResultKey = (record, fallbackIndex = 0) => {
     return `record:${category}|${title}|${address}|${fallbackIndex}`;
 };
 
-export const normalizeSearchRecord = (record, index = 0) => ({
-    raw: record,
-    id: getRecordId(record),
-    key: createStableResultKey(record, index),
-    title: getRecordTitle(record),
-    address: getRecordAddress(record),
-    phone: getRecordPhone(record),
-    category: getRecordCategory(record),
-    type: normalizeWhitespace(readFirstValue(record, ["type", "Type"], ""))
-});
+export const normalizeSearchRecord = (record, index = 0) => {
+    const id = getRecordId(record);
+    const title = getRecordTitle(record);
+    const category = getRecordCategory(record);
+    const type = normalizeWhitespace(readFirstValue(record, ["type", "Type", "TYPE", "tur", "TUR", "tip", "TIP"], ""));
+    const icon = createListIconModel({
+        id,
+        title,
+        category,
+        type,
+        iconKey: normalizeWhitespace(readFirstValue(record, ["iconKey", "IconKey", "serviceTitle", "ServiceTitle"], ""))
+    });
+    return {
+        raw: record,
+        id,
+        key: createStableResultKey(record, index),
+        title,
+        address: getRecordAddress(record),
+        phone: getRecordPhone(record),
+        category,
+        type,
+        icon
+    };
+};
 
 export const normalizeSearchCollection = records => Array.isArray(records)
     ? records.map((record, index) => normalizeSearchRecord(record, index))
