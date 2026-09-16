@@ -33,7 +33,7 @@ describe('candidate prefix regression', () => {
   test('long query tokens beyond prefix budget still use exact postings', () => {
     const source = normalizeRecordCollection([
       { id: '1', title: 'abcdefghijklmnop' },
-      { id: '2', title: 'abcdefghijklmnop-extra' },
+      { id: '2', title: 'abcdefghijklmnopq' },
     ]).records;
     const index = buildCandidateIndex(source, { maxPrefixLength: 8 });
     const plan = planCandidates(index, { query: 'abcdefghijklmnop' });
