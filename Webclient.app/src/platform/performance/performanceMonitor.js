@@ -10,13 +10,19 @@ const round = (value, digits = 1) => {
   return Math.round(value * scale) / scale;
 };
 
-const finiteOrNull = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+const finiteOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
 
 export const rateWebVital = (name, value) => {
   const metric = String(name || '').toLowerCase();
-  const numeric = Number(value);
   const thresholds = VITAL_THRESHOLDS[metric];
-  if (!thresholds || !Number.isFinite(numeric)) return 'unknown';
+  if (!thresholds || value === null || value === undefined || value === '') return 'unknown';
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 'unknown';
   if (numeric <= thresholds.good) return 'good';
   if (numeric <= thresholds.needsImprovement) return 'needs-improvement';
   return 'poor';
@@ -50,7 +56,7 @@ const safeMemorySnapshot = (performanceRef) => {
     usedBytes: used,
     totalBytes: total,
     limitBytes: limit,
-    utilization: used !== null && limit > 0 ? round(used / limit, 4) : null
+    utilization: used !== null && limit !== null && limit > 0 ? round(used / limit, 4) : null
   });
 };
 
@@ -153,8 +159,6 @@ const collectExistingEntries = (performanceRef, state) => {
 
   (performanceRef.getEntriesByType('paint') || [])
     .forEach((entry) => applyEntry(state, 'paint', entry));
-  (performanceRef.getEntriesByType('resource') || [])
-    .forEach((entry) => addResourceEntry(state, entry));
 };
 
 export const createPerformanceMonitor = (dependencies = {}) => {
