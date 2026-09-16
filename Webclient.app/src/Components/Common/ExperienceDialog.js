@@ -92,12 +92,7 @@ export function ExperienceDialog({
 
         returnFocusRef.current = document.activeElement;
         const releaseScrollLock = lockBodyScroll();
-        let frame = null;
-        if (typeof requestAnimationFrame === "function") {
-            frame = requestAnimationFrame(() => focusFirstAvailable(dialogRef.current, initialFocusRef));
-        } else {
-            focusFirstAvailable(dialogRef.current, initialFocusRef);
-        }
+        focusFirstAvailable(dialogRef.current, initialFocusRef);
 
         const onKeyDown = event => {
             if (event.key === "Escape") {
@@ -132,7 +127,6 @@ export function ExperienceDialog({
 
         return () => {
             window.removeEventListener("keydown", onKeyDown, true);
-            if (frame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
             releaseScrollLock();
 
             if (restoreFocus) {
