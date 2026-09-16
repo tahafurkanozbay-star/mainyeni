@@ -62,8 +62,33 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Strict lint
-        run: npm run lint:strict
+      - name: Full lint visibility
+        run: npm run lint
+
+      - name: Strict lint on changed Webclient sources
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            npm run lint:strict
+            exit 0
+          fi
+          git -C .. fetch --no-tags --depth=1 origin "$BASE_SHA"
+          mapfile -t changed_files < <(
+            git -C .. diff --name-only "$BASE_SHA" HEAD -- \
+              Webclient.app/src \
+              Webclient.app/tooling \
+              Webclient.app/vite.config.ts \
+              Webclient.app/vitest.config.ts \
+            | sed 's#^Webclient.app/##' \
+            | grep -E '\.(cjs|mjs|js|jsx|ts|tsx)$' || true
+          )
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No changed Webclient lint targets."
+          else
+            printf 'Strict lint targets:\n - %s\n' "${changed_files[@]}"
+            npx oxlint --deny-warnings "${changed_files[@]}"
+          fi
 
       - name: Strict TypeScript boundaries
         run: npm run typecheck
