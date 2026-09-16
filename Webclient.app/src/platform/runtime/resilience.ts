@@ -103,13 +103,16 @@ const notifyObserver = <TArgs extends readonly unknown[]>(
   }
 };
 
-const normalizedRetryPolicy = (policy: Partial<RetryPolicy> = {}): RetryPolicy => Object.freeze({
-  maxAttempts: positiveInteger(policy.maxAttempts, DEFAULT_RETRY_POLICY.maxAttempts, 10),
-  baseDelayMs: positiveInteger(policy.baseDelayMs, DEFAULT_RETRY_POLICY.baseDelayMs, 60000),
-  maxDelayMs: positiveInteger(policy.maxDelayMs, DEFAULT_RETRY_POLICY.maxDelayMs, 300000),
-  jitterRatio: clampNumber(policy.jitterRatio, 0, 1, DEFAULT_RETRY_POLICY.jitterRatio),
-  retryable: policy.retryable ?? DEFAULT_RETRY_POLICY.retryable,
-});
+const normalizedRetryPolicy = (policy: Partial<RetryPolicy> = {}): RetryPolicy => {
+  const retryable = policy.retryable ?? DEFAULT_RETRY_POLICY.retryable;
+  return Object.freeze({
+    maxAttempts: positiveInteger(policy.maxAttempts, DEFAULT_RETRY_POLICY.maxAttempts, 10),
+    baseDelayMs: positiveInteger(policy.baseDelayMs, DEFAULT_RETRY_POLICY.baseDelayMs, 60000),
+    maxDelayMs: positiveInteger(policy.maxDelayMs, DEFAULT_RETRY_POLICY.maxDelayMs, 300000),
+    jitterRatio: clampNumber(policy.jitterRatio, 0, 1, DEFAULT_RETRY_POLICY.jitterRatio),
+    ...(retryable ? { retryable } : {}),
+  });
+};
 
 const normalizedCircuitPolicy = (policy: Partial<CircuitBreakerPolicy> = {}): CircuitBreakerPolicy => Object.freeze({
   failureThreshold: positiveInteger(policy.failureThreshold, DEFAULT_CIRCUIT_POLICY.failureThreshold, 100),
@@ -149,7 +152,7 @@ export const executeWithRetry = async <TValue>(
     const context: RetryAttemptContext = {
       attempt,
       maxAttempts: policy.maxAttempts,
-      signal: options.signal,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(attempt > 1 ? { previousError } : {}),
     };
     notifyObserver(options.onAttempt, context);
