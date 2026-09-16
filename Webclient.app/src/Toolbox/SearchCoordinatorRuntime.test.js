@@ -44,6 +44,7 @@ const addressRecords = () => [
     {
         id: 10,
         title: "Tunalı Hilmi Caddesi 10",
+        level: "door",
         district: "Çankaya",
         neighborhood: "Kavaklıdere",
         street: "Tunalı Hilmi Caddesi",
@@ -55,6 +56,7 @@ const addressRecords = () => [
     {
         id: 11,
         title: "Tunalı Hilmi Caddesi 20",
+        level: "door",
         district: "Çankaya",
         neighborhood: "Kavaklıdere",
         street: "Tunalı Hilmi Caddesi",
@@ -66,6 +68,7 @@ const addressRecords = () => [
     {
         id: 12,
         title: "Hoşdere Caddesi 1",
+        level: "door",
         district: "Çankaya",
         neighborhood: "Ayrancı",
         street: "Hoşdere Caddesi",
