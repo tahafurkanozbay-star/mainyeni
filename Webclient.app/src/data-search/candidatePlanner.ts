@@ -135,10 +135,15 @@ const postingForToken = (
 ): readonly number[] => {
   const token = normalizeSearchToken(tokenInput);
   if (!token) return [];
-  const exact = index.tokens.get(token);
-  if (exact?.size) return sortedPositions(exact);
+  // Prefix postings are a superset for short indexed tokens: they include the
+  // exact token plus longer lexical forms such as `park` -> `parki`. Using an
+  // exact posting first would incorrectly prune records that the scoring layer
+  // can legitimately match by prefix. Long tokens beyond the prefix budget
+  // still fall back to their exact posting.
   const prefix = index.prefixes.get(token);
-  return prefix?.size ? sortedPositions(prefix) : [];
+  if (prefix?.size) return sortedPositions(prefix);
+  const exact = index.tokens.get(token);
+  return exact?.size ? sortedPositions(exact) : [];
 };
 
 const intersectSorted = (
