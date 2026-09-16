@@ -22,6 +22,7 @@ export const GEOMETRY_ISSUE = Object.freeze({
 const finite = (value) => Number.isFinite(Number(value));
 const number = (value) => Number(value);
 const isArray = Array.isArray;
+const hasOwn = (value, key) => Boolean(value) && Object.prototype.hasOwnProperty.call(value, key);
 
 const normalizeWkid = (spatialReference) => {
   const candidate = spatialReference?.latestWkid ?? spatialReference?.wkid ?? spatialReference;
@@ -42,11 +43,11 @@ export const detectGeometryKind = (geometry) => {
   if (!geometry || typeof geometry !== 'object') return GEOMETRY_KIND.UNKNOWN;
   const explicit = String(geometry.type || '').toLowerCase();
   if (Object.values(GEOMETRY_KIND).includes(explicit)) return explicit;
-  if (finite(geometry.x) && finite(geometry.y)) return GEOMETRY_KIND.POINT;
+  if (hasOwn(geometry, 'x') && hasOwn(geometry, 'y')) return GEOMETRY_KIND.POINT;
   if (isArray(geometry.points)) return GEOMETRY_KIND.MULTIPOINT;
   if (isArray(geometry.paths)) return GEOMETRY_KIND.POLYLINE;
   if (isArray(geometry.rings)) return GEOMETRY_KIND.POLYGON;
-  if ([geometry.xmin, geometry.ymin, geometry.xmax, geometry.ymax].every(finite)) return GEOMETRY_KIND.EXTENT;
+  if (['xmin', 'ymin', 'xmax', 'ymax'].every((key) => hasOwn(geometry, key))) return GEOMETRY_KIND.EXTENT;
   return GEOMETRY_KIND.UNKNOWN;
 };
 
@@ -129,20 +130,20 @@ const consumeCoordinate = (raw, diagnostics, options) => {
 };
 
 const normalizePoint = (geometry, diagnostics, options) => {
-  const raw = [geometry.x, geometry.y];
-  if (finite(geometry.z)) raw.push(number(geometry.z));
-  if (finite(geometry.m)) {
-    if (raw.length === 2) raw.push(undefined);
-    raw.push(number(geometry.m));
-  }
-  const value = consumeCoordinate(raw, diagnostics, options);
+  const value = consumeCoordinate([geometry.x, geometry.y], diagnostics, options);
   if (!value) return null;
+
+  const hasZ = options.preserveZ !== false && finite(geometry.z);
+  const hasM = options.preserveM !== false && finite(geometry.m);
+  diagnostics.hasZ = diagnostics.hasZ || hasZ;
+  diagnostics.hasM = diagnostics.hasM || hasM;
+
   return {
     type: GEOMETRY_KIND.POINT,
     x: value[0],
     y: value[1],
-    ...(value.length >= 3 && finite(value[2]) ? { z: value[2] } : {}),
-    ...(value.length >= 4 && finite(value[3]) ? { m: value[3] } : {}),
+    ...(hasZ ? { z: number(geometry.z) } : {}),
+    ...(hasM ? { m: number(geometry.m) } : {}),
     ...(diagnostics.spatialReference ? { spatialReference: diagnostics.spatialReference } : {}),
   };
 };
@@ -292,7 +293,7 @@ export const normalizeGeometry = (geometry, options = {}) => {
 const visitCoordinates = (geometry, visitor) => {
   const kind = detectGeometryKind(geometry);
   if (kind === GEOMETRY_KIND.POINT) {
-    visitor([geometry.x, geometry.y, geometry.z, geometry.m].filter((value, index) => index < 2 || finite(value)));
+    visitor([geometry.x, geometry.y]);
     return;
   }
   if (kind === GEOMETRY_KIND.MULTIPOINT) {
@@ -375,7 +376,8 @@ export const assessGeometryCollection = (features = [], options = {}) => {
 
   (features || []).forEach((feature, index) => {
     result.total += 1;
-    const source = feature?.geometry ?? feature;
+    const featureOwnsGeometry = feature && typeof feature === 'object' && hasOwn(feature, 'geometry');
+    const source = featureOwnsGeometry ? feature.geometry : feature;
     const normalized = normalizeGeometry(source, options);
     const diagnostics = normalized.diagnostics;
     result.byKind[diagnostics.kind] = (result.byKind[diagnostics.kind] || 0) + 1;
