@@ -12,10 +12,14 @@ on:
       - '**/*.props'
       - '**/package.json'
       - '**/package-lock.json'
+      - '**/tsconfig*.json'
+      - 'global.json'
       - '**/*.css'
       - '.github/workflows/**'
       - 'tools/platform-audit.mjs'
       - 'tools/platform-audit.test.mjs'
+      - 'tools/platform-contracts.mjs'
+      - 'tools/platform-contracts.test.mjs'
       - 'tools/package-lock-integrity.mjs'
       - 'tools/package-lock-integrity.test.mjs'
   workflow_dispatch:
@@ -33,15 +37,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
       - name: Unit tests
-        run: node --test tools/platform-audit.test.mjs tools/package-lock-integrity.test.mjs
+        run: >-
+          node --test
+          tools/platform-audit.test.mjs
+          tools/platform-contracts.test.mjs
+          tools/package-lock-integrity.test.mjs
+
+      - name: Enforce modernization contracts
+        run: node tools/platform-contracts.mjs
 
       - name: Generate architecture inventory
         run: node tools/platform-audit.mjs
@@ -52,17 +63,22 @@ jobs:
       - name: Publish summary
         if: always()
         run: |
-          if [ -f artifacts/platform-audit/platform-audit.md ]; then
-            cat artifacts/platform-audit/platform-audit.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f artifacts/platform-audit/package-lock-integrity.md ]; then
-            printf '\n---\n\n' >> "$GITHUB_STEP_SUMMARY"
-            cat artifacts/platform-audit/package-lock-integrity.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for report in \
+            artifacts/platform-audit/platform-contracts.md \
+            artifacts/platform-audit/platform-audit.md \
+            artifacts/platform-audit/package-lock-integrity.md
+          do
+            if [ -f "$report" ]; then
+              if [ -s "$GITHUB_STEP_SUMMARY" ]; then
+                printf '\n---\n\n' >> "$GITHUB_STEP_SUMMARY"
+              fi
+              cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: platform-architecture-audit
           path: artifacts/platform-audit/

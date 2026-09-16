@@ -23,7 +23,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: Webclient.app
@@ -31,15 +31,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
+      - name: Setup Node 24
         uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: Webclient.app/package-lock.json
 
+      - name: Verify toolchain contract
+        run: |
+          node --version
+          npm --version
+          node -e "const major = Number(process.versions.node.split('.')[0]); if (major !== 24) process.exit(1)"
+
       - name: Install from lockfile
         run: npm ci
+
+      - name: Dependency and lockfile contract
+        run: npm run dependency:verify
 
       - name: Experience quality guard self-test
         run: node scripts/experience-quality-audit.js --self-test
@@ -47,27 +56,32 @@ jobs:
       - name: Experience quality guard
         run: node scripts/experience-quality-audit.js
 
-      - name: Production dependency audit (non-blocking legacy debt)
-        continue-on-error: true
+      - name: Vite migration contract
+        run: npm run quality:vite
+
+      - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Lint when configured
-        run: npm run lint --if-present
+      - name: Strict lint
+        run: npm run lint:strict
 
-      - name: Typecheck when configured
-        run: npm run typecheck --if-present
+      - name: Strict TypeScript boundaries
+        run: npm run typecheck
 
-      - name: Test
-        run: npm test -- --watchAll=false --runInBand
+      - name: Full Vitest regression suite
+        run: npm run test:ci
+
+      - name: Native tooling regression suite
+        run: npm run test:tooling
 
       - name: Build budget script tests
-        run: node --test scripts/web-build-budget.test.mjs
+        run: npm run test:build-budget
 
-      - name: Production build
-        env:
-          CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
+      - name: Production Vite build and integrity manifest
         run: npm run build
+
+      - name: Verify production bundle integrity
+        run: npm run build:verify
 
       - name: Enforce production build budgets
         run: node scripts/web-build-budget.mjs build --strict
