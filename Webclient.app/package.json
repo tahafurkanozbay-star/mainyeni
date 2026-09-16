@@ -37,6 +37,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "quality:experience": "node scripts/experience-quality-audit.js",
+    "quality:experience:self-test": "node scripts/experience-quality-audit.js --self-test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
