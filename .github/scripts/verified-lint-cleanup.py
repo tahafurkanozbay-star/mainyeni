@@ -97,6 +97,7 @@ company.write_text(company.read_text().replace("onClick={(e) =>", "onClick={() =
 map_ana = root / "Components/App/MapAna.js"
 text = map_ana.read_text()
 text = re.sub(r'^import \{ LayerBusiness \}.*\n', '', text, flags=re.M)
+text = re.sub(r'^import \{ Constants_ServiceResultType \}.*\n', '', text, flags=re.M)
 text = re.sub(r'^import \{ loadModules \}.*\n', '', text, flags=re.M)
 map_ana.write_text(text)
 
