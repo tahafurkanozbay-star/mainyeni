@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { InputGroup } from "react-bootstrap";
 import { BiNavigation, BiSearch, BiXCircle } from "react-icons/bi";
-import { useDebounce } from "use-debounce";
 import { FulltextSearchQueryBusiness } from "../../../Business/FulltextSearchQueryBusiness";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
 import { Constants_MessageType, Constants_ServiceResultType } from "../../../Core/Constants";
 import MapManager from "../../../Store/Managers/MapManager";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
+import { useDebounce } from "../../../Toolbox/useDebounce";
 import { MiniLoading } from "../../Common/Loading";
 import {
     buildGoogleDirectionsUrl,
