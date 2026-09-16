@@ -156,8 +156,9 @@ export const compileQueryPlan = (
   throwIfAborted(request.signal);
 
   let spatialCandidatePositions: readonly number[] | null = null;
-  if (request.center && request.radiusMeters > 0) {
-    const bounds = createSpatialBounds(request.center, request.radiusMeters);
+  const spatialCenter = request.center;
+  if (spatialCenter && request.radiusMeters > 0) {
+    const bounds = createSpatialBounds(spatialCenter, request.radiusMeters);
     const spatial = collectSpatialCandidatePositions(dataset.spatialIndex, bounds, {
       maxCandidates: maxSpatialCandidates,
       signal: request.signal,
@@ -173,98 +174,30 @@ export const compileQueryPlan = (
   const selectivity = estimateFilterSelectivity(request);
   const filteredEstimate = Math.ceil(effectiveCandidates.length * selectivity);
   const stages: QueryPlanStage[] = [];
-  stages.push(stage(
-    stages.length,
-    'candidate-index',
-    totalRecords,
-    initialCandidates.length,
-    Math.max(1, candidatePlan.estimatedCost),
-    initialCandidates.length <= maxCandidates,
-    `Candidate planner strategy: ${candidatePlan.strategy}`,
-  ));
+  stages.push(stage(stages.length, 'candidate-index', totalRecords, initialCandidates.length, Math.max(1, candidatePlan.estimatedCost), initialCandidates.length <= maxCandidates, `Candidate planner strategy: ${candidatePlan.strategy}`));
   if (request.level || request.district || request.neighborhood || request.street) {
-    stages.push(stage(
-      stages.length,
-      'hierarchy-filter',
-      effectiveCandidates.length,
-      Math.ceil(effectiveCandidates.length * Math.max(0.05, selectivity)),
-      effectiveCandidates.length,
-      true,
-      'Apply canonical address hierarchy constraints before scoring',
-    ));
+    stages.push(stage(stages.length, 'hierarchy-filter', effectiveCandidates.length, Math.ceil(effectiveCandidates.length * Math.max(0.05, selectivity)), effectiveCandidates.length, true, 'Apply canonical address hierarchy constraints before scoring'));
   }
   if (request.filters.length) {
-    stages.push(stage(
-      stages.length,
-      'record-filter',
-      effectiveCandidates.length,
-      filteredEstimate,
-      effectiveCandidates.length * request.filters.length,
-      request.filters.length <= 16,
-      `Apply ${request.filters.length} normalized record filter(s)`,
-    ));
+    stages.push(stage(stages.length, 'record-filter', effectiveCandidates.length, filteredEstimate, effectiveCandidates.length * request.filters.length, request.filters.length <= 16, `Apply ${request.filters.length} normalized record filter(s)`));
   }
   if (spatialCandidatePositions) {
-    stages.push(stage(
-      stages.length,
-      'spatial-index',
-      initialCandidates.length,
-      effectiveCandidates.length,
-      spatialCandidatePositions.length,
-      spatialCandidatePositions.length <= maxSpatialCandidates,
-      'Intersect text candidates with bounded spatial-cell candidates, then verify exact distance',
-    ));
+    stages.push(stage(stages.length, 'spatial-index', initialCandidates.length, effectiveCandidates.length, spatialCandidatePositions.length, spatialCandidatePositions.length <= maxSpatialCandidates, 'Intersect text candidates with bounded spatial-cell candidates, then verify exact distance'));
   }
-  stages.push(stage(
-    stages.length,
-    'scoring',
-    effectiveCandidates.length,
-    filteredEstimate,
-    filteredEstimate * Math.max(1, request.terms.length),
-    effectiveCandidates.length <= maxCandidates,
-    'Score normalized text and Turkish address evidence',
-  ));
-  stages.push(stage(
-    stages.length,
-    'sort',
-    filteredEstimate,
-    filteredEstimate,
-    filteredEstimate > 1 ? filteredEstimate * Math.log2(filteredEstimate) : filteredEstimate,
-    filteredEstimate <= maxCandidates,
-    `Sort by ${request.sort}`,
-  ));
+  stages.push(stage(stages.length, 'scoring', effectiveCandidates.length, filteredEstimate, filteredEstimate * Math.max(1, request.terms.length), effectiveCandidates.length <= maxCandidates, 'Score normalized text and Turkish address evidence'));
+  stages.push(stage(stages.length, 'sort', filteredEstimate, filteredEstimate, filteredEstimate > 1 ? filteredEstimate * Math.log2(filteredEstimate) : filteredEstimate, filteredEstimate <= maxCandidates, `Sort by ${request.sort}`));
   if (request.facetFields.length) {
-    stages.push(stage(
-      stages.length,
-      'facet',
-      filteredEstimate,
-      filteredEstimate,
-      filteredEstimate * request.facetFields.length,
-      request.facetFields.length <= 12,
-      `Build ${request.facetFields.length} facet field(s) from matched records`,
-    ));
+    stages.push(stage(stages.length, 'facet', filteredEstimate, filteredEstimate, filteredEstimate * request.facetFields.length, request.facetFields.length <= 12, `Build ${request.facetFields.length} facet field(s) from matched records`));
   }
-  stages.push(stage(
-    stages.length,
-    'pagination',
-    filteredEstimate,
-    Math.min(request.limit, Math.max(0, filteredEstimate - request.offset)),
-    request.limit,
-    true,
-    `Return offset ${request.offset} with limit ${request.limit}`,
-  ));
+  stages.push(stage(stages.length, 'pagination', filteredEstimate, Math.min(request.limit, Math.max(0, filteredEstimate - request.offset)), request.limit, true, `Return offset ${request.offset} with limit ${request.limit}`));
 
   const estimatedWorkUnits = Math.ceil(stages.reduce((sum, item) => sum + item.relativeCost, 0));
   const fullScan = candidatePlan.strategy === 'all' || candidatePlan.strategy === 'fallback-scan';
   const candidateRatio = totalRecords ? effectiveCandidates.length / totalRecords : 0;
   const risk = planRisk(fullScan, candidateRatio, options);
   const warnings: string[] = [];
-  if (initialCandidates.length >= maxCandidates && totalRecords > maxCandidates) {
-    warnings.push('candidate-budget-reached');
-  }
-  if (spatialCandidatePositions && spatialCandidatePositions.length >= maxSpatialCandidates) {
-    warnings.push('spatial-candidate-budget-reached');
-  }
+  if (initialCandidates.length >= maxCandidates && totalRecords > maxCandidates) warnings.push('candidate-budget-reached');
+  if (spatialCandidatePositions && spatialCandidatePositions.length >= maxSpatialCandidates) warnings.push('spatial-candidate-budget-reached');
   if (fullScan && request.normalizedQuery) warnings.push('query-fell-back-to-scan');
   if (request.sort === 'distance' && !request.center) warnings.push('distance-sort-without-center');
   if (risk === 'high') warnings.push('high-cost-query-plan');
@@ -273,21 +206,7 @@ export const compileQueryPlan = (
     datasetKey: dataset.key,
     revision: dataset.revision,
     fingerprint: dataset.fingerprint,
-    request: {
-      query: request.normalizedQuery,
-      terms: request.terms,
-      filters: request.filters,
-      facets: request.facetFields,
-      sort: request.sort,
-      offset: request.offset,
-      limit: request.limit,
-      center: request.center,
-      radiusMeters: request.radiusMeters,
-      level: request.level,
-      district: request.district,
-      neighborhood: request.neighborhood,
-      street: request.street,
-    },
+    request: { query: request.normalizedQuery, terms: request.terms, filters: request.filters, facets: request.facetFields, sort: request.sort, offset: request.offset, limit: request.limit, center: request.center, radiusMeters: request.radiusMeters, level: request.level, district: request.district, neighborhood: request.neighborhood, street: request.street },
     strategy: candidatePlan.strategy,
     candidates: effectiveCandidates.length,
     stages: stages.map(item => [item.kind, item.inputEstimate, item.outputEstimate]),
@@ -299,10 +218,7 @@ export const compileQueryPlan = (
     datasetRevision: dataset.revision,
     datasetFingerprint: dataset.fingerprint,
     request,
-    candidatePlan: Object.freeze({
-      ...candidatePlan,
-      candidatePositions: Object.freeze(effectiveCandidates),
-    }),
+    candidatePlan: Object.freeze({ ...candidatePlan, candidatePositions: Object.freeze(effectiveCandidates) }),
     spatialCandidatePositions,
     stages: Object.freeze(stages),
     estimatedCandidateCount: effectiveCandidates.length,
@@ -318,12 +234,7 @@ export const compileQueryPlan = (
 export const compareQueryPlans = (
   baseline: CompiledQueryPlan,
   candidate: CompiledQueryPlan,
-): Readonly<{
-  workDelta: number;
-  candidateDelta: number;
-  riskChanged: boolean;
-  regressed: boolean;
-}> => {
+): Readonly<{ workDelta: number; candidateDelta: number; riskChanged: boolean; regressed: boolean }> => {
   const workDelta = candidate.estimatedWorkUnits - baseline.estimatedWorkUnits;
   const candidateDelta = candidate.estimatedCandidateCount - baseline.estimatedCandidateCount;
   const rank: Readonly<Record<QueryPlanRisk, number>> = { low: 0, medium: 1, high: 2 };
@@ -331,8 +242,7 @@ export const compareQueryPlans = (
     workDelta,
     candidateDelta,
     riskChanged: baseline.risk !== candidate.risk,
-    regressed: rank[candidate.risk] > rank[baseline.risk]
-      || (baseline.estimatedWorkUnits > 0 && candidate.estimatedWorkUnits / baseline.estimatedWorkUnits > 1.5),
+    regressed: rank[candidate.risk] > rank[baseline.risk] || (baseline.estimatedWorkUnits > 0 && candidate.estimatedWorkUnits / baseline.estimatedWorkUnits > 1.5),
   });
 };
 
@@ -347,10 +257,5 @@ export const summarizeQueryPlan = (plan: CompiledQueryPlan): Readonly<Record<str
   fullScan: plan.fullScan,
   risk: plan.risk,
   warnings: plan.warnings,
-  stages: plan.stages.map(item => Object.freeze({
-    kind: item.kind,
-    inputEstimate: item.inputEstimate,
-    outputEstimate: item.outputEstimate,
-    bounded: item.bounded,
-  })),
+  stages: plan.stages.map(item => Object.freeze({ kind: item.kind, inputEstimate: item.inputEstimate, outputEstimate: item.outputEstimate, bounded: item.bounded })),
 });
