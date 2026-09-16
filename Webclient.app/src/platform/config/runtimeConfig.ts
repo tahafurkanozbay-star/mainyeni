@@ -1,3 +1,5 @@
+import { normalizeApplicationPath } from '../network/endpointPolicy';
+
 const DEFAULT_API_BASE_URL = '/api';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_CACHE_TTL_MS = 30000;
@@ -28,9 +30,19 @@ export interface RuntimeConfig {
 }
 
 const getProcessEnv = (): RuntimeEnvironmentSource => {
-  if (typeof process === 'undefined' || !process.env) return {};
-  return process.env as RuntimeEnvironmentSource;
+  const candidate = globalThis as typeof globalThis & {
+    readonly process?: { readonly env?: RuntimeEnvironmentSource };
+  };
+  return candidate.process?.env ?? {};
 };
+
+const getViteEnv = (): RuntimeEnvironmentSource =>
+  (import.meta.env ?? {}) as unknown as RuntimeEnvironmentSource;
+
+const getDefaultEnvironmentSource = (): RuntimeEnvironmentSource => Object.freeze({
+  ...getProcessEnv(),
+  ...getViteEnv(),
+});
 
 const firstDefined = (source: RuntimeEnvironmentSource, keys: readonly string[]): unknown => {
   for (const key of keys) {
@@ -67,22 +79,35 @@ const containsControlCharacter = (value: string): boolean => {
   return false;
 };
 
+const normalizeRelativeApiPath = (value: string): string | null => {
+  if (containsControlCharacter(value)) return null;
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return null;
+  try {
+    const normalized = normalizeApplicationPath(value, { allowQuery: false, allowHash: false });
+    return normalized.replace(/\/$/, '') || '/';
+  } catch {
+    return null;
+  }
+};
+
 export const normalizeApiBaseUrl = (value: unknown): string => {
   const raw = String(value || DEFAULT_API_BASE_URL);
   if (containsControlCharacter(raw)) return DEFAULT_API_BASE_URL;
   const candidate = raw.trim();
-  if (candidate.startsWith('/') && !candidate.startsWith('//') && !candidate.includes('\\')) {
-    return candidate.replace(/\/$/, '') || '/';
-  }
+
+  const relative = normalizeRelativeApiPath(candidate);
+  if (relative) return relative;
 
   try {
     const origin = typeof window !== 'undefined' ? window.location.origin : null;
-    const parsed = new URL(candidate, origin || 'http://localhost');
-    if (origin && parsed.origin === origin && !parsed.username && !parsed.password) {
-      return `${parsed.pathname}${parsed.search}`.replace(/\/$/, '') || '/';
+    if (!origin) return DEFAULT_API_BASE_URL;
+    const parsed = new URL(candidate, origin);
+    if (parsed.origin !== origin || parsed.username || parsed.password || parsed.hash || parsed.search) {
+      return DEFAULT_API_BASE_URL;
     }
+    return normalizeRelativeApiPath(parsed.pathname) ?? DEFAULT_API_BASE_URL;
   } catch {
-    // Build-time configuration is input and must fail closed to the same-origin default.
+    // Build/runtime configuration is untrusted input and fails closed.
   }
 
   return DEFAULT_API_BASE_URL;
@@ -96,7 +121,7 @@ const detectBuildMode = (source: RuntimeEnvironmentSource): RuntimeConfig['build
   return 'unknown';
 };
 
-export const createRuntimeConfig = (source: RuntimeEnvironmentSource = getProcessEnv()): RuntimeConfig => {
+export const createRuntimeConfig = (source: RuntimeEnvironmentSource = getDefaultEnvironmentSource()): RuntimeConfig => {
   const env = source || {};
   const features: RuntimeFeatureFlags = Object.freeze({
     adaptiveRuntime: parseBoolean(firstDefined(env, ['VITE_ADAPTIVE_RUNTIME', 'REACT_APP_ADAPTIVE_RUNTIME']), true),
@@ -140,11 +165,9 @@ export const createRuntimeConfig = (source: RuntimeEnvironmentSource = getProces
 };
 
 export const assertSafeRuntimeConfig = (config: RuntimeConfig): true => {
-  if (!config.apiBaseUrl.startsWith('/') || config.apiBaseUrl.startsWith('//') || config.apiBaseUrl.includes('\\')) {
-    throw new Error('API base URL must resolve to a same-origin relative path');
-  }
-  if (containsControlCharacter(config.apiBaseUrl)) {
-    throw new Error('API base URL contains unsupported control characters');
+  const normalizedApi = normalizeApiBaseUrl(config.apiBaseUrl);
+  if (normalizedApi !== config.apiBaseUrl) {
+    throw new Error('API base URL must be a canonical same-origin relative path');
   }
   if (config.requestTimeoutMs < 1000 || config.requestTimeoutMs > 60000) {
     throw new Error('API timeout is outside the supported range');
