@@ -1,8 +1,9 @@
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 
 type FieldMessage = { readonly error?: string; readonly hint?: string };
+type FieldShellMessage = { readonly error: string | undefined; readonly hint: string | undefined };
 
-const FieldShell = ({ id, label, required, message, children }: { id: string; label: string; required?: boolean; message: FieldMessage; children: ReactNode }) => {
+const FieldShell = ({ id, label, required, message, children }: { id: string; label: string; required: boolean | undefined; message: FieldShellMessage; children: ReactNode }) => {
   const messageId = `${id}-message`;
   return (
     <div className={`experience-field${message.error ? ' experience-field--invalid' : ''}`}>
