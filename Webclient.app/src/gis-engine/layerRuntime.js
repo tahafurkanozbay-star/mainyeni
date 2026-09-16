@@ -92,10 +92,21 @@ const updateNode = (state, layerId, update) => {
   const current = state?.byId?.get(layerId);
   if (!current) return state;
   const next = update({ ...current, runtime: { ...current.runtime } });
+  if (next === current) return state;
   const byId = new Map(state.byId);
   byId.set(layerId, next);
   return { ...state, byId };
 };
+
+const requestMatches = (layer, action) => (
+  !action.requestId || layer.runtime.requestId === action.requestId
+);
+
+const updateRequestedNode = (state, action, update) => updateNode(
+  state,
+  action.layerId,
+  (layer) => requestMatches(layer, action) ? update(layer) : layer,
+);
 
 export const layerReducer = (state, action = {}) => {
   if (!state?.byId) return state;
@@ -112,7 +123,7 @@ export const layerReducer = (state, action = {}) => {
         },
       }));
     case 'LOAD_SUCCESS':
-      return updateNode(state, action.layerId, (layer) => ({
+      return updateRequestedNode(state, action, (layer) => ({
         ...layer,
         runtime: {
           ...layer.runtime,
@@ -124,7 +135,7 @@ export const layerReducer = (state, action = {}) => {
         },
       }));
     case 'LOAD_ERROR':
-      return updateNode(state, action.layerId, (layer) => ({
+      return updateRequestedNode(state, action, (layer) => ({
         ...layer,
         runtime: {
           ...layer.runtime,
@@ -134,6 +145,16 @@ export const layerReducer = (state, action = {}) => {
             message: action.error?.message || 'Katman yüklenemedi.',
           },
           requestId: null,
+        },
+      }));
+    case 'LOAD_CANCEL':
+      return updateRequestedNode(state, action, (layer) => ({
+        ...layer,
+        runtime: {
+          ...layer.runtime,
+          status: LAYER_STATUS.IDLE,
+          requestId: null,
+          error: null,
         },
       }));
     case 'SET_VISIBLE':
@@ -155,13 +176,17 @@ export const layerReducer = (state, action = {}) => {
         },
       }));
     case 'SET_SDK_LAYER':
-      return updateNode(state, action.layerId, (layer) => ({ ...layer, sdkLayer: action.sdkLayer || null }));
+      return updateRequestedNode(state, action, (layer) => ({
+        ...layer,
+        sdkLayer: action.sdkLayer || null,
+      }));
     case 'SET_DISABLED':
       return updateNode(state, action.layerId, (layer) => ({
         ...layer,
         runtime: {
           ...layer.runtime,
           status: action.disabled ? LAYER_STATUS.DISABLED : LAYER_STATUS.IDLE,
+          requestId: action.disabled ? null : layer.runtime.requestId,
         },
       }));
     default:
