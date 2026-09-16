@@ -232,7 +232,7 @@ export const isSmallViewport = (matchMedia = typeof window !== "undefined" ? win
  * while dataset indexing/session/observability code is emitted as lazy chunks.
  */
 export const loadProductionSearchRuntimeModules = async () => Promise.all([
-    import("../../../Toolbox/SearchCoordinatorRuntime"),
+    import("../../../Toolbox/NextGenerationSearchCoordinatorRuntime"),
     import("../../../Toolbox/SearchSessionRuntime"),
     import("../../../Toolbox/SearchObservabilityRuntime")
 ]);
