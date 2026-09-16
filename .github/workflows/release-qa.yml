@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   typed-release-audit:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout with baseline history
@@ -65,7 +65,7 @@ jobs:
           retention-days: 21
 
   webclient-release-validation:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
@@ -121,7 +121,7 @@ jobs:
         run: node scripts/web-build-budget.mjs build --strict
 
   backend-release-validation:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
