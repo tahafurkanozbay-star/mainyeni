@@ -275,12 +275,18 @@ export const createQueryRuntime = (configuration = {}) => {
 
     metrics.networkStarts += 1;
 
-    entry.promise = Promise.resolve()
-      .then(() => factory({
+    let requestPromise;
+    try {
+      requestPromise = Promise.resolve(factory({
         key,
         signal: controller?.signal,
         startedAt,
-      }))
+      }));
+    } catch (error) {
+      requestPromise = Promise.reject(error);
+    }
+
+    entry.promise = requestPromise
       .then((value) => {
         metrics.successes += 1;
         writeCache(key, value, options);
