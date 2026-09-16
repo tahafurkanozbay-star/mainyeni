@@ -1,36 +1,16 @@
-import axios from 'axios';
-import {AppConfig} from "../Core/AppConfig";
-import { AuthBusiness } from "./AuthBusiness";
+import { apiClient } from "../platform/http/httpClient";
 
 export const LayerBusiness = {
-
     /* Katmanlar için kullanıcı yetkilerini alır */
     GetLayers: async () => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise(resolve => {
-
-            let url = AppConfig.Api.BaseUrl + '/Gis/Layer/ListGrouped';
-
-           axios({
-                method: "get",
-                url: url,
-                headers: _headers,
-            }).then((response) => {
-
-                let result = response.data;
-                resolve(result);
-
-            }).catch(function (error) {
-
-                console.log(error);
-                resolve(null);
-
+        try {
+            return await apiClient.get("/Gis/Layer/ListGrouped", {
+                cache: false,
+                dedupe: true
             });
-
-        });
+        } catch (error) {
+            console.error("Layer metadata could not be loaded", error);
+            return null;
+        }
     }
-
-
-}
+};
