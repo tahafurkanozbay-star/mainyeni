@@ -3,10 +3,11 @@
 /**
  * Kent Rehberi Experience quality guard.
  *
- * Dependency-free by design so it can run before CRA/Jest and during toolchain
- * migrations. The guard blocks new remote presentation assets, destructive
- * keyboard-focus suppression and competing GIS icon registries. Existing debt
- * is explicit and narrow; removing an allowlisted item should remove its budget.
+ * Dependency-free by design so it can run before the application toolchain and
+ * during migrations. The guard blocks new remote presentation assets,
+ * destructive keyboard-focus suppression and competing GIS icon registries.
+ * Existing debt is explicit and narrow; removing an allowlisted item should
+ * remove its budget.
  */
 const fs = require("fs");
 const path = require("path");
@@ -18,8 +19,8 @@ const TEXT_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less", ".html", ".h
 const ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".otf"]);
 const LARGE_ASSET_BYTES = 1024 * 1024;
 const CANONICAL_ICON_REGISTRY = "src/gis-engine/iconRegistry.json";
-const ICON_RESOLVER = "src/gis-engine/iconResolver.js";
-const ICON_PRESENTATION = "src/gis-engine/iconPresentation.js";
+const ICON_RESOLVER = "src/gis-engine/iconResolver.ts";
+const ICON_PRESENTATION = "src/gis-engine/iconPresentation.ts";
 
 const LEGACY_DEBT = Object.freeze({
     remotePresentation: new Map([
@@ -248,6 +249,8 @@ function selfTest() {
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { box-shadow: none !important; }").length, 0);
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 0 !important; box-shadow: none !important; }")[0].severity, "error");
     assert.strictEqual(debtAllows("remotePresentation", relativeVirtual, "https://fonts.googleapis.com"), false);
+    assert.strictEqual(path.extname(ICON_RESOLVER), ".ts");
+    assert.strictEqual(path.extname(ICON_PRESENTATION), ".ts");
     console.log("Experience quality audit self-test: PASS");
 }
 
