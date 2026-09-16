@@ -11,7 +11,6 @@ import {
 import { createLineIndex, selectWebSource, snippetAround } from './inventory.mts';
 
 const URL_PATTERN = /\bhttps?:\/\/[^\s'"`<>)}\]]+/gi;
-const URL_IN_TEMPLATE_PATTERN = /https?:\/\/[^\s`$<>)}\]]+/gi;
 const REMOTE_STYLE_PATTERN = /@import\s+(?:url\()?\s*['"]?(https?:\/\/[^'"\s)]+)/gi;
 const NETWORK_CALL_PATTERN = /\b(?:fetch|axios\.(?:get|post|put|patch|delete)|XMLHttpRequest|QueryTask)\b/g;
 const DIRECT_FETCH_PATTERN = /\bfetch\s*\(/g;
@@ -66,7 +65,7 @@ function classifyReference(file: SourceFile, url: URL): ExternalReference['categ
 function extractReferences(file: SourceFile): ExternalReference[] {
   const references: ExternalReference[] = [];
   const lineIndex = createLineIndex(file.text);
-  const patterns = [URL_PATTERN, URL_IN_TEMPLATE_PATTERN, REMOTE_STYLE_PATTERN];
+  const patterns = [URL_PATTERN, REMOTE_STYLE_PATTERN];
   const seen = new Set<string>();
 
   for (const pattern of patterns) {
