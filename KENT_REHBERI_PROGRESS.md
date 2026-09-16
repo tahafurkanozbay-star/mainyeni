@@ -230,3 +230,69 @@
 ## Kurallar
 - Çalışan davranışlar korunur; WMS/WFS eklenmez; gerçek servis ve response şeması incelenmeden endpoint varsayılmaz.
 - Browser Network panelinin tamamen gizlenemeyeceği kabul edilir; güvenlik server-side authorization, least privilege ve data minimization ile kurulur.
+
+## Deep QA / Release / Data-Search Whole-Code Modernization — 2026-09-16
+
+### TUR / GÖREV / BRANCH / COMMIT / PR / MERGE DURUMU
+- TUR: PR #28 üzerinde zorunlu 4.000+ GitHub additions eşiğini gerçek Data/Search QA ve release-modernization işiyle tamamlama, kırmızı CI'ı aynı turda düzeltme ve merge-candidate doğrulama turu.
+- Başlangıç `main` / merge-base: `44ba914ade9df322b01de634356394f821b400ab`.
+- Branch: `agent/data-search-20260916-0837-44ba914`.
+- PR: #28 `feat(data-search): build deterministic data integrity runtime`.
+- Final doğrulanmış PR kod head: `66001186a97d76c02a1b531d39308bf91107e539`.
+- MERGE: PR #28 external/concurrent GitHub işlemiyle green gate sonrasında squash-merge edildi.
+- Squash merge commit: `f15a104889f28a1a0955573d0ff6d3afbfa8a95e`.
+- Merge'in hemen ardından `main` üzerinde bağımsız `README.md` güncellemesi `dae1d6170eae2196e7db521af7ab276a14bd0e94` oluştu; bu progress kaydı ürün kodunu değiştirmeyen post-merge kayıt uzlaştırmasıdır.
+
+### ANLAMLI KAPSAM / ADDITIONS GATE
+- Final PR ölçümü: 16 changed files, 6.153 additions, 11 deletions; zorunlu `additions >= 4000` release eşiği anlamlı kod/test kapsamıyla aşıldı.
+- Satır eşiği için boilerplate, anlamsız test kopyası veya sahte refactor eklenmedi.
+- Paket; ortak data integrity, schema normalization/drift, address hierarchy/spatial search, bounded search index, schema-aware execution/ranking, release-quality guardrails, presentation normalization ve QuerySearch/shared-icon entegrasyonundan oluşuyor.
+
+### UYGULANAN DATA / SEARCH / ADDRESS MODERNİZASYONU
+- `DataIntegrityHelper`: Unicode/control-character-safe metin normalizasyonu, Türkçe arama/kategori anahtarları, finite numeric/coordinate/ID doğrulaması, bounded pagination, deterministik fingerprint/dedup ve locale-aware sıralama.
+- `RecordSchemaRuntime`: alias-aware schema contract'ı, type coercion, required/default alanlar, unknown/missing-field drift diagnostikleri, record collection normalization ve facet sayımları.
+- `AddressSearchRuntime`: district/neighborhood/street/building/door hierarchy modeli, canonical address, coordinate parsing/haversine/bounding-box spatial filtre, address index, ancestor/child traversal, weighted query scoring, nearest-address ve hierarchy quality diagnostics.
+- `SearchIndexRuntime`: token/prefix indexleri, fuzzy search, bounded filtre/facet/pagination, cache identity/limits ve deterministic sonuç sözleşmesi.
+- `SearchExecutionRuntime`: generic eq/neq/in/prefix/contains/exists/gte/lte/between filtreleri, schema-aware field reads, weighted ranking, cancellation (`AbortError`), postings candidate selection, deterministic sort/facets, cache key, page merge/dedup ve non-progressing cursor koruması.
+- `DataReleaseGuardRuntime`: rejected/invalid/duplicate/unknown/missing/hierarchy/conflicting-ID/geocoding/search-filter oranları için representative-sample release policy; pass/warning/block kararları; baseline-vs-candidate regressions ve quality fingerprint.
+- `RecordPresentationRuntime`: normalize edilmiş UI-safe record presentation sözleşmesi.
+- `QuerySearchRuntime`: `record.attributes` dahil schema-tolerant source extraction ve mevcut `gis-engine/iconPresentation` üzerinden merkezi icon model entegrasyonu. İkinci icon authority oluşturulmadı.
+
+### İLK DOĞRULAMA — KIRMIZI CI VE AYNI TURDA DÜZELTİLEN REGRESYONLAR
+- İlk exact-head doğrulamasında Platform Architecture Audit yeşilken Webclient Quality test adımında kırmızı döndü: 4 suite / 7 test failure, 437/444 test pass.
+- Address search'te query ile hiç eşleşmeyen kayda yalnız level bonusu nedeniyle pozitif score verilmesi tespit edildi; `scoreAddressDocument` unmatched durumda 0 dönecek şekilde düzeltildi. Bu, impossible-filter ve hierarchy search false-positive regresyonlarını kapattı.
+- Specialized address/search option normalizer'larında malformed/nonpositive `limit` değerlerinin generic clamp nedeniyle 1'e düşmesi yerine ilgili runtime default limitlerine dönmesi sağlandı; max limit cap korunuyor.
+- Coordinate fallback testinde `[longitude, latitude]` alternatifinin geçerli bir koordinat üretebildiği durumda eski test beklentisinin yanlış olduğu ayrıştırıldı; runtime'ın güvenli fallback sözleşmesi korunup test gerçek davranışa hizalandı.
+- SearchExecution page-merge testi varsayılan relevance ordering'i source-order sanıyordu; production davranış değiştirilmeden test, iki sayfadaki gerçek hit'lerin stable key dedup invariant'ını doğrulayacak şekilde order-agnostic hale getirildi.
+- Paralel/shared branch'e gelen üç düzeltme commit'i ezilmedi; branch compare ile değişiklikler incelenip yalnız kalan SearchExecution test sözleşmesi mevcut en yeni file SHA üzerinde güncellendi.
+
+### İKİNCİ DOĞRULAMA / TEST / BUILD / CI
+- Exact PR kod head `66001186a97d76c02a1b531d39308bf91107e539` için Platform Architecture Audit run #45: `completed/success`.
+- Exact PR kod head için Webclient Quality run #596: `completed/success`.
+- CI merge-ref checkout'u `09332c75c17603ab97486997ad407f2da9b5600b` ile branch head + o anki `main` merge candidate ağacını test etti.
+- Runner: Ubuntu 24.04.5; Node v24.20.0; npm 11.19.0.
+- `npm ci`: PASS; 2.049 package install edildi.
+- lint-if-present: PASS.
+- typecheck-if-present: PASS.
+- Tests: 33/33 suites PASS, 756/756 tests PASS, 0 snapshot; süre yaklaşık 6.1 s.
+- `CI=true npm run build`: PASS, `Compiled successfully.`.
+- Production main JS gzip yaklaşık 44.57 KB; en büyük JS chunk yaklaşık 109.85 KB.
+- Build halen `fs.F_OK` deprecation ve outdated `caniuse-lite` uyarılarını gösteriyor; bunlar bu turda kırıcı toolchain rewrite ile gizlenmedi.
+
+### SECURITY / PERFORMANCE / REGRESSION REVIEW
+- Search ve address pagination limitleri bounded; non-progressing cursor ve duplicate page merge koruması eklendi.
+- Search execution cancellation desteği uzun taramalarda stale/cancelled sonuçların devam etmesini sınırlar.
+- Schema drift ve kalite oranları release guardrail'lerine taşındı; düşük örneklemde sahte blocker üretmemek için minimum sample semantics var.
+- Merkezi icon presentation kullanıldığı için list/GIS type/category mapping drift riski azaltıldı; `iconRegistry.json` dışında ikinci mapping sistemi kurulmadı.
+- Yeni WMS/WFS, uydurma servis URL'si, analytics/CDN veya üçüncü taraf network bağımlılığı eklenmedi.
+- SearchIndex ve SearchExecution runtime'ları farklı sorumluluklar taşısa da token/index/ranking primitive'lerinde kısmi örtüşme var; sonraki turda performans ölçümüyle ortak primitive konsolidasyonu değerlendirilmeli, davranış kanıtı olmadan kör rewrite yapılmamalı.
+
+### KALAN RELEASE / SECURITY RİSKLERİ
+- CI audit borcu değişmedi: 197 vulnerability = 10 low, 116 moderate, 53 high, 18 critical.
+- Özellikle legacy CRA/react-scripts zinciri ile axios, DOMPurify, crypto-js ve jsPDF yüksek öncelikli targeted dependency modernization gerektiriyor. `npm audit fix --force` uygulanmadı; audit bazı önerilerde breaking react-scripts/axios/jsPDF sıçraması istiyor.
+- `fs.F_OK` deprecation ve outdated `caniuse-lite` build uyarıları kontrollü build-tooling modernizasyonuna alınmalı.
+- Gerçek tarayıcı/device üzerinde responsive, screen-reader, forced-colors/reduced-motion ve büyük veri latency/performance smoke bu connector turunda çalıştırılamadı; otomatik unit/build doğrulamasının yerine geçtiği varsayılmamalı.
+- PR #28 final merge durumu doğrulandı; merge sonrası `main` ayrıca README güncellemesiyle ilerledi. Bu progress commit'i yalnız kayıt uzlaştırmasıdır ve ürün runtime davranışını değiştirmez.
+
+### SONRAKİ TUR ÖNCELİĞİ
+- Ayrı kontrollü turda production-facing axios/DOMPurify/crypto-js/jsPDF zincirini çağrı-site testleri ve bundle/build karşılaştırmasıyla modernize et; aynı zamanda SearchIndex/SearchExecution ortak primitive konsolidasyonunu gerçek performans ölçümüyle değerlendir.
