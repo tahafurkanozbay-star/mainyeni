@@ -12,10 +12,9 @@ const legacyJsxPlugin = (): Plugin => ({
         runtime: 'automatic',
       },
     });
-    return {
-      code: result.code,
-      map: result.map,
-    };
+    return result.map
+      ? { code: result.code, map: result.map }
+      : { code: result.code };
   },
 });
 
