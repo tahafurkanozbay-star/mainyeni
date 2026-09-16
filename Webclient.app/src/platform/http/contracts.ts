@@ -78,7 +78,6 @@ export interface RawRequestConfig<TBody = RequestBody> {
   schedulerGroup?: string;
   schedulerBypass?: boolean;
   schedulerTimeoutMs?: number;
-  [key: string]: unknown;
 }
 
 export interface NormalizedRequestConfig<TBody = RequestBody>
@@ -397,9 +396,11 @@ export const normalizeSchedulerGroup = (value: unknown): string => {
 
 export const normalizeSchedulerLabel = (value: unknown): string | null => {
   if (value === null || value === undefined) return null;
-  const text = String(value).trim();
-  if (!text) return null;
-  return text.slice(0, 120);
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const queryIndex = raw.search(/[?#]/);
+  const safe = queryIndex >= 0 ? raw.slice(0, queryIndex) : raw;
+  return (safe.trim() || 'request').slice(0, 120);
 };
 
 export const freezeShallow = <T extends Record<string, unknown>>(value: T): Readonly<T> =>
