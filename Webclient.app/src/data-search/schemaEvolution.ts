@@ -150,6 +150,7 @@ const DEFAULT_MAX_RECORDS = 5_000;
 const DEFAULT_MAX_FIELDS = 256;
 const DEFAULT_MAX_EXAMPLES = 5;
 const DEFAULT_MAX_NESTED_DEPTH = 2;
+const MAX_DISTINCT_SAMPLES = 1_000;
 
 interface MutableFieldProfile {
   name: string;
@@ -205,33 +206,98 @@ const collectRecordFields = (
 ): Readonly<Record<string, unknown>> => {
   if (!isRecord(value)) return Object.freeze({});
   if (!includeNested || maxDepth <= 0) return value;
+
   const output: Record<string, unknown> = {};
+  const visited = new WeakSet<object>();
   const visit = (record: Readonly<Record<string, unknown>>, prefix: string, depth: number): void => {
-    for (const [key, fieldValue] of Object.entries(record)) {
+    if (visited.has(record)) return;
+    visited.add(record);
+    Object.entries(record).reduce((_, [key, fieldValue]) => {
       const path = prefix ? `${prefix}.${key}` : key;
       if (!(path in output)) output[path] = fieldValue;
       if (depth < maxDepth && isRecord(fieldValue)) visit(fieldValue, path, depth + 1);
-    }
+      return undefined;
+    }, undefined as void);
   };
+
   visit(value, '', 0);
-  return output;
+  return Object.freeze(output);
 };
 
 const dominantKind = (kinds: Readonly<Record<SchemaScalarKind, number>>): SchemaScalarKind => {
-  let selected: SchemaScalarKind = 'unknown';
-  let selectedCount = -1;
-  for (const kind of SCALAR_KINDS) {
+  const selected = SCALAR_KINDS.reduce<{ kind: SchemaScalarKind; count: number }>((current, kind) => {
+    if (kind === 'null' || kind === 'undefined') return current;
     const count = kinds[kind] ?? 0;
-    if (kind === 'null' || kind === 'undefined') continue;
-    if (count > selectedCount) {
-      selected = kind;
-      selectedCount = count;
-    }
-  }
-  if (selectedCount > 0) return selected;
+    return count > current.count ? { kind, count } : current;
+  }, { kind: 'unknown', count: -1 });
+
+  if (selected.count > 0) return selected.kind;
   if ((kinds.null ?? 0) > 0) return 'null';
   if ((kinds.undefined ?? 0) > 0) return 'undefined';
   return 'unknown';
+};
+
+const createMutableField = (name: string, normalizedName: string): MutableFieldProfile => ({
+  name,
+  normalizedName,
+  seenCount: 0,
+  nullCount: 0,
+  emptyStringCount: 0,
+  kinds: createKindCounters(),
+  examples: new Set<string>(),
+  distinctSamples: new Set<string>(),
+});
+
+const observeField = (
+  mutable: Map<string, MutableFieldProfile>,
+  fieldOrder: string[],
+  maxFields: number,
+  maxExamples: number,
+  name: string,
+  value: unknown,
+): void => {
+  const normalizedName = normalizeFieldName(name);
+  if (!normalizedName) return;
+
+  let field = mutable.get(normalizedName);
+  if (!field) {
+    if (mutable.size >= maxFields) return;
+    field = createMutableField(name, normalizedName);
+    mutable.set(normalizedName, field);
+    fieldOrder.push(normalizedName);
+  }
+
+  field.seenCount += 1;
+  const kind = classifySchemaValue(value);
+  field.kinds[kind] += 1;
+  if (value === null || value === undefined) field.nullCount += 1;
+  if (typeof value === 'string' && !value.trim()) field.emptyStringCount += 1;
+  const preview = previewValue(value);
+  if (field.examples.size < maxExamples) field.examples.add(preview);
+  if (field.distinctSamples.size < MAX_DISTINCT_SAMPLES) field.distinctSamples.add(preview);
+};
+
+const finalizeField = (
+  field: MutableFieldProfile,
+  sampleCount: number,
+): FieldSchemaProfile => {
+  const missingCount = Math.max(0, sampleCount - field.seenCount);
+  const nonEmptyCount = Math.max(0, field.seenCount - field.nullCount - field.emptyStringCount);
+  return Object.freeze({
+    name: field.name,
+    normalizedName: field.normalizedName,
+    seenCount: field.seenCount,
+    missingCount,
+    nullCount: field.nullCount,
+    emptyStringCount: field.emptyStringCount,
+    nonEmptyCount,
+    distinctSampleCount: field.distinctSamples.size,
+    kinds: Object.freeze({ ...field.kinds }),
+    dominantKind: dominantKind(field.kinds),
+    nullable: field.nullCount > 0,
+    required: sampleCount > 0 && missingCount === 0 && field.nullCount === 0,
+    examples: Object.freeze([...field.examples]),
+  });
 };
 
 export const profileDatasetSchema = (
@@ -263,63 +329,20 @@ export const profileDatasetSchema = (
   const mutable = new Map<string, MutableFieldProfile>();
   const fieldOrder: string[] = [];
 
-  for (const raw of sample) {
+  sample.reduce((_, raw) => {
     const fields = collectRecordFields(raw, options.includeNestedFields === true, maxDepth);
-    for (const [name, value] of Object.entries(fields)) {
-      const normalizedName = normalizeFieldName(name);
-      if (!normalizedName) continue;
-      let field = mutable.get(normalizedName);
-      if (!field) {
-        if (mutable.size >= maxFields) continue;
-        field = {
-          name,
-          normalizedName,
-          seenCount: 0,
-          nullCount: 0,
-          emptyStringCount: 0,
-          kinds: createKindCounters(),
-          examples: new Set<string>(),
-          distinctSamples: new Set<string>(),
-        };
-        mutable.set(normalizedName, field);
-        fieldOrder.push(normalizedName);
-      }
-      field.seenCount += 1;
-      const kind = classifySchemaValue(value);
-      field.kinds[kind] += 1;
-      if (value === null || value === undefined) field.nullCount += 1;
-      if (typeof value === 'string' && !value.trim()) field.emptyStringCount += 1;
-      const preview = previewValue(value);
-      if (field.examples.size < maxExamples) field.examples.add(preview);
-      if (field.distinctSamples.size < 1_000) field.distinctSamples.add(preview);
-    }
-  }
+    Object.entries(fields).reduce((__, [name, value]) => {
+      observeField(mutable, fieldOrder, maxFields, maxExamples, name, value);
+      return undefined;
+    }, undefined as void);
+    return undefined;
+  }, undefined as void);
 
-  const fields: Record<string, FieldSchemaProfile> = {};
-  for (const normalizedName of fieldOrder) {
+  const fields = fieldOrder.reduce<Record<string, FieldSchemaProfile>>((result, normalizedName) => {
     const field = mutable.get(normalizedName);
-    if (!field) continue;
-    const missingCount = Math.max(0, sample.length - field.seenCount);
-    const nonEmptyCount = Math.max(
-      0,
-      field.seenCount - field.nullCount - field.emptyStringCount,
-    );
-    fields[normalizedName] = Object.freeze({
-      name: field.name,
-      normalizedName,
-      seenCount: field.seenCount,
-      missingCount,
-      nullCount: field.nullCount,
-      emptyStringCount: field.emptyStringCount,
-      nonEmptyCount,
-      distinctSampleCount: field.distinctSamples.size,
-      kinds: Object.freeze({ ...field.kinds }),
-      dominantKind: dominantKind(field.kinds),
-      nullable: field.nullCount > 0,
-      required: sample.length > 0 && missingCount === 0 && field.nullCount === 0,
-      examples: Object.freeze([...field.examples]),
-    });
-  }
+    if (field) result[normalizedName] = finalizeField(field, sample.length);
+    return result;
+  }, {});
 
   const fingerprintPayload = fieldOrder.map(name => {
     const field = fields[name];
@@ -327,6 +350,7 @@ export const profileDatasetSchema = (
       ? [name, field.dominantKind, field.required, field.nullable, field.kinds]
       : [name];
   });
+
   return Object.freeze({
     version: 1 as const,
     inputCount: records.length,
@@ -345,19 +369,15 @@ const nonNullKinds = (profile: FieldSchemaProfile): Set<SchemaScalarKind> =>
     && kind !== 'unknown'
     && (profile.kinds[kind] ?? 0) > 0));
 
-const setContains = <T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean => {
-  for (const item of right) if (!left.has(item)) return false;
-  return true;
-};
+const setContains = <T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean =>
+  Array.from(right).every(item => left.has(item));
 
 const compatibilityRank = (value: SchemaCompatibility): number =>
   value === 'breaking' ? 2 : value === 'warning' ? 1 : 0;
 
-const worstCompatibility = (values: readonly SchemaCompatibility[]): SchemaCompatibility => {
-  let result: SchemaCompatibility = 'compatible';
-  for (const value of values) if (compatibilityRank(value) > compatibilityRank(result)) result = value;
-  return result;
-};
+const worstCompatibility = (values: readonly SchemaCompatibility[]): SchemaCompatibility =>
+  values.reduce<SchemaCompatibility>((result, value) =>
+    compatibilityRank(value) > compatibilityRank(result) ? value : result, 'compatible');
 
 const finding = (
   kind: SchemaDriftKind,
@@ -376,6 +396,90 @@ const finding = (
   detail,
 });
 
+const appendCandidateAddition = (
+  findings: SchemaDriftFinding[],
+  baselineNames: ReadonlySet<string>,
+  candidate: DatasetSchemaProfile,
+  name: string,
+): void => {
+  if (baselineNames.has(name)) return;
+  const after = candidate.fields[name] ?? null;
+  findings.push(finding(
+    'field-added',
+    after?.required ? 'warning' : 'compatible',
+    name,
+    null,
+    after,
+    `Field ${name} was added`,
+  ));
+};
+
+const appendBaselineComparison = (
+  findings: SchemaDriftFinding[],
+  candidateNames: ReadonlySet<string>,
+  baseline: DatasetSchemaProfile,
+  candidate: DatasetSchemaProfile,
+  name: string,
+): void => {
+  const before = baseline.fields[name] ?? null;
+  if (!candidateNames.has(name)) {
+    findings.push(finding(
+      'field-removed',
+      'breaking',
+      name,
+      before,
+      null,
+      `Field ${name} was removed`,
+    ));
+    return;
+  }
+
+  const after = candidate.fields[name] ?? null;
+  if (!before || !after) return;
+  const beforeKinds = nonNullKinds(before);
+  const afterKinds = nonNullKinds(after);
+  if (!setContains(beforeKinds, afterKinds)) {
+    findings.push(finding(
+      'type-expanded',
+      'warning',
+      name,
+      before,
+      after,
+      `Field ${name} now contains additional value kinds`,
+    ));
+  } else if (!setContains(afterKinds, beforeKinds)) {
+    findings.push(finding(
+      'type-narrowed',
+      before.required ? 'breaking' : 'warning',
+      name,
+      before,
+      after,
+      `Field ${name} no longer contains all baseline value kinds`,
+    ));
+  }
+
+  if (before.required !== after.required) {
+    findings.push(finding(
+      'requiredness-changed',
+      before.required && !after.required ? 'breaking' : 'warning',
+      name,
+      before,
+      after,
+      `Field ${name} requiredness changed from ${before.required} to ${after.required}`,
+    ));
+  }
+  if (before.nullable !== after.nullable) {
+    findings.push(finding(
+      'nullability-changed',
+      !before.nullable && after.nullable ? 'warning' : 'compatible',
+      name,
+      before,
+      after,
+      `Field ${name} nullability changed from ${before.nullable} to ${after.nullable}`,
+    ));
+  }
+};
+
 export const compareSchemaProfiles = (
   baseline: DatasetSchemaProfile,
   candidate: DatasetSchemaProfile,
@@ -384,76 +488,14 @@ export const compareSchemaProfiles = (
   const baselineNames = new Set(Object.keys(baseline.fields));
   const candidateNames = new Set(Object.keys(candidate.fields));
 
-  for (const name of [...candidateNames].sort()) {
-    if (!baselineNames.has(name)) {
-      const after = candidate.fields[name] ?? null;
-      findings.push(finding(
-        'field-added',
-        after?.required ? 'warning' : 'compatible',
-        name,
-        null,
-        after,
-        `Field ${name} was added`,
-      ));
-    }
-  }
-  for (const name of [...baselineNames].sort()) {
-    if (!candidateNames.has(name)) {
-      findings.push(finding(
-        'field-removed',
-        'breaking',
-        name,
-        baseline.fields[name] ?? null,
-        null,
-        `Field ${name} was removed`,
-      ));
-      continue;
-    }
-    const before = baseline.fields[name];
-    const after = candidate.fields[name];
-    if (!before || !after) continue;
-    const beforeKinds = nonNullKinds(before);
-    const afterKinds = nonNullKinds(after);
-    if (!setContains(beforeKinds, afterKinds)) {
-      findings.push(finding(
-        'type-expanded',
-        'warning',
-        name,
-        before,
-        after,
-        `Field ${name} now contains additional value kinds`,
-      ));
-    } else if (!setContains(afterKinds, beforeKinds)) {
-      findings.push(finding(
-        'type-narrowed',
-        before.required ? 'breaking' : 'warning',
-        name,
-        before,
-        after,
-        `Field ${name} no longer contains all baseline value kinds`,
-      ));
-    }
-    if (before.required !== after.required) {
-      findings.push(finding(
-        'requiredness-changed',
-        before.required && !after.required ? 'breaking' : 'warning',
-        name,
-        before,
-        after,
-        `Field ${name} requiredness changed from ${before.required} to ${after.required}`,
-      ));
-    }
-    if (before.nullable !== after.nullable) {
-      findings.push(finding(
-        'nullability-changed',
-        !before.nullable && after.nullable ? 'warning' : 'compatible',
-        name,
-        before,
-        after,
-        `Field ${name} nullability changed from ${before.nullable} to ${after.nullable}`,
-      ));
-    }
-  }
+  Array.from(candidateNames).sort().reduce((_, name) => {
+    appendCandidateAddition(findings, baselineNames, candidate, name);
+    return undefined;
+  }, undefined as void);
+  Array.from(baselineNames).sort().reduce((_, name) => {
+    appendBaselineComparison(findings, candidateNames, baseline, candidate, name);
+    return undefined;
+  }, undefined as void);
 
   findings.sort((left, right) =>
     compatibilityRank(right.compatibility) - compatibilityRank(left.compatibility)
@@ -464,6 +506,7 @@ export const compareSchemaProfiles = (
     .filter(item => item.kind !== 'field-added' && item.kind !== 'field-removed')
     .map(item => item.field))).sort();
   const compatibility = worstCompatibility(findings.map(item => item.compatibility));
+
   return Object.freeze({
     baselineFingerprint: baseline.fingerprint,
     candidateFingerprint: candidate.fingerprint,
@@ -483,17 +526,17 @@ export const evaluateAliasCoverage = (
   schema: RecordAliasSchema,
 ): AliasCoverageReport => {
   const available = new Set(Object.keys(profile.fields));
-  const entries: AliasCoverageEntry[] = [];
-  for (const [semanticField, rawAliases] of Object.entries(schema)) {
+  const entries = Object.entries(schema).map(([semanticField, rawAliases]) => {
     const aliases = (rawAliases ?? []).map(normalizeFieldName).filter(Boolean);
     const matchedFields = aliases.filter(alias => available.has(alias));
-    entries.push(Object.freeze({
+    return Object.freeze({
       semanticField: semanticField as keyof RecordAliasSchema,
       aliases: Object.freeze(aliases),
       matchedFields: Object.freeze(matchedFields),
       covered: matchedFields.length > 0,
-    }));
-  }
+    });
+  });
+
   return Object.freeze({
     coveredCount: entries.filter(item => item.covered).length,
     missingCount: entries.filter(item => !item.covered).length,
@@ -506,12 +549,11 @@ export const compareAliasCoverage = (
   candidate: AliasCoverageReport,
 ): readonly SchemaDriftFinding[] => {
   const before = new Map(baseline.entries.map(entry => [entry.semanticField, entry]));
-  const findings: SchemaDriftFinding[] = [];
-  for (const entry of candidate.entries) {
+  const findings = candidate.entries.reduce<SchemaDriftFinding[]>((result, entry) => {
     const previous = before.get(entry.semanticField);
-    if (!previous) continue;
+    if (!previous) return result;
     if (previous.covered && !entry.covered) {
-      findings.push(finding(
+      result.push(finding(
         'alias-coverage-lost',
         'breaking',
         String(entry.semanticField),
@@ -520,7 +562,7 @@ export const compareAliasCoverage = (
         `No known alias remains for semantic field ${String(entry.semanticField)}`,
       ));
     } else if (!previous.covered && entry.covered) {
-      findings.push(finding(
+      result.push(finding(
         'alias-coverage-added',
         'compatible',
         String(entry.semanticField),
@@ -529,7 +571,8 @@ export const compareAliasCoverage = (
         `Alias coverage was added for semantic field ${String(entry.semanticField)}`,
       ));
     }
-  }
+    return result;
+  }, []);
   return Object.freeze(findings);
 };
 
@@ -571,21 +614,30 @@ export class SchemaMigrationRegistry {
     const toVersion = versionKey(toVersionInput);
     if (!fromVersion || !toVersion) throw new TypeError('Schema versions are required');
     if (fromVersion === toVersion) return Object.freeze([]);
+
     const boundedMax = normalizeInteger(maxSteps, { min: 1, max: 128, fallback: 32 });
     const queue: Array<{ version: string; path: readonly SchemaMigrationStep[] }> = [
       { version: fromVersion, path: [] },
     ];
     const visited = new Set<string>([fromVersion]);
+
     while (queue.length) {
       const current = queue.shift();
       if (!current || current.path.length >= boundedMax) continue;
-      for (const step of this.byFrom.get(current.version) ?? []) {
+      let resolved: readonly SchemaMigrationStep[] | null = null;
+      (this.byFrom.get(current.version) ?? []).some(step => {
         const path = [...current.path, step];
-        if (step.toVersion === toVersion) return Object.freeze(path);
-        if (visited.has(step.toVersion)) continue;
-        visited.add(step.toVersion);
-        queue.push({ version: step.toVersion, path });
-      }
+        if (step.toVersion === toVersion) {
+          resolved = path;
+          return true;
+        }
+        if (!visited.has(step.toVersion)) {
+          visited.add(step.toVersion);
+          queue.push({ version: step.toVersion, path });
+        }
+        return false;
+      });
+      if (resolved) return Object.freeze(resolved);
     }
     return Object.freeze([]);
   }
@@ -603,43 +655,50 @@ export class SchemaMigrationRegistry {
     if (fromVersion !== toVersion && !path.length) {
       throw new Error(`No schema migration path from ${fromVersion} to ${toVersion}`);
     }
+
     const source = Array.isArray(input) ? input : [];
-    const records: Readonly<Record<string, unknown>>[] = [];
-    const errors: SchemaMigrationError[] = [];
-    source.forEach((raw, index) => {
+    const migrated = source.reduce<{
+      records: Readonly<Record<string, unknown>>[];
+      errors: SchemaMigrationError[];
+    }>((result, raw, index) => {
       if (!isRecord(raw)) {
-        errors.push(Object.freeze({ index, stepId: 'input', message: 'Record is not an object' }));
-        return;
+        result.errors.push(Object.freeze({ index, stepId: 'input', message: 'Record is not an object' }));
+        return result;
       }
-      let current: Readonly<Record<string, unknown>> = Object.freeze({ ...raw });
+
+      let activeStepId = 'migration';
       try {
-        for (const step of path) {
-          current = Object.freeze({ ...step.transform(current, {
+        const initial = Object.freeze({ ...raw });
+        const current = path.reduce<Readonly<Record<string, unknown>>>((record, step) => {
+          activeStepId = step.id;
+          return Object.freeze({ ...step.transform(record, {
             datasetKey,
             fromVersion: step.fromVersion,
             toVersion: step.toVersion,
             stepId: step.id,
             index,
           }) });
-        }
-        records.push(current);
+        }, initial);
+        result.records.push(current);
       } catch (error) {
-        errors.push(Object.freeze({
+        result.errors.push(Object.freeze({
           index,
-          stepId: path.find(step => step.id)?.id ?? 'migration',
+          stepId: activeStepId,
           message: error instanceof Error ? error.message : String(error),
         }));
       }
-    });
+      return result;
+    }, { records: [], errors: [] });
+
     return Object.freeze({
       datasetKey,
       fromVersion,
       toVersion,
       path: Object.freeze(path.map(step => step.id)),
-      records: Object.freeze(records),
-      transformedCount: records.length,
-      rejectedCount: errors.length,
-      errors: Object.freeze(errors),
+      records: Object.freeze(migrated.records),
+      transformedCount: migrated.records.length,
+      rejectedCount: migrated.errors.length,
+      errors: Object.freeze(migrated.errors),
     });
   }
 
