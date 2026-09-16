@@ -22,6 +22,7 @@ test('counts code and package manifests', async t => {
   assert.equal(report.summary.codeFiles, 2);
   assert.equal(report.summary.packageManifests, 1);
   assert.equal(report.summary.packageRiskCount, 2);
+  assert.equal(report.packages[0].file, 'package.json');
 });
 
 test('detects network boundaries and remote assets', async t => {
@@ -32,6 +33,8 @@ test('detects network boundaries and remote assets', async t => {
   assert.ok(report.network.some(x => x.kind === 'websocket'));
   assert.ok(report.network.some(x => x.kind === 'absolute-http'));
   assert.ok(report.externalAssets.some(x => x.kind === 'remote-google-font'));
+  assert.ok(report.network.every(x => x.file.startsWith('src/')));
+  assert.deepEqual(report.externalAssets, [{ file: 'src/site.css', kind: 'remote-google-font' }]);
 });
 
 test('detects security-sensitive browser APIs', async t => {
@@ -41,6 +44,7 @@ test('detects security-sensitive browser APIs', async t => {
   const kinds = new Set(report.security.map(x => x.kind));
   assert.ok(kinds.has('innerHTML')); assert.ok(kinds.has('eval')); assert.ok(kinds.has('local-storage-token'));
   assert.ok(report.summary.securityWeightedScore >= 10);
+  assert.ok(report.security.every(x => x.file === 'src/risky.js'));
 });
 
 test('detects legacy React and polyfill patterns', async t => {
@@ -49,6 +53,7 @@ test('detects legacy React and polyfill patterns', async t => {
   const report = await runAudit(root);
   const kinds = new Set(report.legacy.map(x => x.kind));
   assert.ok(kinds.has('reactdom-render')); assert.ok(kinds.has('component-will-mount')); assert.ok(kinds.has('promise-polyfill'));
+  assert.ok(report.legacy.every(x => !path.isAbsolute(x.file)));
 });
 
 test('parses centralized and project target frameworks', async t => {
@@ -57,6 +62,8 @@ test('parses centralized and project target frameworks', async t => {
   const report = await runAudit(root);
   assert.ok(report.dotnet.some(x => x.frameworks.includes('net10.0')));
   assert.ok(report.dotnet.some(x => x.packages.some(p => p.name === 'Example')));
+  assert.ok(report.dotnet.some(x => x.file === 'Api/Api.csproj'));
+  assert.ok(report.dotnet.some(x => x.file === 'Directory.Build.props'));
 });
 
 test('skips node_modules and build output', async t => {
@@ -78,4 +85,5 @@ test('reports wildcard CORS as high severity', async t => {
   const report = await runAudit(root);
   const finding = report.security.find(x => x.kind === 'wildcard-cors');
   assert.equal(finding?.severity, 'high');
+  assert.equal(finding?.file, 'config.json');
 });
