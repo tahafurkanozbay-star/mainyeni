@@ -1,0 +1,55 @@
+name: One-shot Strict Lint Autofix
+
+on:
+  push:
+    branches:
+      - agent/data-search-production-v2-20260916-1246-851a5c9
+
+permissions:
+  contents: write
+
+jobs:
+  autofix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/data-search-production-v2-20260916-1246-851a5c9
+          fetch-depth: 0
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Install from lockfile
+        working-directory: Webclient.app
+        run: npm ci
+
+      - name: Apply Oxlint safe fixes
+        working-directory: Webclient.app
+        run: npx --no-install oxlint --fix src tooling vite.config.ts vitest.config.ts || true
+
+      - name: Report remaining warnings
+        working-directory: Webclient.app
+        run: npx --no-install oxlint src tooling vite.config.ts vitest.config.ts || true
+
+      - name: Validate patch whitespace
+        run: git diff --check
+
+      - name: Commit safe autofixes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No safe autofixes were available."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Webclient.app/src Webclient.app/tooling Webclient.app/vite.config.ts Webclient.app/vitest.config.ts
+          git commit -m "chore(search): apply strict lint safe fixes"
+          git push origin HEAD:agent/data-search-production-v2-20260916-1246-851a5c9
