@@ -8,16 +8,8 @@ let mockState;
 jest.mock("../Store", () => ({
     __esModule: true,
     default: {
-        getState: jest.fn(() => mockState),
-        dispatch: jest.fn(action => {
-            if (action.type === "SET_GRAPHICS_TEST") {
-                mockState.Map.Graphics = action.payload;
-            }
-            if (action.type === "SET_MAP_VIEW_TEST") {
-                mockState.Map.MapView = action.payload;
-            }
-            return action;
-        })
+        getState: jest.fn(),
+        dispatch: jest.fn()
     }
 }));
 
@@ -60,6 +52,16 @@ describe("MapManager GIS state ownership", () => {
             }
         };
         jest.clearAllMocks();
+        Store.getState.mockImplementation(() => mockState);
+        Store.dispatch.mockImplementation(action => {
+            if (action.type === "SET_GRAPHICS_TEST") {
+                mockState.Map.Graphics = action.payload;
+            }
+            if (action.type === "SET_MAP_VIEW_TEST") {
+                mockState.Map.MapView = action.payload;
+            }
+            return action;
+        });
         MapManager.ClearViewStateBridge();
         MapManager.ClearViewPerformanceMonitor();
     });
