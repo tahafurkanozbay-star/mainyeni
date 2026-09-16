@@ -24,11 +24,14 @@ import {
 } from "./accessibilityRuntime";
 
 const appendFixture = html => {
-    const root = document.createElement("div");
-    root.innerHTML = html;
+    const parsed = new DOMParser().parseFromString(`<div id="fixture-root">${html}</div>`, "text/html");
+    const parsedRoot = parsed.querySelector("#fixture-root");
+    const root = document.importNode(parsedRoot, true);
     document.body.appendChild(root);
     return root;
 };
+
+const clearDocumentBody = () => document.body.replaceChildren();
 
 const rect = (width, height) => ({
     width,
@@ -64,7 +67,7 @@ class FakeMediaQuery {
 
 describe("accessibilityRuntime focus helpers", () => {
     afterEach(() => {
-        document.body.innerHTML = "";
+        clearDocumentBody();
         jest.restoreAllMocks();
     });
 
@@ -137,9 +140,7 @@ describe("accessibilityRuntime focus helpers", () => {
 });
 
 describe("accessibilityRuntime focus trap", () => {
-    afterEach(() => {
-        document.body.innerHTML = "";
-    });
+    afterEach(clearDocumentBody);
 
     test("activates with requested initial focus and restores the opener", () => {
         const opener = document.createElement("button");
@@ -251,7 +252,7 @@ describe("accessibilityRuntime roving navigation", () => {
 
 describe("accessibilityRuntime announcements and media", () => {
     afterEach(() => {
-        document.body.innerHTML = "";
+        clearDocumentBody();
         jest.useRealTimers();
     });
 
@@ -322,9 +323,7 @@ describe("accessibilityRuntime announcements and media", () => {
 });
 
 describe("accessibilityRuntime skip links, shortcuts and touch targets", () => {
-    afterEach(() => {
-        document.body.innerHTML = "";
-    });
+    afterEach(clearDocumentBody);
 
     test("prepares and activates a skip target", () => {
         const target = document.createElement("main");
@@ -346,12 +345,15 @@ describe("accessibilityRuntime skip links, shortcuts and touch targets", () => {
         const button = document.createElement("button");
         const editable = document.createElement("div");
         editable.contentEditable = "true";
+        const editableChild = document.createElement("span");
+        editable.appendChild(editableChild);
         document.body.append(input, textarea, button, editable);
 
         expect(isTypingTarget(input)).toBe(true);
         expect(isTypingTarget(textarea)).toBe(true);
         expect(isTypingTarget(button)).toBe(false);
         expect(isTypingTarget(editable)).toBe(true);
+        expect(isTypingTarget(editableChild)).toBe(true);
         expect(shouldHandleGlobalShortcut({ defaultPrevented: false, isComposing: false, target: button })).toBe(true);
         expect(shouldHandleGlobalShortcut({ defaultPrevented: false, isComposing: false, target: input })).toBe(false);
         expect(shouldHandleGlobalShortcut({ defaultPrevented: true, isComposing: false, target: button })).toBe(false);
