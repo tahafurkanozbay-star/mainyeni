@@ -23,6 +23,7 @@ const ICON_PRESENTATION = "src/gis-engine/iconPresentation.js";
 
 const LEGACY_DEBT = Object.freeze({
     remotePresentation: new Map([
+        ["src/styles.css", ["fonts.googleapis.com/css?family=Mukta"]],
         ["public/index.html", ["js.arcgis.com/4.25/esri/css/main.css"]]
     ]),
     destructiveFocus: new Map([
@@ -49,8 +50,8 @@ function lineNumber(content, index) {
 }
 
 function debtAllows(kind, relativeFile, context) {
-    const entries = LEGACY_DEBT[kind]?.get(relativeFile) || [];
-    return entries.some(token => context.includes(token));
+    const entries = LEGACY_DEBT[kind]?.get(normalise(relativeFile).replace(/^\.\//, "")) || [];
+    return entries.some(token => String(context).includes(token));
 }
 
 function finding(kind, severity, file, line, message) {
@@ -233,11 +234,13 @@ function runAudit() {
 
 function selfTest() {
     const tempRoot = path.join(ROOT, "src", "__experience_audit_virtual__.css");
+    const stylesPath = path.join(ROOT, "src", "styles.css");
     const relativeVirtual = relativeToRoot(tempRoot);
 
     assert.strictEqual(auditRemotePresentationAssets(tempRoot, "@import url('https://cdn.example.com/ui.css');")[0].severity, "error");
     assert.strictEqual(auditRemotePresentationAssets(tempRoot, '<link rel="canonical" href="https://example.com/">').length, 0);
     assert.strictEqual(auditRemotePresentationAssets(tempRoot, '<link rel="stylesheet" href="https://cdn.example.com/ui.css">')[0].severity, "error");
+    assert.strictEqual(auditRemotePresentationAssets(stylesPath, "@import url('https://fonts.googleapis.com/css?family=Mukta');")[0].severity, "warning");
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: none !important; }")[0].severity, "error");
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus:not(:focus-visible) { outline: none; }").length, 0);
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 2px solid blue; }").length, 0);
