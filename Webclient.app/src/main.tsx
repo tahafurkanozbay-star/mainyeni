@@ -11,7 +11,7 @@ if (!(rootElement instanceof HTMLElement)) {
 }
 
 performanceMonitor.start();
-installBrowserRuntimeObservers(runtimeDiagnostics);
+const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics);
 
 const root = createRoot(rootElement, {
   onCaughtError(error, errorInfo) {
@@ -44,4 +44,15 @@ if (typeof requestAnimationFrame === 'function') {
   requestAnimationFrame(() => performanceMonitor.markRenderComplete());
 } else {
   queueMicrotask(() => performanceMonitor.markRenderComplete());
+}
+
+// Vite can replace the entry module while developing. Dispose global listeners,
+// observers and performance instrumentation so repeated HMR cycles cannot create
+// duplicate diagnostics or retain detached browser resources.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    runtimeObserverHandle.dispose();
+    performanceMonitor.stop();
+    root.unmount();
+  });
 }
