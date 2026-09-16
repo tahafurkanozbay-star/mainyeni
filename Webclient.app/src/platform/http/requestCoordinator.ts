@@ -131,7 +131,7 @@ export class RequestCoordinator {
     this.tuningProfile = options.tuningProfile || createRuntimeTuningProfile();
     this.scheduler = options.scheduler || createRequestScheduler({
       ...this.tuningProfile.scheduler,
-      ...(options.schedulerOptions || {}),
+      ...options.schedulerOptions,
       clock: this.clock,
       onEvent: createSchedulerEventBridge(this.diagnostics)
     });

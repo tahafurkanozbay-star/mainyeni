@@ -441,7 +441,7 @@ export const createSearchCoordinator = (options = {}) => {
         ingest(datasetName, payload, ingestOptions = {}) {
             const normalized = normalizeCoordinatorPayload(payload, ingestOptions.adapterOptions);
             const metadata = {
-                ...(ingestOptions.metadata || {}),
+                ...ingestOptions.metadata,
                 adapterContract: normalized.adapted?.diagnostics?.contract || (Array.isArray(payload) ? "array" : "records"),
                 adapterDiagnostics: normalized.adapted?.diagnostics || null,
                 fields: normalized.adapted?.fields || []

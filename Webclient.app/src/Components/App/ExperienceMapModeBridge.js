@@ -171,7 +171,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }) {
             const sceneView = sceneRef.current?.view;
             const mapState = sceneView && bridge
                 ? normalizeMapStateFromScene(sceneView, bridge)
-                : createViewState({ ...(bridge?.getState?.() || {}), mode: "2d", tilt: 0 });
+                : createViewState({ ...bridge?.getState?.(), mode: "2d", tilt: 0 });
 
             // Stop 3D from publishing camera changes before switching bridge
             // authority back to MapView.

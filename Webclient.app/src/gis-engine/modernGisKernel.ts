@@ -221,7 +221,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
   const streamingPlanner = configuration.streamingPlanner || createSceneStreamingPlanner({ now: clock });
   const initialBudget = renderGovernor.getBudget();
   const scheduler = configuration.scheduler || createArcGisRequestScheduler({
-    ...(configuration.schedulerOptions || {}),
+    ...configuration.schedulerOptions,
     now: clock,
     maxConcurrent: initialBudget.maxConcurrentRequests,
     maxConcurrentPerOrigin: Math.max(1, Math.min(4, initialBudget.maxConcurrentRequests)),
@@ -229,7 +229,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     onListenerError: configuration.onListenerError,
   });
   const lifecycle = configuration.lifecycle || createLayerLifecycleRuntime({
-    ...(configuration.lifecycleAdapters || {}),
+    ...configuration.lifecycleAdapters,
     now: clock,
     maxResidentLayers: Math.max(8, initialBudget.maxConcurrentLayerLoads * 4),
     maxResidentBytes: Math.max(32 * 1024 * 1024, Math.floor(initialBudget.maxResidentBytes * 0.6)),
@@ -370,7 +370,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     });
     const existed = layers.has(id);
     lifecycle.registerLayer(id, {
-      ...(registration.lifecycle || {}),
+      ...registration.lifecycle,
       ...descriptor,
       url: descriptor.resourceUrl,
       priority: 100 - Math.round(Math.max(0, Math.min(100, finiteNumber(descriptor.importance, 50) ?? 50))),

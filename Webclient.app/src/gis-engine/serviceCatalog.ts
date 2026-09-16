@@ -117,7 +117,7 @@ export const sanitizeService = (service: GisServiceInput = {}): SanitizedGisServ
     visible: service.visible !== false,
     sublayerId: Number.isInteger(service.sublayerId) ? Number(service.sublayerId) : null,
     proxy: service.proxy === true,
-    metadata: { ...(service.metadata || {}) },
+    metadata: { ...service.metadata },
   };
 
   if (!safe.id) throw new Error('GIS service id is required.');
@@ -155,11 +155,11 @@ export const mergeCatalog = (
   sanitizeCatalog(incoming).forEach((service) => {
     const previous = map.get(service.id);
     map.set(service.id, {
-      ...(previous || {}),
+      ...previous,
       ...service,
       metadata: {
-        ...(previous?.metadata || {}),
-        ...(service.metadata || {}),
+        ...previous?.metadata,
+        ...service.metadata,
       },
     });
   });

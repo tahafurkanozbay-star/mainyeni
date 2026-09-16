@@ -139,9 +139,9 @@ export class ProductionDataSearchRuntime {
     this.observability = createSearchObservability({ ...options.observability, clock: options.observability?.clock ?? clock });
     this.migrations = new SchemaMigrationRegistry();
     this.options = Object.freeze({
-      queryPlan: Object.freeze({ ...(options.queryPlan ?? {}) }),
-      schemaProfile: Object.freeze({ ...(options.schemaProfile ?? {}) }),
-      defaultIntegrityPolicy: Object.freeze({ ...(options.defaultIntegrityPolicy ?? {}) }),
+      queryPlan: Object.freeze({ ...options.queryPlan }),
+      schemaProfile: Object.freeze({ ...options.schemaProfile }),
+      defaultIntegrityPolicy: Object.freeze({ ...options.defaultIntegrityPolicy }),
       clock,
     });
   }
@@ -190,7 +190,7 @@ export class ProductionDataSearchRuntime {
       dedupe: false,
       keepInvalid: true,
       maxRecords: options.maxRecords,
-      policy: { ...this.options.defaultIntegrityPolicy, ...(options.integrityPolicy ?? {}) },
+      policy: { ...this.options.defaultIntegrityPolicy, ...options.integrityPolicy },
     });
     if (!integrity.report.releaseReady && options.allowReleaseBlocked !== true) {
       const catalogEntry = this.catalog.register({
@@ -239,7 +239,7 @@ export class ProductionDataSearchRuntime {
       tags: options.tags,
       ttlMs: options.ttlMs,
       metadata: {
-        ...(options.metadata ?? {}),
+        ...options.metadata,
         searchRevision: dataset.revision,
         searchFingerprint: dataset.fingerprint,
       },
@@ -280,7 +280,7 @@ export class ProductionDataSearchRuntime {
       ...options,
       schemaVersion: options.toVersion,
       metadata: {
-        ...(options.metadata ?? {}),
+        ...options.metadata,
         migrationPath: migration.path,
         migrationRejectedCount: migration.rejectedCount,
       },

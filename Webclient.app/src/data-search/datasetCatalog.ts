@@ -237,7 +237,7 @@ export class DatasetCatalog {
       previousSchemaProfile,
       schemaDrift,
       integrity: input.integrity ?? previous?.integrity ?? null,
-      metadata: Object.freeze({ ...(previous?.metadata ?? {}), ...(input.metadata ?? {}) }),
+      metadata: Object.freeze({ ...previous?.metadata, ...input.metadata }),
     };
     const entry = freezeEntry(base);
     this.removeTagReferences(key);

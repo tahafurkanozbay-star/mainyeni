@@ -191,7 +191,7 @@ const normalizeForward = (
     countryCode: normalizeText(request.countryCode) || null,
     language: normalizeText(request.language) || null,
     bias: request.bias ? normalizeCoordinates(request.bias) : null,
-    metadata: Object.freeze({ ...(request.metadata ?? {}) }),
+    metadata: Object.freeze({ ...request.metadata }),
   });
 };
 
@@ -206,7 +206,7 @@ const normalizeReverse = (
     limit: normalizeLimit(request.limit, options),
     minimumScore: Math.min(100, Math.max(0, Number(request.minimumScore) || 0)),
     language: normalizeText(request.language) || null,
-    metadata: Object.freeze({ ...(request.metadata ?? {}) }),
+    metadata: Object.freeze({ ...request.metadata }),
   });
 };
 

@@ -267,7 +267,7 @@ const choosePriority = (input: GisLayerRenderInput, visible: boolean, view: GisV
 export const createRenderGovernor = (configuration: GisRenderGovernorConfiguration = {}) => {
   const clock = typeof configuration.now === 'function' ? configuration.now : () => Date.now();
   const settings = normalizeSettings(configuration.settings);
-  const device = Object.freeze({ ...(configuration.device || {}) });
+  const device = Object.freeze({ ...configuration.device });
   let tier: GisQualityTier = configuration.initialTier || detectInitialTier(device);
   if (!TIER_ORDER.includes(tier)) tier = 'balanced';
   let view = normalizeView({ kind: '2d', stationary: true, interacting: false });
