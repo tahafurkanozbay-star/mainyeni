@@ -98,6 +98,7 @@ export class RequestCoordinator {
   readonly #configuredLanes = new Map<string, NormalizedLanePolicy>();
   readonly #tasksByKey = new Map<string, RequestTask>();
   readonly #activeByLane = new Map<string, number>();
+  readonly #queuedByLane = new Map<string, number>();
   readonly #onChange: ((snapshot: RequestCoordinatorSnapshot) => void) | undefined;
   readonly #metrics: MutableMetrics = {
     accepted: 0,
@@ -122,10 +123,11 @@ export class RequestCoordinator {
     this.#defaultLaneQueueLimit = boundedInteger(options.defaultLaneQueueLimit, 128, 0, 100_000);
     this.#onChange = options.onChange;
 
-    for (const [rawLane, policy] of Object.entries(options.lanes ?? {})) {
+    Object.entries(options.lanes ?? {}).reduce((configured, [rawLane, policy]) => {
       const lane = normalizeIdentifier(rawLane, 'request lane');
-      this.#configuredLanes.set(lane, this.#normalizeLanePolicy(policy));
-    }
+      configured.set(lane, this.#normalizeLanePolicy(policy));
+      return configured;
+    }, this.#configuredLanes);
   }
 
   get disposed(): boolean {
@@ -215,6 +217,7 @@ export class RequestCoordinator {
     };
     this.#tasksByKey.set(key, task);
     this.#queue.push(task);
+    this.#incrementQueuedLane(lane);
     this.#queue.sort(taskComparator);
     this.#metrics.accepted += 1;
     const handle = this.#attachSubscriber<TValue>(task, options.signal);
@@ -234,9 +237,7 @@ export class RequestCoordinator {
     if (!task || task.state === 'settled') return false;
     const cancellation = reason ?? new DOMException(`Request "${key}" was cancelled.`, 'AbortError');
     if (!task.controller.signal.aborted) task.controller.abort(cancellation);
-    for (const subscriber of [...task.subscribers.values()]) {
-      this.#settleSubscriber(subscriber, false, cancellation);
-    }
+    this.#settleAllSubscribers(task, false, cancellation);
     if (task.state === 'queued') {
       this.#metrics.cancelled += 1;
       this.#removeQueuedTask(task);
@@ -248,35 +249,34 @@ export class RequestCoordinator {
   }
 
   cancelAll(reason?: unknown): number {
-    const keys = [...this.#tasksByKey.values()]
+    return [...this.#tasksByKey.values()]
       .filter((task) => task.state !== 'settled')
-      .map((task) => task.key);
-    let cancelled = 0;
-    for (const key of keys) if (this.cancel(key, reason)) cancelled += 1;
-    return cancelled;
+      .reduce((cancelled, task) => cancelled + (this.cancel(task.key, reason) ? 1 : 0), 0);
   }
 
   cancelLane(laneInput: string, reason?: unknown): number {
     const lane = normalizeIdentifier(laneInput, 'request lane');
-    const keys = [...this.#tasksByKey.values()]
+    return [...this.#tasksByKey.values()]
       .filter((task) => task.lane === lane && task.state !== 'settled')
-      .map((task) => task.key);
-    let cancelled = 0;
-    for (const key of keys) if (this.cancel(key, reason)) cancelled += 1;
-    return cancelled;
+      .reduce((cancelled, task) => cancelled + (this.cancel(task.key, reason) ? 1 : 0), 0);
   }
 
   snapshot(): RequestCoordinatorSnapshot {
-    const lanes = new Set<string>();
-    for (const task of this.#tasksByKey.values()) lanes.add(task.lane);
-    for (const lane of this.#configuredLanes.keys()) lanes.add(lane);
-    const laneRecord: Record<string, { readonly active: number; readonly queued: number }> = {};
-    for (const lane of [...lanes].sort()) {
-      laneRecord[lane] = Object.freeze({
-        active: this.#activeByLane.get(lane) ?? 0,
-        queued: this.#queue.filter((task) => task.lane === lane).length,
-      });
-    }
+    const lanes = new Set<string>([
+      ...this.#configuredLanes.keys(),
+      ...this.#activeByLane.keys(),
+      ...this.#queuedByLane.keys(),
+    ]);
+    const laneRecord = [...lanes].sort().reduce<Record<string, { readonly active: number; readonly queued: number }>>(
+      (record, lane) => {
+        record[lane] = Object.freeze({
+          active: this.#activeByLane.get(lane) ?? 0,
+          queued: this.#queuedByLane.get(lane) ?? 0,
+        });
+        return record;
+      },
+      {},
+    );
     return Object.freeze({
       active: this.#active,
       queued: this.#queue.length,
@@ -296,16 +296,16 @@ export class RequestCoordinator {
     if (this.#disposed) return;
     this.#disposed = true;
     const cancellation = reason ?? new DOMException('Request coordinator disposed.', 'AbortError');
-    for (const task of [...this.#tasksByKey.values()]) {
+    [...this.#tasksByKey.values()].reduce((processed, task) => {
       if (!task.controller.signal.aborted) task.controller.abort(cancellation);
-      for (const subscriber of [...task.subscribers.values()]) {
-        this.#settleSubscriber(subscriber, false, cancellation);
-      }
+      this.#settleAllSubscribers(task, false, cancellation);
       task.state = 'settled';
-    }
+      return processed + 1;
+    }, 0);
     this.#queue = [];
     this.#tasksByKey.clear();
     this.#activeByLane.clear();
+    this.#queuedByLane.clear();
     this.#active = 0;
     this.#emitChange();
   }
@@ -364,10 +364,19 @@ export class RequestCoordinator {
     else subscriber.reject(value);
   }
 
+  #settleAllSubscribers(task: RequestTask, success: boolean, value: unknown): void {
+    [...task.subscribers.values()].reduce((settled, subscriber) => {
+      this.#settleSubscriber(subscriber, success, value);
+      return settled + 1;
+    }, 0);
+  }
+
   #cleanupTaskIfOrphaned(task: RequestTask): void {
-    for (const [id, subscriber] of task.subscribers) {
-      if (subscriber.settled) task.subscribers.delete(id);
-    }
+    [...task.subscribers.entries()].reduce((removed, [id, subscriber]) => {
+      if (!subscriber.settled) return removed;
+      task.subscribers.delete(id);
+      return removed + 1;
+    }, 0);
     if (task.subscribers.size > 0 || task.state === 'settled') return;
     if (!task.controller.signal.aborted) {
       task.controller.abort(new DOMException('All request subscribers cancelled.', 'AbortError'));
@@ -379,9 +388,21 @@ export class RequestCoordinator {
     }
   }
 
+  #incrementQueuedLane(lane: string): void {
+    this.#queuedByLane.set(lane, (this.#queuedByLane.get(lane) ?? 0) + 1);
+  }
+
+  #decrementQueuedLane(lane: string): void {
+    const queued = Math.max(0, (this.#queuedByLane.get(lane) ?? 1) - 1);
+    if (queued === 0) this.#queuedByLane.delete(lane);
+    else this.#queuedByLane.set(lane, queued);
+  }
+
   #removeQueuedTask(task: RequestTask): void {
     const index = this.#queue.indexOf(task);
-    if (index >= 0) this.#queue.splice(index, 1);
+    if (index < 0) return;
+    this.#queue.splice(index, 1);
+    this.#decrementQueuedLane(task.lane);
   }
 
   #assertQueueCapacity(lane: string): void {
@@ -390,7 +411,7 @@ export class RequestCoordinator {
       throw new RequestQueueOverflowError(lane);
     }
     const lanePolicy = this.#lanePolicy(lane);
-    const laneQueued = this.#queue.filter((task) => task.lane === lane).length;
+    const laneQueued = this.#queuedByLane.get(lane) ?? 0;
     if (laneQueued >= lanePolicy.queueLimit) {
       this.#metrics.rejected += 1;
       throw new RequestQueueOverflowError(lane);
@@ -413,11 +434,10 @@ export class RequestCoordinator {
 
   #nextRunnableTask(): RequestTask | null {
     if (this.#active >= this.#globalConcurrency) return null;
-    for (const task of this.#queue) {
+    return this.#queue.find((task) => {
       const laneActive = this.#activeByLane.get(task.lane) ?? 0;
-      if (laneActive < this.#lanePolicy(task.lane).concurrency) return task;
-    }
-    return null;
+      return laneActive < this.#lanePolicy(task.lane).concurrency;
+    }) ?? null;
   }
 
   #drain(): void {
@@ -474,9 +494,7 @@ export class RequestCoordinator {
     else if (task.controller.signal.aborted) this.#metrics.cancelled += 1;
     else this.#metrics.failed += 1;
 
-    for (const subscriber of [...task.subscribers.values()]) {
-      this.#settleSubscriber(subscriber, success, value);
-    }
+    this.#settleAllSubscribers(task, success, value);
     task.subscribers.clear();
     this.#tasksByKey.delete(task.key);
     this.#drain();
