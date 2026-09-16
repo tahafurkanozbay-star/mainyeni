@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from "../platform/http/legacyHttpClient";
 import { AppConfig } from "../Core/AppConfig";
 import { Constants_ServiceResultType } from "../Core/Constants";
 import { AuthBusiness } from "./AuthBusiness";
