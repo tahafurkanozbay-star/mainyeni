@@ -1,0 +1,58 @@
+name: Webclient Modernization Lockfile Bootstrap
+
+on:
+  push:
+    branches:
+      - agent/platform-typescript-vite-20260916-0956
+    paths:
+      - 'Webclient.app/package.json'
+      - '.github/workflows/webclient-modernize-lockfile.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: webclient-modernize-lockfile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout modernization branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/platform-typescript-vite-20260916-0956
+          fetch-depth: 0
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Resolve dependency graph and refresh lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Verify clean lockfile install
+        run: npm ci --ignore-scripts
+
+      - name: Commit generated lockfile
+        working-directory: .
+        shell: bash
+        run: |
+          if git diff --quiet -- Webclient.app/package-lock.json; then
+            echo "Lockfile already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Webclient.app/package-lock.json
+          git commit -m "chore(web): regenerate npm lockfile for modern toolchain"
+          git push origin HEAD:agent/platform-typescript-vite-20260916-0956
