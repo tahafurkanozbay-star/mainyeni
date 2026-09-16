@@ -393,7 +393,12 @@ export const createLayerLoadScheduler = (configuration = {}) => {
         layerId: typeof layer === 'object' ? layer?.id : layer,
       }));
     }
-    const layerId = normalizeLayerId(layer);
+    let layerId;
+    try {
+      layerId = normalizeLayerId(layer);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     if (typeof loader !== 'function') {
       return Promise.reject(new LayerSchedulerError('A layer loader function is required.', {
         code: 'INVALID_LAYER_LOADER',
