@@ -166,6 +166,27 @@ export const addSceneLayers = async (view, services = [], options = {}) => {
   return results.filter(Boolean);
 };
 
+const raceHitTestWithAbort = (hitPromise, signal) => {
+  if (!signal) return hitPromise;
+  if (signal.aborted) return Promise.resolve({ results: [] });
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      callback(value);
+    };
+    const onAbort = () => finish(resolve, { results: [] });
+    signal.addEventListener('abort', onAbort, { once: true });
+    hitPromise.then(
+      (value) => finish(resolve, value),
+      (error) => finish(reject, error),
+    );
+  });
+};
+
 export const pickScene = async (view, screenPoint, options = {}) => {
   if (!view?.hitTest || !screenPoint) return [];
   if (options.signal?.aborted) return [];
@@ -175,16 +196,7 @@ export const pickScene = async (view, screenPoint, options = {}) => {
   if (Array.isArray(options.exclude) && options.exclude.length) hitOptions.exclude = options.exclude;
 
   const hitPromise = Promise.resolve(view.hitTest(screenPoint, hitOptions));
-  const response = options.signal
-    ? await Promise.race([
-        hitPromise,
-        new Promise((resolve) => {
-          const abort = () => resolve({ results: [] });
-          if (options.signal.aborted) abort();
-          else options.signal.addEventListener('abort', abort, { once: true });
-        }),
-      ])
-    : await hitPromise;
+  const response = await raceHitTestWithAbort(hitPromise, options.signal);
 
   if (options.signal?.aborted) return [];
   return (response?.results || []).map((result) => ({
