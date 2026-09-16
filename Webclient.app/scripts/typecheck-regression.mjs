@@ -9,7 +9,8 @@ if (!baselinePath || !currentPath) {
   process.exit(2);
 }
 
-const DIAGNOSTIC = /^(.*)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
+const FILE_DIAGNOSTIC = /^(.*)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
+const GLOBAL_DIAGNOSTIC = /^error (TS\d+): (.*)$/;
 
 const normalizePath = (value) => value
   .replaceAll('\\', '/')
@@ -20,11 +21,18 @@ const readDiagnostics = (file) => {
   const content = fs.readFileSync(path.resolve(file), 'utf8');
   const diagnostics = new Map();
   for (const line of content.split(/\r?\n/u)) {
-    const match = line.match(DIAGNOSTIC);
-    if (!match) continue;
-    const [, fileName, , , code, message] = match;
-    const key = `${normalizePath(fileName)}|${code}|${message.trim()}`;
-    diagnostics.set(key, line.trim());
+    const fileMatch = line.match(FILE_DIAGNOSTIC);
+    if (fileMatch) {
+      const [, fileName, , , code, message] = fileMatch;
+      const key = `${normalizePath(fileName)}|${code}|${message.trim()}`;
+      diagnostics.set(key, line.trim());
+      continue;
+    }
+    const globalMatch = line.match(GLOBAL_DIAGNOSTIC);
+    if (globalMatch) {
+      const [, code, message] = globalMatch;
+      diagnostics.set(`<global>|${code}|${message.trim()}`, line.trim());
+    }
   }
   return diagnostics;
 };
