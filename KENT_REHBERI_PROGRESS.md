@@ -498,3 +498,38 @@
 ### SONRAKİ TUR
 - Merge edilmiş #54 branch'i yeniden kullanılmamalı; yeni Platform işi güncel `main` üzerinden benzersiz branch ile başlamalı.
 - Öncelik: Actions runner/provisioning normale döndüğünde post-merge full-stack doğrulama; ardından kalan JavaScript compatibility adapter'larını ölçümlü strict TypeScript migrasyonuyla azaltma ve gerçek browser/device performans-accessibility smoke matrisini tamamlama.
+
+## Data/Search Production Runtime v2 / PR #59 — 2026-09-16
+
+### TUR / GÖREV / BRANCH / PR / HEAD
+- TUR: Deep Data / Search / Address productionizasyonu, current-main entegrasyonu ve merge-gate doğrulaması.
+- Branch: `agent/data-search-production-v2-20260916-1246-851a5c9`.
+- PR: #59 `feat(search): productionize typed data integrity and search lifecycle`.
+- Ürün-kod head'i current `main` `c89ef2a5ab2fd1d633d10447c5db56f177811bed` üzerine force kullanmadan iki-parent entegrasyonla taşındı; entegrasyon head'i `f54a6ec098c5d7e0b3c580a777cad115ebc7e1b3`.
+- Entegrasyon sonrası `behind=0`, merge-base current `main`, `mergeable=true`, unresolved review thread=0.
+- Progress kaydı öncesi PR kapsamı 17 Data/Search dosyası, **5.317 additions / 3 deletions**; 4.000 meaningful-additions kapısı gerçek runtime/test koduyla aşılmıştır.
+
+### UYGULANAN DATA / SEARCH / ADDRESS KAPSAMI
+- Schema profiling/drift + bounded migration registry, alias coverage ve deterministic schema fingerprinting eklendi.
+- Duplicate/semantic-duplicate, encoding/control-character ve release-policy tabanlı data-integrity reject/quarantine raporu eklendi; raw source string traversal ile normalizer'ın gizleyebileceği anomaliler de görünür hale getirildi.
+- Revision/fingerprint/query-bound deterministic cursor pagination; corruption/expiry/stale-revision kontrolleri eklendi.
+- Candidate/address/spatial indexleri kullanan typed query-plan compiler, candidate budget/stage/selectivity/risk diagnostikleri eklendi.
+- Provider-neutral geocoding orchestration; TTL/LRU cache, in-flight dedupe, subscriber cancellation ve timeout lifecycle eklendi. Yeni endpoint/harici network varsayımı yapılmadı.
+- Race-safe/debounced search session, stale-response suppression, load-more lifecycle ve privacy-safe bounded search observability eklendi.
+- `ProductionDataSearchRuntime` catalog, integrity, migrations, planning, cursor, session, observability ve geocoding yüzeylerini tek strict TypeScript composition altında birleştirdi.
+- Existing candidate planner'da kısa exact token'ın daha uzun prefix postinglerini gölgelemesi düzeltildi; `park`/`parkı`/`parkur` sınıfı regresyon testi eklendi.
+- Shared GIS `iconPresentation` tek icon authority olarak korunmuştur; ikinci resolver/registry, WMS/WFS/WMTS veya uydurma endpoint eklenmemiştir.
+
+### CI / MERGE GATE GERÇEĞİ
+- PR #50 önceki turda merge commit `851a5c93b58cc33e35de0be9e948c87c09ce6096` ile main'e girdi; ancak exact-head zorunlu CI job'ları runner başlamadan `steps=null` durumunda kırmızıydı. Bu, geçmiş merge-protokol anomalisi/teknik borç olarak kaydedildi; aynı bypass PR #59 için tekrarlanmayacaktır.
+- PR #59 exact entegrasyon head'i `f54a6ec...` üzerinde Webclient Quality run `35089747710`, Platform Architecture Audit `35089747698`, Release QA `35089747687` tetiklendi.
+- İlk denemelerde ve güvenli rerunlarda Webclient `quality`, Platform `audit` ve Release QA'nın `typed-release-audit`, `webclient-release-validation`, `backend-release-validation` job'larının tamamı checkout öncesinde `steps=null`, `logs_url=null` ile failure döndü.
+- Bu turda yapılan fresh rerun da aynı sonucu üretti; hiçbir lint/typecheck/test/build assertion'ı çalışmadı. Bu nedenle bu kırmızılar repository kod hatası kanıtı değildir, fakat exact-head `completed+success` gate'ini de karşılamaz.
+- Workflow YAML'ları kontrol edildi: zorunlu job'lar `ubuntu-24.04` üzerinde tanımlı ve bu runner daha önce aynı repoda gerçek green CI çalıştırmıştır; doğrulama kapısını yapay biçimde yeşile çevirmek için runner/OS veya workflow semantiği değiştirilmedi.
+- Repository kuralı gereği zorunlu exact-head check'ler gerçek step execution ile `completed/success` olmadan merge yapılmayacaktır.
+
+### NETWORK / SECURITY / PERFORMANCE / SONRAKİ ADIM
+- Yeni dış network/analytics/CDN/font bağımlılığı veya secret eklenmedi; geocoding sağlayıcısı yalnız caller tarafından inject edilir.
+- Cache/index/cursor/session yapıları bounded; cancellation, stale suppression, dedupe ve release-integrity kontrolleri uygulanmıştır.
+- Current `main` GIS #64 değişiklikleri overlay entegrasyonunda korunmuş, Data/Search dışı ürün dosyaları ezilmemiştir.
+- Sonraki işlem: GitHub-hosted Actions runner provisioning normale döner dönmez PR #59'un bu progress commit'i dahil **yeni exact head** üzerinde Webclient Quality + Release QA + Platform Architecture Audit'i çalıştır; gerçek kod hatası varsa aynı branch'te düzelt, üçü de success ise expected-head SHA ile squash merge yap ve `merged=true` + merge commit + current-main içerme doğrulamasını tamamla.
