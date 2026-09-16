@@ -1,6 +1,11 @@
 import { gzipSync } from 'node:zlib';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  INTEGRITY_MANIFEST_FILE,
+  verifyBuildIntegrityManifest,
+} from './build-integrity.mjs';
 
 const BUILD_DIR = new URL('../build/', import.meta.url);
 const MAX_JS_GZIP_BYTES = 650 * 1024;
@@ -18,6 +23,8 @@ const formatBytes = (value) => {
   return `${amount.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
+const normalizePath = (value) => value.replaceAll('\\', '/');
+
 const walk = async (directory) => {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
@@ -29,12 +36,13 @@ const walk = async (directory) => {
   return files;
 };
 
+const failures = [];
 const fail = (message) => {
+  failures.push(message);
   console.error(`\n[build:verify] ${message}`);
-  process.exitCode = 1;
 };
 
-const buildPath = BUILD_DIR.pathname;
+const buildPath = fileURLToPath(BUILD_DIR);
 try {
   const buildStats = await stat(buildPath);
   if (!buildStats.isDirectory()) throw new Error('build path is not a directory');
@@ -44,10 +52,13 @@ try {
 }
 
 const files = await walk(buildPath);
-const relativeFiles = files.map((file) => relative(buildPath, file));
+const relativeFiles = files.map((file) => normalizePath(relative(buildPath, file)));
 
 if (!relativeFiles.includes('index.html')) {
   fail('index.html is missing from the production bundle.');
+}
+if (!relativeFiles.includes(INTEGRITY_MANIFEST_FILE)) {
+  fail(`${INTEGRITY_MANIFEST_FILE} is missing; production artifacts were not fingerprinted.`);
 }
 
 const sourceMaps = relativeFiles.filter((file) => file.endsWith('.map'));
@@ -65,7 +76,7 @@ for (const file of files) {
   const rawBytes = content.byteLength;
   totalGzipBytes += gzipBytes;
   assets.push({
-    file: relative(buildPath, file),
+    file: normalizePath(relative(buildPath, file)),
     extension,
     rawBytes,
     gzipBytes,
@@ -97,6 +108,28 @@ if (html.includes('%PUBLIC_URL%')) {
 if (/sourceMappingURL=/i.test(html)) {
   fail('Unexpected source-map reference found in production HTML.');
 }
+if (/<script\b[^>]*\bsrc=["']https?:\/\//i.test(html)) {
+  fail('Production HTML must not execute a remote static script; runtime providers must use controlled loaders.');
+}
+if (/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']https?:\/\//i.test(html)
+  || /<link\b[^>]*\bhref=["']https?:\/\/[^>]*\brel=["']stylesheet["']/i.test(html)) {
+  fail('Production HTML must not load an uncontrolled remote stylesheet.');
+}
+
+if (relativeFiles.includes(INTEGRITY_MANIFEST_FILE)) {
+  try {
+    const integrityManifest = JSON.parse(
+      await readFile(join(buildPath, INTEGRITY_MANIFEST_FILE), 'utf8'),
+    );
+    const integrityErrors = await verifyBuildIntegrityManifest(buildPath, integrityManifest);
+    integrityErrors.forEach((error) => fail(error));
+    if (integrityErrors.length === 0) {
+      console.log(`[build:verify] Bundle integrity: ${integrityManifest.bundleIntegrity}`);
+    }
+  } catch (error) {
+    fail(`Unable to validate ${INTEGRITY_MANIFEST_FILE}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 assets
   .sort((left, right) => right.gzipBytes - left.gzipBytes)
@@ -107,5 +140,5 @@ assets
   });
 console.log(`[build:verify] Total JS/CSS gzip: ${formatBytes(totalGzipBytes)}`);
 
-if (process.exitCode) process.exit(process.exitCode);
-console.log('[build:verify] Production bundle passed integrity and size budgets.');
+if (failures.length > 0) process.exit(1);
+console.log('[build:verify] Production bundle passed integrity, origin and size budgets.');
