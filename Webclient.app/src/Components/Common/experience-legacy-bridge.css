@@ -1,0 +1,162 @@
+/*
+ * Accessibility bridge for active legacy Bootstrap/ArcGIS surfaces.
+ * Keep this file imported after legacy styles so new Experience behavior wins
+ * without duplicating or forking the existing design-system layer.
+ */
+
+:root {
+  --experience-focus: #4da3ff;
+  --experience-focus-contrast: #07111f;
+}
+
+/* Legacy styles disable text selection on the entire application. Restore it
+ * for content and form controls while keeping drag-heavy map chrome selectable
+ * only where that is useful. */
+html,
+body,
+#app,
+#app > div,
+#root,
+.modal-content,
+.common-query-window,
+.esri-popup__main-container {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button,
+[role="button"],
+[role="option"],
+.esri-view,
+.esri-view-surface,
+.experience-utility,
+.kr-map-toolbar {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+[role="textbox"],
+[role="combobox"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* The old Bootstrap override explicitly removes focus indication. This bridge
+ * restores a consistent visible ring until the legacy rule is deleted during
+ * the stylesheet split migration. */
+.btn:focus-visible,
+.form-button:focus-visible,
+.results-container-back-button:focus-visible,
+.context-menu-item:focus-visible,
+.radio-group-item:focus-visible,
+.slider-link:focus-visible,
+.experience-utility__button:focus-visible,
+.experience-utility__collapse:focus-visible,
+.experience-close:focus-visible,
+.kr-command__item:focus-visible,
+.kr-command__search input:focus-visible {
+  outline: 3px solid var(--experience-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px var(--experience-focus-contrast) !important;
+}
+
+/* Keep keyboard focus visible without adding rings to pointer interactions. */
+a:focus:not(:focus-visible),
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Dialogs must remain usable on short displays and with browser zoom. */
+[data-experience-dialog="true"] {
+  max-height: min(88vh, 760px);
+  overscroll-behavior: contain;
+}
+
+[data-experience-dialog="true"]:focus {
+  outline: none;
+}
+
+[data-experience-dialog="true"]:focus-visible {
+  outline: 3px solid var(--experience-focus);
+  outline-offset: 3px;
+}
+
+/* Ensure legacy fixed-width query windows do not overflow the viewport. */
+.common-query-window {
+  width: min(560px, calc(100vw - 32px));
+  min-width: min(400px, calc(100vw - 32px));
+}
+
+.common-query-window-body,
+.results-container,
+.esri-popup__content {
+  scrollbar-gutter: stable;
+}
+
+/* Minimum interactive target for touch without inflating dense desktop GIS UI. */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  .form-button,
+  .results-container-back-button,
+  .context-menu-item,
+  .radio-group-item,
+  .esri-widget button,
+  .esri-popup__button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 640px) {
+  .common-query-window,
+  .common-query-window.common-query-window-right {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100dvh - var(--mainbar-height, 56px) - 16px);
+  }
+
+  [data-experience-dialog="true"] {
+    max-height: calc(100dvh - 20px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slides {
+    scroll-behavior: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --experience-focus: Highlight;
+    --experience-focus-contrast: Canvas;
+  }
+
+  .btn:focus-visible,
+  .form-button:focus-visible,
+  .results-container-back-button:focus-visible,
+  .context-menu-item:focus-visible,
+  .radio-group-item:focus-visible,
+  .slider-link:focus-visible,
+  .experience-utility__button:focus-visible,
+  .experience-utility__collapse:focus-visible,
+  .experience-close:focus-visible,
+  .kr-command__item:focus-visible,
+  .kr-command__search input:focus-visible,
+  [data-experience-dialog="true"]:focus-visible {
+    outline: 2px solid Highlight !important;
+    box-shadow: none !important;
+    forced-color-adjust: auto;
+  }
+}
