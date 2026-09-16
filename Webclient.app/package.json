@@ -24,31 +24,29 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
-    "@testing-library/jest-dom": "^5.11.9",
-    "@testing-library/react": "^11.2.3",
-    "@testing-library/user-event": "^12.6.2",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/google.maps": "^3.44.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
     "oxlint": "^1.83.0",
-    "react-error-overlay": "6.0.9",
-    "react-scripts": "^4.0.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0"
-  },
-  "resolutions": {
-    "react-error-overlay": "6.0.9"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   },
   "scripts": {
     "start": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "react-scripts test",
-    "test:ci": "react-scripts test --watchAll=false --runInBand",
+    "test": "vitest",
+    "test:ci": "vitest run",
     "lint": "oxlint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "quality": "npm run lint && npm run typecheck && npm run test:ci && npm run build"
+    "quality": "npm run lint && npm run typecheck && npm run test:ci && npm run build && node scripts/verify-build.mjs"
   },
   "browserslist": {
     "production": [
