@@ -183,7 +183,7 @@ public sealed class SecurityHeadersMiddlewareTests
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
         context.Response.Body.Position = 0;
         using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
-        Assert.Equal("accepted", await reader.ReadToEndAsync());
+        Assert.Equal("accepted", await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
