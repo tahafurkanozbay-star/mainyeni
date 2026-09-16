@@ -226,7 +226,8 @@ public sealed class RepositorySecurityContractTests
         Assert.Contains("isSameOriginPath", endpointPolicy, StringComparison.Ordinal);
         Assert.Contains("CROSS_ORIGIN_BLOCKED", endpointPolicy, StringComparison.Ordinal);
         Assert.Contains("trimmed.startsWith('/')", endpointPolicy, StringComparison.Ordinal);
-        Assert.Contains("!trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("trimmed.startsWith('//')", endpointPolicy, StringComparison.Ordinal);
+        Assert.Contains("if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return false;", endpointPolicy, StringComparison.Ordinal);
     }
 
     private static string Read(string relativePath)
