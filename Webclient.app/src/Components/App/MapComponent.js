@@ -18,14 +18,14 @@ import { GoogleMapsBusiness } from "../../Business/GoogleMapsBusiness";
 import { DebugHelper } from "../../Toolbox/DebugHelper";
 import { LazyManagedWindow } from "../Common/LazyManagedWindow";
 import { QUERY_WINDOW_DEFINITIONS } from "../Common/QueryWindowRegistry";
+import { createViewStateBridge } from "../../gis-engine/viewState";
+import {
+    bindMapViewState,
+    createMapViewOptions,
+    createResponsivePadding,
+    createViewPerformanceMonitor
+} from "../../gis-engine/viewRuntime";
 import "./MapComponent.css";
-
-const createResponsivePadding = () => ({
-    top: 0,
-    bottom: window.innerWidth <= 576 ? 200 : 0,
-    left: window.innerWidth <= 576 ? 0 : 400,
-    right: 0
-});
 
 const openExternalMapUrl = (url) => {
     if (!url) return;
@@ -50,6 +50,9 @@ export const MapComponent = ({ windowManager }) => {
     useEffect(() => {
         let disposed = false;
         let view = null;
+        let bridge = null;
+        let performanceMonitor = null;
+        let unbindViewState = () => {};
         const handles = [];
 
         const initializeMap = async () => {
@@ -62,20 +65,33 @@ export const MapComponent = ({ windowManager }) => {
 
             if (disposed) return;
 
+            // Preserve the application's existing OSM basemap contract. The
+            // shared 3D runtime can reuse this map rather than silently creating
+            // a second ArcGIS Online basemap/elevation dependency.
             const map = new Map({ basemap: "osm" });
-            view = new MapView({
+            view = new MapView(createMapViewOptions({
                 container: mapDiv.current,
-                ui: { components: [] },
                 map,
-                zoom: 11,
-                center: [mapConfig.Centerx ?? 34, mapConfig.Centery ?? 39],
-                padding: createResponsivePadding(),
-                constraints: {
-                    maxZoom: 221,
-                    minZoom: 1,
-                    rotationEnabled: false
-                }
+                configuration: mapConfig,
+                viewportWidth: window.innerWidth
+            }));
+
+            bridge = createViewStateBridge({ mode: "2d" }, {
+                onListenerError: error => DebugHelper.Log(error)
             });
+            MapManager.SetViewStateBridge(bridge);
+
+            unbindViewState = bindMapViewState(view, bridge, {
+                publishInitial: true,
+                applyIncoming: true,
+                goToOptions: { duration: 0, animate: false },
+                onApplyError: error => DebugHelper.Log(error)
+            });
+
+            performanceMonitor = createViewPerformanceMonitor(view, {
+                slowThresholdMs: 250
+            });
+            MapManager.SetViewPerformanceMonitor(performanceMonitor);
 
             handles.push(
                 watchUtils.whenTrue(view, "updating", () => windowManager.SetMapUpdating(true)),
@@ -105,7 +121,9 @@ export const MapComponent = ({ windowManager }) => {
             }));
 
             const updatePadding = () => {
-                if (view && !view.destroyed) view.padding = createResponsivePadding();
+                if (view && !view.destroyed) {
+                    view.padding = createResponsivePadding(window.innerWidth, mapConfig);
+                }
             };
             window.addEventListener("resize", updatePadding, { passive: true });
             handles.push({ remove: () => window.removeEventListener("resize", updatePadding) });
@@ -122,9 +140,23 @@ export const MapComponent = ({ windowManager }) => {
 
         return () => {
             disposed = true;
+            unbindViewState();
+            performanceMonitor?.dispose?.();
+            MapManager.ClearViewPerformanceMonitor(performanceMonitor);
+            MapManager.ClearViewStateBridge(bridge);
+            bridge?.destroy?.();
+
             handles.forEach(handle => {
                 try { handle?.remove?.(); } catch (error) { DebugHelper.Log(error); }
             });
+
+            windowManager.SetMapUpdating(false);
+            Store.dispatch({
+                type: MapReducer_ActionTypes.SetMapView,
+                payload: null
+            });
+            setMapView(null);
+
             if (view) {
                 try {
                     view.container = null;
