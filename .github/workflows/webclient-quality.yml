@@ -41,6 +41,15 @@ jobs:
       - name: Install from lockfile
         run: npm ci
 
+      - name: Experience quality guard self-test
+        run: node scripts/experience-quality-audit.js --self-test
+
+      - name: Experience quality guard
+        run: node scripts/experience-quality-audit.js
+
+      - name: Strict Experience TypeScript boundary
+        run: npm exec --yes --package=typescript@5.9.2 -- tsc -p tsconfig.experience.json --noEmit
+
       - name: Production dependency audit (non-blocking legacy debt)
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
