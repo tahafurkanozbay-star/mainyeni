@@ -19,8 +19,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout with baseline history
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node 24
         uses: actions/setup-node@v7
@@ -36,8 +38,22 @@ jobs:
       - name: Typed QA unit and regression tests
         run: node --test quality/release/*.test.mts
 
-      - name: Generate repository release scorecard
+      - name: Generate whole-repository release scorecard
         run: node quality/release/cli.mts --root . --output qa-artifacts/release
+
+      - name: Materialize exact PR base tree
+        if: github.event_name == 'pull_request'
+        run: git worktree add --detach /tmp/release-baseline "${{ github.event.pull_request.base.sha }}"
+
+      - name: Enforce exact-base PR regression gate
+        if: github.event_name == 'pull_request'
+        run: >-
+          node quality/release/pr-gate.mts
+          --root .
+          --baseline-root /tmp/release-baseline
+          --baseline-commit "${{ github.event.pull_request.base.sha }}"
+          --current-commit "${{ github.sha }}"
+          --output qa-artifacts/release
 
       - name: Upload typed release QA artifacts
         if: always()
@@ -98,13 +114,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup .NET 10
+      - name: Setup .NET 10 LTS
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
+      - name: SDK diagnostics
+        run: dotnet --info
+
       - name: Restore with audit
         run: dotnet restore CityWorks.NetCore.sln
+
+      - name: Dependency vulnerability report
+        run: dotnet list CityWorks.NetCore.sln package --vulnerable --include-transitive
 
       - name: Release build
         run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
