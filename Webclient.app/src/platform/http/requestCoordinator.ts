@@ -18,6 +18,7 @@ import {
   getErrorCode,
   getErrorRetryable,
   getErrorStatus,
+  isAbortSignalLike,
   normalizeRequestPriority,
   toBoundedInteger
 } from './contracts';
@@ -50,6 +51,10 @@ interface CoordinatorDefaults {
   readonly timeoutMs: number;
   readonly maxRetries: number;
   readonly cacheTtlMs: number;
+}
+
+interface TransportAttemptConfig extends NormalizedRequestConfig {
+  readonly attempt: number;
 }
 
 const now = (clock: () => number): number => {
@@ -85,6 +90,9 @@ const createSchedulerEventBridge = (diagnostics: NetworkDiagnosticsLike) =>
   (eventName: string, metadata: Record<string, unknown>): void => {
     recordNetworkEvent(diagnostics, eventName, metadata);
   };
+
+const getRuntimeSignal = (config: NormalizedRequestConfig): AbortSignal | undefined =>
+  isAbortSignalLike(config.signal) ? config.signal : undefined;
 
 export class RequestCoordinator {
   readonly transport: Transport;
@@ -175,14 +183,20 @@ export class RequestCoordinator {
       ? String(config.schedulerGroup)
       : safePathGroup;
     const queueTimeoutMs = getQueueTimeout(config);
+    const signal = getRuntimeSignal(config);
+    const transportConfig: TransportAttemptConfig = {
+      ...config,
+      signal,
+      attempt
+    };
 
     return this.scheduler.schedule(
-      () => this.transport.request(config) as Promise<TransportResult<T>>,
+      () => this.transport.request(transportConfig) as Promise<TransportResult<T>>,
       {
         priority,
         groupKey,
         label: `${config.method}:${safePathGroup}:attempt-${attempt}`,
-        signal: config.signal,
+        signal,
         queueTimeoutMs,
         bypass: config.schedulerBypass === true
       }
@@ -194,6 +208,7 @@ export class RequestCoordinator {
     key: string
   ): Promise<TransportResult<T>> {
     const startedAt = now(this.clock);
+    const signal = getRuntimeSignal(config);
     recordNetworkEvent(this.diagnostics, 'network.request.started', {
       method: config.method,
       url: config.url,
@@ -211,7 +226,7 @@ export class RequestCoordinator {
         {
           maxRetries: config.maxRetries,
           retryAllowed: config.retryAllowed,
-          signal: config.signal,
+          signal,
           retryOptions: this.retryOptions,
           wait: this.wait,
           onAttempt: ({ attempt }: { attempt: number }) => {
