@@ -2,9 +2,7 @@ import {
     normalizeCategoryKey,
     normalizeCoordinates,
     normalizeFiniteNumber,
-    normalizeId,
     normalizeInteger,
-    normalizePagination,
     normalizeSearchText,
     normalizeText
 } from "./DataIntegrityHelper";
@@ -37,7 +35,6 @@ export const MAX_ADDRESS_SEARCH_LIMIT = 250;
 export const EARTH_RADIUS_METERS = 6371008.8;
 
 const isNil = value => value === null || value === undefined;
-
 const unique = values => Array.from(new Set(values.filter(Boolean)));
 
 export const normalizeAddressToken = value => normalizeSearchText(value)
@@ -46,10 +43,9 @@ export const normalizeAddressToken = value => normalizeSearchText(value)
     .replace(/\s+/g, " ")
     .trim();
 
-export const tokenizeAddress = value => unique(normalizeAddressToken(value)
-    .split(" ")
-    .map(token => token.trim())
-    .filter(Boolean));
+export const tokenizeAddress = value => unique(
+    normalizeAddressToken(value).split(" ").map(token => token.trim()).filter(Boolean)
+);
 
 export const normalizeDoorNumber = value => normalizeText(value)
     .replace(/\s+/g, "")
@@ -68,7 +64,11 @@ export const normalizeAddressLevel = value => {
         mahalle: ADDRESS_LEVELS.Neighborhood,
         neighborhood: ADDRESS_LEVELS.Neighborhood,
         cadde: ADDRESS_LEVELS.Street,
+        caddesi: ADDRESS_LEVELS.Street,
         sokak: ADDRESS_LEVELS.Street,
+        sokagi: ADDRESS_LEVELS.Street,
+        bulvar: ADDRESS_LEVELS.Street,
+        bulvari: ADDRESS_LEVELS.Street,
         yol: ADDRESS_LEVELS.Street,
         street: ADDRESS_LEVELS.Street,
         bina: ADDRESS_LEVELS.Building,
@@ -79,6 +79,12 @@ export const normalizeAddressLevel = value => {
         adres: ADDRESS_LEVELS.Address
     };
     return aliases[key] || null;
+};
+
+const inferQueryLevel = query => {
+    const tokens = tokenizeAddress(query);
+    const streetDesignators = new Set(["cadde", "caddesi", "sokak", "sokagi", "bulvar", "bulvari"]);
+    return tokens.some(token => streetDesignators.has(token)) ? ADDRESS_LEVELS.Street : null;
 };
 
 export const inferAddressLevel = record => {
@@ -94,7 +100,7 @@ export const inferAddressLevel = record => {
     const door = normalizeDoorNumber(record?.door ?? record?.kapino ?? record?.attr?.kapino);
     if (door) return ADDRESS_LEVELS.Door;
     if (normalizeText(record?.building ?? record?.bina ?? record?.attr?.building)) return ADDRESS_LEVELS.Building;
-    if (normalizeText(record?.street ?? record?.cadde ?? record?.sokak ?? record?.attr?.ad)) return ADDRESS_LEVELS.Street;
+    if (normalizeText(record?.street ?? record?.cadde ?? record?.sokak ?? record?.attr?.street)) return ADDRESS_LEVELS.Street;
     if (normalizeText(record?.neighborhood ?? record?.mahalle ?? record?.attr?.mahalle)) return ADDRESS_LEVELS.Neighborhood;
     if (normalizeText(record?.district ?? record?.ilce ?? record?.attr?.ilce)) return ADDRESS_LEVELS.District;
     return ADDRESS_LEVELS.Address;
@@ -110,15 +116,7 @@ export const createAddressParts = document => {
     const parts = [district, neighborhood, street, door].filter(Boolean);
     if (!parts.length && address) parts.push(address);
     if (!parts.length && title) parts.push(title);
-    return {
-        district,
-        neighborhood,
-        street,
-        door,
-        title,
-        address,
-        parts
-    };
+    return { district, neighborhood, street, door, title, address, parts };
 };
 
 export const formatCanonicalAddress = document => {
@@ -130,13 +128,9 @@ export const formatCanonicalAddress = document => {
 
 export const createAddressHierarchyKey = document => {
     const parts = createAddressParts(document);
-    const normalized = [
-        normalizeAddressToken(parts.district),
-        normalizeAddressToken(parts.neighborhood),
-        normalizeAddressToken(parts.street),
-        normalizeAddressToken(parts.door)
-    ];
-    return normalized.join("|");
+    return [parts.district, parts.neighborhood, parts.street, parts.door]
+        .map(normalizeAddressToken)
+        .join("|");
 };
 
 export const createAddressParentKey = document => {
@@ -157,11 +151,7 @@ export const createAddressParentKey = document => {
 
 export const normalizeAddressDocument = (record, sourceIndex = 0) => {
     const base = createSearchDocumentFromSchema(record, ADDRESS_RECORD_SCHEMA, sourceIndex);
-    const level = inferAddressLevel({
-        ...record,
-        ...base.fields,
-        attr: record?.attr
-    });
+    const level = inferAddressLevel({ ...record, ...base.fields, attr: record?.attr });
     const canonicalAddress = formatCanonicalAddress(base);
     const tokens = unique([
         ...tokenizeAddress(base.title),
@@ -172,12 +162,11 @@ export const normalizeAddressDocument = (record, sourceIndex = 0) => {
         ...tokenizeAddress(base.door),
         ...tokenizeAddress(canonicalAddress)
     ]);
-    const hierarchyKey = createAddressHierarchyKey(base);
     return {
         ...base,
         level,
         canonicalAddress,
-        hierarchyKey,
+        hierarchyKey: createAddressHierarchyKey(base),
         parentKey: createAddressParentKey({ ...base, level }),
         tokens,
         normalizedDoor: normalizeDoorNumber(base.door),
@@ -187,29 +176,38 @@ export const normalizeAddressDocument = (record, sourceIndex = 0) => {
     };
 };
 
+const parseCoordinateTokens = tokens => {
+    if (!Array.isArray(tokens) || tokens.length < 2) return null;
+    const first = normalizeFiniteNumber(tokens[0], null);
+    const second = normalizeFiniteNumber(tokens[1], null);
+    if (first === null || second === null) return null;
+    const longitudeLatitude = normalizeCoordinates({ longitude: first, latitude: second });
+    if (longitudeLatitude) return longitudeLatitude;
+    return normalizeCoordinates({ longitude: second, latitude: first });
+};
+
 export const parseCoordinatePair = value => {
-    if (Array.isArray(value) && value.length >= 2) {
-        const first = normalizeFiniteNumber(value[0], null);
-        const second = normalizeFiniteNumber(value[1], null);
-        if (first === null || second === null) return null;
-        const lonLat = normalizeCoordinates({ longitude: first, latitude: second });
-        if (lonLat) return lonLat;
-        return normalizeCoordinates({ longitude: second, latitude: first });
-    }
-    if (typeof value === "string") {
-        const tokens = value
-            .replace(/;/g, ",")
-            .split(/[ ,]+/)
-            .map(token => token.trim())
-            .filter(Boolean)
-            .map(token => normalizeFiniteNumber(token.replace(",", "."), null));
-        if (tokens.length >= 2 && tokens[0] !== null && tokens[1] !== null) {
-            const lonLat = normalizeCoordinates({ longitude: tokens[0], latitude: tokens[1] });
-            if (lonLat) return lonLat;
-            return normalizeCoordinates({ longitude: tokens[1], latitude: tokens[0] });
-        }
-    }
+    if (Array.isArray(value)) return parseCoordinateTokens(value);
     if (value && typeof value === "object") return normalizeCoordinates(value);
+    if (typeof value !== "string") return null;
+
+    const text = normalizeText(value);
+    if (!text) return null;
+
+    const whitespaceTokens = text.split(/\s+/).filter(Boolean);
+    if (whitespaceTokens.length === 2) {
+        const result = parseCoordinateTokens(whitespaceTokens.map(token => token.replace(",", ".")));
+        if (result) return result;
+    }
+
+    const semicolonTokens = text.split(";").map(token => token.trim()).filter(Boolean);
+    if (semicolonTokens.length === 2) {
+        const result = parseCoordinateTokens(semicolonTokens.map(token => token.replace(",", ".")));
+        if (result) return result;
+    }
+
+    const commaTokens = text.split(",").map(token => token.trim()).filter(Boolean);
+    if (commaTokens.length === 2) return parseCoordinateTokens(commaTokens);
     return null;
 };
 
@@ -322,9 +320,7 @@ export const getAddressChildren = (index, documentOrParentKey) => {
         : (() => {
             const document = documentOrParentKey;
             if (!document) return null;
-            if (document.level === ADDRESS_LEVELS.District) {
-                return `district:${document.normalizedDistrict}`;
-            }
+            if (document.level === ADDRESS_LEVELS.District) return `district:${document.normalizedDistrict}`;
             if (document.level === ADDRESS_LEVELS.Neighborhood) {
                 return `neighborhood:${document.normalizedDistrict}|${document.normalizedNeighborhood}`;
             }
@@ -342,9 +338,9 @@ export const getAddressAncestors = (index, document) => {
     if (!index?.documents || !document) return [];
     const result = [];
     if (document.normalizedDistrict) {
-        const districtPosition = Array.from(index.byDistrict.get(document.normalizedDistrict) || [])
-            .find(position => index.documents[position]?.level === ADDRESS_LEVELS.District);
-        if (!isNil(districtPosition)) result.push(index.documents[districtPosition]);
+        const position = Array.from(index.byDistrict.get(document.normalizedDistrict) || [])
+            .find(candidate => index.documents[candidate]?.level === ADDRESS_LEVELS.District);
+        if (!isNil(position)) result.push(index.documents[position]);
     }
     if (document.normalizedNeighborhood) {
         const key = `${document.normalizedDistrict}|${document.normalizedNeighborhood}`;
@@ -382,10 +378,14 @@ export const scoreAddressDocument = (document, query) => {
     let tokenScore = 0;
     let matchedTokens = 0;
     queryTokens.forEach(queryToken => {
-        const best = document.tokens.reduce((maximum, token) => Math.max(maximum, scoreToken(token, queryToken)), 0);
+        const best = document.tokens.reduce(
+            (maximum, token) => Math.max(maximum, scoreToken(token, queryToken)),
+            0
+        );
         if (best > 0) matchedTokens += 1;
         tokenScore += best;
     });
+    if (matchedTokens === 0 && exactBonus === 0 && prefixBonus === 0) return 0;
     const completeness = matchedTokens === queryTokens.length ? 150 : matchedTokens * 10;
     const levelBonus = {
         [ADDRESS_LEVELS.Door]: 60,
@@ -399,20 +399,21 @@ export const scoreAddressDocument = (document, query) => {
 };
 
 export const normalizeAddressSearchOptions = options => {
-    const page = normalizePagination({
-        offset: options?.offset,
-        limit: options?.limit ?? DEFAULT_ADDRESS_SEARCH_LIMIT
-    });
+    const rawLimit = normalizeFiniteNumber(options?.limit, null);
+    const limit = rawLimit === null || rawLimit <= 0
+        ? DEFAULT_ADDRESS_SEARCH_LIMIT
+        : Math.min(MAX_ADDRESS_SEARCH_LIMIT, Math.max(1, Math.trunc(rawLimit)));
+    const rawOffset = normalizeFiniteNumber(options?.offset, 0);
     return {
-        offset: page.offset,
-        limit: Math.min(page.limit, MAX_ADDRESS_SEARCH_LIMIT),
+        offset: Math.max(0, Math.trunc(rawOffset || 0)),
+        limit,
         level: normalizeAddressLevel(options?.level),
         district: normalizeAddressToken(options?.district),
         neighborhood: normalizeAddressToken(options?.neighborhood),
         street: normalizeAddressToken(options?.street),
         center: parseCoordinatePair(options?.center),
         radiusMeters: Math.max(0, normalizeFiniteNumber(options?.radiusMeters, 0) || 0),
-        minScore: Math.max(0, normalizeFiniteNumber(options?.minScore, 1) || 1)
+        minScore: Math.max(0, normalizeFiniteNumber(options?.minScore, 1) || 0)
     };
 };
 
@@ -436,8 +437,12 @@ export const filterAddressDocuments = (documents, options = {}) => {
 };
 
 export const searchAddressIndex = (index, query, options = {}) => {
-    const normalizedOptions = normalizeAddressSearchOptions(options);
     const queryText = normalizeAddressToken(query);
+    const inferredLevel = options?.level ? null : inferQueryLevel(queryText);
+    const normalizedOptions = normalizeAddressSearchOptions({
+        ...options,
+        level: options?.level || inferredLevel
+    });
     const filtered = filterAddressDocuments(index?.documents, normalizedOptions);
     const scored = filtered
         .map(document => ({
@@ -458,10 +463,7 @@ export const searchAddressIndex = (index, query, options = {}) => {
                 numeric: true
             });
         });
-    const pageItems = scored.slice(
-        normalizedOptions.offset,
-        normalizedOptions.offset + normalizedOptions.limit
-    );
+    const pageItems = scored.slice(normalizedOptions.offset, normalizedOptions.offset + normalizedOptions.limit);
     const nextOffset = normalizedOptions.offset + pageItems.length;
     return {
         results: pageItems,
@@ -501,32 +503,16 @@ export const detectAddressHierarchyIssues = index => {
     const issues = [];
     (index?.documents || []).forEach(document => {
         if (document.level === ADDRESS_LEVELS.Neighborhood && !document.normalizedDistrict) {
-            issues.push({
-                code: "neighborhood-without-district",
-                key: document.key,
-                severity: "warning"
-            });
+            issues.push({ code: "neighborhood-without-district", key: document.key, severity: "warning" });
         }
         if (document.level === ADDRESS_LEVELS.Street && (!document.normalizedDistrict || !document.normalizedNeighborhood)) {
-            issues.push({
-                code: "street-without-parent",
-                key: document.key,
-                severity: "warning"
-            });
+            issues.push({ code: "street-without-parent", key: document.key, severity: "warning" });
         }
         if (document.level === ADDRESS_LEVELS.Door && (!document.normalizedStreet || !document.normalizedDoor)) {
-            issues.push({
-                code: "door-without-street-or-number",
-                key: document.key,
-                severity: "warning"
-            });
+            issues.push({ code: "door-without-street-or-number", key: document.key, severity: "warning" });
         }
         if ((document.fields.latitude === null) !== (document.fields.longitude === null)) {
-            issues.push({
-                code: "partial-coordinate-pair",
-                key: document.key,
-                severity: "warning"
-            });
+            issues.push({ code: "partial-coordinate-pair", key: document.key, severity: "warning" });
         }
     });
     (index?.diagnostics?.conflictingIds || []).forEach(id => {
