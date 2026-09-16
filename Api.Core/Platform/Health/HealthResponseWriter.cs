@@ -1,3 +1,5 @@
+#nullable enable
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System;
@@ -5,78 +7,45 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Api.Core.Platform.Health
+namespace Api.Core.Platform.Health;
+
+/// <summary>
+/// Emits a stable, minimal health payload. Exception messages, database hosts, credentials and
+/// dependency response bodies are deliberately excluded from the HTTP response.
+/// </summary>
+public static class HealthResponseWriter
 {
-    /// <summary>
-    /// Emits a stable, minimal health payload. Exception messages, database hosts, credentials and
-    /// dependency response bodies are deliberately excluded from the HTTP response.
-    /// </summary>
-    public static class HealthResponseWriter
+    public static Task Write(HttpContext context, HealthReport report)
     {
-        private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(report);
 
-        public static Task Write(HttpContext context, HealthReport report)
-        {
-            if (context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
-            if (report == null)
-            {
-                throw new ArgumentNullException(nameof(report));
-            }
+        context.Response.ContentType = "application/json; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+        context.Response.Headers.Pragma = "no-cache";
 
-            context.Response.ContentType = "application/json; charset=utf-8";
-            context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
-            context.Response.Headers.Pragma = "no-cache";
+        var payload = new HealthResponsePayload(
+            ToPublicStatus(report.Status),
+            Math.Max(0, (long)report.TotalDuration.TotalMilliseconds),
+            report.Entries
+                .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                .Select(entry => new HealthCheckResponsePayload(
+                    entry.Key,
+                    ToPublicStatus(entry.Value.Status),
+                    Math.Max(0, (long)entry.Value.Duration.TotalMilliseconds)))
+                .ToArray());
 
-            var payload = new HealthPayload
-            {
-                Status = ToPublicStatus(report.Status),
-                TotalDurationMs = Math.Max(0, (long)report.TotalDuration.TotalMilliseconds),
-                Checks = report.Entries
-                    .OrderBy(entry => entry.Key, StringComparer.Ordinal)
-                    .Select(entry => new HealthCheckPayload
-                    {
-                        Name = entry.Key,
-                        Status = ToPublicStatus(entry.Value.Status),
-                        DurationMs = Math.Max(0, (long)entry.Value.Duration.TotalMilliseconds)
-                    })
-                    .ToArray()
-            };
-
-            return context.Response.WriteAsync(JsonSerializer.Serialize(payload, SerializerOptions));
-        }
-
-        private static string ToPublicStatus(HealthStatus status)
-        {
-            return status switch
-            {
-                HealthStatus.Healthy => "healthy",
-                HealthStatus.Degraded => "degraded",
-                _ => "unhealthy"
-            };
-        }
-
-        private sealed class HealthPayload
-        {
-            public string Status { get; set; }
-
-            public long TotalDurationMs { get; set; }
-
-            public HealthCheckPayload[] Checks { get; set; }
-        }
-
-        private sealed class HealthCheckPayload
-        {
-            public string Name { get; set; }
-
-            public string Status { get; set; }
-
-            public long DurationMs { get; set; }
-        }
+        return JsonSerializer.SerializeAsync(
+            context.Response.Body,
+            payload,
+            HealthJsonSerializerContext.Default.HealthResponsePayload,
+            context.RequestAborted);
     }
+
+    private static string ToPublicStatus(HealthStatus status) => status switch
+    {
+        HealthStatus.Healthy => "healthy",
+        HealthStatus.Degraded => "degraded",
+        _ => "unhealthy"
+    };
 }

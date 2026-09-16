@@ -73,15 +73,16 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Theory]
-    [InlineData("Api.Admin/Startup.cs")]
-    [InlineData("Api.User/Startup.cs")]
+    [InlineData("Api.Admin/Program.cs")]
+    [InlineData("Api.User/Program.cs")]
     public void ApiCorsPolicies_DoNotAllowArbitraryOrigins(string relativePath)
     {
-        var startup = Read(relativePath);
+        var program = Read(relativePath);
 
-        Assert.DoesNotContain("AllowAnyOrigin", startup, StringComparison.Ordinal);
-        Assert.DoesNotContain("Access-Control-Allow-Origin\", \"*", startup, StringComparison.Ordinal);
-        Assert.Contains("Cors:AllowedOrigins", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowAnyOrigin", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("Access-Control-Allow-Origin\", \"*", program, StringComparison.Ordinal);
+        Assert.Contains("AddKentRehberiApiPlatform", program, StringComparison.Ordinal);
+        Assert.Contains("Cors:AllowedOrigins", program, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -94,6 +95,15 @@ public sealed class RepositorySecurityContractTests
         Assert.DoesNotContain("TimeSpan.FromMinutes(30)", program, StringComparison.Ordinal);
         Assert.DoesNotContain("99999999", program, StringComparison.Ordinal);
         Assert.Contains("AddServerHeader = false", program, StringComparison.Ordinal);
+        Assert.Contains("WebApplication.CreateBuilder", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseStartup<", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LegacyStartupHostingFiles_AreRemoved()
+    {
+        Assert.False(File.Exists(Path.Combine(RepositoryRoot.Value, "Api.Admin", "Startup.cs")));
+        Assert.False(File.Exists(Path.Combine(RepositoryRoot.Value, "Api.User", "Startup.cs")));
     }
 
     [Fact]
@@ -109,10 +119,11 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Fact]
-    public void BackendTargets_AreCentralizedOnNet10_WithoutLegacyAspNetPackagesOrPomelo()
+    public void BackendTargets_AreCentralizedOnNet10AndCSharp14_WithoutLegacyAspNetPackagesOrPomelo()
     {
         var props = Read("Directory.Build.props");
         Assert.Contains("<TargetFramework>net10.0</TargetFramework>", props, StringComparison.Ordinal);
+        Assert.Contains("<LangVersion>14.0</LangVersion>", props, StringComparison.Ordinal);
 
         var projects = new[]
         {
@@ -141,7 +152,8 @@ public sealed class RepositorySecurityContractTests
         using var document = JsonDocument.Parse(text);
         var root = document.RootElement;
 
-        Assert.Equal("10.0.400", root.GetProperty("sdk").GetProperty("version").GetString());
+        Assert.Equal("10.0.401", root.GetProperty("sdk").GetProperty("version").GetString());
+        Assert.Equal("latestPatch", root.GetProperty("sdk").GetProperty("rollForward").GetString());
         Assert.False(root.GetProperty("sdk").GetProperty("allowPrerelease").GetBoolean());
         Assert.Equal("Microsoft.Testing.Platform", root.GetProperty("test").GetProperty("runner").GetString());
     }
@@ -218,12 +230,6 @@ public sealed class RepositorySecurityContractTests
         var path = Path.Combine(RepositoryRoot.Value, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Assert.True(File.Exists(path), $"Expected repository file was not found: {relativePath} ({path})");
         return File.ReadAllText(path);
-    }
-
-    private static string TryRead(string relativePath)
-    {
-        var path = Path.Combine(RepositoryRoot.Value, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
     }
 
     private static string FindRepositoryRoot()
