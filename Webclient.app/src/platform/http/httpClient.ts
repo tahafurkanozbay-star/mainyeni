@@ -10,7 +10,8 @@ import {
   type RuntimeTuningProfile,
   type SchedulerLike,
   type SchedulerOptions,
-  type Transport
+  type Transport,
+  readErrorLike
 } from './contracts';
 import {
   assertRequiredNetworkCapabilities,
@@ -91,15 +92,16 @@ const createTransportDiagnosticHooks = (
     url: string;
     durationMs: number;
     status?: number | null;
-    error?: { code?: string; retryable?: boolean };
+    error: unknown;
   }) => {
+    const errorLike = readErrorLike(error);
     diagnostics.record('network.transport.failed', {
       method,
       url,
       durationMs,
       status,
-      code: error?.code,
-      retryable: error?.retryable === true
+      code: errorLike.code,
+      retryable: errorLike.retryable === true
     });
   }
 });
