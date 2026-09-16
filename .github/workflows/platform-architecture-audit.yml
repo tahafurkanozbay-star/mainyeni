@@ -11,10 +11,13 @@ on:
       - '**/*.csproj'
       - '**/*.props'
       - '**/package.json'
+      - '**/package-lock.json'
       - '**/*.css'
       - '.github/workflows/**'
       - 'tools/platform-audit.mjs'
       - 'tools/platform-audit.test.mjs'
+      - 'tools/package-lock-integrity.mjs'
+      - 'tools/package-lock-integrity.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -38,16 +41,23 @@ jobs:
           node-version: '24'
 
       - name: Unit tests
-        run: node --test tools/platform-audit.test.mjs
+        run: node --test tools/platform-audit.test.mjs tools/package-lock-integrity.test.mjs
 
       - name: Generate architecture inventory
         run: node tools/platform-audit.mjs
+
+      - name: Audit package lock integrity
+        run: node tools/package-lock-integrity.mjs
 
       - name: Publish summary
         if: always()
         run: |
           if [ -f artifacts/platform-audit/platform-audit.md ]; then
             cat artifacts/platform-audit/platform-audit.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f artifacts/platform-audit/package-lock-integrity.md ]; then
+            printf '\n---\n\n' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/platform-audit/package-lock-integrity.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload audit report
