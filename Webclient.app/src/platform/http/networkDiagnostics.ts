@@ -1,8 +1,8 @@
-import {
-  type DiagnosticEvent,
-  type DiagnosticSummary,
-  type DiagnosticsSnapshotOptions,
-  readErrorLike
+import { readErrorLike } from './contracts';
+import type {
+  DiagnosticEvent,
+  DiagnosticSummary,
+  DiagnosticsSnapshotOptions
 } from './contracts';
 
 const DEFAULT_CAPACITY = 200;
