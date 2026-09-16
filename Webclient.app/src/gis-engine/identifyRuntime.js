@@ -78,19 +78,11 @@ export const classifyIdentifyLayer = (layer, index = 0) => {
   if (!isVisible(layer)) return { ...identity, kind: 'skip', reason: 'hidden', layer };
   if (type === 'group') return { ...identity, kind: 'skip', reason: 'group', layer };
 
-  if (
-    type === 'map-image' ||
-    type === 'mapimage' ||
-    isMapServiceUrl(url)
-  ) {
+  if (type === 'map-image' || type === 'mapimage' || isMapServiceUrl(url)) {
     return { ...identity, kind: 'map-service', url, layer };
   }
 
-  if (
-    type === 'feature' ||
-    type === 'feature-layer' ||
-    isFeatureServiceUrl(url)
-  ) {
+  if (type === 'feature' || type === 'feature-layer' || isFeatureServiceUrl(url)) {
     return { ...identity, kind: 'feature-layer', url, layer };
   }
 
@@ -153,6 +145,7 @@ const normalizeMapServiceResult = (target, response) => {
     source: 'identify',
     targetId: target.id,
     targetTitle: target.title,
+    targetUrl: target.url,
     layerId: result?.layerId ?? target.id,
     layerName: result?.layerName || target.title,
     displayFieldName: result?.displayFieldName || null,
@@ -170,10 +163,7 @@ export const identifyMapServices = async (view, mapPoint, targets, options = {})
   if (!source.length) return { results: [], failures: [] };
 
   const [identify, IdentifyParameters] = await raceCancellation(
-    Promise.all([
-      load('esri/rest/identify'),
-      load('esri/rest/support/IdentifyParameters'),
-    ]),
+    Promise.all([load('esri/rest/identify'), load('esri/rest/support/IdentifyParameters')]),
     options.signal,
   );
   throwIfAborted(options.signal);
@@ -210,6 +200,7 @@ const normalizeHitTestResult = (result, index = 0) => {
     source: 'hit-test',
     targetId: identity.id,
     targetTitle: identity.title,
+    targetUrl: normalizeLayerUrl(layer?.url),
     layerId: identity.id,
     layerName: identity.title,
     displayFieldName: layer?.displayField || null,
@@ -229,10 +220,7 @@ export const identifyFeatureLayers = async (view, screenEvent, targets, options 
 
   const include = source.map((target) => target.layer).filter(Boolean);
   const hitOptions = include.length ? { include } : undefined;
-  const response = await raceCancellation(
-    Promise.resolve(view.hitTest(screenEvent, hitOptions)),
-    options.signal,
-  );
+  const response = await raceCancellation(Promise.resolve(view.hitTest(screenEvent, hitOptions)), options.signal);
   throwIfAborted(options.signal);
 
   const allowedLayers = new Set(include);
@@ -256,14 +244,23 @@ const resultObjectId = (result) => {
     ?? null;
 };
 
+const resultNamespace = (result) => {
+  const targetUrl = normalizeLayerUrl(result?.targetUrl);
+  if (targetUrl) return targetUrl.toLowerCase();
+  if (result?.targetId !== null && result?.targetId !== undefined) return String(result.targetId);
+  return String(result?.targetTitle || result?.source || 'unknown');
+};
+
 const resultKey = (result, fallbackIndex) => {
+  const namespace = resultNamespace(result);
+  const layerId = String(result?.layerId ?? result?.layerName ?? 'unknown');
   const objectId = resultObjectId(result);
-  if (objectId !== null && objectId !== undefined) return `${result.layerId}:${objectId}`;
+  if (objectId !== null && objectId !== undefined) return `${namespace}:${layerId}:${objectId}`;
   const geometry = result?.geometry;
   const point = geometry && Number.isFinite(geometry.x) && Number.isFinite(geometry.y)
     ? `${geometry.x}:${geometry.y}`
     : '';
-  return `${result.layerId}:${point}:${fallbackIndex}`;
+  return `${namespace}:${layerId}:${point}:${fallbackIndex}`;
 };
 
 export const dedupeIdentifyResults = (results = []) => {
@@ -279,9 +276,14 @@ export const dedupeIdentifyResults = (results = []) => {
 export const groupIdentifyResults = (results = []) => {
   const groups = new Map();
   dedupeIdentifyResults(results).forEach((result) => {
-    const key = String(result.layerId ?? result.targetId ?? result.layerName ?? 'unknown');
+    const namespace = resultNamespace(result);
+    const layerId = result.layerId ?? result.targetId ?? result.layerName ?? 'unknown';
+    const key = `${namespace}:${String(layerId)}`;
     if (!groups.has(key)) {
       groups.set(key, {
+        targetId: result.targetId ?? null,
+        targetTitle: result.targetTitle || null,
+        targetUrl: result.targetUrl || null,
         layerId: result.layerId ?? result.targetId ?? null,
         layerName: result.layerName || result.targetTitle || 'Katman',
         features: [],
@@ -308,10 +310,7 @@ export const executeGlobalIdentify = async (view, event, options = {}) => {
   );
   throwIfAborted(options.signal);
 
-  const results = dedupeIdentifyResults([
-    ...mapServiceResponse.results,
-    ...featureResults,
-  ]);
+  const results = dedupeIdentifyResults([...mapServiceResponse.results, ...featureResults]);
 
   return {
     groups: groupIdentifyResults(results),
