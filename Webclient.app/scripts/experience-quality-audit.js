@@ -107,10 +107,6 @@ function isPointerOnlyFocusException(selector) {
     return selector.includes(":focus:not(:focus-visible)");
 }
 
-function hasVisibleOutline(body) {
-    return /outline\s*:\s*(?!\s*(?:0|none)\b)[^;]+/i.test(body);
-}
-
 function hasVisibleShadow(body) {
     return /box-shadow\s*:\s*(?!\s*none\b)[^;]+/i.test(body);
 }
@@ -124,10 +120,11 @@ function auditFocusVisibility(file, content) {
         if (!/:focus(?:-visible)?\b/.test(rule.selector)) continue;
         if (isPointerOnlyFocusException(rule.selector)) continue;
 
+        // Removing a shadow alone is not destructive: a visible outline may be
+        // supplied by another matching rule. Removing the outline is blocked
+        // unless this same rule supplies an explicit replacement shadow.
         const removesOutline = /outline\s*:\s*(?:0|none)\s*!important/i.test(rule.body);
-        const removesShadow = /box-shadow\s*:\s*none\s*!important/i.test(rule.body);
-        const destructive = (removesOutline && !hasVisibleShadow(rule.body))
-            || (removesShadow && !hasVisibleOutline(rule.body));
+        const destructive = removesOutline && !hasVisibleShadow(rule.body);
         if (!destructive) continue;
 
         const line = lineNumber(content, rule.index);
@@ -249,7 +246,7 @@ function selfTest() {
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus:not(:focus-visible) { outline: none; }").length, 0);
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 2px solid blue; }").length, 0);
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 0 !important; box-shadow: 0 0 0 3px blue !important; }").length, 0);
-    assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 2px solid blue !important; box-shadow: none !important; }").length, 0);
+    assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { box-shadow: none !important; }").length, 0);
     assert.strictEqual(auditFocusVisibility(tempRoot, ".x:focus-visible { outline: 0 !important; box-shadow: none !important; }")[0].severity, "error");
     assert.strictEqual(debtAllows("remotePresentation", "src/styles.css", "https://fonts.googleapis.com/css?family=Mukta"), true);
     assert.strictEqual(debtAllows("remotePresentation", relativeVirtual, "https://fonts.googleapis.com"), false);
