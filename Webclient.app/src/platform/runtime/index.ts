@@ -6,3 +6,4 @@ export * from './resilience';
 export * from './privacyTelemetry';
 export * from './stateStore';
 export * from './runtimeKernel';
+export * from './supervision';

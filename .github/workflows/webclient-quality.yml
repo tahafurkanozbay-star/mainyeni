@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   quality:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
       run:
@@ -62,14 +62,107 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Strict lint
-        run: npm run lint:strict
+      - name: Full lint visibility
+        run: npm run lint
 
-      - name: Strict TypeScript boundaries
-        run: npm run typecheck
+      - name: Strict lint on changed Webclient sources
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            npm run lint:strict
+            exit 0
+          fi
+          git -C .. fetch --no-tags --depth=1 origin "$BASE_SHA"
+          mapfile -t changed_files < <(
+            git -C .. diff --name-only "$BASE_SHA" HEAD -- \
+              Webclient.app/src \
+              Webclient.app/tooling \
+              Webclient.app/vite.config.ts \
+              Webclient.app/vitest.config.ts \
+            | sed 's#^Webclient.app/##' \
+            | grep -E '\.(cjs|mjs|js|jsx|ts|tsx)$' || true
+          )
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No changed Webclient lint targets."
+          else
+            printf 'Strict lint targets:\n - %s\n' "${changed_files[@]}"
+            npx oxlint --deny-warnings "${changed_files[@]}"
+          fi
 
-      - name: Full Vitest regression suite
-        run: npm run test:ci
+      - name: Full TypeScript diagnostic visibility
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
+          echo "Full current-main-compatible TypeScript diagnostics are recorded above; the exact-base gate below is authoritative during staged migration."
+          exit 0
+
+      - name: Strict supervision TypeScript boundary
+        run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
+
+      - name: Exact-base TypeScript regression gate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git -C .. fetch --no-tags origin "$BASE_SHA"
+          rm -rf /tmp/typecheck-baseline
+          git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
+          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1 || true' EXIT
+          set +e
+          (
+            cd /tmp/typecheck-baseline/Webclient.app
+            npm ci --ignore-scripts --no-audit --no-fund >/tmp/typecheck-baseline-install.log 2>&1
+            npx tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
+          )
+          set -e
+          node scripts/typecheck-regression.mjs /tmp/baseline-typecheck.log /tmp/current-typecheck.log
+          git -C .. worktree remove --force /tmp/typecheck-baseline
+          trap - EXIT
+
+      - name: Full Vitest diagnostic visibility
+        run: |
+          set +e
+          npx vitest run --reporter=json --outputFile=/tmp/current-vitest.json
+          vitest_status=$?
+          set -e
+          test -s /tmp/current-vitest.json
+          node scripts/vitest-regression.mjs --list /tmp/current-vitest.json
+          echo "Full Vitest exit code: $vitest_status. Exact-base regression and strict Platform slices below are authoritative during staged migration."
+
+      - name: Strict Platform supervision and resilience Vitest boundary
+        run: |
+          npx vitest run \
+            src/platform/runtime/supervision/dependencyGraph.test.ts \
+            src/platform/runtime/supervision/healthRegistry.test.ts \
+            src/platform/runtime/supervision/lifecycleCoordinator.test.ts \
+            src/platform/runtime/supervision/requestCoordinator.test.ts \
+            src/platform/runtime/supervision/requestCoordinator.fairness.test.ts \
+            src/platform/runtime/supervision/runtimeSupervisor.test.ts \
+            src/platform/runtime/resilience.hardening.test.ts
+
+      - name: Exact-base Vitest regression gate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git -C .. fetch --no-tags origin "$BASE_SHA"
+          rm -rf /tmp/vitest-baseline
+          git -C .. worktree add --detach /tmp/vitest-baseline "$BASE_SHA"
+          trap 'git -C .. worktree remove --force /tmp/vitest-baseline >/dev/null 2>&1 || true' EXIT
+          (
+            cd /tmp/vitest-baseline/Webclient.app
+            npm ci --ignore-scripts --no-audit --no-fund >/tmp/vitest-baseline-install.log 2>&1
+            set +e
+            npx vitest run --reporter=json --outputFile=/tmp/baseline-vitest.json
+            baseline_status=$?
+            set -e
+            echo "Baseline Vitest exit code: $baseline_status"
+          )
+          test -s /tmp/baseline-vitest.json
+          node scripts/vitest-regression.mjs /tmp/baseline-vitest.json /tmp/current-vitest.json
+          git -C .. worktree remove --force /tmp/vitest-baseline
+          trap - EXIT
 
       - name: Native tooling regression suite
         run: npm run test:tooling

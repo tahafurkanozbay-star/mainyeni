@@ -17,13 +17,14 @@ describe('resilience deadline enforcement', () => {
     const operation = vi.fn((_signal: AbortSignal) => new Promise<string>(() => undefined));
 
     const pending = withTimeout(operation, 50);
-    await vi.advanceTimersByTimeAsync(51);
-
-    await expect(pending).rejects.toMatchObject({
+    const deadlineRejection = expect(pending).rejects.toMatchObject({
       name: 'OperationTimeoutError',
       code: 'OPERATION_TIMEOUT',
       timeoutMs: 50,
     });
+    await vi.advanceTimersByTimeAsync(51);
+
+    await deadlineRejection;
     expect(operation).toHaveBeenCalledTimes(1);
     expect(operation.mock.calls[0]?.[0].aborted).toBe(true);
   });
