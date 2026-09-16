@@ -86,13 +86,33 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<void> => {
   });
 };
 
-const normalizedRetryPolicy = (policy: Partial<RetryPolicy> = {}): RetryPolicy => Object.freeze({
-  maxAttempts: positiveInteger(policy.maxAttempts, DEFAULT_RETRY_POLICY.maxAttempts, 10),
-  baseDelayMs: positiveInteger(policy.baseDelayMs, DEFAULT_RETRY_POLICY.baseDelayMs, 60000),
-  maxDelayMs: positiveInteger(policy.maxDelayMs, DEFAULT_RETRY_POLICY.maxDelayMs, 300000),
-  jitterRatio: clampNumber(policy.jitterRatio, 0, 1, DEFAULT_RETRY_POLICY.jitterRatio),
-  retryable: policy.retryable ?? DEFAULT_RETRY_POLICY.retryable,
-});
+/**
+ * Resilience observers are diagnostic hooks, not control-flow hooks. A metrics,
+ * logging or UI listener must never replace the business result/error that the
+ * resilience primitive is protecting.
+ */
+const notifyObserver = <TArgs extends readonly unknown[]>(
+  observer: ((...args: TArgs) => void) | undefined,
+  ...args: TArgs
+): void => {
+  if (!observer) return;
+  try {
+    observer(...args);
+  } catch {
+    // Observability failures are intentionally isolated from business control flow.
+  }
+};
+
+const normalizedRetryPolicy = (policy: Partial<RetryPolicy> = {}): RetryPolicy => {
+  const retryable = policy.retryable ?? DEFAULT_RETRY_POLICY.retryable;
+  return Object.freeze({
+    maxAttempts: positiveInteger(policy.maxAttempts, DEFAULT_RETRY_POLICY.maxAttempts, 10),
+    baseDelayMs: positiveInteger(policy.baseDelayMs, DEFAULT_RETRY_POLICY.baseDelayMs, 60000),
+    maxDelayMs: positiveInteger(policy.maxDelayMs, DEFAULT_RETRY_POLICY.maxDelayMs, 300000),
+    jitterRatio: clampNumber(policy.jitterRatio, 0, 1, DEFAULT_RETRY_POLICY.jitterRatio),
+    ...(retryable ? { retryable } : {}),
+  });
+};
 
 const normalizedCircuitPolicy = (policy: Partial<CircuitBreakerPolicy> = {}): CircuitBreakerPolicy => Object.freeze({
   failureThreshold: positiveInteger(policy.failureThreshold, DEFAULT_CIRCUIT_POLICY.failureThreshold, 100),
@@ -132,10 +152,10 @@ export const executeWithRetry = async <TValue>(
     const context: RetryAttemptContext = {
       attempt,
       maxAttempts: policy.maxAttempts,
-      signal: options.signal,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(attempt > 1 ? { previousError } : {}),
     };
-    options.onAttempt?.(context);
+    notifyObserver(options.onAttempt, context);
     try {
       return await operation(context);
     } catch (error) {
@@ -144,7 +164,7 @@ export const executeWithRetry = async <TValue>(
       const retryable = policy.retryable?.(error, attempt) !== false;
       if (!retryable || attempt >= policy.maxAttempts) throw error;
       const delayMs = retryDelayMs(attempt, policy, clock.random);
-      options.onRetry?.(error, context, delayMs);
+      notifyObserver(options.onRetry, error, context, delayMs);
       await clock.sleep(delayMs, options.signal);
     }
   }
@@ -220,7 +240,7 @@ export const createCircuitBreaker = (options: CircuitBreakerOptions = {}): Circu
       halfOpenProbeInFlight = false;
       samples.splice(0);
     }
-    options.onTransition?.(next, previous, snapshot());
+    notifyObserver(options.onTransition, next, previous, snapshot());
   };
 
   const shouldOpen = (): boolean => {
@@ -289,12 +309,17 @@ export const createCircuitBreaker = (options: CircuitBreakerOptions = {}): Circu
     openedAt = null;
     halfOpenSuccesses = 0;
     halfOpenProbeInFlight = false;
-    if (previous !== 'closed') options.onTransition?.('closed', previous, snapshot());
+    if (previous !== 'closed') notifyObserver(options.onTransition, 'closed', previous, snapshot());
   };
 
   return Object.freeze({ execute, allow, recordSuccess, recordFailure, snapshot, reset });
 };
 
+/**
+ * Enforces a deadline even when a legacy operation ignores the supplied
+ * AbortSignal. The losing operation promise may still finish internally, but
+ * it can no longer hold the caller open beyond the declared deadline.
+ */
 export const withTimeout = async <TValue>(
   operation: (signal: AbortSignal) => Promise<TValue> | TValue,
   timeoutMs: number,
@@ -304,13 +329,28 @@ export const withTimeout = async <TValue>(
   throwIfAborted(parentSignal);
   const controller = new AbortController();
   const timeoutError = new OperationTimeoutError(normalizedTimeout);
-  const timer = setTimeout(() => controller.abort(timeoutError), normalizedTimeout);
-  const parentAbort = () => controller.abort(parentSignal?.reason ?? abortError());
+  let rejectDeadline: (reason: unknown) => void = () => undefined;
+  let finished = false;
+
+  const deadline = new Promise<never>((_resolve, reject) => {
+    rejectDeadline = reject;
+  });
+
+  const fail = (reason: unknown): void => {
+    if (finished) return;
+    if (!controller.signal.aborted) controller.abort(reason);
+    rejectDeadline(reason);
+  };
+
+  const timer = setTimeout(() => fail(timeoutError), normalizedTimeout);
+  const parentAbort = () => fail(parentSignal?.reason ?? abortError());
   parentSignal?.addEventListener('abort', parentAbort, { once: true });
 
   try {
-    return await operation(controller.signal);
+    const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+    return await Promise.race([operationPromise, deadline]);
   } finally {
+    finished = true;
     clearTimeout(timer);
     parentSignal?.removeEventListener('abort', parentAbort);
   }
