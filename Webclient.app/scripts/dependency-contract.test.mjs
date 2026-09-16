@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 import {
   analyzeDependencyContract,
   collectPackageReferences,
@@ -43,7 +45,7 @@ const lockfile = {
 };
 
 describe('dependency contract', () => {
-  test.each([
+  const packageCases = [
     ['react', 'react'],
     ['react-dom/client', 'react-dom'],
     ['@scope/package/path', '@scope/package'],
@@ -52,19 +54,22 @@ describe('dependency contract', () => {
     ['/absolute', null],
     ['node:fs', null],
     ['https://cdn.example/module.js', null],
-  ])('extracts package root from %s', (specifier, expected) => {
-    expect(packageNameFromSpecifier(specifier)).toBe(expected);
-  });
+  ];
+  for (const [specifier, expected] of packageCases) {
+    test(`extracts package root from ${specifier}`, () => {
+      assert.equal(packageNameFromSpecifier(specifier), expected);
+    });
+  }
 
   test('collects static, side-effect, dynamic and require package imports', () => {
-    expect(collectPackageReferences(`
+    assert.deepEqual(collectPackageReferences(`
       import React from 'react';
       import 'bootstrap/dist/css/bootstrap.min.css';
       export { createPortal } from 'react-dom';
       const helper = require('@scope/helper/runtime');
       const lazy = import('react-redux');
       const local = import('./local');
-    `)).toEqual([
+    `), [
       '@scope/helper',
       'bootstrap',
       'react',
@@ -73,23 +78,26 @@ describe('dependency contract', () => {
     ]);
   });
 
-  test.each([
+  const sourceCases = [
     ['src/App.test.js', true],
     ['src/__tests__/App.js', true],
     ['src/setupTests.js', true],
     ['src/App.tsx', false],
-  ])('classifies test-only source %s', (path, expected) => {
-    expect(isTestSource(path)).toBe(expected);
-  });
+  ];
+  for (const [path, expected] of sourceCases) {
+    test(`classifies test-only source ${path}`, () => {
+      assert.equal(isTestSource(path), expected);
+    });
+  }
 
   test('detects lockfile manifest drift', () => {
-    expect(compareManifestSection('dependencies', {
+    assert.deepEqual(compareManifestSection('dependencies', {
       react: '^19.3.0',
       redux: '^5.0.1',
     }, {
       react: '^19.2.0',
       orphan: '^1.0.0',
-    })).toEqual([
+    }), [
       'dependencies: lockfile contains undeclared dependency orphan',
       'dependencies: react specifier differs (^19.3.0 != ^19.2.0)',
       'dependencies: package-lock is missing redux',
@@ -97,36 +105,38 @@ describe('dependency contract', () => {
   });
 
   test('accepts an exactly synchronized lockfile root', () => {
-    expect(validateLockfile(manifest, lockfile)).toEqual([]);
+    assert.deepEqual(validateLockfile(manifest, lockfile), []);
   });
 
   test('requires lockfile v3 and root metadata', () => {
-    expect(validateLockfile(manifest, { lockfileVersion: 2, packages: {} }))
-      .toEqual([
-        'lockfile: expected lockfileVersion 3, received 2',
-        'lockfile: root package metadata is missing',
-      ]);
+    assert.deepEqual(validateLockfile(manifest, { lockfileVersion: 2, packages: {} }), [
+      'lockfile: expected lockfileVersion 3, received 2',
+      'lockfile: root package metadata is missing',
+    ]);
   });
 
-  test.each([
-    ['*'],
-    ['latest'],
-    ['next'],
-    ['https://example.test/package.tgz'],
-    ['git+https://example.test/repo.git'],
-    ['file:../package'],
-  ])('rejects non-release dependency specifier %s', (specifier) => {
-    expect(validateVersionSpecifiers({ dependencies: { example: specifier } }))
-      .toHaveLength(1);
-  });
+  for (const specifier of [
+    '*',
+    'latest',
+    'next',
+    'https://example.test/package.tgz',
+    'git+https://example.test/repo.git',
+    'file:../package',
+  ]) {
+    test(`rejects non-release dependency specifier ${specifier}`, () => {
+      assert.equal(validateVersionSpecifiers({ dependencies: { example: specifier } }).length, 1);
+    });
+  }
 
   test('prevents react-scripts from returning after Vite migration', () => {
-    expect(validateVersionSpecifiers({ dependencies: { 'react-scripts': '^5.0.1' } })[0])
-      .toMatch(/forbidden by the Vite migration contract/i);
+    assert.match(
+      validateVersionSpecifiers({ dependencies: { 'react-scripts': '^5.0.1' } })[0],
+      /forbidden by the Vite migration contract/i,
+    );
   });
 
   test('accepts the modern minimum toolchain majors', () => {
-    expect(validateModernToolchain(manifest)).toEqual([]);
+    assert.deepEqual(validateModernToolchain(manifest), []);
   });
 
   test('reports legacy toolchain majors and missing contracts', () => {
@@ -144,13 +154,13 @@ describe('dependency contract', () => {
       },
       engines: { node: '>=20', npm: '>=10' },
     };
-    const errors = validateModernToolchain(legacy);
-    expect(errors.join('\n')).toMatch(/react major 17/i);
-    expect(errors.join('\n')).toMatch(/react-redux major 7/i);
-    expect(errors.join('\n')).toMatch(/vite major 6/i);
-    expect(errors.join('\n')).toMatch(/typescript major 5/i);
-    expect(errors.join('\n')).toMatch(/Node engine/i);
-    expect(errors.join('\n')).toMatch(/npm engine/i);
+    const errors = validateModernToolchain(legacy).join('\n');
+    assert.match(errors, /react major 17/i);
+    assert.match(errors, /react-redux major 7/i);
+    assert.match(errors, /vite major 6/i);
+    assert.match(errors, /typescript major 5/i);
+    assert.match(errors, /Node engine/i);
+    assert.match(errors, /npm engine/i);
   });
 
   test('requires runtime imports to be production dependencies', () => {
@@ -159,12 +169,12 @@ describe('dependency contract', () => {
       { path: 'src/App.test.tsx', references: ['@testing-library/react'] },
     ], manifest);
 
-    expect(result.errors).toEqual([
+    assert.deepEqual(result.errors, [
       'src/App.tsx: runtime source imports devDependency @testing-library/react',
       'src/App.tsx: imports undeclared package missing',
     ]);
-    expect(result.usedRuntime).toEqual(['@testing-library/react', 'missing', 'react']);
-    expect(result.usedDevelopment).toEqual(['@testing-library/react']);
+    assert.deepEqual(result.usedRuntime, ['@testing-library/react', 'missing', 'react']);
+    assert.deepEqual(result.usedDevelopment, ['@testing-library/react']);
   });
 
   test('accepts a coherent dependency contract end to end', () => {
@@ -177,8 +187,8 @@ describe('dependency contract', () => {
       ],
     });
 
-    expect(result.ok).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.runtimePackages).toEqual(['bootstrap', 'react']);
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.runtimePackages, ['bootstrap', 'react']);
   });
 });
