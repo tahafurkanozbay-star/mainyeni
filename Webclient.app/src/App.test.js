@@ -87,7 +87,8 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText(/lütfen bekleyin/i)).not.toBeInTheDocument();
+    expect(document.getElementById('experience-global-live-region')).toHaveAttribute('role', 'status');
   });
 
   test('renders the controlled error experience when bootstrap fails', async () => {
