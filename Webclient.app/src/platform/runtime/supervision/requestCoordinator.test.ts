@@ -182,9 +182,10 @@ describe('RequestCoordinator deduplication and cancellation', () => {
       }, { once: true });
     }), { key: 'abortable' });
     await flush();
+    const subscriberRejection = expect(handle.promise).rejects.toBe('no listeners');
     handle.cancel('no listeners');
     await expect(observed.promise).resolves.toBe('no listeners');
-    await expect(handle.promise).rejects.toBe('no listeners');
+    await subscriberRejection;
     await flush();
     expect(coordinator.snapshot().cancelled).toBe(1);
   });

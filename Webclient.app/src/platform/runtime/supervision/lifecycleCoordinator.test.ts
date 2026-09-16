@@ -58,23 +58,27 @@ describe('LifecycleCoordinator orchestration', () => {
   });
 
   test('starts independent nodes from the same dependency level concurrently', async () => {
-    const first = { resolve: () => undefined as void };
     let resolveA!: () => void;
     let resolveB!: () => void;
-    const gateA = new Promise<void>((resolve) => { resolveA = resolve; first.resolve = resolve; });
+    let resolveBothStarted!: () => void;
+    const gateA = new Promise<void>((resolve) => { resolveA = resolve; });
     const gateB = new Promise<void>((resolve) => { resolveB = resolve; });
+    const bothStarted = new Promise<void>((resolve) => { resolveBothStarted = resolve; });
     const starts: string[] = [];
+    const recordStart = (id: string): void => {
+      starts.push(id);
+      if (starts.length === 2) resolveBothStarted();
+    };
     const coordinator = new LifecycleCoordinator({ concurrency: 2 });
     coordinator.register({ id: 'root', start: () => undefined });
     coordinator.register({
-      id: 'a', dependencies: [{ id: 'root' }], start: async () => { starts.push('a'); await gateA; },
+      id: 'a', dependencies: [{ id: 'root' }], start: async () => { recordStart('a'); await gateA; },
     });
     coordinator.register({
-      id: 'b', dependencies: [{ id: 'root' }], start: async () => { starts.push('b'); await gateB; },
+      id: 'b', dependencies: [{ id: 'root' }], start: async () => { recordStart('b'); await gateB; },
     });
     const pending = coordinator.startAll();
-    await flush();
-    await flush();
+    await bothStarted;
     expect(starts.sort()).toEqual(['a', 'b']);
     resolveA();
     resolveB();

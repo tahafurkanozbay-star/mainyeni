@@ -326,8 +326,9 @@ export class RequestCoordinator {
       const abortHandler = signal
         ? () => {
           if (subscriber.settled) return;
-          this.#settleSubscriber(unknownSubscriber, false, cancellationReason(signal));
-          this.#cleanupTaskIfOrphaned(task);
+          const cancellation = cancellationReason(signal);
+          this.#settleSubscriber(unknownSubscriber, false, cancellation);
+          this.#cleanupTaskIfOrphaned(task, cancellation);
           this.#drain();
           this.#emitChange();
         }
@@ -341,12 +342,9 @@ export class RequestCoordinator {
       cancelSubscriber = (reason?: unknown) => {
         const current = task.subscribers.get(subscriberId);
         if (!current || current.settled) return;
-        this.#settleSubscriber(
-          current,
-          false,
-          reason ?? new DOMException('Request subscriber cancelled.', 'AbortError'),
-        );
-        this.#cleanupTaskIfOrphaned(task);
+        const cancellation = reason ?? new DOMException('Request subscriber cancelled.', 'AbortError');
+        this.#settleSubscriber(current, false, cancellation);
+        this.#cleanupTaskIfOrphaned(task, cancellation);
         this.#drain();
         this.#emitChange();
       };
@@ -371,7 +369,7 @@ export class RequestCoordinator {
     }, 0);
   }
 
-  #cleanupTaskIfOrphaned(task: RequestTask): void {
+  #cleanupTaskIfOrphaned(task: RequestTask, reason?: unknown): void {
     [...task.subscribers.entries()].reduce((removed, [id, subscriber]) => {
       if (!subscriber.settled) return removed;
       task.subscribers.delete(id);
@@ -379,7 +377,7 @@ export class RequestCoordinator {
     }, 0);
     if (task.subscribers.size > 0 || task.state === 'settled') return;
     if (!task.controller.signal.aborted) {
-      task.controller.abort(new DOMException('All request subscribers cancelled.', 'AbortError'));
+      task.controller.abort(reason ?? new DOMException('All request subscribers cancelled.', 'AbortError'));
     }
     if (task.state === 'queued') {
       this.#removeQueuedTask(task);
