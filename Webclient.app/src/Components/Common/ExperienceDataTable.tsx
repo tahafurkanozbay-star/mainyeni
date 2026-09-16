@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 
 export interface ExperienceColumn<Row> {
   readonly key: string;
@@ -18,11 +18,16 @@ export interface ExperienceDataTableProps<Row> {
   readonly onRowActivate?: (row: Row) => void;
 }
 
+const getColumnStyle = <Row,>(column: ExperienceColumn<Row>): CSSProperties => ({
+  ...(column.width ? { width: column.width } : {}),
+  ...(column.align ? { textAlign: column.align } : {}),
+});
+
 export const ExperienceDataTable = <Row,>({ caption, columns, rows, getRowKey, emptyMessage = 'Kayıt bulunamadı', selectedRowKey, onRowActivate }: ExperienceDataTableProps<Row>): ReactNode => (
   <div className="experience-table-region" role="region" aria-label={caption} tabIndex={0}>
     <table className="experience-table">
       <caption className="experience-sr-only">{caption}</caption>
-      <thead><tr>{columns.map((column) => <th key={column.key} scope="col" style={{ width: column.width, textAlign: column.align }}>{column.header}</th>)}</tr></thead>
+      <thead><tr>{columns.map((column) => <th key={column.key} scope="col" style={getColumnStyle(column)}>{column.header}</th>)}</tr></thead>
       <tbody>
         {rows.length === 0 ? <tr><td colSpan={columns.length} className="experience-table__empty">{emptyMessage}</td></tr> : rows.map((row, index) => {
           const key = getRowKey(row, index);
@@ -30,7 +35,7 @@ export const ExperienceDataTable = <Row,>({ caption, columns, rows, getRowKey, e
           return (
             <tr key={key} aria-selected={selected || undefined} className={selected ? 'experience-table__row--selected' : undefined} onDoubleClick={onRowActivate ? () => onRowActivate(row) : undefined}>
               {columns.map((column, columnIndex) => (
-                <td key={column.key} style={{ textAlign: column.align }}>
+                <td key={column.key} style={getColumnStyle(column)}>
                   {columnIndex === 0 && onRowActivate ? <button type="button" className="experience-table__row-action" onClick={() => onRowActivate(row)}>{column.cell(row)}</button> : column.cell(row)}
                 </td>
               ))}
