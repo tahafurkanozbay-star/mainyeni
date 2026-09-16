@@ -14,6 +14,7 @@ import {
 import {
   type NormalizedRequestConfig,
   type RawRequestConfig,
+  type RequestBody,
   type RuntimeDefaults,
   type Transport,
   type TransportResult
@@ -140,9 +141,9 @@ export const buildFetchOptions = (
     method: config.method.toUpperCase(),
     headers: bodyResult.headers,
     signal: config.signal || undefined,
-    credentials: (config.credentials as RequestCredentials | undefined) || DEFAULT_FETCH_CREDENTIALS,
-    cache: (config.fetchCache as RequestCache | undefined) || DEFAULT_FETCH_CACHE,
-    redirect: (config.redirect as RequestRedirect | undefined) || DEFAULT_REDIRECT
+    credentials: config.credentials || DEFAULT_FETCH_CREDENTIALS,
+    cache: config.fetchCache || DEFAULT_FETCH_CACHE,
+    redirect: config.redirect || DEFAULT_REDIRECT
   };
 
   if (bodyResult.body !== undefined) options.body = bodyResult.body as BodyInit;
@@ -151,13 +152,14 @@ export const buildFetchOptions = (
   return options;
 };
 
-const assertFetchRuntime = (fetchImpl: unknown): asserts fetchImpl is typeof fetch => {
-  if (typeof fetchImpl !== 'function') {
+const resolveFetchImplementation = (candidate: unknown): typeof fetch => {
+  if (typeof candidate !== 'function') {
     throw new AppError('Fetch API is unavailable.', {
       code: 'FETCH_UNAVAILABLE',
       retryable: false
     });
   }
+  return candidate as typeof fetch;
 };
 
 const now = (clock: () => number): number => {
@@ -171,10 +173,9 @@ export const executeFetch = async <T = unknown>(
 ): Promise<TransportResult<T>> => {
   const defaults = dependencies.defaults || {};
   const config = normalizeRequestConfig(rawConfig, defaults);
-  const fetchImpl = dependencies.fetchImpl || (
-    typeof fetch === 'function' ? fetch : undefined
+  const fetchImpl = resolveFetchImplementation(
+    dependencies.fetchImpl || (typeof fetch === 'function' ? fetch : undefined)
   );
-  assertFetchRuntime(fetchImpl);
 
   const clock = dependencies.clock || Date.now;
   const startedAt = now(clock);
@@ -307,9 +308,9 @@ export const createFetchTransport = (options: FetchTransportOptions = {}): Trans
     request,
     get: (url: string, config: RawRequestConfig = {}) => request({ ...config, url, method: 'get' }),
     head: (url: string, config: RawRequestConfig = {}) => request({ ...config, url, method: 'head' }),
-    post: (url: string, data: unknown, config: RawRequestConfig = {}) => request({ ...config, url, data, method: 'post' }),
-    put: (url: string, data: unknown, config: RawRequestConfig = {}) => request({ ...config, url, data, method: 'put' }),
-    patch: (url: string, data: unknown, config: RawRequestConfig = {}) => request({ ...config, url, data, method: 'patch' }),
+    post: (url: string, data: RequestBody, config: RawRequestConfig = {}) => request({ ...config, url, data, method: 'post' }),
+    put: (url: string, data: RequestBody, config: RawRequestConfig = {}) => request({ ...config, url, data, method: 'put' }),
+    patch: (url: string, data: RequestBody, config: RawRequestConfig = {}) => request({ ...config, url, data, method: 'patch' }),
     delete: (url: string, config: RawRequestConfig = {}) => request({ ...config, url, method: 'delete' })
   }) as Transport;
 };
