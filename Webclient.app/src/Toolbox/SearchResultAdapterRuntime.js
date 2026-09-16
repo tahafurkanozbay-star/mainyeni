@@ -13,47 +13,24 @@ import {
 } from "./RecordPresentationRuntime";
 
 export const RESULT_CONTAINER_KEYS = Object.freeze([
-    "records",
-    "results",
-    "features",
-    "items",
-    "data",
-    "Data"
+    "records", "results", "features", "items", "data", "Data"
 ]);
-
 export const RESULT_TITLE_KEYS = Object.freeze([
-    "title",
-    "Title",
-    "serviceTitle",
-    "ServiceTitle",
-    "name",
-    "Name"
+    "title", "Title", "serviceTitle", "ServiceTitle", "name", "Name"
 ]);
-
 export const RESULT_ERROR_KEYS = Object.freeze([
-    "error",
-    "Error",
-    "message",
-    "Message",
-    "errorMessage",
-    "ErrorMessage"
+    "error", "Error", "message", "Message", "errorMessage", "ErrorMessage"
 ]);
-
 export const RESULT_STATUS_KEYS = Object.freeze([
-    "status",
-    "Status",
-    "resultType",
-    "ResultType",
-    "type",
-    "Type"
+    "status", "Status", "resultType", "ResultType", "type", "Type"
 ]);
 
 export const DEFAULT_ADAPTER_LIMIT = 50;
 export const MAX_ADAPTER_LIMIT = 1000;
 export const MAX_UNWRAP_DEPTH = 8;
 
-const hasOwn = (value, key) => Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
 const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const hasOwn = (value, key) => Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
 const firstDefined = (value, keys) => {
     if (!isObject(value)) return undefined;
     for (const key of keys) {
@@ -61,20 +38,20 @@ const firstDefined = (value, keys) => {
     }
     return undefined;
 };
-
 const toFiniteNumber = value => {
     if (value === "" || value === null || value === undefined) return null;
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
 };
+const normalizeTechnicalToken = value => normalizeText(value).toLowerCase();
 
 export const normalizeResultTitle = (payload, fallback = "") => normalizeText(
     firstDefined(payload, RESULT_TITLE_KEYS) ?? fallback
 );
 
-export const normalizeResultStatus = payload => normalizeText(
+export const normalizeResultStatus = payload => normalizeTechnicalToken(
     firstDefined(payload, RESULT_STATUS_KEYS) ?? ""
-).toLocaleLowerCase("tr-TR");
+);
 
 export const normalizeResultError = payload => {
     if (!payload) return null;
@@ -89,15 +66,13 @@ export const normalizeResultError = payload => {
     return message ? new Error(message) : null;
 };
 
-export const isFailureStatus = status => {
-    const normalized = normalizeText(status).toLocaleLowerCase("tr-TR");
-    return ["error", "failed", "failure", "fail", "exception", "hata", "false", "0"].includes(normalized);
-};
+export const isFailureStatus = status => [
+    "error", "failed", "failure", "fail", "exception", "hata", "false", "0"
+].includes(normalizeTechnicalToken(status));
 
-export const isSuccessStatus = status => {
-    const normalized = normalizeText(status).toLocaleLowerCase("tr-TR");
-    return ["success", "ok", "successful", "başarılı", "basarili", "true", "1"].includes(normalized);
-};
+export const isSuccessStatus = status => [
+    "success", "ok", "successful", "başarılı", "basarili", "true", "1"
+].includes(normalizeTechnicalToken(status));
 
 export const normalizeGeometryCoordinates = geometry => {
     if (!geometry || typeof geometry !== "object") return null;
@@ -157,13 +132,11 @@ export const adaptFeatureRecord = (record, sourceIndex = 0) => {
 
 export const findRecordContainer = (payload, depth = 0, visited = new WeakSet()) => {
     if (Array.isArray(payload)) return { records: payload, key: "array", owner: null, depth };
-    if (!isObject(payload) || depth > MAX_UNWRAP_DEPTH) return null;
-    if (visited.has(payload)) return null;
+    if (!isObject(payload) || depth > MAX_UNWRAP_DEPTH || visited.has(payload)) return null;
     visited.add(payload);
+
     for (const key of RESULT_CONTAINER_KEYS) {
-        if (Array.isArray(payload[key])) {
-            return { records: payload[key], key, owner: payload, depth };
-        }
+        if (Array.isArray(payload[key])) return { records: payload[key], key, owner: payload, depth };
     }
     for (const key of RESULT_CONTAINER_KEYS) {
         const nested = payload[key];
@@ -171,8 +144,7 @@ export const findRecordContainer = (payload, depth = 0, visited = new WeakSet())
         const found = findRecordContainer(nested, depth + 1, visited);
         if (found) return found;
     }
-    const serviceCandidates = [payload.result, payload.Result, payload.response, payload.Response, payload.value, payload.Value];
-    for (const nested of serviceCandidates) {
+    for (const nested of [payload.result, payload.Result, payload.response, payload.Response, payload.value, payload.Value]) {
         if (!isObject(nested) && !Array.isArray(nested)) continue;
         const found = findRecordContainer(nested, depth + 1, visited);
         if (found) return found;
@@ -180,10 +152,7 @@ export const findRecordContainer = (payload, depth = 0, visited = new WeakSet())
     return null;
 };
 
-export const extractResultRecords = payload => {
-    const container = findRecordContainer(payload);
-    return container ? container.records : [];
-};
+export const extractResultRecords = payload => findRecordContainer(payload)?.records || [];
 
 export const normalizeAdapterRecord = (record, sourceIndex = 0, options = {}) => {
     const adapted = adaptFeatureRecord(record, sourceIndex);
@@ -193,9 +162,7 @@ export const normalizeAdapterRecord = (record, sourceIndex = 0, options = {}) =>
     const id = normalized?.id ?? fallbackId;
     const fingerprint = normalized
         ? createRecordFingerprint(normalized)
-        : id !== null
-            ? `id:${id}`
-            : null;
+        : id !== null ? `id:${id}` : null;
     return {
         ...adapted,
         ...(id !== null ? { id } : {}),
@@ -214,7 +181,9 @@ export const dedupeAdaptedRecords = records => {
     const output = [];
     let duplicates = 0;
     (Array.isArray(records) ? records : []).forEach((record, index) => {
-        const normalized = normalizeAdapterRecord(record, index);
+        const normalized = record?.adapterValidation
+            ? record
+            : normalizeAdapterRecord(record, index);
         if (!normalized) return;
         const key = normalized.adapterFingerprint;
         if (key && seen.has(key)) {
@@ -237,7 +206,8 @@ export const readResultFields = payload => {
         payload?.Result?.fields
     ];
     const fields = candidates.find(Array.isArray);
-    return Array.isArray(fields) ? fields.filter(Boolean) : [];
+    if (!Array.isArray(fields)) return [];
+    return fields.every(Boolean) ? fields : fields.filter(Boolean);
 };
 
 export const readTransferLimit = payload => Boolean(
@@ -273,20 +243,18 @@ export const normalizeResultPage = (payload, recordCount, options = {}) => {
     );
     const transferLimited = readTransferLimit(payload);
     const progressedOffset = offset + count;
-    const nextOffset = explicitNextOffset !== null && explicitNextOffset > offset
+    const forwardExplicit = explicitNextOffset !== null && explicitNextOffset > offset
         ? Math.trunc(explicitNextOffset)
-        : count > 0 && transferLimited
-            ? progressedOffset
-            : null;
+        : null;
     const hasMoreByTotal = explicitTotal !== null && progressedOffset < explicitTotal;
-    const hasMore = count > 0 && (transferLimited || hasMoreByTotal || nextOffset !== null);
+    const hasMore = count > 0 && (transferLimited || hasMoreByTotal || forwardExplicit !== null);
     return {
         offset,
         limit,
         count,
         total: explicitTotal === null ? null : Math.max(0, Math.trunc(explicitTotal)),
         hasMore,
-        nextOffset: hasMore ? (nextOffset ?? progressedOffset) : null,
+        nextOffset: hasMore ? (forwardExplicit ?? progressedOffset) : null,
         transferLimited,
         progressed: count > 0
     };
@@ -300,13 +268,15 @@ export const inferResultContract = payload => {
     if (hasOwn(payload, "title") && hasOwn(payload, "data")) return "service-result";
     if (Array.isArray(payload.records)) return "records";
     if (Array.isArray(payload.results)) return "results";
-    if (findRecordContainer(payload)) return "nested";
-    return "object";
+    return findRecordContainer(payload) ? "nested" : "object";
 };
 
 export const collectPayloadDiagnostics = (payload, adaptedRecords, options = {}) => {
     const inputRecords = extractResultRecords(payload);
-    const invalidCount = inputRecords.reduce((count, record) => count + (adaptFeatureRecord(record) ? 0 : 1), 0);
+    const invalidCount = inputRecords.reduce(
+        (count, record) => count + (adaptFeatureRecord(record) ? 0 : 1),
+        0
+    );
     const withCoordinates = adaptedRecords.filter(record => record.coordinates).length;
     const withId = adaptedRecords.filter(record => normalizeId(record.id) !== null).length;
     return {
@@ -325,17 +295,13 @@ export const collectPayloadDiagnostics = (payload, adaptedRecords, options = {})
 };
 
 export const adaptSearchResult = (payload, options = {}) => {
-    const input = extractResultRecords(payload);
-    const adapted = input
+    const adapted = extractResultRecords(payload)
         .map((record, index) => normalizeAdapterRecord(record, index, options))
         .filter(Boolean);
-    let records = adapted;
-    let duplicateCount = 0;
-    if (options.dedupe !== false) {
-        const deduped = dedupeAdaptedRecords(adapted);
-        records = deduped.records;
-        duplicateCount = deduped.duplicates;
-    }
+    const deduped = options.dedupe === false
+        ? { records: adapted, duplicates: 0 }
+        : dedupeAdaptedRecords(adapted);
+    const records = deduped.records;
     const page = normalizeResultPage(payload, records.length, options);
     const status = normalizeResultStatus(payload);
     const explicitError = normalizeResultError(payload);
@@ -343,12 +309,11 @@ export const adaptSearchResult = (payload, options = {}) => {
         ? new Error(`Search result reported failure status: ${status}`)
         : null;
     const error = explicitError || statusError;
-    const title = normalizeResultTitle(payload, options.title || "");
     const presentations = options.presentation === false
         ? []
         : createRecordPresentations(records, options.presentationOptions || {});
     return {
-        title,
+        title: normalizeResultTitle(payload, options.title || ""),
         status,
         ok: !error && !isFailureStatus(status),
         error,
@@ -357,7 +322,7 @@ export const adaptSearchResult = (payload, options = {}) => {
         iconCoverage: options.presentation === false ? null : createIconCoverageReport(presentations),
         fields: readResultFields(payload),
         page,
-        diagnostics: collectPayloadDiagnostics(payload, records, { duplicateCount }),
+        diagnostics: collectPayloadDiagnostics(payload, records, { duplicateCount: deduped.duplicates }),
         raw: options.includeRaw === true ? payload : undefined
     };
 };
@@ -373,7 +338,11 @@ export const createEmptySearchResult = (options = {}) => ({
     fields: [],
     page: {
         offset: normalizeInteger(options.offset, { min: 0, fallback: 0 }),
-        limit: normalizeInteger(options.limit, { min: 1, max: MAX_ADAPTER_LIMIT, fallback: DEFAULT_ADAPTER_LIMIT }),
+        limit: normalizeInteger(options.limit, {
+            min: 1,
+            max: MAX_ADAPTER_LIMIT,
+            fallback: DEFAULT_ADAPTER_LIMIT
+        }),
         count: 0,
         total: options.total === null ? null : normalizeInteger(options.total, { min: 0, fallback: 0 }),
         hasMore: false,
@@ -398,9 +367,10 @@ export const createEmptySearchResult = (options = {}) => ({
 });
 
 export const mergeAdaptedSearchResults = (previous, next, options = {}) => {
-    const left = Array.isArray(previous?.records) ? previous.records : [];
-    const right = Array.isArray(next?.records) ? next.records : [];
-    const combined = [...left, ...right];
+    const combined = [
+        ...(Array.isArray(previous?.records) ? previous.records : []),
+        ...(Array.isArray(next?.records) ? next.records : [])
+    ];
     const deduped = options.dedupe === false
         ? { records: combined, duplicates: 0 }
         : dedupeAdaptedRecords(combined);
