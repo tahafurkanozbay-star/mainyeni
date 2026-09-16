@@ -84,24 +84,41 @@ jobs:
       - name: Install from lockfile
         run: npm ci
 
+      - name: Dependency and lockfile contract
+        run: npm run dependency:verify
+
       - name: Production dependency audit visibility
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Lint when configured
-        run: npm run lint --if-present
+      - name: Vite migration contract
+        run: npm run quality:vite --if-present
 
-      - name: Typecheck when configured
+      - name: Strict lint
+        run: npm run lint:strict --if-present
+
+      - name: Strict typecheck
         run: npm run typecheck --if-present
 
-      - name: Full regression suite
-        run: npm test -- --watchAll=false --runInBand
+      - name: Full application regression suite
+        run: npm run test:ci
 
-      - name: Production build
+      - name: Native tooling regression suite
+        run: npm run test:tooling --if-present
+
+      - name: Build budget script tests
+        run: npm run test:build-budget --if-present
+
+      - name: Production build and integrity manifest
         env:
           CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
+
+      - name: Verify production bundle integrity
+        run: npm run build:verify --if-present
+
+      - name: Enforce production build budgets
+        run: node scripts/web-build-budget.mjs build --strict
 
   backend-release-validation:
     runs-on: ubuntu-24.04

@@ -1,4 +1,4 @@
-import { createStore, combineReducers } from "redux";
+import { legacy_createStore as createStore, combineReducers } from "redux";
 import { ContextMenuReducer } from "./Reducers/ContextMenuReducer";
 import { MapReducer } from "./Reducers/MapReducer";
 import { CommonReducer } from "./Reducers/CommonReducer";
@@ -12,5 +12,4 @@ const rootReducer = combineReducers({
 });
 
 export const Store = createStore(rootReducer);
-
 export default Store;
