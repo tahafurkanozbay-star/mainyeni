@@ -1,0 +1,43 @@
+name: Temporary Lockfile Refresh
+
+on:
+  push:
+    branches:
+      - 'agent/platform-runtime-supervision-20260916-3d116af-r1'
+    paths:
+      - 'Webclient.app/package.json'
+      - '.github/workflows/lockfile-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Refresh lockfile only
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify lockfile install
+        run: npm ci --ignore-scripts
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v6
+        with:
+          name: generated-webclient-lockfile
+          path: Webclient.app/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
