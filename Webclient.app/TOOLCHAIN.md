@@ -18,6 +18,12 @@ Run `npm run verify` for lint, strict type checking, tests, production build and
 
 Production builds must not emit source maps or unresolved CRA placeholders. Bundle budgets are enforced by `scripts/verify-build.mjs` and `scripts/web-build-budget.mjs`.
 
+## Dependency policy
+
+Runtime packages must correspond to verified source usage. Do not retain packages only because they existed in the old CRA manifest. Current event date filtering intentionally depends on `react-datepicker` and `date-fns`; HTTP calls use the shared Fetch runtime rather than Axios.
+
+Deprecated packages are migrated only with behavioral coverage. In particular, replacing `esri-loader` with `@arcgis/core` is a separate ArcGIS-runtime migration and must preserve the repository's verified service URLs, cancellation, ownership, 2D/3D and performance contracts rather than being performed as an unmeasured package swap.
+
 ## Migration rules
 
 New or materially rewritten UI/runtime modules should be TypeScript (`.ts`/`.tsx`). Existing JavaScript with JSX is supported by the Vite Oxc compatibility transform so migration can proceed without a risky big-bang rewrite.
