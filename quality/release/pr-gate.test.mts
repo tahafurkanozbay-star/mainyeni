@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { FindingSnapshot, RegressionDelta, Severity } from './contracts.mts';
-import { decidePullRequestRegression } from './pr-gate.mts';
+import {
+  decidePullRequestRegression,
+  reconcileLanguageMigrationDelta,
+} from './pr-gate.mts';
 
-function snapshot(key: string, severity: Severity): FindingSnapshot {
-  return { key, severity, domain: 'security', file: 'src/example.js', line: 1 };
+function snapshot(
+  key: string,
+  severity: Severity,
+  file = 'src/example.js',
+  line = 1,
+): FindingSnapshot {
+  return { key, severity, domain: 'security', file, line };
 }
 
 function delta(overrides: Partial<RegressionDelta> = {}): RegressionDelta {
@@ -76,4 +84,53 @@ test('material aggregate risk increase blocks even without a single new high fin
   }));
   assert.equal(result.decision.state, 'block');
   assert.ok(result.findings.some(finding => finding.id === 'release-risk-score-regression'));
+});
+
+test('js to typescript migration pairs the same audit finding without hiding new risk', () => {
+  const migrated = reconcileLanguageMigrationDelta(delta({
+    added: [
+      snapshot(
+        'security|client-secret-env|src/requestPolicy.ts:23|new-excerpt',
+        'critical',
+        'src/requestPolicy.ts',
+        23,
+      ),
+      snapshot(
+        'network|plain-http-runtime|src/newRuntime.ts:9|http://example.test',
+        'high',
+        'src/newRuntime.ts',
+        9,
+      ),
+    ],
+    removed: [
+      snapshot(
+        'security|client-secret-env|src/requestPolicy.js:17|old-excerpt',
+        'critical',
+        'src/requestPolicy.js',
+        17,
+      ),
+    ],
+  }));
+
+  assert.equal(migrated.added.length, 1);
+  assert.equal(migrated.added[0]?.file, 'src/newRuntime.ts');
+  assert.equal(migrated.removed.length, 0);
+  assert.equal(migrated.unchanged.some(item => item.file === 'src/requestPolicy.ts'), true);
+});
+
+test('language reconciliation requires matching id domain severity and source stem', () => {
+  const migrated = reconcileLanguageMigrationDelta(delta({
+    added: [
+      snapshot('security|new-critical|src/requestPolicy.ts:1|x', 'critical', 'src/requestPolicy.ts'),
+    ],
+    removed: [
+      snapshot('security|old-critical|src/requestPolicy.js:1|x', 'critical', 'src/requestPolicy.js'),
+      snapshot('security|new-critical|src/other.js:1|x', 'critical', 'src/other.js'),
+      snapshot('security|new-critical|src/requestPolicy.js:1|x', 'high', 'src/requestPolicy.js'),
+    ],
+  }));
+
+  assert.equal(migrated.added.length, 1);
+  assert.equal(migrated.removed.length, 3);
+  assert.equal(migrated.unchanged.length, 0);
 });
