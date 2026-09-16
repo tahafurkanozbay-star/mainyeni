@@ -1,38 +1,9 @@
-import { defineConfig, transformWithOxc, type Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-
-const SOURCE_FILE = /\/src\/.*\.[cm]?[jt]sx?$/;
-const LEGACY_PUBLIC_URL_REFERENCE = 'process.env.PUBLIC_URL';
-
-const legacyJsxPlugin = (): Plugin => ({
-  name: 'kent-rehberi-legacy-jsx',
-  enforce: 'pre',
-  async transform(code, id) {
-    if (!id.includes('/src/') || !id.endsWith('.js')) return null;
-    const result = await transformWithOxc(code, id, {
-      lang: 'jsx',
-      jsx: { runtime: 'automatic' },
-    });
-    return result.map ? { code: result.code, map: result.map } : { code: result.code };
-  },
-});
-
-const legacyEnvironmentGuardPlugin = (): Plugin => ({
-  name: 'kent-rehberi-legacy-environment-guard',
-  enforce: 'pre',
-  transform(code, id) {
-    if (!SOURCE_FILE.test(id) || !code.includes('process.env')) return null;
-    const references = code.match(/process\.env\.[A-Z0-9_]+/g) ?? [];
-    const disallowed = [...new Set(references.filter((reference) => reference !== LEGACY_PUBLIC_URL_REFERENCE))];
-    if (disallowed.length > 0) {
-      throw new Error(
-        `Legacy browser environment access is forbidden in ${id}: ${disallowed.join(', ')}. `
-        + 'Use the typed runtimeConfig/import.meta.env boundary instead.',
-      );
-    }
-    return null;
-  },
-});
+import {
+  legacyEnvironmentGuardPlugin,
+  legacyJsxPlugin,
+} from './tooling/sourceTransforms';
 
 const manualChunk = (id: string): string | undefined => {
   if (!id.includes('node_modules')) return undefined;
@@ -53,11 +24,14 @@ export default defineConfig({
   },
   plugins: [legacyEnvironmentGuardPlugin(), legacyJsxPlugin(), react({ include: /\.[jt]sx?$/ })],
   optimizeDeps: {
-    noDiscovery: true,
+    // Keep core boot dependencies explicit for predictable warm startup while
+    // allowing Vite 8 to discover the remaining legacy/CJS graph automatically.
     include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', 'esri-loader'],
   },
   build: {
-    target: 'es2022',
+    // Vite 8's Baseline target tracks browsers that are widely interoperable
+    // instead of forcing a newer ES syntax level than the product requires.
+    target: 'baseline-widely-available',
     outDir: 'build',
     emptyOutDir: true,
     sourcemap: false,
