@@ -197,7 +197,7 @@ export interface GisServiceInput {
   [key: string]: unknown;
 }
 
-export interface SanitizedGisService {
+export interface SanitizedGisService extends GisServiceInput {
   id: string;
   title: string;
   type: GisServiceType;
