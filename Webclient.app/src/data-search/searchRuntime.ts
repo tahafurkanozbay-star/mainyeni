@@ -38,8 +38,9 @@ import {
 } from './candidatePlanner';
 import {
   buildSpatialIndex,
+  collectSpatialCandidatePositions,
+  createSpatialBounds,
   haversineDistanceMeters,
-  searchRadius,
 } from './spatialIndex';
 
 export const DEFAULT_SEARCH_LIMIT = 50;
@@ -580,14 +581,14 @@ export class DataSearchRuntime {
         signal: request.signal,
       }, this.options.candidatePlanner);
 
-      const spatialPositions = request.center && request.radiusMeters > 0
-        ? new Set(searchRadius(dataset.spatialIndex, request.center, {
+      const spatialBounds = request.center && request.radiusMeters > 0
+        ? createSpatialBounds(request.center, request.radiusMeters)
+        : null;
+      const spatialPositions = spatialBounds
+        ? new Set(collectSpatialCandidatePositions(dataset.spatialIndex, spatialBounds, {
           ...this.options.spatial,
-          radiusMeters: request.radiusMeters,
-          offset: 0,
-          limit: Math.max(dataset.records.length, 1),
           signal: request.signal,
-        }).items.map(hit => hit.record.sourceIndex))
+        }).positions)
         : null;
 
       const hits: SearchHit[] = [];
@@ -604,11 +605,17 @@ export class DataSearchRuntime {
           filteredCount += 1;
           continue;
         }
-        if (spatialPositions && !spatialPositions.has(record.sourceIndex)) {
+        if (spatialPositions && !spatialPositions.has(position)) {
           filteredCount += 1;
           continue;
         }
         const addressScore = scoreAddressRecord(record, addressAnalysis);
+        const structuralStrongQuery = addressAnalysis.requiresStrongEvidence
+          && addressAnalysis.structuralTokens.length > 0;
+        if (structuralStrongQuery && addressScore.matchedStrongCount === 0) {
+          filteredCount += 1;
+          continue;
+        }
         const primaryTextScore = textScore(record, request);
         const score = request.normalizedQuery
           ? Math.max(primaryTextScore, addressScore.score)
@@ -617,6 +624,10 @@ export class DataSearchRuntime {
         const distanceMeters = request.center && record.coordinates
           ? haversineDistanceMeters(request.center, record.coordinates)
           : null;
+        if (spatialPositions && (distanceMeters === null || distanceMeters > request.radiusMeters)) {
+          filteredCount += 1;
+          continue;
+        }
         const reasons: string[] = [];
         if (primaryTextScore > 0) reasons.push('text');
         if (addressScore.score > 0) reasons.push('address');
