@@ -3,6 +3,7 @@ using Api.Core.Platform.Health;
 using Api.Core.Platform.Middleware;
 using Api.Core.Platform.RateLimiting;
 using Business.Core.Context;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.ResponseCompression;
