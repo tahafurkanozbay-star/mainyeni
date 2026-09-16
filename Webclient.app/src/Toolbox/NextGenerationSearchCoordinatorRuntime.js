@@ -9,7 +9,7 @@ import {
 import {
     SEARCH_COORDINATOR_MODES,
     createCoordinatorCacheKey,
-    createSearchCoordinator,
+    createSearchCoordinator as createBaseSearchCoordinator,
     mergeCoordinatorResponses,
     normalizeCoordinatorRequest
 } from "./SearchCoordinatorRuntime";
@@ -154,7 +154,7 @@ export const createAddressV2QualityEnvelope = (dataset, index, response, request
 };
 
 export const createNextGenerationSearchCoordinator = (options = {}) => {
-    const base = options.baseCoordinator || createSearchCoordinator(options);
+    const base = options.baseCoordinator || createBaseSearchCoordinator(options);
     const registry = base.registry;
     const resultCache = base.resultCache;
     const stats = {
