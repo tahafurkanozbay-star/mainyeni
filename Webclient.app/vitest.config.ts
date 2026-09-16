@@ -1,4 +1,5 @@
-import { defineConfig, transformWithEsbuild, type Plugin } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
+import { transformWithEsbuild, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const legacyJsxPlugin = (): Plugin => ({
