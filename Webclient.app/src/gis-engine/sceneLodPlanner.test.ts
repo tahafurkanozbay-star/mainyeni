@@ -58,10 +58,12 @@ describe('scene LOD planner', () => {
     expect(planSceneLayerLod(policy, frame({ scale: 0 }), estimate).reason).toBe('invalid');
   });
 
-  it('promotes active interaction without inflating LOD', () => {
-    const result = planSceneLayerLod(policy, frame({ interactionActive: true, cameraDistance: 30_000, screenCoverage: 0.01 }), estimate);
-    expect(result.quality).toBe('coarse');
-    expect(result.priority).toBe('interactive');
+  it('promotes only interaction-owned layers without inflating LOD', () => {
+    const active = planSceneLayerLod({ ...policy, interactionPriority: true }, frame({ interactionActive: true, cameraDistance: 30_000, screenCoverage: 0.01 }), estimate);
+    const background = planSceneLayerLod(policy, frame({ interactionActive: true, cameraDistance: 30_000, screenCoverage: 0.01 }), estimate);
+    expect(active.quality).toBe('coarse');
+    expect(active.priority).toBe('interactive');
+    expect(background.priority).toBe('prefetch');
   });
 
   it('uses feature resources in 2D and does not apply the 3D label reduction', () => {
