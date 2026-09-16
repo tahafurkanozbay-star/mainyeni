@@ -47,11 +47,17 @@ jobs:
       - name: Install from lockfile
         run: npm ci
 
+      - name: Dependency and lockfile contract
+        run: npm run dependency:verify
+
       - name: Experience quality guard self-test
         run: node scripts/experience-quality-audit.js --self-test
 
       - name: Experience quality guard
         run: node scripts/experience-quality-audit.js
+
+      - name: Vite migration contract
+        run: npm run quality:vite
 
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
@@ -66,7 +72,7 @@ jobs:
         run: npm run test:ci
 
       - name: Build budget script tests
-        run: node --test scripts/web-build-budget.test.mjs
+        run: npm run test:build-budget
 
       - name: Production Vite build
         run: npm run build
