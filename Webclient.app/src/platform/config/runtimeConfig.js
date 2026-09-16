@@ -8,6 +8,15 @@ const getProcessEnv = () => {
   return process.env;
 };
 
+const getViteEnv = () => import.meta.env || {};
+
+const readEnv = (env, modernName, legacyName) => {
+  const modernValue = env?.[modernName];
+  if (modernValue !== undefined && modernValue !== '') return modernValue;
+  const legacyValue = env?.[legacyName];
+  return legacyValue !== undefined ? legacyValue : undefined;
+};
+
 const parseInteger = (value, fallback, min, max) => {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -26,24 +35,24 @@ const normalizeApiBaseUrl = (value) => {
     if (origin && parsed.origin === origin) {
       return `${parsed.pathname}${parsed.search}`.replace(/\/$/, '') || '/';
     }
-  } catch (error) {
+  } catch (_error) {
     // Build-time configuration is still input: invalid values intentionally fall back.
   }
 
   return DEFAULT_API_BASE_URL;
 };
 
-export const createRuntimeConfig = (source = getProcessEnv()) => {
-  const env = source || {};
+export const createRuntimeConfig = (source) => {
+  const env = source || { ...getProcessEnv(), ...getViteEnv() };
   return Object.freeze({
-    apiBaseUrl: normalizeApiBaseUrl(env.REACT_APP_API_URL || env.REACT_APP_API_BASE_URL),
-    requestTimeoutMs: parseInteger(env.REACT_APP_API_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS, 1000, 60000),
-    cacheTtlMs: parseInteger(env.REACT_APP_API_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS, 0, 600000),
-    maxRetries: parseInteger(env.REACT_APP_API_MAX_RETRIES, DEFAULT_MAX_RETRIES, 0, 4),
-    environment: String(env.REACT_APP_ENV || 'production').trim() || 'production',
-    release: String(env.REACT_APP_VERSION || env.REACT_APP_RELEASE || 'local').trim() || 'local',
-    esriApiVersion: String(env.REACT_APP_ESRI_API_VERSION || '').trim(),
-    tkgmCityId: String(env.REACT_APP_TKGM_CITY_ID || '').trim()
+    apiBaseUrl: normalizeApiBaseUrl(readEnv(env, 'VITE_API_URL', 'REACT_APP_API_URL') || readEnv(env, 'VITE_API_BASE_URL', 'REACT_APP_API_BASE_URL')),
+    requestTimeoutMs: parseInteger(readEnv(env, 'VITE_API_TIMEOUT_MS', 'REACT_APP_API_TIMEOUT_MS'), DEFAULT_REQUEST_TIMEOUT_MS, 1000, 60000),
+    cacheTtlMs: parseInteger(readEnv(env, 'VITE_API_CACHE_TTL_MS', 'REACT_APP_API_CACHE_TTL_MS'), DEFAULT_CACHE_TTL_MS, 0, 600000),
+    maxRetries: parseInteger(readEnv(env, 'VITE_API_MAX_RETRIES', 'REACT_APP_API_MAX_RETRIES'), DEFAULT_MAX_RETRIES, 0, 4),
+    environment: String(readEnv(env, 'VITE_APP_ENV', 'REACT_APP_ENV') || 'production').trim() || 'production',
+    release: String(readEnv(env, 'VITE_APP_VERSION', 'REACT_APP_VERSION') || readEnv(env, 'VITE_APP_RELEASE', 'REACT_APP_RELEASE') || 'local').trim() || 'local',
+    esriApiVersion: String(readEnv(env, 'VITE_ESRI_API_VERSION', 'REACT_APP_ESRI_API_VERSION') || '').trim(),
+    tkgmCityId: String(readEnv(env, 'VITE_TKGM_CITY_ID', 'REACT_APP_TKGM_CITY_ID') || '').trim()
   });
 };
 
