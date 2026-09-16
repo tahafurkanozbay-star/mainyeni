@@ -4,27 +4,29 @@ import type { ArcGisMetadataContract } from './arcgisMetadataAdapter';
 
 const contract = (overrides: Partial<ArcGisMetadataContract> = {}): ArcGisMetadataContract => ({
   resourceUrl: 'https://example.invalid/arcgis/rest/services/Kent/FeatureServer/0',
-  serviceType: 'FeatureServer',
-  layerId: 0,
   name: 'Kent',
+  type: 'Feature Layer',
   displayField: 'NAME',
   objectIdField: 'OBJECTID',
   globalIdField: null,
+  geometryField: null,
   geometryType: 'point',
   spatialReference: { wkid: 4326 },
   maxRecordCount: 2,
   capabilities: new Set(['query', 'pagination', 'order-by']),
-  supportsPagination: true,
-  supportsOrderBy: true,
-  supportsStatistics: false,
-  supportsDistinct: false,
-  supportsExtent: false,
-  supportsCentroid: false,
-  supportsQuantization: false,
-  queryReady: true,
   fields: [],
+  fieldMap: new Map(),
+  scales: { minScale: 0, maxScale: 0 },
+  time: { enabled: false, startField: null, endField: null, trackIdField: null, defaultInterval: null, defaultIntervalUnits: null },
+  editing: { create: false, update: false, delete: false, sync: false, attachments: false, supportsApplyEditsWithGlobalIds: false },
+  renderer: { type: null, field: null, field2: null, field3: null, normalizationField: null, visualVariableCount: 0, labelingRuleCount: 0, transparency: null },
+  hasZ: false,
+  hasM: false,
+  issues: [],
+  queryReady: true,
+  identityReady: true,
   ...overrides,
-} as ArcGisMetadataContract);
+});
 
 const response = (features: unknown[], exceededTransferLimit: boolean) => ({
   ok: true,
@@ -52,14 +54,14 @@ describe('createArcGisFeatureWindowExecutor', () => {
 
   it('fails closed when pagination was not verified by metadata', async () => {
     const runtime = createArcGisFeatureWindowExecutor({ transport: vi.fn() });
-    await expect(runtime.execute(contract({ supportsPagination: false }), {
+    await expect(runtime.execute(contract({ capabilities: new Set(['query', 'order-by']) }), {
       where: '1=1', outFields: ['OBJECTID'], returnGeometry: false,
     })).rejects.toMatchObject({ code: 'PAGINATION_UNSUPPORTED' });
   });
 
   it('requires a stable service identity before reading multiple pages', async () => {
     const runtime = createArcGisFeatureWindowExecutor({ transport: vi.fn() });
-    await expect(runtime.execute(contract({ objectIdField: null, globalIdField: null }), {
+    await expect(runtime.execute(contract({ objectIdField: null, globalIdField: null, identityReady: false }), {
       where: '1=1', outFields: ['NAME'], returnGeometry: false,
     })).rejects.toMatchObject({ code: 'STABLE_IDENTITY_REQUIRED' });
   });
@@ -70,9 +72,7 @@ describe('createArcGisFeatureWindowExecutor', () => {
       { attributes: { OBJECTID: 2 } },
     ], true));
     const runtime = createArcGisFeatureWindowExecutor({ transport, defaultPageSize: 2 });
-    const result = await runtime.execute(contract(), { where: '1=1', outFields: ['OBJECTID'], returnGeometry: false }, {
-      maxFeatures: 2,
-    });
+    const result = await runtime.execute(contract(), { where: '1=1', outFields: ['OBJECTID'], returnGeometry: false }, { maxFeatures: 2 });
     expect(result.features).toHaveLength(2);
     expect(result.truncated).toBe(true);
     expect(transport).toHaveBeenCalledTimes(1);
