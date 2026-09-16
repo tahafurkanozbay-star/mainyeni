@@ -41,8 +41,10 @@ const ALLOWED_BUDGET_PROFILES = new Set<RuntimeBudgetProfile>([
 ]);
 
 const getProcessEnv = (): RuntimeEnvironmentSource => {
-  if (typeof process === 'undefined' || !process.env) return {};
-  return process.env as RuntimeEnvironmentSource;
+  const runtimeGlobal = globalThis as typeof globalThis & {
+    process?: { env?: RuntimeEnvironmentSource };
+  };
+  return runtimeGlobal.process?.env || {};
 };
 
 const boundedString = (value: unknown, fallback: string, maxLength = 160): string => {
