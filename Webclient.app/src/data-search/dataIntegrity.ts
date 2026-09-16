@@ -169,24 +169,68 @@ const inspectString = (
   return Object.freeze(anomalies);
 };
 
+const isObjectRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const collectRawStringFields = (
+  source: unknown,
+  maxDepth = 2,
+  maxFields = 128,
+): Readonly<Record<string, string>> => {
+  if (!isObjectRecord(source)) return Object.freeze({});
+  const output: Record<string, string> = {};
+  const visited = new Set<object>();
+  const visit = (value: Readonly<Record<string, unknown>>, prefix: string, depth: number): void => {
+    if (visited.has(value as object) || Object.keys(output).length >= maxFields) return;
+    visited.add(value as object);
+    for (const [key, fieldValue] of Object.entries(value)) {
+      if (Object.keys(output).length >= maxFields) break;
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (typeof fieldValue === 'string') {
+        output[path] = fieldValue;
+      } else if (depth < maxDepth && isObjectRecord(fieldValue)) {
+        visit(fieldValue, path, depth + 1);
+      } else if (depth < maxDepth && Array.isArray(fieldValue)) {
+        for (let index = 0; index < Math.min(fieldValue.length, 16); index += 1) {
+          const item = fieldValue[index];
+          if (typeof item === 'string') output[`${path}[${index}]`] = item;
+          else if (isObjectRecord(item)) visit(item, `${path}[${index}]`, depth + 1);
+          if (Object.keys(output).length >= maxFields) break;
+        }
+      }
+    }
+  };
+  visit(source, '', 0);
+  return Object.freeze(output);
+};
+
+const normalizedStringFields = (record: NormalizedRecord): Readonly<Record<string, unknown>> => Object.freeze({
+  title: record.title,
+  category: record.category,
+  type: record.type,
+  address: record.address,
+  district: record.district,
+  neighborhood: record.neighborhood,
+  street: record.street,
+  door: record.door,
+  phone: record.phone,
+  url: record.url,
+  ...record.fields,
+});
+
 export const detectEncodingAnomalies = (records: readonly NormalizedRecord[]): readonly EncodingAnomaly[] => {
   const anomalies: EncodingAnomaly[] = [];
+  const seen = new Set<string>();
   for (const record of records) {
-    const values: Readonly<Record<string, unknown>> = {
-      title: record.title,
-      category: record.category,
-      type: record.type,
-      address: record.address,
-      district: record.district,
-      neighborhood: record.neighborhood,
-      street: record.street,
-      door: record.door,
-      phone: record.phone,
-      url: record.url,
-      ...record.fields,
-    };
+    const rawFields = collectRawStringFields(record.source);
+    const values = Object.keys(rawFields).length ? rawFields : normalizedStringFields(record);
     for (const [field, value] of Object.entries(values)) {
-      anomalies.push(...inspectString(record, field, value));
+      for (const anomaly of inspectString(record, field, value)) {
+        const key = `${anomaly.recordKey}|${anomaly.field}|${anomaly.code}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        anomalies.push(anomaly);
+      }
     }
   }
   return Object.freeze(anomalies);
@@ -322,7 +366,7 @@ const decideRecord = (
       'encoding-anomaly',
       'warning',
       policy.quarantineEncodingAnomalies ? 'quarantine' : 'accept',
-      'One or more text fields contain suspicious encoding/control characters',
+      'One or more raw text fields contain suspicious encoding/control characters',
     ));
   }
   if (policy.rejectInvalidCoordinate && record.coordinates === null) {
