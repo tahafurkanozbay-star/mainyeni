@@ -127,7 +127,7 @@ describe('data integrity quarantine', () => {
     expect(result.report.issueCounts['duplicate-id']).toBe(2);
   });
 
-  test('normalizes unsafe policy ratios and detail limits', () => {
+  test('clamps unsafe policy ratios and detail limits', () => {
     expect(normalizeIntegrityPolicy({
       maxErrorRatio: 10,
       maxQuarantineRatio: -1,
@@ -135,7 +135,7 @@ describe('data integrity quarantine', () => {
     })).toEqual(expect.objectContaining({
       maxErrorRatio: 1,
       maxQuarantineRatio: 0,
-      maxIssueDetails: 1000,
+      maxIssueDetails: 0,
     }));
   });
 });
