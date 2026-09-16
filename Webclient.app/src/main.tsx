@@ -5,7 +5,6 @@ import { AppErrorBoundary } from './platform/runtime/AppErrorBoundary';
 import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
 import { performanceMonitor } from './platform/performance/performanceMonitor';
 import { runtimeConfig } from './platform/config/runtimeConfig';
-import { runtimeKernel } from './platform/runtime/runtimeKernel';
 
 const rootElement = document.getElementById('root');
 if (!(rootElement instanceof HTMLElement)) {
@@ -17,26 +16,50 @@ const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics)
 
 let disposeAdaptiveRuntime = (): void => undefined;
 if (runtimeConfig.features.adaptiveRuntime) {
-  void runtimeKernel.start()
-    .then((snapshot) => {
+  let lifecycleDisposed = false;
+  let stopRuntime: (() => void) | null = null;
+
+  const requestStop = (): void => {
+    lifecycleDisposed = true;
+    stopRuntime?.();
+  };
+  window.addEventListener('pagehide', requestStop, { once: true });
+
+  void import('./platform/runtime/runtimeKernel')
+    .then(async ({ runtimeKernel }) => {
+      stopRuntime = () => {
+        void runtimeKernel.stop({ drain: false, timeoutMs: 2000 }).catch((error: unknown) => {
+          if (!lifecycleDisposed) {
+            runtimeDiagnostics.captureError(error, { source: 'runtime.kernel.stop' }, 'warn');
+          }
+        });
+      };
+
+      if (lifecycleDisposed) {
+        stopRuntime();
+        return;
+      }
+
+      const snapshot = await runtimeKernel.start();
+      if (lifecycleDisposed) {
+        stopRuntime();
+        return;
+      }
       runtimeDiagnostics.record('runtime.kernel.started', {
         phase: snapshot.phase,
         tier: snapshot.capabilities.tier,
       });
     })
     .catch((error: unknown) => {
-      runtimeDiagnostics.captureError(error, { source: 'runtime.kernel.start' }, 'warn');
+      if (!lifecycleDisposed) {
+        runtimeDiagnostics.captureError(error, { source: 'runtime.kernel.start' }, 'warn');
+      }
     });
 
-  const stopRuntime = (): void => {
-    void runtimeKernel.stop({ drain: false, timeoutMs: 2000 }).catch((error: unknown) => {
-      runtimeDiagnostics.captureError(error, { source: 'runtime.kernel.stop' }, 'warn');
-    });
-  };
-  window.addEventListener('pagehide', stopRuntime, { once: true });
   disposeAdaptiveRuntime = () => {
-    window.removeEventListener('pagehide', stopRuntime);
-    stopRuntime();
+    lifecycleDisposed = true;
+    window.removeEventListener('pagehide', requestStop);
+    stopRuntime?.();
   };
 }
 
