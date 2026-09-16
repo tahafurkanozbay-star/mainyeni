@@ -351,7 +351,7 @@ export class DatasetCatalog {
     if (!key || !this.entries.has(key)) return false;
     this.removeTagReferences(key);
     this.entries.delete(key);
-    for (const [alias, target] of [...this.aliasToKey.entries()]) {
+    for (const [alias, target] of this.aliasToKey.entries()) {
       if (target === key) this.aliasToKey.delete(alias);
     }
     return true;

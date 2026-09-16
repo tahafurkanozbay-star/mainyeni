@@ -487,7 +487,7 @@ export class GeocodingRuntime {
   invalidateProvider(providerIdInput: unknown): number {
     const providerId = normalizeProviderId(providerIdInput);
     let removed = 0;
-    for (const key of [...this.cache.keys()]) {
+    for (const key of this.cache.keys()) {
       if (key.startsWith(`${providerId}|`)) {
         this.cache.delete(key);
         removed += 1;

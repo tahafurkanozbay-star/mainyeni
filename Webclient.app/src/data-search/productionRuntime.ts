@@ -485,7 +485,7 @@ export class ProductionDataSearchRuntime {
 
   dispose(): void {
     if (this.disposed) return;
-    for (const session of [...this.sessions]) session.dispose();
+    for (const session of this.sessions) session.dispose();
     this.sessions.clear();
     this.geocoding.abortAll();
     this.geocoding.clearCache();
