@@ -1,0 +1,47 @@
+name: Platform Lockfile Refresh
+
+on:
+  push:
+    branches:
+      - agent/platform-20260916-vite-typescript-36dcb61c
+    paths:
+      - 'Webclient.app/package.json'
+      - '.github/workflows/platform-lockfile-refresh.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/platform-20260916-vite-typescript-36dcb61c
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Resolve deterministic lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit lockfile when changed
+        working-directory: .
+        shell: bash
+        run: |
+          if git diff --quiet -- Webclient.app/package-lock.json; then
+            echo 'Lockfile already synchronized.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Webclient.app/package-lock.json
+          git commit -m 'chore(web): sync Vite TypeScript lockfile'
+          git push origin HEAD:agent/platform-20260916-vite-typescript-36dcb61c
