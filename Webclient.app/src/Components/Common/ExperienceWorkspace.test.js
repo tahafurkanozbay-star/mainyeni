@@ -44,7 +44,7 @@ describe("ExperienceWorkspace", () => {
     });
 
     afterEach(() => {
-        document.body.innerHTML = "";
+        document.body.replaceChildren();
         jest.restoreAllMocks();
     });
 
