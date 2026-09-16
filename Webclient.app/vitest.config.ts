@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { transformWithEsbuild, type Plugin } from 'vite';
+import { transformWithOxc, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const legacyJsxPlugin = (): Plugin => ({
@@ -7,11 +7,16 @@ const legacyJsxPlugin = (): Plugin => ({
   enforce: 'pre',
   async transform(code, id) {
     if (!id.includes('/src/') || !id.endsWith('.js')) return null;
-    return transformWithEsbuild(code, id, {
-      loader: 'jsx',
-      jsx: 'automatic',
-      target: 'es2022',
+    const result = await transformWithOxc(code, id, {
+      lang: 'jsx',
+      jsx: {
+        runtime: 'automatic',
+      },
     });
+    return {
+      code: result.code,
+      map: result.map,
+    };
   },
 });
 
@@ -39,7 +44,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.js'],
     include: ['src/**/*.test.{js,jsx,ts,tsx}'],
-    fileParallelism: false,
+    pool: 'vmThreads',
+    maxWorkers: 4,
+    fileParallelism: true,
     isolate: true,
     passWithNoTests: false,
     testTimeout: 10_000,
