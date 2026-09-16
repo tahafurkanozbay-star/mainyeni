@@ -71,10 +71,13 @@ jobs:
       - name: Full Vitest regression suite
         run: npm run test:ci
 
+      - name: Native tooling regression suite
+        run: npm run test:tooling
+
       - name: Build budget script tests
         run: npm run test:build-budget
 
-      - name: Production Vite build
+      - name: Production Vite build and integrity manifest
         run: npm run build
 
       - name: Verify production bundle integrity
