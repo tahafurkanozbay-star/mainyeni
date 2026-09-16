@@ -45,6 +45,18 @@ select,
   -webkit-user-select: text;
 }
 
+.experience-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 /* The old Bootstrap override explicitly removes focus indication. This bridge
  * restores a consistent visible ring until the legacy rule is deleted during
  * the stylesheet split migration. */
@@ -86,12 +98,6 @@ textarea:focus:not(:focus-visible) {
 [data-experience-dialog="true"]:focus-visible {
   outline: 3px solid var(--experience-focus);
   outline-offset: 3px;
-}
-
-/* Ensure legacy fixed-width query windows do not overflow the viewport. */
-.common-query-window {
-  width: min(560px, calc(100vw - 32px));
-  min-width: min(400px, calc(100vw - 32px));
 }
 
 .common-query-window-body,
