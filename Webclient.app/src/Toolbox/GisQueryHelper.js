@@ -24,17 +24,34 @@ const throwIfAborted = (signal) => {
     if (signal?.aborted) throw cancelledError();
 };
 
-const toServiceResult = (response) => ({
-    type: Constants_ServiceResultType.Success,
-    data: (response?.features ?? []).map((feature) => ({
+const toNonNegativeInteger = (value, fallback = null) => {
+    if (value === null || value === undefined || value === "") return fallback;
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) return fallback;
+    return Math.floor(number);
+};
+
+const toServiceResult = (response, options = {}) => {
+    const resultOffset = toNonNegativeInteger(options.resultOffset, 0);
+    const data = (response?.features ?? []).map((feature) => ({
         attr: feature.attributes,
         geometry: feature.geometry
-    })),
-    fields: response?.fields ?? [],
-    exceededTransferLimit: Boolean(response?.exceededTransferLimit),
-    geometryType: response?.geometryType ?? null,
-    spatialReference: response?.spatialReference ?? null
-});
+    }));
+
+    return {
+        type: Constants_ServiceResultType.Success,
+        data,
+        fields: response?.fields ?? [],
+        exceededTransferLimit: Boolean(response?.exceededTransferLimit),
+        geometryType: response?.geometryType ?? null,
+        spatialReference: response?.spatialReference ?? null,
+        page: {
+            offset: resultOffset,
+            count: data.length,
+            nextOffset: response?.exceededTransferLimit ? resultOffset + data.length : null
+        }
+    };
+};
 
 const toErrorResult = (error) => ({
     error,
@@ -46,6 +63,9 @@ const toErrorResult = (error) => ({
 const normalizeUrl = (value) => String(value ?? "").trim();
 
 const createQueryOptions = (options = {}, spatial = false) => {
+    const resultOffset = toNonNegativeInteger(options.resultOffset);
+    const resultRecordCount = toNonNegativeInteger(options.resultRecordCount);
+
     if (spatial) {
         const {
             url,
@@ -55,6 +75,10 @@ const createQueryOptions = (options = {}, spatial = false) => {
             ttlMs,
             ...queryOptions
         } = options;
+        if (resultOffset === null) delete queryOptions.resultOffset;
+        else queryOptions.resultOffset = resultOffset;
+        if (resultRecordCount === null) delete queryOptions.resultRecordCount;
+        else queryOptions.resultRecordCount = resultRecordCount;
         return queryOptions;
     }
 
@@ -63,7 +87,9 @@ const createQueryOptions = (options = {}, spatial = false) => {
         orderByFields: options.orderByFields ?? null,
         returnGeometry: Boolean(options.returnGeometry),
         outFields: options.outFields ?? ["*"],
-        where: options.where ?? "1=1"
+        where: options.where ?? "1=1",
+        ...(resultOffset === null ? {} : { resultOffset }),
+        ...(resultRecordCount === null ? {} : { resultRecordCount })
     };
 };
 
@@ -85,15 +111,7 @@ const executeTask = async (options = {}, spatial = false) => {
 
     const queryTask = new QueryTask({ url });
     const queryOptions = createQueryOptions(options, spatial);
-    const query = spatial ? new Query(queryOptions) : new Query();
-
-    if (!spatial) {
-        query.returnDistinctValues = queryOptions.returnDistinctValues;
-        query.orderByFields = queryOptions.orderByFields;
-        query.returnGeometry = queryOptions.returnGeometry;
-        query.outFields = queryOptions.outFields;
-        query.where = queryOptions.where;
-    }
+    const query = new Query(queryOptions);
 
     const requestOptions = options.signal ? { signal: options.signal } : undefined;
     return queryTask.execute(query, requestOptions);
@@ -101,10 +119,8 @@ const executeTask = async (options = {}, spatial = false) => {
 
 const executeQuery = async (options = {}, spatial = false) => {
     try {
-        // AbortSignal ownership stays with the caller. Sharing an abortable request
-        // would allow one consumer to cancel work still required by another.
         if (options.signal) {
-            return toServiceResult(await executeTask(options, spatial));
+            return toServiceResult(await executeTask(options, spatial), options);
         }
 
         const key = createRuntimeKey(options, spatial);
@@ -113,7 +129,7 @@ const executeQuery = async (options = {}, spatial = false) => {
         }
 
         const work = executeTask(options, spatial)
-            .then(toServiceResult)
+            .then((response) => toServiceResult(response, options))
             .catch(toErrorResult)
             .finally(() => {
                 if (inFlightQueries.get(key) === work) {
