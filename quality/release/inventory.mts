@@ -286,8 +286,8 @@ export function buildRepositoryInventory(options: InventoryOptions): RepositoryI
   return {
     root,
     files,
-    ignoredDirectories: [...new Set([...
-      DEFAULT_IGNORE_DIRECTORIES,
+    ignoredDirectories: [...new Set([
+      ...DEFAULT_IGNORE_DIRECTORIES,
       ...(options.ignoreDirectories ?? []),
     ])].sort((a, b) => a.localeCompare(b, 'en')),
     languageStats,
