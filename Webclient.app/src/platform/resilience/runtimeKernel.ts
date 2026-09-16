@@ -6,7 +6,11 @@ import { AppError, isAbortError } from '../errors/appError';
 import { createRuntimeSupervisor } from '../lifecycle/runtimeSupervisor';
 import type { RuntimeLease, RuntimeSupervisor, RuntimeSupervisorSnapshot } from '../lifecycle/runtimeSupervisor';
 import { createRuntimeHealthMonitor } from '../observability/runtimeHealth';
-import type { RuntimeHealthMonitor, RuntimeHealthSnapshot } from '../observability/runtimeHealth';
+import type {
+  RuntimeHealthMonitor,
+  RuntimeHealthSnapshot,
+  RuntimeHealthSeverity
+} from '../observability/runtimeHealth';
 import { createOfflineMemoryStore, decideOfflineStrategy } from '../offline/offlinePolicy';
 import type { OfflineDecision, OfflinePolicyInput, OfflineMemoryStore } from '../offline/offlinePolicy';
 import { createPerformanceMonitor } from '../performance/performanceMonitor';
@@ -131,39 +135,68 @@ const abortError = (): AppError => new AppError('İşlem iptal edildi.', {
   retryable: false
 });
 
+interface ComposedSignal {
+  readonly signal: AbortSignal;
+  readonly cleanup: () => void;
+}
+
 const composeAbortSignals = (
   callerSignal: AbortSignal | undefined,
   timeoutMs: number
-): Readonly<{ signal: AbortSignal; cleanup: () => void }> => {
+): ComposedSignal => {
   const controller = new AbortController();
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-  let timedOut = false;
 
   const onCallerAbort = (): void => {
-    if (!controller.signal.aborted) controller.abort(callerSignal?.reason);
+    if (!controller.signal.aborted) controller.abort(callerSignal?.reason || abortError());
   };
 
   if (callerSignal?.aborted) {
-    controller.abort(callerSignal.reason);
+    controller.abort(callerSignal.reason || abortError());
   } else if (callerSignal && typeof callerSignal.addEventListener === 'function') {
     callerSignal.addEventListener('abort', onCallerAbort, { once: true });
   }
 
-  timeout = setTimeout(() => {
-    timedOut = true;
+  const timeout = setTimeout(() => {
     if (!controller.signal.aborted) controller.abort(timeoutError());
   }, timeoutMs);
 
   return Object.freeze({
     signal: controller.signal,
     cleanup: () => {
-      if (timeout !== null) clearTimeout(timeout);
+      clearTimeout(timeout);
       if (callerSignal && typeof callerSignal.removeEventListener === 'function') {
         callerSignal.removeEventListener('abort', onCallerAbort);
       }
-      if (timedOut) {
-        // State is intentionally local; callers inspect the abort reason instead of a global flag.
-      }
+    }
+  });
+};
+
+const abortPromiseFor = (signal: AbortSignal): Readonly<{
+  promise: Promise<never>;
+  cleanup: () => void;
+}> => {
+  let listener: (() => void) | null = null;
+  const promise = new Promise<never>((_resolve, reject) => {
+    const rejectFromSignal = (): void => {
+      const reason = signal.reason;
+      if (reason instanceof Error) reject(reason);
+      else reject(isAbortError(reason) ? reason : abortError());
+    };
+
+    if (signal.aborted) {
+      rejectFromSignal();
+      return;
+    }
+
+    listener = rejectFromSignal;
+    signal.addEventListener('abort', rejectFromSignal, { once: true });
+  });
+
+  return Object.freeze({
+    promise,
+    cleanup: () => {
+      if (listener) signal.removeEventListener('abort', listener);
+      listener = null;
     }
   });
 };
@@ -188,7 +221,10 @@ export class RuntimeKernel {
     this.clock = typeof options.clock === 'function' ? options.clock : () => Date.now();
     this.health = options.health || createRuntimeHealthMonitor();
     this.supervisor = options.supervisor || createRuntimeSupervisor({
-      onError: (error, context) => this.health.warn('lifecycle', 'dispose-failed', { error, ...context })
+      onError: (error, context) => this.safeHealth('warning', 'lifecycle', 'dispose-failed', {
+        error,
+        ...context
+      })
     });
     this.cache = options.cache || createRequestCache({
       ttlMs: this.config.cacheTtlMs,
@@ -197,9 +233,22 @@ export class RuntimeKernel {
     this.performanceMonitor = options.performanceMonitor || createPerformanceMonitor({ clock: this.clock });
     this.offlineStore = options.offlineStore || createOfflineMemoryStore({ maxEntries: 80 });
     this.breakers = options.breakers || createCircuitBreakerRegistry({
-      onTransition: (transition) => this.health.info('resilience', 'circuit-transition', transition)
+      onTransition: (transition) => this.safeHealth('info', 'resilience', 'circuit-transition', transition)
     });
     this.latestBudget = deriveRuntimeBudget({}, this.config.performanceBudgetProfile);
+  }
+
+  private safeHealth(
+    severity: RuntimeHealthSeverity,
+    domain: string,
+    code: string,
+    metadata: unknown = {}
+  ): void {
+    try {
+      this.health.record(domain, code, severity, metadata);
+    } catch (_error) {
+      // Local observability must never alter application control flow.
+    }
   }
 
   start(): boolean {
@@ -214,7 +263,7 @@ export class RuntimeKernel {
     this.startedAt = this.clock();
     this.performanceMonitor.start();
     this.refreshBudget();
-    this.health.info('runtime', 'kernel-started', {
+    this.safeHealth('info', 'runtime', 'kernel-started', {
       environment: this.config.environment,
       release: this.config.release,
       budgetProfile: this.config.performanceBudgetProfile
@@ -227,7 +276,7 @@ export class RuntimeKernel {
     const derivedSample = sample || capabilitySample(currentPerformance);
     this.latestBudget = deriveRuntimeBudget(derivedSample, this.config.performanceBudgetProfile);
     if (this.latestBudget.pressure === 'high' || this.latestBudget.pressure === 'critical') {
-      this.health.warn('performance', 'runtime-pressure', {
+      this.safeHealth('warning', 'performance', 'runtime-pressure', {
         pressure: this.latestBudget.pressure,
         reasons: this.latestBudget.reasons,
         requestConcurrency: this.latestBudget.maxConcurrentRequests,
@@ -247,7 +296,13 @@ export class RuntimeKernel {
     const id = ++this.sessionSequence;
     const normalizedLabel = safeLabel(label, `session-${id}`);
     const controller = new AbortController();
-    const child = this.supervisor.child(`session:${normalizedLabel}`);
+    const child = createRuntimeSupervisor({
+      onError: (error, context) => this.safeHealth('warning', 'lifecycle', 'session-dispose-failed', {
+        error,
+        session: normalizedLabel,
+        ...context
+      })
+    });
     const parentLease = this.supervisor.register(() => {
       if (!controller.signal.aborted) controller.abort();
       return child.close();
@@ -271,7 +326,7 @@ export class RuntimeKernel {
       if (!controller.signal.aborted) controller.abort();
       await child.close();
       await parentLease.dispose();
-      kernel.health.info('runtime', 'session-disposed', {
+      kernel.safeHealth('info', 'runtime', 'session-disposed', {
         label: normalizedLabel,
         ageMs: Math.max(0, kernel.clock() - record.startedAt)
       });
@@ -301,44 +356,56 @@ export class RuntimeKernel {
     options: ResilientExecutionOptions = {}
   ): Promise<T> {
     if (this.state !== 'running') {
-      throw new AppError('Runtime kernel çalışmıyor.', { code: 'RUNTIME_KERNEL_NOT_RUNNING', retryable: false });
+      throw new AppError('Runtime kernel çalışmıyor.', {
+        code: 'RUNTIME_KERNEL_NOT_RUNNING',
+        retryable: false
+      });
     }
     if (typeof operation !== 'function') throw new TypeError('operation must be a function');
     const domain = safeLabel(options.domain, 'runtime');
     const operationName = safeLabel(options.operation, 'operation');
     const timeoutMs = boundedTimeout(options.timeoutMs, this.config.requestTimeoutMs);
     const composed = composeAbortSignals(options.signal, timeoutMs);
+    const abortRace = abortPromiseFor(composed.signal);
     const started = this.clock();
 
     try {
-      const result = await this.breakers.execute(key, () => operation(composed.signal));
-      this.health.info(domain, 'operation-success', {
+      if (composed.signal.aborted) {
+        throw options.signal?.aborted ? abortError() : timeoutError();
+      }
+      const result = await this.breakers.execute(key, () => Promise.race([
+        Promise.resolve().then(() => operation(composed.signal)),
+        abortRace.promise
+      ]));
+      this.safeHealth('info', domain, 'operation-success', {
         operation: operationName,
         durationMs: Math.max(0, this.clock() - started)
       });
       return result;
     } catch (error) {
-      const aborted = isAbortError(error) || composed.signal.aborted;
-      if (aborted && options.signal?.aborted) {
+      const callerAborted = options.signal?.aborted === true;
+      const timedOrAborted = isAbortError(error) || composed.signal.aborted;
+      if (timedOrAborted && callerAborted) {
         if (options.countAbortAsWarning) {
-          this.health.warn(domain, 'operation-aborted', { operation: operationName });
+          this.safeHealth('warning', domain, 'operation-aborted', { operation: operationName });
         }
         throw abortError();
       }
-      if (aborted) {
-        this.health.warn(domain, 'operation-timeout', {
+      if (timedOrAborted) {
+        this.safeHealth('warning', domain, 'operation-timeout', {
           operation: operationName,
           timeoutMs
         });
         throw timeoutError();
       }
-      this.health.warn(domain, 'operation-failed', {
+      this.safeHealth('warning', domain, 'operation-failed', {
         operation: operationName,
         durationMs: Math.max(0, this.clock() - started),
         error
       });
       throw error;
     } finally {
+      abortRace.cleanup();
       composed.cleanup();
     }
   }
@@ -375,8 +442,7 @@ export class RuntimeKernel {
   }
 
   async stop(): Promise<boolean> {
-    if (this.state === 'stopped') return false;
-    if (this.state === 'stopping') return false;
+    if (this.state === 'stopped' || this.state === 'stopping') return false;
     this.state = 'stopping';
     const activeSessions = Array.from(this.sessions.values());
     this.sessions.clear();
@@ -391,7 +457,7 @@ export class RuntimeKernel {
     this.cache.clear();
     this.offlineStore.clear();
     this.breakers.clear();
-    this.health.info('runtime', 'kernel-stopped', {
+    this.safeHealth('info', 'runtime', 'kernel-stopped', {
       uptimeMs: this.startedAt === null ? 0 : Math.max(0, this.clock() - this.startedAt)
     });
     this.state = 'stopped';
