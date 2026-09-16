@@ -21,21 +21,27 @@ const containsEncodedBackslash = (value: string): boolean => /%5c/i.test(value);
 const containsEncodedControl = (value: string): boolean => /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(value);
 const hasScheme = (value: string): boolean => /^[a-z][a-z\d+.-]*:/i.test(value);
 
+const containsUnsafeDecodedSegment = (value: string): boolean =>
+  value === '.' || value === '..' || value.includes('/') || value.includes('\\') || containsControlCharacter(value);
+
 const containsUnsafeEncodedPath = (value: string): boolean => {
   const path = value.split(/[?#]/, 1)[0] ?? value;
   if (!path.includes('%')) return false;
 
   for (const segment of path.split('/')) {
     if (!segment.includes('%')) continue;
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(segment);
-    } catch {
-      return true;
+    let decoded = segment;
+    for (let round = 0; round < 3 && decoded.includes('%'); round += 1) {
+      let next: string;
+      try {
+        next = decodeURIComponent(decoded);
+      } catch {
+        return true;
+      }
+      if (next === decoded) break;
+      decoded = next;
+      if (containsUnsafeDecodedSegment(decoded)) return true;
     }
-    if (decoded === '.' || decoded === '..') return true;
-    if (decoded.includes('/') || decoded.includes('\\')) return true;
-    if (containsControlCharacter(decoded)) return true;
   }
   return false;
 };
