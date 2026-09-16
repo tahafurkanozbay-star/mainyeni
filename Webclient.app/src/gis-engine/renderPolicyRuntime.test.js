@@ -104,7 +104,7 @@ describe('renderPolicyRuntime', () => {
     expect(plan.renderer.useSharedIconResolver).toBe(true);
   });
 
-  test('disables clustering for polygon layers and can recommend geometry simplification', () => {
+  test('polygon overview can recommend simplification without silently changing query coordinates', () => {
     const plan = planLayerPresentation({
       layer: { id: 'districts' },
       featureStats: {
@@ -121,10 +121,36 @@ describe('renderPolicyRuntime', () => {
     });
     expect(plan.featureReduction).toBeNull();
     expect(plan.simplificationTolerance).toBeGreaterThan(0);
-    expect(plan.request.maxAllowableOffset).toBe(plan.simplificationTolerance);
+    expect(plan.request.maxAllowableOffset).toBeUndefined();
   });
 
-  test('detail polygon view removes simplification tolerance', () => {
+  test('generalization reaches the ArcGIS request only after explicit verified opt-in', () => {
+    const plan = planLayerPresentation({
+      layer: { id: 'districts' },
+      featureStats: { featureCount: 1000, geometryType: 'polygon', averageVertices: 100 },
+      view: { mode: '2d', scale: 200000 },
+      options: {
+        allowGeneralization: true,
+        generalizationTolerance: 2.5,
+      },
+    });
+    expect(plan.request.maxAllowableOffset).toBe(2.5);
+  });
+
+  test('generalization rejects zero, negative and implicit tolerances', () => {
+    const base = {
+      layer: { id: 'districts' },
+      featureStats: { featureCount: 1000, geometryType: 'polygon' },
+      view: { mode: '2d', scale: 200000 },
+    };
+    expect(planLayerPresentation({ ...base, options: { allowGeneralization: true, generalizationTolerance: 0 } }).request.maxAllowableOffset)
+      .toBeUndefined();
+    expect(planLayerPresentation({ ...base, options: { allowGeneralization: true, generalizationTolerance: -1 } }).request.maxAllowableOffset)
+      .toBeUndefined();
+    expect(planLayerPresentation(base).request.maxAllowableOffset).toBeUndefined();
+  });
+
+  test('detail polygon view removes simplification recommendation and request tolerance', () => {
     const plan = planLayerPresentation({
       layer: { id: 'parcels' },
       featureStats: { featureCount: 100, geometryType: 'polygon', averageVertices: 20 },
@@ -239,6 +265,21 @@ describe('renderPolicyRuntime', () => {
       view: { mode: '2d', scale: 300000 },
     });
     expect(shouldRefreshPresentation(detail, overview)).toBe(true);
+  });
+
+  test('refresh predicate detects verified generalization changes', () => {
+    const base = planLayerPresentation({
+      layer: { id: 'districts' },
+      featureStats: { featureCount: 1000, geometryType: 'polygon' },
+      view: { mode: '2d', scale: 200000 },
+    });
+    const generalized = planLayerPresentation({
+      layer: { id: 'districts' },
+      featureStats: { featureCount: 1000, geometryType: 'polygon' },
+      view: { mode: '2d', scale: 200000 },
+      options: { allowGeneralization: true, generalizationTolerance: 3 },
+    });
+    expect(shouldRefreshPresentation(base, generalized)).toBe(true);
   });
 
   test('presentation state tracks previous LOD to apply hysteresis consistently', () => {
