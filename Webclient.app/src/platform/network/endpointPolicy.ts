@@ -8,6 +8,7 @@ export interface EndpointPolicyOptions {
 }
 
 const DEFAULT_MAX_LENGTH = 2048;
+const MAX_DECODE_PASSES = 2;
 
 const containsControlCharacter = (value: string): boolean => {
   for (let index = 0; index < value.length; index += 1) {
@@ -20,6 +21,42 @@ const containsControlCharacter = (value: string): boolean => {
 const containsEncodedBackslash = (value: string): boolean => /%5c/i.test(value);
 const containsEncodedControl = (value: string): boolean => /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(value);
 const hasScheme = (value: string): boolean => /^[a-z][a-z\d+.-]*:/i.test(value);
+
+const decodePathSegment = (value: string): string | null => {
+  let current = value;
+  for (let pass = 0; pass < MAX_DECODE_PASSES; pass += 1) {
+    if (!current.includes('%')) return current;
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) return current;
+      current = decoded;
+    } catch {
+      return null;
+    }
+  }
+  return current;
+};
+
+/**
+ * Reject encoded path material that can change routing semantics after one or
+ * two decode passes. This blocks dot-segment traversal and encoded separators
+ * at the browser/BFF boundary instead of assuming every downstream proxy uses
+ * identical decoding rules.
+ */
+const containsUnsafeEncodedPath = (value: string): boolean => {
+  const path = value.split(/[?#]/, 1)[0] ?? value;
+  if (!path.includes('%')) return false;
+
+  for (const segment of path.split('/')) {
+    if (!segment.includes('%')) continue;
+    const decoded = decodePathSegment(segment);
+    if (decoded === null) return true;
+    if (decoded === '.' || decoded === '..') return true;
+    if (decoded.includes('/') || decoded.includes('\\')) return true;
+    if (containsControlCharacter(decoded)) return true;
+  }
+  return false;
+};
 
 const endpointError = (message: string, details?: Readonly<Record<string, unknown>>): AppError =>
   new AppError(message, {
@@ -35,6 +72,7 @@ export const isSameOriginPath = (value: unknown): value is string => {
   if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return false;
   if (trimmed.includes('\\') || containsEncodedBackslash(trimmed)) return false;
   if (containsControlCharacter(trimmed) || containsEncodedControl(trimmed)) return false;
+  if (containsUnsafeEncodedPath(trimmed)) return false;
   if (hasScheme(trimmed)) return false;
   return true;
 };
@@ -85,7 +123,13 @@ export const normalizeApplicationPath = (
   const raw = String(value || '').trim();
   if (!raw) return '/';
 
-  if (containsControlCharacter(raw) || containsEncodedControl(raw) || raw.includes('\\') || containsEncodedBackslash(raw)) {
+  if (
+    containsControlCharacter(raw)
+    || containsEncodedControl(raw)
+    || raw.includes('\\')
+    || containsEncodedBackslash(raw)
+    || containsUnsafeEncodedPath(raw)
+  ) {
     return assertApplicationEndpoint(raw, options);
   }
   if (hasScheme(raw) || raw.startsWith('//')) return assertApplicationEndpoint(raw, options);
@@ -110,7 +154,13 @@ export const joinApplicationPath = (
     .map((segment) => String(segment ?? '').trim())
     .filter(Boolean)
     .map((segment) => {
-      if (containsControlCharacter(segment) || segment.includes('\\') || hasScheme(segment) || segment.startsWith('//')) {
+      if (
+        containsControlCharacter(segment)
+        || segment.includes('\\')
+        || hasScheme(segment)
+        || segment.startsWith('//')
+        || containsUnsafeEncodedPath(`/${segment}`)
+      ) {
         throw endpointError('Application path segment is unsafe.', { reason: 'unsafe-segment' });
       }
       return segment.replace(/^\/+|\/+$/g, '');
