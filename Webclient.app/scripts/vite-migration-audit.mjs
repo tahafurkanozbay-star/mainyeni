@@ -29,6 +29,9 @@ export const findLegacyEnvironmentReferences = (source) => {
   return [...new Set(matches.filter((item) => !ALLOWED_LEGACY_ENV.has(item)))].sort();
 };
 
+const linkRelation = (tag) =>
+  tag.match(/\brel=["']([^"']+)["']/i)?.[1]?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+
 export const findUnsafeRootAssets = (html) => {
   const findings = [];
   const assetPattern = /<(link|script)\b[^>]*(?:href|src)=["']([^"']+)["'][^>]*>/gi;
@@ -36,14 +39,27 @@ export const findUnsafeRootAssets = (html) => {
     const tag = match[1]?.toLowerCase();
     const target = match[2] ?? '';
     const wholeTag = match[0];
-    if (tag === 'script' && target === '/src/main.tsx') continue;
-    if (target.startsWith('/') && !target.startsWith('//')) {
+    const relations = tag === 'link' ? linkRelation(wholeTag) : [];
+    const isViteEntrypoint = tag === 'script' && target === '/src/main.tsx';
+    const isPresentationLink = tag === 'link' && (
+      relations.includes('stylesheet')
+      || relations.includes('icon')
+      || relations.includes('shortcut')
+      || relations.includes('apple-touch-icon')
+    );
+    const isExecutableScript = tag === 'script';
+
+    if (!isViteEntrypoint && (isPresentationLink || isExecutableScript)
+      && target.startsWith('/') && !target.startsWith('//')) {
       findings.push(`root-relative public asset bypasses Vite base: ${target}`);
     }
+
     if (/^https?:\/\//i.test(target)) {
-      const rel = wholeTag.match(/\brel=["']([^"']+)["']/i)?.[1]?.toLowerCase() ?? '';
-      const isPreconnect = tag === 'link' && rel.split(/\s+/).includes('preconnect');
-      if (!isPreconnect) findings.push(`remote presentation dependency in root HTML: ${target}`);
+      const remoteExecutable = isExecutableScript;
+      const remoteStylesheet = isPresentationLink && relations.includes('stylesheet');
+      if (remoteExecutable || remoteStylesheet) {
+        findings.push(`remote executable/presentation dependency in root HTML: ${target}`);
+      }
     }
   }
   return findings;
@@ -129,6 +145,9 @@ const selfTest = () => {
   assert(findUnsafeRootAssets('<link rel="icon" href="/icon.png">').length === 1, 'root-relative asset should be rejected');
   assert(findUnsafeRootAssets('<link rel="icon" href="%BASE_URL%icon.png">').length === 0, 'BASE_URL asset should pass');
   assert(findUnsafeRootAssets('<link rel="preconnect" href="https://js.arcgis.com">').length === 0, 'preconnect should pass');
+  assert(findUnsafeRootAssets('<link rel="canonical" href="https://kentrehberi.ankara.bel.tr/">').length === 0, 'canonical SEO link should pass');
+  assert(findUnsafeRootAssets('<link rel="stylesheet" href="https://cdn.example.com/ui.css">').length === 1, 'remote stylesheet should fail');
+  assert(findUnsafeRootAssets('<script src="https://cdn.example.com/app.js"></script>').length === 1, 'remote executable script should fail');
   assert(validateEnvironmentExample('VITE_API_URL=/api').length === 0, 'VITE example should pass');
   assert(validateEnvironmentExample('REACT_APP_API_URL=/api').length > 0, 'CRA key should fail');
 
