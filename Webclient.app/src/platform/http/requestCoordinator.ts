@@ -170,17 +170,18 @@ export class RequestCoordinator {
     attempt: number
   ): Promise<TransportResult<T>> {
     const priority = getDefaultPriority(config);
+    const safePathGroup = getSchedulerGroupFromPath(config.url);
     const groupKey = config.schedulerGroup
       ? String(config.schedulerGroup)
-      : getSchedulerGroupFromPath(config.url);
+      : safePathGroup;
     const queueTimeoutMs = getQueueTimeout(config);
 
     return this.scheduler.schedule(
-      () => this.transport.request({ ...config, attempt }) as Promise<TransportResult<T>>,
+      () => this.transport.request(config) as Promise<TransportResult<T>>,
       {
         priority,
         groupKey,
-        label: `${config.method}:${config.url}`,
+        label: `${config.method}:${safePathGroup}:attempt-${attempt}`,
         signal: config.signal,
         queueTimeoutMs,
         bypass: config.schedulerBypass === true
