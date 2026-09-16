@@ -21,8 +21,9 @@ export const sanitizeTelemetryPath = (value) => {
 
   const segments = raw.split('/').map((segment, index) => {
     if (index === 0 || !segment) return segment;
+    if (segment.length > 64) return '{value}';
     if (DYNAMIC_SEGMENT_PATTERNS.some((pattern) => pattern.test(segment))) return '{id}';
-    return segment.length > 64 ? '{value}' : segment;
+    return segment;
   });
 
   const sanitized = segments.join('/').replace(/\/{2,}/g, '/');
