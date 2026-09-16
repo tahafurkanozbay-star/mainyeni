@@ -12,6 +12,8 @@ const DEFAULT_SIDEBAR_WIDTH = 400;
 const DEFAULT_MOBILE_BOTTOM = 200;
 const DEFAULT_MOBILE_BREAKPOINT = 576;
 
+const now = () => Date.now();
+
 const finite = (value, fallback = null) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
@@ -124,15 +126,19 @@ export const createMapViewOptions = ({
   configuration = {},
   viewportWidth,
   padding,
-} = {}) => ({
-  container,
-  ui: { components: [] },
-  map,
-  zoom: clamp(Math.floor(finite(configuration.Zoom ?? configuration.zoom, 11)), 0, ABSOLUTE_MAX_ZOOM),
-  center: normalizeInitialCenter(configuration),
-  padding: padding || createResponsivePadding(viewportWidth, configuration),
-  constraints: normalizeViewConstraints(configuration),
-});
+} = {}) => {
+  const constraints = normalizeViewConstraints(configuration);
+  const configuredZoom = Math.floor(finite(configuration.Zoom ?? configuration.zoom, 11));
+  return {
+    container,
+    ui: { components: [] },
+    map,
+    zoom: clamp(configuredZoom, constraints.minZoom, constraints.maxZoom),
+    center: normalizeInitialCenter(configuration),
+    padding: padding || createResponsivePadding(viewportWidth, configuration),
+    constraints,
+  };
+};
 
 export const snapshotMapViewState = (view, previous = {}) => createViewState({
   ...previous,
@@ -178,16 +184,21 @@ export const viewStateApproximatelyEqual = (left, right, tolerance = {}) => {
   );
 };
 
-export const applyViewStateToMapView = async (view, inputState, options = {}) => {
+export const applyViewStateToMapView = async (view, inputState = {}, options = {}) => {
   if (!view?.goTo) return false;
   const state = createViewState(inputState);
   if (state.mode !== '2d' && options.allowCrossMode !== true) return false;
 
   const target = {};
-  if (state.center) target.center = [...state.center];
-  if (Number.isFinite(state.zoom)) target.zoom = state.zoom;
-  else if (Number.isFinite(state.scale)) target.scale = state.scale;
-  if (Number.isFinite(state.heading)) target.rotation = state.heading;
+  const rawCenter = finitePair(inputState.center);
+  const hasZoom = inputState.zoom !== null && inputState.zoom !== undefined && Number.isFinite(Number(inputState.zoom));
+  const hasScale = inputState.scale !== null && inputState.scale !== undefined && Number.isFinite(Number(inputState.scale));
+  const hasHeading = inputState.heading !== null && inputState.heading !== undefined && Number.isFinite(Number(inputState.heading));
+
+  if (rawCenter) target.center = [...state.center];
+  if (hasZoom && Number.isFinite(state.zoom)) target.zoom = state.zoom;
+  else if (hasScale && Number.isFinite(state.scale)) target.scale = state.scale;
+  if (hasHeading && Number.isFinite(state.heading)) target.rotation = state.heading;
 
   if (!Object.keys(target).length && state.extent) {
     target.extent = {
@@ -234,9 +245,7 @@ export const bindMapViewState = (view, bridge, options = {}) => {
   };
 
   ['center', 'zoom', 'scale', 'rotation', 'extent'].forEach((property) => {
-    if (typeof view.watch === 'function') {
-      handles.push(view.watch(property, schedulePublish));
-    }
+    if (typeof view.watch === 'function') handles.push(view.watch(property, schedulePublish));
   });
 
   if (view?.map?.basemap && typeof view.map.watch === 'function') {
@@ -323,9 +332,7 @@ export const createViewPerformanceMonitor = (view, options = {}) => {
       slowCycles: state.slowCycles,
       totalUpdatingMs: state.totalUpdatingMs,
       longestUpdatingMs: state.longestUpdatingMs,
-      averageUpdatingMs: state.completedCycles
-        ? state.totalUpdatingMs / state.completedCycles
-        : 0,
+      averageUpdatingMs: state.completedCycles ? state.totalUpdatingMs / state.completedCycles : 0,
       active: state.activeSince !== null,
       lastScale: state.lastScale,
       lastZoom: state.lastZoom,
@@ -353,15 +360,16 @@ export const createViewCoordinator = (bridge, options = {}) => {
     const normalizedMode = mode === '3d' ? '3d' : '2d';
     const existing = registrations.get(normalizedMode);
     existing?.unbind?.();
-    registrations.set(normalizedMode, {
+    const entry = {
       view: registration.view || null,
       applyState: registration.applyState,
       unbind: registration.unbind || (() => {}),
-    });
+    };
+    registrations.set(normalizedMode, entry);
+
     return () => {
-      const current = registrations.get(normalizedMode);
-      if (current !== registrations.get(normalizedMode)) return;
-      current?.unbind?.();
+      if (registrations.get(normalizedMode) !== entry) return;
+      entry.unbind?.();
       registrations.delete(normalizedMode);
     };
   };
