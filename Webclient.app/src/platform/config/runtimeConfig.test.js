@@ -1,7 +1,9 @@
 import {
   assertSafeRuntimeConfig,
   createRuntimeConfig,
+  describeRuntimeConfig,
   normalizeApiBaseUrl,
+  normalizeEsriApiVersion,
   runtimeConfigFingerprint,
 } from './runtimeConfig';
 
@@ -35,6 +37,18 @@ describe('Vite-first runtime configuration', () => {
     expect(assertSafeRuntimeConfig(config)).toBe(true);
   });
 
+  test('recognizes Vite built-in environment keys without custom VITE variables', () => {
+    const config = createRuntimeConfig({
+      MODE: 'production',
+      DEV: false,
+      PROD: true,
+      BASE_URL: './',
+    });
+
+    expect(config.buildMode).toBe('vite-ready');
+    expect(config.environment).toBe('production');
+  });
+
   test('still understands an explicitly supplied legacy CRA source during staged migration', () => {
     const config = createRuntimeConfig({
       REACT_APP_API_URL: '/legacy-api',
@@ -63,6 +77,18 @@ describe('Vite-first runtime configuration', () => {
     expect(normalizeApiBaseUrl('/gateway/services')).toBe('/gateway/services');
   });
 
+  test('normalizes ArcGIS versions instead of allowing arbitrary CDN fragments', () => {
+    expect(normalizeEsriApiVersion('4.25')).toBe('4.25');
+    expect(normalizeEsriApiVersion(' 4.34 ')).toBe('4.34');
+    expect(normalizeEsriApiVersion('next')).toBe('4.21');
+    expect(normalizeEsriApiVersion('https://evil.example/sdk')).toBe('4.21');
+    expect(normalizeEsriApiVersion('4.34\nhttps://evil.example')).toBe('4.21');
+  });
+
+  test('uses the project ArcGIS baseline when no version is configured', () => {
+    expect(createRuntimeConfig({}).esriApiVersion).toBe('4.21');
+  });
+
   test('clamps unsafe numeric runtime settings', () => {
     const config = createRuntimeConfig({
       VITE_API_TIMEOUT_MS: '1',
@@ -74,6 +100,12 @@ describe('Vite-first runtime configuration', () => {
     expect(config.maxRetries).toBe(4);
   });
 
+  test('rejects manually constructed ArcGIS versions outside the explicit 4.x contract', () => {
+    const safe = createRuntimeConfig({});
+    expect(() => assertSafeRuntimeConfig({ ...safe, esriApiVersion: 'next' }))
+      .toThrow(/explicit 4\.x release/i);
+  });
+
   test('produces deterministic fingerprints without exposing raw configuration fields', () => {
     const config = createRuntimeConfig({ VITE_API_URL: '/api', VITE_RELEASE: 'r1' });
     const first = runtimeConfigFingerprint(config);
@@ -81,5 +113,11 @@ describe('Vite-first runtime configuration', () => {
     expect(first).toMatch(/^[a-f0-9]{8}$/);
     expect(second).toBe(first);
     expect(first).not.toContain('/api');
+  });
+
+  test('describes TKGM configuration presence without leaking the configured identifier', () => {
+    const description = describeRuntimeConfig(createRuntimeConfig({ VITE_TKGM_CITY_ID: 'sensitive-city-id' }));
+    expect(description.tkgmCityIdConfigured).toBe(true);
+    expect(JSON.stringify(description)).not.toContain('sensitive-city-id');
   });
 });
