@@ -1,16 +1,18 @@
 import { AppError } from '../errors/appError';
 import {
   REQUEST_PRIORITIES,
-  type RequestPriority,
-  type SchedulerCounters,
-  type SchedulerOptions,
-  type SchedulerSnapshot,
-  type SchedulerTaskMetadata,
   isAbortSignalLike,
   normalizeRequestPriority,
   normalizeSchedulerGroup,
   normalizeSchedulerLabel,
   toBoundedInteger
+} from './contracts';
+import type {
+  RequestPriority,
+  SchedulerCounters,
+  SchedulerOptions,
+  SchedulerSnapshot,
+  SchedulerTaskMetadata
 } from './contracts';
 
 const DEFAULT_MAX_CONCURRENT = 8;
