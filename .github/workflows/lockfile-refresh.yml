@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   refresh:
@@ -20,8 +20,10 @@ jobs:
       run:
         working-directory: Webclient.app
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v7
+        with:
+          ref: agent/platform-runtime-supervision-20260916-3d116af-r1
 
       - name: Setup Node 24
         uses: actions/setup-node@v7
@@ -33,6 +35,18 @@ jobs:
 
       - name: Verify lockfile install
         run: npm ci --ignore-scripts
+
+      - name: Commit generated lockfile
+        run: |
+          git -C .. config user.name "github-actions[bot]"
+          git -C .. config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C .. add Webclient.app/package-lock.json
+          if git -C .. diff --cached --quiet; then
+            echo "Lockfile already current."
+          else
+            git -C .. commit -m "chore(web): refresh dependency lockfile"
+            git -C .. push origin HEAD:agent/platform-runtime-supervision-20260916-3d116af-r1
+          fi
 
       - name: Upload generated lockfile
         uses: actions/upload-artifact@v6
