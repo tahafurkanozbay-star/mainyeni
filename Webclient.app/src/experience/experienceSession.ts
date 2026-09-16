@@ -4,7 +4,19 @@ import {
   type ExperiencePreferences,
   type ExperienceBus,
   type PreferenceStore,
+  type StorageLike,
 } from './experienceRuntime';
+
+const resolveBrowserStorage = (): StorageLike | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    // Storage access can be blocked by privacy/sandbox policies. Experience
+    // preferences remain fully usable in-memory in that environment.
+    return null;
+  }
+};
 
 /**
  * One process-wide Experience session.
@@ -17,6 +29,7 @@ import {
 export const experienceBus: ExperienceBus = createExperienceBus();
 export const experiencePreferenceStore: PreferenceStore = createPreferenceStore({
   bus: experienceBus,
+  storage: resolveBrowserStorage(),
 });
 
 export const getExperiencePreferences = (): ExperiencePreferences =>
