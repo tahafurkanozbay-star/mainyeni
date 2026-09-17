@@ -21,6 +21,7 @@ import {
 } from '../../gis-engine/sceneExperienceRuntime';
 import {
   createSceneNavigationRuntime,
+  type SceneNavigateOptions,
   type SceneNavigationRuntime,
 } from '../../gis-engine/sceneNavigationRuntime';
 import { createViewState } from '../../gis-engine/viewState';
@@ -35,6 +36,16 @@ import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experie
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
+
+type SceneNavigationAction =
+  | 'back'
+  | 'forward'
+  | 'home'
+  | 'north'
+  | 'rotate-left'
+  | 'rotate-right'
+  | 'tilt-less'
+  | 'tilt-more';
 
 interface ArcGisMapViewLike {
   map: unknown;
@@ -140,6 +151,12 @@ const prefersReducedMotion = (): boolean => (
   && typeof window.matchMedia === 'function'
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 );
+
+const sceneControlOptions = (reason: string): SceneNavigateOptions => ({
+  animate: !prefersReducedMotion(),
+  durationMs: prefersReducedMotion() ? 0 : 220,
+  reason,
+});
 
 /**
  * Type-safe ownership boundary for the application's 2D/3D transition.
@@ -381,6 +398,27 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     });
   }, []);
 
+  const runSceneNavigationAction = useCallback(async (action: SceneNavigationAction): Promise<boolean> => {
+    if (activeModeRef.current !== '3d') return false;
+    const navigation = sceneNavigationRef.current;
+    if (!navigation) return false;
+
+    const options = sceneControlOptions(`control-${action}`);
+    let success = false;
+    if (action === 'back') success = await navigation.back(options);
+    else if (action === 'forward') success = await navigation.forward(options);
+    else if (action === 'home') success = await navigation.goHome(options);
+    else if (action === 'north') success = await navigation.resetNorth(options);
+    else if (action === 'rotate-left') success = await navigation.rotateBy(-15, options);
+    else if (action === 'rotate-right') success = await navigation.rotateBy(15, options);
+    else if (action === 'tilt-less') success = await navigation.tiltBy(-10, options);
+    else if (action === 'tilt-more') success = await navigation.tiltBy(10, options);
+
+    if (success && action === 'home') announce('3B başlangıç görünümüne dönüldü.');
+    if (success && action === 'north') announce('3B kamera kuzeye hizalandı.');
+    return success;
+  }, []);
+
   useEffect(() => {
     if (!mapView) return undefined;
     disposedRef.current = false;
@@ -439,6 +477,18 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         data-scene-profile={sceneUi.profileLabel}
         data-scene-status={sceneUi.statusLabel}
       />
+      {activeMode === '3d' && (
+        <nav className="experience-scene-controls" aria-label="3B kamera denetimleri">
+          <button type="button" onClick={() => void runSceneNavigationAction('back')} aria-label="3B kamera geçmişinde geri" title="Geri">←</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('forward')} aria-label="3B kamera geçmişinde ileri" title="İleri">→</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('home')} aria-label="3B başlangıç görünümüne dön" title="Başlangıç">⌂</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('north')} aria-label="3B kamerayı kuzeye hizala" title="Kuzeye hizala">N</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('rotate-left')} aria-label="3B kamerayı sola döndür" title="Sola döndür">↶</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('rotate-right')} aria-label="3B kamerayı sağa döndür" title="Sağa döndür">↷</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('tilt-less')} aria-label="3B kamera eğimini azalt" title="Eğimi azalt">↓</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('tilt-more')} aria-label="3B kamera eğimini artır" title="Eğimi artır">↑</button>
+        </nav>
+      )}
       {activeMode === '3d' && (
         <output
           className="experience-scene-health"
