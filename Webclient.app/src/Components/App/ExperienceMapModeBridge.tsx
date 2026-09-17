@@ -292,9 +292,12 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     const bridge = MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null;
     try {
       const sceneView = sceneRef.current?.view;
+      const fallbackMapState = bridge?.getState?.();
       const mapState = sceneView && bridge
         ? normalizeMapStateFromScene(sceneView, bridge)
-        : createViewState({ ...(bridge?.getState?.() ?? {}), mode: '2d', tilt: 0 });
+        : createViewState(fallbackMapState
+          ? { ...fallbackMapState, mode: '2d', tilt: 0 }
+          : { mode: '2d', tilt: 0 });
 
       unbindSceneRef.current?.();
       unbindSceneRef.current = () => undefined;
