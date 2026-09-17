@@ -91,3 +91,21 @@
 - SECURITY / NETWORK: no new endpoint, WMS/WFS/WMTS assumption, client secret, analytics or third-party telemetry was introduced. New scene work is bounded in memory/work concurrency and cancellation-aware.
 - MERGE DURUMU: DRAFT / NOT MERGED. Additions threshold and mergeability are satisfied, but merge remains forbidden until exact-head Webclient Quality and Release QA are completed+success plus final regression/performance/security review.
 - SONRAKİ GÖREV: inspect exact-head GitHub Actions after this documentation commit; fix only real strict-lint/typecheck/Vitest/build failures. If all required checks pass, refresh mergeability/current main and only then consider marking PR ready/merging according to repository rules.
+
+## Deep GIS / 3B Modernization merge closure — 2026-09-17
+- TUR / GÖREV: PR #87 final merge closure; strict TypeScript 2B/3B GIS runtime, scene lifecycle, spatial performance and regression hardening.
+- BRANCH: `agent/gis-3d-experience-20260917`.
+- COMMIT / PR / MERGE DURUMU: final PR head `8e7126e640139ef94878d94e45905a0cba893aa8`; PR #87 had 5,730 additions / 460 deletions / 21 files and was squash-merged successfully. GitHub merge SHA is `eed9462e28afcf126496b642bfacd270f9a89e65` and was verified as `main` immediately after merge.
+- ÖNEMLİ ÖZELLİKLER: strict TypeScript 2D/3D map boundaries, adaptive SceneView/WebGL recovery, typed scene-content lifecycle, terrain/scene-layer controls, deterministic resource admission/eviction, advanced camera/history/bookmarks, capability-aware ArcGIS adapters, clustering/LOD, spatial cache/dedupe/cancellation and modern spatial runtime composition.
+- DEĞİŞEN DOSYALAR: 21 files in PR #87, centered on `Webclient.app/src/gis-engine/*` plus typed `MapComponent.tsx` / `ExperienceMapModeBridge.tsx` and associated tests.
+- YAKLAŞIK SATIR: 5,730 additions / 460 deletions; meaningful-additions merge gate satisfied.
+- TESTLER: exact final head completed successfully for changed-source strict lint, exact-base TypeScript regression, full Vitest visibility, strict Platform Vitest slice, exact-base Vitest regression, typed release QA tests and the final blocked-scene-content budget regression coverage.
+- BUILD: exact final head GitHub Actions completed successfully for Webclient Quality, Release QA and Platform Architecture Audit; production Vite build, bundle integrity, build budgets, .NET release build, xUnit and API publish validation passed within those workflows.
+- NETWORK DEĞİŞİKLİKLERİ: no new endpoint, WMS/WFS/WMTS assumption, remote analytics, third-party telemetry, secret or uncontrolled browser fetch introduced.
+- GÜVENLİK KONTROLLERİ: dependency audit remained green; resource allocation, retries, concurrency, history and caches are bounded; cancellation/stale-result suppression is enforced; no secret/token was added.
+- İKON EŞLEŞTİRME: unchanged; existing shared deterministic icon resolver/config remains the single authority.
+- MODERNİZASYON KARARLARI: retained React 19 + Vite 8 + TypeScript 7 and migrated real runtime boundaries to strict TypeScript rather than performing framework churn; deprecated `esri-loader` remains a future controlled `@arcgis/core` ESM migration target requiring compatibility/network/asset validation.
+- PERFORMANS ETKİSİ: bounded CPU/GPU/draw-call/feature budgets, LOD/clustering policies, spatial cache and request dedupe/cancellation reduce memory, render and repeated-query pressure across 2D/3D paths.
+- ÇÖZÜLEN HATALAR: all changed-source lint regressions removed; no new exact-base TypeScript diagnostics; the priority-eviction bug that could re-mark blocked scene content as ready was fixed and protected by regression coverage.
+- KALAN SORUNLAR: repository baseline still contains pre-existing migration debt outside this PR; no new failures from #87 remain in exact-head gates.
+- SONRAKİ GÖREV NOTU: start any new GIS work from current `main` on a fresh branch; do not reuse merged PR #87 branch. Reassess remaining `esri-loader`/ESM migration, broader 2D/3D service-contract parity and legacy JS boundaries only after current-main inventory and exact-base regression setup.
