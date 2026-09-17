@@ -1,0 +1,118 @@
+name: Data Search TypeScript Regression Finalize
+
+on:
+  push:
+    branches:
+      - agent/data-search-production-v2-20260916-1246-851a5c9
+    paths:
+      - '.github/workflows/data-search-ts-regression-finalize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout canonical branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/data-search-production-v2-20260916-1246-851a5c9
+          fetch-depth: 0
+
+      - name: Apply exact TypeScript contract fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              target.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'Webclient.app/src/data-search/geocodingRuntime.ts',
+              """    return adaptGeocodingPayload(payload, {\n      offset: 'offset' in request ? request.offset : 0,\n      limit: request.limit,\n      minimumScore: request.minimumScore,\n      dedupe: true,\n    });""",
+              """    return adaptGeocodingPayload(payload, {\n      offset: 'offset' in request ? request.offset : 0,\n      ...(request.limit !== undefined ? { limit: request.limit } : {}),\n      ...(request.minimumScore !== undefined ? { minimumScore: request.minimumScore } : {}),\n      dedupe: true,\n    });""",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/productionRuntime.ts',
+              """    const integrity = evaluateDataIntegrity(input, {\n      schema: options.aliases ?? options.schema,\n      dedupe: false,\n      keepInvalid: true,\n      maxRecords: options.maxRecords,\n      policy: { ...this.options.defaultIntegrityPolicy, ...options.integrityPolicy },\n    });""",
+              """    const schema = options.aliases ?? options.schema;\n    const integrity = evaluateDataIntegrity(input, {\n      ...(schema !== undefined ? { schema } : {}),\n      dedupe: false,\n      keepInvalid: true,\n      ...(options.maxRecords !== undefined ? { maxRecords: options.maxRecords } : {}),\n      policy: { ...this.options.defaultIntegrityPolicy, ...options.integrityPolicy },\n    });""",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/productionRuntime.ts',
+              """      const catalogEntry = this.catalog.register({\n        key,\n        title: options.title,\n        sourceKind: options.sourceKind,\n        sourceId: options.sourceId,\n        schemaVersion: options.schemaVersion,\n        aliases: options.aliases ?? options.schema,\n        tags: options.tags,\n        ttlMs: options.ttlMs,\n        metadata: options.metadata,\n        schemaProfile: options.profileSchema === false ? null : profileDatasetSchema(input, this.options.schemaProfile),\n        integrity: integrity.report,\n        state: 'quarantined',\n        now: options.now,\n      });""",
+              """      const catalogEntry = this.catalog.register({\n        key,\n        ...(options.title !== undefined ? { title: options.title } : {}),\n        ...(options.sourceKind !== undefined ? { sourceKind: options.sourceKind } : {}),\n        ...(options.sourceId !== undefined ? { sourceId: options.sourceId } : {}),\n        ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),\n        ...(schema !== undefined ? { aliases: schema } : {}),\n        ...(options.tags !== undefined ? { tags: options.tags } : {}),\n        ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),\n        ...(options.metadata !== undefined ? { metadata: options.metadata } : {}),\n        schemaProfile: options.profileSchema === false ? null : profileDatasetSchema(input, this.options.schemaProfile),\n        integrity: integrity.report,\n        state: 'quarantined',\n        ...(options.now !== undefined ? { now: options.now } : {}),\n      });""",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/productionRuntime.ts',
+              """    const dataset = this.searchRuntime.register(key, sourceRecords, {\n      schema: options.aliases ?? options.schema,\n      dedupe: true,\n      keepInvalid: false,\n      maxRecords: options.maxRecords,\n      now: options.now,\n    });""",
+              """    const dataset = this.searchRuntime.register(key, sourceRecords, {\n      ...(schema !== undefined ? { schema } : {}),\n      dedupe: true,\n      keepInvalid: false,\n      ...(options.maxRecords !== undefined ? { maxRecords: options.maxRecords } : {}),\n      ...(options.now !== undefined ? { now: options.now } : {}),\n    });""",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/productionRuntime.ts',
+              """    const catalog = this.catalog.register({\n      key,\n      title: options.title,\n      sourceKind: options.sourceKind,\n      sourceId: options.sourceId,\n      schemaVersion: options.schemaVersion,\n      aliases: options.aliases ?? options.schema,\n      tags: options.tags,\n      ttlMs: options.ttlMs,\n      metadata: {\n        ...options.metadata,\n        searchRevision: dataset.revision,\n        searchFingerprint: dataset.fingerprint,\n      },\n      schemaProfile,\n      integrity: integrity.report,\n      state: integrity.report.releaseReady ? 'active' : 'quarantined',\n      now: options.now,\n    });""",
+              """    const catalog = this.catalog.register({\n      key,\n      ...(options.title !== undefined ? { title: options.title } : {}),\n      ...(options.sourceKind !== undefined ? { sourceKind: options.sourceKind } : {}),\n      ...(options.sourceId !== undefined ? { sourceId: options.sourceId } : {}),\n      ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),\n      ...(schema !== undefined ? { aliases: schema } : {}),\n      ...(options.tags !== undefined ? { tags: options.tags } : {}),\n      ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),\n      metadata: {\n        ...options.metadata,\n        searchRevision: dataset.revision,\n        searchFingerprint: dataset.fingerprint,\n      },\n      schemaProfile,\n      integrity: integrity.report,\n      state: integrity.report.releaseReady ? 'active' : 'quarantined',\n      ...(options.now !== undefined ? { now: options.now } : {}),\n    });""",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/queryPlanRuntime.ts',
+              """    const bounds = createSpatialBounds(spatialCenter, request.radiusMeters);\n    const spatial = collectSpatialCandidatePositions(dataset.spatialIndex, bounds, {\n      maxCandidates: maxSpatialCandidates,\n      signal: request.signal,\n    });\n    spatialCandidatePositions = Object.freeze([...spatial.positions]);""",
+              """    const bounds = createSpatialBounds(spatialCenter, request.radiusMeters);\n    if (bounds) {\n      const spatial = collectSpatialCandidatePositions(dataset.spatialIndex, bounds, {\n        maxCandidates: maxSpatialCandidates,\n        signal: request.signal,\n      });\n      spatialCandidatePositions = Object.freeze([...spatial.positions]);\n    }""",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/schemaEvolution.ts',
+              "    const aliases = (rawAliases ?? []).map(normalizeFieldName).filter(Boolean);",
+              "    const aliases = (rawAliases ?? []).map((alias: unknown) => normalizeFieldName(alias)).filter(Boolean);",
+          )
+
+          replace_once(
+              'Webclient.app/src/data-search/searchSession.ts',
+              "    let detachExternal = () => undefined;",
+              "    let detachExternal: () => void = () => undefined;",
+          )
+
+          Path('.github/workflows/data-search-ts-regression-finalize.yml').unlink()
+          PY
+
+      - name: Install webclient dependencies
+        working-directory: Webclient.app
+        run: npm ci
+
+      - name: Validate Data Search changed-source lint
+        working-directory: Webclient.app
+        run: npx oxlint --deny-warnings src/data-search/geocodingRuntime.ts src/data-search/productionRuntime.ts src/data-search/queryPlanRuntime.ts src/data-search/schemaEvolution.ts src/data-search/searchSession.ts
+
+      - name: Verify targeted TypeScript diagnostics are eliminated
+        working-directory: Webclient.app
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/typecheck.log
+          set -e
+          if grep -E 'src/data-search/(geocodingRuntime|productionRuntime|queryPlanRuntime|schemaEvolution|searchSession)\.ts' /tmp/typecheck.log; then
+            echo 'Targeted Data/Search TypeScript diagnostics remain.' >&2
+            exit 1
+          fi
+
+      - name: Commit verified product fixes
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Webclient.app/src/data-search .github/workflows/data-search-ts-regression-finalize.yml
+          git commit -m "fix(search): satisfy exact TypeScript contracts"
+          git push origin HEAD:agent/data-search-production-v2-20260916-1246-851a5c9
