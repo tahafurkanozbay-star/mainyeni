@@ -352,8 +352,9 @@ describe('business query runtime deadlines and cancellation', () => {
     });
 
     const pending = runtime.query('Parks', {}, false, { cache: false, timeoutMs: 50 });
+    const rejection = expect(pending).rejects.toBeInstanceOf(BusinessTimeoutError);
     await vi.advanceTimersByTimeAsync(51);
-    await expect(pending).rejects.toBeInstanceOf(BusinessTimeoutError);
+    await rejection;
     expect(runtime.snapshot().timedOut).toBe(1);
     expect(runtime.snapshot().active).toBe(0);
     runtime.dispose();
