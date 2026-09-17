@@ -1,7 +1,7 @@
 import { type ArcGisMetadataContract } from './arcgisMetadataAdapter';
-import { type ArcGisQuerySpec } from './arcgisQueryContract';
+import { type ArcGisOrderBy, type ArcGisQuerySpec } from './arcgisQueryContract';
 
-export type ArcGisWindowStrategy = 'offset' | 'objectIds';
+export type ArcGisWindowStrategy = 'offset';
 
 export interface ArcGisFeatureWindowPlan {
   readonly strategy: ArcGisWindowStrategy;
@@ -9,7 +9,7 @@ export interface ArcGisFeatureWindowPlan {
   readonly maxFeatures: number;
   readonly maxPages: number;
   readonly identityField: string;
-  readonly orderByFields: readonly string[];
+  readonly orderBy: readonly ArcGisOrderBy[];
   readonly warnings: readonly string[];
 }
 
@@ -31,34 +31,29 @@ const positiveInteger = (value: unknown, fallback: number, maximum: number): num
 const identityField = (contract: ArcGisMetadataContract): string => {
   const field = contract.objectIdField || contract.globalIdField;
   if (!contract.identityReady || !field) {
-    throw new ArcGisFeatureWindowPlanningError(
-      'ArcGIS feature-window planning requires a verified stable identity field.',
-      'STABLE_IDENTITY_REQUIRED',
-    );
+    throw new ArcGisFeatureWindowPlanningError('ArcGIS feature-window planning requires a verified stable identity field.', 'STABLE_IDENTITY_REQUIRED');
   }
   return field;
 };
 
-const normalizeOrderBy = (spec: ArcGisQuerySpec, identity: string): readonly string[] => {
-  const configured = Array.isArray(spec.orderByFields)
-    ? spec.orderByFields.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    : [];
-  const hasIdentity = configured.some((value) => value.trim().split(/\s+/u)[0]?.toLowerCase() === identity.toLowerCase());
-  return Object.freeze(hasIdentity ? configured.slice() : [...configured, `${identity} ASC`]);
+const normalizeOrderBy = (spec: ArcGisQuerySpec, identity: string): readonly ArcGisOrderBy[] => {
+  const configured = Array.isArray(spec.orderBy) ? spec.orderBy.slice() : [];
+  const hasIdentity = configured.some((value) => value.field.toLowerCase() === identity.toLowerCase());
+  return Object.freeze(hasIdentity ? configured : [...configured, Object.freeze({ field: identity, direction: 'ASC' as const })]);
 };
 
-/**
- * Produces a deterministic, bounded pagination plan from verified service metadata.
- * It never guesses pagination support and always adds a stable identity tie-breaker
- * so offset windows cannot silently reshuffle records that share the caller's sort key.
- */
+/** Produces a deterministic, bounded offset plan from verified service metadata. */
 export const planArcGisFeatureWindow = (
   contract: ArcGisMetadataContract,
   spec: ArcGisQuerySpec,
   options: Readonly<{ pageSize?: number; maxFeatures?: number; maxPages?: number }> = {},
 ): ArcGisFeatureWindowPlan => {
-  if (!contract.queryReady) {
-    throw new ArcGisFeatureWindowPlanningError('ArcGIS metadata contract is not query-ready.', 'METADATA_NOT_QUERY_READY');
+  if (!contract.queryReady) throw new ArcGisFeatureWindowPlanningError('ArcGIS metadata contract is not query-ready.', 'METADATA_NOT_QUERY_READY');
+  if (!contract.capabilities.has('pagination')) {
+    throw new ArcGisFeatureWindowPlanningError('Verified ArcGIS pagination support is required for offset feature windows.', 'PAGINATION_UNSUPPORTED');
+  }
+  if (!contract.capabilities.has('order-by')) {
+    throw new ArcGisFeatureWindowPlanningError('Deterministic offset windows require verified ArcGIS order-by support.', 'ORDER_BY_UNSUPPORTED');
   }
   const identity = identityField(contract);
   const maxRecordCount = positiveInteger(contract.maxRecordCount, 500, 10_000);
@@ -66,31 +61,9 @@ export const planArcGisFeatureWindow = (
   const maxFeatures = positiveInteger(options.maxFeatures, 10_000, 100_000);
   const maxPages = positiveInteger(options.maxPages, 50, 1_000);
   const warnings: string[] = [];
-
-  if (!contract.capabilities.has('pagination')) {
-    throw new ArcGisFeatureWindowPlanningError(
-      'Verified ArcGIS pagination support is required for offset feature windows.',
-      'PAGINATION_UNSUPPORTED',
-    );
-  }
   if (pageSize < maxRecordCount) warnings.push('page-size-below-service-limit');
   if (maxPages * pageSize < maxFeatures) warnings.push('page-budget-limits-feature-budget');
-
-  return Object.freeze({
-    strategy: 'offset',
-    pageSize,
-    maxFeatures,
-    maxPages,
-    identityField: identity,
-    orderByFields: normalizeOrderBy(spec, identity),
-    warnings: Object.freeze(warnings),
-  });
+  return Object.freeze({ strategy: 'offset', pageSize, maxFeatures, maxPages, identityField: identity, orderBy: normalizeOrderBy(spec, identity), warnings: Object.freeze(warnings) });
 };
 
-export const applyArcGisFeatureWindowPlan = (
-  spec: ArcGisQuerySpec,
-  plan: ArcGisFeatureWindowPlan,
-): ArcGisQuerySpec => Object.freeze({
-  ...spec,
-  orderByFields: plan.orderByFields,
-});
+export const applyArcGisFeatureWindowPlan = (spec: ArcGisQuerySpec, plan: ArcGisFeatureWindowPlan): ArcGisQuerySpec => Object.freeze({ ...spec, orderBy: plan.orderBy });
