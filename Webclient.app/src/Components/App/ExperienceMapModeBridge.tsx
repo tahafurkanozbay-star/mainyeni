@@ -19,6 +19,11 @@ import {
   type SceneExperienceSnapshot,
   type SceneExperienceView,
 } from '../../gis-engine/sceneExperienceRuntime';
+import {
+  createSceneNavigationRuntime,
+  type SceneNavigateOptions,
+  type SceneNavigationRuntime,
+} from '../../gis-engine/sceneNavigationRuntime';
 import { createViewState } from '../../gis-engine/viewState';
 import {
   EXPERIENCE_ANNOUNCEMENT_EVENT,
@@ -27,9 +32,20 @@ import {
   type ExperienceCommandDetail,
   type ExperienceMapMode,
 } from '../../experience/experienceRuntime';
+import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experience/sceneCommandRuntime';
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
+
+type SceneNavigationAction =
+  | 'back'
+  | 'forward'
+  | 'home'
+  | 'north'
+  | 'rotate-left'
+  | 'rotate-right'
+  | 'tilt-less'
+  | 'tilt-more';
 
 interface ArcGisMapViewLike {
   map: unknown;
@@ -136,23 +152,30 @@ const prefersReducedMotion = (): boolean => (
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 );
 
+const sceneControlOptions = (reason: string): SceneNavigateOptions => ({
+  animate: !prefersReducedMotion(),
+  durationMs: prefersReducedMotion() ? 0 : 220,
+  reason,
+});
+
 /**
  * Type-safe ownership boundary for the application's 2D/3D transition.
  *
  * The SceneView is lazy and shares the exact ArcGIS Map used by the MapView.
  * This preserves layer visibility, basemap and selection state while avoiding a
- * second data model. A dedicated scene experience runtime adapts SDK quality to
- * device/frame pressure and owns WebGL fatal-error recovery.
+ * second data model. Dedicated scene experience and navigation runtimes adapt
+ * quality, own WebGL recovery, and bound camera movement/history.
  */
 export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
+  const sceneNavigationRef = useRef<SceneNavigationRuntime | null>(null);
+  const sceneNavigationHomeSetRef = useRef(false);
   const unbindSceneRef = useRef<() => void>(() => undefined);
   const unsubscribeExperienceRef = useRef<() => boolean>(() => false);
   const disposedRef = useRef(false);
   const transitionRef = useRef<Promise<void>>(Promise.resolve());
-  const sceneHomeStateRef = useRef<ReturnType<typeof createViewState> | null>(null);
   const activeModeRef = useRef<ExperienceMapMode>('2d');
   const [activeMode, setActiveMode] = useState<ExperienceMapMode>('2d');
   const [sceneReady, setSceneReady] = useState(false);
@@ -192,10 +215,26 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     return runtime;
   }, [syncSceneUi]);
 
+  const bindSceneNavigation = useCallback((view: SceneExperienceView) => {
+    sceneNavigationRef.current?.dispose();
+    sceneNavigationHomeSetRef.current = false;
+    const runtime = createSceneNavigationRuntime(view as never, {
+      reducedMotion: prefersReducedMotion,
+      defaultDurationMs: 220,
+      onError: (error, context) => DebugHelper.Log({ context, error }),
+    });
+    sceneNavigationRef.current = runtime;
+    return runtime;
+  }, []);
+
   const ensureScene = useCallback(async (): Promise<SceneHandle | null> => {
     const current = sceneRef.current;
     if (current?.view && !current.view.destroyed) return current;
     if (!mapView || !sceneHostRef.current) return null;
+
+    sceneNavigationRef.current?.dispose();
+    sceneNavigationRef.current = null;
+    sceneNavigationHomeSetRef.current = false;
 
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
@@ -223,9 +262,10 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
 
     sceneRef.current = scene;
     bindSceneExperience(scene.view);
+    bindSceneNavigation(scene.view);
     setSceneReady(true);
     return scene;
-  }, [bindSceneExperience, mapView]);
+  }, [bindSceneExperience, bindSceneNavigation, mapView]);
 
   const activate3D = useCallback(async (): Promise<void> => {
     if (!mapView || activeModeRef.current === '3d') {
@@ -255,6 +295,11 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
         animate: !prefersReducedMotion(),
       });
+
+      if (!sceneNavigationHomeSetRef.current) {
+        sceneNavigationRef.current?.setHome();
+        sceneNavigationHomeSetRef.current = true;
+      }
 
       unbindSceneRef.current?.();
       unbindSceneRef.current = bindSceneState(scene.view, bridge as never, undefined, {
@@ -334,41 +379,44 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     return transitionRef.current;
   }, [activate2D, activate3D]);
 
-  const executeSceneCommand = useCallback(async (detail: ExperienceCommandDetail): Promise<boolean> => {
+  const executeActiveSceneCommand = useCallback(async (detail: ExperienceCommandDetail): Promise<boolean> => {
     if (activeModeRef.current !== '3d') return false;
     const view = sceneRef.current?.view;
-    if (!view || view.destroyed) return false;
-    const animation = {
-      duration: prefersReducedMotion() ? 0 : 220,
-      animate: !prefersReducedMotion(),
-    };
+    const navigation = sceneNavigationRef.current;
+    if (!view || view.destroyed || !navigation) return false;
 
-    if (detail.name === 'map-home') {
-      const home = sceneHomeStateRef.current;
-      if (!home) return false;
-      await applyViewStateToSceneView(view, home, {
-        allowCrossMode: true,
-        ...animation,
-      });
-      return true;
-    }
+    return executeSceneRuntimeCommand(detail, {
+      navigation,
+      reducedMotion: prefersReducedMotion,
+      durationMs: 220,
+      focusMap: () => {
+        const container = view.container instanceof HTMLElement ? view.container : sceneHostRef.current;
+        const focusTarget = container?.querySelector<HTMLElement>('.esri-view-surface, [tabindex="0"]');
+        focusTarget?.focus({ preventScroll: true });
+        return Boolean(focusTarget);
+      },
+    });
+  }, []);
 
-    if (detail.name === 'map-zoom-in' || detail.name === 'map-zoom-out') {
-      const scale = Number(view.scale);
-      if (!Number.isFinite(scale) || !view.goTo) return false;
-      const factor = detail.name === 'map-zoom-in' ? 0.5 : 2;
-      await view.goTo({ scale: Math.max(25, scale * factor) }, animation);
-      return true;
-    }
+  const runSceneNavigationAction = useCallback(async (action: SceneNavigationAction): Promise<boolean> => {
+    if (activeModeRef.current !== '3d') return false;
+    const navigation = sceneNavigationRef.current;
+    if (!navigation) return false;
 
-    if (detail.name === 'focus-map') {
-      const container = view.container instanceof HTMLElement ? view.container : sceneHostRef.current;
-      const focusTarget = container?.querySelector<HTMLElement>('.esri-view-surface, [tabindex="0"]');
-      focusTarget?.focus({ preventScroll: true });
-      return Boolean(focusTarget);
-    }
+    const options = sceneControlOptions(`control-${action}`);
+    let success = false;
+    if (action === 'back') success = await navigation.back(options);
+    else if (action === 'forward') success = await navigation.forward(options);
+    else if (action === 'home') success = await navigation.goHome(options);
+    else if (action === 'north') success = await navigation.resetNorth(options);
+    else if (action === 'rotate-left') success = await navigation.rotateBy(-15, options);
+    else if (action === 'rotate-right') success = await navigation.rotateBy(15, options);
+    else if (action === 'tilt-less') success = await navigation.tiltBy(-10, options);
+    else if (action === 'tilt-more') success = await navigation.tiltBy(10, options);
 
-    return false;
+    if (success && action === 'home') announce('3B başlangıç görünümüne dönüldü.');
+    if (success && action === 'north') announce('3B kamera kuzeye hizalandı.');
+    return success;
   }, []);
 
   useEffect(() => {
@@ -378,11 +426,6 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     if (modeRef) modeRef.current = '2d';
     publishMode('2d', 'map-runtime-ready');
 
-    const bridge = MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null;
-    if (bridge?.getState && !sceneHomeStateRef.current) {
-      sceneHomeStateRef.current = normalizeSceneStateFromMap(mapView, bridge);
-    }
-
     const onCommand = (event: Event) => {
       const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
       if (!detail) return;
@@ -391,7 +434,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         void queueTransition(detail.mode);
         return;
       }
-      void executeSceneCommand(detail).catch((error: unknown) => DebugHelper.Log(error));
+      void executeActiveSceneCommand(detail).catch((error: unknown) => DebugHelper.Log(error));
     };
 
     const onVisibilityChange = () => {
@@ -406,7 +449,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
       window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [executeSceneCommand, mapView, modeRef, queueTransition]);
+  }, [executeActiveSceneCommand, mapView, modeRef, queueTransition]);
 
   useEffect(() => () => {
     disposedRef.current = true;
@@ -416,6 +459,9 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     unsubscribeExperienceRef.current = () => false;
     sceneExperienceRef.current?.dispose();
     sceneExperienceRef.current = null;
+    sceneNavigationRef.current?.dispose();
+    sceneNavigationRef.current = null;
+    sceneNavigationHomeSetRef.current = false;
     if (sceneRef.current) destroySceneView(sceneRef.current);
     sceneRef.current = null;
   }, []);
@@ -431,6 +477,18 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         data-scene-profile={sceneUi.profileLabel}
         data-scene-status={sceneUi.statusLabel}
       />
+      {activeMode === '3d' && (
+        <nav className="experience-scene-controls" aria-label="3B kamera denetimleri">
+          <button type="button" onClick={() => void runSceneNavigationAction('back')} aria-label="3B kamera geçmişinde geri" title="Geri">←</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('forward')} aria-label="3B kamera geçmişinde ileri" title="İleri">→</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('home')} aria-label="3B başlangıç görünümüne dön" title="Başlangıç">⌂</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('north')} aria-label="3B kamerayı kuzeye hizala" title="Kuzeye hizala">N</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('rotate-left')} aria-label="3B kamerayı sola döndür" title="Sola döndür">↶</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('rotate-right')} aria-label="3B kamerayı sağa döndür" title="Sağa döndür">↷</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('tilt-less')} aria-label="3B kamera eğimini azalt" title="Eğimi azalt">↓</button>
+          <button type="button" onClick={() => void runSceneNavigationAction('tilt-more')} aria-label="3B kamera eğimini artır" title="Eğimi artır">↑</button>
+        </nav>
+      )}
       {activeMode === '3d' && (
         <output
           className="experience-scene-health"
