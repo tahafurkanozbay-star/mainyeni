@@ -188,7 +188,12 @@ export const queryByGeometry = async (
   throwIfAborted(signal);
   if (!layer?.queryFeatures) throw new Error('FeatureLayer-like object is required.');
 
-  const query = { geometry, where, outFields, returnGeometry };
+  const query = {
+    ...(geometry === undefined ? {} : { geometry }),
+    where,
+    outFields,
+    returnGeometry,
+  };
   const requestOptions = signal ? { signal } : undefined;
   const result = await layer.queryFeatures(query, requestOptions);
   throwIfAborted(signal);

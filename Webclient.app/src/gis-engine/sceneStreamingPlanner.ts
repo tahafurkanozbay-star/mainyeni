@@ -103,7 +103,7 @@ const normalizeCandidate = (input: GisStreamingCandidate): NormalizedCandidate =
     ...input,
     id,
     layerId,
-    resourceUrl,
+    ...(resourceUrl === undefined ? {} : { resourceUrl }),
     estimatedBytes,
     distance: finiteNumber(input.distance),
     screenArea: finiteNumber(input.screenArea),
@@ -243,12 +243,12 @@ export const planSceneStreaming = (
     }
     if (resident || inFlight) continue;
     if (!candidate.visible && !forcedLoad) {
-      if (prefetch.length >= maxPrefetch) {
-        skipped.push({ id: candidate.id, reason: 'prefetch-budget-exhausted' });
-        continue;
-      }
       if (!input.budget.allowPrefetch || input.view.stationary === false) {
         skipped.push({ id: candidate.id, reason: 'prefetch-disabled' });
+        continue;
+      }
+      if (prefetch.length >= maxPrefetch) {
+        skipped.push({ id: candidate.id, reason: 'prefetch-budget-exhausted' });
         continue;
       }
       if (projectedResidentBytes + candidate.estimatedBytes > maxResidentBytes) {

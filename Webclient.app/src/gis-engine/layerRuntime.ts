@@ -303,8 +303,8 @@ export const hydrateLayerRuntime = (
     next = layerReducer(next, {
       type: 'SET_SCALE_RANGE',
       layerId: persisted.id,
-      minScale: persisted.minScale,
-      maxScale: persisted.maxScale,
+      ...(persisted.minScale === undefined ? {} : { minScale: persisted.minScale }),
+      ...(persisted.maxScale === undefined ? {} : { maxScale: persisted.maxScale }),
     });
   }
   return next;

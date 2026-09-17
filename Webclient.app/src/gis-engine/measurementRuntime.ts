@@ -34,7 +34,7 @@ export interface MeasurementState {
   clearedAt: string | null;
   destroyedAt: string | null;
 }
-export interface MeasurementStateInput extends Partial<MeasurementState> { activeTool?: MeasurementTool | string; }
+export interface MeasurementStateInput extends Omit<Partial<MeasurementState>, 'activeTool'> { activeTool?: MeasurementTool | string; }
 
 export const createMeasurementState = (input: MeasurementStateInput = {}): MeasurementState => ({
   status: input.status || 'idle',

@@ -176,7 +176,11 @@ export const createViewCoordinator = (bridge: ViewStateBridge, options: ViewCoor
   const register = (mode: ViewMode, registration: ViewRegistration = {}): (() => void) => {
     if (destroyed) throw new Error('View coordinator has been destroyed.');
     const normalizedMode: ViewMode = mode === '3d' ? '3d' : '2d'; const existing = registrations.get(normalizedMode); existing?.unbind?.();
-    const entry: ViewRegistration = { view: registration.view || null, applyState: registration.applyState, unbind: registration.unbind || (() => {}) };
+    const entry: ViewRegistration = {
+      view: registration.view || null,
+      ...(registration.applyState === undefined ? {} : { applyState: registration.applyState }),
+      unbind: registration.unbind || (() => {}),
+    };
     registrations.set(normalizedMode, entry);
     return () => { if (registrations.get(normalizedMode) !== entry) return; entry.unbind?.(); registrations.delete(normalizedMode); };
   };
