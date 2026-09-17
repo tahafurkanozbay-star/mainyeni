@@ -76,9 +76,10 @@ describe('arcgisSelectionCoordinator', () => {
     const stale = coordinator.select({ layerId: 'parcels', contract });
     const fresh = coordinator.select({ layerId: 'parcels', contract });
     resolveFirst?.(response([feature(1)]));
+    const staleResult = await stale;
+    expect(staleResult.revision).toBe(2);
     await expect(fresh).resolves.toMatchObject({ status: 'ready', revision: 2, identities: [9] });
-    await expect(stale).resolves.toMatchObject({ status: 'ready', revision: 2, identities: [9] });
-    expect(coordinator.snapshot('parcels').identities).toEqual([9]);
+    expect(coordinator.snapshot('parcels')).toMatchObject({ status: 'ready', revision: 2, identities: [9] });
   });
 
   it('does not cancel requests owned by another layer', async () => {
