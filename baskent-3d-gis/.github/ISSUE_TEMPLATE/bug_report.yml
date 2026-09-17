@@ -1,0 +1,26 @@
+name: Hata bildirimi
+description: Harita, katman veya arayüz hatası bildirin.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Hata özeti
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Tekrarlama adımları
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: service
+    attributes:
+      label: İlgili servis/katman
+  - type: input
+    id: browser
+    attributes:
+      label: Tarayıcı ve sürüm

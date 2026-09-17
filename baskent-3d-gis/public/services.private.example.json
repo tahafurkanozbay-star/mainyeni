@@ -1,0 +1,74 @@
+{
+  "services": [
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ DAĞITIM İSTASYONU",
+      "servisTuruAdi": "WMS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wms/doğalgaz-dağitim-i̇stasyonu"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ DAĞITIM İSTASYONU",
+      "servisTuruAdi": "WFS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wfs/doğalgaz-dağitim-i̇stasyonu"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ DEPOLAMA TESİSİ",
+      "servisTuruAdi": "WFS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wfs/doğalgaz-depolama-tesi̇si̇"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ DEPOLAMA TESİSİ",
+      "servisTuruAdi": "WMS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wms/doğalgaz-depolama-tesi̇si̇"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ HATTI",
+      "servisTuruAdi": "WMS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wms/doğalgaz-hatti"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ HATTI",
+      "servisTuruAdi": "WFS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wfs/doğalgaz-hatti"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ SERVİS KUTUSU",
+      "servisTuruAdi": "WFS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wfs/doğalgaz-servi̇s-kutusu"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ SERVİS KUTUSU",
+      "servisTuruAdi": "WMS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wms/doğalgaz-servi̇s-kutusu"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ VANA",
+      "servisTuruAdi": "WFS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wfs/doğalgaz-vana"
+    },
+    {
+      "ustKurumAdi": "ENERJİ VE TABİİ KAYNAKLAR BAKANLIĞI",
+      "metaveriSahibiKurumAdi": "ENERJİ PİYASASI DÜZENLEME KURUMU BAŞKANLIĞI",
+      "cografiVeriKatmanAdi": "DOĞALGAZ VANA",
+      "servisTuruAdi": "WMS",
+      "tokenUrl": "https://YOUR-SECURE-PROXY.example/geoservices/wms/doğalgaz-vana"
+    }
+  ]
+}
