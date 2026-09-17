@@ -16,11 +16,9 @@ const LEGACY_IMPORT_ALLOWLIST = new Set([
   'Components/Widget/LayerList/LayerListWidget.js',
   'Components/Widget/OverviewMap/OverviewMapWidget.js',
   'Components/Widget/Sketch/SketchWidget.js',
-  'Toolbox/GisCommonHelper.js',
-  'Toolbox/GisGraphicsHelper.js',
   'Toolbox/GisQueryHelper.js',
 ]);
-const MAX_LEGACY_DIRECT_CONSUMERS = 13;
+const MAX_LEGACY_DIRECT_CONSUMERS = 11;
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
