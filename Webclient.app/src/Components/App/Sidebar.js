@@ -32,6 +32,7 @@ const createInitialOperationalLayer = async (mapView, serviceKey) => {
 export const Sidebar = React.forwardRef(({ id, windowManager }, ref) => {
     const [activeGroup, setActiveGroup] = useState(null);
     const [visible, setVisible] = useState(true);
+    const [collapsed, setCollapsed] = useState(false);
     const mountedOperationalLayers = useRef([]);
 
     useImperativeHandle(ref, () => ({
@@ -41,6 +42,7 @@ export const Sidebar = React.forwardRef(({ id, windowManager }, ref) => {
         OnShow: () => {
             DebugHelper.Log(`show ${id}`);
             setVisible(true);
+            setCollapsed(false);
         },
         OnClose: () => {
             DebugHelper.Log(`closing ${id}`);
@@ -104,6 +106,11 @@ export const Sidebar = React.forwardRef(({ id, windowManager }, ref) => {
     );
 
     const toggleGroup = groupId => {
+        if (collapsed) {
+            setCollapsed(false);
+            setActiveGroup(groupId);
+            return;
+        }
         setActiveGroup(current => current === groupId ? null : groupId);
     };
 
@@ -114,7 +121,25 @@ export const Sidebar = React.forwardRef(({ id, windowManager }, ref) => {
     if (!visible) return null;
 
     return (
-        <aside className="sidebar-container kr-sidebar" aria-label="Kent Rehberi hizmet kategorileri">
+        <aside className={`sidebar-container kr-sidebar ${collapsed ? "is-collapsed" : ""}`} aria-label="Kent Rehberi hizmet kategorileri">
+            <header className="kr-sidebar__topline">
+                <div className="kr-sidebar__title">
+                    <span>ŞEHİR SERVİSLERİ</span>
+                    <strong>Keşfet</strong>
+                </div>
+                <button
+                    type="button"
+                    className="kr-sidebar__toggle"
+                    onClick={() => setCollapsed(value => !value)}
+                    aria-expanded={!collapsed}
+                    aria-label={collapsed ? "Hizmet panelini genişlet" : "Hizmet panelini daralt"}
+                    title={collapsed ? "Paneli genişlet" : "Paneli daralt"}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m15 18-6-6 6-6" />
+                    </svg>
+                </button>
+            </header>
             <nav className="ns-sidebar-header kr-sidebar__groups" aria-label="Kurum kategorileri">
                 {SIDEBAR_GROUPS.map(group => (
                     <button
