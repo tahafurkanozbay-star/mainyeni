@@ -6,12 +6,12 @@ import {
 } from './arcgisFeatureWindowExecutor';
 import {
   createArcGisQueryExecutor,
+  type ArcGisFeature,
   type ArcGisQueryExecutionOptions,
   type ArcGisQueryResult,
   type ArcGisQueryTransport,
   type ArcGisScheduler,
 } from './arcgisQueryExecutor';
-import type { ArcGisFeature } from './arcgisQueryExecutor';
 import type { FeatureWindowResult } from './arcgisFeatureWindow';
 import {
   createSpatialRequestCoordinator,
@@ -95,7 +95,7 @@ const assertContract = (contract: ArcGisMetadataContract): void => {
   if (!/^https?:\/\//i.test(contract.resourceUrl) && !contract.resourceUrl.startsWith('/')) {
     throw new ArcGisQueryPipelineError('ArcGIS pipeline requires a verified resource URL.', 'INVALID_RESOURCE_URL');
   }
-  if (!\/(?:FeatureServer|MapServer)\/\d+$/i.test(contract.resourceUrl.replace(/\/+$/, ''))) {
+  if (!/(?:FeatureServer|MapServer)\/\d+$/i.test(contract.resourceUrl.replace(/\/+$/, ''))) {
     throw new ArcGisQueryPipelineError('ArcGIS pipeline accepts only concrete FeatureServer/MapServer layers.', 'INVALID_RESOURCE_URL');
   }
 };
