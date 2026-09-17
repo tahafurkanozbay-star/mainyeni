@@ -5,19 +5,8 @@ import { describe, expect, it } from 'vitest';
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
 const LEGACY_TRANSPORT_BOUNDARY = 'gis-engine/arcgisModuleRuntime.ts';
-const LEGACY_IMPORT_ALLOWLIST = new Set([
-  'Business/CommonBusiness.js',
-  'Components/App/MapComponent.legacy.js',
-  'Components/Query/ParklarQuery/ParklarQueryWindow.js',
-  'Components/Query/VicinityQuery/VicinityQueryWindow.js',
-  'Components/Widget/AdvancedSketch/AdvancedSketchWidgetMain.js',
-  'Components/Widget/Basemap/BasemapWidget.js',
-  'Components/Widget/LayerList/LayerListWidget.js',
-  'Components/Widget/OverviewMap/OverviewMapWidget.js',
-  'Components/Widget/Sketch/SketchWidget.js',
-  'Toolbox/GisQueryHelper.js',
-]);
-const MAX_LEGACY_DIRECT_CONSUMERS = 10;
+const LEGACY_IMPORT_ALLOWLIST = new Set<string>();
+const MAX_LEGACY_DIRECT_CONSUMERS = 0;
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {

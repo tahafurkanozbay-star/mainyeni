@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import { Accordion, Button, Form } from "react-bootstrap";
 import { BiLayer, BiSearch } from "react-icons/bi";
 import { FiMapPin } from "react-icons/fi";
@@ -143,7 +143,7 @@ export const VicinityQueryWindow = React.forwardRef((props, ref) => {
                 Title: item?.attr?.[titleField] ?? item?.attr?.adi ?? item?.attr?.ad ?? title,
                 Geometry: item?.geometry,
                 attr: {
-                    ...(item?.attr || {}),
+                    ...item?.attr,
                     _MAHALLE_ADI: resolveNeighborhoodName(item)
                 }
             }))

@@ -62,6 +62,37 @@ const clearModuleCache = (): void => {
   moduleCache.clear();
 };
 
+const unique = <T>(values: readonly T[]): T[] => [...new Set(values)];
+
+const loadMissingModules = (moduleIds: readonly string[]): void => {
+  const missing = unique(moduleIds.filter((moduleId) => !moduleCache.has(moduleId)));
+  if (missing.length === 0) return;
+
+  loadRequests += 1;
+  const transportAtRequestTime = activeTransport;
+  const batchPromise = transportAtRequestTime.loadModules(missing)
+    .then((modules) => {
+      if (!Array.isArray(modules)) {
+        throw new TypeError(`ArcGIS module transport ${transportAtRequestTime.name} returned a non-array payload.`);
+      }
+      if (modules.length !== missing.length) {
+        throw new Error(
+          `ArcGIS module transport ${transportAtRequestTime.name} returned ${modules.length} module(s) for ${missing.length} request(s).`,
+        );
+      }
+      return modules;
+    })
+    .catch((error: unknown) => {
+      failures += 1;
+      for (const moduleId of missing) moduleCache.delete(moduleId);
+      throw error;
+    });
+
+  for (const [index, moduleId] of missing.entries()) {
+    moduleCache.set(moduleId, batchPromise.then((modules) => modules[index]));
+  }
+};
+
 /**
  * ArcGIS module boundary used while the application transitions from the retired
  * esri-loader AMD transport to @arcgis/core ESM. Consumers depend only on this
@@ -106,37 +137,37 @@ export const evictArcgisModule = (moduleIdInput: string): boolean => {
   return moduleCache.delete(moduleId);
 };
 
-export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Promise<T> => {
-  const moduleId = normalizeModuleId(moduleIdInput);
-  const cached = moduleCache.get(moduleId);
-  if (cached) {
-    cacheHits += 1;
-    return cached as Promise<T>;
+export const evictArcgisModules = (moduleIds: readonly string[]): number => {
+  let removed = 0;
+  for (const moduleId of unique(moduleIds.map(normalizeModuleId))) {
+    if (moduleCache.delete(moduleId)) removed += 1;
   }
-
-  loadRequests += 1;
-  const transportAtRequestTime = activeTransport;
-  const request = transportAtRequestTime.loadModules([moduleId])
-    .then((modules) => {
-      if (!Array.isArray(modules) || modules.length === 0) {
-        throw new Error(`ArcGIS module transport returned no module for ${moduleId}.`);
-      }
-      return modules[0] as T;
-    })
-    .catch((error: unknown) => {
-      failures += 1;
-      moduleCache.delete(moduleId);
-      throw error;
-    });
-  moduleCache.set(moduleId, request as Promise<unknown>);
-  return request;
+  return removed;
 };
 
 export const loadArcgisModules = async <TModules extends readonly unknown[] = readonly unknown[]>(
-  moduleIds: readonly string[],
+  moduleIdsInput: readonly string[],
 ): Promise<TModules> => {
-  const modules = await Promise.all(moduleIds.map((moduleId) => loadArcgisModule(moduleId)));
+  const moduleIds = moduleIdsInput.map(normalizeModuleId);
+  if (moduleIds.length === 0) return [] as unknown as TModules;
+
+  const cachedAtStart = new Set(moduleIds.filter((moduleId) => moduleCache.has(moduleId)));
+  cacheHits += cachedAtStart.size;
+  loadMissingModules(moduleIds);
+
+  const modules = await Promise.all(moduleIds.map((moduleId) => {
+    const cached = moduleCache.get(moduleId);
+    if (!cached) {
+      throw new Error(`ArcGIS module ${moduleId} was not cached after scheduling.`);
+    }
+    return cached;
+  }));
   return modules as unknown as TModules;
+};
+
+export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Promise<T> => {
+  const [module] = await loadArcgisModules<readonly [T]>([moduleIdInput]);
+  return module;
 };
 
 export const getArcgisModuleRuntimeSnapshot = (): ArcgisModuleRuntimeSnapshot => Object.freeze({

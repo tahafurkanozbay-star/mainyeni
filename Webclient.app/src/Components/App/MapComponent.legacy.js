@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../gis-engine/arcgisModuleRuntime";
 import Store from "../../Store/Store";
 import { MapReducer_ActionTypes } from "../../Store/Reducers/MapReducer";
 import { NavigationBar } from "./NavigationBar";

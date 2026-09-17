@@ -1,5 +1,5 @@
 import { React, Component } from "react";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 
 export class OverviewMapWidget extends Component {
 

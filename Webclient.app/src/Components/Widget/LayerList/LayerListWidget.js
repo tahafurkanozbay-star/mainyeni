@@ -2,7 +2,7 @@ import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { LayerBusiness } from "../../../Business/LayerBusiness";
 import { Constants_ServiceResultType } from "../../../Core/Constants";
 import { MapManager } from "../../../Store/Managers/MapManager";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import { Accordion, Form, Tab, Tabs } from "react-bootstrap";
 import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { ContainerLoading, NoResultsFound } from "../../Common/Loading";
@@ -97,7 +97,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
                         layerObject,
                         priority: normalizedPriority,
                     };
-                } catch (_) {
+                } catch {
                     return null;
                 }
             });
@@ -121,7 +121,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
                 return evaluateGroupVisibility({ ...group, layers: hydratedLayers });
             });
             setLayerGroups(hydratedGroups);
-        } catch (_) {
+        } catch {
             if (mountedRef.current && requestVersion === requestVersionRef.current) setLayerGroups([]);
         }
     };
@@ -210,7 +210,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
             const nextLegend = new Legend({ view: mapView, container: "legendDiv" });
             legendRef.current = nextLegend;
             setLegend(nextLegend);
-        } catch (_) {
+        } catch {
             disposeLegend();
         }
     };

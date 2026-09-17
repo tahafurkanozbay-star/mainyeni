@@ -1,4 +1,4 @@
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
 import { AppConfig } from "../Core/AppConfig";
 import { Constants_LayerType, Constants_ServiceResultType } from "../Core/Constants";
 import { MapManager } from "../Store/Managers/MapManager";
@@ -69,7 +69,7 @@ const normalizeExternalUrl = value => {
         const url = new URL(value, window.location.origin);
         if (url.protocol !== "http:" && url.protocol !== "https:") return null;
         return url.href;
-    } catch (error) {
+    } catch {
         return null;
     }
 };
@@ -405,7 +405,7 @@ export const CommonBusiness = {
                     slider.appendChild(slides);
                     mediaSection.appendChild(slider);
                 }
-            } catch (error) {
+            } catch {
                 appendTextBlock(mediaSection, "popup-description", "Görseller yüklenemedi.");
             }
             if (mediaSection.childNodes.length) sections.appendChild(mediaSection);

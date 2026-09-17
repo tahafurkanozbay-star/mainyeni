@@ -1,4 +1,4 @@
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
 import { Constants_ServiceResultType } from "../Core/Constants";
 import { stableQueryKey } from "../gis-engine/spatialEngine";
 import {
@@ -11,6 +11,10 @@ const DEFAULT_PAGE_SIZE = 1000;
 const MAX_PAGE_SIZE = 2000;
 const DEFAULT_MAX_RECORDS = 10000;
 const MAX_ALL_RECORDS = 100000;
+const QUERY_MODULE_IDS = Object.freeze([
+    "esri/tasks/QueryTask",
+    "esri/tasks/support/Query"
+]);
 
 let queryModulesPromise = null;
 const queryRuntime = createQueryRuntime({
@@ -21,10 +25,7 @@ const queryRuntime = createQueryRuntime({
 
 const loadQueryModules = () => {
     if (!queryModulesPromise) {
-        queryModulesPromise = loadModules([
-            "esri/tasks/QueryTask",
-            "esri/tasks/support/Query"
-        ]).catch((error) => {
+        queryModulesPromise = loadModules(QUERY_MODULE_IDS).catch((error) => {
             queryModulesPromise = null;
             throw error;
         });
@@ -102,17 +103,15 @@ const createQueryOptions = (options = {}, spatial = false) => {
     const resultRecordCount = toNonNegativeInteger(options.resultRecordCount);
 
     if (spatial) {
-        const {
-            url,
-            signal,
-            cache,
-            live,
-            ttlMs,
-            cacheTags,
-            pageSize,
-            maxRecords,
-            ...queryOptions
-        } = options;
+        const queryOptions = { ...options };
+        delete queryOptions.url;
+        delete queryOptions.signal;
+        delete queryOptions.cache;
+        delete queryOptions.live;
+        delete queryOptions.ttlMs;
+        delete queryOptions.cacheTags;
+        delete queryOptions.pageSize;
+        delete queryOptions.maxRecords;
         if (resultOffset === null) delete queryOptions.resultOffset;
         else queryOptions.resultOffset = resultOffset;
         if (resultRecordCount === null) delete queryOptions.resultRecordCount;
