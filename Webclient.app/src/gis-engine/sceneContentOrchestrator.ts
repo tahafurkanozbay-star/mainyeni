@@ -608,7 +608,7 @@ export const createSceneContentOrchestrator = (
     record.status = 'registered';
     enqueue(record);
     await scheduleDrain();
-    return record.status === 'ready' || record.status === 'hidden';
+    return ['ready', 'hidden'].includes(String(records.get(id)?.status));
   };
 
   const updateBudget = (limits: Partial<SceneBudgetLimits>): SceneContentSnapshot => {
