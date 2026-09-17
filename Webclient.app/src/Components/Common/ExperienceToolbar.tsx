@@ -44,6 +44,8 @@ const handleToolbarKeyDown = (event: KeyboardEvent<HTMLButtonElement>, orientati
 
 export const ExperienceToolbar = ({ label, actions, orientation = 'horizontal', className = '' }: ExperienceToolbarProps): ReactNode => {
   const id = useId();
+  const firstEnabledIndex = actions.findIndex((action) => !action.disabled);
+
   return (
     <div className={`experience-toolbar experience-toolbar--${orientation} ${className}`.trim()} role="toolbar" aria-label={label} aria-orientation={orientation}>
       {actions.map((action, index) => (
@@ -55,7 +57,7 @@ export const ExperienceToolbar = ({ label, actions, orientation = 'horizontal', 
           aria-label={action.label}
           aria-pressed={action.pressed}
           disabled={action.disabled}
-          tabIndex={index === 0 ? 0 : -1}
+          tabIndex={index === firstEnabledIndex ? 0 : -1}
           onClick={action.onActivate}
           onKeyDown={(event) => handleToolbarKeyDown(event, orientation)}
         >
