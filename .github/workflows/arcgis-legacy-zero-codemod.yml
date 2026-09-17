@@ -1,0 +1,37 @@
+name: ArcGIS Legacy Zero Codemod
+
+on:
+  push:
+    branches:
+      - agent/arcgis-legacy-zero-20260917
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, '[arcgis-migration]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/arcgis-legacy-zero-20260917
+          fetch-depth: 0
+
+      - name: Apply deterministic codemod
+        run: node .github/scripts/arcgis-legacy-zero.mjs
+
+      - name: Verify migration diff
+        run: |
+          git diff --check
+          test -n "$(git status --porcelain)"
+
+      - name: Commit migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Webclient.app/src
+          git commit -m "refactor(gis): eliminate direct legacy loader consumers [arcgis-migration]"
+          git push origin HEAD:agent/arcgis-legacy-zero-20260917
