@@ -12,6 +12,7 @@
     "src/gis-engine/identifyRuntime.ts",
     "src/gis-engine/spatialEngine.ts"
   ],
+  "include": [],
   "exclude": [
     "node_modules",
     "build",
