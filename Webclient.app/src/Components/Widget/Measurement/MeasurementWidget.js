@@ -42,7 +42,7 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
         if (!controller) return;
         try {
             await controller.ensureWidget();
-        } catch (_) {
+        } catch {
             // State subscription exposes the loading error; the widget shell stays usable.
         }
     };
@@ -56,7 +56,7 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
                 return;
             }
             await controller.setTool(toolName);
-        } catch (_) {
+        } catch {
             // Unsupported/load errors are reflected by controller state.
         }
     };
