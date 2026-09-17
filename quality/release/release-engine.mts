@@ -27,6 +27,7 @@ import { auditGis } from './gis-audit.mts';
 import { auditModernization } from './modernization-audit.mts';
 import { auditNetwork } from './network-audit.mts';
 import { auditPerformance } from './performance-audit.mts';
+import { auditRuntimeResilience } from './runtime-resilience-audit.mts';
 import { scanSource } from './source-audit.mts';
 import { auditTestContracts } from './test-contracts.mts';
 import { auditUx } from './ux-audit.mts';
@@ -104,7 +105,7 @@ export function regressionFindings(delta: RegressionDelta): Finding[] {
 
 export async function runReleaseEngine(inventory: RepositoryInventory, context: ReleaseContext, options: ReleaseEngineOptions = {}, baseline?: BaselineSnapshot): Promise<ReleaseExecution> {
   const thresholds = mergedThresholds(options.thresholds);
-  const sections: AuditSection<unknown>[] = [auditModernization(inventory), scanSource(inventory), auditDependencies(inventory), auditNetwork(inventory), auditGis(inventory), auditUx(inventory), auditPerformance(inventory), auditDataIntegrity(inventory), auditTestContracts(inventory)];
+  const sections: AuditSection<unknown>[] = [auditModernization(inventory), scanSource(inventory), auditDependencies(inventory), auditNetwork(inventory), auditGis(inventory), auditUx(inventory), auditPerformance(inventory), auditDataIntegrity(inventory), auditRuntimeResilience(inventory), auditTestContracts(inventory)];
   let findings = flattenFindings(sections); let decision = decideReleaseGate(findings, thresholds);
   let report: ReleaseReport = { schemaVersion: 1, context, inventory, sections, findings, decision, fingerprint: reportFingerprint(context, inventory, findings) };
   if (!baseline) return { report };
