@@ -1,4 +1,4 @@
-import { loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
+import { evictArcgisModules, loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
 import { Constants_ServiceResultType } from "../Core/Constants";
 import { stableQueryKey } from "../gis-engine/spatialEngine";
 import {
@@ -11,6 +11,10 @@ const DEFAULT_PAGE_SIZE = 1000;
 const MAX_PAGE_SIZE = 2000;
 const DEFAULT_MAX_RECORDS = 10000;
 const MAX_ALL_RECORDS = 100000;
+const QUERY_MODULE_IDS = Object.freeze([
+    "esri/tasks/QueryTask",
+    "esri/tasks/support/Query"
+]);
 
 let queryModulesPromise = null;
 const queryRuntime = createQueryRuntime({
@@ -21,10 +25,7 @@ const queryRuntime = createQueryRuntime({
 
 const loadQueryModules = () => {
     if (!queryModulesPromise) {
-        queryModulesPromise = loadModules([
-            "esri/tasks/QueryTask",
-            "esri/tasks/support/Query"
-        ]).catch((error) => {
+        queryModulesPromise = loadModules(QUERY_MODULE_IDS).catch((error) => {
             queryModulesPromise = null;
             throw error;
         });
@@ -314,6 +315,7 @@ export const invalidateGisQueryCacheTag = (tag) => queryRuntime.invalidateTag(ta
 export const clearGisQueryRuntime = () => {
     queryRuntime.clear({ abortInFlight: true });
     queryModulesPromise = null;
+    evictArcgisModules(QUERY_MODULE_IDS);
 };
 
 export const configureGisQueryRuntime = (options = {}) => queryRuntime.configure(options);
