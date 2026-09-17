@@ -7,3 +7,4 @@ export * from './privacyTelemetry';
 export * from './stateStore';
 export * from './runtimeKernel';
 export * from './supervision';
+export * from './admissionController';
