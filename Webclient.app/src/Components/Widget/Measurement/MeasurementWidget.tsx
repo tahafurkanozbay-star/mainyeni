@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentType } from 'react';
 import { CommonQueryWindowTools } from '../../Query/_Common/CommonQueryWindowTools';
 import { ExperienceStatus, type ExperienceStatusTone } from '../../Common/ExperienceStatus';
 import MapManager from '../../../Store/Managers/MapManager';
@@ -21,6 +21,17 @@ interface MeasurementWidgetProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
 }
+
+interface QueryWindowToolsProps {
+  readonly windowManager: WindowManagerLike;
+  readonly windowId: string;
+  readonly showNearbySearch: boolean;
+  readonly showMapSelect: boolean;
+  readonly setQueryField: (field: string, value: unknown) => void;
+  readonly query: unknown;
+}
+
+const QueryWindowTools = CommonQueryWindowTools as unknown as ComponentType<QueryWindowToolsProps>;
 
 export interface MeasurementWidgetHandle {
   readonly id: string;
@@ -140,7 +151,7 @@ export const MeasurementWidget = forwardRef<MeasurementWidgetHandle, Measurement
       <div className="common-query-window-header">
         <img className="common-query-window-header-icon" src="images/icons/toolbar/olcumaraci.png" alt="" />
         <span id={`${id}-title`}>Ölçüm Araçları</span>
-        <CommonQueryWindowTools windowManager={windowManager} windowId={id} showNearbySearch={false} showMapSelect={false} setQueryField={() => undefined} query={null} />
+        <QueryWindowTools windowManager={windowManager} windowId={id} showNearbySearch={false} showMapSelect={false} setQueryField={() => undefined} query={null} />
       </div>
       <div className="common-query-window-body layer-list-window-body measurement-widget__body">
         <ExperienceStatus tone={presentation.tone} live={state.status === 'error' ? 'assertive' : 'polite'} busy={busy}>{presentation.text}</ExperienceStatus>
