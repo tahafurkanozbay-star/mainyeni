@@ -8,3 +8,4 @@ export * from './stateStore';
 export * from './runtimeKernel';
 export * from './supervision';
 export * from './admissionController';
+export * from './pressureMonitor';
