@@ -102,16 +102,16 @@ const hasLegacyLoaderImport = (file: string): boolean => {
 };
 
 describe('ArcGIS module loading boundary', () => {
-  it('does not grow direct legacy-loader consumers beyond the migration allowlist', () => {
+  it('keeps the direct legacy-loader consumer set equal to the migration allowlist', () => {
     const sourceRoot = resolve(process.cwd(), 'src');
-    const unexpectedConsumers = collectSourceFiles(sourceRoot)
+    const actualConsumers = collectSourceFiles(sourceRoot)
       .filter((file) => !file.includes('.test.'))
       .filter(hasLegacyLoaderImport)
       .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
       .filter((file) => file !== LEGACY_TRANSPORT_BOUNDARY)
-      .filter((file) => !LEGACY_IMPORT_ALLOWLIST.has(file))
       .sort();
+    const allowedConsumers = [...LEGACY_IMPORT_ALLOWLIST].sort();
 
-    expect(unexpectedConsumers).toEqual([]);
+    expect(actualConsumers).toEqual(allowedConsumers);
   });
 });
