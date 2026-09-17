@@ -154,7 +154,7 @@ jobs:
           git -C .. worktree add --detach /tmp/vitest-baseline "$BASE_SHA"
           trap 'git -C .. worktree remove --force /tmp/vitest-baseline >/dev/null 2>&1 || true' EXIT
           (
-            cd /tmp/typecheck-baseline/Webclient.app
+            cd /tmp/vitest-baseline/Webclient.app
             npm ci --ignore-scripts --no-audit --no-fund >/tmp/vitest-baseline-install.log 2>&1
             set +e
             npx vitest run --reporter=json --outputFile=/tmp/baseline-vitest.json
