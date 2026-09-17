@@ -1,0 +1,74 @@
+{
+  "services": [
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "YAĞMUR SUYU ELEMAN",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/portal/sharing/servers/75d8d74b9476492c89f7ab3cecca0326/rest/services/ttt/yag_eleman/MapServer/0"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "YAĞMUR SUYU BORU",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/portal/sharing/servers/7f7cfe83777e48f9a02ee1ea0cc8e3d7/rest/services/ttt/yag_boru/MapServer/0"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "PİS SU BORU",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/portal/sharing/servers/7e0c8381e1094ebf816c2d2fd09a6c77/rest/services/ttt/pis_boru/MapServer/0"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "PİS SU ELEMAN",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/portal/sharing/servers/3d6dda3d02c24072b026f43bd39c99f2/rest/services/ttt/pis_eleman/MapServer/0"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "İÇME SUYU ELEMAN",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/portal/sharing/servers/2813d66314144a9b9d51644d860e0002/rest/services/ttt/ic_eleman/MapServer/0"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "İÇME SUYU BORU",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/portal/sharing/servers/0e6a64c5fe7245499015bc9272603aa5/rest/services/ttt/ic_boru/MapServer/0"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "UYGULAMA İMAR PLANI (UIP ESRI3)",
+      "servisTuruAdi": "MapServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/server/rest/services/plan/uip_esri3/MapServer"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "SINIRLAR",
+      "servisTuruAdi": "FeatureServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/server/rest/services/Hosted/S%C4%B1n%C4%B1rlar/FeatureServer/1"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "3D1234 WFL1",
+      "servisTuruAdi": "FeatureServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/server/rest/services/Hosted/3D1234_WFL1/FeatureServer/1"
+    },
+    {
+      "ustKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "metaveriSahibiKurumAdi": "ANKARA BÜYÜKŞEHİR BELEDİYESİ",
+      "cografiVeriKatmanAdi": "3D1234 WSL2",
+      "servisTuruAdi": "SceneServer",
+      "tokenUrl": "https://baskentcbs.ankara.bel.tr/server/rest/services/Hosted/3D1234_WSL2/SceneServer"
+    }
+  ]
+}
