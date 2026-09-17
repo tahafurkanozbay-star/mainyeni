@@ -12,16 +12,260 @@ export const GIS_LAYER_STATE = Object.freeze({
   EVICTED: 'evicted',
   FAILED: 'failed',
   DISPOSED: 'disposed',
-});
+} as const);
+
+export type GisLayerState = typeof GIS_LAYER_STATE[keyof typeof GIS_LAYER_STATE];
+
+export interface LayerLifecycleRuntimeErrorDetails {
+  code?: string;
+  layerId?: string | null;
+  cause?: unknown;
+}
 
 export class LayerLifecycleRuntimeError extends Error {
-  constructor(message, details = {}) {
-    super(message);
+  readonly code: string;
+  readonly layerId: string | null;
+  override readonly cause: unknown;
+
+  constructor(message: string, details: LayerLifecycleRuntimeErrorDetails = {}) {
+    super(message, details.cause === undefined ? undefined : { cause: details.cause });
     this.name = 'LayerLifecycleRuntimeError';
-    this.code = details.code || 'LAYER_LIFECYCLE_ERROR';
-    this.layerId = details.layerId || null;
+    this.code = details.code ?? 'LAYER_LIFECYCLE_ERROR';
+    this.layerId = details.layerId ?? null;
     this.cause = details.cause;
   }
+}
+
+export interface LayerLifecycleViewLike extends Record<string, unknown> {
+  id?: unknown;
+  uid?: unknown;
+  type?: unknown;
+  viewType?: unknown;
+}
+
+export interface LayerLifecycleDescriptor extends Record<string, unknown> {
+  id?: unknown;
+  layerId?: unknown;
+  resourceUrl?: unknown;
+  url?: unknown;
+  instance?: unknown;
+  layer?: unknown;
+  visible?: boolean;
+  pinned?: boolean;
+  priority?: number;
+  estimatedBytes?: number;
+  adapters?: Partial<LayerLifecycleAdapters>;
+}
+
+export interface LayerLifecycleAdapterContext extends Readonly<Record<string, unknown>> {
+  readonly layerId: string;
+}
+
+export interface LayerLifecycleAttachContext extends LayerLifecycleAdapterContext {
+  readonly signal?: AbortSignal;
+}
+
+export interface LayerLifecycleDetachContext extends LayerLifecycleAdapterContext {
+  readonly viewKey: string | null;
+  readonly reason: string;
+}
+
+export interface LayerLifecycleVisibilityContext extends LayerLifecycleAdapterContext {
+  readonly reason: string;
+}
+
+export interface LayerLifecycleSuspendContext extends LayerLifecycleAdapterContext {
+  readonly viewKey: string | null;
+  readonly reason: string;
+}
+
+export interface LayerLifecycleAdapters {
+  create: (descriptor: Readonly<LayerLifecycleDescriptor>) => Promise<unknown> | unknown;
+  attach: (
+    instance: unknown,
+    view: unknown,
+    context: LayerLifecycleAttachContext,
+  ) => Promise<void> | void;
+  detach: (
+    instance: unknown,
+    context: LayerLifecycleDetachContext,
+  ) => Promise<void> | void;
+  destroy: (
+    instance: unknown,
+    context: LayerLifecycleVisibilityContext,
+  ) => Promise<void> | void;
+  setVisible: (
+    instance: unknown,
+    visible: boolean,
+    context: LayerLifecycleVisibilityContext,
+  ) => Promise<void> | void;
+  suspend: (
+    instance: unknown,
+    context: LayerLifecycleSuspendContext,
+  ) => Promise<void> | void;
+  resume: (
+    instance: unknown,
+    context: LayerLifecycleSuspendContext,
+  ) => Promise<void> | void;
+}
+
+export interface LayerLifecycleEvent extends Readonly<Record<string, unknown>> {
+  readonly type: string;
+  readonly timestamp: number;
+  readonly layerId: string | null;
+  readonly state: GisLayerState | null;
+}
+
+export interface LayerLifecycleRuntimeConfiguration {
+  maxResidentLayers?: number;
+  maxResidentBytes?: number;
+  maxVisibleLayers?: number;
+  defaultEstimatedBytes?: number;
+  idleTtlMs?: number;
+  now?: () => number;
+  adapters?: Partial<LayerLifecycleAdapters>;
+  onEvent?: (event: Readonly<LayerLifecycleEvent>) => void;
+  onListenerError?: (error: unknown, event: Readonly<Record<string, unknown>>) => void;
+}
+
+export interface LayerLifecycleEntrySnapshot {
+  readonly id: string;
+  readonly resourceUrl: string | null;
+  readonly state: GisLayerState;
+  readonly visible: boolean;
+  readonly pinned: boolean;
+  readonly priority: number;
+  readonly estimatedBytes: number;
+  readonly ownerCount: number;
+  readonly owners: readonly string[];
+  readonly resident: boolean;
+  readonly attachedViewKey: string | null;
+  readonly createdAt: number;
+  readonly lastAccessAt: number;
+  readonly lastStateChangeAt: number;
+  readonly failureCount: number;
+  readonly lastErrorCode: string | null;
+}
+
+export interface LayerLifecycleMetrics {
+  registered: number;
+  created: number;
+  attached: number;
+  detached: number;
+  suspended: number;
+  resumed: number;
+  evicted: number;
+  disposed: number;
+  failedTransitions: number;
+  retains: number;
+  releases: number;
+  budgetSweeps: number;
+  budgetEvictions: number;
+  visibilityDemotions: number;
+}
+
+export interface LayerLifecycleLimits {
+  readonly maxResidentLayers: number;
+  readonly maxResidentBytes: number;
+  readonly maxVisibleLayers: number;
+  readonly idleTtlMs: number;
+}
+
+export interface LayerLifecycleSnapshot {
+  readonly destroyed: boolean;
+  readonly layerCount: number;
+  readonly residentLayers: number;
+  readonly residentBytes: number;
+  readonly visibleLayers: number;
+  readonly limits: LayerLifecycleLimits;
+  readonly metrics: Readonly<LayerLifecycleMetrics>;
+  readonly layers: readonly LayerLifecycleEntrySnapshot[];
+  readonly listenerCount: number;
+}
+
+export interface LayerLifecycleSweepOptions {
+  reason?: string;
+  aggressive?: boolean;
+}
+
+export interface LayerLifecycleSweepResult {
+  readonly evicted: number;
+  readonly residentLayers: number;
+  readonly residentBytes: number;
+}
+
+export interface LayerLifecycleEvictOptions {
+  force?: boolean;
+  reason?: string;
+}
+
+export interface LayerLifecycleAttachOptions {
+  signal?: AbortSignal;
+  visible?: boolean;
+}
+
+export interface LayerLifecycleVisibilityOptions {
+  reason?: string;
+}
+
+export interface LayerLifecycleResumeOptions extends LayerLifecycleVisibilityOptions {
+  visible?: boolean;
+}
+
+export interface LayerLifecycleBudgetUpdate {
+  maxResidentLayers?: number;
+  maxResidentBytes?: number;
+  maxBytes?: number;
+  maxVisibleLayers?: number;
+  idleTtlMs?: number;
+}
+
+export interface LayerLifecycleRuntime {
+  registerLayer: (layerId: unknown, descriptor?: LayerLifecycleDescriptor) => LayerLifecycleEntrySnapshot;
+  retain: (layerId: unknown, ownerId: unknown) => () => boolean;
+  release: (layerId: unknown, ownerId: unknown) => boolean;
+  ensureResident: (layerId: unknown) => Promise<unknown>;
+  attach: (layerId: unknown, view: unknown, options?: LayerLifecycleAttachOptions) => Promise<unknown>;
+  detach: (layerId: unknown, reason?: string) => Promise<boolean>;
+  setVisible: (layerId: unknown, visible: unknown, options?: LayerLifecycleVisibilityOptions) => Promise<boolean>;
+  suspend: (layerId: unknown, reason?: string) => Promise<boolean>;
+  resume: (layerId: unknown, options?: LayerLifecycleResumeOptions) => Promise<boolean>;
+  evict: (layerId: unknown, options?: LayerLifecycleEvictOptions) => Promise<boolean>;
+  dispose: (layerId: unknown, options?: LayerLifecycleVisibilityOptions) => Promise<boolean>;
+  sweep: (options?: LayerLifecycleSweepOptions) => Promise<LayerLifecycleSweepResult>;
+  updateBudgets: (update?: LayerLifecycleBudgetUpdate) => Promise<LayerLifecycleSweepResult>;
+  touch: (layerId: unknown) => LayerLifecycleEntrySnapshot;
+  getLayer: (layerId: unknown) => LayerLifecycleEntrySnapshot | null;
+  subscribe: (listener: (event: Readonly<LayerLifecycleEvent>) => void) => () => boolean;
+  getSnapshot: () => LayerLifecycleSnapshot;
+  destroy: () => Promise<void>;
+}
+
+interface InternalLayerEntry {
+  id: string;
+  resourceUrl: string | null;
+  descriptor: LayerLifecycleDescriptor;
+  state: GisLayerState;
+  instance: unknown | null;
+  owners: Set<string>;
+  visible: boolean;
+  pinned: boolean;
+  priority: number;
+  estimatedBytes: number;
+  attachedViewKey: string | null;
+  createdAt: number;
+  lastAccessAt: number;
+  lastStateChangeAt: number;
+  failureCount: number;
+  lastError: LayerLifecycleRuntimeError | null;
+  transition: Promise<unknown> | null;
+}
+
+interface EventBus {
+  emit: (event: Readonly<LayerLifecycleEvent>) => void;
+  subscribe: (listener: (event: Readonly<LayerLifecycleEvent>) => void) => () => boolean;
+  clear: () => void;
+  size: () => number;
 }
 
 const DEFAULTS = Object.freeze({
@@ -32,24 +276,35 @@ const DEFAULTS = Object.freeze({
   idleTtlMs: 2 * 60 * 1000,
 });
 
-const finite = (value, fallback = null) => {
+const finite = (value: unknown, fallback: number | null = null): number => {
   const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
+  return Number.isFinite(numeric) ? numeric : (fallback ?? 0);
 };
 
-const positiveInteger = (value, fallback, max = Number.MAX_SAFE_INTEGER) => {
-  const numeric = finite(value);
-  if (numeric === null || numeric <= 0) return fallback;
+const positiveInteger = (
+  value: unknown,
+  fallback: number,
+  max = Number.MAX_SAFE_INTEGER,
+): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
   return Math.min(max, Math.max(1, Math.floor(numeric)));
 };
 
-const nonNegative = (value, fallback = 0) => {
-  const numeric = finite(value);
-  return numeric !== null && numeric >= 0 ? numeric : fallback;
+const nonNegative = (value: unknown, fallback = 0): number => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
 };
 
-const normalizeLayerId = (value) => {
-  const raw = typeof value === 'object' ? value?.id ?? value?.layerId : value;
+const record = (value: unknown): Record<string, unknown> => (
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+);
+
+const normalizeLayerId = (value: unknown): string => {
+  const source = record(value);
+  const raw = value !== null && typeof value === 'object' ? source.id ?? source.layerId : value;
   const id = String(raw ?? '').trim();
   if (!id) {
     throw new LayerLifecycleRuntimeError('A stable GIS layer id is required.', {
@@ -59,7 +314,7 @@ const normalizeLayerId = (value) => {
   return id;
 };
 
-const normalizeOwner = (value) => {
+const normalizeOwner = (value: unknown): string => {
   const owner = String(value ?? '').trim();
   if (!owner) {
     throw new LayerLifecycleRuntimeError('Layer ownership requires a stable owner id.', {
@@ -69,26 +324,28 @@ const normalizeOwner = (value) => {
   return owner;
 };
 
-const viewIdentity = (view) => {
+const viewIdentity = (view: unknown): string | null => {
   if (view === null || view === undefined) return null;
   if (typeof view === 'string' || typeof view === 'number') return String(view);
-  return String(view.id ?? view.uid ?? view.type ?? view.viewType ?? 'anonymous-view');
+  const source = record(view);
+  return String(source.id ?? source.uid ?? source.type ?? source.viewType ?? 'anonymous-view');
 };
 
-const createEventBus = (onListenerError) => {
-  const listeners = new Set();
+const createEventBus = (
+  onListenerError: LayerLifecycleRuntimeConfiguration['onListenerError'],
+): EventBus => {
+  const listeners = new Set<(event: Readonly<LayerLifecycleEvent>) => void>();
   return {
     emit(event) {
       [...listeners].forEach((listener) => {
         try {
           listener(event);
-        } catch (error) {
+        } catch (error: unknown) {
           onListenerError?.(error, event);
         }
       });
     },
     subscribe(listener) {
-      if (typeof listener !== 'function') return () => {};
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
@@ -101,19 +358,21 @@ const createEventBus = (onListenerError) => {
   };
 };
 
-const defaultAdapters = Object.freeze({
-  create: async (descriptor) => descriptor.instance || descriptor.layer || { id: descriptor.id },
-  attach: async () => {},
-  detach: async () => {},
-  destroy: async () => {},
+const defaultAdapters: Readonly<LayerLifecycleAdapters> = Object.freeze({
+  create: async (descriptor) => descriptor.instance ?? descriptor.layer ?? { id: descriptor.id },
+  attach: async () => undefined,
+  detach: async () => undefined,
+  destroy: async () => undefined,
   setVisible: async (instance, visible) => {
-    if (instance && typeof instance === 'object' && 'visible' in instance) instance.visible = visible;
+    if (instance && typeof instance === 'object' && 'visible' in instance) {
+      (instance as { visible?: boolean }).visible = visible;
+    }
   },
-  suspend: async () => {},
-  resume: async () => {},
+  suspend: async () => undefined,
+  resume: async () => undefined,
 });
 
-const cloneEntry = (entry) => Object.freeze({
+const cloneEntry = (entry: InternalLayerEntry): LayerLifecycleEntrySnapshot => Object.freeze({
   id: entry.id,
   resourceUrl: entry.resourceUrl,
   state: entry.state,
@@ -129,13 +388,15 @@ const cloneEntry = (entry) => Object.freeze({
   lastAccessAt: entry.lastAccessAt,
   lastStateChangeAt: entry.lastStateChangeAt,
   failureCount: entry.failureCount,
-  lastErrorCode: entry.lastError?.code || null,
+  lastErrorCode: entry.lastError?.code ?? null,
 });
 
-export const createLayerLifecycleRuntime = (configuration = {}) => {
+export const createLayerLifecycleRuntime = (
+  configuration: LayerLifecycleRuntimeConfiguration = {},
+): LayerLifecycleRuntime => {
   const clock = typeof configuration.now === 'function' ? configuration.now : () => Date.now();
   const eventBus = createEventBus(configuration.onListenerError);
-  const layers = new Map();
+  const layers = new Map<string, InternalLayerEntry>();
   let destroyed = false;
   let maxResidentLayers = positiveInteger(
     configuration.maxResidentLayers,
@@ -153,7 +414,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     1000,
   );
   let idleTtlMs = nonNegative(configuration.idleTtlMs, DEFAULTS.idleTtlMs);
-  const metrics = {
+  const metrics: LayerLifecycleMetrics = {
     registered: 0,
     created: 0,
     attached: 0,
@@ -170,7 +431,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     visibilityDemotions: 0,
   };
 
-  const assertActive = () => {
+  const assertActive = (): void => {
     if (destroyed) {
       throw new LayerLifecycleRuntimeError('Layer lifecycle runtime has been destroyed.', {
         code: 'RUNTIME_DESTROYED',
@@ -178,24 +439,29 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     }
   };
 
-  const emit = (type, entry, details = {}) => {
-    const event = Object.freeze({
+  const emit = (
+    type: string,
+    entry: InternalLayerEntry | null,
+    details: Readonly<Record<string, unknown>> = {},
+  ): Readonly<LayerLifecycleEvent> => {
+    const detailLayerId = typeof details.layerId === 'string' ? details.layerId : null;
+    const event: Readonly<LayerLifecycleEvent> = Object.freeze({
       type,
       timestamp: clock(),
-      layerId: entry?.id || details.layerId || null,
-      state: entry?.state || null,
+      layerId: entry?.id ?? detailLayerId,
+      state: entry?.state ?? null,
       ...details,
     });
     eventBus.emit(event);
     try {
       configuration.onEvent?.(event);
-    } catch (error) {
+    } catch (error: unknown) {
       configuration.onListenerError?.(error, event);
     }
     return event;
   };
 
-  const requireEntry = (layerId) => {
+  const requireEntry = (layerId: unknown): InternalLayerEntry => {
     const id = normalizeLayerId(layerId);
     const entry = layers.get(id);
     if (!entry || entry.state === GIS_LAYER_STATE.DISPOSED) {
@@ -207,13 +473,17 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return entry;
   };
 
-  const adaptersFor = (entry) => ({
+  const adaptersFor = (entry: InternalLayerEntry): LayerLifecycleAdapters => ({
     ...defaultAdapters,
-    ...(configuration.adapters || {}),
-    ...(entry.descriptor.adapters || {}),
+    ...configuration.adapters,
+    ...entry.descriptor.adapters,
   });
 
-  const setState = (entry, state, details = {}) => {
+  const setState = (
+    entry: InternalLayerEntry,
+    state: GisLayerState,
+    details: Readonly<Record<string, unknown>> = {},
+  ): void => {
     const previous = entry.state;
     entry.state = state;
     entry.lastStateChangeAt = clock();
@@ -225,7 +495,11 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     });
   };
 
-  const failTransition = (entry, error, operation) => {
+  const failTransition = (
+    entry: InternalLayerEntry,
+    error: unknown,
+    operation: string,
+  ): LayerLifecycleRuntimeError => {
     const wrapped = error instanceof LayerLifecycleRuntimeError
       ? error
       : new LayerLifecycleRuntimeError(`Layer lifecycle ${operation} failed.`, {
@@ -240,11 +514,15 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return wrapped;
   };
 
-  const serialize = (entry, operation, task) => {
-    const previous = entry.transition || Promise.resolve();
-    let current;
+  const serialize = <T>(
+    entry: InternalLayerEntry,
+    operation: string,
+    task: () => Promise<T> | T,
+  ): Promise<T> => {
+    const previous = entry.transition ?? Promise.resolve();
+    let current: Promise<T>;
     current = previous
-      .catch(() => {})
+      .catch(() => undefined)
       .then(async () => {
         if (entry.state === GIS_LAYER_STATE.DISPOSED) {
           throw new LayerLifecycleRuntimeError('Disposed GIS layer cannot transition.', {
@@ -254,7 +532,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
         }
         try {
           return await task();
-        } catch (error) {
+        } catch (error: unknown) {
           throw failTransition(entry, error, operation);
         }
       })
@@ -265,7 +543,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return current;
   };
 
-  const createResidentUnsafe = async (entry) => {
+  const createResidentUnsafe = async (entry: InternalLayerEntry): Promise<unknown> => {
     if (entry.instance) return entry.instance;
     setState(entry, GIS_LAYER_STATE.CREATING);
     const adapters = adaptersFor(entry);
@@ -288,7 +566,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return instance;
   };
 
-  const detachUnsafe = async (entry, reason = 'detach') => {
+  const detachUnsafe = async (entry: InternalLayerEntry, reason = 'detach'): Promise<boolean> => {
     if (!entry.instance) return false;
     if (
       entry.state !== GIS_LAYER_STATE.ATTACHED
@@ -312,44 +590,45 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return true;
   };
 
-  const evictUnsafe = async (entry, options = {}) => {
+  const evictUnsafe = async (
+    entry: InternalLayerEntry,
+    options: LayerLifecycleEvictOptions = {},
+  ): Promise<boolean> => {
     if (!entry.instance) {
       if (entry.state !== GIS_LAYER_STATE.EVICTED) setState(entry, GIS_LAYER_STATE.EVICTED);
       return false;
     }
     if (!options.force && (entry.pinned || entry.owners.size > 0)) return false;
-    setState(entry, GIS_LAYER_STATE.EVICTING, { reason: options.reason || 'evict' });
+    const reason = options.reason ?? 'evict';
+    setState(entry, GIS_LAYER_STATE.EVICTING, { reason });
     if (entry.attachedViewKey !== null || entry.state === GIS_LAYER_STATE.SUSPENDED) {
-      await detachUnsafe(entry, options.reason || 'evict');
-      setState(entry, GIS_LAYER_STATE.EVICTING, { reason: options.reason || 'evict' });
+      await detachUnsafe(entry, reason);
+      setState(entry, GIS_LAYER_STATE.EVICTING, { reason });
     }
     const instance = entry.instance;
     entry.instance = null;
     entry.attachedViewKey = null;
     entry.visible = false;
-    await adaptersFor(entry).destroy(instance, {
-      layerId: entry.id,
-      reason: options.reason || 'evict',
-    });
+    await adaptersFor(entry).destroy(instance, { layerId: entry.id, reason });
     metrics.evicted += 1;
-    setState(entry, GIS_LAYER_STATE.EVICTED, { reason: options.reason || 'evict' });
-    emit('layer-evicted', entry, { reason: options.reason || 'evict' });
+    setState(entry, GIS_LAYER_STATE.EVICTED, { reason });
+    emit('layer-evicted', entry, { reason });
     return true;
   };
 
-  const residentEntries = () => [...layers.values()].filter((entry) => Boolean(entry.instance));
+  const residentEntries = (): InternalLayerEntry[] => [...layers.values()].filter((entry) => Boolean(entry.instance));
 
-  const residentBytes = () => residentEntries().reduce((sum, entry) => sum + entry.estimatedBytes, 0);
+  const residentBytes = (): number => residentEntries().reduce((sum, entry) => sum + entry.estimatedBytes, 0);
 
-  const visibleEntries = () => [...layers.values()].filter((entry) => (
-    entry.instance
+  const visibleEntries = (): InternalLayerEntry[] => [...layers.values()].filter((entry) => (
+    Boolean(entry.instance)
     && entry.visible
     && (entry.state === GIS_LAYER_STATE.ATTACHED || entry.state === GIS_LAYER_STATE.SUSPENDED)
   ));
 
-  const evictionCandidates = (nowValue = clock()) => [...layers.values()]
+  const evictionCandidates = (nowValue = clock()): InternalLayerEntry[] => [...layers.values()]
     .filter((entry) => (
-      entry.instance
+      Boolean(entry.instance)
       && !entry.pinned
       && entry.owners.size === 0
       && entry.state !== GIS_LAYER_STATE.CREATING
@@ -365,7 +644,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
       return left.id.localeCompare(right.id);
     });
 
-  const visibilityCandidates = () => visibleEntries()
+  const visibilityCandidates = (): InternalLayerEntry[] => visibleEntries()
     .filter((entry) => !entry.pinned && entry.owners.size === 0)
     .sort((left, right) => {
       if (left.priority !== right.priority) return right.priority - left.priority;
@@ -373,13 +652,14 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
       return left.id.localeCompare(right.id);
     });
 
-  const demoteVisibility = async () => {
+  const demoteVisibility = async (): Promise<number> => {
     let visible = visibleEntries();
     if (visible.length <= maxVisibleLayers) return 0;
     let changed = 0;
     const candidates = visibilityCandidates();
     for (const entry of candidates) {
       if (visible.length <= maxVisibleLayers) break;
+      if (!entry.instance) continue;
       await adaptersFor(entry).setVisible(entry.instance, false, {
         layerId: entry.id,
         reason: 'visible-layer-budget',
@@ -394,11 +674,11 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return changed;
   };
 
-  const sweep = async (options = {}) => {
+  const sweep = async (options: LayerLifecycleSweepOptions = {}): Promise<LayerLifecycleSweepResult> => {
     assertActive();
     metrics.budgetSweeps += 1;
     const nowValue = clock();
-    const reason = options.reason || 'budget-sweep';
+    const reason = options.reason ?? 'budget-sweep';
     await demoteVisibility();
     let residents = residentEntries().length;
     let bytes = residentBytes();
@@ -422,7 +702,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
         && bytes <= maxResidentBytes
       ) {
         const remainingIdle = candidates.some((candidate) => (
-          candidate.instance
+          Boolean(candidate.instance)
           && !candidate.pinned
           && candidate.owners.size === 0
           && idleTtlMs > 0
@@ -437,19 +717,17 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
       residentLayers: residents,
       residentBytes: bytes,
     });
-    return Object.freeze({
-      evicted,
-      residentLayers: residents,
-      residentBytes: bytes,
-    });
+    return Object.freeze({ evicted, residentLayers: residents, residentBytes: bytes });
   };
 
-  const registerLayer = (layerId, descriptor = {}) => {
+  const registerLayer = (
+    layerId: unknown,
+    descriptor: LayerLifecycleDescriptor = {},
+  ): LayerLifecycleEntrySnapshot => {
     assertActive();
     const id = normalizeLayerId(layerId);
-    const resourceUrl = descriptor.resourceUrl || descriptor.url
-      ? assertAllowedArcGisResourceUrl(descriptor.resourceUrl || descriptor.url)
-      : null;
+    const urlInput = descriptor.resourceUrl ?? descriptor.url;
+    const resourceUrl = urlInput ? assertAllowedArcGisResourceUrl(urlInput) : null;
     const existing = layers.get(id);
     if (existing) {
       if (
@@ -463,12 +741,8 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
           layerId: id,
         });
       }
-      existing.resourceUrl = resourceUrl || existing.resourceUrl;
-      existing.descriptor = {
-        ...existing.descriptor,
-        ...descriptor,
-        id,
-      };
+      existing.resourceUrl = resourceUrl ?? existing.resourceUrl;
+      existing.descriptor = { ...existing.descriptor, ...descriptor, id };
       existing.priority = finite(descriptor.priority, existing.priority);
       existing.pinned = descriptor.pinned === undefined ? existing.pinned : descriptor.pinned === true;
       existing.estimatedBytes = positiveInteger(
@@ -482,19 +756,20 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     }
 
     const timestamp = clock();
-    const entry = {
+    const instance = descriptor.instance ?? null;
+    const entry: InternalLayerEntry = {
       id,
       resourceUrl,
       descriptor: { ...descriptor, id },
-      state: GIS_LAYER_STATE.REGISTERED,
-      instance: descriptor.instance || null,
-      owners: new Set(),
+      state: instance ? GIS_LAYER_STATE.DETACHED : GIS_LAYER_STATE.REGISTERED,
+      instance,
+      owners: new Set<string>(),
       visible: descriptor.visible === true,
       pinned: descriptor.pinned === true,
       priority: finite(descriptor.priority, 100),
       estimatedBytes: positiveInteger(
         descriptor.estimatedBytes,
-        DEFAULTS.defaultEstimatedBytes,
+        configuration.defaultEstimatedBytes ?? DEFAULTS.defaultEstimatedBytes,
         1024 * 1024 * 1024,
       ),
       attachedViewKey: null,
@@ -505,17 +780,13 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
       lastError: null,
       transition: null,
     };
-    if (entry.instance) entry.state = GIS_LAYER_STATE.DETACHED;
     layers.set(id, entry);
     metrics.registered += 1;
-    emit('layer-registered', entry, {
-      resourceUrl,
-      estimatedBytes: entry.estimatedBytes,
-    });
+    emit('layer-registered', entry, { resourceUrl, estimatedBytes: entry.estimatedBytes });
     return cloneEntry(entry);
   };
 
-  const retain = (layerId, ownerId) => {
+  const retain = (layerId: unknown, ownerId: unknown): (() => boolean) => {
     assertActive();
     const entry = requireEntry(layerId);
     const owner = normalizeOwner(ownerId);
@@ -540,7 +811,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     };
   };
 
-  const release = (layerId, ownerId) => {
+  const release = (layerId: unknown, ownerId: unknown): boolean => {
     assertActive();
     const entry = requireEntry(layerId);
     const owner = normalizeOwner(ownerId);
@@ -553,13 +824,17 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return removed;
   };
 
-  const ensureResident = (layerId) => {
+  const ensureResident = (layerId: unknown): Promise<unknown> => {
     assertActive();
     const entry = requireEntry(layerId);
     return serialize(entry, 'create', () => createResidentUnsafe(entry));
   };
 
-  const attach = (layerId, view, options = {}) => {
+  const attach = (
+    layerId: unknown,
+    view: unknown,
+    options: LayerLifecycleAttachOptions = {},
+  ): Promise<unknown> => {
     assertActive();
     const entry = requireEntry(layerId);
     const viewKey = viewIdentity(view);
@@ -571,10 +846,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     }
     return serialize(entry, 'attach', async () => {
       await createResidentUnsafe(entry);
-      if (
-        entry.state === GIS_LAYER_STATE.ATTACHED
-        && entry.attachedViewKey === viewKey
-      ) {
+      if (entry.state === GIS_LAYER_STATE.ATTACHED && entry.attachedViewKey === viewKey) {
         entry.lastAccessAt = clock();
         return entry.instance;
       }
@@ -582,13 +854,20 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
         await detachUnsafe(entry, 'view-switch');
       }
       setState(entry, GIS_LAYER_STATE.ATTACHING, { viewKey });
-      await adaptersFor(entry).attach(entry.instance, view, {
-        layerId: entry.id,
-        signal: options.signal,
-      });
+      const instance = entry.instance;
+      if (!instance) {
+        throw new LayerLifecycleRuntimeError('Resident layer disappeared before attach.', {
+          code: 'MISSING_RESIDENT_INSTANCE',
+          layerId: entry.id,
+        });
+      }
+      const attachContext: LayerLifecycleAttachContext = options.signal === undefined
+        ? { layerId: entry.id }
+        : { layerId: entry.id, signal: options.signal };
+      await adaptersFor(entry).attach(instance, view, attachContext);
       entry.attachedViewKey = viewKey;
       entry.visible = options.visible === undefined ? true : options.visible === true;
-      await adaptersFor(entry).setVisible(entry.instance, entry.visible, {
+      await adaptersFor(entry).setVisible(instance, entry.visible, {
         layerId: entry.id,
         reason: 'attach',
       });
@@ -596,35 +875,38 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
       metrics.attached += 1;
       setState(entry, GIS_LAYER_STATE.ATTACHED, { viewKey });
       emit('layer-attached', entry, { viewKey, visible: entry.visible });
-      return entry.instance;
+      return instance;
     }).then(async (instance) => {
       await sweep({ reason: 'post-attach' });
       return instance;
     });
   };
 
-  const detach = (layerId, reason = 'manual') => {
+  const detach = (layerId: unknown, reason = 'manual'): Promise<boolean> => {
     assertActive();
     const entry = requireEntry(layerId);
     return serialize(entry, 'detach', () => detachUnsafe(entry, reason));
   };
 
-  const setVisible = (layerId, visible, options = {}) => {
+  const setVisible = (
+    layerId: unknown,
+    visible: unknown,
+    options: LayerLifecycleVisibilityOptions = {},
+  ): Promise<boolean> => {
     assertActive();
     const entry = requireEntry(layerId);
     const nextVisible = visible === true;
+    const reason = options.reason ?? 'manual';
     return serialize(entry, 'visibility', async () => {
       await createResidentUnsafe(entry);
+      if (!entry.instance) return false;
       await adaptersFor(entry).setVisible(entry.instance, nextVisible, {
         layerId: entry.id,
-        reason: options.reason || 'manual',
+        reason,
       });
       entry.visible = nextVisible;
       entry.lastAccessAt = clock();
-      emit('layer-visibility', entry, {
-        visible: nextVisible,
-        reason: options.reason || 'manual',
-      });
+      emit('layer-visibility', entry, { visible: nextVisible, reason });
       return nextVisible;
     }).then(async (result) => {
       if (result) await demoteVisibility();
@@ -632,7 +914,7 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     });
   };
 
-  const suspend = (layerId, reason = 'pressure') => {
+  const suspend = (layerId: unknown, reason = 'pressure'): Promise<boolean> => {
     assertActive();
     const entry = requireEntry(layerId);
     return serialize(entry, 'suspend', async () => {
@@ -656,7 +938,10 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     });
   };
 
-  const resume = (layerId, options = {}) => {
+  const resume = (
+    layerId: unknown,
+    options: LayerLifecycleResumeOptions = {},
+  ): Promise<boolean> => {
     assertActive();
     const entry = requireEntry(layerId);
     return serialize(entry, 'resume', async () => {
@@ -665,42 +950,48 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
         entry.lastAccessAt = clock();
         return false;
       }
+      if (!entry.instance) return false;
+      const reason = options.reason ?? 'manual';
       await adaptersFor(entry).resume(entry.instance, {
         layerId: entry.id,
         viewKey: entry.attachedViewKey,
-        reason: options.reason || 'manual',
+        reason,
       });
       const nextVisible = options.visible === undefined ? true : options.visible === true;
       await adaptersFor(entry).setVisible(entry.instance, nextVisible, {
         layerId: entry.id,
-        reason: options.reason || 'manual',
+        reason,
       });
       entry.visible = nextVisible;
       metrics.resumed += 1;
       setState(
         entry,
         entry.attachedViewKey ? GIS_LAYER_STATE.ATTACHED : GIS_LAYER_STATE.DETACHED,
-        { reason: options.reason || 'manual' },
+        { reason },
       );
       emit('layer-resumed', entry, { visible: nextVisible });
       return true;
     });
   };
 
-  const evict = (layerId, options = {}) => {
+  const evict = (
+    layerId: unknown,
+    options: LayerLifecycleEvictOptions = {},
+  ): Promise<boolean> => {
     assertActive();
     const entry = requireEntry(layerId);
     return serialize(entry, 'evict', () => evictUnsafe(entry, options));
   };
 
-  const dispose = (layerId, options = {}) => {
+  const dispose = (
+    layerId: unknown,
+    options: LayerLifecycleVisibilityOptions = {},
+  ): Promise<boolean> => {
     assertActive();
     const entry = requireEntry(layerId);
     return serialize(entry, 'dispose', async () => {
-      await evictUnsafe(entry, {
-        force: true,
-        reason: options.reason || 'dispose',
-      });
+      const reason = options.reason ?? 'dispose';
+      await evictUnsafe(entry, { force: true, reason });
       entry.owners.clear();
       entry.descriptor = {};
       entry.lastError = null;
@@ -708,12 +999,14 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
       entry.lastStateChangeAt = clock();
       metrics.disposed += 1;
       layers.delete(entry.id);
-      emit('layer-disposed', entry, { reason: options.reason || 'dispose' });
+      emit('layer-disposed', entry, { reason });
       return true;
     });
   };
 
-  const updateBudgets = (next = {}) => {
+  const updateBudgets = (
+    next: LayerLifecycleBudgetUpdate = {},
+  ): Promise<LayerLifecycleSweepResult> => {
     assertActive();
     maxResidentLayers = positiveInteger(next.maxResidentLayers, maxResidentLayers, 1000);
     maxResidentBytes = positiveInteger(
@@ -732,20 +1025,20 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     return sweep({ reason: 'budget-update' });
   };
 
-  const touch = (layerId) => {
+  const touch = (layerId: unknown): LayerLifecycleEntrySnapshot => {
     assertActive();
     const entry = requireEntry(layerId);
     entry.lastAccessAt = clock();
     return cloneEntry(entry);
   };
 
-  const getLayer = (layerId) => {
+  const getLayer = (layerId: unknown): LayerLifecycleEntrySnapshot | null => {
     const id = normalizeLayerId(layerId);
     const entry = layers.get(id);
     return entry ? cloneEntry(entry) : null;
   };
 
-  const snapshot = () => Object.freeze({
+  const snapshot = (): LayerLifecycleSnapshot => Object.freeze({
     destroyed,
     layerCount: layers.size,
     residentLayers: residentEntries().length,
@@ -766,14 +1059,14 @@ export const createLayerLifecycleRuntime = (configuration = {}) => {
     listenerCount: eventBus.size(),
   });
 
-  const destroy = async () => {
+  const destroy = async (): Promise<void> => {
     if (destroyed) return;
     const entries = [...layers.values()];
     for (const entry of entries) {
       try {
-        if (entry.transition) await entry.transition.catch(() => {});
+        if (entry.transition) await entry.transition.catch(() => undefined);
         await evictUnsafe(entry, { force: true, reason: 'runtime-destroy' });
-      } catch (error) {
+      } catch (error: unknown) {
         configuration.onListenerError?.(error, {
           type: 'destroy-error',
           layerId: entry.id,
