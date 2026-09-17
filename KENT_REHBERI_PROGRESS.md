@@ -8,21 +8,20 @@
 ## Deep Platform / Architecture — 2026-09-16 17:00 TRT
 - PR #72 delivered runtime supervision/toolchain/CI modernization with 4,944 additions and was squash merged as `3660cc87bc51a09d94297d7d752dc4bc2bbaa1fe`; the subsequent progress commit advanced main to `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`.
 
-## Deep Experience continuation — 2026-09-17 05:26 TRT
-- TUR / GÖREV: Deep Experience / Whole-Code Modernization; shared accessible GIS toolbar adoption on a real measurement surface.
-- BASE MAIN: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`; PR #74 remained current, open and `mergeable=true` at turn start.
+## Deep Experience continuation — 2026-09-17 06:23 TRT
+- TUR / GÖREV: Deep Experience / Whole-Code Modernization; exact-head CI remediation after shared measurement-toolbar adoption.
+- BASE MAIN: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`; PR #74 is open, canonical and GitHub reports `mergeable=true` at turn start.
 - BRANCH: `agent/experience-ui-20260916-1724-2dd3ce9`.
-- PR: #74 remains the canonical open Experience PR.
-- HEAD BEFORE THIS PASS: `2af036fb70cf4699e64f231983a6c94b6b96b5b6`; exact-head Platform Architecture Audit, Release QA and Webclient Quality all completed successfully.
-- MERGE DURUMU: NOT MERGED. Turn-start base...head = 421 additions / 30 deletions / 9 files, far below the mandatory 4,000 meaningful-additions gate.
-- ÖNEMLİ ÖZELLİKLER: `MeasurementWidget` now consumes the shared `ExperienceToolbar` instead of maintaining a separate ad-hoc toolbar. Area/distance pressed and loading-disabled state is preserved while the real GIS screen gains the shared roving-tabindex, Arrow/Home/End keyboard contract, focus behavior and toolbar semantics.
-- DEĞİŞEN DOSYALAR THIS PASS: `Webclient.app/src/Components/Widget/Measurement/MeasurementWidget.js`; this progress record.
-- COMMIT: measurement integration commit `3d8663bd9ca03b6c6cc6378f360827ba6e4d8f47` before this progress commit.
-- TESTLER / BUILD / CI: turn-start head `2af036fb...` passed Platform Architecture Audit, Release QA and Webclient Quality. Exact-head Actions must complete again for this integration; no PASS is claimed for the new head yet.
+- PR: #74 remains the canonical open Experience PR; turn-start base...head = 447 additions / 52 deletions / 10 files, below the mandatory 4,000 meaningful-additions gate.
+- HEAD BEFORE THIS PASS: `6de49c14bba008cc73d06e79759828f450d4375f`.
+- CI FINDING: Platform Architecture Audit completed successfully, but Webclient Quality and Release QA failed. Webclient Quality passed install, dependency/lockfile, Experience guard, Vite migration, production dependency audit and full lint visibility, then failed at `Strict lint on changed Webclient sources`; downstream TypeScript, Vitest and production-build stages were skipped.
+- REMEDIATION: measurement toolbar action callbacks now explicitly discard the async `setActiveTool` promise with `void` inside synchronous action handlers. This keeps the shared `ExperienceToolbarAction.onActivate: () => void` boundary explicit while retaining the existing controller error handling.
+- COMMIT: `ff2c23cdf92317e3c5f01babb70635cdcafb5501` before this progress commit.
+- TESTLER / BUILD / CI: no PASS claimed for the remediation head yet; Actions had not appeared at the immediate post-commit check. Exact-head Webclient Quality / Release QA / Platform Architecture Audit must be rechecked next turn.
 - NETWORK DEĞİŞİKLİKLERİ: none. No endpoint, WMS/WFS/WMTS, analytics, CDN, dependency or remote asset added.
-- GÜVENLİK / ACCESSIBILITY: native buttons and existing measurement controller remain authoritative; shared toolbar supplies one Tab entry point plus enabled-only Arrow/Home/End navigation. No secret, unsafe HTML or dynamic remote content introduced.
+- GÜVENLİK / ACCESSIBILITY: measurement buttons remain native through the shared toolbar; one Tab entry plus enabled-only Arrow/Home/End navigation remains intact. No unsafe HTML, secret or dynamic remote content introduced.
 - İKON EŞLEŞTİRME: unchanged; existing FontAwesome measurement glyphs remain presentation-only and no resolver/registry was duplicated.
-- MODERNİZASYON KARARI: apply the shared primitive to an existing production GIS widget rather than accumulating isolated design-system code with no screen adoption.
-- PERFORMANS ETKİSİ: two small action descriptors per render; no new timers, observers, requests or dependencies.
-- ÇÖZÜLEN HATALAR / UX BORCU: measurement controls now inherit deterministic keyboard toolbar navigation and consistent accessible focus behavior instead of two independent tab stops with no arrow navigation.
-- KALAN SORUNLAR / SONRAKİ GÖREV: verify exact-head CI; continue same PR while current/mergeable with additional real-screen panel/form/table/status integrations, 2D↔3D controls, remote-font cleanup and repo-native interaction/accessibility regressions until >=4,000 meaningful additions. Require second interaction/regression review and final main refresh before squash merge.
+- MODERNİZASYON KARARI: preserve the real-screen shared-toolbar integration and repair its strict quality boundary instead of reverting to the legacy ad-hoc toolbar.
+- PERFORMANS ETKİSİ: neutral; no new requests, timers, observers or dependencies.
+- MERGE DURUMU: NOT MERGED. 4,000 meaningful-addition gate is not met and exact-head mandatory CI is not yet successful.
+- KALAN SORUNLAR / SONRAKİ GÖREV: first recheck exact-head CI and inspect the precise strict-lint failure if it persists. Then continue the same canonical PR with substantive real-screen panel/form/table/status and 2D↔3D Experience integrations until >=4,000 meaningful additions; require second interaction/regression review and final main refresh before squash merge.
