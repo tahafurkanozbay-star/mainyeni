@@ -7,7 +7,7 @@ import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
 import { MapComponent } from './Components/App/MapComponent';
-import { Constants_LoadingStatus } from './Core/Constants';
+import { Constants_LoadingStatus, type LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { FullScreenLoading } from './Components/Common/Loading';
@@ -39,13 +39,10 @@ const describeBootstrapError = (error: unknown): string => {
 
 function App() {
   const windowManager = useWindowManager();
-  const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
+  const [configLoadStatus, setConfigLoadStatus] = useState<LoadingStatus>(Constants_LoadingStatus.LOADING);
   const [configErrorMessage, setConfigErrorMessage] = useState('');
 
   useEffect(() => {
-    // esri-loader must own both SDK script and stylesheet resolution. Keeping the
-    // version in one runtime contract prevents a 4.x JavaScript/CSS mismatch and
-    // avoids an unconditional ArcGIS stylesheet request before configuration is ready.
     setDefaultOptions({
       version: AppConfig.App.EsriApiVersion,
       css: true,
@@ -86,7 +83,7 @@ function App() {
     <ExperienceThemeProvider>
       <div id="app-shell">
         {configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
-          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message={configErrorMessage || "Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin."} /> :
+          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message={configErrorMessage || 'Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin.'} /> :
             <>
               <MapComponent windowManager={windowManager} />
               <ExperienceWorkspace />

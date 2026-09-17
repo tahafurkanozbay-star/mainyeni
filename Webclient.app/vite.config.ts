@@ -57,9 +57,9 @@ export default defineConfig({
     react({ include: /\.[jt]sx?$/ }),
   ],
   optimizeDeps: {
-    // Keep core boot dependencies explicit for predictable warm startup while
-    // leaving Vite 8 dependency discovery enabled for the remaining legacy/CJS
-    // graph, as required by the staged migration contract.
+    // Keep dependency discovery enabled during the remaining legacy/CJS migration.
+    // The explicit include list keeps critical boot dependencies warm while Vite
+    // is still free to discover imports that have not yet been converted to ESM.
     include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', 'esri-loader', 'prop-types', '@fortawesome/react-fontawesome', 'crypto-js'],
   },
   build: {

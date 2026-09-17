@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import {
   legacyJestCompatibilityPlugin,
   legacyJsxPlugin,
-} from './tooling/sourceTransforms';
+} from './tooling/sourceTransforms.ts';
 
 export default defineConfig({
   plugins: [legacyJestCompatibilityPlugin(), legacyJsxPlugin(), react({ include: /\.[jt]sx?$/ })],
