@@ -12,11 +12,11 @@ import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
-import { setDefaultOptions } from 'esri-loader';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
+import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
 import { runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
@@ -43,7 +43,7 @@ function App() {
   const [configErrorMessage, setConfigErrorMessage] = useState('');
 
   useEffect(() => {
-    setDefaultOptions({
+    const arcgisRuntime = configureArcgisModuleRuntime({
       version: AppConfig.App.EsriApiVersion,
       css: true,
       insertCssBefore: 'link[rel="stylesheet"]',
@@ -54,7 +54,8 @@ function App() {
 
     runtimeDiagnostics.record('app.bootstrap.started', {
       esriApiVersion: AppConfig.App.EsriApiVersion,
-      esriStylesheet: 'managed-by-esri-loader',
+      arcgisModuleBackend: arcgisRuntime.backend,
+      esriStylesheet: 'managed-by-arcgis-module-runtime',
     });
 
     bootstrapApplication({ signal: controller.signal })
