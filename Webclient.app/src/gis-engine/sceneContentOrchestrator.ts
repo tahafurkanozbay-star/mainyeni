@@ -202,8 +202,8 @@ const normalizeDefinition = (input: SceneContentDefinition): Readonly<SceneConte
     maxScale,
     priority: input.priority ?? 'visible',
     loadPolicy: input.loadPolicy ?? 'visible',
-    metadata: Object.freeze({ ...(input.metadata ?? {}) }),
-    estimate: Object.freeze({ ...(input.estimate ?? {}) }),
+    metadata: Object.freeze(input.metadata ? { ...input.metadata } : {}),
+    estimate: Object.freeze(input.estimate ? { ...input.estimate } : {}),
   });
 };
 
