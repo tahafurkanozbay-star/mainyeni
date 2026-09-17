@@ -1,15 +1,108 @@
+.measurement-widget__body {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.measurement-widget__toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.measurement-widget-tool-select-button,
+.measurement-widget__clear,
+.measurement-widget__retry {
+  min-height: 44px;
+  border: 1px solid var(--experience-border, #cbd5e1);
+  border-radius: 10px;
+  background: var(--experience-surface, #fff);
+  color: var(--experience-text, #142033);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .measurement-widget-tool-select-button {
-    border: 1px solid gray;
-    border-radius: 5px;
-    margin: 5px;
-    padding: 10px;
-    float: left;
-    cursor: pointer;
-    color: gray;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.measurement-widget-tool-select-button svg {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+.measurement-widget-tool-select-button:hover:not(:disabled),
+.measurement-widget__clear:hover:not(:disabled),
+.measurement-widget__retry:hover:not(:disabled) {
+  border-color: var(--experience-accent, #155eef);
+  background: var(--experience-surface-subtle, #f5f8ff);
+}
+
+.measurement-widget-tool-select-button[aria-pressed="true"] {
+  border-color: var(--experience-accent, #155eef);
+  background: var(--experience-accent, #155eef);
+  color: #fff;
+}
+
+.measurement-widget-tool-select-button:focus-visible,
+.measurement-widget__clear:focus-visible,
+.measurement-widget__retry:focus-visible {
+  outline: 3px solid var(--experience-focus, #155eef);
+  outline-offset: 2px;
+}
+
+.measurement-widget-tool-select-button:disabled,
+.measurement-widget__clear:disabled,
+.measurement-widget__retry:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.measurement-widget__clear {
+  grid-column: 1 / -1;
+  padding-inline: 14px;
+}
+
+.measurement-widget__retry {
+  justify-self: start;
+  padding-inline: 16px;
+}
+
+.measurement-widget__sdk {
+  min-height: 48px;
+  border-radius: 10px;
+}
+
+@media (max-width: 520px) {
+  .measurement-widget__toolbar { grid-template-columns: 1fr; }
+  .measurement-widget__clear { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .measurement-widget-tool-select-button,
+  .measurement-widget__clear,
+  .measurement-widget__retry { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .measurement-widget-tool-select-button,
+  .measurement-widget__clear,
+  .measurement-widget__retry {
+    border-color: ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
   }
-  
-  .measurement-widget-tool-select-button:hover {
-    background-color: #EEE;
-  
+  .measurement-widget-tool-select-button[aria-pressed="true"] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
   }
-  
+}
