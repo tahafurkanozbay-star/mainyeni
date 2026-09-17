@@ -4,7 +4,7 @@ import {
   legacyEnvironmentGuardPlugin,
   legacyJsxPlugin,
   legacyPresentationCleanupPlugin,
-} from './tooling/sourceTransforms';
+} from './tooling/sourceTransforms.ts';
 
 const manualChunk = (id: string): string | undefined => {
   if (!id.includes('node_modules')) return undefined;
@@ -24,7 +24,7 @@ const localBootstrapPreviewPlugin = (): Plugin => ({
   name: 'kent-rehberi-local-bootstrap-preview',
   configureServer(server) {
     server.middlewares.use('/api', (request, response, next) => {
-      const requestUrl = new URL(request.url || '/', 'http://localhost');
+      const requestUrl = new URL((request as { readonly url?: string }).url ?? '/', 'http://localhost');
       const payload = requestUrl.pathname === '/AppSettings/List'
         ? {
           isSuccess: requestUrl.searchParams.get('key') === 'GisMapConfig',
