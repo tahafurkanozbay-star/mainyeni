@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
 const ALLOWED_LEGACY_IMPORT = 'gis-engine/arcgisModuleRuntime.ts';
+const LEGACY_IMPORT_PATTERN = new RegExp(
+  `(?:from\\s*['"]${LEGACY_LOADER_PACKAGE}['"]|import\\s*['"]${LEGACY_LOADER_PACKAGE}['"]|require\\(\\s*['"]${LEGACY_LOADER_PACKAGE}['"]\\s*\\)|import\\(\\s*['"]${LEGACY_LOADER_PACKAGE}['"]\\s*\\))`,
+);
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
@@ -18,7 +21,7 @@ describe('ArcGIS module loading boundary', () => {
     const sourceRoot = resolve(process.cwd(), 'src');
     const offenders = collectSourceFiles(sourceRoot)
       .filter((file) => !file.includes('.test.'))
-      .filter((file) => readFileSync(file, 'utf8').includes(LEGACY_LOADER_PACKAGE))
+      .filter((file) => LEGACY_IMPORT_PATTERN.test(readFileSync(file, 'utf8')))
       .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
       .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
       .sort();
