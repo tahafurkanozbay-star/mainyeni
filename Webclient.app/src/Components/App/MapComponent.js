@@ -3,7 +3,7 @@ import { loadModules } from "esri-loader";
 import Store from "../../Store/Store";
 import { MapReducer_ActionTypes } from "../../Store/Reducers/MapReducer";
 import { NavigationBar } from "./NavigationBar";
-import { Sidebar } from "./Sidebar";
+import { SidebarModern as Sidebar } from "./SidebarModern.tsx";
 import MapManager from "../../Store/Managers/MapManager";
 import { ToolbarWidget } from "../Widget/Toolbar/ToolbarWidget";
 import { BasemapWidget } from "../Widget/Basemap/BasemapWidget";

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noImplicitAny": false
+  },
+  "include": [
+    "src/experience/contracts.ts",
+    "src/Components/App/SidebarModern.tsx"
+  ],
+  "exclude": ["node_modules", "build", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
+}
