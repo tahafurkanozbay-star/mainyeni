@@ -53,14 +53,14 @@ export interface ArcGisRequestScheduleOptions<T = unknown> {
   url?: unknown;
   execute?: ArcGisRequestExecutor<T>;
   factory?: ArcGisRequestExecutor<T>;
-  priority?: ArcGisRequestPriorityName | number | string;
-  signal?: AbortSignal;
+  priority?: ArcGisRequestPriorityName | number | string | null;
+  signal?: AbortSignal | null;
   cache?: boolean;
-  cacheTtlMs?: number;
-  staleTtlMs?: number;
+  cacheTtlMs?: number | null;
+  staleTtlMs?: number | null;
   allowStale?: boolean;
   allowStaleOnError?: boolean;
-  estimatedBytes?: number;
+  estimatedBytes?: number | null;
   tags?: readonly unknown[];
 }
 
@@ -109,7 +109,7 @@ export interface ArcGisRequestSchedulerLimits {
   readonly maxCacheBytes: number;
 }
 
-export interface ArcGisRequestSchedulerSnapshot {
+export interface ArcGisRequestSchedulerSnapshot extends Readonly<Record<string, unknown>> {
   readonly destroyed: boolean;
   readonly activeCount: number;
   readonly queueDepth: number;
@@ -138,10 +138,10 @@ export interface ArcGisRequestScheduler {
 
 interface CacheWriteOptions {
   cache: boolean | undefined;
-  cacheTtlMs: number | undefined;
-  staleTtlMs: number | undefined;
+  cacheTtlMs: number | null | undefined;
+  staleTtlMs: number | null | undefined;
   allowStaleOnError: boolean | undefined;
-  estimatedBytes: number | undefined;
+  estimatedBytes: number | null | undefined;
   tags: readonly string[];
 }
 
@@ -545,7 +545,7 @@ export const createArcGisRequestScheduler = (
     }
   };
 
-  const addSubscriber = <T>(job: InternalJob, signal: AbortSignal | undefined): Promise<T> => {
+  const addSubscriber = <T>(job: InternalJob, signal: AbortSignal | null | undefined): Promise<T> => {
     const promise = new Promise<unknown>((resolve, reject) => {
       const subscriber: InternalSubscriber = {
         resolve,
@@ -653,7 +653,6 @@ export const createArcGisRequestScheduler = (
             && stale?.entry
             && cacheState(stale.entry) === 'stale'
           ) {
-            metrics.staleHits += 1;
             settleJob(job, 'resolve', stale.entry.value);
             emit('request-stale-fallback', {
               requestKey: job.key,
@@ -789,6 +788,7 @@ export const createArcGisRequestScheduler = (
       if (subscriber.settled) return;
       subscriber.cancelled = true;
       subscriber.cancelReason = reason;
+      metrics.cancelledSubscribers += 1;
       settleSubscriber(subscriber, 'reject', abortError(reason));
     });
     cancelJobIfOrphaned(job);
@@ -849,6 +849,7 @@ export const createArcGisRequestScheduler = (
         if (subscriber.settled) return;
         subscriber.cancelled = true;
         subscriber.cancelReason = reason;
+        metrics.cancelledSubscribers += 1;
         settleSubscriber(subscriber, 'reject', abortError(reason));
       });
       if (!job.controller.signal.aborted) job.controller.abort(abortError(reason));
