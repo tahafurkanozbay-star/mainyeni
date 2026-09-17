@@ -101,6 +101,11 @@ export const resetArcgisModuleTransport = (): ArcgisModuleRuntimeSnapshot => {
   return getArcgisModuleRuntimeSnapshot();
 };
 
+export const evictArcgisModule = (moduleIdInput: string): boolean => {
+  const moduleId = normalizeModuleId(moduleIdInput);
+  return moduleCache.delete(moduleId);
+};
+
 export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Promise<T> => {
   const moduleId = normalizeModuleId(moduleIdInput);
   const cached = moduleCache.get(moduleId);
