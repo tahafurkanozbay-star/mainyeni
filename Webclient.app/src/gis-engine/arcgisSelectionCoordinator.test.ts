@@ -6,7 +6,7 @@ import {
 } from './arcgisSelectionCoordinator';
 import type { ArcGisQueryTransport, ArcGisQueryTransportResponse } from './arcgisQueryExecutor';
 
-const contract = adaptArcGisLayerMetadata({
+const contract = adaptArcGisLayerMetadata('https://example.test/arcgis/rest/services/Parcels/FeatureServer/0', {
   id: 0,
   name: 'Parcels',
   type: 'Feature Layer',
@@ -23,7 +23,7 @@ const contract = adaptArcGisLayerMetadata({
     { name: 'OBJECTID', alias: 'OBJECTID', type: 'esriFieldTypeOID', nullable: false, editable: false },
     { name: 'NAME', alias: 'Name', type: 'esriFieldTypeString', nullable: true, editable: true },
   ],
-}, 'https://example.test/arcgis/rest/services/Parcels/FeatureServer/0');
+});
 
 const response = (features: readonly unknown[], exceededTransferLimit = false): ArcGisQueryTransportResponse => ({
   ok: true,
