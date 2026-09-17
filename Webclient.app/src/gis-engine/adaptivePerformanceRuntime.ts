@@ -132,7 +132,7 @@ const percentile = (values: number[], ratio: number): number => {
   if (!values.length) return 0;
   const sorted = values.slice().sort((left, right) => left - right);
   const index = clamp(Math.ceil(sorted.length * ratio) - 1, 0, sorted.length - 1);
-  return sorted[index];
+  return sorted[index] ?? 0;
 };
 
 const defaultEnvironment = (): GisEnvironmentLike => globalThis as unknown as GisEnvironmentLike;

@@ -84,12 +84,12 @@ export function focusElement(element: HTMLElement | null | undefined, preventScr
 }
 
 export function focusFirst(container: ParentNode | null | undefined): boolean {
-    return focusElement(getFocusableElements(container)[0]);
+    return focusElement(getFocusableElements(container)[0] ?? null);
 }
 
 export function focusLast(container: ParentNode | null | undefined): boolean {
     const elements = getFocusableElements(container);
-    return focusElement(elements[elements.length - 1]);
+    return focusElement(elements[elements.length - 1] ?? null);
 }
 
 export function moveFocus(
@@ -100,9 +100,12 @@ export function moveFocus(
 ): HTMLElement | null {
     const elements = getFocusableElements(container);
     if (!elements.length) return null;
-    if (direction === "first") return focusElement(elements[0]) ? elements[0] : null;
+    if (direction === "first") {
+        const first = elements[0] ?? null;
+        return focusElement(first) ? first : null;
+    }
     if (direction === "last") {
-        const last = elements[elements.length - 1];
+        const last = elements[elements.length - 1] ?? null;
         return focusElement(last) ? last : null;
     }
 
@@ -116,7 +119,7 @@ export function moveFocus(
         return null;
     }
 
-    const next = elements[nextIndex];
+    const next = elements[nextIndex] ?? null;
     return focusElement(next) ? next : null;
 }
 
@@ -363,8 +366,19 @@ export function describeKeyboardShortcut(parts: readonly string[]): string {
 export function isTypingTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
     const contentEditable = target.getAttribute("contenteditable");
-    if (target.isContentEditable || contentEditable === "" || contentEditable?.toLowerCase() === "true") return true;
+    const contentEditableProperty = target.contentEditable?.toLowerCase();
+    if (
+        target.isContentEditable
+        || contentEditable === ""
+        || contentEditable?.toLowerCase() === "true"
+        || contentEditableProperty === "true"
+    ) return true;
     if (target.closest?.('[contenteditable=""], [contenteditable="true"]')) return true;
+    for (let ancestor = target.parentElement; ancestor; ancestor = ancestor.parentElement) {
+        const ancestorValue = ancestor.contentEditable?.toLowerCase();
+        if (ancestorValue === "false") break;
+        if (ancestor.isContentEditable || ancestorValue === "true") return true;
+    }
     const tag = target.tagName;
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
