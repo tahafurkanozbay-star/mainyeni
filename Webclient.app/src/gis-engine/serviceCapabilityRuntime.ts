@@ -116,6 +116,23 @@ export interface ArcGisCapabilityAssessment {
   readonly stableIdentity: boolean;
 }
 
+export interface ArcGisCapabilityAssessmentInput {
+  readonly resourceKind?: unknown;
+  readonly supportsQuery?: unknown;
+  readonly maxRecordCount?: unknown;
+  readonly supportsPagination?: unknown;
+  readonly objectIdField?: unknown;
+  readonly supportsOrderBy?: unknown;
+  readonly geometryType?: unknown;
+  readonly spatialReference?: unknown;
+  readonly editing?: unknown;
+  readonly globalIdField?: unknown;
+}
+
+export interface ArcGisCapabilityFieldSelectionInput {
+  readonly fields?: readonly unknown[] | null;
+}
+
 export interface ArcGisCapabilityBuildOptions {
   url?: string | null;
   metadata?: Record<string, unknown>;
@@ -464,30 +481,37 @@ export const capabilityContractToPaginationMetadata = (
 });
 
 export const assessCapabilityContract = (
-  contract: Partial<ArcGisCapabilityContract> = {},
+  contract: ArcGisCapabilityAssessmentInput = {},
 ): Readonly<ArcGisCapabilityAssessment> => {
   const issues: string[] = [];
+  const editing = asRecord(contract.editing);
   if (contract.resourceKind === ARCGIS_RESOURCE_KIND.UNKNOWN) issues.push('unknown-resource-kind');
-  if (contract.supportsQuery && !contract.maxRecordCount) issues.push('missing-max-record-count');
-  if (contract.supportsPagination && !contract.objectIdField && !contract.supportsOrderBy) {
+  if (contract.supportsQuery === true && !positiveInteger(contract.maxRecordCount)) {
+    issues.push('missing-max-record-count');
+  }
+  if (contract.supportsPagination === true && !contract.objectIdField && contract.supportsOrderBy !== true) {
     issues.push('pagination-without-stable-identity');
   }
   if (contract.geometryType && !contract.spatialReference) issues.push('missing-spatial-reference');
-  if (contract.editing?.editing && !contract.objectIdField && !contract.globalIdField) {
+  if (editing.editing === true && !contract.objectIdField && !contract.globalIdField) {
     issues.push('editing-without-stable-identity');
   }
   return Object.freeze({
     valid: issues.length === 0,
     issues: Object.freeze(issues),
-    queryReady: Boolean(contract.supportsQuery && contract.maxRecordCount),
+    queryReady: Boolean(contract.supportsQuery === true && positiveInteger(contract.maxRecordCount)),
     stableIdentity: Boolean(contract.objectIdField || contract.globalIdField),
   });
 };
 
 export const selectCapabilityFields = (
-  contract: Partial<ArcGisCapabilityContract> = {},
+  contract: ArcGisCapabilityFieldSelectionInput = {},
   requested: readonly unknown[] = [],
 ): string[] => {
-  const known = new Set((contract.fields ?? []).map((field) => field.name));
+  const known = new Set(
+    (Array.isArray(contract.fields) ? contract.fields : [])
+      .map((field) => asRecord(field).name)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0),
+  );
   return uniqueStrings(requested).filter((field) => known.has(field));
 };
