@@ -8,7 +8,9 @@ const SENSITIVE_KEY_PATTERN = /(authorization|cookie|password|secret|token|crede
 const URL_KEY_PATTERN = /(url|uri|href|endpoint)/i;
 
 export type DiagnosticPrimitive = string | number | boolean | null | undefined;
-export type DiagnosticValue = DiagnosticPrimitive | readonly DiagnosticValue[] | Readonly<Record<string, DiagnosticValue>>;
+export interface DiagnosticArray extends ReadonlyArray<DiagnosticValue> {}
+export interface DiagnosticObject extends Readonly<Record<string, DiagnosticValue>> {}
+export type DiagnosticValue = DiagnosticPrimitive | DiagnosticArray | DiagnosticObject;
 
 export interface BootstrapDiagnosticEvent {
   readonly id: number;

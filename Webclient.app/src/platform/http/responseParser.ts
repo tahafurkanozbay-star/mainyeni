@@ -158,16 +158,16 @@ export const parseResponseBody = async (
   if (responseType === 'text') return text;
   if (responseType === 'json') {
     return parseJsonText(text, {
-      status: response?.status,
-      allowInvalidJson: options.allowInvalidJson
+      ...(response?.status === undefined ? {} : { status: response.status }),
+      ...(options.allowInvalidJson === undefined ? {} : { allowInvalidJson: options.allowInvalidJson })
     });
   }
 
   const contentType = getContentType(response);
   if (isJsonContentType(contentType)) {
     return parseJsonText(text, {
-      status: response?.status,
-      allowInvalidJson: options.allowInvalidJson
+      ...(response?.status === undefined ? {} : { status: response.status }),
+      ...(options.allowInvalidJson === undefined ? {} : { allowInvalidJson: options.allowInvalidJson })
     });
   }
 
@@ -178,7 +178,7 @@ export const parseResponseBody = async (
   if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
       (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
     return parseJsonText(text, {
-      status: response?.status,
+      ...(response?.status === undefined ? {} : { status: response.status }),
       allowInvalidJson: true
     });
   }

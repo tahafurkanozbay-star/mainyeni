@@ -62,7 +62,7 @@ const endpointError = (message: string, details?: Readonly<Record<string, unknow
   new AppError(message, {
     code: 'CROSS_ORIGIN_BLOCKED',
     retryable: false,
-    details,
+    ...(details === undefined ? {} : { details }),
   });
 
 export const isSameOriginPath = (value: unknown): value is string => {
