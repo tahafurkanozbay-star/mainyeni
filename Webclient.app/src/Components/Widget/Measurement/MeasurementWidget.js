@@ -94,7 +94,9 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
             icon: <FontAwesomeIcon icon={faChartArea} size="2x" />,
             pressed: activeTool === MEASUREMENT_TOOLS.AREA,
             disabled: measurementStatus === 'loading',
-            onActivate: () => setActiveTool(MEASUREMENT_TOOLS.AREA),
+            onActivate: () => {
+                void setActiveTool(MEASUREMENT_TOOLS.AREA);
+            },
         },
         {
             id: 'distance',
@@ -102,7 +104,9 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
             icon: <FontAwesomeIcon icon={faChartLine} size="2x" />,
             pressed: activeTool === MEASUREMENT_TOOLS.DISTANCE,
             disabled: measurementStatus === 'loading',
-            onActivate: () => setActiveTool(MEASUREMENT_TOOLS.DISTANCE),
+            onActivate: () => {
+                void setActiveTool(MEASUREMENT_TOOLS.DISTANCE);
+            },
         },
     ];
 
