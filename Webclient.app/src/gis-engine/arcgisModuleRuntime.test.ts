@@ -4,6 +4,9 @@ import {
   getArcgisModuleRuntimeSnapshot,
   loadArcgisModule,
   resetArcgisModuleRuntimeCache,
+  resetArcgisModuleTransport,
+  setArcgisModuleTransport,
+  type ArcgisModuleTransport,
 } from './arcgisModuleRuntime';
 
 vi.mock('esri-loader', () => ({
@@ -15,6 +18,7 @@ const loadModulesMock = vi.mocked(esriLoader.loadModules);
 
 describe('arcgisModuleRuntime', () => {
   beforeEach(() => {
+    resetArcgisModuleTransport();
     resetArcgisModuleRuntimeCache();
     vi.clearAllMocks();
   });
@@ -30,6 +34,7 @@ describe('arcgisModuleRuntime', () => {
     await expect(second).resolves.toBe(moduleValue);
     expect(loadModulesMock).toHaveBeenCalledTimes(1);
     expect(getArcgisModuleRuntimeSnapshot()).toMatchObject({
+      backend: 'legacy-amd',
       cachedModules: 1,
       loadRequests: 1,
       cacheHits: 1,
@@ -58,5 +63,41 @@ describe('arcgisModuleRuntime', () => {
   it('rejects empty module identifiers before invoking the transport', async () => {
     await expect(loadArcgisModule('   ')).rejects.toThrow('ArcGIS module id is required.');
     expect(loadModulesMock).not.toHaveBeenCalled();
+  });
+
+  it('can swap the module transport without changing consumers', async () => {
+    const esmValue = { kind: 'MapView', source: 'esm' };
+    const transport: ArcgisModuleTransport = {
+      name: 'arcgis-core-esm-test',
+      loadModules: vi.fn(async (moduleIds) => moduleIds.map(() => esmValue)),
+    };
+
+    const snapshot = setArcgisModuleTransport(transport);
+    expect(snapshot).toMatchObject({ backend: 'arcgis-core-esm-test', cachedModules: 0 });
+
+    await expect(loadArcgisModule('esri/views/MapView')).resolves.toBe(esmValue);
+    expect(transport.loadModules).toHaveBeenCalledWith(['esri/views/MapView']);
+    expect(loadModulesMock).not.toHaveBeenCalled();
+  });
+
+  it('clears cached AMD modules when the transport changes', async () => {
+    const legacyValue = { source: 'amd' };
+    loadModulesMock.mockResolvedValue([legacyValue]);
+    await expect(loadArcgisModule('esri/Map')).resolves.toBe(legacyValue);
+    expect(getArcgisModuleRuntimeSnapshot().cachedModules).toBe(1);
+
+    const nextValue = { source: 'next' };
+    setArcgisModuleTransport({
+      name: 'next-transport',
+      loadModules: async () => [nextValue],
+    });
+
+    expect(getArcgisModuleRuntimeSnapshot().cachedModules).toBe(0);
+    await expect(loadArcgisModule('esri/Map')).resolves.toBe(nextValue);
+  });
+
+  it('rejects transports that cannot load modules', () => {
+    expect(() => setArcgisModuleTransport({ name: 'invalid' } as ArcgisModuleTransport))
+      .toThrow('ArcGIS module transport must provide loadModules().');
   });
 });
