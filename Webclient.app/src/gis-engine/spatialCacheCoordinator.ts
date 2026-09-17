@@ -233,7 +233,7 @@ export const createSpatialCacheCoordinator = (options: SpatialCacheOptions = {})
   };
 
   const clear = (reason = 'clear'): void => {
-    for (const key of [...entries.keys()]) removeEntry(key, reason);
+    for (const key of entries.keys()) removeEntry(key, reason);
   };
 
   const request = async <TValue>(
