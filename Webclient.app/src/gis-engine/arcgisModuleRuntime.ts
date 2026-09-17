@@ -6,14 +6,21 @@ export interface ArcgisModuleRuntimeConfiguration {
   insertCssBefore?: string;
 }
 
+export interface ArcgisModuleTransport {
+  readonly name: string;
+  readonly configure?: (configuration: ArcgisModuleRuntimeConfiguration) => void;
+  readonly loadModules: (moduleIds: readonly string[]) => Promise<readonly unknown[]>;
+}
+
 export interface ArcgisModuleRuntimeSnapshot {
-  backend: 'legacy-amd';
+  backend: string;
   configured: boolean;
   version: string | null;
   cachedModules: number;
   loadRequests: number;
   cacheHits: number;
   failures: number;
+  transportChanges: number;
 }
 
 type LegacyLoaderNamespace = typeof esriLoaderNamespace & {
@@ -21,12 +28,20 @@ type LegacyLoaderNamespace = typeof esriLoaderNamespace & {
 };
 
 const legacyLoader = esriLoaderNamespace as LegacyLoaderNamespace;
+const legacyAmdTransport: ArcgisModuleTransport = Object.freeze({
+  name: 'legacy-amd',
+  configure: (configuration: ArcgisModuleRuntimeConfiguration) => legacyLoader.setDefaultOptions?.(configuration),
+  loadModules: (moduleIds: readonly string[]) => legacyLoader.loadModules([...moduleIds]),
+});
+
 const moduleCache = new Map<string, Promise<unknown>>();
+let activeTransport: ArcgisModuleTransport = legacyAmdTransport;
 let configured = false;
 let configuredVersion: string | null = null;
 let loadRequests = 0;
 let cacheHits = 0;
 let failures = 0;
+let transportChanges = 0;
 
 const normalizeModuleId = (moduleId: string): string => {
   const normalized = String(moduleId ?? '').trim();
@@ -34,21 +49,61 @@ const normalizeModuleId = (moduleId: string): string => {
   return normalized;
 };
 
+const validateTransport = (transport: ArcgisModuleTransport): ArcgisModuleTransport => {
+  if (!transport || typeof transport.loadModules !== 'function') {
+    throw new TypeError('ArcGIS module transport must provide loadModules().');
+  }
+  const name = String(transport.name ?? '').trim();
+  if (!name) throw new TypeError('ArcGIS module transport name is required.');
+  return transport;
+};
+
+const clearModuleCache = (): void => {
+  moduleCache.clear();
+};
+
 /**
- * Temporary ArcGIS module boundary used while the application transitions from
- * the retired esri-loader AMD transport to @arcgis/core ESM. Application code
- * must depend on this module instead of importing esri-loader directly so the
- * transport can be replaced without touching every GIS consumer again.
+ * ArcGIS module boundary used while the application transitions from the retired
+ * esri-loader AMD transport to @arcgis/core ESM. Consumers depend only on this
+ * module, while the active transport can be swapped atomically and verified in
+ * isolation before the package-level migration is completed.
  */
 export const configureArcgisModuleRuntime = (
   configuration: ArcgisModuleRuntimeConfiguration = {},
 ): ArcgisModuleRuntimeSnapshot => {
-  legacyLoader.setDefaultOptions?.(configuration);
+  activeTransport.configure?.(configuration);
   configured = true;
   configuredVersion = typeof configuration.version === 'string' && configuration.version.trim()
     ? configuration.version.trim()
     : null;
   return getArcgisModuleRuntimeSnapshot();
+};
+
+export const setArcgisModuleTransport = (transport: ArcgisModuleTransport): ArcgisModuleRuntimeSnapshot => {
+  const nextTransport = validateTransport(transport);
+  if (nextTransport === activeTransport) return getArcgisModuleRuntimeSnapshot();
+  activeTransport = nextTransport;
+  clearModuleCache();
+  configured = false;
+  configuredVersion = null;
+  transportChanges += 1;
+  return getArcgisModuleRuntimeSnapshot();
+};
+
+export const resetArcgisModuleTransport = (): ArcgisModuleRuntimeSnapshot => {
+  if (activeTransport !== legacyAmdTransport) {
+    activeTransport = legacyAmdTransport;
+    clearModuleCache();
+    configured = false;
+    configuredVersion = null;
+    transportChanges += 1;
+  }
+  return getArcgisModuleRuntimeSnapshot();
+};
+
+export const evictArcgisModule = (moduleIdInput: string): boolean => {
+  const moduleId = normalizeModuleId(moduleIdInput);
+  return moduleCache.delete(moduleId);
 };
 
 export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Promise<T> => {
@@ -60,8 +115,14 @@ export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Prom
   }
 
   loadRequests += 1;
-  const request = legacyLoader.loadModules([moduleId])
-    .then((modules) => modules[0] as T)
+  const transportAtRequestTime = activeTransport;
+  const request = transportAtRequestTime.loadModules([moduleId])
+    .then((modules) => {
+      if (!Array.isArray(modules) || modules.length === 0) {
+        throw new Error(`ArcGIS module transport returned no module for ${moduleId}.`);
+      }
+      return modules[0] as T;
+    })
     .catch((error: unknown) => {
       failures += 1;
       moduleCache.delete(moduleId);
@@ -79,17 +140,18 @@ export const loadArcgisModules = async <TModules extends readonly unknown[] = re
 };
 
 export const getArcgisModuleRuntimeSnapshot = (): ArcgisModuleRuntimeSnapshot => Object.freeze({
-  backend: 'legacy-amd',
+  backend: activeTransport.name,
   configured,
   version: configuredVersion,
   cachedModules: moduleCache.size,
   loadRequests,
   cacheHits,
   failures,
+  transportChanges,
 });
 
 export const resetArcgisModuleRuntimeCache = (): void => {
-  moduleCache.clear();
+  clearModuleCache();
   loadRequests = 0;
   cacheHits = 0;
   failures = 0;

@@ -1,4 +1,4 @@
-import { loadModules } from "esri-loader";
+import { loadArcgisModule } from "../gis-engine/arcgisModuleRuntime";
 import { AppConfig } from "../Core/AppConfig";
 import { IsNull } from "../Toolbox/ObjectHelper";
 import { AuthBusiness } from "./AuthBusiness";
@@ -84,7 +84,7 @@ export const TkgmQueryBusiness = {
     },
 
     IntersectMapPolygonWithTkgmParcel: async _geometry => {
-        const [WebMercatorUtils] = await loadModules(["esri/geometry/support/webMercatorUtils"]);
+        const WebMercatorUtils = await loadArcgisModule("esri/geometry/support/webMercatorUtils");
         const polygonGeometry = WebMercatorUtils.webMercatorToGeographic(_geometry);
         const polygonRings = polygonGeometry.rings[0]
             .map(point => `${point[0].toFixed(6)} ${point[1].toFixed(6)}`)

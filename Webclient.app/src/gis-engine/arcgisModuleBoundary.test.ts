@@ -7,7 +7,6 @@ const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
 const LEGACY_TRANSPORT_BOUNDARY = 'gis-engine/arcgisModuleRuntime.ts';
 const LEGACY_IMPORT_ALLOWLIST = new Set([
   'Business/CommonBusiness.js',
-  'Business/TkgmQueryBusiness.js',
   'Components/App/MapComponent.legacy.js',
   'Components/Query/ParklarQuery/ParklarQueryWindow.js',
   'Components/Query/VicinityQuery/VicinityQueryWindow.js',
@@ -16,13 +15,9 @@ const LEGACY_IMPORT_ALLOWLIST = new Set([
   'Components/Widget/LayerList/LayerListWidget.js',
   'Components/Widget/OverviewMap/OverviewMapWidget.js',
   'Components/Widget/Sketch/SketchWidget.js',
-  'Toolbox/GisCommonHelper.js',
-  'Toolbox/GisGraphicsHelper.js',
   'Toolbox/GisQueryHelper.js',
-  'gis-engine/identifyRuntime.ts',
-  'gis-engine/measurementRuntime.ts',
-  'gis-engine/spatialEngine.ts',
 ]);
+const MAX_LEGACY_DIRECT_CONSUMERS = 10;
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
@@ -102,7 +97,7 @@ const hasLegacyLoaderImport = (file: string): boolean => {
 };
 
 describe('ArcGIS module loading boundary', () => {
-  it('keeps the direct legacy-loader consumer set equal to the migration allowlist', () => {
+  it('keeps the direct legacy-loader consumer set equal to the shrinking migration allowlist', () => {
     const sourceRoot = resolve(process.cwd(), 'src');
     const actualConsumers = collectSourceFiles(sourceRoot)
       .filter((file) => !file.includes('.test.'))
@@ -113,5 +108,6 @@ describe('ArcGIS module loading boundary', () => {
     const allowedConsumers = [...LEGACY_IMPORT_ALLOWLIST].sort();
 
     expect(actualConsumers).toEqual(allowedConsumers);
+    expect(actualConsumers.length).toBeLessThanOrEqual(MAX_LEGACY_DIRECT_CONSUMERS);
   });
 });

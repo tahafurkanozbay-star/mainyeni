@@ -1,15 +1,13 @@
-import { loadModules } from 'esri-loader';
+import { evictArcgisModule, loadArcgisModules } from './arcgisModuleRuntime';
 import type { ArcGisGeometryLike, ArcGisGraphicLike } from './contracts';
 
-const modulePromises = new Map<string, Promise<any>>();
-export const clearIdentifyRuntimeCache = (): void => { modulePromises.clear(); };
+const IDENTIFY_MODULE_IDS = [
+  'esri/rest/identify',
+  'esri/rest/support/IdentifyParameters',
+] as const;
 
-const load = <T = any>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name]).then((modules) => modules[0]).catch((error) => { modulePromises.delete(name); throw error; });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
+export const clearIdentifyRuntimeCache = (): void => {
+  IDENTIFY_MODULE_IDS.forEach((moduleId) => evictArcgisModule(moduleId));
 };
 
 export interface IdentifyRuntimeError extends Error { code?: string; }
@@ -108,7 +106,8 @@ type Settled<T> = { status: 'fulfilled'; value: T } | { status: 'rejected'; reas
 const settleWithConcurrency = async <TItem, TResult>(items: TItem[], worker: (item: TItem, index: number) => Promise<TResult>, concurrency = 4, signal?: AbortSignal): Promise<Array<Settled<TResult>>> => {
   const source = Array.isArray(items) ? items : [];
   const limit = Math.max(1, Math.min(8, Number(concurrency) || 4));
-  const results = new Array<Settled<TResult>>(source.length);
+  const results: Array<Settled<TResult>> = [];
+  results.length = source.length;
   let cursor = 0;
   const run = async (): Promise<void> => {
     while (cursor < source.length) {
@@ -160,7 +159,10 @@ export const identifyMapServices = async (view: IdentifyViewLike, mapPoint: ArcG
   throwIfAborted(options.signal);
   const source = Array.isArray(targets) ? targets : collectIdentifyTargets(view).mapServices;
   if (!source.length) return { results: [], failures: [] };
-  const [identify, IdentifyParameters] = await raceCancellation(Promise.all([load<any>('esri/rest/identify'), load<IdentifyParametersCtor>('esri/rest/support/IdentifyParameters')]), options.signal);
+  const [identify, IdentifyParameters] = await raceCancellation(
+    loadArcgisModules<[any, IdentifyParametersCtor]>(IDENTIFY_MODULE_IDS),
+    options.signal,
+  );
   throwIfAborted(options.signal);
   const settled = await settleWithConcurrency(source, async (target) => {
     throwIfAborted(options.signal);

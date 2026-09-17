@@ -100,6 +100,9 @@ jobs:
       - name: Strict supervision TypeScript boundary
         run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
 
+      - name: Strict modern GIS TypeScript boundary
+        run: npm run typecheck:gis-modern-core -- --pretty false
+
       - name: Exact-base TypeScript regression gate
         if: github.event_name == 'pull_request'
         env:
