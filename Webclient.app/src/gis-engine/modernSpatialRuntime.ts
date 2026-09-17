@@ -143,7 +143,10 @@ export const createModernSpatialRuntime = (options: ModernSpatialRuntimeOptions 
   };
 
   const emit = (type: ModernSpatialEvent['type'], subject: string, detail?: Readonly<Record<string, unknown>>): void => {
-    options.onEvent?.(Object.freeze({ type, timestamp: Date.now(), subject, detail }));
+    const event: ModernSpatialEvent = detail === undefined
+      ? Object.freeze({ type, timestamp: Date.now(), subject })
+      : Object.freeze({ type, timestamp: Date.now(), subject, detail });
+    options.onEvent?.(event);
   };
 
   const registerService = (
