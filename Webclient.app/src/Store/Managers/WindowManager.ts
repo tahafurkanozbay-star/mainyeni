@@ -87,7 +87,7 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
     if (!disposed) requestRender();
   };
 
-  const manager: WindowManagerApi = Object.freeze({
+  const manager: WindowManagerApi = {
     RegisterPlaceholder: (windowid, defaults = {}) => {
       const normalizedId = String(windowid ?? '').trim();
       if (!normalizedId || getWindow(normalizedId)) return false;
@@ -242,8 +242,9 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
       if (messageTimer !== null) globalThis.clearTimeout(messageTimer);
       messageTimer = null;
     },
-  });
+  };
 
+  Object.freeze(manager);
   return manager;
 };
 
