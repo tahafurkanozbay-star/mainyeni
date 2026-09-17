@@ -25,10 +25,10 @@ const DEFAULT_FETCH_CACHE: RequestCache = 'no-store';
 const DEFAULT_REDIRECT: RequestRedirect = 'follow';
 
 interface LinkedAbortScopeOptions {
-  signal?: AbortSignal | null;
-  timeoutMs?: number;
-  setTimeout?: typeof setTimeout;
-  clearTimeout?: typeof clearTimeout;
+  signal?: AbortSignal | null | undefined;
+  timeoutMs?: number | undefined;
+  setTimeout?: typeof setTimeout | undefined;
+  clearTimeout?: typeof clearTimeout | undefined;
 }
 
 export interface LinkedAbortScope {
@@ -40,27 +40,27 @@ export interface LinkedAbortScope {
 }
 
 interface FetchDependencies {
-  defaults?: RuntimeDefaults;
-  baseUrl?: string;
-  fetchImpl?: typeof fetch;
-  clock?: () => number;
-  setTimeout?: typeof setTimeout;
-  clearTimeout?: typeof clearTimeout;
-  onStart?: (event: { method: string; url: string; timeout: number }) => void;
-  onSuccess?: (event: {
+  defaults?: RuntimeDefaults | undefined;
+  baseUrl?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  clock?: (() => number) | undefined;
+  setTimeout?: typeof setTimeout | undefined;
+  clearTimeout?: typeof clearTimeout | undefined;
+  onStart?: ((event: { method: string; url: string; timeout: number }) => void) | undefined;
+  onSuccess?: ((event: {
     method: string;
     url: string;
     durationMs: number;
     status: number;
     metadata: Readonly<Record<string, unknown>>;
-  }) => void;
-  onFailure?: (event: {
+  }) => void) | undefined;
+  onFailure?: ((event: {
     method: string;
     url: string;
     durationMs: number;
     status?: number | null;
     error: unknown;
-  }) => void;
+  }) => void) | undefined;
 }
 
 interface FetchTransportOptions extends RuntimeDefaults, Omit<FetchDependencies, 'defaults'> {}
@@ -140,7 +140,7 @@ export const buildFetchOptions = (
   const options: RequestInit = {
     method: config.method.toUpperCase(),
     headers: bodyResult.headers,
-    signal: config.signal || undefined,
+    signal: config.signal ?? null,
     credentials: config.credentials || DEFAULT_FETCH_CREDENTIALS,
     cache: config.fetchCache || DEFAULT_FETCH_CACHE,
     redirect: config.redirect || DEFAULT_REDIRECT
