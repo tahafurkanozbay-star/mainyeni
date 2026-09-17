@@ -12,6 +12,7 @@ export interface RuntimeEnvironmentSource {
 
 export interface RuntimeFeatureFlags {
   readonly adaptiveRuntime: boolean;
+  readonly debugLogging: boolean;
   readonly privacyTelemetry: boolean;
   readonly typedBootstrap: boolean;
   readonly strictEndpointPolicy: boolean;
@@ -143,6 +144,7 @@ export const createRuntimeConfig = (source: RuntimeEnvironmentSource = getDefaul
   const env = source || {};
   const features: RuntimeFeatureFlags = Object.freeze({
     adaptiveRuntime: parseBoolean(firstDefined(env, ['VITE_ADAPTIVE_RUNTIME', 'REACT_APP_ADAPTIVE_RUNTIME']), true),
+    debugLogging: parseBoolean(firstDefined(env, ['VITE_ENV_DEBUG', 'REACT_APP_ENV_DEBUG']), false),
     privacyTelemetry: parseBoolean(firstDefined(env, ['VITE_PRIVACY_TELEMETRY', 'REACT_APP_PRIVACY_TELEMETRY']), true),
     typedBootstrap: parseBoolean(firstDefined(env, ['VITE_TYPED_BOOTSTRAP', 'REACT_APP_TYPED_BOOTSTRAP']), true),
     strictEndpointPolicy: parseBoolean(firstDefined(env, ['VITE_STRICT_ENDPOINT_POLICY', 'REACT_APP_STRICT_ENDPOINT_POLICY']), true),
@@ -217,6 +219,7 @@ export const runtimeConfigFingerprint = (config: RuntimeConfig = runtimeConfig):
     config.tkgmCityId,
     config.buildMode,
     Number(config.features.adaptiveRuntime),
+    Number(config.features.debugLogging),
     Number(config.features.privacyTelemetry),
     Number(config.features.typedBootstrap),
     Number(config.features.strictEndpointPolicy),

@@ -173,11 +173,12 @@ export const executeFetch = async <T = unknown>(
 ): Promise<TransportResult<T>> => {
   const defaults = dependencies.defaults || {};
   const config = normalizeRequestConfig(rawConfig, defaults);
-  const fetchImpl = resolveFetchImplementation(
-    dependencies.fetchImpl || (typeof fetch === 'function' ? fetch : undefined)
-  );
+  const nativeFetch = typeof globalThis.fetch === 'function'
+    ? globalThis.fetch.bind(globalThis)
+    : undefined;
+  const fetchImpl = resolveFetchImplementation(dependencies.fetchImpl || nativeFetch);
 
-  const clock = dependencies.clock || Date.now;
+  const clock = dependencies.clock || (() => Date.now());
   const startedAt = now(clock);
   const url = joinApplicationUrl(
     dependencies.baseUrl || defaults.baseUrl || '/api',
