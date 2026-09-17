@@ -1,15 +1,6 @@
-import { loadModules } from 'esri-loader';
+import { loadArcgisModule } from './arcgisModuleRuntime';
 import { GIS_SERVICE_TYPES, inferServiceType, sanitizeService } from './serviceCatalog';
 import type { ArcGisLayerLike, GisServiceInput, SanitizedGisService } from './contracts';
-
-const modulePromises = new Map<string, Promise<any>>();
-const load = <T = any>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name]).then((modules) => modules[0]).catch((error) => { modulePromises.delete(name); throw error; });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
-};
 
 const applyCommon = <T extends ArcGisLayerLike>(layer: T, service: SanitizedGisService): T => {
   layer.id = service.id; layer.title = service.title; layer.visible = service.visible; layer.opacity = service.opacity;
@@ -28,7 +19,7 @@ const featureLayerUrl = (service: SanitizedGisService): string => {
 
 type LayerConstructor = new (options: Record<string, unknown>) => ArcGisLayerLike;
 const createLayer = async (moduleName: string, service: SanitizedGisService, url = service.url): Promise<ArcGisLayerLike> => {
-  const Layer = await load<LayerConstructor>(moduleName);
+  const Layer = await loadArcgisModule<LayerConstructor>(moduleName);
   return applyCommon(new Layer({ url }), service);
 };
 const createFeatureLayer = (service: SanitizedGisService) => createLayer('esri/layers/FeatureLayer', service, featureLayerUrl(service));
@@ -59,7 +50,7 @@ export const applyFeatureReduction = <T extends ArcGisLayerLike>(layer: T, optio
   const clusterRadius = Number.isFinite(options.clusterRadius) ? Number(options.clusterRadius) : 60;
   try {
     layer.featureReduction = { type: 'cluster', clusterRadius, maxScale, popupTemplate: options.popupTemplate || layer.popupTemplate, labelsVisible: false };
-  } catch (_) { /* Optional capability: unsupported combinations do not fail the layer. */ }
+  } catch { /* Optional capability: unsupported combinations do not fail the layer. */ }
   return layer;
 };
 
