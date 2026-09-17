@@ -23,6 +23,8 @@ export interface LazyManagedWindowProps {
   readonly componentProps?: Readonly<Record<string, unknown>>;
 }
 
+const EMPTY_COMPONENT_PROPS: Readonly<Record<string, unknown>> = Object.freeze({});
+
 export function WindowLoadingFallback({ label = 'Araç yükleniyor' }: { readonly label?: string }): ReactNode {
   const statusId = useId();
   return (
@@ -39,7 +41,7 @@ export function WindowLoadingFallback({ label = 'Araç yükleniyor' }: { readonl
 export function LazyManagedWindow({ id, label, component: Component, windowManager, componentProps }: LazyManagedWindowProps): ReactNode {
   const componentRef = useRef<ManagedWindowHandle | null>(null);
   const visible = windowManager?.IsVisible?.(id) ?? false;
-  const stableProps = useMemo(() => ({ ...(componentProps ?? {}) }), [componentProps]);
+  const stableProps = useMemo(() => componentProps ?? EMPTY_COMPONENT_PROPS, [componentProps]);
 
   useEffect(() => {
     windowManager?.RegisterPlaceholder?.(id);
