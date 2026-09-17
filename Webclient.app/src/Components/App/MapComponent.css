@@ -94,6 +94,60 @@
     linear-gradient(135deg, var(--exp-surface-2, #f8fafc), var(--exp-bg, #f4f7fb));
 }
 
+/* React-owned, runtime-backed SceneView camera controls. These intentionally
+ * live above the Esri surface so keyboard, coarse-pointer and forced-color
+ * users have deterministic access to camera history, orientation and tilt. */
+.experience-scene-controls {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(62px, calc(env(safe-area-inset-bottom) + 54px));
+  z-index: 19;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(44px, 1fr));
+  gap: 6px;
+  width: min(220px, calc(100vw - 32px));
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 86%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 90%, transparent);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 16%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.experience-scene-controls button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 88%, transparent);
+  border-radius: 11px;
+  background: var(--exp-surface, #fff);
+  color: var(--exp-text, #0f172a);
+  font: 800 17px/1 system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform var(--exp-transition, 140ms ease),
+    background-color var(--exp-transition, 140ms ease),
+    border-color var(--exp-transition, 140ms ease);
+}
+
+.experience-scene-controls button:hover {
+  border-color: var(--exp-accent, #155eef);
+  background: color-mix(in srgb, var(--exp-accent, #155eef) 8%, var(--exp-surface, #fff));
+}
+
+.experience-scene-controls button:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.experience-scene-controls button:focus-visible {
+  outline: 3px solid var(--exp-accent, #155eef);
+  outline-offset: 2px;
+}
+
 /* Compact scene telemetry gives operators immediate feedback when adaptive
  * quality changes or a WebGL recovery occurs. It is deliberately non-modal and
  * does not intercept map interaction. */
@@ -198,11 +252,19 @@
   max-height: 500px;
 }
 
-html[data-experience-motion="reduced"] .experience-scene-host {
+html[data-experience-motion="reduced"] .experience-scene-host,
+html[data-experience-motion="reduced"] .experience-scene-controls button {
   transition: none;
 }
 
 @media (max-width: 640px) {
+  .experience-scene-controls {
+    right: 10px;
+    bottom: max(56px, calc(env(safe-area-inset-bottom) + 48px));
+    grid-template-columns: repeat(4, 44px);
+    width: auto;
+  }
+
   .experience-scene-health {
     right: 10px;
     bottom: max(12px, env(safe-area-inset-bottom));
@@ -214,7 +276,8 @@ html[data-experience-motion="reduced"] .experience-scene-host {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .experience-scene-host {
+  .experience-scene-host,
+  .experience-scene-controls button {
     transition: none;
   }
 }
@@ -224,7 +287,8 @@ html[data-experience-motion="reduced"] .experience-scene-host {
   .esri-view .esri-view-surface--inset-outline:focus-visible::after,
   .esri-swipe__container:focus,
   .esri-swipe__container:focus-visible,
-  .esri-popup__button:focus-visible {
+  .esri-popup__button:focus-visible,
+  .experience-scene-controls button:focus-visible {
     outline-color: Highlight !important;
     box-shadow: none !important;
   }
@@ -234,6 +298,7 @@ html[data-experience-motion="reduced"] .experience-scene-host {
     background: Canvas;
   }
 
+  .experience-scene-controls,
   .experience-scene-health {
     border-color: CanvasText;
     background: Canvas;
@@ -241,6 +306,12 @@ html[data-experience-motion="reduced"] .experience-scene-host {
     box-shadow: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+
+  .experience-scene-controls button {
+    border-color: ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
   }
 
   .experience-scene-health__mode {
