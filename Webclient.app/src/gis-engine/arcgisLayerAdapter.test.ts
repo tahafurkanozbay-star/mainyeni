@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { adaptArcGisLayerMetadata } from './arcgisMetadataAdapter';
 import { adaptArcGisLayer, adaptArcGisLayers, ArcGisLayerAdapterError, isLayerVisibleAtScale } from './arcgisLayerAdapter';
 
-const metadata = (url = 'https://example.test/arcgis/rest/services/Parcels/FeatureServer/0') => adaptArcGisLayerMetadata({
+const metadata = (url = 'https://example.test/arcgis/rest/services/Parcels/FeatureServer/0') => adaptArcGisLayerMetadata(url, {
   id: 0,
   name: 'Parcels',
   type: 'Feature Layer',
@@ -16,7 +16,7 @@ const metadata = (url = 'https://example.test/arcgis/rest/services/Parcels/Featu
   spatialReference: { wkid: 3857 },
   drawingInfo: { labelingInfo: [{ labelExpression: '[NAME]' }] },
   fields: [{ name: 'OBJECTID', alias: 'OBJECTID', type: 'esriFieldTypeOID', nullable: false, editable: false }],
-}, url);
+});
 
 describe('arcgisLayerAdapter', () => {
   it('creates deterministic renderer-neutral descriptors for 2D and 3D', () => {
