@@ -353,13 +353,20 @@ const recordInvalid = (findings: readonly SpatialIntegrityFinding[]): boolean =>
 export const configurationFromCapabilities = (
   capabilities: ArcGisServiceCapabilities,
   overrides: SpatialIntegrityConfiguration = {},
-): SpatialIntegrityConfiguration => ({
-  expectedGeometryType: capabilities.geometryType,
-  expectedWkid: capabilities.spatialReferenceWkid ?? undefined,
-  objectIdField: capabilities.objectIdField ?? undefined,
-  allowedFields: capabilities.fieldNames,
-  ...overrides,
-});
+): SpatialIntegrityConfiguration => {
+  const configuration: SpatialIntegrityConfiguration = {
+    expectedGeometryType: capabilities.geometryType,
+    allowedFields: capabilities.fieldNames,
+    ...overrides,
+  };
+  if (overrides.expectedWkid === undefined && capabilities.spatialReferenceWkid !== null) {
+    configuration.expectedWkid = capabilities.spatialReferenceWkid;
+  }
+  if (overrides.objectIdField === undefined && capabilities.objectIdField !== null) {
+    configuration.objectIdField = capabilities.objectIdField;
+  }
+  return configuration;
+};
 
 export class SpatialIntegrityRuntime {
   #configuration: NormalizedConfiguration;
