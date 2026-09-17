@@ -80,7 +80,7 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
   });
 
-  test('renders map, UX layer and command center after bootstrap completes', async () => {
+  test('renders map, UX layer, command center and data disclaimer after bootstrap completes', async () => {
     const operation = deferred();
     bootstrapApplication.mockReturnValue(operation.promise);
     render(<App />);
@@ -93,6 +93,9 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
+    expect(screen.getByRole('note', { name: /veri kullanım uyarısı/i })).toHaveTextContent(
+      'Sitede Gösterilen Veriler Bilgi Amaçlıdır. Resmî İşlemlerde KULLANILAMAZ!'
+    );
     expect(screen.queryByText(/lütfen bekleyin/i)).not.toBeInTheDocument();
     expect(document.getElementById('experience-global-live-region')).toHaveAttribute('role', 'status');
   });
