@@ -223,7 +223,7 @@ export const applySceneQualityPolicy = (
 
   try {
     view.qualityProfile = policy.sdkQuality;
-  } catch (_) {
+  } catch {
     // Older SceneView builds may expose qualityProfile as construction-only.
     // Keeping this assignment best-effort preserves compatibility with the
     // repository's esri-loader runtime while still allowing newer builds to
@@ -235,13 +235,13 @@ export const applySceneQualityPolicy = (
 
   try {
     environment.atmosphereEnabled = policy.atmosphereEnabled;
-  } catch (_) {
+  } catch {
     // Best effort: environment capabilities vary across ArcGIS SDK versions.
   }
 
   try {
     environment.starsEnabled = policy.starsEnabled;
-  } catch (_) {
+  } catch {
     // Best effort.
   }
 
@@ -250,13 +250,13 @@ export const applySceneQualityPolicy = (
 
   try {
     lighting.directShadowsEnabled = policy.directShadowsEnabled;
-  } catch (_) {
+  } catch {
     // Best effort.
   }
 
   try {
     lighting.cameraTrackingEnabled = policy.cameraTrackingEnabled;
-  } catch (_) {
+  } catch {
     // Sun and virtual lighting do not expose an identical property surface.
   }
 };
@@ -472,7 +472,7 @@ export const createSceneExperienceRuntime = (
     stopSampler();
     try {
       fatalHandle?.remove?.();
-    } catch (_) {
+    } catch {
       // Idempotent teardown.
     }
     performanceUnsubscribe?.();
