@@ -264,7 +264,7 @@ export const createBusinessQueryRuntime = (
       if (!task) break;
       counters.queued = Math.max(0, counters.queued - 1);
       task.cleanup?.();
-      task.cleanup = undefined;
+      delete task.cleanup;
 
       if (task.cancelled || task.signal?.aborted) {
         counters.cancelled += 1;
