@@ -4,6 +4,7 @@ import {
   type ClusterBucket,
   type ClusterBucketPoint,
   type ClusterLodDecision,
+  type ClusterLodInput,
   type ClusterMode,
 } from './clusterLodPolicy';
 
@@ -146,15 +147,16 @@ const normalizeFeature = (feature: AdaptiveClusterFeature): AdaptiveClusterFeatu
   const x = finite(feature.x, Number.NaN);
   const y = finite(feature.y, Number.NaN);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return Object.freeze({
+  const normalized: AdaptiveClusterFeature = {
     id: feature.id,
     x,
     y,
     weight: Math.max(0, finite(feature.weight, 1)),
-    label: typeof feature.label === 'string' && feature.label.trim() ? feature.label.trim() : undefined,
     selected: feature.selected === true,
     importance: Math.max(0, finite(feature.importance, 0)),
-  });
+  };
+  if (typeof feature.label === 'string' && feature.label.trim()) normalized.label = feature.label.trim();
+  return Object.freeze(normalized);
 };
 
 const pressureRank = (pressure: ClusterRuntimePressure): number => (
@@ -363,16 +365,17 @@ export class AdaptiveClusterRuntime {
     const pressure = deriveClusterRuntimePressure(input.performance, this.#configuration);
     const reducedMotion = input.performance?.reducedMotion === true;
     const selectionFingerprint = [...selected].map(String).sort().join('|');
-
-    const rawDecision = createClusterLodDecision({
+    const lodInput: ClusterLodInput = {
       featureCount: sampled.length,
       viewportWidth: viewport.width * (viewport.pixelRatio ?? 1),
       viewportHeight: viewport.height * (viewport.pixelRatio ?? 1),
       zoom: viewport.zoom,
-      averageFrameMs: input.performance?.frameMs,
-      deviceMemoryGb: input.performance?.deviceMemoryGb,
       reducedMotion,
-    });
+    };
+    if (input.performance?.frameMs !== undefined) lodInput.averageFrameMs = input.performance.frameMs;
+    if (input.performance?.deviceMemoryGb !== undefined) lodInput.deviceMemoryGb = input.performance.deviceMemoryGb;
+
+    const rawDecision = createClusterLodDecision(lodInput);
     const mode = this.#resolveMode(rawDecision.mode, pressure);
     const decision = Object.freeze({ ...rawDecision, mode });
     const items = createItems(sampled, decision, selected, this.#configuration);
