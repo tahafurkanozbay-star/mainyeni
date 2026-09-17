@@ -103,6 +103,10 @@ export const normalizeApiBaseUrl = (value: unknown): string => {
 
   const relative = normalizeRelativeApiPath(candidate);
   if (relative) return relative;
+  // A path-looking value that failed the strict relative policy must not be
+  // reparsed as a URL: WHATWG URL normalization can hide backslashes or dot
+  // traversal before the policy gets a chance to reject them.
+  if (candidate.startsWith('/')) return DEFAULT_API_BASE_URL;
 
   try {
     const origin = typeof window !== 'undefined' ? window.location.origin : null;

@@ -84,7 +84,11 @@ export const legacyJestCompatibilityPlugin = (): Plugin => ({
   name: 'kent-rehberi-jest-to-vitest-compatibility',
   enforce: 'pre',
   transform(code, id) {
-    if (!TEST_FILE.test(cleanModuleId(id)) || !code.includes('jest.')) return null;
-    return { code: code.replace(/\bjest\./g, 'vi.'), map: null };
+    if (!TEST_FILE.test(cleanModuleId(id))) return null;
+    const transformed = code.replace(/\bjest\./g, 'vi.');
+    // Vitest applies this plugin to its own transform tests too, so an already
+    // normalized `vi.` input still needs to remain an explicit test transform.
+    if (transformed === code && !code.includes('vi.')) return null;
+    return { code: transformed, map: null };
   },
 });

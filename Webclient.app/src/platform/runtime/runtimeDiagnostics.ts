@@ -111,8 +111,8 @@ export const sanitizeRuntimeDiagnosticText = (
 
   text = stripRelativeUrlQuery(text)
     .replace(AUTHORIZATION_PATTERN, (_match, scheme: string) => `${scheme} ${REDACTED}`)
-    .replace(SENSITIVE_QUERY_PATTERN, (_match, prefix: string) => `${prefix}${REDACTED}`)
-    .replace(ABSOLUTE_URL_PATTERN, (url) => stripAbsoluteUrlQuery(url));
+    .replace(ABSOLUTE_URL_PATTERN, (url) => stripAbsoluteUrlQuery(url))
+    .replace(SENSITIVE_QUERY_PATTERN, (_match, prefix: string) => `${prefix}${REDACTED}`);
 
   return truncate(text, maxLength);
 };
