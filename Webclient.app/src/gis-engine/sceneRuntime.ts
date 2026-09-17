@@ -4,7 +4,7 @@ import { create3DLayer } from './layerFactory';
 import type { ArcGisGraphicLike, ArcGisLayerLike, GisServiceInput, ViewState, ViewStateBridge, ViewStateInput } from './contracts';
 
 const finite = (value: unknown, fallback: number | null = null): number | null => { const numeric = Number(value); return Number.isFinite(numeric) ? numeric : fallback; };
-const safeRemove = (handle: { remove?: () => void } | null | undefined): void => { try { handle?.remove?.(); } catch (_) { /* idempotent scene cleanup */ } };
+const safeRemove = (handle: { remove?: () => void } | null | undefined): void => { try { handle?.remove?.(); } catch { /* idempotent scene cleanup */ } };
 
 export interface SceneViewLike {
   camera?: any; extent?: any; scale?: number; container?: any;
@@ -26,7 +26,7 @@ export const createSceneView = async (container: unknown, options: SceneCreateOp
   if (options.camera !== undefined) viewOptions.camera = options.camera; viewOptions.qualityProfile = options.qualityProfile !== undefined ? options.qualityProfile : 'medium'; if (options.environment !== undefined) viewOptions.environment = options.environment; if (options.constraints !== undefined) viewOptions.constraints = options.constraints; if (options.padding !== undefined) viewOptions.padding = options.padding;
   const view = new SceneViewCtor(viewOptions) as SceneViewLike; return { map, view, ownsMap };
 };
-export const destroySceneView = (scene: SceneViewLike | { view?: SceneViewLike } | null | undefined): void => { const view = (scene as { view?: SceneViewLike })?.view || scene as SceneViewLike; if (!view) return; try { view.container = null; view.destroy?.(); } catch (_) { /* partial initialization teardown */ } };
+export const destroySceneView = (scene: SceneViewLike | { view?: SceneViewLike } | null | undefined): void => { const view = (scene as { view?: SceneViewLike })?.view || scene as SceneViewLike; if (!view) return; try { view.container = null; view.destroy?.(); } catch { /* partial initialization teardown */ } };
 export interface GroundOptions { opacity?: unknown; navigationConstraint?: any; surfaceColor?: any; }
 export const configureGround = async (view: SceneViewLike, options: GroundOptions = {}): Promise<SceneViewLike> => { if (!view?.map?.ground) return view; if (options.opacity !== undefined) { const numericOpacity = Number(options.opacity); view.map.ground.opacity = Number.isFinite(numericOpacity) ? Math.max(0, Math.min(1, numericOpacity)) : 1; } if (options.navigationConstraint) view.map.ground.navigationConstraint = options.navigationConstraint; if (options.surfaceColor !== undefined) view.map.ground.surfaceColor = options.surfaceColor; return view; };
 
@@ -35,7 +35,7 @@ export const addSceneLayer = async (view: SceneViewLike, service: GisServiceInpu
 export interface AddSceneLayersOptions { concurrency?: number; signal?: AbortSignal; stopOnError?: boolean; layerOptions?: SceneLayerOptions[]; }
 export type SceneLayerSettled = { status: 'fulfilled'; value: ArcGisLayerLike } | { status: 'rejected'; reason: unknown };
 export const addSceneLayers = async (view: SceneViewLike, services: GisServiceInput[] = [], options: AddSceneLayersOptions = {}): Promise<SceneLayerSettled[]> => {
-  const input = Array.isArray(services) ? services : []; const concurrency = Math.max(1, Math.min(8, Math.floor(Number(options.concurrency) || 2))); const results = new Array<SceneLayerSettled>(input.length); let nextIndex = 0; let stopped = false;
+  const input = Array.isArray(services) ? services : []; const concurrency = Math.max(1, Math.min(8, Math.floor(Number(options.concurrency) || 2))); const results: SceneLayerSettled[] = []; let nextIndex = 0; let stopped = false;
   const worker = async (): Promise<void> => { while (!stopped) { if (options.signal?.aborted) { stopped = true; return; } const index = nextIndex; nextIndex += 1; if (index >= input.length) return; try { const layer = await addSceneLayer(view, input[index], options.layerOptions?.[index] || {}); results[index] = { status: 'fulfilled', value: layer }; } catch (error) { results[index] = { status: 'rejected', reason: error }; if (options.stopOnError === true) { stopped = true; return; } } } };
   await Promise.all(Array.from({ length: Math.min(concurrency, input.length) }, worker)); return results.filter(Boolean);
 };
