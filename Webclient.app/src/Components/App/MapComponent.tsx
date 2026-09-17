@@ -72,6 +72,18 @@ interface ReactiveUtilsLike {
   ) => RemovableHandle;
 }
 
+const LegacyNavigationBar = NavigationBar as React.ElementType;
+const LegacySidebar = Sidebar as React.ElementType;
+const LegacyToolbarWidget = ToolbarWidget as React.ElementType;
+const LegacyBasemapWidget = BasemapWidget as React.ElementType;
+const LegacyBookmarkWidget = BookmarkWidget as React.ElementType;
+const LegacyContextMenuWidget = ContextMenuWidget as React.ElementType;
+const LegacyFeedbackWidget = FeedbackWidget as React.ElementType;
+const LegacyGlobalIdentifyWidget = GlobalIdentifyWidget as React.ElementType;
+const LegacyMeasurementWidget = MeasurementWidget as React.ElementType;
+const LegacySketchWidget = SketchWidget as React.ElementType;
+const LegacyStreetViewWidget = StreetViewWidget as React.ElementType;
+
 const openExternalMapUrl = (url: unknown): void => {
   if (typeof url !== 'string' || !url) return;
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
@@ -138,7 +150,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       bridge = createViewStateBridge({ mode: '2d' }, {
         onListenerError: (error: unknown) => DebugHelper.Log(error),
       });
-      MapManager.SetViewStateBridge?.(bridge);
+      MapManager.SetViewStateBridge?.(bridge as never);
 
       unbindViewState = bindMapViewState(view as never, bridge, {
         publishInitial: true,
@@ -174,7 +186,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
       const clickHandle = view.on?.('click', (event) => {
         if (event.button === 2 || MapManager.GetMobileRightClick?.()) {
-          MapManager.SetMapClickEvent?.(event);
+          MapManager.SetMapClickEvent?.(event as never);
           windowManager.ShowWindow('context-menu-widget');
         } else {
           windowManager.HideWindow('context-menu-widget');
@@ -205,7 +217,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       unbindViewState();
       performanceMonitor?.dispose?.();
       MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
-      MapManager.ClearViewStateBridge?.(bridge);
+      MapManager.ClearViewStateBridge?.(bridge as never);
       bridge?.destroy?.();
       handles.forEach(safeRemove);
       windowManager.SetMapUpdating(false);
@@ -237,18 +249,18 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && (
         <>
           <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} />
-          <NavigationBar id="mainbar" windowManager={windowManager} />
-          <Sidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
-          <ToolbarWidget id="toolbar-widget" windowManager={windowManager} />
+          <LegacyNavigationBar id="mainbar" windowManager={windowManager} />
+          <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
+          <LegacyToolbarWidget id="toolbar-widget" windowManager={windowManager} />
 
-          <BasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
-          <BookmarkWidget id="bookmark-widget" windowManager={windowManager} ref={bookmarkWidgetRef} />
-          <ContextMenuWidget id="context-menu-widget" windowManager={windowManager} ref={contextMenuWidgetRef} />
-          <FeedbackWidget id="feedback-widget" windowManager={windowManager} ref={feedbackWidgetRef} />
-          <GlobalIdentifyWidget id="global-identify-widget" windowManager={windowManager} ref={globalIdentifyWidgetRef} />
-          <MeasurementWidget id="measurement-widget" windowManager={windowManager} ref={measurementWidgetRef} />
-          <SketchWidget id="sketch-widget" windowManager={windowManager} ref={sketchWidgetRef} />
-          <StreetViewWidget id="streetview-widget" windowManager={windowManager} ref={streetViewWidgetRef} />
+          <LegacyBasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
+          <LegacyBookmarkWidget id="bookmark-widget" windowManager={windowManager} ref={bookmarkWidgetRef} />
+          <LegacyContextMenuWidget id="context-menu-widget" windowManager={windowManager} ref={contextMenuWidgetRef} />
+          <LegacyFeedbackWidget id="feedback-widget" windowManager={windowManager} ref={feedbackWidgetRef} />
+          <LegacyGlobalIdentifyWidget id="global-identify-widget" windowManager={windowManager} ref={globalIdentifyWidgetRef} />
+          <LegacyMeasurementWidget id="measurement-widget" windowManager={windowManager} ref={measurementWidgetRef} />
+          <LegacySketchWidget id="sketch-widget" windowManager={windowManager} ref={sketchWidgetRef} />
+          <LegacyStreetViewWidget id="streetview-widget" windowManager={windowManager} ref={streetViewWidgetRef} />
 
           {QUERY_WINDOW_DEFINITIONS.map((definition) => (
             <LazyManagedWindow
@@ -256,6 +268,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
               id={definition.id}
               label={definition.label}
               component={definition.component}
+              componentProps={{}}
               windowManager={windowManager}
             />
           ))}
