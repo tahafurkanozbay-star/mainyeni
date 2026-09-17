@@ -83,7 +83,7 @@ export interface SceneLayerEvent {
     | 'visibility';
   layerId: string;
   timestamp: number;
-  reason?: string;
+  reason?: string | undefined;
   generation: number;
 }
 
