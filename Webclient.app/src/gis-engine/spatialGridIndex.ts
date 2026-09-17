@@ -60,6 +60,7 @@ type IndexedRecord<T> = {
 };
 
 type PreparedRecord<T> = Omit<IndexedRecord<T>, 'sequence'>;
+type CellDelta = readonly [key: string, delta: -1 | 1];
 
 const integer = (value: unknown, fallback: number, maximum: number): number => {
   const numeric = Number(value);
@@ -103,6 +104,10 @@ const normalizedReference = (value: SpatialReferenceLike | undefined): Readonly<
   return normalized ? Object.freeze({ wkid: normalized.wkid }) : null;
 };
 
+const extentReference = (extent: NormalizedExtent): Readonly<{ wkid: number }> | null => (
+  extent.spatialReference ? Object.freeze({ wkid: extent.spatialReference.wkid }) : null
+);
+
 export type SpatialGridIndex<T> = Readonly<{
   upsert(record: SpatialIndexRecord<T>): SpatialIndexHit<T>;
   upsertMany(records: readonly SpatialIndexRecord<T>[]): readonly SpatialIndexHit<T>[];
@@ -120,9 +125,9 @@ export type SpatialGridIndex<T> = Readonly<{
 }>;
 
 /**
- * Bounded uniform-grid spatial index for already-normalized ArcGIS client data.
- * It never reprojects coordinates or guesses a missing spatial reference. The
- * grid only narrows candidates; every query performs an exact extent check.
+ * Bounded uniform-grid index for normalized ArcGIS client data. Cell traversal
+ * is represented as a single linear cursor rather than nested synchronous
+ * iteration. The index never reprojects or guesses a known spatial reference.
  */
 export const createSpatialGridIndex = <T>(options: Readonly<{
   cellSize?: number;
@@ -153,22 +158,10 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
     if (disposed) throw new SpatialGridIndexError('Spatial grid index is disposed.', 'DISPOSED');
   };
 
-  const assertReference = (extent: NormalizedExtent): void => {
-    const incoming = extent.spatialReference ? Object.freeze({ wkid: extent.spatialReference.wkid }) : null;
-    if (!sameSpatialReference(activeReference, incoming)) {
-      throw new SpatialGridIndexError(
-        `Spatial reference mismatch: ${String(activeReference?.wkid)} != ${String(incoming?.wkid)}`,
-        'SPATIAL_REFERENCE_MISMATCH',
-      );
-    }
-    if (activeReference === null && incoming !== null) activeReference = incoming;
-  };
-
   const cellRange = (extent: NormalizedExtent): Readonly<{
     minX: number;
-    maxX: number;
     minY: number;
-    maxY: number;
+    width: number;
     count: number;
   }> => {
     const minX = Math.floor(extent.xmin / cellSize);
@@ -184,27 +177,45 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
         'FEATURE_CELL_BUDGET_EXCEEDED',
       );
     }
-    return Object.freeze({ minX, maxX, minY, maxY, count });
+    return Object.freeze({ minX, minY, width, count });
   };
 
   const keysForExtent = (extent: NormalizedExtent): readonly string[] => {
     const range = cellRange(extent);
-    const output: string[] = [];
-    for (let x = range.minX; x <= range.maxX; x += 1) {
-      for (let y = range.minY; y <= range.maxY; y += 1) {
-        output.push(cellKey(x, y));
-      }
-    }
-    return Object.freeze(output);
+    return Object.freeze(Array.from({ length: range.count }, (_, offset) => {
+      const x = range.minX + (offset % range.width);
+      const y = range.minY + Math.floor(offset / range.width);
+      return cellKey(x, y);
+    }));
   };
 
   const prepare = (record: SpatialIndexRecord<T>): PreparedRecord<T> => {
     const key = identityKey(record.id);
     const extent = normalizeExtent(record.extent);
-    assertReference(extent);
-    const owner = boundedOwner(record.owner);
-    const recordCells = keysForExtent(extent);
-    return Object.freeze({ key, id: record.id, extent, value: record.value, owner, cells: recordCells });
+    return Object.freeze({
+      key,
+      id: record.id,
+      extent,
+      value: record.value,
+      owner: boundedOwner(record.owner),
+      cells: keysForExtent(extent),
+    });
+  };
+
+  const resolveReference = (
+    prepared: readonly PreparedRecord<T>[],
+    base: Readonly<{ wkid: number }> | null,
+  ): Readonly<{ wkid: number }> | null => {
+    const known = prepared.map((item) => extentReference(item.extent)).filter((item): item is Readonly<{ wkid: number }> => item !== null);
+    const target = base ?? known[0] ?? null;
+    if (target && known.some((item) => item.wkid !== target.wkid)) {
+      const mismatched = known.find((item) => item.wkid !== target.wkid);
+      throw new SpatialGridIndexError(
+        `Spatial reference mismatch: ${String(target.wkid)} != ${String(mismatched?.wkid)}`,
+        'SPATIAL_REFERENCE_MISMATCH',
+      );
+    }
+    return target;
   };
 
   const hitFor = (record: IndexedRecord<T>): SpatialIndexHit<T> => Object.freeze({
@@ -214,57 +225,67 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
     owner: record.owner,
   });
 
-  const projectedBudget = (prepared: readonly PreparedRecord<T>[], replacing: ReadonlySet<string>): Readonly<{
-    features: number;
-    references: number;
-    newCells: number;
-  }> => {
-    let features = records.size;
-    let references = referenceCount;
-    const prospectiveCells = new Set<string>();
-    for (const candidate of prepared) {
-      const current = records.get(candidate.key);
-      if (!current && !replacing.has(candidate.key)) features += 1;
-      if (current) references -= current.cells.length;
-      references += candidate.cells.length;
-      for (const key of candidate.cells) if (!cells.has(key)) prospectiveCells.add(key);
-    }
-    return Object.freeze({ features, references, newCells: prospectiveCells.size });
+  const assertUnique = (prepared: readonly PreparedRecord<T>[], message: string): void => {
+    const seen = new Set<string>();
+    const duplicate = prepared.find((item) => {
+      if (seen.has(item.key)) return true;
+      seen.add(item.key);
+      return false;
+    });
+    if (duplicate) throw new SpatialGridIndexError(`${message}: ${duplicate.key}`, 'DUPLICATE_IDENTITY');
   };
 
-  const assertBudget = (prepared: readonly PreparedRecord<T>[], replacing: ReadonlySet<string> = new Set()): void => {
-    const projected = projectedBudget(prepared, replacing);
-    if (projected.features > maximumFeatures) {
-      throw new SpatialGridIndexError('Spatial feature budget exceeded.', 'FEATURE_BUDGET_EXCEEDED');
-    }
-    if (cells.size + projected.newCells > maximumCells) {
-      throw new SpatialGridIndexError('Spatial cell budget exceeded.', 'CELL_BUDGET_EXCEEDED');
-    }
-    if (projected.references > maximumReferences) {
+  const applyDeltas = (counts: Map<string, number>, deltas: readonly CellDelta[]): void => {
+    deltas.reduce((total, [key, delta]) => {
+      const next = (counts.get(key) ?? 0) + delta;
+      if (next <= 0) counts.delete(key);
+      else counts.set(key, next);
+      return total + delta;
+    }, 0);
+  };
+
+  const assertProjectedBudget = (prepared: readonly PreparedRecord<T>[]): void => {
+    const featureCount = records.size + prepared.filter((item) => !records.has(item.key)).length;
+    if (featureCount > maximumFeatures) throw new SpatialGridIndexError('Spatial feature budget exceeded.', 'FEATURE_BUDGET_EXCEEDED');
+
+    const counts = new Map<string, number>(Array.from(cells, ([key, bucket]) => [key, bucket.size] as const));
+    const deltas = prepared.flatMap((item): readonly CellDelta[] => {
+      const previous = records.get(item.key);
+      const removals = (previous?.cells ?? []).map((key): CellDelta => [key, -1]);
+      const additions = item.cells.map((key): CellDelta => [key, 1]);
+      return [...removals, ...additions];
+    });
+    applyDeltas(counts, deltas);
+
+    if (counts.size > maximumCells) throw new SpatialGridIndexError('Spatial cell budget exceeded.', 'CELL_BUDGET_EXCEEDED');
+    const projectedReferences = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
+    if (projectedReferences > maximumReferences) {
       throw new SpatialGridIndexError('Spatial cell-reference budget exceeded.', 'REFERENCE_BUDGET_EXCEEDED');
     }
-    const bucketGrowth = new Map<string, number>();
-    for (const candidate of prepared) {
-      const previous = records.get(candidate.key);
-      const previousCells = new Set(previous?.cells ?? []);
-      for (const key of candidate.cells) {
-        if (previousCells.has(key)) continue;
-        const next = (cells.get(key)?.size ?? 0) + (bucketGrowth.get(key) ?? 0) + 1;
-        if (next > maximumBucketSize) {
-          throw new SpatialGridIndexError(`Spatial bucket ${key} exceeds its bounded size.`, 'BUCKET_BUDGET_EXCEEDED');
-        }
-        bucketGrowth.set(key, (bucketGrowth.get(key) ?? 0) + 1);
-      }
+    const oversized = Array.from(counts.entries()).find(([, count]) => count > maximumBucketSize);
+    if (oversized) throw new SpatialGridIndexError(`Spatial bucket ${oversized[0]} exceeds its bounded size.`, 'BUCKET_BUDGET_EXCEEDED');
+  };
+
+  const assertReplacementBudget = (prepared: readonly PreparedRecord<T>[]): void => {
+    if (prepared.length > maximumFeatures) throw new SpatialGridIndexError('Spatial feature budget exceeded.', 'FEATURE_BUDGET_EXCEEDED');
+    const counts = new Map<string, number>();
+    applyDeltas(counts, prepared.flatMap((item) => item.cells.map((key): CellDelta => [key, 1])));
+    if (counts.size > maximumCells) throw new SpatialGridIndexError('Spatial cell budget exceeded.', 'CELL_BUDGET_EXCEEDED');
+    const references = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
+    if (references > maximumReferences) throw new SpatialGridIndexError('Spatial reference budget exceeded.', 'REFERENCE_BUDGET_EXCEEDED');
+    if (Array.from(counts.values()).some((count) => count > maximumBucketSize)) {
+      throw new SpatialGridIndexError('Spatial bucket budget exceeded.', 'BUCKET_BUDGET_EXCEEDED');
     }
   };
 
   const detach = (record: IndexedRecord<T>): void => {
-    for (const key of record.cells) {
+    const removed = record.cells.reduce((count, key) => {
       const bucket = cells.get(key);
-      if (!bucket) continue;
-      if (bucket.delete(record.key)) referenceCount -= 1;
+      if (!bucket || !bucket.delete(record.key)) return count;
       if (bucket.size === 0) cells.delete(key);
-    }
+      return count + 1;
+    }, 0);
+    referenceCount -= removed;
     if (record.owner) {
       const owned = owners.get(record.owner);
       owned?.delete(record.key);
@@ -278,24 +299,21 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
     sequence += 1;
     const next: IndexedRecord<T> = { ...prepared, sequence };
     records.set(prepared.key, next);
-    for (const key of next.cells) {
+    const added = next.cells.reduce((count, key) => {
       let bucket = cells.get(key);
       if (!bucket) {
         bucket = new Set<string>();
         cells.set(key, bucket);
       }
-      if (!bucket.has(next.key)) {
-        bucket.add(next.key);
-        referenceCount += 1;
-      }
-    }
+      if (bucket.has(next.key)) return count;
+      bucket.add(next.key);
+      return count + 1;
+    }, 0);
+    referenceCount += added;
     if (next.owner) {
-      let owned = owners.get(next.owner);
-      if (!owned) {
-        owned = new Set<string>();
-        owners.set(next.owner, owned);
-      }
+      const owned = owners.get(next.owner) ?? new Set<string>();
       owned.add(next.key);
+      owners.set(next.owner, owned);
     }
     return next;
   };
@@ -303,53 +321,36 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
   const upsert = (record: SpatialIndexRecord<T>): SpatialIndexHit<T> => {
     assertLive();
     const prepared = prepare(record);
-    assertBudget([prepared]);
-    return hitFor(attach(prepared));
+    const nextReference = resolveReference([prepared], activeReference);
+    assertProjectedBudget([prepared]);
+    const hit = hitFor(attach(prepared));
+    activeReference = nextReference;
+    return hit;
   };
 
   const upsertMany = (input: readonly SpatialIndexRecord<T>[]): readonly SpatialIndexHit<T>[] => {
     assertLive();
-    if (input.length > maximumFeatures) {
-      throw new SpatialGridIndexError('Spatial batch exceeds feature budget.', 'FEATURE_BUDGET_EXCEEDED');
-    }
+    if (input.length > maximumFeatures) throw new SpatialGridIndexError('Spatial batch exceeds feature budget.', 'FEATURE_BUDGET_EXCEEDED');
     const prepared = input.map(prepare);
-    const seen = new Set<string>();
-    for (const item of prepared) {
-      if (seen.has(item.key)) throw new SpatialGridIndexError(`Duplicate spatial identity in batch: ${item.key}`, 'DUPLICATE_IDENTITY');
-      seen.add(item.key);
-    }
-    assertBudget(prepared);
-    return Object.freeze(prepared.map((item) => hitFor(attach(item))));
+    assertUnique(prepared, 'Duplicate spatial identity in batch');
+    const nextReference = resolveReference(prepared, activeReference);
+    assertProjectedBudget(prepared);
+    const hits = prepared.map((item) => hitFor(attach(item)));
+    activeReference = nextReference;
+    return Object.freeze(hits);
   };
 
   const replaceAll = (input: readonly SpatialIndexRecord<T>[]): readonly SpatialIndexHit<T>[] => {
     assertLive();
     const prepared = input.map(prepare);
-    const seen = new Set<string>();
-    let references = 0;
-    const prospectiveCells = new Set<string>();
-    for (const item of prepared) {
-      if (seen.has(item.key)) throw new SpatialGridIndexError(`Duplicate spatial identity in replacement: ${item.key}`, 'DUPLICATE_IDENTITY');
-      seen.add(item.key);
-      references += item.cells.length;
-      for (const key of item.cells) prospectiveCells.add(key);
-    }
-    if (prepared.length > maximumFeatures) throw new SpatialGridIndexError('Spatial feature budget exceeded.', 'FEATURE_BUDGET_EXCEEDED');
-    if (prospectiveCells.size > maximumCells) throw new SpatialGridIndexError('Spatial cell budget exceeded.', 'CELL_BUDGET_EXCEEDED');
-    if (references > maximumReferences) throw new SpatialGridIndexError('Spatial reference budget exceeded.', 'REFERENCE_BUDGET_EXCEEDED');
-    const bucketCounts = new Map<string, number>();
-    for (const item of prepared) {
-      for (const key of item.cells) {
-        const count = (bucketCounts.get(key) ?? 0) + 1;
-        if (count > maximumBucketSize) throw new SpatialGridIndexError('Spatial bucket budget exceeded.', 'BUCKET_BUDGET_EXCEEDED');
-        bucketCounts.set(key, count);
-      }
-    }
+    assertUnique(prepared, 'Duplicate spatial identity in replacement');
+    const replacementReference = resolveReference(prepared, configuredReference);
+    assertReplacementBudget(prepared);
     records.clear();
     cells.clear();
     owners.clear();
     referenceCount = 0;
-    if (configuredReference === null) activeReference = null;
+    activeReference = replacementReference;
     return Object.freeze(prepared.map((item) => hitFor(attach(item))));
   };
 
@@ -381,15 +382,13 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
     if (!owner) return 0;
     const owned = owners.get(owner);
     if (!owned) return 0;
-    const keys = Array.from(owned);
-    let removed = 0;
-    for (const key of keys) {
+    const removed = Array.from(owned).reduce((count, key) => {
       const record = records.get(key);
-      if (!record) continue;
+      if (!record) return count;
       records.delete(key);
       detach(record);
-      removed += 1;
-    }
+      return count + 1;
+    }, 0);
     if (records.size === 0 && configuredReference === null) activeReference = null;
     return removed;
   };
@@ -399,25 +398,19 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
   const queryExtent = (input: SpatialExtent, limit?: number): readonly SpatialIndexHit<T>[] => {
     assertLive();
     const extent = normalizeExtent(input);
-    const incoming = extent.spatialReference ? Object.freeze({ wkid: extent.spatialReference.wkid }) : null;
+    const incoming = extentReference(extent);
     if (!sameSpatialReference(activeReference, incoming)) return Object.freeze([]);
-    const range = cellRange(extent);
-    const candidates = new Set<string>();
-    for (let x = range.minX; x <= range.maxX; x += 1) {
-      for (let y = range.minY; y <= range.maxY; y += 1) {
-        const bucket = cells.get(cellKey(x, y));
-        if (!bucket) continue;
-        for (const key of bucket) candidates.add(key);
-      }
-    }
-    const output: IndexedRecord<T>[] = [];
-    for (const key of candidates) {
-      const record = records.get(key);
-      if (!record || !intersectsExtent(record.extent, extent)) continue;
-      output.push(record);
-    }
-    output.sort((left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key));
-    return Object.freeze(output.slice(0, boundedLimit(limit)).map(hitFor));
+    const candidates = keysForExtent(extent).reduce((result, key) => {
+      const bucket = cells.get(key);
+      if (!bucket) return result;
+      Array.from(bucket).reduce((set, identity) => set.add(identity), result);
+      return result;
+    }, new Set<string>());
+    const matching = Array.from(candidates)
+      .map((key) => records.get(key))
+      .filter((record): record is IndexedRecord<T> => record !== undefined && intersectsExtent(record.extent, extent))
+      .sort((left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key));
+    return Object.freeze(matching.slice(0, boundedLimit(limit)).map(hitFor));
   };
 
   const queryPoint = (point: SpatialPoint, limit?: number): readonly SpatialIndexHit<T>[] => {
@@ -429,13 +422,11 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
     }
     const bucket = cells.get(cellKey(Math.floor(point.x / cellSize), Math.floor(point.y / cellSize)));
     if (!bucket) return Object.freeze([]);
-    const output: IndexedRecord<T>[] = [];
-    for (const key of bucket) {
-      const record = records.get(key);
-      if (record && containsPoint(record.extent, point)) output.push(record);
-    }
-    output.sort((left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key));
-    return Object.freeze(output.slice(0, boundedLimit(limit)).map(hitFor));
+    const matching = Array.from(bucket)
+      .map((key) => records.get(key))
+      .filter((record): record is IndexedRecord<T> => record !== undefined && containsPoint(record.extent, point))
+      .sort((left, right) => left.sequence - right.sequence || left.key.localeCompare(right.key));
+    return Object.freeze(matching.slice(0, boundedLimit(limit)).map(hitFor));
   };
 
   const snapshot = (): SpatialIndexSnapshot => Object.freeze({
