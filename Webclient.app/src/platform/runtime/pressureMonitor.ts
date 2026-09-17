@@ -1,0 +1,249 @@
+import { clampNumber, positiveInteger, type RuntimeBudget } from './contracts';
+
+export type PressureLevel = 'nominal' | 'elevated' | 'high' | 'critical';
+export type PressureSignalKind = 'queue' | 'latency' | 'failure' | 'memory' | 'frame';
+
+export interface PressureSample {
+  readonly timestamp: number;
+  readonly kind: PressureSignalKind;
+  readonly value: number;
+}
+
+export interface PressureWindowPolicy {
+  readonly windowMs?: number;
+  readonly maxSamples?: number;
+  readonly minimumSamples?: number;
+  readonly elevatedThreshold?: number;
+  readonly highThreshold?: number;
+  readonly criticalThreshold?: number;
+  readonly recoveryThreshold?: number;
+  readonly recoverySamples?: number;
+}
+
+export interface PressureSummary {
+  readonly level: PressureLevel;
+  readonly score: number;
+  readonly sampleCount: number;
+  readonly generatedAt: number;
+  readonly byKind: Readonly<Record<PressureSignalKind, Readonly<{
+    count: number;
+    average: number;
+    peak: number;
+  }>>>;
+  readonly transitions: number;
+  readonly consecutiveRecoverySamples: number;
+}
+
+export interface AdaptiveBudgetRecommendation {
+  readonly level: PressureLevel;
+  readonly networkConcurrency: number;
+  readonly cpuConcurrency: number;
+  readonly queueCapacity: number;
+  readonly cacheBytes: number;
+  readonly visibleFeatures2d: number;
+  readonly visibleFeatures3d: number;
+  readonly gpuHeavyLayers: number;
+  readonly reason: string;
+}
+
+export interface PressureMonitor {
+  readonly record: (sample: PressureSample) => PressureSummary;
+  readonly recordMany: (samples: readonly PressureSample[]) => PressureSummary;
+  readonly snapshot: () => PressureSummary;
+  readonly recommendBudget: (budget: RuntimeBudget) => AdaptiveBudgetRecommendation;
+  readonly reset: () => void;
+  readonly dispose: () => void;
+}
+
+const SIGNAL_KINDS: readonly PressureSignalKind[] = Object.freeze([
+  'queue',
+  'latency',
+  'failure',
+  'memory',
+  'frame',
+]);
+
+const LEVEL_RANK: Readonly<Record<PressureLevel, number>> = Object.freeze({
+  nominal: 0,
+  elevated: 1,
+  high: 2,
+  critical: 3,
+});
+
+const DEFAULT_POLICY = Object.freeze({
+  windowMs: 30_000,
+  maxSamples: 512,
+  minimumSamples: 3,
+  elevatedThreshold: 0.45,
+  highThreshold: 0.68,
+  criticalThreshold: 0.86,
+  recoveryThreshold: 0.34,
+  recoverySamples: 3,
+});
+
+const normalizedPolicy = (policy: PressureWindowPolicy) => Object.freeze({
+  windowMs: positiveInteger(policy.windowMs, DEFAULT_POLICY.windowMs, 10 * 60_000),
+  maxSamples: positiveInteger(policy.maxSamples, DEFAULT_POLICY.maxSamples, 10_000),
+  minimumSamples: positiveInteger(policy.minimumSamples, DEFAULT_POLICY.minimumSamples, 100),
+  elevatedThreshold: clampNumber(policy.elevatedThreshold, 0.05, 0.95, DEFAULT_POLICY.elevatedThreshold),
+  highThreshold: clampNumber(policy.highThreshold, 0.1, 0.98, DEFAULT_POLICY.highThreshold),
+  criticalThreshold: clampNumber(policy.criticalThreshold, 0.2, 1, DEFAULT_POLICY.criticalThreshold),
+  recoveryThreshold: clampNumber(policy.recoveryThreshold, 0, 0.9, DEFAULT_POLICY.recoveryThreshold),
+  recoverySamples: positiveInteger(policy.recoverySamples, DEFAULT_POLICY.recoverySamples, 50),
+});
+
+const normalizeValue = (value: unknown): number => clampNumber(value, 0, 1, 0);
+
+const emptyKindSummary = (): Record<PressureSignalKind, { count: number; average: number; peak: number }> => ({
+  queue: { count: 0, average: 0, peak: 0 },
+  latency: { count: 0, average: 0, peak: 0 },
+  failure: { count: 0, average: 0, peak: 0 },
+  memory: { count: 0, average: 0, peak: 0 },
+  frame: { count: 0, average: 0, peak: 0 },
+});
+
+const levelForScore = (
+  score: number,
+  thresholds: ReturnType<typeof normalizedPolicy>,
+): PressureLevel => {
+  if (score >= thresholds.criticalThreshold) return 'critical';
+  if (score >= thresholds.highThreshold) return 'high';
+  if (score >= thresholds.elevatedThreshold) return 'elevated';
+  return 'nominal';
+};
+
+const scaleInteger = (value: number, ratio: number, minimum: number): number =>
+  Math.max(minimum, Math.floor(value * ratio));
+
+export const createPressureMonitor = (
+  input: PressureWindowPolicy = {},
+  now: () => number = Date.now,
+): PressureMonitor => {
+  const policy = normalizedPolicy(input);
+  const samples: PressureSample[] = [];
+  let currentLevel: PressureLevel = 'nominal';
+  let transitions = 0;
+  let consecutiveRecoverySamples = 0;
+  let disposed = false;
+
+  const prune = (timestamp: number): void => {
+    const cutoff = timestamp - policy.windowMs;
+    while (samples.length > 0 && (samples[0]?.timestamp ?? timestamp) < cutoff) samples.shift();
+    if (samples.length > policy.maxSamples) samples.splice(0, samples.length - policy.maxSamples);
+  };
+
+  const calculate = (timestamp: number): PressureSummary => {
+    prune(timestamp);
+    const byKind = emptyKindSummary();
+    let weightedTotal = 0;
+    let weight = 0;
+
+    for (const sample of samples) {
+      const bucket = byKind[sample.kind];
+      bucket.count += 1;
+      bucket.average += sample.value;
+      bucket.peak = Math.max(bucket.peak, sample.value);
+      const ageRatio = clampNumber((timestamp - sample.timestamp) / policy.windowMs, 0, 1, 1);
+      const recencyWeight = 1 - ageRatio * 0.5;
+      weightedTotal += sample.value * recencyWeight;
+      weight += recencyWeight;
+    }
+
+    for (const kind of SIGNAL_KINDS) {
+      const bucket = byKind[kind];
+      bucket.average = bucket.count === 0 ? 0 : bucket.average / bucket.count;
+      Object.freeze(bucket);
+    }
+
+    const score = samples.length < policy.minimumSamples || weight === 0
+      ? 0
+      : clampNumber(weightedTotal / weight, 0, 1, 0);
+    const observedLevel = levelForScore(score, policy);
+
+    if (LEVEL_RANK[observedLevel] > LEVEL_RANK[currentLevel]) {
+      currentLevel = observedLevel;
+      consecutiveRecoverySamples = 0;
+      transitions += 1;
+    } else if (LEVEL_RANK[observedLevel] < LEVEL_RANK[currentLevel]) {
+      if (score <= policy.recoveryThreshold) consecutiveRecoverySamples += 1;
+      else consecutiveRecoverySamples = 0;
+      if (consecutiveRecoverySamples >= policy.recoverySamples) {
+        currentLevel = observedLevel;
+        consecutiveRecoverySamples = 0;
+        transitions += 1;
+      }
+    } else {
+      consecutiveRecoverySamples = 0;
+    }
+
+    return Object.freeze({
+      level: currentLevel,
+      score,
+      sampleCount: samples.length,
+      generatedAt: timestamp,
+      byKind: Object.freeze(byKind),
+      transitions,
+      consecutiveRecoverySamples,
+    });
+  };
+
+  const snapshot = (): PressureSummary => calculate(now());
+
+  const record = (sample: PressureSample): PressureSummary => {
+    if (disposed) return snapshot();
+    if (!SIGNAL_KINDS.includes(sample.kind)) return snapshot();
+    const timestamp = Number.isFinite(sample.timestamp) ? sample.timestamp : now();
+    samples.push(Object.freeze({ timestamp, kind: sample.kind, value: normalizeValue(sample.value) }));
+    return calculate(timestamp);
+  };
+
+  const recordMany = (incoming: readonly PressureSample[]): PressureSummary => {
+    if (disposed) return snapshot();
+    for (const sample of incoming) {
+      if (!SIGNAL_KINDS.includes(sample.kind)) continue;
+      samples.push(Object.freeze({
+        timestamp: Number.isFinite(sample.timestamp) ? sample.timestamp : now(),
+        kind: sample.kind,
+        value: normalizeValue(sample.value),
+      }));
+    }
+    return calculate(now());
+  };
+
+  const recommendBudget = (budget: RuntimeBudget): AdaptiveBudgetRecommendation => {
+    const summary = snapshot();
+    const ratio = summary.level === 'critical'
+      ? 0.4
+      : summary.level === 'high'
+        ? 0.6
+        : summary.level === 'elevated'
+          ? 0.8
+          : 1;
+    return Object.freeze({
+      level: summary.level,
+      networkConcurrency: scaleInteger(budget.maxConcurrentNetwork, ratio, 1),
+      cpuConcurrency: scaleInteger(budget.maxConcurrentCpu, ratio, 1),
+      queueCapacity: scaleInteger(budget.maxQueuedTasks, ratio, 8),
+      cacheBytes: scaleInteger(budget.maxCacheBytes, Math.max(ratio, 0.5), 1024 * 1024),
+      visibleFeatures2d: scaleInteger(budget.maxVisibleFeatures2d, ratio, 250),
+      visibleFeatures3d: scaleInteger(budget.maxVisibleFeatures3d, ratio, 100),
+      gpuHeavyLayers: scaleInteger(budget.maxGpuHeavyLayers, ratio, 1),
+      reason: `runtime-pressure:${summary.level}:${summary.score.toFixed(3)}`,
+    });
+  };
+
+  const reset = (): void => {
+    samples.splice(0);
+    currentLevel = 'nominal';
+    transitions = 0;
+    consecutiveRecoverySamples = 0;
+  };
+
+  const dispose = (): void => {
+    if (disposed) return;
+    reset();
+    disposed = true;
+  };
+
+  return Object.freeze({ record, recordMany, snapshot, recommendBudget, reset, dispose });
+};
