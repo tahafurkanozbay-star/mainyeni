@@ -521,8 +521,8 @@ export const createGisRuntimeOrchestrator = (
     try {
       const result = await executeArcGisPagination<TFeature>({
         metadata: capabilityContractToPaginationMetadata(contract),
-        fetchPage: adapters.fetchPage,
-        fetchObjectIds: adapters.fetchObjectIds,
+        ...(adapters.fetchPage === undefined ? {} : { fetchPage: adapters.fetchPage }),
+        ...(adapters.fetchObjectIds === undefined ? {} : { fetchObjectIds: adapters.fetchObjectIds }),
         options,
       });
       emit('paged-query-complete', {
@@ -620,17 +620,17 @@ export const createGisRuntimeOrchestrator = (
     const { id, contract } = requireCapability(layerId);
     metrics.presentationPlans += 1;
     const result = presentationState.plan({
-      layer: { ...(input.layer ?? {}), id },
+      layer: { ...input.layer, id },
       featureStats: {
         geometryType: contract.geometryType,
         serviceMaxRecordCount: contract.maxRecordCount,
-        ...(input.featureStats ?? {}),
+        ...input.featureStats,
       },
       view: input.view ?? {},
       performanceBudget: currentBudget,
       options: {
         objectIdField: contract.objectIdField,
-        ...(input.options ?? {}),
+        ...input.options,
       },
     } as Parameters<PresentationState['plan']>[0]);
     const resultRecord = record(result);
