@@ -257,7 +257,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
       });
 
       unbindSceneRef.current?.();
-      unbindSceneRef.current = bindSceneState(scene.view, bridge as never, null, {
+      unbindSceneRef.current = bindSceneState(scene.view, bridge as never, undefined, {
         applyIncoming: true,
         goToOptions: {
           duration: prefersReducedMotion() ? 0 : 180,
