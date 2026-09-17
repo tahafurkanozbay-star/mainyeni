@@ -6,7 +6,7 @@
     "checkJs": false,
     "noImplicitAny": false,
     "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": true
   },
   "include": [
     "src/experience/contracts.ts",
