@@ -189,12 +189,10 @@ export const createSpatialGridIndex = <T>(options: Readonly<{
 
   const keysForExtent = (extent: NormalizedExtent): readonly string[] => {
     const range = cellRange(extent);
-    const output = new Array<string>(range.count);
-    let cursor = 0;
+    const output: string[] = [];
     for (let x = range.minX; x <= range.maxX; x += 1) {
       for (let y = range.minY; y <= range.maxY; y += 1) {
-        output[cursor] = cellKey(x, y);
-        cursor += 1;
+        output.push(cellKey(x, y));
       }
     }
     return Object.freeze(output);
