@@ -64,12 +64,9 @@ interface MapClickEvent {
   [key: string]: unknown;
 }
 
-interface ReactiveUtilsLike {
-  watch: (
-    expression: () => unknown,
-    callback: (value: unknown, oldValue?: unknown) => void,
-    options?: { initial?: boolean; once?: boolean },
-  ) => RemovableHandle;
+interface WatchUtilsLike {
+  whenTrue: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
+  whenFalse: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
 }
 
 const LegacyNavigationBar = NavigationBar as React.ElementType;
@@ -131,11 +128,11 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
     const initializeMap = async (): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
-      const [MapCtor, MapViewCtor, reactiveUtils] = await loadModules([
+      const [MapCtor, MapViewCtor, watchUtils] = await loadModules([
         'esri/Map',
         'esri/views/MapView',
-        'esri/core/reactiveUtils',
-      ]) as [new (options: unknown) => unknown, new (options: unknown) => MapViewLike, ReactiveUtilsLike];
+        'esri/core/watchUtils',
+      ]) as [new (options: unknown) => unknown, new (options: unknown) => MapViewLike, WatchUtilsLike];
 
       if (disposed || !mapDiv.current) return;
 
@@ -164,11 +161,10 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       });
       MapManager.SetViewPerformanceMonitor?.(performanceMonitor);
 
-      handles.push(reactiveUtils.watch(
-        () => view?.updating,
-        (updating) => windowManager.SetMapUpdating(Boolean(updating)),
-        { initial: true },
-      ));
+      handles.push(
+        watchUtils.whenTrue(view, 'updating', () => windowManager.SetMapUpdating(true)),
+        watchUtils.whenFalse(view, 'updating', () => windowManager.SetMapUpdating(false)),
+      );
 
       const popupHandle = view.popup.on?.('trigger-action', (event) => {
         const feature = view?.popup.selectedFeature;
