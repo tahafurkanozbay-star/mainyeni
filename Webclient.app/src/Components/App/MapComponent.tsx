@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { loadModules } from 'esri-loader';
 import Store from '../../Store/Store';
 import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
@@ -19,6 +18,7 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
+import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import { createViewStateBridge } from '../../gis-engine/viewState';
 import {
   bindMapViewState,
@@ -69,7 +69,9 @@ interface WatchUtilsLike {
   whenFalse: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
 }
 
-const LegacyNavigationBar = NavigationBar as React.ElementType;
+type ArcgisMapConstructor = new (options: unknown) => unknown;
+type ArcgisMapViewConstructor = new (options: unknown) => MapViewLike;
+
 const LegacySidebar = SidebarModern as React.ElementType;
 const ModernToolbarWidget = ToolbarWidgetModern as React.ElementType;
 const LegacyBasemapWidget = BasemapWidget as React.ElementType;
@@ -128,11 +130,15 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
     const initializeMap = async (): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
-      const [MapCtor, MapViewCtor, watchUtils] = await loadModules([
+      const [MapCtor, MapViewCtor, watchUtils] = await loadArcgisModules<[
+        ArcgisMapConstructor,
+        ArcgisMapViewConstructor,
+        WatchUtilsLike,
+      ]>([
         'esri/Map',
         'esri/views/MapView',
         'esri/core/watchUtils',
-      ]) as [new (options: unknown) => unknown, new (options: unknown) => MapViewLike, WatchUtilsLike];
+      ]);
 
       if (disposed || !mapDiv.current) return;
 
@@ -245,7 +251,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && (
         <>
           <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} />
-          <LegacyNavigationBar id="mainbar" windowManager={windowManager} />
+          <NavigationBar id="mainbar" windowManager={windowManager} />
           <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
           <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} />
 
