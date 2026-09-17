@@ -19,7 +19,7 @@ const ActionIcon = ({ type, size = 18 }) => {
 };
 
 const dispatchCommand = (name, detail = {}) => {
-    try { window.dispatchEvent(new CustomEvent("kentrehberi:command", { detail: { name, ...detail } })); } catch (_) { /* optional enhancement */ }
+    try { window.dispatchEvent(new CustomEvent("kentrehberi:command", { detail: { name, ...detail } })); } catch { /* optional enhancement */ }
 };
 
 export function ExperienceUXLayer({ windowManager }) {
@@ -31,7 +31,7 @@ export function ExperienceUXLayer({ windowManager }) {
 
     useEffect(() => {
         document.documentElement.dataset.experienceTheme = theme;
-        try { window.localStorage.setItem("kent-rehberi-experience-theme", theme); } catch (_) { /* storage unavailable */ }
+        try { window.localStorage.setItem("kent-rehberi-experience-theme", theme); } catch { /* storage unavailable */ }
     }, [theme]);
 
     useEffect(() => {
