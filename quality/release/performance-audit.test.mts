@@ -11,11 +11,11 @@ function kind(path: string): FileKind {
 }
 
 function source(path: string, text: string): SourceFile {
-  const extension = path.includes('.') ? path.split('.').at(-1) : undefined;
+  const lastDot = path.lastIndexOf('.');
   return {
     absolutePath: `/repo/${path}`,
     repositoryPath: path,
-    extension: extension ? `.${extension}` : '',
+    extension: lastDot >= 0 ? path.slice(lastDot) : '',
     kind: kind(path),
     bytes: new TextEncoder().encode(text).byteLength,
     lines: text.split('\n').length,
