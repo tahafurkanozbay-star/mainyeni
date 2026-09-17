@@ -1,5 +1,5 @@
 import React, { useEffect, useImperativeHandle, useRef } from "react";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import MapManager from "../../../Store/Managers/MapManager";
 import { CommonQueryWindowTools } from "../../Query/_Common/CommonQueryWindowTools";
 import "./SketchWidget.css";

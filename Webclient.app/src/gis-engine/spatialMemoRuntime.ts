@@ -72,7 +72,7 @@ export interface SpatialMemoCacheEntry<T = unknown> {
 
 interface SpatialMemoSubscriber {
   done: boolean;
-  signal?: AbortSignal;
+  signal: AbortSignal | undefined;
   abortHandler: (() => void) | null;
 }
 
@@ -434,7 +434,11 @@ export const createSpatialMemoRuntime = (
 
     let computation: Promise<T>;
     try {
-      computation = Promise.resolve(factory({ key, signal: controller ? controller.signal : undefined, startedAt }));
+      computation = Promise.resolve(factory({
+        key,
+        ...(controller ? { signal: controller.signal } : {}),
+        startedAt,
+      }));
     } catch (error) {
       computation = Promise.reject(error);
     }

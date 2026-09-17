@@ -32,6 +32,12 @@ jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
   )
 }));
 
+jest.mock('./Components/Common/ExperienceCommandCenterModern', () => ({
+  ExperienceCommandCenterModern: ({ windowManager }) => (
+    <div data-testid="command-center" data-manager-id={windowManager?.id || 'none'} />
+  )
+}));
+
 jest.mock('./Store/Managers/WindowManager', () => ({
   useWindowManager: () => ({ id: 'window-manager-1' })
 }));
@@ -74,7 +80,7 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
   });
 
-  test('renders map, UX layer and command center after bootstrap completes', async () => {
+  test('renders map, UX layer, command center and data disclaimer after bootstrap completes', async () => {
     const operation = deferred();
     bootstrapApplication.mockReturnValue(operation.promise);
     render(<App />);
@@ -87,6 +93,9 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
+    expect(screen.getByRole('note', { name: /veri kullanım uyarısı/i })).toHaveTextContent(
+      'Sitede Gösterilen Veriler Bilgi Amaçlıdır. Resmî İşlemlerde KULLANILAMAZ!'
+    );
     expect(screen.queryByText(/lütfen bekleyin/i)).not.toBeInTheDocument();
     expect(document.getElementById('experience-global-live-region')).toHaveAttribute('role', 'status');
   });
@@ -100,7 +109,7 @@ describe('App bootstrap lifecycle', () => {
       operation.reject(new Error('network details that must not reach UI'));
       try {
         await operation.promise;
-      } catch (_error) {
+      } catch {
         // App owns the rejection; this only drains the deferred promise for React act.
       }
     });
@@ -119,7 +128,7 @@ describe('App bootstrap lifecycle', () => {
       operation.reject(Object.assign(new Error('cancelled'), { code: 'BOOTSTRAP_ABORTED' }));
       try {
         await operation.promise;
-      } catch (_error) {
+      } catch {
         // Expected cancellation.
       }
     });
@@ -161,7 +170,7 @@ describe('App bootstrap lifecycle', () => {
       operation.reject(new Error('late failure'));
       try {
         await operation.promise;
-      } catch (_error) {
+      } catch {
         // Expected rejection after unmount.
       }
     });

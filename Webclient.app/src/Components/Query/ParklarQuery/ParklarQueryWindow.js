@@ -9,7 +9,7 @@ import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { DebugHelper } from "../../../Toolbox/DebugHelper";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import { createDisposableBag, createLayerOwner } from "../../../gis-engine/layerOwnership";
 
 const OWNER_ID = 'parklar-query-window';
@@ -74,7 +74,7 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
                 });
                 lifecycleRef.current.add(zoomHandle);
             }
-        } catch (_) {}
+        } catch {}
     };
 
     useEffect(() => {
@@ -115,7 +115,7 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
             setActiveTab("query");
             addExtentRef.current = false;
             const initialExtent = extentHistoryRef.current[0];
-            if (initialExtent) { try { await view.goTo(initialExtent); } catch (_) {} }
+            if (initialExtent) { try { await view.goTo(initialExtent); } catch {} }
             if (!mountedRef.current || requestVersion !== queryVersionRef.current) return;
             const clusterLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering("YeniParklarQeryUrl", props.windowTitle || windowTitle, query, getSymbolBasedOnZoom(view.zoom));
             if (!mountedRef.current || requestVersion !== queryVersionRef.current) { clusterLayer?.layerObj?.destroy?.(); return; }
@@ -130,7 +130,7 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
                     const expandFactorY = (extent.ymax - extent.ymin) * 0.1;
                     await view.goTo({ xmin: extent.xmin - expandFactorX, ymin: extent.ymin - expandFactorY, xmax: extent.xmax + expandFactorX, ymax: extent.ymax + expandFactorY, spatialReference: extent.spatialReference });
                 }
-            } catch (_) {}
+            } catch {}
             setResultList((Array.isArray(result.data) ? result.data : []).map((item) => ({ ObjectId: item?.attr?.objectid, Title: item?.attr?.adi, Phone: item?.attr?.telefon, Address: item?.attr?.adres, AddressDescription: "Adres tarifi bulunmuyor" })));
         } catch (error) {
             if (mountedRef.current && requestVersion === queryVersionRef.current) {
@@ -163,14 +163,14 @@ export const ParklarQueryWindow = React.forwardRef((props, ref) => {
             const lng = itemDetails?.geometry?.longitude;
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("Koordinat bilgisi bulunamadı");
             window.open(`https://www.google.com.tr/maps?saddr=My+Location&daddr=${encodeURIComponent(`${lat},${lng}`)}`, "_blank", "noopener,noreferrer");
-        } catch (_) { props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı"); }
+        } catch { props.windowManager.ShowMessage(Constants_MessageType.Error, "Yol tarifi alınamadı - öğe detayları bulunamadı"); }
     };
     const btnBack_OnClick = async () => {
         removeLastClusterLayer();
         addExtentRef.current = false;
         const targetExtent = extentHistoryRef.current[0];
         const view = mapViewRef.current;
-        if (view && targetExtent) { try { await view.goTo(targetExtent); } catch (_) {} }
+        if (view && targetExtent) { try { await view.goTo(targetExtent); } catch {} }
         props.windowManager.ShowWindow("sidebar");
         setActiveTab("form");
     };

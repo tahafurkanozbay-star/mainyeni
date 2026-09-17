@@ -118,7 +118,7 @@ const canTransition: Readonly<Record<RuntimePhase, readonly RuntimePhase[]>> = O
   stopping: Object.freeze(['stopped', 'failed']),
   stopped: Object.freeze(['starting']),
   failed: Object.freeze(['starting', 'stopping', 'stopped']),
-});
+} satisfies Record<RuntimePhase, readonly RuntimePhase[]>);
 
 const normalizeModuleId = (value: unknown): string => {
   const normalized = asNonEmptyString(value, 100);
@@ -344,9 +344,9 @@ export const createRuntimeKernel = (options: RuntimeKernelOptions = {}): Runtime
       } catch (error) {
         if (isAbortLike(error) || signal.aborted) {
           telemetry.warn('kernel', 'start-aborted', { phase });
-          if (phase === 'starting') transition('stopping');
+          if ((phase as RuntimePhase) === 'starting') transition('stopping');
           scheduler.cancelAll(signal.reason ?? error);
-          if (phase === 'stopping') transition('stopped');
+          if ((phase as RuntimePhase) === 'stopping') transition('stopped');
           throw error;
         }
         rememberFailure('kernel:start', error);
@@ -385,8 +385,7 @@ export const createRuntimeKernel = (options: RuntimeKernelOptions = {}): Runtime
   };
 
   const resume = async (signal?: AbortSignal): Promise<RuntimeKernelSnapshot> => {
-    if (phase !== 'suspended') return start({ signal, warmup: false });
-    return start({ signal, warmup: false });
+    return start({ ...(signal ? { signal } : {}), warmup: false });
   };
 
   const stop = (stopOptions: RuntimeKernelStopOptions = {}): Promise<RuntimeKernelSnapshot> => {

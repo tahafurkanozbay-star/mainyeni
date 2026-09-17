@@ -191,7 +191,13 @@ export const createQueryRuntime = (configuration: QueryRuntimeConfiguration = {}
     const entry: QueryInFlightEntry<T> = { key, controller, subscribers: new Set(), settled: false, startedAt, promise: Promise.resolve(undefined as unknown as T) };
     metrics.networkStarts += 1;
     let requestPromise: Promise<T>;
-    try { requestPromise = Promise.resolve(factory({ key, signal: controller?.signal, startedAt })); }
+    try {
+      requestPromise = Promise.resolve(factory({
+        key,
+        ...(controller ? { signal: controller.signal } : {}),
+        startedAt,
+      }));
+    }
     catch (error) { requestPromise = Promise.reject(error); }
     entry.promise = requestPromise
       .then((value) => { metrics.successes += 1; writeCache(key, value, options); return value; })
@@ -210,7 +216,10 @@ export const createQueryRuntime = (configuration: QueryRuntimeConfiguration = {}
     if (entry) metrics.deduped += 1; else entry = startRequest(key, factory, options);
     return subscribe(entry, options.signal);
   };
-  const prefetch = async <T>(rawKey: unknown, factory: QueryFactory<T>, options: QueryExecuteOptions<T> = {}): Promise<T> => execute(rawKey, factory, { ...options, signal: undefined });
+  const prefetch = async <T>(rawKey: unknown, factory: QueryFactory<T>, options: QueryExecuteOptions<T> = {}): Promise<T> => {
+    const { signal: _signal, ...prefetchOptions } = options;
+    return execute(rawKey, factory, prefetchOptions);
+  };
   const getCached = <T = unknown>(rawKey: unknown, options: QueryExecuteOptions<T> = {}): T | undefined => {
     const cached = readCache<T>(normalizeKey(rawKey), options); return cached.hit ? cached.value : undefined;
   };
@@ -245,8 +254,8 @@ export interface ArcGisQueryCachePolicyOptions { cache?: boolean; ttlMs?: number
 export interface ArcGisQueryResultLike extends Dictionary { type?: string; exceededTransferLimit?: boolean; page?: { hasMore?: boolean }; }
 export const createArcGisQueryCachePolicy = (options: ArcGisQueryCachePolicyOptions = {}): QueryExecuteOptions<ArcGisQueryResultLike> => ({
   cache: options.cache !== false,
-  ttlMs: options.ttlMs,
-  tags: options.tags,
+  ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
+  ...(options.tags !== undefined ? { tags: options.tags } : {}),
   isCacheable: (result) => Boolean(result && result.type !== 'error' && result.exceededTransferLimit !== true && result.page?.hasMore !== true),
 });
 export interface QueryRuntimeKeyInput { serviceUrl?: unknown; operation?: unknown; queryKey?: unknown; }

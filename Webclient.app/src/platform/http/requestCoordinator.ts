@@ -106,7 +106,7 @@ export class RequestCoordinator {
 
   private readonly inFlight = new Map<string, Promise<TransportResult<unknown>>>();
   private readonly clock: () => number;
-  private readonly wait?: (milliseconds: number, signal?: AbortSignal | null) => Promise<void>;
+  private readonly wait: ((milliseconds: number, signal?: AbortSignal | null) => Promise<void>) | undefined;
   private readonly retryOptions: Record<string, unknown>;
 
   constructor(options: CoordinatorOptions) {
@@ -186,9 +186,10 @@ export class RequestCoordinator {
       : safePathGroup;
     const queueTimeoutMs = getQueueTimeout(config);
     const signal = getRuntimeSignal(config);
+    const { signal: _configuredSignal, ...configWithoutSignal } = config;
     const transportConfig: TransportAttemptConfig = {
-      ...config,
-      signal,
+      ...configWithoutSignal,
+      ...(signal ? { signal } : {}),
       attempt
     };
 
@@ -198,7 +199,7 @@ export class RequestCoordinator {
         priority,
         groupKey,
         label: `${config.method}:${safePathGroup}:attempt-${attempt}`,
-        signal,
+        ...(signal ? { signal } : {}),
         queueTimeoutMs,
         bypass: config.schedulerBypass === true
       }
@@ -228,9 +229,9 @@ export class RequestCoordinator {
         {
           maxRetries: config.maxRetries,
           retryAllowed: config.retryAllowed,
-          signal,
+          ...(signal ? { signal } : {}),
           retryOptions: this.retryOptions,
-          wait: this.wait,
+          ...(this.wait ? { wait: this.wait } : {}),
           onAttempt: ({ attempt }: { attempt: number }) => {
             recordNetworkEvent(this.diagnostics, 'network.request.attempt', {
               method: config.method,

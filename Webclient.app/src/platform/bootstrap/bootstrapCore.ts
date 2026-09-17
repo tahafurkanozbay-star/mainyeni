@@ -431,9 +431,10 @@ export const runApplicationBootstrap = async (
 
   try {
     throwIfBootstrapAborted(signal, stage);
+    const loadOptions = signal === undefined ? {} : { signal };
     const [mapResult, servicesResult] = await Promise.all([
-      loadMapConfiguration({ signal }),
-      loadConfigurationServices({ signal }),
+      loadMapConfiguration(loadOptions),
+      loadConfigurationServices(loadOptions),
     ]);
 
     throwIfBootstrapAborted(signal, stage);
@@ -449,10 +450,21 @@ export const runApplicationBootstrap = async (
 
     throwIfBootstrapAborted(signal, stage);
     stage = BootstrapStage.PROXY;
-    await runProxySetup({ plan, addProxyRule, signal, diagnostics });
+    await runProxySetup({
+      plan,
+      addProxyRule,
+      ...(signal === undefined ? {} : { signal }),
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+    });
 
     stage = BootstrapStage.COMMIT;
-    await commitPlan({ plan, setMapConfiguration, setConfigurationServices, signal, diagnostics });
+    await commitPlan({
+      plan,
+      setMapConfiguration,
+      setConfigurationServices,
+      ...(signal === undefined ? {} : { signal }),
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+    });
 
     throwIfBootstrapAborted(signal, stage);
     stage = BootstrapStage.COMPLETED;

@@ -193,11 +193,11 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
 
   const observability = configuration.observability || createGisObservabilityRuntime({
     now: clock,
-    onListenerError: configuration.onListenerError,
+    ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
   });
   const serviceHealth = configuration.serviceHealth || createServiceHealthRuntime({
     now: clock,
-    onListenerError: configuration.onListenerError,
+    ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
     onEvent: (event) => {
       observability.record({
         type: `health.${event.type}`,
@@ -214,9 +214,9 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
   });
   const renderGovernor = configuration.renderGovernor || createRenderGovernor({
     now: clock,
-    device: configuration.device,
-    initialTier: configuration.initialTier,
-    onListenerError: configuration.onListenerError,
+    ...(configuration.device ? { device: configuration.device } : {}),
+    ...(configuration.initialTier ? { initialTier: configuration.initialTier } : {}),
+    ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
   });
   const streamingPlanner = configuration.streamingPlanner || createSceneStreamingPlanner({ now: clock });
   const initialBudget = renderGovernor.getBudget();
@@ -226,7 +226,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     maxConcurrent: initialBudget.maxConcurrentRequests,
     maxConcurrentPerOrigin: Math.max(1, Math.min(4, initialBudget.maxConcurrentRequests)),
     maxCacheBytes: Math.max(4 * 1024 * 1024, Math.floor(initialBudget.maxResidentBytes * 0.12)),
-    onListenerError: configuration.onListenerError,
+    ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
   });
   const lifecycle = configuration.lifecycle || createLayerLifecycleRuntime({
     ...(configuration.lifecycleAdapters || {}),
@@ -235,7 +235,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     maxResidentBytes: Math.max(32 * 1024 * 1024, Math.floor(initialBudget.maxResidentBytes * 0.6)),
     maxVisibleLayers: positiveInteger(configuration.layerBudget?.maxVisibleLayers, 24, 500),
     idleTtlMs: positiveInteger(configuration.layerBudget?.idleTtlMs, 60000, 60 * 60 * 1000),
-    onListenerError: configuration.onListenerError,
+    ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
   });
 
   const assertActive = (): void => {
@@ -320,8 +320,10 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
       serviceId: id,
       resourceUrl,
       resourceKind: String(contract.resourceKind || ''),
-      maxRecordCount: contract.maxRecordCount,
-      metadataRevision: registration.metadataRevision,
+      ...(contract.maxRecordCount !== undefined ? { maxRecordCount: contract.maxRecordCount } : {}),
+      ...(registration.metadataRevision !== undefined
+        ? { metadataRevision: registration.metadataRevision }
+        : {}),
     });
     metrics.serviceRegistrations += existing ? 0 : 1;
     observability.record({

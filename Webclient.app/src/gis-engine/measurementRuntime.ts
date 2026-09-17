@@ -1,15 +1,9 @@
-import { loadModules } from 'esri-loader';
+import { evictArcgisModule, loadArcgisModule } from './arcgisModuleRuntime';
 
-const modulePromises = new Map<string, Promise<any>>();
+const MEASUREMENT_MODULE_ID = 'esri/widgets/Measurement';
 
-export const clearMeasurementRuntimeCache = (): void => { modulePromises.clear(); };
-
-const load = <T = any>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name]).then((modules) => modules[0]).catch((error) => { modulePromises.delete(name); throw error; });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
+export const clearMeasurementRuntimeCache = (): void => {
+  evictArcgisModule(MEASUREMENT_MODULE_ID);
 };
 
 export const MEASUREMENT_TOOLS = Object.freeze({ NONE: '', DISTANCE: 'distance', AREA: 'area' });
@@ -34,7 +28,7 @@ export interface MeasurementState {
   clearedAt: string | null;
   destroyedAt: string | null;
 }
-export interface MeasurementStateInput extends Partial<MeasurementState> { activeTool?: MeasurementTool | string; }
+export interface MeasurementStateInput extends Omit<Partial<MeasurementState>, 'activeTool'> { activeTool?: MeasurementTool | string; }
 
 export const createMeasurementState = (input: MeasurementStateInput = {}): MeasurementState => ({
   status: input.status || 'idle',
@@ -57,7 +51,7 @@ export type MeasurementListener = (state: MeasurementState) => void;
 export interface MeasurementControllerOptions { view?: unknown; container?: unknown; }
 
 const notify = (listeners: Set<MeasurementListener>, state: MeasurementState): void => {
-  listeners.forEach((listener) => { try { listener(state); } catch (_) { /* observer isolation */ } });
+  listeners.forEach((listener) => { try { listener(state); } catch { /* observer isolation */ } });
 };
 
 export interface MeasurementController {
@@ -99,7 +93,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
     if (widget) return widget;
     if (creationPromise) return creationPromise;
     setState({ status: 'loading', error: null });
-    creationPromise = load<MeasurementWidgetCtor>('esri/widgets/Measurement')
+    creationPromise = loadArcgisModule<MeasurementWidgetCtor>(MEASUREMENT_MODULE_ID)
       .then((Measurement) => {
         if (destroyed) return null;
         widget = new Measurement({ view, container, activeTool: state.activeTool });
@@ -126,7 +120,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
 
   const clear = (): boolean => {
     if (destroyed) return false;
-    try { widget?.clear?.(); if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE; } catch (_) { /* SDK cleanup */ }
+    try { widget?.clear?.(); if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE; } catch { /* SDK cleanup */ }
     setState({ activeTool: MEASUREMENT_TOOLS.NONE, clearedAt: new Date().toISOString() });
     return true;
   };
@@ -136,7 +130,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
   const destroy = (): void => {
     if (destroyed) return;
     destroyed = true;
-    try { widget?.clear?.(); widget?.destroy?.(); } catch (_) { /* idempotent teardown */ }
+    try { widget?.clear?.(); widget?.destroy?.(); } catch { /* idempotent teardown */ }
     widget = null; creationPromise = null; listeners.clear();
     state = { ...state, status: 'destroyed', activeTool: MEASUREMENT_TOOLS.NONE, destroyedAt: new Date().toISOString() };
   };

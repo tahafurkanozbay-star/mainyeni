@@ -194,6 +194,7 @@ export const createRuntimeTelemetry = (options: TelemetryOptions = {}): RuntimeT
     const name = asNonEmptyString(input.name, 96);
     if (!domain || !name) return null;
     const duration = asFiniteNumber(input.durationMs);
+    const attributes = sanitizeTelemetryAttributes(input.attributes, options);
     const event: TelemetryEvent = Object.freeze({
       id: makeId(),
       timestamp: now(),
@@ -201,9 +202,7 @@ export const createRuntimeTelemetry = (options: TelemetryOptions = {}): RuntimeT
       domain: safeString(domain, 64),
       name: safeString(name, 96),
       ...(duration !== null ? { durationMs: Math.max(0, Math.round(duration * 100) / 100) } : {}),
-      ...(input.attributes
-        ? { attributes: sanitizeTelemetryAttributes(input.attributes, options) }
-        : {}),
+      ...(attributes === undefined ? {} : { attributes }),
     });
 
     if (events.length >= capacity) {
@@ -216,7 +215,7 @@ export const createRuntimeTelemetry = (options: TelemetryOptions = {}): RuntimeT
 
   const shorthand = (level: TelemetryLevel) =>
     (domain: string, name: string, attributes?: Readonly<Record<string, unknown>>) =>
-      record({ level, domain, name, attributes });
+      record({ level, domain, name, ...(attributes === undefined ? {} : { attributes }) });
 
   const measure = async <TValue>(
     domain: string,

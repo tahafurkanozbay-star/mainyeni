@@ -44,7 +44,7 @@ interface QueuedTask<T = unknown> {
   priority: RequestPriority;
   groupKey: string;
   label: string | null;
-  signal?: AbortSignal | null;
+  signal: AbortSignal | undefined;
   queuedAt: number;
   queueTimeoutMs: number;
   timeoutHandle: TimerHandle | null;

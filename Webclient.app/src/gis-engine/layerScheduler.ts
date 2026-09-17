@@ -12,7 +12,7 @@ const positiveInteger = (value: unknown, fallback: number, max = Number.MAX_SAFE
 const now = (): number => Date.now();
 const cancelledError = (layerId: string): LayerSchedulerError => new LayerSchedulerError('Layer request cancelled.', { code: 'CANCELLED', layerId });
 const normalizeLayerId = (layerOrId: unknown): string => { const raw = typeof layerOrId === 'object' && layerOrId ? (layerOrId as { id?: unknown }).id : layerOrId; const id = String(raw ?? '').trim(); if (!id) throw new LayerSchedulerError('A layer id is required.', { code: 'INVALID_LAYER_ID' }); return id; };
-const normalizePriority = (value: unknown, fallback = LAYER_LOAD_PRIORITY.VISIBLE): number => { const numeric = Number(value); return Number.isFinite(numeric) ? numeric : fallback; };
+const normalizePriority = (value: unknown, fallback: number = LAYER_LOAD_PRIORITY.VISIBLE): number => { const numeric = Number(value); return Number.isFinite(numeric) ? numeric : fallback; };
 const safeAbort = (controller: AbortController | null): boolean => { if (!controller || controller.signal?.aborted) return false; try { controller.abort(); return true; } catch (_) { return false; } };
 const createController = (): AbortController | null => typeof AbortController === 'undefined' ? null : new AbortController();
 
@@ -82,7 +82,7 @@ export const createLayerLoadScheduler = (configuration: { maxConcurrent?: unknow
     if (entry.subscribers.size === 0 && !entry.settled) { if (entry.state === 'queued') { removeFromQueue(entry as SchedulerEntry); entries.delete(entry.layerId); entry.state = 'cancelled'; entry.settled = true; emit('cancelled', entry as SchedulerEntry, { phase: 'queued' }); } else if (entry.state === 'running' && safeAbort(entry.controller)) { metrics.underlyingAborts += 1; emit('abort', entry as SchedulerEntry, { phase: 'running' }); } }
   };
   const subscribe = <T>(entry: SchedulerEntry<any, T>, signal?: AbortSignal): Promise<T> => new Promise<T>((resolve, reject) => {
-    const subscriber: Subscriber<T> = { signal, resolve, reject, done: false, abortHandler: null }; entry.subscribers.add(subscriber);
+    const subscriber: Subscriber<T> = { ...(signal === undefined ? {} : { signal }), resolve, reject, done: false, abortHandler: null }; entry.subscribers.add(subscriber);
     const cancelSubscriber = () => finishSubscriber(entry, subscriber, reject, cancelledError(entry.layerId), 'cancelled');
     if (signal) { subscriber.abortHandler = cancelSubscriber; if (signal.aborted) { cancelSubscriber(); return; } signal.addEventListener('abort', cancelSubscriber, { once: true }); }
     if (entry.settled) { if (entry.error) finishSubscriber(entry, subscriber, reject, entry.error); else finishSubscriber(entry, subscriber, resolve, entry.value); }
@@ -95,7 +95,7 @@ export const createLayerLoadScheduler = (configuration: { maxConcurrent?: unknow
   };
   const startEntry = (entry: SchedulerEntry): void => {
     if (destroyed || entry.settled || entry.subscribers.size === 0) return; entry.state = 'running'; entry.startedAt = clock(); entry.controller = createController(); active += 1; metrics.started += 1; metrics.peakConcurrent = Math.max(metrics.peakConcurrent, active); emit('started', entry);
-    Promise.resolve().then(() => entry.loader({ layer: entry.layer, layerId: entry.layerId, signal: entry.controller?.signal, priority: entry.priority, metadata: { ...entry.metadata } })).then((value) => settleEntry(entry, null, value), (error) => settleEntry(entry, error, undefined)).finally(() => { active = Math.max(0, active - 1); drain(); });
+    Promise.resolve().then(() => entry.loader({ layer: entry.layer, layerId: entry.layerId, ...(entry.controller ? { signal: entry.controller.signal } : {}), priority: entry.priority, metadata: { ...entry.metadata } })).then((value) => settleEntry(entry, null, value), (error) => settleEntry(entry, error, undefined)).finally(() => { active = Math.max(0, active - 1); drain(); });
   };
   const drain = (): void => { if (destroyed || draining) return; draining = true; try { sortQueue(); while (active < settings.maxConcurrent && queue.length) { const entry = queue.shift(); if (!entry || entry.settled || entry.subscribers.size === 0) continue; startEntry(entry); } } finally { draining = false; } };
   const schedule = <TLayer, TValue>(layer: TLayer, loader: SchedulerLoader<TLayer, TValue>, options: ScheduleOptions = {}): Promise<TValue> => {
@@ -132,8 +132,8 @@ export const createLayerRuntimeLoader = ({ scheduler, getTree, setTree, loadLaye
   const update = (action: LayerAction): LayerTree => { const current = getTree(); const next = layerReducer(current, action); if (next !== current) setTree(next); return next; };
   const load = (layer: LayerDescriptor, options: ScheduleOptions & { featureCount?: number } = {}): Promise<ArcGisLayerLike> => {
     const layerId = normalizeLayerId(layer); const existing = activeLoads.get(layerId); if (existing) return existing; const requestId = `${layerId}:${++requestSequence}`; update({ type: 'LOAD_START', layerId, requestId });
-    const promise = scheduler.schedule<LayerDescriptor, ArcGisLayerLike>(layer, async ({ signal, priority, metadata }) => { const sdkLayer = await loadLayer(layer, { layer, layerId, signal, priority, metadata }); if (signal?.aborted) throw cancelledError(layerId); applyRuntimeToSdkLayer(layer, sdkLayer); residency?.touch?.(layerId, { loadedAt: clock() }); return sdkLayer; }, options)
-      .then((sdkLayer) => { update({ type: 'SET_SDK_LAYER', layerId, requestId, sdkLayer }); update({ type: 'LOAD_SUCCESS', layerId, requestId, featureCount: Number.isFinite(options.featureCount) ? options.featureCount : undefined, loadedAt: new Date(clock()).toISOString() }); return sdkLayer; })
+    const promise = scheduler.schedule<LayerDescriptor, ArcGisLayerLike>(layer, async ({ signal, priority, metadata }) => { const sdkLayer = await loadLayer(layer, { layer, layerId, ...(signal === undefined ? {} : { signal }), priority, metadata }); if (signal?.aborted) throw cancelledError(layerId); applyRuntimeToSdkLayer(layer, sdkLayer); residency?.touch?.(layerId, { loadedAt: clock() }); return sdkLayer; }, options)
+      .then((sdkLayer) => { update({ type: 'SET_SDK_LAYER', layerId, requestId, sdkLayer }); update({ type: 'LOAD_SUCCESS', layerId, requestId, ...(Number.isFinite(options.featureCount) ? { featureCount: Number(options.featureCount) } : {}), loadedAt: new Date(clock()).toISOString() }); return sdkLayer; })
       .catch((error) => { if (error?.code === 'CANCELLED' || error?.name === 'AbortError') { update({ type: 'LOAD_CANCEL', layerId, requestId }); throw error; } update({ type: 'LOAD_ERROR', layerId, requestId, error }); throw error; })
       .finally(() => { if (activeLoads.get(layerId) === promise) activeLoads.delete(layerId); });
     activeLoads.set(layerId, promise); return promise;

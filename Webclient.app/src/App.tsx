@@ -12,11 +12,11 @@ import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
-import { setDefaultOptions } from 'esri-loader';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
-import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
+import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
+import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
 import { runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
@@ -24,18 +24,35 @@ import { DebugHelper } from './Toolbox/DebugHelper';
 
 const describeBootstrapError = (error: unknown): string => {
   if (!(error instanceof Error)) return 'Harita yapılandırması yüklenemedi.';
-  if (!import.meta.env.DEV) return error.message;
 
   const diagnostic = error as Error & { code?: unknown; cause?: unknown };
-  const code = diagnostic.code ? ` [${String(diagnostic.code)}]` : '';
-  const cause = diagnostic.cause instanceof Error && diagnostic.cause.message
-    ? ` — ${diagnostic.cause.message}`
+  const code = typeof diagnostic.code === 'string' && /^[A-Z0-9_-]{1,48}$/.test(diagnostic.code)
+    ? ` (${diagnostic.code})`
     : '';
-  const source = diagnostic.cause instanceof Error && diagnostic.cause.stack
-    ? ` (${diagnostic.cause.stack.split('\n')[1]?.trim() || ''})`
-    : '';
-  return `${diagnostic.message}${code}${cause}${source}`;
+  return `Harita yapılandırması yüklenemedi${code}. Lütfen bağlantınızı kontrol edip tekrar deneyin.`;
 };
+
+const SiteDataDisclaimer = () => (
+  <aside
+    aria-label="Veri kullanım uyarısı"
+    className="position-fixed start-50 translate-middle-x px-3 py-2 rounded-3 border shadow-sm text-center fw-semibold"
+    role="note"
+    style={{
+      bottom: 'calc(8px + env(safe-area-inset-bottom))',
+      zIndex: 1004,
+      maxWidth: 'calc(100vw - 24px)',
+      width: 'max-content',
+      pointerEvents: 'none',
+      backgroundColor: 'var(--exp-surface)',
+      borderColor: 'var(--exp-border)',
+      color: 'var(--exp-text)',
+      fontSize: '0.78rem',
+      lineHeight: 1.35,
+    }}
+  >
+    Sitede Gösterilen Veriler Bilgi Amaçlıdır. Resmî İşlemlerde <strong>KULLANILAMAZ!</strong>
+  </aside>
+);
 
 function App() {
   const windowManager = useWindowManager();
@@ -43,7 +60,7 @@ function App() {
   const [configErrorMessage, setConfigErrorMessage] = useState('');
 
   useEffect(() => {
-    setDefaultOptions({
+    const arcgisRuntime = configureArcgisModuleRuntime({
       version: AppConfig.App.EsriApiVersion,
       css: true,
       insertCssBefore: 'link[rel="stylesheet"]',
@@ -54,7 +71,8 @@ function App() {
 
     runtimeDiagnostics.record('app.bootstrap.started', {
       esriApiVersion: AppConfig.App.EsriApiVersion,
-      esriStylesheet: 'managed-by-esri-loader',
+      arcgisModuleBackend: arcgisRuntime.backend,
+      esriStylesheet: 'managed-by-arcgis-module-runtime',
     });
 
     bootstrapApplication({ signal: controller.signal })
@@ -89,6 +107,7 @@ function App() {
               <ExperienceWorkspace />
               <ExperienceUXLayer windowManager={windowManager} />
               <ExperienceCommandCenter windowManager={windowManager} />
+              <SiteDataDisclaimer />
             </>}
       </div>
     </ExperienceThemeProvider>

@@ -140,7 +140,7 @@ export const buildFetchOptions = (
   const options: RequestInit = {
     method: config.method.toUpperCase(),
     headers: bodyResult.headers,
-    signal: config.signal || undefined,
+    ...(config.signal ? { signal: config.signal } : {}),
     credentials: config.credentials || DEFAULT_FETCH_CREDENTIALS,
     cache: config.fetchCache || DEFAULT_FETCH_CACHE,
     redirect: config.redirect || DEFAULT_REDIRECT
@@ -193,10 +193,10 @@ export const executeFetch = async <T = unknown>(
   );
 
   const linked = createLinkedAbortScope({
-    signal: config.signal,
+    ...(config.signal ? { signal: config.signal } : {}),
     timeoutMs: config.timeout,
-    setTimeout: dependencies.setTimeout,
-    clearTimeout: dependencies.clearTimeout
+    ...(dependencies.setTimeout ? { setTimeout: dependencies.setTimeout } : {}),
+    ...(dependencies.clearTimeout ? { clearTimeout: dependencies.clearTimeout } : {})
   });
 
   const fetchOptions = buildFetchOptions(
@@ -293,13 +293,13 @@ export const createFetchTransport = (options: FetchTransportOptions = {}): Trans
   const dependencies: FetchDependencies = {
     defaults,
     baseUrl: defaults.baseUrl,
-    fetchImpl: options.fetchImpl,
-    clock: options.clock,
-    setTimeout: options.setTimeout,
-    clearTimeout: options.clearTimeout,
-    onStart: options.onStart,
-    onSuccess: options.onSuccess,
-    onFailure: options.onFailure
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.setTimeout ? { setTimeout: options.setTimeout } : {}),
+    ...(options.clearTimeout ? { clearTimeout: options.clearTimeout } : {}),
+    ...(options.onStart ? { onStart: options.onStart } : {}),
+    ...(options.onSuccess ? { onSuccess: options.onSuccess } : {}),
+    ...(options.onFailure ? { onFailure: options.onFailure } : {})
   };
 
   const request = <T = unknown>(config: RawRequestConfig = {}) => executeFetch<T>(config, dependencies);

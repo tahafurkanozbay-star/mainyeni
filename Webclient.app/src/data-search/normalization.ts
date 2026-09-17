@@ -161,7 +161,7 @@ export const getRecordSources = (value: unknown): readonly UnknownRecord[] => {
   const sources: UnknownRecord[] = [value];
   const nestedKeys = ['attributes', 'attr', 'properties', 'fields', 'data'];
   for (const key of nestedKeys) {
-    const nested = value[key];
+    const nested: unknown = value[key];
     if (isRecord(nested) && nested !== value) sources.push(nested);
   }
   return sources;

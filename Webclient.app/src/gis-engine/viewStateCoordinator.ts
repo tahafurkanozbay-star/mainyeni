@@ -91,7 +91,7 @@ export const createViewStateCoordinator = (initial: Partial<GisViewState> = {}) 
         center,
         scale: Math.max(1, finite(camera.scale, 1)),
         rotation: finite(camera.rotation),
-        spatialReferenceWkid: camera.spatialReferenceWkid,
+        ...(camera.spatialReferenceWkid === undefined ? {} : { spatialReferenceWkid: camera.spatialReferenceWkid }),
       });
       return publish({ ...state, camera2d: normalized }, 'camera-2d');
     },
@@ -103,7 +103,7 @@ export const createViewStateCoordinator = (initial: Partial<GisViewState> = {}) 
         position,
         heading: finite(camera.heading),
         tilt: Math.max(0, Math.min(180, finite(camera.tilt))),
-        spatialReferenceWkid: camera.spatialReferenceWkid,
+        ...(camera.spatialReferenceWkid === undefined ? {} : { spatialReferenceWkid: camera.spatialReferenceWkid }),
       });
       return publish({ ...state, camera3d: normalized }, 'camera-3d');
     },

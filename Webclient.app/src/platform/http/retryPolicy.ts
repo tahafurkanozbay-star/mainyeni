@@ -301,15 +301,19 @@ export const executeWithRetry = async <T>(
 
   while (true) {
     try {
-      onAttempt?.({ attempt, signal });
-      return await operation({ attempt, signal });
+      const attemptContext = {
+        attempt,
+        ...(signal === undefined ? {} : { signal }),
+      };
+      onAttempt?.(attemptContext);
+      return await operation(attemptContext);
     } catch (error) {
       const decision = createRetryDecision({
         error,
         attempt,
         maxRetries,
         retryAllowed,
-        signal,
+        ...(signal === undefined ? {} : { signal }),
         options: retryOptions
       });
 

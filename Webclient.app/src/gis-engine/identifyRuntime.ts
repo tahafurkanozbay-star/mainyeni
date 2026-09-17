@@ -1,15 +1,13 @@
-import { loadModules } from 'esri-loader';
+import { evictArcgisModule, loadArcgisModules } from './arcgisModuleRuntime';
 import type { ArcGisGeometryLike, ArcGisGraphicLike } from './contracts';
 
-const modulePromises = new Map<string, Promise<any>>();
-export const clearIdentifyRuntimeCache = (): void => { modulePromises.clear(); };
+const IDENTIFY_MODULE_IDS = [
+  'esri/rest/identify',
+  'esri/rest/support/IdentifyParameters',
+] as const;
 
-const load = <T = any>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name]).then((modules) => modules[0]).catch((error) => { modulePromises.delete(name); throw error; });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
+export const clearIdentifyRuntimeCache = (): void => {
+  IDENTIFY_MODULE_IDS.forEach((moduleId) => evictArcgisModule(moduleId));
 };
 
 export interface IdentifyRuntimeError extends Error { code?: string; }
@@ -108,13 +106,14 @@ type Settled<T> = { status: 'fulfilled'; value: T } | { status: 'rejected'; reas
 const settleWithConcurrency = async <TItem, TResult>(items: TItem[], worker: (item: TItem, index: number) => Promise<TResult>, concurrency = 4, signal?: AbortSignal): Promise<Array<Settled<TResult>>> => {
   const source = Array.isArray(items) ? items : [];
   const limit = Math.max(1, Math.min(8, Number(concurrency) || 4));
-  const results = new Array<Settled<TResult>>(source.length);
+  const results: Array<Settled<TResult>> = [];
+  results.length = source.length;
   let cursor = 0;
   const run = async (): Promise<void> => {
     while (cursor < source.length) {
       throwIfAborted(signal);
       const index = cursor; cursor += 1;
-      try { results[index] = { status: 'fulfilled', value: await worker(source[index], index) }; }
+      try { results[index] = { status: 'fulfilled', value: await worker(source[index]!, index) }; }
       catch (error) { if ((error as IdentifyRuntimeError)?.code === 'CANCELLED') throw error; results[index] = { status: 'rejected', reason: error }; }
     }
   };
@@ -129,8 +128,8 @@ const createIdentifyParameters = (IdentifyParameters: IdentifyParametersCtor, vi
   const params = new IdentifyParameters({ returnGeometry: options.returnGeometry !== false, geometry: mapPoint, tolerance: Number.isFinite(options.tolerance) ? Math.max(0, Number(options.tolerance)) : 3, mapExtent: view?.extent });
   if (view?.width) params.width = view.width;
   if (view?.height) params.height = view.height;
-  if (Number.isFinite(view?.resolution)) params.resolution = view.resolution;
-  if (Number.isFinite(options.dpi)) params.dpi = options.dpi;
+  if (Number.isFinite(view?.resolution)) params.resolution = Number(view.resolution);
+  if (Number.isFinite(options.dpi)) params.dpi = Number(options.dpi);
   if (options.layerOption) params.layerOption = options.layerOption;
   if (Array.isArray(options.layerIds) && options.layerIds.length) params.layerIds = options.layerIds;
   return params;
@@ -160,7 +159,10 @@ export const identifyMapServices = async (view: IdentifyViewLike, mapPoint: ArcG
   throwIfAborted(options.signal);
   const source = Array.isArray(targets) ? targets : collectIdentifyTargets(view).mapServices;
   if (!source.length) return { results: [], failures: [] };
-  const [identify, IdentifyParameters] = await raceCancellation(Promise.all([load<any>('esri/rest/identify'), load<IdentifyParametersCtor>('esri/rest/support/IdentifyParameters')]), options.signal);
+  const [identify, IdentifyParameters] = await raceCancellation(
+    loadArcgisModules<[any, IdentifyParametersCtor]>(IDENTIFY_MODULE_IDS),
+    options.signal,
+  );
   throwIfAborted(options.signal);
   const settled = await settleWithConcurrency(source, async (target) => {
     throwIfAborted(options.signal);
@@ -172,7 +174,7 @@ export const identifyMapServices = async (view: IdentifyViewLike, mapPoint: ArcG
   }, options.concurrency, options.signal);
   const results: IdentifyResult[] = [];
   const failures: IdentifyFailure[] = [];
-  settled.forEach((entry, index) => { if (entry.status === 'fulfilled') results.push(...entry.value); else failures.push({ target: source[index], error: entry.reason }); });
+  settled.forEach((entry, index) => { if (entry.status === 'fulfilled') results.push(...entry.value); else failures.push({ target: source[index]!, error: entry.reason }); });
   return { results, failures };
 };
 
@@ -254,7 +256,7 @@ export const createIdentifySession = (): IdentifySession => {
   const cancel = (): void => { generation += 1; controller?.abort?.(); controller = null; };
   const run = async (view: IdentifyViewLike, event: IdentifyEventLike, options: IdentifyOptions = {}): Promise<GlobalIdentifyResult> => {
     cancel(); const localGeneration = generation; const localController = typeof AbortController !== 'undefined' ? new AbortController() : null; controller = localController;
-    try { const result = await executeGlobalIdentify(view, event, { ...options, signal: localController?.signal }); if (generation !== localGeneration) throw cancelledError(); return result; }
+    try { const result = await executeGlobalIdentify(view, event, { ...options, ...(localController ? { signal: localController.signal } : {}) }); if (generation !== localGeneration) throw cancelledError(); return result; }
     finally { if (controller === localController) controller = null; }
   };
   return { run, cancel, get generation() { return generation; }, get active() { return Boolean(controller); } };

@@ -5,11 +5,11 @@ import {
 } from './iconPresentation';
 import {
   FEATURE_RENDER_STRATEGY,
-  FeatureRenderPlan,
   createClusterConfiguration,
   planFeatureRendering,
 } from './featureBudget';
-import { Dictionary, IconRecord } from './contracts';
+import type { FeatureRenderPlan } from './featureBudget';
+import type { Dictionary, IconRecord, IconResolveOptions, PictureMarkerOptions } from './contracts';
 
 export const GIS_VIEW_MODE = Object.freeze({
   MAP_2D: '2d',
@@ -307,15 +307,19 @@ const pointSymbol = (
   context: PointPresentationContext & { mode: GisViewMode },
   options: PresentationOptions,
 ): ReturnType<typeof create3DGraphicModel> | ReturnType<typeof createPictureMarkerSymbol> => {
+  const iconOptions: IconResolveOptions = options.fallbackIcon === undefined
+    ? {}
+    : { fallback: options.fallbackIcon };
   if (context.mode === GIS_VIEW_MODE.SCENE_3D) {
-    return create3DGraphicModel(record, { fallback: options.fallbackIcon });
+    return create3DGraphicModel(record, iconOptions);
   }
-  return createPictureMarkerSymbol(record, finite(context.zoom, 12) as number, {
-    fallback: options.fallbackIcon,
+  const markerOptions: PictureMarkerOptions = {
+    ...iconOptions,
     minSize: finite(options.minIconSize, 24) as number,
     maxSize: finite(options.maxIconSize, 48) as number,
     zoomThreshold: finite(options.zoomThreshold, 10) as number,
-  });
+  };
+  return createPictureMarkerSymbol(record, finite(context.zoom, 12) as number, markerOptions);
 };
 
 export const createSharedPointPresentation = (
@@ -324,8 +328,11 @@ export const createSharedPointPresentation = (
   options: PresentationOptions = {},
 ): SharedPointPresentation => {
   const mode = normalizeMode(context.mode);
+  const iconOptions: IconResolveOptions = options.fallbackIcon === undefined
+    ? {}
+    : { fallback: options.fallbackIcon };
   return Object.freeze({
-    iconKey: getIconKey(record, { fallback: options.fallbackIcon }),
+    iconKey: getIconKey(record, iconOptions),
     mode,
     symbol: pointSymbol(record, { ...context, mode }, options),
   });
@@ -390,7 +397,7 @@ export const planLayerPresentation = ({
     averageVertices: featureStats.averageVertices,
     hasLabels: Boolean(options.labelField),
     hasPictures: geometryType === 'point' && Boolean(options.hasPictures),
-    supportsClustering: options.supportsClustering,
+    ...(options.supportsClustering === undefined ? {} : { supportsClustering: options.supportsClustering }),
     serviceMaxRecordCount: featureStats.serviceMaxRecordCount,
   }, {
     ...performanceBudget,
@@ -403,7 +410,7 @@ export const planLayerPresentation = ({
   const featureReduction = renderPlan.shouldCluster
     ? createClusterConfiguration(renderPlan, {
       radius: options.clusterRadius,
-      popupEnabled: options.clusterPopupEnabled,
+      ...(options.clusterPopupEnabled === undefined ? {} : { popupEnabled: options.clusterPopupEnabled }),
       fields: recommendedOutFields(options),
     })
     : null;

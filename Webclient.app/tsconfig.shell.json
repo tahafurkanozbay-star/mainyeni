@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noImplicitAny": false,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": [
+    "src/experience/contracts.ts",
+    "src/Components/App/SidebarModern.tsx",
+    "src/Components/Widget/Toolbar/ToolbarWidgetModern.tsx",
+    "src/Components/Common/ExperienceCommandCenterModern.tsx"
+  ],
+  "exclude": ["node_modules", "build", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
+}

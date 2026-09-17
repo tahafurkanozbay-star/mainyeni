@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true
+  },
+  "files": [
+    "src/gis-engine/arcgisModuleRuntime.ts",
+    "src/gis-engine/arcgisEsmTransport.ts",
+    "src/gis-engine/arcgisQuerySessionRuntime.ts",
+    "src/gis-engine/measurementRuntime.ts",
+    "src/gis-engine/identifyRuntime.ts",
+    "src/gis-engine/spatialEngine.ts",
+    "src/gis-engine/adaptiveClusterRuntime.ts",
+    "src/gis-engine/spatialIntegrityRuntime.ts",
+    "src/gis-engine/renderParityRuntime.ts",
+    "src/gis-engine/spatialWorkloadGovernor.ts",
+    "src/gis-engine/modernGisHardeningRuntime.ts"
+  ],
+  "include": [],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}

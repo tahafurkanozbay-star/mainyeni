@@ -1,4 +1,4 @@
-import { loadModules } from 'esri-loader';
+import { loadArcgisModules } from './arcgisModuleRuntime';
 import type {
   AnalysisInput,
   ArcGisFeatureSetLike,
@@ -30,27 +30,12 @@ interface ProjectionLike {
 
 type SpatialReferenceCtor = new (options: { wkid: number }) => unknown;
 
-const modulePromises = new Map<string, Promise<unknown>>();
 const SPATIAL_RELATIONS = new Set<SpatialRelation>([
   'contains', 'crosses', 'disjoint', 'equals', 'intersects', 'overlaps', 'touches', 'within',
 ]);
 
-const loadModule = <T = unknown>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name])
-      .then((values) => values[0])
-      .catch((error) => {
-        modulePromises.delete(name);
-        throw error;
-      });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
-};
-
-const modules = <T extends unknown[]>(names: string[]): Promise<T> => Promise.all(
-  names.map((name) => loadModule(name)),
-) as Promise<T>;
+const modules = <T extends readonly unknown[]>(names: readonly string[]): Promise<T> =>
+  loadArcgisModules<T>(names);
 
 const stable = (value: unknown, seen = new WeakSet<object>()): string => {
   if (value === null || value === undefined) return String(value);
@@ -188,7 +173,12 @@ export const queryByGeometry = async (
   throwIfAborted(signal);
   if (!layer?.queryFeatures) throw new Error('FeatureLayer-like object is required.');
 
-  const query = { geometry, where, outFields, returnGeometry };
+  const query = {
+    ...(geometry === undefined ? {} : { geometry }),
+    where,
+    outFields,
+    returnGeometry,
+  };
   const requestOptions = signal ? { signal } : undefined;
   const result = await layer.queryFeatures(query, requestOptions);
   throwIfAborted(signal);
