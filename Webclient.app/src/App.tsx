@@ -7,7 +7,7 @@ import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
 import { MapComponent } from './Components/App/MapComponent';
-import { Constants_LoadingStatus } from './Core/Constants';
+import { Constants_LoadingStatus, type LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { FullScreenLoading } from './Components/Common/Loading';
@@ -23,7 +23,7 @@ import { runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
 
 function App() {
   const windowManager = useWindowManager();
-  const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
+  const [configLoadStatus, setConfigLoadStatus] = useState<LoadingStatus>(Constants_LoadingStatus.LOADING);
 
   useEffect(() => {
     // esri-loader must own both SDK script and stylesheet resolution. Keeping the

@@ -1,208 +1,105 @@
-import axios from 'axios';
 import { loadModules } from "esri-loader";
-import {AppConfig} from "../Core/AppConfig";
+import { AppConfig } from "../Core/AppConfig";
 import { IsNull } from "../Toolbox/ObjectHelper";
 import { AuthBusiness } from "./AuthBusiness";
+import { HttpBusiness } from "./HttpBusiness";
+
+const normalizeTkgmPayload = payload => {
+    if (typeof payload !== "string") return payload;
+    return JSON.parse(payload);
+};
+
+const getAuthenticatedTkgmResource = async path => {
+    const headers = await AuthBusiness.GetRequestHeaders();
+    const payload = await HttpBusiness.Get(AppConfig.Api.BaseUrl + path, { headers });
+    return normalizeTkgmPayload(payload);
+};
 
 export const TkgmQueryBusiness = {
-
     /* Tkgm servisinden ilçeler elde edilir */
-    GetDistricts: async (_cityId) => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise(resolve => {
-
-            let url = AppConfig.Api.BaseUrl + '/Gis/Tkgm/Districts/'+_cityId
-
-            axios({
-                method: "get",
-                url: url,
-                headers: _headers,
-            }).then((response) => {
-                
-
-                var data=JSON.parse(response.data);
-                resolve(data?.features);
-
-            }).catch(function (error) {
-
-                console.log(error);
-                resolve(null);
-
-            });
-
-        });
+    GetDistricts: async _cityId => {
+        try {
+            const data = await getAuthenticatedTkgmResource('/Gis/Tkgm/Districts/' + encodeURIComponent(_cityId));
+            return data?.features;
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     },
 
-
-    /* Tkgm servisinden ilçeye ait mahalle listesi çağırılır*/
-    GetNeighborhoodsOfDistrict: async (_districtId) => {
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise(resolve => {
-
-            let url = AppConfig.Api.BaseUrl + '/Gis/Tkgm/Nbhoods/'+_districtId
-
-            axios({
-                method: "get",
-                url: url,
-                headers: _headers,
-            }).then((response) => {
-                
-                var data=JSON.parse(response.data);
-                resolve(data?.features);
-
-            }).catch(function (error) {
-
-                console.log(error);
-                resolve(null);
-
-            });
-
-        });
+    /* Tkgm servisinden ilçeye ait mahalle listesi çağırılır */
+    GetNeighborhoodsOfDistrict: async _districtId => {
+        try {
+            const data = await getAuthenticatedTkgmResource('/Gis/Tkgm/Nbhoods/' + encodeURIComponent(_districtId));
+            return data?.features;
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     },
 
-    /*mahalle ve adaya göre parsel listesini getirir*/
-    GetParcels: async (_query) => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise(resolve => {
-
-            let url = AppConfig.Api.BaseUrl + '/Gis/Tkgm/Parcel/'+_query.district+'/'+_query.nbhood+'/'+_query.cityblock+'/'+_query.parcel;
-
-
-            axios({
-                method: "get",
-                url: url,
-                headers: _headers,
-            }).then((response) => {
-                
-                resolve(JSON.parse(response.data));
-
-            }).catch(function (error) {
-
-                console.log(error);
-                resolve(null);
-
-            });
-
-        });
+    /* mahalle ve adaya göre parsel listesini getirir */
+    GetParcels: async _query => {
+        try {
+            return await getAuthenticatedTkgmResource(
+                '/Gis/Tkgm/Parcel/' +
+                encodeURIComponent(_query.district) + '/' +
+                encodeURIComponent(_query.nbhood) + '/' +
+                encodeURIComponent(_query.cityblock) + '/' +
+                encodeURIComponent(_query.parcel)
+            );
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     },
 
-
-
-
-    //Tkgm/TkgmServicev2.svc/GetParcelInfo?adano=101&parselno=36&tapumahalleref=11607&token=SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
     GetParcelInfo: async (_neighborhoodId, _cityBlockNo, _parcelNo) => {
+        if (IsNull(_neighborhoodId) && IsNull(_cityBlockNo) && IsNull(_parcelNo)) return null;
 
-        
-        return new Promise(resolve => {
-
-            if (IsNull(_neighborhoodId) && IsNull(_cityBlockNo) && IsNull(_parcelNo)) {
-                resolve(null);
-            }
-
-            if (IsNull(_cityBlockNo)) {
-                _cityBlockNo = 0;
-            }
-
-            let url = AppConfig.Api.Url + '/Tkgm/TkgmServicev2.svc/GetParcelInfo';
-
-            let config = {
-            
+        try {
+            return await HttpBusiness.Get(AppConfig.Api.Url + '/Tkgm/TkgmServicev2.svc/GetParcelInfo', {
                 params: {
                     mahalleId: _neighborhoodId,
-                    adaNo: _cityBlockNo,
+                    adaNo: IsNull(_cityBlockNo) ? 0 : _cityBlockNo,
                     parselNo: _parcelNo,
                 }
-            };
-
-            axios.get(url, config)
-                .then((response) => {
-                    let result = response.data;
-
-                    resolve(result);
-                }, (error) => {
-                    console.log(error);
-                    resolve(null);
-
-                });
-        }).catch((reject, ex) => {
-            console.log(ex);
-            reject(null);
-        });
+            });
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     },
 
     /* Noktayı tapu parseliyle kesiştirerek, kesişen parsel bilgisini getirir */
-    IntersectMapPointWithTkgmParcel: async (_point) => {
-
-
-        return new Promise((resolve, reject) => {
-
-            let y = _point.latitude;
-            let x = _point.longitude;
-
-            let url = 'https://cbsapi.tkgm.gov.tr/megsiswebapi.v3/api/parsel';
-
-            url += '/' + y + '/' + x;
-
-            fetch(url, {
-                referrer: ""
-            }).then(response => response.json())
-                .then((result) => {
-
-                    resolve(result);
-
-                }, (error) => {
-
-                    console.log(error);
-                    resolve(null);
-
-                });
-        })
+    IntersectMapPointWithTkgmParcel: async _point => {
+        try {
+            const y = _point.latitude;
+            const x = _point.longitude;
+            return await HttpBusiness.Get(`https://cbsapi.tkgm.gov.tr/megsiswebapi.v3/api/parsel/${y}/${x}`);
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     },
 
-    IntersectMapPolygonWithTkgmParcel: async (_geometry) => {
+    IntersectMapPolygonWithTkgmParcel: async _geometry => {
+        const [WebMercatorUtils] = await loadModules(["esri/geometry/support/webMercatorUtils"]);
+        const polygonGeometry = WebMercatorUtils.webMercatorToGeographic(_geometry);
+        const polygonRings = polygonGeometry.rings[0]
+            .map(point => `${point[0].toFixed(6)} ${point[1].toFixed(6)}`)
+            .join(",");
 
-        loadModules(["esri/geometry/support/webMercatorUtils"]).then(([WebMercatorUtils]) => {
-
-            return new Promise((resolve, reject) => {
-
-                let polygonGeometry = WebMercatorUtils.webMercatorToGeographic(_geometry);
-
-                let url = AppConfig.Api.Url + '/Tkgm/TkgmServicev2.svc/GetParcelsInPolygon';
-
-                let polygonRings = polygonGeometry.rings[0].map(x => {
-                    return x[0].toFixed(6) + " " + x[1].toFixed(6)
-                }).join(",") + "";
-
-                let config = {
-                    //headers: headers,
-                    params: {
-                        polygon: encodeURI(polygonRings),
-                        pasifleriGoster: true,
-                    }
-                };
-
-
-                axios.get(url, config).then((response) => {
-
-                    let result = response.data;
-
-                    resolve(result);
-
-                }, (error) => {
-
-                    console.log(error);
-                    resolve(null);
-
-                });
-
+        try {
+            return await HttpBusiness.Get(AppConfig.Api.Url + '/Tkgm/TkgmServicev2.svc/GetParcelsInPolygon', {
+                params: {
+                    polygon: polygonRings,
+                    pasifleriGoster: true,
+                }
             });
-
-        });
-
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     }
-}
+};
