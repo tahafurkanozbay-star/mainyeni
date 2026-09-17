@@ -287,7 +287,10 @@ const snapshotRecord = (
   kind: record.definition.kind,
   status: record.status,
   requestedVisible: record.definition.visible !== false,
-  effectiveVisible: desiredVisible(record, active, scale) && record.layer?.visible !== false,
+  effectiveVisible: record.status !== 'blocked'
+    && record.status !== 'disposed'
+    && desiredVisible(record, active, scale)
+    && record.layer?.visible !== false,
   admitted: record.admitted,
   admissionReason: record.admissionReason,
   attempts: record.attempts,
@@ -396,6 +399,10 @@ export const createSceneContentOrchestrator = (
   };
 
   const applyVisibility = (record: MutableSceneContentRecord): void => {
+    if (record.status === 'blocked' && !record.admitted) {
+      if (record.layer) record.layer.visible = false;
+      return;
+    }
     const visible = desiredVisible(record, active, scale);
     if (record.layer) {
       applyLayerPresentation(record.layer, record.definition, visible);
