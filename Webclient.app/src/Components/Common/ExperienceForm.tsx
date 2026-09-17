@@ -3,9 +3,9 @@ import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttribu
 interface FieldFrameProps {
   readonly id: string;
   readonly label: string;
-  readonly hint?: string;
-  readonly error?: string;
-  readonly required?: boolean;
+  readonly hint?: string | undefined;
+  readonly error?: string | undefined;
+  readonly required?: boolean | undefined;
   readonly children: ReactNode;
 }
 
