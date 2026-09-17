@@ -83,16 +83,16 @@ const hasLegacyLoaderImport = (file: string): boolean => {
     || DYNAMIC_IMPORT_PATTERN.test(source);
 };
 
-describe('ArcGIS module loading boundary', () => {
-  it('keeps the legacy loader isolated behind arcgisModuleRuntime in production sources', () => {
-    const sourceRoot = resolve(process.cwd(), 'src');
-    const offenders = collectSourceFiles(sourceRoot)
-      .filter((file) => !file.includes('.test.'))
-      .filter(hasLegacyLoaderImport)
-      .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
-      .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
-      .sort();
+const sourceRoot = resolve(process.cwd(), 'src');
+const offenders = collectSourceFiles(sourceRoot)
+  .filter((file) => !file.includes('.test.'))
+  .filter(hasLegacyLoaderImport)
+  .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
+  .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
+  .sort();
 
+describe('ArcGIS module loading boundary', () => {
+  it(`keeps the legacy loader isolated behind arcgisModuleRuntime in production sources [offenders: ${offenders.join(', ') || 'none'}]`, () => {
     expect(offenders).toEqual([]);
   });
 });
