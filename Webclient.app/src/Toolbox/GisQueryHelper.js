@@ -1,4 +1,4 @@
-import { evictArcgisModules, loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
+import { loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
 import { Constants_ServiceResultType } from "../Core/Constants";
 import { stableQueryKey } from "../gis-engine/spatialEngine";
 import {
@@ -315,7 +315,6 @@ export const invalidateGisQueryCacheTag = (tag) => queryRuntime.invalidateTag(ta
 export const clearGisQueryRuntime = () => {
     queryRuntime.clear({ abortInFlight: true });
     queryModulesPromise = null;
-    evictArcgisModules(QUERY_MODULE_IDS);
 };
 
 export const configureGisQueryRuntime = (options = {}) => queryRuntime.configure(options);
