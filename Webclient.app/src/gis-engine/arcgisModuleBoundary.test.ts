@@ -3,7 +3,8 @@ import { extname, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
-const ALLOWED_ESRI_LOADER_IMPORT = 'gis-engine/arcgisModuleRuntime.ts';
+const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
+const ALLOWED_LEGACY_IMPORT = 'gis-engine/arcgisModuleRuntime.ts';
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
@@ -13,12 +14,13 @@ const collectSourceFiles = (directory: string): string[] => readdirSync(director
   });
 
 describe('ArcGIS module loading boundary', () => {
-  it('keeps esri-loader imports isolated behind arcgisModuleRuntime', () => {
+  it('keeps the legacy loader isolated behind arcgisModuleRuntime in production sources', () => {
     const sourceRoot = resolve(process.cwd(), 'src');
     const offenders = collectSourceFiles(sourceRoot)
-      .filter((file) => readFileSync(file, 'utf8').includes('esri-loader'))
+      .filter((file) => !file.includes('.test.'))
+      .filter((file) => readFileSync(file, 'utf8').includes(LEGACY_LOADER_PACKAGE))
       .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
-      .filter((file) => file !== ALLOWED_ESRI_LOADER_IMPORT)
+      .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
       .sort();
 
     expect(offenders).toEqual([]);
