@@ -19,6 +19,10 @@ import {
   type SceneExperienceSnapshot,
   type SceneExperienceView,
 } from '../../gis-engine/sceneExperienceRuntime';
+import {
+  createSceneNavigationRuntime,
+  type SceneNavigationRuntime,
+} from '../../gis-engine/sceneNavigationRuntime';
 import { createViewState } from '../../gis-engine/viewState';
 import {
   EXPERIENCE_ANNOUNCEMENT_EVENT,
@@ -27,6 +31,7 @@ import {
   type ExperienceCommandDetail,
   type ExperienceMapMode,
 } from '../../experience/experienceRuntime';
+import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experience/sceneCommandRuntime';
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
@@ -141,18 +146,19 @@ const prefersReducedMotion = (): boolean => (
  *
  * The SceneView is lazy and shares the exact ArcGIS Map used by the MapView.
  * This preserves layer visibility, basemap and selection state while avoiding a
- * second data model. A dedicated scene experience runtime adapts SDK quality to
- * device/frame pressure and owns WebGL fatal-error recovery.
+ * second data model. Dedicated scene experience and navigation runtimes adapt
+ * quality, own WebGL recovery, and bound camera movement/history.
  */
 export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
+  const sceneNavigationRef = useRef<SceneNavigationRuntime | null>(null);
+  const sceneNavigationHomeSetRef = useRef(false);
   const unbindSceneRef = useRef<() => void>(() => undefined);
   const unsubscribeExperienceRef = useRef<() => boolean>(() => false);
   const disposedRef = useRef(false);
   const transitionRef = useRef<Promise<void>>(Promise.resolve());
-  const sceneHomeStateRef = useRef<ReturnType<typeof createViewState> | null>(null);
   const activeModeRef = useRef<ExperienceMapMode>('2d');
   const [activeMode, setActiveMode] = useState<ExperienceMapMode>('2d');
   const [sceneReady, setSceneReady] = useState(false);
@@ -192,10 +198,26 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     return runtime;
   }, [syncSceneUi]);
 
+  const bindSceneNavigation = useCallback((view: SceneExperienceView) => {
+    sceneNavigationRef.current?.dispose();
+    sceneNavigationHomeSetRef.current = false;
+    const runtime = createSceneNavigationRuntime(view as never, {
+      reducedMotion: prefersReducedMotion,
+      defaultDurationMs: 220,
+      onError: (error, context) => DebugHelper.Log({ context, error }),
+    });
+    sceneNavigationRef.current = runtime;
+    return runtime;
+  }, []);
+
   const ensureScene = useCallback(async (): Promise<SceneHandle | null> => {
     const current = sceneRef.current;
     if (current?.view && !current.view.destroyed) return current;
     if (!mapView || !sceneHostRef.current) return null;
+
+    sceneNavigationRef.current?.dispose();
+    sceneNavigationRef.current = null;
+    sceneNavigationHomeSetRef.current = false;
 
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
@@ -223,9 +245,10 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
 
     sceneRef.current = scene;
     bindSceneExperience(scene.view);
+    bindSceneNavigation(scene.view);
     setSceneReady(true);
     return scene;
-  }, [bindSceneExperience, mapView]);
+  }, [bindSceneExperience, bindSceneNavigation, mapView]);
 
   const activate3D = useCallback(async (): Promise<void> => {
     if (!mapView || activeModeRef.current === '3d') {
@@ -255,6 +278,11 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
         animate: !prefersReducedMotion(),
       });
+
+      if (!sceneNavigationHomeSetRef.current) {
+        sceneNavigationRef.current?.setHome();
+        sceneNavigationHomeSetRef.current = true;
+      }
 
       unbindSceneRef.current?.();
       unbindSceneRef.current = bindSceneState(scene.view, bridge as never, undefined, {
@@ -334,41 +362,23 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     return transitionRef.current;
   }, [activate2D, activate3D]);
 
-  const executeSceneCommand = useCallback(async (detail: ExperienceCommandDetail): Promise<boolean> => {
+  const executeActiveSceneCommand = useCallback(async (detail: ExperienceCommandDetail): Promise<boolean> => {
     if (activeModeRef.current !== '3d') return false;
     const view = sceneRef.current?.view;
-    if (!view || view.destroyed) return false;
-    const animation = {
-      duration: prefersReducedMotion() ? 0 : 220,
-      animate: !prefersReducedMotion(),
-    };
+    const navigation = sceneNavigationRef.current;
+    if (!view || view.destroyed || !navigation) return false;
 
-    if (detail.name === 'map-home') {
-      const home = sceneHomeStateRef.current;
-      if (!home) return false;
-      await applyViewStateToSceneView(view, home, {
-        allowCrossMode: true,
-        ...animation,
-      });
-      return true;
-    }
-
-    if (detail.name === 'map-zoom-in' || detail.name === 'map-zoom-out') {
-      const scale = Number(view.scale);
-      if (!Number.isFinite(scale) || !view.goTo) return false;
-      const factor = detail.name === 'map-zoom-in' ? 0.5 : 2;
-      await view.goTo({ scale: Math.max(25, scale * factor) }, animation);
-      return true;
-    }
-
-    if (detail.name === 'focus-map') {
-      const container = view.container instanceof HTMLElement ? view.container : sceneHostRef.current;
-      const focusTarget = container?.querySelector<HTMLElement>('.esri-view-surface, [tabindex="0"]');
-      focusTarget?.focus({ preventScroll: true });
-      return Boolean(focusTarget);
-    }
-
-    return false;
+    return executeSceneRuntimeCommand(detail, {
+      navigation,
+      reducedMotion: prefersReducedMotion,
+      durationMs: 220,
+      focusMap: () => {
+        const container = view.container instanceof HTMLElement ? view.container : sceneHostRef.current;
+        const focusTarget = container?.querySelector<HTMLElement>('.esri-view-surface, [tabindex="0"]');
+        focusTarget?.focus({ preventScroll: true });
+        return Boolean(focusTarget);
+      },
+    });
   }, []);
 
   useEffect(() => {
@@ -378,11 +388,6 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     if (modeRef) modeRef.current = '2d';
     publishMode('2d', 'map-runtime-ready');
 
-    const bridge = MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null;
-    if (bridge?.getState && !sceneHomeStateRef.current) {
-      sceneHomeStateRef.current = normalizeSceneStateFromMap(mapView, bridge);
-    }
-
     const onCommand = (event: Event) => {
       const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
       if (!detail) return;
@@ -391,7 +396,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         void queueTransition(detail.mode);
         return;
       }
-      void executeSceneCommand(detail).catch((error: unknown) => DebugHelper.Log(error));
+      void executeActiveSceneCommand(detail).catch((error: unknown) => DebugHelper.Log(error));
     };
 
     const onVisibilityChange = () => {
@@ -406,7 +411,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
       window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [executeSceneCommand, mapView, modeRef, queueTransition]);
+  }, [executeActiveSceneCommand, mapView, modeRef, queueTransition]);
 
   useEffect(() => () => {
     disposedRef.current = true;
@@ -416,6 +421,9 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     unsubscribeExperienceRef.current = () => false;
     sceneExperienceRef.current?.dispose();
     sceneExperienceRef.current = null;
+    sceneNavigationRef.current?.dispose();
+    sceneNavigationRef.current = null;
+    sceneNavigationHomeSetRef.current = false;
     if (sceneRef.current) destroySceneView(sceneRef.current);
     sceneRef.current = null;
   }, []);
