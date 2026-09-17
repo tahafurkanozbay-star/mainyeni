@@ -34,3 +34,28 @@
 - PERFORMANS ETKİSİ: bounded global/lane concurrency and queue limits cap work/memory pressure; dedupe suppresses duplicate work; readiness-gated execution and deterministic lifecycle reduce race/restart amplification; no polling loop/background timer added.
 - ÇÖZÜLEN HATALAR: stale Platform PR #65 was superseded and is closed; runtime operations that ignore AbortSignal are now deadline-bounded; observer failures cannot replace business outcomes; CI distinguishes staged baseline debt from new exact-base regressions.
 - KALAN SORUNLAR / SONRAKİ GÖREV: PR #67 (strict Business/Core/Redux TypeScript migration) and PR #69 (Vite/debug/browser dependency hotfix) are now stale/non-mergeable against advanced `main`; do not stack new Platform work onto them. Next Platform turn must refresh `main`, determine which unmerged changes are still absent after #72, and reapply only non-overlapping validated work on a fresh current-main branch. Preserve concurrent GIS/Data/Experience ownership. Require >=4,000 meaningful additions on the canonical Platform PR plus exact-head completed+success CI, conflict-free mergeability, security/performance/regression review and final main refresh before merge.
+
+## Deep Platform / Architecture — 2026-09-16 18:00 TRT
+- TUR / GÖREV: Whole-Code strict TypeScript continuation on current main; Business/Core/Store/Toolbox modernization recovered from stale PR #67 without carrying stale platform/GIS trees.
+- BASE MAIN: `2dd3ce93a4581959ce37bdca7ecc9c9920b8b9c0`.
+- BRANCH: `agent/platform-ts-core-20260916-1800-2dd3ce9`.
+- PR: #76 `feat(platform): strict TypeScript business/core/store/toolbox modernization`.
+- HEAD before progress commit: `ffcc5834e03baaf007b858d14b34a6f0ae5a9f7b`.
+- MERGE DURUMU: OPEN / NOT MERGED. Base...head = 4,524 additions / 1,231 deletions / 55 files before this progress commit, so the meaningful-additions threshold is met; merge remains forbidden until exact-head required CI is completed+success and mergeability is conflict-free.
+- ÖNEMLİ ÖZELLİKLER: typed Business service contracts/runtime, typed configuration/constants, Redux/store contracts and managers, typed Toolbox utilities and focused regression tests; stale #67 platform/GIS trees were not transplanted.
+- NETWORK DEĞİŞİKLİKLERİ: no WMS/WFS/WMTS or new remote endpoint introduced by this continuation.
+- TESTLER / BUILD / CI: immediately after PR creation no pull-request workflow run was yet associated with exact head `ffcc5834...`; no PASS is claimed. Next turn must inspect exact-head Actions, fix any real lint/typecheck/test/build failures, run second verification and final security/performance/regression review.
+- GÜVENLİK / PERFORMANS: this continuation keeps merged #72 bounded runtime supervision on main and avoids replacing its platform subtree; typed boundaries reduce implicit-any/config/state contract drift without adding polling or unbounded queues.
+- KALAN SORUNLAR / SONRAKİ GÖREV: inspect #76 exact-head CI and mergeability; fix failures on the same canonical PR. Also reassess the small Vite/debug/browser dependency hotfix from stale #69 and carry only still-missing, conflict-free pieces after #76 is stable. Merge only with >=4,000 additions, completed+success required checks, mergeable=true and acceptable release risk.
+
+## Deep Platform / Architecture — 2026-09-17 08:58 TRT
+- TUR / GÖREV: current-main recovery of the strict TypeScript whole-code modernization after `main` advanced; stale PR #76 superseded by canonical PR #78.
+- BASE MAIN: `566af1dd55e149e41ae41a9106701192b0e149c8`.
+- BRANCH / PR: `codex/platform-modernization-main-20260917`, PR #78 `feat(platform): continue whole-code TypeScript modernization on current main`.
+- HEAD before this progress commit: `ffebb7971dc3242d9622e6399b7e4e87ca7a81c8`; PR snapshot = 4,538 additions / 1,339 deletions / 57 files, mergeable=true. Mandatory additions threshold remains satisfied.
+- LIFECYCLE: #76 became diverged after main received the browser-dependency hotfix; no new work was stacked onto the stale branch. The still-needed Business/Core/Store/Toolbox modernization was rebuilt on current main while preserving the native fetch/storage hotfix intent, and #76 was closed as superseded.
+- CI / HATA DÜZELTME: first #78 exact-head run proved the previous changed-source oxlint `no-control-regex` blocker is fixed. Remaining webclient failure is exact-base TypeScript regression gate. Backend run showed 461/462 tests passing; the sole failure was a repository security contract still reading removed `Webclient.app/src/Core/AppConfig.js` after the migration. That contract is now updated to `AppConfig.ts`.
+- TYPE SAFETY: Store action unions were tightened by removing catch-all `{type:string}` members that prevented reducer discriminant narrowing under TypeScript 7 strict analysis. This is a compile-time contract correction; runtime action strings remain unchanged.
+- SECURITY / PERFORMANCE: no new endpoint, WMS/WFS/WMTS, secret, telemetry or polling added. Same-origin API policy, native Web Crypto storage, bounded Business runtime concurrency/cache/diagnostics, timeout/cancellation and dedupe remain intact.
+- MERGE DURUMU: NOT MERGED. The latest head has no completed exact-head checks yet after the fixes, so merge is forbidden despite additions>=4000 and mergeable=true.
+- SONRAKİ GÖREV: wait for/check exact-head GitHub Actions, obtain the exact TypeScript regression diagnostics if still red, fix only real errors, then perform second lint/typecheck/Vitest/build + backend validation, security/performance/regression review and final mergeability/main refresh. Squash merge only when every required check is completed+success.

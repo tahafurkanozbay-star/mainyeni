@@ -216,7 +216,7 @@ public sealed class RepositorySecurityContractTests
     public void ApplicationApiClient_DefaultsToSameOriginThroughCentralRuntimeConfiguration()
     {
         var envExample = Read("Webclient.app/.env.example");
-        var appConfig = Read("Webclient.app/src/Core/AppConfig.js");
+        var appConfig = Read("Webclient.app/src/Core/AppConfig.ts");
         var runtimeConfig = Read("Webclient.app/src/platform/config/runtimeConfig.ts");
         var endpointPolicy = Read("Webclient.app/src/platform/network/endpointPolicy.ts");
         var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.app", ".env");

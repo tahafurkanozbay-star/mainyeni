@@ -1,13 +1,12 @@
-import axios from "axios";
 import { AppConfig } from "../Core/AppConfig";
 import { Constants_ServiceResultType } from "../Core/Constants";
 import { AuthBusiness } from "./AuthBusiness";
+import { HttpBusiness } from "./HttpBusiness";
 
 const getEgoResource = async path => {
     const headers = await AuthBusiness.GetRequestHeaders();
     try {
-        const response = await axios({ method: "get", url: AppConfig.Api.BaseUrl + path, headers });
-        return response.data;
+        return await HttpBusiness.Get(AppConfig.Api.BaseUrl + path, { headers });
     } catch (error) {
         return Promise.reject({ type: Constants_ServiceResultType.Error, message: error.message });
     }
