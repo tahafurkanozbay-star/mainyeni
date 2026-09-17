@@ -357,8 +357,8 @@ export const configurationFromCapabilities = (
   const configuration: SpatialIntegrityConfiguration = {
     expectedGeometryType: capabilities.geometryType,
     allowedFields: capabilities.fieldNames,
-    ...overrides,
   };
+  Object.assign(configuration, overrides);
   if (overrides.expectedWkid === undefined && capabilities.spatialReferenceWkid !== null) {
     configuration.expectedWkid = capabilities.spatialReferenceWkid;
   }
