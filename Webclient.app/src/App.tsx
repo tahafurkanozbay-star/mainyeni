@@ -13,7 +13,7 @@ import { useWindowManager } from './Store/Managers/WindowManager';
 import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
-import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
+import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
@@ -24,17 +24,12 @@ import { DebugHelper } from './Toolbox/DebugHelper';
 
 const describeBootstrapError = (error: unknown): string => {
   if (!(error instanceof Error)) return 'Harita yapılandırması yüklenemedi.';
-  if (!import.meta.env.DEV) return error.message;
 
   const diagnostic = error as Error & { code?: unknown; cause?: unknown };
-  const code = diagnostic.code ? ` [${String(diagnostic.code)}]` : '';
-  const cause = diagnostic.cause instanceof Error && diagnostic.cause.message
-    ? ` — ${diagnostic.cause.message}`
+  const code = typeof diagnostic.code === 'string' && /^[A-Z0-9_-]{1,48}$/.test(diagnostic.code)
+    ? ` (${diagnostic.code})`
     : '';
-  const source = diagnostic.cause instanceof Error && diagnostic.cause.stack
-    ? ` (${diagnostic.cause.stack.split('\n')[1]?.trim() || ''})`
-    : '';
-  return `${diagnostic.message}${code}${cause}${source}`;
+  return `Harita yapılandırması yüklenemedi${code}. Lütfen bağlantınızı kontrol edip tekrar deneyin.`;
 };
 
 function App() {
