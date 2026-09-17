@@ -275,12 +275,18 @@ export const createBusinessQueryRuntime = (
 
       task.started = true;
       counters.active += 1;
-      void task.execute()
-        .then(task.resolve, task.reject)
-        .finally(() => {
+      void task.execute().then(
+        (value) => {
           counters.active = Math.max(0, counters.active - 1);
           pump();
-        });
+          task.resolve(value);
+        },
+        (error: unknown) => {
+          counters.active = Math.max(0, counters.active - 1);
+          pump();
+          task.reject(error);
+        },
+      );
     }
   };
 
