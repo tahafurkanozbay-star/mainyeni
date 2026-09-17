@@ -143,7 +143,7 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
   );
   const diagnostics = options.diagnostics || createNetworkDiagnostics({
     capacity: options.diagnosticCapacity || 250,
-    clock: options.clock
+    ...(options.clock ? { clock: options.clock } : {})
   });
 
   recordRuntimeProfile(diagnostics, capabilityReport, tuningProfile);
@@ -154,10 +154,10 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
     timeoutMs: config.requestTimeoutMs,
     maxRetries: config.maxRetries,
     cacheTtlMs: config.cacheTtlMs,
-    fetchImpl: options.fetchImpl,
-    clock: options.clock,
-    setTimeout: options.setTimeout,
-    clearTimeout: options.clearTimeout,
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.setTimeout ? { setTimeout: options.setTimeout } : {}),
+    ...(options.clearTimeout ? { clearTimeout: options.clearTimeout } : {}),
     ...hooks
   });
 
@@ -168,11 +168,13 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
     maxRetries: config.maxRetries,
     cacheTtlMs: config.cacheTtlMs,
     maxCacheEntries: options.maxCacheEntries || 150,
-    clock: options.clock,
-    wait: options.wait,
-    retryOptions: options.retryOptions,
-    scheduler: options.scheduler,
-    schedulerOptions: options.schedulerOptions as Record<string, unknown>,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.wait ? { wait: options.wait } : {}),
+    ...(options.retryOptions ? { retryOptions: options.retryOptions } : {}),
+    ...(options.scheduler ? { scheduler: options.scheduler } : {}),
+    ...(options.schedulerOptions
+      ? { schedulerOptions: options.schedulerOptions as Record<string, unknown> }
+      : {}),
     tuningProfile
   });
 
