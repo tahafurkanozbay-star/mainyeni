@@ -155,6 +155,10 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
     return selected;
   };
 
+  const detachTerminalEntry = (entry: Entry<unknown>): void => {
+    if (entries.get(entry.key) === entry) entries.delete(entry.key);
+  };
+
   const pump = (): void => {
     if (disposed) return;
     while (running < concurrency) {
@@ -163,25 +167,33 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
       entry.state = 'running';
       entry.startedAt = now();
       running += 1;
-      void Promise.resolve(entry.operation({ key: entry.key, signal: entry.controller.signal })).then((value) => {
-        if (entry.controller.signal.aborted) throw abortError(entry.controller.signal.reason);
-        entry.state = 'fulfilled';
-        entry.finishedAt = now();
-        if (entry.cacheTtlMs > 0) {
-          cache.delete(entry.key);
-          cache.set(entry.key, { value, expiresAt: entry.finishedAt + entry.cacheTtlMs });
-          trimCache();
-        }
-        settleSubscribers(entry, value, null);
-      }).catch((error: unknown) => {
-        entry.state = entry.controller.signal.aborted ? 'cancelled' : 'rejected';
-        entry.finishedAt = now();
-        settleSubscribers(entry, undefined, entry.controller.signal.aborted ? abortError(entry.controller.signal.reason) : error);
-      }).finally(() => {
-        running -= 1;
-        entries.delete(entry.key);
-        pump();
-      });
+      void Promise.resolve()
+        .then(() => entry.operation({ key: entry.key, signal: entry.controller.signal }))
+        .then((value) => {
+          if (entry.controller.signal.aborted) throw abortError(entry.controller.signal.reason);
+          entry.state = 'fulfilled';
+          entry.finishedAt = now();
+          if (entry.cacheTtlMs > 0) {
+            cache.delete(entry.key);
+            cache.set(entry.key, { value, expiresAt: entry.finishedAt + entry.cacheTtlMs });
+            trimCache();
+          }
+          // Release key ownership before promises resolve. An awaiting consumer may
+          // issue the same key immediately; it must observe cache or create fresh work,
+          // never subscribe to an already terminal entry.
+          detachTerminalEntry(entry);
+          settleSubscribers(entry, value, null);
+        })
+        .catch((error: unknown) => {
+          entry.state = entry.controller.signal.aborted ? 'cancelled' : 'rejected';
+          entry.finishedAt = now();
+          detachTerminalEntry(entry);
+          settleSubscribers(entry, undefined, entry.controller.signal.aborted ? abortError(entry.controller.signal.reason) : error);
+        })
+        .finally(() => {
+          running -= 1;
+          pump();
+        });
     }
   };
 
@@ -191,7 +203,14 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
     requestOptions: SpatialRequestOptions = {},
   ): Promise<T> => {
     if (disposed) return Promise.reject(new SpatialRequestCoordinatorError('Spatial request coordinator is disposed.', 'DISPOSED'));
-    const key = normalizedKey(rawKey);
+
+    let key: string;
+    try {
+      key = normalizedKey(rawKey);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+
     if (typeof operation !== 'function') return Promise.reject(new SpatialRequestCoordinatorError('Spatial request operation is required.', 'MISSING_OPERATION'));
     trimCache();
     const cached = cache.get(key);
@@ -199,7 +218,8 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
 
     let entry = entries.get(key) as Entry<T> | undefined;
     if (!entry) {
-      const queuedCount = Array.from(entries.values()).filter((candidate) => candidate.state === 'queued').length;
+      let queuedCount = 0;
+      for (const candidate of entries.values()) if (candidate.state === 'queued') queuedCount += 1;
       if (running >= concurrency && queuedCount >= maximumQueued) {
         return Promise.reject(new SpatialRequestCoordinatorError('Spatial request queue budget exceeded.', 'QUEUE_BUDGET_EXCEEDED'));
       }
@@ -236,7 +256,7 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
           if (entry.state === 'queued') {
             entry.state = 'cancelled';
             entry.finishedAt = now();
-            entries.delete(entry.key);
+            detachTerminalEntry(entry as Entry<unknown>);
           }
         }
       };
@@ -255,8 +275,8 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
     if (entry.state === 'queued') {
       entry.state = 'cancelled';
       entry.finishedAt = now();
+      detachTerminalEntry(entry);
       settleSubscribers(entry, undefined, abortError(reason));
-      entries.delete(key);
     }
     return true;
   };
