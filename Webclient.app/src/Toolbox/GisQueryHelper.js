@@ -102,17 +102,15 @@ const createQueryOptions = (options = {}, spatial = false) => {
     const resultRecordCount = toNonNegativeInteger(options.resultRecordCount);
 
     if (spatial) {
-        const {
-            url,
-            signal,
-            cache,
-            live,
-            ttlMs,
-            cacheTags,
-            pageSize,
-            maxRecords,
-            ...queryOptions
-        } = options;
+        const queryOptions = { ...options };
+        delete queryOptions.url;
+        delete queryOptions.signal;
+        delete queryOptions.cache;
+        delete queryOptions.live;
+        delete queryOptions.ttlMs;
+        delete queryOptions.cacheTags;
+        delete queryOptions.pageSize;
+        delete queryOptions.maxRecords;
         if (resultOffset === null) delete queryOptions.resultOffset;
         else queryOptions.resultOffset = resultOffset;
         if (resultRecordCount === null) delete queryOptions.resultRecordCount;

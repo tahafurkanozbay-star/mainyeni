@@ -10,11 +10,10 @@ import "./AdvancedSketchWidgetMain.css";
 
 import ColorPicker from "./colorpicker";
 import { Form, Tab, Tabs } from "react-bootstrap";
-import mainbarCollapse from "react-bootstrap/esm/mainbarCollapse";
 import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import MapManager from "../../../Store/Managers/MapManager";
 
-export const AdvancedSketchWidgetMain = (props) => {
+export const AdvancedSketchWidgetMain = (_props) => {
   const ToolTypes = {
     POINT: "point",
     POLYLINE: "polyline",
@@ -82,7 +81,7 @@ export const AdvancedSketchWidgetMain = (props) => {
 
   const [selectedTool, setSelectedTool] = useState(ToolTypes.SELECT);
 
-  const [pointSymbol, setPointSymbol] = useState(defaultPointSymbol);
+  const [pointSymbol] = useState(defaultPointSymbol);
   const [lineSymbol, setLineSymbol] = useState(defaultLineSymbol);
   const [polygonSymbol, setPolygonSymbol] = useState(defaultPolygonSymbol);
 

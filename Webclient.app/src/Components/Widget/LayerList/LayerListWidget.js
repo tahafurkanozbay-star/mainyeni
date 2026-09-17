@@ -97,7 +97,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
                         layerObject,
                         priority: normalizedPriority,
                     };
-                } catch (_) {
+                } catch {
                     return null;
                 }
             });
@@ -121,7 +121,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
                 return evaluateGroupVisibility({ ...group, layers: hydratedLayers });
             });
             setLayerGroups(hydratedGroups);
-        } catch (_) {
+        } catch {
             if (mountedRef.current && requestVersion === requestVersionRef.current) setLayerGroups([]);
         }
     };
@@ -210,7 +210,7 @@ export const LayerListWidget = React.forwardRef((props, ref) => {
             const nextLegend = new Legend({ view: mapView, container: "legendDiv" });
             legendRef.current = nextLegend;
             setLegend(nextLegend);
-        } catch (_) {
+        } catch {
             disposeLegend();
         }
     };
