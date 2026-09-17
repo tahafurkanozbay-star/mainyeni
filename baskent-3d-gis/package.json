@@ -1,0 +1,22 @@
+{
+  "name": "baskent-3d-gis",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Ankara odaklı 3B CBS platformu: ArcGIS Feature/Scene/MapServer ile OGC WMS/WFS servislerini tek bir modern arayüzde birleştirir.",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "dev": "npm run build && node scripts/serve.mjs",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit --pretty false",
+    "validate:services": "node scripts/validate-services.mjs",
+    "test": "node --test tests/catalog.node.test.mjs",
+    "check": "npm run validate:services && npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
