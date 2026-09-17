@@ -289,6 +289,7 @@ export class ArcGisQuerySession<TFeature = unknown> {
     const seenIdentities = new Set<string>();
     let state: ArcGisPagedQueryState<TFeature> | null = null;
     let exceededTransferLimit = false;
+    let serviceComplete = false;
     let pageOffset = Math.max(0, Math.floor(Number(options.resultOffset) || 0));
     let pages = 0;
 
@@ -319,11 +320,15 @@ export class ArcGisQuerySession<TFeature = unknown> {
         maxRecords,
       );
       exceededTransferLimit = page.exceededTransferLimit;
+      serviceComplete = !page.exceededTransferLimit || page.features.length === 0;
       state = advanceArcGisPagedQueryState(state, page.features, {
         pageSize: page.plan.pageSize,
         exceededTransferLimit: page.exceededTransferLimit,
         maxRecords,
       });
+
+      const advanceBy = page.features.length;
+      if (advanceBy > 0) pageOffset += advanceBy;
 
       if (!this.#capabilities.supportsPagination) {
         if (page.exceededTransferLimit || page.features.length >= page.plan.pageSize) {
@@ -331,21 +336,19 @@ export class ArcGisQuerySession<TFeature = unknown> {
         }
         break;
       }
-      if (state.complete || page.features.length === 0) break;
+      if (serviceComplete || state.complete || page.features.length === 0) break;
 
-      const advanceBy = page.features.length;
       if (advanceBy <= 0 || accepted === 0 && page.features.length > 0 && !this.#capabilities.objectIdField) {
         warnings.add('pagination-did-not-produce-progress');
         break;
       }
-      pageOffset += advanceBy;
     }
 
-    const pageLimitReached = pages >= maxPages && state?.complete !== true;
-    const recordLimitReached = features.length >= maxRecords && state?.complete !== true;
+    const recordLimitReached = features.length >= maxRecords && exceededTransferLimit;
+    const pageLimitReached = pages >= maxPages && exceededTransferLimit && !recordLimitReached;
     if (pageLimitReached) warnings.add('max-pages-reached');
     if (recordLimitReached) warnings.add('max-records-reached');
-    const complete = state?.complete === true && !pageLimitReached && !recordLimitReached;
+    const complete = serviceComplete && !pageLimitReached && !recordLimitReached;
 
     return Object.freeze({
       features: Object.freeze([...features]),
