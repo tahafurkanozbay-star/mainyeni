@@ -109,7 +109,7 @@ describe('App bootstrap lifecycle', () => {
       operation.reject(new Error('network details that must not reach UI'));
       try {
         await operation.promise;
-      } catch (_error) {
+      } catch {
         // App owns the rejection; this only drains the deferred promise for React act.
       }
     });
@@ -128,7 +128,7 @@ describe('App bootstrap lifecycle', () => {
       operation.reject(Object.assign(new Error('cancelled'), { code: 'BOOTSTRAP_ABORTED' }));
       try {
         await operation.promise;
-      } catch (_error) {
+      } catch {
         // Expected cancellation.
       }
     });
@@ -170,7 +170,7 @@ describe('App bootstrap lifecycle', () => {
       operation.reject(new Error('late failure'));
       try {
         await operation.promise;
-      } catch (_error) {
+      } catch {
         // Expected rejection after unmount.
       }
     });
