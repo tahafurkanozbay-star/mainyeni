@@ -7,6 +7,7 @@
   },
   "files": [
     "src/gis-engine/arcgisModuleRuntime.ts",
+    "src/gis-engine/arcgisEsmTransport.ts",
     "src/gis-engine/measurementRuntime.ts",
     "src/gis-engine/identifyRuntime.ts",
     "src/gis-engine/spatialEngine.ts"
