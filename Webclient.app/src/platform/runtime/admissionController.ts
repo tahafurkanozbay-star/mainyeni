@@ -89,8 +89,8 @@ export const createAdmissionController = (input: AdmissionPolicy, now: () => num
     maxQueued: positive(input.maxQueued, 64),
     maxCost: positive(input.maxCost, 32),
     maxQueueAgeMs: positive(input.maxQueueAgeMs, 30_000),
-    laneMaxActive: Object.freeze({ ...(input.laneMaxActive ?? {}) }),
-    laneMaxQueued: Object.freeze({ ...(input.laneMaxQueued ?? {}) }),
+    laneMaxActive: Object.freeze({ ...input.laneMaxActive }),
+    laneMaxQueued: Object.freeze({ ...input.laneMaxQueued }),
   });
   const active = new Map<string, AdmissionLease>();
   const queue: QueueEntry[] = [];
