@@ -1,4 +1,3 @@
-import { loadModules } from 'esri-loader';
 import * as esriLoaderNamespace from 'esri-loader';
 
 export interface ArcgisModuleRuntimeConfiguration {
@@ -61,7 +60,7 @@ export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Prom
   }
 
   loadRequests += 1;
-  const request = loadModules([moduleId])
+  const request = legacyLoader.loadModules([moduleId])
     .then((modules) => modules[0] as T)
     .catch((error: unknown) => {
       failures += 1;
