@@ -74,11 +74,13 @@
   pointer-events: none;
   transition: opacity var(--exp-transition, 180ms ease);
   contain: layout paint size;
+  content-visibility: auto;
 }
 
 .experience-scene-host.is-active {
   opacity: 1;
   pointer-events: auto;
+  content-visibility: visible;
 }
 
 .experience-scene-host.is-inactive {
@@ -88,7 +90,63 @@
 
 .experience-scene-host[data-scene-ready="false"] {
   background:
+    radial-gradient(circle at 50% 42%, rgb(21 94 239 / 9%), transparent 32%),
     linear-gradient(135deg, var(--exp-surface-2, #f8fafc), var(--exp-bg, #f4f7fb));
+}
+
+/* Compact scene telemetry gives operators immediate feedback when adaptive
+ * quality changes or a WebGL recovery occurs. It is deliberately non-modal and
+ * does not intercept map interaction. */
+.experience-scene-health {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 18;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 86%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 88%, transparent);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 14%);
+  color: var(--exp-text, #0f172a);
+  font: 600 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.experience-scene-health__mode {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  min-height: 22px;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: var(--exp-accent, #155eef);
+  color: #fff;
+  font-weight: 800;
+}
+
+.experience-scene-health__profile,
+.experience-scene-health__recovery {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experience-scene-health__metric {
+  color: var(--exp-text-muted, #64748b);
+  font-variant-numeric: tabular-nums;
+}
+
+.experience-scene-health__recovery {
+  color: var(--exp-warning-text, #92400e);
 }
 
 /* React-owned navigation, panels and managed windows stay above either Esri
@@ -144,6 +202,17 @@ html[data-experience-motion="reduced"] .experience-scene-host {
   transition: none;
 }
 
+@media (max-width: 640px) {
+  .experience-scene-health {
+    right: 10px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .experience-scene-health__metric {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .experience-scene-host {
     transition: none;
@@ -163,5 +232,20 @@ html[data-experience-motion="reduced"] .experience-scene-host {
   .experience-scene-host {
     forced-color-adjust: auto;
     background: Canvas;
+  }
+
+  .experience-scene-health {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .experience-scene-health__mode {
+    border: 1px solid CanvasText;
+    background: Highlight;
+    color: HighlightText;
   }
 }
