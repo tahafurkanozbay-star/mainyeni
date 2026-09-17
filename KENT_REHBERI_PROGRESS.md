@@ -9,20 +9,22 @@
 - NETWORK / SECURITY: no new endpoint, WMS/WFS/WMTS, telemetry, secret or production runtime dependency.
 
 ## Deep QA / Release continuation — 2026-09-17 23:48 TRT
-- MAIN / LIFECYCLE: current `main` remains `172581511c10401d49c3ad4ac98c45f383598df1`; PR #111 remains current-main based, open, draft and mergeable=true.
-- PR SNAPSHOT: head `ec6685611cb6444a4589fb3dccca490297804efd`; 123 additions / 109 deletions / 3 files. Mandatory 4,000 meaningful-additions gate is not met; merge remains forbidden.
-- CI: exact-head Release QA run `35267189166` completed successfully. This is evidence for the current head only; no broader check is inferred.
-- RELEASE ENGINE AUDIT: `quality/release/release-engine.mts` currently runs modernization, source, dependency, network, GIS, UX, performance and test-contract audits. The new `auditDataIntegrity` module is still not wired into the sections array.
-- WRITE ATTEMPT: a minimal integration update was retried this turn, but the connector safety gate again blocked the write. Integration is explicitly not claimed.
-- REGRESSION / SECURITY / PERFORMANCE REVIEW: current data-integrity audit is static/release-time only and adds no production network, polling, timer or render overhead. Existing main GIS/network/security audit layers remain untouched.
-- MERGE DURUMU: NOT MERGED. Gate is far below 4,000 additions even though mergeable=true and exact-head Release QA is green.
+- MAIN / LIFECYCLE: current `main` remains `172581511c10401d49c3ad4ac98c45f383598df1`; PR #111 remains current-main based, open and draft.
+- CI: exact-head Release QA run `35267189166` completed successfully.
+- MERGE DURUMU: NOT MERGED; mandatory 4,000 meaningful-additions gate remains unmet.
 
 ## Deep QA / Release continuation — 2026-09-18 00:51 TRT
-- MAIN / LIFECYCLE: current `main` remains `172581511c10401d49c3ad4ac98c45f383598df1`; PR #111 remains the canonical current-main QA PR.
-- CI CHECKPOINT: exact prior head `309e588145aaafec40aa2e9398e8947d3d94b402` Release QA run `35273198692` completed successfully.
-- RELEASE ENGINE: `auditDataIntegrity` is now imported and wired into the release-engine sections, so malformed runtime JSON, lossy identity coercion, missing dedupe evidence and unbounded collection findings participate in release decisions and baseline deltas.
+- RELEASE ENGINE: `auditDataIntegrity` is imported and wired into release decisions and baseline deltas.
 - IMPLEMENTATION COMMIT: `8b716333f219d63e2e0598d0ec140f69597617ff`.
-- SECURITY / PERFORMANCE / NETWORK: static release-time integration only; no production endpoint, WMS/WFS/WMTS, telemetry, secret, timer, polling or render path was added.
-- VERIFICATION: the integration creates a new exact head; the earlier green run is not treated as proof for this head. Exact-head Actions must complete before claiming PASS.
-- MERGE DURUMU: NOT MERGED. The 4,000 meaningful-additions threshold remains unmet; keep PR #111 open/draft and continue meaningful release/regression modernization.
-- SONRAKİ GÖREV: refresh main and PR #111, inspect exact-head CI for the integration commit/progress head, fix any real failure, then continue high-priority security/accessibility/observability/CI/network/GIS release coverage without line-padding. Merge only after >=4,000 additions, all relevant exact-head checks completed+success, mergeable=true and final regression/security/performance review.
+- MERGE DURUMU: NOT MERGED; keep PR #111 open/draft.
+
+## Deep QA / Release continuation — 2026-09-18 01:48 TRT
+- MAIN / LIFECYCLE: current `main` remains `172581511c10401d49c3ad4ac98c45f383598df1`; compare confirms PR #111 is 6 commits ahead / 0 behind with merge-base exactly current main.
+- CI CHECKPOINT: prior head `b39120979e9474fcbec8eb3dcb922ca1facb1aad` Release QA run `35279083977` completed successfully. New code commits invalidate that proof for the new head; exact-head CI is required again.
+- RUNTIME RESILIENCE: added strict TypeScript `runtime-resilience-audit.mts` plus focused Vitest regressions. Audit inventories timers, listeners, AbortSignal usage, retries, Web Storage and Promise construction; flags lifecycle timers/listeners without visible teardown, retry-oriented network/runtime code without obvious attempt/deadline bounds, empty catch blocks, and blocks credential-like browser Web Storage.
+- REGRESSION COVERAGE: tests cover timer/listener cleanup positive+negative cases, bounded/unbounded retry, empty catch, credential vs preference storage, test exclusion, and signal inventory.
+- SECURITY / PERFORMANCE / NETWORK: static release-time audit only; no production endpoint, WMS/WFS/WMTS, telemetry, secret, polling, timer or render path added. Credential Web Storage is a critical/blocking finding.
+- IMPLEMENTATION COMMITS: `010b7fc7c06fed665dbb5378a86e460f06c4713c`, `95d0998655c46986b213c204c633b1e323da8975`.
+- RELEASE ENGINE INTEGRATION: the new resilience audit is not yet wired into `runReleaseEngine`; do not claim its findings affect the gate until that integration is committed and exact-head CI passes.
+- MERGE DURUMU: NOT MERGED. Before this slice base...head was only 167 additions / 345 deletions; this slice adds meaningful coverage but remains far below the mandatory 4,000 additions threshold.
+- SONRAKİ GÖREV: wire `auditRuntimeResilience` into the release-engine, run exact-head CI, fix real failures, then continue high-priority security/accessibility/responsive/CI-integrity/GIS release coverage. Merge only after >=4,000 meaningful additions, all relevant exact-head checks completed+success, mergeable=true and final security/performance/regression review.
