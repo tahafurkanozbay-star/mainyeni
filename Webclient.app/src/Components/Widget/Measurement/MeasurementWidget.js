@@ -2,6 +2,7 @@ import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChartArea, faChartLine } from '@fortawesome/free-solid-svg-icons';
 import { CommonQueryWindowTools } from "../../Query/_Common/CommonQueryWindowTools";
+import { ExperienceToolbar } from "../../Common/ExperienceToolbar";
 import MapManager from "../../../Store/Managers/MapManager";
 import { createMeasurementController, MEASUREMENT_TOOLS } from "../../../gis-engine/measurementRuntime";
 import "./MeasurementWidget.css";
@@ -86,6 +87,25 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const measurementActions = [
+        {
+            id: 'area',
+            label: 'Alan ölç',
+            icon: <FontAwesomeIcon icon={faChartArea} size="2x" />,
+            pressed: activeTool === MEASUREMENT_TOOLS.AREA,
+            disabled: measurementStatus === 'loading',
+            onActivate: () => setActiveTool(MEASUREMENT_TOOLS.AREA),
+        },
+        {
+            id: 'distance',
+            label: 'Mesafe ölç',
+            icon: <FontAwesomeIcon icon={faChartLine} size="2x" />,
+            pressed: activeTool === MEASUREMENT_TOOLS.DISTANCE,
+            disabled: measurementStatus === 'loading',
+            onActivate: () => setActiveTool(MEASUREMENT_TOOLS.DISTANCE),
+        },
+    ];
+
     return (
         <div
             className="common-query-window common-query-window-right"
@@ -104,28 +124,11 @@ export const MeasurementWidget = React.forwardRef((props, ref) => {
                 />
             </div>
             <div className="common-query-window-body layer-list-window-body">
-                <div role="toolbar" aria-label="Ölçüm araçları">
-                    <button
-                        type="button"
-                        onClick={() => setActiveTool(MEASUREMENT_TOOLS.AREA)}
-                        className="measurement-widget-tool-select-button"
-                        aria-pressed={activeTool === MEASUREMENT_TOOLS.AREA}
-                        aria-label="Alan ölç"
-                        disabled={measurementStatus === 'loading'}
-                    >
-                        <FontAwesomeIcon icon={faChartArea} size="2x" aria-hidden="true" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTool(MEASUREMENT_TOOLS.DISTANCE)}
-                        className="measurement-widget-tool-select-button"
-                        aria-pressed={activeTool === MEASUREMENT_TOOLS.DISTANCE}
-                        aria-label="Mesafe ölç"
-                        disabled={measurementStatus === 'loading'}
-                    >
-                        <FontAwesomeIcon icon={faChartLine} size="2x" aria-hidden="true" />
-                    </button>
-                </div>
+                <ExperienceToolbar
+                    label="Ölçüm araçları"
+                    actions={measurementActions}
+                    className="measurement-widget-toolbar"
+                />
                 <div id="measurementDiv" aria-live="polite" />
             </div>
         </div>
