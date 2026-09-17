@@ -306,7 +306,7 @@ export const createSpatialCacheCoordinator = (options: SpatialCacheOptions = {})
       evictions,
       dedupeHits,
       activeRequests: inFlight.size,
-      keys: Object.freeze([...entries.keys()]),
+      keys: Object.freeze(Array.from(entries.keys())),
     });
   };
 
