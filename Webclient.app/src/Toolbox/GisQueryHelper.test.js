@@ -1,4 +1,4 @@
-import { loadModules } from 'esri-loader';
+import { loadArcgisModules as loadModules } from '../gis-engine/arcgisModuleRuntime';
 import {
   GisQueryHelper,
   clearGisQueryRuntime,
@@ -7,8 +7,8 @@ import {
   invalidateGisQueryCacheTag,
 } from './GisQueryHelper';
 
-jest.mock('esri-loader', () => ({
-  loadModules: jest.fn(),
+jest.mock('../gis-engine/arcgisModuleRuntime', () => ({
+  loadArcgisModules: jest.fn(),
 }));
 
 const deferred = () => {
