@@ -1,32 +1,118 @@
-import { AppConfig } from "../Core/AppConfig";
-import { IsNull } from "./ObjectHelper";
-import CryptoJS from 'crypto-js';
+const STORAGE_PREFIX = "kr:v2:";
+const MAX_SERIALIZED_BYTES = 512 * 1024;
 
-export const LocalStorageHelper = {
+const getStorage = () => {
+    try {
+        return typeof window !== "undefined" && window.localStorage ? window.localStorage : null;
+    }
+    catch {
+        return null;
+    }
+};
 
+const safeKey = (key) => {
+    if (typeof key !== "string") {
+        return null;
+    }
+
+    const normalized = key.trim();
+    if (!normalized || normalized.length > 256) {
+        return null;
+    }
+
+    for (let index = 0; index < normalized.length; index += 1) {
+        const code = normalized.charCodeAt(index);
+        if (code <= 31 || code === 127) {
+            return null;
+        }
+    }
+
+    return normalized;
+};
+
+const byteLength = (value) => {
+    if (typeof TextEncoder !== "undefined") {
+        return new TextEncoder().encode(value).byteLength;
+    }
+
+    return value.length * 2;
+};
+
+const parseEnvelope = (text) => {
+    const payload = text.startsWith(STORAGE_PREFIX) ? text.slice(STORAGE_PREFIX.length) : text;
+
+    try {
+        const parsed = JSON.parse(payload);
+        if (
+            parsed !== null &&
+            typeof parsed === "object" &&
+            !Array.isArray(parsed) &&
+            parsed.version === 2 &&
+            Object.prototype.hasOwnProperty.call(parsed, "value")
+        ) {
+            return parsed.value;
+        }
+
+        return parsed;
+    }
+    catch {
+        return null;
+    }
+};
+
+const serializeEnvelope = (value) => {
+    try {
+        const serialized = STORAGE_PREFIX + JSON.stringify({
+            version: 2,
+            savedAt: Date.now(),
+            value
+        });
+
+        return byteLength(serialized) <= MAX_SERIALIZED_BYTES ? serialized : null;
+    }
+    catch {
+        return null;
+    }
+};
+
+export const LocalStorageHelper = Object.freeze({
     Get: (_key) => {
-        var encrypted = localStorage.getItem(_key);
-        if (!IsNull(encrypted)) {
-            try {
+        const storage = getStorage();
+        const key = safeKey(_key);
+        if (!storage || !key) {
+            return null;
+        }
 
-                var bytes = CryptoJS.AES.decrypt(encrypted, AppConfig.Keys.LocalStorageKey);
-                var decryptedData = bytes.toString(CryptoJS.enc.Utf8);
-                return JSON.parse(decryptedData);
-            }
-            catch (ex) {
+        try {
+            const raw = storage.getItem(key);
+            if (raw === null || raw === "") {
                 return null;
             }
+
+            return parseEnvelope(raw);
         }
-        else {
+        catch {
             return null;
         }
     },
 
     Set: (_key, _obj) => {
+        const storage = getStorage();
+        const key = safeKey(_key);
+        if (!storage || !key) {
+            return;
+        }
 
-        var json = JSON.stringify(_obj);
-        var encrypted = CryptoJS.AES.encrypt(json, AppConfig.Keys.LocalStorageKey);
-        return localStorage.setItem(_key, encrypted);
+        const serialized = serializeEnvelope(_obj);
+        if (!serialized) {
+            return;
+        }
+
+        try {
+            storage.setItem(key, serialized);
+        }
+        catch {
+            // Storage may be disabled, sandboxed or quota constrained. Persistence is best effort.
+        }
     }
-}
-
+});
