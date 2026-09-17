@@ -203,7 +203,7 @@ export const upsertWindowRegistration = (
     ref: incoming.ref ?? current.ref ?? null,
     visible: incoming.visible ?? current.visible ?? false,
     minimized: incoming.minimized ?? current.minimized ?? false,
-    query: incoming.query === undefined ? current.query : incoming.query,
+    query: incoming.query === undefined ? (current.query ?? null) : incoming.query,
   });
   return Object.freeze(windows.map((item, itemIndex) => itemIndex === index ? next : item));
 };
