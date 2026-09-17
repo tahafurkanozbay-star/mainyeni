@@ -11,8 +11,8 @@ export type SceneResourceRequest = Readonly<{
   estimatedGpuBytes: number;
   estimatedDrawCalls: number;
   estimatedFeatures: number;
-  distance?: number;
-  screenCoverage?: number;
+  distance?: number | undefined;
+  screenCoverage?: number | undefined;
 }>;
 
 export type SceneBudgetLimits = Readonly<{
