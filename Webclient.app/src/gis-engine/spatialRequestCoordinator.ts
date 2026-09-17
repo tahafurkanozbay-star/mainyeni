@@ -167,8 +167,15 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
       entry.state = 'running';
       entry.startedAt = now();
       running += 1;
-      void Promise.resolve()
-        .then(() => entry.operation({ key: entry.key, signal: entry.controller.signal }))
+
+      let execution: Promise<unknown>;
+      try {
+        execution = Promise.resolve(entry.operation({ key: entry.key, signal: entry.controller.signal }));
+      } catch (error) {
+        execution = Promise.reject(error);
+      }
+
+      void execution
         .then((value) => {
           if (entry.controller.signal.aborted) throw abortError(entry.controller.signal.reason);
           entry.state = 'fulfilled';
