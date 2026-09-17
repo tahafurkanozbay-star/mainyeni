@@ -50,7 +50,7 @@ export const applyFeatureReduction = <T extends ArcGisLayerLike>(layer: T, optio
   const clusterRadius = Number.isFinite(options.clusterRadius) ? Number(options.clusterRadius) : 60;
   try {
     layer.featureReduction = { type: 'cluster', clusterRadius, maxScale, popupTemplate: options.popupTemplate || layer.popupTemplate, labelsVisible: false };
-  } catch (_) { /* Optional capability: unsupported combinations do not fail the layer. */ }
+  } catch { /* Optional capability: unsupported combinations do not fail the layer. */ }
   return layer;
 };
 
