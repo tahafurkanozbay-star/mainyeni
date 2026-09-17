@@ -51,7 +51,7 @@ export type MeasurementListener = (state: MeasurementState) => void;
 export interface MeasurementControllerOptions { view?: unknown; container?: unknown; }
 
 const notify = (listeners: Set<MeasurementListener>, state: MeasurementState): void => {
-  listeners.forEach((listener) => { try { listener(state); } catch (_) { /* observer isolation */ } });
+  listeners.forEach((listener) => { try { listener(state); } catch { /* observer isolation */ } });
 };
 
 export interface MeasurementController {
@@ -120,7 +120,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
 
   const clear = (): boolean => {
     if (destroyed) return false;
-    try { widget?.clear?.(); if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE; } catch (_) { /* SDK cleanup */ }
+    try { widget?.clear?.(); if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE; } catch { /* SDK cleanup */ }
     setState({ activeTool: MEASUREMENT_TOOLS.NONE, clearedAt: new Date().toISOString() });
     return true;
   };
@@ -130,7 +130,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
   const destroy = (): void => {
     if (destroyed) return;
     destroyed = true;
-    try { widget?.clear?.(); widget?.destroy?.(); } catch (_) { /* idempotent teardown */ }
+    try { widget?.clear?.(); widget?.destroy?.(); } catch { /* idempotent teardown */ }
     widget = null; creationPromise = null; listeners.clear();
     state = { ...state, status: 'destroyed', activeTool: MEASUREMENT_TOOLS.NONE, destroyedAt: new Date().toISOString() };
   };
