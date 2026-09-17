@@ -11,7 +11,7 @@ import "./AdvancedSketchWidgetMain.css";
 import ColorPicker from "./colorpicker";
 import { Form, Tab, Tabs } from "react-bootstrap";
 import mainbarCollapse from "react-bootstrap/esm/mainbarCollapse";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import MapManager from "../../../Store/Managers/MapManager";
 
 export const AdvancedSketchWidgetMain = (props) => {

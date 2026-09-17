@@ -2,7 +2,7 @@ import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { LayerBusiness } from "../../../Business/LayerBusiness";
 import { Constants_ServiceResultType } from "../../../Core/Constants";
 import { MapManager } from "../../../Store/Managers/MapManager";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import { Accordion, Form, Tab, Tabs } from "react-bootstrap";
 import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { ContainerLoading, NoResultsFound } from "../../Common/Loading";

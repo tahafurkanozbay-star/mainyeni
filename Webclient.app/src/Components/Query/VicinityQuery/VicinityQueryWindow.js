@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import { Accordion, Button, Form } from "react-bootstrap";
 import { BiLayer, BiSearch } from "react-icons/bi";
 import { FiMapPin } from "react-icons/fi";

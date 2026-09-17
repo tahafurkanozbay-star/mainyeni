@@ -9,7 +9,7 @@ import { CommonBusiness } from "../../../Business/CommonBusiness";
 import { DebugHelper } from "../../../Toolbox/DebugHelper";
 import { GisGraphicsHelper } from "../../../Toolbox/GisGraphicsHelper";
 import { LoggingBusiness } from "../../../Business/LoggingBusiness";
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../../../gis-engine/arcgisModuleRuntime";
 import { createDisposableBag, createLayerOwner } from "../../../gis-engine/layerOwnership";
 
 const OWNER_ID = 'parklar-query-window';

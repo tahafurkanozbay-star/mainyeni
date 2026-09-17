@@ -1,4 +1,4 @@
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
 import { AppConfig } from "../Core/AppConfig";
 import { Constants_LayerType, Constants_ServiceResultType } from "../Core/Constants";
 import { MapManager } from "../Store/Managers/MapManager";

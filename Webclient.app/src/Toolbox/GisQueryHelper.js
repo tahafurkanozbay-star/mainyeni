@@ -1,4 +1,4 @@
-import { loadModules } from "esri-loader";
+import { loadArcgisModules as loadModules } from "../gis-engine/arcgisModuleRuntime";
 import { Constants_ServiceResultType } from "../Core/Constants";
 import { stableQueryKey } from "../gis-engine/spatialEngine";
 import {
