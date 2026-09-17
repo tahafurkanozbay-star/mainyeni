@@ -219,6 +219,14 @@ const sublayerSummary = (metadata = {}) => uniqueStrings([
   ...(metadata.tables || []).map((table) => table?.id),
 ]);
 
+/**
+ * @param {{
+ *   url?: string | null,
+ *   metadata?: Record<string, any>,
+ *   serviceId?: string | null,
+ *   allowUnknownUrl?: boolean
+ * }} [options]
+ */
 export const buildArcGisCapabilityContract = ({
   url = null,
   metadata = {},

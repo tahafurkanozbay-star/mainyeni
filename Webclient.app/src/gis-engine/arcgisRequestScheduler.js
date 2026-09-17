@@ -417,26 +417,36 @@ export const createArcGisRequestScheduler = (configuration = {}) => {
         queueMs: Math.max(0, job.startedAt - job.enqueuedAt),
       });
 
-      Promise.resolve()
-        .then(() => job.execute({
+      let execution;
+      try {
+        execution = Promise.resolve(job.execute({
           signal: job.controller.signal,
           requestKey: job.key,
           resourceUrl: job.resourceUrl,
-        }))
-        .then((value) => {
+        }));
+      } catch (error) {
+        execution = Promise.reject(error);
+      }
+      execution.then(
+        (value) => {
           job.state = 'completed';
           metrics.completed += 1;
           writeCache(job.key, value, job.options);
+          if (jobs.get(job.key) === job) jobs.delete(job.key);
+          releaseActive(job);
           settleJob(job, 'resolve', value);
           emit('request-completed', {
             requestKey: job.key,
             resourceUrl: job.resourceUrl,
             durationMs: Math.max(0, clock() - job.startedAt),
           });
-        })
-        .catch((error) => {
+          pump();
+        },
+        (error) => {
           job.state = 'failed';
           const stale = readCache(job.key, { allowStale: true });
+          if (jobs.get(job.key) === job) jobs.delete(job.key);
+          releaseActive(job);
           if (
             job.options.allowStaleOnError === true
             && stale?.entry
@@ -458,12 +468,9 @@ export const createArcGisRequestScheduler = (configuration = {}) => {
               error,
             });
           }
-        })
-        .finally(() => {
-          jobs.delete(job.key);
-          releaseActive(job);
           pump();
-        });
+        },
+      );
     }
   };
 
@@ -492,11 +499,15 @@ export const createArcGisRequestScheduler = (configuration = {}) => {
     }
 
     const existing = jobs.get(key);
-    if (existing) {
+    if (existing && (existing.state === 'queued' || existing.state === 'active')) {
       metrics.deduped += 1;
       emit('request-deduped', { requestKey: key, state: existing.state });
       return addSubscriber(existing, request.signal);
     }
+    // A subscriber may resume immediately after settleJob, before the job's
+    // finally callback removes it. Never attach to an already-settled job: it
+    // has no future settlement event and would leave the new request pending.
+    if (existing) jobs.delete(key);
 
     if (queue.length >= maxQueueSize) {
       metrics.rejectedByBackpressure += 1;
