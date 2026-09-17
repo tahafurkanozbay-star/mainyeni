@@ -20,9 +20,8 @@ const LEGACY_IMPORT_ALLOWLIST = new Set([
   'Toolbox/GisGraphicsHelper.js',
   'Toolbox/GisQueryHelper.js',
   'gis-engine/identifyRuntime.ts',
-  'gis-engine/measurementRuntime.ts',
-  'gis-engine/spatialEngine.ts',
 ]);
+const MAX_LEGACY_DIRECT_CONSUMERS = 14;
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
@@ -102,7 +101,7 @@ const hasLegacyLoaderImport = (file: string): boolean => {
 };
 
 describe('ArcGIS module loading boundary', () => {
-  it('keeps the direct legacy-loader consumer set equal to the migration allowlist', () => {
+  it('keeps the direct legacy-loader consumer set equal to the shrinking migration allowlist', () => {
     const sourceRoot = resolve(process.cwd(), 'src');
     const actualConsumers = collectSourceFiles(sourceRoot)
       .filter((file) => !file.includes('.test.'))
@@ -113,5 +112,6 @@ describe('ArcGIS module loading boundary', () => {
     const allowedConsumers = [...LEGACY_IMPORT_ALLOWLIST].sort();
 
     expect(actualConsumers).toEqual(allowedConsumers);
+    expect(actualConsumers.length).toBeLessThanOrEqual(MAX_LEGACY_DIRECT_CONSUMERS);
   });
 });
