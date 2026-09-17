@@ -62,7 +62,7 @@ const endpointError = (message: string, details?: Readonly<Record<string, unknow
   new AppError(message, {
     code: 'CROSS_ORIGIN_BLOCKED',
     retryable: false,
-    details,
+    ...(details !== undefined ? { details } : {}),
   });
 
 export const isSameOriginPath = (value: unknown): value is string => {
@@ -166,7 +166,7 @@ export const joinApplicationPath = (
       return segment.replace(/^\/+|\/+$/g, '');
     })
     .filter(Boolean);
-  return normalizeApplicationPath(`${cleanBase}/${cleanSegments.join('/')}` || '/');
+  return normalizeApplicationPath(`${cleanBase}/${cleanSegments.join('/')}`);
 };
 
 export const withApplicationQuery = (
