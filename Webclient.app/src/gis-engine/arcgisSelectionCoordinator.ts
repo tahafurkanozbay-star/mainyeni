@@ -84,7 +84,10 @@ const emptySnapshot = (layerId: string): ArcGisSelectionSnapshot => Object.freez
 
 const querySpec = (request: ArcGisSelectionRequest): ArcGisQuerySpec => Object.freeze({
   where: String(request.where ?? '1=1').trim() || '1=1',
-  outFields: request.outFields?.length ? request.outFields : Object.freeze(['*']),
+  // An empty outFields list is the query-contract representation of ArcGIS `*`.
+  // Do not inject `*` as a field token: explicit field names are intentionally
+  // validated by createArcGisQueryPlan and wildcard is serialized only there.
+  outFields: request.outFields?.length ? request.outFields : Object.freeze([]),
   returnGeometry: true,
   ...(request.geometry ? {
     geometry: request.geometry,
