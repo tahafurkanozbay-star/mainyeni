@@ -6,6 +6,7 @@ import './Components/Common/experience-ui.css';
 import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
+import './experience/experience-primitives.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { Constants_LoadingStatus, type LoadingStatus } from './Core/Constants';
 import { AppConfig } from './Core/AppConfig';
