@@ -119,7 +119,7 @@ const mergeQueryOptions = (
   options: ArcGisPipelineExecutionOptions,
   signal: AbortSignal,
 ): ArcGisQueryExecutionOptions => Object.freeze({
-  ...(options.query ?? {}),
+  ...options.query,
   signal,
 });
 
@@ -127,7 +127,7 @@ const mergeWindowOptions = (
   options: ArcGisPipelineWindowOptions,
   signal: AbortSignal,
 ): ArcGisFeatureWindowExecutionOptions => Object.freeze({
-  ...(options.query ?? {}),
+  ...options.query,
   ...(options.pageSize !== undefined ? { pageSize: options.pageSize } : {}),
   ...(options.maxFeatures !== undefined ? { maxFeatures: options.maxFeatures } : {}),
   ...(options.maxPages !== undefined ? { maxPages: options.maxPages } : {}),
