@@ -49,6 +49,7 @@ export interface ExperienceAccordionProps {
 
 export const ExperienceAccordion = ({ items, label, allowMultiple = true, initiallyOpen = [] }: ExperienceAccordionProps): ReactNode => {
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set(initiallyOpen));
+  const generatedId = useId();
 
   const toggle = (id: string): void => {
     setOpenIds((current) => {
@@ -63,17 +64,18 @@ export const ExperienceAccordion = ({ items, label, allowMultiple = true, initia
     <div className="experience-accordion" aria-label={label}>
       {items.map((item) => {
         const open = openIds.has(item.id);
-        const panelId = `experience-accordion-${item.id}`;
+        const panelId = `${generatedId}-${item.id}-panel`;
+        const triggerId = `${generatedId}-${item.id}-trigger`;
         return (
           <section key={item.id} className="experience-accordion__item">
             <h3 className="experience-accordion__heading">
-              <button type="button" className="experience-accordion__trigger" aria-expanded={open} aria-controls={panelId} onClick={() => toggle(item.id)}>
+              <button id={triggerId} type="button" className="experience-accordion__trigger" aria-expanded={open} aria-controls={panelId} onClick={() => toggle(item.id)}>
                 <span>{item.title}</span>
                 {item.summary ? <span className="experience-accordion__summary">{item.summary}</span> : null}
                 <span aria-hidden="true" className="experience-accordion__chevron">⌄</span>
               </button>
             </h3>
-            <div id={panelId} className="experience-accordion__panel" hidden={!open}>{item.content}</div>
+            <div id={panelId} role="region" aria-labelledby={triggerId} className="experience-accordion__panel" hidden={!open}>{item.content}</div>
           </section>
         );
       })}
