@@ -8,7 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import type { WindowManagerLike } from '../../experience/contracts';
+import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { SIDEBAR_GROUPS, SIDEBAR_ITEMS } from '../App/SidebarCatalog';
 import { EmptyState } from './ExperienceDesignSystem';
 import { normalizeCommandQuery } from './experience-quality-utils';
@@ -28,7 +28,7 @@ export interface ExperienceCommand {
 }
 
 interface ExperienceCommandCenterProps {
-  readonly windowManager: WindowManagerLike;
+  readonly windowManager: Pick<WindowManagerApi, 'ShowWindow'>;
 }
 
 interface ExperienceCommandEventDetail {

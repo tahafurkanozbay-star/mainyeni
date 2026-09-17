@@ -32,6 +32,12 @@ jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
   )
 }));
 
+jest.mock('./Components/Common/ExperienceCommandCenterModern', () => ({
+  ExperienceCommandCenterModern: ({ windowManager }) => (
+    <div data-testid="command-center" data-manager-id={windowManager?.id || 'none'} />
+  )
+}));
+
 jest.mock('./Store/Managers/WindowManager', () => ({
   useWindowManager: () => ({ id: 'window-manager-1' })
 }));
