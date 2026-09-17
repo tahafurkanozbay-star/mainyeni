@@ -1,0 +1,21 @@
+import { describe, expect, it } from "vitest";
+import { createRenderStateCoordinator } from "./renderStateCoordinator";
+const frame=(mode:"2d"|"3d"="2d",scale=1000)=>({mode,scale});
+const layer=(overrides:Record<string,unknown>={})=>({layerId:"roads",visible:true,opacity:0.8,...overrides});
+describe("renderStateCoordinator",()=>{
+ it("keeps deterministic state across identical frames",()=>{const c=createRenderStateCoordinator();const a=c.reconcile(frame(),[layer()]);const b=c.reconcile(frame(),[layer()]);expect(b.revision).toBe(a.revision);expect(b.layers[0].status).toBe("loading");});
+ it("preserves object id zero and deduplicates ids",()=>{const c=createRenderStateCoordinator();const s=c.reconcile(frame(),[layer({selectedObjectIds:[0,"0",2,2," 3 ",""],highlightedObjectIds:[5,5]})]);expect(s.layers[0].selectedObjectIds).toEqual(["0","2","3"]);expect(s.layers[0].highlightedObjectIds).toEqual(["5"]);});
+ it("transfers logical state between 2d and 3d",()=>{const c=createRenderStateCoordinator();c.reconcile(frame("2d"),[layer({selectedObjectIds:[7]})]);c.markReady("roads");const s=c.reconcile(frame("3d"),[layer({selectedObjectIds:[7]})]);expect(s.mode).toBe("3d");expect(s.layers[0]).toMatchObject({mode:"3d",status:"ready",selectedObjectIds:["7"]});});
+ it("applies scale ranges consistently",()=>{const c=createRenderStateCoordinator();expect(c.reconcile(frame("2d",20000),[layer({minScale:10000})]).layers[0].visible).toBe(false);expect(c.reconcile(frame("2d",500),[layer({maxScale:1000})]).layers[0].visible).toBe(false);});
+ it("clamps opacity and fails safe for non-finite opacity",()=>{const c=createRenderStateCoordinator();expect(c.reconcile(frame(),[layer({opacity:2})]).layers[0].opacity).toBe(1);expect(c.reconcile(frame(),[layer({opacity:-2})]).layers[0].opacity).toBe(0);expect(c.reconcile(frame(),[layer({opacity:Number.NaN})]).layers[0].opacity).toBe(1);});
+ it("rejects duplicate logical layer ownership",()=>{const c=createRenderStateCoordinator();expect(()=>c.reconcile(frame(),[layer(),layer()])).toThrow(/Duplicate/);});
+ it("rejects blank ids before accepting state",()=>{const c=createRenderStateCoordinator();expect(()=>c.reconcile(frame(),[layer({layerId:" "})])).toThrow(/blank/);});
+ it("rejects malformed frame scale",()=>{const c=createRenderStateCoordinator();expect(()=>c.reconcile(frame("2d",0),[layer()])).toThrow(/Invalid/);expect(()=>c.reconcile(frame("2d",Number.NaN),[layer()])).toThrow(/Invalid/);});
+ it("tracks loading ready and error without inventing layers",()=>{const c=createRenderStateCoordinator();expect(c.markReady("missing").layers).toEqual([]);c.reconcile(frame(),[layer()]);expect(c.markReady("roads").layers[0].status).toBe("ready");expect(c.markError("roads"," timeout ").layers[0]).toMatchObject({status:"error",error:"timeout"});});
+ it("clears error when caller restarts loading",()=>{const c=createRenderStateCoordinator();c.reconcile(frame(),[layer()]);c.markError("roads","bad");const s=c.markLoading("roads");expect(s.layers[0].status).toBe("loading");expect(s.layers[0].error).toBeUndefined();});
+ it("removes absent layers during reconciliation",()=>{const c=createRenderStateCoordinator();c.reconcile(frame(),[layer(),layer({layerId:"buildings"})]);const s=c.reconcile(frame(),[layer()]);expect(s.layers.map(x=>x.layerId)).toEqual(["roads"]);});
+ it("supports explicit release",()=>{const c=createRenderStateCoordinator();c.reconcile(frame(),[layer()]);expect(c.releaseLayer("roads").layers).toEqual([]);});
+ it("clears selection and highlight without dropping render state",()=>{const c=createRenderStateCoordinator();c.reconcile(frame(),[layer({selectedObjectIds:[1],highlightedObjectIds:[2]})]);c.markReady("roads");const s=c.clearTransientState();expect(s.layers[0]).toMatchObject({status:"ready",selectedObjectIds:[],highlightedObjectIds:[]});});
+ it("orders layers deterministically",()=>{const c=createRenderStateCoordinator();const s=c.reconcile(frame(),[layer({layerId:"z"}),layer({layerId:"a"})]);expect(s.layers.map(x=>x.layerId)).toEqual(["a","z"]);});
+ it("disallows use after disposal",()=>{const c=createRenderStateCoordinator();c.reconcile(frame(),[layer()]);c.dispose();c.dispose();expect(()=>c.snapshot()).toThrow(/disposed/);});
+});
