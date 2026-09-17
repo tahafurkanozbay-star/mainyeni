@@ -125,7 +125,7 @@ export class RequestCoordinator {
       maxEntries: options.maxCacheEntries || DEFAULT_MAX_CACHE_ENTRIES
     });
     this.diagnostics = options.diagnostics || createNetworkDiagnostics();
-    this.clock = options.clock || Date.now;
+    this.clock = options.clock || (() => Date.now());
     this.wait = options.wait;
     this.retryOptions = options.retryOptions || {};
     this.tuningProfile = options.tuningProfile || createRuntimeTuningProfile();

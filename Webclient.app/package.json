@@ -53,8 +53,17 @@
     "npm": ">=11.0.0"
   },
   "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all", "supports es6-module"],
-    "development": ["last 2 chrome version", "last 2 firefox version", "last 2 safari version"]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all",
+      "supports es6-module"
+    ],
+    "development": [
+      "last 2 chrome version",
+      "last 2 firefox version",
+      "last 2 safari version"
+    ]
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

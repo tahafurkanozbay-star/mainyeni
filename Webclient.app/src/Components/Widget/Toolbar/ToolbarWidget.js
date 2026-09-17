@@ -73,19 +73,19 @@ export const ToolbarWidget = (props) => {
     };
 
     const openFeedbackPortal = () => {
-        window.open("https://baskent153.ankara.bel.tr", "_blank", "noopener,noreferrer");
+        window.open("https://ulakbell.ankara.bel.tr/WebForm/basket153basvuru#/", "_blank", "noopener,noreferrer");
     };
 
     return (
         <div className="toolbarwidget" aria-label="Harita araçları">
-            <ToolbarWidgetButton onClick={openFeedbackPortal} image="baskent153.png" tooltipText="Geri Bildirim (Başkent 153)" />
-            <ToolbarWidgetButton onClick={() => showWindow("basemap-widget")} image="basemap.png" tooltipText="Altlık Haritalar" />
-            <ToolbarWidgetButton onClick={() => showWindow("numbering-query-window")} image="adresarama.png" tooltipText="Adres Arama" />
-            <ToolbarWidgetButton onClick={getUserLocation} image="konumbul.png" tooltipText="Konum Bul" />
-            <ToolbarWidgetButton onClick={() => showWindow("cityblockparcel-query-window")} image="adaparsel.png" tooltipText="Ada-Parsel Arama" />
-            <ToolbarWidgetButton onClick={() => showWindow("measurement-widget")} image="olcumaraci.png" tooltipText="Ölçüm Aracı" />
-            <ToolbarWidgetButton onClick={() => showWindow("streetview-widget")} image="sokakgoruntusu.png" tooltipText="Sokak Görüntüsü" />
-            <ToolbarWidgetButton onClick={gotoInitialView} image="fullextent.png" tooltipText="Başlangıç görünümüne dön" />
+            <ToolbarWidgetButton onClick={openFeedbackPortal} image="baskent153.png" icon="feedback" tooltipText="Geri Bildirim (Başkent 153)" />
+            <ToolbarWidgetButton onClick={() => showWindow("basemap-widget")} image="basemap.png" icon="basemap" tooltipText="Altlık Haritalar" />
+            <ToolbarWidgetButton onClick={() => showWindow("numbering-query-window")} image="adresarama.png" icon="address" tooltipText="Adres Arama" />
+            <ToolbarWidgetButton onClick={getUserLocation} image="konumbul.png" icon="location" tooltipText="Konum Bul" />
+            <ToolbarWidgetButton onClick={() => showWindow("cityblockparcel-query-window")} image="adaparsel.png" icon="parcel" tooltipText="Ada-Parsel Arama" />
+            <ToolbarWidgetButton onClick={() => showWindow("measurement-widget")} image="olcumaraci.png" icon="measure" tooltipText="Ölçüm Aracı" />
+            <ToolbarWidgetButton onClick={() => showWindow("streetview-widget")} image="sokakgoruntusu.png" icon="streetview" tooltipText="Sokak Görüntüsü" />
+            <ToolbarWidgetButton onClick={gotoInitialView} image="fullextent.png" icon="home" tooltipText="Başlangıç görünümüne dön" />
             {AppConfig.App.IsFullVersion && false && (
                 <ToolbarWidgetButton onClick={() => showWindow("transit-route-query-window")} image="yoltarifi.png" tooltipText="Yol Tarifi" />
             )}

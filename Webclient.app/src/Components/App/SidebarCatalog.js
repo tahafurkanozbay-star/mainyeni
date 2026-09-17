@@ -1,8 +1,8 @@
 export const SIDEBAR_GROUPS = Object.freeze([
-  { id: 'ABB', label: 'Ankara Büyükşehir Belediyesi', logo: '../images/abbbuton.svg' },
-  { id: 'EGO', label: 'EGO Genel Müdürlüğü', logo: '../images/egobuton.svg' },
-  { id: 'ASKI', label: 'ASKİ Genel Müdürlüğü', logo: '../images/askibuton.svg' },
-  { id: 'ISTIRAK', label: 'Belediye iştirakleri', logo: '../images/istiraklerbuton.svg' }
+  { id: 'ABB', shortLabel: 'ABB', label: 'Ankara Büyükşehir Belediyesi', logo: '../images/abbbuton.svg' },
+  { id: 'EGO', shortLabel: 'EGO', label: 'EGO Genel Müdürlüğü', logo: '../images/egobuton.svg' },
+  { id: 'ASKI', shortLabel: 'ASKİ', label: 'ASKİ Genel Müdürlüğü', logo: '../images/askibuton.svg' },
+  { id: 'ISTIRAK', shortLabel: 'İştirak', label: 'Belediye iştirakleri', logo: '../images/istiraklerbuton.svg' }
 ]);
 
 export const SIDEBAR_ITEMS = Object.freeze([

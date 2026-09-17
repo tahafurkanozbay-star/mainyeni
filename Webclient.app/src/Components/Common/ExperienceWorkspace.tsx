@@ -110,7 +110,7 @@ const MapModeControl = ({ mode, pendingMode, onChange }: MapModeControlProps): R
       className="experience-map-mode"
       role="group"
       aria-label="Harita görünümü"
-      aria-busy={busy}
+      aria-busy={busy || undefined}
     >
       {MAP_MODES.map((option) => {
         const selected = mode === option.value;

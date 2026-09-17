@@ -33,6 +33,7 @@ describe('Vite-first runtime configuration', () => {
     expect(config.tkgmCityId).toBe('28');
     expect(config.buildMode).toBe('vite-ready');
     expect(config.features.adaptiveRuntime).toBe(true);
+    expect(config.features.debugLogging).toBe(false);
     expect(config.features.privacyTelemetry).toBe(false);
     expect(assertSafeRuntimeConfig(config)).toBe(true);
   });

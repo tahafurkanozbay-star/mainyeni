@@ -20,10 +20,27 @@ import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
 import { runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
+import { DebugHelper } from './Toolbox/DebugHelper';
+
+const describeBootstrapError = (error: unknown): string => {
+  if (!(error instanceof Error)) return 'Harita yapılandırması yüklenemedi.';
+  if (!import.meta.env.DEV) return error.message;
+
+  const diagnostic = error as Error & { code?: unknown; cause?: unknown };
+  const code = diagnostic.code ? ` [${String(diagnostic.code)}]` : '';
+  const cause = diagnostic.cause instanceof Error && diagnostic.cause.message
+    ? ` — ${diagnostic.cause.message}`
+    : '';
+  const source = diagnostic.cause instanceof Error && diagnostic.cause.stack
+    ? ` (${diagnostic.cause.stack.split('\n')[1]?.trim() || ''})`
+    : '';
+  return `${diagnostic.message}${code}${cause}${source}`;
+};
 
 function App() {
   const windowManager = useWindowManager();
   const [configLoadStatus, setConfigLoadStatus] = useState(Constants_LoadingStatus.LOADING);
+  const [configErrorMessage, setConfigErrorMessage] = useState('');
 
   useEffect(() => {
     // esri-loader must own both SDK script and stylesheet resolution. Keeping the
@@ -53,10 +70,12 @@ function App() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || isBootstrapAbortError(error)) return;
+        DebugHelper.Log(error);
         runtimeDiagnostics.captureError(error, {
           source: 'app.bootstrap',
           durationMs: Math.round(performance.now() - startedAt),
         });
+        setConfigErrorMessage(describeBootstrapError(error));
         setConfigLoadStatus(Constants_LoadingStatus.ERROR);
       });
 
@@ -67,7 +86,7 @@ function App() {
     <ExperienceThemeProvider>
       <div id="app-shell">
         {configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
-          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message="Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin." /> :
+          configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message={configErrorMessage || "Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin."} /> :
             <>
               <MapComponent windowManager={windowManager} />
               <ExperienceWorkspace />
