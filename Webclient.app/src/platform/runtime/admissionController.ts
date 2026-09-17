@@ -94,7 +94,10 @@ export const createAdmissionController = (input: AdmissionPolicy, now: () => num
   let expired = 0;
   let disposed = false;
 
-  const nextId = (): string => `admission-${(++sequence).toString(36)}`;
+  const nextId = (): string => {
+    sequence += 1;
+    return `admission-${sequence.toString(36)}`;
+  };
   const laneActiveCount = (lane: string): number => {
     let count = 0;
     for (const lease of active.values()) {
@@ -162,7 +165,7 @@ export const createAdmissionController = (input: AdmissionPolicy, now: () => num
     expireStale();
     queue.sort((left, right) =>
       priorityRank[left.request.priority] - priorityRank[right.request.priority] || left.sequence - right.sequence);
-    for (;;) {
+    while (queue.length > 0) {
       const index = queue.findIndex((entry) => canAdmit(entry.request));
       if (index < 0) return;
       const entry = queue[index];
