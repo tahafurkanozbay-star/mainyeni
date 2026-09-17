@@ -434,6 +434,7 @@ html[data-experience-theme='dark'] {
 .kr-command__item { min-height: 58px; border-radius: 11px; }
 .kr-command__item:hover, .kr-command__item.is-active { background: color-mix(in srgb, var(--kr-premium-blue) 10%, transparent); border-color: color-mix(in srgb, var(--kr-premium-blue) 22%, var(--exp-border)); }
 .kr-command__icon { color: var(--kr-premium-blue); background: color-mix(in srgb, var(--kr-premium-blue) 9%, transparent); border-color: color-mix(in srgb, var(--kr-premium-blue) 16%, var(--exp-border)); }
+.kr-command__icon svg { display: block; }
 .experience-help, .experience-settings { border-radius: 20px; box-shadow: 0 26px 80px rgba(7, 25, 44, .28); }
 .experience-help__header, .experience-settings__header { background: linear-gradient(135deg, color-mix(in srgb, var(--kr-premium-blue) 11%, transparent), transparent 58%); }
 .experience-eyebrow { color: var(--kr-premium-blue); }
