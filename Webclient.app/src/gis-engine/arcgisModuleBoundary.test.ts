@@ -8,6 +8,7 @@ const LEGACY_TRANSPORT_BOUNDARY = 'gis-engine/arcgisModuleRuntime.ts';
 const LEGACY_IMPORT_ALLOWLIST = new Set([
   'Business/CommonBusiness.js',
   'Business/TkgmQueryBusiness.js',
+  'Components/App/MapComponent.legacy.js',
   'Components/App/MapComponent.tsx',
   'Components/Query/ParklarQuery/ParklarQueryWindow.js',
   'Components/Query/VicinityQuery/VicinityQueryWindow.js',
