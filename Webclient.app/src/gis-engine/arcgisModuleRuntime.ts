@@ -30,8 +30,8 @@ type LegacyLoaderNamespace = typeof esriLoaderNamespace & {
 const legacyLoader = esriLoaderNamespace as LegacyLoaderNamespace;
 const legacyAmdTransport: ArcgisModuleTransport = Object.freeze({
   name: 'legacy-amd',
-  configure: (configuration) => legacyLoader.setDefaultOptions?.(configuration),
-  loadModules: (moduleIds) => legacyLoader.loadModules([...moduleIds]),
+  configure: (configuration: ArcgisModuleRuntimeConfiguration) => legacyLoader.setDefaultOptions?.(configuration),
+  loadModules: (moduleIds: readonly string[]) => legacyLoader.loadModules([...moduleIds]),
 });
 
 const moduleCache = new Map<string, Promise<unknown>>();
