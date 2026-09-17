@@ -186,7 +186,6 @@ const appendUniqueFeatures = <TFeature>(
 export class ArcGisQuerySession<TFeature = unknown> {
   readonly serviceUrl: string;
 
-  #metadata: ArcGisLayerMetadataLike;
   #capabilities: ArcGisServiceCapabilities;
   #executor: ArcGisQueryExecutor<TFeature>;
   #defaultMaxRecords: number;
@@ -205,7 +204,6 @@ export class ArcGisQuerySession<TFeature = unknown> {
 
   constructor(configuration: ArcGisQuerySessionConfiguration<TFeature>) {
     this.serviceUrl = normalizeServiceUrl(configuration.serviceUrl);
-    this.#metadata = configuration.metadata;
     this.#capabilities = deriveArcGisServiceCapabilities(configuration.metadata);
     this.#executor = configuration.executor;
     this.#defaultMaxRecords = clampInteger(
@@ -233,7 +231,6 @@ export class ArcGisQuerySession<TFeature = unknown> {
 
   refreshMetadata(metadata: ArcGisLayerMetadataLike): ArcGisServiceCapabilities {
     this.#assertActive();
-    this.#metadata = metadata;
     this.#capabilities = deriveArcGisServiceCapabilities(metadata);
     this.#revision += 1;
     this.#abortInFlight('metadata-refresh');
