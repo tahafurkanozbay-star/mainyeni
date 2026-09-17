@@ -73,7 +73,7 @@ export const ToolbarWidget = (props) => {
     };
 
     const openFeedbackPortal = () => {
-        window.open("https://baskent153.ankara.bel.tr", "_blank", "noopener,noreferrer");
+        window.open("https://ulakbell.ankara.bel.tr/WebForm/basket153basvuru#/", "_blank", "noopener,noreferrer");
     };
 
     return (
