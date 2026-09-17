@@ -5,7 +5,7 @@ import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
 import { SidebarModern } from './SidebarModern';
 import MapManager from '../../Store/Managers/MapManager';
-import { ToolbarWidget } from '../Widget/Toolbar/ToolbarWidget';
+import { ToolbarWidgetModern } from '../Widget/Toolbar/ToolbarWidgetModern';
 import { BasemapWidget } from '../Widget/Basemap/BasemapWidget';
 import { MeasurementWidget } from '../Widget/Measurement/MeasurementWidget';
 import { SketchWidget } from '../Widget/Sketch/SketchWidget';
@@ -71,7 +71,7 @@ interface WatchUtilsLike {
 
 const LegacyNavigationBar = NavigationBar as React.ElementType;
 const LegacySidebar = SidebarModern as React.ElementType;
-const LegacyToolbarWidget = ToolbarWidget as React.ElementType;
+const ModernToolbarWidget = ToolbarWidgetModern as React.ElementType;
 const LegacyBasemapWidget = BasemapWidget as React.ElementType;
 const LegacyBookmarkWidget = BookmarkWidget as React.ElementType;
 const LegacyContextMenuWidget = ContextMenuWidget as React.ElementType;
@@ -247,7 +247,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
           <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} />
           <LegacyNavigationBar id="mainbar" windowManager={windowManager} />
           <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
-          <LegacyToolbarWidget id="toolbar-widget" windowManager={windowManager} />
+          <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} />
 
           <LegacyBasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
           <LegacyBookmarkWidget id="bookmark-widget" windowManager={windowManager} ref={bookmarkWidgetRef} />
