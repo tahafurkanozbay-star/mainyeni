@@ -640,16 +640,19 @@ export const createArcGisQueryIdentity = (value: unknown): string => {
   return `arcgis-query:${fnv1a(canonical)}:${canonical.length}`;
 };
 
-const freezeRequest = (request: ArcGisQueryRequest): Readonly<ArcGisQueryRequest> => Object.freeze({
-  ...request,
-  outFields: Object.freeze([...(request.outFields || [])]),
-  outStatistics: request.outStatistics
-    ? Object.freeze(request.outStatistics.map((item) => Object.freeze({ ...item })))
-    : request.outStatistics,
-  groupByFieldsForStatistics: request.groupByFieldsForStatistics
-    ? Object.freeze([...request.groupByFieldsForStatistics])
-    : request.groupByFieldsForStatistics,
-});
+const freezeRequest = (request: ArcGisQueryRequest): Readonly<ArcGisQueryRequest> => {
+  const { outFields, outStatistics, groupByFieldsForStatistics, ...rest } = request;
+  return Object.freeze({
+    ...rest,
+    ...(outFields ? { outFields: Object.freeze([...outFields]) } : {}),
+    ...(outStatistics
+      ? { outStatistics: Object.freeze(outStatistics.map((item) => Object.freeze({ ...item }))) }
+      : {}),
+    ...(groupByFieldsForStatistics
+      ? { groupByFieldsForStatistics: Object.freeze([...groupByFieldsForStatistics]) }
+      : {}),
+  });
+};
 
 export const compileArcGisQueryPlan = (
   contract: ArcGisCapabilityContractLike = {},
@@ -705,11 +708,17 @@ export const compileArcGisQueryPlan = (
   if (geometry) {
     request.geometry = geometry.geometry;
     request.geometryType = geometry.geometryType;
-    request.inSR = geometry.spatialReference.wkid || geometry.spatialReference.wkt;
+    const inSpatialReference = geometry.spatialReference.wkid || geometry.spatialReference.wkt;
+    if (inSpatialReference !== null && inSpatialReference !== undefined) {
+      request.inSR = inSpatialReference;
+    }
     request.spatialRel = normalizeSpatialRelationship(input.spatialRelationship || input.spatialRel);
   }
   if (outSpatialReference) {
-    request.outSR = outSpatialReference.wkid || outSpatialReference.wkt;
+    const outputSpatialReference = outSpatialReference.wkid || outSpatialReference.wkt;
+    if (outputSpatialReference !== null && outputSpatialReference !== undefined) {
+      request.outSR = outputSpatialReference;
+    }
   }
   if (orderBy.length) {
     request.orderByFields = orderBy.map((item) => `${item.field} ${item.direction}`).join(',');

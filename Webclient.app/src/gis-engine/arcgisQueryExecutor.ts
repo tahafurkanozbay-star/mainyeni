@@ -418,14 +418,18 @@ export const createArcGisQueryExecutor = (dependencies: Readonly<{
     return dependencies.scheduler.schedule<ArcGisQueryResult>({
       key,
       resourceUrl: contract.resourceUrl,
-      priority: options.priority,
-      signal: options.signal,
-      cache: options.cache,
-      cacheTtlMs: options.cacheTtlMs ?? dependencies.defaultCacheTtlMs,
-      staleTtlMs: options.staleTtlMs ?? dependencies.defaultStaleTtlMs,
-      allowStale: options.allowStale,
-      allowStaleOnError: options.allowStaleOnError,
-      estimatedBytes: options.estimatedBytes,
+      ...(options.priority !== undefined ? { priority: options.priority } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.cache !== undefined ? { cache: options.cache } : {}),
+      ...((options.cacheTtlMs ?? dependencies.defaultCacheTtlMs) !== undefined
+        ? { cacheTtlMs: options.cacheTtlMs ?? dependencies.defaultCacheTtlMs }
+        : {}),
+      ...((options.staleTtlMs ?? dependencies.defaultStaleTtlMs) !== undefined
+        ? { staleTtlMs: options.staleTtlMs ?? dependencies.defaultStaleTtlMs }
+        : {}),
+      ...(options.allowStale !== undefined ? { allowStale: options.allowStale } : {}),
+      ...(options.allowStaleOnError !== undefined ? { allowStaleOnError: options.allowStaleOnError } : {}),
+      ...(options.estimatedBytes !== undefined ? { estimatedBytes: options.estimatedBytes } : {}),
       tags: Object.freeze([contract.resourceUrl, ...(options.tags ?? [])]),
       execute: ({ signal }) => run(signal),
     });
