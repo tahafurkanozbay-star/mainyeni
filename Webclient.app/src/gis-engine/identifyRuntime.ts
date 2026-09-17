@@ -106,7 +106,8 @@ type Settled<T> = { status: 'fulfilled'; value: T } | { status: 'rejected'; reas
 const settleWithConcurrency = async <TItem, TResult>(items: TItem[], worker: (item: TItem, index: number) => Promise<TResult>, concurrency = 4, signal?: AbortSignal): Promise<Array<Settled<TResult>>> => {
   const source = Array.isArray(items) ? items : [];
   const limit = Math.max(1, Math.min(8, Number(concurrency) || 4));
-  const results = new Array<Settled<TResult>>(source.length);
+  const results: Array<Settled<TResult>> = [];
+  results.length = source.length;
   let cursor = 0;
   const run = async (): Promise<void> => {
     while (cursor < source.length) {
