@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import './experience-premium.css';
+import './Components/Common/experience-primitives.css';
 import { AppErrorBoundary } from './platform/runtime/AppErrorBoundary';
 import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
 import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery';
@@ -99,9 +100,6 @@ if (typeof requestAnimationFrame === 'function') {
   queueMicrotask(() => performanceMonitor.markRenderComplete());
 }
 
-// Vite can replace the entry module while developing. Dispose global listeners,
-// observers, adaptive runtime resources and performance instrumentation so HMR
-// cycles cannot create duplicate diagnostics or retain detached browser state.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     disposeAdaptiveRuntime();
