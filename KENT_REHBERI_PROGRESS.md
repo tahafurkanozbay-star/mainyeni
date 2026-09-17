@@ -2,35 +2,19 @@
 
 > Full historical progress remains available on `main` at the parent commit. This branch-scoped continuation record intentionally summarizes the current GIS turn to avoid duplicating a very large shared history while preserving the canonical parent.
 
-## Deep GIS continuation — 2026-09-16 14:14 TRT
-- TUR / GÖREV: Deep GIS / Whole-Code Modernization continuation; bounded ArcGIS feature data lifecycle and integrity.
-- BASE MAIN: `c89ef2a5ab2fd1d633d10447c5db56f177811bed`.
-- BRANCH: `agent/gis-deep-20260916-1414-c89ef2a`.
-- PR: #66 `feat(gis): continue bounded ArcGIS data lifecycle modernization`.
-- HEAD before this progress commit: `cc845269ef4ecb2928800136474a828a3e007d46`.
-- MERGE DURUMU: OPEN / NOT MERGED. Base...head before progress = 146 additions, 0 deletions, 2 files; mandatory 4,000 meaningful-additions gate is not met, so merge is forbidden.
-- ÖNEMLİ ÖZELLİKLER: strict TypeScript `arcgisFeatureWindow` primitive; verified transport stays injected; page/feature memory bounds; AbortSignal cancellation; stable identity dedupe preserving numeric id 0; explicit transfer-limit completion/truncation evidence; fail-closed non-progressing pagination detection.
-- DEĞİŞEN DOSYALAR: `Webclient.app/src/gis-engine/arcgisFeatureWindow.ts`, `arcgisFeatureWindow.test.ts`, this progress record.
-- TESTLER / BUILD / CI: focused Vitest coverage was added for dedupe/id=0, progress failure, budgets, invalid configuration and cancellation. No GitHub Actions workflow run was yet associated with exact head `cc845269...`; therefore no test/lint/typecheck/build PASS is claimed. Exact-head CI remains mandatory before eventual merge.
-- NETWORK DEĞİŞİKLİKLERİ: none. No direct fetch, new endpoint, WMS/WFS/WMTS, CDN, analytics or remote asset.
-- GÜVENLİK / DATA INTEGRITY: bounded allocation, cancellation, duplicate suppression and pagination progress checks reduce runaway memory/loop and inconsistent feature-window risk; capability/transport facts are not guessed.
-- İKON EŞLEŞTİRME: unchanged; `iconRegistry.json` + shared resolver/presentation remains the single authority.
-- MODERNİZASYON KARARI: add a small composable strict-TS primitive on the current React 19/Vite 8/TS7 main rather than fork query transport or duplicate existing ArcGIS query executors.
-- PERFORMANS ETKİSİ: explicit maxFeatures/maxPages bounds and identity dedupe cap client memory growth and redundant downstream rendering; no new polling/timers.
-- ÇÖZÜLEN HATALAR: feature-window consumers now have a reusable fail-closed guard against repeated/non-advancing ArcGIS pages and duplicate stable identities.
-- KALAN SORUNLAR / SONRAKİ GÖREV: continue on PR #66 until >=4,000 meaningful additions with high-priority GIS work: capability-aware query/window composition, lifecycle/resource ownership, 2D/3D render-state parity, scene/LOD budgets, spatial utilities and targeted regressions. Refresh current main before adding work; if this branch becomes behind/diverged, follow branch lifecycle rules instead of force-updating. Run exact-head required CI, fix real failures, run second verification, performance/data-integrity/security review and final regression before any merge.
-
-## Deep Platform / Architecture — 2026-09-16 17:00 TRT
-- TUR / GÖREV: Deep Platform / Whole-Code Modernization; current-main runtime supervision, bounded work coordination, toolchain and CI quality contracts.
-- BASE MAIN: `3c6eaa8b35eca2da1219ddaab9f90d16a3255a79`.
-- BRANCH: `agent/platform-runtime-supervision-20260916-1626-3c6eaa8-r2`.
-- COMMIT / PR / MERGE DURUMU: PR #72 head `1e0b41d194cd9bea601b6123d60de4a764623aef`; 4,944 additions / 50 deletions / 30 files; squash merged successfully as `3660cc87bc51a09d94297d7d752dc4bc2bbaa1fe`. Verified current `main` equals that merge SHA before this progress-only commit.
-- ÖNEMLİ ÖZELLİKLER: deterministic dependency DAG/lifecycle coordination; bounded health/readiness registry; global/per-lane request coordination with deterministic priority, dedupe and subscriber-aware cancellation; runtime supervisor composition; hard deadline enforcement; observer isolation; bounded diagnostics/event history.
-- TOOLCHAIN / MODERNİZASYON: Node 24/npm 11 and native ESM contract; Vite-first environment contract; strict supervision TypeScript boundary; exact-base TypeScript/Vitest regression gates; changed-source strict lint; production dependency audit; release and architecture workflow hardening.
-- TESTLER / BUILD / CI: exact PR head `1e0b41d...` GitHub Actions completed successfully for Platform Architecture Audit, Platform Backend Validation, Webclient Quality and Release QA. No PASS is inferred from the post-merge progress-only documentation commit.
-- NETWORK DEĞİŞİKLİKLERİ: no new endpoint, WMS/WFS/WMTS, CDN, analytics, telemetry transport or remote runtime dependency.
-- GÜVENLİK KONTROLLERİ: no client secret/token introduced; bounded queues/history/diagnostics; hard timeouts and cancellation; Vite local-only environment contract; production dependency audit enforced.
-- İKON EŞLEŞTİRME: unchanged; existing shared GIS icon authority remains canonical.
-- PERFORMANS ETKİSİ: bounded global/lane concurrency and queue limits cap work/memory pressure; dedupe suppresses duplicate work; readiness-gated execution and deterministic lifecycle reduce race/restart amplification; no polling loop/background timer added.
-- ÇÖZÜLEN HATALAR: stale Platform PR #65 was superseded and is closed; runtime operations that ignore AbortSignal are now deadline-bounded; observer failures cannot replace business outcomes; CI distinguishes staged baseline debt from new exact-base regressions.
-- KALAN SORUNLAR / SONRAKİ GÖREV: PR #67 (strict Business/Core/Redux TypeScript migration) and PR #69 (Vite/debug/browser dependency hotfix) are now stale/non-mergeable against advanced `main`; do not stack new Platform work onto them. Next Platform turn must refresh `main`, determine which unmerged changes are still absent after #72, and reapply only non-overlapping validated work on a fresh current-main branch. Preserve concurrent GIS/Data/Experience ownership. Require >=4,000 meaningful additions on the canonical Platform PR plus exact-head completed+success CI, conflict-free mergeability, security/performance/regression review and final main refresh before merge.
+## Deep GIS continuation — 2026-09-17 09:14 TRT
+- TUR / GÖREV: Kent Rehberi Deep GIS / Whole-Code Modernization; current-main gate refresh and GIS regression review.
+- BASE MAIN: `55a72129eb8053d2dffb772d0db52383693010a2`.
+- BRANCH: `agent/gis-deep-20260917-0839-566af1d`.
+- COMMIT / PR / MERGE DURUMU: PR #79. GIS head was `35d31837323decab8805d9eb909b409b7e76affb`; main advanced by unrelated Başkent 153 link fix. Branch was safely refreshed with a two-parent merge commit `94393f891f193cc52a6cd2920954580d7b8b087d` preserving both trees. Base...head is now ahead-only, merge-base equals current main, with 4,059 additions / 0 deletions / 28 GIS files. NOT MERGED because exact-head CI has not yet produced workflow runs.
+- ÖNEMLİ ÖZELLİKLER: capability-aware bounded ArcGIS feature windows and query pipeline; deterministic stable-identity selection; renderer binding and 2D/3D render-state parity; scene frame/LOD/resource budgets; geometry normalization; bounded spatial grid index; request dedupe/cancellation/cache/queue ownership; deterministic 2D/3D view-state synchronization.
+- DEĞİŞEN DOSYALAR: 28 files under `Webclient.app/src/gis-engine/`, split between strict TypeScript runtime modules and focused Vitest regressions. Current-main feedback-link change is preserved and is not counted in PR diff.
+- YAKLAŞIK SATIR: GitHub base...head reports 4,059 additions, 0 deletions; mandatory meaningful-additions threshold is met.
+- TESTLER / BUILD / CI: focused Vitest regressions exist for every added runtime area. Exact refreshed head `94393f891...` currently has no associated GitHub Actions workflow run, so no test/lint/typecheck/build PASS is claimed and merge remains forbidden. Next turn must check CI first; if workflows start, inspect exact-head results and fix code-caused failures on this branch.
+- NETWORK DEĞİŞİKLİKLERİ: no WMS/WFS/WMTS, invented endpoint, direct new transport, CDN, analytics, telemetry provider or remote asset. ArcGIS query transport remains injected and metadata/capability-driven.
+- GÜVENLİK KONTROLLERİ / DATA INTEGRITY: bounded features/pages/queue/cache/index/resource budgets; stable identity requirements; transfer-limit and pagination progress evidence; cancellation; stale selection suppression; deterministic ownership; malformed geometry/extent/state fail-closed behavior.
+- İKON EŞLEŞTİRME: unchanged; existing shared deterministic icon registry/resolver remains the single authority; no second resolver added.
+- MODERNİZASYON KARARLARI: extend the current strict TypeScript GIS engine with composable provider-neutral coordinators rather than introducing another mapping runtime or duplicating ArcGIS transport/configuration.
+- PERFORMANS ETKİSİ: bounded paging, grid indexing, LOD/resource budgets, request dedupe, cancellation, bounded cache/queue and renderer/view-state coalescing reduce redundant network/CPU/GPU/memory work.
+- ÇÖZÜLEN HATALAR: request coordinator terminal entries release key ownership before subscriber settlement, preventing immediate same-key consumers from attaching to terminal work; synchronous operation failures and invalid keys are converted into deterministic promise failures; queued cancellation ownership is detached safely.
+- KALAN SORUNLAR / SONRAKİ GÖREV: exact-head CI is the only current merge gate known to be unmet. Check PR #79 mergeability and all required Actions for the newest progress commit; run/fix first verification, second verification, performance/data-integrity/security review and final regression. Refresh main immediately before any squash merge. Merge only with additions >=4,000, completed+success required checks, conflict-free mergeable=true and no critical release risk; then verify merge SHA and current main.
