@@ -114,7 +114,7 @@ const settleWithConcurrency = async <TItem, TResult>(items: TItem[], worker: (it
     while (cursor < source.length) {
       throwIfAborted(signal);
       const index = cursor; cursor += 1;
-      try { results[index] = { status: 'fulfilled', value: await worker(source[index], index) }; }
+      try { results[index] = { status: 'fulfilled', value: await worker(source[index]!, index) }; }
       catch (error) { if ((error as IdentifyRuntimeError)?.code === 'CANCELLED') throw error; results[index] = { status: 'rejected', reason: error }; }
     }
   };
@@ -129,8 +129,8 @@ const createIdentifyParameters = (IdentifyParameters: IdentifyParametersCtor, vi
   const params = new IdentifyParameters({ returnGeometry: options.returnGeometry !== false, geometry: mapPoint, tolerance: Number.isFinite(options.tolerance) ? Math.max(0, Number(options.tolerance)) : 3, mapExtent: view?.extent });
   if (view?.width) params.width = view.width;
   if (view?.height) params.height = view.height;
-  if (Number.isFinite(view?.resolution)) params.resolution = view.resolution;
-  if (Number.isFinite(options.dpi)) params.dpi = options.dpi;
+  if (Number.isFinite(view?.resolution)) params.resolution = Number(view.resolution);
+  if (Number.isFinite(options.dpi)) params.dpi = Number(options.dpi);
   if (options.layerOption) params.layerOption = options.layerOption;
   if (Array.isArray(options.layerIds) && options.layerIds.length) params.layerIds = options.layerIds;
   return params;
@@ -172,7 +172,7 @@ export const identifyMapServices = async (view: IdentifyViewLike, mapPoint: ArcG
   }, options.concurrency, options.signal);
   const results: IdentifyResult[] = [];
   const failures: IdentifyFailure[] = [];
-  settled.forEach((entry, index) => { if (entry.status === 'fulfilled') results.push(...entry.value); else failures.push({ target: source[index], error: entry.reason }); });
+  settled.forEach((entry, index) => { if (entry.status === 'fulfilled') results.push(...entry.value); else failures.push({ target: source[index]!, error: entry.reason }); });
   return { results, failures };
 };
 
@@ -254,7 +254,7 @@ export const createIdentifySession = (): IdentifySession => {
   const cancel = (): void => { generation += 1; controller?.abort?.(); controller = null; };
   const run = async (view: IdentifyViewLike, event: IdentifyEventLike, options: IdentifyOptions = {}): Promise<GlobalIdentifyResult> => {
     cancel(); const localGeneration = generation; const localController = typeof AbortController !== 'undefined' ? new AbortController() : null; controller = localController;
-    try { const result = await executeGlobalIdentify(view, event, { ...options, signal: localController?.signal }); if (generation !== localGeneration) throw cancelledError(); return result; }
+    try { const result = await executeGlobalIdentify(view, event, { ...options, ...(localController ? { signal: localController.signal } : {}) }); if (generation !== localGeneration) throw cancelledError(); return result; }
     finally { if (controller === localController) controller = null; }
   };
   return { run, cancel, get generation() { return generation; }, get active() { return Boolean(controller); } };

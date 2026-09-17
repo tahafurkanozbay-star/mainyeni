@@ -21,8 +21,8 @@ export interface GisServiceErrorDetails extends RuntimeErrorDetails {
 
 export class GisServiceError extends Error {
   code: string;
-  serviceId?: string;
-  status?: number;
+  serviceId: string | undefined;
+  status: number | undefined;
   cause?: unknown;
 
   constructor(message: string, details: GisServiceErrorDetails = {}) {
@@ -100,7 +100,7 @@ const runAttempt = <T>(
     : null;
 
   const request = Promise.resolve().then(() => requestFactory(service, {
-    signal: requestSignal,
+    ...(requestSignal === undefined ? {} : { signal: requestSignal }),
     attempt,
   }));
 
@@ -146,7 +146,7 @@ const asError = (error: unknown, serviceId: string): GisServiceError => {
   return new GisServiceError(candidate?.message || 'GIS request failed', {
     code: 'NETWORK_ERROR',
     serviceId,
-    status: candidate?.status,
+    ...(candidate?.status === undefined ? {} : { status: candidate.status }),
     cause: error,
   });
 };
@@ -237,7 +237,7 @@ export class GisServiceRegistry {
       try {
         const result = await runAttempt(requestFactory, service, {
           timeoutMs,
-          externalSignal: options.signal,
+          ...(options.signal === undefined ? {} : { externalSignal: options.signal }),
           attempt: attemptNumber,
         });
         this.setHealth(serviceId, {
