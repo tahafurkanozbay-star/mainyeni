@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true
+  },
+  "files": [
+    "src/gis-engine/arcgisModuleRuntime.ts",
+    "src/gis-engine/measurementRuntime.ts",
+    "src/gis-engine/identifyRuntime.ts",
+    "src/gis-engine/spatialEngine.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}
