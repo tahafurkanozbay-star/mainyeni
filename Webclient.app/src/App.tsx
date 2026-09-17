@@ -32,6 +32,28 @@ const describeBootstrapError = (error: unknown): string => {
   return `Harita yapılandırması yüklenemedi${code}. Lütfen bağlantınızı kontrol edip tekrar deneyin.`;
 };
 
+const SiteDataDisclaimer = () => (
+  <aside
+    aria-label="Veri kullanım uyarısı"
+    className="position-fixed start-50 translate-middle-x px-3 py-2 rounded-3 border shadow-sm text-center fw-semibold"
+    role="note"
+    style={{
+      bottom: 'calc(8px + env(safe-area-inset-bottom))',
+      zIndex: 1004,
+      maxWidth: 'calc(100vw - 24px)',
+      width: 'max-content',
+      pointerEvents: 'none',
+      backgroundColor: 'var(--exp-surface)',
+      borderColor: 'var(--exp-border)',
+      color: 'var(--exp-text)',
+      fontSize: '0.78rem',
+      lineHeight: 1.35,
+    }}
+  >
+    Sitede Gösterilen Veriler Bilgi Amaçlıdır. Resmî İşlemlerde <strong>KULLANILAMAZ!</strong>
+  </aside>
+);
+
 function App() {
   const windowManager = useWindowManager();
   const [configLoadStatus, setConfigLoadStatus] = useState<LoadingStatus>(Constants_LoadingStatus.LOADING);
@@ -85,6 +107,7 @@ function App() {
               <ExperienceWorkspace />
               <ExperienceUXLayer windowManager={windowManager} />
               <ExperienceCommandCenter windowManager={windowManager} />
+              <SiteDataDisclaimer />
             </>}
       </div>
     </ExperienceThemeProvider>
