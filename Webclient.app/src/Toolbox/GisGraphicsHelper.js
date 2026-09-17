@@ -1,4 +1,4 @@
-import { loadModules } from "esri-loader";
+import { loadArcgisModule, loadArcgisModules } from "../gis-engine/arcgisModuleRuntime";
 import { ArrayHelper } from "./ArrayHelper";
 import { IsNull } from './ObjectHelper';
 import { TextHelper } from "./TextHelper";
@@ -28,7 +28,7 @@ export const GisGraphicsHelper = {
   },
 
   CreatePoint: async props => {
-    const [Point] = await loadModules(["esri/geometry/Point"]);
+    const Point = await loadArcgisModule("esri/geometry/Point");
     return new Point(props);
   },
 
@@ -44,13 +44,13 @@ export const GisGraphicsHelper = {
 
   CreateCustomGraphicFromGeometry: async (_geometry, _symbol) => {
     if (isNil(_geometry)) return Promise.reject(null);
-    const [Graphic] = await loadModules(["esri/Graphic"]);
+    const Graphic = await loadArcgisModule("esri/Graphic");
     return new Graphic({ geometry: _geometry, symbol: _symbol });
   },
 
   CreateGraphicFromGeometry: async (_geometry, _symbol) => {
     if (isNil(_geometry)) return null;
-    const [Graphic] = await loadModules(["esri/Graphic"]);
+    const Graphic = await loadArcgisModule("esri/Graphic");
     const pointSymbol = { type: "picture-marker", url: "images/icons/map/pictureMarker.png", width: "48px", height: "48px" };
     const polylineSymbol = { type: "simple-line", color: [78, 229, 255], width: 4 };
     const polygonSymbol = { type: "simple-line", color: [78, 229, 255], width: 4 };
@@ -74,19 +74,19 @@ export const GisGraphicsHelper = {
   },
 
   CreatePolygonFromXYPoints: async _points => {
-    const [Polygon] = await loadModules(["esri/geometry/Polygon"]);
+    const Polygon = await loadArcgisModule("esri/geometry/Polygon");
     const rings = (_points?.[0] || []).map(point => [point[0], point[1]]);
     return new Polygon({ rings, spatialReference: { wkid: 4326 } });
   },
 
   CreatePolylineFromXYPoints: async _points => {
-    const [Polyline] = await loadModules(["esri/geometry/Polyline"]);
+    const Polyline = await loadArcgisModule("esri/geometry/Polyline");
     const paths = (_points?.[0] || []).map(point => [point[0], point[1]]);
     return new Polyline({ paths, spatialReference: { wkid: 4326 } });
   },
 
   ProjectGeometry: async (_geometry, _wkid) => {
-    const [projection, SpatialReference] = await loadModules(["esri/geometry/projection", "esri/geometry/SpatialReference"]);
+    const [projection, SpatialReference] = await loadArcgisModules(["esri/geometry/projection", "esri/geometry/SpatialReference"]);
     await projection.load();
     return projection.project(_geometry, new SpatialReference({ wkid: _wkid }));
   }
