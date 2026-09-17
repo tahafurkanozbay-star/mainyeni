@@ -4,11 +4,14 @@
     "allowImportingTsExtensions": true,
     "allowJs": false,
     "checkJs": false,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": [
     "src/experience/contracts.ts",
-    "src/Components/App/SidebarModern.tsx"
+    "src/Components/App/SidebarModern.tsx",
+    "src/Components/Common/ExperienceCommandCenterModern.tsx"
   ],
   "exclude": ["node_modules", "build", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

@@ -14,7 +14,7 @@ import { FullScreenLoading } from './Components/Common/Loading';
 import { FullScreenError } from './Components/Common/Error';
 import { setDefaultOptions } from 'esri-loader';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
-import { ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenter';
+import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
