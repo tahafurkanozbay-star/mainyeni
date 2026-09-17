@@ -1,15 +1,13 @@
-import { loadModules } from 'esri-loader';
+import { evictArcgisModule, loadArcgisModules } from './arcgisModuleRuntime';
 import type { ArcGisGeometryLike, ArcGisGraphicLike } from './contracts';
 
-const modulePromises = new Map<string, Promise<any>>();
-export const clearIdentifyRuntimeCache = (): void => { modulePromises.clear(); };
+const IDENTIFY_MODULE_IDS = [
+  'esri/rest/identify',
+  'esri/rest/support/IdentifyParameters',
+] as const;
 
-const load = <T = any>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name]).then((modules) => modules[0]).catch((error) => { modulePromises.delete(name); throw error; });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
+export const clearIdentifyRuntimeCache = (): void => {
+  IDENTIFY_MODULE_IDS.forEach((moduleId) => evictArcgisModule(moduleId));
 };
 
 export interface IdentifyRuntimeError extends Error { code?: string; }
@@ -160,7 +158,10 @@ export const identifyMapServices = async (view: IdentifyViewLike, mapPoint: ArcG
   throwIfAborted(options.signal);
   const source = Array.isArray(targets) ? targets : collectIdentifyTargets(view).mapServices;
   if (!source.length) return { results: [], failures: [] };
-  const [identify, IdentifyParameters] = await raceCancellation(Promise.all([load<any>('esri/rest/identify'), load<IdentifyParametersCtor>('esri/rest/support/IdentifyParameters')]), options.signal);
+  const [identify, IdentifyParameters] = await raceCancellation(
+    loadArcgisModules<[any, IdentifyParametersCtor]>(IDENTIFY_MODULE_IDS),
+    options.signal,
+  );
   throwIfAborted(options.signal);
   const settled = await settleWithConcurrency(source, async (target) => {
     throwIfAborted(options.signal);
