@@ -67,7 +67,11 @@ export function NavigationBar({ windowManager }) {
                                     enterKeyHint="search"
                                 />
                                 <button type="submit" className="kr-search-submit" aria-label="Aramayı başlat" title="Ara">
-                                    <span aria-hidden="true">⌕</span>
+                                    <span className="kr-search-fallback" aria-hidden="true">⌕</span>
+                                    <svg className="kr-search-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <circle cx="11" cy="11" r="7" />
+                                        <path d="m20 20-4-4" />
+                                    </svg>
                                 </button>
                             </div>
                             <span className="kr-search-hint" aria-hidden="true">

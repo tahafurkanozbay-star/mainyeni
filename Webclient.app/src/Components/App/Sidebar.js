@@ -127,6 +127,7 @@ export const Sidebar = React.forwardRef(({ id, windowManager }, ref) => {
                         title={group.label}
                     >
                         <img src={group.logo} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+                        <span className="kr-sidebar__group-label" aria-hidden="true">{group.shortLabel || group.id}</span>
                         <span className="experience-sr-only">{group.label}</span>
                     </button>
                 ))}
