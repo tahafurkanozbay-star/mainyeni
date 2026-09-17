@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { ParklarQeryBusiness } from '../../../Business/ParklarQeryBusiness';
@@ -18,7 +18,6 @@ const OWNER_ID = 'parklar-query-window';
 const WINDOW_TITLE = 'Parklar';
 const WINDOW_LOGO = 'images/Sidebar/ABB/park.png';
 const WINDOW_LOGO_ICON = 'images/icons/map/ABB/parklar.svg';
-
 interface ParkQuery { name: string | null; districtId: number | string | null; districtName: string | null; nbhoodId: number | string | null; nbhoodName: string | null; showMapSelect: boolean; showNearby: boolean }
 interface ParkResult { ObjectId?: string | number; Title?: string; Phone?: string; Address?: string; AddressDescription?: string }
 interface GeometryLike { latitude?: number; longitude?: number }
@@ -29,157 +28,26 @@ interface ClusterLike { layerObj?: LayerLike }
 interface MapViewLike { map?: unknown; extent?: unknown; zoom?: number; goTo?: (target: unknown) => Promise<unknown>; watch?: (name: string, callback: (value: number) => void) => DisposableHandle }
 interface WindowManagerLike { RegisterWindow: (ref: React.ForwardedRef<ManagedWindowHandle>) => void; IsVisible: (id: string) => boolean; ShowWindow: (id: string) => void; ToggleMinimiseWindow: (id: string) => void; ShowMessage: (type: string, message: string) => void }
 interface ParklarQueryWindowProps { id: string; windowTitle?: string; windowManager: WindowManagerLike }
-
 const DEFAULT_QUERY: ParkQuery = Object.freeze({ name: null, districtId: null, districtName: null, nbhoodId: null, nbhoodName: null, showMapSelect: false, showNearby: false });
 const messageFrom = (error: unknown, fallback: string): string => error instanceof Error && error.message ? error.message : fallback;
-
 export const ParklarQueryWindow = forwardRef<ManagedWindowHandle, ParklarQueryWindowProps>((props, ref) => {
-  const [query, setQuery] = useState<ParkQuery>(DEFAULT_QUERY);
-  const [resultList, setResultList] = useState<readonly ParkResult[] | null>(null);
-  const [activeTab, setActiveTab] = useState<'form' | 'query'>('form');
-  const [loading, setLoading] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | number | null>(null);
-  const mapViewRef = useRef<MapViewLike | null>(null);
-  const extentHistoryRef = useRef<unknown[]>([]);
-  const addExtentRef = useRef(true);
-  const clusterLayerRef = useRef<ClusterLike | null>(null);
-  const ownerRef = useRef<ReturnType<typeof createLayerOwner> | null>(null);
-  const lifecycleRef = useRef(createDisposableBag());
-  const queryVersionRef = useRef(0);
-  const mountedRef = useRef(true);
-
-  const getOwner = (view = mapViewRef.current ?? MapManager.GetMapView() as MapViewLike | null) => {
-    if (!view?.map) return null;
-    if (!ownerRef.current) ownerRef.current = createLayerOwner(view as never, OWNER_ID);
-    return ownerRef.current;
-  };
+  const [query, setQuery] = useState<ParkQuery>(DEFAULT_QUERY); const [resultList, setResultList] = useState<readonly ParkResult[] | null>(null); const [activeTab, setActiveTab] = useState<'form' | 'query'>('form'); const [loading, setLoading] = useState(false); const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const mapViewRef = useRef<MapViewLike | null>(null); const extentHistoryRef = useRef<unknown[]>([]); const addExtentRef = useRef(true); const clusterLayerRef = useRef<ClusterLike | null>(null); const ownerRef = useRef<ReturnType<typeof createLayerOwner> | null>(null); const lifecycleRef = useRef(createDisposableBag()); const queryVersionRef = useRef(0); const mountedRef = useRef(true);
+  const getOwner = (view = mapViewRef.current ?? MapManager.GetMapView() as MapViewLike | null) => { if (!view?.map) return null; if (!ownerRef.current) ownerRef.current = createLayerOwner(view as never, OWNER_ID); return ownerRef.current; };
   const removeLastClusterLayer = () => { getOwner()?.clear(); clusterLayerRef.current = null; };
-  const getSymbolBasedOnZoom = (zoomLevel: unknown) => {
-    const zoom = Number(zoomLevel);
-    const size = Number.isFinite(zoom) && zoom > 10 ? { width: 30, height: 35 } : { width: 80, height: 80 };
-    return { type: 'picture-marker', url: WINDOW_LOGO_ICON, width: `${size.width}px`, height: `${size.height}px` };
-  };
-  const rememberExtent = () => {
-    if (!addExtentRef.current || !mapViewRef.current?.extent) return;
-    const history = [...extentHistoryRef.current, mapViewRef.current.extent];
-    extentHistoryRef.current = history.length > 30 ? history.slice(-30) : history;
-  };
-  const installViewWatchers = async (view: MapViewLike | null) => {
-    if (!view) return;
-    try {
-      const [watchUtils] = await loadModules(['esri/core/watchUtils']) as any[];
-      if (!mountedRef.current || mapViewRef.current !== view) return;
-      if (view.extent) extentHistoryRef.current = [view.extent];
-      const readyHandle = watchUtils.when(view, 'ready', () => {
-        const extentHandle = watchUtils.whenOnce(view, 'extent', () => lifecycleRef.current.add(watchUtils.whenTrue(view, 'stationary', (stationary: boolean) => { if (stationary) rememberExtent(); })));
-        lifecycleRef.current.add(extentHandle);
-      });
-      lifecycleRef.current.add(readyHandle);
-      if (view.watch) lifecycleRef.current.add(view.watch('zoom', newZoom => { const renderer = clusterLayerRef.current?.layerObj?.renderer; if (renderer) { renderer.symbol = getSymbolBasedOnZoom(newZoom); clusterLayerRef.current?.layerObj?.refresh?.(); } }));
-    } catch { /* watcher enhancement is non-critical */ }
-  };
-
-  const getItemDetailsById = async (item: ParkResult): Promise<ParkDetail> => {
-    const result = await ParklarQeryBusiness.Query({ ObjectId: item.ObjectId }, true);
-    if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data) || !result.data.length) throw new Error('Öğe detayları bulunamadı');
-    return result.data[0] as ParkDetail;
-  };
-  const activateItem = async (item: ParkResult) => {
-    setSelectedId(item.ObjectId ?? null);
-    LoggingBusiness.CreateClientLog('Parklar/Detay Göster', `${item.ObjectId ?? ''}/${item.Address ?? ''}`);
-    try {
-      const details = await getItemDetailsById(item);
-      if (mapViewRef.current && details.geometry) GisGraphicsHelper.ZoomToGeometry(mapViewRef.current as never, details.geometry as never, 18);
-      if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id);
-    } catch (error) { props.windowManager.ShowMessage(Constants_MessageType.Error, messageFrom(error, 'Park detayı açılamadı')); }
-  };
-  const showRoute = async (event: MouseEvent<HTMLButtonElement>, item: ParkResult) => {
-    event.stopPropagation();
-    try {
-      const details = await getItemDetailsById(item);
-      const lat = details.geometry?.latitude; const lng = details.geometry?.longitude;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Koordinat bilgisi bulunamadı');
-      window.open(`https://www.google.com.tr/maps?saddr=My+Location&daddr=${encodeURIComponent(`${lat},${lng}`)}`, '_blank', 'noopener,noreferrer');
-    } catch { props.windowManager.ShowMessage(Constants_MessageType.Error, 'Yol tarifi alınamadı - öğe detayları bulunamadı'); }
-  };
-
-  const fetchQueryResults = async () => {
-    const view = mapViewRef.current ?? MapManager.GetMapView() as MapViewLike | null;
-    if (!view?.map) { props.windowManager.ShowMessage(Constants_MessageType.Error, 'Harita görünümü henüz hazır değil'); return; }
-    mapViewRef.current = view;
-    const requestVersion = ++queryVersionRef.current;
-    setLoading(true);
-    LoggingBusiness.CreateClientLog('Parklar/Sorgu', `${query.districtName ?? ''}/${query.nbhoodName ?? ''}/${query.name ?? ''}`);
-    try {
-      const result = await ParklarQeryBusiness.Query(query, false);
-      if (!mountedRef.current || requestVersion !== queryVersionRef.current) return;
-      if (result?.type !== Constants_ServiceResultType.Success) { setResultList([]); setActiveTab('query'); return; }
-      setActiveTab('query'); addExtentRef.current = false;
-      const initialExtent = extentHistoryRef.current[0]; if (initialExtent && view.goTo) { try { await view.goTo(initialExtent); } catch {} }
-      if (!mountedRef.current || requestVersion !== queryVersionRef.current) return;
-      const clusterLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering('YeniParklarQeryUrl', props.windowTitle ?? WINDOW_TITLE, query, getSymbolBasedOnZoom(view.zoom)) as ClusterLike;
-      if (!mountedRef.current || requestVersion !== queryVersionRef.current) { clusterLayer?.layerObj?.destroy?.(); return; }
-      removeLastClusterLayer(); clusterLayerRef.current = clusterLayer; getOwner(view)?.add(clusterLayer?.layerObj as never);
-      try {
-        const extent = (await clusterLayer?.layerObj?.queryExtent?.())?.extent;
-        if (extent && view.goTo && mountedRef.current && requestVersion === queryVersionRef.current) {
-          const x = (extent.xmax - extent.xmin) * .05; const y = (extent.ymax - extent.ymin) * .1;
-          await view.goTo({ xmin: extent.xmin - x, ymin: extent.ymin - y, xmax: extent.xmax + x, ymax: extent.ymax + y, spatialReference: extent.spatialReference });
-        }
-      } catch {}
-      setResultList((Array.isArray(result.data) ? result.data : []).map((item: any) => ({ ObjectId: item?.attr?.objectid, Title: item?.attr?.adi, Phone: item?.attr?.telefon, Address: item?.attr?.adres, AddressDescription: 'Adres tarifi bulunmuyor' })));
-    } catch (error) {
-      if (mountedRef.current && requestVersion === queryVersionRef.current) { props.windowManager.ShowMessage(Constants_MessageType.Error, messageFrom(error, 'Park sorgusu başarısız oldu')); setResultList([]); setActiveTab('query'); }
-    } finally { if (mountedRef.current && requestVersion === queryVersionRef.current) setLoading(false); }
-  };
-
-  const goBack = async () => {
-    queryVersionRef.current += 1; removeLastClusterLayer(); addExtentRef.current = false; setSelectedId(null);
-    const target = extentHistoryRef.current[0]; if (target && mapViewRef.current?.goTo) { try { await mapViewRef.current.goTo(target); } catch {} }
-    setActiveTab('form');
-  };
-
-  useEffect(() => {
-    mountedRef.current = true; props.windowManager.RegisterWindow(ref); const view = MapManager.GetMapView() as MapViewLike | null; mapViewRef.current = view; void installViewWatchers(view);
-    const lifecycle = lifecycleRef.current;
-    return () => { mountedRef.current = false; queryVersionRef.current += 1; lifecycle.dispose(); ownerRef.current?.clear(); ownerRef.current = null; clusterLayerRef.current = null; };
-  // registration is intentionally mount-scoped for the legacy window manager contract
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  const getSymbolBasedOnZoom = (zoomLevel: unknown) => { const zoom = Number(zoomLevel); const size = Number.isFinite(zoom) && zoom > 10 ? { width: 30, height: 35 } : { width: 80, height: 80 }; return { type: 'picture-marker', url: WINDOW_LOGO_ICON, width: `${size.width}px`, height: `${size.height}px` }; };
+  const rememberExtent = () => { if (!addExtentRef.current || !mapViewRef.current?.extent) return; const history = [...extentHistoryRef.current, mapViewRef.current.extent]; extentHistoryRef.current = history.length > 30 ? history.slice(-30) : history; };
+  const installViewWatchers = async (view: MapViewLike | null) => { if (!view) return; try { const [watchUtils] = await loadModules(['esri/core/watchUtils']) as any[]; if (!mountedRef.current || mapViewRef.current !== view) return; if (view.extent) extentHistoryRef.current = [view.extent]; const readyHandle = watchUtils.when(view, 'ready', () => { const extentHandle = watchUtils.whenOnce(view, 'extent', () => lifecycleRef.current.add(watchUtils.whenTrue(view, 'stationary', (stationary: boolean) => { if (stationary) rememberExtent(); }))); lifecycleRef.current.add(extentHandle); }); lifecycleRef.current.add(readyHandle); if (view.watch) lifecycleRef.current.add(view.watch('zoom', newZoom => { const renderer = clusterLayerRef.current?.layerObj?.renderer; if (renderer) { renderer.symbol = getSymbolBasedOnZoom(newZoom); clusterLayerRef.current?.layerObj?.refresh?.(); } })); } catch { /* watcher enhancement is non-critical */ } };
+  const getItemDetailsById = async (item: ParkResult): Promise<ParkDetail> => { const result = await ParklarQeryBusiness.Query({ ObjectId: item.ObjectId }, true); if (result?.type !== Constants_ServiceResultType.Success || !Array.isArray(result.data) || !result.data.length) throw new Error('Öğe detayları bulunamadı'); return result.data[0] as ParkDetail; };
+  const activateItem = async (item: ParkResult) => { setSelectedId(item.ObjectId ?? null); LoggingBusiness.CreateClientLog('Parklar/Detay Göster', `${item.ObjectId ?? ''}/${item.Address ?? ''}`); try { const details = await getItemDetailsById(item); if (mapViewRef.current && details.geometry) GisGraphicsHelper.ZoomToGeometry(mapViewRef.current as never, details.geometry as never, 18); if (window.screen.width < 960) props.windowManager.ToggleMinimiseWindow(props.id); } catch (error) { props.windowManager.ShowMessage(Constants_MessageType.Error, messageFrom(error, 'Park detayı açılamadı')); } };
+  const showRoute = async (event: MouseEvent<HTMLButtonElement>, item: ParkResult) => { event.stopPropagation(); try { const details = await getItemDetailsById(item); const lat = details.geometry?.latitude; const lng = details.geometry?.longitude; if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Koordinat bilgisi bulunamadı'); window.open(`https://www.google.com.tr/maps?saddr=My+Location&daddr=${encodeURIComponent(`${lat},${lng}`)}`, '_blank', 'noopener,noreferrer'); } catch { props.windowManager.ShowMessage(Constants_MessageType.Error, 'Yol tarifi alınamadı - öğe detayları bulunamadı'); } };
+  const fetchQueryResults = async () => { const view = mapViewRef.current ?? MapManager.GetMapView() as MapViewLike | null; if (!view?.map) { props.windowManager.ShowMessage(Constants_MessageType.Error, 'Harita görünümü henüz hazır değil'); return; } mapViewRef.current = view; const requestVersion = ++queryVersionRef.current; setLoading(true); LoggingBusiness.CreateClientLog('Parklar/Sorgu', `${query.districtName ?? ''}/${query.nbhoodName ?? ''}/${query.name ?? ''}`); try { const result = await ParklarQeryBusiness.Query(query, false); if (!mountedRef.current || requestVersion !== queryVersionRef.current) return; if (result?.type !== Constants_ServiceResultType.Success) { setResultList([]); setActiveTab('query'); return; } setActiveTab('query'); addExtentRef.current = false; const initialExtent = extentHistoryRef.current[0]; if (initialExtent && view.goTo) { try { await view.goTo(initialExtent); } catch {} } if (!mountedRef.current || requestVersion !== queryVersionRef.current) return; const clusterLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering('YeniParklarQeryUrl', props.windowTitle ?? WINDOW_TITLE, query, getSymbolBasedOnZoom(view.zoom)) as ClusterLike; if (!mountedRef.current || requestVersion !== queryVersionRef.current) { clusterLayer?.layerObj?.destroy?.(); return; } removeLastClusterLayer(); clusterLayerRef.current = clusterLayer; getOwner(view)?.add(clusterLayer?.layerObj as never); try { const extent = (await clusterLayer?.layerObj?.queryExtent?.())?.extent; if (extent && view.goTo && mountedRef.current && requestVersion === queryVersionRef.current) { const x = (extent.xmax - extent.xmin) * .05; const y = (extent.ymax - extent.ymin) * .1; await view.goTo({ xmin: extent.xmin - x, ymin: extent.ymin - y, xmax: extent.xmax + x, ymax: extent.ymax + y, spatialReference: extent.spatialReference }); } } catch {} setResultList((Array.isArray(result.data) ? result.data : []).map((item: any) => ({ ObjectId: item?.attr?.objectid, Title: item?.attr?.adi, Phone: item?.attr?.telefon, Address: item?.attr?.adres, AddressDescription: 'Adres tarifi bulunmuyor' }))); } catch (error) { if (mountedRef.current && requestVersion === queryVersionRef.current) { props.windowManager.ShowMessage(Constants_MessageType.Error, messageFrom(error, 'Park sorgusu başarısız oldu')); setResultList([]); setActiveTab('query'); } } finally { if (mountedRef.current && requestVersion === queryVersionRef.current) setLoading(false); } };
+  const goBack = async () => { queryVersionRef.current += 1; removeLastClusterLayer(); addExtentRef.current = false; setSelectedId(null); const target = extentHistoryRef.current[0]; if (target && mapViewRef.current?.goTo) { try { await mapViewRef.current.goTo(target); } catch {} } setActiveTab('form'); };
+  useEffect(() => { mountedRef.current = true; props.windowManager.RegisterWindow(ref); const view = MapManager.GetMapView() as MapViewLike | null; mapViewRef.current = view; void installViewWatchers(view); const lifecycle = lifecycleRef.current; return () => { mountedRef.current = false; queryVersionRef.current += 1; lifecycle.dispose(); ownerRef.current?.clear(); ownerRef.current = null; clusterLayerRef.current = null; }; /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useImperativeHandle(ref, () => ({ id: props.id, visible: false, minimized: false, OnShow: () => { DebugHelper.Log(`show ${props.id}`); }, OnClose: () => { queryVersionRef.current += 1; setQuery(DEFAULT_QUERY); setActiveTab('form'); setResultList(null); setSelectedId(null); removeLastClusterLayer(); } }), [props.id]);
-
-  const columns = useMemo<readonly ExperienceDataColumn<ParkResult>[]>(() => [
-    { id: 'name', header: 'Park', cell: item => <strong>{item.Title || 'Adsız park'}</strong> },
-    { id: 'address', header: 'Adres', cell: item => item.Address || 'Adres bilgisi yok' },
-    { id: 'phone', header: 'Telefon', cell: item => item.Phone || '—' },
-    { id: 'actions', header: 'İşlemler', align: 'end', cell: item => <button type="button" className="experience-table-action" onClick={event => void showRoute(event, item)} aria-label={`${item.Title || 'Park'} için yol tarifi aç`}>Yol tarifi</button> },
-  ], []);
-
-  const visible = props.windowManager.IsVisible(props.id);
-  const resultStatus = resultList === null ? 'Park adıyla arama yapın.' : resultList.length === 0 ? 'Filtrelere uygun park bulunamadı.' : `${resultList.length} park bulundu.`;
-  return (
-    <section className="sidebar-container park-query-modern" style={{ visibility: visible ? 'visible' : 'hidden' }} aria-label="Park sorgusu" aria-busy={loading || undefined} data-active-tab={activeTab}>
-      <header className="common-query-window-header"><img className="common-query-window-header-icon" src={WINDOW_LOGO} alt="" /><span>{WINDOW_TITLE}</span></header>
-      {activeTab === 'form' ? (
-        <div className="park-query-modern__body">
-          <div className="park-query-modern__intro"><h2>Park ara</h2><p>Ankara genelindeki parkları ada göre arayın ve sonucu haritada inceleyin.</p></div>
-          <form role="search" className="park-query-modern__form" onSubmit={event => { event.preventDefault(); if (!loading) void fetchQueryResults(); }}>
-            <ExperienceInput label="Park adı" value={query.name ?? ''} placeholder="Örn. Kuğulu Park" autoComplete="off" disabled={loading} onChange={event => setQuery(current => ({ ...current, name: event.currentTarget.value || null }))} />
-            <button className="experience-query-surface__submit" type="submit" disabled={loading}>{loading ? 'Aranıyor…' : 'Parkları ara'}</button>
-          </form>
-          <ExperienceStatus tone="info" live="polite" busy={loading}>{loading ? 'Park verileri ve harita katmanı hazırlanıyor…' : 'Arama sonuçları harita görünümüyle eş zamanlı güncellenir.'}</ExperienceStatus>
-        </div>
-      ) : (
-        <div className="park-query-modern__body">
-          <ExperienceToolbar label="Park sonuç araçları"><button type="button" className="experience-table-action" onClick={() => void goBack()}>Aramaya dön</button><button type="button" className="experience-table-action" onClick={() => void fetchQueryResults()} disabled={loading}>Yenile</button></ExperienceToolbar>
-          <ExperienceStatus tone={resultList?.length ? 'success' : 'neutral'} live="polite" busy={loading}>{loading ? 'Sonuçlar yenileniyor…' : resultStatus}</ExperienceStatus>
-          <ExperienceDataTable rows={resultList ?? []} columns={columns} getRowKey={(item, index) => item.ObjectId ?? `${item.Title ?? 'park'}-${index}`} caption="Park sorgu sonuçları" busy={loading} busyLabel="Park sonuçları yükleniyor" selectedRowKey={selectedId} onRowActivate={item => void activateItem(item)} />
-        </div>
-      )}
-    </section>
-  );
+  const columns = useMemo<readonly ExperienceDataColumn<ParkResult>[]>(() => [{ id: 'name', header: 'Park', cell: item => <strong>{item.Title || 'Adsız park'}</strong> }, { id: 'address', header: 'Adres', cell: item => item.Address || 'Adres bilgisi yok' }, { id: 'phone', header: 'Telefon', cell: item => item.Phone || '—' }, { id: 'actions', header: 'İşlemler', align: 'end', cell: item => <button type="button" className="experience-table-action" onClick={event => void showRoute(event, item)} aria-label={`${item.Title || 'Park'} için yol tarifi aç`}>Yol tarifi</button> }], []);
+  const visible = props.windowManager.IsVisible(props.id); const resultStatus = resultList === null ? 'Park adıyla arama yapın.' : resultList.length === 0 ? 'Filtrelere uygun park bulunamadı.' : `${resultList.length} park bulundu.`;
+  return <section className="sidebar-container park-query-modern" style={{ visibility: visible ? 'visible' : 'hidden' }} aria-label="Park sorgusu" aria-busy={loading || undefined} data-active-tab={activeTab}><header className="common-query-window-header"><img className="common-query-window-header-icon" src={WINDOW_LOGO} alt="" /><span>{WINDOW_TITLE}</span></header>{activeTab === 'form' ? <div className="park-query-modern__body"><div className="park-query-modern__intro"><h2>Park ara</h2><p>Ankara genelindeki parkları ada göre arayın ve sonucu haritada inceleyin.</p></div><form role="search" className="park-query-modern__form" onSubmit={event => { event.preventDefault(); if (!loading) void fetchQueryResults(); }}><ExperienceInput label="Park adı" value={query.name ?? ''} placeholder="Örn. Kuğulu Park" autoComplete="off" disabled={loading} onChange={event => setQuery(current => ({ ...current, name: event.currentTarget.value || null }))} /><button className="experience-query-surface__submit" type="submit" disabled={loading}>{loading ? 'Aranıyor…' : 'Parkları ara'}</button></form><ExperienceStatus tone="info" live="polite" busy={loading}>{loading ? 'Park verileri ve harita katmanı hazırlanıyor…' : 'Arama sonuçları harita görünümüyle eş zamanlı güncellenir.'}</ExperienceStatus></div> : <div className="park-query-modern__body"><ExperienceToolbar label="Park sonuç araçları"><button type="button" className="experience-table-action" onClick={() => void goBack()}>Aramaya dön</button><button type="button" className="experience-table-action" onClick={() => void fetchQueryResults()} disabled={loading}>Yenile</button></ExperienceToolbar><ExperienceStatus tone={resultList?.length ? 'success' : 'neutral'} live="polite" busy={loading}>{loading ? 'Sonuçlar yenileniyor…' : resultStatus}</ExperienceStatus><ExperienceDataTable rows={resultList ?? []} columns={columns} getRowKey={(item, index) => item.ObjectId ?? `${item.Title ?? 'park'}-${index}`} caption="Park sorgu sonuçları" busy={loading} busyLabel="Park sonuçları yükleniyor" selectedRowKey={selectedId} onRowActivate={item => void activateItem(item)} /></div>}</section>;
 });
-
 ParklarQueryWindow.displayName = 'ParklarQueryWindow';
 export default ParklarQueryWindow;
