@@ -10,7 +10,6 @@ import {
 } from './contracts';
 
 const TURKISH_LOCALE = 'tr-TR';
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/gu;
 const COMBINING_MARK_PATTERN = /[\u0300-\u036f]/gu;
 const SQL_WILDCARD_PATTERN = /[%_]/gu;
 const MAX_FINGERPRINT_LENGTH = 1024;
@@ -69,7 +68,15 @@ export const createQueryPolicy = (overrides: Partial<QueryPolicy> = {}): Readonl
   ),
 });
 
-export const stripControlCharacters = (value: string): string => value.replace(CONTROL_CHARACTER_PATTERN, '');
+export const stripControlCharacters = (value: string): string => {
+  let cleaned = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) continue;
+    cleaned += value[index] ?? '';
+  }
+  return cleaned;
+};
 
 export const normalizeBusinessText = (value: unknown, maximumLength = 256): string | null => {
   const text = normalizeString(value, maximumLength);
