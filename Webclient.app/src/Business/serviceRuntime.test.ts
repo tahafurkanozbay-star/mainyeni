@@ -345,15 +345,16 @@ describe('business query runtime concurrency and queue', () => {
 describe('business query runtime deadlines and cancellation', () => {
   test('enforces hard deadline even when executor ignores AbortSignal', async () => {
     vi.useFakeTimers();
+    const timeoutMs = 250;
     const execute = vi.fn(() => new Promise<unknown>(() => undefined));
     const { dependencies } = createDependencies({ executor: { execute, executeSpatial: execute } });
     const runtime = createBusinessQueryRuntime(dependencies, {
-      policy: { defaultTimeoutMs: 50, maxTimeoutMs: 1000 },
+      policy: { defaultTimeoutMs: timeoutMs, maxTimeoutMs: 1000 },
     });
 
-    const pending = runtime.query('Parks', {}, false, { cache: false, timeoutMs: 50 });
+    const pending = runtime.query('Parks', {}, false, { cache: false, timeoutMs });
     const rejection = expect(pending).rejects.toBeInstanceOf(BusinessTimeoutError);
-    await vi.advanceTimersByTimeAsync(51);
+    await vi.advanceTimersByTimeAsync(timeoutMs + 1);
     await rejection;
     expect(runtime.snapshot().timedOut).toBe(1);
     expect(runtime.snapshot().active).toBe(0);
