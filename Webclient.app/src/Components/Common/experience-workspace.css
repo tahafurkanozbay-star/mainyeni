@@ -31,6 +31,10 @@
 }
 
 .experience-skip-links a {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: max-content;
   min-block-size: 44px;
   display: inline-flex;
   align-items: center;
