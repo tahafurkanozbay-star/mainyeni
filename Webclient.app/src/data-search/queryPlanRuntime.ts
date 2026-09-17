@@ -159,11 +159,13 @@ export const compileQueryPlan = (
   const spatialCenter = request.center;
   if (spatialCenter && request.radiusMeters > 0) {
     const bounds = createSpatialBounds(spatialCenter, request.radiusMeters);
-    const spatial = collectSpatialCandidatePositions(dataset.spatialIndex, bounds, {
-      maxCandidates: maxSpatialCandidates,
-      signal: request.signal,
-    });
-    spatialCandidatePositions = Object.freeze([...spatial.positions]);
+    if (bounds) {
+      const spatial = collectSpatialCandidatePositions(dataset.spatialIndex, bounds, {
+        maxCandidates: maxSpatialCandidates,
+        signal: request.signal,
+      });
+      spatialCandidatePositions = Object.freeze([...spatial.positions]);
+    }
   }
 
   const initialCandidates = candidatePlan.candidatePositions.slice(0, maxCandidates);
