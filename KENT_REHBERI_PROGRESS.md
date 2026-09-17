@@ -34,3 +34,16 @@
 - PERFORMANS ETKİSİ: bounded global/lane concurrency and queue limits cap work/memory pressure; dedupe suppresses duplicate work; readiness-gated execution and deterministic lifecycle reduce race/restart amplification; no polling loop/background timer added.
 - ÇÖZÜLEN HATALAR: stale Platform PR #65 was superseded and is closed; runtime operations that ignore AbortSignal are now deadline-bounded; observer failures cannot replace business outcomes; CI distinguishes staged baseline debt from new exact-base regressions.
 - KALAN SORUNLAR / SONRAKİ GÖREV: PR #67 (strict Business/Core/Redux TypeScript migration) and PR #69 (Vite/debug/browser dependency hotfix) are now stale/non-mergeable against advanced `main`; do not stack new Platform work onto them. Next Platform turn must refresh `main`, determine which unmerged changes are still absent after #72, and reapply only non-overlapping validated work on a fresh current-main branch. Preserve concurrent GIS/Data/Experience ownership. Require >=4,000 meaningful additions on the canonical Platform PR plus exact-head completed+success CI, conflict-free mergeability, security/performance/regression review and final main refresh before merge.
+
+## Deep Data / Search continuation — 2026-09-17 10:36 TRT
+- TUR / GÖREV: canonical PR #59 merge-gate recovery and current-main integration.
+- BASE MAIN: `f7cbd5a153938c1d977c3b98f5e87626058c12cb`.
+- BRANCH / PR: `agent/data-search-production-v2-20260916-1246-851a5c9` / #59.
+- COMMIT / MERGE DURUMU: exact branch head before this progress-only commit `2c732f99c6d451f34a244ce3562ebf314fb7cb73`; OPEN / NOT MERGED.
+- ÖNEMLİ ÖZELLİKLER: current main integrated without force; final integration tree was rebuilt from current-main tree plus only PR #59 Data/Search paths, preventing rollback of concurrent Platform/GIS/Experience changes.
+- DEĞİŞEN DOSYALAR / YAKLAŞIK SATIR: current base...head is Data/Search-only, 18 files, ~5.3K additions and single-digit deletions; >=4,000 meaningful-additions gate remains satisfied.
+- TESTLER / BUILD / CI: fresh exact-head Webclient Quality, Release QA and Platform Architecture Audit were queued after integration; no PASS is claimed until all complete successfully on the final exact head.
+- NETWORK / GÜVENLİK / İKON: no endpoint, WMS/WFS/WMTS, telemetry or remote dependency added; injected geocoding transport and bounded cancellation/cache remain; shared GIS icon authority unchanged.
+- MODERNİZASYON / PERFORMANS: strict TypeScript Data/Search lifecycle remains the migration boundary; bounded catalogs, cursor/query budgets, cache/dedupe/cancellation and privacy-safe observability remain intact.
+- ÇÖZÜLEN HATALAR: stale/diverged branch condition corrected to behind=0 with merge-base=current main while preserving parallel main changes.
+- KALAN SORUNLAR / SONRAKİ GÖREV: wait for fresh exact-head required CI; if repository-code TypeScript regressions remain, fix them on this same canonical PR branch and obtain a second fresh exact-head verification. Merge only after additions>=4000, behind=0, merge-base=current main, mergeable=true, zero unresolved review threads and all mandatory checks completed+success.
