@@ -1,15 +1,9 @@
-import { loadModules } from 'esri-loader';
+import { evictArcgisModule, loadArcgisModule } from './arcgisModuleRuntime';
 
-const modulePromises = new Map<string, Promise<any>>();
+const MEASUREMENT_MODULE_ID = 'esri/widgets/Measurement';
 
-export const clearMeasurementRuntimeCache = (): void => { modulePromises.clear(); };
-
-const load = <T = any>(name: string): Promise<T> => {
-  if (!modulePromises.has(name)) {
-    const promise = loadModules([name]).then((modules) => modules[0]).catch((error) => { modulePromises.delete(name); throw error; });
-    modulePromises.set(name, promise);
-  }
-  return modulePromises.get(name) as Promise<T>;
+export const clearMeasurementRuntimeCache = (): void => {
+  evictArcgisModule(MEASUREMENT_MODULE_ID);
 };
 
 export const MEASUREMENT_TOOLS = Object.freeze({ NONE: '', DISTANCE: 'distance', AREA: 'area' });
@@ -99,7 +93,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
     if (widget) return widget;
     if (creationPromise) return creationPromise;
     setState({ status: 'loading', error: null });
-    creationPromise = load<MeasurementWidgetCtor>('esri/widgets/Measurement')
+    creationPromise = loadArcgisModule<MeasurementWidgetCtor>(MEASUREMENT_MODULE_ID)
       .then((Measurement) => {
         if (destroyed) return null;
         widget = new Measurement({ view, container, activeTool: state.activeTool });
