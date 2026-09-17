@@ -43,9 +43,9 @@ export interface ArcGisQueryOptions extends MutableRecord {
   orderByFields?: readonly string[];
   outFields?: readonly string[];
   geometry?: unknown;
-  distance?: number;
-  units?: string;
-  spatialRelationship?: string;
+  distance?: number | undefined;
+  units?: string | undefined;
+  spatialRelationship?: string | undefined;
   objectIds?: readonly number[];
   resultOffset?: number;
   resultRecordCount?: number;
@@ -379,7 +379,7 @@ export const DEFAULT_QUERY_POLICY: Readonly<QueryPolicy> = Object.freeze({
   maxCacheTtlMs: 300000,
 });
 
-export const DEFAULT_QUERY_CLOCK: QueryRuntimeClock = Object.freeze({
+export const DEFAULT_QUERY_CLOCK: QueryRuntimeClock = Object.freeze<QueryRuntimeClock>({
   now: () => Date.now(),
   setTimeout: (callback, delay) => globalThis.setTimeout(callback, delay),
   clearTimeout: (timer) => globalThis.clearTimeout(timer),
