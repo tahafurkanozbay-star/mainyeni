@@ -296,7 +296,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
       const mapState = sceneView && bridge
         ? normalizeMapStateFromScene(sceneView, bridge)
         : createViewState(fallbackMapState
-          ? { ...fallbackMapState, mode: '2d', tilt: 0 }
+          ? Object.assign({}, fallbackMapState, { mode: '2d', tilt: 0 })
           : { mode: '2d', tilt: 0 });
 
       unbindSceneRef.current?.();
