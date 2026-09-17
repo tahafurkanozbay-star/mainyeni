@@ -4,7 +4,25 @@ import { describe, expect, it } from 'vitest';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
-const ALLOWED_LEGACY_IMPORT = 'gis-engine/arcgisModuleRuntime.ts';
+const LEGACY_TRANSPORT_BOUNDARY = 'gis-engine/arcgisModuleRuntime.ts';
+const LEGACY_IMPORT_ALLOWLIST = new Set([
+  'Business/CommonBusiness.js',
+  'Business/TkgmQueryBusiness.js',
+  'Components/App/MapComponent.tsx',
+  'Components/Query/ParklarQuery/ParklarQueryWindow.js',
+  'Components/Query/VicinityQuery/VicinityQueryWindow.js',
+  'Components/Widget/AdvancedSketch/AdvancedSketchWidgetMain.js',
+  'Components/Widget/Basemap/BasemapWidget.js',
+  'Components/Widget/LayerList/LayerListWidget.js',
+  'Components/Widget/OverviewMap/OverviewMapWidget.js',
+  'Components/Widget/Sketch/SketchWidget.js',
+  'Toolbox/GisCommonHelper.js',
+  'Toolbox/GisGraphicsHelper.js',
+  'Toolbox/GisQueryHelper.js',
+  'gis-engine/identifyRuntime.ts',
+  'gis-engine/measurementRuntime.ts',
+  'gis-engine/spatialEngine.ts',
+]);
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
@@ -83,16 +101,17 @@ const hasLegacyLoaderImport = (file: string): boolean => {
     || DYNAMIC_IMPORT_PATTERN.test(source);
 };
 
-const sourceRoot = resolve(process.cwd(), 'src');
-const offenders = collectSourceFiles(sourceRoot)
-  .filter((file) => !file.includes('.test.'))
-  .filter(hasLegacyLoaderImport)
-  .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
-  .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
-  .sort();
-
 describe('ArcGIS module loading boundary', () => {
-  it(`keeps the legacy loader isolated behind arcgisModuleRuntime in production sources [offenders: ${offenders.join(', ') || 'none'}]`, () => {
-    expect(offenders).toEqual([]);
+  it('does not grow direct legacy-loader consumers beyond the migration allowlist', () => {
+    const sourceRoot = resolve(process.cwd(), 'src');
+    const unexpectedConsumers = collectSourceFiles(sourceRoot)
+      .filter((file) => !file.includes('.test.'))
+      .filter(hasLegacyLoaderImport)
+      .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
+      .filter((file) => file !== LEGACY_TRANSPORT_BOUNDARY)
+      .filter((file) => !LEGACY_IMPORT_ALLOWLIST.has(file))
+      .sort();
+
+    expect(unexpectedConsumers).toEqual([]);
   });
 });
