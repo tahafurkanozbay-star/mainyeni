@@ -59,3 +59,13 @@
 - SECURITY / PERFORMANCE: no new endpoint, WMS/WFS/WMTS, secret, telemetry or polling added. Same-origin API policy, native Web Crypto storage, bounded Business runtime concurrency/cache/diagnostics, timeout/cancellation and dedupe remain intact.
 - MERGE DURUMU: NOT MERGED. The latest head has no completed exact-head checks yet after the fixes, so merge is forbidden despite additions>=4000 and mergeable=true.
 - SONRAKİ GÖREV: wait for/check exact-head GitHub Actions, obtain the exact TypeScript regression diagnostics if still red, fix only real errors, then perform second lint/typecheck/Vitest/build + backend validation, security/performance/regression review and final mergeability/main refresh. Squash merge only when every required check is completed+success.
+
+## Deep QA / Release — 2026-09-17 11:51 TRT
+- TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization; stale QA branch recovery and current-main release gate triage.
+- BASE MAIN: `b4da03b8aac582fb6b5c4a2ff8a81fc25cfe7a79` (includes merged Platform #83 and GIS #86).
+- BRANCH: `agent/deep-qa-release-20260917-1151-b4da03b`.
+- ÖNCEKİ QA PR: #75 is still open but stale/diverged (`base_sha=2dd3ce9...`, `head=4d2c603...`, `mergeable=false`). Its exact-head Release QA run `35191743516` failed: backend release validation succeeded; webclient stopped at the Vite migration contract; typed-release-audit stopped at TypeScript 7 strict typecheck. Therefore #75 is not merge-safe and no new work is being stacked on it.
+- CI / RİSK ÖNCELİĞİ: current main has already absorbed major Platform and GIS changes after #75's base. Highest priority is to recover only still-missing QA/release audit capabilities onto current main, then rerun exact-head Release QA/Webclient/Architecture checks. Do not transplant stale platform/GIS trees.
+- MERGE DURUMU: NOT MERGED. New branch currently contains only this lifecycle/progress checkpoint and is far below the mandatory 4,000 meaningful-addition gate.
+- NETWORK / GÜVENLİK / İKON: no runtime endpoint, secret, GIS service, icon registry or browser-network behavior changed in this checkpoint.
+- SONRAKİ GÖREV: compare #75 against current main, reapply only absent typed QA audit/release modules and regression coverage on this branch, close #75 as superseded once the current-main QA PR exists, continue until >=4,000 meaningful additions, then require exact-head completed+success CI, second verification, security/performance/regression review, conflict-free mergeability and final main refresh before squash merge.
