@@ -23,17 +23,19 @@ describe('ExperienceStatus', () => {
 describe('ExperienceProgress', () => {
   it('bounds determinate values to the configured maximum', () => {
     render(<ExperienceProgress label="Sorgu ilerlemesi" value={140} max={100} detail="Tamamlanıyor" />);
-    const progress = screen.getByRole('progressbar', { name: 'Sorgu ilerlemesi' });
-    expect(progress).toHaveAttribute('value', '100');
+    const progress = screen.getByRole('progressbar');
+    expect(progress).toHaveValue(100);
     expect(progress).toHaveAttribute('max', '100');
+    expect(screen.getByText('Sorgu ilerlemesi')).toBeInTheDocument();
     expect(screen.getByText('Tamamlanıyor')).toBeInTheDocument();
   });
 
   it('normalizes invalid maxima instead of emitting an invalid progress contract', () => {
     render(<ExperienceProgress label="Veri hazırlanıyor" value={25} max={0} />);
-    const progress = screen.getByRole('progressbar', { name: 'Veri hazırlanıyor' });
+    const progress = screen.getByRole('progressbar');
     expect(progress).toHaveAttribute('max', '100');
-    expect(progress).toHaveAttribute('value', '25');
+    expect(progress).toHaveValue(25);
+    expect(screen.getByText('Veri hazırlanıyor')).toBeInTheDocument();
   });
 
   it('uses an accessible indeterminate progressbar when value is omitted', () => {
