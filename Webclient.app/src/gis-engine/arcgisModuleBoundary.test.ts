@@ -1,17 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
-import {
-  ScriptKind,
-  ScriptTarget,
-  SyntaxKind,
-  createSourceFile,
-  forEachChild,
-  isCallExpression,
-  isIdentifier,
-  isImportDeclaration,
-  isStringLiteralLike,
-} from 'typescript';
-import type { Node } from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
@@ -25,68 +13,86 @@ const collectSourceFiles = (directory: string): string[] => readdirSync(director
     return SOURCE_EXTENSIONS.has(extname(entry.name)) ? [path] : [];
   });
 
-const getScriptKind = (file: string): ScriptKind => {
-  switch (extname(file)) {
-    case '.tsx': return ScriptKind.TSX;
-    case '.jsx': return ScriptKind.JSX;
-    case '.js': return ScriptKind.JS;
-    default: return ScriptKind.TS;
+const stripComments = (source: string): string => {
+  let output = '';
+  let index = 0;
+  let quote: "'" | '"' | '`' | null = null;
+  let escaped = false;
+
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (quote) {
+      output += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      output += char;
+      index += 1;
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      while (index < source.length && source[index] !== '\n') index += 1;
+      output += '\n';
+      index += 1;
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      index += 2;
+      while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
+        if (source[index] === '\n') output += '\n';
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+
+    output += char;
+    index += 1;
   }
+
+  return output;
 };
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapedPackage = escapeRegExp(LEGACY_LOADER_PACKAGE);
+const STATIC_IMPORT_PATTERN = new RegExp(
+  `(?:^|\\n)\\s*import(?:\\s+type)?(?:\\s+[\\s\\S]*?\\s+from)?\\s*['"]${escapedPackage}['"]`,
+  'm',
+);
+const REQUIRE_PATTERN = new RegExp(`\\brequire\\(\\s*['"]${escapedPackage}['"]\\s*\\)`);
+const DYNAMIC_IMPORT_PATTERN = new RegExp(`\\bimport\\(\\s*['"]${escapedPackage}['"]\\s*\\)`);
 
 const hasLegacyLoaderImport = (file: string): boolean => {
-  const sourceFile = createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ScriptTarget.Latest,
-    true,
-    getScriptKind(file),
-  );
-  let found = false;
-
-  const visit = (node: Node): void => {
-    if (found) return;
-
-    if (
-      isImportDeclaration(node)
-      && isStringLiteralLike(node.moduleSpecifier)
-      && node.moduleSpecifier.text === LEGACY_LOADER_PACKAGE
-    ) {
-      found = true;
-      return;
-    }
-
-    if (
-      isCallExpression(node)
-      && node.arguments.length === 1
-      && isStringLiteralLike(node.arguments[0])
-      && node.arguments[0].text === LEGACY_LOADER_PACKAGE
-      && (
-        node.expression.kind === SyntaxKind.ImportKeyword
-        || (isIdentifier(node.expression) && node.expression.text === 'require')
-      )
-    ) {
-      found = true;
-      return;
-    }
-
-    forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return found;
+  const source = stripComments(readFileSync(file, 'utf8'));
+  return STATIC_IMPORT_PATTERN.test(source)
+    || REQUIRE_PATTERN.test(source)
+    || DYNAMIC_IMPORT_PATTERN.test(source);
 };
 
-const sourceRoot = resolve(process.cwd(), 'src');
-const offenders = collectSourceFiles(sourceRoot)
-  .filter((file) => !file.includes('.test.'))
-  .filter(hasLegacyLoaderImport)
-  .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
-  .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
-  .sort();
-
 describe('ArcGIS module loading boundary', () => {
-  it(`keeps the legacy loader isolated behind arcgisModuleRuntime in production sources [offenders: ${offenders.join(', ') || 'none'}]`, () => {
+  it('keeps the legacy loader isolated behind arcgisModuleRuntime in production sources', () => {
+    const sourceRoot = resolve(process.cwd(), 'src');
+    const offenders = collectSourceFiles(sourceRoot)
+      .filter((file) => !file.includes('.test.'))
+      .filter(hasLegacyLoaderImport)
+      .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
+      .filter((file) => file !== ALLOWED_LEGACY_IMPORT)
+      .sort();
+
     expect(offenders).toEqual([]);
   });
 });
