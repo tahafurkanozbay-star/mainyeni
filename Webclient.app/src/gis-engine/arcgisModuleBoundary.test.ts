@@ -19,9 +19,8 @@ const LEGACY_IMPORT_ALLOWLIST = new Set([
   'Toolbox/GisCommonHelper.js',
   'Toolbox/GisGraphicsHelper.js',
   'Toolbox/GisQueryHelper.js',
-  'gis-engine/identifyRuntime.ts',
 ]);
-const MAX_LEGACY_DIRECT_CONSUMERS = 14;
+const MAX_LEGACY_DIRECT_CONSUMERS = 13;
 
 const collectSourceFiles = (directory: string): string[] => readdirSync(directory, { withFileTypes: true })
   .flatMap((entry) => {
