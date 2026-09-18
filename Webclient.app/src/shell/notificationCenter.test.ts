@@ -193,6 +193,7 @@ describe('createNotificationCenter', () => {
     const center = createNotificationCenter();
     center.subscribe(() => { throw new Error('observer'); });
     expect(() => center.publish({ message: 'still works' })).not.toThrow();
+    expect(center.snapshot().observerFailures).toBe(1);
   });
 
   it('unsubscribe is idempotent', () => {

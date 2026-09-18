@@ -204,6 +204,7 @@ describe('createWindowLifecycleRuntime', () => {
     const runtime = createWindowLifecycleRuntime();
     runtime.subscribe(() => { throw new Error('observer'); });
     expect(() => runtime.register({ id: 'a' })).not.toThrow();
+    expect(runtime.snapshot().observerFailures).toBe(1);
   });
 
   it('supports unsubscribe', () => {

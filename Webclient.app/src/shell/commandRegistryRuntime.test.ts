@@ -238,6 +238,7 @@ describe('createShellCommandRegistry', () => {
     const registry = createShellCommandRegistry();
     registry.subscribe(() => { throw new Error('observer'); });
     expect(() => registry.register({ id: 'x', label: 'X', execute: () => undefined })).not.toThrow();
+    expect(registry.snapshot().observerFailures).toBe(1);
   });
 
   it('supports idempotent unsubscribe', () => {
