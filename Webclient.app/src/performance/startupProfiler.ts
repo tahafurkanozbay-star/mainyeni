@@ -46,7 +46,7 @@ export const createStartupProfiler = (
   });
 
   return Object.freeze({
-    begin(rawName: string, atMs: unknown = now()) {
+    begin(rawName: string, atMs: unknown = now()): boolean {
       const name = safeText(rawName, 120);
       if (!name || phases.has(name)) return false;
       phases.set(name, {
@@ -58,7 +58,7 @@ export const createStartupProfiler = (
       return true;
     },
 
-    end(rawName: string, atMs: unknown = now()) {
+    end(rawName: string, atMs: unknown = now()): StartupPhase | null {
       const name = safeText(rawName, 120);
       const phase = phases.get(name);
       if (!phase) return null;
@@ -69,7 +69,7 @@ export const createStartupProfiler = (
       return toSnapshot(phase);
     },
 
-    mark(rawName: string, durationMs: unknown) {
+    mark(rawName: string, durationMs: unknown): StartupPhase {
       const name = safeText(rawName, 120) || 'anonymous';
       const duration = Math.max(0, finiteNumber(durationMs, 0) ?? 0);
       const completedAtMs = now();
@@ -89,7 +89,7 @@ export const createStartupProfiler = (
         .sort((left, right) => left.startedAtMs - right.startedAtMs),
     ),
 
-    clear() {
+    clear(): number {
       const count = phases.size;
       phases.clear();
       return count;
