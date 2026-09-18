@@ -9,33 +9,202 @@ export const MAX_DATASET_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_DATASETS = 128;
 export const MAX_DATASET_RECORDS = 1000000;
 
-const asArray = value => Array.isArray(value) ? value : [];
-const isPromiseLike = value => value && typeof value.then === "function";
+type UnknownRecord = Record<string, unknown>;
 
-const boundedPositiveInteger = (value, fallback, maximum) => {
+export interface DatasetRegistryOptions {
+    ttlMs?: unknown;
+    maxDatasets?: unknown;
+    maxRecords?: unknown;
+    rejectOversized?: unknown;
+    freezeSnapshots?: unknown;
+}
+
+export interface NormalizedDatasetOptions {
+    ttlMs: number;
+    maxDatasets: number;
+    maxRecords: number;
+    rejectOversized: boolean;
+    freezeSnapshots: boolean;
+}
+
+export interface DatasetSnapshot {
+    name: string;
+    revision: number;
+    fingerprint: string;
+    records: unknown[];
+    recordCount: number;
+    metadata: UnknownRecord;
+    createdAt: number;
+    updatedAt: number;
+    expiresAt: number;
+    stale: boolean;
+}
+
+interface DatasetSnapshotInput {
+    name: unknown;
+    records: unknown;
+    revision?: unknown;
+    metadata?: unknown;
+    fingerprint?: string | null;
+    createdAt: number;
+    updatedAt: number;
+    expiresAt: number;
+    stale?: boolean;
+}
+
+interface DerivedDatasetEntry {
+    revision: number;
+    fingerprint: string;
+    value: unknown;
+}
+
+interface DatasetEntry {
+    name: string;
+    records: unknown[];
+    metadata: UnknownRecord;
+    revision: number;
+    fingerprint: string;
+    createdAt: number;
+    updatedAt: number;
+    expiresAt: number;
+    lastAccessAt: number;
+    stale: boolean;
+    derived: Map<string, DerivedDatasetEntry>;
+}
+
+interface DatasetStats {
+    registrations: number;
+    replacements: number;
+    appends: number;
+    removals: number;
+    cacheHits: number;
+    cacheMisses: number;
+    loadsStarted: number;
+    loadsDeduped: number;
+    loadsSucceeded: number;
+    loadsFailed: number;
+    evictions: number;
+    staleReads: number;
+    derivedBuilds: number;
+    derivedHits: number;
+    derivedInvalidations: number;
+}
+
+export interface DatasetLoaderContext {
+    name: string;
+    previous: DatasetSnapshot | null;
+    signal: AbortSignal | null | undefined;
+}
+
+export type DatasetLoader = (context: DatasetLoaderContext) => unknown | PromiseLike<unknown>;
+
+export interface DatasetLoadOptions {
+    signal?: AbortSignal | null;
+    now?: unknown;
+    completedAt?: unknown;
+    allowStale?: boolean;
+    force?: boolean;
+    loader?: DatasetLoader;
+}
+
+export interface DatasetReadOptions {
+    now?: unknown;
+    allowStale?: boolean;
+    touch?: boolean;
+}
+
+export interface DatasetWriteOptions {
+    now?: unknown;
+}
+
+export interface DatasetRegistryDiagnostics extends DatasetStats {
+    datasetCount: number;
+    totalRecords: number;
+    staleDatasetCount: number;
+    inFlightCount: number;
+    loaderCount: number;
+    names: string[];
+    revisions: Record<string, number>;
+}
+
+export interface SearchDatasetRegistryApi {
+    options: NormalizedDatasetOptions;
+    register(name: unknown, records: unknown, metadata?: UnknownRecord, writeOptions?: DatasetWriteOptions): DatasetSnapshot;
+    replace(name: unknown, records: unknown, metadata?: UnknownRecord, writeOptions?: DatasetWriteOptions): DatasetSnapshot;
+    append(name: unknown, records: unknown, metadata?: UnknownRecord, writeOptions?: DatasetWriteOptions): DatasetSnapshot;
+    get(name: unknown, readOptions?: DatasetReadOptions): DatasetSnapshot | null;
+    peek(name: unknown, readOptions?: Pick<DatasetReadOptions, "now">): DatasetSnapshot | null;
+    has(name: unknown, readOptions?: Pick<DatasetReadOptions, "now" | "allowStale">): boolean;
+    list(readOptions?: Pick<DatasetReadOptions, "now">): DatasetSnapshot[];
+    remove(name: unknown): boolean;
+    clear(): number;
+    markStale(name: unknown): boolean;
+    refreshExpiry(name: unknown, ttlMs: unknown, suppliedNow?: unknown): DatasetSnapshot | null;
+    registerLoader(name: unknown, loader: DatasetLoader): () => boolean;
+    load(name: unknown, loadOptions?: DatasetLoadOptions): Promise<DatasetSnapshot>;
+    ensure(name: unknown, ensureOptions?: DatasetLoadOptions): Promise<DatasetSnapshot>;
+    getDerived<T = unknown>(name: unknown, key: unknown): T | undefined;
+    setDerived<T>(name: unknown, key: unknown, value: T): T | undefined;
+    getOrBuildDerived<T>(name: unknown, key: unknown, builder: (snapshot: DatasetSnapshot) => T): T | undefined;
+    invalidateDerived(name: unknown, key?: unknown): boolean;
+    diagnostics(readOptions?: Pick<DatasetReadOptions, "now">): DatasetRegistryDiagnostics;
+    resetStatistics(): void;
+    _unsafeEntries: Map<string, DatasetEntry>;
+    _unsafeInFlight: Map<string, Promise<DatasetSnapshot>>;
+}
+
+interface CreateEntryInput {
+    name: string;
+    records: unknown;
+    metadata: unknown;
+    now: number;
+    previous: DatasetEntry | null;
+}
+
+interface EntryReadOptions {
+    allowStale?: boolean;
+    touchEntry?: boolean;
+}
+
+interface LoaderPayload {
+    records: unknown[];
+    metadata: UnknownRecord;
+}
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+
+const normalizeMetadata = (value: unknown): UnknownRecord =>
+    isRecord(value) ? { ...value } : {};
+
+const asArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+    isRecord(value) && typeof value.then === "function";
+
+const boundedPositiveInteger = (value: unknown, fallback: number, maximum: number): number => {
     if (value === undefined || value === null || value === "") return fallback;
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric <= 0) return fallback;
     return Math.min(maximum, numeric);
 };
 
-export const createSearchAbortError = (message = "Search dataset operation aborted") => {
+export const createSearchAbortError = (message = "Search dataset operation aborted"): Error => {
     const error = new Error(message);
     error.name = "AbortError";
     return error;
 };
 
-export const throwIfDatasetAborted = signal => {
+export const throwIfDatasetAborted = (signal?: AbortSignal | null): void => {
     if (signal?.aborted) throw createSearchAbortError();
 };
 
-export const normalizeDatasetName = value => normalizeText(value)
+export const normalizeDatasetName = (value: unknown): string => normalizeText(value)
     .toLocaleLowerCase("tr-TR")
     .replace(/[^a-z0-9ğüşöçı_-]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
 
-export const normalizeDatasetOptions = options => ({
+export const normalizeDatasetOptions = (options: DatasetRegistryOptions = {}): NormalizedDatasetOptions => ({
     ttlMs: boundedPositiveInteger(options?.ttlMs, DEFAULT_DATASET_TTL_MS, MAX_DATASET_TTL_MS),
     maxDatasets: boundedPositiveInteger(options?.maxDatasets, DEFAULT_MAX_DATASETS, MAX_DATASETS),
     maxRecords: boundedPositiveInteger(options?.maxRecords, DEFAULT_MAX_RECORDS, MAX_DATASET_RECORDS),
@@ -43,7 +212,7 @@ export const normalizeDatasetOptions = options => ({
     freezeSnapshots: options?.freezeSnapshots !== false
 });
 
-const normalizeScalarForFingerprint = value => {
+const normalizeScalarForFingerprint = (value: unknown): string | null => {
     if (value === null) return "null";
     if (value === undefined) return "undefined";
     if (typeof value === "number") return Number.isFinite(value) ? String(value) : "invalid-number";
@@ -53,7 +222,7 @@ const normalizeScalarForFingerprint = value => {
     return null;
 };
 
-export const stableSerializeForFingerprint = (value, seen = new WeakSet()) => {
+export const stableSerializeForFingerprint = (value: unknown, seen: WeakSet<object> = new WeakSet()): string => {
     const scalar = normalizeScalarForFingerprint(value);
     if (scalar !== null) return JSON.stringify(scalar);
     if (typeof value !== "object" || value === null) return JSON.stringify(String(value));
@@ -63,14 +232,15 @@ export const stableSerializeForFingerprint = (value, seen = new WeakSet()) => {
         if (Array.isArray(value)) {
             return `[${value.map(item => stableSerializeForFingerprint(item, seen)).join(",")}]`;
         }
-        const keys = Object.keys(value).sort((left, right) => left.localeCompare(right));
-        return `{${keys.map(key => `${JSON.stringify(key)}:${stableSerializeForFingerprint(value[key], seen)}`).join(",")}}`;
+        const record = value as UnknownRecord;
+        const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+        return `{${keys.map(key => `${JSON.stringify(key)}:${stableSerializeForFingerprint(record[key], seen)}`).join(",")}}`;
     } finally {
         seen.delete(value);
     }
 };
 
-export const hashSearchDataset = value => {
+export const hashSearchDataset = (value: unknown): string => {
     const input = stableSerializeForFingerprint(value);
     let hash = 2166136261;
     for (let index = 0; index < input.length; index += 1) {
@@ -80,24 +250,28 @@ export const hashSearchDataset = value => {
     return `fnv1a-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 };
 
-export const createDatasetFingerprint = (records, metadata = {}) => hashSearchDataset({
+export const createDatasetFingerprint = (records: unknown, metadata: unknown = {}): string => hashSearchDataset({
     count: asArray(records).length,
     metadata,
     records: asArray(records)
 });
 
-export const normalizeDatasetRecords = (records, options = {}) => {
+export const normalizeDatasetRecords = (
+    records: unknown,
+    options: DatasetRegistryOptions | NormalizedDatasetOptions = {}
+): unknown[] => {
     const normalizedOptions = normalizeDatasetOptions(options);
     const input = asArray(records);
     if (normalizedOptions.rejectOversized && input.length > normalizedOptions.maxRecords) {
-        const error = new RangeError(`Dataset contains ${input.length} records; maximum is ${normalizedOptions.maxRecords}`);
-        error.code = "DATASET_RECORD_LIMIT";
-        throw error;
+        throw Object.assign(
+            new RangeError(`Dataset contains ${input.length} records; maximum is ${normalizedOptions.maxRecords}`),
+            { code: "DATASET_RECORD_LIMIT" }
+        );
     }
     return input.slice(0, normalizedOptions.maxRecords);
 };
 
-const freezeSnapshot = (snapshot, enabled) => {
+const freezeSnapshot = (snapshot: DatasetSnapshot, enabled: boolean): DatasetSnapshot => {
     if (!enabled) return snapshot;
     Object.freeze(snapshot.records);
     Object.freeze(snapshot.metadata);
@@ -114,12 +288,10 @@ export const createDatasetSnapshot = ({
     updatedAt,
     expiresAt,
     stale = false
-}, options = {}) => {
+}: DatasetSnapshotInput, options: DatasetRegistryOptions | NormalizedDatasetOptions = {}): DatasetSnapshot => {
     const normalizedOptions = normalizeDatasetOptions(options);
     const normalizedRecords = normalizeDatasetRecords(records, normalizedOptions);
-    const safeMetadata = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-        ? { ...metadata }
-        : {};
+    const safeMetadata = normalizeMetadata(metadata);
     const safeRevision = boundedPositiveInteger(revision, 1, Number.MAX_SAFE_INTEGER);
     return freezeSnapshot({
         name: normalizeDatasetName(name),
@@ -135,7 +307,7 @@ export const createDatasetSnapshot = ({
     }, normalizedOptions.freezeSnapshots);
 };
 
-const createStats = () => ({
+const createStats = (): DatasetStats => ({
     registrations: 0,
     replacements: 0,
     appends: 0,
@@ -153,36 +325,35 @@ const createStats = () => ({
     derivedInvalidations: 0
 });
 
-const resolveLoaderPayload = payload => {
+const resolveLoaderPayload = (payload: unknown): LoaderPayload => {
     if (Array.isArray(payload)) return { records: payload, metadata: {} };
-    if (payload && typeof payload === "object" && Array.isArray(payload.records)) {
+    if (isRecord(payload) && Array.isArray(payload.records)) {
         return {
             records: payload.records,
-            metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {}
+            metadata: normalizeMetadata(payload.metadata)
         };
     }
     return { records: [], metadata: {} };
 };
 
-export const createSearchDatasetRegistry = (options = {}) => {
+export const createSearchDatasetRegistry = (options: DatasetRegistryOptions = {}): SearchDatasetRegistryApi => {
     const normalizedOptions = normalizeDatasetOptions(options);
-    const entries = new Map();
-    const loaders = new Map();
-    const inFlight = new Map();
+    const entries = new Map<string, DatasetEntry>();
+    const loaders = new Map<string, DatasetLoader>();
+    const inFlight = new Map<string, Promise<DatasetSnapshot>>();
     const stats = createStats();
-    const nowValue = supplied => Number.isFinite(supplied) ? supplied : Date.now();
+    const nowValue = (supplied: unknown): number =>
+        typeof supplied === "number" && Number.isFinite(supplied) ? supplied : Date.now();
 
-    const touch = (entry, now) => {
+    const touch = (entry: DatasetEntry, now: number): void => {
         entry.lastAccessAt = now;
         entries.delete(entry.name);
         entries.set(entry.name, entry);
     };
 
-    const createEntry = ({ name, records, metadata, now, previous }) => {
+    const createEntry = ({ name, records, metadata, now, previous }: CreateEntryInput): DatasetEntry => {
         const normalizedRecords = normalizeDatasetRecords(records, normalizedOptions);
-        const safeMetadata = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-            ? { ...metadata }
-            : {};
+        const safeMetadata = normalizeMetadata(metadata);
         return {
             name,
             records: normalizedRecords,
@@ -198,12 +369,12 @@ export const createSearchDatasetRegistry = (options = {}) => {
         };
     };
 
-    const publicSnapshot = (entry, now) => createDatasetSnapshot({
+    const publicSnapshot = (entry: DatasetEntry, now: number): DatasetSnapshot => createDatasetSnapshot({
         ...entry,
         stale: entry.stale || entry.expiresAt <= now
     }, normalizedOptions);
 
-    const evictIfNeeded = () => {
+    const evictIfNeeded = (): void => {
         while (entries.size > normalizedOptions.maxDatasets) {
             const oldestName = entries.keys().next().value;
             if (oldestName === undefined) break;
@@ -212,7 +383,11 @@ export const createSearchDatasetRegistry = (options = {}) => {
         }
     };
 
-    const getEntry = (name, suppliedNow, { allowStale = true, touchEntry = true } = {}) => {
+    const getEntry = (
+        name: unknown,
+        suppliedNow: unknown,
+        { allowStale = true, touchEntry = true }: EntryReadOptions = {}
+    ): DatasetEntry | null => {
         const normalizedName = normalizeDatasetName(name);
         if (!normalizedName) return null;
         const entry = entries.get(normalizedName);
@@ -232,7 +407,13 @@ export const createSearchDatasetRegistry = (options = {}) => {
         return entry;
     };
 
-    const write = (name, records, metadata, suppliedNow, mode = "replace") => {
+    const write = (
+        name: unknown,
+        records: unknown,
+        metadata: unknown,
+        suppliedNow: unknown,
+        mode: "replace" | "append" | "register" = "replace"
+    ): DatasetSnapshot => {
         const normalizedName = normalizeDatasetName(name);
         if (!normalizedName) throw new TypeError("Dataset name is required");
         const now = nowValue(suppliedNow);
@@ -247,7 +428,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
         return publicSnapshot(entry, now);
     };
 
-    const registerLoader = (name, loader) => {
+    const registerLoader = (name: unknown, loader: DatasetLoader): (() => boolean) => {
         const normalizedName = normalizeDatasetName(name);
         if (!normalizedName) throw new TypeError("Dataset name is required");
         if (typeof loader !== "function") throw new TypeError("Dataset loader must be a function");
@@ -255,7 +436,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
         return () => loaders.delete(normalizedName);
     };
 
-    const load = async (name, loadOptions = {}) => {
+    const load = async (name: unknown, loadOptions: DatasetLoadOptions = {}): Promise<DatasetSnapshot> => {
         const normalizedName = normalizeDatasetName(name);
         if (!normalizedName) throw new TypeError("Dataset name is required");
         throwIfDatasetAborted(loadOptions.signal);
@@ -269,19 +450,20 @@ export const createSearchDatasetRegistry = (options = {}) => {
         const loader = loadOptions.loader || loaders.get(normalizedName);
         if (typeof loader !== "function") {
             if (existing) return publicSnapshot(existing, now);
-            const error = new Error(`No loader registered for dataset: ${normalizedName}`);
-            error.code = "DATASET_LOADER_MISSING";
-            throw error;
+            throw Object.assign(
+                new Error(`No loader registered for dataset: ${normalizedName}`),
+                { code: "DATASET_LOADER_MISSING" }
+            );
         }
         if (inFlight.has(normalizedName)) {
             stats.loadsDeduped += 1;
-            const shared = await inFlight.get(normalizedName);
+            const shared = await inFlight.get(normalizedName)!;
             throwIfDatasetAborted(loadOptions.signal);
             return shared;
         }
 
         stats.loadsStarted += 1;
-        const operation = Promise.resolve().then(async () => {
+        const operation: Promise<DatasetSnapshot> = Promise.resolve().then(async () => {
             throwIfDatasetAborted(loadOptions.signal);
             const payload = loader({
                 name: normalizedName,
@@ -310,7 +492,7 @@ export const createSearchDatasetRegistry = (options = {}) => {
         return operation;
     };
 
-    const api = {
+    const api: SearchDatasetRegistryApi = {
         options: normalizedOptions,
 
         register(name, records, metadata = {}, writeOptions = {}) {
@@ -403,16 +585,16 @@ export const createSearchDatasetRegistry = (options = {}) => {
             return load(name, ensureOptions);
         },
 
-        getDerived(name, key) {
+        getDerived<T = unknown>(name: unknown, key: unknown): T | undefined {
             const entry = entries.get(normalizeDatasetName(name));
             if (!entry) return undefined;
             const derived = entry.derived.get(normalizeText(key));
             if (!derived || derived.revision !== entry.revision || derived.fingerprint !== entry.fingerprint) return undefined;
             stats.derivedHits += 1;
-            return derived.value;
+            return derived.value as T;
         },
 
-        setDerived(name, key, value) {
+        setDerived<T>(name: unknown, key: unknown, value: T): T | undefined {
             const entry = entries.get(normalizeDatasetName(name));
             const normalizedKey = normalizeText(key);
             if (!entry || !normalizedKey) return undefined;
@@ -425,13 +607,17 @@ export const createSearchDatasetRegistry = (options = {}) => {
             return value;
         },
 
-        getOrBuildDerived(name, key, builder) {
+        getOrBuildDerived<T>(
+            name: unknown,
+            key: unknown,
+            builder: (snapshot: DatasetSnapshot) => T
+        ): T | undefined {
             const cached = api.getDerived(name, key);
             if (cached !== undefined) return cached;
             if (typeof builder !== "function") throw new TypeError("Derived dataset builder must be a function");
             const snapshot = api.peek(name);
             if (!snapshot) return undefined;
-            return api.setDerived(name, key, builder(snapshot));
+            return api.setDerived<T>(name, key, builder(snapshot));
         },
 
         invalidateDerived(name, key) {
@@ -459,12 +645,15 @@ export const createSearchDatasetRegistry = (options = {}) => {
                 inFlightCount: inFlight.size,
                 loaderCount: loaders.size,
                 names: snapshots.map(entry => entry.name),
-                revisions: snapshots.reduce((result, entry) => ({ ...result, [entry.name]: entry.revision }), {})
+                revisions: snapshots.reduce<Record<string, number>>(
+                    (result, entry) => ({ ...result, [entry.name]: entry.revision }),
+                    {}
+                )
             };
         },
 
         resetStatistics() {
-            Object.keys(stats).forEach(key => {
+            (Object.keys(stats) as Array<keyof DatasetStats>).forEach(key => {
                 stats[key] = 0;
             });
         },
