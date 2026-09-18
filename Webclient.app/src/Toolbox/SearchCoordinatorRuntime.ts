@@ -14,7 +14,6 @@ import {
     executeSearch,
     normalizeSearchRequest,
     type SearchExecutionIndex,
-    type SearchHit,
     type SearchPage
 } from "./SearchExecutionRuntime";
 import {
@@ -23,9 +22,7 @@ import {
     findNearestAddresses,
     parseCoordinatePair,
     searchAddressIndex,
-    type AddressDocument,
     type AddressIndex,
-    type AddressSearchHit,
     type Coordinates
 } from "./AddressSearchRuntime";
 import {
@@ -663,7 +660,7 @@ export const createSearchCoordinator = (options: CoordinatorOptions = {}) => {
         ingest(datasetName: unknown, payload: unknown, ingestOptions: CoordinatorIngestOptions = {}) {
             const normalized = normalizeCoordinatorPayload(payload, ingestOptions.adapterOptions);
             const metadata = {
-                ...(ingestOptions.metadata || {}),
+                ...ingestOptions.metadata,
                 adapterContract: normalized.adapted?.diagnostics?.contract || (Array.isArray(payload) ? "array" : "records"),
                 adapterDiagnostics: normalized.adapted?.diagnostics || null,
                 fields: normalized.adapted?.fields || []
