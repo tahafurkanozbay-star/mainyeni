@@ -161,9 +161,13 @@ export const createRuntimeHealthJournal = (
   const prune = (): void => {
     const cutoff = now() - policy.retentionMs;
     let removeCount = 0;
-    while (removeCount < events.length && (events[removeCount]?.at ?? cutoff) < cutoff) removeCount += 1;
-    if (removeCount === 0) return;
-    events.splice(0, removeCount);
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index];
+      if (event && event.at < cutoff) {
+        events.splice(index, 1);
+        removeCount += 1;
+      }
+    }
     pruned += removeCount;
   };
 
