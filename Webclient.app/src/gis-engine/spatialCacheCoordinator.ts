@@ -247,8 +247,15 @@ export const createSpatialCacheCoordinator = (options: SpatialCacheOptions = {})
   const notifyObserverError = (error: unknown): void => {
     try {
       options.onObserverError?.(error);
-    } catch {
-      // Observer failures must never mutate cache behavior.
+    } catch (observerError) {
+      const reporter = (globalThis as typeof globalThis & {
+        reportError?: (reportedError: unknown) => void;
+      }).reportError;
+      if (typeof reporter === 'function') {
+        reporter(observerError);
+        return;
+      }
+      throw observerError;
     }
   };
 
