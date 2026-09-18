@@ -1,6 +1,5 @@
 import type {
   GuardrailReadinessPolicy,
-  LifecycleGuardPolicy,
   PayloadBudget,
   TextBoundaryLimits,
   UrlBoundaryPolicy,
@@ -10,7 +9,6 @@ import type { BoundedCachePolicy } from './boundedCache';
 import { normalizeBoundedCachePolicy } from './boundedCache';
 import type { DeadlinePolicy } from './deadlineRegistry';
 import { normalizeDeadlinePolicy } from './deadlineRegistry';
-import { normalizeLifecycleGuardPolicy } from './lifecycleGuard';
 import { normalizePayloadBudget } from './payloadBoundary';
 import { normalizeGuardrailReadinessPolicy } from './readiness';
 import { normalizeTextBoundaryLimits } from './textBoundary';
@@ -25,7 +23,6 @@ export interface PlatformGuardrailProfile {
   readonly url: UrlBoundaryPolicy;
   readonly payload: PayloadBudget;
   readonly work: WorkBudgetPolicy;
-  readonly lifecycle: LifecycleGuardPolicy;
   readonly cache: BoundedCachePolicy;
   readonly deadline: DeadlinePolicy;
   readonly readiness: GuardrailReadinessPolicy;
@@ -37,7 +34,6 @@ export interface PlatformGuardrailProfileInput {
   readonly url?: Partial<UrlBoundaryPolicy>;
   readonly payload?: Partial<PayloadBudget>;
   readonly work?: Partial<WorkBudgetPolicy>;
-  readonly lifecycle?: Partial<LifecycleGuardPolicy>;
   readonly cache?: Partial<BoundedCachePolicy>;
   readonly deadline?: Partial<DeadlinePolicy>;
   readonly readiness?: Partial<GuardrailReadinessPolicy>;
@@ -111,12 +107,6 @@ const BACKGROUND_OVERRIDES: PlatformGuardrailProfileInput = Object.freeze({
     maxRunMs: 180_000,
     maxCompletedHistory: 96,
   }),
-  lifecycle: Object.freeze({
-    maxTrackedResources: 512,
-    maxOwnersPerResource: 4,
-    staleAfterMs: 10 * 60_000,
-    maxHistory: 256,
-  }),
   cache: Object.freeze({
     capacity: 128,
     ttlMs: 5 * 60_000,
@@ -169,9 +159,6 @@ export const createPlatformGuardrailProfile = (
     ),
     work: normalizeWorkBudgetPolicy(
       mergePartial(preset.work, input.work),
-    ),
-    lifecycle: normalizeLifecycleGuardPolicy(
-      mergePartial(preset.lifecycle, input.lifecycle),
     ),
     cache: normalizeBoundedCachePolicy(
       mergePartial(preset.cache, input.cache),
@@ -232,7 +219,6 @@ export const profileCapacitySummary = (
   cacheEntries: number;
   cacheWeight: number;
   defaultDeadlineMs: number;
-  trackedResources: number;
 }> => Object.freeze({
   name: profile.name,
   maxConcurrent: profile.work.maxConcurrent,
@@ -241,5 +227,4 @@ export const profileCapacitySummary = (
   cacheEntries: profile.cache.capacity,
   cacheWeight: profile.cache.maxEstimatedWeight,
   defaultDeadlineMs: profile.deadline.defaultTimeoutMs,
-  trackedResources: profile.lifecycle.maxTrackedResources,
 });
