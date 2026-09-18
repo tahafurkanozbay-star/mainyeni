@@ -46,6 +46,7 @@ public static class KentRehberiQueryValidation
 {
     public const int MaxDistrictLength = 50;
     public const int MaxNeighborhoodLength = 50;
+    public const int MinQueryLength = 2;
     public const int MaxQueryLength = 120;
 
     public static KentRehberiSearchCriteria NormalizeSearch(
@@ -64,6 +65,7 @@ public static class KentRehberiQueryValidation
         var normalizedIlce = NormalizeText(ilce, MaxDistrictLength, "ilce", errors);
         var normalizedMahalle = NormalizeText(mahalle, MaxNeighborhoodLength, "mahalle", errors);
         var normalizedQuery = NormalizeText(query, MaxQueryLength, "q", errors);
+        ValidateQueryLength(normalizedQuery, errors);
         var normalizedBounds = ParseBounds(bbox, errors);
         var normalizedLimit = NormalizeLimit(limit, options, errors);
 
@@ -108,6 +110,7 @@ public static class KentRehberiQueryValidation
         var normalizedIlce = NormalizeText(ilce, MaxDistrictLength, "ilce", errors);
         var normalizedMahalle = NormalizeText(mahalle, MaxNeighborhoodLength, "mahalle", errors);
         var normalizedQuery = NormalizeText(query, MaxQueryLength, "q", errors);
+        ValidateQueryLength(normalizedQuery, errors);
         var normalizedLimit = NormalizeLimit(limit, options, errors);
 
         if (!longitude.HasValue || !double.IsFinite(longitude.Value) ||
@@ -181,6 +184,19 @@ public static class KentRehberiQueryValidation
         }
 
         return normalized;
+    }
+
+    private static void ValidateQueryLength(
+        string? query,
+        IDictionary<string, List<string>> errors)
+    {
+        if (query is not null && query.Length < MinQueryLength)
+        {
+            AddError(
+                errors,
+                "q",
+                $"q must contain at least {MinQueryLength} characters.");
+        }
     }
 
     private static KentRehberiBounds? ParseBounds(
