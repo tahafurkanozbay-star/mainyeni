@@ -108,6 +108,12 @@ export const validateViteConfigContract = (source) => {
   if (!source.includes("from './tooling/sourceTransforms'")) {
     findings.push('Vite and Vitest must share the centralized legacy source transform boundary');
   }
+  if (!source.includes("from './tooling/moduleResolutionGuard'")) {
+    findings.push('Vite must import the typed module resolution ambiguity guard');
+  }
+  if (!/moduleResolutionGuardPlugin\s*\(\s*\)/.test(source)) {
+    findings.push('Vite must enforce the module resolution ambiguity guard before source transforms');
+  }
   if (!/sourcemap\s*:\s*false/.test(source)) {
     findings.push('production source maps must remain disabled');
   }
@@ -168,8 +174,10 @@ const selfTest = () => {
 
   const validConfig = `
     import { legacyJsxPlugin } from './tooling/sourceTransforms';
+    import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard';
     export default {
       envPrefix: ['VITE_'],
+      plugins: [moduleResolutionGuardPlugin(), legacyJsxPlugin()],
       define: { 'process.env.PUBLIC_URL': JSON.stringify('./') },
       optimizeDeps: { include: ['react'] },
       build: { target: 'baseline-widely-available', sourcemap: false }
