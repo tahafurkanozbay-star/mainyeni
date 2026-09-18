@@ -163,3 +163,31 @@
 - REVIEW: Merge öncesi `mergeable=true`, unresolved review thread=0 ve exact-head mandatory CI tamamen yeşil doğrulandı.
 - SONRAKİ GÖREV: Yeni Data/Search turu gerekirse merged PR #59 branch'i yeniden kullanılmadan güncel `main` tabanlı yeni role-scoped branch/PR ile başlatılmalı.
 
+
+
+## Deep Platform / Architecture — 2026-09-18 adaptive workload control plane
+- TUR / GÖREV: Deep Platform / Whole-Code Modernization; adaptive admission, workload ownership, pressure recovery and bounded health evidence on exact-current-main.
+- BASE MAIN: `0c05ca79d139701200832a5544dc4437e3adf2b2`.
+- BRANCH: `agent/platform-adaptive-runtime-20260918-0c05ca7`.
+- PR: #118 `feat(platform): complete adaptive workload control plane on current main`.
+- BRANCH LIFECYCLE: previous Platform PR #112 was found diverged after main advanced through GIS and Data/Search merges. No new work was stacked on it. The still-missing Platform files were selectively reapplied on exact current main; concurrent GIS/Data/Search trees were not transplanted or overwritten.
+- ADMISSION CONTROL: strict-TypeScript bounded admission primitive with global and per-lane active/queue limits, weighted cost capacity, deterministic priority/FIFO ordering, queue expiry, AbortSignal cancellation, selective queued cancellation, snapshot accounting and deterministic disposal.
+- PRESSURE CONTROL: queue depth, p95 latency, failure rate, frame pacing and existing resource-budget pressure are combined into a normalized adaptive pressure decision. Recovery hysteresis prevents oscillation; effective capacity is constrained from the existing RuntimeBudget rather than creating a second budget authority.
+- PRESSURE SHEDDING: critical pressure may cancel only bounded queued low-value lanes by default (background/prefetch/maintenance). Foreground/default work and active leases are not preempted. Shedding is level/lane configurable or disableable and exposes cumulative/last-sample evidence.
+- KERNEL LIFECYCLE: adaptive runtime module binds the control plane to RuntimeKernel start/ready/resume/suspend/stop/dispose hooks. Budget generation changes rebuild stale capacity state; suspend can selectively shed queued background work; stop/dispose tear down deterministically.
+- HEALTH JOURNAL: added bounded transport-free runtime health evidence with capacity/retention limits, latency p50/p95/p99, rolling failure rate, severity/kind counters, bounded messages/tags, filtering, immutable snapshots, clear and deterministic disposal.
+- HEALTH COORDINATOR: phase, pressure, admission, scheduler and resource-budget samples are converted into transition/delta evidence instead of unbounded per-frame telemetry. Queue/resource saturation uses threshold crossing semantics and emits explicit recovery evidence.
+- WORKLOAD GOVERNOR: admission and ResourceBudget reservations are acquired as one logical ownership boundary. Partial resource acquisition rolls back atomically; deadlines and caller cancellation release admission/resources; owner cancellation and selective active/queued cancellation are bounded.
+- RESOURCE ACCOUNTING: active snapshots report live resource units by kind and ignore TTL-expired reservations. Manual release is idempotent and abort-driven release cannot double-count completion.
+- PRIVACY / OBSERVABILITY: workload keys and owner identifiers are not copied into health journal events. New health evidence remains local/in-memory; no analytics or telemetry transport was introduced.
+- TEST KAPSAMI: admission limits/cost/lane isolation/priority/FIFO/expiry/cancellation/disposal; pressure scoring/budget contraction/hysteresis; adaptive control shedding; kernel lifecycle regeneration/suspend/stop; health retention/filter/percentiles/failure rate; health transition/delta/saturation/recovery; workload atomic rollback/deadline/abort/owner/resource accounting.
+- DETERMINISM FIX: runtimeHealthJournal tests now inject a fixed clock when using synthetic event timestamps, preventing real Date.now retention pruning from creating false exact-base Vitest regressions.
+- CURRENT-MAIN REBASE: an intermediate branch based on `7a89ce6810...` became stale while Data/Search merged. Work was re-created again on `0c05ca79...`; this branch is the only canonical Platform continuation.
+- NETWORK DEĞİŞİKLİKLERİ: none. No new endpoint, browser fetch, WMS/WFS/WMTS, CDN, analytics, remote font/asset, polling loop or telemetry transport.
+- GÜVENLİK KONTROLLERİ: no secret/token/API key added; queue/history/resource ownership are bounded; cancellation/deadline paths release owned capacity; partial reservation failures rollback; caller-provided labels are bounded before accounting exposure.
+- İKON EŞLEŞTİRME: unchanged; shared deterministic GIS icon resolver/config remains authoritative.
+- MODERNİZASYON KARARI: retain React 19 + Vite 8 + TypeScript 7 and existing RuntimeKernel/RuntimeBudget/resource manager/scheduler infrastructure. Add composable strict-TS governance around these authorities instead of a parallel scheduler, second budget model or framework rewrite.
+- PERFORMANS ETKİSİ: explicit active/queue/cost/resource bounds cap memory and concurrency; low-value queued work can be shed under critical pressure; pressure recovery avoids oscillation; health evidence uses bounded history and transition/delta sampling.
+- REGRESYON RİSKİ: primary risk is orchestration semantics (deadline/cancellation/resource rollback) rather than network behavior. Focused tests cover these ownership boundaries; exact-head GitHub Actions remains authoritative.
+- MERGE GATE: merge remains forbidden until PR #118 base...head GitHub additions are >=4,000, exact-head Platform Architecture Audit + Webclient Quality + Release QA are completed+success, PR is conflict-free/mergeable=true, and final current-main refresh confirms behind=0.
+- SONRAKİ ADIM: inspect #118 exact-head CI diagnostics, fix only real lint/typecheck/Vitest/build/backend/release failures on the same canonical PR, run second verification, perform security/performance/regression review, then refresh main and squash merge only if every gate remains satisfied.
