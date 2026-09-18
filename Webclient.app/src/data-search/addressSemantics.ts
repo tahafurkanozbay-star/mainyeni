@@ -113,7 +113,7 @@ const isPostalCode = (value: string): boolean => /^\d{5}$/.test(value);
 
 export const normalizeAddressSemanticText = (value: unknown): string =>
   normalizeSearchText(value)
-    .replace(/[.,;:(){}\[\]\/\\]+/g, ' ')
+    .replace(/[.,;:(){}[\]/\\]+/g, ' ')
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
