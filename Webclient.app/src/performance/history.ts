@@ -32,7 +32,7 @@ export const createPerformanceHistory = (capacityValue: unknown = 32): Performan
   };
 
   return Object.freeze({
-    add(snapshot) {
+    add(snapshot: PerformanceRuntimeSnapshot) {
       snapshots.push(snapshot);
       trim();
     },
