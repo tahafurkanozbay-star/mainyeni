@@ -185,28 +185,29 @@ export class ProductionDataSearchRuntime {
     const startedAt = this.now();
     const key = normalizeText(datasetKeyInput);
     if (!key) throw new TypeError('Dataset key is required');
+    const schema = options.aliases ?? options.schema;
     const integrity = evaluateDataIntegrity(input, {
-      schema: options.aliases ?? options.schema,
+      ...(schema !== undefined ? { schema } : {}),
       dedupe: false,
       keepInvalid: true,
-      maxRecords: options.maxRecords,
+      ...(options.maxRecords !== undefined ? { maxRecords: options.maxRecords } : {}),
       policy: { ...this.options.defaultIntegrityPolicy, ...options.integrityPolicy },
     });
     if (!integrity.report.releaseReady && options.allowReleaseBlocked !== true) {
       const catalogEntry = this.catalog.register({
         key,
-        title: options.title,
-        sourceKind: options.sourceKind,
-        sourceId: options.sourceId,
-        schemaVersion: options.schemaVersion,
-        aliases: options.aliases ?? options.schema,
-        tags: options.tags,
-        ttlMs: options.ttlMs,
-        metadata: options.metadata,
+        ...(options.title !== undefined ? { title: options.title } : {}),
+        ...(options.sourceKind !== undefined ? { sourceKind: options.sourceKind } : {}),
+        ...(options.sourceId !== undefined ? { sourceId: options.sourceId } : {}),
+        ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),
+        ...(schema !== undefined ? { aliases: schema } : {}),
+        ...(options.tags !== undefined ? { tags: options.tags } : {}),
+        ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
+        ...(options.metadata !== undefined ? { metadata: options.metadata } : {}),
         schemaProfile: options.profileSchema === false ? null : profileDatasetSchema(input, this.options.schemaProfile),
         integrity: integrity.report,
         state: 'quarantined',
-        now: options.now,
+        ...(options.now !== undefined ? { now: options.now } : {}),
       });
       this.observability.recordIntegrity(key, integrity.report, Math.max(0, this.now() - startedAt));
       throw Object.assign(new Error(`Dataset ${key} failed data-integrity release policy`), {
@@ -220,24 +221,24 @@ export class ProductionDataSearchRuntime {
       : [...integrity.accepted];
     const sourceRecords = recordsForIndex.map(record => record.source);
     const dataset = this.searchRuntime.register(key, sourceRecords, {
-      schema: options.aliases ?? options.schema,
+      ...(schema !== undefined ? { schema } : {}),
       dedupe: true,
       keepInvalid: false,
-      maxRecords: options.maxRecords,
-      now: options.now,
+      ...(options.maxRecords !== undefined ? { maxRecords: options.maxRecords } : {}),
+      ...(options.now !== undefined ? { now: options.now } : {}),
     });
     const schemaProfile = options.profileSchema === false
       ? null
       : profileDatasetSchema(input, this.options.schemaProfile);
     const catalog = this.catalog.register({
       key,
-      title: options.title,
-      sourceKind: options.sourceKind,
-      sourceId: options.sourceId,
-      schemaVersion: options.schemaVersion,
-      aliases: options.aliases ?? options.schema,
-      tags: options.tags,
-      ttlMs: options.ttlMs,
+      ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(options.sourceKind !== undefined ? { sourceKind: options.sourceKind } : {}),
+      ...(options.sourceId !== undefined ? { sourceId: options.sourceId } : {}),
+      ...(options.schemaVersion !== undefined ? { schemaVersion: options.schemaVersion } : {}),
+      ...(schema !== undefined ? { aliases: schema } : {}),
+      ...(options.tags !== undefined ? { tags: options.tags } : {}),
+      ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
       metadata: {
         ...options.metadata,
         searchRevision: dataset.revision,
@@ -246,7 +247,7 @@ export class ProductionDataSearchRuntime {
       schemaProfile,
       integrity: integrity.report,
       state: integrity.report.releaseReady ? 'active' : 'quarantined',
-      now: options.now,
+      ...(options.now !== undefined ? { now: options.now } : {}),
     });
     this.observability.recordIntegrity(key, integrity.report, Math.max(0, this.now() - startedAt));
     return Object.freeze({
