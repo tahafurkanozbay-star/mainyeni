@@ -88,7 +88,7 @@ export const createUserTimingProfiler = (
   };
 
   return Object.freeze({
-    begin(rawName: string) {
+    begin(rawName: string): string | null {
       if (disposed) return null;
       const logicalName = safeText(rawName, 100);
       if (!logicalName || active.has(logicalName)) return null;
@@ -107,7 +107,7 @@ export const createUserTimingProfiler = (
       return nativeMark;
     },
 
-    end(rawName: string) {
+    end(rawName: string): number | null {
       if (disposed) return null;
       const logicalName = safeText(rawName, 100);
       const started = active.get(logicalName);
@@ -145,7 +145,7 @@ export const createUserTimingProfiler = (
       );
     },
 
-    dispose() {
+    dispose(): void {
       if (disposed) return;
       disposed = true;
       for (const logicalName of active.keys()) clearNative(logicalName);
