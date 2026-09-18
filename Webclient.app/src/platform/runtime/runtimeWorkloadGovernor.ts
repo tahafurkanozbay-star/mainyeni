@@ -141,6 +141,7 @@ interface InternalWorkload {
   readonly externalSignal: AbortSignal | null;
   readonly externalAbort: (() => void) | null;
   timer: ReturnType<typeof setTimeout> | null;
+  internalAbortCleanup: (() => void) | null;
   released: boolean;
   outcome: ReleaseOutcome | null;
 }
@@ -258,6 +259,8 @@ export const createRuntimeWorkloadGovernor = (
     if (internal.externalSignal && internal.externalAbort) {
       internal.externalSignal.removeEventListener('abort', internal.externalAbort);
     }
+    internal.internalAbortCleanup?.();
+    internal.internalAbortCleanup = null;
     active.delete(internal.admission.id);
     releaseResources(internal.resources);
     internal.admission.release();
@@ -415,6 +418,7 @@ export const createRuntimeWorkloadGovernor = (
       externalSignal,
       externalAbort,
       timer,
+      internalAbortCleanup: null,
       released: false,
       outcome: null,
     };
@@ -423,6 +427,9 @@ export const createRuntimeWorkloadGovernor = (
       releaseInternal(internal, classifyOutcome(abortReason(controller.signal)));
     };
     controller.signal.addEventListener('abort', onAbort, { once: true });
+    internal.internalAbortCleanup = () => {
+      controller.signal.removeEventListener('abort', onAbort);
+    };
 
     active.set(admission.id, internal);
     acquired += 1;
