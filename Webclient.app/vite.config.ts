@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard';
 import {
   legacyEnvironmentGuardPlugin,
   legacyJsxPlugin,
@@ -157,6 +158,7 @@ export default defineConfig({
     'process.env.PUBLIC_URL': JSON.stringify('./'),
   },
   plugins: [
+    moduleResolutionGuardPlugin(),
     legacyEnvironmentGuardPlugin(),
     legacyPresentationCleanupPlugin(),
     legacyJsxPlugin(),
@@ -164,7 +166,7 @@ export default defineConfig({
     react({ include: /\.[jt]sx?$/ }),
   ],
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/views/SceneView.js', 'prop-types', '@fortawesome/react-fontawesome', 'crypto-js'],
+    include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/views/SceneView.js', 'prop-types', '@fortawesome/react-fontawesome'],
   },
   build: {
     target: 'baseline-widely-available',

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "description": "Production JavaScript ceilings captured at the current-main Platform strict-TypeScript cutover. Counts may only decrease.",
+  "domains": {
+    "web-root": 0,
+    "business": 59,
+    "components": 97,
+    "core": 0,
+    "store": 0,
+    "toolbox": 4,
+    "data-search": 0,
+    "experience": 2,
+    "gis": 0,
+    "platform": 0
+  },
+  "platformLegacyAllowlist": []
+}

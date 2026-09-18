@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ConfigurationBusiness } from '../../Business/ConfigurationBusiness';
-import { CommonBusiness } from '../../Business/CommonBusiness';
+import { arcgisProxyPolicy, resolveConfigurationServiceUrl } from '../network/arcgisProxyPolicy';
 import MapManager from '../../Store/Managers/MapManager';
 import {
   applicationBootstrapDependencies,
@@ -9,25 +10,25 @@ import {
   getApplicationBootstrapDiagnosticSummary
 } from './bootstrapApplication';
 
-jest.mock('../../Business/ConfigurationBusiness', () => ({
+vi.mock('../../Business/ConfigurationBusiness', () => ({
   ConfigurationBusiness: {
-    GetMapConfiguration: jest.fn(),
-    GetConfigServices: jest.fn()
+    GetMapConfiguration: vi.fn(),
+    GetConfigServices: vi.fn()
   }
 }));
 
-jest.mock('../../Business/CommonBusiness', () => ({
-  CommonBusiness: {
-    GenerateUrl: jest.fn(),
-    AddProxyRule: jest.fn()
+vi.mock('../network/arcgisProxyPolicy', () => ({
+  resolveConfigurationServiceUrl: vi.fn(),
+  arcgisProxyPolicy: {
+    register: vi.fn()
   }
 }));
 
-jest.mock('../../Store/Managers/MapManager', () => ({
+vi.mock('../../Store/Managers/MapManager', () => ({
   __esModule: true,
   default: {
-    SetMapConfiguration: jest.fn(),
-    SetConfigurationServices: jest.fn()
+    SetMapConfiguration: vi.fn(),
+    SetConfigurationServices: vi.fn()
   }
 }));
 
@@ -51,15 +52,15 @@ const resetSuccessfulDefaults = () => {
     isSuccess: true,
     data: services
   });
-  CommonBusiness.GenerateUrl.mockImplementation((service) => service.eg);
-  CommonBusiness.AddProxyRule.mockResolvedValue(undefined);
+  vi.mocked(resolveConfigurationServiceUrl).mockImplementation((service) => typeof service.eg === 'string' ? service.eg : null);
+  vi.mocked(arcgisProxyPolicy.register).mockResolvedValue(undefined);
   MapManager.SetMapConfiguration.mockReturnValue(undefined);
   MapManager.SetConfigurationServices.mockReturnValue(undefined);
 };
 
 describe('applicationBootstrapDependencies', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     resetSuccessfulDefaults();
   });
 
@@ -75,15 +76,15 @@ describe('applicationBootstrapDependencies', () => {
     expect(ConfigurationBusiness.GetConfigServices).toHaveBeenCalledWith({ signal });
   });
 
-  test('generates proxy URLs through CommonBusiness', () => {
+  test('resolves service URLs through the typed proxy policy', () => {
     const value = applicationBootstrapDependencies.generateServiceUrl(services[0]);
     expect(value).toBe(services[0].eg);
-    expect(CommonBusiness.GenerateUrl).toHaveBeenCalledWith(services[0]);
+    expect(resolveConfigurationServiceUrl).toHaveBeenCalledWith(services[0]);
   });
 
-  test('installs proxy rules through CommonBusiness', async () => {
+  test('installs proxy rules through the typed proxy policy', async () => {
     await applicationBootstrapDependencies.addProxyRule('https://gis.example.test/a', 'source');
-    expect(CommonBusiness.AddProxyRule).toHaveBeenCalledWith('https://gis.example.test/a', 'source');
+    expect(arcgisProxyPolicy.register).toHaveBeenCalledWith('https://gis.example.test/a');
   });
 
   test('commits map configuration through MapManager', async () => {
@@ -99,7 +100,7 @@ describe('applicationBootstrapDependencies', () => {
 
 describe('bootstrapApplication integration adapter', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     clearApplicationBootstrapDiagnostics();
     resetSuccessfulDefaults();
   });
@@ -112,8 +113,8 @@ describe('bootstrapApplication integration adapter', () => {
     expect(result.proxyRuleCount).toBe(2);
     expect(ConfigurationBusiness.GetMapConfiguration).toHaveBeenCalledTimes(1);
     expect(ConfigurationBusiness.GetConfigServices).toHaveBeenCalledTimes(1);
-    expect(CommonBusiness.GenerateUrl).toHaveBeenCalledTimes(2);
-    expect(CommonBusiness.AddProxyRule).toHaveBeenCalledTimes(2);
+    expect(resolveConfigurationServiceUrl).toHaveBeenCalledTimes(2);
+    expect(arcgisProxyPolicy.register).toHaveBeenCalledTimes(2);
     expect(MapManager.SetMapConfiguration).toHaveBeenCalledWith(mapConfiguration);
     expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith(services);
   });
@@ -121,8 +122,8 @@ describe('bootstrapApplication integration adapter', () => {
   test('passes a caller cancellation signal to both network loaders', async () => {
     const signal = {
       aborted: false,
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     };
 
     await bootstrapApplication({ signal });
@@ -140,7 +141,7 @@ describe('bootstrapApplication integration adapter', () => {
     await expect(bootstrapApplication()).rejects.toMatchObject({
       code: 'BOOTSTRAP_MAP_REQUEST_FAILED'
     });
-    expect(CommonBusiness.AddProxyRule).not.toHaveBeenCalled();
+    expect(arcgisProxyPolicy.register).not.toHaveBeenCalled();
     expect(MapManager.SetMapConfiguration).not.toHaveBeenCalled();
     expect(MapManager.SetConfigurationServices).not.toHaveBeenCalled();
   });
@@ -154,14 +155,14 @@ describe('bootstrapApplication integration adapter', () => {
     await expect(bootstrapApplication()).rejects.toMatchObject({
       code: 'BOOTSTRAP_SERVICE_REQUEST_FAILED'
     });
-    expect(CommonBusiness.AddProxyRule).not.toHaveBeenCalled();
+    expect(arcgisProxyPolicy.register).not.toHaveBeenCalled();
     expect(MapManager.SetMapConfiguration).not.toHaveBeenCalled();
   });
 
   test('waits for asynchronous proxy setup before committing MapManager state', async () => {
     let resolveProxy;
     const proxyPromise = new Promise((resolve) => { resolveProxy = resolve; });
-    CommonBusiness.AddProxyRule
+    arcgisProxyPolicy.register
       .mockReturnValueOnce(proxyPromise)
       .mockResolvedValueOnce(undefined);
 
@@ -188,7 +189,7 @@ describe('bootstrapApplication integration adapter', () => {
     const result = await bootstrapApplication();
     expect(result.serviceCount).toBe(2);
     expect(result.proxyRuleCount).toBe(1);
-    expect(CommonBusiness.AddProxyRule).toHaveBeenCalledTimes(1);
+    expect(arcgisProxyPolicy.register).toHaveBeenCalledTimes(1);
     expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith(sharedServices);
   });
 
@@ -201,12 +202,12 @@ describe('bootstrapApplication integration adapter', () => {
     const result = await bootstrapApplication();
     expect(result.serviceCount).toBe(0);
     expect(result.proxyRuleCount).toBe(0);
-    expect(CommonBusiness.AddProxyRule).not.toHaveBeenCalled();
+    expect(arcgisProxyPolicy.register).not.toHaveBeenCalled();
     expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith([]);
   });
 
   test('uses a caller-provided diagnostics collector instead of the shared collector', async () => {
-    const diagnostics = { record: jest.fn() };
+    const diagnostics = { record: vi.fn() };
     await bootstrapApplication({ diagnostics });
     expect(diagnostics.record).toHaveBeenCalledWith('bootstrap.started', expect.any(Object));
     expect(getApplicationBootstrapDiagnostics()).toEqual([]);
@@ -236,7 +237,7 @@ describe('bootstrapApplication integration adapter', () => {
   });
 
   test('records proxy failures without committing application state', async () => {
-    CommonBusiness.AddProxyRule.mockRejectedValue(new Error('proxy failed'));
+    vi.mocked(arcgisProxyPolicy.register).mockRejectedValue(new Error('proxy failed'));
     await expect(bootstrapApplication()).rejects.toMatchObject({
       code: 'BOOTSTRAP_PROXY_SETUP_FAILED'
     });
