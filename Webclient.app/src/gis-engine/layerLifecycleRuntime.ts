@@ -359,11 +359,13 @@ const createEventBus = (
 };
 
 const defaultAdapters: Readonly<LayerLifecycleAdapters> = Object.freeze({
-  create: async (descriptor) => descriptor.instance ?? descriptor.layer ?? { id: descriptor.id },
+  create: async (
+    descriptor: Readonly<LayerLifecycleDescriptor>,
+  ) => descriptor.instance ?? descriptor.layer ?? { id: descriptor.id },
   attach: async () => undefined,
   detach: async () => undefined,
   destroy: async () => undefined,
-  setVisible: async (instance, visible) => {
+  setVisible: async (instance: unknown, visible: boolean) => {
     if (instance && typeof instance === 'object' && 'visible' in instance) {
       (instance as { visible?: boolean }).visible = visible;
     }

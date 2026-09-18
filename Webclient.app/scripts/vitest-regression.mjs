@@ -18,7 +18,12 @@ const readReport = (filePath) => {
 
 const normalizeFile = (value) => String(value ?? '<unknown-file>')
   .replaceAll('\\', '/')
-  .replace(/^.*?\/Webclient\.app\//, 'Webclient.app/');
+  .replace(/^.*?\/Webclient\.app\//, 'Webclient.app/')
+  // Test-file language migrations must not manufacture a regression solely
+  // because the same assertion moved from .test.js/.jsx to .test.ts/.tsx.
+  // Only the terminal test extension is canonicalized; production-module
+  // paths and assertion names remain exact so real new failures still fail.
+  .replace(/\.test\.(?:jsx?|tsx?)$/i, '.test.<source>');
 
 const failureName = (assertion, index) => {
   const ancestor = Array.isArray(assertion.ancestorTitles) ? assertion.ancestorTitles.join(' > ') : '';
