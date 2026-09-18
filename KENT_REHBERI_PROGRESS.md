@@ -163,3 +163,13 @@
 - REVIEW: Merge öncesi `mergeable=true`, unresolved review thread=0 ve exact-head mandatory CI tamamen yeşil doğrulandı.
 - SONRAKİ GÖREV: Yeni Data/Search turu gerekirse merged PR #59 branch'i yeniden kullanılmadan güncel `main` tabanlı yeni role-scoped branch/PR ile başlatılmalı.
 
+
+## Deep QA / Release merge closure — 2026-09-18
+- TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization kapanışı; closed/unmerged #111 yerine exact-current-main tabanlı fresh kanonik PR #121 kullanıldı.
+- BASE MAIN: `0c05ca79d139701200832a5544dc4437e3adf2b2`; final PR head `7f178f5daba39c4a6b39a5b550fd6226c7c4829d`; merge-base exact base ile eşleşti, behind=0, unresolved review thread=0 ve mergeable=true doğrulandı.
+- KAPSAM / GATE: 4,738 meaningful additions / 0 deletions / 25 files; zorunlu >=4,000 additions gate gerçek QA/release işiyle karşılandı.
+- QA KAPSAMI: strict release audits + regressions for security/backend-security, CI supply-chain integrity, validation reproducibility, accessibility, responsive/mobile, observability/lifecycle, data integrity, runtime resilience, TypeScript/ESM/Vite/React modernization, ArcGIS/GIS release contracts and network behavior; tüm yeni denetimler current-main release engine'e bağlandı.
+- CI / DÜZELTMELER: exact-head Release QA run `35313414973` completed+success. İlk strict-TypeScript failure iki portable assert çağrısıyla; sonraki test failure literal newline fixture ve aynı satırdaki GIS protocol finding double-count ile izole edilip düzeltildi. Final run'da typed release audit, Webclient release validation ve backend release validation tamamen başarılı.
+- SECURITY / PERFORMANCE / NETWORK: production runtime/dependency/render path değişmedi; yeni endpoint, WMS/WFS/WMTS, secret, telemetry, polling veya remote asset eklenmedi. QA engine baseline ve current tree'yi aynı audit setiyle karşılaştırarak yalnız yeni regresyonları gate ediyor.
+- MERGE: PR #121 ready durumuna alındı ve expected-head SHA ile squash merge edildi. GitHub `merged=true` döndürdü; merge SHA `78ae9e81a460499316c60fcb2c1aaa29b2e5550c`. Merge sonrası current `main` bu SHA ile doğrulandı.
+- SONRAKİ GÖREV: merged QA branch yeniden kullanılmamalı. Yeni QA turu gerekirse o andaki current main'den fresh role-scoped branch/PR açılmalı; aynı >=4,000 additions + exact-head completed-success CI + mergeable/current-main gate korunmalı.
