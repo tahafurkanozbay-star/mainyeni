@@ -139,3 +139,13 @@
 - MERGE DURUMU: DRAFT / NOT MERGED at this progress checkpoint. Merge requires the post-progress exact-head Platform Architecture Audit, Webclient Quality and Release QA to be completed+success, additions>=4,000, current-main/behind=0, mergeable=true and final safety/performance/data-integrity review.
 - SONRAKİ GÖREV: verify post-progress exact-head CI, refresh current main and PR mergeability, then mark #113 ready and squash-merge only if every gate remains green. After merge verify merge SHA and current-main state; do not reuse the merged branch for further GIS work.
 
+
+## Deep GIS / bounded spatial analysis merge closure — 2026-09-18
+- TUR / GÖREV: PR #113 final closure; strict-TypeScript bounded spatial analysis modernization.
+- BRANCH / PR: `agent/gis-spatial-analysis-20260917-2315-1725815`, PR #113 `feat(gis): continue bounded spatial analysis modernization`.
+- COMMIT / PR / MERGE DURUMU: final head `41f39ce262d865e613d83cd966f5d82a7ff21345`; 4,058 additions / 1 deletion / 22 files; exact base `172581511c10401d49c3ad4ac98c45f383598df1`; compare ahead=23 / behind=0 with matching merge-base. Squash-merged successfully as `7a89ce681095e5092640a737398c99a1863094e5`.
+- TESTLER / BUILD / CI: exact final head Platform Architecture Audit, Webclient Quality and Release QA all completed successfully. Post-merge `main` SHA `7a89ce681095e5092640a737398c99a1863094e5` also completed the same three workflows successfully.
+- ÖNEMLİ ÖZELLİKLER: bounded geometry/selection/buffer/aggregation/spatial-join/topology/statistics-classification runtimes; priority-aware bounded analysis scheduling; unified modern spatial-analysis kernel; strict GIS TypeScript coverage.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: explicit cardinality/work/memory budgets, AbortSignal cancellation, dedupe, fail-closed topology/statistics exhaustion and finite-input validation remain enforced. No WMS/WFS/WMTS, invented endpoint, secret, analytics, telemetry or uncontrolled browser transport was introduced. Shared deterministic icon resolver remains canonical.
+- ÇÖZÜLEN HATALAR: closed-ring zero-length segment boundary handling, exactOptionalPropertyTypes regressions, scheduler allocation lint and equal-interval test expectation were corrected before final green CI.
+- SONRAKİ GÖREV: merged PR #113 branch must not be reused. Separate PR #115 (`refactor(gis): migrate ArcGIS runtime to @arcgis/core 5.1 ESM`) is a new draft workstream based on the merged main; at the latest checkpoint it remains below the 4,000 meaningful-additions gate and must independently satisfy exact-head CI/mergeability/current-main requirements before merge.
