@@ -183,8 +183,8 @@ test('backend security findings participate in the release report', async () => 
   await assertIntegrated(
     auditBackendSecurity,
     [{
-      path: 'Api.Core/Program.cs',
-      text: 'policy.AllowAnyOrigin();',
+      path: 'Webclient.API/Program.cs',
+      text: 'services.AddCors(o => o.AddPolicy("bad", p => p.AllowAnyOrigin().AllowCredentials()));',
     }],
   );
 });
@@ -217,8 +217,8 @@ test('runtime resilience findings participate in the release report', async () =
   await assertIntegrated(
     auditRuntimeResilience,
     [{
-      path: 'Webclient.app/src/Core/poller.ts',
-      text: 'setInterval(() => tick(), 1000);',
+      path: 'Webclient.app/src/runtime/MapRuntime.ts',
+      text: 'export function start(){ setInterval(() => work(), 1000); }',
     }],
   );
 });
@@ -395,8 +395,8 @@ test('release markdown exposes deep QA section names', async () => {
     /ArcGIS transport, lifecycle, data and 2D\/3D release-contract audit/,
   );
   assert.match(markdown, /Security boundary and credential regression audit/);
-  assert.match(markdown, /Backend API and server trust-boundary audit/);
-  assert.match(markdown, /Runtime observability and reliability audit/);
+  assert.match(markdown, /Backend API authorization, input and transport boundary audit/);
+  assert.match(markdown, /Runtime observability, cancellation and lifecycle audit/);
 });
 
 test('release report keeps findings deterministically sorted', async () => {
