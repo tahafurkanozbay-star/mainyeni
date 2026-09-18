@@ -13,7 +13,10 @@ import {
   faChartLine,
   faEraser,
 } from '@fortawesome/free-solid-svg-icons';
-import { CommonQueryWindowTools } from '../../Query/_Common/CommonQueryWindowTools';
+import {
+  CommonQueryWindowTools,
+  type QueryWindowManagerLike,
+} from '../../Query/_Common/CommonQueryWindowTools';
 import {
   createManagedWindowFocusLifecycle,
   type ManagedWindowFocusLifecycle,
@@ -33,14 +36,10 @@ import {
 } from '../../../gis-engine/measurementRuntime';
 import './MeasurementWidget.css';
 
-interface WindowManagerLike {
+interface WindowManagerLike extends QueryWindowManagerLike {
   readonly RegisterWindow: (ref: unknown) => void;
   readonly ShowWindow: (id: string) => void;
   readonly IsVisible: (id: string) => boolean;
-  readonly IsMinimized?: (id: string) => boolean;
-  readonly HideWindow?: (id: string) => void;
-  readonly ToggleMinimiseWindow?: (id: string) => void;
-  readonly ShowMessage?: (type: unknown, message: string) => void;
 }
 
 export interface MeasurementWidgetProps {
