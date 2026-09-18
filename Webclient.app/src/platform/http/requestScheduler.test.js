@@ -403,6 +403,7 @@ describe('RequestScheduler execution and observability', () => {
 
     await expect(scheduler.schedule(() => 'safe')).resolves.toBe('safe');
     expect(scheduler.snapshot().counters.completed).toBe(1);
+    expect(scheduler.getDiagnosticListenerFailureCount()).toBeGreaterThan(0);
   });
 
   test('snapshot is immutable and reports groups, priorities and peaks', async () => {
