@@ -67,4 +67,5 @@ public sealed record KentRehberiCapabilities(
     [property: JsonPropertyName("defaultLimit")] int DefaultLimit,
     [property: JsonPropertyName("maxLimit")] int MaxLimit,
     [property: JsonPropertyName("maxRadiusMeters")] int MaxRadiusMeters,
+    [property: JsonPropertyName("objectIdCursorEnabled")] bool ObjectIdCursorEnabled,
     [property: JsonPropertyName("filters")] IReadOnlyList<string> Filters);
