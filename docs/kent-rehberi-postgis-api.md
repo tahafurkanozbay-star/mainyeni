@@ -36,7 +36,7 @@ store veya process environment üzerinden aşağıdaki anahtar verilir:
 Örnek biçim:
 
 ```text
-Host=<internal-postgres-host>;Port=5432;Database=<database>;Username=kent_rehberi_api_ro;Password=<secret>;Pooling=true
+Host=<internal-postgres-host>;Port=5432;Database=<database>;Username=kent_rehberi_select;Password=<secret>;Pooling=true
 ```
 
 Gerçek host, veritabanı adı, kullanıcı/parola veya başka internal network
