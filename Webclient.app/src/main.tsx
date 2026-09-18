@@ -8,6 +8,14 @@ import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/r
 import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery';
 import { performanceMonitor } from './platform/performance/performanceMonitor';
 import { runtimeConfig } from './platform/config/runtimeConfig';
+import {
+  browserPerformanceDiagnosticEnvironment,
+  installPerformanceLifecycleCapture,
+  performanceRuntime,
+  recordPerformanceDiagnostic,
+  registerWebVitals,
+  startupProfiler,
+} from './performance';
 
 const rootElement = document.getElementById('root');
 if (!(rootElement instanceof HTMLElement)) {
@@ -15,6 +23,24 @@ if (!(rootElement instanceof HTMLElement)) {
 }
 
 performanceMonitor.start();
+startupProfiler.begin('application-bootstrap', typeof performance !== 'undefined' ? performance.now() : 0);
+const webVitalsRegistration = registerWebVitals(performanceRuntime.recordVital);
+const performanceLifecycleHandle = installPerformanceLifecycleCapture(performanceRuntime, {
+  onCapture(snapshot) {
+    recordPerformanceDiagnostic(
+      runtimeDiagnostics,
+      snapshot,
+      browserPerformanceDiagnosticEnvironment(),
+    );
+  },
+  onCaptureError(error) {
+    runtimeDiagnostics.captureError(
+      error,
+      { source: 'performance.lifecycle.capture-observer' },
+      'warn',
+    );
+  },
+});
 const deploymentRecoveryHandle = installDeploymentRecovery(runtimeDiagnostics);
 const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics);
 
@@ -94,10 +120,15 @@ root.render(
   </AppErrorBoundary>,
 );
 
+const markInitialRenderComplete = (): void => {
+  performanceMonitor.markRenderComplete();
+  startupProfiler.end('application-bootstrap', typeof performance !== 'undefined' ? performance.now() : 0);
+};
+
 if (typeof requestAnimationFrame === 'function') {
-  requestAnimationFrame(() => performanceMonitor.markRenderComplete());
+  requestAnimationFrame(markInitialRenderComplete);
 } else {
-  queueMicrotask(() => performanceMonitor.markRenderComplete());
+  queueMicrotask(markInitialRenderComplete);
 }
 
 // Vite can replace the entry module while developing. Dispose global listeners,
@@ -108,6 +139,8 @@ if (import.meta.hot) {
     disposeAdaptiveRuntime();
     deploymentRecoveryHandle.dispose();
     runtimeObserverHandle.dispose();
+    performanceLifecycleHandle.dispose();
+    webVitalsRegistration.stop();
     performanceMonitor.stop();
     root.unmount();
   });

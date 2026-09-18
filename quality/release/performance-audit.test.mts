@@ -66,3 +66,74 @@ test('production source still contributes loop and maintainability signals', () 
   assert.ok(section.summary.synchronousLoopCandidates >= 20);
   assert.equal(section.summary.largestFiles[0]?.file, 'Webclient.app/src/runtime.ts');
 });
+
+
+test('flags legacy JavaScript inside the performance instrumentation boundary', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/performance/runtime.js',
+      text: 'export const runtime = true;',
+    },
+    {
+      path: 'Webclient.app/src/reportWebVitals.js',
+      text: 'export default function report() {}',
+    },
+  ]));
+  assert.ok(ids(section).includes('performance-legacy-javascript-runtime'));
+  assert.deepEqual(section.summary.legacyPerformanceJavascriptFiles, [
+    'Webclient.app/src/performance/runtime.js',
+    'Webclient.app/src/reportWebVitals.js',
+  ]);
+});
+
+test('flags PerformanceObserver lifecycle imbalance only inside instrumentation files', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/performance/observer.ts',
+      text: 'const observer = new PerformanceObserver(() => {}); observer.observe({ type: "resource" });',
+    },
+    {
+      path: 'Webclient.app/src/feature/unrelated.ts',
+      text: 'const observer = new PerformanceObserver(() => {});',
+    },
+  ]));
+  assert.ok(ids(section).includes('performance-observer-lifecycle-risk'));
+  assert.deepEqual(section.summary.observerLifecycleRiskFiles, [
+    'Webclient.app/src/performance/observer.ts',
+  ]);
+});
+
+test('accepts explicitly disconnected observers', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/platform/performance/monitor.ts',
+      text: 'const observer = new PerformanceObserver(() => {}); observer.observe({ type: "resource" }); observer.disconnect();',
+    },
+  ]));
+  assert.equal(ids(section).includes('performance-observer-lifecycle-risk'), false);
+  assert.deepEqual(section.summary.observerLifecycleRiskFiles, []);
+});
+
+test('flags recurring performance timers without deterministic cleanup', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/performance/poller.ts',
+      text: 'const id = setInterval(sample, 1000);',
+    },
+  ]));
+  assert.ok(ids(section).includes('performance-recurring-timer-lifecycle-risk'));
+  assert.deepEqual(section.summary.recurringTimerLifecycleRiskFiles, [
+    'Webclient.app/src/performance/poller.ts',
+  ]);
+});
+
+test('accepts balanced recurring timer cleanup', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/performance/poller.ts',
+      text: 'const id = setInterval(sample, 1000); clearInterval(id);',
+    },
+  ]));
+  assert.equal(ids(section).includes('performance-recurring-timer-lifecycle-risk'), false);
+  assert.deepEqual(section.summary.recurringTimerLifecycleRiskFiles, []);
+});
