@@ -109,7 +109,7 @@ test('root TypeScript compatibility bridge may remain staged without weakening P
 
 test('Vite module resolution guard runs before legacy source transforms', async () => {
   const source = await fs.readFile(path.join(ROOT, 'Webclient.app', 'vite.config.ts'), 'utf8');
-  const importIndex = source.indexOf("from './tooling/moduleResolutionGuard'");
+  const importIndex = source.indexOf("from './tooling/moduleResolutionGuard.ts'");
   const pluginIndex = source.indexOf('moduleResolutionGuardPlugin()');
   const environmentIndex = source.indexOf('legacyEnvironmentGuardPlugin()');
   const jsxIndex = source.indexOf('legacyJsxPlugin()');
