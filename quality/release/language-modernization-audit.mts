@@ -308,7 +308,7 @@ const RULES: readonly LanguageRule[] = [
     severity: 'low',
     title: '@ts-expect-error lacks an explanatory suffix',
     message: 'Document why the expected compiler error is safe so future maintainers can remove the escape when the dependency evolves.',
-    pattern: new RegExp('@ts-expect-error\\s*(?:\\r?\\n|$)', 'g'),
+    pattern: new RegExp('@ts-expect-error[ \\t]*(?:\\r?\\n|$)', 'g'),
     kinds: 'typescript',
     tag: 'strict-types',
   },
