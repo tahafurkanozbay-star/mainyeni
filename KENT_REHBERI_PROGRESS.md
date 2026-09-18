@@ -228,3 +228,13 @@
 - NETWORK / İKON: yeni dış endpoint/protokol/telemetry/CDN/WMS/WFS yok; same-origin reverse proxy sınırı ve mevcut ortak ikon authority değişmedi.
 - MERGE DURUMU: DRAFT / NOT MERGED. Bu progress commit yeni exact head oluşturacağından Platform Backend Validation, Platform Architecture Audit ve Release QA exact-head completed+success olmadan PASS/merge iddiası yapılmayacak. Gerçek production PostGIS secret bu ortamda olmadığı için canlı DB smoke/EXPLAIN deployment adımı olarak kalıyor. Meaningful-additions repository hedefi/gate'i de ayrıca korunuyor.
 
+## Kent Rehberi PostGIS API validation checkpoint — 2026-09-18
+- VERIFIED CODE HEAD: `077810f4d5742969d3f28e0db59dffae208ef42c`.
+- EXACT-HEAD CI: Platform Architecture Audit run #841 (`35335866750`) completed+success; Platform Backend Validation run #279 (`35335866678`) completed+success; Release QA run #870 (`35335866637`) completed+success.
+- BACKEND VALIDATION: .NET 10 setup, restore/NuGet audit, vulnerability report, Release build, Microsoft.Testing.Platform xUnit suite, User API publish ve Admin API publish başarılı.
+- RELEASE VALIDATION: typed release audit, exact-base TypeScript/Vitest regression gates, native tooling, dependency audit, production Vite build/integrity ve build budgets başarılı.
+- FINAL HARDENING DELTA: dedicated datasource readiness, safe DB failure logging, fail-closed ObjectID cursor, persistent uniqueness requirement, 2.000-result / 50 km hard ceilings, 2..120 free-text query bound ve ilgili regression/security tests doğrulandı.
+- LIVE DB LIMITATION: gerçek `ConnectionStrings__KentRehberi` secret bu çalışma ortamına verilmedi; bu nedenle production table connectivity, sample GeoJSON response ve EXPLAIN/index planı CI içinde iddia edilmiyor. Bunlar deployment smoke adımıdır.
+- MERGE: PR #129 draft kalmalı. Kod doğrulaması yeşil olsa da base...head yaklaşık 2.4k additions ile repository'nin ~4k meaningful-additions merge hedefi/gate'i altında; sırf satır doldurmak için kapsam genişletilmedi.
+- NOTE: bu progress-only commit yeni exact head oluşturur; merge-ready PASS ancak bu yeni dokümantasyon head'i için zorunlu CI tekrar completed+success olursa söylenebilir.
+
