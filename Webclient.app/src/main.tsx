@@ -9,8 +9,10 @@ import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery
 import { performanceMonitor } from './platform/performance/performanceMonitor';
 import { runtimeConfig } from './platform/config/runtimeConfig';
 import {
+  browserPerformanceDiagnosticEnvironment,
   installPerformanceLifecycleCapture,
   performanceRuntime,
+  recordPerformanceDiagnostic,
   registerWebVitals,
   startupProfiler,
 } from './performance';
@@ -23,7 +25,15 @@ if (!(rootElement instanceof HTMLElement)) {
 performanceMonitor.start();
 startupProfiler.begin('application-bootstrap', typeof performance !== 'undefined' ? performance.now() : 0);
 const webVitalsRegistration = registerWebVitals(performanceRuntime.recordVital);
-const performanceLifecycleHandle = installPerformanceLifecycleCapture(performanceRuntime);
+const performanceLifecycleHandle = installPerformanceLifecycleCapture(performanceRuntime, {
+  onCapture(snapshot) {
+    recordPerformanceDiagnostic(
+      runtimeDiagnostics,
+      snapshot,
+      browserPerformanceDiagnosticEnvironment(),
+    );
+  },
+});
 const deploymentRecoveryHandle = installDeploymentRecovery(runtimeDiagnostics);
 const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics);
 
