@@ -158,10 +158,10 @@ export const createAdaptiveRuntimeModule = (
     id: options.id ?? 'adaptive-runtime-control',
     order: options.order ?? 40,
     required: options.required ?? false,
-    start: (context) => activate(context),
-    ready: (context) => activate(context),
+    start: (context: RuntimeKernelModuleContext) => activate(context),
+    ready: (context: RuntimeKernelModuleContext) => activate(context),
     suspend: () => suspend(),
-    resume: (context) => activate(context),
+    resume: (context: RuntimeKernelModuleContext) => activate(context),
     stop: () => stop(),
     dispose: () => dispose(),
   });
