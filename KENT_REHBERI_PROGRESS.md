@@ -208,3 +208,21 @@
 - SECURITY / PERFORMANCE: yeni secret, WMS/WFS/WMTS, analytics/telemetry endpoint veya remote runtime dependency eklenmedi. Capacity/load-shedding work bounded; release audit production/test ayrımı gate'i gevşetmeden false-positive riskini azalttı.
 - MERGE: PR #131 expected-head SHA korumasıyla squash merge edildi; GitHub `merged=true`; merge SHA `a885f5b8ae077485873404c8dd78a16cef7179c3` ve commit current `main` üzerinde doğrulandı.
 - SONRAKİ GÖREV: merged #131 branch yeniden kullanılmamalı. Yeni Platform turu o andaki current `main`den fresh role-scoped branch ile başlamalı; Experience/GIS/Data-Search alanlarını gereksiz yere ezmeden strict TS/TSX migration ve runtime wiring boşlukları önceliklendirilmeli.
+
+## Deep Data / PostGIS GeoJSON frontend integration — 2026-09-18
+- TUR / GÖREV: Secure PostGIS Kent Rehberi JSON/GeoJSON API + frontend ArcGIS GeoJSONLayer wiring.
+- BASE MAIN: `50459b5b8335c2fb253fb433f8b7a3435c6e1523`; branch exact merge-base matches current main at this checkpoint.
+- BRANCH / PR: `agent/data-api-frontend-20260918-1608-50459b5` / PR #148 `feat(data): wire PostGIS GeoJSON API into frontend map layer`.
+- CODE HEAD before this progress commit: `746242d8915fad23d6fad59436cc96fb9efe3a72`; compare ahead=1 / behind=0 / mergeable=true.
+- BACKEND: added `/kent-rehberi`, `/{objectId}`, `/nearby`, `/capabilities`; parameterized Npgsql/PostGIS queries, bbox + geography nearby filtering, bounded limits/timeouts, readiness probe and safe 503 behavior.
+- DATABASE: readonly runtime role name is `kent_rehberi_select`; tracked source contains no password/internal host. `gdb_geomattr_data` is not selected or granted. DBA runbook adds least-privilege column grants and recommended objectid/GiST indexes.
+- FRONTEND: `kentRehberiGeoJsonLayer.ts` calls same-origin `/api/kent-rehberi?limit=500`, validates FeatureCollection/features/objectid, enforces max 2,000 features + default 8 MiB payload budget, timeout/AbortSignal and safe HTTP error handling.
+- ARCGIS: validated GeoJSON is loaded through `GeoJSONLayer` using a temporary Blob URL; explicit field schema avoids null/first-feature inference; Blob URL is revoked after load; component teardown aborts request and removes/destroys layer.
+- MAP WIRING: `MapComponent.tsx` attaches the Kent Rehberi layer non-blockingly. Datasource failure does not block the base map shell.
+- LOCAL DEMO: Vite development middleware serves three clearly named `Yerel Demo` Ankara points on the same `/api/kent-rehberi` path with `x-kent-rehberi-demo: vite-local-only`; production build still uses the real User API.
+- SECURITY: API base must remain canonical same-origin; browser never receives DB credentials; HTTP error bodies are not reflected; no WMS/WFS or new third-party transport was introduced.
+- REGRESSION FIXES: release audit lossy identity finding was fixed by rejecting non-number objectid values without coercion; changed-source lint fixture warning and Vite request-method TypeScript regression were fixed.
+- TEST / BUILD: exact code head `746242d8...` completed Platform Architecture Audit #878, Webclient Quality #2458, Release QA #915 and Platform Backend Validation #288 successfully, including TypeScript exact-base regression, Vitest, production Vite build/integrity/budgets, .NET Release build, xUnit and API publish.
+- LIVE DB LIMITATION: private PostgreSQL is not reachable from this execution environment; no claim is made for live row retrieval, production GeoJSON sample or EXPLAIN/index-plan verification. Those remain deployment smoke steps.
+- MERGE DURUMU: DRAFT / NOT MERGED. PR is ~3k additions and remains below the repository's ~4k meaningful-additions target/gate; no filler is added merely to satisfy line count.
+- SONRAKİ GÖREV: after this progress append, require fresh exact-head CI again; then re-check current main/behind=0/mergeable. For live rollout, set only server-side `ConnectionStrings__KentRehberi`, apply DBA runbook, verify `/health/ready`, GeoJSON, bbox, nearby and production EXPLAIN plans.
