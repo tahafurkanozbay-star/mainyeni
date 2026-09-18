@@ -306,18 +306,27 @@ describe('scene layer concurrency, retry, and failure isolation', () => {
     expect(onObserverError).toHaveBeenCalled();
   });
 
-  it('isolates failures from the observer-error callback itself', async () => {
-    const runtime = createSceneLayerLifecycleRuntime<Resource>({
-      onEvent: () => {
-        throw new Error('observer failed');
-      },
-      onObserverError: () => {
-        throw new Error('secondary observer failed');
-      },
-    });
-    runtime.register({ id: 'safe' }, adapter());
+  it('reports failures from the observer-error callback through the host error channel', async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    try {
+      const runtime = createSceneLayerLifecycleRuntime<Resource>({
+        onEvent: () => {
+          throw new Error('observer failed');
+        },
+        onObserverError: () => {
+          throw new Error('secondary observer failed');
+        },
+      });
+      runtime.register({ id: 'safe' }, adapter());
 
-    await expect(runtime.request('safe')).resolves.toMatchObject({ phase: 'ready' });
+      await expect(runtime.request('safe')).resolves.toMatchObject({ phase: 'ready' });
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'secondary observer failed',
+      }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
