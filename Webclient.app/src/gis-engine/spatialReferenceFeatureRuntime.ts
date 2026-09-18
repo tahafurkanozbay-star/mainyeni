@@ -43,6 +43,9 @@ export type SpatialFeatureIntegrityOptions = GeometryProjectionOptions &
     maxAttributesPerFeature?: number;
     maxAttributeKeyLength?: number;
     maxStringValueLength?: number;
+    maxIdLength?: number;
+    maxAttributeBytesPerFeature?: number;
+    maxTotalAttributeBytes?: number;
     maxIssues?: number;
     targetSpatialReference?: NormalizedSpatialReference;
     projectToTarget?: boolean;
@@ -57,12 +60,16 @@ export type SpatialFeatureIntegrityResult = Readonly<{
   rejectedCount: number;
   duplicateCount: number;
   projectedCount: number;
+  estimatedAttributeBytes: number;
 }>;
 
 const DEFAULT_MAX_FEATURES = 100_000;
 const DEFAULT_MAX_ATTRIBUTES = 256;
 const DEFAULT_MAX_ATTRIBUTE_KEY_LENGTH = 256;
 const DEFAULT_MAX_STRING_VALUE_LENGTH = 16_384;
+const DEFAULT_MAX_ID_LENGTH = 512;
+const DEFAULT_MAX_ATTRIBUTE_BYTES_PER_FEATURE = 256 * 1024;
+const DEFAULT_MAX_TOTAL_ATTRIBUTE_BYTES = 32 * 1024 * 1024;
 const DEFAULT_MAX_ISSUES = 2_000;
 
 function positiveBudget(value: number | undefined, fallback: number, label: string): number {
@@ -79,7 +86,7 @@ function throwIfAborted(signal?: AbortSignal): void {
   }
 }
 
-function normalizeId(id: string | number): string | number {
+function normalizeId(id: string | number, maxLength = DEFAULT_MAX_ID_LENGTH): string | number {
   if (typeof id === "number") {
     if (!Number.isSafeInteger(id)) {
       throw new TypeError("feature id must be a safe integer or non-empty string");
@@ -88,6 +95,9 @@ function normalizeId(id: string | number): string | number {
   }
   if (typeof id !== "string" || id.trim().length === 0) {
     throw new TypeError("feature id must be a safe integer or non-empty string");
+  }
+  if (id.length > maxLength) {
+    throw new RangeError("feature id exceeds configured length budget");
   }
   return id;
 }
@@ -149,6 +159,17 @@ function normalizeAttributes(
   return Object.freeze(normalized);
 }
 
+function estimateAttributesBytes(attributes: ArcGisAttributes): number {
+  let bytes = 0;
+  for (const [key, value] of Object.entries(attributes)) {
+    bytes += key.length * 2;
+    if (value === null) bytes += 4;
+    else if (typeof value === "string") bytes += value.length * 2;
+    else bytes += 8;
+  }
+  return bytes;
+}
+
 function issueCode(error: unknown): SpatialFeatureIssueCode {
   if (error instanceof RangeError && error.message.includes("attribute")) {
     return "attribute-budget";
@@ -184,8 +205,18 @@ function normalizeFeature(
   feature: SpatialFeature,
   options: SpatialFeatureIntegrityOptions,
 ): SpatialFeature {
-  const id = normalizeId(feature.id);
+  const maxIdLength = positiveBudget(options.maxIdLength, DEFAULT_MAX_ID_LENGTH, "maxIdLength");
+  const id = normalizeId(feature.id, maxIdLength);
   const attributes = normalizeAttributes(feature.attributes, options);
+  const attributeBytes = estimateAttributesBytes(attributes);
+  const maxAttributeBytes = positiveBudget(
+    options.maxAttributeBytesPerFeature,
+    DEFAULT_MAX_ATTRIBUTE_BYTES_PER_FEATURE,
+    "maxAttributeBytesPerFeature",
+  );
+  if (attributeBytes > maxAttributeBytes) {
+    throw new RangeError("feature exceeds attribute byte budget");
+  }
   const geometry = normalizeGeometry2D(feature.geometry, options);
   return Object.freeze({ id, geometry, attributes });
 }
@@ -223,6 +254,12 @@ export function inspectSpatialFeatures(
 ): SpatialFeatureIntegrityResult {
   const maxFeatures = positiveBudget(options.maxFeatures, DEFAULT_MAX_FEATURES, "maxFeatures");
   const maxIssues = positiveBudget(options.maxIssues, DEFAULT_MAX_ISSUES, "maxIssues");
+  const maxIdLength = positiveBudget(options.maxIdLength, DEFAULT_MAX_ID_LENGTH, "maxIdLength");
+  const maxTotalAttributeBytes = positiveBudget(
+    options.maxTotalAttributeBytes,
+    DEFAULT_MAX_TOTAL_ATTRIBUTE_BYTES,
+    "maxTotalAttributeBytes",
+  );
   if (input.length > maxFeatures) {
     throw new RangeError("feature collection exceeds configured budget");
   }
@@ -233,13 +270,14 @@ export function inspectSpatialFeatures(
   let rejectedCount = 0;
   let duplicateCount = 0;
   let projectedCount = 0;
+  let estimatedAttributeBytes = 0;
 
   for (let index = 0; index < input.length; index += 1) {
     throwIfAborted(options.signal);
     const candidate = input[index]!;
     let normalizedId: string | number | undefined;
     try {
-      normalizedId = normalizeId(candidate.id);
+      normalizedId = normalizeId(candidate.id, maxIdLength);
       const key = identityKey(normalizedId);
       if (seen.has(key)) {
         duplicateCount += 1;
@@ -263,7 +301,12 @@ export function inspectSpatialFeatures(
 
       const normalized = normalizeFeature(candidate, options);
       const aligned = alignFeatureSpatialReference(normalized, options);
+      const featureAttributeBytes = estimateAttributesBytes(aligned.feature.attributes);
+      if (estimatedAttributeBytes + featureAttributeBytes > maxTotalAttributeBytes) {
+        throw new RangeError("feature collection exceeds attribute byte budget");
+      }
       features.push(aligned.feature);
+      estimatedAttributeBytes += featureAttributeBytes;
       if (aligned.projected) projectedCount += 1;
     } catch (error) {
       const mismatch = error instanceof TypeError && error.message === "spatial-reference-mismatch";
@@ -291,6 +334,7 @@ export function inspectSpatialFeatures(
     rejectedCount,
     duplicateCount,
     projectedCount,
+    estimatedAttributeBytes,
   });
 }
 
