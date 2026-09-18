@@ -35,7 +35,7 @@ test('policy exposes deterministic default layer order', () => {
   assert.deepEqual(policy.externalDomains, ['core']);
   assert.deepEqual(policy.adapterExternalDomains, ['business', 'store', 'core']);
   assert.equal(policy.tiers.errors, 0);
-  assert.equal(policy.tiers.network, 1);
+  assert.equal(policy.tiers.network, 0);
   assert.equal(policy.tiers.http, 2);
   assert.equal(policy.tiers.runtime, 3);
   assert.equal(policy.tiers.bootstrap, 4);
@@ -52,6 +52,17 @@ test('runtime may depend on http, cache and errors', async () => {
     'Webclient.app/src/platform/http/client.ts': 'export const http = 1;',
     'Webclient.app/src/platform/cache/cache.ts': 'export const cache = 1;',
     'Webclient.app/src/platform/errors/error.ts': 'export class AppError extends Error {}',
+  }, async (root) => {
+    const report = await auditPlatformBoundaries(root);
+    assert.equal(report.summary.passed, true);
+    assert.ok(!codes(report).includes('platform-layer-inversion'));
+  });
+});
+
+test('runtime config may depend on pure endpoint network policy foundation', async () => {
+  await withFixture({
+    'Webclient.app/src/platform/config/runtimeConfig.ts': "import { normalize } from '../network/endpointPolicy'; export { normalize };",
+    'Webclient.app/src/platform/network/endpointPolicy.ts': 'export const normalize = (value) => value;',
   }, async (root) => {
     const report = await auditPlatformBoundaries(root);
     assert.equal(report.summary.passed, true);
@@ -300,7 +311,7 @@ test('markdown exposes gate, order, matrix and incoming dependencies', async () 
     const markdown = formatPlatformBoundaryMarkdown(report);
     assert.match(markdown, /Platform Boundary Audit/);
     assert.match(markdown, /Gate: \*\*PASS\*\*/);
-    assert.match(markdown, /errors\/config/);
+    assert.match(markdown, /errors\/config\/network/);
     assert.match(markdown, /Platform dependency matrix/);
     assert.match(markdown, /Incoming application dependencies/);
     assert.match(markdown, /runtime -> http/);
