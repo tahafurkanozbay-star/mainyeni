@@ -19,7 +19,7 @@ export const ADDRESS_LEVELS = Object.freeze({
     Building: "building",
     Door: "door",
     Address: "address"
-});
+} as const);
 
 export const ADDRESS_LEVEL_ORDER = Object.freeze([
     ADDRESS_LEVELS.District,
@@ -34,10 +34,131 @@ export const DEFAULT_ADDRESS_SEARCH_LIMIT = 25;
 export const MAX_ADDRESS_SEARCH_LIMIT = 250;
 export const EARTH_RADIUS_METERS = 6371008.8;
 
-const isNil = value => value === null || value === undefined;
-const unique = values => Array.from(new Set(values.filter(Boolean)));
+export type AddressLevel = (typeof ADDRESS_LEVELS)[keyof typeof ADDRESS_LEVELS];
 
-export const normalizeAddressToken = value => normalizeSearchText(value)
+export interface Coordinates {
+    longitude: number;
+    latitude: number;
+}
+
+export interface BoundingBox {
+    minLatitude: number;
+    maxLatitude: number;
+    minLongitude: number;
+    maxLongitude: number;
+}
+
+export interface AddressLike extends Record<string, unknown> {
+    level?: unknown;
+    addressLevel?: unknown;
+    type?: unknown;
+    category?: unknown;
+    door?: unknown;
+    kapino?: unknown;
+    building?: unknown;
+    bina?: unknown;
+    street?: unknown;
+    cadde?: unknown;
+    sokak?: unknown;
+    neighborhood?: unknown;
+    mahalle?: unknown;
+    district?: unknown;
+    ilce?: unknown;
+    title?: unknown;
+    address?: unknown;
+    coordinates?: unknown;
+    attr?: AddressLike;
+    fields?: Record<string, unknown>;
+    source?: unknown;
+    key?: string;
+    id?: unknown;
+}
+
+export interface AddressDocument extends AddressLike {
+    key: string;
+    fields: Record<string, unknown>;
+    level: AddressLevel;
+    canonicalAddress: string;
+    hierarchyKey: string;
+    parentKey: string | null;
+    tokens: string[];
+    normalizedDoor: string;
+    normalizedDistrict: string;
+    normalizedNeighborhood: string;
+    normalizedStreet: string;
+    coordinates?: Coordinates | null;
+}
+
+export interface AddressIndex {
+    documents: AddressDocument[];
+    byKey: Map<string, AddressDocument>;
+    byId: Map<unknown, AddressDocument>;
+    byLevel: Map<string, Set<number>>;
+    byDistrict: Map<string, Set<number>>;
+    byNeighborhood: Map<string, Set<number>>;
+    byStreet: Map<string, Set<number>>;
+    byToken: Map<string, Set<number>>;
+    byParent: Map<string, Set<number>>;
+    diagnostics: Record<string, unknown> & { conflictingIds?: unknown[] };
+    drift: unknown;
+}
+
+export interface AddressSearchOptionsInput {
+    offset?: unknown;
+    limit?: unknown;
+    level?: unknown;
+    district?: unknown;
+    neighborhood?: unknown;
+    street?: unknown;
+    center?: unknown;
+    radiusMeters?: unknown;
+    minScore?: unknown;
+    dedupe?: boolean;
+}
+
+export interface NormalizedAddressSearchOptions {
+    offset: number;
+    limit: number;
+    level: AddressLevel | null;
+    district: string;
+    neighborhood: string;
+    street: string;
+    center: Coordinates | null;
+    radiusMeters: number;
+    minScore: number;
+}
+
+export interface AddressSearchHit {
+    document: AddressDocument;
+    score: number;
+    distanceMeters: number | null;
+}
+
+export interface AddressHierarchyIssue {
+    code: string;
+    severity: "warning" | "error";
+    key?: string;
+    id?: unknown;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+
+const normalizeFiniteNumberValue = (value: unknown, fallback: number | null): number | null =>
+    normalizeFiniteNumber(value as never, fallback as never) as number | null;
+
+const normalizeIntegerValue = (
+    value: unknown,
+    options: Readonly<{ min?: number; max?: number; fallback: number | null }>
+): number | null => normalizeInteger(value as never, options as never) as number | null;
+
+const normalizeCoordinatesValue = (value: unknown): Coordinates | null =>
+    normalizeCoordinates(value as never) as Coordinates | null;
+
+const isNil = (value: unknown): value is null | undefined => value === null || value === undefined;
+const unique = <T>(values: readonly T[]): T[] => Array.from(new Set(values.filter(value => Boolean(value))));
+
+export const normalizeAddressToken = (value: unknown): string => normalizeSearchText(value)
     .replace(/[.,;:(){}]/g, " ")
     .split("[").join(" ")
     .split("]").join(" ")
@@ -46,22 +167,22 @@ export const normalizeAddressToken = value => normalizeSearchText(value)
     .replace(/\s+/g, " ")
     .trim();
 
-export const tokenizeAddress = value => unique(
+export const tokenizeAddress = (value: unknown): string[] => unique(
     normalizeAddressToken(value).split(" ").map(token => token.trim()).filter(Boolean)
 );
 
-export const normalizeDoorNumber = value => normalizeText(value)
+export const normalizeDoorNumber = (value: unknown): string => normalizeText(value)
     .replace(/\s+/g, "")
     .toLocaleUpperCase("tr-TR");
 
-export const normalizePostalCode = value => {
+export const normalizePostalCode = (value: unknown): string => {
     const digits = normalizeText(value).replace(/\D/g, "");
     return digits.length === 5 ? digits : "";
 };
 
-export const normalizeAddressLevel = value => {
+export const normalizeAddressLevel = (value: unknown): AddressLevel | null => {
     const key = normalizeCategoryKey(value);
-    const aliases = {
+    const aliases: Readonly<Record<string, AddressLevel>> = {
         ilce: ADDRESS_LEVELS.District,
         district: ADDRESS_LEVELS.District,
         mahalle: ADDRESS_LEVELS.Neighborhood,
@@ -81,16 +202,16 @@ export const normalizeAddressLevel = value => {
         address: ADDRESS_LEVELS.Address,
         adres: ADDRESS_LEVELS.Address
     };
-    return aliases[key] || null;
+    return aliases[key] ?? null;
 };
 
-const inferQueryLevel = query => {
+const inferQueryLevel = (query: unknown): AddressLevel | null => {
     const tokens = tokenizeAddress(query);
     const streetDesignators = new Set(["cadde", "caddesi", "sokak", "sokagi", "bulvar", "bulvari"]);
     return tokens.some(token => streetDesignators.has(token)) ? ADDRESS_LEVELS.Street : null;
 };
 
-export const inferAddressLevel = record => {
+export const inferAddressLevel = (record: AddressLike | null | undefined): AddressLevel => {
     const explicit = normalizeAddressLevel(
         record?.level
         ?? record?.addressLevel
@@ -109,7 +230,7 @@ export const inferAddressLevel = record => {
     return ADDRESS_LEVELS.Address;
 };
 
-export const createAddressParts = document => {
+export const createAddressParts = (document: AddressLike | null | undefined) => {
     const district = normalizeText(document?.district);
     const neighborhood = normalizeText(document?.neighborhood);
     const street = normalizeText(document?.street);
@@ -122,21 +243,21 @@ export const createAddressParts = document => {
     return { district, neighborhood, street, door, title, address, parts };
 };
 
-export const formatCanonicalAddress = document => {
+export const formatCanonicalAddress = (document: AddressLike | null | undefined): string => {
     const parts = createAddressParts(document);
     const hierarchy = [parts.street, parts.door, parts.neighborhood, parts.district].filter(Boolean);
     if (hierarchy.length) return hierarchy.join(", ");
     return parts.address || parts.title || "";
 };
 
-export const createAddressHierarchyKey = document => {
+export const createAddressHierarchyKey = (document: AddressLike | null | undefined): string => {
     const parts = createAddressParts(document);
     return [parts.district, parts.neighborhood, parts.street, parts.door]
-        .map(normalizeAddressToken)
+        .map(value => normalizeAddressToken(value))
         .join("|");
 };
 
-export const createAddressParentKey = document => {
+export const createAddressParentKey = (document: AddressLike | null | undefined): string | null => {
     const level = document?.level || inferAddressLevel(document);
     const parts = createAddressParts(document);
     if (level === ADDRESS_LEVELS.District) return null;
@@ -152,9 +273,13 @@ export const createAddressParentKey = document => {
     return null;
 };
 
-export const normalizeAddressDocument = (record, sourceIndex = 0) => {
-    const base = createSearchDocumentFromSchema(record, ADDRESS_RECORD_SCHEMA, sourceIndex);
-    const level = inferAddressLevel({ ...record, ...base.fields, attr: record?.attr });
+export const normalizeAddressDocument = (record: unknown, sourceIndex = 0): AddressDocument => {
+    const input = (isRecord(record) ? record : {}) as AddressLike;
+    const base = createSearchDocumentFromSchema(input, ADDRESS_RECORD_SCHEMA, sourceIndex) as AddressLike;
+    const baseFields = isRecord(base.fields) ? base.fields : {};
+    const levelInput: AddressLike = { ...input, ...baseFields };
+    if (input.attr) levelInput.attr = input.attr;
+    const level = inferAddressLevel(levelInput);
     const canonicalAddress = formatCanonicalAddress(base);
     const tokens = unique([
         ...tokenizeAddress(base.title),
@@ -167,6 +292,8 @@ export const normalizeAddressDocument = (record, sourceIndex = 0) => {
     ]);
     return {
         ...base,
+        fields: baseFields,
+        key: String(base.key ?? ""),
         level,
         canonicalAddress,
         hierarchyKey: createAddressHierarchyKey(base),
@@ -176,22 +303,22 @@ export const normalizeAddressDocument = (record, sourceIndex = 0) => {
         normalizedDistrict: normalizeAddressToken(base.district),
         normalizedNeighborhood: normalizeAddressToken(base.neighborhood),
         normalizedStreet: normalizeAddressToken(base.street)
-    };
+    } as AddressDocument;
 };
 
-const parseCoordinateTokens = tokens => {
+const parseCoordinateTokens = (tokens: readonly unknown[]): Coordinates | null => {
     if (!Array.isArray(tokens) || tokens.length < 2) return null;
-    const first = normalizeFiniteNumber(tokens[0], null);
-    const second = normalizeFiniteNumber(tokens[1], null);
+    const first = normalizeFiniteNumberValue(tokens[0], null);
+    const second = normalizeFiniteNumberValue(tokens[1], null);
     if (first === null || second === null) return null;
-    const longitudeLatitude = normalizeCoordinates({ longitude: first, latitude: second });
+    const longitudeLatitude = normalizeCoordinatesValue({ longitude: first, latitude: second });
     if (longitudeLatitude) return longitudeLatitude;
-    return normalizeCoordinates({ longitude: second, latitude: first });
+    return normalizeCoordinatesValue({ longitude: second, latitude: first });
 };
 
-export const parseCoordinatePair = value => {
+export const parseCoordinatePair = (value: unknown): Coordinates | null => {
     if (Array.isArray(value)) return parseCoordinateTokens(value);
-    if (value && typeof value === "object") return normalizeCoordinates(value);
+    if (value && typeof value === "object") return normalizeCoordinatesValue(value);
     if (typeof value !== "string") return null;
 
     const text = normalizeText(value);
@@ -214,9 +341,9 @@ export const parseCoordinatePair = value => {
     return null;
 };
 
-export const toRadians = degrees => degrees * Math.PI / 180;
+export const toRadians = (degrees: number): number => degrees * Math.PI / 180;
 
-export const haversineDistanceMeters = (left, right) => {
+export const haversineDistanceMeters = (left: unknown, right: unknown): number | null => {
     const a = parseCoordinatePair(left);
     const b = parseCoordinatePair(right);
     if (!a || !b) return null;
@@ -230,9 +357,9 @@ export const haversineDistanceMeters = (left, right) => {
     return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-export const createBoundingBox = (center, radiusMeters) => {
+export const createBoundingBox = (center: unknown, radiusMeters: unknown): BoundingBox | null => {
     const point = parseCoordinatePair(center);
-    const radius = normalizeFiniteNumber(radiusMeters, null);
+    const radius = normalizeFiniteNumberValue(radiusMeters, null);
     if (!point || radius === null || radius < 0) return null;
     const latitudeDelta = radius / 111320;
     const longitudeScale = Math.max(Math.cos(toRadians(point.latitude)), 0.000001);
@@ -245,7 +372,7 @@ export const createBoundingBox = (center, radiusMeters) => {
     };
 };
 
-export const isInsideBoundingBox = (coordinates, bounds) => {
+export const isInsideBoundingBox = (coordinates: unknown, bounds: BoundingBox | null | undefined): boolean => {
     const point = parseCoordinatePair(coordinates);
     if (!point || !bounds) return false;
     return point.latitude >= bounds.minLatitude
@@ -254,34 +381,40 @@ export const isInsideBoundingBox = (coordinates, bounds) => {
         && point.longitude <= bounds.maxLongitude;
 };
 
-const addToMapSet = (map, key, value) => {
+const addToMapSet = (map: Map<string, Set<number>>, key: string | null | undefined, value: number): void => {
     if (!key) return;
-    if (!map.has(key)) map.set(key, new Set());
-    map.get(key).add(value);
+    let values = map.get(key);
+    if (!values) {
+        values = new Set<number>();
+        map.set(key, values);
+    }
+    values.add(value);
 };
 
-export const createAddressIndex = (records, options = {}) => {
+export const createAddressIndex = (records: unknown, options: AddressSearchOptionsInput = {}): AddressIndex => {
     const normalized = normalizeRecordCollection(records, ADDRESS_RECORD_SCHEMA, {
         dedupe: options.dedupe !== false,
         keepInvalid: true
     });
-    const documents = normalized.documents.map((document, index) => normalizeAddressDocument(document.source, index));
-    const byKey = new Map();
-    const byId = new Map();
-    const byLevel = new Map();
-    const byDistrict = new Map();
-    const byNeighborhood = new Map();
-    const byStreet = new Map();
-    const byToken = new Map();
-    const byParent = new Map();
-    const duplicateKeys = [];
-    const conflictingIds = [];
+    const documents = (normalized.documents as Array<{ source?: unknown }>)
+        .map((document, index) => normalizeAddressDocument(document.source, index));
+    const byKey = new Map<string, AddressDocument>();
+    const byId = new Map<unknown, AddressDocument>();
+    const byLevel = new Map<string, Set<number>>();
+    const byDistrict = new Map<string, Set<number>>();
+    const byNeighborhood = new Map<string, Set<number>>();
+    const byStreet = new Map<string, Set<number>>();
+    const byToken = new Map<string, Set<number>>();
+    const byParent = new Map<string, Set<number>>();
+    const duplicateKeys: string[] = [];
+    const conflictingIds: unknown[] = [];
 
     documents.forEach((document, index) => {
         if (byKey.has(document.key)) duplicateKeys.push(document.key);
         byKey.set(document.key, document);
         if (document.id) {
-            if (byId.has(document.id) && byId.get(document.id).key !== document.key) conflictingIds.push(document.id);
+            const existing = byId.get(document.id);
+            if (existing && existing.key !== document.key) conflictingIds.push(document.id);
             else byId.set(document.id, document);
         }
         addToMapSet(byLevel, document.level, index);
@@ -316,7 +449,10 @@ export const createAddressIndex = (records, options = {}) => {
     };
 };
 
-export const getAddressChildren = (index, documentOrParentKey) => {
+export const getAddressChildren = (
+    index: AddressIndex | null | undefined,
+    documentOrParentKey: AddressDocument | string | null | undefined
+): AddressDocument[] => {
     if (!index?.documents || !index?.byParent) return [];
     const parentKey = typeof documentOrParentKey === "string"
         ? documentOrParentKey
@@ -334,33 +470,49 @@ export const getAddressChildren = (index, documentOrParentKey) => {
         })();
     if (!parentKey) return [];
     const positions = index.byParent.get(parentKey);
-    return positions ? Array.from(positions).map(position => index.documents[position]).filter(Boolean) : [];
+    return positions
+        ? Array.from(positions)
+            .map(position => index.documents[position])
+            .filter((document): document is AddressDocument => Boolean(document))
+        : [];
 };
 
-export const getAddressAncestors = (index, document) => {
+export const getAddressAncestors = (
+    index: AddressIndex | null | undefined,
+    document: AddressDocument | null | undefined
+): AddressDocument[] => {
     if (!index?.documents || !document) return [];
-    const result = [];
+    const result: AddressDocument[] = [];
     if (document.normalizedDistrict) {
         const position = Array.from(index.byDistrict.get(document.normalizedDistrict) || [])
             .find(candidate => index.documents[candidate]?.level === ADDRESS_LEVELS.District);
-        if (!isNil(position)) result.push(index.documents[position]);
+        if (!isNil(position)) {
+            const candidate = index.documents[position];
+            if (candidate) result.push(candidate);
+        }
     }
     if (document.normalizedNeighborhood) {
         const key = `${document.normalizedDistrict}|${document.normalizedNeighborhood}`;
         const position = Array.from(index.byNeighborhood.get(key) || [])
             .find(candidate => index.documents[candidate]?.level === ADDRESS_LEVELS.Neighborhood);
-        if (!isNil(position)) result.push(index.documents[position]);
+        if (!isNil(position)) {
+            const candidate = index.documents[position];
+            if (candidate) result.push(candidate);
+        }
     }
     if (document.normalizedStreet) {
         const key = `${document.normalizedDistrict}|${document.normalizedNeighborhood}|${document.normalizedStreet}`;
         const position = Array.from(index.byStreet.get(key) || [])
             .find(candidate => index.documents[candidate]?.level === ADDRESS_LEVELS.Street);
-        if (!isNil(position)) result.push(index.documents[position]);
+        if (!isNil(position)) {
+            const candidate = index.documents[position];
+            if (candidate) result.push(candidate);
+        }
     }
     return result;
 };
 
-const scoreToken = (candidate, queryToken) => {
+const scoreToken = (candidate: string, queryToken: string): number => {
     if (!candidate || !queryToken) return 0;
     if (candidate === queryToken) return 100;
     if (candidate.startsWith(queryToken)) return 70;
@@ -369,7 +521,7 @@ const scoreToken = (candidate, queryToken) => {
     return 0;
 };
 
-export const scoreAddressDocument = (document, query) => {
+export const scoreAddressDocument = (document: AddressDocument, query: unknown): number => {
     const queryText = normalizeAddressToken(query);
     if (!queryText) return 0;
     const queryTokens = tokenizeAddress(queryText);
@@ -401,12 +553,14 @@ export const scoreAddressDocument = (document, query) => {
     return exactBonus + prefixBonus + tokenScore + completeness + levelBonus;
 };
 
-export const normalizeAddressSearchOptions = options => {
-    const rawLimit = normalizeFiniteNumber(options?.limit, null);
+export const normalizeAddressSearchOptions = (
+    options: AddressSearchOptionsInput | null | undefined = {}
+): NormalizedAddressSearchOptions => {
+    const rawLimit = normalizeFiniteNumberValue(options?.limit, null);
     const limit = rawLimit === null || rawLimit <= 0
         ? DEFAULT_ADDRESS_SEARCH_LIMIT
         : Math.min(MAX_ADDRESS_SEARCH_LIMIT, Math.max(1, Math.trunc(rawLimit)));
-    const rawOffset = normalizeFiniteNumber(options?.offset, 0);
+    const rawOffset = normalizeFiniteNumberValue(options?.offset, 0);
     return {
         offset: Math.max(0, Math.trunc(rawOffset || 0)),
         limit,
@@ -415,17 +569,18 @@ export const normalizeAddressSearchOptions = options => {
         neighborhood: normalizeAddressToken(options?.neighborhood),
         street: normalizeAddressToken(options?.street),
         center: parseCoordinatePair(options?.center),
-        radiusMeters: Math.max(0, normalizeFiniteNumber(options?.radiusMeters, 0) || 0),
-        minScore: Math.max(0, normalizeFiniteNumber(options?.minScore, 1) || 0)
+        radiusMeters: Math.max(0, normalizeFiniteNumberValue(options?.radiusMeters, 0) ?? 0),
+        minScore: Math.max(0, normalizeFiniteNumberValue(options?.minScore, 1) ?? 0)
     };
 };
 
-export const filterAddressDocuments = (documents, options = {}) => {
+export const filterAddressDocuments = (documents: unknown, options: AddressSearchOptionsInput = {}): AddressDocument[] => {
     const normalized = normalizeAddressSearchOptions(options);
     const bounds = normalized.center && normalized.radiusMeters > 0
         ? createBoundingBox(normalized.center, normalized.radiusMeters)
         : null;
-    return (Array.isArray(documents) ? documents : []).filter(document => {
+    const sourceDocuments = (Array.isArray(documents) ? documents : []) as AddressDocument[];
+    return sourceDocuments.filter(document => {
         if (normalized.level && document.level !== normalized.level) return false;
         if (normalized.district && document.normalizedDistrict !== normalized.district) return false;
         if (normalized.neighborhood && document.normalizedNeighborhood !== normalized.neighborhood) return false;
@@ -439,7 +594,11 @@ export const filterAddressDocuments = (documents, options = {}) => {
     });
 };
 
-export const searchAddressIndex = (index, query, options = {}) => {
+export const searchAddressIndex = (
+    index: AddressIndex | null | undefined,
+    query: unknown,
+    options: AddressSearchOptionsInput = {}
+) => {
     const queryText = normalizeAddressToken(query);
     const inferredLevel = options?.level ? null : inferQueryLevel(queryText);
     const normalizedOptions = normalizeAddressSearchOptions({
@@ -447,7 +606,7 @@ export const searchAddressIndex = (index, query, options = {}) => {
         level: options?.level || inferredLevel
     });
     const filtered = filterAddressDocuments(index?.documents, normalizedOptions);
-    const scored = filtered
+    const scored: AddressSearchHit[] = filtered
         .map(document => ({
             document,
             score: queryText ? scoreAddressDocument(document, queryText) : 1,
@@ -481,15 +640,19 @@ export const searchAddressIndex = (index, query, options = {}) => {
     };
 };
 
-export const findNearestAddresses = (index, center, options = {}) => {
+export const findNearestAddresses = (
+    index: AddressIndex | null | undefined,
+    center: unknown,
+    options: AddressSearchOptionsInput = {}
+) => {
     const point = parseCoordinatePair(center);
     if (!point) return [];
-    const limit = normalizeInteger(options.limit, {
+    const limit = normalizeIntegerValue(options.limit, {
         min: 1,
         max: MAX_ADDRESS_SEARCH_LIMIT,
         fallback: DEFAULT_ADDRESS_SEARCH_LIMIT
-    });
-    const radiusMeters = Math.max(0, normalizeFiniteNumber(options.radiusMeters, 5000) || 5000);
+    }) ?? DEFAULT_ADDRESS_SEARCH_LIMIT;
+    const radiusMeters = Math.max(0, normalizeFiniteNumberValue(options.radiusMeters, 5000) ?? 5000);
     const bounds = createBoundingBox(point, radiusMeters);
     return (index?.documents || [])
         .filter(document => document.coordinates && isInsideBoundingBox(document.coordinates, bounds))
@@ -497,13 +660,14 @@ export const findNearestAddresses = (index, center, options = {}) => {
             document,
             distanceMeters: haversineDistanceMeters(point, document.coordinates)
         }))
-        .filter(item => item.distanceMeters !== null && item.distanceMeters <= radiusMeters)
+        .filter((item): item is { document: AddressDocument; distanceMeters: number } =>
+            item.distanceMeters !== null && item.distanceMeters <= radiusMeters)
         .sort((left, right) => left.distanceMeters - right.distanceMeters)
         .slice(0, limit);
 };
 
-export const detectAddressHierarchyIssues = index => {
-    const issues = [];
+export const detectAddressHierarchyIssues = (index: AddressIndex | null | undefined): AddressHierarchyIssue[] => {
+    const issues: AddressHierarchyIssue[] = [];
     (index?.documents || []).forEach(document => {
         if (document.level === ADDRESS_LEVELS.Neighborhood && !document.normalizedDistrict) {
             issues.push({ code: "neighborhood-without-district", key: document.key, severity: "warning" });
@@ -524,9 +688,9 @@ export const detectAddressHierarchyIssues = index => {
     return issues;
 };
 
-export const createAddressQualityReport = index => {
+export const createAddressQualityReport = (index: AddressIndex | null | undefined) => {
     const documents = index?.documents || [];
-    const levelCounts = ADDRESS_LEVEL_ORDER.reduce((result, level) => ({
+    const levelCounts = ADDRESS_LEVEL_ORDER.reduce<Partial<Record<AddressLevel, number>>>((result, level) => ({
         ...result,
         [level]: documents.filter(document => document.level === level).length
     }), {});
