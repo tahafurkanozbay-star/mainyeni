@@ -71,7 +71,8 @@ Listeleme `objectid` üzerinden artan sırada keyset pagination kullanabilir.
 Kaynak DDL `objectid` için UNIQUE constraint göstermediği için cursor özelliği
 tracked config'te **fail-closed kapalıdır**. Önce
 `database/kent-rehberi-api.sql` içindeki duplicate preflight çalıştırılmalı,
-sorgu sıfır satır döndürmeli ve tercihen unique index oluşturulmalıdır. Bundan
+sorgu sıfır satır döndürmeli ve cursor açılmadan önce ObjectID benzersizliğini
+kalıcı olarak garanti eden unique index/constraint oluşturulmalıdır. Bundan
 sonra deployment config'inde:
 
 `KentRehberiData__ObjectIdCursorEnabled=true`
