@@ -153,6 +153,7 @@ test('domains already migrated to TypeScript retain zero JavaScript budgets', as
     path.join(ROOT, 'tools', 'platform-language-baseline.json'),
     'utf8',
   ));
+  assert.equal(baseline.domains?.['web-root'], 0);
   assert.equal(baseline.domains?.core, 0);
   assert.equal(baseline.domains?.store, 0);
   assert.equal(baseline.domains?.['data-search'], 0);
@@ -194,6 +195,25 @@ test('canonical typed modules contain no CommonJS export or require boundary', a
     assert.doesNotMatch(source, /\brequire\s*\(/u, stem);
     assert.doesNotMatch(source, /\bmodule\.exports\b/u, stem);
   }
+});
+
+test('retired CRA and legacy transport dependencies cannot return', async () => {
+  const packageJson = JSON.parse(await fs.readFile(
+    path.join(ROOT, 'Webclient.app', 'package.json'),
+    'utf8',
+  ));
+  for (const dependency of ['axios', 'crypto-js', 'web-vitals']) {
+    assert.equal(packageJson.dependencies?.[dependency], undefined, dependency + ' must stay removed');
+  }
+
+  assert.equal(
+    await exists(path.join(ROOT, 'Webclient.app', 'src', 'reportWebVitals.js')),
+    false,
+    'unused CRA reportWebVitals entry must stay removed',
+  );
+
+  const vite = await fs.readFile(path.join(ROOT, 'Webclient.app', 'vite.config.ts'), 'utf8');
+  assert.doesNotMatch(vite, /['"]crypto-js['"]/u);
 });
 
 test('module graph, language ratchet, boundary and browser audits are present', async () => {
