@@ -1,5 +1,7 @@
+using Api.Core.Platform;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System;
 using System.Linq;
 
@@ -28,6 +30,12 @@ public static class KentRehberiServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton<KentRehberiConnectionFactory>();
         services.AddScoped<IKentRehberiRepository, KentRehberiRepository>();
+
+        services.AddHealthChecks()
+            .AddCheck<KentRehberiHealthCheck>(
+                "kent-rehberi-data",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: new[] { ApiPlatformDefaults.ReadinessTag });
 
         return services;
     }
