@@ -391,6 +391,10 @@
   gap: var(--exp-space-1);
 }
 
+.experience-pagination__page {
+  display: contents;
+}
+
 .experience-pagination__button {
   display: inline-grid;
   place-items: center;
