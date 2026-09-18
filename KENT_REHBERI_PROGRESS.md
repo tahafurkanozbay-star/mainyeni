@@ -226,3 +226,19 @@
 - LIVE DB LIMITATION: private PostgreSQL is not reachable from this execution environment; no claim is made for live row retrieval, production GeoJSON sample or EXPLAIN/index-plan verification. Those remain deployment smoke steps.
 - MERGE DURUMU: DRAFT / NOT MERGED. PR is ~3k additions and remains below the repository's ~4k meaningful-additions target/gate; no filler is added merely to satisfy line count.
 - SONRAKİ GÖREV: after this progress append, require fresh exact-head CI again; then re-check current main/behind=0/mergeable. For live rollout, set only server-side `ConnectionStrings__KentRehberi`, apply DBA runbook, verify `/health/ready`, GeoJSON, bbox, nearby and production EXPLAIN plans.
+
+## Deep GIS / whole-code spatial query modernization — 2026-09-18 19:50 TRT
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; spatial reference, feature integrity, capability-aware query contracts, bounded query execution, immutable snapshots and 2B/3B query parity.
+- BASE MAIN: `5800c210a0cd869583450224c5331dcf2888b3ac` (Data/PostGIS merge included before this branch).
+- BRANCH / PR: `agent/gis-wholecode-20260918-1949-5800c21`, PR #152 `feat(gis): modernize whole-code spatial query runtime`.
+- HEAD before this progress commit: `8894b0574f2abaa3f45e492d9bc6e4a25294499d`; base...head = 4,107 additions / 1 deletion / 19 files; ahead=2 / behind=0 with merge-base equal to exact base.
+- LIFECYCLE: stale #141 and #149 were closed/superseded after main advanced. #149 GIS file set was compared against the Data merge and overlap was zero; only still-missing file deltas were reapplied on fresh current main, not the stale commit chain.
+- DİL / TOOLCHAIN: active gis-engine production runtime has no remaining .js source; strict TypeScript remains the correct production language on React 19 + Vite 8 + TypeScript 7 + @arcgis/core ESM + Node 24. Remaining gis-engine .js files are legacy tests and should be migrated incrementally rather than forcing a risky rewrite.
+- ÖNEMLİ ÖZELLİKLER: bounded SR normalization/projection; feature identity/attribute integrity; capability-aware page/feature/byte query budgets; verified metadata-backed field/order/statistics/distinct query compiler; immutable feature snapshots/deltas; SR-aware 2B/3B view-query fingerprints; typed query session composition; bounded prioritized multi-layer batch execution; 2B/3B query parity orchestration.
+- TEST / BUILD / CI DURUMU: new post-progress exact-head workflows are mandatory. No PASS is claimed until Platform Architecture Audit, Webclient Quality and Release QA all complete successfully on the final SHA.
+- NETWORK DEĞİŞİKLİKLERİ: none. No new endpoint, WMS/WFS/WMTS, analytics, telemetry transport, CDN or remote asset.
+- GÜVENLİK / DATA INTEGRITY: no secret/token added; verified ArcGIS capability/field contracts fail closed; cardinality/byte/concurrency limits and AbortSignal cancellation bound client work; numeric/string identities remain distinct.
+- İKON EŞLEŞTİRME: unchanged; existing deterministic shared resolver remains the only icon authority.
+- PERFORMANS ETKİSİ: bounded pagination/admission, memo-compatible dedupe, immutable revisioned snapshots and shared 2B/3B query fingerprints reduce duplicate service work, uncontrolled allocations and inconsistent view queries.
+- MERGE DURUMU: DRAFT / NOT MERGED. >=4,000 additions gate is met, but merge requires final exact-head CI completed+success, mergeable=true/conflict-free, behind=0, final main refresh and security/performance/data-integrity/regression review.
+- SONRAKİ GÖREV: inspect final-head CI, fix real strict TS/lint/Vitest/build failures without weakening gates, run second verification, review snapshot atomicity/query cancellation/cache invalidation, then mark ready and squash-merge only if every gate remains green.
