@@ -296,7 +296,7 @@ export const createHttpResponseError = async (
   let body: unknown = null;
   try {
     body = await parseResponseBody(response, { ...options, allowInvalidJson: true });
-  } catch (_error) {
+  } catch {
     body = null;
   }
 
