@@ -336,6 +336,6 @@ export function spatialFeatureCollectionExtent(
 
   return Object.freeze({
     extent: Object.freeze({ xmin, ymin, xmax, ymax }),
-    spatialReference: normalizeSpatialReference(target, options),
+    spatialReference: target,
   });
 }
