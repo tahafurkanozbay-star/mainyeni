@@ -232,6 +232,7 @@ export interface PerformanceRuntimeDependencies extends ResourceTimingDependenci
 export interface PerformanceLifecycleDependencies {
   readonly documentRef?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'> | null;
   readonly windowRef?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
+  readonly onCapture?: ((snapshot: PerformanceRuntimeSnapshot) => void) | undefined;
 }
 
 export type DeepPartial<T> = {
