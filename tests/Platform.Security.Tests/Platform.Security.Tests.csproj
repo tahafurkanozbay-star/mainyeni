@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Api.Core\Api.Core.csproj" />
+    <ProjectReference Include="..\..\Api.User\Api.User.csproj" />
     <ProjectReference Include="..\..\Business\Business.csproj" />
     <ProjectReference Include="..\..\Toolbox\Toolbox.csproj" />
   </ItemGroup>
