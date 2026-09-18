@@ -230,7 +230,9 @@ describe('managed window focus lifecycle', () => {
     const lifecycle = createManagedWindowFocusLifecycle();
     lifecycle.open({ root });
     expect(frames.pending()).toBe(1);
-    expect(lifecycle.close()).toBe(true);
+    // Focus never entered this non-modal window, so close must cancel pending
+    // work without stealing focus from the already-correct opener.
+    expect(lifecycle.close()).toBe(false);
     expect(frames.pending()).toBe(0);
     frames.flush();
     expect(document.activeElement).toBe(opener);
