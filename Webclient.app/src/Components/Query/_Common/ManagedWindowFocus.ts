@@ -29,10 +29,12 @@ const DEFAULT_FOCUS_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])'
 ].join(',');
 
-const hasInertAncestor = (element: HTMLElement): boolean => {
+const hasUnavailableAncestor = (element: HTMLElement): boolean => {
   let current: HTMLElement | null = element;
   while (current) {
+    if (current.hidden || current.hasAttribute('hidden')) return true;
     if (current.hasAttribute('inert')) return true;
+    if (current.getAttribute('aria-hidden') === 'true') return true;
     current = current.parentElement;
   }
   return false;
@@ -40,11 +42,9 @@ const hasInertAncestor = (element: HTMLElement): boolean => {
 
 const isUnavailable = (element: HTMLElement): boolean => {
   if (!element.isConnected) return true;
-  if (element.hidden || element.hasAttribute('hidden')) return true;
-  if (element.getAttribute('aria-hidden') === 'true') return true;
+  if (hasUnavailableAncestor(element)) return true;
   if (element.getAttribute('aria-disabled') === 'true') return true;
   if (element.hasAttribute('disabled')) return true;
-  if (hasInertAncestor(element)) return true;
   return false;
 };
 
@@ -134,7 +134,9 @@ export function createManagedWindowFocusLifecycle(documentRef: Document = docume
     open: options => {
       cancelPending();
       if (!opened) {
-        opener = options.opener ?? captureManagedWindowOpener(documentRef);
+        opener = Object.prototype.hasOwnProperty.call(options, 'opener')
+          ? options.opener ?? null
+          : captureManagedWindowOpener(documentRef);
         restorePolicy = options.restorePolicy ?? 'if-focus-within';
       }
       root = options.root;
