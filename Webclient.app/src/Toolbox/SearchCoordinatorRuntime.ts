@@ -325,7 +325,7 @@ export const createCoordinatorResultCache = (options: CoordinatorCacheOptions = 
         fallback: DEFAULT_COORDINATOR_RESULT_TTL_MS
     });
     const entries = new Map<string, { value: CoordinatorResponse; expiresAt: number }>();
-    const stats: CoordinatorStats = { hits: 0, misses: 0, sets: 0, evictions: 0, expirations: 0 };
+    const stats = { hits: 0, misses: 0, sets: 0, evictions: 0, expirations: 0 };
 
     const removeExpired = (now: number): void => {
         Array.from(entries.entries()).forEach(([key, entry]) => {
@@ -434,8 +434,9 @@ export const createAddressSearchResponse = (
     index: AddressIndex,
     request: NormalizedCoordinatorRequest
 ): CoordinatorResponse => {
+    const addressOptions = isObject(request.addressOptions) ? request.addressOptions : undefined;
     const response = searchAddressIndex(index, request.query, {
-        ...request.addressOptions,
+        ...addressOptions,
         offset: request.offset,
         limit: request.limit,
         district: request.district,
@@ -535,7 +536,7 @@ export const createSearchCoordinator = (options: CoordinatorOptions = {}) => {
     const registry = options.registry
         || createSearchDatasetRegistry(options.registryOptions as never) as SearchDatasetRegistryLike;
     const resultCache = options.resultCache || createCoordinatorResultCache(options.cacheOptions);
-    const stats = {
+    const stats: CoordinatorStats = {
         searches: 0,
         textSearches: 0,
         addressSearches: 0,
@@ -746,10 +747,13 @@ export const createSearchCoordinator = (options: CoordinatorOptions = {}) => {
         },
 
         diagnostics(readOptions: UnknownRecord = {}) {
+            const now = typeof readOptions.now === "number" && Number.isFinite(readOptions.now)
+                ? readOptions.now
+                : undefined;
             return {
                 ...stats,
                 registry: registry.diagnostics(readOptions),
-                resultCache: resultCache.diagnostics(readOptions.now)
+                resultCache: resultCache.diagnostics(now)
             };
         },
 
