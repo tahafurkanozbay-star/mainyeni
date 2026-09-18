@@ -46,9 +46,10 @@ export const normalizeSearchDocument = (
     source.searchText,
   ].filter(Boolean).join(' '));
   const tokens = tokenizeSearchText(searchText);
-  const sourceIndex = normalizeInteger(source.sourceIndex, {
-    fallback: index,
-  }) ?? index;
+  const sourceIndex =
+    typeof source.sourceIndex === 'number' && Number.isInteger(source.sourceIndex)
+      ? source.sourceIndex
+      : index;
 
   return {
     ...source,
