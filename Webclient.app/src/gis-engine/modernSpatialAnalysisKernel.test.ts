@@ -109,6 +109,20 @@ describe('modernSpatialAnalysisKernel', () => {
     expect(kernel.classifyValue(3.1, classification)).toBe(3);
   });
 
+  it('exposes categorical classification through the unified kernel contract', () => {
+    const kernel = createModernSpatialAnalysisKernel(configuration);
+    const classification = kernel.classifyCategories([
+      { value: null, category: 'parks' },
+      { value: null, category: 'parks' },
+      { value: null, category: 'roads' },
+      { value: null, category: 'schools' },
+    ], 2);
+    expect(classification.entries.map((entry) => entry.key)).toEqual(['string:parks', 'string:roads']);
+    expect(classification.otherCount).toBe(1);
+    expect(kernel.classifyCategory('parks', classification)).toBe(0);
+    expect(kernel.classifyCategory('schools', classification)).toBeNull();
+  });
+
   it('deduplicates submitted analysis jobs behind one kernel task', async () => {
     const kernel = createModernSpatialAnalysisKernel(configuration);
     let resolve!: (value: number) => void;

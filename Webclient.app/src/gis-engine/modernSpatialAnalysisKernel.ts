@@ -44,11 +44,15 @@ import {
   type SpatialSelectionResult,
 } from './spatialSelectionRuntime';
 import {
+  classifyCategoryValue,
   classifyNumericValue,
+  createCategoryClassification,
   createNumericClassification,
   summarizeSpatialStatistics,
+  type CategoryClassificationResult,
   type NumericClassificationMethod,
   type NumericClassificationResult,
+  type SpatialStatisticCategory,
   type SpatialStatisticObservation,
   type SpatialStatisticsBudget,
   type SpatialStatisticsOptions,
@@ -219,6 +223,28 @@ export class ModernSpatialAnalysisKernel {
   classifyValue(value: number, classification: NumericClassificationResult): number | null {
     this.#assertActive();
     return classifyNumericValue(value, classification);
+  }
+
+  classifyCategories(
+    observations: readonly SpatialStatisticObservation[],
+    maxClasses: number,
+    signal?: AbortSignal,
+  ): CategoryClassificationResult {
+    this.#assertActive();
+    return createCategoryClassification(
+      observations,
+      maxClasses,
+      this.#configuration.statistics,
+      signal ? { signal } : {},
+    );
+  }
+
+  classifyCategory(
+    value: SpatialStatisticCategory | undefined,
+    classification: CategoryClassificationResult,
+  ): number | null {
+    this.#assertActive();
+    return classifyCategoryValue(value, classification);
   }
 
   submit<T>(
