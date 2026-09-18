@@ -47,6 +47,8 @@ export interface SpatialJoinResult<TFeatureId extends SpatialJoinId = SpatialJoi
   readonly diagnostics: SpatialJoinDiagnostics;
 }
 
+type RingContainment = 'outside' | 'inside' | 'boundary';
+
 function assertPositiveInteger(value: number, name: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new RangeError(`${name} must be a positive safe integer`);
@@ -80,23 +82,28 @@ function pointOnSegment(point: SpatialJoinPoint, a: SpatialJoinPoint, b: Spatial
   return dot <= lengthSquared;
 }
 
-function pointInRing(point: SpatialJoinPoint, ring: readonly SpatialJoinPoint[]): boolean {
+function classifyPointInRing(point: SpatialJoinPoint, ring: readonly SpatialJoinPoint[]): RingContainment {
+  if (ring.length === 0) return 'outside';
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const a = ring[j]!;
     const b = ring[i]!;
-    if (pointOnSegment(point, a, b)) return true;
+    if (pointOnSegment(point, a, b)) return 'boundary';
     const intersects = (a.y > point.y) !== (b.y > point.y)
       && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
     if (intersects) inside = !inside;
   }
-  return inside;
+  return inside ? 'inside' : 'outside';
 }
 
 function pointInPolygon(point: SpatialJoinPoint, rings: readonly (readonly SpatialJoinPoint[])[]): boolean {
   let inside = false;
   for (const ring of rings) {
-    if (pointInRing(point, ring)) inside = !inside;
+    const containment = classifyPointInRing(point, ring);
+    // Polygon boundaries are inclusive. Keep this state distinct from an interior
+    // crossing so a closed ring or a hole cannot toggle a boundary point away.
+    if (containment === 'boundary') return true;
+    if (containment === 'inside') inside = !inside;
   }
   return inside;
 }
