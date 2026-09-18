@@ -248,6 +248,20 @@ export const fetchKentRehberiGeoJson = async (
   }
 };
 
+const kentRehberiFields = Object.freeze([
+  { name: 'objectid', alias: 'Kayıt No', type: 'oid' },
+  { name: 'adi', alias: 'Adı', type: 'string', length: 255 },
+  { name: 'adres', alias: 'Adres', type: 'string', length: 255 },
+  { name: 'ilce', alias: 'İlçe', type: 'string', length: 50 },
+  { name: 'mahalle', alias: 'Mahalle', type: 'string', length: 50 },
+  { name: 'x', alias: 'X', type: 'double' },
+  { name: 'y', alias: 'Y', type: 'double' },
+  { name: 'tur', alias: 'Tür', type: 'integer' },
+  { name: 'yapan', alias: 'Yapan', type: 'integer' },
+  { name: 'webSayfasi', alias: 'Web Sayfası', type: 'string', length: 255 },
+  { name: 'durakNo', alias: 'Durak No', type: 'string', length: 254 },
+]);
+
 const popupFieldInfos = Object.freeze([
   { fieldName: 'objectid', label: 'Kayıt No', visible: true },
   { fieldName: 'adi', label: 'Adı', visible: true },
@@ -278,6 +292,7 @@ export const createKentRehberiGeoJsonLayer = async (
       title: LAYER_TITLE,
       url: objectUrl,
       objectIdField: 'objectid',
+      fields: kentRehberiFields,
       popupEnabled: true,
       outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo'],
       popupTemplate: {
