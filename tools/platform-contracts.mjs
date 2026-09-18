@@ -13,6 +13,7 @@ const REQUIRED_WEB_SCRIPTS = Object.freeze([
   'quality:module-graph',
   'quality:language-ratchet',
   'quality:platform-boundaries',
+  'quality:browser-runtime',
   'lint',
   'lint:strict',
   'test:ci',
