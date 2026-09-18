@@ -57,6 +57,39 @@ describe('ManagedWindowFocus', () => {
     expect(document.activeElement).toBe(target);
   });
 
+  it('skips aria-disabled and inert candidates', () => {
+    const root = append('section', { id: 'root' });
+    const ariaDisabled = document.createElement('button');
+    ariaDisabled.setAttribute('aria-disabled', 'true');
+    const inertGroup = document.createElement('div');
+    inertGroup.setAttribute('inert', '');
+    const inertButton = document.createElement('button');
+    inertGroup.append(inertButton);
+    const available = document.createElement('button');
+    available.id = 'available';
+    root.append(ariaDisabled, inertGroup, available);
+
+    expect(focusManagedWindow({ root })).toBe(available);
+    expect(document.activeElement).toBe(available);
+  });
+
+  it('does not focus a hidden or inert window root', () => {
+    const hiddenRoot = append('section', { hidden: true });
+    hiddenRoot.append(document.createElement('button'));
+    expect(focusManagedWindow({ root: hiddenRoot })).toBeNull();
+
+    hiddenRoot.removeAttribute('hidden');
+    hiddenRoot.setAttribute('inert', '');
+    expect(focusManagedWindow({ root: hiddenRoot })).toBeNull();
+  });
+
+  it('fails safely for an invalid feature-owned focus selector', () => {
+    const root = append('section');
+    root.append(document.createElement('button'));
+    expect(() => focusManagedWindow({ root, initialFocusSelector: '[broken' })).not.toThrow();
+    expect(document.activeElement).toBe(root);
+  });
+
   it('falls back to the window root when no interactive control exists', () => {
     const root = append('section', { id: 'root' });
     const emptyState = document.createElement('p');
@@ -80,6 +113,13 @@ describe('ManagedWindowFocus', () => {
     expect(captureManagedWindowOpener()).toBe(opener);
     expect(restoreManagedWindowFocus(opener)).toBe(true);
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('does not capture an aria-disabled active element as an opener', () => {
+    const opener = append('button');
+    opener.focus();
+    opener.setAttribute('aria-disabled', 'true');
+    expect(captureManagedWindowOpener()).toBeNull();
   });
 
   it('does not restore focus to a detached opener', () => {
@@ -138,6 +178,43 @@ describe('managed window focus lifecycle', () => {
     lifecycle.open({ root });
     expect(frames.pending()).toBe(1);
     frames.flush();
+    expect(lifecycle.close()).toBe(true);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('does not steal focus back when a non-modal user moved outside the window', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button', { id: 'opener' });
+    const root = append('section', { id: 'window' });
+    const inside = document.createElement('button');
+    root.append(inside);
+    const outside = append('button', { id: 'outside' });
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root });
+    frames.flush();
+    expect(document.activeElement).toBe(inside);
+    outside.focus();
+
+    expect(lifecycle.close()).toBe(false);
+    expect(document.activeElement).toBe(outside);
+    expect(lifecycle.isOpen()).toBe(false);
+  });
+
+  it('supports explicit always-restore ownership when a caller needs it', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button', { id: 'opener' });
+    const root = append('section');
+    root.append(document.createElement('button'));
+    const outside = append('button');
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root, restorePolicy: 'always' });
+    frames.flush();
+    outside.focus();
+
     expect(lifecycle.close()).toBe(true);
     expect(document.activeElement).toBe(opener);
   });
