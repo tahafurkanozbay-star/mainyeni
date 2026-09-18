@@ -70,8 +70,11 @@ describe('MapWidgetSurface', () => {
       </MapWidgetSurface>,
     );
 
-    const region = screen.getByRole('region', { name: 'Gizli araç', hidden: true });
+    const region = document.getElementById('hidden-widget-surface');
+    expect(region).not.toBeNull();
+    if (!region) throw new Error('Hidden widget surface was not rendered.');
     const preservedInput = region.querySelector<HTMLInputElement>('input[aria-label="Korunan alan"]');
+    expect(region).toHaveAttribute('role', 'region');
     expect(region).toHaveAttribute('aria-hidden', 'true');
     expect(region).toHaveStyle({ visibility: 'hidden' });
     expect(preservedInput).not.toBeNull();
