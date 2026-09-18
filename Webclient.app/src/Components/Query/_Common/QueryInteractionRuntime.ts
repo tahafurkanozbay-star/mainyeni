@@ -157,7 +157,16 @@ export const openExternalSafely = (
   }
 
   if (!['https:', 'http:'].includes(parsed.protocol)) return false;
-  return Boolean(opener(parsed.href, '_blank', 'noopener,noreferrer'));
+
+  const openedWindow = opener(parsed.href, '_blank', 'noopener,noreferrer');
+  if (!openedWindow) return false;
+
+  try {
+    openedWindow.opener = null;
+  } catch {
+    // Browser-enforced noopener can make the property inaccessible/read-only.
+  }
+  return true;
 };
 
 export const normalizeErrorMessage = (
