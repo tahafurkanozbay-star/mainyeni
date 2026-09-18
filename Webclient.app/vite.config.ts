@@ -56,11 +56,84 @@ const manualChunk = (id: string): string | undefined => {
  * is intentionally unavailable. This middleware exists only in Vite's dev
  * server; production builds and deployed API requests are unaffected.
  */
+const localKentRehberiDemo = Object.freeze({
+  type: 'FeatureCollection',
+  features: Object.freeze([
+    {
+      type: 'Feature',
+      id: 900001,
+      geometry: { type: 'Point', coordinates: [32.8541, 39.9208] },
+      properties: {
+        objectid: 900001,
+        adi: 'Yerel Demo — Kent Rehberi 1',
+        adres: 'Kızılay / Ankara',
+        ilce: 'Çankaya',
+        mahalle: 'Kızılay',
+        x: 32.8541,
+        y: 39.9208,
+        tur: 1,
+        yapan: null,
+        webSayfasi: null,
+        durakNo: null,
+      },
+    },
+    {
+      type: 'Feature',
+      id: 900002,
+      geometry: { type: 'Point', coordinates: [32.8663, 39.9259] },
+      properties: {
+        objectid: 900002,
+        adi: 'Yerel Demo — Kent Rehberi 2',
+        adres: 'Sıhhiye / Ankara',
+        ilce: 'Çankaya',
+        mahalle: 'Korkutreis',
+        x: 32.8663,
+        y: 39.9259,
+        tur: 1,
+        yapan: null,
+        webSayfasi: null,
+        durakNo: null,
+      },
+    },
+    {
+      type: 'Feature',
+      id: 900003,
+      geometry: { type: 'Point', coordinates: [32.8329, 39.9119] },
+      properties: {
+        objectid: 900003,
+        adi: 'Yerel Demo — Kent Rehberi 3',
+        adres: 'Bahçelievler / Ankara',
+        ilce: 'Çankaya',
+        mahalle: 'Bahçelievler',
+        x: 32.8329,
+        y: 39.9119,
+        tur: 1,
+        yapan: null,
+        webSayfasi: null,
+        durakNo: null,
+      },
+    },
+  ]),
+  meta: Object.freeze({ count: 3, limit: 500, hasMore: false }),
+});
+
 const localBootstrapPreviewPlugin = (): Plugin => ({
   name: 'kent-rehberi-local-bootstrap-preview',
   configureServer(server) {
     server.middlewares.use('/api', (request, response, next) => {
       const requestUrl = new URL((request as { url?: string }).url || '/', 'https://vite.local');
+
+      const requestMethod = (request as { method?: string }).method;
+      if (requestMethod === 'GET' && requestUrl.pathname === '/kent-rehberi') {
+        response.writeHead(200, {
+          'content-type': 'application/geo+json; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-kent-rehberi-demo': 'vite-local-only',
+        });
+        response.end(JSON.stringify(localKentRehberiDemo));
+        return;
+      }
+
       const payload = requestUrl.pathname === '/AppSettings/List'
         ? {
           isSuccess: requestUrl.searchParams.get('key') === 'GisMapConfig',

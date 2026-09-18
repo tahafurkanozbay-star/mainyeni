@@ -27,6 +27,12 @@ import {
   createViewPerformanceMonitor,
 } from '../../gis-engine/viewRuntime';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
+import {
+  attachKentRehberiGeoJsonLayer,
+  isKentRehberiAbortError,
+  type KentRehberiLayerHandle,
+  type KentRehberiMapLike,
+} from '../../data-services/kentRehberiGeoJsonLayer';
 import './MapComponent.css';
 
 interface WindowManagerLike {
@@ -126,6 +132,8 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     let bridge: ReturnType<typeof createViewStateBridge> | null = null;
     let performanceMonitor: ReturnType<typeof createViewPerformanceMonitor> | null = null;
     let unbindViewState: () => void = () => undefined;
+    let kentRehberiLayerHandle: KentRehberiLayerHandle | null = null;
+    const kentRehberiAbortController = new AbortController();
     const handles: RemovableHandle[] = [];
 
     const initializeMap = async (): Promise<void> => {
@@ -209,6 +217,21 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         payload: view,
       });
       setMapView(view);
+
+      void attachKentRehberiGeoJsonLayer({
+        map: map as KentRehberiMapLike,
+        signal: kentRehberiAbortController.signal,
+      })
+        .then((handle) => {
+          if (disposed) {
+            handle.dispose();
+            return;
+          }
+          kentRehberiLayerHandle = handle;
+        })
+        .catch((error: unknown) => {
+          if (!isKentRehberiAbortError(error)) DebugHelper.Log(error);
+        });
     };
 
     void initializeMap().catch((error: unknown) => DebugHelper.Log(error));
@@ -216,6 +239,9 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     return () => {
       disposed = true;
       activeViewModeRef.current = '2d';
+      kentRehberiAbortController.abort();
+      kentRehberiLayerHandle?.dispose();
+      kentRehberiLayerHandle = null;
       unbindViewState();
       performanceMonitor?.dispose?.();
       MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
