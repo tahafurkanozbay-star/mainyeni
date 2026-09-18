@@ -18,7 +18,8 @@ const icon = (severity: UiMessageSeverity): ReactNode => {
 
 export function MessageAlert({ message = 'Mesaj içeriği bulunamadı.', type = 'info', dismissMessage }: MessageAlertProps) {
   const model = createMessageViewModel({ message, type });
-  return <Alert onClose={dismissMessage} variant={model.variant} dismissible={typeof dismissMessage === 'function'} role="alert">
+  const closeProps = typeof dismissMessage === 'function' ? { onClose: dismissMessage } : {};
+  return <Alert {...closeProps} variant={model.variant} dismissible={typeof dismissMessage === 'function'} role="alert">
     <Alert.Heading>{model.heading}</Alert.Heading>
     <p>{icon(model.severity)}<span className="ms-2">{model.message}</span></p>
   </Alert>;
