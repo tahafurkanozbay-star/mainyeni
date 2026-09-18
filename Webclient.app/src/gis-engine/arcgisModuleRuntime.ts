@@ -1,4 +1,4 @@
-import * as esriLoaderNamespace from 'esri-loader';
+import { createDefaultArcgisEsmTransport } from './arcgisEsmTransport';
 
 export interface ArcgisModuleRuntimeConfiguration {
   version?: string;
@@ -23,19 +23,10 @@ export interface ArcgisModuleRuntimeSnapshot {
   transportChanges: number;
 }
 
-type LegacyLoaderNamespace = typeof esriLoaderNamespace & {
-  setDefaultOptions?: (options: ArcgisModuleRuntimeConfiguration) => void;
-};
-
-const legacyLoader = esriLoaderNamespace as LegacyLoaderNamespace;
-const legacyAmdTransport: ArcgisModuleTransport = Object.freeze({
-  name: 'legacy-amd',
-  configure: (configuration: ArcgisModuleRuntimeConfiguration) => legacyLoader.setDefaultOptions?.(configuration),
-  loadModules: (moduleIds: readonly string[]) => legacyLoader.loadModules([...moduleIds]),
-});
+const defaultEsmTransport = createDefaultArcgisEsmTransport();
 
 const moduleCache = new Map<string, Promise<unknown>>();
-let activeTransport: ArcgisModuleTransport = legacyAmdTransport;
+let activeTransport: ArcgisModuleTransport = defaultEsmTransport;
 let configured = false;
 let configuredVersion: string | null = null;
 let loadRequests = 0;
@@ -94,10 +85,9 @@ const loadMissingModules = (moduleIds: readonly string[]): void => {
 };
 
 /**
- * ArcGIS module boundary used while the application transitions from the retired
- * esri-loader AMD transport to @arcgis/core ESM. Consumers depend only on this
- * module, while the active transport can be swapped atomically and verified in
- * isolation before the package-level migration is completed.
+ * ArcGIS module boundary backed by @arcgis/core ESM. Consumers keep a stable
+ * module-loading contract while the runtime owns bundling, cache de-duplication,
+ * compatibility adapters and test-only transport injection in one place.
  */
 export const configureArcgisModuleRuntime = (
   configuration: ArcgisModuleRuntimeConfiguration = {},
@@ -122,8 +112,8 @@ export const setArcgisModuleTransport = (transport: ArcgisModuleTransport): Arcg
 };
 
 export const resetArcgisModuleTransport = (): ArcgisModuleRuntimeSnapshot => {
-  if (activeTransport !== legacyAmdTransport) {
-    activeTransport = legacyAmdTransport;
+  if (activeTransport !== defaultEsmTransport) {
+    activeTransport = defaultEsmTransport;
     clearModuleCache();
     configured = false;
     configuredVersion = null;

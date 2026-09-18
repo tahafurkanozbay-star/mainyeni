@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
-const LEGACY_TRANSPORT_BOUNDARY = 'gis-engine/arcgisModuleRuntime.ts';
 const LEGACY_IMPORT_ALLOWLIST = new Set<string>();
 const MAX_LEGACY_DIRECT_CONSUMERS = 0;
 
@@ -86,17 +85,23 @@ const hasLegacyLoaderImport = (file: string): boolean => {
 };
 
 describe('ArcGIS module loading boundary', () => {
-  it('keeps the direct legacy-loader consumer set equal to the shrinking migration allowlist', () => {
+  it('keeps the retired legacy-loader consumer set permanently at zero', () => {
     const sourceRoot = resolve(process.cwd(), 'src');
     const actualConsumers = collectSourceFiles(sourceRoot)
       .filter((file) => !file.includes('.test.'))
       .filter(hasLegacyLoaderImport)
       .map((file) => relative(sourceRoot, file).replaceAll('\\', '/'))
-      .filter((file) => file !== LEGACY_TRANSPORT_BOUNDARY)
       .sort();
     const allowedConsumers = [...LEGACY_IMPORT_ALLOWLIST].sort();
 
     expect(actualConsumers).toEqual(allowedConsumers);
     expect(actualConsumers.length).toBeLessThanOrEqual(MAX_LEGACY_DIRECT_CONSUMERS);
+  });
+  it('pins the ArcGIS 5.1 ESM package and removes the retired loader dependency', () => {
+    const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(manifest.dependencies?.['esri-loader']).toBeUndefined();
+    expect(manifest.dependencies?.['@arcgis/core']).toBe('5.1.24');
   });
 });
