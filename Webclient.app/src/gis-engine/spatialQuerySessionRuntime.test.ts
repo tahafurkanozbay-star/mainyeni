@@ -151,6 +151,52 @@ describe("spatialQuerySessionRuntime", () => {
     expect(result.integrity.duplicateCount).toBe(1);
   });
 
+  it("uses distinct memo identities for different page plans and integrity policies", async () => {
+    const session = createSpatialQuerySession({
+      capability: capability(),
+      transport: {
+        executePage: async () => ({
+          features: [],
+          exceededTransferLimit: false,
+        }),
+      },
+    });
+
+    const first = await session.query({
+      budget: {
+        mode: "viewport",
+        requestedFeatures: 2,
+        requestedPageSize: 1,
+      },
+      integrity: {
+        maxFeatures: 10,
+      },
+    });
+    const second = await session.query({
+      budget: {
+        mode: "viewport",
+        requestedFeatures: 2,
+        requestedPageSize: 2,
+      },
+      integrity: {
+        maxFeatures: 10,
+      },
+    });
+    const third = await session.query({
+      budget: {
+        mode: "viewport",
+        requestedFeatures: 2,
+        requestedPageSize: 2,
+      },
+      integrity: {
+        maxFeatures: 20,
+      },
+    });
+
+    expect(first.cacheKey).not.toBe(second.cacheKey);
+    expect(second.cacheKey).not.toBe(third.cacheKey);
+  });
+
   it("tracks invalidation generations", () => {
     const session = createSpatialQuerySession({
       capability: capability(),
