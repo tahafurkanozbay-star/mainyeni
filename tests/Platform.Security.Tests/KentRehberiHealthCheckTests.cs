@@ -35,7 +35,7 @@ public sealed class KentRehberiHealthCheckTests
         Assert.Equal(HealthStatus.Healthy, result.Status);
         Assert.Contains(
             "disabled",
-            result.Description,
+            result.Description ?? string.Empty,
             System.StringComparison.OrdinalIgnoreCase);
     }
 
@@ -61,7 +61,7 @@ public sealed class KentRehberiHealthCheckTests
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
         Assert.Contains(
             "not configured",
-            result.Description,
+            result.Description ?? string.Empty,
             System.StringComparison.OrdinalIgnoreCase);
     }
 
@@ -82,8 +82,7 @@ public sealed class KentRehberiHealthCheckTests
             .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
             .Value;
 
-        var registration = Assert.Single(
-            healthOptions.Registrations,
+        var registration = healthOptions.Registrations.Single(
             candidate => candidate.Name == "kent-rehberi-data");
 
         Assert.Contains(
