@@ -211,12 +211,12 @@ export interface PerformanceLifecycleHandle {
 }
 
 export interface ResourceTimingDependencies {
-  readonly performanceRef?: Pick<Performance, 'getEntriesByType'> | null;
-  readonly locationOrigin?: string | null;
+  readonly performanceRef?: Pick<Performance, 'getEntriesByType'> | null | undefined;
+  readonly locationOrigin?: string | null | undefined;
 }
 
 export interface LongTaskDependencies {
-  readonly performanceRef?: Pick<Performance, 'getEntriesByType'> | null;
+  readonly performanceRef?: Pick<Performance, 'getEntriesByType'> | null | undefined;
 }
 
 export interface PerformanceRuntimeDependencies extends ResourceTimingDependencies, LongTaskDependencies {
@@ -235,7 +235,7 @@ export interface PerformanceLifecycleDependencies {
 }
 
 export type DeepPartial<T> = {
-  readonly [K in keyof T]?: T[K] extends Readonly<Record<string, unknown>>
+  readonly [K in keyof T]?: T[K] extends object
     ? DeepPartial<T[K]>
     : T[K];
 };
