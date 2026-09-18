@@ -16,6 +16,11 @@ public sealed class KentRehberiOptions
     public int ConnectionTimeoutSeconds { get; set; } = 5;
     public int MaxPoolSize { get; set; } = 40;
     public int CacheMaxAgeSeconds { get; set; } = 30;
+    public int HealthCheckTimeoutSeconds { get; set; } = 3;
+
+    // Cursor pagination is fail-closed because the source DDL does not declare
+    // objectid UNIQUE. Enable only after the deployment duplicate preflight is clean.
+    public bool ObjectIdCursorEnabled { get; set; }
 
     public IReadOnlyList<string> Validate()
     {
@@ -59,6 +64,11 @@ public sealed class KentRehberiOptions
         if (CacheMaxAgeSeconds is < 0 or > 3_600)
         {
             failures.Add("KentRehberiData:CacheMaxAgeSeconds must be between 0 and 3600.");
+        }
+
+        if (HealthCheckTimeoutSeconds is < 1 or > 15)
+        {
+            failures.Add("KentRehberiData:HealthCheckTimeoutSeconds must be between 1 and 15.");
         }
 
         return failures;
