@@ -209,7 +209,7 @@ export class SpatialLodBudgetRuntime {
   removeLayer(layerId: string): readonly string[] {
     const normalized = normalizeText(layerId, 'layerId', this.#budget.maxIdLength);
     const removed: string[] = [];
-    for (const stored of [...this.#resources.values()]) {
+    for (const stored of this.#resources.values()) {
       if (stored.layerId !== normalized) continue;
       this.#removeStored(stored);
       removed.push(stored.id);
@@ -220,7 +220,7 @@ export class SpatialLodBudgetRuntime {
   reconcileScale(scale: number): readonly string[] {
     finiteNonNegative(scale, 'scale');
     const removed: string[] = [];
-    for (const stored of [...this.#resources.values()]) {
+    for (const stored of this.#resources.values()) {
       if (isSpatialLodResourceInScale(stored, scale)) continue;
       this.#removeStored(stored);
       removed.push(stored.id);
