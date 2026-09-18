@@ -37,11 +37,16 @@ export interface SceneLayerAdapter<TResource = unknown> {
 export interface SceneLayerRuntimeOptions {
   maxConcurrentLoads?: number;
   maxLoadedLayers?: number;
+  maxCpuBytes?: number;
+  maxGpuBytes?: number;
+  maxFeatures?: number;
+  maxDrawCalls?: number;
   retryLimit?: number;
   retryBaseDelayMs?: number;
   now?: () => number;
   sleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
   onEvent?: (event: SceneLayerEvent) => void;
+  onObserverError?: (error: unknown) => void;
 }
 
 export interface SceneLayerSnapshot {
@@ -101,6 +106,15 @@ export interface SceneLayerLifecycleRuntime<TResource = unknown> {
   dispose: (reason?: string) => Promise<void>;
 }
 
+export class SceneLayerResourceBudgetError extends Error {
+  public readonly code = 'SCENE_LAYER_RESOURCE_BUDGET';
+
+  public constructor(public readonly layerId: string) {
+    super(`Scene layer ${layerId} exceeds the configured resource budget`);
+    this.name = 'SceneLayerResourceBudgetError';
+  }
+}
+
 interface MutableLayerState<TResource> {
   descriptor: SceneLayerDescriptor;
   adapter: SceneLayerAdapter<TResource>;
@@ -133,6 +147,11 @@ const DEFAULT_ESTIMATE: SceneLayerResourceEstimate = Object.freeze({
   drawCalls: 0,
 });
 
+const DEFAULT_MAX_CPU_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_GPU_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_FEATURES = 2_000_000;
+const DEFAULT_MAX_DRAW_CALLS = 10_000;
+
 const finiteNonNegative = (value: unknown, fallback: number): number => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
@@ -152,11 +171,26 @@ const defaultSleep = (delayMs: number, signal: AbortSignal): Promise<void> => ne
     reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
     return;
   }
-  const handle = setTimeout(resolve, delayMs);
-  signal.addEventListener('abort', () => {
+
+  let settled = false;
+  const cleanup = (): void => {
+    signal.removeEventListener('abort', onAbort);
+  };
+  const finish = (): void => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    resolve();
+  };
+  const onAbort = (): void => {
+    if (settled) return;
+    settled = true;
     clearTimeout(handle);
+    cleanup();
     reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
-  }, { once: true });
+  };
+  const handle = setTimeout(finish, delayMs);
+  signal.addEventListener('abort', onAbort, { once: true });
 });
 
 const snapshotLayer = <TResource>(state: MutableLayerState<TResource>): SceneLayerSnapshot => Object.freeze({
@@ -190,6 +224,10 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
 ): SceneLayerLifecycleRuntime<TResource> => {
   const maxConcurrentLoads = Math.max(1, Math.floor(finiteNonNegative(options.maxConcurrentLoads, 4)));
   const maxLoadedLayers = Math.max(1, Math.floor(finiteNonNegative(options.maxLoadedLayers, 32)));
+  const maxCpuBytes = Math.max(1, Math.floor(finiteNonNegative(options.maxCpuBytes, DEFAULT_MAX_CPU_BYTES)));
+  const maxGpuBytes = Math.max(1, Math.floor(finiteNonNegative(options.maxGpuBytes, DEFAULT_MAX_GPU_BYTES)));
+  const maxFeatures = Math.max(1, Math.floor(finiteNonNegative(options.maxFeatures, DEFAULT_MAX_FEATURES)));
+  const maxDrawCalls = Math.max(1, Math.floor(finiteNonNegative(options.maxDrawCalls, DEFAULT_MAX_DRAW_CALLS)));
   const retryLimit = Math.max(0, Math.floor(finiteNonNegative(options.retryLimit, 2)));
   const retryBaseDelayMs = Math.max(10, Math.floor(finiteNonNegative(options.retryBaseDelayMs, 250)));
   const now = options.now ?? Date.now;
@@ -202,14 +240,26 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
   let viewportZoom: number | null = null;
   let reconcileScheduled: Promise<void> | null = null;
 
+  const notifyObserverError = (error: unknown): void => {
+    try {
+      options.onObserverError?.(error);
+    } catch {
+      // Observability hooks are intentionally isolated from lifecycle state.
+    }
+  };
+
   const emit = (state: MutableLayerState<TResource>, type: SceneLayerEvent['type'], reason?: string): void => {
-    options.onEvent?.(Object.freeze({
-      type,
-      layerId: state.descriptor.id,
-      timestamp: now(),
-      reason,
-      generation: state.generation,
-    }));
+    try {
+      options.onEvent?.(Object.freeze({
+        type,
+        layerId: state.descriptor.id,
+        timestamp: now(),
+        reason,
+        generation: state.generation,
+      }));
+    } catch (error) {
+      notifyObserverError(error);
+    }
   };
 
   const getState = (layerId: string): MutableLayerState<TResource> => {
@@ -249,27 +299,57 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
     }
   };
 
-  const evictIfNeeded = async (): Promise<void> => {
-    const loaded = [...layers.values()].filter((state) => state.resource !== null && state.phase !== 'loading');
-    if (loaded.length <= maxLoadedLayers) return;
+  const loadedStates = (): MutableLayerState<TResource>[] => Array.from(layers.values())
+    .filter((state) => state.resource !== null && state.phase !== 'disposed');
+
+  const resourceBudgetSatisfied = (loaded = loadedStates()): boolean => {
+    let cpuBytes = 0;
+    let gpuBytes = 0;
+    let featureCount = 0;
+    let drawCalls = 0;
+    for (const state of loaded) {
+      cpuBytes += state.estimate.cpuBytes;
+      gpuBytes += state.estimate.gpuBytes;
+      featureCount += state.estimate.featureCount;
+      drawCalls += state.estimate.drawCalls;
+    }
+    return loaded.length <= maxLoadedLayers
+      && cpuBytes <= maxCpuBytes
+      && gpuBytes <= maxGpuBytes
+      && featureCount <= maxFeatures
+      && drawCalls <= maxDrawCalls;
+  };
+
+  const evictIfNeeded = async (protectedLayerId?: string): Promise<boolean> => {
+    const loaded = loadedStates();
+    if (resourceBudgetSatisfied(loaded)) return true;
 
     const candidates = loaded
-      .filter((state) => !state.descriptor.required && !state.requested)
+      .filter((state) => (
+        state.descriptor.id !== protectedLayerId
+        && !state.descriptor.required
+        && !state.requested
+      ))
       .sort((left, right) => {
         const priorityDelta = PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority];
         if (priorityDelta !== 0) return priorityDelta;
-        return (left.lastUsedAt ?? 0) - (right.lastUsedAt ?? 0);
+        const recencyDelta = (left.lastUsedAt ?? 0) - (right.lastUsedAt ?? 0);
+        if (recencyDelta !== 0) return recencyDelta;
+        return left.descriptor.id.localeCompare(right.descriptor.id);
       });
 
-    while (loaded.length > maxLoadedLayers && candidates.length) {
+    while (!resourceBudgetSatisfied(loaded) && candidates.length > 0) {
       const candidate = candidates.shift();
-      if (!candidate || candidate.resource === null) continue;
+      if (candidate === undefined || candidate.resource === null) continue;
       await disposeResource(candidate, 'capacity');
       candidate.phase = 'idle';
       candidate.loadedAt = null;
       emit(candidate, 'evicted', 'capacity');
-      loaded.splice(loaded.indexOf(candidate), 1);
+      const index = loaded.indexOf(candidate);
+      if (index >= 0) loaded.splice(index, 1);
     }
+
+    return resourceBudgetSatisfied(loaded);
   };
 
   const activate = async (state: MutableLayerState<TResource>): Promise<void> => {
@@ -319,16 +399,37 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
           state.loadedAt = now();
           state.lastUsedAt = state.loadedAt;
           state.lastError = null;
-          state.retries = 0;
-          if (state.adapter.activate) {
-            await state.adapter.activate(resource, {
-              signal: controller.signal,
-              generation,
-              descriptor: state.descriptor,
-            });
+
+          const admitted = await evictIfNeeded(state.descriptor.id);
+          if (!admitted) {
+            const budgetError = new SceneLayerResourceBudgetError(state.descriptor.id);
+            state.lastError = budgetError;
+            await disposeResource(state, 'resource-budget');
+            state.phase = 'failed';
+            state.loadedAt = null;
+            emit(state, 'load-failed', 'resource-budget');
+            return;
           }
+
+          try {
+            if (state.adapter.activate) {
+              await state.adapter.activate(resource, {
+                signal: controller.signal,
+                generation,
+                descriptor: state.descriptor,
+              });
+            }
+          } catch (error) {
+            state.lastError = error;
+            await disposeResource(state, 'activation-failed');
+            state.phase = 'failed';
+            state.loadedAt = null;
+            emit(state, 'load-failed', 'activation-failed');
+            return;
+          }
+
+          state.retries = 0;
           emit(state, 'load-ready');
-          await evictIfNeeded();
           return;
         } catch (error) {
           if (controller.signal.aborted || disposed || state.generation !== generation) return;
@@ -444,10 +545,13 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
     if (!state) return false;
     state.generation += 1;
     state.controller?.abort(reason);
-    await disposeResource(state, reason);
-    state.phase = 'disposed';
-    emit(state, 'disposed', reason);
-    layers.delete(layerId);
+    try {
+      await disposeResource(state, reason);
+    } finally {
+      state.phase = 'disposed';
+      emit(state, 'disposed', reason);
+      layers.delete(layerId);
+    }
     return true;
   };
 
@@ -471,9 +575,12 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
     if (!state || state.phase === 'disposed') return false;
     state.requested = false;
     state.controller?.abort(reason);
-    if (state.resource !== null && state.adapter.suspend) await state.adapter.suspend(state.resource, reason);
-    state.phase = state.resource !== null ? 'suspended' : 'idle';
+    const resource = state.resource;
+    state.phase = resource !== null ? 'suspended' : 'idle';
     emit(state, 'suspended', reason);
+    if (resource !== null && state.adapter.suspend) {
+      await state.adapter.suspend(resource, reason);
+    }
     return true;
   };
 
