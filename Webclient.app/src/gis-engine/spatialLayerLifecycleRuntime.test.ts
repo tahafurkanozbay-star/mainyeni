@@ -40,6 +40,19 @@ describe('SpatialLayerLifecycleRuntime', () => {
     expect(runtime.snapshot().failures).toBe(2);
   });
 
+  it('supports an explicit zero-retry budget', () => {
+    const runtime = new SpatialLayerLifecycleRuntime({
+      maxFailuresPerLayer: 5,
+      maxRetryAttempts: 0,
+    });
+    runtime.register(layer('no-retry'));
+    runtime.transition('no-retry', 'loading');
+
+    expect(runtime.markFailed('no-retry')).toBe(true);
+    expect(runtime.phase('no-retry')).toBe('suspended');
+    expect(() => runtime.retry('no-retry')).toThrow(/only failed layers/);
+  });
+
   it('suspends active layers outside ArcGIS-style scale constraints', () => {
     const runtime = new SpatialLayerLifecycleRuntime();
     runtime.register(layer('parcels', { minScale: 50_000, maxScale: 1_000 }));
