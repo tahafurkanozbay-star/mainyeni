@@ -11,7 +11,22 @@ const manualChunk = (id: string): string | undefined => {
   if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-redux/') || id.includes('/redux/')) return 'react-vendor';
   if (id.includes('/bootstrap/') || id.includes('/react-bootstrap/')) return 'ui-vendor';
   if (id.includes('/@fortawesome/') || id.includes('/react-icons/')) return 'icons-vendor';
-  if (id.includes('/esri-loader/')) return 'arcgis-loader';
+
+  // @arcgis/core is intentionally split by stable SDK responsibility rather
+  // than collapsed into one vendor chunk. The 5.x ESM graph is substantially
+  // larger than the retired loader shim; keeping views, layers, widgets,
+  // geometry and REST clients separate preserves lazy loading and prevents a
+  // single GIS chunk from monopolising the production gzip budget.
+  if (id.includes('/@arcgis/core/')) {
+    if (id.includes('/@arcgis/core/views/')) return 'arcgis-views';
+    if (id.includes('/@arcgis/core/widgets/')) return 'arcgis-widgets';
+    if (id.includes('/@arcgis/core/layers/')) return 'arcgis-layers';
+    if (id.includes('/@arcgis/core/geometry/')) return 'arcgis-geometry';
+    if (id.includes('/@arcgis/core/rest/')) return 'arcgis-rest';
+    if (id.includes('/@arcgis/core/renderers/') || id.includes('/@arcgis/core/symbols/')) return 'arcgis-rendering';
+    if (id.includes('/@arcgis/core/core/')) return 'arcgis-core-runtime';
+    return 'arcgis-shared';
+  }
   return undefined;
 };
 
@@ -58,9 +73,9 @@ export default defineConfig({
   ],
   optimizeDeps: {
     // Keep dependency discovery enabled during the remaining legacy/CJS migration.
-    // The explicit include list keeps critical boot dependencies warm while Vite
-    // is still free to discover imports that have not yet been converted to ESM.
-    include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', 'esri-loader', 'prop-types', '@fortawesome/react-fontawesome', 'crypto-js'],
+    // Warm the bundled ArcGIS ESM package rather than the removed esri-loader.
+    // Vite remains free to discover imports not listed here.
+    include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/views/SceneView.js', 'prop-types', '@fortawesome/react-fontawesome', 'crypto-js'],
   },
   build: {
     // Vite 8's Baseline target tracks browsers that are widely interoperable
