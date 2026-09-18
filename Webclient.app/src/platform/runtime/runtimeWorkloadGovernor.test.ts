@@ -117,8 +117,12 @@ describe('runtime workload governor', () => {
           signal.addEventListener('abort', () => reject(signal.reason), { once: true });
         }),
       );
+      // Attach the rejection observer before advancing fake timers. Otherwise the
+      // deadline can reject between microtasks and Vitest correctly reports an
+      // unhandled rejection even though the assertion is attached immediately after.
+      const timeoutAssertion = expect(pending).rejects.toBeInstanceOf(RuntimeWorkloadTimeoutError);
       await vi.advanceTimersByTimeAsync(25);
-      await expect(pending).rejects.toBeInstanceOf(RuntimeWorkloadTimeoutError);
+      await timeoutAssertion;
       expect(governor.snapshot().counters.timedOut).toBe(1);
       expect(governor.snapshot().active).toBe(0);
       governor.dispose();
