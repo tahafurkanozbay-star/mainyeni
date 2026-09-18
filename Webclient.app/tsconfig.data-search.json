@@ -1,7 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false
   },
   "include": [
     "src/data-search/**/*.ts",
