@@ -152,6 +152,40 @@ export const buildArcGisNumericEqualsFilter = (
   return `${assertArcGisFieldName(field)}=${numeric}`;
 };
 
+export interface IntegerLiteralOptions {
+  readonly allowNegative?: boolean;
+  readonly maximumDigits?: number;
+}
+
+export const normalizeIntegerLiteral = (
+  value: unknown,
+  options: IntegerLiteralOptions = {},
+): string | null => {
+  const maximumDigits = Math.min(18, Math.max(1, Math.trunc(options.maximumDigits ?? 15)));
+  const text = typeof value === 'number'
+    ? (Number.isSafeInteger(value) ? String(value) : '')
+    : typeof value === 'string'
+      ? value.trim()
+      : '';
+  if (!text) return null;
+
+  const pattern = options.allowNegative ? /^-?\d+$/u : /^\d+$/u;
+  if (!pattern.test(text)) return null;
+  const digits = text.startsWith('-') ? text.slice(1) : text;
+  if (digits.length > maximumDigits) return null;
+  return text;
+};
+
+export const buildArcGisIntegerEqualsFilter = (
+  field: unknown,
+  value: unknown,
+  options: IntegerLiteralOptions = {},
+): string | null => {
+  const literal = normalizeIntegerLiteral(value, options);
+  if (literal === null) return null;
+  return `${assertArcGisFieldName(field)}=${literal}`;
+};
+
 export const normalizeFiniteNumber = (
   value: unknown,
   minimum = Number.NEGATIVE_INFINITY,
