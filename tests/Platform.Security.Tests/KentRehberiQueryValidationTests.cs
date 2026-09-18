@@ -276,6 +276,23 @@ public sealed class KentRehberiQueryValidationTests
     }
 
     [Fact]
+    public void Options_RejectPublicCeilingsAboveRepositorySafetyCaps()
+    {
+        var options = CreateOptions();
+        options.MaxLimit = 2_001;
+        options.MaxRadiusMeters = 50_001;
+
+        var failures = options.Validate();
+
+        Assert.Contains(
+            failures,
+            value => value.Contains("MaxLimit", StringComparison.Ordinal));
+        Assert.Contains(
+            failures,
+            value => value.Contains("MaxRadiusMeters", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Options_RejectDefaultLimitAboveMaximum()
     {
         var options = CreateOptions();
