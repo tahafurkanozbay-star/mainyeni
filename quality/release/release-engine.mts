@@ -21,7 +21,15 @@ import {
   type Severity,
   type SeverityCounts,
 } from './contracts.mts';
+import { auditAccessibility } from './accessibility-audit.mts';
+import { auditBackendSecurity } from './backend-security-audit.mts';
+import { auditCiIntegrity } from './ci-integrity-audit.mts';
 import { auditDataIntegrity } from './data-integrity-audit.mts';
+import { auditGisReleaseContracts } from './gis-release-contract-audit.mts';
+import { auditLanguageModernization } from './language-modernization-audit.mts';
+import { auditObservability } from './observability-audit.mts';
+import { auditResponsive } from './responsive-audit.mts';
+import { auditSecurity } from './security-audit.mts';
 import { auditDependencies } from './dependency-audit.mts';
 import { auditGis } from './gis-audit.mts';
 import { auditModernization } from './modernization-audit.mts';
@@ -105,7 +113,26 @@ export function regressionFindings(delta: RegressionDelta): Finding[] {
 
 export async function runReleaseEngine(inventory: RepositoryInventory, context: ReleaseContext, options: ReleaseEngineOptions = {}, baseline?: BaselineSnapshot): Promise<ReleaseExecution> {
   const thresholds = mergedThresholds(options.thresholds);
-  const sections: AuditSection<unknown>[] = [auditModernization(inventory), scanSource(inventory), auditDependencies(inventory), auditNetwork(inventory), auditGis(inventory), auditUx(inventory), auditPerformance(inventory), auditDataIntegrity(inventory), auditRuntimeResilience(inventory), auditTestContracts(inventory)];
+  const sections: AuditSection<unknown>[] = [
+    auditModernization(inventory),
+    auditLanguageModernization(inventory),
+    scanSource(inventory),
+    auditSecurity(inventory),
+    auditBackendSecurity(inventory),
+    auditDependencies(inventory),
+    auditCiIntegrity(inventory),
+    auditNetwork(inventory),
+    auditGis(inventory),
+    auditGisReleaseContracts(inventory),
+    auditUx(inventory),
+    auditAccessibility(inventory),
+    auditResponsive(inventory),
+    auditPerformance(inventory),
+    auditDataIntegrity(inventory),
+    auditRuntimeResilience(inventory),
+    auditObservability(inventory),
+    auditTestContracts(inventory),
+  ];
   let findings = flattenFindings(sections); let decision = decideReleaseGate(findings, thresholds);
   let report: ReleaseReport = { schemaVersion: 1, context, inventory, sections, findings, decision, fingerprint: reportFingerprint(context, inventory, findings) };
   if (!baseline) return { report };
