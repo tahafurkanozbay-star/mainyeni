@@ -126,6 +126,14 @@ public sealed class KentRehberiApiSecurityContractTests
             "kent_rehberi.kent_rehberi_tumu_pggeom",
             sql,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "TO kent_rehberi_select",
+            sql,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "CREATE ROLE kent_rehberi_select",
+            sql,
+            StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
             "gdb_geomattr_data",
             sql,
