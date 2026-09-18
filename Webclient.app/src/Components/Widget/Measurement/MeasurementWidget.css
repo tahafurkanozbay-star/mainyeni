@@ -1,15 +1,101 @@
+.measurement-widget-body {
+    display: grid;
+    gap: 0.75rem;
+    align-content: start;
+}
+
+.measurement-widget-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.25rem;
+}
+
 .measurement-widget-tool-select-button {
-    border: 1px solid gray;
-    border-radius: 5px;
-    margin: 5px;
-    padding: 10px;
-    float: left;
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 3rem;
+    min-block-size: 3rem;
+    border: 1px solid currentColor;
+    border-radius: 0.625rem;
+    padding: 0.625rem;
+    background: transparent;
+    color: inherit;
     cursor: pointer;
-    color: gray;
-  }
-  
-  .measurement-widget-tool-select-button:hover {
-    background-color: #EEE;
-  
-  }
-  
+    transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.measurement-widget-tool-select-button:hover:not(:disabled) {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.measurement-widget-tool-select-button[aria-pressed="true"] {
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.measurement-widget-tool-select-button:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 3px;
+}
+
+.measurement-widget-tool-select-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.measurement-widget-status {
+    min-block-size: 1.5rem;
+    margin: 0;
+    padding-inline: 0.25rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.measurement-widget-result {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+    .measurement-widget-toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .measurement-widget-tool-select-button {
+        inline-size: 100%;
+        min-block-size: 3.25rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .measurement-widget-tool-select-button {
+        transition: none;
+    }
+}
+
+@media (forced-colors: active) {
+    .measurement-widget-tool-select-button,
+    .measurement-widget-tool-select-button[aria-pressed="true"] {
+        forced-color-adjust: auto;
+        border-color: ButtonText;
+        background: ButtonFace;
+        color: ButtonText;
+        box-shadow: none;
+    }
+
+    .measurement-widget-tool-select-button[aria-pressed="true"] {
+        outline: 2px solid Highlight;
+        outline-offset: -4px;
+    }
+
+    .measurement-widget-tool-select-button:focus-visible {
+        outline-color: Highlight;
+    }
+
+    .measurement-widget-tool-select-button:disabled {
+        color: GrayText;
+        border-color: GrayText;
+    }
+}
