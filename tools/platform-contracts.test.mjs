@@ -185,7 +185,7 @@ test('requires module graph and language ratchet scripts in the web quality surf
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const report = await runPlatformContracts(root);
   const codes = report.findings
-    .filter((finding) => finding.code === 'web-script-missing')
+    .filter((finding) => finding.code === 'webclient-script-missing')
     .map((finding) => finding.detail?.script)
     .filter(Boolean);
   assert.ok(codes.includes('quality:module-graph'));

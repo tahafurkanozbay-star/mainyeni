@@ -333,7 +333,7 @@ const validateWebclient = async (root, report) => {
   const scripts = packageJson.scripts || {};
   for (const script of REQUIRED_WEB_SCRIPTS) {
     if (!scripts[script]) {
-      addFinding(report, 'error', 'webclient-script-missing', `Required webclient script is missing: ${script}.`, relative(root, packageFile));
+      addFinding(report, 'error', 'webclient-script-missing', `Required webclient script is missing: ${script}.`, relative(root, packageFile), { script });
     }
   }
 
