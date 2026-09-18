@@ -14,3 +14,4 @@ export * from './history';
 export * from './startupProfiler';
 export * from './diagnostics';
 export * from './userTiming';
+export * from './baselineCodec';
