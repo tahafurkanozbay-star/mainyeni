@@ -92,7 +92,11 @@ export const createOperationProfiler = (
   };
 
   return Object.freeze({
-    async measure(name, operation, options = {}) {
+    async measure<T>(
+      name: string,
+      operation: () => T | Promise<T>,
+      options: ProfileOperationOptions = {},
+    ): Promise<T> {
       if (typeof operation !== 'function') throw new TypeError('Profiled operation must be a function.');
       if (options.signal?.aborted) {
         record(name, 0, 'cancelled');
