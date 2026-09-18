@@ -190,6 +190,7 @@ export function createSpatialQuerySession(
     plan: SpatialQueryPlan,
     signal: AbortSignal,
     cacheKey: string,
+    requestGeneration: number,
   ): Promise<SpatialQuerySessionResult> => {
     const execution = await executeSpatialQueryPlan(
       plan,
@@ -204,10 +205,18 @@ export function createSpatialQuerySession(
       signal,
     );
 
+    if (generation !== requestGeneration) {
+      throw new Error("spatial query result became stale after session invalidation");
+    }
+
     const integrity = inspectSpatialFeatures(
       execution.features,
       mergeIntegrityOptions(options.defaultIntegrity, request.integrity, signal),
     );
+
+    if (generation !== requestGeneration) {
+      throw new Error("spatial query result became stale during integrity validation");
+    }
 
     return Object.freeze({
       contract,
@@ -218,7 +227,7 @@ export function createSpatialQuerySession(
       }),
       integrity,
       cacheKey,
-      generation,
+      generation: requestGeneration,
     });
   };
 
@@ -245,11 +254,12 @@ export function createSpatialQuerySession(
     });
     admittedFeatures += plan.admittedFeatures;
 
+    const requestGeneration = generation;
     const baseKey = spatialQueryContractCacheKey(capability, contract, namespace);
-    const cacheKey = `${baseKey}:g${generation}:m${plan.mode}:n${plan.admittedFeatures}`;
+    const cacheKey = `${baseKey}:g${requestGeneration}:m${plan.mode}:n${plan.admittedFeatures}`;
 
     const execute = async (signal: AbortSignal): Promise<SpatialQuerySessionResult> =>
-      runQuery(request, contract, plan, signal, cacheKey);
+      runQuery(request, contract, plan, signal, cacheKey, requestGeneration);
 
     try {
       let result: SpatialQuerySessionResult;
