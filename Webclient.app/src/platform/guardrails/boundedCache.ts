@@ -142,9 +142,10 @@ export const createBoundedCache = <K extends string, V>(
     return removed;
   };
 
-  const evictionCandidate = (): MutableEntry<V> | null => {
+  const evictionCandidate = (excludedKey?: string): MutableEntry<V> | null => {
     let candidate: MutableEntry<V> | null = null;
     for (const entry of entries.values()) {
+      if (entry.key === excludedKey) continue;
       if (!candidate) {
         candidate = entry;
         continue;
@@ -160,7 +161,7 @@ export const createBoundedCache = <K extends string, V>(
     return candidate;
   };
 
-  const ensureCapacity = (incomingWeight: number, replacingKey?: string): void => {
+  const ensureCapacity = (incomingWeight: number, replacingKey?: string): boolean => {
     const replacing = replacingKey ? entries.get(replacingKey) : undefined;
     const existingWeight = replacing?.estimatedWeight ?? 0;
 
@@ -168,11 +169,11 @@ export const createBoundedCache = <K extends string, V>(
       entries.size - (replacing ? 1 : 0) >= policy.capacity ||
       estimatedWeight - existingWeight + incomingWeight > policy.maxEstimatedWeight
     ) {
-      const candidate = evictionCandidate();
-      if (!candidate) break;
-      if (candidate.key === replacingKey && entries.size === 1) break;
+      const candidate = evictionCandidate(replacingKey);
+      if (!candidate) return false;
       removeEntry(candidate.key, 'evict');
     }
+    return true;
   };
 
   const get = (keyInput: K, atInput?: number): V | undefined => {
@@ -226,7 +227,7 @@ export const createBoundedCache = <K extends string, V>(
     }
 
     sweep(at);
-    ensureCapacity(weight, key);
+    if (!ensureCapacity(weight, key)) return false;
 
     const existing = entries.get(key);
     if (!existing && entries.size >= policy.capacity) return false;
