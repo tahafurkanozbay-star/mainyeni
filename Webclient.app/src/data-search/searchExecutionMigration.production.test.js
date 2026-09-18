@@ -11,5 +11,7 @@ describe('legacy search core TypeScript migration ratchet', () => {
     expect(existsSync(resolve(sourceRoot, 'AddressSearchRuntime.js'))).toBe(false);
     expect(existsSync(resolve(sourceRoot, 'SearchCoordinatorRuntime.ts'))).toBe(true);
     expect(existsSync(resolve(sourceRoot, 'SearchCoordinatorRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'SearchDatasetRegistry.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'SearchDatasetRegistry.js'))).toBe(false);
   });
 });
