@@ -16,7 +16,9 @@ public sealed class KentRehberiQueryValidationTests
         CommandTimeoutSeconds = 8,
         ConnectionTimeoutSeconds = 5,
         MaxPoolSize = 40,
-        CacheMaxAgeSeconds = 30
+        CacheMaxAgeSeconds = 30,
+        HealthCheckTimeoutSeconds = 3,
+        ObjectIdCursorEnabled = true
     };
 
     [Fact]
@@ -108,6 +110,29 @@ public sealed class KentRehberiQueryValidationTests
                 CreateOptions()));
 
         Assert.Contains("limit", error.Errors.Keys);
+    }
+
+    [Fact]
+    public void NormalizeSearch_RejectsCursorUntilUniquenessIsExplicitlyVerified()
+    {
+        var options = CreateOptions();
+        options.ObjectIdCursorEnabled = false;
+
+        var error = Assert.Throws<KentRehberiValidationException>(() =>
+            KentRehberiQueryValidation.NormalizeSearch(
+                null,
+                null,
+                null,
+                null,
+                null,
+                10,
+                null,
+                options));
+
+        Assert.Contains("afterObjectId", error.Errors.Keys);
+        Assert.Contains(
+            error.Errors["afterObjectId"],
+            message => message.Contains("uniqueness", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -235,10 +260,11 @@ public sealed class KentRehberiQueryValidationTests
         options.ConnectionTimeoutSeconds = 0;
         options.MaxPoolSize = 0;
         options.CacheMaxAgeSeconds = -1;
+        options.HealthCheckTimeoutSeconds = 0;
 
         var failures = options.Validate();
 
-        Assert.True(failures.Count >= 7);
+        Assert.True(failures.Count >= 8);
         Assert.Contains(failures, x => x.Contains("DefaultLimit", StringComparison.Ordinal));
         Assert.Contains(failures, x => x.Contains("MaxLimit", StringComparison.Ordinal));
         Assert.Contains(failures, x => x.Contains("MaxRadiusMeters", StringComparison.Ordinal));
@@ -246,6 +272,7 @@ public sealed class KentRehberiQueryValidationTests
         Assert.Contains(failures, x => x.Contains("ConnectionTimeoutSeconds", StringComparison.Ordinal));
         Assert.Contains(failures, x => x.Contains("MaxPoolSize", StringComparison.Ordinal));
         Assert.Contains(failures, x => x.Contains("CacheMaxAgeSeconds", StringComparison.Ordinal));
+        Assert.Contains(failures, x => x.Contains("HealthCheckTimeoutSeconds", StringComparison.Ordinal));
     }
 
     [Fact]
