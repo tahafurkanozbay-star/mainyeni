@@ -263,7 +263,7 @@ export class SpatialAnalysisJobRuntime {
     if (this.#disposed) return;
     this.#disposed = true;
     const reason = disposedError();
-    for (const job of [...this.#jobs.values()]) {
+    for (const job of this.#jobs.values()) {
       if (job.settled) continue;
       job.controller.abort(reason);
       this.#finishFailure(job, reason, 'cancelled');
