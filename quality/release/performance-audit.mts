@@ -28,6 +28,12 @@ const MEMO_PATTERN = /\b(?:React\.memo|memo|useMemo|useCallback)\s*\(/g;
 const VIRTUAL_PATTERN = /\b(?:virtualiz|windowing|react-window|react-virtualized|overscan)\b/gi;
 const QUERY_WINDOW_IMPORT_PATTERN = /^\s*import\s+[^;]+from\s+['"][^'"]*(?:Query|Window)[^'"]*['"]/gm;
 const LARGE_COLLECTION_LITERAL_PATTERN = /\[(?:[^\[\]]|\[[^\]]*\]){5000,}\]/g;
+const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/i;
+const GENERATED_PATH = /(?:^|\/)(?:dist|build|coverage|node_modules)(?:\/|$)/i;
+
+function isProductionWebSource(file: SourceFile): boolean {
+  return !TEST_PATH.test(file.repositoryPath) && !GENERATED_PATH.test(file.repositoryPath);
+}
 
 function countMatches(text: string, pattern: RegExp): number {
   return [...text.matchAll(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`))].length;
@@ -166,7 +172,7 @@ export function auditPerformance(
   budget: PerformanceBudget = DEFAULT_PERFORMANCE_BUDGET,
 ): AuditSection<PerformanceAuditDetails> {
   const start = performance.now();
-  const webFiles = selectWebSource(inventory).filter(file => !file.repositoryPath.startsWith('quality/release/'));
+  const webFiles = selectWebSource(inventory).filter(file => !file.repositoryPath.startsWith('quality/release/') && isProductionWebSource(file));
   const codeFiles = webFiles.filter(file => ['javascript', 'typescript'].includes(file.kind));
   const signals = fileSizeSignals(webFiles, budget);
   const largeJson = largeJsonFindings(webFiles, budget);
