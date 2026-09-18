@@ -12,7 +12,7 @@ import type { ManagedWindowHandle } from '../../../experience/contracts';\nimpor
 
 export interface MapWidgetManagerLike extends QueryWindowManagerLike {
   readonly IsVisible: (id: string) => boolean;
-  readonly ShowWindow: (id: string, query?: unknown) => void;
+  readonly ShowWindow: (id: string) => void;
   readonly RegisterWindow: (ref: RefObject<ManagedWindowHandle | null>) => void;\n  readonly UnregisterWindow?: (id: string, ref: RefObject<ManagedWindowHandle | null>) => void;
   readonly HideWindow: (id: string) => void;
 }
