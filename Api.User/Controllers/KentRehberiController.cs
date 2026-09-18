@@ -200,22 +200,29 @@ public sealed class KentRehberiController : ControllerBase
     {
         Response.Headers.CacheControl = "public, max-age=300";
 
+        var filters = new List<string>
+        {
+            "ilce",
+            "mahalle",
+            "tur",
+            "q",
+            "bbox",
+            "nearby"
+        };
+
+        if (options.ObjectIdCursorEnabled)
+        {
+            filters.Add("afterObjectId");
+        }
+
         return Ok(new KentRehberiCapabilities(
             "kent-rehberi",
             4326,
             options.DefaultLimit,
             options.MaxLimit,
             options.MaxRadiusMeters,
-            new[]
-            {
-                "ilce",
-                "mahalle",
-                "tur",
-                "q",
-                "bbox",
-                "afterObjectId",
-                "nearby"
-            }));
+            options.ObjectIdCursorEnabled,
+            filters));
     }
 
     private void EnsureAvailable()
@@ -248,8 +255,8 @@ public sealed class KentRehberiController : ControllerBase
         Response.Headers.CacheControl = "no-store";
 
         logger.LogWarning(
-            exception,
-            "Kent Rehberi data request failed. TraceId: {TraceId}",
+            "Kent Rehberi data request failed with {FailureType}. TraceId: {TraceId}",
+            exception.GetType().Name,
             HttpContext.TraceIdentifier);
 
         return Problem(
