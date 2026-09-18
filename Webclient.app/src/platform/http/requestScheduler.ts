@@ -117,6 +117,7 @@ export class RequestScheduler {
   private peakQueued = 0;
   private pumping = false;
   private pumpRequested = false;
+  private diagnosticListenerFailures = 0;
 
   constructor(options: SchedulerOptions = {}) {
     this.maxConcurrent = toBoundedInteger(options.maxConcurrent, DEFAULT_MAX_CONCURRENT, 1, 32);
@@ -160,7 +161,11 @@ export class RequestScheduler {
     try {
       this.onEvent(eventName, metadata);
     } catch {
-      // Local diagnostics are best-effort and must never block delivery.
+      // Diagnostics are best-effort, but observer failures remain measurable.
+      this.diagnosticListenerFailures = Math.min(
+        Number.MAX_SAFE_INTEGER,
+        this.diagnosticListenerFailures + 1
+      );
     }
   }
 
@@ -502,6 +507,10 @@ export class RequestScheduler {
 
   getRunningCount(): number {
     return this.running;
+  }
+
+  getDiagnosticListenerFailureCount(): number {
+    return this.diagnosticListenerFailures;
   }
 
   cancelQueued(reason = 'Scheduler queue cleared'): number {
