@@ -59,7 +59,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
     }, [id, windowManager]);
 
     const getClickedPoint = useCallback((): unknown | null => (
-      (MapManager.GetMapClickEvent() as MapClickEventLike | null)?.mapPoint ?? null
+      (MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null)?.mapPoint ?? null
     ), []);
 
     const logPointAction = useCallback((label: string, point: unknown): void => {
@@ -158,7 +158,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       visible: false,
       minimized: false,
       OnShow: () => {
-        const clickEvent = MapManager.GetMapClickEvent() as MapClickEventLike | null;
+        const clickEvent = MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null;
         if (!clickEvent) return;
         setRequestedPosition({
           x: finiteCoordinate(clickEvent.x),
