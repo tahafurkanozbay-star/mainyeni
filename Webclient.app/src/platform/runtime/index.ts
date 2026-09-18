@@ -7,3 +7,8 @@ export * from './privacyTelemetry';
 export * from './stateStore';
 export * from './runtimeKernel';
 export * from './supervision';
+export * from './admissionController';
+export * from './pressureController';
+export * from './adaptiveRuntimeControl';
+export * from './runtimeHealthJournal';
+export * from './runtimeWorkloadGovernor';
