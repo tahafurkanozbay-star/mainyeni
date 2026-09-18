@@ -85,8 +85,12 @@ export const installPerformanceLifecycleCapture = (
     const snapshot = runtime.capture();
     try {
       dependencies.onCapture?.(snapshot);
-    } catch {
-      // Diagnostics observers are best-effort and must never break navigation.
+    } catch (error: unknown) {
+      if (dependencies.onCaptureError) {
+        dependencies.onCaptureError(error);
+      } else {
+        throw error;
+      }
     }
     return snapshot;
   };
