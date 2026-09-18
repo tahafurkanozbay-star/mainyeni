@@ -8,6 +8,7 @@ import {
   hasExplicitModuleExtension,
   hasTypedJavascriptCollision,
   isRelativeModuleSpecifier,
+  isStrictTypedDomainAmbiguity,
   moduleCandidatePaths,
   moduleResolutionGuardPlugin,
 } from './moduleResolutionGuard';
@@ -134,24 +135,60 @@ describe('module resolution guard', () => {
     }
   });
 
-  test('plugin fails closed for ambiguous candidates', async () => {
+  test('plugin fails closed for ambiguous candidates in a strict typed domain', async () => {
     const root = fixture();
     try {
-      const importer = write(root, 'Webclient.app/src/app.ts');
-      write(root, 'Webclient.app/src/runtime.ts');
-      write(root, 'Webclient.app/src/runtime.js');
+      const importer = write(root, 'Webclient.app/src/App.tsx');
+      write(root, 'Webclient.app/src/platform/runtime.ts');
+      write(root, 'Webclient.app/src/platform/runtime.js');
       const plugin = moduleResolutionGuardPlugin();
       if (typeof plugin.resolveId !== 'function') throw new Error('resolveId hook required');
       await expect(Promise.resolve().then(() =>
         plugin.resolveId.call(
           { error: (message: unknown) => { throw new Error(String(message)); } } as never,
-          './runtime',
+          './platform/runtime',
           importer,
         ),
       )).rejects.toThrow(/Ambiguous extensionless module resolution/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  test('staged guard does not hard-block legacy experience shadow pairs', async () => {
+    const root = fixture();
+    try {
+      const importer = write(root, 'Webclient.app/src/App.tsx');
+      write(root, 'Webclient.app/src/Components/Common/ExperienceWorkspace.tsx');
+      write(root, 'Webclient.app/src/Components/Common/ExperienceWorkspace.js');
+      const candidates = findExistingRelativeImportCandidates(
+        './Components/Common/ExperienceWorkspace',
+        importer,
+      );
+      expect(candidates).toHaveLength(2);
+      expect(hasTypedJavascriptCollision(candidates)).toBe(true);
+      expect(isStrictTypedDomainAmbiguity(candidates)).toBe(false);
+
+      const plugin = moduleResolutionGuardPlugin();
+      if (typeof plugin.resolveId !== 'function') throw new Error('resolveId hook required');
+      const context = { error: (message: unknown) => { throw new Error(String(message)); } } as never;
+      await expect(Promise.resolve(plugin.resolveId.call(
+        context,
+        './Components/Common/ExperienceWorkspace',
+        importer,
+      ))).resolves.toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('strict typed-domain ambiguity is identified from candidate paths', () => {
+    const candidates = moduleCandidatePaths(
+      './platform/runtime',
+      '/workspace/Webclient.app/src/App.tsx',
+      ['.ts', '.js'],
+    );
+    expect(isStrictTypedDomainAmbiguity(candidates)).toBe(true);
   });
 
   test('plugin ignores dependency imports and files outside Webclient source boundary', async () => {
