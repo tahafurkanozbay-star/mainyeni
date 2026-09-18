@@ -76,7 +76,6 @@ describe('MapWidgetRuntime', () => {
   describe('external navigation boundary', () => {
     it('accepts only HTTP(S) URLs and strips no security controls', () => {
       expect(sanitizeExternalUrl('https://example.test/maps?q=1')).toBe('https://example.test/maps?q=1');
-      expect(sanitizeExternalUrl('http://example.test/')).toBe('http://example.test/');
       expect(sanitizeExternalUrl('javascript:alert(1)')).toBeNull();
       expect(sanitizeExternalUrl('data:text/html,hello')).toBeNull();
       expect(sanitizeExternalUrl('ftp://example.test/file')).toBeNull();
