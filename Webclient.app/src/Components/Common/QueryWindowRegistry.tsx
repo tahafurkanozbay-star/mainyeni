@@ -1,18 +1,38 @@
-import React from 'react';
+import React, { type ComponentType, type LazyExoticComponent } from 'react';
 
-const lazyNamed = (loader, exportName) => React.lazy(() => loader().then(module => {
-  const Component = module[exportName];
-  if (!Component) throw new Error(`Lazy window export not found: ${exportName}`);
-  return { default: Component };
-}));
+export interface QueryWindowDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly component: LazyExoticComponent<ComponentType<Record<string, unknown>>>;
+}
+type QueryWindowModule = Readonly<Record<string, unknown>>;
+type QueryWindowLoader = () => Promise<QueryWindowModule>;
 
-const defineWindow = (id, label, loader, exportName) => ({
+const lazyNamed = (
+  loader: QueryWindowLoader,
+  exportName: string,
+): LazyExoticComponent<ComponentType<Record<string, unknown>>> =>
+  React.lazy(async () => {
+    const module = await loader();
+    const Component = module[exportName];
+    if (typeof Component !== 'function' && typeof Component !== 'object') {
+      throw new Error(`Lazy window export not found: ${exportName}`);
+    }
+    return { default: Component as ComponentType<Record<string, unknown>> };
+  });
+
+const defineWindow = (
+  id: string,
+  label: string,
+  loader: QueryWindowLoader,
+  exportName: string,
+): QueryWindowDefinition => Object.freeze({
   id,
   label,
-  component: lazyNamed(loader, exportName)
+  component: lazyNamed(loader, exportName),
 });
 
-export const QUERY_WINDOW_DEFINITIONS = Object.freeze([
+export const QUERY_WINDOW_DEFINITIONS: readonly QueryWindowDefinition[] = Object.freeze([
   defineWindow('assemblyarea-query-window', 'Toplanma alanları', () => import('../Query/AAQuery/AAQueryWindow'), 'AssemblyAreaQueryWindow'),
   defineWindow('baskentmarket-query-window', 'Başkent Market', () => import('../Query/BaskentMarketQuery/BaskentMarketQueryWindow'), 'BaskentMarketQueryWindow'),
   defineWindow('cityblockparcel-query-window', 'Ada parsel sorgusu', () => import('../Query/CityBlockParcelQuery/CityBlockParcelQueryWindow'), 'CityBlockParcelQueryWindow'),
@@ -66,4 +86,4 @@ export const QUERY_WINDOW_DEFINITIONS = Object.freeze([
   defineWindow('vicinity-query-window', 'Yakın çevre sorgusu', () => import('../Query/VicinityQuery/VicinityQueryWindow'), 'VicinityQueryWindow')
 ]);
 
-export const QUERY_WINDOW_IDS = Object.freeze(QUERY_WINDOW_DEFINITIONS.map(item => item.id));
+export const QUERY_WINDOW_IDS: readonly string[] = Object.freeze(QUERY_WINDOW_DEFINITIONS.map((item) => item.id));
