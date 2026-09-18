@@ -243,8 +243,15 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(
   const notifyObserverError = (error: unknown): void => {
     try {
       options.onObserverError?.(error);
-    } catch {
-      // Observability hooks are intentionally isolated from lifecycle state.
+    } catch (observerError) {
+      const reporter = (globalThis as typeof globalThis & {
+        reportError?: (reportedError: unknown) => void;
+      }).reportError;
+      if (typeof reporter === 'function') {
+        reporter(observerError);
+        return;
+      }
+      throw observerError;
     }
   };
 
