@@ -81,7 +81,15 @@ export const installPerformanceLifecycleCapture = (
     : dependencies.windowRef;
 
   let disposed = false;
-  const capture = (): PerformanceRuntimeSnapshot => runtime.capture();
+  const capture = (): PerformanceRuntimeSnapshot => {
+    const snapshot = runtime.capture();
+    try {
+      dependencies.onCapture?.(snapshot);
+    } catch {
+      // Diagnostics observers are best-effort and must never break navigation.
+    }
+    return snapshot;
+  };
 
   const onVisibilityChange = (): void => {
     if (!disposed && documentRef?.visibilityState === 'hidden') capture();
