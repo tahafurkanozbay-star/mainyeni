@@ -576,7 +576,7 @@ export const mergeAdaptedSearchResults = (
             nextOffset: hasMore ? nextPage.nextOffset : null
         },
         diagnostics: {
-            ...(next?.diagnostics ?? {}),
+            ...next?.diagnostics,
             mergedPageCount: (previous?.diagnostics?.mergedPageCount || 1) + 1,
             mergedRecordCount: deduped.records.length,
             duplicateCount: (previous?.diagnostics?.duplicateCount || 0)
