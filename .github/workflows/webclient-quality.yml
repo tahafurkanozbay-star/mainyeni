@@ -111,7 +111,7 @@ jobs:
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/typecheck-baseline
           git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
-          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1 || true' EXIT
+          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1' EXIT
           set +e
           (
             cd /tmp/typecheck-baseline/Webclient.app
