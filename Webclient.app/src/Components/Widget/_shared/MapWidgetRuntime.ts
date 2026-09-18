@@ -187,10 +187,11 @@ export const openExternalUrl = (
   return true;
 };
 
-export const normalizeMapPoint = (point: MapPointLike | null | undefined): NormalizedMapPoint | null => {
-  if (!point) return null;
-  const latitude = finiteNumber(point.latitude ?? point.y);
-  const longitude = finiteNumber(point.longitude ?? point.x);
+export const normalizeMapPoint = (point: unknown): NormalizedMapPoint | null => {
+  if (!point || typeof point !== 'object' || Array.isArray(point)) return null;
+  const candidate = point as MapPointLike;
+  const latitude = finiteNumber(candidate.latitude ?? candidate.y);
+  const longitude = finiteNumber(candidate.longitude ?? candidate.x);
   if (latitude === null || longitude === null) return null;
   if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
   return Object.freeze({ latitude, longitude });
