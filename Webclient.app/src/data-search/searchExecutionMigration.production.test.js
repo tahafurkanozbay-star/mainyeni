@@ -19,5 +19,17 @@ describe('legacy search core TypeScript migration ratchet', () => {
     expect(existsSync(resolve(sourceRoot, 'DataIntegrityHelper.js'))).toBe(false);
     expect(existsSync(resolve(sourceRoot, 'RecordPresentationRuntime.ts'))).toBe(true);
     expect(existsSync(resolve(sourceRoot, 'RecordPresentationRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'SearchResultAdapterRuntime.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'SearchResultAdapterRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'DataSearchNextRuntime.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'DataSearchNextRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'DataReleaseGuardRuntime.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'DataReleaseGuardRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'RecordSchemaRuntime.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'RecordSchemaRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'SearchIndexRuntime.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'SearchIndexRuntime.js'))).toBe(false);
+    expect(existsSync(resolve(sourceRoot, 'SearchObservabilityRuntime.ts'))).toBe(true);
+    expect(existsSync(resolve(sourceRoot, 'SearchObservabilityRuntime.js'))).toBe(false);
   });
 });
