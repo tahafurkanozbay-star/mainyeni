@@ -241,11 +241,6 @@ export const CommonBusiness = {
 
     CreateLayer: async layerItem => {
         if (!layerItem) return null;
-        if (layerItem.layerType === Constants_LayerType.WMSLayer) {
-            throw Object.assign(new Error("WMS layers are not supported by the modern GIS runtime."), {
-                code: "UNSUPPORTED_GIS_SERVICE_TYPE"
-            });
-        }
         const url = CommonBusiness.GenerateUrl(layerItem);
         if (url) await CommonBusiness.AddProxyRule(url);
 
