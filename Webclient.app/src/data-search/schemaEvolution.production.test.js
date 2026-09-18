@@ -185,9 +185,9 @@ describe('schemaEvolution production runtime', () => {
 
   test('catalog TTL marks active entries stale without deleting them', () => {
     let now = 1000;
-    const catalog = new DatasetCatalog({ clock: () => now, defaultTtlMs: 100 });
+    const catalog = new DatasetCatalog({ clock: () => now, defaultTtlMs: 1_000 });
     catalog.register({ key: 'places' });
-    now = 1200;
+    now = 2_100;
 
     expect(catalog.get('places').state).toBe('stale');
     expect(catalog.get('places', { allowStale: false })).toBeNull();
