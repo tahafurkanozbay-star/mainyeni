@@ -97,9 +97,11 @@ describe("spatialFeatureSnapshotRuntime", () => {
     expect(store.snapshot()).toBe(before);
   });
 
-  it("rejects mixed spatial references without an explicit projection target", () => {
+  it("rejects mixed spatial references without mutating the committed snapshot or index", () => {
     const webMercator = normalizeSpatialReference({ wkid: 3857 });
     const store = createSpatialFeatureSnapshotStore();
+    store.replace([point(9, 9, 9)]);
+    const before = store.snapshot();
 
     expect(() =>
       store.replace([
@@ -116,6 +118,31 @@ describe("spatialFeatureSnapshotRuntime", () => {
         },
       ]),
     ).toThrow(/mixed spatial references/);
+
+    expect(store.snapshot()).toBe(before);
+    expect(store.has(9)).toBe(true);
+    expect(store.has(1)).toBe(false);
+    expect(store.has(2)).toBe(false);
+  });
+
+  it("keeps delta commits atomic when the estimated-byte budget is exceeded", () => {
+    const store = createSpatialFeatureSnapshotStore({
+      maxSnapshotFeatures: 3,
+      maxDeltaFeatures: 2,
+      maxEstimatedBytes: 100,
+    });
+    store.replace([point(1, 0, 0)]);
+    const before = store.snapshot();
+
+    expect(() =>
+      store.applyDelta({
+        upsert: [point(2, 1, 1)],
+      }),
+    ).toThrow(/estimated-byte budget/);
+
+    expect(store.snapshot()).toBe(before);
+    expect(store.has(1)).toBe(true);
+    expect(store.has(2)).toBe(false);
   });
 
   it("supports projection-on-ingest when explicitly configured", () => {
