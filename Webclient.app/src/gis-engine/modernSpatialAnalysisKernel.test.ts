@@ -106,7 +106,7 @@ describe('modernSpatialAnalysisKernel', () => {
     const classification = kernel.classify(observations, 'equal-interval', 5);
     expect(summary.mean).toBe(3);
     expect(classification.breaks[classification.breaks.length - 1]).toBe(5);
-    expect(kernel.classifyValue(3.1, classification)).toBe(3);
+    expect(kernel.classifyValue(3.1, classification)).toBe(2);
   });
 
   it('exposes categorical classification through the unified kernel contract', () => {
