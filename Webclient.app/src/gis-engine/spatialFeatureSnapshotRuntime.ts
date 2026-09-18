@@ -205,8 +205,12 @@ export function createSpatialFeatureSnapshotStore(
   let updatedAt = createdAt;
   let revision = 0;
 
-  const buildSnapshot = (): SpatialFeatureSnapshot => {
-    const features = [...index.values()].sort((left, right) =>
+  const buildSnapshot = (
+    source: ReadonlyMap<string, SpatialFeature>,
+    snapshotRevision = revision,
+    snapshotUpdatedAt = updatedAt,
+  ): SpatialFeatureSnapshot => {
+    const features = [...source.values()].sort((left, right) =>
       compareIdentities(left.id, right.id),
     );
     let estimatedBytes = 0;
@@ -226,9 +230,9 @@ export function createSpatialFeatureSnapshotStore(
     }
 
     return Object.freeze({
-      revision,
+      revision: snapshotRevision,
       createdAt,
-      updatedAt,
+      updatedAt: snapshotUpdatedAt,
       features: Object.freeze(features),
       ids: Object.freeze(features.map((feature) => feature.id)),
       size: features.length,
@@ -238,17 +242,27 @@ export function createSpatialFeatureSnapshotStore(
     });
   };
 
-  let current = buildSnapshot();
+  let current = buildSnapshot(index);
 
   const commit = (
+    staged: ReadonlyMap<string, SpatialFeature>,
     inserted: number,
     updated: number,
     deleted: number,
     unchanged: number,
   ): SpatialFeatureSnapshotChange => {
-    revision += 1;
-    updatedAt = now();
-    current = buildSnapshot();
+    const nextRevision = revision + 1;
+    const nextUpdatedAt = now();
+    const nextSnapshot = buildSnapshot(staged, nextRevision, nextUpdatedAt);
+
+    index.clear();
+    for (const [key, feature] of staged) {
+      index.set(key, feature);
+    }
+    revision = nextRevision;
+    updatedAt = nextUpdatedAt;
+    current = nextSnapshot;
+
     return Object.freeze({
       revision,
       inserted,
@@ -304,11 +318,7 @@ export function createSpatialFeatureSnapshotStore(
       }
     }
 
-    index.clear();
-    for (const [key, feature] of next) {
-      index.set(key, feature);
-    }
-    return commit(inserted, updated, deleted, unchanged);
+    return commit(next, inserted, updated, deleted, unchanged);
   };
 
   const applyDelta = (
@@ -366,17 +376,12 @@ export function createSpatialFeatureSnapshotStore(
       throw new RangeError("snapshot feature budget exceeded after delta");
     }
 
-    index.clear();
-    for (const [key, feature] of staged) {
-      index.set(key, feature);
-    }
-    return commit(inserted, updated, deleted, unchanged);
+    return commit(staged, inserted, updated, deleted, unchanged);
   };
 
   const clear = (): SpatialFeatureSnapshotChange => {
     const deleted = index.size;
-    index.clear();
-    return commit(0, 0, deleted, 0);
+    return commit(new Map<string, SpatialFeature>(), 0, 0, deleted, 0);
   };
 
   return Object.freeze({
