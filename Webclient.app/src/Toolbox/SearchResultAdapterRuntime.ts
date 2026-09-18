@@ -5,55 +5,187 @@ import {
     normalizeInteger,
     normalizePagination,
     normalizeRecord,
-    normalizeText
+    normalizeText,
+    type Coordinates,
+    type RecordSchema
 } from "./DataIntegrityHelper";
 import {
     createIconCoverageReport,
-    createRecordPresentations
+    createRecordPresentations,
+    type IconCoverageReport,
+    type RecordPresentation,
+    type RecordPresentationOptions
 } from "./RecordPresentationRuntime";
 
 export const RESULT_CONTAINER_KEYS = Object.freeze([
     "records", "results", "features", "items", "data", "Data"
-]);
+] as const);
 export const RESULT_TITLE_KEYS = Object.freeze([
     "title", "Title", "serviceTitle", "ServiceTitle", "name", "Name"
-]);
+] as const);
 export const RESULT_ERROR_KEYS = Object.freeze([
     "error", "Error", "message", "Message", "errorMessage", "ErrorMessage"
-]);
+] as const);
 export const RESULT_STATUS_KEYS = Object.freeze([
     "status", "Status", "resultType", "ResultType", "type", "Type"
-]);
+] as const);
 
 export const DEFAULT_ADAPTER_LIMIT = 50;
 export const MAX_ADAPTER_LIMIT = 1000;
 export const MAX_UNWRAP_DEPTH = 8;
 
-const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
-const hasOwn = (value, key) => Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
-const firstDefined = (value, keys) => {
+type UnknownRecord = Record<string, unknown>;
+
+export type ResultContract =
+    | "array"
+    | "empty"
+    | "arcgis-or-geojson"
+    | "legacy-service-result"
+    | "service-result"
+    | "records"
+    | "results"
+    | "nested"
+    | "object";
+
+export interface AdaptedFeatureRecord extends UnknownRecord {
+    id?: string;
+    coordinates?: Coordinates;
+    latitude?: number;
+    longitude?: number;
+    geometry: unknown;
+    attr: UnknownRecord | undefined;
+    attributes: UnknownRecord | undefined;
+    properties: UnknownRecord | undefined;
+    sourceIndex: number;
+    source: UnknownRecord;
+}
+
+export interface AdapterValidation {
+    normalized: boolean;
+    hasId: boolean;
+    hasCoordinates: boolean;
+    hasGeometry: boolean;
+}
+
+export interface AdapterRecord extends AdaptedFeatureRecord {
+    adapterFingerprint: string | null;
+    adapterValidation: AdapterValidation;
+}
+
+export interface RecordContainer {
+    records: unknown[];
+    key: string;
+    owner: UnknownRecord | null;
+    depth: number;
+}
+
+export interface AdapterRecordOptions {
+    schema?: RecordSchema;
+}
+
+export interface AdapterPageOptions {
+    offset?: unknown;
+    limit?: unknown;
+}
+
+export interface AdapterOptions extends AdapterRecordOptions, AdapterPageOptions {
+    dedupe?: boolean;
+    presentation?: boolean;
+    presentationOptions?: RecordPresentationOptions;
+    title?: unknown;
+    includeRaw?: boolean;
+    duplicateCount?: number;
+    ok?: boolean;
+    error?: unknown;
+    total?: unknown;
+}
+
+export interface AdapterPage {
+    offset: number;
+    limit: number;
+    count: number;
+    total: number | null;
+    hasMore: boolean;
+    nextOffset: number | null;
+    transferLimited: boolean;
+    progressed: boolean;
+}
+
+export interface AdapterDiagnostics extends Record<string, unknown> {
+    contract: ResultContract;
+    inputCount: number;
+    acceptedCount: number;
+    invalidCount: number;
+    duplicateCount: number;
+    coordinateCount: number;
+    missingCoordinateCount: number;
+    idCount: number;
+    missingIdCount: number;
+    fieldCount: number;
+    transferLimited: boolean;
+    mergedPageCount?: number;
+    mergedRecordCount?: number;
+}
+
+export interface AdaptedSearchResult {
+    title: string;
+    status: string;
+    ok: boolean;
+    error: Error | unknown | null;
+    records: AdapterRecord[];
+    presentations: RecordPresentation[];
+    iconCoverage: IconCoverageReport | null;
+    fields: unknown[];
+    page: AdapterPage;
+    diagnostics: AdapterDiagnostics;
+    raw: unknown | undefined;
+}
+
+export interface AdapterPageIterator {
+    offset: number;
+    limit: number;
+    pages: number;
+    received: number;
+    done: boolean;
+}
+
+const isObject = (value: unknown): value is UnknownRecord =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+
+const hasOwn = (value: unknown, key: string): boolean =>
+    Boolean(isObject(value) && Object.prototype.hasOwnProperty.call(value, key));
+
+const firstDefined = (value: unknown, keys: readonly string[]): unknown => {
     if (!isObject(value)) return undefined;
     for (const key of keys) {
         if (hasOwn(value, key) && value[key] !== undefined && value[key] !== null) return value[key];
     }
     return undefined;
 };
-const toFiniteNumber = value => {
+
+const readProperty = (value: unknown, key: string): unknown =>
+    isObject(value) ? value[key] : undefined;
+
+const readNestedProperty = (value: unknown, container: string, key: string): unknown =>
+    readProperty(readProperty(value, container), key);
+
+const toFiniteNumber = (value: unknown): number | null => {
     if (value === "" || value === null || value === undefined) return null;
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
 };
-const normalizeTechnicalToken = value => normalizeText(value).toLowerCase();
 
-export const normalizeResultTitle = (payload, fallback = "") => normalizeText(
+const normalizeTechnicalToken = (value: unknown): string => normalizeText(value).toLowerCase();
+
+export const normalizeResultTitle = (payload: unknown, fallback = ""): string => normalizeText(
     firstDefined(payload, RESULT_TITLE_KEYS) ?? fallback
 );
 
-export const normalizeResultStatus = payload => normalizeTechnicalToken(
+export const normalizeResultStatus = (payload: unknown): string => normalizeTechnicalToken(
     firstDefined(payload, RESULT_STATUS_KEYS) ?? ""
 );
 
-export const normalizeResultError = payload => {
+export const normalizeResultError = (payload: unknown): Error | null => {
     if (!payload) return null;
     const candidate = firstDefined(payload, RESULT_ERROR_KEYS);
     if (!candidate) return null;
@@ -66,16 +198,16 @@ export const normalizeResultError = payload => {
     return message ? new Error(message) : null;
 };
 
-export const isFailureStatus = status => [
+export const isFailureStatus = (status: unknown): boolean => [
     "error", "failed", "failure", "fail", "exception", "hata", "false", "0"
 ].includes(normalizeTechnicalToken(status));
 
-export const isSuccessStatus = status => [
+export const isSuccessStatus = (status: unknown): boolean => [
     "success", "ok", "successful", "başarılı", "basarili", "true", "1"
 ].includes(normalizeTechnicalToken(status));
 
-export const normalizeGeometryCoordinates = geometry => {
-    if (!geometry || typeof geometry !== "object") return null;
+export const normalizeGeometryCoordinates = (geometry: unknown): Coordinates | null => {
+    if (!isObject(geometry)) return null;
     const direct = normalizeCoordinates(geometry);
     if (direct) return direct;
     if (Array.isArray(geometry.coordinates) && geometry.coordinates.length >= 2) {
@@ -89,7 +221,7 @@ export const normalizeGeometryCoordinates = geometry => {
     return null;
 };
 
-export const getFeatureAttributes = record => {
+export const getFeatureAttributes = (record: unknown): UnknownRecord => {
     if (!isObject(record)) return {};
     if (isObject(record.attributes)) return record.attributes;
     if (isObject(record.attr)) return record.attr;
@@ -97,7 +229,10 @@ export const getFeatureAttributes = record => {
     return record;
 };
 
-export const adaptFeatureRecord = (record, sourceIndex = 0) => {
+export const adaptFeatureRecord = (
+    record: unknown,
+    sourceIndex = 0
+): AdaptedFeatureRecord | null => {
     if (!isObject(record)) return null;
     const attributes = getFeatureAttributes(record);
     const geometry = record.geometry ?? attributes.geometry ?? null;
@@ -130,13 +265,19 @@ export const adaptFeatureRecord = (record, sourceIndex = 0) => {
     };
 };
 
-export const findRecordContainer = (payload, depth = 0, visited = new WeakSet()) => {
+export const findRecordContainer = (
+    payload: unknown,
+    depth = 0,
+    visited: WeakSet<object> = new WeakSet()
+): RecordContainer | null => {
     if (Array.isArray(payload)) return { records: payload, key: "array", owner: null, depth };
     if (!isObject(payload) || depth > MAX_UNWRAP_DEPTH || visited.has(payload)) return null;
     visited.add(payload);
 
     for (const key of RESULT_CONTAINER_KEYS) {
-        if (Array.isArray(payload[key])) return { records: payload[key], key, owner: payload, depth };
+        if (Array.isArray(payload[key])) {
+            return { records: payload[key] as unknown[], key, owner: payload, depth };
+        }
     }
     for (const key of RESULT_CONTAINER_KEYS) {
         const nested = payload[key];
@@ -144,7 +285,14 @@ export const findRecordContainer = (payload, depth = 0, visited = new WeakSet())
         const found = findRecordContainer(nested, depth + 1, visited);
         if (found) return found;
     }
-    for (const nested of [payload.result, payload.Result, payload.response, payload.Response, payload.value, payload.Value]) {
+    for (const nested of [
+        payload.result,
+        payload.Result,
+        payload.response,
+        payload.Response,
+        payload.value,
+        payload.Value
+    ]) {
         if (!isObject(nested) && !Array.isArray(nested)) continue;
         const found = findRecordContainer(nested, depth + 1, visited);
         if (found) return found;
@@ -152,9 +300,14 @@ export const findRecordContainer = (payload, depth = 0, visited = new WeakSet())
     return null;
 };
 
-export const extractResultRecords = payload => findRecordContainer(payload)?.records || [];
+export const extractResultRecords = (payload: unknown): unknown[] =>
+    findRecordContainer(payload)?.records || [];
 
-export const normalizeAdapterRecord = (record, sourceIndex = 0, options = {}) => {
+export const normalizeAdapterRecord = (
+    record: unknown,
+    sourceIndex = 0,
+    options: AdapterRecordOptions = {}
+): AdapterRecord | null => {
     const adapted = adaptFeatureRecord(record, sourceIndex);
     if (!adapted) return null;
     const normalized = normalizeRecord(adapted, options.schema || {});
@@ -176,13 +329,16 @@ export const normalizeAdapterRecord = (record, sourceIndex = 0, options = {}) =>
     };
 };
 
-export const dedupeAdaptedRecords = records => {
-    const seen = new Set();
-    const output = [];
+export const dedupeAdaptedRecords = (
+    records: unknown
+): { records: AdapterRecord[]; duplicates: number } => {
+    const seen = new Set<string>();
+    const output: AdapterRecord[] = [];
     let duplicates = 0;
-    (Array.isArray(records) ? records : []).forEach((record, index) => {
-        const normalized = record?.adapterValidation
-            ? record
+    const input = Array.isArray(records) ? records : [];
+    input.forEach((record, index) => {
+        const normalized = isObject(record) && isObject(record.adapterValidation)
+            ? record as unknown as AdapterRecord
             : normalizeAdapterRecord(record, index);
         if (!normalized) return;
         const key = normalized.adapterFingerprint;
@@ -196,50 +352,60 @@ export const dedupeAdaptedRecords = records => {
     return { records: output, duplicates };
 };
 
-export const readResultFields = payload => {
+export const readResultFields = (payload: unknown): unknown[] => {
     const candidates = [
-        payload?.fields,
-        payload?.Fields,
-        payload?.data?.fields,
-        payload?.Data?.fields,
-        payload?.result?.fields,
-        payload?.Result?.fields
+        readProperty(payload, "fields"),
+        readProperty(payload, "Fields"),
+        readNestedProperty(payload, "data", "fields"),
+        readNestedProperty(payload, "Data", "fields"),
+        readNestedProperty(payload, "result", "fields"),
+        readNestedProperty(payload, "Result", "fields")
     ];
     const fields = candidates.find(Array.isArray);
     if (!Array.isArray(fields)) return [];
     return fields.every(Boolean) ? fields : fields.filter(Boolean);
 };
 
-export const readTransferLimit = payload => Boolean(
-    payload?.exceededTransferLimit
-    ?? payload?.ExceededTransferLimit
-    ?? payload?.data?.exceededTransferLimit
-    ?? payload?.Data?.exceededTransferLimit
-    ?? payload?.result?.exceededTransferLimit
-    ?? payload?.Result?.exceededTransferLimit
+export const readTransferLimit = (payload: unknown): boolean => Boolean(
+    readProperty(payload, "exceededTransferLimit")
+    ?? readProperty(payload, "ExceededTransferLimit")
+    ?? readNestedProperty(payload, "data", "exceededTransferLimit")
+    ?? readNestedProperty(payload, "Data", "exceededTransferLimit")
+    ?? readNestedProperty(payload, "result", "exceededTransferLimit")
+    ?? readNestedProperty(payload, "Result", "exceededTransferLimit")
 );
 
-export const normalizeResultPage = (payload, recordCount, options = {}) => {
+export const normalizeResultPage = (
+    payload: unknown,
+    recordCount: unknown,
+    options: AdapterPageOptions = {}
+): AdapterPage => {
     const requested = normalizePagination({
-        offset: options.offset ?? payload?.offset ?? payload?.resultOffset ?? 0,
-        limit: options.limit ?? payload?.limit ?? payload?.resultRecordCount ?? DEFAULT_ADAPTER_LIMIT
+        offset: options.offset
+            ?? readProperty(payload, "offset")
+            ?? readProperty(payload, "resultOffset")
+            ?? 0,
+        limit: options.limit
+            ?? readProperty(payload, "limit")
+            ?? readProperty(payload, "resultRecordCount")
+            ?? DEFAULT_ADAPTER_LIMIT
     });
     const offset = requested.offset;
     const limit = Math.min(MAX_ADAPTER_LIMIT, requested.limit);
-    const count = normalizeInteger(recordCount, { min: 0, fallback: 0 });
+    const count = normalizeInteger(recordCount, { min: 0, fallback: 0 }) ?? 0;
     const explicitTotal = toFiniteNumber(
-        payload?.total
-        ?? payload?.totalCount
-        ?? payload?.TotalCount
-        ?? payload?.countTotal
-        ?? payload?.data?.total
-        ?? payload?.Data?.total
+        readProperty(payload, "total")
+        ?? readProperty(payload, "totalCount")
+        ?? readProperty(payload, "TotalCount")
+        ?? readProperty(payload, "countTotal")
+        ?? readNestedProperty(payload, "data", "total")
+        ?? readNestedProperty(payload, "Data", "total")
     );
     const explicitNextOffset = toFiniteNumber(
-        payload?.nextOffset
-        ?? payload?.NextOffset
-        ?? payload?.data?.nextOffset
-        ?? payload?.Data?.nextOffset
+        readProperty(payload, "nextOffset")
+        ?? readProperty(payload, "NextOffset")
+        ?? readNestedProperty(payload, "data", "nextOffset")
+        ?? readNestedProperty(payload, "Data", "nextOffset")
     );
     const transferLimited = readTransferLimit(payload);
     const progressedOffset = offset + count;
@@ -260,7 +426,7 @@ export const normalizeResultPage = (payload, recordCount, options = {}) => {
     };
 };
 
-export const inferResultContract = payload => {
+export const inferResultContract = (payload: unknown): ResultContract => {
     if (Array.isArray(payload)) return "array";
     if (!isObject(payload)) return "empty";
     if (Array.isArray(payload.features)) return "arcgis-or-geojson";
@@ -271,7 +437,11 @@ export const inferResultContract = payload => {
     return findRecordContainer(payload) ? "nested" : "object";
 };
 
-export const collectPayloadDiagnostics = (payload, adaptedRecords, options = {}) => {
+export const collectPayloadDiagnostics = (
+    payload: unknown,
+    adaptedRecords: readonly AdapterRecord[],
+    options: Pick<AdapterOptions, "duplicateCount"> = {}
+): AdapterDiagnostics => {
     const inputRecords = extractResultRecords(payload);
     const invalidCount = inputRecords.reduce(
         (count, record) => count + (adaptFeatureRecord(record) ? 0 : 1),
@@ -294,10 +464,13 @@ export const collectPayloadDiagnostics = (payload, adaptedRecords, options = {})
     };
 };
 
-export const adaptSearchResult = (payload, options = {}) => {
+export const adaptSearchResult = (
+    payload: unknown,
+    options: AdapterOptions = {}
+): AdaptedSearchResult => {
     const adapted = extractResultRecords(payload)
         .map((record, index) => normalizeAdapterRecord(record, index, options))
-        .filter(Boolean);
+        .filter((record): record is AdapterRecord => record !== null);
     const deduped = options.dedupe === false
         ? { records: adapted, duplicates: 0 }
         : dedupeAdaptedRecords(adapted);
@@ -313,7 +486,7 @@ export const adaptSearchResult = (payload, options = {}) => {
         ? []
         : createRecordPresentations(records, options.presentationOptions || {});
     return {
-        title: normalizeResultTitle(payload, options.title || ""),
+        title: normalizeResultTitle(payload, normalizeText(options.title)),
         status,
         ok: !error && !isFailureStatus(status),
         error,
@@ -327,7 +500,9 @@ export const adaptSearchResult = (payload, options = {}) => {
     };
 };
 
-export const createEmptySearchResult = (options = {}) => ({
+export const createEmptySearchResult = (
+    options: AdapterOptions = {}
+): AdaptedSearchResult => ({
     title: normalizeText(options.title),
     status: "",
     ok: options.ok !== false,
@@ -337,14 +512,16 @@ export const createEmptySearchResult = (options = {}) => ({
     iconCoverage: options.presentation === false ? null : createIconCoverageReport([]),
     fields: [],
     page: {
-        offset: normalizeInteger(options.offset, { min: 0, fallback: 0 }),
+        offset: normalizeInteger(options.offset, { min: 0, fallback: 0 }) ?? 0,
         limit: normalizeInteger(options.limit, {
             min: 1,
             max: MAX_ADAPTER_LIMIT,
             fallback: DEFAULT_ADAPTER_LIMIT
-        }),
+        }) ?? DEFAULT_ADAPTER_LIMIT,
         count: 0,
-        total: options.total === null ? null : normalizeInteger(options.total, { min: 0, fallback: 0 }),
+        total: options.total === null
+            ? null
+            : normalizeInteger(options.total, { min: 0, fallback: 0 }) ?? 0,
         hasMore: false,
         nextOffset: null,
         transferLimited: false,
@@ -366,7 +543,11 @@ export const createEmptySearchResult = (options = {}) => ({
     raw: undefined
 });
 
-export const mergeAdaptedSearchResults = (previous, next, options = {}) => {
+export const mergeAdaptedSearchResults = (
+    previous: AdaptedSearchResult | null | undefined,
+    next: AdaptedSearchResult | null | undefined,
+    options: AdapterOptions = {}
+) => {
     const combined = [
         ...(Array.isArray(previous?.records) ? previous.records : []),
         ...(Array.isArray(next?.records) ? next.records : [])
@@ -377,7 +558,7 @@ export const mergeAdaptedSearchResults = (previous, next, options = {}) => {
     const presentations = options.presentation === false
         ? []
         : createRecordPresentations(deduped.records, options.presentationOptions || {});
-    const nextPage = next?.page || {};
+    const nextPage: Partial<AdapterPage> = next?.page ?? {};
     const hasMore = nextPage.hasMore === true && nextPage.nextOffset !== null;
     return {
         ...next,
@@ -395,7 +576,7 @@ export const mergeAdaptedSearchResults = (previous, next, options = {}) => {
             nextOffset: hasMore ? nextPage.nextOffset : null
         },
         diagnostics: {
-            ...(next?.diagnostics || {}),
+            ...(next?.diagnostics ?? {}),
             mergedPageCount: (previous?.diagnostics?.mergedPageCount || 1) + 1,
             mergedRecordCount: deduped.records.length,
             duplicateCount: (previous?.diagnostics?.duplicateCount || 0)
@@ -405,7 +586,9 @@ export const mergeAdaptedSearchResults = (previous, next, options = {}) => {
     };
 };
 
-export const createAdapterPageIterator = (initialOptions = {}) => {
+export const createAdapterPageIterator = (
+    initialOptions: AdapterPageOptions = {}
+): AdapterPageIterator => {
     const initial = normalizePagination({
         offset: initialOptions.offset,
         limit: initialOptions.limit ?? DEFAULT_ADAPTER_LIMIT
@@ -419,9 +602,12 @@ export const createAdapterPageIterator = (initialOptions = {}) => {
     };
 };
 
-export const advanceAdapterPageIterator = (state, result) => {
+export const advanceAdapterPageIterator = (
+    state: AdapterPageIterator | null | undefined,
+    result: AdaptedSearchResult | null | undefined
+): AdapterPageIterator => {
     const current = state || createAdapterPageIterator();
-    const count = normalizeInteger(result?.page?.count, { min: 0, fallback: 0 });
+    const count = normalizeInteger(result?.page?.count, { min: 0, fallback: 0 }) ?? 0;
     const candidate = normalizeInteger(result?.page?.nextOffset, { min: 0, fallback: null });
     const progressed = candidate !== null && candidate > current.offset;
     const hasMore = result?.page?.hasMore === true;
