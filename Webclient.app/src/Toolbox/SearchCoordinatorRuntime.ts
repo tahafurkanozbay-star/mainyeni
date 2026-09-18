@@ -12,14 +12,21 @@ import {
 import {
     createSearchExecutionIndex,
     executeSearch,
-    normalizeSearchRequest
+    normalizeSearchRequest,
+    type SearchExecutionIndex,
+    type SearchHit,
+    type SearchPage
 } from "./SearchExecutionRuntime";
 import {
     createAddressIndex,
     createAddressQualityReport,
     findNearestAddresses,
     parseCoordinatePair,
-    searchAddressIndex
+    searchAddressIndex,
+    type AddressDocument,
+    type AddressIndex,
+    type AddressSearchHit,
+    type Coordinates
 } from "./AddressSearchRuntime";
 import {
     createDataQualitySnapshot,
@@ -38,25 +45,198 @@ export const SEARCH_COORDINATOR_MODES = Object.freeze({
     Text: "text",
     Address: "address",
     Nearest: "nearest"
-});
+} as const);
+
+
+export type SearchCoordinatorMode = (typeof SEARCH_COORDINATOR_MODES)[keyof typeof SEARCH_COORDINATOR_MODES];
+
+type UnknownRecord = Record<string, unknown>;
+
+export interface CoordinatorRequestInput extends UnknownRecord {
+    query?: unknown;
+    mode?: unknown;
+    datasets?: unknown;
+    dataset?: unknown;
+    center?: unknown;
+    coordinates?: unknown;
+    radiusMeters?: unknown;
+    offset?: unknown;
+    limit?: unknown;
+    address?: unknown;
+    addressOptions?: unknown;
+    district?: unknown;
+    neighborhood?: unknown;
+    street?: unknown;
+    level?: unknown;
+    filters?: unknown;
+    facetFields?: unknown;
+    sort?: unknown;
+    minScore?: unknown;
+    schema?: unknown;
+    includeQuality?: unknown;
+    includeSchemaReport?: unknown;
+    useCache?: unknown;
+    forceDatasetRefresh?: unknown;
+}
+
+export interface NormalizedCoordinatorRequest extends UnknownRecord {
+    query: string;
+    normalizedQuery: string;
+    mode: SearchCoordinatorMode;
+    datasets: string[];
+    center: Coordinates | null;
+    radiusMeters: number;
+    offset: number;
+    limit: number;
+    includeQuality: boolean;
+    includeSchemaReport: boolean;
+    useCache: boolean;
+    forceDatasetRefresh: boolean;
+}
+
+export interface CoordinatorCacheOptions {
+    maxEntries?: unknown;
+    ttlMs?: unknown;
+}
+
+export interface CoordinatorCacheDiagnostics {
+    hits: number;
+    misses: number;
+    sets: number;
+    evictions: number;
+    expirations: number;
+    size: number;
+    maxEntries: number;
+    ttlMs: number;
+}
+
+export interface DatasetSnapshot {
+    name: string;
+    revision: number;
+    fingerprint: string;
+    records: unknown[];
+    metadata?: Record<string, unknown>;
+}
+
+interface SearchDatasetRegistryLike {
+    getOrBuildDerived<T>(
+        datasetName: string,
+        cacheKey: string,
+        builder: (snapshot: DatasetSnapshot) => T
+    ): T;
+    append(datasetName: unknown, records: unknown[], metadata: UnknownRecord, options: UnknownRecord): unknown;
+    replace(datasetName: unknown, records: unknown[], metadata: UnknownRecord, options: UnknownRecord): unknown;
+    register(datasetName: unknown, records: unknown, metadata: unknown, options: unknown): unknown;
+    registerLoader(datasetName: unknown, loader: unknown): unknown;
+    ensure(datasetName: unknown, options: UnknownRecord): Promise<DatasetSnapshot>;
+    get(datasetName: unknown, options: UnknownRecord): DatasetSnapshot | null | undefined;
+    invalidateDerived(datasetName: unknown): unknown;
+    markStale(datasetName: unknown): unknown;
+    remove(datasetName: unknown): unknown;
+    clear(): unknown;
+    diagnostics(options?: unknown): unknown;
+    resetStatistics(): void;
+}
+
+interface AdaptedSearchPayload {
+    records: unknown[];
+    diagnostics?: UnknownRecord;
+    fields?: unknown[];
+}
+
+export interface CoordinatorPayload {
+    records: unknown[];
+    adapted: AdaptedSearchPayload | null;
+}
+
+export interface CoordinatorSearchOptions extends UnknownRecord {
+    signal?: AbortSignal | null;
+    weights?: Readonly<Record<string, number>>;
+    now?: number;
+    force?: boolean;
+    allowStale?: boolean;
+    releasePolicy?: unknown;
+}
+
+export interface CoordinatorResponse {
+    mode?: SearchCoordinatorMode;
+    results: unknown[];
+    records: unknown[];
+    page?: SearchPage;
+    facets?: Record<string, unknown>;
+    diagnostics?: UnknownRecord;
+    rawSearchResponse?: unknown;
+    request?: unknown;
+    dataset?: string;
+    datasetRevision?: number;
+    datasetFingerprint?: string;
+    schemaId?: unknown;
+    schemaReport?: unknown;
+    quality?: unknown;
+    qualityGate?: unknown;
+    error?: unknown;
+}
+
+export interface CoordinatorResultCache {
+    get(key: string, now?: number): CoordinatorResponse | undefined;
+    set(key: string, value: CoordinatorResponse, now?: number): CoordinatorResponse;
+    delete(key: string): boolean;
+    clear(): number;
+    invalidateDataset(datasetName: unknown): number;
+    diagnostics(now?: number): CoordinatorCacheDiagnostics;
+}
+
+interface CoordinatorOptions {
+    registry?: SearchDatasetRegistryLike;
+    registryOptions?: unknown;
+    resultCache?: CoordinatorResultCache;
+    cacheOptions?: CoordinatorCacheOptions;
+    releasePolicy?: unknown;
+}
+
+interface CoordinatorIngestOptions extends UnknownRecord {
+    adapterOptions?: UnknownRecord;
+    metadata?: UnknownRecord;
+    append?: boolean;
+    now?: number;
+}
+
+interface CoordinatorStats {
+    searches: number;
+    textSearches: number;
+    addressSearches: number;
+    nearestSearches: number;
+    multiDatasetSearches: number;
+    cacheHits: number;
+    cacheMisses: number;
+    failures: number;
+    ingestions: number;
+}
+
+const normalizeIntegerValue = (
+    value: unknown,
+    options: Readonly<{ min?: number; max?: number; fallback: number }>
+): number => normalizeInteger(value as never, options as never) as number;
 
 export const DEFAULT_COORDINATOR_RESULT_CACHE_SIZE = 100;
 export const DEFAULT_COORDINATOR_RESULT_TTL_MS = 30000;
 export const MAX_COORDINATOR_RESULT_CACHE_SIZE = 1000;
 export const MAX_COORDINATOR_DATASETS_PER_QUERY = 16;
 
-const asArray = value => Array.isArray(value) ? value : [];
-const unique = values => Array.from(new Set(values));
-const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const asArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const unique = <T>(values: readonly T[]): T[] => Array.from(new Set(values));
+const isObject = (value: unknown): value is UnknownRecord =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
 
-export const normalizeCoordinatorMode = value => {
+export const normalizeCoordinatorMode = (value: unknown): SearchCoordinatorMode => {
     const normalized = normalizeText(value).toLocaleLowerCase("tr-TR");
-    return Object.values(SEARCH_COORDINATOR_MODES).includes(normalized)
-        ? normalized
+    const candidate = normalized as SearchCoordinatorMode;
+    return (Object.values(SEARCH_COORDINATOR_MODES) as SearchCoordinatorMode[]).includes(candidate)
+        ? candidate
         : SEARCH_COORDINATOR_MODES.Auto;
 };
 
-export const looksLikeCoordinateQuery = value => {
+export const looksLikeCoordinateQuery = (value: unknown): boolean => {
     if (Array.isArray(value)) return value.length >= 2 && Boolean(parseCoordinatePair(value));
     if (value && typeof value === "object") return Boolean(parseCoordinatePair(value));
     const text = normalizeText(value);
@@ -69,7 +249,7 @@ export const looksLikeCoordinateQuery = value => {
     return numericTokens.length === 2 && Boolean(parseCoordinatePair(text));
 };
 
-export const inferCoordinatorMode = request => {
+export const inferCoordinatorMode = (request: CoordinatorRequestInput): SearchCoordinatorMode => {
     const explicit = normalizeCoordinatorMode(request?.mode);
     if (explicit !== SEARCH_COORDINATOR_MODES.Auto) return explicit;
     if (request?.center || request?.coordinates || looksLikeCoordinateQuery(request?.query)) {
@@ -81,13 +261,13 @@ export const inferCoordinatorMode = request => {
     return SEARCH_COORDINATOR_MODES.Text;
 };
 
-export const normalizeCoordinatorRequest = request => {
-    const input = isObject(request) ? request : { query: request };
+export const normalizeCoordinatorRequest = (request: unknown): NormalizedCoordinatorRequest => {
+    const input: CoordinatorRequestInput = isObject(request) ? request : { query: request };
     const query = normalizeText(input.query);
     const datasets = unique([
         ...asArray(input.datasets),
         ...(input.dataset ? [input.dataset] : [])
-    ].map(normalizeText).filter(Boolean)).slice(0, MAX_COORDINATOR_DATASETS_PER_QUERY);
+    ].map(value => normalizeText(value)).filter(Boolean)).slice(0, MAX_COORDINATOR_DATASETS_PER_QUERY);
     const center = parseCoordinatePair(input.center || input.coordinates)
         || (looksLikeCoordinateQuery(query) ? parseCoordinatePair(query) : null);
     return {
@@ -98,8 +278,8 @@ export const normalizeCoordinatorRequest = request => {
         datasets,
         center,
         radiusMeters: Math.max(0, Number.isFinite(Number(input.radiusMeters)) ? Number(input.radiusMeters) : 5000),
-        offset: normalizeInteger(input.offset, { min: 0, fallback: 0 }),
-        limit: normalizeInteger(input.limit, { min: 1, max: 500, fallback: 50 }),
+        offset: normalizeIntegerValue(input.offset, { min: 0, fallback: 0 }),
+        limit: normalizeIntegerValue(input.limit, { min: 1, max: 500, fallback: 50 }),
         includeQuality: input.includeQuality !== false,
         includeSchemaReport: input.includeSchemaReport === true,
         useCache: input.useCache !== false,
@@ -107,7 +287,11 @@ export const normalizeCoordinatorRequest = request => {
     };
 };
 
-export const createCoordinatorCacheKey = (datasetName, datasetRevision, request) => {
+export const createCoordinatorCacheKey = (
+    datasetName: unknown,
+    datasetRevision: unknown,
+    request: unknown
+): string => {
     const normalized = normalizeCoordinatorRequest(request);
     const filters = asArray(normalized.filters)
         .map(filter => JSON.stringify(filter))
@@ -126,27 +310,27 @@ export const createCoordinatorCacheKey = (datasetName, datasetRevision, request)
         street: normalizeSearchText(normalized.street),
         level: normalizeSearchText(normalized.level),
         filters,
-        facets: asArray(normalized.facetFields).map(normalizeText).sort(),
+        facets: asArray(normalized.facetFields).map(value => normalizeText(value)).sort(),
         sort: normalized.sort || "",
         minScore: normalized.minScore ?? null
     });
 };
 
-export const createCoordinatorResultCache = (options = {}) => {
-    const maxEntries = normalizeInteger(options.maxEntries, {
+export const createCoordinatorResultCache = (options: CoordinatorCacheOptions = {}): CoordinatorResultCache => {
+    const maxEntries = normalizeIntegerValue(options.maxEntries, {
         min: 1,
         max: MAX_COORDINATOR_RESULT_CACHE_SIZE,
         fallback: DEFAULT_COORDINATOR_RESULT_CACHE_SIZE
     });
-    const ttlMs = normalizeInteger(options.ttlMs, {
+    const ttlMs = normalizeIntegerValue(options.ttlMs, {
         min: 1,
         max: 60 * 60 * 1000,
         fallback: DEFAULT_COORDINATOR_RESULT_TTL_MS
     });
-    const entries = new Map();
-    const stats = { hits: 0, misses: 0, sets: 0, evictions: 0, expirations: 0 };
+    const entries = new Map<string, { value: CoordinatorResponse; expiresAt: number }>();
+    const stats: CoordinatorStats = { hits: 0, misses: 0, sets: 0, evictions: 0, expirations: 0 };
 
-    const removeExpired = now => {
+    const removeExpired = (now: number): void => {
         Array.from(entries.entries()).forEach(([key, entry]) => {
             if (entry.expiresAt <= now) {
                 entries.delete(key);
@@ -156,7 +340,7 @@ export const createCoordinatorResultCache = (options = {}) => {
     };
 
     return {
-        get(key, now = Date.now()) {
+        get(key: string, now = Date.now()): CoordinatorResponse | undefined {
             removeExpired(now);
             const entry = entries.get(key);
             if (!entry) {
@@ -168,26 +352,28 @@ export const createCoordinatorResultCache = (options = {}) => {
             stats.hits += 1;
             return entry.value;
         },
-        set(key, value, now = Date.now()) {
+        set(key: string, value: CoordinatorResponse, now = Date.now()): CoordinatorResponse {
             removeExpired(now);
             entries.delete(key);
             entries.set(key, { value, expiresAt: now + ttlMs });
             stats.sets += 1;
             while (entries.size > maxEntries) {
-                entries.delete(entries.keys().next().value);
+                const oldestKey = entries.keys().next().value;
+                if (oldestKey === undefined) break;
+                entries.delete(oldestKey);
                 stats.evictions += 1;
             }
             return value;
         },
-        delete(key) {
+        delete(key: string): boolean {
             return entries.delete(key);
         },
-        clear() {
+        clear(): number {
             const count = entries.size;
             entries.clear();
             return count;
         },
-        invalidateDataset(datasetName) {
+        invalidateDataset(datasetName: unknown): number {
             const marker = `"dataset":"${normalizeText(datasetName)}"`;
             let removed = 0;
             Array.from(entries.keys()).forEach(key => {
@@ -198,36 +384,43 @@ export const createCoordinatorResultCache = (options = {}) => {
             });
             return removed;
         },
-        diagnostics(now = Date.now()) {
+        diagnostics(now = Date.now()): CoordinatorCacheDiagnostics {
             removeExpired(now);
             return { ...stats, size: entries.size, maxEntries, ttlMs };
         }
     };
 };
 
-export const normalizeCoordinatorPayload = (payload, options = {}) => {
+export const normalizeCoordinatorPayload = (
+    payload: unknown,
+    options: UnknownRecord = {}
+): CoordinatorPayload => {
     if (Array.isArray(payload)) return { records: payload, adapted: null };
-    if (payload && Array.isArray(payload.records) && payload.page && payload.diagnostics) {
-        return { records: payload.records, adapted: payload };
+    if (isObject(payload) && Array.isArray(payload.records) && payload.page && payload.diagnostics) {
+        return { records: payload.records, adapted: payload as unknown as AdaptedSearchPayload };
     }
-    const adapted = adaptSearchResult(payload, {
+    const adapted = adaptSearchResult(payload as never, {
         ...options,
         presentation: options.presentation !== false
-    });
-    return { records: adapted.records, adapted };
+    } as never) as AdaptedSearchPayload;
+    return { records: Array.isArray(adapted.records) ? adapted.records : [], adapted };
 };
 
-export const createTextSearchResponse = (index, request, options = {}) => {
+export const createTextSearchResponse = (
+    index: SearchExecutionIndex,
+    request: NormalizedCoordinatorRequest,
+    options: CoordinatorSearchOptions = {}
+): CoordinatorResponse => {
     const searchRequest = normalizeSearchRequest({
         ...request,
         query: request.query,
         offset: request.offset,
         limit: request.limit
     });
-    const response = executeSearch(index, searchRequest, {
-        signal: options.signal,
-        weights: options.weights
-    });
+    const executionOptions: { signal?: AbortSignal | null; weights?: Readonly<Record<string, number>> } = {};
+    if (options.signal !== undefined) executionOptions.signal = options.signal;
+    if (options.weights !== undefined) executionOptions.weights = options.weights;
+    const response = executeSearch(index, searchRequest, executionOptions);
     return {
         mode: SEARCH_COORDINATOR_MODES.Text,
         results: response.results,
@@ -240,7 +433,10 @@ export const createTextSearchResponse = (index, request, options = {}) => {
     };
 };
 
-export const createAddressSearchResponse = (index, request) => {
+export const createAddressSearchResponse = (
+    index: AddressIndex,
+    request: NormalizedCoordinatorRequest
+): CoordinatorResponse => {
     const response = searchAddressIndex(index, request.query, {
         ...request.addressOptions,
         offset: request.offset,
@@ -267,7 +463,10 @@ export const createAddressSearchResponse = (index, request) => {
     };
 };
 
-export const createNearestSearchResponse = (index, request) => {
+export const createNearestSearchResponse = (
+    index: AddressIndex,
+    request: NormalizedCoordinatorRequest
+): CoordinatorResponse => {
     const center = request.center || parseCoordinatePair(request.query);
     const nearest = findNearestAddresses(index, center, {
         radiusMeters: request.radiusMeters,
@@ -299,15 +498,20 @@ export const createNearestSearchResponse = (index, request) => {
     };
 };
 
-export const mergeCoordinatorResponses = responses => {
-    const input = asArray(responses).filter(Boolean);
+export const mergeCoordinatorResponses = (responses: unknown): CoordinatorResponse & {
+    datasets: string[];
+    errors: Array<{ dataset?: string; error: unknown }>;
+} => {
+    const input = asArray(responses)
+        .filter((response): response is CoordinatorResponse => isObject(response) && Array.isArray(response.results));
     const results = input.flatMap(response => response.results || []);
     const records = input.flatMap(response => response.records || []);
     const seen = new Set();
-    const dedupedResults = [];
+    const dedupedResults: unknown[] = [];
     results.forEach(result => {
-        const document = result?.document || result;
-        const key = document?.key || document?.id || `${document?.title || ""}|${document?.address || ""}`;
+        const resultRecord = isObject(result) ? result : {};
+        const document = isObject(resultRecord.document) ? resultRecord.document : resultRecord;
+        const key = document.key || document.id || `${document.title || ""}|${document.address || ""}`;
         if (seen.has(key)) return;
         seen.add(key);
         dedupedResults.push(result);
@@ -315,11 +519,12 @@ export const mergeCoordinatorResponses = responses => {
     return {
         results: dedupedResults,
         records,
-        datasets: input.map(response => response.dataset).filter(Boolean),
-        errors: input.filter(response => response.error).map(response => ({
-            dataset: response.dataset,
-            error: response.error
-        })),
+        datasets: input.map(response => response.dataset).filter((value): value is string => Boolean(value)),
+        errors: input.filter(response => response.error !== undefined).map(response => {
+            const entry: { dataset?: string; error: unknown } = { error: response.error };
+            if (response.dataset !== undefined) entry.dataset = response.dataset;
+            return entry;
+        }),
         diagnostics: {
             datasetCount: input.length,
             resultCount: dedupedResults.length,
@@ -329,8 +534,9 @@ export const mergeCoordinatorResponses = responses => {
     };
 };
 
-export const createSearchCoordinator = (options = {}) => {
-    const registry = options.registry || createSearchDatasetRegistry(options.registryOptions);
+export const createSearchCoordinator = (options: CoordinatorOptions = {}) => {
+    const registry = options.registry
+        || createSearchDatasetRegistry(options.registryOptions as never) as SearchDatasetRegistryLike;
     const resultCache = options.resultCache || createCoordinatorResultCache(options.cacheOptions);
     const stats = {
         searches: 0,
@@ -344,10 +550,16 @@ export const createSearchCoordinator = (options = {}) => {
         ingestions: 0
     };
 
-    const schemaForMode = (mode, request) => request.schema
-        || (mode === SEARCH_COORDINATOR_MODES.Text ? GENERIC_RECORD_SCHEMA : ADDRESS_RECORD_SCHEMA);
+    const schemaForMode = (
+        mode: SearchCoordinatorMode,
+        request: NormalizedCoordinatorRequest
+    ): typeof GENERIC_RECORD_SCHEMA => (request.schema as typeof GENERIC_RECORD_SCHEMA | undefined)
+        || (mode === SEARCH_COORDINATOR_MODES.Text ? GENERIC_RECORD_SCHEMA : ADDRESS_RECORD_SCHEMA as typeof GENERIC_RECORD_SCHEMA);
 
-    const buildTextIndex = (dataset, schema) => registry.getOrBuildDerived(
+    const buildTextIndex = (
+        dataset: DatasetSnapshot,
+        schema: typeof GENERIC_RECORD_SCHEMA
+    ): SearchExecutionIndex => registry.getOrBuildDerived<SearchExecutionIndex>(
         dataset.name,
         `execution:${createSchemaFingerprint(schema)}`,
         snapshot => createSearchExecutionIndex(snapshot.records, schema, {
@@ -356,19 +568,26 @@ export const createSearchCoordinator = (options = {}) => {
         })
     );
 
-    const buildAddress = dataset => registry.getOrBuildDerived(
+    const buildAddress = (dataset: DatasetSnapshot): AddressIndex => registry.getOrBuildDerived<AddressIndex>(
         dataset.name,
         "address-index:v1",
         snapshot => createAddressIndex(snapshot.records)
     );
 
-    const getSchemaReport = (dataset, schema) => registry.getOrBuildDerived(
+    const getSchemaReport = (
+        dataset: DatasetSnapshot,
+        schema: typeof GENERIC_RECORD_SCHEMA
+    ): unknown => registry.getOrBuildDerived<unknown>(
         dataset.name,
         `schema-report:${createSchemaFingerprint(schema)}`,
         snapshot => createSchemaQualityReport(snapshot.records, schema)
     );
 
-    const runAgainstSnapshot = (dataset, rawRequest, searchOptions = {}) => {
+    const runAgainstSnapshot = (
+        dataset: DatasetSnapshot,
+        rawRequest: unknown,
+        searchOptions: CoordinatorSearchOptions = {}
+    ): CoordinatorResponse => {
         const request = normalizeCoordinatorRequest(rawRequest);
         throwIfDatasetAborted(searchOptions.signal);
         const cacheKey = createCoordinatorCacheKey(dataset.name, dataset.revision, request);
@@ -382,9 +601,9 @@ export const createSearchCoordinator = (options = {}) => {
         }
 
         stats.searches += 1;
-        let response;
-        let schema;
-        let addressReport = null;
+        let response: CoordinatorResponse;
+        let schema: typeof GENERIC_RECORD_SCHEMA;
+        let addressReport: unknown = null;
         if (request.mode === SEARCH_COORDINATOR_MODES.Address) {
             stats.addressSearches += 1;
             const index = buildAddress(dataset);
@@ -414,10 +633,13 @@ export const createSearchCoordinator = (options = {}) => {
                 addressReport,
                 searchResponse: response.rawSearchResponse,
                 label: dataset.name
-            })
+            } as never)
             : null;
         const qualityGate = qualitySnapshot
-            ? evaluateDataReleaseGate(qualitySnapshot, searchOptions.releasePolicy || options.releasePolicy)
+            ? evaluateDataReleaseGate(
+                qualitySnapshot as never,
+                (searchOptions.releasePolicy || options.releasePolicy) as never
+            )
             : null;
         const result = {
             ...response,
@@ -438,7 +660,7 @@ export const createSearchCoordinator = (options = {}) => {
         registry,
         resultCache,
 
-        ingest(datasetName, payload, ingestOptions = {}) {
+        ingest(datasetName: unknown, payload: unknown, ingestOptions: CoordinatorIngestOptions = {}) {
             const normalized = normalizeCoordinatorPayload(payload, ingestOptions.adapterOptions);
             const metadata = {
                 ...(ingestOptions.metadata || {}),
@@ -453,24 +675,25 @@ export const createSearchCoordinator = (options = {}) => {
                 : registry.replace(datasetName, normalized.records, metadata, { now: ingestOptions.now });
         },
 
-        register(datasetName, records, metadata = {}, registerOptions = {}) {
+        register(datasetName: unknown, records: unknown, metadata: unknown = {}, registerOptions: unknown = {}) {
             stats.ingestions += 1;
             resultCache.invalidateDataset(datasetName);
             return registry.register(datasetName, records, metadata, registerOptions);
         },
 
-        registerLoader(datasetName, loader) {
+        registerLoader(datasetName: unknown, loader: unknown) {
             return registry.registerLoader(datasetName, loader);
         },
 
-        async search(datasetName, request = {}, searchOptions = {}) {
+        async search(datasetName: unknown, request: CoordinatorRequestInput = {}, searchOptions: CoordinatorSearchOptions = {}) {
             try {
                 throwIfDatasetAborted(searchOptions.signal);
-                const dataset = await registry.ensure(datasetName, {
+                const ensureOptions: UnknownRecord = {
                     ...searchOptions,
-                    force: request.forceDatasetRefresh === true || searchOptions.force === true,
-                    signal: searchOptions.signal
-                });
+                    force: request.forceDatasetRefresh === true || searchOptions.force === true
+                };
+                if (searchOptions.signal !== undefined) ensureOptions.signal = searchOptions.signal;
+                const dataset = await registry.ensure(datasetName, ensureOptions);
                 throwIfDatasetAborted(searchOptions.signal);
                 return runAgainstSnapshot(dataset, request, searchOptions);
             } catch (error) {
@@ -479,22 +702,24 @@ export const createSearchCoordinator = (options = {}) => {
             }
         },
 
-        searchLocal(datasetName, request = {}, searchOptions = {}) {
+        searchLocal(datasetName: unknown, request: CoordinatorRequestInput = {}, searchOptions: CoordinatorSearchOptions = {}) {
             const dataset = registry.get(datasetName, {
                 allowStale: searchOptions.allowStale !== false,
                 now: searchOptions.now
             });
             if (!dataset) {
-                const error = new Error(`Dataset is not available locally: ${normalizeText(datasetName)}`);
-                error.code = "DATASET_NOT_AVAILABLE";
+                const error = Object.assign(
+                    new Error(`Dataset is not available locally: ${normalizeText(datasetName)}`),
+                    { code: "DATASET_NOT_AVAILABLE" }
+                );
                 stats.failures += 1;
                 throw error;
             }
             return runAgainstSnapshot(dataset, request, searchOptions);
         },
 
-        async searchMany(datasetNames, request = {}, searchOptions = {}) {
-            const names = unique(asArray(datasetNames).map(normalizeText).filter(Boolean))
+        async searchMany(datasetNames: unknown, request: CoordinatorRequestInput = {}, searchOptions: CoordinatorSearchOptions = {}) {
+            const names = unique(asArray(datasetNames).map(value => normalizeText(value)).filter(Boolean))
                 .slice(0, MAX_COORDINATOR_DATASETS_PER_QUERY);
             stats.multiDatasetSearches += 1;
             const settled = await Promise.all(names.map(async datasetName => {
@@ -507,13 +732,13 @@ export const createSearchCoordinator = (options = {}) => {
             return mergeCoordinatorResponses(settled);
         },
 
-        invalidate(datasetName) {
+        invalidate(datasetName: unknown) {
             resultCache.invalidateDataset(datasetName);
             registry.invalidateDerived(datasetName);
             return registry.markStale(datasetName);
         },
 
-        remove(datasetName) {
+        remove(datasetName: unknown) {
             resultCache.invalidateDataset(datasetName);
             return registry.remove(datasetName);
         },
@@ -523,7 +748,7 @@ export const createSearchCoordinator = (options = {}) => {
             return registry.clear();
         },
 
-        diagnostics(readOptions = {}) {
+        diagnostics(readOptions: UnknownRecord = {}) {
             return {
                 ...stats,
                 registry: registry.diagnostics(readOptions),
@@ -532,7 +757,7 @@ export const createSearchCoordinator = (options = {}) => {
         },
 
         resetStatistics() {
-            Object.keys(stats).forEach(key => {
+            (Object.keys(stats) as Array<keyof CoordinatorStats>).forEach(key => {
                 stats[key] = 0;
             });
             registry.resetStatistics();
