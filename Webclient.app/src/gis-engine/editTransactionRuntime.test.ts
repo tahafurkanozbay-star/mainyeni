@@ -118,6 +118,44 @@ describe('createGisEditTransactionRuntime', () => {
     expect(Object.isFrozen(operation.attributes)).toBe(true);
   });
 
+  it('detaches nested staged payloads from caller mutation', () => {
+    const runtime = createGisEditTransactionRuntime();
+    const tx = runtime.beginTransaction();
+    const attributes = {
+      nested: {
+        status: 'draft',
+        tags: ['one', 'two'],
+      },
+    };
+    const geometry = {
+      type: 'point',
+      coordinates: [32.8, 39.9],
+    };
+
+    const operation = runtime.stageAdd(tx.transactionId, {
+      layerId: 'assets',
+      attributes,
+      geometry,
+    });
+
+    attributes.nested.status = 'mutated';
+    attributes.nested.tags.push('three');
+    geometry.coordinates[0] = 0;
+
+    expect(operation.attributes).toEqual({
+      nested: {
+        status: 'draft',
+        tags: ['one', 'two'],
+      },
+    });
+    expect(operation.geometry).toEqual({
+      type: 'point',
+      coordinates: [32.8, 39.9],
+    });
+    expect(Object.isFrozen((operation.attributes?.nested as Record<string, unknown>))).toBe(true);
+    expect(Object.isFrozen((operation.geometry as Record<string, unknown>).coordinates)).toBe(true);
+  });
+
   it('stages update operations with numeric feature ids and revisions', () => {
     const runtime = createGisEditTransactionRuntime();
     const tx = runtime.beginTransaction();
