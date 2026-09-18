@@ -48,8 +48,21 @@ describe('QueryInteractionRuntime', () => {
   });
 
   it('opens only HTTP(S) targets with isolation features', () => {
-    const opener = vi.fn(() => null);
+    const openedWindow = { opener: {} } as Window;
+    const opener = vi.fn(() => openedWindow);
     expect(openExternalSafely('javascript:alert(1)', opener)).toBe(false);
+    expect(openExternalSafely('https://example.com/path', opener)).toBe(true);
+    expect(opener).toHaveBeenCalledTimes(1);
+    expect(opener).toHaveBeenCalledWith(
+      'https://example.com/path',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(openedWindow.opener).toBeNull();
+  });
+
+  it('reports a blocked popup without weakening opener isolation', () => {
+    const opener = vi.fn(() => null);
     expect(openExternalSafely('https://example.com/path', opener)).toBe(false);
     expect(opener).toHaveBeenCalledWith(
       'https://example.com/path',
