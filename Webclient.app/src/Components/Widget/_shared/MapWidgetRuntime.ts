@@ -1,3 +1,4 @@
+import { DebugHelper } from '../../../Toolbox/DebugHelper';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 export const DEFAULT_WIDGET_OPERATION_TIMEOUT_MS = 15_000;
@@ -185,8 +186,8 @@ export const openExternalUrl = (
   if (!opened) return false;
   try {
     opened.opener = null;
-  } catch {
-    // Browser may expose a restricted proxy. noopener already protects the boundary.
+  } catch (error) {
+    DebugHelper.Log(error);
   }
   return true;
 };
