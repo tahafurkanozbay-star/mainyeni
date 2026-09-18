@@ -36,7 +36,7 @@ export interface QueryWindowManagerLike {
   readonly IsMinimized: (id: string) => boolean;
   readonly ToggleMinimiseWindow: (id: string) => void;
   readonly HideWindow: (id: string) => void;
-  readonly ShowMessage: (type: unknown, message: string) => void;
+  readonly ShowMessage: (type: string | number, message: string, durationSeconds?: number) => void;
 }
 
 export interface CommonQueryWindowToolsProps {
@@ -234,137 +234,19 @@ export const CommonQueryWindowTools = forwardRef<
 
   return (
     <>
-      <button
-        type="button"
-        className="common-query-window-tool-button"
-        onClick={() => windowManager.ToggleMinimiseWindow(windowId)}
-        title="Pencereyi küçült"
-        aria-label="Pencereyi küçült"
-        aria-expanded={!minimized}
-      >
-        <BiChevronUp
-          className="common-query-window-tool-minimise-button"
-          aria-hidden="true"
-        />
+      <button type="button" className="common-query-window-tool-button" onClick={() => windowManager.ToggleMinimiseWindow(windowId)} title="Pencereyi küçült" aria-label="Pencereyi küçült" aria-expanded={!minimized}>
+        <BiChevronUp className="common-query-window-tool-minimise-button" aria-hidden="true" />
       </button>
-      <button
-        type="button"
-        className="common-query-window-tool-button"
-        onClick={() => windowManager.HideWindow(windowId)}
-        title="Pencereyi kapat"
-        aria-label="Pencereyi kapat"
-      >
-        <RiCloseCircleFill
-          className="common-query-window-tool-close-button"
-          aria-hidden="true"
-        />
+      <button type="button" className="common-query-window-tool-button" onClick={() => windowManager.HideWindow(windowId)} title="Pencereyi kapat" aria-label="Pencereyi kapat">
+        <RiCloseCircleFill className="common-query-window-tool-close-button" aria-hidden="true" />
       </button>
-
-      {!minimized ? (
-        <div className="common-query-window-tools" aria-label="Sorgu araçları">
-          {showNearbySearch ? (
-            nearbyActive ? (
-              <button
-                type="button"
-                className="common-query-window-tool danger"
-                onClick={() => changeSearchNearby(false)}
-                disabled={locating}
-                aria-pressed="true"
-              >
-                <BiX className="common-query-window-tool-icon" aria-hidden="true" />
-                <span>{locating ? 'Konum alınıyor…' : 'Yakınımda aramayı kapat'}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="common-query-window-tool"
-                onClick={() => changeSearchNearby(true)}
-                disabled={locating}
-                aria-pressed="false"
-              >
-                <img src="images/icons/common/yakinimdaara.png" alt="" aria-hidden="true" />
-                <span>{locating ? 'Konum alınıyor…' : 'Yakınımda Ara'}</span>
-              </button>
-            )
-          ) : null}
-
-          {showMapSelect ? (
-            mapSelectActive ? (
-              <button
-                type="button"
-                className="common-query-window-tool danger"
-                onClick={() => changeMapSelect(false)}
-                aria-pressed="true"
-              >
-                <BiX className="common-query-window-tool-icon" aria-hidden="true" />
-                <span>Harita seçimini iptal et</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="common-query-window-tool"
-                onClick={() => changeMapSelect(true)}
-                aria-pressed="false"
-              >
-                <img src="images/icons/common/haritadansec.png" alt="" aria-hidden="true" />
-                <span>Haritadan Seç</span>
-              </button>
-            )
-          ) : null}
-        </div>
-      ) : null}
-
-      {locationError ? (
-        <p className="common-query-window-tools-error" role="alert">
-          {locationError}
-        </p>
-      ) : null}
-
-      {showNearbySearch && nearbyActive && !locating ? (
-        <div className="common-query-window-tools-body">
-          <div className="common-query-window-tools-distance-row">
-            <div className="common-query-window-tools-distance-range">
-              <label htmlFor={distanceId}>Yakınlık mesafesi</label>
-              <input
-                id={distanceId}
-                type="range"
-                min={MIN_BUFFER_UNITS}
-                max={MAX_BUFFER_UNITS}
-                value={bufferDistance}
-                onChange={(event) => updateBufferUnits(event.target.value)}
-                aria-valuetext={`${bufferMeters} metre`}
-              />
-            </div>
-            <div className="common-query-window-tools-buffer-distance-indicator">
-              <label htmlFor={meterId}>Metre</label>
-              <input
-                id={meterId}
-                type="number"
-                min={MIN_BUFFER_UNITS * 100}
-                max={MAX_BUFFER_UNITS * 100}
-                step="100"
-                inputMode="numeric"
-                value={bufferMeters}
-                onChange={(event) => updateBufferMeters(event.target.value)}
-              />
-              <span aria-hidden="true">m</span>
-            </div>
-          </div>
-          <p className="common-query-window-tools-distance-help">
-            Seçilen konumun {bufferMeters.toLocaleString('tr-TR')} metre çevresindeki
-            kayıtlar sorgulanır.
-          </p>
-        </div>
-      ) : null}
-
-      {showMapSelect && mapSelectActive ? (
-        <div className="common-query-window-tools-body">
-          <div className="common-query-window-tools-mapselect-message" role="status">
-            <BiInfoCircle aria-hidden="true" />
-            <span>Lütfen haritaya tıklayarak bir öğe seçin.</span>
-          </div>
-        </div>
-      ) : null}
+      {!minimized ? <div className="common-query-window-tools" aria-label="Sorgu araçları">
+        {showNearbySearch ? (nearbyActive ? <button type="button" className="common-query-window-tool danger" onClick={() => changeSearchNearby(false)} disabled={locating} aria-pressed="true"><BiX className="common-query-window-tool-icon" aria-hidden="true" /><span>{locating ? 'Konum alınıyor…' : 'Yakınımda aramayı kapat'}</span></button> : <button type="button" className="common-query-window-tool" onClick={() => changeSearchNearby(true)} disabled={locating} aria-pressed="false"><img src="images/icons/common/yakinimdaara.png" alt="" aria-hidden="true" /><span>{locating ? 'Konum alınıyor…' : 'Yakınımda Ara'}</span></button>) : null}
+        {showMapSelect ? (mapSelectActive ? <button type="button" className="common-query-window-tool danger" onClick={() => changeMapSelect(false)} aria-pressed="true"><BiX className="common-query-window-tool-icon" aria-hidden="true" /><span>Harita seçimini iptal et</span></button> : <button type="button" className="common-query-window-tool" onClick={() => changeMapSelect(true)} aria-pressed="false"><img src="images/icons/common/haritadansec.png" alt="" aria-hidden="true" /><span>Haritadan Seç</span></button>) : null}
+      </div> : null}
+      {locationError ? <p className="common-query-window-tools-error" role="alert">{locationError}</p> : null}
+      {showNearbySearch && nearbyActive && !locating ? <div className="common-query-window-tools-body"><div className="common-query-window-tools-distance-row"><div className="common-query-window-tools-distance-range"><label htmlFor={distanceId}>Yakınlık mesafesi</label><input id={distanceId} type="range" min={MIN_BUFFER_UNITS} max={MAX_BUFFER_UNITS} value={bufferDistance} onChange={(event) => updateBufferUnits(event.target.value)} aria-valuetext={`${bufferMeters} metre`} /></div><div className="common-query-window-tools-buffer-distance-indicator"><label htmlFor={meterId}>Metre</label><input id={meterId} type="number" min={MIN_BUFFER_UNITS * 100} max={MAX_BUFFER_UNITS * 100} step="100" inputMode="numeric" value={bufferMeters} onChange={(event) => updateBufferMeters(event.target.value)} /><span aria-hidden="true">m</span></div></div><p className="common-query-window-tools-distance-help">Seçilen konumun {bufferMeters.toLocaleString('tr-TR')} metre çevresindeki kayıtlar sorgulanır.</p></div> : null}
+      {showMapSelect && mapSelectActive ? <div className="common-query-window-tools-body"><div className="common-query-window-tools-mapselect-message" role="status"><BiInfoCircle aria-hidden="true" /><span>Lütfen haritaya tıklayarak bir öğe seçin.</span></div></div> : null}
     </>
   );
 });
