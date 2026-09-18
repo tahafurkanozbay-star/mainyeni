@@ -74,6 +74,46 @@ public sealed class KentRehberiApiSecurityContractTests
     }
 
     [Fact]
+    public void ReadinessProbe_IsRegisteredAndUsesSafePublicHealthContract()
+    {
+        var registration = Read(
+            "Api.User/KentRehberi/KentRehberiServiceCollectionExtensions.cs");
+        var healthCheck = Read(
+            "Api.User/KentRehberi/KentRehberiHealthCheck.cs");
+
+        Assert.Contains("KentRehberiHealthCheck", registration, StringComparison.Ordinal);
+        Assert.Contains("ApiPlatformDefaults.ReadinessTag", registration, StringComparison.Ordinal);
+        Assert.Contains("HealthCheckResult.Unhealthy", healthCheck, StringComparison.Ordinal);
+        Assert.DoesNotContain("Password=", healthCheck, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Host=", healthCheck, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PublicFailureLogging_DoesNotAttachDatabaseExceptionPayload()
+    {
+        var controller = Read("Api.User/Controllers/KentRehberiController.cs");
+
+        Assert.Contains("{FailureType}", controller, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "logger.LogWarning(\n            exception,",
+            controller,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ObjectIdCursor_IsFailClosedInTrackedConfiguration()
+    {
+        var appsettings = Read("Api.User/appsettings.json");
+        using var document = JsonDocument.Parse(appsettings);
+
+        var dataOptions = document.RootElement
+            .GetProperty("KentRehberiData");
+
+        Assert.False(
+            dataOptions.GetProperty("ObjectIdCursorEnabled").GetBoolean());
+    }
+
+    [Fact]
     public void DatabaseRunbook_UsesColumnLevelReadOnlyGrant()
     {
         var sql = Read("database/kent-rehberi-api.sql");
