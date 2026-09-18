@@ -14,11 +14,29 @@ type ReactiveWatch = (
 
 type QueryRestFunction = (url: string, query: unknown, requestOptions?: unknown) => Promise<unknown>;
 
+type ProjectOperatorOptions = Readonly<{ geographicTransformation?: unknown }>;
+
+type ProjectOperatorModule = Readonly<{
+  isLoaded?: () => boolean;
+  load?: () => Promise<void>;
+  execute?: (
+    geometry: unknown,
+    outSpatialReference: unknown,
+    options?: ProjectOperatorOptions,
+  ) => unknown;
+  executeMany?: (
+    geometries: readonly unknown[],
+    outSpatialReference: unknown,
+    options?: ProjectOperatorOptions,
+  ) => readonly unknown[];
+}>;
+
 const LEGACY_ARCGIS_PREFIX = 'esri/';
 const ESM_ARCGIS_PREFIX = '@arcgis/core/';
 
 const LEGACY_ESM_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   'esri/core/watchUtils': '@arcgis/core/core/reactiveUtils.js',
+  'esri/geometry/projection': '@arcgis/core/geometry/operators/projectOperator.js',
   'esri/tasks/QueryTask': '@arcgis/core/rest/query.js',
   'esri/tasks/support/Query': '@arcgis/core/rest/support/Query.js',
 });
@@ -36,7 +54,7 @@ const defaultImporters: Readonly<Record<string, () => Promise<unknown>>> = Objec
   '@arcgis/core/geometry/Polyline.js': () => import('@arcgis/core/geometry/Polyline.js'),
   '@arcgis/core/geometry/SpatialReference.js': () => import('@arcgis/core/geometry/SpatialReference.js'),
   '@arcgis/core/geometry/geometryEngine.js': () => import('@arcgis/core/geometry/geometryEngine.js'),
-  '@arcgis/core/geometry/projection.js': () => import('@arcgis/core/geometry/projection.js'),
+  '@arcgis/core/geometry/operators/projectOperator.js': () => import('@arcgis/core/geometry/operators/projectOperator.js'),
   '@arcgis/core/geometry/support/geodesicUtils.js': () => import('@arcgis/core/geometry/support/geodesicUtils.js'),
   '@arcgis/core/geometry/support/webMercatorUtils.js': () => import('@arcgis/core/geometry/support/webMercatorUtils.js'),
   '@arcgis/core/layers/FeatureLayer.js': () => import('@arcgis/core/layers/FeatureLayer.js'),
@@ -167,9 +185,49 @@ const createQueryTaskCompatibility = (moduleNamespace: unknown): unknown => {
   };
 };
 
+const createProjectionCompatibility = (
+  moduleNamespace: unknown,
+): Readonly<Record<string, unknown>> => {
+  const operator = moduleNamespace as ProjectOperatorModule;
+  if (
+    typeof operator.isLoaded !== 'function'
+    || typeof operator.load !== 'function'
+    || typeof operator.execute !== 'function'
+    || typeof operator.executeMany !== 'function'
+  ) {
+    throw new TypeError(
+      'ArcGIS projection compatibility requires projectOperator isLoaded(), load(), execute() and executeMany().',
+    );
+  }
+
+  const isLoaded = operator.isLoaded;
+  const load = operator.load;
+  const execute = operator.execute;
+  const executeMany = operator.executeMany;
+
+  return Object.freeze({
+    isLoaded,
+    load,
+    project: (
+      geometryOrGeometries: unknown,
+      outSpatialReference: unknown,
+      geographicTransformation?: unknown,
+    ): unknown => {
+      const options = geographicTransformation === undefined || geographicTransformation === null
+        ? undefined
+        : { geographicTransformation };
+      if (Array.isArray(geometryOrGeometries)) {
+        return executeMany(geometryOrGeometries, outSpatialReference, options);
+      }
+      return execute(geometryOrGeometries, outSpatialReference, options);
+    },
+  });
+};
+
 export const adaptArcgisEsmModule = (moduleIdInput: string, moduleNamespace: unknown): unknown => {
   const moduleId = normalizeModuleId(moduleIdInput);
   if (moduleId === 'esri/core/watchUtils') return createWatchUtilsCompatibility(moduleNamespace);
+  if (moduleId === 'esri/geometry/projection') return createProjectionCompatibility(moduleNamespace);
   if (moduleId === 'esri/tasks/QueryTask') return createQueryTaskCompatibility(moduleNamespace);
   return unwrapArcgisEsmModule(moduleNamespace);
 };

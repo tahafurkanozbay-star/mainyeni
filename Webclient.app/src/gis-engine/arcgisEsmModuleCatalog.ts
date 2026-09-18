@@ -60,7 +60,7 @@ const ARCGIS_MODULE_CATALOG: readonly ArcgisModuleDescriptor[] = Object.freeze([
   descriptor('esri/geometry/Polyline', '@arcgis/core/geometry/Polyline.js', ['geometry'], 1, 'feature'),
   descriptor('esri/geometry/SpatialReference', '@arcgis/core/geometry/SpatialReference.js', ['geometry'], 1, 'feature'),
   descriptor('esri/geometry/geometryEngine', '@arcgis/core/geometry/geometryEngine.js', ['geometry'], 4, 'on-demand'),
-  descriptor('esri/geometry/projection', '@arcgis/core/geometry/projection.js', ['geometry'], 4, 'on-demand'),
+  descriptor('esri/geometry/projection', '@arcgis/core/geometry/operators/projectOperator.js', ['geometry'], 4, 'on-demand'),
   descriptor(
     'esri/geometry/support/geodesicUtils',
     '@arcgis/core/geometry/support/geodesicUtils.js',

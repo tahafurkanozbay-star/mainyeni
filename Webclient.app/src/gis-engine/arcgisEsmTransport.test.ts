@@ -17,6 +17,8 @@ describe('arcgisEsmTransport', () => {
       .toBe('@arcgis/core/Graphic.js');
     expect(resolveArcgisEsmSpecifier('esri/core/watchUtils'))
       .toBe('@arcgis/core/core/reactiveUtils.js');
+    expect(resolveArcgisEsmSpecifier('esri/geometry/projection'))
+      .toBe('@arcgis/core/geometry/operators/projectOperator.js');
     expect(resolveArcgisEsmSpecifier('esri/tasks/QueryTask'))
       .toBe('@arcgis/core/rest/query.js');
     expect(resolveArcgisEsmSpecifier('esri/tasks/support/Query'))
@@ -54,7 +56,7 @@ describe('arcgisEsmTransport', () => {
     expect(importer).toHaveBeenNthCalledWith(2, '@arcgis/core/rest/identify.js');
     expect(transport.name).toBe('arcgis-core-esm');
   });
-  it('adapts removed watchUtils and QueryTask APIs onto modern 5.x modules', async () => {
+  it('adapts removed watchUtils, QueryTask and projection APIs onto modern 5.x modules', async () => {
     const handle = { remove: vi.fn() };
     const watch = vi.fn(() => handle);
     const when = vi.fn(() => handle);
@@ -87,6 +89,42 @@ describe('arcgisEsmTransport', () => {
       undefined,
     );
     expect(executeForCount).toHaveBeenCalledTimes(1);
+
+    const projected = { x: 1, y: 2 };
+    const projectedMany = [{ x: 1, y: 2 }, { x: 3, y: 4 }];
+    const isLoaded = vi.fn(() => true);
+    const load = vi.fn().mockResolvedValue(undefined);
+    const execute = vi.fn(() => projected);
+    const executeMany = vi.fn(() => projectedMany);
+    const projection = adaptArcgisEsmModule('esri/geometry/projection', {
+      isLoaded,
+      load,
+      execute,
+      executeMany,
+    }) as {
+      isLoaded: () => boolean;
+      load: () => Promise<void>;
+      project: (
+        geometryOrGeometries: unknown,
+        outSpatialReference: unknown,
+        geographicTransformation?: unknown,
+      ) => unknown;
+    };
+
+    expect(projection.isLoaded()).toBe(true);
+    await projection.load();
+    expect(projection.project({ x: 1, y: 2 }, { wkid: 3857 })).toBe(projected);
+    expect(projection.project(
+      [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+      { wkid: 3857 },
+      { wkid: 108190 },
+    )).toBe(projectedMany);
+    expect(execute).toHaveBeenCalledWith({ x: 1, y: 2 }, { wkid: 3857 }, undefined);
+    expect(executeMany).toHaveBeenCalledWith(
+      [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+      { wkid: 3857 },
+      { geographicTransformation: { wkid: 108190 } },
+    );
   });
 
   it('registers the production 2D/3D modules as statically analyzable Vite imports', () => {
@@ -96,5 +134,6 @@ describe('arcgisEsmTransport', () => {
     expect(specifiers).toContain('@arcgis/core/views/SceneView.js');
     expect(specifiers).toContain('@arcgis/core/rest/query.js');
     expect(specifiers).toContain('@arcgis/core/core/reactiveUtils.js');
+    expect(specifiers).toContain('@arcgis/core/geometry/operators/projectOperator.js');
   });
 });
