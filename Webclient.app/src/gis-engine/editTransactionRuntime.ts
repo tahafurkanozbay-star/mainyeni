@@ -222,7 +222,7 @@ const DEFAULT_MAX_GEOMETRY_DEPTH = 64;
 
 const cloneRecord = (
   value: Readonly<Record<string, unknown>> | undefined,
-): Readonly<Record<string, unknown>> => Object.freeze({ ...(value ?? {}) });
+): Readonly<Record<string, unknown>> => Object.freeze({ ...value });
 
 const normalizeFeatureId = (value: unknown): GisFeatureId => {
   if (typeof value === 'number') {
@@ -393,7 +393,7 @@ export const createGisEditTransactionRuntime = (
       timestamp: Math.trunc(now()),
       ...details,
     });
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(event);
       } catch (error: unknown) {
