@@ -27,6 +27,9 @@ import {
   createViewPerformanceMonitor,
 } from '../../gis-engine/viewRuntime';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
+import type { ManagedWindowHandle } from '../../experience/contracts';
+import type { MapWidgetManagerLike } from '../Widget/_shared/MapWidgetSurface';
+import { openExternalUrl } from '../Widget/_shared/MapWidgetRuntime';
 import {
   attachKentRehberiGeoJsonLayer,
   isKentRehberiAbortError,
@@ -34,11 +37,10 @@ import {
   type KentRehberiMapLike,
 } from '../../data-services/kentRehberiGeoJsonLayer';
 import './MapComponent.css';
+import '../Widget/_shared/ExperienceWidgetModernization.css';
 
-interface WindowManagerLike {
-  SetMapUpdating: (updating: boolean) => void;
-  ShowWindow: (id: string) => void;
-  HideWindow: (id: string) => void;
+interface WindowManagerLike extends MapWidgetManagerLike {
+  readonly SetMapUpdating: (updating: boolean) => void;
 }
 
 interface MapComponentProps {
@@ -80,20 +82,7 @@ type ArcgisMapViewConstructor = new (options: unknown) => MapViewLike;
 
 const LegacySidebar = SidebarModern as React.ElementType;
 const ModernToolbarWidget = ToolbarWidgetModern as React.ElementType;
-const LegacyBasemapWidget = BasemapWidget as React.ElementType;
-const LegacyBookmarkWidget = BookmarkWidget as React.ElementType;
-const LegacyContextMenuWidget = ContextMenuWidget as React.ElementType;
-const LegacyFeedbackWidget = FeedbackWidget as React.ElementType;
-const LegacyGlobalIdentifyWidget = GlobalIdentifyWidget as React.ElementType;
 const LegacyMeasurementWidget = MeasurementWidget as React.ElementType;
-const LegacySketchWidget = SketchWidget as React.ElementType;
-const LegacyStreetViewWidget = StreetViewWidget as React.ElementType;
-
-const openExternalMapUrl = (url: unknown): void => {
-  if (typeof url !== 'string' || !url) return;
-  const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  if (opened) opened.opener = null;
-};
 
 const safeRemove = (handle: RemovableHandle | null | undefined): void => {
   try {
@@ -117,14 +106,14 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const sidebarRef = useRef<unknown>(null);
 
-  const basemapWidgetRef = useRef<unknown>(null);
-  const bookmarkWidgetRef = useRef<unknown>(null);
-  const contextMenuWidgetRef = useRef<unknown>(null);
-  const feedbackWidgetRef = useRef<unknown>(null);
-  const globalIdentifyWidgetRef = useRef<unknown>(null);
+  const basemapWidgetRef = useRef<ManagedWindowHandle | null>(null);
+  const bookmarkWidgetRef = useRef<ManagedWindowHandle | null>(null);
+  const contextMenuWidgetRef = useRef<ManagedWindowHandle | null>(null);
+  const feedbackWidgetRef = useRef<ManagedWindowHandle | null>(null);
+  const globalIdentifyWidgetRef = useRef<ManagedWindowHandle | null>(null);
   const measurementWidgetRef = useRef<unknown>(null);
-  const sketchWidgetRef = useRef<unknown>(null);
-  const streetViewWidgetRef = useRef<unknown>(null);
+  const sketchWidgetRef = useRef<ManagedWindowHandle | null>(null);
+  const streetViewWidgetRef = useRef<ManagedWindowHandle | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -185,11 +174,11 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         if (!feature?.geometry) return;
 
         if (event.action?.id === 'show-on-google') {
-          openExternalMapUrl(GoogleMapsBusiness.CreateRoutesUrlFromPoint(feature.geometry));
+          openExternalUrl(GoogleMapsBusiness.CreateRoutesUrlFromPoint(feature.geometry));
         }
 
         if (event.action?.id === 'show-on-streetview' || event.action?.id === 'show-details') {
-          openExternalMapUrl(GoogleMapsBusiness.CreateStreetViewUrlFromPoint(feature.geometry));
+          openExternalUrl(GoogleMapsBusiness.CreateStreetViewUrlFromPoint(feature.geometry));
         }
       });
       if (popupHandle) handles.push(popupHandle);
@@ -281,14 +270,14 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
           <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
           <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} />
 
-          <LegacyBasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
-          <LegacyBookmarkWidget id="bookmark-widget" windowManager={windowManager} ref={bookmarkWidgetRef} />
-          <LegacyContextMenuWidget id="context-menu-widget" windowManager={windowManager} ref={contextMenuWidgetRef} />
-          <LegacyFeedbackWidget id="feedback-widget" windowManager={windowManager} ref={feedbackWidgetRef} />
-          <LegacyGlobalIdentifyWidget id="global-identify-widget" windowManager={windowManager} ref={globalIdentifyWidgetRef} />
+          <BasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
+          <BookmarkWidget id="bookmark-widget" windowManager={windowManager} ref={bookmarkWidgetRef} />
+          <ContextMenuWidget id="context-menu-widget" windowManager={windowManager} ref={contextMenuWidgetRef} />
+          <FeedbackWidget id="feedback-widget" windowManager={windowManager} ref={feedbackWidgetRef} />
+          <GlobalIdentifyWidget id="global-identify-widget" windowManager={windowManager} ref={globalIdentifyWidgetRef} />
           <LegacyMeasurementWidget id="measurement-widget" windowManager={windowManager} ref={measurementWidgetRef} />
-          <LegacySketchWidget id="sketch-widget" windowManager={windowManager} ref={sketchWidgetRef} />
-          <LegacyStreetViewWidget id="streetview-widget" windowManager={windowManager} ref={streetViewWidgetRef} />
+          <SketchWidget id="sketch-widget" windowManager={windowManager} ref={sketchWidgetRef} />
+          <StreetViewWidget id="streetview-widget" windowManager={windowManager} ref={streetViewWidgetRef} />
 
           {QUERY_WINDOW_DEFINITIONS.map((definition) => (
             <LazyManagedWindow
