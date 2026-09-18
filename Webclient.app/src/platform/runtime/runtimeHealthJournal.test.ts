@@ -28,6 +28,19 @@ describe('runtimeHealthJournal', () => {
     journal.dispose();
   });
 
+  it('prunes expired evidence even when events arrive out of timestamp order', () => {
+    let clock = 1_000;
+    const journal = createRuntimeHealthJournal({ retentionMs: 100 }, () => clock);
+    journal.record({ at: 950, kind: 'lifecycle', severity: 'info', code: 'newer' });
+    journal.record({ at: 800, kind: 'lifecycle', severity: 'info', code: 'late-old' });
+    journal.record({ at: 975, kind: 'lifecycle', severity: 'info', code: 'newest' });
+
+    clock = 1_020;
+    expect(journal.query().map((event) => event.code)).toEqual(['newer', 'newest']);
+    expect(journal.summary()).toMatchObject({ retained: 2, pruned: 1 });
+    journal.dispose();
+  });
+
   it('computes bounded latency percentiles from duration-bearing events', () => {
     const journal = createRuntimeHealthJournal({ latencyWindowSize: 4 }, FIXED_NOW);
     [10, 20, 30, 40, 50].forEach((durationMs, index) => journal.record({
