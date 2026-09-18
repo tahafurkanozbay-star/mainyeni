@@ -4,22 +4,163 @@ import {
     normalizeText
 } from "./DataIntegrityHelper";
 import {
-    normalizeCoordinatorRequest
+    normalizeCoordinatorRequest,
+    type CoordinatorRequestInput,
+    type CoordinatorResponse,
+    type CoordinatorSearchOptions,
+    type NormalizedCoordinatorRequest
 } from "./SearchCoordinatorRuntime";
 import {
     createSearchAbortError
 } from "./SearchDatasetRegistry";
+
+
+type UnknownRecord = Record<string, unknown>;
+
+export type SearchSessionStatus = "idle" | "scheduled" | "loading" | "success" | "cancelled" | "error";
+
+export interface SearchAbortSignalLike {
+    aborted: boolean;
+}
+
+interface SearchAbortControllerLike {
+    signal: SearchAbortSignalLike;
+    abort(reason?: unknown): void;
+}
+
+export interface SearchSessionState {
+    status: SearchSessionStatus;
+    requestId: number;
+    committedRequestId: number;
+    pendingRequestId: number | null;
+    dataset: string;
+    query: string;
+    normalizedQuery: string;
+    result: SessionSearchResult | null;
+    error: unknown;
+    startedAt: number | null;
+    completedAt: number | null;
+    durationMs: number | null;
+    staleResponseCount: number;
+    cancellationCount: number;
+}
+
+export interface SessionSearchResult extends UnknownRecord {
+    records?: unknown[];
+    request?: UnknownRecord | null;
+    page?: {
+        hasMore?: boolean;
+        nextOffset?: number | null;
+        [key: string]: unknown;
+    } | null;
+}
+
+export interface SessionExecutionResult {
+    result: SessionSearchResult | null;
+    stale: boolean;
+    requestId: number;
+    terminal?: boolean;
+}
+
+export interface SearchSessionHistoryEntry {
+    requestId: number;
+    dataset: unknown;
+    query: string;
+    status: "success" | "stale" | "cancelled" | "error";
+    startedAt: number;
+    completedAt: number;
+    error?: unknown;
+}
+
+export interface SearchScheduler<TId = unknown> {
+    set(callback: () => void, delay: number): TId;
+    clear(id: TId): void;
+}
+
+export interface ManualSearchScheduler extends SearchScheduler<number> {
+    run(id: number): boolean;
+    runAll(): number;
+    size(): number;
+    entries(): Array<{ id: number; delay: number }>;
+}
+
+export interface SearchCoordinatorLike {
+    search(
+        datasetName: unknown,
+        request?: CoordinatorRequestInput | NormalizedCoordinatorRequest,
+        options?: CoordinatorSearchOptions | UnknownRecord
+    ): Promise<CoordinatorResponse | SessionSearchResult>;
+}
+
+export interface SearchSessionOptions {
+    scheduler?: SearchScheduler;
+    now?: () => number;
+    debounceMs?: unknown;
+    historySize?: unknown;
+    cancelPrevious?: boolean;
+    dedupeInFlight?: boolean;
+}
+
+export interface SessionSearchOptions extends UnknownRecord {
+    signal?: SearchAbortSignalLike | null;
+    debounceMs?: unknown;
+}
+
+interface ScheduledSearch {
+    timerId: unknown;
+    resolve: (value: SessionExecutionResult | PromiseLike<SessionExecutionResult>) => void;
+    reject: (reason?: unknown) => void;
+    datasetName: unknown;
+    request: CoordinatorRequestInput;
+}
+
+export interface SearchSessionApi {
+    search(datasetName: unknown, request?: CoordinatorRequestInput, searchOptions?: SessionSearchOptions): Promise<SessionExecutionResult>;
+    schedule(datasetName: unknown, request?: CoordinatorRequestInput, searchOptions?: SessionSearchOptions): Promise<SessionExecutionResult>;
+    searchNow(datasetName: unknown, request?: CoordinatorRequestInput, searchOptions?: SessionSearchOptions): Promise<SessionExecutionResult>;
+    loadMore(searchOptions?: SessionSearchOptions): Promise<SessionExecutionResult>;
+    cancel(reason?: string): boolean;
+    subscribe(listener: (state: SearchSessionState) => void): () => boolean | void;
+    getState(): SearchSessionState;
+    getHistory(): SearchSessionHistoryEntry[];
+    getInFlightCount(): number;
+    clearHistory(): number;
+    reset(): void;
+    dispose(): boolean;
+    isDisposed(): boolean;
+    diagnostics(): {
+        status: SearchSessionStatus;
+        requestId: number;
+        committedRequestId: number;
+        staleResponseCount: number;
+        cancellationCount: number;
+        inFlightCount: number;
+        scheduled: boolean;
+        historyCount: number;
+        listenerCount: number;
+        debounceMs: number;
+        disposed: boolean;
+    };
+}
+
+const normalizeIntegerValue = (
+    value: unknown,
+    options: Readonly<{ min?: number; max?: number; fallback: number }>
+): number => normalizeInteger(value as never, options as never) as number;
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
 
 export const DEFAULT_SEARCH_DEBOUNCE_MS = 180;
 export const MAX_SEARCH_DEBOUNCE_MS = 2000;
 export const DEFAULT_SESSION_HISTORY_SIZE = 20;
 export const MAX_SESSION_HISTORY_SIZE = 200;
 
-const noop = () => {};
-const asArray = value => Array.isArray(value) ? value : [];
-const hasAbortController = () => typeof AbortController !== "undefined";
+const noop = (): void => {};
+const asArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const hasAbortController = (): boolean => typeof AbortController !== "undefined";
 
-export const normalizeSearchDebounceMs = value => {
+export const normalizeSearchDebounceMs = (value: unknown): number => {
     if (value === 0 || value === "0") return 0;
     if (value === undefined || value === null || value === "") return DEFAULT_SEARCH_DEBOUNCE_MS;
     const numeric = Number(value);
@@ -27,7 +168,10 @@ export const normalizeSearchDebounceMs = value => {
     return Math.min(MAX_SEARCH_DEBOUNCE_MS, numeric);
 };
 
-export const createSessionRequestKey = (datasetName, request = {}) => {
+export const createSessionRequestKey = (
+    datasetName: unknown,
+    request: CoordinatorRequestInput = {}
+): string => {
     const normalized = normalizeCoordinatorRequest(request);
     return JSON.stringify({
         dataset: normalizeText(datasetName),
@@ -48,7 +192,7 @@ export const createSessionRequestKey = (datasetName, request = {}) => {
     });
 };
 
-export const createSessionState = () => ({
+export const createSessionState = (): SearchSessionState => ({
     status: "idle",
     requestId: 0,
     committedRequestId: 0,
@@ -65,45 +209,45 @@ export const createSessionState = () => ({
     cancellationCount: 0
 });
 
-export const createManualSearchScheduler = () => {
+export const createManualSearchScheduler = (): ManualSearchScheduler => {
     let sequence = 0;
-    const tasks = new Map();
+    const tasks = new Map<number, { callback: () => void; delay: number }>();
     return {
-        set(callback, delay) {
+        set(callback: () => void, delay: number): number {
             const id = ++sequence;
             tasks.set(id, { callback, delay });
             return id;
         },
-        clear(id) {
+        clear(id: number): void {
             tasks.delete(id);
         },
-        run(id) {
+        run(id: number): boolean {
             const task = tasks.get(id);
             if (!task) return false;
             tasks.delete(id);
             task.callback();
             return true;
         },
-        runAll() {
+        runAll(): number {
             const ids = Array.from(tasks.keys());
             ids.forEach(id => this.run(id));
             return ids.length;
         },
-        size() {
+        size(): number {
             return tasks.size;
         },
-        entries() {
+        entries(): Array<{ id: number; delay: number }> {
             return Array.from(tasks.entries()).map(([id, task]) => ({ id, delay: task.delay }));
         }
     };
 };
 
-const createDefaultScheduler = () => ({
-    set: (callback, delay) => setTimeout(callback, delay),
-    clear: id => clearTimeout(id)
+const createDefaultScheduler = (): SearchScheduler<ReturnType<typeof setTimeout>> => ({
+    set: (callback: () => void, delay: number) => setTimeout(callback, delay),
+    clear: (id: ReturnType<typeof setTimeout>) => clearTimeout(id)
 });
 
-const createController = () => hasAbortController()
+const createController = (): SearchAbortControllerLike => hasAbortController()
     ? new AbortController()
     : {
         signal: { aborted: false },
@@ -112,56 +256,59 @@ const createController = () => hasAbortController()
         }
     };
 
-const cloneState = state => ({ ...state });
+const cloneState = (state: SearchSessionState): SearchSessionState => ({ ...state });
 
-export const createSearchSession = (coordinator, options = {}) => {
+export const createSearchSession = (
+    coordinator: SearchCoordinatorLike | null | undefined,
+    options: SearchSessionOptions = {}
+): SearchSessionApi => {
     if (!coordinator || typeof coordinator.search !== "function") {
         throw new TypeError("Search session requires a coordinator with a search function");
     }
 
-    const scheduler = options.scheduler || createDefaultScheduler();
+    const scheduler: SearchScheduler = options.scheduler || createDefaultScheduler();
     const now = typeof options.now === "function" ? options.now : () => Date.now();
     const debounceMs = normalizeSearchDebounceMs(options.debounceMs);
-    const historySize = normalizeInteger(options.historySize, {
+    const historySize = normalizeIntegerValue(options.historySize, {
         min: 1,
         max: MAX_SESSION_HISTORY_SIZE,
         fallback: DEFAULT_SESSION_HISTORY_SIZE
     });
     const cancelPrevious = options.cancelPrevious !== false;
     const dedupeInFlight = options.dedupeInFlight !== false;
-    const listeners = new Set();
-    const inFlight = new Map();
-    const history = [];
+    const listeners = new Set<(state: SearchSessionState) => void>();
+    const inFlight = new Map<string, Promise<SessionExecutionResult>>();
+    const history: SearchSessionHistoryEntry[] = [];
     let state = createSessionState();
     let sequence = 0;
-    let activeController = null;
-    let activeKey = null;
-    let scheduled = null;
+    let activeController: SearchAbortControllerLike | null = null;
+    let activeKey: string | null = null;
+    let scheduled: ScheduledSearch | null = null;
     let disposed = false;
 
-    const emit = () => {
+    const emit = (): void => {
         const snapshot = cloneState(state);
         listeners.forEach(listener => {
             try {
                 listener(snapshot);
-            } catch (_error) {
+            } catch {
                 // Consumer listeners are observational and cannot break search execution.
             }
         });
     };
 
-    const transition = patch => {
+    const transition = (patch: Partial<SearchSessionState>): SearchSessionState => {
         state = { ...state, ...patch };
         emit();
         return cloneState(state);
     };
 
-    const remember = entry => {
+    const remember = (entry: SearchSessionHistoryEntry): void => {
         history.push(entry);
         while (history.length > historySize) history.shift();
     };
 
-    const cancelScheduled = reason => {
+    const cancelScheduled = (reason?: string): boolean => {
         if (!scheduled) return false;
         scheduler.clear(scheduled.timerId);
         const pending = scheduled;
@@ -174,7 +321,7 @@ export const createSearchSession = (coordinator, options = {}) => {
         return true;
     };
 
-    const abortActive = reason => {
+    const abortActive = (reason?: string): boolean => {
         if (!activeController) return false;
         activeController.abort(reason);
         activeController = null;
@@ -183,12 +330,16 @@ export const createSearchSession = (coordinator, options = {}) => {
         return true;
     };
 
-    const execute = async (datasetName, request = {}, searchOptions = {}) => {
+    const execute = async (
+        datasetName: unknown,
+        request: CoordinatorRequestInput = {},
+        searchOptions: SessionSearchOptions = {}
+    ): Promise<SessionExecutionResult> => {
         if (disposed) throw new Error("Search session is disposed");
         const normalized = normalizeCoordinatorRequest(request);
         const requestKey = createSessionRequestKey(datasetName, normalized);
         if (searchOptions.signal?.aborted) throw createSearchAbortError();
-        if (dedupeInFlight && inFlight.has(requestKey)) return inFlight.get(requestKey);
+        if (dedupeInFlight && inFlight.has(requestKey)) return inFlight.get(requestKey)!;
 
         const requestId = ++sequence;
         if (cancelPrevious && activeKey && activeKey !== requestKey) abortActive("Search superseded");
@@ -211,10 +362,11 @@ export const createSearchSession = (coordinator, options = {}) => {
 
         const operation = Promise.resolve().then(async () => {
             if (searchOptions.signal?.aborted || controller.signal.aborted) throw createSearchAbortError();
-            const result = await coordinator.search(datasetName, normalized, {
+            const coordinatorOptions: CoordinatorSearchOptions & UnknownRecord = {
                 ...searchOptions,
-                signal: controller.signal
-            });
+                signal: controller.signal as AbortSignal
+            };
+            const result = await coordinator.search(datasetName, normalized, coordinatorOptions) as SessionSearchResult;
             if (searchOptions.signal?.aborted || controller.signal.aborted) throw createSearchAbortError();
             const completedAt = now();
             const stale = requestId < sequence;
@@ -233,9 +385,9 @@ export const createSearchSession = (coordinator, options = {}) => {
             });
             remember({ requestId, dataset: datasetName, query: normalized.query, status: "success", startedAt, completedAt });
             return { result, stale: false, requestId };
-        }).catch(error => {
+        }).catch((error: unknown) => {
             const completedAt = now();
-            const aborted = error?.name === "AbortError" || controller.signal.aborted;
+            const aborted = (isRecord(error) && error.name === "AbortError") || controller.signal.aborted;
             if (requestId === sequence) {
                 transition({
                     status: aborted ? "cancelled" : "error",
@@ -266,7 +418,11 @@ export const createSearchSession = (coordinator, options = {}) => {
         return operation;
     };
 
-    const schedule = (datasetName, request = {}, searchOptions = {}) => {
+    const schedule = (
+        datasetName: unknown,
+        request: CoordinatorRequestInput = {},
+        searchOptions: SessionSearchOptions = {}
+    ): Promise<SessionExecutionResult> => {
         if (disposed) return Promise.reject(new Error("Search session is disposed"));
         cancelScheduled("Scheduled search superseded");
         const requestId = sequence + 1;
@@ -278,7 +434,7 @@ export const createSearchSession = (coordinator, options = {}) => {
             normalizedQuery: normalizeSearchText(request?.query),
             error: null
         });
-        return new Promise((resolve, reject) => {
+        return new Promise<SessionExecutionResult>((resolve, reject) => {
             const timerId = scheduler.set(() => {
                 scheduled = null;
                 execute(datasetName, request, searchOptions).then(resolve, reject);
@@ -291,19 +447,24 @@ export const createSearchSession = (coordinator, options = {}) => {
         search: execute,
         schedule,
 
-        searchNow(datasetName, request = {}, searchOptions = {}) {
+        searchNow(
+            datasetName: unknown,
+            request: CoordinatorRequestInput = {},
+            searchOptions: SessionSearchOptions = {}
+        ): Promise<SessionExecutionResult> {
             cancelScheduled("Immediate search requested");
             return execute(datasetName, request, searchOptions);
         },
 
-        async loadMore(searchOptions = {}) {
+        async loadMore(searchOptions: SessionSearchOptions = {}): Promise<SessionExecutionResult> {
             const current = state.result;
             const nextOffset = current?.page?.nextOffset;
             if (!current || current?.page?.hasMore !== true || nextOffset === null || nextOffset === undefined) {
                 return { result: current, stale: false, requestId: state.committedRequestId, terminal: true };
             }
+            const previousRequest = isRecord(current.request) ? current.request : {};
             return execute(state.dataset, {
-                ...(current.request || {}),
+                ...previousRequest,
                 offset: nextOffset
             }, searchOptions);
         },
@@ -317,31 +478,31 @@ export const createSearchSession = (coordinator, options = {}) => {
             return scheduledCancelled || activeCancelled;
         },
 
-        subscribe(listener) {
+        subscribe(listener: (state: SearchSessionState) => void): () => boolean | void {
             if (typeof listener !== "function") return noop;
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
 
-        getState() {
+        getState(): SearchSessionState {
             return cloneState(state);
         },
 
-        getHistory() {
+        getHistory(): SearchSessionHistoryEntry[] {
             return history.slice();
         },
 
-        getInFlightCount() {
+        getInFlightCount(): number {
             return inFlight.size;
         },
 
-        clearHistory() {
+        clearHistory(): number {
             const count = history.length;
             history.length = 0;
             return count;
         },
 
-        reset() {
+        reset(): void {
             api.cancel("Search session reset");
             history.length = 0;
             sequence = 0;
@@ -349,7 +510,7 @@ export const createSearchSession = (coordinator, options = {}) => {
             emit();
         },
 
-        dispose() {
+        dispose(): boolean {
             if (disposed) return false;
             api.cancel("Search session disposed");
             disposed = true;
@@ -359,7 +520,7 @@ export const createSearchSession = (coordinator, options = {}) => {
             return true;
         },
 
-        isDisposed() {
+        isDisposed(): boolean {
             return disposed;
         },
 
