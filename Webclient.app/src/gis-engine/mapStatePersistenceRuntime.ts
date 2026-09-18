@@ -476,17 +476,20 @@ export const createGisMapStatePersistenceRuntime = (
       ? null
       : Math.trunc(finite(source.expiresAt, 'Expiration timestamp'));
 
+    const decodedBasemapId = source.basemapId as string | null | undefined;
+    const decodedTemporal = source.temporal as GisPersistedTemporalState | null | undefined;
+    const decodedWorkspace = source.workspace as string | null | undefined;
     const rebuilt = capture({
       view: source.view as GisMapViewState,
-      basemapId: source.basemapId as string | null | undefined,
+      ...(decodedBasemapId === undefined ? {} : { basemapId: decodedBasemapId }),
       layers: Array.isArray(source.layers)
         ? source.layers as unknown as readonly GisPersistedLayerState[]
         : [],
-      temporal: source.temporal as GisPersistedTemporalState | null | undefined,
+      ...(decodedTemporal === undefined ? {} : { temporal: decodedTemporal }),
       selections: Array.isArray(source.selections)
         ? source.selections as unknown as readonly GisPersistedSelectionState[]
         : [],
-      workspace: source.workspace as string | null | undefined,
+      ...(decodedWorkspace === undefined ? {} : { workspace: decodedWorkspace }),
       metadata: source.metadata && typeof source.metadata === 'object' && !Array.isArray(source.metadata)
         ? source.metadata as Readonly<Record<string, unknown>>
         : {},
