@@ -457,3 +457,83 @@ describe('runtimeWorkloadGovernor', () => {
     harness.control.dispose();
   });
 });
+  it('keeps manual workload release idempotent', async () => {
+    const harness = createHarness();
+    const lease = await harness.governor.acquire({
+      key: 'idempotent-release',
+      resources: [{ kind: 'network', units: 1 }],
+    });
+
+    lease.release();
+    lease.release();
+
+    expect(harness.governor.snapshot().counters).toMatchObject({
+      acquired: 1,
+      completed: 1,
+      cancelled: 0,
+      failed: 0,
+    });
+    expect(harness.manager.snapshot().used.network).toBe(0);
+    harness.dispose();
+  });
+
+  it('stops reporting a resource claim after its reservation TTL expires', async () => {
+    vi.useFakeTimers();
+    const harness = createHarness();
+    const lease = await harness.governor.acquire({
+      key: 'ttl-resource',
+      deadlineMs: 1_000,
+      resources: [{ kind: 'network', units: 1, ttlMs: 25 }],
+    });
+
+    expect(harness.governor.snapshot().activeResources.network).toBe(1);
+    await vi.advanceTimersByTimeAsync(25);
+
+    expect(lease.released).toBe(false);
+    expect(lease.resources[0]?.released).toBe(true);
+    expect(harness.governor.snapshot().activeResources.network).toBe(0);
+    lease.release();
+    harness.dispose();
+  });
+
+  it('treats a blank owner cancellation request as a no-op', async () => {
+    const harness = createHarness();
+    const lease = await harness.governor.acquire({ key: 'owned', owner: 'map' });
+
+    expect(harness.governor.cancelOwner('   ')).toBe(0);
+    expect(lease.released).toBe(false);
+
+    lease.release();
+    harness.dispose();
+  });
+
+  it('propagates caller aborts through running execute operations', async () => {
+    const harness = createHarness();
+    const controller = new AbortController();
+    let entered = false;
+
+    const operation = harness.governor.execute({
+      key: 'abort-running',
+      signal: controller.signal,
+      resources: [{ kind: 'cpu', units: 1 }],
+    }, ({ signal }) => new Promise<string>((resolve, reject) => {
+      entered = true;
+      if (signal.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      void resolve;
+    }));
+
+    await Promise.resolve();
+    expect(entered).toBe(true);
+    controller.abort(new DOMException('caller stopped', 'AbortError'));
+
+    await expect(operation).rejects.toMatchObject({ name: 'AbortError' });
+    expect(harness.governor.snapshot().active).toBe(0);
+    expect(harness.governor.snapshot().counters.cancelled).toBe(1);
+    expect(harness.manager.snapshot().used.cpu).toBe(0);
+    harness.dispose();
+  });
+
