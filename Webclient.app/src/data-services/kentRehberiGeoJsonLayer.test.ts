@@ -50,11 +50,11 @@ describe('kentRehberiGeoJsonLayer', () => {
       { type: 'Feature', geometry: null, properties: { objectid: 0 } },
     ] })).toThrow(/valid objectid/i);
 
-    expect(() => validateKentRehberiFeatureCollection({ type: 'FeatureCollection', features: new Array(2001).fill({
+    expect(() => validateKentRehberiFeatureCollection({ type: 'FeatureCollection', features: Array.from({ length: 2001 }, () => ({
       type: 'Feature',
       geometry: null,
       properties: { objectid: 1 },
-    }) })).toThrow(/bounded feature limit/i);
+    })) })).toThrow(/bounded feature limit/i);
   });
 
   test('fetches the same-origin endpoint with the GeoJSON accept contract', async () => {
