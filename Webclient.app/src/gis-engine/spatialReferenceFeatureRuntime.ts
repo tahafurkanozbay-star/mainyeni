@@ -1,7 +1,6 @@
 import {
   type NormalizedSpatialReference,
   type SpatialReferenceRuntimeOptions,
-  normalizeSpatialReference,
   spatialReferencesEquivalent,
 } from "./spatialReferenceRuntime";
 import {
