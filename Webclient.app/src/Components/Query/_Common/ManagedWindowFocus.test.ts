@@ -78,8 +78,11 @@ describe('ManagedWindowFocus', () => {
     document.body.append(opener);
     opener.focus();
     expect(captureManagedWindowOpener(document)).toBe(opener);
+    document.body.tabIndex = -1;
     document.body.focus();
+    expect(document.activeElement).toBe(document.body);
     expect(captureManagedWindowOpener(document)).toBeNull();
+    document.body.removeAttribute('tabindex');
   });
 
   it('restores only connected and available opener elements', () => {
