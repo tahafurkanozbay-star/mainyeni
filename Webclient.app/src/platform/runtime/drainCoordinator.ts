@@ -233,6 +233,7 @@ export const createDrainCoordinator = (
   const releaseWork = (
     work: ActiveWork,
     wasCancelled: boolean,
+    settle = true,
   ): boolean => {
     if (work.released) return false;
     work.released = true;
@@ -240,20 +241,22 @@ export const createDrainCoordinator = (
     if (!active.delete(work.id)) return false;
     if (wasCancelled) cancelled += 1;
     else completed += 1;
-    settleDrainedWaiters();
+    if (active.size === 0 && phase === 'draining') phase = 'drained';
+    if (settle) settleDrainedWaiters();
     return true;
   };
 
   const forceCancel = (
     work: ActiveWork,
     reason: unknown,
+    settle = true,
   ): boolean => {
     if (work.released) return false;
     if (!work.controller.signal.aborted) {
       work.controller.abort(reason);
     }
     forced += 1;
-    return releaseWork(work, true);
+    return releaseWork(work, true, settle);
   };
 
   const enter = (
@@ -428,11 +431,12 @@ export const createDrainCoordinator = (
         if (waiter.settled) return;
         let cancelledCount = 0;
         if (waiter.cancelOnTimeout) {
-          for (const work of active.values()) {
-            if (forceCancel(work, waiter.reason)) cancelledCount += 1;
+          for (const work of [...active.values()]) {
+            if (forceCancel(work, waiter.reason, false)) cancelledCount += 1;
           }
         }
         settleWaiter(waiter, true, cancelledCount);
+        settleDrainedWaiters();
       }, timeoutMs);
 
       waiters.add(waiter);
@@ -445,7 +449,7 @@ export const createDrainCoordinator = (
   ): void => {
     if (phase === 'disposed') return;
     accepting = false;
-    for (const work of active.values()) forceCancel(work, reason);
+    for (const work of [...active.values()]) forceCancel(work, reason, false);
     phase = 'disposed';
     drainStartedAt ??= clock.now();
     for (const waiter of waiters) settleWaiter(waiter, false, 0);

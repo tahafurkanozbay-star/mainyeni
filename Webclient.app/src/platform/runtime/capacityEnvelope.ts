@@ -202,6 +202,47 @@ const normalizedWeights = <TKey extends string>(
   ) as Record<TKey, number>);
 };
 
+const laneEnabled = (
+  lane: CapacityLane,
+  pressure: RuntimePressureLevel,
+  demand: CapacityDemand,
+): boolean => {
+  const background = lane === 'background' || lane === 'prefetch' || lane === 'maintenance';
+  if (pressure === 'critical' && background) return false;
+  if (lane === 'prefetch' && (demand.online === false || demand.saveData === true)) return false;
+  return true;
+};
+
+const allocateLaneCapacity = (
+  total: number,
+  weights: Readonly<Record<CapacityLane, number>>,
+  enabled: ReadonlySet<CapacityLane>,
+): Readonly<Record<CapacityLane, number>> => {
+  const capacity = Math.max(0, Math.floor(total));
+  const allocations = Object.fromEntries(LANES.map((lane) => [lane, 0])) as Record<CapacityLane, number>;
+  const lanes = LANES.filter((lane) => enabled.has(lane));
+  if (capacity === 0 || lanes.length === 0) return Object.freeze(allocations);
+
+  const weightTotal = lanes.reduce((sum, lane) => sum + Math.max(0, finite(weights[lane])), 0);
+  const equalShare = 1 / lanes.length;
+  const ranked = lanes.map((lane, order) => {
+    const share = weightTotal > 0 ? Math.max(0, finite(weights[lane])) / weightTotal : equalShare;
+    const exact = capacity * share;
+    const floor = Math.floor(exact);
+    allocations[lane] = floor;
+    return { lane, order, remainder: exact - floor };
+  });
+
+  let remaining = capacity - lanes.reduce((sum, lane) => sum + allocations[lane], 0);
+  ranked.sort((left, right) => right.remainder - left.remainder || left.order - right.order);
+  for (let index = 0; remaining > 0 && ranked.length > 0; index += 1, remaining -= 1) {
+    const candidate = ranked[index % ranked.length];
+    if (candidate) allocations[candidate.lane] += 1;
+  }
+
+  return Object.freeze(allocations);
+};
+
 const normalizedPolicy = (overrides: Partial<CapacityEnvelopePolicy> = {}): CapacityEnvelopePolicy => {
   const factor = (value: number | undefined, fallback: number): number =>
     Math.max(0.2, Math.min(1, finite(value ?? fallback, fallback)));
@@ -230,22 +271,14 @@ const scaled = (value: number, factor: number, minimum: number): number =>
 
 const lanePolicy = (
   lane: CapacityLane,
+  laneActive: number,
+  laneQueued: number,
   maxActive: number,
-  maxQueued: number,
-  pressure: RuntimePressureLevel,
+  enabled: boolean,
   policy: CapacityEnvelopePolicy,
-  demand: CapacityDemand,
 ): CapacityLanePolicy => {
-  const activeShare = policy.laneWeights[lane];
-  const queueShare = policy.laneQueueWeights[lane];
   const reserveShare = policy.laneReserveWeights[lane];
   const background = lane === 'background' || lane === 'prefetch' || lane === 'maintenance';
-  const disabledByPressure = pressure === 'critical' && background;
-  const disabledByNetwork = demand.online === false && lane === 'prefetch';
-  const disabledBySaveData = demand.saveData === true && lane === 'prefetch';
-  const enabled = !(disabledByPressure || disabledByNetwork || disabledBySaveData);
-  const laneActive = enabled ? Math.max(1, Math.round(maxActive * activeShare)) : 0;
-  const laneQueued = enabled ? Math.max(1, Math.round(maxQueued * queueShare)) : 0;
   const reservedActive = enabled && !background
     ? Math.min(laneActive, Math.max(0, Math.floor(maxActive * reserveShare)))
     : 0;
@@ -332,14 +365,29 @@ export const createCapacityEnvelopePlanner = (
       effectiveFactor,
       minimumCost,
     );
+    const enabledLanes = new Set(
+      LANES.filter((lane) => laneEnabled(lane, pressure, demand)),
+    );
+    const activeAllocation = allocateLaneCapacity(maxActive, policy.laneWeights, enabledLanes);
+    const queueAllocation = allocateLaneCapacity(maxQueued, policy.laneQueueWeights, enabledLanes);
     const lanes = Object.fromEntries(
-      LANES.map((lane) => [lane, lanePolicy(lane, maxActive, maxQueued, pressure, policy, demand)]),
+      LANES.map((lane) => [
+        lane,
+        lanePolicy(
+          lane,
+          activeAllocation[lane],
+          queueAllocation[lane],
+          maxActive,
+          enabledLanes.has(lane),
+          policy,
+        ),
+      ]),
     ) as Record<CapacityLane, CapacityLanePolicy>;
     const laneMaxActive = Object.fromEntries(
-      LANES.filter((lane) => lanes[lane].enabled).map((lane) => [lane, lanes[lane].maxActive]),
+      LANES.map((lane) => [lane, lanes[lane].enabled ? lanes[lane].maxActive : 0]),
     );
     const laneMaxQueued = Object.fromEntries(
-      LANES.filter((lane) => lanes[lane].enabled).map((lane) => [lane, lanes[lane].maxQueued]),
+      LANES.map((lane) => [lane, lanes[lane].enabled ? lanes[lane].maxQueued : 0]),
     );
     const admission: AdmissionPolicy = Object.freeze({
       maxActive,

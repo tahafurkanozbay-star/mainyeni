@@ -271,4 +271,23 @@ describe('createAdmissionController', () => {
     expect(controller.snapshot()).toMatchObject({ active: 0, queued: 0 });
     lease.release();
   });
+  it('treats zero lane limits as a hard disabled-lane contract', async () => {
+    const controller = createAdmissionController({
+      ...policy,
+      maxActive: 4,
+      maxQueued: 8,
+      laneMaxActive: { disabled: 0 },
+      laneMaxQueued: { disabled: 0 },
+    });
+    await expect(controller.acquire({ key: 'disabled', lane: 'disabled' }))
+      .rejects.toBeInstanceOf(AdmissionRejectedError);
+    expect(controller.snapshot()).toMatchObject({
+      active: 0,
+      queued: 0,
+      admitted: 0,
+      shed: 1,
+    });
+  });
+
+
 });

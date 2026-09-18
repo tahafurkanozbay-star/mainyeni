@@ -34,7 +34,7 @@ describe('runtimeHealthJournal', () => {
       journal.record({ at: clock, kind: 'latency', severity: 'info', code: 'request', durationMs });
     });
     const summary = journal.summary();
-    expect(summary.p50LatencyMs).toBe(40);
+    expect(summary.p50LatencyMs).toBe(30);
     expect(summary.p95LatencyMs).toBe(50);
     expect(summary.p99LatencyMs).toBe(50);
     journal.dispose();

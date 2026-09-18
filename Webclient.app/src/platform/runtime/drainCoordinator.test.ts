@@ -435,4 +435,26 @@ describe('drainCoordinator', () => {
     expect(coordinator.resumeAccepting()).toBe(true);
     expect(coordinator.snapshot().drainStartedAt).toBeNull();
   });
+  it('settles multiple drain observers consistently after forced timeout cancellation', async () => {
+    vi.useFakeTimers();
+    const coordinator = createDrainCoordinator({ defaultTimeoutMs: 50 });
+    coordinator.enter('a');
+    coordinator.enter('b');
+    const timed = coordinator.drain({ timeoutMs: 50 });
+    const observer = coordinator.drain({ timeoutMs: 500 });
+    await vi.advanceTimersByTimeAsync(51);
+    await expect(timed).resolves.toMatchObject({
+      timedOut: true,
+      cancelled: 2,
+      remaining: 0,
+      phase: 'drained',
+    });
+    await expect(observer).resolves.toMatchObject({
+      timedOut: false,
+      remaining: 0,
+      phase: 'drained',
+    });
+  });
+
+
 });

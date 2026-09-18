@@ -104,12 +104,12 @@ describe('capacityEnvelope', () => {
     expect(envelope.lanes.default.enabled).toBe(true);
   });
 
-  it('does not expose disabled lanes through admission lane limits', () => {
+  it('blocks disabled lanes through explicit zero admission limits', () => {
     const planner = createCapacityEnvelopePlanner(budget);
     const envelope = planner.plan('critical', demand());
-    expect(envelope.admission.laneMaxActive?.background).toBeUndefined();
-    expect(envelope.admission.laneMaxActive?.prefetch).toBeUndefined();
-    expect(envelope.admission.laneMaxQueued?.maintenance).toBeUndefined();
+    expect(envelope.admission.laneMaxActive?.background).toBe(0);
+    expect(envelope.admission.laneMaxActive?.prefetch).toBe(0);
+    expect(envelope.admission.laneMaxQueued?.maintenance).toBe(0);
     expect(envelope.admission.laneMaxActive?.interactive).toBeGreaterThan(0);
   });
 
@@ -297,7 +297,7 @@ describe('capacityEnvelope', () => {
     const envelope = planner.plan('nominal', demand());
     const laneQueuedTotal = Object.values(envelope.lanes)
       .reduce((sum, lane) => sum + lane.maxQueued, 0);
-    expect(laneQueuedTotal).toBeGreaterThanOrEqual(envelope.maxQueued);
+    expect(laneQueuedTotal).toBe(envelope.maxQueued);
     expect(envelope.lanes.interactive.maxQueued).toBeGreaterThan(envelope.lanes.prefetch.maxQueued);
   });
 
@@ -344,4 +344,28 @@ describe('capacityEnvelope', () => {
     const second = planner.plan('high', input);
     expect(second).toEqual(first);
   });
+  it('partitions active capacity exactly without oversubscribing the global envelope', () => {
+    const planner = createCapacityEnvelopePlanner(budget, {
+      minimumActive: 2,
+      policy: {
+        laneWeights: {
+          interactive: 100,
+          foreground: 1,
+          default: 1,
+          background: 1,
+          prefetch: 1,
+          maintenance: 1,
+        },
+      },
+    });
+    const envelope = planner.plan('critical', demand());
+    const activeTotal = Object.values(envelope.lanes)
+      .reduce((sum, lane) => sum + lane.maxActive, 0);
+    expect(activeTotal).toBe(envelope.maxActive);
+    expect(envelope.lanes.background.maxActive).toBe(0);
+    expect(envelope.lanes.prefetch.maxActive).toBe(0);
+    expect(envelope.lanes.maintenance.maxActive).toBe(0);
+  });
+
+
 });

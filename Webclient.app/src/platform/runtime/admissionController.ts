@@ -83,6 +83,9 @@ const priorityRank: Readonly<Record<AdmissionPriority, number>> = Object.freeze(
 const positive = (value: number, fallback: number): number =>
   Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 
+const nonNegativeLimit = (value: number, fallback: number): number =>
+  Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+
 export const createAdmissionController = (input: AdmissionPolicy, now: () => number = Date.now) => {
   const policy = Object.freeze({
     maxActive: positive(input.maxActive, 8),
@@ -133,7 +136,8 @@ export const createAdmissionController = (input: AdmissionPolicy, now: () => num
     if (active.size >= policy.maxActive) return false;
     if (activeCost() + request.cost > policy.maxCost) return false;
     const limit = policy.laneMaxActive[request.lane];
-    return limit === undefined || laneActiveCount(request.lane) < positive(limit, policy.maxActive);
+    return limit === undefined
+      || laneActiveCount(request.lane) < nonNegativeLimit(limit, policy.maxActive);
   };
 
   const normalize = (request: AdmissionRequest): NormalizedAdmissionRequest => ({
@@ -211,7 +215,7 @@ export const createAdmissionController = (input: AdmissionPolicy, now: () => num
     }
     const laneQueueLimit = policy.laneMaxQueued[normalized.lane];
     const laneQueueFull = laneQueueLimit !== undefined
-      && laneQueued(normalized.lane) >= positive(laneQueueLimit, policy.maxQueued);
+      && laneQueued(normalized.lane) >= nonNegativeLimit(laneQueueLimit, policy.maxQueued);
     if (queue.length >= policy.maxQueued || laneQueueFull) {
       shed += 1;
       return Promise.reject(new AdmissionRejectedError());
