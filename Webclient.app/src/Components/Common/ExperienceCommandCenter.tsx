@@ -214,9 +214,9 @@ export function ExperienceCommandCenter({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const registry = useMemo(
-    () => createExperienceCommandRegistry({
-      ...(windowManager ? { windowManager } : {}),
-    }),
+    () => createExperienceCommandRegistry(
+      windowManager ? { windowManager } : {},
+    ),
     [windowManager],
   );
 
