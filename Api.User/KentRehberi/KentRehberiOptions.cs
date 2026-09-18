@@ -31,9 +31,9 @@ public sealed class KentRehberiOptions
             failures.Add("KentRehberiData:DefaultLimit must be between 1 and 2000.");
         }
 
-        if (MaxLimit is < 1 or > 10_000)
+        if (MaxLimit is < 1 or > 2_000)
         {
-            failures.Add("KentRehberiData:MaxLimit must be between 1 and 10000.");
+            failures.Add("KentRehberiData:MaxLimit must be between 1 and 2000.");
         }
 
         if (DefaultLimit > MaxLimit)
@@ -41,9 +41,9 @@ public sealed class KentRehberiOptions
             failures.Add("KentRehberiData:DefaultLimit cannot exceed MaxLimit.");
         }
 
-        if (MaxRadiusMeters is < 100 or > 200_000)
+        if (MaxRadiusMeters is < 100 or > 50_000)
         {
-            failures.Add("KentRehberiData:MaxRadiusMeters must be between 100 and 200000.");
+            failures.Add("KentRehberiData:MaxRadiusMeters must be between 100 and 50000.");
         }
 
         if (CommandTimeoutSeconds is < 1 or > 60)
