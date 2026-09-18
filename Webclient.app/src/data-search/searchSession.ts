@@ -240,7 +240,7 @@ export class SearchSession {
     externalSignal: AbortSignal | null | undefined,
   ): Promise<SearchSessionEnvelope> {
     const startedAt = this.now();
-    let detachExternal = () => undefined;
+    let detachExternal: () => void = () => undefined;
     detachExternal = this.attachExternalAbort(externalSignal, controller);
     if (controller.signal.aborted) {
       detachExternal();
