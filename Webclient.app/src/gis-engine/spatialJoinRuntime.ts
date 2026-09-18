@@ -74,11 +74,20 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 function pointOnSegment(point: SpatialJoinPoint, a: SpatialJoinPoint, b: SpatialJoinPoint): boolean {
-  const cross = (point.y - a.y) * (b.x - a.x) - (point.x - a.x) * (b.y - a.y);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+  // Closed ArcGIS rings commonly repeat the first vertex. The synthetic
+  // last->first edge is then zero-length and must only contain that vertex;
+  // treating every point as collinear with a zero-length segment makes the
+  // whole polygon look like an inclusive boundary.
+  if (lengthSquared === 0) {
+    return point.x === a.x && point.y === a.y;
+  }
+  const cross = (point.y - a.y) * dx - (point.x - a.x) * dy;
   if (Math.abs(cross) > Number.EPSILON * 32) return false;
-  const dot = (point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y);
+  const dot = (point.x - a.x) * dx + (point.y - a.y) * dy;
   if (dot < 0) return false;
-  const lengthSquared = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
   return dot <= lengthSquared;
 }
 
@@ -100,8 +109,6 @@ function pointInPolygon(point: SpatialJoinPoint, rings: readonly (readonly Spati
   let inside = false;
   for (const ring of rings) {
     const containment = classifyPointInRing(point, ring);
-    // Polygon boundaries are inclusive. Keep this state distinct from an interior
-    // crossing so a closed ring or a hole cannot toggle a boundary point away.
     if (containment === 'boundary') return true;
     if (containment === 'inside') inside = !inside;
   }
@@ -116,10 +123,7 @@ function validateBudgets(budgets: SpatialJoinBudgets): void {
   assertPositiveInteger(budgets.maxMatches, 'maxMatches');
 }
 
-/**
- * Deterministic, allocation-bounded point-in-polygon join for client-side GIS analysis.
- * Numeric and string identities remain distinct and input order defines stable match order.
- */
+/** Deterministic, allocation-bounded point-in-polygon join for client-side GIS analysis. */
 export function joinPointsToPolygons<TFeatureId extends SpatialJoinId, TPolygonId extends SpatialJoinId>(
   features: readonly SpatialJoinFeature<TFeatureId>[],
   polygons: readonly SpatialJoinPolygon<TPolygonId>[],
@@ -127,70 +131,41 @@ export function joinPointsToPolygons<TFeatureId extends SpatialJoinId, TPolygonI
 ): SpatialJoinResult<TFeatureId, TPolygonId> {
   validateBudgets(options.budgets);
   throwIfAborted(options.signal);
-
   const { maxFeatures, maxPolygons, maxRingVertices, maxCandidatePairs, maxMatches } = options.budgets;
   const matches: SpatialJoinMatch<TFeatureId, TPolygonId>[] = [];
   let featuresVisited = 0;
   let polygonsVisited = 0;
   let candidatePairsVisited = 0;
   let reason: SpatialJoinDiagnostics['reason'] = 'complete';
-
   const polygonLimit = Math.min(polygons.length, maxPolygons);
   if (polygons.length > maxPolygons) reason = 'polygon-budget';
-
   for (let featureIndex = 0; featureIndex < features.length; featureIndex += 1) {
-    if (featuresVisited >= maxFeatures) {
-      reason = 'feature-budget';
-      break;
-    }
+    if (featuresVisited >= maxFeatures) { reason = 'feature-budget'; break; }
     throwIfAborted(options.signal);
     const feature = features[featureIndex]!;
     assertId(feature.id, 'feature.id');
     assertPoint(feature.point, 'feature.point');
     featuresVisited += 1;
-
     for (let polygonIndex = 0; polygonIndex < polygonLimit; polygonIndex += 1) {
-      if (candidatePairsVisited >= maxCandidatePairs) {
-        reason = 'candidate-budget';
-        break;
-      }
+      if (candidatePairsVisited >= maxCandidatePairs) { reason = 'candidate-budget'; break; }
       throwIfAborted(options.signal);
       const polygon = polygons[polygonIndex]!;
       assertId(polygon.id, 'polygon.id');
       polygonsVisited += 1;
       candidatePairsVisited += 1;
-
       let vertexCount = 0;
       for (const ring of polygon.rings) {
         vertexCount += ring.length;
-        if (vertexCount > maxRingVertices) {
-          reason = 'vertex-budget';
-          break;
-        }
+        if (vertexCount > maxRingVertices) { reason = 'vertex-budget'; break; }
         for (const point of ring) assertPoint(point, 'polygon vertex');
       }
       if (reason === 'vertex-budget') break;
-
       if (pointInPolygon(feature.point, polygon.rings)) {
-        if (matches.length >= maxMatches) {
-          reason = 'match-budget';
-          break;
-        }
+        if (matches.length >= maxMatches) { reason = 'match-budget'; break; }
         matches.push({ featureId: feature.id, polygonId: polygon.id });
       }
     }
     if (reason === 'candidate-budget' || reason === 'match-budget' || reason === 'vertex-budget') break;
   }
-
-  return {
-    matches,
-    diagnostics: {
-      featuresVisited,
-      polygonsVisited,
-      candidatePairsVisited,
-      matchesProduced: matches.length,
-      truncated: reason !== 'complete',
-      reason,
-    },
-  };
+  return { matches, diagnostics: { featuresVisited, polygonsVisited, candidatePairsVisited, matchesProduced: matches.length, truncated: reason !== 'complete', reason } };
 }
