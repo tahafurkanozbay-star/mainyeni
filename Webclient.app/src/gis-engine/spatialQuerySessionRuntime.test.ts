@@ -168,6 +168,45 @@ describe("spatialQuerySessionRuntime", () => {
     expect(session.stats().invalidations).toBe(1);
   });
 
+
+  it("rejects an in-flight result after session invalidation", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const session = createSpatialQuerySession({
+      capability: capability(),
+      transport: {
+        executePage: async () => {
+          await gate;
+          return {
+            features: [
+              {
+                id: 1,
+                geometry: { type: "point", x: 0, y: 0, spatialReference: sr },
+                attributes: {},
+              },
+            ],
+            exceededTransferLimit: false,
+          };
+        },
+      },
+    });
+
+    const pending = session.query({
+      budget: {
+        mode: "identify",
+        requestedFeatures: 1,
+      },
+    });
+    session.invalidate();
+    release?.();
+
+    await expect(pending).rejects.toThrow(/stale/);
+    expect(session.stats().generation).toBe(1);
+    expect(session.stats().failures).toBe(1);
+  });
+
   it("honors pre-aborted requests", async () => {
     const controller = new AbortController();
     controller.abort(new Error("cancelled"));
