@@ -528,7 +528,7 @@ export const evaluateAliasCoverage = (
   const available = new Set(Object.keys(profile.fields));
   const entries = Object.entries(schema).map(([semanticField, rawAliases]) => {
     const aliases = (rawAliases ?? []).map(normalizeFieldName).filter(Boolean);
-    const matchedFields = aliases.filter(alias => available.has(alias));
+    const matchedFields = aliases.filter((alias: string) => available.has(alias));
     return Object.freeze({
       semanticField: semanticField as keyof RecordAliasSchema,
       aliases: Object.freeze(aliases),
