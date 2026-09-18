@@ -17,6 +17,7 @@ export interface SpatialLayerLifecycleBudget {
   readonly maxCpuBytes: number;
   readonly maxGpuBytes: number;
   readonly maxFailuresPerLayer: number;
+  readonly maxRetryAttempts: number;
   readonly maxIdLength: number;
 }
 
@@ -43,6 +44,7 @@ const DEFAULT_BUDGET: SpatialLayerLifecycleBudget = Object.freeze({
   maxCpuBytes: 512 * 1024 * 1024,
   maxGpuBytes: 768 * 1024 * 1024,
   maxFailuresPerLayer: 3,
+  maxRetryAttempts: 2,
   maxIdLength: 256,
 });
 
@@ -83,6 +85,7 @@ function normalizeBudget(input: Partial<SpatialLayerLifecycleBudget>): SpatialLa
     maxCpuBytes: positiveSafeInteger(input.maxCpuBytes ?? DEFAULT_BUDGET.maxCpuBytes, 'maxCpuBytes'),
     maxGpuBytes: positiveSafeInteger(input.maxGpuBytes ?? DEFAULT_BUDGET.maxGpuBytes, 'maxGpuBytes'),
     maxFailuresPerLayer: positiveSafeInteger(input.maxFailuresPerLayer ?? DEFAULT_BUDGET.maxFailuresPerLayer, 'maxFailuresPerLayer'),
+    maxRetryAttempts: nonNegativeSafeInteger(input.maxRetryAttempts ?? DEFAULT_BUDGET.maxRetryAttempts, 'maxRetryAttempts'),
     maxIdLength: positiveSafeInteger(input.maxIdLength ?? DEFAULT_BUDGET.maxIdLength, 'maxIdLength'),
   });
   if (budget.maxActiveLayers > budget.maxLayers) throw new RangeError('maxActiveLayers must not exceed maxLayers');
@@ -157,7 +160,9 @@ export class SpatialLayerLifecycleRuntime {
     if (layer.phase === 'disposed') return false;
     layer.failures += 1;
     this.#failures += 1;
-    layer.phase = layer.failures >= this.#budget.maxFailuresPerLayer ? 'suspended' : 'failed';
+    const retryBudgetExhausted = layer.failures > this.#budget.maxRetryAttempts;
+    const failureBudgetExhausted = layer.failures >= this.#budget.maxFailuresPerLayer;
+    layer.phase = retryBudgetExhausted || failureBudgetExhausted ? 'suspended' : 'failed';
     layer.lastTouched = ++this.#clock;
     this.#transitions += 1;
     return layer.phase === 'suspended';
@@ -166,6 +171,10 @@ export class SpatialLayerLifecycleRuntime {
   retry(id: string): void {
     const layer = this.#require(id);
     if (layer.phase !== 'failed') throw new Error('only failed layers can retry');
+    if (layer.failures > this.#budget.maxRetryAttempts) {
+      layer.phase = 'suspended';
+      throw new Error('layer retry budget exhausted');
+    }
     layer.phase = 'loading';
     layer.lastTouched = ++this.#clock;
     this.#transitions += 1;
