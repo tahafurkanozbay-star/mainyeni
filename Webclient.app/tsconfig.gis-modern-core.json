@@ -40,7 +40,8 @@
     "src/gis-engine/spatialQuerySessionRuntime.ts",
     "src/gis-engine/spatialViewQueryStateRuntime.ts",
     "src/gis-engine/spatialFeatureSnapshotRuntime.ts",
-    "src/gis-engine/spatialQueryContractRuntime.ts"
+    "src/gis-engine/spatialQueryContractRuntime.ts",
+    "src/gis-engine/spatialQueryParityRuntime.ts"
   ],
   "include": [],
   "exclude": [
