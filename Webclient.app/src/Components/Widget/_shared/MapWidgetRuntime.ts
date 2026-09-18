@@ -103,7 +103,12 @@ export interface RovingMenuState {
 }
 
 const SECRETISH_KEY = /(authorization|cookie|token|secret|password|session|credential|api[-_]?key)/iu;
-const CONTROL_CHARS = /[\u0000-\u001f\u007f]/gu;
+const replaceControlCharacters = (value: string): string => (
+  Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f ? ' ' : character;
+  }).join('')
+);
 
 const finiteNumber = (value: unknown): number | null => {
   const numeric = typeof value === 'number' ? value : Number(value);
@@ -139,7 +144,7 @@ export const normalizeWidgetError = (
       ? error
       : fallback;
   const normalized = raw
-    .replace(CONTROL_CHARS, ' ')
+    
     .replace(/\s+/gu, ' ')
     .trim();
   if (!normalized) return fallback;
@@ -224,8 +229,7 @@ export const clampContextMenuPosition = (
 
 export const sanitizeWidgetLabel = (value: unknown, fallback = 'İsimsiz öğe'): string => {
   if (typeof value !== 'string') return fallback;
-  const normalized = value
-    .replace(CONTROL_CHARS, ' ')
+  const normalized = replaceControlCharacters(value)
     .replace(/\s+/gu, ' ')
     .trim();
   return normalized ? normalized.slice(0, 120) : fallback;
@@ -257,7 +261,7 @@ export const safeRecordEntries = (
     }
     entries.push(Object.freeze({
       key,
-      value: display.replace(CONTROL_CHARS, ' ').slice(0, 500),
+      value: replaceControlCharacters(display).slice(0, 500),
     }));
   }
   return Object.freeze(entries);
