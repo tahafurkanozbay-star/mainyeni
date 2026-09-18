@@ -28,6 +28,9 @@ async function fixture(overrides = {}) {
         dev: 'vite',
         build: 'vite build',
         'build:verify': 'node scripts/verify-build.mjs',
+        'quality:module-graph': 'node ../tools/platform-module-graph.mjs --strict',
+        'quality:language-ratchet': 'node ../tools/platform-language-ratchet.mjs --strict',
+        'quality:platform-boundaries': 'node ../tools/platform-boundary-audit.mjs --strict',
         lint: 'oxlint src',
         'lint:strict': 'oxlint --deny-warnings src',
         'test:ci': 'vitest run',
@@ -54,7 +57,11 @@ async function fixture(overrides = {}) {
         allowJs: true,
       },
     }),
-    'Webclient.app/tsconfig.platform.json': JSON.stringify({ extends: './tsconfig.json', include: ['src/platform/**/*.ts'] }),
+    'Webclient.app/tsconfig.platform.json': JSON.stringify({
+      extends: './tsconfig.json',
+      compilerOptions: { allowJs: false, checkJs: false },
+      include: ['src/platform/**/*.ts'],
+    }),
     'Webclient.app/tsconfig.gis.json': JSON.stringify({ extends: './tsconfig.json', include: ['src/gis-engine/**/*.ts'] }),
     'Webclient.app/tsconfig.experience.json': JSON.stringify({ extends: './tsconfig.json', include: ['src/experience/**/*.ts'] }),
     'Webclient.app/tsconfig.data-search.json': JSON.stringify({ extends: './tsconfig.json', include: ['src/data-search/**/*.ts'] }),
@@ -145,5 +152,42 @@ test('rejects a globally disabled nullable context and weakened NuGet vulnerabil
   const codes = new Set(report.findings.map((finding) => finding.code));
   assert.ok(codes.has('dotnet-nullable-disabled'));
   assert.ok(codes.has('dotnet-vulnerability-gate'));
+  assert.equal(report.summary.passed, false);
+});
+
+
+test('rejects Platform TypeScript boundary when allowJs is not explicitly disabled', async (t) => {
+  const root = await fixture({
+    'Webclient.app/tsconfig.platform.json': JSON.stringify({
+      extends: './tsconfig.json',
+      include: ['src/platform/**/*.ts'],
+    }),
+  });
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const report = await runPlatformContracts(root);
+  assert.ok(report.findings.some((finding) => finding.code === 'tsconfig-platform-allow-js'));
+  assert.equal(report.summary.passed, false);
+});
+
+test('requires module graph and language ratchet scripts in the web quality surface', async (t) => {
+  const packageJson = JSON.parse((await fs.readFile(
+    path.join(await fixture(), 'Webclient.app/package.json'),
+    'utf8',
+  )));
+  delete packageJson.scripts['quality:module-graph'];
+  delete packageJson.scripts['quality:language-ratchet'];
+  delete packageJson.scripts['quality:platform-boundaries'];
+  const root = await fixture({
+    'Webclient.app/package.json': JSON.stringify(packageJson),
+  });
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const report = await runPlatformContracts(root);
+  const codes = report.findings
+    .filter((finding) => finding.code === 'web-script-missing')
+    .map((finding) => finding.detail?.script)
+    .filter(Boolean);
+  assert.ok(codes.includes('quality:module-graph'));
+  assert.ok(codes.includes('quality:language-ratchet'));
+  assert.ok(codes.includes('quality:platform-boundaries'));
   assert.equal(report.summary.passed, false);
 });

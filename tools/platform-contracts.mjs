@@ -10,6 +10,9 @@ const REQUIRED_WEB_SCRIPTS = Object.freeze([
   'dev',
   'build',
   'build:verify',
+  'quality:module-graph',
+  'quality:language-ratchet',
+  'quality:platform-boundaries',
   'lint',
   'lint:strict',
   'test:ci',
@@ -226,6 +229,31 @@ const validateTypeScriptProjects = async (root, webRoot, packageJson, report) =>
         'tsconfig-invalid',
         `Unable to resolve ${project}.`,
         relative(root, file),
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
+  const platformConfigPath = path.join(webRoot, 'tsconfig.platform.json');
+  if (await exists(platformConfigPath)) {
+    try {
+      const platformConfig = await resolveTsconfig(platformConfigPath);
+      if (platformConfig.compilerOptions?.allowJs !== false) {
+        addFinding(
+          report,
+          'error',
+          'tsconfig-platform-allow-js',
+          'Platform TypeScript boundary must explicitly disable allowJs after the typed runtime cutover.',
+          relative(root, platformConfigPath),
+        );
+      }
+    } catch (error) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-platform-invalid',
+        'Platform TypeScript configuration cannot be resolved.',
+        relative(root, platformConfigPath),
         { error: error instanceof Error ? error.message : String(error) },
       );
     }
