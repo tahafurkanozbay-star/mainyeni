@@ -41,7 +41,12 @@
     "src/gis-engine/spatialViewQueryStateRuntime.ts",
     "src/gis-engine/spatialFeatureSnapshotRuntime.ts",
     "src/gis-engine/spatialQueryContractRuntime.ts",
-    "src/gis-engine/spatialQueryParityRuntime.ts"
+    "src/gis-engine/spatialQueryParityRuntime.ts",
+    "src/gis-engine/temporalLayerRuntime.ts",
+    "src/gis-engine/editTransactionRuntime.ts",
+    "src/gis-engine/mapStatePersistenceRuntime.ts",
+    "src/gis-engine/exportPlanRuntime.ts",
+    "src/gis-engine/modernGisKernel.ts"
   ],
   "include": [],
   "exclude": [
