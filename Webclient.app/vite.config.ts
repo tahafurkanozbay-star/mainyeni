@@ -4,7 +4,7 @@ import {
   legacyEnvironmentGuardPlugin,
   legacyJsxPlugin,
   legacyPresentationCleanupPlugin,
-} from './tooling/sourceTransforms.ts';
+} from './tooling/sourceTransforms';
 
 const arcgisLeafChunk = (id: string, prefix: string, chunkPrefix: string): string | undefined => {
   const marker = `/@arcgis/core/${prefix}/`;
@@ -60,7 +60,7 @@ const localBootstrapPreviewPlugin = (): Plugin => ({
   name: 'kent-rehberi-local-bootstrap-preview',
   configureServer(server) {
     server.middlewares.use('/api', (request, response, next) => {
-      const requestUrl = new URL((request as { url?: string }).url || '/', 'http://localhost');
+      const requestUrl = new URL((request as { url?: string }).url || '/', 'https://vite.local');
       const payload = requestUrl.pathname === '/AppSettings/List'
         ? {
           isSuccess: requestUrl.searchParams.get('key') === 'GisMapConfig',
