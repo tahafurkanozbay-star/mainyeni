@@ -6,7 +6,7 @@
 -- 1) Least-privilege runtime role.
 -- Create/login/password management should be performed by the deployment secret
 -- system. This script intentionally does not create a login or embed a password.
-GRANT USAGE ON SCHEMA kent_rehberi TO kent_rehberi_api_ro;
+GRANT USAGE ON SCHEMA kent_rehberi TO kent_rehberi_select;
 
 GRANT SELECT (
     objectid,
@@ -23,7 +23,7 @@ GRANT SELECT (
     shape
 )
 ON TABLE kent_rehberi.kent_rehberi_tumu_pggeom
-TO kent_rehberi_api_ro;
+TO kent_rehberi_select;
 
 -- 2) Cursor/order support. ObjectID is expected to behave as the stable ArcGIS
 -- row identity. Verify duplicates before relying on keyset pagination.
