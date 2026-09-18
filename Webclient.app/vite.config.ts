@@ -123,7 +123,8 @@ const localBootstrapPreviewPlugin = (): Plugin => ({
     server.middlewares.use('/api', (request, response, next) => {
       const requestUrl = new URL((request as { url?: string }).url || '/', 'https://vite.local');
 
-      if (request.method === 'GET' && requestUrl.pathname === '/kent-rehberi') {
+      const requestMethod = (request as { method?: string }).method;
+      if (requestMethod === 'GET' && requestUrl.pathname === '/kent-rehberi') {
         response.writeHead(200, {
           'content-type': 'application/geo+json; charset=utf-8',
           'cache-control': 'no-store',
