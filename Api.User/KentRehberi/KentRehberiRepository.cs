@@ -149,7 +149,7 @@ public sealed class KentRehberiRepository : IKentRehberiRepository
         }
 
         var nextAfterObjectId =
-            hasMore && features.Count > 0
+            hasMore && options.ObjectIdCursorEnabled && features.Count > 0
                 ? features[^1].Id
                 : (int?)null;
 
