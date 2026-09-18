@@ -1,0 +1,170 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+using Xunit;
+
+namespace Platform.Security.Tests;
+
+public sealed class KentRehberiApiSecurityContractTests
+{
+    private static readonly Lazy<string> RepositoryRoot = new(FindRepositoryRoot);
+
+    [Fact]
+    public void TrackedConfiguration_ContainsNoKentRehberiDatabaseSecret()
+    {
+        var appsettings = Read("Api.User/appsettings.json");
+        using var document = JsonDocument.Parse(appsettings);
+
+        var connectionStrings = document.RootElement
+            .GetProperty("ConnectionStrings");
+
+        Assert.Equal(
+            string.Empty,
+            connectionStrings.GetProperty("KentRehberi").GetString());
+
+        Assert.DoesNotContain("192.168.101.161", appsettings, StringComparison.Ordinal);
+        Assert.DoesNotContain("Password=", appsettings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("User ID=", appsettings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Repository_UsesFixedServerOwnedTableAndParameterizedUserInput()
+    {
+        var source = Read("Api.User/KentRehberi/KentRehberiRepository.cs");
+
+        Assert.Contains(
+            "kent_rehberi.kent_rehberi_tumu_pggeom",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains("AddWithValue", source, StringComparison.Ordinal);
+        Assert.Contains("@ilce", source, StringComparison.Ordinal);
+        Assert.Contains("@mahalle", source, StringComparison.Ordinal);
+        Assert.Contains("@tur", source, StringComparison.Ordinal);
+        Assert.Contains("@query", source, StringComparison.Ordinal);
+        Assert.Contains("@minLongitude", source, StringComparison.Ordinal);
+        Assert.Contains("@radiusMeters", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("gdb_geomattr_data", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("192.168.101.161", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PublicContract_DoesNotExposeBinaryGeodatabaseMetadata()
+    {
+        var contract = Read("Api.User/KentRehberi/KentRehberiContracts.cs");
+        var controller = Read("Api.User/Controllers/KentRehberiController.cs");
+
+        Assert.DoesNotContain("gdb_geomattr_data", contract, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("gdb_geomattr_data", controller, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("application/geo+json", controller, StringComparison.Ordinal);
+        Assert.Contains("Status503ServiceUnavailable", controller, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConnectionFactory_FailsClosedAndDoesNotLogDatabaseTopology()
+    {
+        var source = Read(
+            "Api.User/KentRehberi/KentRehberiConnectionFactory.cs");
+
+        Assert.Contains("IsConfigured", source, StringComparison.Ordinal);
+        Assert.Contains("KentRehberiDataUnavailableException", source, StringComparison.Ordinal);
+        Assert.Contains("IncludeErrorDetail = false", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("192.168.101.161", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Console.Write", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DatabaseRunbook_UsesColumnLevelReadOnlyGrant()
+    {
+        var sql = Read("database/kent-rehberi-api.sql");
+
+        Assert.Contains(
+            "GRANT SELECT (",
+            sql,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "kent_rehberi.kent_rehberi_tumu_pggeom",
+            sql,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "gdb_geomattr_data",
+            sql,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "GRANT INSERT",
+            sql,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "GRANT UPDATE",
+            sql,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "GRANT DELETE",
+            sql,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DeploymentGuide_DoesNotTrackProvidedInternalHost()
+    {
+        var guide = Read("docs/kent-rehberi-postgis-api.md");
+
+        Assert.DoesNotContain("192.168.101.161", guide, StringComparison.Ordinal);
+        Assert.Contains(
+            "ConnectionStrings__KentRehberi",
+            guide,
+            StringComparison.Ordinal);
+        Assert.Contains("/api/kent-rehberi", guide, StringComparison.Ordinal);
+    }
+
+    private static string Read(string relativePath)
+    {
+        var path = Path.Combine(
+            RepositoryRoot.Value,
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        Assert.True(
+            File.Exists(path),
+            $"Expected repository file was not found: {relativePath} ({path})");
+
+        return File.ReadAllText(path);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var candidates = new List<string>
+        {
+            Directory.GetCurrentDirectory(),
+            AppContext.BaseDirectory
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            var directory = new DirectoryInfo(candidate);
+            while (directory is not null)
+            {
+                if (File.Exists(
+                        Path.Combine(
+                            directory.FullName,
+                            "KENT_REHBERI_AGENT_RULES.md")) &&
+                    File.Exists(
+                        Path.Combine(
+                            directory.FullName,
+                            "CityWorks.NetCore.sln")))
+                {
+                    return directory.FullName;
+                }
+
+                directory = directory.Parent;
+            }
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not locate the Kent Rehberi repository root.");
+    }
+}
