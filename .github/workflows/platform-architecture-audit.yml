@@ -53,6 +53,7 @@ jobs:
           tools/platform-language-ratchet.test.mjs
           tools/platform-boundary-audit.test.mjs
           tools/browser-runtime-boundary.test.mjs
+          tools/platform-ts-cutover.test.mjs
           tools/package-lock-integrity.test.mjs
 
       - name: Enforce modernization contracts
