@@ -12,6 +12,8 @@ const SOURCE_EXTENSIONS = Object.freeze([
   '.mjs',
 ] as const);
 
+const STRICT_TYPED_DOMAIN = /\/Webclient\.app\/src\/(?:platform|Core|Store|data-search|gis-engine)\//u;
+
 export interface ModuleResolutionCandidate {
   readonly path: string;
   readonly extension: string;
@@ -108,6 +110,10 @@ export const hasTypedJavascriptCollision = (
   return typed && javascript;
 };
 
+export const isStrictTypedDomainAmbiguity = (
+  candidates: readonly ModuleResolutionCandidate[],
+): boolean => candidates.some((candidate) => STRICT_TYPED_DOMAIN.test(normalizedId(candidate.path)));
+
 export const describeModuleResolutionAmbiguity = (
   source: string,
   importer: string,
@@ -152,6 +158,7 @@ export const moduleResolutionGuardPlugin = (
 
     const candidates = findExistingRelativeImportCandidates(source, importer, options);
     if (candidates.length <= 1) return null;
+    if (!isStrictTypedDomainAmbiguity(candidates)) return null;
 
     this.error(describeModuleResolutionAmbiguity(source, importer, candidates));
     return null;
