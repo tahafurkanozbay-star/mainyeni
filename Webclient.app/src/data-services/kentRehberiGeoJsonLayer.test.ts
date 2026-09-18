@@ -100,8 +100,10 @@ describe('kentRehberiGeoJsonLayer', () => {
   });
 
   test('creates, attaches and deterministically disposes the loaded GeoJSONLayer', async () => {
-    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:https://local.test/kent-rehberi');
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const createObjectURL = vi.fn(() => 'blob:https://local.test/kent-rehberi');
+    const revokeObjectURL = vi.fn(() => undefined);
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
 
     const load = vi.fn(async () => undefined);
     const destroy = vi.fn();
@@ -131,6 +133,10 @@ describe('kentRehberiGeoJsonLayer', () => {
       title: 'Kent Rehberi',
       url: 'blob:https://local.test/kent-rehberi',
       objectIdField: 'objectid',
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'objectid', type: 'oid' }),
+        expect.objectContaining({ name: 'adi', type: 'string' }),
+      ]),
     }));
     expect(load).toHaveBeenCalledTimes(1);
     expect(map.add).toHaveBeenCalledWith(layer);
