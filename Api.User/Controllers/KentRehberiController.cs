@@ -1,4 +1,5 @@
 using Api.User.Filters;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -38,6 +39,7 @@ public sealed class KentRehberiController : ControllerBase
     /// The external reverse proxy is expected to expose this route as /api/kent-rehberi.
     /// </summary>
     [HttpGet]
+    [AllowAnonymous]
     [Produces("application/geo+json")]
     [ProducesResponseType(typeof(KentRehberiFeatureCollection), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -92,6 +94,7 @@ public sealed class KentRehberiController : ControllerBase
     /// Returns one public Kent Rehberi feature by objectid.
     /// </summary>
     [HttpGet("{objectId:int:min(1)}")]
+    [AllowAnonymous]
     [Produces("application/geo+json")]
     [ProducesResponseType(typeof(KentRehberiFeature), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -133,6 +136,7 @@ public sealed class KentRehberiController : ControllerBase
     /// ordered by exact PostGIS geography distance.
     /// </summary>
     [HttpGet("nearby")]
+    [AllowAnonymous]
     [Produces("application/geo+json")]
     [ProducesResponseType(typeof(KentRehberiFeatureCollection), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -189,6 +193,7 @@ public sealed class KentRehberiController : ControllerBase
     /// Returns the stable public capability envelope without exposing database topology.
     /// </summary>
     [HttpGet("capabilities")]
+    [AllowAnonymous]
     [Produces("application/json")]
     [ProducesResponseType(typeof(KentRehberiCapabilities), StatusCodes.Status200OK)]
     public IActionResult Capabilities()
