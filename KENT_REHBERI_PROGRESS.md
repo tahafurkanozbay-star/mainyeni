@@ -221,3 +221,9 @@
 - PREVIOUS VALIDATION EVIDENCE: stale head `5b669865...` için üç required workflow completed+success idi. Recovery branch için hiçbir PASS henüz iddia edilmiyor; fresh exact-head CI zorunlu.
 - MERGE: NOT MERGED. Fresh PR açılmalı, eski PR #129 superseded olarak kapatılmalı. Repository meaningful-additions hedefi/gate'i sırf satır doldurmak için aşılmayacak; focused scope gate altında kalırsa draft bırakılmalı.
 
+## Kent Rehberi DB role alignment — 2026-09-18
+- DEPLOYMENT ROLE: readonly runtime PostgreSQL kullanıcı adı `kent_rehberi_select` olarak doğrulandı ve DBA runbook / deployment guide bu adla hizalandı.
+- SECRET POLICY: parola GitHub, tracked config, PR body veya dokümana yazılmadı; yalnız deployment tarafındaki `ConnectionStrings__KentRehberi` secret değerinin parçası olmalı.
+- RUNBOOK: script rolü oluşturmaz ve parola yönetmez; yalnız önceden provision edilmiş `kent_rehberi_select` rolüne schema usage + gerekli kolonlarda SELECT verir.
+- VALIDATION: credential-role değişikliği yeni exact head oluşturduğu için fresh Platform Backend Validation, Platform Architecture Audit ve Release QA yeniden required.
+
