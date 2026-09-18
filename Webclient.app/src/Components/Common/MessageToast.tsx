@@ -25,8 +25,9 @@ export function MessageToast({ message, onDismiss, delayMs }: MessageToastProps)
     [message],
   );
   if (!model) return null;
+  const closeProps = typeof onDismiss === 'function' ? { onClose: onDismiss } : {};
   return <Toast
-    onClose={onDismiss}
+    {...closeProps}
     delay={delay(delayMs)}
     autohide={typeof onDismiss === 'function'}
     role={model.severity === 'error' ? 'alert' : 'status'}
