@@ -260,7 +260,7 @@ export const createTemporalLayerRuntime = (
       revision,
       ...details,
     });
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(event);
       } catch (error: unknown) {
