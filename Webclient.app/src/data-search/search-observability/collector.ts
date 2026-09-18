@@ -167,6 +167,7 @@ export const aggregateMetric = (
       || summary.min === null
       || summary.max === null
       || summary.p50 === null
+      || summary.p90 === null
       || summary.p95 === null
       || summary.p99 === null) {
       return [];
@@ -177,6 +178,7 @@ export const aggregateMetric = (
       min: summary.min,
       max: summary.max,
       p50: summary.p50,
+      p90: summary.p90,
       p95: summary.p95,
       p99: summary.p99,
       sum: summary.sum,
@@ -200,7 +202,7 @@ export const aggregateMetric = (
     sum,
     average: weightedAverage,
     p50: Math.max(...values.map(item => item.p50)),
-    p90: Math.max(...values.map(item => item.p95)),
+    p90: Math.max(...values.map(item => item.p90)),
     p95: Math.max(...values.map(item => item.p95)),
     p99: Math.max(...values.map(item => item.p99)),
     latest: values.at(-1)?.latest ?? null,
