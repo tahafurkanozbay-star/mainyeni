@@ -44,6 +44,11 @@ const normalizeStringSet = (values: readonly string[]): readonly string[] =>
     ),
   ]);
 
+const normalizePortSet = (values: readonly string[]): readonly string[] =>
+  Object.freeze([
+    ...new Set(values.map((value) => value.trim().toLowerCase())),
+  ]);
+
 export const normalizeUrlBoundaryPolicy = (
   input: Partial<UrlBoundaryPolicy> = {},
 ): UrlBoundaryPolicy => {
@@ -62,7 +67,7 @@ export const normalizeUrlBoundaryPolicy = (
     blockedHosts: normalizeStringSet(
       input.blockedHosts ?? DEFAULT_URL_BOUNDARY_POLICY.blockedHosts,
     ),
-    allowedPorts: normalizeStringSet(
+    allowedPorts: normalizePortSet(
       input.allowedPorts ?? DEFAULT_URL_BOUNDARY_POLICY.allowedPorts,
     ),
     allowRelative: input.allowRelative ?? DEFAULT_URL_BOUNDARY_POLICY.allowRelative,
