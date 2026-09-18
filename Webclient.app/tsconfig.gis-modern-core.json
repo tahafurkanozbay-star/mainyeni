@@ -32,7 +32,9 @@
     "src/gis-engine/spatialTopologyRuntime.ts",
     "src/gis-engine/spatialStatisticsRuntime.ts",
     "src/gis-engine/spatialAnalysisJobRuntime.ts",
-    "src/gis-engine/modernSpatialAnalysisKernel.ts"
+    "src/gis-engine/modernSpatialAnalysisKernel.ts",
+    "src/gis-engine/spatialReferenceRuntime.ts",
+    "src/gis-engine/spatialReferenceGeometryRuntime.ts"
   ],
   "include": [],
   "exclude": [
