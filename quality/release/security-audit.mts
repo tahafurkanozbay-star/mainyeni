@@ -12,7 +12,7 @@ export interface SecurityAuditSummary {
 
 interface LocatedMatch { readonly line: number; readonly excerpt: string; }
 const GENERATED = /(^|\/)(node_modules|dist|build|coverage|bin|obj)(\/|$)/i;
-const TESTS = /(^|\/)(__tests__|tests?|fixtures?|mocks?)(\/|\.|$)/i;
+const TESTS = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|\.|$)|\.(?:test|spec)\.[^/]+$/i;
 const AUDITABLE = new Set(['javascript', 'typescript', 'csharp', 'json', 'yaml', 'html', 'xml']);
 function eligible(file: SourceFile): boolean { return AUDITABLE.has(file.kind) && !GENERATED.test(file.repositoryPath) && !TESTS.test(file.repositoryPath) && !file.repositoryPath.startsWith('quality/release/'); }
 function lineAt(text: string, offset: number): number { let line = 1; for (let index = 0; index < offset; index += 1) if (text.charCodeAt(index) === 10) line += 1; return line; }
