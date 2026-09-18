@@ -136,7 +136,7 @@ export function ExperienceDataTable<Row>({
                 key={key}
                 data-selected={selected ? 'true' : undefined}
                 tabIndex={onRowActivate ? 0 : undefined}
-                onDoubleClick={onRowActivate ? () => onRowActivate(row, index) : undefined}
+                onClick={onRowActivate ? () => onRowActivate(row, index) : undefined}
                 onKeyDown={onRowActivate
                   ? (event) => activateFromKeyboard(event, row, index)
                   : undefined}
