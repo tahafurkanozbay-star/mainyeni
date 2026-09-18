@@ -45,6 +45,7 @@ export class ResiliencePolicy {
   private consecutiveSuccesses = 0;
   private halfOpenInFlight = 0;
   private rejected = 0;
+  private epoch = 0;
 
   constructor(options: ResiliencePolicyOptions = {}) {
     this.failureThreshold = clampInt(options.failureThreshold, 5, 1, 100);
@@ -64,6 +65,7 @@ export class ResiliencePolicy {
       return null;
     }
     if (probe) this.halfOpenInFlight += 1;
+    const permitEpoch = this.epoch;
     let completed = false;
     const admittedAt = this.now();
     return {
@@ -72,6 +74,9 @@ export class ResiliencePolicy {
       complete: (outcome) => {
         if (completed) return;
         completed = true;
+        // A reset/trip/close starts a new policy generation. Results from permits
+        // issued by an older generation must not mutate the current circuit state.
+        if (permitEpoch !== this.epoch) return;
         if (probe) this.halfOpenInFlight = Math.max(0, this.halfOpenInFlight - 1);
         this.record(outcome);
       },
@@ -94,6 +99,7 @@ export class ResiliencePolicy {
   }
 
   reset(): void {
+    this.epoch += 1;
     this.outcomes.length = 0;
     this.state = 'closed';
     this.openedAt = null;
@@ -105,6 +111,7 @@ export class ResiliencePolicy {
   private refreshState(): void {
     if (this.state !== 'open' || this.openedAt === null) return;
     if (this.now() - this.openedAt >= this.openDurationMs) {
+      this.epoch += 1;
       this.state = 'half-open';
       this.consecutiveSuccesses = 0;
       this.halfOpenInFlight = 0;
@@ -120,10 +127,12 @@ export class ResiliencePolicy {
       if (outcome === 'success') {
         this.consecutiveSuccesses += 1;
         if (this.consecutiveSuccesses >= this.successThreshold) {
+          this.epoch += 1;
           this.state = 'closed';
           this.openedAt = null;
           this.consecutiveSuccesses = 0;
           this.outcomes.length = 0;
+          this.halfOpenInFlight = 0;
         }
       } else {
         this.trip();
@@ -140,6 +149,7 @@ export class ResiliencePolicy {
   }
 
   private trip(): void {
+    this.epoch += 1;
     this.state = 'open';
     this.openedAt = this.now();
     this.consecutiveSuccesses = 0;
