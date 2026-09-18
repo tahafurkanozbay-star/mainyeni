@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { captureManagedWindowOpener, focusManagedWindow, restoreManagedWindowFocus, scheduleManagedWindowFocus } from './ManagedWindowFocus';
+import { captureManagedWindowOpener, createManagedWindowFocusLifecycle, focusManagedWindow, restoreManagedWindowFocus, scheduleManagedWindowFocus } from './ManagedWindowFocus';
 
 const append = <K extends keyof HTMLElementTagNameMap>(tag: K, attributes: Record<string, string | boolean> = {}) => {
   const element = document.createElement(tag);
@@ -12,6 +12,27 @@ const append = <K extends keyof HTMLElementTagNameMap>(tag: K, attributes: Recor
   }
   document.body.append(element);
   return element;
+};
+
+const installAnimationFrameHarness = () => {
+  let nextId = 1;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+    const id = nextId++;
+    callbacks.set(id, callback);
+    return id;
+  });
+  vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => {
+    callbacks.delete(id);
+  });
+  return {
+    pending: () => callbacks.size,
+    flush: () => {
+      const scheduled = [...callbacks.entries()];
+      callbacks.clear();
+      scheduled.forEach(([, callback]) => callback(performance.now()));
+    }
+  };
 };
 
 afterEach(() => {
@@ -74,5 +95,98 @@ describe('ManagedWindowFocus', () => {
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
     cancel();
     expect(cancelAnimationFrame).toHaveBeenCalledWith(17);
+  });
+});
+
+describe('managed window focus lifecycle', () => {
+  it('captures the opener and moves focus after the window is mounted', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button', { id: 'opener' });
+    const root = append('section', { id: 'window' });
+    const search = document.createElement('input');
+    search.id = 'search';
+    root.append(search);
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root });
+    expect(lifecycle.isOpen()).toBe(true);
+    expect(frames.pending()).toBe(1);
+    expect(document.activeElement).toBe(opener);
+
+    frames.flush();
+    expect(document.activeElement).toBe(search);
+    expect(lifecycle.close()).toBe(true);
+    expect(document.activeElement).toBe(opener);
+    expect(lifecycle.isOpen()).toBe(false);
+  });
+
+  it('preserves the original opener across repeated open notifications', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button', { id: 'opener' });
+    const root = append('section', { id: 'window' });
+    const first = document.createElement('button');
+    first.id = 'first';
+    root.append(first);
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root });
+    frames.flush();
+    expect(document.activeElement).toBe(first);
+
+    lifecycle.open({ root });
+    expect(frames.pending()).toBe(1);
+    frames.flush();
+    expect(lifecycle.close()).toBe(true);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('cancels stale scheduled focus when the window closes before the frame', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button');
+    const root = append('section');
+    const action = document.createElement('button');
+    root.append(action);
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root });
+    expect(frames.pending()).toBe(1);
+    expect(lifecycle.close()).toBe(true);
+    expect(frames.pending()).toBe(0);
+    frames.flush();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('fails closed when the captured opener is detached', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button');
+    const root = append('section');
+    root.append(document.createElement('button'));
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root });
+    frames.flush();
+    opener.remove();
+    expect(lifecycle.close()).toBe(false);
+    expect(lifecycle.isOpen()).toBe(false);
+  });
+
+  it('dispose cancels pending work without restoring focus', () => {
+    const frames = installAnimationFrameHarness();
+    const opener = append('button');
+    const root = append('section');
+    root.append(document.createElement('button'));
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle();
+    lifecycle.open({ root });
+    expect(frames.pending()).toBe(1);
+    lifecycle.dispose();
+    expect(frames.pending()).toBe(0);
+    expect(lifecycle.isOpen()).toBe(false);
+    expect(document.activeElement).toBe(opener);
   });
 });
