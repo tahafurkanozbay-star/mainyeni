@@ -149,3 +149,17 @@
 - PERFORMANCE / DATA INTEGRITY / SECURITY: explicit cardinality/work/memory budgets, AbortSignal cancellation, dedupe, fail-closed topology/statistics exhaustion and finite-input validation remain enforced. No WMS/WFS/WMTS, invented endpoint, secret, analytics, telemetry or uncontrolled browser transport was introduced. Shared deterministic icon resolver remains canonical.
 - ÇÖZÜLEN HATALAR: closed-ring zero-length segment boundary handling, exactOptionalPropertyTypes regressions, scheduler allocation lint and equal-interval test expectation were corrected before final green CI.
 - SONRAKİ GÖREV: merged PR #113 branch must not be reused. Separate PR #115 (`refactor(gis): migrate ArcGIS runtime to @arcgis/core 5.1 ESM`) is a new draft workstream based on the merged main; at the latest checkpoint it remains below the 4,000 meaningful-additions gate and must independently satisfy exact-head CI/mergeability/current-main requirements before merge.
+
+## Deep Data / Search / Address merge closure — 2026-09-18
+- TUR / GÖREV: Kanonik Data/Search PR #59 production merge kapanışı; typed data integrity, schema evolution, cursor pagination, query planning/observability, geocoding runtime/session ve bounded search lifecycle modernizasyonu.
+- BRANCH / PR: `agent/data-search-production-v2-20260916-1246-851a5c9` / PR #59 `feat(search): productionize typed data integrity and search lifecycle`.
+- FINAL EXACT HEAD: `fa959fe46b86abc9c215165d15c443fafe430c58`.
+- MERGE: squash merge başarılı; `merged=true`; merge SHA `906b9bd3e9eb19318ef34f7a10b22a8c077cfb13`. Merge sonrası `main` bu SHA ile identical olarak doğrulandı.
+- KAPSAM: 19 Data/Search dosyası, 5.290 additions / 9 deletions; zorunlu >=4.000 anlamlı addition kapısı korundu.
+- MAIN ENTEGRASYONU: Çalışma sırasında ilerleyen main iki kez force/rebase kullanmadan branch'e entegre edildi; paralel GIS/Platform/Experience ve ortak progress kayıtları korunarak `behind=0`, merge-base=current main şartı her fresh CI öncesi yeniden sağlandı.
+- CI / TEST / BUILD: Exact head üzerinde Webclient Quality #2206, Release QA #770 ve Platform Architecture Audit #759 `completed+success`. Exact-base TypeScript ve Vitest regression gate'leri, strict lint, typed release audit, native tooling regression suite, production Vite build/integrity manifest, bundle integrity, build budgets, backend release build/xUnit/publish adımları başarılı.
+- DÜZELTİLEN REGRESYONLAR: exactOptionalPropertyTypes uyumlu optional registration construction; schema alias callback explicit typing; abort cleanup callback typing; geocoding optional contract; nullable spatial bounds guard; katalog TTL production floor ile test kontratı hizalaması.
+- DATA / SECURITY / PERFORMANCE: Integrity quarantine/release policy, deterministic alias/schema handling, bounded cursor token/age/limit kontrolleri, cancellation/debounce/session lifecycle, candidate/query-plan observability ve bounded catalog/search davranışı korunuyor. Yeni WMS/WFS, uydurma endpoint veya gereksiz dış network çağrısı eklenmedi.
+- REVIEW: Merge öncesi `mergeable=true`, unresolved review thread=0 ve exact-head mandatory CI tamamen yeşil doğrulandı.
+- SONRAKİ GÖREV: Yeni Data/Search turu gerekirse merged PR #59 branch'i yeniden kullanılmadan güncel `main` tabanlı yeni role-scoped branch/PR ile başlatılmalı.
+
