@@ -137,9 +137,14 @@ const isLocalIpv6 = (hostname: string): boolean => {
   const value = stripIpv6Brackets(hostname).toLowerCase();
   if (!value.includes(':')) return false;
   if (value === '::' || value === '::1') return true;
-  if (/^f[cd]/u.test(value)) return true;
-  if (/^fe[89ab]/u.test(value)) return true;
-  if (/^ff/u.test(value)) return true;
+  if (value.startsWith('fc') || value.startsWith('fd')) return true;
+  if (
+    value.startsWith('fe8') ||
+    value.startsWith('fe9') ||
+    value.startsWith('fea') ||
+    value.startsWith('feb')
+  ) return true;
+  if (value.startsWith('ff')) return true;
   return false;
 };
 
