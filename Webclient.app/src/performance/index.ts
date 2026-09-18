@@ -8,3 +8,7 @@ export * from './vitals';
 export * from './baseline';
 export * from './readiness';
 export * from './runtime';
+export * from './operationProfiler';
+export * from './adaptivePolicy';
+export * from './history';
+export * from './startupProfiler';
