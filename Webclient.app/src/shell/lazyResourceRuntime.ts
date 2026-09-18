@@ -214,8 +214,14 @@ export const createLazyResourceRuntime = <T>(
       promise: Promise.resolve(undefined as T),
     };
 
-    const promise = Promise.resolve()
-      .then(() => loader(key, { signal: controller.signal }))
+    let loaderPromise: Promise<T>;
+    try {
+      loaderPromise = Promise.resolve(loader(key, { signal: controller.signal }));
+    } catch (error: unknown) {
+      loaderPromise = Promise.reject(error);
+    }
+
+    const promise = loaderPromise
       .then((value) => {
         if (destroyed || controller.signal.aborted) throw abortError();
         const current = entries.get(key);
