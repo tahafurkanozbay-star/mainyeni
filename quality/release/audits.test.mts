@@ -34,6 +34,19 @@ test('source audit ignores rule definitions inside quality engine', () => {
   assert.equal(section.findings.some(item => item.id === 'dynamic-eval'), false);
 });
 
+test('source audit ignores conventional test fixtures without weakening production dynamic-code blocking', () => {
+  const inventory = fixtureInventory([
+    { path: 'tools/runtime-boundary.test.mjs', text: 'eval(userInput)' },
+    { path: 'Webclient.app/src/runtime.spec.ts', text: 'new Function(userInput)()' },
+    { path: 'Webclient.app/src/__tests__/runtime.ts', text: 'eval(userInput)' },
+    { path: 'Webclient.app/src/runtime.ts', text: 'eval(userInput)' },
+  ]);
+  const findings = scanSource(inventory).findings.filter(item => item.id === 'dynamic-eval');
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]?.location?.file, 'Webclient.app/src/runtime.ts');
+  assert.equal(findings[0]?.blocking, true);
+});
+
 test('client secret env usage is a critical blocker', () => {
   const inventory = fixtureInventory([{ path: 'Webclient.app/src/config.js', text: 'const key = process.env.REACT_APP_API_KEY;' }]);
   const finding = scanSource(inventory).findings.find(item => item.id === 'client-secret-env');
