@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyCategoryValue,
   classifyNumericValue,
+  createCategoryClassification,
   createNumericClassification,
   summarizeSpatialStatistics,
   type SpatialStatisticsBudget,
@@ -126,4 +128,53 @@ describe('spatialStatisticsRuntime', () => {
     expect(() => summarizeSpatialStatistics([{ value: 1 }], budget, { signal: controller.signal }))
       .toThrow('cancel statistics');
   });
+
+  it('builds bounded categorical classes with deterministic other accounting', () => {
+    const classification = createCategoryClassification([
+      { value: null, category: 'parks', weight: 2 },
+      { value: null, category: 'parks', weight: 1 },
+      { value: null, category: 'roads', weight: 4 },
+      { value: null, category: 'schools', weight: 3 },
+      { value: null, category: 'hospitals', weight: 5 },
+    ], 2, budget);
+
+    expect(classification.entries).toEqual([
+      { key: 'string:parks', classIndex: 0, count: 2, weight: 3 },
+      { key: 'string:hospitals', classIndex: 1, count: 1, weight: 5 },
+    ]);
+    expect(classification.otherCount).toBe(2);
+    expect(classification.otherWeight).toBe(7);
+    expect(classification.truncated).toBe(true);
+    expect(classification.diagnostics).toContain('class-budget-exhausted');
+    expect(classifyCategoryValue('parks', classification)).toBe(0);
+    expect(classifyCategoryValue('roads', classification)).toBeNull();
+  });
+
+  it('keeps string and numeric category identities distinct and bounds cardinality', () => {
+    const classification = createCategoryClassification([
+      { value: 1, category: 7 },
+      { value: 1, category: '7' },
+      { value: 1, category: 8 },
+    ], 3, { ...budget, maxCategories: 2 });
+
+    expect(classification.entries.map((entry) => entry.key)).toEqual(['number:7', 'string:7']);
+    expect(classification.otherCount).toBe(1);
+    expect(classification.diagnostics).toContain('category-budget-exhausted');
+    expect(classifyCategoryValue(7, classification)).toBe(0);
+    expect(classifyCategoryValue('7', classification)).toBe(1);
+  });
+
+  it('rejects missing categories and invalid weights in categorical classification', () => {
+    const classification = createCategoryClassification([
+      { value: null, category: null },
+      { value: null, category: 'bad', weight: -1 },
+      { value: null, category: 'good', weight: 0 },
+    ], 2, budget);
+    expect(classification.acceptedCount).toBe(1);
+    expect(classification.rejectedCount).toBe(2);
+    expect(classification.entries).toEqual([
+      { key: 'string:good', classIndex: 0, count: 1, weight: 0 },
+    ]);
+  });
+
 });

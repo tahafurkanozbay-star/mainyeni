@@ -369,3 +369,102 @@ export const classifyNumericValue = (
   }
   return classification.breaks.length - 1;
 };
+
+
+export type CategoryClassificationEntry = Readonly<{
+  key: string;
+  classIndex: number;
+  count: number;
+  weight: number;
+}>;
+
+export type CategoryClassificationResult = Readonly<{
+  entries: readonly CategoryClassificationEntry[];
+  inputCount: number;
+  acceptedCount: number;
+  rejectedCount: number;
+  otherCount: number;
+  otherWeight: number;
+  truncated: boolean;
+  diagnostics: readonly string[];
+}>;
+
+export const createCategoryClassification = (
+  observations: readonly SpatialStatisticObservation[],
+  maxClassesInput: number,
+  budgetInput: SpatialStatisticsBudget,
+  options: Readonly<{ signal?: AbortSignal }> = {},
+): CategoryClassificationResult => {
+  const budget = normalizeSpatialStatisticsBudget(budgetInput);
+  const maxClasses = Math.min(positiveInteger(maxClassesInput, 'maxClasses'), budget.maxCategories);
+  const categories = new Map<string, MutableCategory>();
+  const diagnostics: string[] = [];
+  let acceptedCount = 0;
+  let rejectedCount = 0;
+  let overflowCount = 0;
+  let overflowWeight = 0;
+  const limit = Math.min(observations.length, budget.maxObservations);
+  if (observations.length > limit) diagnostics.push('observation-budget-exhausted');
+
+  for (let index = 0; index < limit; index += 1) {
+    if ((index & 127) === 0) throwIfAborted(options.signal);
+    const observation = observations[index]!;
+    const key = categoryKey(observation.category);
+    const weight = observation.weight ?? 1;
+    if (key === null || !Number.isFinite(weight) || weight < 0) {
+      rejectedCount += 1;
+      continue;
+    }
+    acceptedCount += 1;
+    const existing = categories.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.weight += weight;
+      continue;
+    }
+    if (categories.size >= budget.maxCategories) {
+      overflowCount += 1;
+      overflowWeight += weight;
+      continue;
+    }
+    categories.set(key, { count: 1, weight });
+  }
+  throwIfAborted(options.signal);
+
+  const ranked = [...categories.entries()]
+    .map(([key, value]) => ({ key, count: value.count, weight: value.weight }))
+    .sort((left, right) => right.count - left.count || right.weight - left.weight || left.key.localeCompare(right.key));
+  const selected = ranked.slice(0, maxClasses);
+  const omitted = ranked.slice(maxClasses);
+  const otherCount = overflowCount + omitted.reduce((sum, item) => sum + item.count, 0);
+  const otherWeight = overflowWeight + omitted.reduce((sum, item) => sum + item.weight, 0);
+  const categoryBudgetExceeded = overflowCount > 0;
+  const classBudgetExceeded = omitted.length > 0;
+  if (categoryBudgetExceeded) diagnostics.push('category-budget-exhausted');
+  if (classBudgetExceeded) diagnostics.push('class-budget-exhausted');
+
+  return {
+    entries: selected.map((item, classIndex) => ({
+      key: item.key,
+      classIndex,
+      count: item.count,
+      weight: item.weight,
+    })),
+    inputCount: observations.length,
+    acceptedCount,
+    rejectedCount,
+    otherCount,
+    otherWeight,
+    truncated: observations.length > limit || categoryBudgetExceeded || classBudgetExceeded,
+    diagnostics,
+  };
+};
+
+export const classifyCategoryValue = (
+  value: SpatialStatisticCategory | undefined,
+  classification: CategoryClassificationResult,
+): number | null => {
+  const key = categoryKey(value);
+  if (key === null) return null;
+  return classification.entries.find((entry) => entry.key === key)?.classIndex ?? null;
+};
