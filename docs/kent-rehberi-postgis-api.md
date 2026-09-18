@@ -67,11 +67,19 @@ GET /api/kent-rehberi?afterObjectId=12345&limit=500
 Bbox filtresi önce GiST bounding-box operatörünü, ardından
 `ST_Intersects` kontrolünü uygular.
 
-Listeleme `objectid` üzerinden artan sırada keyset pagination kullanır.
-İlk response `meta.hasMore=true` ise `meta.nextAfterObjectId` sonraki
-istekte `afterObjectId` olarak verilir. Deployment öncesi
-`database/kent-rehberi-api.sql` içindeki duplicate preflight çalıştırılmalı;
-ObjectID benzersizliği doğrulanmadan cursor pagination'a güvenilmemelidir.
+Listeleme `objectid` üzerinden artan sırada keyset pagination kullanabilir.
+Kaynak DDL `objectid` için UNIQUE constraint göstermediği için cursor özelliği
+tracked config'te **fail-closed kapalıdır**. Önce
+`database/kent-rehberi-api.sql` içindeki duplicate preflight çalıştırılmalı,
+sorgu sıfır satır döndürmeli ve tercihen unique index oluşturulmalıdır. Bundan
+sonra deployment config'inde:
+
+`KentRehberiData__ObjectIdCursorEnabled=true`
+
+verilebilir. Özellik açıkken ilk response `meta.hasMore=true` ise
+`meta.nextAfterObjectId` sonraki istekte `afterObjectId` olarak kullanılır.
+Özellik kapalıyken istemciden `afterObjectId` gönderilmesi 400 döner ve
+capabilities response'u cursor desteğinin kapalı olduğunu açıkça belirtir.
 
 ### Tek kayıt
 
@@ -149,6 +157,11 @@ sözleşmesini verir.
 - `limit`, radius, koordinat ve bbox sınırları fail-closed doğrulanır.
 - Request cancellation PostgreSQL komutuna aktarılır.
 - Command timeout ve connection timeout ayrıca sınırlandırılır.
+- Ayrı Kent Rehberi datasource'u `/health/ready` readiness zincirine dahildir;
+  feature enabled iken secret eksikse veya tablo okunamıyorsa readiness unhealthy
+  olur. Public health payload DB hostu/SQL/exception ayrıntısı içermez.
+- DB erişim hatalarında controller logu exception mesajı/stack yerine yalnız
+  güvenli hata sınıfı + trace id kaydeder.
 - Npgsql error detail kapalıdır; HTTP 503 cevabı internal exception/host/SQL
   ayrıntısı döndürmez.
 - Global Platform rate limiter ve request timeout yeni endpointleri de kapsar.
@@ -194,7 +207,9 @@ gelen trafiğe göre yapılandırılmalıdır. Client tarafından doğrudan gön
 4. metre bazlı nearby sorgusu için `shape::geography` expression GiST indexini
    ekler,
 5. ilçe/mahalle/tür filtreleri için yardımcı indexleri ekler,
-6. ObjectID duplicate preflight sağlar.
+6. ObjectID duplicate preflight sağlar,
+7. preflight temizlendikten sonra cursor özelliğinin deployment config ile
+   explicit açılmasını gerektirir.
 
 `CREATE INDEX CONCURRENTLY` komutlarını explicit transaction içinde
 çalıştırmayın.
@@ -224,6 +239,7 @@ GET /api/kent-rehberi?limit=1
 GET /api/kent-rehberi?bbox=<known-small-bbox>&limit=10
 GET /api/kent-rehberi/nearby?lon=<known-lon>&lat=<known-lat>&radiusMeters=500&limit=10
 GET /health/ready
+GET /api/kent-rehberi/capabilities
 ```
 
 Kontrol edin:
@@ -233,7 +249,9 @@ Kontrol edin:
 - `Cache-Control`, correlation id, security headers ve rate limiting mevcut,
 - bbox planı geometry GiST indexini,
 - nearby planı geography expression GiST indexini kullanıyor,
-- büyük result setler limit ile bounded kalıyor.
+- büyük result setler limit ile bounded kalıyor,
+- `/health/ready` içinde `kent-rehberi-data` healthy görünüyor,
+- ObjectID duplicate preflight temizlenmeden cursor özelliği açılmıyor.
 
 Gerçek DB credentials olmadan CI yalnız contract/validation/build testlerini
 çalıştırır; production DB bağlantısı deployment ortamında smoke test edilir.
