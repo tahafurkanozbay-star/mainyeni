@@ -143,10 +143,12 @@ const baseForName = (
 const mergePartial = <T extends object>(
   base: Partial<T> | undefined,
   override: Partial<T> | undefined,
-): Partial<T> => ({
-  ...(base ?? {}),
-  ...(override ?? {}),
-});
+): Partial<T> => {
+  const merged: Partial<T> = {};
+  if (base) Object.assign(merged, base);
+  if (override) Object.assign(merged, override);
+  return merged;
+};
 
 export const createPlatformGuardrailProfile = (
   input: PlatformGuardrailProfileInput = {},
