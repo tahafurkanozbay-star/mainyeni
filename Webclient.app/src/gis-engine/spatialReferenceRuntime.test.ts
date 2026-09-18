@@ -1,0 +1,20 @@
+import { describe, expect, it } from "vitest";
+import { chooseAnalysisSpatialReference, geographicToWebMercator, normalizeExtent, normalizeSpatialReference, projectCoordinate, projectCoordinates, projectExtent, spatialReferencesEquivalent, webMercatorToGeographic } from "./spatialReferenceRuntime";
+import { geometryExtent2D, normalizeGeometry2D, projectGeometry2D, projectGeometryBatch } from "./spatialReferenceGeometryRuntime";
+describe("spatial reference integrity",()=>{
+ it("normalizes aliases and vertical references",()=>{const r=normalizeSpatialReference({wkid:102100,latestWkid:3857,vcsWkid:5714});expect(r.key).toBe("wkid:3857:vcs:5714");expect(r.webMercator).toBe(true);});
+ it("recognizes Web Mercator aliases",()=>expect(spatialReferencesEquivalent(normalizeSpatialReference({wkid:102100}),normalizeSpatialReference({wkid:3857}))).toBe(true));
+ it("keeps vertical references distinct",()=>expect(spatialReferencesEquivalent(normalizeSpatialReference({wkid:4326,vcsWkid:5703}),normalizeSpatialReference({wkid:4326,vcsWkid:5714}))).toBe(false));
+ it("round trips Ankara through Web Mercator",()=>{const input=[32.8597,39.9334] as const;const round=webMercatorToGeographic(geographicToWebMercator(input));expect(round[0]).toBeCloseTo(input[0],8);expect(round[1]).toBeCloseTo(input[1],8);});
+ it("clamps Mercator latitude",()=>expect(Number.isFinite(geographicToWebMercator([0,90])[1])).toBe(true));
+ it("fails closed for unsupported projection",()=>expect(()=>projectCoordinate([32,40],normalizeSpatialReference({wkid:4326}),normalizeSpatialReference({wkid:32636}))).toThrow(/unsupported/));
+ it("bounds coordinate batches",()=>{const r=normalizeSpatialReference({wkid:4326});expect(()=>projectCoordinates([[1,2],[3,4]],r,r,{maxCoordinates:1})).toThrow(/budget/);});
+ it("honors cancellation",()=>{const r=normalizeSpatialReference({wkid:4326});const c=new AbortController();c.abort(new Error("cancelled"));expect(()=>projectCoordinates([[1,2]],r,r,{signal:c.signal})).toThrow("cancelled");});
+ it("normalizes and projects extents",()=>{const a=normalizeSpatialReference({wkid:4326}),b=normalizeSpatialReference({wkid:3857});const e=projectExtent(normalizeExtent({xmin:32,ymin:39,xmax:33,ymax:40}),a,b);expect(e.xmax).toBeGreaterThan(e.xmin);});
+ it("rejects invalid extents and identifiers",()=>{expect(()=>normalizeExtent({xmin:2,ymin:0,xmax:1,ymax:1})).toThrow(/inverted/);expect(()=>normalizeSpatialReference({wkid:0})).toThrow(/positive/);});
+ it("rejects mixed analysis SRs",()=>expect(()=>chooseAnalysisSpatialReference([normalizeSpatialReference({wkid:4326}),normalizeSpatialReference({wkid:3857})])).toThrow(/explicit verified/));
+ it("closes polygon rings deterministically",()=>{const sr=normalizeSpatialReference({wkid:4326});const g=normalizeGeometry2D({type:"polygon",rings:[[[0,0],[1,0],[1,1]]],spatialReference:sr});expect(g.type).toBe("polygon");if(g.type==="polygon")expect(g.rings[0]).toEqual([[0,0],[1,0],[1,1],[0,0]]);});
+ it("projects geometry while preserving type",()=>{const a=normalizeSpatialReference({wkid:4326}),b=normalizeSpatialReference({wkid:3857});const g=projectGeometry2D({type:"point",x:32,y:40,spatialReference:a},b);expect(g.type).toBe("point");if(g.type==="point")expect(g.x).toBeGreaterThan(3_000_000);});
+ it("computes bounded geometry extent",()=>{const sr=normalizeSpatialReference({wkid:4326});expect(geometryExtent2D({type:"polyline",paths:[[[1,2],[3,4]]],spatialReference:sr})).toEqual({xmin:1,ymin:2,xmax:3,ymax:4});});
+ it("enforces part and batch budgets",()=>{const sr=normalizeSpatialReference({wkid:4326});const g={type:"point",x:1,y:2,spatialReference:sr} as const;expect(()=>projectGeometryBatch([g,g],sr,{maxGeometries:1})).toThrow(/budget/);expect(()=>normalizeGeometry2D({type:"polyline",paths:[[[1,2]],[[3,4]]],spatialReference:sr},{maxParts:1})).toThrow(/part budget/);});
+});
