@@ -56,6 +56,15 @@ jobs:
       - name: Experience quality guard
         run: node scripts/experience-quality-audit.js
 
+      - name: Experience widget modernization guard self-test
+        run: node scripts/experience-widget-audit.mjs --self-test
+
+      - name: Experience widget modernization guard
+        run: node scripts/experience-widget-audit.mjs
+
+      - name: Strict Experience widget TypeScript boundary
+        run: npx tsc --noEmit -p tsconfig.experience-widgets.json --pretty false
+
       - name: Vite migration contract
         run: npm run quality:vite
 
