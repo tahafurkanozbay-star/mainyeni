@@ -481,7 +481,7 @@ export const createRuntimeWorkloadGovernor = (
     for (const internal of active.values()) {
       activeByLane[internal.admission.lane] = (activeByLane[internal.admission.lane] ?? 0) + 1;
       for (const reservation of internal.resources) {
-        activeResources[reservation.kind] += reservation.units;
+        if (!reservation.released) activeResources[reservation.kind] += reservation.units;
       }
     }
     const adaptive = options.control.snapshot();
