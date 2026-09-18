@@ -22,13 +22,13 @@ export const SEARCH_FILTER_OPERATORS = Object.freeze({
     GreaterThanOrEqual: "gte",
     LessThanOrEqual: "lte",
     Between: "between"
-});
+} as const);
 
 export const SEARCH_SORT_MODES = Object.freeze({
     Relevance: "relevance",
     Title: "title",
     SourceOrder: "source-order"
-});
+} as const);
 
 export const DEFAULT_SEARCH_LIMIT = 50;
 export const MAX_SEARCH_LIMIT = 250;
@@ -44,13 +44,141 @@ export const DEFAULT_FIELD_WEIGHTS = Object.freeze({
     type: 2,
     door: 2,
     phone: 1
-});
+} as const);
 
-const isNil = value => value === null || value === undefined;
-const asArray = value => Array.isArray(value) ? value : isNil(value) ? [] : [value];
-const unique = values => Array.from(new Set(values));
+export type SearchFilterOperator = (typeof SEARCH_FILTER_OPERATORS)[keyof typeof SEARCH_FILTER_OPERATORS];
+export type SearchSortMode = (typeof SEARCH_SORT_MODES)[keyof typeof SEARCH_SORT_MODES];
 
-export const tokenizeSearchQuery = value => unique(
+type UnknownRecord = Record<string, unknown>;
+
+export interface SearchDocument {
+    [key: string]: unknown;
+    key?: string;
+    id?: string | number;
+    sourceIndex: number;
+    title?: unknown;
+    searchText?: unknown;
+    fields?: Record<string, unknown>;
+}
+
+export interface SearchFilterInput {
+    field?: unknown;
+    operator?: unknown;
+    values?: unknown;
+    value?: unknown;
+    caseSensitive?: boolean;
+}
+
+export interface NormalizedSearchFilter {
+    field: string;
+    operator: SearchFilterOperator;
+    values: unknown[];
+    caseSensitive: boolean;
+}
+
+export interface SearchRequestInput extends UnknownRecord {
+    query?: unknown;
+    filters?: unknown;
+    facetFields?: unknown;
+    offset?: unknown;
+    limit?: unknown;
+    minScore?: unknown;
+    sort?: unknown;
+    includeUnmatchedWhenQueryEmpty?: unknown;
+}
+
+export interface NormalizedSearchRequest {
+    query: string;
+    normalizedQuery: string;
+    terms: string[];
+    filters: NormalizedSearchFilter[];
+    facetFields: string[];
+    offset: number;
+    limit: number;
+    minScore: number;
+    sort: SearchSortMode;
+    includeUnmatchedWhenQueryEmpty: boolean;
+}
+
+export interface SearchHit {
+    document: SearchDocument;
+    score: number;
+    position: number;
+}
+
+export interface SearchPage {
+    offset: number;
+    limit: number;
+    count: number;
+    total: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+}
+
+export interface SearchResponse {
+    results: SearchHit[];
+    page: SearchPage;
+    facets: Record<string, unknown>;
+    diagnostics: {
+        candidateCount: number;
+        scannedCount: number;
+        matchedCount: number;
+        filteredOutCount: number;
+        belowScoreCount: number;
+    };
+    request: NormalizedSearchRequest;
+}
+
+export interface SearchExecutionIndex {
+    schemaId: unknown;
+    schemaVersion: unknown;
+    documents: SearchDocument[];
+    postings: Map<string, Set<number>>;
+    byKey: Map<unknown, number>;
+    byId: Map<unknown, number>;
+    diagnostics: unknown;
+    drift: unknown;
+}
+
+export interface SearchExecutionOptions {
+    signal?: AbortSignal | null;
+    weights?: Readonly<Record<string, number>>;
+}
+
+export interface SearchPageIteratorState {
+    request: NormalizedSearchRequest;
+    nextOffset: number;
+    done: boolean;
+    pages: number;
+    received: number;
+}
+
+interface SearchIndexOptions {
+    dedupe?: boolean;
+    keepInvalid?: boolean;
+}
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+
+const normalizeFiniteNumberValue = (value: unknown, fallback: number | null): number | null =>
+    normalizeFiniteNumber(value as never, fallback as never) as number | null;
+
+const normalizeIntegerValue = (
+    value: unknown,
+    options: Readonly<{ min?: number; max?: number; fallback: number | null }>
+): number | null => normalizeInteger(value as never, options as never) as number | null;
+
+const normalizePaginationValue = (
+    value: Readonly<{ offset?: unknown; limit?: unknown }>
+): Readonly<{ offset: number; limit: number }> =>
+    normalizePagination(value as never) as Readonly<{ offset: number; limit: number }>;
+
+const isNil = (value: unknown): value is null | undefined => value === null || value === undefined;
+const asArray = (value: unknown): unknown[] => Array.isArray(value) ? value : isNil(value) ? [] : [value];
+const unique = <T>(values: readonly T[]): T[] => Array.from(new Set(values));
+
+export const tokenizeSearchQuery = (value: unknown): string[] => unique(
     normalizeSearchText(value)
         .replace(/[^a-z0-9]+/g, " ")
         .split(/\s+/)
@@ -58,18 +186,20 @@ export const tokenizeSearchQuery = value => unique(
         .filter(Boolean)
 ).slice(0, MAX_QUERY_TERMS);
 
-export const normalizeFilterOperator = value => {
+export const normalizeFilterOperator = (value: unknown): SearchFilterOperator => {
     const normalized = normalizeSearchText(value);
-    const allowed = new Set(Object.values(SEARCH_FILTER_OPERATORS));
-    return allowed.has(normalized) ? normalized : SEARCH_FILTER_OPERATORS.Equals;
+    const allowed = new Set<SearchFilterOperator>(Object.values(SEARCH_FILTER_OPERATORS));
+    const candidate = normalized as SearchFilterOperator;
+    return allowed.has(candidate) ? candidate : SEARCH_FILTER_OPERATORS.Equals;
 };
 
-export const normalizeSearchFilter = filter => {
-    if (!filter || typeof filter !== "object") return null;
-    const field = normalizeText(filter.field);
+export const normalizeSearchFilter = (filter: unknown): NormalizedSearchFilter | null => {
+    if (!isRecord(filter)) return null;
+    const input = filter as SearchFilterInput;
+    const field = normalizeText(input.field);
     if (!field) return null;
-    const operator = normalizeFilterOperator(filter.operator);
-    const values = asArray(filter.values ?? filter.value)
+    const operator = normalizeFilterOperator(input.operator);
+    const values = asArray(input.values ?? input.value)
         .filter(value => !isNil(value) && value !== "")
         .slice(0, 100);
     if (operator !== SEARCH_FILTER_OPERATORS.Exists && !values.length) return null;
@@ -77,37 +207,41 @@ export const normalizeSearchFilter = filter => {
         field,
         operator,
         values,
-        caseSensitive: filter.caseSensitive === true
+        caseSensitive: input.caseSensitive === true
     };
 };
 
-export const normalizeSearchFilters = filters => asArray(filters)
+export const normalizeSearchFilters = (filters: unknown): NormalizedSearchFilter[] => asArray(filters)
     .map(normalizeSearchFilter)
-    .filter(Boolean)
+    .filter((filter): filter is NormalizedSearchFilter => filter !== null)
     .slice(0, MAX_FILTERS);
 
-export const normalizeSearchRequest = request => {
-    const input = request && typeof request === "object" ? request : {};
-    const page = normalizePagination({
+export const normalizeSearchRequest = (request: unknown): NormalizedSearchRequest => {
+    const input: SearchRequestInput = isRecord(request) ? request : {};
+    const page = normalizePaginationValue({
         offset: input.offset,
         limit: input.limit ?? DEFAULT_SEARCH_LIMIT
     });
     const query = normalizeText(input.query);
+    const requestedSort = normalizeText(input.sort);
+    const sort = (Object.values(SEARCH_SORT_MODES) as string[]).includes(requestedSort)
+        ? requestedSort as SearchSortMode
+        : SEARCH_SORT_MODES.Relevance;
     return {
         query,
         normalizedQuery: normalizeSearchText(query),
         terms: tokenizeSearchQuery(query),
         filters: normalizeSearchFilters(input.filters),
-        facetFields: unique(asArray(input.facetFields).map(normalizeText).filter(Boolean)).slice(0, 12),
+        facetFields: unique(asArray(input.facetFields).map(value => normalizeText(value)).filter(Boolean)).slice(0, 12),
         offset: page.offset,
         limit: Math.min(page.limit, MAX_SEARCH_LIMIT),
-        minScore: Math.max(0, normalizeFiniteNumber(input.minScore, 0) || 0),
-        sort: Object.values(SEARCH_SORT_MODES).includes(input.sort) ? input.sort : SEARCH_SORT_MODES.Relevance,
+        minScore: Math.max(0, normalizeFiniteNumberValue(input.minScore, 0) ?? 0),
+        sort,
         includeUnmatchedWhenQueryEmpty: input.includeUnmatchedWhenQueryEmpty !== false
     };
 };
 
-export const readDocumentField = (document, field) => {
+export const readDocumentField = (document: SearchDocument | null | undefined, field: string): unknown => {
     if (!document || !field) return null;
     if (document.fields && Object.prototype.hasOwnProperty.call(document.fields, field)) {
         return document.fields[field];
@@ -115,17 +249,17 @@ export const readDocumentField = (document, field) => {
     return document[field];
 };
 
-const normalizeComparable = (value, caseSensitive = false) => {
+const normalizeComparable = (value: unknown, caseSensitive = false): string | number | boolean => {
     if (typeof value === "number") return value;
     if (typeof value === "boolean") return value;
     const text = normalizeText(value);
     return caseSensitive ? text : normalizeSearchText(text);
 };
 
-const valuesEqual = (left, right, caseSensitive) => normalizeComparable(left, caseSensitive)
+const valuesEqual = (left: unknown, right: unknown, caseSensitive: boolean): boolean => normalizeComparable(left, caseSensitive)
     === normalizeComparable(right, caseSensitive);
 
-export const matchSearchFilter = (document, filter) => {
+export const matchSearchFilter = (document: SearchDocument, filter: unknown): boolean => {
     const normalizedFilter = normalizeSearchFilter(filter);
     if (!normalizedFilter) return true;
     const raw = readDocumentField(document, normalizedFilter.field);
@@ -139,15 +273,17 @@ export const matchSearchFilter = (document, filter) => {
             return values.some(value => valuesEqual(raw, value, normalizedFilter.caseSensitive));
         case SEARCH_FILTER_OPERATORS.Prefix: {
             const candidate = normalizeComparable(raw, normalizedFilter.caseSensitive);
-            return typeof candidate === "string" && values.some(value => candidate.startsWith(
-                normalizeComparable(value, normalizedFilter.caseSensitive)
-            ));
+            return typeof candidate === "string" && values.some(value => {
+                const prefix = normalizeComparable(value, normalizedFilter.caseSensitive);
+                return typeof prefix === "string" && candidate.startsWith(prefix);
+            });
         }
         case SEARCH_FILTER_OPERATORS.Contains: {
             const candidate = normalizeComparable(raw, normalizedFilter.caseSensitive);
-            return typeof candidate === "string" && values.some(value => candidate.includes(
-                normalizeComparable(value, normalizedFilter.caseSensitive)
-            ));
+            return typeof candidate === "string" && values.some(value => {
+                const fragment = normalizeComparable(value, normalizedFilter.caseSensitive);
+                return typeof fragment === "string" && candidate.includes(fragment);
+            });
         }
         case SEARCH_FILTER_OPERATORS.GreaterThanOrEqual: {
             const candidate = normalizeFiniteNumber(raw, null);
@@ -173,10 +309,10 @@ export const matchSearchFilter = (document, filter) => {
     }
 };
 
-export const matchesSearchFilters = (document, filters) => normalizeSearchFilters(filters)
+export const matchesSearchFilters = (document: SearchDocument, filters: unknown): boolean => normalizeSearchFilters(filters)
     .every(filter => matchSearchFilter(document, filter));
 
-export const scoreTextField = (value, normalizedQuery, terms) => {
+export const scoreTextField = (value: unknown, normalizedQuery: string, terms: readonly string[]): number => {
     const candidate = normalizeSearchText(value);
     if (!candidate) return 0;
     if (!normalizedQuery) return 1;
@@ -202,12 +338,16 @@ export const scoreTextField = (value, normalizedQuery, terms) => {
     return score;
 };
 
-export const scoreSearchDocument = (document, request, weights = DEFAULT_FIELD_WEIGHTS) => {
+export const scoreSearchDocument = (
+    document: SearchDocument,
+    request: unknown,
+    weights: Readonly<Record<string, number>> = DEFAULT_FIELD_WEIGHTS
+): number => {
     const normalizedRequest = normalizeSearchRequest(request);
     if (!normalizedRequest.normalizedQuery) return normalizedRequest.includeUnmatchedWhenQueryEmpty ? 1 : 0;
     let score = 0;
     Object.entries(weights).forEach(([field, weight]) => {
-        const numericWeight = Math.max(0, normalizeFiniteNumber(weight, 0) || 0);
+        const numericWeight = Math.max(0, normalizeFiniteNumberValue(weight, 0) ?? 0);
         if (!numericWeight) return;
         score += scoreTextField(
             readDocumentField(document, field),
@@ -228,31 +368,36 @@ export const scoreSearchDocument = (document, request, weights = DEFAULT_FIELD_W
     return score;
 };
 
-export const buildSearchPostings = documents => {
-    const postings = new Map();
-    (Array.isArray(documents) ? documents : []).forEach((document, position) => {
+export const buildSearchPostings = (documents: unknown): Map<string, Set<number>> => {
+    const postings = new Map<string, Set<number>>();
+    const sourceDocuments = (Array.isArray(documents) ? documents : []) as SearchDocument[];
+    sourceDocuments.forEach((document, position) => {
         const tokens = unique(tokenizeSearchQuery(document?.searchText));
         tokens.forEach(token => {
-            if (!postings.has(token)) postings.set(token, new Set());
-            postings.get(token).add(position);
+            let posting = postings.get(token);
+            if (!posting) {
+                posting = new Set<number>();
+                postings.set(token, posting);
+            }
+            posting.add(position);
         });
     });
     return postings;
 };
 
 export const createSearchExecutionIndex = (
-    records,
-    compiledSchema = GENERIC_RECORD_SCHEMA,
-    options = {}
-) => {
+    records: unknown,
+    compiledSchema: typeof GENERIC_RECORD_SCHEMA = GENERIC_RECORD_SCHEMA,
+    options: SearchIndexOptions = {}
+): SearchExecutionIndex => {
     const normalized = normalizeRecordCollection(records, compiledSchema, {
         dedupe: options.dedupe !== false,
         keepInvalid: options.keepInvalid === true
     });
-    const documents = normalized.documents;
+    const documents = normalized.documents as SearchDocument[];
     const postings = buildSearchPostings(documents);
-    const byKey = new Map();
-    const byId = new Map();
+    const byKey = new Map<unknown, number>();
+    const byId = new Map<unknown, number>();
     documents.forEach((document, position) => {
         byKey.set(document.key, position);
         if (document.id && !byId.has(document.id)) byId.set(document.id, position);
@@ -269,7 +414,7 @@ export const createSearchExecutionIndex = (
     };
 };
 
-export const getCandidatePositions = (index, request) => {
+export const getCandidatePositions = (index: SearchExecutionIndex | null | undefined, request: unknown): number[] => {
     const normalizedRequest = normalizeSearchRequest(request);
     const total = index?.documents?.length || 0;
     if (!normalizedRequest.terms.length || !index?.postings) {
@@ -278,29 +423,32 @@ export const getCandidatePositions = (index, request) => {
 
     const sets = normalizedRequest.terms
         .map(term => index.postings.get(term))
-        .filter(Boolean)
+        .filter((set): set is Set<number> => Boolean(set))
         .sort((left, right) => left.size - right.size);
 
     if (!sets.length) return Array.from({ length: total }, (_value, position) => position);
 
-    const primary = Array.from(sets[0]);
+    const primarySet = sets[0];
+    if (!primarySet) return [];
+    const primary = Array.from(primarySet);
     const intersection = primary.filter(position => sets.every(set => set.has(position)));
     if (intersection.length) return intersection;
 
-    const union = new Set();
+    const union = new Set<number>();
     sets.forEach(set => set.forEach(position => union.add(position)));
     return Array.from(union);
 };
 
-export const buildSearchFacetSnapshot = (documents, fields) => unique(asArray(fields)
-    .map(normalizeText)
-    .filter(Boolean))
-    .reduce((result, fieldName) => ({
-        ...result,
-        [fieldName]: buildFacetCounts(documents, fieldName)
-    }), {});
+export const buildSearchFacetSnapshot = (documents: unknown, fields: unknown): Record<string, unknown> => {
+    const sourceDocuments = (Array.isArray(documents) ? documents : []) as SearchDocument[];
+    return unique(asArray(fields).map(value => normalizeText(value)).filter(Boolean))
+        .reduce<Record<string, unknown>>((result, fieldName) => ({
+            ...result,
+            [fieldName]: buildFacetCounts(sourceDocuments, fieldName)
+        }), {});
+};
 
-export const compareSearchHits = (left, right, sort) => {
+export const compareSearchHits = (left: SearchHit, right: SearchHit, sort: SearchSortMode): number => {
     if (sort === SEARCH_SORT_MODES.SourceOrder) {
         return left.document.sourceIndex - right.document.sourceIndex;
     }
@@ -322,18 +470,22 @@ export const compareSearchHits = (left, right, sort) => {
     return left.document.sourceIndex - right.document.sourceIndex;
 };
 
-export const throwIfSearchAborted = signal => {
+export const throwIfSearchAborted = (signal?: AbortSignal | null): void => {
     if (!signal?.aborted) return;
     const error = new Error("Search execution aborted");
     error.name = "AbortError";
     throw error;
 };
 
-export const executeSearch = (index, request = {}, options = {}) => {
+export const executeSearch = (
+    index: SearchExecutionIndex,
+    request: unknown = {},
+    options: SearchExecutionOptions = {}
+): SearchResponse => {
     const normalizedRequest = normalizeSearchRequest(request);
     throwIfSearchAborted(options.signal);
     const candidatePositions = getCandidatePositions(index, normalizedRequest);
-    const hits = [];
+    const hits: SearchHit[] = [];
     let scanned = 0;
     let filteredOut = 0;
     let belowScore = 0;
@@ -389,7 +541,7 @@ export const executeSearch = (index, request = {}, options = {}) => {
     };
 };
 
-export const createSearchCacheKey = request => {
+export const createSearchCacheKey = (request: unknown): string => {
     const normalized = normalizeSearchRequest(request);
     const filters = normalized.filters
         .map(filter => `${filter.field}:${filter.operator}:${filter.values.map(value => normalizeText(value)).join(",")}`)
@@ -405,11 +557,14 @@ export const createSearchCacheKey = request => {
     ].join("|");
 };
 
-export const mergeSearchPages = (previous, next) => {
+export const mergeSearchPages = (
+    previous: Partial<SearchResponse> | null | undefined,
+    next: Partial<SearchResponse> | null | undefined
+) => {
     const left = Array.isArray(previous?.results) ? previous.results : [];
     const right = Array.isArray(next?.results) ? next.results : [];
     const seen = new Set();
-    const results = [];
+    const results: SearchHit[] = [];
     [...left, ...right].forEach(hit => {
         const key = hit?.document?.key ?? `position:${hit?.position}`;
         if (seen.has(key)) return;
@@ -417,9 +572,10 @@ export const mergeSearchPages = (previous, next) => {
         results.push(hit);
     });
 
-    const nextPage = next?.page || {};
+    const nextPage: Partial<SearchPage> = next?.page ?? {};
+    const nextResponse = next ?? {};
     return {
-        ...next,
+        ...nextResponse,
         results,
         page: {
             ...nextPage,
@@ -430,7 +586,7 @@ export const mergeSearchPages = (previous, next) => {
     };
 };
 
-export const createSearchPageIteratorState = (request = {}) => {
+export const createSearchPageIteratorState = (request: unknown = {}): SearchPageIteratorState => {
     const normalized = normalizeSearchRequest(request);
     return {
         request: normalized,
@@ -441,10 +597,13 @@ export const createSearchPageIteratorState = (request = {}) => {
     };
 };
 
-export const advanceSearchPageIterator = (state, response) => {
+export const advanceSearchPageIterator = (
+    state: SearchPageIteratorState | null | undefined,
+    response: Partial<SearchResponse> | null | undefined
+): SearchPageIteratorState => {
     const current = state || createSearchPageIteratorState();
-    const count = normalizeInteger(response?.page?.count, { min: 0, fallback: 0 });
-    const nextOffset = normalizeInteger(response?.page?.nextOffset, { min: 0, fallback: null });
+    const count = normalizeIntegerValue(response?.page?.count, { min: 0, fallback: 0 }) ?? 0;
+    const nextOffset = normalizeIntegerValue(response?.page?.nextOffset, { min: 0, fallback: null });
     const hasMore = response?.page?.hasMore === true;
     const progressed = nextOffset !== null && nextOffset > current.nextOffset;
     return {
