@@ -92,10 +92,34 @@ test('accepts diagnostic-rich module with request correlation', () => {
 test('ignores tests and generated output', () => {
   const section = auditObservability(inventory([
     source('Webclient.app/src/__tests__/bad.test.ts', `console.error('x'); try { x(); } catch {}`),
+    source('Webclient.app/src/runtime.test.ts', `window.addEventListener('resize', resize); fetch('/a'); fetch('/b'); fetch('/c');`),
+    source('Webclient.app/src/runtime.spec.ts', `setInterval(refresh, 1); console.warn('spec');`),
     source('Webclient.app/dist/app.js', `console.error('x'); setInterval(x, 1);`, 'javascript'),
   ]));
   assert.equal(section.summary.runtimeFiles, 0);
   assert.equal(section.findings.length, 0);
+});
+
+test('does not treat generic admission request vocabulary as network IO', () => {
+  const section = auditObservability(inventory([
+    source('Webclient.app/src/admission.ts', `
+      export const score = (request) => request.cost;
+      export const queue = (request) => request.priority;
+      export const decide = (request) => request.lane;
+    `),
+  ]));
+  assert.ok(!ids(section).includes('observability-cancellation-contract-review'));
+});
+
+test('still flags repeated explicit transport calls without cancellation', () => {
+  const section = auditObservability(inventory([
+    source('Webclient.app/src/transport.ts', `
+      httpClient.get('/a');
+      httpClient.get('/b');
+      httpClient.get('/c');
+    `),
+  ]));
+  assert.ok(ids(section).includes('observability-cancellation-contract-review'));
 });
 
 test('ignores backend and tooling files outside browser runtime roots', () => {
