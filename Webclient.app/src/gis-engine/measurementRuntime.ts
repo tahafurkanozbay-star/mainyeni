@@ -6,7 +6,11 @@ export const clearMeasurementRuntimeCache = (): void => {
   evictArcgisModule(MEASUREMENT_MODULE_ID);
 };
 
-export const MEASUREMENT_TOOLS = Object.freeze({ NONE: '', DISTANCE: 'distance', AREA: 'area' });
+export const MEASUREMENT_TOOLS = Object.freeze({
+  NONE: '',
+  DISTANCE: 'distance',
+  AREA: 'area',
+} as const);
 export type MeasurementTool = typeof MEASUREMENT_TOOLS[keyof typeof MEASUREMENT_TOOLS];
 export type MeasurementStatus = 'idle' | 'loading' | 'ready' | 'error' | 'destroyed';
 
@@ -48,10 +52,50 @@ export interface MeasurementWidgetLike {
 }
 type MeasurementWidgetCtor = new (options: { view: unknown; container: unknown; activeTool: MeasurementTool }) => MeasurementWidgetLike;
 export type MeasurementListener = (state: MeasurementState) => void;
-export interface MeasurementControllerOptions { view?: unknown; container?: unknown; }
+export type MeasurementDiagnosticPhase = 'load' | 'tool' | 'clear' | 'destroy' | 'listener';
+export interface MeasurementDiagnostic {
+  readonly phase: MeasurementDiagnosticPhase;
+  readonly code: string;
+  readonly message: string;
+  readonly error: unknown;
+}
+export interface MeasurementControllerOptions {
+  view?: unknown;
+  container?: unknown;
+  onDiagnostic?: (diagnostic: MeasurementDiagnostic) => void;
+}
 
-const notify = (listeners: Set<MeasurementListener>, state: MeasurementState): void => {
-  listeners.forEach((listener) => { try { listener(state); } catch { /* observer isolation */ } });
+const errorRecord = (error: unknown): Readonly<{ code: string; message: string }> => {
+  if (error instanceof Error) {
+    const withCode = error as Error & { code?: unknown };
+    return {
+      code: typeof withCode.code === 'string' ? withCode.code : 'MEASUREMENT_ERROR',
+      message: error.message || 'Measurement operation failed.',
+    };
+  }
+  if (error !== null && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    return {
+      code: typeof record.code === 'string' ? record.code : 'MEASUREMENT_ERROR',
+      message: typeof record.message === 'string' && record.message.trim()
+        ? record.message
+        : 'Measurement operation failed.',
+    };
+  }
+  return { code: 'MEASUREMENT_ERROR', message: 'Measurement operation failed.' };
+};
+
+const createDiagnostic = (
+  phase: MeasurementDiagnosticPhase,
+  error: unknown,
+): MeasurementDiagnostic => {
+  const normalized = errorRecord(error);
+  return {
+    phase,
+    code: normalized.code,
+    message: normalized.message,
+    error,
+  };
 };
 
 export interface MeasurementController {
@@ -75,10 +119,23 @@ export const createMeasurementController = (options: MeasurementControllerOption
   let destroyed = false;
   let state = createMeasurementState();
   const listeners = new Set<MeasurementListener>();
+  const report = (phase: MeasurementDiagnosticPhase, error: unknown): void => {
+    options.onDiagnostic?.(createDiagnostic(phase, error));
+  };
+
+  const notify = (nextState: MeasurementState): void => {
+    listeners.forEach((listener) => {
+      try {
+        listener(nextState);
+      } catch (error) {
+        report('listener', error);
+      }
+    });
+  };
 
   const setState = (patch: Partial<MeasurementState>): MeasurementState => {
     state = { ...state, ...patch };
-    notify(listeners, state);
+    notify(state);
     return state;
   };
 
@@ -100,9 +157,19 @@ export const createMeasurementController = (options: MeasurementControllerOption
         setState({ status: 'ready', createdAt: new Date().toISOString(), error: null });
         return widget;
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         creationPromise = null;
-        setState({ status: 'error', error: { code: error?.code || 'MEASUREMENT_LOAD_ERROR', message: error?.message || 'Measurement widget could not be loaded.' } });
+        const normalized = errorRecord(error);
+        report('load', error);
+        setState({
+          status: 'error',
+          error: {
+            code: normalized.code === 'MEASUREMENT_ERROR'
+              ? 'MEASUREMENT_LOAD_ERROR'
+              : normalized.code,
+            message: normalized.message || 'Measurement widget could not be loaded.',
+          },
+        });
         throw error;
       });
     try { return await creationPromise; } finally { creationPromise = null; }
@@ -110,7 +177,14 @@ export const createMeasurementController = (options: MeasurementControllerOption
 
   const setTool = async (tool: unknown): Promise<MeasurementWidgetLike | null> => {
     const normalized = normalizeMeasurementTool(tool);
-    if (normalized === null) throw Object.assign(new Error(`Unsupported measurement tool: ${String(tool)}`), { code: 'UNSUPPORTED_MEASUREMENT_TOOL' });
+    if (normalized === null) {
+      const error = Object.assign(
+        new Error(`Unsupported measurement tool: ${String(tool)}`),
+        { code: 'UNSUPPORTED_MEASUREMENT_TOOL' },
+      );
+      report('tool', error);
+      throw error;
+    }
     const currentWidget = await ensureWidget();
     if (!currentWidget || destroyed) return null;
     currentWidget.activeTool = normalized;
@@ -120,7 +194,12 @@ export const createMeasurementController = (options: MeasurementControllerOption
 
   const clear = (): boolean => {
     if (destroyed) return false;
-    try { widget?.clear?.(); if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE; } catch { /* SDK cleanup */ }
+    try {
+      widget?.clear?.();
+      if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE;
+    } catch (error) {
+      report('clear', error);
+    }
     setState({ activeTool: MEASUREMENT_TOOLS.NONE, clearedAt: new Date().toISOString() });
     return true;
   };
@@ -130,7 +209,12 @@ export const createMeasurementController = (options: MeasurementControllerOption
   const destroy = (): void => {
     if (destroyed) return;
     destroyed = true;
-    try { widget?.clear?.(); widget?.destroy?.(); } catch { /* idempotent teardown */ }
+    try {
+      widget?.clear?.();
+      widget?.destroy?.();
+    } catch (error) {
+      report('destroy', error);
+    }
     widget = null; creationPromise = null; listeners.clear();
     state = { ...state, status: 'destroyed', activeTool: MEASUREMENT_TOOLS.NONE, destroyedAt: new Date().toISOString() };
   };
