@@ -276,7 +276,10 @@ const segmentIntersection = (
 
   const proper = ((c1 > epsilon && c2 < -epsilon) || (c1 < -epsilon && c2 > epsilon))
     && ((c3 > epsilon && c4 < -epsilon) || (c3 < -epsilon && c4 > epsilon));
-  if (proper) return { kind: 'cross', point: lineIntersection(a, b, c, d, epsilon) };
+  if (proper) {
+    const point = lineIntersection(a, b, c, d, epsilon);
+    return point ? { kind: 'cross', point } : { kind: 'cross' };
+  }
 
   const candidates = [
     [c, a, b],
