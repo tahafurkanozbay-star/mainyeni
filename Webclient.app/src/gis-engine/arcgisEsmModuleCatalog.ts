@@ -134,7 +134,7 @@ export const requireArcgisModuleDescriptor = (moduleIdInput: string): ArcgisModu
   const moduleId = normalizeRequestedId(moduleIdInput);
   const found = getArcgisModuleDescriptor(moduleId);
   if (!found) {
-    throw new Error(\`ArcGIS module \${moduleId} is not present in the static ESM catalog.\`);
+    throw new Error(`ArcGIS module ${moduleId} is not present in the static ESM catalog.`);
   }
   return found;
 };

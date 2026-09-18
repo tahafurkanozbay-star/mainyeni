@@ -72,7 +72,7 @@ export const evaluateArcgisEsmHealth = (
     reasons.push(reason(
       'catalog-drift',
       'error',
-      \`ArcGIS ESM catalog/transport registry drift detected (\${missing} mismatched specifier(s)).\`,
+      `ArcGIS ESM catalog/transport registry drift detected (${missing} mismatched specifier(s)).`,
     ));
   }
 
@@ -80,7 +80,7 @@ export const evaluateArcgisEsmHealth = (
     reasons.push(reason(
       'unexpected-backend',
       'error',
-      \`ArcGIS module runtime backend is \${input.moduleRuntime.backend}; production ESM backend is required.\`,
+      `ArcGIS module runtime backend is ${input.moduleRuntime.backend}; production ESM backend is required.`,
     ));
   }
 
@@ -88,7 +88,7 @@ export const evaluateArcgisEsmHealth = (
     reasons.push(reason(
       'runtime-load-failure',
       'warning',
-      \`ArcGIS module runtime recorded \${input.moduleRuntime.failures} load failure(s).\`,
+      `ArcGIS module runtime recorded ${input.moduleRuntime.failures} load failure(s).`,
     ));
   }
 
@@ -96,7 +96,7 @@ export const evaluateArcgisEsmHealth = (
     reasons.push(reason(
       'lifecycle-request-failure',
       'warning',
-      \`ArcGIS ESM lifecycle recorded \${input.lifecycle.failedRequests} failed request(s).\`,
+      `ArcGIS ESM lifecycle recorded ${input.lifecycle.failedRequests} failed request(s).`,
     ));
   }
 
@@ -104,7 +104,7 @@ export const evaluateArcgisEsmHealth = (
     reasons.push(reason(
       'bundle-budget-defer',
       'warning',
-      \`ArcGIS ESM bundle budgeting deferred \${input.lifecycle.incompletePlans} plan(s).\`,
+      `ArcGIS ESM bundle budgeting deferred ${input.lifecycle.incompletePlans} plan(s).`,
     ));
   }
 
@@ -112,7 +112,7 @@ export const evaluateArcgisEsmHealth = (
     reasons.push(reason(
       'load-queue-active',
       'info',
-      \`ArcGIS ESM loader has \${input.lifecycle.governor.running} running and \${input.lifecycle.governor.queued} queued job(s).\`,
+      `ArcGIS ESM loader has ${input.lifecycle.governor.running} running and ${input.lifecycle.governor.queued} queued job(s).`,
     ));
   }
 
@@ -150,7 +150,7 @@ export const assertArcgisEsmProductionHealthy = (
       .map((item) => item.code)
       .join(', ');
     throw Object.assign(
-      new Error(\`ArcGIS ESM production readiness is blocked: \${details || 'unknown'}\`),
+      new Error(`ArcGIS ESM production readiness is blocked: ${details || 'unknown'}`),
       { code: 'ARCGIS_ESM_BLOCKED' },
     );
   }

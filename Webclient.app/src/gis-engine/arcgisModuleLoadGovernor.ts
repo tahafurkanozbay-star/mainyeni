@@ -84,14 +84,14 @@ const PRIORITY_RANK: Readonly<Record<ArcgisModuleLoadPriority, number>> = Object
 
 const positiveInteger = (value: number, name: string): number => {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new RangeError(\`\${name} must be a positive safe integer\`);
+    throw new RangeError(`${name} must be a positive safe integer`);
   }
   return value;
 };
 
 const nonNegativeInteger = (value: number, name: string): number => {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new RangeError(\`\${name} must be a non-negative safe integer\`);
+    throw new RangeError(`${name} must be a non-negative safe integer`);
   }
   return value;
 };
@@ -113,10 +113,10 @@ const createError = (message: string, code: string): Error & { code: string } =>
   Object.assign(new Error(message), { code });
 
 const cancellationError = (jobId: string): Error & { code: string } =>
-  createError(\`ArcGIS module load job \${jobId} was cancelled.\`, 'CANCELLED');
+  createError(`ArcGIS module load job ${jobId} was cancelled.`, 'CANCELLED');
 
 const timeoutError = (jobId: string): Error & { code: string } =>
-  createError(\`ArcGIS module load job \${jobId} exceeded its timeout.\`, 'TIMEOUT');
+  createError(`ArcGIS module load job ${jobId} exceeded its timeout.`, 'TIMEOUT');
 
 const disposedError = (): Error & { code: string } =>
   createError('ArcGIS module load governor is disposed.', 'GOVERNOR_DISPOSED');
@@ -223,7 +223,7 @@ export class ArcgisModuleLoadGovernor {
     }
 
     const sequence = ++this.#sequence;
-    const id = \`arcgis-module-job-\${sequence}\`;
+    const id = `arcgis-module-job-${sequence}`;
     let resolve!: (value: readonly unknown[] | PromiseLike<readonly unknown[]>) => void;
     let reject!: (reason?: unknown) => void;
     const promise = new Promise<readonly unknown[]>((resolvePromise, rejectPromise) => {

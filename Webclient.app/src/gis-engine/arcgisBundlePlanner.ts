@@ -136,7 +136,7 @@ const DEFAULT_PRIORITY: Readonly<Record<ArcgisFeatureIntent, number>> = Object.f
 
 const positiveInteger = (value: number, name: string): number => {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new RangeError(\`\${name} must be a positive safe integer\`);
+    throw new RangeError(`${name} must be a positive safe integer`);
   }
   return value;
 };
@@ -162,7 +162,7 @@ const normalizeRequests = (
   requests.forEach((request, order) => {
     const intent = typeof request === 'string' ? request : request.intent;
     if (!(intent in FEATURE_REQUIREMENTS)) {
-      throw new Error(\`Unknown ArcGIS feature intent: \${String(intent)}\`);
+      throw new Error(`Unknown ArcGIS feature intent: ${String(intent)}`);
     }
     const priority = normalizePriority(
       typeof request === 'string' ? undefined : request.priority,
@@ -225,7 +225,7 @@ export const planArcgisBundle = (
         ...(weightBudgetExceeded ? ['weight-budget'] : []),
       ];
       const reason = reasons.join('+');
-      diagnostics.push(\`\${request.intent} deferred: \${reason}\`);
+      diagnostics.push(`${request.intent} deferred: ${reason}`);
       featurePlans.push(Object.freeze({
         intent: request.intent,
         priority: request.priority,

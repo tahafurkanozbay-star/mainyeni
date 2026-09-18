@@ -78,7 +78,7 @@ export type ArcgisEsmLifecycleSnapshot = Readonly<{
 
 const positiveInteger = (value: number, name: string): number => {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new RangeError(\`\${name} must be a positive safe integer\`);
+    throw new RangeError(`${name} must be a positive safe integer`);
   }
   return value;
 };
@@ -90,7 +90,7 @@ const lifecycleDisposedError = (): Error & { code: string } => Object.assign(
 
 const incompletePlanError = (plan: ArcgisBundlePlan): Error & { code: string; deferred: readonly ArcgisFeatureIntent[] } =>
   Object.assign(
-    new Error(\`ArcGIS ESM bundle budget deferred: \${plan.deferredFeatures.join(', ')}\`),
+    new Error(`ArcGIS ESM bundle budget deferred: ${plan.deferredFeatures.join(', ')}`),
     { code: 'BUNDLE_BUDGET_EXCEEDED', deferred: plan.deferredFeatures },
   );
 
@@ -182,7 +182,7 @@ export class ArcgisEsmLifecycleRuntime {
     try {
       const values = await this.#governor.submit(
         plan.moduleIds,
-        createLoadOptions(options, \`bundle:\${plan.specifiers.join('|')}\`),
+        createLoadOptions(options, `bundle:${plan.specifiers.join('|')}`),
       );
       const modules = plan.moduleIds.map((moduleId, index) => {
         const resolved = resolveArcgisCatalogModules([moduleId])[0]!;
@@ -247,7 +247,7 @@ export class ArcgisEsmLifecycleRuntime {
     try {
       const values = await this.#governor.submit(
         requestedIds,
-        createLoadOptions(options, \`direct:\${specifiers.join('|')}\`),
+        createLoadOptions(options, `direct:${specifiers.join('|')}`),
       );
       const modules = resolved.map((item, index) => {
         this.#loadedSpecifiers.add(item.descriptor.specifier);
