@@ -1,4 +1,4 @@
-import { loadModules } from 'esri-loader';
+import { resetArcgisModuleRuntimeCache, setArcgisModuleTransport } from './arcgisModuleRuntime';
 import {
   area,
   createTimeSlider,
@@ -9,11 +9,15 @@ import {
   stableQueryKey,
 } from './spatialEngine';
 
-jest.mock('esri-loader', () => ({
-  loadModules: jest.fn(),
-}));
+const loadModules = jest.fn();
+const arcgisTestTransport = { name: 'spatial-engine-test', loadModules };
 
 describe('spatialEngine runtime', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    setArcgisModuleTransport(arcgisTestTransport);
+    resetArcgisModuleRuntimeCache();
+  });
   test('loads each ArcGIS module once and reuses the resolved module', async () => {
     const geometryEngine = {
       geodesicDistance: jest.fn(() => 12),
