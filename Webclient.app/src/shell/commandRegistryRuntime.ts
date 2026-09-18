@@ -29,6 +29,7 @@ export interface ShellCommandSnapshot {
   readonly commandCount: number;
   readonly shortcutCount: number;
   readonly commands: readonly ShellCommandMatch[];
+  readonly observerFailures: number;
 }
 
 export interface ShellCommandEvent {
@@ -163,6 +164,7 @@ export const createShellCommandRegistry = (
   const listeners = new Set<(event: ShellCommandEvent) => void>();
   let revision = 0;
   let destroyed = false;
+  let observerFailures = 0;
 
   const timestamp = (): number => {
     const value = Number(now());
@@ -176,11 +178,11 @@ export const createShellCommandRegistry = (
 
   const emit = (type: ShellCommandEvent['type'], commandId: string, error: unknown = null): void => {
     const event = Object.freeze({ type, commandId, timestamp: timestamp(), error });
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(event);
       } catch {
-        // Command observers are diagnostics-only and isolated from execution.
+        observerFailures += 1;
       }
     }
   };
@@ -318,6 +320,7 @@ export const createShellCommandRegistry = (
       commandCount: commands.size,
       shortcutCount: shortcuts.size,
       commands: Object.freeze(matches),
+      observerFailures,
     });
   };
 

@@ -25,6 +25,7 @@ export interface WindowRuntimeSnapshot {
   readonly activeWindowId: string | null;
   readonly visibleCount: number;
   readonly minimizedCount: number;
+  readonly observerFailures: number;
 }
 
 export interface WindowRuntimeEvent {
@@ -110,6 +111,7 @@ export const createWindowLifecycleRuntime = (
   let revision = 0;
   let activationSequence = 0;
   let destroyed = false;
+  let observerFailures = 0;
 
   const timestamp = (): number => {
     const value = Number(now());
@@ -123,11 +125,11 @@ export const createWindowLifecycleRuntime = (
 
   const emit = (type: WindowRuntimeEvent['type'], record: WindowRuntimeRecord | null): void => {
     const event = Object.freeze({ type, window: record, timestamp: timestamp(), revision });
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(event);
       } catch {
-        // UI observers are isolated from the lifecycle state machine.
+        observerFailures += 1;
       }
     }
   };
@@ -263,6 +265,7 @@ export const createWindowLifecycleRuntime = (
       activeWindowId: active?.id ?? null,
       visibleCount: windows.filter((item) => item.visible).length,
       minimizedCount: windows.filter((item) => item.visible && item.minimized).length,
+      observerFailures,
     });
   };
 

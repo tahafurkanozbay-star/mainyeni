@@ -29,6 +29,7 @@ export interface NotificationSnapshot {
   readonly totalExpired: number;
   readonly totalDropped: number;
   readonly duplicateCollapses: number;
+  readonly observerFailures: number;
 }
 
 export interface NotificationEvent {
@@ -117,6 +118,7 @@ export const createNotificationCenter = (
   let totalExpired = 0;
   let totalDropped = 0;
   let duplicateCollapses = 0;
+  let observerFailures = 0;
   const listeners = new Set<(event: NotificationEvent) => void>();
 
   const timestamp = (): number => {
@@ -131,11 +133,11 @@ export const createNotificationCenter = (
 
   const emit = (type: NotificationEvent['type'], notification: NotificationRecord | null): void => {
     const event = Object.freeze({ type, notification, timestamp: timestamp() });
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(event);
       } catch {
-        // Observers are best-effort and must never replace the business outcome.
+        observerFailures += 1;
       }
     }
   };
@@ -254,6 +256,7 @@ export const createNotificationCenter = (
       totalExpired,
       totalDropped,
       duplicateCollapses,
+      observerFailures,
     });
   };
 
