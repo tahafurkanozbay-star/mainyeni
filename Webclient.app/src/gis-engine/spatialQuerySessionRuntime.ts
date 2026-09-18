@@ -155,6 +155,61 @@ function mergeIntegrityOptions(
   };
 }
 
+function cacheFingerprint(value: string): string {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ (code + index), 0x85ebca6b);
+  }
+  return `${(first >>> 0).toString(16).padStart(8, "0")}${(second >>> 0)
+    .toString(16)
+    .padStart(8, "0")}`;
+}
+
+function planCacheFingerprint(plan: SpatialQueryPlan): string {
+  return cacheFingerprint(JSON.stringify([
+    plan.mode,
+    plan.requestedFeatures,
+    plan.admittedFeatures,
+    plan.pageSize,
+    plan.pageCount,
+    plan.estimatedBytes,
+    plan.includeGeometry,
+    plan.geometryPrecision,
+    plan.stableOrderField,
+    plan.pagination,
+    plan.truncatedBy,
+  ]));
+}
+
+function integrityCacheFingerprint(
+  base: SpatialFeatureIntegrityOptions | undefined,
+  override: SpatialFeatureIntegrityOptions | undefined,
+): string {
+  const merged: SpatialFeatureIntegrityOptions = {
+    ...base,
+    ...override,
+  };
+  return cacheFingerprint(JSON.stringify([
+    merged.maxCoordinates,
+    merged.maxWktLength,
+    merged.maxParts,
+    merged.maxVerticesPerPart,
+    merged.closePolygonRings,
+    merged.maxFeatures,
+    merged.maxAttributesPerFeature,
+    merged.maxAttributeKeyLength,
+    merged.maxStringValueLength,
+    merged.maxIssues,
+    merged.targetSpatialReference?.key,
+    merged.projectToTarget,
+    merged.rejectDuplicateIds,
+    merged.rejectInvalidFeatures,
+  ]));
+}
+
 export function createSpatialQuerySession(
   options: SpatialQuerySessionOptions,
 ): SpatialQuerySession {
@@ -256,7 +311,12 @@ export function createSpatialQuerySession(
 
     const requestGeneration = generation;
     const baseKey = spatialQueryContractCacheKey(capability, contract, namespace);
-    const cacheKey = `${baseKey}:g${requestGeneration}:m${plan.mode}:n${plan.admittedFeatures}`;
+    const planKey = planCacheFingerprint(plan);
+    const integrityKey = integrityCacheFingerprint(
+      options.defaultIntegrity,
+      request.integrity,
+    );
+    const cacheKey = `${baseKey}:g${requestGeneration}:p${planKey}:i${integrityKey}`;
 
     const execute = async (signal: AbortSignal): Promise<SpatialQuerySessionResult> =>
       runQuery(request, contract, plan, signal, cacheKey, requestGeneration);
@@ -268,7 +328,7 @@ export function createSpatialQuerySession(
           cache: request.cache !== false,
           dedupe: request.dedupe !== false,
           ttlMs: positiveTtl(request.cacheTtlMs, defaultTtl),
-          tags: [tag, `${tag}:generation:${generation}`],
+          tags: [tag, `${tag}:generation:${requestGeneration}`],
           ...(request.signal === undefined ? {} : { signal: request.signal }),
         };
         result = await options.memo.execute(
