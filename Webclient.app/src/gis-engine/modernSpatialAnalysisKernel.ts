@@ -127,7 +127,7 @@ export class ModernSpatialAnalysisKernel {
 
   analyzePolygon(polygon: AnalysisPolygon, signal?: AbortSignal): PolygonAnalysisResult {
     this.#assertActive();
-    const topology = analyzePolygonTopology(polygon, this.#configuration.topology, { signal });
+    const topology = analyzePolygonTopology(polygon, this.#configuration.topology, signal ? { signal } : {});
     const measurement = measurePolygon(polygon, this.#configuration.geometry, signal);
     return {
       measurement,
