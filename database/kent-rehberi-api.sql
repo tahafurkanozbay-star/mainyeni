@@ -40,10 +40,14 @@ HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC, objectid
 LIMIT 20;
 
--- Optional after the duplicate preflight is clean:
+-- Recommended after the duplicate preflight is clean:
 -- CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS
 --     ux_kent_rehberi_tumu_objectid
 -- ON kent_rehberi.kent_rehberi_tumu_pggeom (objectid);
+--
+-- Only after the duplicate preflight is clean should deployment set:
+-- KentRehberiData__ObjectIdCursorEnabled=true
+-- The API intentionally rejects afterObjectId while that flag is false.
 
 -- 3) Viewport/bbox queries. This is the primary map navigation index.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS
