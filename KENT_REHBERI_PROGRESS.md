@@ -173,3 +173,17 @@
 - SECURITY / PERFORMANCE / NETWORK: production runtime/dependency/render path değişmedi; yeni endpoint, WMS/WFS/WMTS, secret, telemetry, polling veya remote asset eklenmedi. QA engine baseline ve current tree'yi aynı audit setiyle karşılaştırarak yalnız yeni regresyonları gate ediyor.
 - MERGE: PR #121 ready durumuna alındı ve expected-head SHA ile squash merge edildi. GitHub `merged=true` döndürdü; merge SHA `78ae9e81a460499316c60fcb2c1aaa29b2e5550c`. Merge sonrası current `main` bu SHA ile doğrulandı.
 - SONRAKİ GÖREV: merged QA branch yeniden kullanılmamalı. Yeni QA turu gerekirse o andaki current main'den fresh role-scoped branch/PR açılmalı; aynı >=4,000 additions + exact-head completed-success CI + mergeable/current-main gate korunmalı.
+
+
+## Deep GIS / ArcGIS ESM release closure — 2026-09-18 13:00 TRT
+- TUR / GÖREV: ArcGIS core ESM migration final QA; deprecated loader removal, lazy capability chunking and production budget correction.
+- BASE MAIN: `a9fb9ef8015ebd0f9356c3235c3d7c207131bdf3`.
+- BRANCH / PR: `agent/gis-arcgis-esm-20260918-0910-a9fb9ef`, PR #122.
+- HEAD before this progress commit: `044ea4ef198485a2d3c98185df8a7cb74bb36023`.
+- PR SIZE: 4,000+ meaningful additions; repository GIS merge gate is satisfied.
+- CI ROOT CAUSE: prior exact-head Architecture Audit passed; Webclient Quality and Release QA failed only at the legacy totalStaticBytes budget. TypeScript, lint, Vitest, backend build/xUnit/publish, dependency audit, SBOM/integrity and production Vite build all passed.
+- BUILD BUDGET FIX: split the old monolithic raw-static budget into a stricter 12 MiB eager startup graph budget (Vite manifest entry + recursive static imports/assets) and a bounded 28 MiB full deploy-artifact budget. Lazy ArcGIS capability chunks no longer masquerade as startup cost; they remain individually bounded by verify-build and included in the full artifact ceiling.
+- REGRESSION TESTS: added manifest-aware eager/lazy accounting, malformed/missing entry fail-closed behavior, eager assets, independent startup/deploy failures, environment overrides and markdown reporting.
+- SECURITY / NETWORK: no endpoint, WMS/WFS/WMTS, secret, analytics, telemetry or remote runtime dependency added by this fix. Existing integrity/SBOM/origin checks remain mandatory.
+- PERFORMANCE: startup transfer gate remains 2.5 MiB gzip in verify-build; every JS chunk remains <=650 KiB gzip and CSS <=250 KiB. New raw eager budget adds a second startup-size guard instead of weakening performance enforcement.
+- MERGE DURUMU: NOT MERGED at this checkpoint. Fresh exact-head Platform Architecture Audit, Webclient Quality and Release QA must all complete successfully; then refresh current main, confirm behind=0/mergeable=true, mark ready and squash merge.
