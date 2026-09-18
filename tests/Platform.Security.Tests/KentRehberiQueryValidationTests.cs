@@ -154,23 +154,37 @@ public sealed class KentRehberiQueryValidationTests
         Assert.Contains("afterObjectId", error.Errors.Keys);
     }
 
-    [Theory]
-    [InlineData("a")]
-    [InlineData(" ")]
-    public void NormalizeSearch_RejectsTooShortFreeTextQuery(string query)
+    [Fact]
+    public void NormalizeSearch_RejectsTooShortFreeTextQuery()
     {
         var error = Assert.Throws<KentRehberiValidationException>(() =>
             KentRehberiQueryValidation.NormalizeSearch(
                 null,
                 null,
                 null,
-                query,
+                "a",
                 null,
                 null,
                 null,
                 CreateOptions()));
 
         Assert.Contains("q", error.Errors.Keys);
+    }
+
+    [Fact]
+    public void NormalizeSearch_TreatsBlankFreeTextAsNoFilter()
+    {
+        var result = KentRehberiQueryValidation.NormalizeSearch(
+            null,
+            null,
+            null,
+            "   ",
+            null,
+            null,
+            null,
+            CreateOptions());
+
+        Assert.Null(result.Query);
     }
 
     [Fact]
