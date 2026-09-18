@@ -1,5 +1,8 @@
 import { createArcGisRequestScheduler } from './arcgisRequestScheduler';
-import { createLayerLifecycleRuntime } from './layerLifecycleRuntime';
+import {
+  createLayerLifecycleRuntime,
+  type LayerLifecycleDescriptor,
+} from './layerLifecycleRuntime';
 import {
   buildArcGisCapabilityContract,
   assessCapabilityContract,
@@ -383,12 +386,20 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
       geometryType: registration.geometryType || service.contract.geometryType || null,
     });
     const existed = layers.has(id);
-    lifecycle.registerLayer(id, {
+    const lifecycleResourceUrl = descriptor.resourceUrl || service.url;
+    const lifecycleDescriptor: LayerLifecycleDescriptor = {
       ...registration.lifecycle,
-      ...descriptor,
-      url: descriptor.resourceUrl,
-      priority: 100 - Math.round(Math.max(0, Math.min(100, finiteNumber(descriptor.importance, 50) ?? 50))),
-    });
+      id,
+      resourceUrl: lifecycleResourceUrl,
+      url: lifecycleResourceUrl,
+      priority: 100 - Math.round(
+        Math.max(0, Math.min(100, finiteNumber(descriptor.importance, 50) ?? 50)),
+      ),
+      ...(descriptor.visible === undefined ? {} : { visible: descriptor.visible }),
+      ...(descriptor.pinned === undefined ? {} : { pinned: descriptor.pinned }),
+      ...(descriptor.estimatedBytes == null ? {} : { estimatedBytes: descriptor.estimatedBytes }),
+    };
+    lifecycle.registerLayer(id, lifecycleDescriptor);
     layers.set(id, { id, serviceId: service.id, descriptor });
     metrics.layerRegistrations += existed ? 0 : 1;
     observability.record({
@@ -489,14 +500,18 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
       const value = await scheduler.schedule({
         key: requestKey,
         resourceUrl: service.url,
-        priority: context.priority,
-        cache: context.cache,
-        cacheTtlMs: context.cacheTtlMs,
-        staleTtlMs: context.staleTtlMs,
-        allowStale: context.allowStale,
-        allowStaleOnError: context.allowStaleOnError,
-        estimatedBytes: context.estimatedBytes,
-        signal: context.signal,
+        ...(context.priority === undefined ? {} : { priority: context.priority }),
+        ...(context.cache === undefined ? {} : { cache: context.cache }),
+        ...(context.cacheTtlMs === undefined ? {} : { cacheTtlMs: context.cacheTtlMs }),
+        ...(context.staleTtlMs === undefined ? {} : { staleTtlMs: context.staleTtlMs }),
+        ...(context.allowStale === undefined ? {} : { allowStale: context.allowStale }),
+        ...(context.allowStaleOnError === undefined
+          ? {}
+          : { allowStaleOnError: context.allowStaleOnError }),
+        ...(context.estimatedBytes === undefined
+          ? {}
+          : { estimatedBytes: context.estimatedBytes }),
+        ...(context.signal === undefined ? {} : { signal: context.signal }),
         tags: uniqueTags([
           ...(context.tags || []),
           `service:${service.id}`,
