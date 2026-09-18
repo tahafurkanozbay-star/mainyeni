@@ -431,7 +431,7 @@ export const createDrainCoordinator = (
         if (waiter.settled) return;
         let cancelledCount = 0;
         if (waiter.cancelOnTimeout) {
-          for (const work of [...active.values()]) {
+          for (const work of active.values()) {
             if (forceCancel(work, waiter.reason, false)) cancelledCount += 1;
           }
         }
@@ -449,7 +449,7 @@ export const createDrainCoordinator = (
   ): void => {
     if (phase === 'disposed') return;
     accepting = false;
-    for (const work of [...active.values()]) forceCancel(work, reason, false);
+    for (const work of active.values()) forceCancel(work, reason, false);
     phase = 'disposed';
     drainStartedAt ??= clock.now();
     for (const waiter of waiters) settleWaiter(waiter, false, 0);
