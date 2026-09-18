@@ -29,7 +29,7 @@ export interface ObservabilityAuditSummary {
   readonly correlationSignals: number;
 }
 
-const TEST_PATH = /(^|\/)(__tests__|tests?|fixtures?|mocks?)(\/|\.|$)/i;
+const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/i;
 const GENERATED_PATH = /(^|\/)(dist|build|coverage|node_modules)(\/|$)/i;
 const RUNTIME_PATH = /^(?:Webclient\.app|Webclient\.Admin)\/src\//;
 const CONSOLE_PATTERN = /\bconsole\.(?:log|debug|info|warn|error|trace)\s*\(/g;
@@ -180,9 +180,9 @@ function asyncBoundaryFinding(file: SourceFile, item: ObservabilitySignal): Find
 }
 
 function cancellationFinding(file: SourceFile, item: ObservabilitySignal): Finding[] {
-  const networkish = /\b(?:fetch|request|queryFeatures|axios|executeQueryJSON)\b/.test(file.text);
-  if (!networkish || item.abortControllers > 0 || /\bAbortSignal\b|\bsignal\s*[:=]/.test(file.text)) return [];
-  if (count(file.text, /\b(?:fetch|request|queryFeatures|axios|executeQueryJSON)\b/g) < 3) return [];
+  const networkPattern = /\b(?:fetch|queryFeatures|executeQueryJSON)\s*\(|\baxios(?:\.[A-Za-z_$][\w$]*)?\s*\(|\b(?:httpClient|transport)\b/g;
+  const networkCalls = count(file.text, networkPattern);
+  if (networkCalls < 3 || item.abortControllers > 0 || /\bAbortSignal\b|\bsignal\s*[:=]/.test(file.text)) return [];
   return [{
     id: 'observability-cancellation-contract-review',
     domain: 'observability',
