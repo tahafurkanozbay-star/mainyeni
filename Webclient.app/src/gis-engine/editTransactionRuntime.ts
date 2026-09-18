@@ -330,6 +330,72 @@ const stableJsonBytes = (
   return visit(value, 0);
 };
 
+const cloneSerializableValue = (
+  value: unknown,
+  maxStringLength: number,
+  maxDepth: number,
+): unknown => {
+  const seen = new Set<object>();
+
+  const clone = (candidate: unknown, depth: number): unknown => {
+    if (depth > maxDepth) {
+      throw new RangeError('GIS edit payload nesting exceeds the configured depth budget.');
+    }
+    if (candidate === null || candidate === undefined) return candidate;
+
+    if (typeof candidate === 'string') {
+      if (candidate.length > maxStringLength) {
+        throw new RangeError('GIS edit payload string exceeds the configured length budget.');
+      }
+      return candidate;
+    }
+
+    if (typeof candidate === 'number') {
+      if (!Number.isFinite(candidate)) {
+        throw new TypeError('GIS edit payload numbers must be finite.');
+      }
+      return candidate;
+    }
+
+    if (typeof candidate === 'boolean') return candidate;
+
+    if (
+      typeof candidate === 'bigint'
+      || typeof candidate === 'symbol'
+      || typeof candidate === 'function'
+    ) {
+      throw new TypeError('GIS edit payload contains a non-serializable value.');
+    }
+
+    if (Array.isArray(candidate)) {
+      if (seen.has(candidate)) throw new TypeError('GIS edit payload cannot contain cycles.');
+      seen.add(candidate);
+      const snapshot = Object.freeze(candidate.map((item) => clone(item, depth + 1)));
+      seen.delete(candidate);
+      return snapshot;
+    }
+
+    if (typeof candidate === 'object') {
+      const source = candidate as Record<string, unknown>;
+      if (seen.has(source)) throw new TypeError('GIS edit payload cannot contain cycles.');
+      seen.add(source);
+      const snapshot: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(source)) {
+        if (key.length > maxStringLength) {
+          throw new RangeError('GIS edit payload key exceeds the configured length budget.');
+        }
+        snapshot[key] = clone(item, depth + 1);
+      }
+      seen.delete(source);
+      return Object.freeze(snapshot);
+    }
+
+    throw new TypeError('GIS edit payload contains an unsupported value.');
+  };
+
+  return clone(value, 0);
+};
+
 const freezeOperation = (operation: GisEditOperation): GisEditOperation => Object.freeze({
   ...operation,
   attributes: operation.attributes ? Object.freeze({ ...operation.attributes }) : null,
@@ -461,7 +527,11 @@ export const createGisEditTransactionRuntime = (
       clone[normalizedKey] = value;
     }
     stableJsonBytes(clone, maxStringLength, maxGeometryDepth);
-    return Object.freeze(clone);
+    return cloneSerializableValue(
+      clone,
+      maxStringLength,
+      maxGeometryDepth,
+    ) as Readonly<Record<string, unknown>>;
   };
 
   const normalizeOperation = (
@@ -471,7 +541,10 @@ export const createGisEditTransactionRuntime = (
     const attributes = input.kind === 'delete'
       ? null
       : validateAttributes(input.attributes);
-    const geometry = input.kind === 'delete' ? null : input.geometry ?? null;
+    const geometryInput = input.kind === 'delete' ? null : input.geometry ?? null;
+    const geometry = geometryInput === null
+      ? null
+      : cloneSerializableValue(geometryInput, maxStringLength, maxGeometryDepth);
 
     if (geometry !== null) {
       stableJsonBytes(geometry, maxStringLength, maxGeometryDepth);
