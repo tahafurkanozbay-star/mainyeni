@@ -229,6 +229,29 @@ describe('runtimeWorkloadGovernor', () => {
     harness.dispose();
   });
 
+  it('detaches caller cancellation ownership after manual release', async () => {
+    const harness = createHarness();
+    const controller = new AbortController();
+    const lease = await harness.governor.acquire({
+      key: 'released-before-abort',
+      signal: controller.signal,
+      resources: [{ kind: 'network', units: 1 }],
+    });
+
+    lease.release();
+    controller.abort(new DOMException('late caller abort', 'AbortError'));
+    await Promise.resolve();
+
+    expect(lease.released).toBe(true);
+    expect(lease.signal.aborted).toBe(false);
+    expect(harness.governor.snapshot().counters).toMatchObject({
+      completed: 1,
+      cancelled: 0,
+    });
+    expect(harness.manager.snapshot().used.network).toBe(0);
+    harness.dispose();
+  });
+
   it('auto-releases active work when the caller aborts', async () => {
     const harness = createHarness();
     const controller = new AbortController();
