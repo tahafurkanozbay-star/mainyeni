@@ -103,7 +103,7 @@ export interface AddressIndex {
     drift: unknown;
 }
 
-export interface AddressSearchOptionsInput extends Record<string, unknown> {
+export interface AddressSearchOptionsInput {
     offset?: unknown;
     limit?: unknown;
     level?: unknown;
@@ -277,7 +277,9 @@ export const normalizeAddressDocument = (record: unknown, sourceIndex = 0): Addr
     const input = (isRecord(record) ? record : {}) as AddressLike;
     const base = createSearchDocumentFromSchema(input, ADDRESS_RECORD_SCHEMA, sourceIndex) as AddressLike;
     const baseFields = isRecord(base.fields) ? base.fields : {};
-    const level = inferAddressLevel({ ...input, ...baseFields, attr: input.attr });
+    const levelInput: AddressLike = { ...input, ...baseFields };
+    if (input.attr) levelInput.attr = input.attr;
+    const level = inferAddressLevel(levelInput);
     const canonicalAddress = formatCanonicalAddress(base);
     const tokens = unique([
         ...tokenizeAddress(base.title),
@@ -468,7 +470,11 @@ export const getAddressChildren = (
         })();
     if (!parentKey) return [];
     const positions = index.byParent.get(parentKey);
-    return positions ? Array.from(positions).map(position => index.documents[position]).filter(Boolean) : [];
+    return positions
+        ? Array.from(positions)
+            .map(position => index.documents[position])
+            .filter((document): document is AddressDocument => Boolean(document))
+        : [];
 };
 
 export const getAddressAncestors = (
@@ -489,13 +495,19 @@ export const getAddressAncestors = (
         const key = `${document.normalizedDistrict}|${document.normalizedNeighborhood}`;
         const position = Array.from(index.byNeighborhood.get(key) || [])
             .find(candidate => index.documents[candidate]?.level === ADDRESS_LEVELS.Neighborhood);
-        if (!isNil(position)) result.push(index.documents[position]);
+        if (!isNil(position)) {
+            const candidate = index.documents[position];
+            if (candidate) result.push(candidate);
+        }
     }
     if (document.normalizedStreet) {
         const key = `${document.normalizedDistrict}|${document.normalizedNeighborhood}|${document.normalizedStreet}`;
         const position = Array.from(index.byStreet.get(key) || [])
             .find(candidate => index.documents[candidate]?.level === ADDRESS_LEVELS.Street);
-        if (!isNil(position)) result.push(index.documents[position]);
+        if (!isNil(position)) {
+            const candidate = index.documents[position];
+            if (candidate) result.push(candidate);
+        }
     }
     return result;
 };
