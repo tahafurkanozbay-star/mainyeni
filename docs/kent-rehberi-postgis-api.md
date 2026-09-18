@@ -154,7 +154,9 @@ sözleşmesini verir.
 - Şema ve tablo adı server-owned sabittir; query parametresinden alınmaz.
 - `q` içindeki `%`, `_` ve backslash LIKE wildcard olarak değil literal
   veri olarak escape edilir.
-- İlçe/mahalle uzunluğu 50, query uzunluğu 120 karakterle sınırlıdır.
+- İlçe/mahalle uzunluğu 50 karakterle sınırlıdır; serbest metin `q`
+  araması en az 2, en fazla 120 karakter kabul eder. Böylece tek karakterli
+  pahalı `%q%` taramaları public endpointte engellenir.
 - `limit`, radius, koordinat ve bbox sınırları fail-closed doğrulanır.
 - Request cancellation PostgreSQL komutuna aktarılır.
 - Command timeout ve connection timeout ayrıca sınırlandırılır.
