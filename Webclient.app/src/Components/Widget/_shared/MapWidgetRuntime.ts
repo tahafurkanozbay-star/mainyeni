@@ -304,7 +304,7 @@ export const createResourceBag = (
 
   return Object.freeze({
     add,
-    delete(resource) {
+    delete(resource: DisposableLike | (() => void) | null | undefined) {
       if (resource) resources.delete(resource);
     },
     dispose() {
