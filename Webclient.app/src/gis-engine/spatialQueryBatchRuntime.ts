@@ -149,7 +149,7 @@ export async function executeSpatialQueryBatch(
     return left.inputIndex - right.inputIndex;
   });
 
-  const results: Array<SpatialQueryBatchTaskResult | undefined> = new Array(input.length);
+  const results: Array<SpatialQueryBatchTaskResult | undefined> = Array.from({ length: input.length });
   let cursor = 0;
   let firstFailure: unknown;
 
