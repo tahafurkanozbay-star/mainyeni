@@ -43,7 +43,7 @@ describe('SpatialLayerLifecycleRuntime', () => {
   it('supports an explicit zero-retry budget', () => {
     const runtime = new SpatialLayerLifecycleRuntime({
       maxFailuresPerLayer: 5,
-      maxRetryAttempts: 0,
+      retryLimit: 0,
     });
     runtime.register(layer('no-retry'));
     runtime.transition('no-retry', 'loading');
