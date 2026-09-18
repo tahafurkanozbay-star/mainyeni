@@ -3,17 +3,20 @@ import {
   type CSSProperties,
   type ReactNode,
   type Ref,
+  type RefObject,
 } from 'react';
 import {
   CommonQueryWindowTools,
   type QueryWindowManagerLike,
 } from '../../Query/_Common/CommonQueryWindowTools';
-import type { ManagedWindowHandle } from '../../../experience/contracts';\nimport './MapWidgetSurface.css';
+import type { ManagedWindowHandle } from '../../../experience/contracts';
+import './MapWidgetSurface.css';
 
 export interface MapWidgetManagerLike extends QueryWindowManagerLike {
   readonly IsVisible: (id: string) => boolean;
   readonly ShowWindow: (id: string) => void;
-  readonly RegisterWindow: (ref: RefObject<ManagedWindowHandle | null>) => void;\n  readonly UnregisterWindow?: (id: string, ref: RefObject<ManagedWindowHandle | null>) => void;
+  readonly RegisterWindow: (ref: RefObject<ManagedWindowHandle | null>) => void;
+  readonly UnregisterWindow?: (id: string, ref: RefObject<ManagedWindowHandle | null>) => void;
   readonly HideWindow: (id: string) => void;
 }
 
