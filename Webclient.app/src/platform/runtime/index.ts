@@ -16,3 +16,4 @@ export * from './adaptiveRuntimeModule';
 export * from './capacityEnvelope';
 export * from './loadShedding';
 export * from './drainCoordinator';
+export * from './runtimeHealthPolicy';
