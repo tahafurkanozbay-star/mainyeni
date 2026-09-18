@@ -269,7 +269,16 @@ function ruleAllowed(file: SourceFile, rule: GisRule): boolean {
 function findingsForRule(file: SourceFile, rule: GisRule): Finding[] {
   if (!ruleAllowed(file, rule)) return [];
   const pattern = new RegExp(rule.pattern.source, rule.pattern.flags.includes('g') ? rule.pattern.flags : `${rule.pattern.flags}g`);
-  return [...file.text.matchAll(pattern)].slice(0, 2).map(match => ({
+  const uniqueMatches: { readonly match: RegExpMatchArray; readonly line: number }[] = [];
+  const seenLines = new Set<number>();
+  for (const match of file.text.matchAll(pattern)) {
+    const line = lineAt(file.text, match.index ?? 0);
+    if (seenLines.has(line)) continue;
+    seenLines.add(line);
+    uniqueMatches.push({ match, line });
+    if (uniqueMatches.length >= 2) break;
+  }
+  return uniqueMatches.map(({ match, line }) => ({
     id: rule.id,
     domain: rule.tag === 'icons' ? 'icons' : rule.tag === 'network' || rule.tag === 'credential' ? 'network' : 'gis',
     severity: rule.severity,
@@ -277,7 +286,7 @@ function findingsForRule(file: SourceFile, rule: GisRule): Finding[] {
     message: rule.message,
     location: {
       file: file.repositoryPath,
-      line: lineAt(file.text, match.index ?? 0),
+      line,
     },
     evidence: {
       excerpt: compact(match[0]),
