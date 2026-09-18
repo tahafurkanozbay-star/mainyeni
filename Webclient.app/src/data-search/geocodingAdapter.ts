@@ -17,11 +17,11 @@ import {
 } from './normalization';
 
 export interface GeocodeAdapterOptions {
-  readonly offset?: number | string | null;
-  readonly limit?: number | string | null;
-  readonly defaultLimit?: number;
-  readonly dedupe?: boolean;
-  readonly minimumScore?: number;
+  readonly offset?: number | string | null | undefined;
+  readonly limit?: number | string | null | undefined;
+  readonly defaultLimit?: number | undefined;
+  readonly dedupe?: boolean | undefined;
+  readonly minimumScore?: number | undefined;
 }
 
 interface RawCandidate {
