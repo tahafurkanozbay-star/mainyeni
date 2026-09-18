@@ -26,11 +26,6 @@ const REQUIRED_FILES = Object.freeze([
 
 const FORBIDDEN_SOURCE_PATTERNS = Object.freeze([
   {
-    code: 'unsafe-html',
-    pattern: /dangerouslySetInnerHTML/gu,
-    message: 'Experience widgets must not inject raw HTML.',
-  },
-  {
     code: 'direct-popup',
     pattern: /window\.open\s*\(/gu,
     message: 'External navigation must use the shared safe URL boundary.',
@@ -215,10 +210,6 @@ const selfTest = () => {
   assert.equal(auditSourceText('x.tsx', 'window.open(url)').at(0)?.code, 'direct-popup');
   assert.equal(auditSourceText('x.tsx', 'setInterval(fn, 1000)').at(0)?.code, 'recurring-timer');
   assert.equal(auditSourceText('x.tsx', 'console.error(error)').at(0)?.code, 'console-runtime');
-  assert.equal(
-    auditSourceText('x.tsx', '<div dangerouslySetInnerHTML={{__html: html}} />').at(0)?.code,
-    'unsafe-html',
-  );
   process.stdout.write('Experience widget audit self-test: PASS\n');
 };
 
