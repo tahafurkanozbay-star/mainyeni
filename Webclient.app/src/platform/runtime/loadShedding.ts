@@ -79,7 +79,7 @@ const DEFAULT_POLICY: LoadSheddingPolicy = Object.freeze({
   deadlineProtectionMs: 1_500,
   protectedLanes: Object.freeze(['interactive', 'foreground']),
   backgroundLanes: Object.freeze(['background', 'prefetch', 'maintenance']),
-  pressureLevels: Object.freeze(['high', 'critical']),
+  pressureLevels: Object.freeze(['high', 'critical'] as const),
   laneWeights: Object.freeze({
     interactive: -100,
     foreground: -60,
