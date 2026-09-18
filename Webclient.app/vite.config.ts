@@ -12,16 +12,26 @@ const manualChunk = (id: string): string | undefined => {
   if (id.includes('/bootstrap/') || id.includes('/react-bootstrap/')) return 'ui-vendor';
   if (id.includes('/@fortawesome/') || id.includes('/react-icons/')) return 'icons-vendor';
 
-  // @arcgis/core is intentionally split by stable SDK responsibility rather
-  // than collapsed into one vendor chunk. The 5.x ESM graph is substantially
-  // larger than the retired loader shim; keeping views, layers, widgets,
-  // geometry and REST clients separate preserves lazy loading and prevents a
-  // single GIS chunk from monopolising the production gzip budget.
+  // Keep ArcGIS' large ESM graph lazy, but prevent any single responsibility
+  // bucket from becoming a multi-megabyte transfer. These boundaries follow
+  // stable SDK directories rather than individual application call sites so
+  // cache identity remains deterministic across feature routes.
   if (id.includes('/@arcgis/core/')) {
-    if (id.includes('/@arcgis/core/views/')) return 'arcgis-views';
+    if (id.includes('/@arcgis/core/views/2d/')) return 'arcgis-views-2d';
+    if (id.includes('/@arcgis/core/views/3d/')) return 'arcgis-views-3d';
+    if (id.includes('/@arcgis/core/views/support/')) return 'arcgis-views-support';
+    if (id.includes('/@arcgis/core/views/')) return 'arcgis-views-runtime';
+
+    if (id.includes('/@arcgis/core/layers/support/')) return 'arcgis-layers-support';
+    if (id.includes('/@arcgis/core/layers/graphics/')) return 'arcgis-layers-graphics';
+    if (id.includes('/@arcgis/core/layers/vectorTiles/')) return 'arcgis-layers-vector';
+    if (id.includes('/@arcgis/core/layers/')) return 'arcgis-layers-runtime';
+
+    if (id.includes('/@arcgis/core/geometry/operators/')) return 'arcgis-geometry-operators';
+    if (id.includes('/@arcgis/core/geometry/support/')) return 'arcgis-geometry-support';
+    if (id.includes('/@arcgis/core/geometry/')) return 'arcgis-geometry-runtime';
+
     if (id.includes('/@arcgis/core/widgets/')) return 'arcgis-widgets';
-    if (id.includes('/@arcgis/core/layers/')) return 'arcgis-layers';
-    if (id.includes('/@arcgis/core/geometry/')) return 'arcgis-geometry';
     if (id.includes('/@arcgis/core/rest/')) return 'arcgis-rest';
     if (id.includes('/@arcgis/core/renderers/') || id.includes('/@arcgis/core/symbols/')) return 'arcgis-rendering';
     if (id.includes('/@arcgis/core/core/')) return 'arcgis-core-runtime';
@@ -60,8 +70,6 @@ export default defineConfig({
   base: './',
   envPrefix: ['VITE_'],
   define: {
-    // Narrow bridge for the one remaining public-asset call site. Do not expose
-    // a generic process.env object to browser code.
     'process.env.PUBLIC_URL': JSON.stringify('./'),
   },
   plugins: [
@@ -72,20 +80,19 @@ export default defineConfig({
     react({ include: /\.[jt]sx?$/ }),
   ],
   optimizeDeps: {
-    // Keep dependency discovery enabled during the remaining legacy/CJS migration.
-    // Warm the bundled ArcGIS ESM package rather than the removed esri-loader.
-    // Vite remains free to discover imports not listed here.
     include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/views/SceneView.js', 'prop-types', '@fortawesome/react-fontawesome', 'crypto-js'],
   },
   build: {
-    // Vite 8's Baseline target tracks browsers that are widely interoperable
-    // instead of forcing a newer ES syntax level than the product requires.
     target: 'baseline-widely-available',
     outDir: 'build',
     emptyOutDir: true,
     sourcemap: false,
     cssCodeSplit: true,
     reportCompressedSize: true,
+    // Emit Vite's graph manifest so release verification can distinguish the
+    // eagerly transferred application shell from intentionally lazy ArcGIS
+    // capability chunks instead of treating every possible feature as startup.
+    manifest: true,
     chunkSizeWarningLimit: 900,
     rolldownOptions: { output: { manualChunks: manualChunk } },
   },
