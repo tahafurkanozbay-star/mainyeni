@@ -304,3 +304,15 @@
 - MERGE: expected-head squash merge returned `merged=true`; merge SHA `3da891d951247f5530626d99de01f70148d56b7e`, verified as current main immediately after merge. The connector lacked permission for the separate Ready-for-review mutation, but GitHub's expected-head merge endpoint accepted the fully green draft PR and performed the squash merge without bypassing CI.
 - SONRAKİ GÖREV: merged #160 branch must not be reused. Future performance work starts from then-current `main` on a fresh role-scoped branch; preserve the same exact-head CI, current-main, bounded-observability, network-safety and cross-team overlap gates.
 
+## Deep Experience / Map Widget modernization continuation — 2026-09-19 02:34 TRT
+- TUR / GÖREV: Kent Rehberi Deep Experience / Whole-Code Modernization; PR #165 üzerinde merge-ready kapanış turu.
+- BASE MAIN: `17ce9e3d6cf86531affbcc874c836426bde86d6c`; branch halen behind=0 ve merge-base exact base.
+- BRANCH / PR: `agent/experience-widget-modernization-20260918-2137-17ce9e3`, PR #165 `feat(experience): modernize map widgets with strict TypeScript`.
+- KAPSAM / GATE: PR snapshot 4,435+ meaningful additions, 1,319 deletions, 28 files; mandatory >=4,000 additions gate remains satisfied without filler.
+- SON CI TEŞHİSİ: exact head `2e16fe85980a939ae46c4f29859494cf619f3c2e` Platform Architecture Audit success. Webclient Quality ve Release QA yalnız exact-base Vitest regression gate nedeniyle failure; typecheck, lint, dependency audit, strict Platform/GIS boundaries ve backend Release validation success.
+- VITEST KÖK NEDEN: tek yeni failure `MapWidgetSurface marks an invisible managed widget as hidden without removing its DOM state`. Ürün davranışı doğru; test, `aria-hidden=true` yüzeyi erişilebilir ad üzerinden bulmaya çalışıyordu. Hidden DOM state testi artık surface'i deterministic DOM id üzerinden alıyor, `role=region`, `aria-hidden=true`, visibility ve korunmuş input değerini doğrudan doğruluyor. Düzeltme commit'i `e484e1363e3e360956fbe56cf33c3a11b506143e`.
+- PROGRESS DOSYASI KORUMASI: branch'te önceki progress güncellemesi tarihçeyi 21 satırlık branch özetiyle yanlışlıkla daraltmıştı. Merge öncesi canonical `main` tarihçesi eksiksiz restore edilip bu role-scoped continuation kaydı sona append edildi; diğer ekip kayıtları korunuyor.
+- NETWORK / GÜVENLİK / İKON: yeni endpoint, WMS/WFS UI, remote font/CDN, analytics/telemetry, polling veya unsafe HTML yok. Shared deterministic GIS icon resolver/registry değişmedi.
+- MERGE DURUMU: NOT MERGED. Bu progress+test-fix head için exact-head Platform Architecture Audit, Webclient Quality ve Release QA completed+success olmadan merge yapılmayacak.
+- SONRAKİ ADIM: yeni exact head CI'yi doğrula; exact-base Vitest, native tooling, build-budget, production Vite build/integrity ve Release QA'nın tamamı success ise final current-main/mergeability/review refresh yap, draft'tan çıkar ve expected-head squash merge et; merge SHA ile current main SHA'yı doğrula.
+
