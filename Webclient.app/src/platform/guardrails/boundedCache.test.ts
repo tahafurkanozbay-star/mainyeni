@@ -65,6 +65,20 @@ describe('boundedCache', () => {
     expect(cache.snapshot()).toMatchObject({ size: 1, estimatedWeight: 3 });
   });
 
+  it('preserves the replaced key while evicting other entries for weight', () => {
+    const cache = createBoundedCache<string, number>({
+      capacity: 3,
+      maxEstimatedWeight: 10,
+      maxEntryWeight: 10,
+    });
+    cache.set('primary', 1, { estimatedWeight: 6 }, 0);
+    cache.set('secondary', 2, { estimatedWeight: 4 }, 1);
+    expect(cache.set('primary', 3, { estimatedWeight: 7 }, 2)).toBe(true);
+    expect(cache.peek('primary', 3)).toBe(3);
+    expect(cache.peek('secondary', 3)).toBeUndefined();
+    expect(cache.snapshot()).toMatchObject({ size: 1, estimatedWeight: 7 });
+  });
+
   it('tracks hits across replacements', () => {
     const cache = createBoundedCache<string, number>();
     cache.set('a', 1, {}, 0);
