@@ -54,7 +54,7 @@ export const createPerformanceRuntime = (
   return Object.freeze({
     recordVital,
     capture,
-    setBaseline(nextBaseline) {
+    setBaseline(nextBaseline: PerformanceBaseline | null) {
       baseline = nextBaseline;
     },
     getBaseline: () => baseline,
