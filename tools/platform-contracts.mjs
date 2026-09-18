@@ -10,6 +10,10 @@ const REQUIRED_WEB_SCRIPTS = Object.freeze([
   'dev',
   'build',
   'build:verify',
+  'quality:module-graph',
+  'quality:language-ratchet',
+  'quality:platform-boundaries',
+  'quality:browser-runtime',
   'lint',
   'lint:strict',
   'test:ci',
@@ -231,6 +235,31 @@ const validateTypeScriptProjects = async (root, webRoot, packageJson, report) =>
     }
   }
 
+  const platformConfigPath = path.join(webRoot, 'tsconfig.platform.json');
+  if (await exists(platformConfigPath)) {
+    try {
+      const platformConfig = await resolveTsconfig(platformConfigPath);
+      if (platformConfig.compilerOptions?.allowJs !== false) {
+        addFinding(
+          report,
+          'error',
+          'tsconfig-platform-allow-js',
+          'Platform TypeScript boundary must explicitly disable allowJs after the typed runtime cutover.',
+          relative(root, platformConfigPath),
+        );
+      }
+    } catch (error) {
+      addFinding(
+        report,
+        'error',
+        'tsconfig-platform-invalid',
+        'Platform TypeScript configuration cannot be resolved.',
+        relative(root, platformConfigPath),
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
   const rootConfigPath = path.join(webRoot, 'tsconfig.json');
   if (await exists(rootConfigPath)) {
     try {
@@ -304,7 +333,7 @@ const validateWebclient = async (root, report) => {
   const scripts = packageJson.scripts || {};
   for (const script of REQUIRED_WEB_SCRIPTS) {
     if (!scripts[script]) {
-      addFinding(report, 'error', 'webclient-script-missing', `Required webclient script is missing: ${script}.`, relative(root, packageFile));
+      addFinding(report, 'error', 'webclient-script-missing', `Required webclient script is missing: ${script}.`, relative(root, packageFile), { script });
     }
   }
 

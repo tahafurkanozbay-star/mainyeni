@@ -242,3 +242,13 @@
 - PERFORMANS ETKİSİ: bounded pagination/admission, memo-compatible dedupe, immutable revisioned snapshots and shared 2B/3B query fingerprints reduce duplicate service work, uncontrolled allocations and inconsistent view queries.
 - MERGE DURUMU: DRAFT / NOT MERGED. >=4,000 additions gate is met, but merge requires final exact-head CI completed+success, mergeable=true/conflict-free, behind=0, final main refresh and security/performance/data-integrity/regression review.
 - SONRAKİ GÖREV: inspect final-head CI, fix real strict TS/lint/Vitest/build failures without weakening gates, run second verification, review snapshot atomicity/query cancellation/cache invalidation, then mark ready and squash-merge only if every gate remains green.
+
+## 2026-09-18 — Deep Platform strict TypeScript cutover continuation on current main
+- TUR / GÖREV: Whole-code Platform modernization; strict TypeScript canonicalization, deterministic module graph, language ratchet, browser/runtime responsibility boundaries, resilience policy and CI/release enforcement.
+- BASE MAIN: `1f488b974edcb3e4fff49054338c7581e21b46c8`; fresh branch `agent/platform-ts-cutover-20260918-1f488b9-r3` created from exact current main after GIS spatial-query modernization advanced `main`.
+- LIFECYCLE: PR #151 became diverged (ahead=4 / behind=1 / mergeable=false) after `main` advanced, so no new work was stacked on it. Only its validated file-level Platform delta was reapplied; old commit ancestry was not transplanted.
+- CONCURRENCY: current-main delta since #151 base touched only GIS files plus this shared progress record; no Platform code overlap was found. Current GIS additions are preserved.
+- MODERNIZATION: removes 18 production JavaScript shadows for canonical typed Platform modules, enforces `allowJs=false` in strict Platform TS, adds module-graph/language-ratchet/responsibility/browser-runtime gates, bounded resilience policy coverage, narrow Node-24 tooling declarations, and release-audit false-positive hardening.
+- SAFETY: no WMS/WFS/WMTS integration, production secret, analytics/telemetry transport, remote executable asset, speculative endpoint, or polling loop added.
+- MERGE GATE: successor PR must retain >=4,000 meaningful additions, exact-current-main ancestry, mergeable=true and exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success before squash merge.
+
