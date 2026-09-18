@@ -558,7 +558,7 @@ export const runApplicationBootstrap = async (
       serviceCount: result.serviceCount,
       proxyRuleCount: result.proxyRuleCount,
     });
-    emit(diagnostics, 'bootstrap.completed', result);
+    emit(diagnostics, 'bootstrap.completed', { ...result });
     return result;
   } catch (error) {
     const normalized = wrapUnexpectedError(error, stage);
