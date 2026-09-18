@@ -8,12 +8,12 @@ import {
   CommonQueryWindowTools,
   type QueryWindowManagerLike,
 } from '../../Query/_Common/CommonQueryWindowTools';
-import './MapWidgetSurface.css';
+import type { ManagedWindowHandle } from '../../../experience/contracts';\nimport './MapWidgetSurface.css';
 
 export interface MapWidgetManagerLike extends QueryWindowManagerLike {
   readonly IsVisible: (id: string) => boolean;
   readonly ShowWindow: (id: string, query?: unknown) => void;
-  readonly RegisterWindow: (ref: Ref<unknown>) => void;
+  readonly RegisterWindow: (ref: RefObject<ManagedWindowHandle | null>) => void;\n  readonly UnregisterWindow?: (id: string, ref: RefObject<ManagedWindowHandle | null>) => void;
   readonly HideWindow: (id: string) => void;
 }
 
