@@ -329,12 +329,12 @@ const safeParse = (encoded: string): unknown => {
   let decoded: string;
   try {
     decoded = decodeURIComponent(encoded);
-  } catch (_error) {
+  } catch {
     throw new Error('Encoded GIS map state is not valid URI data.');
   }
   try {
     return JSON.parse(decoded);
-  } catch (_error) {
+  } catch {
     throw new Error('Encoded GIS map state is not valid JSON.');
   }
 };
