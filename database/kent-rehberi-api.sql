@@ -45,7 +45,9 @@ LIMIT 20;
 --     ux_kent_rehberi_tumu_objectid
 -- ON kent_rehberi.kent_rehberi_tumu_pggeom (objectid);
 --
--- Only after the duplicate preflight is clean should deployment set:
+-- Cursor safety requires a persistent uniqueness guarantee, not only a one-time
+-- clean preflight. Prefer creating the unique index above (after repairing any
+-- duplicates). Only while that guarantee remains in place should deployment set:
 -- KentRehberiData__ObjectIdCursorEnabled=true
 -- The API intentionally rejects afterObjectId while that flag is false.
 
