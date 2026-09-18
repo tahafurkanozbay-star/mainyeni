@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "description": "Production JavaScript ceilings captured before the Platform strict-TypeScript cutover. Counts may only decrease.",
   "domains": {
-    "web-root": 2,
+    "web-root": 0,
     "business": 59,
     "components": 97,
     "core": 0,
