@@ -209,6 +209,24 @@
 - MERGE: PR #131 expected-head SHA korumasıyla squash merge edildi; GitHub `merged=true`; merge SHA `a885f5b8ae077485873404c8dd78a16cef7179c3` ve commit current `main` üzerinde doğrulandı.
 - SONRAKİ GÖREV: merged #131 branch yeniden kullanılmamalı. Yeni Platform turu o andaki current `main`den fresh role-scoped branch ile başlamalı; Experience/GIS/Data-Search alanlarını gereksiz yere ezmeden strict TS/TSX migration ve runtime wiring boşlukları önceliklendirilmeli.
 
+## Deep Data / PostGIS GeoJSON frontend integration — 2026-09-18
+- TUR / GÖREV: Secure PostGIS Kent Rehberi JSON/GeoJSON API + frontend ArcGIS GeoJSONLayer wiring.
+- BASE MAIN: `50459b5b8335c2fb253fb433f8b7a3435c6e1523`; branch exact merge-base matches current main at this checkpoint.
+- BRANCH / PR: `agent/data-api-frontend-20260918-1608-50459b5` / PR #148 `feat(data): wire PostGIS GeoJSON API into frontend map layer`.
+- CODE HEAD before this progress commit: `746242d8915fad23d6fad59436cc96fb9efe3a72`; compare ahead=1 / behind=0 / mergeable=true.
+- BACKEND: added `/kent-rehberi`, `/{objectId}`, `/nearby`, `/capabilities`; parameterized Npgsql/PostGIS queries, bbox + geography nearby filtering, bounded limits/timeouts, readiness probe and safe 503 behavior.
+- DATABASE: readonly runtime role name is `kent_rehberi_select`; tracked source contains no password/internal host. `gdb_geomattr_data` is not selected or granted. DBA runbook adds least-privilege column grants and recommended objectid/GiST indexes.
+- FRONTEND: `kentRehberiGeoJsonLayer.ts` calls same-origin `/api/kent-rehberi?limit=500`, validates FeatureCollection/features/objectid, enforces max 2,000 features + default 8 MiB payload budget, timeout/AbortSignal and safe HTTP error handling.
+- ARCGIS: validated GeoJSON is loaded through `GeoJSONLayer` using a temporary Blob URL; explicit field schema avoids null/first-feature inference; Blob URL is revoked after load; component teardown aborts request and removes/destroys layer.
+- MAP WIRING: `MapComponent.tsx` attaches the Kent Rehberi layer non-blockingly. Datasource failure does not block the base map shell.
+- LOCAL DEMO: Vite development middleware serves three clearly named `Yerel Demo` Ankara points on the same `/api/kent-rehberi` path with `x-kent-rehberi-demo: vite-local-only`; production build still uses the real User API.
+- SECURITY: API base must remain canonical same-origin; browser never receives DB credentials; HTTP error bodies are not reflected; no WMS/WFS or new third-party transport was introduced.
+- REGRESSION FIXES: release audit lossy identity finding was fixed by rejecting non-number objectid values without coercion; changed-source lint fixture warning and Vite request-method TypeScript regression were fixed.
+- TEST / BUILD: exact code head `746242d8...` completed Platform Architecture Audit #878, Webclient Quality #2458, Release QA #915 and Platform Backend Validation #288 successfully, including TypeScript exact-base regression, Vitest, production Vite build/integrity/budgets, .NET Release build, xUnit and API publish.
+- LIVE DB LIMITATION: private PostgreSQL is not reachable from this execution environment; no claim is made for live row retrieval, production GeoJSON sample or EXPLAIN/index-plan verification. Those remain deployment smoke steps.
+- MERGE DURUMU: DRAFT / NOT MERGED. PR is ~3k additions and remains below the repository's ~4k meaningful-additions target/gate; no filler is added merely to satisfy line count.
+- SONRAKİ GÖREV: after this progress append, require fresh exact-head CI again; then re-check current main/behind=0/mergeable. For live rollout, set only server-side `ConnectionStrings__KentRehberi`, apply DBA runbook, verify `/health/ready`, GeoJSON, bbox, nearby and production EXPLAIN plans.
+
 ## 2026-09-18 — Platform/Architecture strict TypeScript cutover continuation (PR #147)
 
 - Canonical PR: #147 `agent/platform-ts-cutover-20260918-1630-50459b5`, exact current-main base `50459b5b8335c2fb253fb433f8b7a3435c6e1523`; pre-fix head `f8947009a85fcb76f724ea9c14bb5fa3f1a535b1` was 13 commits ahead / 0 behind, mergeable, and 4,160 additions / 513 deletions.
@@ -217,3 +235,8 @@
 - Release source-audit fix excludes conventional `*.test.*` / `*.spec.*` / test-fixture paths only from the `dynamic-eval` rule; production dynamic execution remains CRITICAL and explicitly blocking. Added a Node test proving both sides of that boundary.
 - No WMS/WFS/WMTS integration, endpoint, secret, remote executable asset, analytics transport, dependency, or polling loop was added.
 - Merge remains forbidden until the new exact head completes Webclient Quality + Release QA + Platform Architecture Audit successfully, downstream build/integrity budgets execute, PR remains current-main based and mergeable, and final security/performance/regression review is clean.
+
+## 2026-09-18 — Platform PR #147 current-main refresh
+- Current `main` advanced to `5800c210a0cd869583450224c5331dcf2888b3ac` via the Data/PostGIS GeoJSON merge while Platform validation was in progress.
+- The Platform branch was refreshed with a non-force two-parent merge after explicit overlap review. The main-side Kent Rehberi Vite local demo/proxy and the Platform-side module-resolution guard are both preserved; append-only progress entries from both roles are retained.
+- Merge remains gated on exact-head CI, current-main ancestry, mergeability, and final regression/security/performance review.
