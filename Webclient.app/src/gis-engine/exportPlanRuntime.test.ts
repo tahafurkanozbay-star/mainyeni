@@ -133,7 +133,6 @@ describe('createGisExportRuntime', () => {
       mode: '2d',
       format: 'png',
       pageSize: 'custom',
-      widthPx: undefined,
       heightPx: 100,
     })).toThrow(/width must be finite/i);
   });
