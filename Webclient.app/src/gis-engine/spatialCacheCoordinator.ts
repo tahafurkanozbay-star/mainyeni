@@ -528,14 +528,14 @@ export const createSpatialCacheCoordinator = (options: SpatialCacheOptions = {})
       return Promise.reject(new SpatialCacheCapacityError('Spatial cache in-flight request budget exceeded'));
     }
 
+    const normalizedRequestOptions: SpatialRequestOptions = requestOptions.tags === undefined
+      ? Object.freeze({ ...requestOptions })
+      : Object.freeze({ ...requestOptions, tags: normalizeTags(requestOptions.tags) });
     const record: InFlightRequest<TValue> = {
       key: normalized,
       controller: new AbortController(),
       loader,
-      options: Object.freeze({
-        ...requestOptions,
-        tags: requestOptions.tags === undefined ? undefined : normalizeTags(requestOptions.tags),
-      }),
+      options: normalizedRequestOptions,
       subscribers: new Map(),
       settled: false,
     };
