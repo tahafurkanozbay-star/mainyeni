@@ -6,6 +6,15 @@ import {
     resolveRecordIcon,
     resolveRecordIconUrl
 } from "../gis-engine/iconPresentation";
+import type {
+    Graphic3DModel,
+    IconRecord,
+    IconResolveOptions,
+    ListIconModel,
+    PictureMarkerOptions,
+    PictureMarkerSymbolModel,
+    ResolvedIconEntry
+} from "../gis-engine/contracts";
 import {
     normalizeCategoryKey,
     normalizeSearchText,
@@ -16,19 +25,179 @@ import {
     createSearchDocumentFromSchema
 } from "./RecordSchemaRuntime";
 
-const readNestedCandidate = (record, keys) => {
-    const sources = [record, record?.attr, record?.attributes, record?.properties].filter(Boolean);
+type UnknownRecord = Record<string, unknown>;
+
+interface SearchDocumentLike {
+    key: string;
+    id: string | null;
+    title: string;
+    address: string;
+    district: string;
+    neighborhood: string;
+    street: string;
+    category: string;
+    type: string;
+    coordinates: unknown;
+    fields: unknown;
+    validation: unknown;
+}
+
+export interface SharedIconCandidate extends IconRecord {
+    type: string;
+    category: string;
+    kind: string;
+    className: string;
+    iconKey: string;
+    id: string;
+}
+
+export type RecordPresentationOptions = IconResolveOptions & PictureMarkerOptions & {
+    document?: SearchDocumentLike | null;
+    schema?: unknown;
+    sourceIndex?: number;
+    untitledLabel?: unknown;
+    otherCategoryLabel?: unknown;
+    zoom?: number;
+};
+
+export interface SharedResolvedRecordIcon extends ResolvedIconEntry {
+    candidate: SharedIconCandidate;
+    url: string;
+}
+
+export interface RecordPresentationIcon {
+    key: string;
+    src: string;
+    alt: string;
+    matchedBy: ResolvedIconEntry["matchedBy"] | null;
+    isFallback: boolean;
+}
+
+export interface RecordPresentation {
+    key: string;
+    id: string | null;
+    title: string;
+    subtitle: string;
+    address: string;
+    category: string;
+    categoryKey: string;
+    type: string;
+    searchText: string;
+    icon: RecordPresentationIcon;
+    iconCandidate: SharedIconCandidate;
+    coordinates: unknown;
+    fields: unknown;
+    validation: unknown;
+    source: unknown;
+    sourceIndex: number;
+}
+
+export interface PresentationCategoryFacet {
+    key: string;
+    label: string;
+    count: number;
+}
+
+export interface PresentationIconFacet {
+    key: string;
+    src: string;
+    count: number;
+    fallbackCount: number;
+}
+
+export interface PresentationFacets {
+    categories: PresentationCategoryFacet[];
+    icons: PresentationIconFacet[];
+    fallbackIconCount: number;
+}
+
+export interface PresentationFilterOptions {
+    query?: unknown;
+    category?: unknown;
+    iconKey?: unknown;
+    fallbackOnly?: boolean;
+}
+
+export interface PresentationPageOptions extends PresentationFilterOptions {
+    offset?: unknown;
+    limit?: unknown;
+}
+
+export interface PresentationPage {
+    items: RecordPresentation[];
+    facets: PresentationFacets;
+    page: {
+        offset: number;
+        limit: number;
+        count: number;
+        total: number;
+        hasMore: boolean;
+        nextOffset: number | null;
+    };
+}
+
+export interface IconCoverageFallbackRecord {
+    key: string;
+    id: string | null;
+    title: string;
+    category: string;
+    type: string;
+    candidate: SharedIconCandidate;
+}
+
+export interface IconCoverageReport {
+    total: number;
+    matched: number;
+    fallback: number;
+    coverageRatio: number;
+    fallbackRecords: IconCoverageFallbackRecord[];
+    facets: PresentationFacets;
+}
+
+export interface SharedMapModels {
+    presentation: RecordPresentation;
+    iconKey: string;
+    list: ListIconModel;
+    marker2D: PictureMarkerSymbolModel;
+    graphic3D: Graphic3DModel;
+}
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+
+const toSearchDocument = (
+    record: unknown,
+    schema: unknown,
+    sourceIndex: number
+): SearchDocumentLike => createSearchDocumentFromSchema(
+    record,
+    schema,
+    sourceIndex
+) as SearchDocumentLike;
+
+const readNestedCandidate = (record: unknown, keys: readonly string[]): unknown => {
+    const root = isRecord(record) ? record : null;
+    const sources: UnknownRecord[] = [
+        root,
+        root && isRecord(root.attr) ? root.attr : null,
+        root && isRecord(root.attributes) ? root.attributes : null,
+        root && isRecord(root.properties) ? root.properties : null
+    ].filter((source): source is UnknownRecord => Boolean(source));
+
     for (const source of sources) {
         for (const key of keys) {
-            const value = source?.[key];
+            const value = source[key];
             if (value !== null && value !== undefined && normalizeText(value) !== "") return value;
         }
     }
     return null;
 };
 
-export const createSharedIconCandidate = (record, normalizedDocument = null) => {
-    const document = normalizedDocument || createSearchDocumentFromSchema(record, GENERIC_RECORD_SCHEMA, 0);
+export const createSharedIconCandidate = (
+    record: unknown,
+    normalizedDocument: SearchDocumentLike | null = null
+): SharedIconCandidate => {
+    const document = normalizedDocument || toSearchDocument(record, GENERIC_RECORD_SCHEMA, 0);
     const type = normalizeText(
         document.type
         || readNestedCandidate(record, ["type", "Type", "TYPE", "tur", "TUR", "tip", "TIP"])
@@ -51,26 +220,34 @@ export const createSharedIconCandidate = (record, normalizedDocument = null) => 
     };
 };
 
-export const resolveSharedRecordIcon = (record, options = {}) => {
-    const document = options.document || createSearchDocumentFromSchema(
+export const resolveSharedRecordIcon = (
+    record: unknown,
+    options: RecordPresentationOptions = {}
+): SharedResolvedRecordIcon => {
+    const document = options.document || toSearchDocument(
         record,
         options.schema || GENERIC_RECORD_SCHEMA,
         options.sourceIndex || 0
     );
     const candidate = createSharedIconCandidate(record, document);
-    const resolved = resolveRecordIcon(candidate, {
-        fallback: options.fallback || "default",
-        onFallback: options.onFallback
-    });
+    const iconOptions = {
+        ...options,
+        fallback: options.fallback || "default"
+    } as IconResolveOptions;
+    const resolved = resolveRecordIcon(candidate, iconOptions);
     return {
         ...resolved,
         candidate,
-        url: resolved.url || resolved.src || resolved.icon || resolveRecordIconUrl(candidate, options)
+        url: resolved.url || resolved.src || resolved.icon || resolveRecordIconUrl(candidate, iconOptions)
     };
 };
 
-export const createRecordPresentation = (record, sourceIndex = 0, options = {}) => {
-    const document = createSearchDocumentFromSchema(
+export const createRecordPresentation = (
+    record: unknown,
+    sourceIndex = 0,
+    options: RecordPresentationOptions = {}
+): RecordPresentation => {
+    const document = toSearchDocument(
         record,
         options.schema || GENERIC_RECORD_SCHEMA,
         sourceIndex
@@ -117,17 +294,22 @@ export const createRecordPresentation = (record, sourceIndex = 0, options = {}) 
     };
 };
 
-export const createRecordPresentations = (records, options = {}) => (
+export const createRecordPresentations = (
+    records: unknown,
+    options: RecordPresentationOptions = {}
+): RecordPresentation[] => (
     Array.isArray(records)
         ? records.map((record, index) => createRecordPresentation(record, index, options))
         : []
 );
 
-export const createPresentationFacets = presentations => {
-    const categoryCounts = new Map();
-    const iconCounts = new Map();
+export const createPresentationFacets = (presentations: unknown): PresentationFacets => {
+    const categoryCounts = new Map<string, PresentationCategoryFacet>();
+    const iconCounts = new Map<string, PresentationIconFacet>();
     let fallbackIconCount = 0;
-    (Array.isArray(presentations) ? presentations : []).forEach(presentation => {
+    const input = (Array.isArray(presentations) ? presentations : []) as RecordPresentation[];
+
+    input.forEach(presentation => {
         const categoryKey = presentation.categoryKey || "diger";
         const category = presentation.category || "Diğer";
         const categoryEntry = categoryCounts.get(categoryKey) || {
@@ -152,6 +334,7 @@ export const createPresentationFacets = presentations => {
         }
         iconCounts.set(iconKey, iconEntry);
     });
+
     return {
         categories: Array.from(categoryCounts.values())
             .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "tr-TR")),
@@ -161,12 +344,17 @@ export const createPresentationFacets = presentations => {
     };
 };
 
-export const filterPresentations = (presentations, options = {}) => {
+export const filterPresentations = (
+    presentations: unknown,
+    options: PresentationFilterOptions = {}
+): RecordPresentation[] => {
     const query = normalizeSearchText(options.query);
     const categoryKey = normalizeCategoryKey(options.category);
     const iconKey = normalizeText(options.iconKey);
     const fallbackOnly = options.fallbackOnly === true;
-    return (Array.isArray(presentations) ? presentations : []).filter(presentation => {
+    const input = (Array.isArray(presentations) ? presentations : []) as RecordPresentation[];
+
+    return input.filter(presentation => {
         if (query && !presentation.searchText.includes(query)) return false;
         if (categoryKey && presentation.categoryKey !== categoryKey) return false;
         if (iconKey && presentation.icon?.key !== iconKey) return false;
@@ -175,10 +363,18 @@ export const filterPresentations = (presentations, options = {}) => {
     });
 };
 
-export const createPresentationPage = (presentations, options = {}) => {
+export const createPresentationPage = (
+    presentations: unknown,
+    options: PresentationPageOptions = {}
+): PresentationPage => {
     const filtered = filterPresentations(presentations, options);
-    const offset = Math.max(0, Number.isFinite(Number(options.offset)) ? Math.trunc(Number(options.offset)) : 0);
-    const limitCandidate = Number.isFinite(Number(options.limit)) ? Math.trunc(Number(options.limit)) : 50;
+    const offset = Math.max(
+        0,
+        Number.isFinite(Number(options.offset)) ? Math.trunc(Number(options.offset)) : 0
+    );
+    const limitCandidate = Number.isFinite(Number(options.limit))
+        ? Math.trunc(Number(options.limit))
+        : 50;
     const limit = Math.min(500, Math.max(1, limitCandidate));
     const items = filtered.slice(offset, offset + limit);
     const nextOffset = offset + items.length;
@@ -196,8 +392,8 @@ export const createPresentationPage = (presentations, options = {}) => {
     };
 };
 
-export const createIconCoverageReport = presentations => {
-    const input = Array.isArray(presentations) ? presentations : [];
+export const createIconCoverageReport = (presentations: unknown): IconCoverageReport => {
+    const input = (Array.isArray(presentations) ? presentations : []) as RecordPresentation[];
     const fallbackRecords = input
         .filter(presentation => presentation.icon?.isFallback)
         .map(presentation => ({
@@ -219,26 +415,33 @@ export const createIconCoverageReport = presentations => {
     };
 };
 
-export const createSharedMapModels = (record, options = {}) => {
+export const createSharedMapModels = (
+    record: unknown,
+    options: RecordPresentationOptions = {}
+): SharedMapModels => {
     const presentation = createRecordPresentation(record, options.sourceIndex || 0, options);
     const candidate = presentation.iconCandidate;
+    const iconOptions = {
+        ...options,
+        fallback: options.fallback || "default"
+    } as IconResolveOptions;
+    const markerOptions = {
+        ...options,
+        fallback: options.fallback || "default"
+    } as PictureMarkerOptions;
+
     return {
         presentation,
-        iconKey: getIconKey(candidate, { fallback: options.fallback || "default" }),
+        iconKey: getIconKey(candidate, iconOptions),
         list: createListIconModel({
             ...candidate,
             title: presentation.title
-        }, { fallback: options.fallback || "default" }),
-        marker2D: createPictureMarkerSymbol(candidate, options.zoom ?? 12, {
-            fallback: options.fallback || "default",
-            minSize: options.minSize,
-            maxSize: options.maxSize,
-            zoomThreshold: options.zoomThreshold
-        }),
+        }, iconOptions),
+        marker2D: createPictureMarkerSymbol(candidate, options.zoom ?? 12, markerOptions),
         graphic3D: create3DGraphicModel({
             ...candidate,
             title: presentation.title
-        }, { fallback: options.fallback || "default" })
+        }, iconOptions)
     };
 };
 
