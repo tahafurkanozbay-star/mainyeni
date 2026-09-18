@@ -83,7 +83,7 @@ export function ExperiencePagination({
           const previous = pages[index - 1];
           const hasGap = previous !== undefined && value - previous > 1;
           return (
-            <span key={value} style={{ display: 'contents' }}>
+            <span key={value} className="experience-pagination__page">
               {hasGap ? <span aria-hidden="true">…</span> : null}
               <button
                 type="button"
