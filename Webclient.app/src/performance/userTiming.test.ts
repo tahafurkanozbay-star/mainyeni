@@ -52,6 +52,7 @@ describe('native user timing profiler', () => {
     now = 175;
     expect(profiler.end('fallback')).toBe(75);
     expect(profiler.snapshot()[0]?.duration.maximum).toBe(75);
+    expect(profiler.nativeFailureCount()).toBe(2);
   });
 
   it('rejects duplicate active marks and invalid direct samples', () => {
@@ -82,6 +83,7 @@ describe('native user timing profiler', () => {
     expect(profiler.activeMarks()).toBe(0);
     expect(profiler.snapshot()).toEqual([]);
     expect(profiler.record('after-dispose', 1)).toBe(false);
+    expect(profiler.nativeFailureCount()).toBe(0);
     expect(clearMarks).toHaveBeenCalled();
     expect(clearMeasures).toHaveBeenCalled();
   });
