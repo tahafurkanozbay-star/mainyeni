@@ -254,8 +254,8 @@ export const MeasurementWidget = forwardRef<
         <CommonQueryWindowTools windowManager={windowManager} windowId={id} showNearbySearch={false} showMapSelect={false} setQueryField={() => undefined} />
       </div>
       <div className="measurement-widget__body">
-        <ExperienceToolbar ariaLabel="Ölçüm araçları" items={toolbarItems} orientation="horizontal" />
-        <ExperienceStatus tone={tone} role={actionError || state.error ? 'alert' : 'status'}>{message}</ExperienceStatus>
+        <ExperienceToolbar label="Ölçüm araçları" items={toolbarItems} orientation="horizontal" />
+        <ExperienceStatus tone={tone} live={actionError || state.error ? 'assertive' : 'polite'}>{message}</ExperienceStatus>
         <div id="measurementDiv" className="measurement-widget__canvas" aria-label="ArcGIS ölçüm denetimi" />
       </div>
     </section>
