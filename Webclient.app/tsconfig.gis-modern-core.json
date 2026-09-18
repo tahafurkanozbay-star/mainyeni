@@ -34,7 +34,8 @@
     "src/gis-engine/spatialAnalysisJobRuntime.ts",
     "src/gis-engine/modernSpatialAnalysisKernel.ts",
     "src/gis-engine/spatialReferenceRuntime.ts",
-    "src/gis-engine/spatialReferenceGeometryRuntime.ts"
+    "src/gis-engine/spatialReferenceGeometryRuntime.ts",
+    "src/gis-engine/spatialReferenceFeatureRuntime.ts"
   ],
   "include": [],
   "exclude": [
