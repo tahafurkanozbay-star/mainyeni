@@ -244,6 +244,7 @@ describe('runtimeWorkloadGovernor', () => {
 
     expect(lease.released).toBe(true);
     expect(lease.signal.aborted).toBe(false);
+    expect(harness.governor.snapshot().active).toBe(0);
     expect(harness.governor.snapshot().counters).toMatchObject({
       completed: 1,
       cancelled: 0,
