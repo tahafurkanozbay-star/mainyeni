@@ -12,3 +12,5 @@ export * from './operationProfiler';
 export * from './adaptivePolicy';
 export * from './history';
 export * from './startupProfiler';
+export * from './diagnostics';
+export * from './userTiming';
