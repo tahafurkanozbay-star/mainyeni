@@ -26,6 +26,7 @@ export interface UserTimingProfiler {
   readonly snapshot: () => readonly UserTimingMeasurement[];
   readonly dispose: () => void;
   readonly activeMarks: () => number;
+  readonly nativeFailureCount: () => number;
 }
 
 interface ActiveMark {
@@ -50,6 +51,11 @@ export const createUserTimingProfiler = (
   const active = new Map<string, ActiveMark>();
   const states = new Map<string, TimingState>();
   let disposed = false;
+  let nativeFailures = 0;
+
+  const recordNativeFailure = (): void => {
+    nativeFailures = Math.min(Number.MAX_SAFE_INTEGER, nativeFailures + 1);
+  };
 
   const now = (): number => {
     const value = performanceRef?.now?.();
@@ -77,7 +83,7 @@ export const createUserTimingProfiler = (
       performanceRef?.clearMarks?.(markName(logicalName));
       performanceRef?.clearMeasures?.(measureName(logicalName));
     } catch {
-      // User Timing support varies by browser and test environment.
+      recordNativeFailure();
     }
   };
 
@@ -91,7 +97,7 @@ export const createUserTimingProfiler = (
       try {
         performanceRef?.mark?.(nativeMark);
       } catch {
-        // In-memory timing still provides a deterministic fallback.
+        recordNativeFailure();
       }
       active.set(logicalName, {
         logicalName,
@@ -117,7 +123,7 @@ export const createUserTimingProfiler = (
         const nativeDuration = finiteNumber(measured?.duration, null);
         if (nativeDuration !== null && nativeDuration >= 0) duration = nativeDuration;
       } catch {
-        // Fallback duration remains authoritative when measure() is unsupported.
+        recordNativeFailure();
       }
 
       record(logicalName, duration);
@@ -149,6 +155,7 @@ export const createUserTimingProfiler = (
     },
 
     activeMarks: () => active.size,
+    nativeFailureCount: () => nativeFailures,
   });
 };
 
