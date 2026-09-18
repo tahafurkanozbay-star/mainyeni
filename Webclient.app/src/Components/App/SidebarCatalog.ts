@@ -1,3 +1,4 @@
+import { createSidebarCatalogRuntime } from '../../shell/sidebarCatalogRuntime';
 export type SidebarGroupId = 'ABB' | 'EGO' | 'ASKI' | 'ISTIRAK';
 
 export interface SidebarGroup {
@@ -86,4 +87,10 @@ export const INITIAL_CITY_LAYER_SERVICE_KEYS: readonly string[] = Object.freeze(
   'YeniWifiNoktalariQeryUrl'
 ]);
 
-export const getSidebarItemsForGroup = (groupId: SidebarGroupId): readonly SidebarItem[] => SIDEBAR_ITEMS.filter((item) => item.group === groupId);
+export const SIDEBAR_CATALOG_RUNTIME = createSidebarCatalogRuntime({
+  groups: SIDEBAR_GROUPS,
+  items: SIDEBAR_ITEMS,
+});
+
+export const getSidebarItemsForGroup = (groupId: SidebarGroupId): readonly SidebarItem[] =>
+  SIDEBAR_CATALOG_RUNTIME.itemsForGroup(groupId) as readonly SidebarItem[];
