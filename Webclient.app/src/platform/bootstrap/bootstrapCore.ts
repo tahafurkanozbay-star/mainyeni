@@ -191,7 +191,7 @@ export const parseMapConfiguration = (result: unknown): MapConfiguration => {
       retryable: true,
     });
   }
-  if (isPlainObject(normalized)) return Object.freeze({ ...normalized });
+  if (isPlainObject(normalized)) return normalized;
   if (typeof normalized !== 'string') {
     throw new AppError('Harita yapılandırması desteklenmeyen biçimde döndü.', {
       code: BootstrapErrorCode.MAP_PAYLOAD_INVALID,

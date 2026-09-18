@@ -264,3 +264,11 @@
 - Fixed by constructing loader options as `{}` when no signal exists and `{ signal }` only when present; no compiler flag, cast escape, API widening or runtime fallback was introduced.
 - Previous head is not considered green; fresh exact-head CI is required.
 
+## 2026-09-18 — PR #155 bootstrap identity + deterministic typed module resolution
+- Concurrent Platform sequence completed strict-TypeScript migration of `bootstrapApplication` and its test, removed the legacy JS adapter/test, and ratcheted Platform production JavaScript budget to zero.
+- Preserved that work and fixed the remaining bootstrap contract mismatch: already-materialized map configuration objects now retain identity instead of being cloned/frozen during parsing.
+- Branch-wide source inventory found exactly five remaining JavaScript/TypeScript same-stem shadow pairs, all obsolete CRA-era pure re-export compatibility shims outside the active Experience #153 file set.
+- Removed `ExperienceDesignSystem.js`, `ExperienceDialog.js`, `ExperienceWorkspace.js`, `experience/accessibilityRuntime.js`, and `experience/experienceRuntime.js`; canonical TS/TSX modules remain unchanged.
+- This resolves the production Vite/Rolldown ambiguity detected by the new module-resolution guard without weakening the guard or introducing a resolution exception.
+- No dependency, endpoint, WMS/WFS/WMTS, secret, remote asset, analytics/telemetry or polling behavior was added. Fresh exact-head CI remains mandatory.
+
