@@ -14,7 +14,7 @@ describe('deadlineRegistry', () => {
   });
 
   it('reports remaining time and expiration', () => {
-    const registry = createDeadlineRegistry({ defaultTimeoutMs: 10 });
+    const registry = createDeadlineRegistry({ minimumTimeoutMs: 1, defaultTimeoutMs: 10 });
     const token = registry.begin('query', undefined, 0)!;
     expect(registry.remaining(token.id, 5)).toBe(5);
     expect(registry.expired(token.id, 9)).toBe(false);
@@ -52,7 +52,7 @@ describe('deadlineRegistry', () => {
   });
 
   it('sweeps expired deadlines exactly once', () => {
-    const registry = createDeadlineRegistry({ defaultTimeoutMs: 10 });
+    const registry = createDeadlineRegistry({ minimumTimeoutMs: 1, defaultTimeoutMs: 10 });
     registry.begin('a', undefined, 0);
     registry.begin('b', undefined, 5);
     expect(registry.sweep(11)).toHaveLength(1);
@@ -61,7 +61,7 @@ describe('deadlineRegistry', () => {
   });
 
   it('does not classify completed work as expired', () => {
-    const registry = createDeadlineRegistry({ defaultTimeoutMs: 10 });
+    const registry = createDeadlineRegistry({ minimumTimeoutMs: 1, defaultTimeoutMs: 10 });
     const token = registry.begin('a', undefined, 0)!;
     registry.complete(token.id, 5);
     expect(registry.expired(token.id, 20)).toBe(false);
