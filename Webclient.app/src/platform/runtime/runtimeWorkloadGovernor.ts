@@ -227,6 +227,7 @@ export const createRuntimeWorkloadGovernor = (
     lane: string,
     durationMs?: number,
   ): void => {
+    if (disposed) return;
     journal.record({
       at: now(),
       kind,
@@ -483,6 +484,7 @@ export const createRuntimeWorkloadGovernor = (
   };
 
   const snapshot = (): RuntimeWorkloadGovernorSnapshot => {
+    assertActive();
     const activeByLane: Record<string, number> = {};
     const activeResources = emptyResourceCounts();
     for (const internal of active.values()) {
