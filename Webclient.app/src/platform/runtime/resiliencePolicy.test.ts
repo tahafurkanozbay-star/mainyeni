@@ -76,4 +76,43 @@ describe('ResiliencePolicy', () => {
     policy.reset();
     expect(policy.snapshot()).toMatchObject({ state: 'closed', samples: 0, rejected: 0, openedAt: null });
   });
+
+  it('ignores a stale closed-state permit after another request trips the circuit', () => {
+    const policy = new ResiliencePolicy({ failureThreshold: 1, minimumSamples: 1 });
+    const slow = policy.acquire()!;
+    policy.acquire()!.complete('failure');
+    expect(policy.snapshot().state).toBe('open');
+
+    slow.complete('success');
+    expect(policy.snapshot()).toMatchObject({ state: 'open', samples: 1, successes: 0, failures: 1 });
+  });
+
+  it('ignores outstanding half-open probes after a sibling probe reopens the circuit', () => {
+    let now = 0;
+    const policy = new ResiliencePolicy({
+      failureThreshold: 1,
+      minimumSamples: 1,
+      openDurationMs: 10,
+      maxHalfOpenProbes: 2,
+      now: () => now,
+    });
+    policy.acquire()!.complete('failure');
+    now = 10;
+    const first = policy.acquire()!;
+    const second = policy.acquire()!;
+    expect(policy.snapshot().halfOpenInFlight).toBe(2);
+
+    first.complete('failure');
+    expect(policy.snapshot()).toMatchObject({ state: 'open', openedAt: 10, halfOpenInFlight: 0 });
+    second.complete('success');
+    expect(policy.snapshot()).toMatchObject({ state: 'open', openedAt: 10, halfOpenInFlight: 0 });
+  });
+
+  it('ignores permits issued before an explicit reset', () => {
+    const policy = new ResiliencePolicy({ failureThreshold: 1, minimumSamples: 1 });
+    const permit = policy.acquire()!;
+    policy.reset();
+    permit.complete('failure');
+    expect(policy.snapshot()).toMatchObject({ state: 'closed', samples: 0, failures: 0, rejected: 0 });
+  });
 });
