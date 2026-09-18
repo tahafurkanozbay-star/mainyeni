@@ -3,8 +3,8 @@ export type RovingFocusDirection = 'ltr' | 'rtl';
 
 export interface RovingFocusItem {
   readonly id: string;
-  readonly disabled?: boolean;
-  readonly hidden?: boolean;
+  readonly disabled?: boolean | undefined;
+  readonly hidden?: boolean | undefined;
 }
 
 export interface RovingFocusOptions {
