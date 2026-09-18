@@ -159,7 +159,7 @@ export class RequestScheduler {
     if (!this.onEvent) return;
     try {
       this.onEvent(eventName, metadata);
-    } catch (_error) {
+    } catch {
       // Local diagnostics are best-effort and must never block delivery.
     }
   }
