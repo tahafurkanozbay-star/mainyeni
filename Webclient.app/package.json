@@ -40,7 +40,7 @@
     "test:ci": "vitest run",
     "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:gis && npm run typecheck:gis-modern-core && npm run typecheck:experience && npm run typecheck:modern-shell && npm run typecheck:data-search",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:gis && npm run typecheck:gis-modern-core && npm run typecheck:experience && npm run typecheck:modern-shell && npm run typecheck:data-search && npm run typecheck:performance",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",
     "typecheck:gis": "tsc --noEmit -p tsconfig.gis.json",
     "typecheck:gis-modern-core": "tsc --noEmit -p tsconfig.gis-modern-core.json",
@@ -53,7 +53,8 @@
     "quality:module-graph": "node ../tools/platform-module-graph.mjs --strict",
     "quality:language-ratchet": "node ../tools/platform-language-ratchet.mjs --strict",
     "quality:platform-boundaries": "node ../tools/platform-boundary-audit.mjs --strict",
-    "quality:browser-runtime": "node ../tools/browser-runtime-boundary.mjs --strict"
+    "quality:browser-runtime": "node ../tools/browser-runtime-boundary.mjs --strict",
+    "typecheck:performance": "tsc --noEmit -p tsconfig.performance.json"
   },
   "engines": {
     "node": ">=24.0.0",
