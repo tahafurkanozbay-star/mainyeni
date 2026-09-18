@@ -149,7 +149,7 @@ export const openExternalSafely = (
 ): boolean => {
   if (!url || typeof opener !== 'function') return false;
 
-  const targetUrl = typeof url === 'string' ? url.trim() : url.href;
+  const targetUrl = url.trim();
   let parsed: URL;
   try {
     parsed = new URL(
