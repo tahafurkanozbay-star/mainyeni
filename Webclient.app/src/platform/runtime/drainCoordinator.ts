@@ -113,8 +113,8 @@ const DEFAULT_POLICY: DrainCoordinatorPolicy = Object.freeze({
 
 const DEFAULT_CLOCK: DrainCoordinatorClock = Object.freeze({
   now: () => Date.now(),
-  setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
-  clearTimeout: (handle) => globalThis.clearTimeout(handle),
+  setTimeout: (callback: () => void, delayMs: number) => globalThis.setTimeout(callback, delayMs),
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(handle),
 });
 
 const positiveInt = (
@@ -196,7 +196,7 @@ export const createDrainCoordinator = (
 
   const detachExternalSignal = (work: ActiveWork): void => {
     work.externalCleanup?.();
-    work.externalCleanup = undefined;
+    delete work.externalCleanup;
   };
 
   const settleWaiter = (
@@ -211,7 +211,7 @@ export const createDrainCoordinator = (
       waiter.timeout = null;
     }
     waiter.signalCleanup?.();
-    waiter.signalCleanup = undefined;
+    delete waiter.signalCleanup;
     waiters.delete(waiter);
     if (active.size === 0 && phase !== 'disposed') phase = 'drained';
     const endedAt = clock.now();
