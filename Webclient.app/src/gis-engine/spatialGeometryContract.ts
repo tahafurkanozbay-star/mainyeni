@@ -119,7 +119,8 @@ function normalizeVertex(
   const x = coordinates[0];
   const y = coordinates[1];
   if (x === undefined || y === undefined) throw new TypeError(`${name} requires at least x and y coordinates`);
-  return Object.freeze([x, y, ...coordinates.slice(2)]);
+  const normalized: [number, number, ...number[]] = [x, y, ...coordinates.slice(2)];
+  return Object.freeze(normalized);
 }
 
 function coordinateAt(vertex: NormalizedVertex, index: number, name: string): number {
