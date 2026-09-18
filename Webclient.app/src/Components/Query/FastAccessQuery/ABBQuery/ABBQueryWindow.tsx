@@ -43,7 +43,6 @@ export const ABBQueryWindow = React.forwardRef(function ABBQueryWindow(
           alt=""
           aria-hidden="true"
         />
-        <span className="experience-sr-only">Halk Ekmek noktaları</span>
       </button>
     </aside>
   );
