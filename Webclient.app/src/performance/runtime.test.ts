@@ -155,4 +155,50 @@ describe('performance lifecycle capture', () => {
     expect(documentListeners.size).toBe(0);
     expect(windowListeners.size).toBe(0);
   });
+  it('routes capture observer failures through the explicit lifecycle error boundary', () => {
+    const observerError = new Error('observer failed');
+    const onCaptureError = vi.fn();
+    const runtime = {
+      recordVital: vi.fn(),
+      capture: vi.fn(() => ({ report: {} as never, baseline: null, comparison: null })),
+      setBaseline: vi.fn(),
+      getBaseline: vi.fn(() => null),
+      getLastSnapshot: vi.fn(() => null),
+      reset: vi.fn(),
+    };
+
+    const handle = installPerformanceLifecycleCapture(runtime, {
+      documentRef: null,
+      windowRef: null,
+      onCapture() {
+        throw observerError;
+      },
+      onCaptureError,
+    });
+
+    expect(() => handle.capture()).not.toThrow();
+    expect(onCaptureError).toHaveBeenCalledWith(observerError);
+  });
+
+  it('rethrows capture observer failures when no error boundary is configured', () => {
+    const runtime = {
+      recordVital: vi.fn(),
+      capture: vi.fn(() => ({ report: {} as never, baseline: null, comparison: null })),
+      setBaseline: vi.fn(),
+      getBaseline: vi.fn(() => null),
+      getLastSnapshot: vi.fn(() => null),
+      reset: vi.fn(),
+    };
+
+    const handle = installPerformanceLifecycleCapture(runtime, {
+      documentRef: null,
+      windowRef: null,
+      onCapture() {
+        throw new Error('unhandled observer');
+      },
+    });
+
+    expect(() => handle.capture()).toThrow('unhandled observer');
+  });
+
 });
