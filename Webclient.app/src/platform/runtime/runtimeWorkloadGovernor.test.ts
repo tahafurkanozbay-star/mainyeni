@@ -516,15 +516,15 @@ describe('runtimeWorkloadGovernor', () => {
       key: 'abort-running',
       signal: controller.signal,
       resources: [{ kind: 'cpu', units: 1 }],
-    }, ({ signal }) => new Promise<string>((resolve, reject) => {
+    }, async ({ signal }) => {
       entered = true;
-      if (signal.aborted) {
-        reject(signal.reason);
-        return;
+      if (!signal.aborted) {
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
       }
-      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-      void resolve;
-    }));
+      throw signal.reason;
+    });
 
     await Promise.resolve();
     expect(entered).toBe(true);
