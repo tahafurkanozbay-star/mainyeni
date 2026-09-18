@@ -258,7 +258,7 @@ test('ts-nocheck outside the modern typed boundary is still visible without forc
   const finding = section.findings.find(item => item.id === 'language-ts-nocheck');
   assert.ok(finding);
   assert.equal(finding.severity, 'high');
-  assert.notEqual(finding.blocking, true);
+  assert.equal(finding.blocking, undefined);
 });
 
 test('detects duplicate legacy and typed modules under the same stem', () => {
@@ -306,7 +306,7 @@ test('strict=false in a non-primary tsconfig remains high severity without force
   const finding = section.findings.find(item => item.id === 'language-tsconfig-strict-disabled');
   assert.ok(finding);
   assert.equal(finding.severity, 'high');
-  assert.notEqual(finding.blocking, true);
+  assert.equal(finding.blocking, undefined);
 });
 
 test('primary compiler contract reports disabled noUncheckedIndexedAccess', () => {
