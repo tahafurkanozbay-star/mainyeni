@@ -18,7 +18,18 @@
     "src/Toolbox/GisCommonHelper.ts",
     "src/Toolbox/useDebounce.ts",
     "src/observability/webVitalsRuntime.ts",
-    "src/reportWebVitals.ts"
+    "src/reportWebVitals.ts",
+    "src/shell/notificationCenter.ts",
+    "src/shell/windowLifecycleRuntime.ts",
+    "src/shell/sidebarCatalogRuntime.ts",
+    "src/shell/performanceBudgetRuntime.ts",
+    "src/shell/lazyResourceRuntime.ts",
+    "src/shell/commandRegistryRuntime.ts",
+    "src/shell/shellKernel.ts"
   ],
-  "exclude": ["node_modules", "build", "dist"]
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist"
+  ]
 }
