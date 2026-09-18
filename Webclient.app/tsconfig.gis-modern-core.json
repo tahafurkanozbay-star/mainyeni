@@ -16,7 +16,17 @@
     "src/gis-engine/spatialIntegrityRuntime.ts",
     "src/gis-engine/renderParityRuntime.ts",
     "src/gis-engine/spatialWorkloadGovernor.ts",
-    "src/gis-engine/modernGisHardeningRuntime.ts"
+    "src/gis-engine/modernGisHardeningRuntime.ts",
+    "src/gis-engine/geometryAnalysisRuntime.ts",
+    "src/gis-engine/spatialAnalysisRuntime.ts",
+    "src/gis-engine/spatialSelectionRuntime.ts",
+    "src/gis-engine/spatialBufferRuntime.ts",
+    "src/gis-engine/spatialAggregationRuntime.ts",
+    "src/gis-engine/spatialJoinRuntime.ts",
+    "src/gis-engine/spatialTopologyRuntime.ts",
+    "src/gis-engine/spatialStatisticsRuntime.ts",
+    "src/gis-engine/spatialAnalysisJobRuntime.ts",
+    "src/gis-engine/modernSpatialAnalysisKernel.ts"
   ],
   "include": [],
   "exclude": [
