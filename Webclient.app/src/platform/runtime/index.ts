@@ -12,3 +12,7 @@ export * from './pressureController';
 export * from './adaptiveRuntimeControl';
 export * from './runtimeHealthJournal';
 export * from './runtimeWorkloadGovernor';
+export * from './adaptiveRuntimeModule';
+export * from './capacityEnvelope';
+export * from './loadShedding';
+export * from './drainCoordinator';
