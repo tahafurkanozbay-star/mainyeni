@@ -1,11 +1,27 @@
-export const SIDEBAR_GROUPS = Object.freeze([
+import { createSidebarCatalogRuntime } from '../../shell/sidebarCatalogRuntime';
+export type SidebarGroupId = 'ABB' | 'EGO' | 'ASKI' | 'ISTIRAK';
+
+export interface SidebarGroup {
+  readonly id: SidebarGroupId;
+  readonly shortLabel: string;
+  readonly label: string;
+  readonly logo: string;
+}
+export interface SidebarItem {
+  readonly group: SidebarGroupId;
+  readonly label: string;
+  readonly windowId: string;
+  readonly iconType: string;
+}
+
+export const SIDEBAR_GROUPS: readonly SidebarGroup[] = Object.freeze([
   { id: 'ABB', shortLabel: 'ABB', label: 'Ankara Büyükşehir Belediyesi', logo: '../images/abbbuton.svg' },
   { id: 'EGO', shortLabel: 'EGO', label: 'EGO Genel Müdürlüğü', logo: '../images/egobuton.svg' },
   { id: 'ASKI', shortLabel: 'ASKİ', label: 'ASKİ Genel Müdürlüğü', logo: '../images/askibuton.svg' },
   { id: 'ISTIRAK', shortLabel: 'İştirak', label: 'Belediye iştirakleri', logo: '../images/istiraklerbuton.svg' }
 ]);
 
-export const SIDEBAR_ITEMS = Object.freeze([
+export const SIDEBAR_ITEMS: readonly SidebarItem[] = Object.freeze([
   { group: 'ABB', label: 'Kadın Danışma Merkezleri', windowId: 'kadindanisma-query-window', iconType: 'kadın danışma merkezi' },
   { group: 'ABB', label: 'Kadınlar Lokali', windowId: 'kadinlarlokali-query-window', iconType: 'kadınlar lokali' },
   { group: 'ABB', label: 'Pati Dostu Uygulamalar', windowId: 'patidostu-query-window', iconType: 'pati dostu' },
@@ -51,7 +67,7 @@ export const SIDEBAR_ITEMS = Object.freeze([
   { group: 'ISTIRAK', label: 'Halk Ekmek Satış Noktaları', windowId: 'halkekmek-query-window', iconType: 'halk ekmek' }
 ]);
 
-export const INITIAL_CITY_LAYER_SERVICE_KEYS = Object.freeze([
+export const INITIAL_CITY_LAYER_SERVICE_KEYS: readonly string[] = Object.freeze([
   'YeniYasliDostuQueryUrl',
   'YeniSosyalHizmetlerQueryUrl',
   'YeniTeknolojiMerkezleriQueryUrl',
@@ -71,4 +87,10 @@ export const INITIAL_CITY_LAYER_SERVICE_KEYS = Object.freeze([
   'YeniWifiNoktalariQeryUrl'
 ]);
 
-export const getSidebarItemsForGroup = groupId => SIDEBAR_ITEMS.filter(item => item.group === groupId);
+export const SIDEBAR_CATALOG_RUNTIME = createSidebarCatalogRuntime({
+  groups: SIDEBAR_GROUPS,
+  items: SIDEBAR_ITEMS,
+});
+
+export const getSidebarItemsForGroup = (groupId: SidebarGroupId): readonly SidebarItem[] =>
+  SIDEBAR_CATALOG_RUNTIME.itemsForGroup(groupId) as readonly SidebarItem[];
