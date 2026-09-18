@@ -39,13 +39,25 @@ export const safeRatio = (numerator: unknown, denominator: unknown): number => {
   return bottom > 0 ? top / bottom : 0;
 };
 
+const stripControlCharacters = (value: string): string => {
+  let output = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint < 32 || codePoint === 127) continue;
+    output += character;
+  }
+  return output;
+};
+
 export const safeText = (value: unknown, maximumLength = 120): string => {
   const text = typeof value === 'string'
     ? value
     : value === null || value === undefined
       ? ''
       : String(value);
-  return text.replace(/[\u0000-\u001f\u007f]/gu, '').trim().slice(0, Math.max(0, maximumLength));
+  return stripControlCharacters(text)
+    .trim()
+    .slice(0, Math.max(0, maximumLength));
 };
 
 export const stableUnique = (values: readonly string[]): string[] =>
