@@ -71,6 +71,13 @@ public static class KentRehberiQueryValidation
         {
             AddError(errors, "afterObjectId", "afterObjectId must be greater than zero.");
         }
+        else if (afterObjectId.HasValue && !options.ObjectIdCursorEnabled)
+        {
+            AddError(
+                errors,
+                "afterObjectId",
+                "afterObjectId is disabled until ObjectID uniqueness is verified by the deployment preflight.");
+        }
 
         ThrowIfInvalid(errors);
 
