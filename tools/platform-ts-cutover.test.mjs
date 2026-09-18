@@ -7,6 +7,7 @@ const ROOT = path.resolve(process.cwd());
 const PLATFORM = path.join(ROOT, 'Webclient.app', 'src', 'platform');
 
 const canonicalTypedModules = Object.freeze([
+  'bootstrap/bootstrapApplication',
   'bootstrap/bootstrapCore',
   'bootstrap/bootstrapDiagnostics',
   'cache/requestCache',
@@ -58,7 +59,7 @@ test('all migrated Platform runtime modules have one canonical TypeScript implem
 test('cutover module list contains no duplicate stems', () => {
   const unique = new Set(canonicalTypedModules);
   assert.equal(unique.size, canonicalTypedModules.length);
-  assert.equal(canonicalTypedModules.length, 18);
+  assert.equal(canonicalTypedModules.length, 19);
 });
 
 test('Platform production JavaScript is reduced to the bounded bootstrap composition adapter', async () => {
@@ -69,17 +70,16 @@ test('Platform production JavaScript is reduced to the bounded bootstrap composi
     .map((file) => normalize(path.relative(ROOT, file)))
     .sort();
 
-  assert.deepEqual(productionJavascript, [
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-  ]);
+  assert.deepEqual(productionJavascript, []);
 });
 
-test('bootstrap adapter remains explicit until its legacy Business dependency is typed', async () => {
-  const bootstrap = path.join(PLATFORM, 'bootstrap', 'bootstrapApplication.js');
+test('bootstrap composition is strict TypeScript and no longer depends on legacy CommonBusiness', async () => {
+  const bootstrap = path.join(PLATFORM, 'bootstrap', 'bootstrapApplication.ts');
   const source = await fs.readFile(bootstrap, 'utf8');
   assert.match(source, /Business\/ConfigurationBusiness/u);
-  assert.match(source, /Business\/CommonBusiness/u);
+  assert.doesNotMatch(source, /Business\/CommonBusiness/u);
   assert.match(source, /Store\/Managers\/MapManager/u);
+  assert.match(source, /network\/arcgisProxyPolicy/u);
   assert.match(source, /\.\/bootstrapDiagnostics/u);
   assert.match(source, /\.\/bootstrapCore/u);
 });
@@ -138,16 +138,14 @@ test('package verify pipeline contains every Platform modernization gate', async
   }
 });
 
-test('language baseline permanently ratchets Platform production JavaScript to one adapter', async () => {
+test('language baseline permanently ratchets Platform production JavaScript to zero', async () => {
   const baseline = JSON.parse(await fs.readFile(
     path.join(ROOT, 'tools', 'platform-language-baseline.json'),
     'utf8',
   ));
   assert.equal(baseline.schemaVersion, 1);
-  assert.equal(baseline.domains?.platform, 1);
-  assert.deepEqual(baseline.platformLegacyAllowlist, [
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-  ]);
+  assert.equal(baseline.domains?.platform, 0);
+  assert.deepEqual(baseline.platformLegacyAllowlist, []);
 });
 
 test('domains already migrated to TypeScript retain zero JavaScript budgets', async () => {
