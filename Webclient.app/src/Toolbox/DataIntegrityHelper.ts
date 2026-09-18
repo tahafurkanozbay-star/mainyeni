@@ -145,7 +145,7 @@ export const normalizeInteger = (
     }: IntegerOptions = {}
 ): number | null => {
     const number = normalizeFiniteNumber(value, fallback);
-    if (number === fallback || !Number.isInteger(number)) return fallback;
+    if (number === null || number === fallback || !Number.isInteger(number)) return fallback;
     return Math.min(max, Math.max(min, number));
 };
 
