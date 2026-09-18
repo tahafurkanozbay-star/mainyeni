@@ -612,7 +612,7 @@ export const createSearchDatasetRegistry = (options: DatasetRegistryOptions = {}
             key: unknown,
             builder: (snapshot: DatasetSnapshot) => T
         ): T | undefined {
-            const cached = api.getDerived(name, key);
+            const cached = api.getDerived<T>(name, key);
             if (cached !== undefined) return cached;
             if (typeof builder !== "function") throw new TypeError("Derived dataset builder must be a function");
             const snapshot = api.peek(name);
