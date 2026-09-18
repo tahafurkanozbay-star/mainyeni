@@ -76,15 +76,15 @@ describe('applicationBootstrapDependencies', () => {
     expect(ConfigurationBusiness.GetConfigServices).toHaveBeenCalledWith({ signal });
   });
 
-  test('generates proxy URLs through CommonBusiness', () => {
+  test('resolves service URLs through the typed proxy policy', () => {
     const value = applicationBootstrapDependencies.generateServiceUrl(services[0]);
     expect(value).toBe(services[0].eg);
     expect(resolveConfigurationServiceUrl).toHaveBeenCalledWith(services[0]);
   });
 
-  test('installs proxy rules through CommonBusiness', async () => {
+  test('installs proxy rules through the typed proxy policy', async () => {
     await applicationBootstrapDependencies.addProxyRule('https://gis.example.test/a', 'source');
-    expect(arcgisProxyPolicy.register).toHaveBeenCalledWith('https://gis.example.test/a', 'source');
+    expect(arcgisProxyPolicy.register).toHaveBeenCalledWith('https://gis.example.test/a');
   });
 
   test('commits map configuration through MapManager', async () => {
