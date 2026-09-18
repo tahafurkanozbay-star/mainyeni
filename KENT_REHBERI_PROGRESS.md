@@ -226,3 +226,15 @@
 - LIVE DB LIMITATION: private PostgreSQL is not reachable from this execution environment; no claim is made for live row retrieval, production GeoJSON sample or EXPLAIN/index-plan verification. Those remain deployment smoke steps.
 - MERGE DURUMU: DRAFT / NOT MERGED. PR is ~3k additions and remains below the repository's ~4k meaningful-additions target/gate; no filler is added merely to satisfy line count.
 - SONRAKİ GÖREV: after this progress append, require fresh exact-head CI again; then re-check current main/behind=0/mergeable. For live rollout, set only server-side `ConnectionStrings__KentRehberi`, apply DBA runbook, verify `/health/ready`, GeoJSON, bbox, nearby and production EXPLAIN plans.
+
+## 2026-09-18 — Deep QA / Platform whole-code modernization (#151)
+
+- Current main/base: `5800c210a0cd869583450224c5331dcf2888b3ac`; clean branch `agent/platform-ts-cutover-20260918-1940-5800c21-r2`, PR #151.
+- Superseded stale Platform PR #147 after main advanced; its validated delta was rebuilt from exact current main rather than stacking on a behind branch.
+- Preserved the merged Kent Rehberi/PostGIS frontend + Vite-local `/api/kent-rehberi` integration while adding the Platform module-resolution ambiguity guard.
+- Platform modernization carries 18 canonical JavaScript-shadow removals, strict `allowJs=false` Platform TypeScript boundary, module-graph/language-ratchet/responsibility/browser-runtime gates, resilience policy coverage, and release/security regression hardening.
+- Fixed exact-base TypeScript regressions for Node 24 tooling with a narrow built-in declaration boundary instead of exposing the full Node ambient surface to browser code.
+- Fixed release scanners so conventional test/spec/fixture/mock files cannot become false production `eval/new Function` blockers; production dynamic-code execution remains CRITICAL+blocking and is regression-tested.
+- Current base...head before this progress commit: 4,176 additions / 513 deletions / 47 files, ahead=2, behind=0, merge-base=current main, mergeable=true.
+- Final gate: keep draft/open until exact-head Platform Architecture Audit, Webclient Quality and Release QA all complete successfully; then re-check current main, additions, mergeability/conflicts and squash-merge only if every gate remains satisfied.
+
