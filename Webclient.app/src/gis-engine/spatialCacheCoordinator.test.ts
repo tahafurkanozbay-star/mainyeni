@@ -181,20 +181,29 @@ describe('createSpatialCacheCoordinator observers', () => {
     expect(onObserverError).toHaveBeenCalledTimes(1);
   });
 
-  it('isolates failures from the observer-error observer itself', () => {
-    const cache = createSpatialCacheCoordinator({
-      maxEntries: 1,
-      onEvict: () => {
-        throw new Error('eviction observer failed');
-      },
-      onObserverError: () => {
-        throw new Error('secondary observer failed');
-      },
-    });
+  it('reports failures from the observer-error observer through the host error channel', () => {
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    try {
+      const cache = createSpatialCacheCoordinator({
+        maxEntries: 1,
+        onEvict: () => {
+          throw new Error('eviction observer failed');
+        },
+        onObserverError: () => {
+          throw new Error('secondary observer failed');
+        },
+      });
 
-    cache.put('one', 1);
-    expect(() => cache.put('two', 2)).not.toThrow();
-    expect(cache.getSnapshot().size).toBe(1);
+      cache.put('one', 1);
+      expect(() => cache.put('two', 2)).not.toThrow();
+      expect(cache.getSnapshot().size).toBe(1);
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'secondary observer failed',
+      }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('emits explicit reasons for manual and budget removals', () => {
