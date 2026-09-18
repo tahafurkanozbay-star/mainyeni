@@ -187,3 +187,13 @@
 - SECURITY / NETWORK: no endpoint, WMS/WFS/WMTS, secret, analytics, telemetry or remote runtime dependency added by this fix. Existing integrity/SBOM/origin checks remain mandatory.
 - PERFORMANCE: startup transfer gate remains 2.5 MiB gzip in verify-build; every JS chunk remains <=650 KiB gzip and CSS <=250 KiB. New raw eager budget adds a second startup-size guard instead of weakening performance enforcement.
 - MERGE DURUMU: NOT MERGED at this checkpoint. Fresh exact-head Platform Architecture Audit, Webclient Quality and Release QA must all complete successfully; then refresh current main, confirm behind=0/mergeable=true, mark ready and squash merge.
+
+
+## Deep GIS / ArcGIS ESM merge closure — 2026-09-18 13:08 TRT
+- COMMIT / PR / MERGE DURUMU: PR #122 final head `4d04f280f103ef5135d51203d37bc75178ae10bd`; 4,747 additions / 297 deletions / 35 files. Draft kaldırıldı ve expected-head korumasıyla squash merge başarıyla tamamlandı.
+- MERGE SHA: `61d2a3d7260140ece1c28a1ae5053f9c3298c59e`; GitHub `merged=true` döndürdü ve merge commit current `main` üzerinde doğrulandı.
+- TESTLER / BUILD: exact-head Platform Architecture Audit run `35332882310`, Release QA run `35332882288` ve Webclient Quality run `35332882261` completed+success. TypeScript 7 strict/exact-base gates, lint, full/strict/exact-base Vitest, native tooling, backend .NET 10 build/xUnit/publish, dependency audit, production Vite build, integrity/SBOM ve budget checks başarılı.
+- MODERNİZASYON: deprecated `esri-loader` kaldırılarak pinned `@arcgis/core@5.1.24` ESM boundary'ye geçildi; lazy capability catalog/planner, bounded load governor, lifecycle/prewarm, health/readiness ve deterministic chunking eklendi.
+- PERFORMANS: production doğrulaması eager JS/CSS gzip 2.5 MiB startup tavanını, <=650 KiB JS ve <=250 KiB CSS asset limitlerini koruyor. Ek olarak build-budget artık 12 MiB raw eager startup graph ile 28 MiB tam deploy artifact limitini ayrı ölçüyor; lazy capabilities startup maliyeti gibi yanlış sınıflandırılmıyor.
+- SECURITY / NETWORK: yeni endpoint, WMS/WFS/WMTS, secret, analytics, telemetry veya remote runtime dependency eklenmedi. Release provenance, SBOM, bundle integrity ve origin kuralları yeşil kaldı.
+- SONRAKİ GÖREV: merged #122 branch yeniden kullanılmamalı. Yeni GIS/QA işi current main'den fresh branch ile başlamalı; eşzamanlı Platform #123 ve Experience #124 alanlarını gereksiz yere ezmemeli.
