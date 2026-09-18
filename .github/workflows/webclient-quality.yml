@@ -133,6 +133,15 @@ jobs:
           node scripts/vitest-regression.mjs --list /tmp/current-vitest.json
           echo "Full Vitest exit code: $vitest_status. Exact-base regression and strict Platform slices below are authoritative during staged migration."
 
+      - name: Retain Vitest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webclient-vitest-${{ github.run_id }}
+          path: /tmp/current-vitest.json
+          if-no-files-found: warn
+          retention-days: 3
+
       - name: Strict Platform supervision and resilience Vitest boundary
         run: |
           npx vitest run \
