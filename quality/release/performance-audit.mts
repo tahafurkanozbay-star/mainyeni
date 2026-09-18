@@ -18,6 +18,9 @@ export interface PerformanceAuditDetails extends PerformanceSummary {
   readonly eagerQueryWindowImports: readonly string[];
   readonly memoizationSignals: number;
   readonly virtualizationSignals: number;
+  readonly observerLifecycleRiskFiles: readonly string[];
+  readonly recurringTimerLifecycleRiskFiles: readonly string[];
+  readonly legacyPerformanceJavascriptFiles: readonly string[];
 }
 
 const LOOP_PATTERN = /\b(?:for\s*\(|while\s*\(|forEach\s*\(|\.map\s*\(|\.reduce\s*\()/g;
@@ -30,6 +33,11 @@ const QUERY_WINDOW_IMPORT_PATTERN = /^\s*import\s+[^;]+from\s+['"][^'"]*(?:Query
 const LARGE_COLLECTION_LITERAL_PATTERN = /\[(?:[^\[\]]|\[[^\]]*\]){5000,}\]/g;
 const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/i;
 const GENERATED_PATH = /(?:^|\/)(?:dist|build|coverage|node_modules)(?:\/|$)/i;
+const PERFORMANCE_INSTRUMENTATION_PATH = /(?:^|\/)(?:performance|platform\/performance)(?:\/|$)|(?:^|\/)reportWebVitals\.[^/]+$/i;
+const PERFORMANCE_OBSERVER_PATTERN = /\bnew\s+PerformanceObserver\s*\(/g;
+const OBSERVER_DISCONNECT_PATTERN = /\.disconnect\s*\(/g;
+const RECURRING_TIMER_PATTERN = /\bsetInterval\s*\(/g;
+const CLEAR_RECURRING_TIMER_PATTERN = /\bclearInterval\s*\(/g;
 
 function isProductionWebSource(file: SourceFile): boolean {
   return !TEST_PATH.test(file.repositoryPath) && !GENERATED_PATH.test(file.repositoryPath);
@@ -167,6 +175,81 @@ function largeLiteralFindings(files: readonly SourceFile[]): Finding[] {
   return findings;
 }
 
+
+function instrumentationLifecycleFindings(files: readonly SourceFile[]): {
+  observerRisk: string[];
+  timerRisk: string[];
+  legacyJavascript: string[];
+  findings: Finding[];
+} {
+  const observerRisk: string[] = [];
+  const timerRisk: string[] = [];
+  const legacyJavascript: string[] = [];
+  const findings: Finding[] = [];
+
+  for (const file of files) {
+    if (!PERFORMANCE_INSTRUMENTATION_PATH.test(file.repositoryPath)) continue;
+
+    if (
+      /(?:^|\/)reportWebVitals\.js$/i.test(file.repositoryPath)
+      || /(?:^|\/)performance\/[^/]+\.js$/i.test(file.repositoryPath)
+    ) {
+      legacyJavascript.push(file.repositoryPath);
+      findings.push({
+        id: 'performance-legacy-javascript-runtime',
+        domain: 'performance',
+        severity: 'medium',
+        title: 'Legacy JavaScript performance runtime',
+        message: 'Performance instrumentation should remain inside the strict TypeScript boundary.',
+        location: { file: file.repositoryPath, line: 1 },
+        remediation: 'Migrate the performance runtime to TypeScript and include it in the dedicated strict typecheck project.',
+        tags: ['typescript', 'instrumentation'],
+      });
+    }
+
+    const observerCreates = countMatches(file.text, PERFORMANCE_OBSERVER_PATTERN);
+    const observerDisconnects = countMatches(file.text, OBSERVER_DISCONNECT_PATTERN);
+    if (observerCreates > observerDisconnects) {
+      observerRisk.push(file.repositoryPath);
+      findings.push({
+        id: 'performance-observer-lifecycle-risk',
+        domain: 'performance',
+        severity: 'medium',
+        title: 'PerformanceObserver lifecycle may leak',
+        message: 'Performance instrumentation creates more observers than it visibly disconnects.',
+        location: { file: file.repositoryPath, line: 1 },
+        evidence: { metadata: { observerCreates, observerDisconnects } },
+        remediation: 'Retain observer handles and disconnect them on stop, unmount, page lifecycle cleanup, and HMR disposal.',
+        tags: ['observer', 'memory', 'lifecycle'],
+      });
+    }
+
+    const intervals = countMatches(file.text, RECURRING_TIMER_PATTERN);
+    const clears = countMatches(file.text, CLEAR_RECURRING_TIMER_PATTERN);
+    if (intervals > clears) {
+      timerRisk.push(file.repositoryPath);
+      findings.push({
+        id: 'performance-recurring-timer-lifecycle-risk',
+        domain: 'performance',
+        severity: 'medium',
+        title: 'Recurring performance timer may outlive its owner',
+        message: 'Performance instrumentation creates more recurring timers than it visibly clears.',
+        location: { file: file.repositoryPath, line: 1 },
+        evidence: { metadata: { intervals, clears } },
+        remediation: 'Prefer event/observer-driven collection; otherwise clear recurring timers deterministically on disposal.',
+        tags: ['timer', 'memory', 'lifecycle'],
+      });
+    }
+  }
+
+  return {
+    observerRisk,
+    timerRisk,
+    legacyJavascript,
+    findings,
+  };
+}
+
 export function auditPerformance(
   inventory: RepositoryInventory,
   budget: PerformanceBudget = DEFAULT_PERFORMANCE_BUDGET,
@@ -178,12 +261,14 @@ export function auditPerformance(
   const largeJson = largeJsonFindings(webFiles, budget);
   const loading = lazyLoadingSignals(codeFiles);
   const nested = nestedLoopFindings(codeFiles);
+  const instrumentation = instrumentationLifecycleFindings(codeFiles);
   const findings: Finding[] = [
     ...signalFindings(signals),
     ...largeJson.findings,
     ...nested,
     ...eagerImportFindings(loading.eager),
     ...largeLiteralFindings(codeFiles),
+    ...instrumentation.findings,
   ];
 
   const synchronousLoopCandidates = codeFiles.reduce((sum, file) => sum + countMatches(file.text, LOOP_PATTERN), 0);
@@ -208,6 +293,9 @@ export function auditPerformance(
       eagerQueryWindowImports: loading.eager,
       memoizationSignals,
       virtualizationSignals,
+      observerLifecycleRiskFiles: instrumentation.observerRisk,
+      recurringTimerLifecycleRiskFiles: instrumentation.timerRisk,
+      legacyPerformanceJavascriptFiles: instrumentation.legacyJavascript,
     },
     findings: sorted,
     elapsedMs: Math.max(0, performance.now() - start),
