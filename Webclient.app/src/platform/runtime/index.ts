@@ -11,6 +11,7 @@ export * from './admissionController';
 export * from './pressureController';
 export * from './adaptiveRuntimeControl';
 export * from './runtimeHealthJournal';
+export * from './runtimeHealthPolicy';
 export * from './runtimeWorkloadGovernor';
 export * from './adaptiveRuntimeModule';
 export * from './capacityEnvelope';
