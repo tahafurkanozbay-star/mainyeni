@@ -1,3 +1,4 @@
+import { invokeArcgisModuleTransportBatch } from './arcgisModuleTransport';
 import { createDefaultArcgisEsmTransport } from './arcgisEsmTransport';
 
 export interface ArcgisModuleRuntimeConfiguration {
@@ -42,7 +43,7 @@ const normalizeModuleId = (moduleId: string): string => {
 
 const validateTransport = (transport: ArcgisModuleTransport): ArcgisModuleTransport => {
   if (!transport || typeof transport.loadModules !== 'function') {
-    throw new TypeError('ArcGIS module transport must provide loadModules().');
+    throw new TypeError('ArcGIS module transport must provide a module batch loader.');
   }
   const name = String(transport.name ?? '').trim();
   if (!name) throw new TypeError('ArcGIS module transport name is required.');
@@ -61,7 +62,7 @@ const loadMissingModules = (moduleIds: readonly string[]): void => {
 
   loadRequests += 1;
   const transportAtRequestTime = activeTransport;
-  const batchPromise = transportAtRequestTime.loadModules(missing)
+  const batchPromise = invokeArcgisModuleTransportBatch(transportAtRequestTime, missing)
     .then((modules) => {
       if (!Array.isArray(modules)) {
         throw new TypeError(`ArcGIS module transport ${transportAtRequestTime.name} returned a non-array payload.`);

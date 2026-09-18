@@ -108,11 +108,7 @@ describe('App bootstrap lifecycle', () => {
 
     await act(async () => {
       operation.reject(new Error('network details that must not reach UI'));
-      try {
-        await operation.promise;
-      } catch {
-        // App owns the rejection; this only drains the deferred promise for React act.
-      }
+      await expect(operation.promise).rejects.toThrow('network details that must not reach UI');
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(/harita yapılandırması yüklenemedi/i);
@@ -127,11 +123,7 @@ describe('App bootstrap lifecycle', () => {
 
     await act(async () => {
       operation.reject(Object.assign(new Error('cancelled'), { code: 'BOOTSTRAP_ABORTED' }));
-      try {
-        await operation.promise;
-      } catch {
-        // Expected cancellation.
-      }
+      await expect(operation.promise).rejects.toMatchObject({ code: 'BOOTSTRAP_ABORTED' });
     });
 
     expect(screen.getByRole('status')).toBeInTheDocument();
@@ -169,11 +161,7 @@ describe('App bootstrap lifecycle', () => {
 
     await act(async () => {
       operation.reject(new Error('late failure'));
-      try {
-        await operation.promise;
-      } catch {
-        // Expected rejection after unmount.
-      }
+      await expect(operation.promise).rejects.toThrow('late failure');
     });
 
     expect(screen.queryByText(/harita yapılandırması yüklenemedi/i)).not.toBeInTheDocument();
