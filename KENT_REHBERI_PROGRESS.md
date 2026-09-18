@@ -240,3 +240,10 @@
 - Current `main` advanced to `5800c210a0cd869583450224c5331dcf2888b3ac` via the Data/PostGIS GeoJSON merge while Platform validation was in progress.
 - The Platform branch was refreshed with a non-force two-parent merge after explicit overlap review. The main-side Kent Rehberi Vite local demo/proxy and the Platform-side module-resolution guard are both preserved; append-only progress entries from both roles are retained.
 - Merge remains gated on exact-head CI, current-main ancestry, mergeability, and final regression/security/performance review.
+
+## 2026-09-18 — Vite/TypeScript shadow-module cleanup
+- Webclient production build correctly exposed a remaining extensionless resolution ambiguity outside the Platform folder: five obsolete CRA-era JavaScript compatibility shims shadowed canonical TypeScript/TSX modules.
+- Removed only re-export adapters: `ExperienceDesignSystem.js`, `ExperienceDialog.js`, `ExperienceWorkspace.js`, `experience/accessibilityRuntime.js`, and `experience/experienceRuntime.js`.
+- Canonical typed modules remain unchanged. Open Experience PR #150 does not modify these shim files, avoiding active-role conflict.
+- This removes the remaining known JS↔TS same-stem shadow pairs under `Webclient.app/src`; exact-head build/CI is required to prove consumer resolution and bundle integrity.
+
