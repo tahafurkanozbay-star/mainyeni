@@ -164,7 +164,9 @@ export const createMeasurementController = (options: MeasurementControllerOption
         setState({
           status: 'error',
           error: {
-            code: normalized.code || 'MEASUREMENT_LOAD_ERROR',
+            code: normalized.code === 'MEASUREMENT_ERROR'
+              ? 'MEASUREMENT_LOAD_ERROR'
+              : normalized.code,
             message: normalized.message || 'Measurement widget could not be loaded.',
           },
         });
