@@ -103,6 +103,18 @@ jobs:
       - name: Strict modern GIS TypeScript boundary
         run: npm run typecheck:gis-modern-core -- --pretty false
 
+      - name: Enforce GIS TypeScript-only source and test boundary
+        run: |
+          legacy_files="$(find src/gis-engine -type f \( -name '*.js' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' \) -print)"
+          if [ -n "$legacy_files" ]; then
+            echo "Legacy JavaScript files are forbidden in src/gis-engine:"
+            echo "$legacy_files"
+            exit 1
+          fi
+
+      - name: Strict operational GIS TypeScript test boundary
+        run: npx tsc --noEmit -p tsconfig.gis-operational-tests.json --pretty false
+
       - name: Exact-base TypeScript regression gate
         if: github.event_name == 'pull_request'
         env:

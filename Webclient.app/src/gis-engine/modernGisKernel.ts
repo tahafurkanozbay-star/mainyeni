@@ -17,6 +17,10 @@ import { createServiceHealthRuntime } from './serviceHealthRuntime';
 import { createRenderGovernor, type GisLayerRenderInput } from './renderGovernorRuntime';
 import { createSceneStreamingPlanner, type GisSceneStreamingPlanInput } from './sceneStreamingPlanner';
 import { createGisObservabilityRuntime } from './gisObservabilityRuntime';
+import { createTemporalLayerRuntime } from './temporalLayerRuntime';
+import { createGisEditTransactionRuntime } from './editTransactionRuntime';
+import { createGisMapStatePersistenceRuntime } from './mapStatePersistenceRuntime';
+import { createGisExportRuntime } from './exportPlanRuntime';
 import {
   createDeterministicFingerprint,
   finiteNumber,
@@ -41,6 +45,10 @@ export interface ModernGisKernelConfiguration {
   readonly renderGovernor?: ReturnType<typeof createRenderGovernor>;
   readonly streamingPlanner?: ReturnType<typeof createSceneStreamingPlanner>;
   readonly observability?: ReturnType<typeof createGisObservabilityRuntime>;
+  readonly temporal?: ReturnType<typeof createTemporalLayerRuntime>;
+  readonly edits?: ReturnType<typeof createGisEditTransactionRuntime>;
+  readonly mapState?: ReturnType<typeof createGisMapStatePersistenceRuntime>;
+  readonly exports?: ReturnType<typeof createGisExportRuntime>;
   readonly lifecycleAdapters?: Record<string, unknown>;
   readonly schedulerOptions?: Record<string, unknown>;
   readonly layerBudget?: {
@@ -228,6 +236,10 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     maxCacheBytes: Math.max(4 * 1024 * 1024, Math.floor(initialBudget.maxResidentBytes * 0.12)),
     ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
   });
+  const temporal = configuration.temporal || createTemporalLayerRuntime({ now: clock });
+  const edits = configuration.edits || createGisEditTransactionRuntime({ now: clock });
+  const mapState = configuration.mapState || createGisMapStatePersistenceRuntime({ now: clock });
+  const exports = configuration.exports || createGisExportRuntime();
   const lifecycle = configuration.lifecycle || createLayerLifecycleRuntime({
     ...(configuration.lifecycleAdapters || {}),
     now: clock,
@@ -715,6 +727,8 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     serviceHealth.destroy();
     renderGovernor.destroy();
     streamingPlanner.destroy();
+    temporal.destroy();
+    edits.destroy();
     observability.destroy();
     services.clear();
     layers.clear();
@@ -740,6 +754,10 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     sweepLayers,
     getSnapshot,
     getDiagnostics,
+    temporal,
+    edits,
+    mapState,
+    exports,
     getService: (serviceId: unknown) => requireService(serviceId),
     getLayer: (layerId: unknown) => requireLayer(layerId).descriptor,
     destroy,
