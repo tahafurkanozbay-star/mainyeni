@@ -534,14 +534,17 @@ describe('runtimeWorkloadGovernor', () => {
   it('propagates caller aborts through running execute operations', async () => {
     const harness = createHarness();
     const controller = new AbortController();
-    let entered = false;
+    let markEntered: (() => void) | null = null;
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
 
     const operation = harness.governor.execute({
       key: 'abort-running',
       signal: controller.signal,
       resources: [{ kind: 'cpu', units: 1 }],
     }, async ({ signal }) => {
-      entered = true;
+      markEntered?.();
       if (!signal.aborted) {
         await new Promise<void>((resolve) => {
           signal.addEventListener('abort', () => resolve(), { once: true });
@@ -550,8 +553,7 @@ describe('runtimeWorkloadGovernor', () => {
       throw signal.reason;
     });
 
-    await Promise.resolve();
-    expect(entered).toBe(true);
+    await entered;
     controller.abort(new DOMException('caller stopped', 'AbortError'));
 
     await expect(operation).rejects.toMatchObject({ name: 'AbortError' });
