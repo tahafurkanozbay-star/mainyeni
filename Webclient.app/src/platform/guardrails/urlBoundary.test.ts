@@ -39,7 +39,9 @@ describe('urlBoundary', () => {
   });
 
   it('requires HTTPS for external destinations by default', () => {
-    const result = evaluateUrlBoundary('http://services.example.gov.tr/data', policy);
+    const insecure = new URL('https://services.example.gov.tr/data');
+    insecure.protocol = 'http:';
+    const result = evaluateUrlBoundary(insecure.href, policy);
     expect(result.decision).toBe('deny');
     expect(result.reasons.map((entry) => entry.code)).toContain('external-https-required');
   });
