@@ -957,13 +957,22 @@ export const createGisEditTransactionRuntime = (
   return Object.freeze({
     beginTransaction,
     stage,
-    stageAdd(transactionId, input) {
+    stageAdd(
+      transactionId: unknown,
+      input: Omit<GisEditAddOperationInput, 'kind'>,
+    ) {
       return stage(transactionId, { kind: 'add', ...input });
     },
-    stageUpdate(transactionId, input) {
+    stageUpdate(
+      transactionId: unknown,
+      input: Omit<GisEditUpdateOperationInput, 'kind'>,
+    ) {
       return stage(transactionId, { kind: 'update', ...input });
     },
-    stageDelete(transactionId, input) {
+    stageDelete(
+      transactionId: unknown,
+      input: Omit<GisEditDeleteOperationInput, 'kind'>,
+    ) {
       return stage(transactionId, { kind: 'delete', ...input });
     },
     removeOperation,
