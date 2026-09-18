@@ -71,9 +71,11 @@ describe('MapWidgetSurface', () => {
     );
 
     const region = screen.getByRole('region', { name: 'Gizli araç', hidden: true });
+    const preservedInput = region.querySelector<HTMLInputElement>('input[aria-label="Korunan alan"]');
     expect(region).toHaveAttribute('aria-hidden', 'true');
     expect(region).toHaveStyle({ visibility: 'hidden' });
-    expect(screen.getByLabelText('Korunan alan')).toHaveValue('persisted');
+    expect(preservedInput).not.toBeNull();
+    expect(preservedInput).toHaveValue('persisted');
   });
 
   it('renders failures as assertive alerts while keeping informational status separate', () => {
