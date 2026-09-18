@@ -31,7 +31,14 @@ export interface SpatialLayerLifecycleSnapshot {
   readonly evictions: number;
 }
 
-interface StoredLayer extends SpatialLayerDescriptor {
+interface StoredLayer {
+  id: string;
+  priority: SpatialLayerPriority;
+  estimatedCpuBytes: number;
+  estimatedGpuBytes: number;
+  minScale?: number;
+  maxScale?: number;
+  visible: boolean;
   phase: SpatialLayerPhase;
   sequence: number;
   failures: number;
