@@ -8,6 +8,10 @@
   "files": [
     "src/gis-engine/arcgisModuleRuntime.ts",
     "src/gis-engine/arcgisEsmTransport.ts",
+    "src/gis-engine/arcgisEsmModuleCatalog.ts",
+    "src/gis-engine/arcgisBundlePlanner.ts",
+    "src/gis-engine/arcgisModuleLoadGovernor.ts",
+    "src/gis-engine/arcgisEsmLifecycleRuntime.ts",
     "src/gis-engine/arcgisQuerySessionRuntime.ts",
     "src/gis-engine/measurementRuntime.ts",
     "src/gis-engine/identifyRuntime.ts",
