@@ -154,16 +154,13 @@ export async function executeSpatialQueryBatch(
   let firstFailure: unknown;
 
   const worker = async (): Promise<void> => {
-    while (true) {
-      if (controller.signal.aborted) {
-        return;
-      }
+    while (!controller.signal.aborted && cursor < queue.length) {
       const index = cursor;
       cursor += 1;
-      if (index >= queue.length) {
+      const entry = queue[index];
+      if (!entry) {
         return;
       }
-      const entry = queue[index]!;
       try {
         const result = await entry.task.session.query({
           ...entry.task.request,
