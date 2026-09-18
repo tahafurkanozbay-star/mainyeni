@@ -33,6 +33,13 @@ const performanceLifecycleHandle = installPerformanceLifecycleCapture(performanc
       browserPerformanceDiagnosticEnvironment(),
     );
   },
+  onCaptureError(error) {
+    runtimeDiagnostics.captureError(
+      error,
+      { source: 'performance.lifecycle.capture-observer' },
+      'warn',
+    );
+  },
 });
 const deploymentRecoveryHandle = installDeploymentRecovery(runtimeDiagnostics);
 const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics);
