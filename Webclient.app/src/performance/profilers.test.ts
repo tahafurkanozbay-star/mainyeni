@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createPerformanceHistory } from './history';
 import { createOperationProfiler } from './operationProfiler';
 import { createStartupProfiler } from './startupProfiler';
