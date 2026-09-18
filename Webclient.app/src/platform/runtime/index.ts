@@ -11,3 +11,4 @@ export * from './pressureController';
 export * from './admissionController';
 export * from './adaptiveRuntimeControl';
 export * from './adaptiveRuntimeModule';
+export * from './runtimeHealthJournal';
