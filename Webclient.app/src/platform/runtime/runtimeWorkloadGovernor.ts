@@ -465,7 +465,7 @@ export const createRuntimeWorkloadGovernor = (
     reason: unknown = new DOMException('Runtime workload cancelled.', 'AbortError'),
   ): number => {
     let count = 0;
-    for (const internal of [...active.values()]) {
+    for (const internal of active.values()) {
       if (!predicate(internal.publicLease) || internal.controller.signal.aborted) continue;
       internal.controller.abort(reason);
       count += 1;
