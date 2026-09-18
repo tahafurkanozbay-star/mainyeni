@@ -53,7 +53,7 @@ export interface SharedIconCandidate extends IconRecord {
 
 export type RecordPresentationOptions = IconResolveOptions & PictureMarkerOptions & {
     document?: SearchDocumentLike | null;
-    schema?: unknown;
+    schema?: typeof GENERIC_RECORD_SCHEMA;
     sourceIndex?: number;
     untitledLabel?: unknown;
     otherCategoryLabel?: unknown;
@@ -167,7 +167,7 @@ const isRecord = (value: unknown): value is UnknownRecord =>
 
 const toSearchDocument = (
     record: unknown,
-    schema: unknown,
+    schema: typeof GENERIC_RECORD_SCHEMA,
     sourceIndex: number
 ): SearchDocumentLike => createSearchDocumentFromSchema(
     record,
