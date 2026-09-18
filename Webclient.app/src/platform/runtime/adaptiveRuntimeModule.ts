@@ -17,6 +17,7 @@ export interface AdaptiveRuntimeModuleOptions {
   readonly order?: number;
   readonly admission?: AdaptiveRuntimeControlOptions['admission'];
   readonly pressure?: AdaptiveRuntimeControlOptions['pressure'];
+  readonly shedding?: AdaptiveRuntimeControlOptions['shedding'];
   readonly now?: () => number;
   readonly cancelQueuedOnSuspend?: boolean;
   readonly suspendedLanePredicate?: (request: Readonly<AdmissionRequest>) => boolean;
@@ -74,9 +75,7 @@ export const createAdaptiveRuntimeModule = (
 
   const assertRunning = (): AdaptiveRuntimeControl => {
     assertUsable();
-    if (phase !== 'running' || !control) {
-      throw new Error(`Adaptive runtime module is not running (${phase}).`);
-    }
+    if (phase !== 'running' || !control) throw new Error(`Adaptive runtime module is not running (${phase}).`);
     return control;
   };
 
@@ -85,6 +84,7 @@ export const createAdaptiveRuntimeModule = (
       budget: nextBudget,
       ...(options.admission ? { admission: options.admission } : {}),
       ...(options.pressure ? { pressure: options.pressure } : {}),
+      ...(options.shedding !== undefined ? { shedding: options.shedding } : {}),
       ...(options.now ? { now: options.now } : {}),
     });
     generation += 1;
@@ -108,9 +108,7 @@ export const createAdaptiveRuntimeModule = (
       phase = 'suspended';
       return;
     }
-    if (options.cancelQueuedOnSuspend !== false) {
-      control.cancelQueued(options.suspendedLanePredicate ?? defaultSuspendPredicate);
-    }
+    if (options.cancelQueuedOnSuspend !== false) control.cancelQueued(options.suspendedLanePredicate ?? defaultSuspendPredicate);
     phase = 'suspended';
   };
 
@@ -132,10 +130,7 @@ export const createAdaptiveRuntimeModule = (
   };
 
   const snapshot = (): AdaptiveRuntimeModuleSnapshot => Object.freeze({
-    phase,
-    generation,
-    control: control?.snapshot() ?? null,
-    budget,
+    phase, generation, control: control?.snapshot() ?? null, budget,
   });
 
   const acquire = (request: AdmissionRequest): Promise<AdmissionLease> => {
@@ -147,7 +142,6 @@ export const createAdaptiveRuntimeModule = (
   };
 
   const record = (sample: AdaptiveRuntimeSample): AdaptiveRuntimeSnapshot => assertRunning().record(sample);
-
   const cancelQueued = (predicate?: (request: Readonly<AdmissionRequest>) => boolean): number => {
     assertUsable();
     if (!control) return 0;
@@ -155,9 +149,7 @@ export const createAdaptiveRuntimeModule = (
   };
 
   const module: RuntimeKernelModule = Object.freeze({
-    id: options.id ?? 'adaptive-runtime-control',
-    order: options.order ?? 40,
-    required: options.required ?? false,
+    id: options.id ?? 'adaptive-runtime-control', order: options.order ?? 40, required: options.required ?? false,
     start: (context: RuntimeKernelModuleContext) => activate(context),
     ready: (context: RuntimeKernelModuleContext) => activate(context),
     suspend: () => suspend(),
