@@ -258,3 +258,9 @@
 - #155 creation snapshot: 4,214 additions / 1,024 deletions / 49 files, ahead=1 / behind=0, merge-base=current main, draft/open.
 - Exact-head CI yeniden zorunludur; önceki #151 CI sonuçları #155 için PASS sayılmaz.
 
+## 2026-09-18 — PR #155 exact-base TypeScript regression fix
+- First exact-head Webclient Quality run reached the authoritative exact-base TypeScript gate after dependency, Vite, lint, full TypeScript and strict Platform/GIS boundaries passed.
+- Gate found one new Platform diagnostic in `bootstrapCore.ts`: optional AbortSignal was materialized as `{ signal: undefined }` under `exactOptionalPropertyTypes`.
+- Fixed by constructing loader options as `{}` when no signal exists and `{ signal }` only when present; no compiler flag, cast escape, API widening or runtime fallback was introduced.
+- Previous head is not considered green; fresh exact-head CI is required.
+
