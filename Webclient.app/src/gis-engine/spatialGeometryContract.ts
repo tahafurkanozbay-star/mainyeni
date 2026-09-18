@@ -104,10 +104,28 @@ function normalizeWkid(reference: SpatialReferenceContract | undefined): number 
   return value;
 }
 
-function normalizeVertex(vertex: readonly number[], limits: SpatialGeometryLimits, name: string): readonly number[] {
+type NormalizedVertex = readonly [number, number, ...number[]];
+
+function normalizeVertex(
+  vertex: readonly number[],
+  limits: SpatialGeometryLimits,
+  name: string,
+): NormalizedVertex {
   if (vertex.length < 2) throw new TypeError(`${name} requires at least x and y coordinates`);
   if (vertex.length > limits.maxCoordinatesPerVertex) throw new RangeError(`${name} exceeds coordinate dimension budget`);
-  return Object.freeze(vertex.map((coordinate, index) => canonicalNumber(coordinate, `${name}[${index}]`, limits.maxAbsoluteCoordinate)));
+  const coordinates = vertex.map((coordinate, index) => (
+    canonicalNumber(coordinate, `${name}[${index}]`, limits.maxAbsoluteCoordinate)
+  ));
+  const x = coordinates[0];
+  const y = coordinates[1];
+  if (x === undefined || y === undefined) throw new TypeError(`${name} requires at least x and y coordinates`);
+  return Object.freeze([x, y, ...coordinates.slice(2)]);
+}
+
+function coordinateAt(vertex: NormalizedVertex, index: number, name: string): number {
+  const coordinate = vertex[index];
+  if (coordinate === undefined) throw new TypeError(`${name} is missing from normalized vertex`);
+  return coordinate;
 }
 
 class InspectionAccumulator {
@@ -128,7 +146,7 @@ class InspectionAccumulator {
     if (this.partCount > this.limits.maxParts) throw new RangeError('geometry exceeds part budget');
   }
 
-  addVertex(vertex: readonly number[], name: string): readonly number[] {
+  addVertex(vertex: readonly number[], name: string): NormalizedVertex {
     this.vertexCount += 1;
     if (this.vertexCount > this.limits.maxVertices) throw new RangeError('geometry exceeds vertex budget');
     const normalized = normalizeVertex(vertex, this.limits, name);
@@ -163,6 +181,7 @@ function normalizeParts(
     if (kind === 'ring') {
       const first = normalized[0];
       const last = normalized[normalized.length - 1];
+      if (first === undefined || last === undefined) throw new TypeError(`ring ${partIndex} must contain vertices`);
       if (first[0] !== last[0] || first[1] !== last[1]) throw new TypeError(`ring ${partIndex} must be closed`);
     }
     return normalized;
@@ -186,12 +205,16 @@ export function normalizeSpatialGeometry(
       ...(geometry.z === undefined ? [] : [geometry.z]),
       ...(geometry.m === undefined ? [] : [geometry.m]),
     ], 'point');
+    const z = geometry.z === undefined ? undefined : coordinateAt(vertex, 2, 'point.z');
+    const m = geometry.m === undefined
+      ? undefined
+      : coordinateAt(vertex, geometry.z === undefined ? 2 : 3, 'point.m');
     normalized = Object.freeze({
       type: 'point',
       x: vertex[0],
       y: vertex[1],
-      ...(geometry.z === undefined ? {} : { z: vertex[2] }),
-      ...(geometry.m === undefined ? {} : { m: vertex[geometry.z === undefined ? 2 : 3] }),
+      ...(z === undefined ? {} : { z }),
+      ...(m === undefined ? {} : { m }),
       ...(wkid === undefined ? {} : { spatialReference: Object.freeze({ wkid }) }),
     });
   } else if (geometry.type === 'multipoint') {
