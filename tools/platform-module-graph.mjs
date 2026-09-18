@@ -338,8 +338,10 @@ export const buildPlatformModuleGraph = async (root = DEFAULT_ROOT) => {
         const candidates = resolution.candidates
           .map((candidate) => relativePath(resolvedRoot, candidate))
           .sort();
+        const platformAmbiguity = record.relative.startsWith(PLATFORM_ROOT + '/')
+          || candidates.some((candidate) => candidate.startsWith(PLATFORM_ROOT + '/'));
         findings.push(finding(
-          'error',
+          platformAmbiguity ? 'error' : 'warning',
           'ambiguous-relative-import',
           'Extensionless relative import resolves to multiple source candidates.',
           record.relative,
@@ -387,8 +389,10 @@ export const buildPlatformModuleGraph = async (root = DEFAULT_ROOT) => {
           && sourceStem(candidate.relative) === sourceStem(targetRecord.relative)
           && TYPE_EXTENSIONS.has(path.extname(candidate.relative).toLowerCase()));
         if (typedCandidates.length > 0) {
+          const platformShadow = record.relative.startsWith(PLATFORM_ROOT + '/')
+            || targetRecord.relative.startsWith(PLATFORM_ROOT + '/');
           findings.push(finding(
-            'error',
+            platformShadow ? 'error' : 'warning',
             'explicit-legacy-import-shadows-typed',
             'Import targets JavaScript while a typed implementation with the same stem exists.',
             record.relative,
