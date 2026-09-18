@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { getDefaultArcgisEsmSpecifiers, resolveArcgisEsmSpecifier } from './arcgisEsmTransport';
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const LEGACY_LOADER_PACKAGE = ['esri', 'loader'].join('-');
@@ -97,6 +98,21 @@ describe('ArcGIS module loading boundary', () => {
     expect(actualConsumers).toEqual(allowedConsumers);
     expect(actualConsumers.length).toBeLessThanOrEqual(MAX_LEGACY_DIRECT_CONSUMERS);
   });
+  it('registers every product ArcGIS module id as a statically analyzable ESM import', () => {
+    const sourceRoot = resolve(process.cwd(), 'src');
+    const registered = new Set(getDefaultArcgisEsmSpecifiers());
+    const moduleIds = collectSourceFiles(sourceRoot)
+      .filter((file) => !file.includes('.test.'))
+      .flatMap((file) => [...readFileSync(file, 'utf8').matchAll(/['"](esri\/[^'"]+)['"]/g)].map((match) => match[1]))
+      .filter((moduleId): moduleId is string => typeof moduleId === 'string')
+      .sort();
+    const missing = [...new Set(moduleIds)]
+      .map((moduleId) => ({ moduleId, specifier: resolveArcgisEsmSpecifier(moduleId) }))
+      .filter(({ specifier }) => !registered.has(specifier));
+
+    expect(missing).toEqual([]);
+  });
+
   it('pins the ArcGIS 5.1 ESM package and removes the retired loader dependency', () => {
     const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>;
