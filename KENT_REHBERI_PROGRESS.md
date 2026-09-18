@@ -252,3 +252,9 @@
 - SAFETY: no WMS/WFS/WMTS integration, production secret, analytics/telemetry transport, remote executable asset, speculative endpoint, or polling loop added.
 - MERGE GATE: successor PR must retain >=4,000 meaningful additions, exact-current-main ancestry, mergeable=true and exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success before squash merge.
 
+## 2026-09-18 — Platform successor PR #155 canonicalization
+- KANONİK PR: #155 `refactor(platform): strict TypeScript cutover on latest main`; base `1f488b974edcb3e4fff49054338c7581e21b46c8`.
+- PR #151, current main ilerlediği için diverged/behind + mergeable=false durumuna düştü ve #155 tarafından superseded olarak kapatıldı.
+- #155 creation snapshot: 4,214 additions / 1,024 deletions / 49 files, ahead=1 / behind=0, merge-base=current main, draft/open.
+- Exact-head CI yeniden zorunludur; önceki #151 CI sonuçları #155 için PASS sayılmaz.
+
