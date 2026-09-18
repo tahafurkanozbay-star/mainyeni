@@ -149,16 +149,20 @@ export const openExternalSafely = (
 ): boolean => {
   if (!url || typeof opener !== 'function') return false;
 
+  const targetUrl = typeof url === 'string' ? url.trim() : url.href;
   let parsed: URL;
   try {
-    parsed = new URL(url, typeof window === 'undefined' ? 'https://localhost/' : window.location.href);
+    parsed = new URL(
+      targetUrl,
+      typeof window === 'undefined' ? 'https://localhost/' : window.location.href,
+    );
   } catch {
     return false;
   }
 
   if (!['https:', 'http:'].includes(parsed.protocol)) return false;
 
-  const openedWindow = opener(parsed.href, '_blank', 'noopener,noreferrer');
+  const openedWindow = opener(targetUrl, '_blank', 'noopener,noreferrer');
   if (!openedWindow) return false;
 
   try {
