@@ -443,7 +443,7 @@ export const collectPayloadDiagnostics = (
     options: Pick<AdapterOptions, "duplicateCount"> = {}
 ): AdapterDiagnostics => {
     const inputRecords = extractResultRecords(payload);
-    const invalidCount = inputRecords.reduce(
+    const invalidCount = inputRecords.reduce<number>(
         (count, record) => count + (adaptFeatureRecord(record) ? 0 : 1),
         0
     );
