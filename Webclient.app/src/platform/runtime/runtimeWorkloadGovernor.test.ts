@@ -38,13 +38,13 @@ describe('runtime workload governor', () => {
     expect(lease.owner).toBe('map-shell');
     expect(governor.snapshot().active).toBe(1);
     expect(governor.snapshot().activeResources.network).toBe(1);
-    expect(resources.snapshot().usage.network).toBe(1);
+    expect(resources.snapshot().used.network).toBe(1);
 
     lease.release();
     expect(lease.released).toBe(true);
     expect(governor.snapshot().active).toBe(0);
     expect(governor.snapshot().counters.completed).toBe(1);
-    expect(resources.snapshot().usage.network).toBe(0);
+    expect(resources.snapshot().used.network).toBe(0);
     governor.dispose();
     resources.dispose();
   });
@@ -61,7 +61,7 @@ describe('runtime workload governor', () => {
     );
     expect(result).toBe(42);
     expect(governor.snapshot().counters.completed).toBe(1);
-    expect(resources.snapshot().usage.network).toBe(0);
+    expect(resources.snapshot().used.network).toBe(0);
     governor.dispose();
     resources.dispose();
   });
@@ -73,7 +73,7 @@ describe('runtime workload governor', () => {
       () => { throw new Error('boom'); },
     )).rejects.toThrow('boom');
     expect(governor.snapshot().counters.failed).toBe(1);
-    expect(resources.snapshot().usage.cpu).toBe(0);
+    expect(resources.snapshot().used.cpu).toBe(0);
     governor.dispose();
     resources.dispose();
   });
@@ -151,7 +151,7 @@ describe('runtime workload governor', () => {
     await expect(governor.acquire({ key: 'too-many-claims', resources: claims }))
       .rejects.toBeInstanceOf(RuntimeWorkloadResourceRejectedError);
     expect(governor.snapshot().admission.active).toBe(0);
-    expect(resources.snapshot().usage.network).toBe(0);
+    expect(resources.snapshot().used.network).toBe(0);
     governor.dispose();
     resources.dispose();
   });
