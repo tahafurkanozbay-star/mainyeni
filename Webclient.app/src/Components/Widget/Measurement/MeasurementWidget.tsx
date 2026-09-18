@@ -7,12 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faChartArea,
-  faChartLine,
-  faEraser,
-} from '@fortawesome/free-solid-svg-icons';
 import {
   CommonQueryWindowTools,
   type QueryWindowManagerLike,
@@ -80,6 +74,16 @@ const statusText = (state: MeasurementState): string => {
 const errorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message.trim()) return error.message;
   return 'Ölçüm aracı hazırlanırken beklenmeyen bir sorun oluştu.';
+};
+
+const ToolGlyph = ({ kind }: { readonly kind: 'area' | 'distance' | 'clear' }): ReactNode => {
+  if (kind === 'area') {
+    return <span className="measurement-widget__tool-glyph" aria-hidden="true">▱</span>;
+  }
+  if (kind === 'distance') {
+    return <span className="measurement-widget__tool-glyph" aria-hidden="true">↔</span>;
+  }
+  return <span className="measurement-widget__tool-glyph" aria-hidden="true">⌫</span>;
 };
 
 export const MeasurementWidget = forwardRef<
@@ -214,7 +218,7 @@ export const MeasurementWidget = forwardRef<
     {
       id: MEASUREMENT_TOOLS.AREA,
       label: 'Alan ölç',
-      icon: <FontAwesomeIcon icon={faChartArea} />,
+      icon: <ToolGlyph kind="area" />,
       pressed: state.activeTool === MEASUREMENT_TOOLS.AREA,
       disabled: loading,
       onActivate: () => void selectTool(MEASUREMENT_TOOLS.AREA),
@@ -222,7 +226,7 @@ export const MeasurementWidget = forwardRef<
     {
       id: MEASUREMENT_TOOLS.DISTANCE,
       label: 'Mesafe ölç',
-      icon: <FontAwesomeIcon icon={faChartLine} />,
+      icon: <ToolGlyph kind="distance" />,
       pressed: state.activeTool === MEASUREMENT_TOOLS.DISTANCE,
       disabled: loading,
       onActivate: () => void selectTool(MEASUREMENT_TOOLS.DISTANCE),
@@ -230,7 +234,7 @@ export const MeasurementWidget = forwardRef<
     {
       id: 'clear',
       label: 'Ölçümü temizle',
-      icon: <FontAwesomeIcon icon={faEraser} />,
+      icon: <ToolGlyph kind="clear" />,
       disabled: loading || state.activeTool === MEASUREMENT_TOOLS.NONE,
       onActivate: clearMeasurement,
     },
@@ -245,47 +249,19 @@ export const MeasurementWidget = forwardRef<
       aria-busy={loading || undefined}
     >
       <div className="common-query-window-header">
-        <img
-          className="common-query-window-header-icon"
-          src="images/icons/toolbar/olcumaraci.png"
-          alt=""
-          aria-hidden="true"
-        />
+        <img className="common-query-window-header-icon" src="images/icons/toolbar/olcumaraci.png" alt="" aria-hidden="true" />
         <span id={`${id}-title`}>Ölçüm Araçları</span>
-        <CommonQueryWindowTools
-          windowManager={windowManager}
-          windowId={id}
-          showNearbySearch={false}
-          showMapSelect={false}
-          setQueryField={() => undefined}
-          query={null}
-        />
+        <CommonQueryWindowTools windowManager={windowManager} windowId={id} showNearbySearch={false} showMapSelect={false} setQueryField={() => undefined} />
       </div>
-      <div className="common-query-window-body layer-list-window-body measurement-widget-body">
-        <ExperienceToolbar
-          className="measurement-widget-toolbar"
-          label="Ölçüm araçları"
-          items={toolbarItems}
-          orientation="horizontal"
-        />
-        <ExperienceStatus
-          className="measurement-widget-status"
-          tone={tone}
-          live={actionError || state.error ? 'assertive' : 'polite'}
-          busy={loading}
-        >
-          {message}
-        </ExperienceStatus>
-        <div
-          id="measurementDiv"
-          className="measurement-widget-result"
-          role="region"
-          aria-label="Ölçüm sonucu"
-          aria-live="polite"
-        />
+      <div className="measurement-widget__body">
+        <ExperienceToolbar ariaLabel="Ölçüm araçları" items={toolbarItems} orientation="horizontal" />
+        <ExperienceStatus tone={tone} role={actionError || state.error ? 'alert' : 'status'}>{message}</ExperienceStatus>
+        <div id="measurementDiv" className="measurement-widget__canvas" aria-label="ArcGIS ölçüm denetimi" />
       </div>
     </section>
   );
 });
 
 MeasurementWidget.displayName = 'MeasurementWidget';
+
+export default MeasurementWidget;
