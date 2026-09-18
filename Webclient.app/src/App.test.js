@@ -2,7 +2,7 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import App from './App';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
-import { setDefaultOptions } from 'esri-loader';
+import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 
 jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
   bootstrapApplication: jest.fn()
@@ -42,7 +42,7 @@ jest.mock('./Store/Managers/WindowManager', () => ({
   useWindowManager: () => ({ id: 'window-manager-1' })
 }));
 
-jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
+jest.mock('./gis-engine/arcgisModuleRuntime', () => ({ configureArcgisModuleRuntime: jest.fn() }));
 
 const deferred = () => {
   let resolve;
@@ -57,14 +57,15 @@ const deferred = () => {
 describe('App bootstrap lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    configureArcgisModuleRuntime.mockReturnValue({ backend: 'arcgis-core-esm' });
     bootstrapApplication.mockImplementation(() => new Promise(() => {}));
   });
 
   test('configures ArcGIS and starts bootstrap once with a cancellation signal', () => {
     render(<App />);
 
-    expect(setDefaultOptions).toHaveBeenCalledTimes(1);
-    expect(setDefaultOptions).toHaveBeenCalledWith(expect.objectContaining({ version: expect.anything() }));
+    expect(configureArcgisModuleRuntime).toHaveBeenCalledTimes(1);
+    expect(configureArcgisModuleRuntime).toHaveBeenCalledWith(expect.objectContaining({ version: '5.1.24', css: true }));
     expect(bootstrapApplication).toHaveBeenCalledTimes(1);
     expect(bootstrapApplication).toHaveBeenCalledWith({
       signal: expect.objectContaining({ aborted: false })
@@ -107,11 +108,7 @@ describe('App bootstrap lifecycle', () => {
 
     await act(async () => {
       operation.reject(new Error('network details that must not reach UI'));
-      try {
-        await operation.promise;
-      } catch {
-        // App owns the rejection; this only drains the deferred promise for React act.
-      }
+      await expect(operation.promise).rejects.toThrow('network details that must not reach UI');
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(/harita yapılandırması yüklenemedi/i);
@@ -126,11 +123,7 @@ describe('App bootstrap lifecycle', () => {
 
     await act(async () => {
       operation.reject(Object.assign(new Error('cancelled'), { code: 'BOOTSTRAP_ABORTED' }));
-      try {
-        await operation.promise;
-      } catch {
-        // Expected cancellation.
-      }
+      await expect(operation.promise).rejects.toMatchObject({ code: 'BOOTSTRAP_ABORTED' });
     });
 
     expect(screen.getByRole('status')).toBeInTheDocument();
@@ -168,11 +161,7 @@ describe('App bootstrap lifecycle', () => {
 
     await act(async () => {
       operation.reject(new Error('late failure'));
-      try {
-        await operation.promise;
-      } catch {
-        // Expected rejection after unmount.
-      }
+      await expect(operation.promise).rejects.toThrow('late failure');
     });
 
     expect(screen.queryByText(/harita yapılandırması yüklenemedi/i)).not.toBeInTheDocument();

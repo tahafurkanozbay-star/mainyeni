@@ -5,7 +5,7 @@ export const AppConfig = Object.freeze({
     Title1: 'Ankara Büyükşehir Belediyesi',
     Title2: 'Kent Rehberi',
     Version: runtimeConfig.release,
-    EsriApiVersion: runtimeConfig.esriApiVersion || '4.21',
+    EsriApiVersion: runtimeConfig.esriApiVersion || '5.1.24',
     IsFullVersion: true,
   }),
   Api: Object.freeze({

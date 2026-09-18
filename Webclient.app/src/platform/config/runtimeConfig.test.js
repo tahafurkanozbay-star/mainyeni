@@ -17,7 +17,7 @@ describe('Vite-first runtime configuration', () => {
       VITE_API_MAX_RETRIES: '3',
       VITE_ENV: 'staging',
       VITE_RELEASE: '2026.09.16',
-      VITE_ESRI_API_VERSION: '4.34',
+      VITE_ESRI_API_VERSION: '5.1.24',
       VITE_TKGM_CITY_ID: '28',
       VITE_ADAPTIVE_RUNTIME: 'true',
       VITE_PRIVACY_TELEMETRY: 'false',
@@ -29,7 +29,7 @@ describe('Vite-first runtime configuration', () => {
     expect(config.maxRetries).toBe(3);
     expect(config.environment).toBe('staging');
     expect(config.release).toBe('2026.09.16');
-    expect(config.esriApiVersion).toBe('4.34');
+    expect(config.esriApiVersion).toBe('5.1.24');
     expect(config.tkgmCityId).toBe('28');
     expect(config.buildMode).toBe('vite-ready');
     expect(config.features.adaptiveRuntime).toBe(true);
@@ -79,15 +79,15 @@ describe('Vite-first runtime configuration', () => {
   });
 
   test('normalizes ArcGIS versions instead of allowing arbitrary CDN fragments', () => {
-    expect(normalizeEsriApiVersion('4.25')).toBe('4.25');
-    expect(normalizeEsriApiVersion(' 4.34 ')).toBe('4.34');
-    expect(normalizeEsriApiVersion('next')).toBe('4.21');
-    expect(normalizeEsriApiVersion('https://evil.example/sdk')).toBe('4.21');
-    expect(normalizeEsriApiVersion('4.34\nhttps://evil.example')).toBe('4.21');
+    expect(normalizeEsriApiVersion('5.1.24')).toBe('5.1.24');
+    expect(normalizeEsriApiVersion(' 5.1.24 ')).toBe('5.1.24');
+    expect(normalizeEsriApiVersion('next')).toBe('5.1.24');
+    expect(normalizeEsriApiVersion('https://evil.example/sdk')).toBe('5.1.24');
+    expect(normalizeEsriApiVersion('5.1.24\nhttps://evil.example')).toBe('5.1.24');
   });
 
   test('uses the project ArcGIS baseline when no version is configured', () => {
-    expect(createRuntimeConfig({}).esriApiVersion).toBe('4.21');
+    expect(createRuntimeConfig({}).esriApiVersion).toBe('5.1.24');
   });
 
   test('clamps unsafe numeric runtime settings', () => {
@@ -101,10 +101,10 @@ describe('Vite-first runtime configuration', () => {
     expect(config.maxRetries).toBe(4);
   });
 
-  test('rejects manually constructed ArcGIS versions outside the explicit 4.x contract', () => {
+  test('rejects manually constructed ArcGIS versions outside the bundled package contract', () => {
     const safe = createRuntimeConfig({});
     expect(() => assertSafeRuntimeConfig({ ...safe, esriApiVersion: 'next' }))
-      .toThrow(/explicit 4\.x release/i);
+      .toThrow(/must match bundled @arcgis\/core 5\.1\.24/i);
   });
 
   test('produces deterministic fingerprints without exposing raw configuration fields', () => {

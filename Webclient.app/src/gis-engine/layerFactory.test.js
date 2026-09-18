@@ -1,9 +1,8 @@
-import { loadModules } from 'esri-loader';
+import { resetArcgisModuleRuntimeCache, setArcgisModuleTransport } from './arcgisModuleRuntime';
 import { create2DLayer, create3DLayer } from './layerFactory';
 
-jest.mock('esri-loader', () => ({
-  loadModules: jest.fn(),
-}));
+const loadModules = jest.fn();
+const arcgisTestTransport = { name: 'layer-factory-test', loadModules };
 
 const FeatureLayer = jest.fn().mockImplementation(function FeatureLayerMock(options) { return { ...options }; });
 const MapImageLayer = jest.fn().mockImplementation(function MapImageLayerMock(options) { return { ...options }; });
@@ -24,6 +23,8 @@ const absolute = (path) => new URL(path, window.location.origin).toString().repl
 describe('layerFactory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    setArcgisModuleTransport(arcgisTestTransport);
+    resetArcgisModuleRuntimeCache();
     loadModules.mockImplementation(([name]) => Promise.resolve([sdkModules[name]]));
   });
 

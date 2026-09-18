@@ -1,4 +1,4 @@
-import { loadModules } from 'esri-loader';
+import { resetArcgisModuleRuntimeCache, setArcgisModuleTransport } from './arcgisModuleRuntime';
 import {
   MEASUREMENT_TOOLS,
   clearMeasurementRuntimeCache,
@@ -9,14 +9,15 @@ import {
   normalizeMeasurementTool,
 } from './measurementRuntime';
 
-jest.mock('esri-loader', () => ({
-  loadModules: jest.fn(),
-}));
+const loadModules = jest.fn();
+const arcgisTestTransport = { name: 'measurement-runtime-test', loadModules };
 
 describe('measurementRuntime', () => {
   beforeEach(() => {
-    clearMeasurementRuntimeCache();
     jest.clearAllMocks();
+    setArcgisModuleTransport(arcgisTestTransport);
+    resetArcgisModuleRuntimeCache();
+    clearMeasurementRuntimeCache();
   });
 
   test('normalizes supported measurement tool aliases', () => {
