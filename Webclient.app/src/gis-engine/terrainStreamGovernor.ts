@@ -101,11 +101,6 @@ const finiteNonNegative = (value: unknown, label: string): number => {
   return Object.is(resolved, -0) ? 0 : resolved;
 };
 
-const optionalTimestamp = (value: number | undefined, label: string): number | undefined => {
-  if (value === undefined) return undefined;
-  return finiteNonNegative(value, label);
-};
-
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 const percentile = (values: readonly number[], ratio: number): number => {
@@ -223,10 +218,10 @@ export class TerrainStreamGovernor {
             estimatedBytes,
             ...(input.requestedAt === undefined
               ? {}
-              : { requestedAt: optionalTimestamp(input.requestedAt, 'terrain tile requestedAt') }),
+              : { requestedAt: finiteNonNegative(input.requestedAt, 'terrain tile requestedAt') }),
             ...(input.lastUsedAt === undefined
               ? {}
-              : { lastUsedAt: optionalTimestamp(input.lastUsedAt, 'terrain tile lastUsedAt') }),
+              : { lastUsedAt: finiteNonNegative(input.lastUsedAt, 'terrain tile lastUsedAt') }),
           }),
           score: Number.NEGATIVE_INFINITY,
           oversized: true,
@@ -242,10 +237,10 @@ export class TerrainStreamGovernor {
         estimatedBytes,
         ...(input.requestedAt === undefined
           ? {}
-          : { requestedAt: optionalTimestamp(input.requestedAt, 'terrain tile requestedAt') }),
+          : { requestedAt: finiteNonNegative(input.requestedAt, 'terrain tile requestedAt') }),
         ...(input.lastUsedAt === undefined
           ? {}
-          : { lastUsedAt: optionalTimestamp(input.lastUsedAt, 'terrain tile lastUsedAt') }),
+          : { lastUsedAt: finiteNonNegative(input.lastUsedAt, 'terrain tile lastUsedAt') }),
       });
       return { tile, score: tileScore(tile, budget, timestamp), oversized: false };
     });
