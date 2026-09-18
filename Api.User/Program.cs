@@ -1,5 +1,6 @@
 using Api.Core.Platform;
 using Api.User.Filters;
+using Api.User.KentRehberi;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +26,7 @@ public static class Program
         // CORS allowlists are resolved centrally by AddKentRehberiApiPlatform from
         // Platform:Cors:AllowedOrigins and the temporary legacy Cors:AllowedOrigins bridge.
         builder.Services.AddKentRehberiApiPlatform(builder.Configuration);
+        builder.Services.AddKentRehberiData(builder.Configuration);
         builder.Services.AddScoped<AppRequestFilterAttribute>();
         builder.Services.AddMemoryCache();
         builder.Services.AddControllers();
