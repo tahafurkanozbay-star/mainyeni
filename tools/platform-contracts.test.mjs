@@ -30,6 +30,7 @@ async function fixture(overrides = {}) {
         'build:verify': 'node scripts/verify-build.mjs',
         'quality:module-graph': 'node ../tools/platform-module-graph.mjs --strict',
         'quality:language-ratchet': 'node ../tools/platform-language-ratchet.mjs --strict',
+        'quality:platform-boundaries': 'node ../tools/platform-boundary-audit.mjs --strict',
         lint: 'oxlint src',
         'lint:strict': 'oxlint --deny-warnings src',
         'test:ci': 'vitest run',
@@ -175,6 +176,7 @@ test('requires module graph and language ratchet scripts in the web quality surf
   )));
   delete packageJson.scripts['quality:module-graph'];
   delete packageJson.scripts['quality:language-ratchet'];
+  delete packageJson.scripts['quality:platform-boundaries'];
   const root = await fixture({
     'Webclient.app/package.json': JSON.stringify(packageJson),
   });
@@ -186,5 +188,6 @@ test('requires module graph and language ratchet scripts in the web quality surf
     .filter(Boolean);
   assert.ok(codes.includes('quality:module-graph'));
   assert.ok(codes.includes('quality:language-ratchet'));
+  assert.ok(codes.includes('quality:platform-boundaries'));
   assert.equal(report.summary.passed, false);
 });

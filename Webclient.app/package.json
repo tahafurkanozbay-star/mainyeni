@@ -48,10 +48,11 @@
     "typecheck:shell": "tsc --noEmit -p tsconfig.shell.json",
     "typecheck:modern-shell": "tsc --noEmit -p tsconfig.modern-shell.json",
     "typecheck:data-search": "tsc --noEmit -p tsconfig.data-search.json",
-    "verify": "npm run dependency:verify && npm run quality:module-graph && npm run quality:language-ratchet && npm run lint:strict && npm run quality:experience && npm run quality:vite && npm run typecheck && npm run test:ci && npm run test:tooling && npm run test:build-budget && npm run build && npm run build:verify",
+    "verify": "npm run dependency:verify && npm run quality:module-graph && npm run quality:language-ratchet && npm run quality:platform-boundaries && npm run lint:strict && npm run quality:experience && npm run quality:vite && npm run typecheck && npm run test:ci && npm run test:tooling && npm run test:build-budget && npm run build && npm run build:verify",
     "preview": "vite preview --host 0.0.0.0",
     "quality:module-graph": "node ../tools/platform-module-graph.mjs --strict",
-    "quality:language-ratchet": "node ../tools/platform-language-ratchet.mjs --strict"
+    "quality:language-ratchet": "node ../tools/platform-language-ratchet.mjs --strict",
+    "quality:platform-boundaries": "node ../tools/platform-boundary-audit.mjs --strict"
   },
   "engines": {
     "node": ">=24.0.0",

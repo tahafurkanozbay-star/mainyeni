@@ -51,6 +51,7 @@ jobs:
           tools/platform-contracts.test.mjs
           tools/platform-module-graph.test.mjs
           tools/platform-language-ratchet.test.mjs
+          tools/platform-boundary-audit.test.mjs
           tools/package-lock-integrity.test.mjs
 
       - name: Enforce modernization contracts
@@ -61,6 +62,9 @@ jobs:
 
       - name: Enforce language modernization ratchet
         run: node tools/platform-language-ratchet.mjs --strict
+
+      - name: Enforce Platform responsibility boundaries
+        run: node tools/platform-boundary-audit.mjs --strict
 
       - name: Generate architecture inventory
         run: node tools/platform-audit.mjs
@@ -76,6 +80,7 @@ jobs:
             artifacts/platform-audit/platform-audit.md \
             artifacts/platform-audit/platform-module-graph.md \
             artifacts/platform-audit/language-modernization.md \
+            artifacts/platform-audit/platform-boundaries.md \
             artifacts/platform-audit/package-lock-integrity.md
           do
             if [ -f "$report" ]; then
