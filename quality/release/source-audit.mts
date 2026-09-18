@@ -22,6 +22,7 @@ export interface SourceAuditSummary {
 const CODE_KINDS: readonly FileKind[] = ['javascript', 'typescript', 'csharp'];
 const WEB_KINDS: readonly FileKind[] = ['javascript', 'typescript', 'html', 'css'];
 const JS_KINDS: readonly FileKind[] = ['javascript', 'typescript'];
+const TEST_SOURCE_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|\.|$)|\.(?:test|spec)\.[^/]+$/i;
 
 const EXCLUDED_PATHS = [
   /^quality\/release\//,
@@ -65,6 +66,7 @@ export const SOURCE_RULES: readonly TextRule[] = Object.freeze([
     message: 'eval/new Function introduces code-injection and CSP bypass risk.',
     pattern: /\beval\s*\(|\bnew\s+Function\s*\(/g,
     includeKinds: JS_KINDS,
+    excludePaths: [TEST_SOURCE_PATH],
     remediation: 'Replace dynamic evaluation with explicit parsers, lookup tables, or typed dispatch.',
     blocking: true,
     maxFindingsPerFile: 8,

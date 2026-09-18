@@ -208,3 +208,12 @@
 - SECURITY / PERFORMANCE: yeni secret, WMS/WFS/WMTS, analytics/telemetry endpoint veya remote runtime dependency eklenmedi. Capacity/load-shedding work bounded; release audit production/test ayrımı gate'i gevşetmeden false-positive riskini azalttı.
 - MERGE: PR #131 expected-head SHA korumasıyla squash merge edildi; GitHub `merged=true`; merge SHA `a885f5b8ae077485873404c8dd78a16cef7179c3` ve commit current `main` üzerinde doğrulandı.
 - SONRAKİ GÖREV: merged #131 branch yeniden kullanılmamalı. Yeni Platform turu o andaki current `main`den fresh role-scoped branch ile başlamalı; Experience/GIS/Data-Search alanlarını gereksiz yere ezmeden strict TS/TSX migration ve runtime wiring boşlukları önceliklendirilmeli.
+
+## 2026-09-18 — Platform/Architecture strict TypeScript cutover continuation (PR #147)
+
+- Canonical PR: #147 `agent/platform-ts-cutover-20260918-1630-50459b5`, exact current-main base `50459b5b8335c2fb253fb433f8b7a3435c6e1523`; pre-fix head `f8947009a85fcb76f724ea9c14bb5fa3f1a535b1` was 13 commits ahead / 0 behind, mergeable, and 4,160 additions / 513 deletions.
+- Exact-head Platform Architecture Audit was green. Webclient Quality and Release QA had narrowed to two real regression gates: one newly failing Vitest case in `bootstrapCore.test.js`, and release-source audit false positives from literal `eval/new Function` examples inside `tools/browser-runtime-boundary.test.mjs`.
+- Bootstrap migration fix preserves the legacy public contract for an already materialized `configValue` object: `parseMapConfiguration` returns that object identity instead of cloning/freezing it during parsing. Immutable plan/result boundaries remain independently enforced.
+- Release source-audit fix excludes conventional `*.test.*` / `*.spec.*` / test-fixture paths only from the `dynamic-eval` rule; production dynamic execution remains CRITICAL and explicitly blocking. Added a Node test proving both sides of that boundary.
+- No WMS/WFS/WMTS integration, endpoint, secret, remote executable asset, analytics transport, dependency, or polling loop was added.
+- Merge remains forbidden until the new exact head completes Webclient Quality + Release QA + Platform Architecture Audit successfully, downstream build/integrity budgets execute, PR remains current-main based and mergeable, and final security/performance/regression review is clean.
