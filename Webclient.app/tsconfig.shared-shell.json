@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/Components/Common/Error.tsx",
+    "src/Components/Common/Loading.tsx",
+    "src/Components/Common/messageModel.ts",
+    "src/Components/Common/MessageAlert.tsx",
+    "src/Components/Common/MessageBar.tsx",
+    "src/Components/Common/MessageToast.tsx",
+    "src/Components/Common/SharedGISIcon.tsx",
+    "src/Components/App/SidebarCatalog.ts",
+    "src/Toolbox/GisCommonHelper.ts",
+    "src/Toolbox/useDebounce.ts",
+    "src/observability/webVitalsRuntime.ts",
+    "src/reportWebVitals.ts"
+  ],
+  "exclude": ["node_modules", "build", "dist"]
+}
