@@ -1,4 +1,4 @@
-import { resetArcgisModuleRuntimeCache, setArcgisModuleTransport } from './arcgisModuleRuntime';
+import { setArcgisModuleTransport } from './arcgisModuleRuntime';
 import { createViewStateBridge } from './viewState';
 import { create3DLayer } from './layerFactory';
 import {
