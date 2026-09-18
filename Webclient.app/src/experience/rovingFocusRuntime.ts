@@ -45,7 +45,14 @@ export const getInitialRovingIndex = (
   const available = getAvailableRovingIndices(items);
   if (available.length === 0) return -1;
   const afterPreferred = available.find((index) => index > preferredIndex);
-  return afterPreferred ?? available[0] ?? -1;
+  if (afterPreferred !== undefined) return afterPreferred;
+
+  for (let position = available.length - 1; position >= 0; position -= 1) {
+    const candidate = available[position];
+    if (candidate !== undefined && candidate < preferredIndex) return candidate;
+  }
+
+  return available[0] ?? -1;
 };
 
 const moveBy = (
