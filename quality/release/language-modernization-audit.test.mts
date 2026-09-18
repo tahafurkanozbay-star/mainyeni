@@ -221,7 +221,7 @@ test("reports var declarations", () => {
 
 test("flags undocumented ts-expect-error", () => {
   const section = auditLanguageModernization(fixtureInventory([
-    { path: "Webclient.app/src/Core/value.ts", text: "// @ts-expect-error\\nconst x = bad();" },
+    { path: "Webclient.app/src/Core/value.ts", text: "// @ts-expect-error\nconst x = bad();" },
   ]));
   const ids = section.findings.map(finding => finding.id);
   assert.ok(ids.includes("language-ts-expect-error-undocumented"));
