@@ -161,8 +161,10 @@ export const sanitizeExternalUrl = (value: unknown): string | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
   try {
+    if (trimmed.length > 2048) return null;
     const parsed = new URL(trimmed, window.location.href);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.username || parsed.password) return null;
     return parsed.toString();
   } catch {
     return null;
@@ -386,7 +388,17 @@ export const createLatestOperationGate = (
     });
 
     try {
-      const result = await operation(context);
+      const operationPromise = Promise.resolve().then(() => operation(context));
+      const abortPromise = new Promise<never>((_resolve, reject) => {
+        if (controller.signal.aborted) {
+          reject(new DOMException('Operation cancelled.', 'AbortError'));
+          return;
+        }
+        controller.signal.addEventListener('abort', () => {
+          reject(new DOMException('Operation cancelled.', 'AbortError'));
+        }, { once: true });
+      });
+      const result = await Promise.race([operationPromise, abortPromise]);
       if (!context.isCurrent()) {
         throw new DOMException('Operation superseded or cancelled.', 'AbortError');
       }
