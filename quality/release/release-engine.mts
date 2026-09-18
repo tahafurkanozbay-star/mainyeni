@@ -21,11 +21,22 @@ import {
   type Severity,
   type SeverityCounts,
 } from './contracts.mts';
+import { auditAccessibility } from './accessibility-audit.mts';
+import { auditBackendSecurity } from './backend-security-audit.mts';
+import { auditCiIntegrity } from './ci-integrity-audit.mts';
+import { auditDataIntegrity } from './data-integrity-audit.mts';
 import { auditDependencies } from './dependency-audit.mts';
+import { auditGisReleaseContracts } from './gis-release-contract-audit.mts';
+import { auditLanguageModernization } from './language-modernization-audit.mts';
 import { auditGis } from './gis-audit.mts';
 import { auditModernization } from './modernization-audit.mts';
 import { auditNetwork } from './network-audit.mts';
 import { auditPerformance } from './performance-audit.mts';
+import { auditObservability } from './observability-audit.mts';
+import { auditResponsive } from './responsive-audit.mts';
+import { auditRuntimeResilience } from './runtime-resilience-audit.mts';
+import { auditSecurity } from './security-audit.mts';
+import { auditValidationIntegrity } from './validation-integrity-audit.mts';
 import { scanSource } from './source-audit.mts';
 import { auditTestContracts } from './test-contracts.mts';
 import { auditUx } from './ux-audit.mts';
@@ -222,12 +233,23 @@ export async function runReleaseEngine(
   const thresholds = mergedThresholds(options.thresholds);
   const sections: AuditSection<unknown>[] = [
     auditModernization(inventory),
+    auditLanguageModernization(inventory),
     scanSource(inventory),
+    auditSecurity(inventory),
+    auditBackendSecurity(inventory),
     auditDependencies(inventory),
+    auditCiIntegrity(inventory),
+    auditValidationIntegrity(inventory),
     auditNetwork(inventory),
     auditGis(inventory),
+    auditGisReleaseContracts(inventory),
     auditUx(inventory),
+    auditAccessibility(inventory),
+    auditResponsive(inventory),
     auditPerformance(inventory),
+    auditDataIntegrity(inventory),
+    auditRuntimeResilience(inventory),
+    auditObservability(inventory),
     auditTestContracts(inventory),
   ];
 
