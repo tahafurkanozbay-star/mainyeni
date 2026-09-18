@@ -1,9 +1,83 @@
 import type { GuardrailReason, TextBoundaryLimits, TextBoundaryResult } from './contracts';
 
-const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
-const BIDI_CONTROL_CHARACTERS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;
-const INVISIBLE_FORMATTING_CHARACTERS = /[\u200B\u200C\u200D\u2060\uFEFF]/gu;
+const BIDI_CONTROL_CODE_POINTS = new Set([
+  0x061c,
+  0x200e,
+  0x200f,
+  0x202a,
+  0x202b,
+  0x202c,
+  0x202d,
+  0x202e,
+  0x2066,
+  0x2067,
+  0x2068,
+  0x2069,
+]);
+
+const INVISIBLE_FORMATTING_CODE_POINTS = new Set([
+  0x200b,
+  0x200c,
+  0x200d,
+  0x2060,
+  0xfeff,
+]);
+
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_\x60|~0-9A-Za-z]+$/u;
+
+const isControlCodePoint = (codePoint: number): boolean =>
+  (codePoint >= 0 && codePoint <= 8) ||
+  codePoint === 11 ||
+  codePoint === 12 ||
+  (codePoint >= 14 && codePoint <= 31) ||
+  codePoint === 127;
+
+const containsCodePoint = (
+  value: string,
+  predicate: (codePoint: number) => boolean,
+): boolean => {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && predicate(codePoint)) return true;
+  }
+  return false;
+};
+
+const removeCodePoints = (
+  value: string,
+  blocked: ReadonlySet<number>,
+): string => {
+  let output = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined || blocked.has(codePoint)) continue;
+    output += character;
+  }
+  return output;
+};
+
+const replaceControlCharacters = (
+  value: string,
+  replacement: string,
+): string => {
+  let output = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    output += codePoint !== undefined && isControlCodePoint(codePoint)
+      ? replacement
+      : character;
+  }
+  return output;
+};
+
+const hasControlCharacters = (value: string): boolean =>
+  containsCodePoint(value, isControlCodePoint);
+
+const hasBidiControlCharacters = (value: string): boolean =>
+  containsCodePoint(value, (codePoint) => BIDI_CONTROL_CODE_POINTS.has(codePoint));
+
+const hasInvisibleFormatting = (value: string): boolean =>
+  containsCodePoint(value, (codePoint) => INVISIBLE_FORMATTING_CODE_POINTS.has(codePoint));
 
 export const DEFAULT_TEXT_BOUNDARY_LIMITS: TextBoundaryLimits = Object.freeze({
   maxCodeUnits: 4_096,
@@ -85,18 +159,18 @@ export const evaluateTextBoundary = (
   }
 
   if (limits.stripInvisibleFormatting) {
-    value = value.replace(INVISIBLE_FORMATTING_CHARACTERS, '');
+    value = removeCodePoints(value, INVISIBLE_FORMATTING_CODE_POINTS);
   }
 
   if (limits.trim) {
     value = value.trim();
   }
 
-  if (limits.rejectControlCharacters && CONTROL_CHARACTERS.test(value)) {
+  if (limits.rejectControlCharacters && hasControlCharacters(value)) {
     reasons.push(reason('control-character', 'Control characters are not allowed.'));
   }
 
-  if (limits.rejectBidiControls && BIDI_CONTROL_CHARACTERS.test(value)) {
+  if (limits.rejectBidiControls && hasBidiControlCharacters(value)) {
     reasons.push(reason('bidi-control', 'Bidirectional formatting controls are not allowed.'));
   }
 
@@ -178,7 +252,7 @@ export const evaluateHeaderBoundary = (
   });
 };
 
-const FILE_UNSAFE_CHARACTERS = /[<>:"/\\|?*\u0000-\u001F\u007F]/gu;
+const FILE_UNSAFE_CHARACTERS = /[<>:"/\\|?*]/gu;
 const FILE_TRAILING_DOTS_OR_SPACES = /[. ]+$/u;
 const RESERVED_FILE_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
 
@@ -204,7 +278,7 @@ export const sanitizeFileName = (
     normalizeUnicode: true,
   });
 
-  let value = evaluated.value
+  let value = replaceControlCharacters(evaluated.value, '_')
     .replace(FILE_UNSAFE_CHARACTERS, '_')
     .replace(FILE_TRAILING_DOTS_OR_SPACES, '');
 
@@ -228,9 +302,9 @@ export const sanitizeFileName = (
 };
 
 export const hasSensitiveUnicodeFormatting = (value: string): boolean =>
-  CONTROL_CHARACTERS.test(value) ||
-  BIDI_CONTROL_CHARACTERS.test(value) ||
-  INVISIBLE_FORMATTING_CHARACTERS.test(value);
+  hasControlCharacters(value) ||
+  hasBidiControlCharacters(value) ||
+  hasInvisibleFormatting(value);
 
 export const truncateUtf8 = (
   value: string,
