@@ -33,7 +33,7 @@ describe('platform guardrail profiles', () => {
     const profile = createBackgroundGuardrailProfile();
     expect(profile.name).toBe('background');
     expect(profile.work.maxConcurrent).toBe(2);
-    expect(profile.lifecycle.staleAfterMs).toBeGreaterThan(60_000);
+    expect(profile.deadline.defaultTimeoutMs).toBeGreaterThan(60_000);
   });
 
   it('allows callers to narrow preset limits', () => {
@@ -87,7 +87,6 @@ describe('platform guardrail profiles', () => {
       cacheEntries: profile.cache.capacity,
       cacheWeight: profile.cache.maxEstimatedWeight,
       defaultDeadlineMs: profile.deadline.defaultTimeoutMs,
-      trackedResources: profile.lifecycle.maxTrackedResources,
     });
   });
 
