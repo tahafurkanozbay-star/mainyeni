@@ -140,8 +140,8 @@ export const createExperienceCommandRegistry = (
       label: definition.label,
       description: definition.group,
       group: definition.group,
-      shortcut: definition.shortcut,
-      keywords: definition.keywords,
+      ...(definition.shortcut ? { shortcut: definition.shortcut } : {}),
+      ...(definition.keywords ? { keywords: definition.keywords } : {}),
       enabled: () => target ? typeof dependencies.windowManager?.ShowWindow === 'function' : true,
       execute: () => {
         if (target) {
@@ -214,7 +214,9 @@ export function ExperienceCommandCenter({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const registry = useMemo(
-    () => createExperienceCommandRegistry({ windowManager }),
+    () => createExperienceCommandRegistry({
+      ...(windowManager ? { windowManager } : {}),
+    }),
     [windowManager],
   );
 

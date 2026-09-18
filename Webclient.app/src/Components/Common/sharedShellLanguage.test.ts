@@ -11,10 +11,17 @@ const migrated = Object.freeze([
   ['src/Components/Common/MessageToast.js', 'src/Components/Common/MessageToast.tsx'],
   ['src/Components/Common/SharedGISIcon.js', 'src/Components/Common/SharedGISIcon.tsx'],
   ['src/Components/Common/QueryWindowRegistry.js', 'src/Components/Common/QueryWindowRegistry.tsx'],
+  ['src/Components/Common/ExperienceCommandCenter.js', 'src/Components/Common/ExperienceCommandCenter.tsx'],
+  ['src/Components/Common/experience-quality-utils.js', 'src/Components/Common/experience-quality-utils.ts'],
   ['src/Components/App/SidebarCatalog.js', 'src/Components/App/SidebarCatalog.ts'],
   ['src/Toolbox/GisCommonHelper.js', 'src/Toolbox/GisCommonHelper.ts'],
   ['src/Toolbox/useDebounce.js', 'src/Toolbox/useDebounce.ts'],
   ['src/reportWebVitals.js', 'src/reportWebVitals.ts'],
+  ['src/Components/Common/ExperienceDesignSystem.js', 'src/Components/Common/ExperienceDesignSystem.tsx'],
+  ['src/Components/Common/ExperienceDialog.js', 'src/Components/Common/ExperienceDialog.tsx'],
+  ['src/Components/Common/ExperienceWorkspace.js', 'src/Components/Common/ExperienceWorkspace.tsx'],
+  ['src/experience/accessibilityRuntime.js', 'src/experience/accessibilityRuntime.ts'],
+  ['src/experience/experienceRuntime.js', 'src/experience/experienceRuntime.ts'],
 ] as const);
 
 describe('shared-shell TypeScript cutover', () => {
@@ -35,8 +42,8 @@ describe('shared-shell TypeScript cutover', () => {
       expect(source).not.toMatch(/\.hours\s*=|\.minutes\s*=|\.seconds\s*=|\.typeIcon\s*=/u);
     }
   });
-  it('keeps local Web Vitals runtime transport-free', () => {
-    const source = fs.readFileSync(path.join(ROOT, 'src/observability/webVitalsRuntime.ts'), 'utf8');
+  it('keeps canonical performance runtime transport-free', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'src/performance/runtime.ts'), 'utf8');
     expect(source).not.toMatch(/\bfetch\s*\(|axios|XMLHttpRequest|WebSocket|EventSource/u);
   });
   it('keeps sidebar catalog ids unique and grouped', async () => {

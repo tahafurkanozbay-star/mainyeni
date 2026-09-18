@@ -23,7 +23,13 @@
     "src/shell/sidebarCatalogRuntime.ts",
     "src/shell/lazyResourceRuntime.ts",
     "src/shell/commandRegistryRuntime.ts",
-    "src/shell/shellKernel.ts"
+    "src/shell/shellKernel.ts",
+    "src/Components/Common/ExperienceCommandCenter.tsx",
+    "src/Components/Common/experience-quality-utils.ts"
   ],
-  "exclude": ["node_modules", "build", "dist"]
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist"
+  ]
 }
