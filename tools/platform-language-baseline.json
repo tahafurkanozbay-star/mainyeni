@@ -11,9 +11,7 @@
     "data-search": 0,
     "experience": 2,
     "gis": 0,
-    "platform": 1
+    "platform": 0
   },
-  "platformLegacyAllowlist": [
-    "Webclient.app/src/platform/bootstrap/bootstrapApplication.js"
-  ]
+  "platformLegacyAllowlist": []
 }
