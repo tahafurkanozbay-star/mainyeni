@@ -143,8 +143,7 @@ export const normalizeWidgetError = (
     : typeof error === 'string'
       ? error
       : fallback;
-  const normalized = raw
-    
+  const normalized = replaceControlCharacters(raw)
     .replace(/\s+/gu, ' ')
     .trim();
   if (!normalized) return fallback;
