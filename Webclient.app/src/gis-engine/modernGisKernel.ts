@@ -1,5 +1,8 @@
 import { createArcGisRequestScheduler } from './arcgisRequestScheduler';
-import { createLayerLifecycleRuntime } from './layerLifecycleRuntime';
+import {
+  createLayerLifecycleRuntime,
+  type LayerLifecycleDescriptor,
+} from './layerLifecycleRuntime';
 import {
   buildArcGisCapabilityContract,
   assessCapabilityContract,
@@ -17,6 +20,10 @@ import { createServiceHealthRuntime } from './serviceHealthRuntime';
 import { createRenderGovernor, type GisLayerRenderInput } from './renderGovernorRuntime';
 import { createSceneStreamingPlanner, type GisSceneStreamingPlanInput } from './sceneStreamingPlanner';
 import { createGisObservabilityRuntime } from './gisObservabilityRuntime';
+import { createTemporalLayerRuntime } from './temporalLayerRuntime';
+import { createGisEditTransactionRuntime } from './editTransactionRuntime';
+import { createGisMapStatePersistenceRuntime } from './mapStatePersistenceRuntime';
+import { createGisExportRuntime } from './exportPlanRuntime';
 import {
   createDeterministicFingerprint,
   finiteNumber,
@@ -41,6 +48,10 @@ export interface ModernGisKernelConfiguration {
   readonly renderGovernor?: ReturnType<typeof createRenderGovernor>;
   readonly streamingPlanner?: ReturnType<typeof createSceneStreamingPlanner>;
   readonly observability?: ReturnType<typeof createGisObservabilityRuntime>;
+  readonly temporal?: ReturnType<typeof createTemporalLayerRuntime>;
+  readonly edits?: ReturnType<typeof createGisEditTransactionRuntime>;
+  readonly mapState?: ReturnType<typeof createGisMapStatePersistenceRuntime>;
+  readonly exports?: ReturnType<typeof createGisExportRuntime>;
   readonly lifecycleAdapters?: Record<string, unknown>;
   readonly schedulerOptions?: Record<string, unknown>;
   readonly layerBudget?: {
@@ -121,7 +132,7 @@ const estimateValueBytes = (value: unknown): number => {
   if (ArrayBuffer.isView(value)) return value.byteLength;
   try {
     return Math.max(1, JSON.stringify(value).length * 2);
-  } catch (_error) {
+  } catch {
     return 4096;
   }
 };
@@ -221,15 +232,19 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
   const streamingPlanner = configuration.streamingPlanner || createSceneStreamingPlanner({ now: clock });
   const initialBudget = renderGovernor.getBudget();
   const scheduler = configuration.scheduler || createArcGisRequestScheduler({
-    ...(configuration.schedulerOptions || {}),
+    ...configuration.schedulerOptions,
     now: clock,
     maxConcurrent: initialBudget.maxConcurrentRequests,
     maxConcurrentPerOrigin: Math.max(1, Math.min(4, initialBudget.maxConcurrentRequests)),
     maxCacheBytes: Math.max(4 * 1024 * 1024, Math.floor(initialBudget.maxResidentBytes * 0.12)),
     ...(configuration.onListenerError ? { onListenerError: configuration.onListenerError } : {}),
   });
+  const temporal = configuration.temporal || createTemporalLayerRuntime({ now: clock });
+  const edits = configuration.edits || createGisEditTransactionRuntime({ now: clock });
+  const mapState = configuration.mapState || createGisMapStatePersistenceRuntime({ now: clock });
+  const exports = configuration.exports || createGisExportRuntime();
   const lifecycle = configuration.lifecycle || createLayerLifecycleRuntime({
-    ...(configuration.lifecycleAdapters || {}),
+    ...configuration.lifecycleAdapters,
     now: clock,
     maxResidentLayers: Math.max(8, initialBudget.maxConcurrentLayerLoads * 4),
     maxResidentBytes: Math.max(32 * 1024 * 1024, Math.floor(initialBudget.maxResidentBytes * 0.6)),
@@ -371,12 +386,20 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
       geometryType: registration.geometryType || service.contract.geometryType || null,
     });
     const existed = layers.has(id);
-    lifecycle.registerLayer(id, {
-      ...(registration.lifecycle || {}),
-      ...descriptor,
-      url: descriptor.resourceUrl,
-      priority: 100 - Math.round(Math.max(0, Math.min(100, finiteNumber(descriptor.importance, 50) ?? 50))),
-    });
+    const lifecycleResourceUrl = descriptor.resourceUrl || service.url;
+    const lifecycleDescriptor: LayerLifecycleDescriptor = {
+      ...registration.lifecycle,
+      id,
+      resourceUrl: lifecycleResourceUrl,
+      url: lifecycleResourceUrl,
+      priority: 100 - Math.round(
+        Math.max(0, Math.min(100, finiteNumber(descriptor.importance, 50) ?? 50)),
+      ),
+      ...(descriptor.visible === undefined ? {} : { visible: descriptor.visible }),
+      ...(descriptor.pinned === undefined ? {} : { pinned: descriptor.pinned }),
+      ...(descriptor.estimatedBytes == null ? {} : { estimatedBytes: descriptor.estimatedBytes }),
+    };
+    lifecycle.registerLayer(id, lifecycleDescriptor);
     layers.set(id, { id, serviceId: service.id, descriptor });
     metrics.layerRegistrations += existed ? 0 : 1;
     observability.record({
@@ -477,14 +500,18 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
       const value = await scheduler.schedule({
         key: requestKey,
         resourceUrl: service.url,
-        priority: context.priority,
-        cache: context.cache,
-        cacheTtlMs: context.cacheTtlMs,
-        staleTtlMs: context.staleTtlMs,
-        allowStale: context.allowStale,
-        allowStaleOnError: context.allowStaleOnError,
-        estimatedBytes: context.estimatedBytes,
-        signal: context.signal,
+        ...(context.priority === undefined ? {} : { priority: context.priority }),
+        ...(context.cache === undefined ? {} : { cache: context.cache }),
+        ...(context.cacheTtlMs === undefined ? {} : { cacheTtlMs: context.cacheTtlMs }),
+        ...(context.staleTtlMs === undefined ? {} : { staleTtlMs: context.staleTtlMs }),
+        ...(context.allowStale === undefined ? {} : { allowStale: context.allowStale }),
+        ...(context.allowStaleOnError === undefined
+          ? {}
+          : { allowStaleOnError: context.allowStaleOnError }),
+        ...(context.estimatedBytes === undefined
+          ? {}
+          : { estimatedBytes: context.estimatedBytes }),
+        ...(context.signal === undefined ? {} : { signal: context.signal }),
         tags: uniqueTags([
           ...(context.tags || []),
           `service:${service.id}`,
@@ -715,6 +742,8 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     serviceHealth.destroy();
     renderGovernor.destroy();
     streamingPlanner.destroy();
+    temporal.destroy();
+    edits.destroy();
     observability.destroy();
     services.clear();
     layers.clear();
@@ -740,6 +769,10 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     sweepLayers,
     getSnapshot,
     getDiagnostics,
+    temporal,
+    edits,
+    mapState,
+    exports,
     getService: (serviceId: unknown) => requireService(serviceId),
     getLayer: (layerId: unknown) => requireLayer(layerId).descriptor,
     destroy,

@@ -1,10 +1,11 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard.ts';
 import {
   legacyEnvironmentGuardPlugin,
   legacyJsxPlugin,
   legacyPresentationCleanupPlugin,
-} from './tooling/sourceTransforms';
+} from './tooling/sourceTransforms.ts';
 
 const arcgisLeafChunk = (id: string, prefix: string, chunkPrefix: string): string | undefined => {
   const marker = `/@arcgis/core/${prefix}/`;
@@ -157,6 +158,7 @@ export default defineConfig({
     'process.env.PUBLIC_URL': JSON.stringify('./'),
   },
   plugins: [
+    moduleResolutionGuardPlugin(),
     legacyEnvironmentGuardPlugin(),
     legacyPresentationCleanupPlugin(),
     legacyJsxPlugin(),

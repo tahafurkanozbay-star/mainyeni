@@ -23,7 +23,10 @@ const CODE_KINDS: readonly FileKind[] = ['javascript', 'typescript', 'csharp'];
 const WEB_KINDS: readonly FileKind[] = ['javascript', 'typescript', 'html', 'css'];
 const JS_KINDS: readonly FileKind[] = ['javascript', 'typescript'];
 
+const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|\.|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/iu;
+
 const EXCLUDED_PATHS = [
+  TEST_PATH,
   /^quality\/release\//,
   /(?:^|\/)package-lock\.json$/,
   /(?:^|\/)vendor\//,

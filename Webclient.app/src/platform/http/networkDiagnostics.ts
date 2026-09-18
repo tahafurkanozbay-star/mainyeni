@@ -72,7 +72,7 @@ const sanitizeUrlLike = (value: unknown): string => {
       : 'https://localhost';
     const parsed = new URL(text, base);
     return parsed.pathname || '/';
-  } catch (_error) {
+  } catch {
     const queryIndex = text.indexOf('?');
     const hashIndex = text.indexOf('#');
     const cutPoints = [queryIndex, hashIndex].filter((index) => index >= 0);
