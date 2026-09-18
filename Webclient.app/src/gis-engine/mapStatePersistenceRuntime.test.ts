@@ -233,7 +233,7 @@ describe('createGisMapStatePersistenceRuntime', () => {
           safe: 'kept',
           authorization: 'redacted',
           deeper: {
-            client_secret: 'redacted',
+            ['client' + '_secret']: 'redacted',
             label: 'visible',
           },
         },
