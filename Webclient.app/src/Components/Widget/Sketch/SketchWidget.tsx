@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import { loadArcgisModules } from '../../../gis-engine/arcgisModuleRuntime';
+import { DebugHelper } from '../../../Toolbox/DebugHelper';
 import MapManager from '../../../Store/Managers/MapManager';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import {
@@ -90,8 +91,8 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
       if (layer && map) {
         try {
           map.remove(layer);
-        } catch {
-          // The ArcGIS map may already have released the layer during view teardown.
+        } catch (error) {
+          DebugHelper.Log(error);
         }
       }
       sketchLayerRef.current = null;
