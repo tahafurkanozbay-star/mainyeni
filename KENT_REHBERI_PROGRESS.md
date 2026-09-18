@@ -208,3 +208,16 @@
 - SECURITY / PERFORMANCE: yeni secret, WMS/WFS/WMTS, analytics/telemetry endpoint veya remote runtime dependency eklenmedi. Capacity/load-shedding work bounded; release audit production/test ayrımı gate'i gevşetmeden false-positive riskini azalttı.
 - MERGE: PR #131 expected-head SHA korumasıyla squash merge edildi; GitHub `merged=true`; merge SHA `a885f5b8ae077485873404c8dd78a16cef7179c3` ve commit current `main` üzerinde doğrulandı.
 - SONRAKİ GÖREV: merged #131 branch yeniden kullanılmamalı. Yeni Platform turu o andaki current `main`den fresh role-scoped branch ile başlamalı; Experience/GIS/Data-Search alanlarını gereksiz yere ezmeden strict TS/TSX migration ve runtime wiring boşlukları önceliklendirilmeli.
+
+## Kent Rehberi PostGIS API current-main recovery — 2026-09-18 14:40 TRT
+- TUR / GÖREV: Data/API recovery; stale/diverged PR #129 yerine exact current main `525c69614f9b4d9f7fa3d87b712947fdcc037fd2` tabanında verified PostGIS public API kapsamını temiz şekilde yeniden uygulama.
+- LIFECYCLE: PR #129 code head `5b669865e81a795535e5a56b40e90d1a1e894340` exact-head Platform Architecture Audit / Platform Backend Validation / Release QA completed+success olduktan sonra main dört commit ilerledi ve branch behind=4/diverged oldu. Repository kuralları gereği stale branch'e yeni iş yığılmadı.
+- NEW BRANCH: `agent/data-api-20260918-1440-525c696`. Main'de ilerleyen Address/Search ve adaptive Platform runtime dosyaları Data/API dosyalarıyla çakışmıyor; yalnız main'de bulunmayan doğrulanmış Data/API dosyaları seçici olarak recovery edildi.
+- API: `/kent-rehberi`, `/{objectId}`, `/nearby`, `/capabilities`; public reverse-proxy hedefi `/api/kent-rehberi`. Filtreler ilce/mahalle/tur/q/bbox; cursor yalnız persistent ObjectID uniqueness garantisi + explicit deployment flag sonrası.
+- DATA / SECURITY: sabit `kent_rehberi.kent_rehberi_tumu_pggeom` kaynağı; parameterized Npgsql SQL; `gdb_geomattr_data` dışarı verilmez; ayrı `ConnectionStrings__KentRehberi` server secret; safe DB failure logging; 503 data minimization; dedicated readiness probe; readonly column-level grant/index runbook.
+- BOUNDS: max 2.000 kayıt, max 50 km nearby radius, q 2..120 karakter, EPSG:4326 bbox validation, bounded pool/connection/command timeout, request cancellation.
+- TEST KAPSAMI: query validation, cursor fail-closed, hard ceilings, readiness registration/disabled/unconfigured behavior, tracked-secret/security contracts.
+- NETWORK: browser/PostgreSQL direct connection yok; WMS/WFS/analytics/telemetry/CDN/remote asset eklenmedi.
+- PREVIOUS VALIDATION EVIDENCE: stale head `5b669865...` için üç required workflow completed+success idi. Recovery branch için hiçbir PASS henüz iddia edilmiyor; fresh exact-head CI zorunlu.
+- MERGE: NOT MERGED. Fresh PR açılmalı, eski PR #129 superseded olarak kapatılmalı. Repository meaningful-additions hedefi/gate'i sırf satır doldurmak için aşılmayacak; focused scope gate altında kalırsa draft bırakılmalı.
+
