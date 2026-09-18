@@ -124,7 +124,7 @@ export const validateKentRehberiFeatureCollection = (
     }
 
     const objectId = candidate.properties.objectid;
-    if (!Number.isInteger(objectId) || Number(objectId) <= 0) {
+    if (typeof objectId !== 'number' || !Number.isInteger(objectId) || objectId <= 0) {
       throw new TypeError(`Kent Rehberi feature ${index} is missing a valid objectid.`);
     }
 
