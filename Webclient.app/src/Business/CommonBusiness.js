@@ -241,12 +241,16 @@ export const CommonBusiness = {
 
     CreateLayer: async layerItem => {
         if (!layerItem) return null;
+        if (layerItem.layerType === Constants_LayerType.WMSLayer) {
+            throw Object.assign(new Error("WMS layers are not supported by the modern GIS runtime."), {
+                code: "UNSUPPORTED_GIS_SERVICE_TYPE"
+            });
+        }
         const url = CommonBusiness.GenerateUrl(layerItem);
         if (url) await CommonBusiness.AddProxyRule(url);
 
-        const [FeatureLayer, WMSLayer, MapImageLayer, GeoJSONLayer] = await loadModules([
+        const [FeatureLayer, MapImageLayer, GeoJSONLayer] = await loadModules([
             "esri/layers/FeatureLayer",
-            "esri/layers/WMSLayer",
             "esri/layers/MapImageLayer",
             "esri/layers/GeoJSONLayer"
         ]);
@@ -277,10 +281,6 @@ export const CommonBusiness = {
                 featureReduction: layerItem.featureReduction ?? null,
                 popupTemplate: layerItem.popupTemplate ?? null
             });
-        }
-
-        if (layerItem.layerType === Constants_LayerType.WMSLayer) {
-            return new WMSLayer(common);
         }
 
         if (layerItem.layerType === Constants_LayerType.GeoJSONLayer) {

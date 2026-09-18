@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as esriLoader from 'esri-loader';
 import {
   getArcgisModuleRuntimeSnapshot,
   loadArcgisModule,
@@ -9,16 +8,16 @@ import {
   type ArcgisModuleTransport,
 } from './arcgisModuleRuntime';
 
-vi.mock('esri-loader', () => ({
-  loadModules: vi.fn(),
-  setDefaultOptions: vi.fn(),
-}));
-
-const loadModulesMock = vi.mocked(esriLoader.loadModules);
+const loadModulesMock = vi.fn();
+const testTransport: ArcgisModuleTransport = {
+  name: 'test-esm',
+  loadModules: loadModulesMock,
+};
 
 describe('arcgisModuleRuntime', () => {
   beforeEach(() => {
     resetArcgisModuleTransport();
+    setArcgisModuleTransport(testTransport);
     resetArcgisModuleRuntimeCache();
     vi.clearAllMocks();
   });
@@ -34,7 +33,7 @@ describe('arcgisModuleRuntime', () => {
     await expect(second).resolves.toBe(moduleValue);
     expect(loadModulesMock).toHaveBeenCalledTimes(1);
     expect(getArcgisModuleRuntimeSnapshot()).toMatchObject({
-      backend: 'legacy-amd',
+      backend: 'test-esm',
       cachedModules: 1,
       loadRequests: 1,
       cacheHits: 1,
@@ -80,10 +79,10 @@ describe('arcgisModuleRuntime', () => {
     expect(loadModulesMock).not.toHaveBeenCalled();
   });
 
-  it('clears cached AMD modules when the transport changes', async () => {
-    const legacyValue = { source: 'amd' };
-    loadModulesMock.mockResolvedValue([legacyValue]);
-    await expect(loadArcgisModule('esri/Map')).resolves.toBe(legacyValue);
+  it('clears cached modules when the transport changes', async () => {
+    const firstValue = { source: 'first' };
+    loadModulesMock.mockResolvedValue([firstValue]);
+    await expect(loadArcgisModule('esri/Map')).resolves.toBe(firstValue);
     expect(getArcgisModuleRuntimeSnapshot().cachedModules).toBe(1);
 
     const nextValue = { source: 'next' };
@@ -94,6 +93,11 @@ describe('arcgisModuleRuntime', () => {
 
     expect(getArcgisModuleRuntimeSnapshot().cachedModules).toBe(0);
     await expect(loadArcgisModule('esri/Map')).resolves.toBe(nextValue);
+  });
+
+  it('resets custom transports to the production @arcgis/core ESM backend', () => {
+    const snapshot = resetArcgisModuleTransport();
+    expect(snapshot).toMatchObject({ backend: 'arcgis-core-esm', cachedModules: 0 });
   });
 
   it('rejects transports that cannot load modules', () => {

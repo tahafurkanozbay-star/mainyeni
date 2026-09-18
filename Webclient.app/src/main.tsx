@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import '@arcgis/core/assets/esri/themes/light/main.css';
 import './styles.css';
 import './experience-premium.css';
 import { AppErrorBoundary } from './platform/runtime/AppErrorBoundary';

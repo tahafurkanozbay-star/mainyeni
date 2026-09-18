@@ -2,7 +2,7 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import App from './App';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
-import { setDefaultOptions } from 'esri-loader';
+import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 
 jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
   bootstrapApplication: jest.fn()
@@ -42,7 +42,7 @@ jest.mock('./Store/Managers/WindowManager', () => ({
   useWindowManager: () => ({ id: 'window-manager-1' })
 }));
 
-jest.mock('esri-loader', () => ({ setDefaultOptions: jest.fn() }));
+jest.mock('./gis-engine/arcgisModuleRuntime', () => ({ configureArcgisModuleRuntime: jest.fn() }));
 
 const deferred = () => {
   let resolve;
@@ -57,14 +57,15 @@ const deferred = () => {
 describe('App bootstrap lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    configureArcgisModuleRuntime.mockReturnValue({ backend: 'arcgis-core-esm' });
     bootstrapApplication.mockImplementation(() => new Promise(() => {}));
   });
 
   test('configures ArcGIS and starts bootstrap once with a cancellation signal', () => {
     render(<App />);
 
-    expect(setDefaultOptions).toHaveBeenCalledTimes(1);
-    expect(setDefaultOptions).toHaveBeenCalledWith(expect.objectContaining({ version: expect.anything() }));
+    expect(configureArcgisModuleRuntime).toHaveBeenCalledTimes(1);
+    expect(configureArcgisModuleRuntime).toHaveBeenCalledWith(expect.objectContaining({ version: '5.1.24', css: true }));
     expect(bootstrapApplication).toHaveBeenCalledTimes(1);
     expect(bootstrapApplication).toHaveBeenCalledWith({
       signal: expect.objectContaining({ aborted: false })

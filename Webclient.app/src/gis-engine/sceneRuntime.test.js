@@ -1,4 +1,4 @@
-import { loadModules } from 'esri-loader';
+import { resetArcgisModuleRuntimeCache, setArcgisModuleTransport } from './arcgisModuleRuntime';
 import { createViewStateBridge } from './viewState';
 import { create3DLayer } from './layerFactory';
 import {
@@ -19,9 +19,8 @@ import {
   snapshotSceneState,
 } from './sceneRuntime';
 
-jest.mock('esri-loader', () => ({
-  loadModules: jest.fn(),
-}));
+const loadModules = jest.fn();
+const arcgisTestTransport = { name: 'scene-runtime-test', loadModules };
 
 jest.mock('./layerFactory', () => ({
   create3DLayer: jest.fn(),
@@ -81,6 +80,7 @@ const createScene = (overrides = {}) => {
 describe('sceneRuntime', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    setArcgisModuleTransport(arcgisTestTransport);
     resetSceneRuntimeModuleCache();
   });
 
