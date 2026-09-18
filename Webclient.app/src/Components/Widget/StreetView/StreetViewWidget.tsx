@@ -36,7 +36,8 @@ export const StreetViewWidget = forwardRef<ManagedWindowHandle, StreetViewWidget
       visible: false,
       minimized: false,
       OnShow: () => {
-        const mapPoint = MapManager.GetMapClickEvent()?.mapPoint;
+        const clickEvent = MapManager.GetMapClickEvent() as unknown as { readonly mapPoint?: unknown } | null;
+        const mapPoint = clickEvent?.mapPoint;
         const normalized = normalizeMapPoint(mapPoint);
         if (!normalized || !mapPoint) {
           setUrl(null);
