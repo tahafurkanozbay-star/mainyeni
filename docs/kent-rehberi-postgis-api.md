@@ -258,3 +258,49 @@ Kontrol edin:
 
 Gerçek DB credentials olmadan CI yalnız contract/validation/build testlerini
 çalıştırır; production DB bağlantısı deployment ortamında smoke test edilir.
+
+## Frontend GeoJSONLayer bağlantısı
+
+Webclient harita kabuğu açıldığında `src/data-services/kentRehberiGeoJsonLayer.ts`
+üzerinden same-origin:
+
+`GET /api/kent-rehberi?limit=500`
+
+isteğini yapar. Response doğrudan ArcGIS constructor'a verilmez; önce aşağıdaki
+sınırlar uygulanır:
+
+- response yalnız `application/geo+json` / `application/json` kabul eder,
+- HTTP error body istemci hata mesajına yansıtılmaz,
+- FeatureCollection ve her Feature yapısı doğrulanır,
+- her kayıtta pozitif integer `properties.objectid` zorunludur,
+- feature sayısı public API üst sınırı olan 2000'i aşamaz,
+- frontend payload bütçesi varsayılan 8 MiB ile sınırlıdır,
+- request timeout + AbortSignal ile iptal edilebilir,
+- API base yalnız canonical same-origin relative path kabul eder.
+
+Doğrulanmış FeatureCollection bir Blob'a çevrilir ve ArcGIS 5.1
+`GeoJSONLayer` Blob URL desteği kullanılarak yüklenir. Alan şeması explicit
+tanımlanır; ilk feature içindeki null değerlerden field type tahmini yapılmaz.
+Layer load tamamlanınca Blob URL revoke edilir. React map shell dispose olursa
+pending request abort edilir ve eklenmiş katman map'ten kaldırılıp destroy
+edilir.
+
+Bu katman yüklemesi **best-effort** çalışır: Kent Rehberi datasource geçici
+olarak 503 dönerse ana harita ve diğer GIS yetenekleri açılmaya devam eder;
+veritabanı hatası browser'a ayrıntılı olarak yansıtılmaz.
+
+### Yerel Vite demo akışı
+
+Vite development server yalnız yerel geliştirme için aynı
+`/api/kent-rehberi` yolunda üç adet açıkça `Yerel Demo` adı taşıyan Ankara
+noktası döndürür. Response header'ında
+`x-kent-rehberi-demo: vite-local-only` bulunur. Bu middleware production
+bundle içinde çalışan bir veri kaynağı değildir; production deployment gerçek
+User API + PostGIS datasource'u kullanır.
+
+Bu ayrım sayesinde DB/VPN erişimi olmayan frontend geliştirme ortamında bile
+gerçek akış:
+
+`fetch('/api/kent-rehberi') -> FeatureCollection validation -> Blob -> GeoJSONLayer -> map.add()`
+
+şeklinde test edilebilir.
