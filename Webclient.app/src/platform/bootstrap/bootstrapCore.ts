@@ -51,10 +51,7 @@ export interface BootstrapPlan {
   readonly mapConfiguration: MapConfiguration;
   readonly configurationServices: readonly ConfigurationService[];
   readonly proxyRules: readonly BootstrapProxyRule[];
-  readonly summary: Readonly<{
-    serviceCount: number;
-    proxyRuleCount: number;
-  }>;
+  readonly summary: Readonly<{ serviceCount: number; proxyRuleCount: number }>;
 }
 
 export interface BootstrapResult {
@@ -70,13 +67,20 @@ export interface BootstrapDiagnostics {
   record(event: string, payload?: Readonly<Record<string, unknown>>): void;
 }
 
+export interface BootstrapRequestOptions {
+  readonly signal?: AbortSignal;
+}
+
 export interface BootstrapDependencies {
-  readonly loadMapConfiguration: (options?: { readonly signal?: AbortSignal }) => Promise<ServiceResult> | ServiceResult;
-  readonly loadConfigurationServices: (options?: { readonly signal?: AbortSignal }) => Promise<ServiceResult> | ServiceResult;
+  readonly loadMapConfiguration:
+    (options?: BootstrapRequestOptions) => Promise<ServiceResult> | ServiceResult;
+  readonly loadConfigurationServices:
+    (options?: BootstrapRequestOptions) => Promise<ServiceResult> | ServiceResult;
   readonly generateServiceUrl: (service: ConfigurationService) => unknown;
   readonly addProxyRule: (url: string, source: string) => Promise<unknown> | unknown;
   readonly setMapConfiguration: (configuration: MapConfiguration) => Promise<unknown> | unknown;
-  readonly setConfigurationServices: (services: readonly ConfigurationService[]) => Promise<unknown> | unknown;
+  readonly setConfigurationServices:
+    (services: readonly ConfigurationService[]) => Promise<unknown> | unknown;
 }
 
 export interface BootstrapOptions {
@@ -84,10 +88,38 @@ export interface BootstrapOptions {
   readonly diagnostics?: BootstrapDiagnostics | null;
 }
 
-const DEFAULT_SOURCE = 'ApplicationBootstrap';
-const SERVICE_ID_KEYS = Object.freeze(['id', 'Id', 'code', 'Code', 'title', 'Title', 'name', 'Name'] as const);
+export interface NormalizeProxyUrlOptions {
+  readonly allowEmpty?: boolean;
+  readonly serviceIndex?: number | null;
+}
+
+export interface CreateBootstrapPlanOptions {
+  readonly mapConfiguration: unknown;
+  readonly configurationServices: unknown;
+  readonly generateServiceUrl?: unknown;
+}
+
+interface ProxySetupOptions {
+  readonly plan: BootstrapPlan;
+  readonly addProxyRule: BootstrapDependencies['addProxyRule'];
+  readonly signal?: AbortSignal;
+  readonly diagnostics?: BootstrapDiagnostics | null;
+}
+
+interface CommitPlanOptions {
+  readonly plan: BootstrapPlan;
+  readonly setMapConfiguration: BootstrapDependencies['setMapConfiguration'];
+  readonly setConfigurationServices: BootstrapDependencies['setConfigurationServices'];
+  readonly signal?: AbortSignal;
+  readonly diagnostics?: BootstrapDiagnostics | null;
+}
 
 type AnyFunction = (...args: any[]) => any;
+
+const DEFAULT_SOURCE = 'ApplicationBootstrap';
+const SERVICE_ID_KEYS = Object.freeze([
+  'id', 'Id', 'code', 'Code', 'title', 'Title', 'name', 'Name',
+] as const);
 
 const asFiniteNumber = (value: unknown, fallback = 0): number => {
   const parsed = Number(value);
@@ -111,11 +143,12 @@ const requiredFunction = <TFunction extends AnyFunction>(
   return value as TFunction;
 };
 
-const createAbortError = (stage: BootstrapStageValue): AppError => new AppError('Uygulama başlatma işlemi iptal edildi.', {
-  code: BootstrapErrorCode.ABORTED,
-  retryable: true,
-  details: { stage },
-});
+const createAbortError = (stage: BootstrapStageValue): AppError =>
+  new AppError('Uygulama başlatma işlemi iptal edildi.', {
+    code: BootstrapErrorCode.ABORTED,
+    retryable: true,
+    details: { stage },
+  });
 
 export const throwIfBootstrapAborted = (
   signal?: AbortSignal,
@@ -125,33 +158,32 @@ export const throwIfBootstrapAborted = (
 };
 
 export const isBootstrapAbortError = (error: unknown): boolean =>
-  (error instanceof AppError && error.code === BootstrapErrorCode.ABORTED) || isAbortError(error);
+  (error instanceof AppError && error.code === BootstrapErrorCode.ABORTED) ||
+  isAbortError(error);
 
-const resultCandidate = (value: unknown): ServiceResult | null =>
-  value && typeof value === 'object' ? value as ServiceResult : null;
+const serviceResultCandidate = (value: unknown): ServiceResult | null =>
+  value !== null && typeof value === 'object' ? value as ServiceResult : null;
 
 const normalizeServiceResultError = (
   result: ServiceResult | null,
-  code: BootstrapErrorCodeValue,
+  code: string,
   fallbackMessage: string,
 ): AppError => {
   const candidateMessage = typeof result?.message === 'string' ? result.message.trim() : '';
   return new AppError(candidateMessage || fallbackMessage, {
     code,
     retryable: true,
-    details: {
-      resultType: result?.type ?? result?.resultType ?? null,
-    },
+    details: { resultType: result?.type ?? result?.resultType ?? null },
   });
 };
 
 export const assertSuccessfulServiceResult = (
   result: unknown,
-  options: { readonly code?: BootstrapErrorCodeValue; readonly message?: string } = {},
+  options: Readonly<{ code?: string; message?: string }> = {},
 ): ServiceResult => {
   const code = options.code ?? BootstrapErrorCode.UNEXPECTED;
   const message = options.message ?? 'Yapılandırma servisi başarısız oldu.';
-  const candidate = resultCandidate(result);
+  const candidate = serviceResultCandidate(result);
 
   if (!candidate) {
     throw new AppError(message, {
@@ -160,20 +192,19 @@ export const assertSuccessfulServiceResult = (
       details: { reason: 'missing-result' },
     });
   }
-  if (candidate.isSuccess !== true) throw normalizeServiceResultError(candidate, code, message);
+  if (candidate.isSuccess !== true) {
+    throw normalizeServiceResultError(candidate, code, message);
+  }
   return candidate;
 };
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-};
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const normalizeJsonText = (value: unknown): unknown => {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
+  return trimmed.length > 0 ? trimmed : null;
 };
 
 export const parseMapConfiguration = (result: unknown): MapConfiguration => {
@@ -191,7 +222,7 @@ export const parseMapConfiguration = (result: unknown): MapConfiguration => {
       retryable: true,
     });
   }
-  if (isPlainObject(normalized)) return Object.freeze({ ...normalized });
+  if (isPlainObject(normalized)) return normalized;
   if (typeof normalized !== 'string') {
     throw new AppError('Harita yapılandırması desteklenmeyen biçimde döndü.', {
       code: BootstrapErrorCode.MAP_PAYLOAD_INVALID,
@@ -203,7 +234,7 @@ export const parseMapConfiguration = (result: unknown): MapConfiguration => {
   try {
     const parsed: unknown = JSON.parse(normalized);
     if (!isPlainObject(parsed)) throw new Error('Map configuration must be an object');
-    return Object.freeze({ ...parsed });
+    return parsed;
   } catch (error) {
     throw new AppError('Harita yapılandırması geçerli JSON değil.', {
       code: BootstrapErrorCode.MAP_PAYLOAD_INVALID,
@@ -223,13 +254,15 @@ const serviceIdentity = (service: ConfigurationService, index: number): string =
   return `index:${index}`;
 };
 
-export const normalizeConfigurationServices = (result: unknown): readonly ConfigurationService[] => {
+export const normalizeConfigurationServices = (
+  result: unknown,
+): readonly ConfigurationService[] => {
   const successful = assertSuccessfulServiceResult(result, {
     code: BootstrapErrorCode.SERVICE_REQUEST_FAILED,
     message: 'CBS servis yapılandırması alınamadı.',
   });
   const rawServices = successful.data;
-  if (rawServices === null || rawServices === undefined) return Object.freeze([]);
+  if (rawServices === null || rawServices === undefined) return [];
   if (!Array.isArray(rawServices)) {
     throw new AppError('CBS servis yapılandırması liste biçiminde değil.', {
       code: BootstrapErrorCode.SERVICE_PAYLOAD_INVALID,
@@ -240,7 +273,7 @@ export const normalizeConfigurationServices = (result: unknown): readonly Config
 
   const seen = new Set<string>();
   const services: ConfigurationService[] = [];
-  rawServices.forEach((service, index) => {
+  rawServices.forEach((service: unknown, index: number) => {
     if (!isPlainObject(service)) {
       throw new AppError('CBS servis kaydı nesne biçiminde değil.', {
         code: BootstrapErrorCode.SERVICE_PAYLOAD_INVALID,
@@ -248,13 +281,12 @@ export const normalizeConfigurationServices = (result: unknown): readonly Config
         details: { index, payloadType: typeof service },
       });
     }
-    const frozen = Object.freeze({ ...service });
-    const identity = serviceIdentity(frozen, index);
+    const identity = serviceIdentity(service, index);
     if (seen.has(identity)) return;
     seen.add(identity);
-    services.push(frozen);
+    services.push(service);
   });
-  return Object.freeze(services);
+  return services;
 };
 
 const containsControlCharacter = (value: string): boolean => {
@@ -267,10 +299,9 @@ const containsControlCharacter = (value: string): boolean => {
 
 export const normalizeProxyUrl = (
   value: unknown,
-  options: { readonly allowEmpty?: boolean; readonly serviceIndex?: number | null } = {},
+  options: NormalizeProxyUrlOptions = {},
 ): string | null => {
-  const allowEmpty = options.allowEmpty === true;
-  const serviceIndex = options.serviceIndex ?? null;
+  const { allowEmpty = false, serviceIndex = null } = options;
   if (value === null || value === undefined) {
     if (allowEmpty) return null;
     throw new AppError('CBS servis adresi eksik.', {
@@ -288,6 +319,7 @@ export const normalizeProxyUrl = (
       details: { serviceIndex },
     });
   }
+
   const url = rawUrl.trim();
   if (!url) {
     if (allowEmpty) return null;
@@ -300,12 +332,23 @@ export const normalizeProxyUrl = (
   return url;
 };
 
-export const createBootstrapPlan = (input: {
-  readonly mapConfiguration: unknown;
-  readonly configurationServices: unknown;
-  readonly generateServiceUrl: unknown;
-}): BootstrapPlan => {
-  const { mapConfiguration, configurationServices, generateServiceUrl } = input;
+const requiredProxyUrl = (value: unknown, serviceIndex: number): string => {
+  const normalized = normalizeProxyUrl(value, { serviceIndex });
+  if (normalized === null) {
+    throw new AppError('CBS servis adresi eksik.', {
+      code: BootstrapErrorCode.SERVICE_URL_INVALID,
+      retryable: false,
+      details: { serviceIndex },
+    });
+  }
+  return normalized;
+};
+
+export const createBootstrapPlan = ({
+  mapConfiguration,
+  configurationServices,
+  generateServiceUrl,
+}: CreateBootstrapPlanOptions): BootstrapPlan => {
   if (!isPlainObject(mapConfiguration)) {
     throw new AppError('Harita yapılandırması hazırlanamadı.', {
       code: BootstrapErrorCode.MAP_PAYLOAD_INVALID,
@@ -326,27 +369,38 @@ export const createBootstrapPlan = (input: {
     });
   }
 
+  const serviceUrlGenerator = generateServiceUrl as (service: ConfigurationService) => unknown;
   const proxyRules: BootstrapProxyRule[] = [];
   const seenUrls = new Set<string>();
-  const typedServices = configurationServices as ConfigurationService[];
-  typedServices.forEach((service, index) => {
-    const url = normalizeProxyUrl((generateServiceUrl as (service: ConfigurationService) => unknown)(service), { serviceIndex: index });
-    if (!url || seenUrls.has(url)) return;
+
+  configurationServices.forEach((service: unknown, index: number) => {
+    if (!isPlainObject(service)) {
+      throw new AppError('CBS servis kaydı nesne biçiminde değil.', {
+        code: BootstrapErrorCode.SERVICE_PAYLOAD_INVALID,
+        retryable: false,
+        details: { index, payloadType: typeof service },
+      });
+    }
+    const url = requiredProxyUrl(serviceUrlGenerator(service), index);
+    if (seenUrls.has(url)) return;
     seenUrls.add(url);
-    proxyRules.push(Object.freeze({
+    proxyRules.push({
       url,
       source: DEFAULT_SOURCE,
       serviceIndex: index,
       serviceIdentity: serviceIdentity(service, index),
-    }));
+    });
   });
 
-  const frozenServices = Object.freeze([...typedServices]);
   return Object.freeze({
-    mapConfiguration: Object.freeze({ ...mapConfiguration }),
-    configurationServices: frozenServices,
-    proxyRules: Object.freeze(proxyRules),
-    summary: Object.freeze({ serviceCount: frozenServices.length, proxyRuleCount: proxyRules.length }),
+    mapConfiguration,
+    configurationServices: Object.freeze([...configurationServices]) as
+      readonly ConfigurationService[],
+    proxyRules: Object.freeze([...proxyRules]),
+    summary: Object.freeze({
+      serviceCount: configurationServices.length,
+      proxyRuleCount: proxyRules.length,
+    }),
   });
 };
 
@@ -355,15 +409,16 @@ const emit = (
   event: string,
   payload: Readonly<Record<string, unknown>> = {},
 ): void => {
-  if (!diagnostics || typeof diagnostics.record !== 'function') return;
-  diagnostics.record(event, payload);
+  diagnostics?.record(event, payload);
 };
 
 const emitStage = (
   diagnostics: BootstrapDiagnostics | null | undefined,
   stage: BootstrapStageValue,
   payload: Readonly<Record<string, unknown>> = {},
-): void => emit(diagnostics, 'bootstrap.stage', { stage, ...payload });
+): void => {
+  emit(diagnostics, 'bootstrap.stage', { stage, ...payload });
+};
 
 const wrapUnexpectedError = (error: unknown, stage: BootstrapStageValue): AppError => {
   if (error instanceof AppError) return error;
@@ -381,60 +436,76 @@ const wrapUnexpectedError = (error: unknown, stage: BootstrapStageValue): AppErr
   });
 };
 
-const runProxySetup = async (input: {
-  readonly plan: BootstrapPlan;
-  readonly addProxyRule: BootstrapDependencies['addProxyRule'];
-  readonly signal?: AbortSignal;
-  readonly diagnostics?: BootstrapDiagnostics | null;
-}): Promise<void> => {
-  emitStage(input.diagnostics, BootstrapStage.PROXY, { proxyRuleCount: input.plan.proxyRules.length });
-  for (const rule of input.plan.proxyRules) {
-    throwIfBootstrapAborted(input.signal, BootstrapStage.PROXY);
-    await input.addProxyRule(rule.url, rule.source);
-    emit(input.diagnostics, 'bootstrap.proxy.ready', {
+const runProxySetup = async ({
+  plan,
+  addProxyRule,
+  signal,
+  diagnostics,
+}: ProxySetupOptions): Promise<void> => {
+  emitStage(diagnostics, BootstrapStage.PROXY, { proxyRuleCount: plan.proxyRules.length });
+  for (const rule of plan.proxyRules) {
+    throwIfBootstrapAborted(signal, BootstrapStage.PROXY);
+    await addProxyRule(rule.url, rule.source);
+    emit(diagnostics, 'bootstrap.proxy.ready', {
       serviceIndex: rule.serviceIndex,
       serviceIdentity: rule.serviceIdentity,
     });
   }
 };
 
-const commitPlan = async (input: {
-  readonly plan: BootstrapPlan;
-  readonly setMapConfiguration: BootstrapDependencies['setMapConfiguration'];
-  readonly setConfigurationServices: BootstrapDependencies['setConfigurationServices'];
-  readonly signal?: AbortSignal;
-  readonly diagnostics?: BootstrapDiagnostics | null;
-}): Promise<void> => {
-  emitStage(input.diagnostics, BootstrapStage.COMMIT, input.plan.summary);
-  throwIfBootstrapAborted(input.signal, BootstrapStage.COMMIT);
-  await input.setMapConfiguration(input.plan.mapConfiguration);
-  throwIfBootstrapAborted(input.signal, BootstrapStage.COMMIT);
-  await input.setConfigurationServices(input.plan.configurationServices);
+const commitPlan = async ({
+  plan,
+  setMapConfiguration,
+  setConfigurationServices,
+  signal,
+  diagnostics,
+}: CommitPlanOptions): Promise<void> => {
+  emitStage(diagnostics, BootstrapStage.COMMIT, plan.summary);
+  throwIfBootstrapAborted(signal, BootstrapStage.COMMIT);
+  await setMapConfiguration(plan.mapConfiguration);
+  throwIfBootstrapAborted(signal, BootstrapStage.COMMIT);
+  await setConfigurationServices(plan.configurationServices);
 };
 
 export const runApplicationBootstrap = async (
-  dependencies: Partial<BootstrapDependencies> = {},
+  dependenciesInput: Partial<BootstrapDependencies> = {},
   options: BootstrapOptions = {},
 ): Promise<BootstrapResult> => {
-  const loadMapConfiguration = requiredFunction<BootstrapDependencies['loadMapConfiguration']>(dependencies, 'loadMapConfiguration');
-  const loadConfigurationServices = requiredFunction<BootstrapDependencies['loadConfigurationServices']>(dependencies, 'loadConfigurationServices');
-  const generateServiceUrl = requiredFunction<BootstrapDependencies['generateServiceUrl']>(dependencies, 'generateServiceUrl');
-  const addProxyRule = requiredFunction<BootstrapDependencies['addProxyRule']>(dependencies, 'addProxyRule');
-  const setMapConfiguration = requiredFunction<BootstrapDependencies['setMapConfiguration']>(dependencies, 'setMapConfiguration');
-  const setConfigurationServices = requiredFunction<BootstrapDependencies['setConfigurationServices']>(dependencies, 'setConfigurationServices');
+  const loadMapConfiguration = requiredFunction<BootstrapDependencies['loadMapConfiguration']>(
+    dependenciesInput, 'loadMapConfiguration',
+  );
+  const loadConfigurationServices =
+    requiredFunction<BootstrapDependencies['loadConfigurationServices']>(
+      dependenciesInput, 'loadConfigurationServices',
+    );
+  const generateServiceUrl = requiredFunction<BootstrapDependencies['generateServiceUrl']>(
+    dependenciesInput, 'generateServiceUrl',
+  );
+  const addProxyRule = requiredFunction<BootstrapDependencies['addProxyRule']>(
+    dependenciesInput, 'addProxyRule',
+  );
+  const setMapConfiguration = requiredFunction<BootstrapDependencies['setMapConfiguration']>(
+    dependenciesInput, 'setMapConfiguration',
+  );
+  const setConfigurationServices =
+    requiredFunction<BootstrapDependencies['setConfigurationServices']>(
+      dependenciesInput, 'setConfigurationServices',
+    );
 
-  const { signal, diagnostics } = options;
+  const signal = options.signal;
+  const diagnostics = options.diagnostics;
+  const requestOptions: BootstrapRequestOptions = signal ? { signal } : {};
   const startedAt = now();
   let stage: BootstrapStageValue = BootstrapStage.LOAD;
+
   emit(diagnostics, 'bootstrap.started', { startedAt });
   emitStage(diagnostics, stage);
 
   try {
     throwIfBootstrapAborted(signal, stage);
-    const loadOptions = signal === undefined ? {} : { signal };
     const [mapResult, servicesResult] = await Promise.all([
-      loadMapConfiguration(loadOptions),
-      loadConfigurationServices(loadOptions),
+      loadMapConfiguration(requestOptions),
+      loadConfigurationServices(requestOptions),
     ]);
 
     throwIfBootstrapAborted(signal, stage);
@@ -446,15 +517,19 @@ export const runApplicationBootstrap = async (
     throwIfBootstrapAborted(signal, stage);
     stage = BootstrapStage.PREPARE;
     emitStage(diagnostics, stage, { serviceCount: configurationServices.length });
-    const plan = createBootstrapPlan({ mapConfiguration, configurationServices, generateServiceUrl });
+    const plan = createBootstrapPlan({
+      mapConfiguration,
+      configurationServices,
+      generateServiceUrl,
+    });
 
     throwIfBootstrapAborted(signal, stage);
     stage = BootstrapStage.PROXY;
     await runProxySetup({
       plan,
       addProxyRule,
-      ...(signal === undefined ? {} : { signal }),
-      ...(diagnostics === undefined ? {} : { diagnostics }),
+      ...(signal ? { signal } : {}),
+      ...(diagnostics ? { diagnostics } : {}),
     });
 
     stage = BootstrapStage.COMMIT;
@@ -462,8 +537,8 @@ export const runApplicationBootstrap = async (
       plan,
       setMapConfiguration,
       setConfigurationServices,
-      ...(signal === undefined ? {} : { signal }),
-      ...(diagnostics === undefined ? {} : { diagnostics }),
+      ...(signal ? { signal } : {}),
+      ...(diagnostics ? { diagnostics } : {}),
     });
 
     throwIfBootstrapAborted(signal, stage);
@@ -477,8 +552,13 @@ export const runApplicationBootstrap = async (
       proxyRuleCount: plan.proxyRules.length,
       serviceCount: plan.configurationServices.length,
     });
-    emitStage(diagnostics, stage, { durationMs, serviceCount: result.serviceCount, proxyRuleCount: result.proxyRuleCount });
-    emit(diagnostics, 'bootstrap.completed', result as unknown as Readonly<Record<string, unknown>>);
+
+    emitStage(diagnostics, stage, {
+      durationMs,
+      serviceCount: result.serviceCount,
+      proxyRuleCount: result.proxyRuleCount,
+    });
+    emit(diagnostics, 'bootstrap.completed', result);
     return result;
   } catch (error) {
     const normalized = wrapUnexpectedError(error, stage);
@@ -503,12 +583,26 @@ export const runApplicationBootstrap = async (
 export const createBootstrapDependencies = (
   dependencies: Partial<BootstrapDependencies> = {},
 ): BootstrapDependencies => ({
-  loadMapConfiguration: requiredFunction(dependencies, 'loadMapConfiguration'),
-  loadConfigurationServices: requiredFunction(dependencies, 'loadConfigurationServices'),
-  generateServiceUrl: requiredFunction(dependencies, 'generateServiceUrl'),
-  addProxyRule: requiredFunction(dependencies, 'addProxyRule'),
-  setMapConfiguration: requiredFunction(dependencies, 'setMapConfiguration'),
-  setConfigurationServices: requiredFunction(dependencies, 'setConfigurationServices'),
+  loadMapConfiguration: requiredFunction<BootstrapDependencies['loadMapConfiguration']>(
+    dependencies, 'loadMapConfiguration',
+  ),
+  loadConfigurationServices:
+    requiredFunction<BootstrapDependencies['loadConfigurationServices']>(
+      dependencies, 'loadConfigurationServices',
+    ),
+  generateServiceUrl: requiredFunction<BootstrapDependencies['generateServiceUrl']>(
+    dependencies, 'generateServiceUrl',
+  ),
+  addProxyRule: requiredFunction<BootstrapDependencies['addProxyRule']>(
+    dependencies, 'addProxyRule',
+  ),
+  setMapConfiguration: requiredFunction<BootstrapDependencies['setMapConfiguration']>(
+    dependencies, 'setMapConfiguration',
+  ),
+  setConfigurationServices:
+    requiredFunction<BootstrapDependencies['setConfigurationServices']>(
+      dependencies, 'setConfigurationServices',
+    ),
 });
 
 export const bootstrapDurationBucket = (durationMs: unknown): string => {
