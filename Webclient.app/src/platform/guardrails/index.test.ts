@@ -70,7 +70,7 @@ describe('guardrail public boundary', () => {
     const result = evaluatePayloadBoundary(value, { maxUtf8Bytes: 1_024 });
 
     expect(result.accepted).toBe(true);
-    expect(result.value).toBe(value);
+    expect(result.value).toStrictEqual(value);
     expect(result.stats.nodes).toBeGreaterThan(0);
     expect(result.stats.utf8Bytes).toBeGreaterThanOrEqual(estimateUtf8Bytes('Ankara'));
   });
