@@ -135,7 +135,7 @@ export const createBoundedCache = <K extends string, V>(
     assertActive();
     const at = timestamp(atInput);
     let removed = 0;
-    for (const [key, entry] of [...entries]) {
+    for (const [key, entry] of entries) {
       if (!isExpired(entry, at)) continue;
       if (removeEntry(key, 'expire')) removed += 1;
     }
