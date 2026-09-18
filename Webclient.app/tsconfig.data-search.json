@@ -3,6 +3,6 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true
   },
-  "include": ["src/data-search/**/*.ts", "src/Toolbox/SearchExecutionRuntime.ts", "src/Toolbox/AddressSearchRuntime.ts", "src/Toolbox/SearchCoordinatorRuntime.ts", "src/Toolbox/SearchDatasetRegistry.ts", "src/Toolbox/SearchSessionRuntime.ts", "src/Toolbox/DataIntegrityHelper.ts"],
+  "include": ["src/data-search/**/*.ts", "src/Toolbox/SearchExecutionRuntime.ts", "src/Toolbox/AddressSearchRuntime.ts", "src/Toolbox/SearchCoordinatorRuntime.ts", "src/Toolbox/SearchDatasetRegistry.ts", "src/Toolbox/SearchSessionRuntime.ts", "src/Toolbox/DataIntegrityHelper.ts", "src/Toolbox/RecordPresentationRuntime.ts"],
   "exclude": ["node_modules", "build", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }
