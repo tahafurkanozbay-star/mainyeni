@@ -6,12 +6,14 @@ import { pathToFileURL } from 'node:url';
 
 const MiB = 1024 * 1024;
 const KiB = 1024;
+const VITE_MANIFEST_PATH = '.vite/manifest.json';
 
 export const DEFAULT_WEB_BUILD_BUDGETS = Object.freeze({
   totalJavaScriptGzipBytes: 5 * MiB,
   largestJavaScriptGzipBytes: 2500 * KiB,
   totalCssGzipBytes: 750 * KiB,
-  totalStaticBytes: 25 * MiB,
+  eagerStaticBytes: 12 * MiB,
+  totalStaticBytes: 28 * MiB,
   sourceMapBytes: 25 * MiB
 });
 
@@ -32,6 +34,10 @@ const budgetFromEnvironment = (environment = process.env) => ({
   totalCssGzipBytes: finitePositive(
     environment.WEB_BUDGET_CSS_GZIP_BYTES,
     DEFAULT_WEB_BUILD_BUDGETS.totalCssGzipBytes
+  ),
+  eagerStaticBytes: finitePositive(
+    environment.WEB_BUDGET_EAGER_BYTES,
+    DEFAULT_WEB_BUILD_BUDGETS.eagerStaticBytes
   ),
   totalStaticBytes: finitePositive(
     environment.WEB_BUDGET_TOTAL_BYTES,
@@ -77,6 +83,83 @@ const formatBytes = (bytes) => {
 
 const sum = (items, field) => items.reduce((total, item) => total + item[field], 0);
 
+const normalizeManifestPath = (value) =>
+  String(value || '').replaceAll('\\', '/').replace(/^\.\//u, '');
+
+const collectEagerManifestPaths = (manifest) => {
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    throw new TypeError('Vite manifest must be an object.');
+  }
+
+  const entries = Object.entries(manifest);
+  const entryKeys = entries
+    .filter(([, value]) => value && typeof value === 'object' && value.isEntry === true)
+    .map(([key]) => key);
+
+  if (entryKeys.length === 0) {
+    throw new Error('Vite manifest does not contain an application entry.');
+  }
+
+  const visited = new Set();
+  const files = new Set();
+
+  const addList = (value) => {
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      if (typeof item === 'string' && item) files.add(normalizeManifestPath(item));
+    }
+  };
+
+  const visit = (key) => {
+    if (visited.has(key)) return;
+    visited.add(key);
+
+    const chunk = manifest[key];
+    if (!chunk || typeof chunk !== 'object' || Array.isArray(chunk)) {
+      throw new Error(`Vite manifest import is missing: ${key}`);
+    }
+
+    if (typeof chunk.file === 'string' && chunk.file) {
+      files.add(normalizeManifestPath(chunk.file));
+    }
+    addList(chunk.css);
+    addList(chunk.assets);
+
+    if (Array.isArray(chunk.imports)) {
+      for (const dependency of chunk.imports) {
+        if (typeof dependency === 'string' && dependency) visit(dependency);
+      }
+    }
+  };
+
+  for (const entryKey of entryKeys) visit(entryKey);
+  files.add('index.html');
+  return files;
+};
+
+const loadEagerPaths = async (root, productionFiles) => {
+  const manifestPath = path.join(root, VITE_MANIFEST_PATH);
+  const manifestRecord = productionFiles.find((record) => record.path === VITE_MANIFEST_PATH);
+  if (!manifestRecord) {
+    return {
+      manifestUsed: false,
+      paths: new Set(productionFiles.map((record) => record.path))
+    };
+  }
+
+  try {
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    return {
+      manifestUsed: true,
+      paths: collectEagerManifestPaths(manifest)
+    };
+  } catch (error) {
+    throw new Error(
+      `Unable to analyze Vite eager graph: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+};
+
 export const analyzeBuildDirectory = async (buildDirectory, options = {}) => {
   const root = path.resolve(buildDirectory);
   const budgets = {
@@ -111,6 +194,10 @@ export const analyzeBuildDirectory = async (buildDirectory, options = {}) => {
   const largestJavaScript = [...javascript]
     .sort((left, right) => right.gzipBytes - left.gzipBytes)[0] || null;
 
+  const eager = await loadEagerPaths(root, productionFiles);
+  const eagerFiles = productionFiles.filter((file) => eager.paths.has(file.path));
+  const lazyFiles = productionFiles.filter((file) => !eager.paths.has(file.path));
+
   const measurements = Object.freeze({
     fileCount: records.length,
     productionFileCount: productionFiles.length,
@@ -122,14 +209,20 @@ export const analyzeBuildDirectory = async (buildDirectory, options = {}) => {
     largestJavaScriptPath: largestJavaScript?.path || null,
     totalCssBytes: sum(css, 'bytes'),
     totalCssGzipBytes: sum(css, 'gzipBytes'),
+    eagerStaticBytes: sum(eagerFiles, 'bytes'),
+    lazyStaticBytes: sum(lazyFiles, 'bytes'),
     totalStaticBytes: sum(productionFiles, 'bytes'),
-    sourceMapBytes: sum(sourceMaps, 'bytes')
+    sourceMapBytes: sum(sourceMaps, 'bytes'),
+    eagerFileCount: eagerFiles.length,
+    lazyFileCount: lazyFiles.length,
+    viteManifestUsed: eager.manifestUsed
   });
 
   const checks = [
     ['totalJavaScriptGzipBytes', measurements.totalJavaScriptGzipBytes, budgets.totalJavaScriptGzipBytes],
     ['largestJavaScriptGzipBytes', measurements.largestJavaScriptGzipBytes, budgets.largestJavaScriptGzipBytes],
     ['totalCssGzipBytes', measurements.totalCssGzipBytes, budgets.totalCssGzipBytes],
+    ['eagerStaticBytes', measurements.eagerStaticBytes, budgets.eagerStaticBytes],
     ['totalStaticBytes', measurements.totalStaticBytes, budgets.totalStaticBytes],
     ['sourceMapBytes', measurements.sourceMapBytes, budgets.sourceMapBytes]
   ].map(([metric, actual, budget]) => Object.freeze({
@@ -149,6 +242,10 @@ export const analyzeBuildDirectory = async (buildDirectory, options = {}) => {
     largestFiles: Object.freeze([...productionFiles]
       .sort((left, right) => right.bytes - left.bytes)
       .slice(0, 20)
+      .map((file) => Object.freeze({ ...file }))),
+    largestEagerFiles: Object.freeze([...eagerFiles]
+      .sort((left, right) => right.bytes - left.bytes)
+      .slice(0, 20)
       .map((file) => Object.freeze({ ...file })))
   });
 };
@@ -160,17 +257,29 @@ export const formatBuildBudgetMarkdown = (report) => {
   const largest = report.largestFiles.slice(0, 10).map((file) =>
     `| \`${file.path}\` | ${file.type} | ${formatBytes(file.bytes)} | ${file.gzipBytes === null ? 'n/a' : formatBytes(file.gzipBytes)} |`
   );
+  const eagerLargest = report.largestEagerFiles.slice(0, 10).map((file) =>
+    `| \`${file.path}\` | ${file.type} | ${formatBytes(file.bytes)} | ${file.gzipBytes === null ? 'n/a' : formatBytes(file.gzipBytes)} |`
+  );
 
   return [
     '## Web production build budget',
     '',
     `Overall: **${report.pass ? 'PASS' : 'FAIL'}**`,
     '',
+    `Vite manifest startup graph: **${report.measurements.viteManifestUsed ? 'enabled' : 'fallback-to-all-files'}**`,
+    `Eager files: ${report.measurements.eagerFileCount}; lazy/deferred files: ${report.measurements.lazyFileCount}`,
+    '',
     '| Result | Metric | Actual | Budget |',
     '| --- | --- | ---: | ---: |',
     ...rows,
     '',
-    '### Largest production assets',
+    '### Largest eager startup assets',
+    '',
+    '| Asset | Type | Raw | Gzip |',
+    '| --- | --- | ---: | ---: |',
+    ...eagerLargest,
+    '',
+    '### Largest production artifacts',
     '',
     '| Asset | Type | Raw | Gzip |',
     '| --- | --- | ---: | ---: |',
