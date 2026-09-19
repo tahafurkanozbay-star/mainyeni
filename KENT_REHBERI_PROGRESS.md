@@ -358,3 +358,27 @@
 - PERFORMANS / RELIABILITY: lazy production search runtime ve bounded lifecycle/search contracts korunuyor; invalid identifiers ve unknown snapshots daha erken sınırlandırılıyor; yeni ağır runtime dependency veya polling yok. Production bundle integrity ve budgets final exact head'de geçti.
 - MERGE: PR #168 tüm zorunlu exact-head kapılar yeşil olduktan ve final current-main/merge-base/behind/mergeability kontrolü yapıldıktan sonra draft'tan çıkarıldı. Expected-head squash merge `merged=true` döndürdü; merge SHA `5666f8d617a914f2c9063f22993a9b16288b3d86`, merge sonrasında current main olarak doğrulandı.
 - SONRAKİ GÖREV: merged #168 branch yeniden kullanılmamalı. Yeni Experience turu o anki current main'den benzersiz branch ile başlamalı; kalan legacy JS/JSX query/admin/toolbar/a11y debt'i sahiplik ve overlap kontrolüyle feature-by-feature strict TS/TSX'e taşınmalı. Aynı >=4,000 additions, exact-head CI, accessibility/responsive/security/performance, release scorecard ve final main-refresh kapıları korunmalı.
+
+
+## Deep GIS / Whole-Code Modernization current-main migration — 2026-09-19 21:35 TRT
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; stale PR #171 değişikliklerini güncel main üzerine temiz taşıma ve strict-TypeScript spatial runtime modernizasyonu.
+- BASE MAIN: `9f1491022dc037dd02c2cd1cee5210ba80bc664f`.
+- BRANCH: `agent/gis-modernization-20260919-2135-9f149102`.
+- ÖNCEKİ PR: #171 eski base `7364dfcc571d47d191a0b3e224dd9579daae8b24` üzerinde 4 commit behind/diverged kaldı; branch lifecycle kuralı gereği üzerine yeni iş yığılmadı.
+- TAŞINAN KAPSAM: yalnız güncel main'de bulunmayan 23 GIS/CI dosyası; SceneLayer lifecycle, spatial cache/query/key/geometry/reference/extent/layer/LOD runtime'ları, terrain stream governor, focused tests ve test/Release QA timeout güvenilirliği. Experience #168 ile değişen query yüzeyleri aynen korundu.
+- MERGE DURUMU: bu kayıt oluşturulurken yeni current-main commit/PR hazırlanıyor; eski #171 merge edilmemeli ve yeni PR açıldıktan sonra superseded olarak kapatılmalı.
+- DİL / MODERNİZASYON: tek seferlik riskli repository rewrite yerine React 19 + Vite 8 + TypeScript 7 + ArcGIS 5 / .NET 10 üzerinde feature-by-feature strict TypeScript, exact optional typing, bounded adapters ve compatibility contracts.
+- PERFORMANS / DATA INTEGRITY: bounded query concurrency/queue/dedupe/cancellation; bounded cache metadata/bytes/in-flight subscribers; CPU/GPU/feature/draw-call SceneLayer budgets; LOD resource/vertex budgets; bounded terrain plan/tile bytes/frame pressure; deterministic eviction and clock-skew-safe scoring.
+- GÜVENLİK / NETWORK: yeni endpoint, direct fetch, WMS/WFS, telemetry, remote asset, client secret/token, eval veya unsafe HTML eklenmedi. Mevcut doğrulanmış ArcGIS REST adapter sınırları korunuyor.
+- İKON: shared deterministic icon registry/resolver tek otorite olarak korunuyor.
+- TEST / CI: yeni current-main exact head için Platform Architecture Audit, Webclient Quality ve Release QA yeniden zorunlu. Full lint, strict changed-source lint, TypeScript, exact-base TypeScript/Vitest, full Vitest, production Vite build/integrity/budget ve backend Release validation tamamlanmadan merge yok.
+- SONRAKİ: yeni PR exact-head CI diagnosticlerini düzelt; final main refresh, mergeable/conflict-free, performance/data-integrity/security review ve >=4,000 meaningful additions gate sağlanırsa squash merge.
+
+
+## Deep GIS / current-main branch lifecycle refresh — 2026-09-19 21:45 TRT
+- BASE MAIN: `901b2f2f522418abe8af149d7352326f3c3ad070`; Platform runtime merge/progression sonrası önceki GIS PR #174 1 commit behind/diverged kaldı.
+- YENİ BRANCH: `agent/gis-modernization-20260919-2145-901b2f2f`.
+- TAŞIMA: #174 ile new-main arasında 0 changed-path overlap doğrulandı; request cancellation ve adaptive clustering hardening dahil 27 kod/CI dosyası exact blob olarak taşındı, progress role-scoped append ile korundu.
+- ÇÖZÜLEN YENİ HATALAR: pre-aborted first spatial request artık ghost queued entry bırakmıyor; last-subscriber/explicit cancel çalışan abort-insensitive isteğin abonelerini anında serbest bırakıyor; adaptive cluster selected-feature yolu accepted feature budget'ını aşamıyor; numeric/string selection identity ayrımı korunuyor; render fingerprint x/y/weight/label/id değişikliklerini kapsıyor; clustered labels decision labelBudget ile sınırlandırılıyor; malformed feature drop accounting snapshot'a dahil.
+- PERFORMANS / DATA INTEGRITY: queue-pressure sızıntısı, stale render fingerprint ve cluster label amplification kapatıldı; sampling ve selected-set sınırları deterministik.
+- MERGE: yeni PR açılacak; #174 superseded olarak kapatılmalı. Exact-head tüm CI completed+success olmadan merge yok.
