@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  StructuredTaskScopeError,
   createStructuredTaskScope,
   type TaskScopeClock,
 } from './structuredTaskScope';
