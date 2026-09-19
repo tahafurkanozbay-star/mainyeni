@@ -51,7 +51,7 @@ export class CacheWarmupPlanner {
     );
     this.#maxPerNamespace = cacheInteger(
       'maxPerNamespace',
-      options.maxPerNamespace ?? 8,
+      options.maxPerNamespace ?? Math.min(8, this.#maxSelected),
       1,
       this.#maxSelected,
     );
