@@ -387,3 +387,12 @@
 - NETWORK / GÜVENLİK: yeni endpoint, direct fetch, WMS/WFS, telemetry, remote asset, client secret/token, eval veya unsafe HTML yok. Doğrulanmış ArcGIS REST adapter sınırları korunuyor.
 - İKON: shared deterministic icon registry/resolver tek otorite olarak korunuyor.
 - MERGE GATE: >=4,000 meaningful additions, behind=0/current merge-base, mergeable=true, exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success, full/exact-base Vitest, TypeScript, production build/integrity/budgets ve final security/performance/data-integrity review zorunlu.
+
+
+## Deep GIS / exact-base release blocker closure — 2026-09-19 22:02 TRT
+- PR: #175 canonical current-main GIS PR.
+- HEAD before this progress commit: `d8b422c648e028fa52ef99a5d254b03d40a3c5e4`.
+- RELEASE SCORECARD: first exact-base typed release audit blocked 2 new HIGH findings, both `observability-swallowed-exception`, in `sceneLayerLifecycleRuntime.ts` and `spatialCacheCoordinator.ts`.
+- ROOT CAUSE / FIX: nested empty `catch {}` observer-failure guards were replaced with non-empty reportError-aware handling. Business lifecycle/cache outcomes remain isolated from observer callbacks; host `globalThis.reportError` still receives secondary observer failures when available; no direct console fallback was added.
+- VALIDATION STATUS: TypeScript 7 strict typecheck and typed QA tests had already passed before the scorecard gate. This progress commit requires a fresh exact-head Platform Architecture Audit + Webclient Quality + Release QA run; no final PASS is claimed until those complete successfully.
+- FINAL GATE: PR remains draft/open. >=4,000 meaningful additions and behind=0/current merge-base are satisfied at this checkpoint; merge only after final exact-head CI, production build/integrity/budget, security/performance/data-integrity review, final main refresh and mergeable=true.
