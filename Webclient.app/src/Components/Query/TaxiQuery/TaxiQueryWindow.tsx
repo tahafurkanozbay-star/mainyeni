@@ -151,7 +151,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
     const [districtList, setDistrictList] = useState<readonly DistrictRecord[]>([]);
     const [nbhoodList, setNbhoodList] = useState<readonly DistrictRecord[]>([]);
     const [query, setQuery] = useState<TaxiQueryState>({ ...DEFAULT_QUERY });
-    const [, setClusterLayer] = useState<LayerEnvelope | null>(null);
+    const clusterLayerRef = useRef<LayerEnvelope | null>(null);
     const [resultList, setResultList] = useState<readonly TaxiListItem[] | null>(null);
     const [activeTab, setActiveTab] = useState<'form' | 'query'>('form');
     const [loading, setLoading] = useState(false);
@@ -164,16 +164,15 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
     const minimized = windowManager.IsMinimized(id);
 
     const removeLastClusterLayer = useCallback((): void => {
-      setClusterLayer((current) => {
-        if (current?.layerObj && mapView?.map?.remove) {
-          try {
-            mapView.map.remove(current.layerObj);
-          } catch (error) {
-            globalThis.reportError?.(error);
-          }
+      const current = clusterLayerRef.current;
+      clusterLayerRef.current = null;
+      if (current?.layerObj && mapView?.map?.remove) {
+        try {
+          mapView.map.remove(current.layerObj);
+        } catch (error) {
+          globalThis.reportError?.(error);
         }
-        return null;
-      });
+      }
     }, [mapView]);
 
     const resetSurface = useCallback((): void => {
@@ -348,7 +347,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
 
         removeLastClusterLayer();
         if (nextCluster?.layerObj && mapView?.map?.add) {
-          setClusterLayer(nextCluster);
+          clusterLayerRef.current = nextCluster;
           mapView.map.add(nextCluster.layerObj);
         }
       } catch (error) {
@@ -488,6 +487,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
                     id={`${id}-name`}
                     className="form-control"
                     value={query.name}
+                    aria-label="Adı"
                     autoComplete="off"
                     onChange={(event) => setQueryField('name', event.target.value)}
                   />
@@ -502,6 +502,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
                       id={`${id}-district`}
                       className="form-select form-control"
                       value={query.districtId}
+                      aria-label="İlçe"
                       onChange={(event) => void onDistrictChange(event)}
                     >
                       <option value="">Seçiniz..</option>
@@ -522,6 +523,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
                       id={`${id}-neighborhood`}
                       className="form-select"
                       value={query.nbhoodId}
+                      aria-label="Mahalle"
                       onChange={onNeighborhoodChange}
                       disabled={!query.districtId}
                     >
