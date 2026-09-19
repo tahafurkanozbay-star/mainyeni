@@ -91,7 +91,7 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
   let disposed = false; let activeLoads = 0; let viewportScale: number | null = null; let viewportZoom: number | null = null; let viewportInitialized = false;
   let reconcileScheduled: Promise<void> | null = null; let reconcileDirty = false;
 
-  const observerError = (error: unknown): void => { try { options.onObserverError?.(error); } catch (secondary) { try { const report = (globalThis as typeof globalThis & { reportError?: (e: unknown) => void }).reportError; if (typeof report === 'function') report(secondary); } catch { /* observer failures never replace lifecycle outcomes */ } } };
+  const observerError = (error: unknown): void => { try { options.onObserverError?.(error); } catch (secondary) { const report = (globalThis as typeof globalThis & { reportError?: (e: unknown) => void }).reportError; if (typeof report === 'function') report(secondary); } };
   const emit = (state: MutableLayerState<TResource>, type: SceneLayerEvent['type'], reason?: string): void => { try { options.onEvent?.(Object.freeze({ type, layerId: state.descriptor.id, timestamp: now(), reason, generation: state.generation })); } catch (error) { observerError(error); } };
   const getState = (id: string): MutableLayerState<TResource> => { const state = layers.get(id); if (!state) throw new Error(`Unknown scene layer: ${id}`); return state; };
   const viewportRequests = (state: MutableLayerState<TResource>): boolean => viewportInitialized && state.visible && state.descriptor.visible !== false && inRange(state.descriptor, viewportScale, viewportZoom);
