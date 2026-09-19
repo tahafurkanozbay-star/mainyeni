@@ -771,9 +771,6 @@ export const TransitRouteQueryWindow = forwardRef<
                       zoomCallback={() => {
                         void showItemOnMap(item);
                       }}
-                      showTransitRouteCallback={(event) => {
-                        void showRoute(event, item);
-                      }}
                       showRouteCallback={(event) => {
                         void showRoute(event, item);
                       }}
