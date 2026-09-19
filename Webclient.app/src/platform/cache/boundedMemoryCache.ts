@@ -258,6 +258,7 @@ export class BoundedMemoryCache {
         byteSize,
         namespaceExists: namespaceUsage.entries > 0,
         replacing: replacing !== undefined,
+        replacingInNamespace: replacing?.namespace === namespace,
         ...(replacing ? { replacedByteSize: replacing.byteSize } : {}),
         global: {
           entries: this.#entries.size,
