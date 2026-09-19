@@ -236,6 +236,18 @@ export const createLayerOwner = <TLayer>(mapOrView: MapOrView<TLayer>, ownerId: 
   });
 };
 
+const reportCleanupError = (error: unknown): void => {
+  const reporter = (
+    globalThis as typeof globalThis & {
+      reportError?: (reason: unknown) => void;
+    }
+  ).reportError;
+
+  if (typeof reporter === 'function') {
+    reporter(error);
+  }
+};
+
 const disposeOne = (disposable: Disposable): void => {
   try {
     if (typeof disposable === 'function') disposable();
@@ -244,7 +256,10 @@ const disposeOne = (disposable: Disposable): void => {
       disposable.destroy?.();
       disposable.abort?.();
     }
-  } catch { /* cleanup is deliberately idempotent */ }
+  } catch (error) {
+    // Cleanup remains idempotent, while modern runtimes receive observable failure evidence.
+    reportCleanupError(error);
+  }
 };
 
 export interface DisposableBag {
