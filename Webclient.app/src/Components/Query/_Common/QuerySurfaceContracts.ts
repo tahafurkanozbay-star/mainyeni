@@ -116,18 +116,26 @@ export const readNestedQueryField = (
   keys: readonly string[],
 ): unknown => {
   if (!record) return undefined;
-  const sources = [
-    record,
-    record.attr,
-    record.attributes,
-    record.properties,
-  ].filter(isUnknownRecord);
 
-  for (const source of sources) {
-    const value = readQueryField(source, keys);
-    if (value !== undefined && value !== null) return value;
-  }
-  return undefined;
+  const direct = readQueryField(record, keys);
+  if (direct !== undefined && direct !== null) return direct;
+
+  const attributeValue = readQueryField(
+    isUnknownRecord(record.attr) ? record.attr : undefined,
+    keys,
+  );
+  if (attributeValue !== undefined && attributeValue !== null) return attributeValue;
+
+  const attributesValue = readQueryField(
+    isUnknownRecord(record.attributes) ? record.attributes : undefined,
+    keys,
+  );
+  if (attributesValue !== undefined && attributesValue !== null) return attributesValue;
+
+  return readQueryField(
+    isUnknownRecord(record.properties) ? record.properties : undefined,
+    keys,
+  );
 };
 
 export const normalizeQueryOption = (
