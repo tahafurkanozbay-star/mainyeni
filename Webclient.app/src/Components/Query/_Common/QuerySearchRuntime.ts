@@ -145,6 +145,32 @@ export const normalizeWhitespace = (value: unknown): string => String(value ?? '
   .replace(/\s+/g, ' ')
   .trim();
 
+interface DatasetObservationSnapshot {
+  readonly name: string;
+  readonly recordCount: number;
+}
+
+const readDatasetObservation = (
+  value: unknown,
+  fallbackName: string,
+): DatasetObservationSnapshot | null => {
+  if (!isRecord(value)) return null;
+
+  const recordCount = value.recordCount;
+  if (
+    typeof recordCount !== 'number'
+    || !Number.isFinite(recordCount)
+    || recordCount < 0
+  ) {
+    return null;
+  }
+
+  return Object.freeze({
+    name: normalizeWhitespace(value.name) || fallbackName,
+    recordCount: Math.trunc(recordCount),
+  });
+};
+
 export const normalizeTurkishSearchText = (value: unknown): string =>
   normalizeWhitespace(value).toLocaleUpperCase(TURKISH_LOCALE);
 
@@ -278,7 +304,7 @@ export const normalizeSearchRecord = (
     category,
     type,
     icon: createListIconModel({
-      id: typeof id === 'string' || typeof id === 'number' ? id : undefined,
+      ...(typeof id === 'string' || typeof id === 'number' ? { id } : {}),
       title,
       category,
       type,
@@ -562,13 +588,25 @@ export const createProductionSearchRuntime = async (
 
     ingest(datasetName, payload, ingestOptions = {}) {
       const snapshot = coordinator.ingest(datasetName, payload, ingestOptions);
-      observability.recordDatasetSize(snapshot.recordCount, { dataset: snapshot.name });
+      const observation = readDatasetObservation(snapshot, datasetName);
+      if (observation) {
+        observability.recordDatasetSize(
+          observation.recordCount,
+          { dataset: observation.name },
+        );
+      }
       return snapshot;
     },
 
     register(datasetName, records, metadata = {}, registerOptions = {}) {
       const snapshot = coordinator.register(datasetName, records, metadata, registerOptions);
-      observability.recordDatasetSize(snapshot.recordCount, { dataset: snapshot.name });
+      const observation = readDatasetObservation(snapshot, datasetName);
+      if (observation) {
+        observability.recordDatasetSize(
+          observation.recordCount,
+          { dataset: observation.name },
+        );
+      }
       return snapshot;
     },
 
