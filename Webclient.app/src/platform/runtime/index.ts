@@ -17,3 +17,41 @@ export * from './capacityEnvelope';
 export * from './loadShedding';
 export * from './drainCoordinator';
 export * from './runtimeHealthPolicy';
+export * from './resourceLeaseRegistry';
+export { BoundedCircuitBreaker, CircuitOpenError as BoundedCircuitOpenError } from './circuitBreaker';
+export type {
+  CircuitBreakerOptions as BoundedCircuitBreakerOptions,
+  CircuitState as BoundedCircuitState,
+  CircuitOutcome as BoundedCircuitOutcome,
+  CircuitSnapshot as BoundedCircuitSnapshot,
+  CircuitEvent as BoundedCircuitEvent,
+} from './circuitBreaker';
+export { BoundedBulkhead, BulkheadRejectedError } from './bulkhead';
+export type {
+  BulkheadOptions,
+  BulkheadRunOptions,
+  BulkheadSnapshot,
+  BulkheadEvent,
+  BulkheadRejectionReason,
+} from './bulkhead';
+export { BoundedFailureBudget } from './failureBudget';
+export type {
+  FailureBudgetOptions,
+  FailureBudgetRecordOptions,
+  FailureBudgetSnapshot,
+  FailureBudgetEvent,
+  FailureBudgetOutcome,
+  FailureBudgetState,
+} from './failureBudget';
+export { BoundedResilienceCoordinator, ResilienceCoordinatorError } from './resilienceCoordinator';
+export type {
+  ResilienceCoordinatorOptions,
+  ResilienceRequest,
+  ResiliencePriority,
+  ResilienceOutcome as CoordinatedResilienceOutcome,
+  ResilienceEvent,
+  ResilienceSnapshot,
+  ResilienceClock as ResilienceCoordinatorClock,
+} from './resilienceCoordinator';
+export * from './structuredTaskScope';
+export * from './runtimePolicyProfile';
