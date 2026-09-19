@@ -99,7 +99,12 @@ export class BoundedBulkhead {
 
   run<T>(operation: () => Promise<T>, options: BulkheadRunOptions = {}): Promise<T> {
     if (typeof operation !== 'function') return Promise.reject(new TypeError('operation must be a function'));
-    const owner = ownerKey(options.owner);
+    let owner: string;
+    try {
+      owner = ownerKey(options.owner);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     if (this.#disposed) return this.#rejectImmediately<T>(owner, 'disposed');
     if (options.signal?.aborted) return this.#rejectImmediately<T>(owner, 'aborted');
     if (this.#canStart(owner)) return this.#start(owner, operation);
