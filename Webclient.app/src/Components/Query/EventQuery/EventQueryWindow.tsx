@@ -123,8 +123,18 @@ const MAP_SYMBOL = Object.freeze(
 
 const createDefaultQuery = (): EventQueryState => ({ ...DEFAULT_QUERY });
 
-const formatEventDate = (value: unknown): string =>
-  normalizeQueryText(DatetimeHelper.ConvertFromEsriDate(value), '');
+const formatEventDate = (value: unknown): string => {
+  const dateValue = (
+    typeof value === 'string'
+    || typeof value === 'number'
+    || value instanceof Date
+  ) ? value : null;
+
+  return normalizeQueryText(
+    DatetimeHelper.ConvertFromEsriDate(dateValue),
+    '',
+  );
+};
 
 const normalizeEvent = (feature: QueryFeatureLike): EventListItem => Object.freeze({
   ObjectId: normalizeQueryIdentifier(
@@ -521,7 +531,7 @@ export const EventQueryWindow = forwardRef<
                       dateFormat="dd.MM.yyyy"
                       className="form-control"
                       placeholderText="Seçiniz..."
-                      onChange={(date) => setQueryField('startDate', date)}
+                      onChange={(date: Date | null) => setQueryField('startDate', date)}
                     />
                   </Form.Group>
 
@@ -536,7 +546,7 @@ export const EventQueryWindow = forwardRef<
                       dateFormat="dd.MM.yyyy"
                       className="form-control"
                       placeholderText="Seçiniz..."
-                      onChange={(date) => setQueryField('endDate', date)}
+                      onChange={(date: Date | null) => setQueryField('endDate', date)}
                     />
                   </Form.Group>
                 </div>
