@@ -1,0 +1,14 @@
+{
+  "name": "Ankara Büyükşehir Belediyesi Kent Rehberi",
+  "short_name": "Kent Rehberi",
+  "description": "Ankara Büyükşehir Belediyesi Kent Rehberi ve CBS uygulaması",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "categories": ["navigation", "utilities"]
+}

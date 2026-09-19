@@ -1,4 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard.ts';
 import {
@@ -6,6 +8,8 @@ import {
   legacyJsxPlugin,
   legacyPresentationCleanupPlugin,
 } from './tooling/sourceTransforms.ts';
+
+const webclientRoot = fileURLToPath(new URL('.', import.meta.url));
 
 const arcgisLeafChunk = (id: string, prefix: string, chunkPrefix: string): string | undefined => {
   const marker = `/@arcgis/core/${prefix}/`;
@@ -177,7 +181,20 @@ export default defineConfig({
     reportCompressedSize: true,
     manifest: true,
     chunkSizeWarningLimit: 900,
-    rolldownOptions: { output: { manualChunks: manualChunk } },
+    rolldownOptions: {
+      input: {
+        app: resolve(webclientRoot, 'index.html'),
+        'service-worker': resolve(webclientRoot, 'src/platform/offline/serviceWorkerEntry.ts'),
+      },
+      output: {
+        entryFileNames: (chunk) => chunk.name === 'service-worker'
+          ? 'service-worker.js'
+          : 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        manualChunks: manualChunk,
+      },
+    },
   },
   server: { host: '0.0.0.0', port: 3000, strictPort: false },
   preview: { host: '0.0.0.0', port: 4173 },
