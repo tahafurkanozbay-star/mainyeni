@@ -167,11 +167,15 @@ export class CacheFlightRegistry {
       'cache flight subscriber aborted',
       subscriber.signal?.reason,
     )));
-    if (flight.subscribers.size === 0 && !flight.settled && !flight.controller.signal.aborted) {
-      flight.controller.abort(new CacheFlightError(
+    if (flight.subscribers.size === 0 && !flight.settled) {
+      flight.settled = true;
+      this.#cancelled += 1;
+      const error = new CacheFlightError(
         'operation-cancelled',
         'cache flight has no subscribers',
-      ));
+      );
+      if (!flight.controller.signal.aborted) flight.controller.abort(error);
+      this.#flights.delete(flight.key);
     }
   }
 

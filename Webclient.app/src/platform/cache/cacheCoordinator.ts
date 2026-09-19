@@ -1,8 +1,8 @@
 import { BoundedMemoryCache, type BoundedMemoryCacheOptions } from './boundedMemoryCache';
 import { CacheContractError } from './cacheContracts';
 import { createCacheKey } from './cacheKey';
-import { CacheFlightError } from './cacheFlightContracts';
-import { CacheFlightRegistry, type CacheFlightRegistryOptions } from './cacheFlightRegistry';
+import { CacheFlightError, type CacheFlightRegistryOptions } from './cacheFlightContracts';
+import { CacheFlightRegistry } from './cacheFlightRegistry';
 import { evaluateCachePolicy } from './cachePolicy';
 import type {
   CacheCoordinatorSnapshot,
@@ -82,21 +82,21 @@ export class CacheCoordinator {
     }
 
     const cached = this.#store.get<T>(parsedKey.serialized, true);
-    if (cached.hit && cached.state === 'fresh' && cached.value !== undefined) {
+    if (cached.hit && cached.state === 'fresh' && cached.entry) {
       this.#stats.freshHits += 1;
       return Object.freeze({
-        value: cached.value,
+        value: cached.entry.value,
         source: 'fresh-cache',
         cached: true,
         key: parsedKey.serialized,
       });
     }
 
-    if (cached.hit && cached.state === 'stale' && cached.value !== undefined) {
+    if (cached.hit && cached.state === 'stale' && cached.entry) {
       this.#stats.staleHits += 1;
       const revalidation = this.#revalidate(request, parsedKey.serialized, parsedKey.namespace);
       return Object.freeze({
-        value: cached.value,
+        value: cached.entry.value,
         source: 'stale-cache',
         cached: true,
         key: parsedKey.serialized,
@@ -253,7 +253,10 @@ interface LinkedController {
 const linkedController = (signal?: AbortSignal): LinkedController => {
   const controller = new AbortController();
   if (!signal) return Object.freeze({ signal: controller.signal, dispose: () => undefined });
-  if (signal.aborted) controller.abort(signal.reason);
+  if (signal.aborted) {
+    controller.abort(signal.reason);
+    return Object.freeze({ signal: controller.signal, dispose: () => undefined });
+  }
   const abort = (): void => controller.abort(signal.reason);
   signal.addEventListener('abort', abort, { once: true });
   return Object.freeze({
