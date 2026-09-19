@@ -8,6 +8,7 @@ import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/r
 import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery';
 import { performanceMonitor } from './platform/performance/performanceMonitor';
 import { runtimeConfig } from './platform/config/runtimeConfig';
+import { installInputModalityRuntime } from './experience/inputModalityRuntime';
 import {
   browserPerformanceDiagnosticEnvironment,
   installPerformanceLifecycleCapture,
@@ -43,6 +44,7 @@ const performanceLifecycleHandle = installPerformanceLifecycleCapture(performanc
 });
 const deploymentRecoveryHandle = installDeploymentRecovery(runtimeDiagnostics);
 const runtimeObserverHandle = installBrowserRuntimeObservers(runtimeDiagnostics);
+const inputModalityHandle = installInputModalityRuntime({ document, window });
 
 let disposeAdaptiveRuntime = (): void => undefined;
 if (runtimeConfig.features.adaptiveRuntime) {
@@ -136,6 +138,7 @@ if (typeof requestAnimationFrame === 'function') {
 // cycles cannot create duplicate diagnostics or retain detached browser state.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    inputModalityHandle.dispose();
     disposeAdaptiveRuntime();
     deploymentRecoveryHandle.dispose();
     runtimeObserverHandle.dispose();
