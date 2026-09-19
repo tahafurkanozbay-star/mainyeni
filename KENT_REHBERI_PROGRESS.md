@@ -373,3 +373,17 @@
 - MODERNİZASYON KARARI: repository'nin güncel stabil stack'i korunuyor; kör framework/dil rewrite yapılmadı. Platform production boundary strict TypeScript-first olarak güçlendirildi; backend .NET 10/C# tarafına gereksiz dil göçü uygulanmadı.
 - SONRAKİ GÖREV: merged #172 branch yeniden kullanılmamalı. Yeni Platform işi o anki current main'den benzersiz branch ile başlamalı; concurrent GIS/Experience sahipliği, >=4,000 meaningful additions, exact-head CI, bounded-runtime, network safety ve final main-refresh kapıları korunmalı.
 
+
+
+## Deep GIS / Whole-Code Modernization — current-main canonical refresh — 2026-09-19 21:52 TRT
+- TUR / GÖREV: 2D+3D GIS / Spatial Engine whole-code modernization; strict-TypeScript runtime, cancellation, clustering, LOD, cache, geometry/reference integrity, terrain streaming ve CI reliability.
+- BASE MAIN: `a7b965cf26c9c8c51efc885cb884da5155e9f799`.
+- BRANCH: `agent/gis-modernization-20260919-2152-a7b965cf`.
+- BRANCH LIFECYCLE: önceki #171 eski base üzerinde diverged olduğu için kapatıldı; #174 ve sonraki geçici branch'ler main ilerlemesi sırasında superseded edildi. Bu branch yalnız güncel main'de eksik olan GIS/CI delta'sını taşır.
+- KAPSAM: 27 kod/CI dosyası; SceneLayer lifecycle, spatial cache/query/key/geometry/reference/extent/layer/LOD, terrain governor, spatial request coordinator, adaptive clustering, focused regression testleri ve Webclient/Release QA timeout güvenilirliği.
+- YENİ DÜZELTMELER: pre-aborted spatial request ghost queue leak kapatıldı; explicit/last-subscriber cancellation abort-insensitive running work abonelerini anında serbest bırakıyor; adaptive cluster selected-feature path accepted budget'ı aşamıyor; numeric/string selection identity ayrımı korunuyor; render fingerprint x/y/weight/label/typed-id değişikliklerini kapsıyor; clustered label sayısı decision labelBudget ile sınırlı; malformed feature drop accounting snapshot'a dahil.
+- DİL / MODERNİZASYON: tek seferlik riskli repository rewrite yapılmadı. Stable React 19 + Vite 8 + TypeScript 7 + ArcGIS 5 / .NET 10 stack'inde feature-by-feature strict TypeScript, exactOptionalPropertyTypes, typed adapters ve exact-base regression kapıları güçlendirildi.
+- PERFORMANS / DATA INTEGRITY: bounded concurrency/queue/cache/feature/geometry/attribute/CPU/GPU/vertex/draw-call/tile-plan sınırları; deterministic eviction, dedupe, cancellation, clock-skew-safe terrain scoring, clustering label amplification kontrolü.
+- NETWORK / GÜVENLİK: yeni endpoint, direct fetch, WMS/WFS, telemetry, remote asset, client secret/token, eval veya unsafe HTML yok. Doğrulanmış ArcGIS REST adapter sınırları korunuyor.
+- İKON: shared deterministic icon registry/resolver tek otorite olarak korunuyor.
+- MERGE GATE: >=4,000 meaningful additions, behind=0/current merge-base, mergeable=true, exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success, full/exact-base Vitest, TypeScript, production build/integrity/budgets ve final security/performance/data-integrity review zorunlu.

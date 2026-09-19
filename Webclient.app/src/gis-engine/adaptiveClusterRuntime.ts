@@ -205,7 +205,7 @@ const deterministicSample = (
   selected: Set<string | number>,
 ): readonly AdaptiveClusterFeature[] => {
   if (features.length <= limit) return features;
-  const mustKeep = features.filter((feature) => selected.has(feature.id));
+  const mustKeep = features.filter((feature) => selected.has(feature.id)).slice(0, limit);
   const remainingLimit = Math.max(0, limit - mustKeep.length);
   const candidates = features
     .filter((feature) => !selected.has(feature.id))
@@ -232,7 +232,12 @@ const stableItemFingerprint = (items: readonly AdaptiveClusterRenderItem[]): str
   for (const item of items) {
     feed(item.key);
     feed(String(item.count));
+    feed(String(item.x));
+    feed(String(item.y));
+    feed(String(item.totalWeight));
+    feed(item.label ?? '');
     feed(item.selected ? '1' : '0');
+    for (const id of item.ids) feed(`${typeof id}:${String(id)}`);
   }
   return hash.toString(16).padStart(8, '0');
 };
@@ -256,6 +261,7 @@ const featureToItem = (
 const bucketToItem = (
   bucket: ClusterBucket,
   selected: Set<string | number>,
+  allowLabel: boolean,
 ): AdaptiveClusterRenderItem => Object.freeze({
   key: `cluster:${bucket.key}`,
   kind: 'cluster',
@@ -265,7 +271,7 @@ const bucketToItem = (
   totalWeight: bucket.totalWeight,
   ids: bucket.ids,
   selected: bucketSelected(bucket, selected),
-  label: String(bucket.count),
+  label: allowLabel ? String(bucket.count) : null,
 });
 
 const applyItemBudget = (
@@ -299,7 +305,13 @@ const createItems = (
   }
 
   const buckets = clusterPointsIntoGrid(features, decision.clusterRadiusPx, configuration.maxIdsPerCluster);
-  const items = buckets.map((bucket) => bucketToItem(bucket, selected));
+  let labelsUsed = 0;
+  const items = buckets.map((bucket) => {
+    const selectedBucket = bucketSelected(bucket, selected);
+    const allowLabel = selectedBucket || labelsUsed < decision.labelBudget;
+    if (allowLabel && !selectedBucket) labelsUsed += 1;
+    return bucketToItem(bucket, selected, allowLabel);
+  });
   return applyItemBudget(items, configuration.maxClusters);
 };
 
@@ -360,11 +372,18 @@ export class AdaptiveClusterRuntime {
     const normalized = input.features
       .map(normalizeFeature)
       .filter((feature): feature is AdaptiveClusterFeature => feature !== null);
-    const selected = selectionSet(normalized, input.selectedIds, this.#configuration.maxSelectedFeatures);
+    const selected = selectionSet(
+      normalized,
+      input.selectedIds,
+      Math.min(this.#configuration.maxSelectedFeatures, this.#configuration.maxInputFeatures),
+    );
     const sampled = deterministicSample(normalized, this.#configuration.maxInputFeatures, selected);
     const pressure = deriveClusterRuntimePressure(input.performance, this.#configuration);
     const reducedMotion = input.performance?.reducedMotion === true;
-    const selectionFingerprint = [...selected].map(String).sort().join('|');
+    const selectionFingerprint = [...selected]
+      .map((id) => `${typeof id}:${String(id)}`)
+      .sort()
+      .join('|');
     const lodInput: ClusterLodInput = {
       featureCount: sampled.length,
       viewportWidth: viewport.width * (viewport.pixelRatio ?? 1),
@@ -402,7 +421,7 @@ export class AdaptiveClusterRuntime {
     this.#lastZoom = viewport.zoom;
     this.#lastReducedMotion = reducedMotion;
     this.#lastSelectionFingerprint = selectionFingerprint;
-    this.#droppedFeatures += Math.max(0, normalized.length - sampled.length);
+    this.#droppedFeatures += Math.max(0, input.features.length - sampled.length);
 
     return Object.freeze({
       revision: this.#revision,

@@ -51,6 +51,20 @@ describe('spatialRequestCoordinator', () => {
     controller.abort('navigation changed');
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     expect(transportSignal?.aborted).toBe(true);
+    expect(coordinator.snapshot('solo')).toBeNull();
+  });
+
+  it('does not allocate a queued entry for a pre-aborted first subscriber', async () => {
+    const coordinator = createSpatialRequestCoordinator({ concurrency: 1, maximumQueued: 1 });
+    const controller = new AbortController();
+    controller.abort('already stale');
+    const operation = vi.fn(async () => 1);
+
+    await expect(coordinator.run('pre-aborted', operation, { signal: controller.signal }))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(operation).not.toHaveBeenCalled();
+    expect(coordinator.snapshot('pre-aborted')).toBeNull();
+    expect(coordinator.snapshots()).toHaveLength(0);
   });
 
   it('honors bounded concurrency and queues excess work', async () => {
@@ -134,8 +148,20 @@ describe('spatialRequestCoordinator', () => {
     const pending = coordinator.run('running', async (context) => { signal = context.signal; return work.promise; });
     expect(coordinator.cancel('running', 'layer hidden')).toBe(true);
     expect(signal?.aborted).toBe(true);
-    work.resolve(1);
+    expect(coordinator.snapshot('running')).toBeNull();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    work.resolve(1);
+  });
+
+  it('settles subscribers immediately when cancelling abort-insensitive running work', async () => {
+    const coordinator = createSpatialRequestCoordinator();
+    const operation = vi.fn(async () => new Promise<number>(() => undefined));
+    const pending = coordinator.run('insensitive-running', operation);
+
+    expect(coordinator.cancel('insensitive-running', 'view disposed')).toBe(true);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(coordinator.snapshot('insensitive-running')).toBeNull();
+    expect(operation).toHaveBeenCalledTimes(1);
   });
 
   it('does not cache results unless a positive TTL is requested', async () => {

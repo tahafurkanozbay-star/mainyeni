@@ -52,6 +52,7 @@ describe('adaptiveClusterRuntime', () => {
     expect(['soft', 'aggressive']).toContain(result.decision.mode);
     expect(result.clusterCount).toBeGreaterThan(0);
     expect(result.items.every((item) => item.ids.length <= 5)).toBe(true);
+    expect(result.labelCount).toBeLessThanOrEqual(result.decision.labelBudget);
   });
 
   it('raises clustering pressure immediately but relaxes with hysteresis', () => {
@@ -104,6 +105,24 @@ describe('adaptiveClusterRuntime', () => {
     expect(result.items.some((item) => item.selected)).toBe(true);
   });
 
+  it('never exceeds the accepted feature budget even when selected identities exceed it', () => {
+    const runtime = createAdaptiveClusterRuntime({
+      maxInputFeatures: 1_000,
+      maxSelectedFeatures: 10_000,
+    });
+    const input = features(2_000).map((feature) => ({ ...feature, selected: true }));
+
+    const result = runtime.evaluate({
+      features: input,
+      viewport: { ...viewport, zoom: 20 },
+      performance: { frameMs: 16, deviceMemoryGb: 8 },
+    });
+
+    expect(result.acceptedCount).toBe(1_000);
+    expect(result.items.length).toBeLessThanOrEqual(1_000);
+    expect(result.selectedIds.length).toBeLessThanOrEqual(1_000);
+  });
+
   it('drops malformed coordinates before rendering instead of producing invalid buckets', () => {
     const runtime = createAdaptiveClusterRuntime();
     const result = runtime.evaluate({
@@ -119,6 +138,7 @@ describe('adaptiveClusterRuntime', () => {
     expect(result.items.flatMap((item) => item.ids)).toContain(1);
     expect(result.items.flatMap((item) => item.ids)).not.toContain(2);
     expect(result.items.flatMap((item) => item.ids)).not.toContain(3);
+    expect(runtime.snapshot().droppedFeatures).toBe(2);
   });
 
   it('respects label budgets while selected feature labels remain visible', () => {
@@ -150,6 +170,33 @@ describe('adaptiveClusterRuntime', () => {
     expect(first.fingerprint).toBe(second.fingerprint);
     expect(first.items).toEqual(second.items);
     expect(second.transitionReason).toBe('stable');
+  });
+
+  it('changes the render fingerprint when stable identities move on screen', () => {
+    const runtime = createAdaptiveClusterRuntime();
+    const first = runtime.evaluate({
+      features: [{ id: 1, x: 10, y: 20, weight: 1 }],
+      viewport: { ...viewport, zoom: 20 },
+    });
+    const second = runtime.evaluate({
+      features: [{ id: 1, x: 40, y: 50, weight: 1 }],
+      viewport: { ...viewport, zoom: 20 },
+    });
+
+    expect(second.fingerprint).not.toBe(first.fingerprint);
+  });
+
+  it('distinguishes numeric and string selection identities in transition fingerprints', () => {
+    const runtime = createAdaptiveClusterRuntime();
+    const input = [
+      { id: 1, x: 10, y: 20 },
+      { id: '1', x: 30, y: 40 },
+    ];
+
+    runtime.evaluate({ features: input, viewport, selectedIds: [1] });
+    const changed = runtime.evaluate({ features: input, viewport, selectedIds: ['1'] });
+
+    expect(changed.transitionReason).toBe('selection');
   });
 
   it('reports viewport, feature-count and selection transition causes', () => {
