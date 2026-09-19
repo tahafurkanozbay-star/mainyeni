@@ -25,7 +25,10 @@ import {
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { TextHelper } from '../../../Toolbox/TextHelper';
-import { createPictureMarkerSymbol } from '../../../gis-engine/iconPresentation';
+import {
+  createPictureMarkerSymbol,
+  resolveRecordIconUrl,
+} from '../../../gis-engine/iconPresentation';
 import { ButtonLoading } from '../../Common/Loading';
 import {
   CommonQueryWindowTools,
@@ -112,6 +115,10 @@ const PHARMACY_ICON_RECORD = Object.freeze({
 
 const PHARMACY_SYMBOL = Object.freeze(
   createPictureMarkerSymbol(PHARMACY_ICON_RECORD, 12, { minSize: 48, maxSize: 48 }),
+);
+const PHARMACY_WINDOW_LOGO = resolveRecordIconUrl(
+  PHARMACY_ICON_RECORD,
+  { fallback: 'images/icons/sidebar/eczane.png' },
 );
 
 const normalizeFiniteCoordinate = (value: unknown): number | null => {
@@ -612,7 +619,7 @@ export const PodQueryWindow = forwardRef<
       <header className="common-query-window-header">
         <img
           className="common-query-window-header-icon"
-          src="images/icons/sidebar/eczane.png"
+          src={PHARMACY_WINDOW_LOGO}
           alt=""
           aria-hidden="true"
         />
