@@ -421,3 +421,13 @@
 - MERGE: PR draft'tan yalnız tüm exact-head kapılar yeşil olduktan sonra çıkarıldı. Expected-head squash merge `merged=true` döndürdü; merge SHA `f847c2d05e75eca5c2389a0acffebe916215d070`; PR #184 closed+merged ve merge commit merge sonrasında current main olarak doğrulandı.
 - KALAN / SONRAKİ GÖREV: merged #184 branch yeniden kullanılmamalı. Kalan legacy JS/JSX; aktif Business/GIS sahiplikleri ve yeni current-main durumu kontrol edilerek sonraki benzersiz branch'lerde strict TS/TSX'e taşınmalı. Aynı >=4,000 meaningful additions, exact-head CI, accessibility/security/performance/regression ve final-main-refresh kapıları korunmalı.
 - POST-MERGE NOTE: bu progress-only dokümantasyon commit'i fully tested squash merge sonrasında oluşturulur; dokümantasyon-only commit için CI PASS varsayılmaz.
+
+
+## Deep GIS modernization current-main recovery — 2026-09-19 23:48 TRT
+- TUR / GÖREV: Deep GIS modernization canonical merge recovery after main advanced.
+- BASE / BRANCH: current main `2c1f0e80cea6ed173503ae18ae2a9e74e028d6a0`; fresh branch `agent/gis-final-merge-20260919-2c1f0e8-r1`.
+- LIFECYCLE: stale #183 and #187 are not merge candidates because their merge-bases are older than current main. The intervening main delta touched only `KENT_REHBERI_PROGRESS.md`, with zero path overlap against the 27 GIS/CI files migrated from #187.
+- KAPSAM: verified GIS/CI delta was migrated by exact blob identity only for files missing from current main; no concurrent main changes were overwritten.
+- CI PROFILE: Webclient Quality remains pull_request + main-push only, timeout-minutes 90, PR-number/ref concurrency with cancel-in-progress=true. Vitest remains pool='forks' with maxWorkers=2. Release QA intentionally does not duplicate the full/exact-base Vitest suite.
+- SECURITY / NETWORK / GIS CONTRACT: no WMS/WFS or invented endpoint was introduced by this recovery; shared deterministic icon resolver remains unchanged.
+- MERGE GATE: do not merge until the new PR is current-main based, additions >= 4000, mergeable=true/conflict-free, and exact-head Platform Architecture Audit, Webclient Quality, and Release QA are all completed+success; then refresh main/mergeability and use expected-head squash merge.
