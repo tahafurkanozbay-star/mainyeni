@@ -18,6 +18,7 @@ export interface CacheAdmissionProbe {
   readonly byteSize: number;
   readonly namespaceExists: boolean;
   readonly replacing: boolean;
+  readonly replacingInNamespace?: boolean;
   readonly replacedByteSize?: number;
   readonly global: CacheUsage;
   readonly namespace: Omit<CacheUsage, 'namespaces'>;
@@ -37,12 +38,14 @@ export const cacheAdmissionReason = (
 
   const oldEntries = probe.replacing ? 1 : 0;
   const oldBytes = probe.replacing ? (probe.replacedByteSize ?? 0) : 0;
+  const namespaceOldEntries = probe.replacingInNamespace ? 1 : 0;
+  const namespaceOldBytes = probe.replacingInNamespace ? oldBytes : 0;
   if (probe.global.entries - oldEntries + 1 > limits.maxEntries) return 'entry-capacity';
   if (probe.global.bytes - oldBytes + probe.byteSize > limits.maxBytes) return 'byte-capacity';
-  if (probe.namespace.entries - oldEntries + 1 > limits.maxEntriesPerNamespace) {
+  if (probe.namespace.entries - namespaceOldEntries + 1 > limits.maxEntriesPerNamespace) {
     return 'namespace-entry-capacity';
   }
-  if (probe.namespace.bytes - oldBytes + probe.byteSize > limits.maxBytesPerNamespace) {
+  if (probe.namespace.bytes - namespaceOldBytes + probe.byteSize > limits.maxBytesPerNamespace) {
     return 'namespace-byte-capacity';
   }
   return undefined;
