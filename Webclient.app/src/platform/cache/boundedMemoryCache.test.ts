@@ -222,7 +222,7 @@ describe('BoundedMemoryCache', () => {
       value: 'value',
       ttlMs: 1000,
       byteSize: 129,
-    })).toMatchObject({ code: 'entry-too-large' });
+    })).toThrow('cache entry exceeds maximum byte size');
     expect(cache.snapshot()).toMatchObject({ entries: 0, rejectedWrites: 1 });
   });
 
@@ -306,14 +306,14 @@ describe('BoundedMemoryCache', () => {
       value: 1,
       ttlMs: 0,
       byteSize: 8,
-    })).toMatchObject({ code: 'invalid-duration' });
+    })).toThrow('cache ttl must be greater than zero');
     expect(() => cache.put({
       key: 'bytes',
       namespace: 'catalog',
       value: 1,
       ttlMs: 100,
       byteSize: 0,
-    })).toMatchObject({ code: 'invalid-byte-size' });
+    })).toThrow('cache byte size is invalid');
   });
 
   it('rejects a regressing clock', () => {
@@ -321,7 +321,7 @@ describe('BoundedMemoryCache', () => {
     const cache = new BoundedMemoryCache({ clock: time.clock });
     cache.put({ key: 'a', namespace: 'catalog', value: 1, ttlMs: 100, byteSize: 8 });
     time.set(9);
-    expect(() => cache.get('a')).toMatchObject({ code: 'clock-regression' });
+    expect(() => cache.get('a')).toThrow('cache clock must be monotonic');
   });
 
   it('clears ownership and rejects future access after dispose', () => {
@@ -336,13 +336,13 @@ describe('BoundedMemoryCache', () => {
       bytes: 0,
       namespaces: 0,
     });
-    expect(() => cache.get('a')).toMatchObject({ code: 'disposed' });
+    expect(() => cache.get('a')).toThrow('cache store is disposed');
     expect(() => cache.put({
       key: 'b',
       namespace: 'catalog',
       value: 2,
       ttlMs: 100,
       byteSize: 8,
-    })).toMatchObject({ code: 'disposed' });
+    })).toThrow('cache store is disposed');
   });
 });
