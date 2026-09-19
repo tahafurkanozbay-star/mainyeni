@@ -371,6 +371,7 @@ export const CityBlockParcelQueryWindow = forwardRef<
               className="form-select"
               onChange={(event) => void onDistrictChange(event)}
               value={query.district}
+              aria-label="İlçe"
               aria-invalid={!query.district && Boolean(errorMessage)}
             >
               <option value="">Seçiniz..</option>
@@ -388,6 +389,7 @@ export const CityBlockParcelQueryWindow = forwardRef<
               id={neighborhoodId}
               className="form-select"
               value={query.nbhood}
+              aria-label="Mahalle"
               onChange={onNeighborhoodChange}
               disabled={!query.district}
             >
@@ -409,6 +411,7 @@ export const CityBlockParcelQueryWindow = forwardRef<
               autoComplete="off"
               className="form-control"
               value={query.cityblock}
+              aria-label="Ada"
               onChange={(event) => setQueryField('cityblock', event.target.value)}
             />
           </Form.Group>
@@ -424,6 +427,7 @@ export const CityBlockParcelQueryWindow = forwardRef<
               autoComplete="off"
               className="form-control"
               value={query.parcel}
+              aria-label="Parsel"
               onChange={(event) => setQueryField('parcel', event.target.value)}
             />
           </Form.Group>
