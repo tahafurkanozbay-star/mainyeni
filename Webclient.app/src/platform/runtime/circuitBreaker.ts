@@ -48,6 +48,8 @@ const requireInteger = (name: string, value: number, minimum: number, maximum: n
 };
 
 export class BoundedCircuitBreaker {
+  /** A circuit admission never retries caller work internally; one execute call invokes at most one attempt. */
+  readonly maxAttempts = 1;
   readonly failureThreshold: number;
   readonly recoveryTimeoutMs: number;
   readonly halfOpenMaxCalls: number;
