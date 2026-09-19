@@ -125,14 +125,18 @@ export class CachePolicyRegistry {
     this.#assertTagsAllowed(policy, tags);
 
     const input: CachePolicyInput = {
-      method: request.method,
       classification: policy.classification,
       explicitCacheable: policy.enabled,
-      authenticated: request.authenticated,
-      containsAuthorization: request.containsAuthorization,
       ttlMs: request.ttlMs ?? policy.ttlMs,
       staleWhileRevalidateMs:
         request.staleWhileRevalidateMs ?? policy.staleWhileRevalidateMs,
+      ...(request.method === undefined ? {} : { method: request.method }),
+      ...(request.authenticated === undefined
+        ? {}
+        : { authenticated: request.authenticated }),
+      ...(request.containsAuthorization === undefined
+        ? {}
+        : { containsAuthorization: request.containsAuthorization }),
     };
     const decision = evaluateCachePolicy(input);
     return Object.freeze({
