@@ -510,7 +510,7 @@ export const RouteQueryWindow = forwardRef<
             value={query.districtId}
           >
             <option value="">Seçiniz..</option>
-            {districtList.map((item, index) => {
+            {districtList.map((item) => {
               const districtId = normalizeQueryIdentifier(
                 readNestedQueryField(item, ['id', 'ID']),
               );
