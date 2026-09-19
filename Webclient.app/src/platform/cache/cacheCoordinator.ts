@@ -3,6 +3,7 @@ import { CacheContractError } from './cacheContracts';
 import { createCacheKey } from './cacheKey';
 import { CacheFlightError, type CacheFlightRegistryOptions } from './cacheFlightContracts';
 import { CacheFlightRegistry } from './cacheFlightRegistry';
+import { CacheMutationGuard, type CacheMutationGuardOptions } from './cacheMutationGuard';
 import { evaluateCachePolicy } from './cachePolicy';
 import type {
   CacheCoordinatorSnapshot,
@@ -16,6 +17,8 @@ export interface CacheCoordinatorOptions {
   readonly storeOptions?: BoundedMemoryCacheOptions;
   readonly flights?: CacheFlightRegistry;
   readonly flightOptions?: CacheFlightRegistryOptions;
+  readonly mutations?: CacheMutationGuard;
+  readonly mutationOptions?: CacheMutationGuardOptions;
 }
 
 interface MutableCoordinatorStats {
@@ -29,11 +32,13 @@ interface MutableCoordinatorStats {
   writes: number;
   writeIssues: number;
   revalidationFailures: number;
+  invalidatedWrites: number;
 }
 
 export class CacheCoordinator {
   readonly #store: BoundedMemoryCache;
   readonly #flights: CacheFlightRegistry;
+  readonly #mutations: CacheMutationGuard;
   readonly #stats: MutableCoordinatorStats = {
     reads: 0,
     freshHits: 0,
@@ -45,12 +50,14 @@ export class CacheCoordinator {
     writes: 0,
     writeIssues: 0,
     revalidationFailures: 0,
+    invalidatedWrites: 0,
   };
   #disposed = false;
 
   constructor(options: CacheCoordinatorOptions = {}) {
     this.#store = options.store ?? new BoundedMemoryCache(options.storeOptions);
     this.#flights = options.flights ?? new CacheFlightRegistry(options.flightOptions);
+    this.#mutations = options.mutations ?? new CacheMutationGuard(options.mutationOptions);
   }
 
   async readThrough<T>(request: CacheReadThroughRequest<T>): Promise<CacheResolution<T>> {
@@ -104,6 +111,11 @@ export class CacheCoordinator {
     }
 
     this.#stats.misses += 1;
+    const mutation = this.#mutations.capture(
+      parsedKey.serialized,
+      parsedKey.namespace,
+      request.tags ?? [],
+    );
     const joined = this.#flights.has(parsedKey.serialized);
     if (joined) this.#stats.sharedLoads += 1;
     else this.#stats.loads += 1;
@@ -118,14 +130,16 @@ export class CacheCoordinator {
       }),
     });
 
-    const issue = this.#write(
-      parsedKey.serialized,
-      parsedKey.namespace,
-      value,
-      request,
-      policy.ttlMs,
-      policy.staleWhileRevalidateMs,
-    );
+    const issue = this.#mutations.isCurrent(mutation)
+      ? this.#write(
+        parsedKey.serialized,
+        parsedKey.namespace,
+        value,
+        request,
+        policy.ttlMs,
+        policy.staleWhileRevalidateMs,
+      )
+      : this.#invalidatedWriteIssue();
     return Object.freeze({
       value,
       source: 'shared-loader',
@@ -137,11 +151,15 @@ export class CacheCoordinator {
 
   invalidateTags(tags: readonly string[]): number {
     this.#assertOpen();
+    this.#mutations.invalidateTags(tags);
+    this.#flights.cancelAll('cache-tag-invalidation');
     return this.#store.invalidateTags(tags);
   }
 
   invalidateNamespace(namespace: string): number {
     this.#assertOpen();
+    this.#mutations.invalidateNamespace(namespace);
+    this.#flights.cancelAll('cache-namespace-invalidation');
     return this.#store.invalidateNamespace(namespace);
   }
 
@@ -174,6 +192,7 @@ export class CacheCoordinator {
     key: string,
     namespace: string,
   ): Promise<CacheRevalidationOutcome> {
+    const mutation = this.#mutations.capture(key, namespace, request.tags ?? []);
     const joined = this.#flights.has(key);
     if (joined) this.#stats.sharedLoads += 1;
     else this.#stats.loads += 1;
@@ -185,14 +204,16 @@ export class CacheCoordinator {
     }).then(
       (value) => {
         const policy = evaluateCachePolicy(request.policy);
-        const issue = this.#write(
-          key,
-          namespace,
-          value,
-          request,
-          policy.ttlMs,
-          policy.staleWhileRevalidateMs,
-        );
+        const issue = this.#mutations.isCurrent(mutation)
+          ? this.#write(
+            key,
+            namespace,
+            value,
+            request,
+            policy.ttlMs,
+            policy.staleWhileRevalidateMs,
+          )
+          : this.#invalidatedWriteIssue();
         return Object.freeze({ status: 'updated', cached: issue === undefined });
       },
       (error: unknown) => {
@@ -234,6 +255,12 @@ export class CacheCoordinator {
       }
       throw error;
     }
+  }
+
+  #invalidatedWriteIssue(): string {
+    this.#stats.invalidatedWrites += 1;
+    this.#stats.writeIssues += 1;
+    return 'invalidated-during-load';
   }
 
   #assertOpen(): void {
