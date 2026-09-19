@@ -25,7 +25,6 @@ import {
   filterEgoLines,
   parseRouteCoordinatePairs,
   type EgoLine,
-  type EgoStop,
 } from '../_Common/QuerySearchRuntime';
 import type { UnknownRecord } from '../_Common/QuerySurfaceContracts';
 import { EgoStopsQuery } from './EgoStopsQuery';
