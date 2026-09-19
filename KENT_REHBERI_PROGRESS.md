@@ -410,3 +410,10 @@
 - BULGU: PR açıklaması güvenli CI profilini taşıdığını söylüyordu fakat gerçek branch dosyalarında Webclient Quality `timeout-minutes: 25` ve Vitest `vmThreads / maxWorkers: 4` kalmıştı.
 - DÜZELTME: Webclient Quality timeout 90 dakikaya çıkarıldı; full suite `forks` ve `maxWorkers: 2` process-isolation profiline geri döndürüldü. Release QA duplicate full/exact-base Vitest çalıştırmama davranışı korunuyor.
 - GATE: test/assertion kapsamı azaltılmadı. Yeni exact head için Platform Architecture Audit, Webclient Quality ve Release QA completed+success zorunlu; merge öncesi final main/merge-base/mergeable refresh yapılacak.
+
+
+## Deep GIS / bounded VM-fork Vitest remediation — 2026-09-19 TRT
+- PR: #179; prior exact head `fb3bc246d6858b0d358d60726b98a92e76a0c8ac`.
+- OBSERVATION: Platform Architecture Audit and Release QA completed successfully, while the sole Webclient Quality full Vitest diagnostic remained in-progress for more than ten minutes with `pool: 'forks'`, `maxWorkers: 2`; earlier fork-profile attempts showed the same long-running behavior. This is materially slower than the repository's previous VM-pool green runs and blocks exact-head release closure without producing a test failure.
+- REMEDIATION: retain child-process isolation while switching to Vitest `vmForks`, bounded to 2 workers with explicit `vmMemoryLimit: '768MB'`. This reuses the jsdom environment per worker like the previously fast VM profile while allowing the OS to reclaim memory when VM-fork workers recycle. Test files, assertions, isolation, timeouts and exact-base regression gates remain unchanged.
+- MERGE GATE: fresh exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success remains mandatory; no previous run is reused.
