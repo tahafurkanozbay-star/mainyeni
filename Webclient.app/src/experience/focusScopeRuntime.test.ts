@@ -12,11 +12,11 @@ const createDialog = (): {
   last: HTMLButtonElement;
 } => {
   document.body.innerHTML = `
-    <button id="before">Önceki</button>
+    <button id="before" type="button">Önceki</button>
     <section id="dialog" tabindex="-1">
-      <button id="first">İlk</button>
-      <input id="middle" />
-      <button id="last">Son</button>
+      <button id="first" type="button">İlk</button>
+      <input id="middle" aria-label="Orta alan" />
+      <button id="last" type="button">Son</button>
     </section>
   `;
 
@@ -148,9 +148,9 @@ describe('focusScopeRuntime', () => {
     document.body.innerHTML = `
       <button id="before">Önceki</button>
       <section id="dialog" tabindex="-1">
-        <button disabled>Kapalı</button>
+        <button type="button" disabled>Kapalı</button>
       </section>
-      <button id="fallback">Yedek</button>
+      <button id="fallback" type="button">Yedek</button>
     `;
 
     const container = document.getElementById('dialog');
@@ -269,7 +269,7 @@ describe('focusScopeRuntime', () => {
   test('routes Escape to the top-most scope only', () => {
     const outerFixture = createDialog();
     const inner = document.createElement('section');
-    inner.innerHTML = '<button id="inner-close">İç</button>';
+    inner.innerHTML = '<button id="inner-close" type="button">İç</button>';
     document.body.appendChild(inner);
 
     const outerEscape = vi.fn();
@@ -339,7 +339,7 @@ describe('focusScopeRuntime', () => {
   test('nested scopes expose deterministic top-most snapshots', () => {
     const { container } = createDialog();
     const secondContainer = document.createElement('section');
-    secondContainer.innerHTML = '<button>İç</button>';
+    secondContainer.innerHTML = '<button type="button">İç</button>';
     document.body.appendChild(secondContainer);
 
     const outer = createFocusScope({ document, container });
