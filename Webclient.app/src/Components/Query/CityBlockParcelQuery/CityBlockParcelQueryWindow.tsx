@@ -16,6 +16,7 @@ import { AppConfig } from '../../../Core/AppConfig';
 import { Constants_MessageType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
+import { resolveRecordIconUrl } from '../../../gis-engine/iconPresentation';
 import { ButtonLoading } from '../../Common/Loading';
 import { CommonQueryWindowTools } from '../_Common/CommonQueryWindowTools';
 import {
@@ -53,6 +54,16 @@ interface CityBlockParcelQueryWindowProps {
   readonly id: string;
   readonly windowManager: ManagedQueryWindowManager;
 }
+
+const PARCEL_ICON_RECORD = Object.freeze({
+  type: 'parcel',
+  category: 'Ada Parsel',
+  title: 'Ada-Parsel Arama',
+});
+const PARCEL_WINDOW_LOGO = resolveRecordIconUrl(
+  PARCEL_ICON_RECORD,
+  { fallback: 'images/icons/toolbar/adaparsel.png' },
+);
 
 const INITIAL_QUERY: CityBlockParcelQueryState = Object.freeze({
   district: '',
@@ -337,7 +348,7 @@ export const CityBlockParcelQueryWindow = forwardRef<
       <header className="common-query-window-header">
         <img
           className="common-query-window-header-icon"
-          src="images/icons/toolbar/adaparsel.png"
+          src={PARCEL_WINDOW_LOGO}
           alt=""
           aria-hidden="true"
         />
