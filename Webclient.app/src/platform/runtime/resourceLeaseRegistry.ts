@@ -252,7 +252,7 @@ export class ResourceLeaseRegistry {
   dispose(): void {
     if (this.#disposed) return;
     const now = this.#now();
-    for (const id of [...this.#active.keys()]) {
+    for (const id of this.#active.keys()) {
       this.#release(id, 'registry-disposed', now);
     }
     this.#disposed = true;
