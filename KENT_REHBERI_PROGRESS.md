@@ -396,3 +396,11 @@
 - ROOT CAUSE / FIX: nested empty `catch {}` observer-failure guards were replaced with non-empty reportError-aware handling. Business lifecycle/cache outcomes remain isolated from observer callbacks; host `globalThis.reportError` still receives secondary observer failures when available; no direct console fallback was added.
 - VALIDATION STATUS: TypeScript 7 strict typecheck and typed QA tests had already passed before the scorecard gate. This progress commit requires a fresh exact-head Platform Architecture Audit + Webclient Quality + Release QA run; no final PASS is claimed until those complete successfully.
 - FINAL GATE: PR remains draft/open. >=4,000 meaningful additions and behind=0/current merge-base are satisfied at this checkpoint; merge only after final exact-head CI, production build/integrity/budget, security/performance/data-integrity review, final main refresh and mergeable=true.
+
+
+## Deep GIS / CI gate serialization hardening — 2026-09-19 22:46 TRT
+- PR: #175; exact head before this commit `e10944915d4f8e0ab467341c85df08594d9cfc3a`.
+- BULGU: Webclient Quality ve Release QA webclient jobs aynı full Vitest + exact-base Vitest suite'ini paralel olarak tekrar çalıştırıyor; iki process-isolated jsdom/fork suite aynı anda yaklaşık bir saat aynı adımda kaldı ve merge gate'i kaynak rekabeti nedeniyle ilerlemedi.
+- DÜZELTME: full Vitest ve exact-base Vitest otoritesi Webclient Quality'de tekilleştirildi. Release QA duplicate full/exact-base Vitest tekrarını kaldırdı; bağımsız typed release scorecard, lint, TypeScript/exact-base TypeScript, native tooling, build-budget, production Vite build/integrity/budgets ve backend Release validation aynen zorunlu kaldı.
+- GATE ZAYIFLATILMADI: hiçbir test/assertion silinmedi; full suite ve exact-base Vitest hâlâ mandatory Webclient Quality check olarak exact PR head üzerinde çalışıyor. Amaç aynı ağır suite'in iki runner'da eşzamanlı kopyasını çalıştırmayı önlemek.
+- MERGE: bu CI düzenlemesi yeni exact head oluşturur. Platform Architecture Audit, Webclient Quality ve Release QA yeni head'de completed+success olmadan merge yapılmayacak.
