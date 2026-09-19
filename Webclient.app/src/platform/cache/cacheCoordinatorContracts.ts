@@ -47,4 +47,5 @@ export interface CacheCoordinatorSnapshot {
   readonly writes: number;
   readonly writeIssues: number;
   readonly revalidationFailures: number;
+  readonly invalidatedWrites: number;
 }
