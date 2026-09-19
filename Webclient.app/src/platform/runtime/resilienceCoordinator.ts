@@ -55,6 +55,8 @@ interface MutableStats { accepted: number; rejected: number; succeeded: number; 
 
 /** Bounded composition boundary for retry, circuit, bulkhead and rolling failure-budget policy. */
 export class BoundedResilienceCoordinator {
+  /** Hard upper bound on caller-operation attempts for one execute() invocation. */
+  readonly maxAttempts: number;
   readonly #bulkhead: BoundedBulkhead; readonly #breaker: BoundedCircuitBreaker;
   readonly #budget: BoundedFailureBudget; readonly #retry: BoundedRetryPolicy; readonly #clock: ResilienceClock;
   readonly #historyLimit: number; readonly #maxOwners: number; readonly #maxKeys: number;
@@ -68,10 +70,11 @@ export class BoundedResilienceCoordinator {
     this.#historyLimit = boundedInteger('historyLimit', options.historyLimit ?? 128, 0, 2_000);
     this.#maxOwners = boundedInteger('maxOwners', options.maxOwners ?? 128, 1, 10_000);
     this.#maxKeys = boundedInteger('maxKeys', options.maxKeys ?? 512, 1, 50_000);
+    this.maxAttempts = boundedInteger('retry.maxAttempts', options.retry?.maxAttempts ?? 3, 1, 10);
     this.#bulkhead = new BoundedBulkhead(options.bulkhead);
     this.#breaker = new BoundedCircuitBreaker(options.circuitBreaker);
     this.#budget = new BoundedFailureBudget({ ...options.failureBudget, clock: () => this.#now() });
-    this.#retry = new BoundedRetryPolicy(options.retry);
+    this.#retry = new BoundedRetryPolicy({ ...options.retry, maxAttempts: this.maxAttempts });
   }
 
   async execute<T>(request: ResilienceRequest<T>): Promise<T> {
