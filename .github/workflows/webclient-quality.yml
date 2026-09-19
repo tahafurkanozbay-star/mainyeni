@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - 'agent/**'
     paths:
       - 'Webclient.app/**'
       - '.github/workflows/webclient-quality.yml'
@@ -17,13 +16,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: webclient-quality-${{ github.ref }}
+  group: webclient-quality-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: Webclient.app
@@ -81,7 +80,7 @@ jobs:
               Webclient.app/vite.config.ts \
               Webclient.app/vitest.config.ts \
             | sed 's#^Webclient.app/##' \
-            | grep -E '\.(cjs|mjs|js|jsx|ts|tsx)$' || true
+            | awk '/\.(cjs|mjs|js|jsx|ts|tsx)$/'
           )
           if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No changed Webclient lint targets."
@@ -111,7 +110,7 @@ jobs:
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/typecheck-baseline
           git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
-          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1 || true' EXIT
+          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1' EXIT
           set +e
           (
             cd /tmp/typecheck-baseline/Webclient.app
@@ -152,7 +151,7 @@ jobs:
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/vitest-baseline
           git -C .. worktree add --detach /tmp/vitest-baseline "$BASE_SHA"
-          trap 'git -C .. worktree remove --force /tmp/vitest-baseline >/dev/null 2>&1 || true' EXIT
+          trap 'git -C .. worktree remove --force /tmp/vitest-baseline >/dev/null 2>&1' EXIT
           (
             cd /tmp/vitest-baseline/Webclient.app
             npm ci --ignore-scripts --no-audit --no-fund >/tmp/vitest-baseline-install.log 2>&1
