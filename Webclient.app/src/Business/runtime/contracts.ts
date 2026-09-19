@@ -172,7 +172,8 @@ export interface QueryPlannerInput {
   readonly outFields?: readonly string[];
   readonly spatial?: {
     readonly geometry: unknown;
-    readonly distance: unknown;
+    readonly distance?: unknown;
+    readonly distanceMeters?: unknown;
     readonly units?: 'meters';
     readonly spatialRelationship?: 'intersects';
   };
