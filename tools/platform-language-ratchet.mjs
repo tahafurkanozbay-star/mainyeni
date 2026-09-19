@@ -87,10 +87,18 @@ const readBaseline = async (root, baselinePath) => {
     }
     domains[domain] = value;
   }
+  const testDomains = {};
+  for (const [domain, value] of Object.entries(parsed.testDomains ?? {})) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error('Invalid test JavaScript budget for domain ' + domain + '.');
+    }
+    testDomains[domain] = value;
+  }
   return Object.freeze({
     schemaVersion: 1,
     description: String(parsed.description || ''),
     domains: Object.freeze(domains),
+    testDomains: Object.freeze(testDomains),
     platformLegacyAllowlist: Object.freeze(
       Array.isArray(parsed.platformLegacyAllowlist)
         ? parsed.platformLegacyAllowlist.map(String).sort()
@@ -177,6 +185,7 @@ export const auditLanguageModernization = async (
   for (const domain of [...domainNames].sort()) {
     const current = domains.get(domain) || emptyDomain(domain);
     const budget = baseline.domains[domain];
+    const testBudget = baseline.testDomains[domain];
     if (budget === undefined) {
       if (current.productionJavascriptFiles > 0) {
         findings.push(finding(
@@ -196,6 +205,15 @@ export const auditLanguageModernization = async (
         'Production JavaScript count exceeds the ratcheted domain ceiling.',
         null,
         { domain, current: current.productionJavascriptFiles, budget },
+      ));
+    }
+    if (testBudget !== undefined && current.testJavascriptFiles > testBudget) {
+      findings.push(finding(
+        'error',
+        'test-javascript-budget-regression',
+        'Test JavaScript count exceeds the ratcheted domain ceiling.',
+        null,
+        { domain, current: current.testJavascriptFiles, budget: testBudget },
       ));
     }
   }
@@ -250,6 +268,9 @@ export const auditLanguageModernization = async (
     accumulator.typescript += item.productionTypescriptFiles;
     accumulator.javascriptLines += item.productionJavascriptLines;
     accumulator.typescriptLines += item.productionTypescriptLines;
+    accumulator.testFiles += item.testFiles;
+    accumulator.testJavascript += item.testJavascriptFiles;
+    accumulator.testTypescript += item.testTypescriptFiles;
     return accumulator;
   }, {
     productionFiles: 0,
@@ -257,6 +278,9 @@ export const auditLanguageModernization = async (
     typescript: 0,
     javascriptLines: 0,
     typescriptLines: 0,
+    testFiles: 0,
+    testJavascript: 0,
+    testTypescript: 0,
   });
 
   return Object.freeze({
@@ -272,9 +296,15 @@ export const auditLanguageModernization = async (
       productionTypescriptFiles: totals.typescript,
       productionJavascriptLines: totals.javascriptLines,
       productionTypescriptLines: totals.typescriptLines,
+      testFiles: totals.testFiles,
+      testJavascriptFiles: totals.testJavascript,
+      testTypescriptFiles: totals.testTypescript,
       typedProductionRatio: totals.productionFiles === 0
         ? 1
         : totals.typescript / totals.productionFiles,
+      typedTestRatio: totals.testFiles === 0
+        ? 1
+        : totals.testTypescript / totals.testFiles,
     }),
     domains: Object.freeze(orderedDomains),
     migrationQueue: Object.freeze(migrationQueue),
@@ -296,6 +326,9 @@ export const formatLanguageModernizationMarkdown = (report) => {
     String(item.productionTypescriptFiles),
     String(item.productionJavascriptFiles),
     String(report.baseline.domains[item.domain] ?? 'n/a'),
+    String(item.testTypescriptFiles),
+    String(item.testJavascriptFiles),
+    String(report.baseline.testDomains[item.domain] ?? 'n/a'),
     percent(item.typedProductionRatio),
     String(item.productionTypescriptLines),
     String(item.productionJavascriptLines),
@@ -325,11 +358,14 @@ export const formatLanguageModernizationMarkdown = (report) => {
     '- Typed production ratio: **' + percent(report.summary.typedProductionRatio) + '**',
     '- Production TypeScript lines: **' + report.summary.productionTypescriptLines + '**',
     '- Production JavaScript lines: **' + report.summary.productionJavascriptLines + '**',
+    '- Test TypeScript files: **' + report.summary.testTypescriptFiles + '**',
+    '- Test JavaScript files: **' + report.summary.testJavascriptFiles + '**',
+    '- Typed test ratio: **' + percent(report.summary.typedTestRatio) + '**',
     '',
     '## Domain ratchet',
     '',
     table(
-      ['Domain', 'TS files', 'JS files', 'JS ceiling', 'Typed ratio', 'TS lines', 'JS lines'],
+      ['Domain', 'Prod TS', 'Prod JS', 'Prod JS ceiling', 'Test TS', 'Test JS', 'Test JS ceiling', 'Prod typed ratio', 'TS lines', 'JS lines'],
       domainRows,
     ),
     '',
@@ -341,7 +377,7 @@ export const formatLanguageModernizationMarkdown = (report) => {
     '',
     table(['Severity', 'Code', 'File', 'Message'], findingRows),
     '',
-    'The JavaScript ceilings are ratchets, not targets. They may decrease as modules migrate to TypeScript but must never increase. Domains already at zero JavaScript are permanently protected from regression.',
+    'The JavaScript ceilings are ratchets, not targets. Production and test ceilings may decrease as modules migrate to TypeScript but must never increase. Domains already at zero JavaScript are permanently protected from regression.',
     '',
   ].join('\n');
 };

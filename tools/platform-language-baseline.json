@@ -1,17 +1,29 @@
 {
   "schemaVersion": 1,
-  "description": "Production JavaScript ceilings captured before the Platform strict-TypeScript cutover. Counts may only decrease.",
+  "description": "Production and test JavaScript ceilings captured at the current TypeScript migration frontier. Counts may only decrease.",
   "domains": {
-    "web-root": 2,
+    "web-root": 0,
     "business": 59,
-    "components": 97,
+    "components": 70,
     "core": 0,
     "store": 0,
-    "toolbox": 12,
+    "toolbox": 2,
     "data-search": 0,
-    "experience": 2,
+    "experience": 0,
     "gis": 0,
     "platform": 1
+  },
+  "testDomains": {
+    "web-root": 2,
+    "business": 3,
+    "components": 9,
+    "core": 0,
+    "store": 2,
+    "toolbox": 15,
+    "data-search": 8,
+    "experience": 2,
+    "gis": 0,
+    "platform": 19
   },
   "platformLegacyAllowlist": [
     "Webclient.app/src/platform/bootstrap/bootstrapApplication.js"
