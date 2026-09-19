@@ -363,6 +363,6 @@ describe('spatialFeatureCollectionExtent', () => {
     expect(() => spatialFeatureCollectionExtent([
       pointFeature(1, 0, 0),
       webMercatorFeature,
-    ])).toThrow('spatial-reference-mismatch');
+    ])).toThrow('feature collection contains mixed spatial references');
   });
 });
