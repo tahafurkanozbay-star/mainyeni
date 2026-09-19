@@ -163,18 +163,6 @@ export class CacheMutationGuard {
     this.#tags.clear();
   }
 
-  releaseKey(rawKey: string): void {
-    this.#keys.delete(cacheKey(rawKey));
-  }
-
-  releaseNamespace(rawNamespace: string): void {
-    this.#namespaces.delete(cacheNamespace(rawNamespace));
-  }
-
-  releaseTags(rawTags: readonly string[]): void {
-    for (const rawTag of rawTags) this.#tags.delete(cacheTag(rawTag));
-  }
-
   snapshot(): CacheMutationGuardSnapshot {
     return Object.freeze({
       globalGeneration: this.#globalGeneration,
