@@ -276,7 +276,9 @@ export class BoundedMemoryCache {
       }
 
       const candidate = this.#evictionCandidate(
-        reason.startsWith('namespace-') ? namespace : undefined,
+        reason === 'namespace-entry-capacity' || reason === 'namespace-byte-capacity'
+          ? namespace
+          : undefined,
         replacing?.key,
       );
       if (!candidate || !this.#remove(candidate, 'capacity')) {
@@ -301,7 +303,7 @@ export class BoundedMemoryCache {
     return undefined;
   }
 
-  #remove(key: string, reason: string): boolean {
+  #remove(key: string, _reason: string): boolean {
     const entry = this.#entries.get(key);
     if (!entry) return false;
     this.#entries.delete(key);
