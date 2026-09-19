@@ -29,25 +29,21 @@ describe('estimateCacheValueBytes', () => {
   it('rejects circular values', () => {
     const value: { self?: unknown } = {};
     value.self = value;
-    expect(() => estimateCacheValueBytes(value)).toMatchObject({
-      code: 'invalid-byte-size',
-    });
+    expect(() => estimateCacheValueBytes(value)).toThrow('cache value contains a cycle');
   });
 
   it('rejects functions and symbols', () => {
-    expect(() => estimateCacheValueBytes({ value: () => 1 })).toMatchObject({
-      code: 'invalid-byte-size',
-    });
-    expect(() => estimateCacheValueBytes({ value: Symbol('x') })).toMatchObject({
-      code: 'invalid-byte-size',
-    });
+    expect(() => estimateCacheValueBytes({ value: () => 1 }))
+      .toThrow('cache value contains unsupported data');
+    expect(() => estimateCacheValueBytes({ value: Symbol('x') }))
+      .toThrow('cache value contains unsupported data');
   });
 
   it('enforces traversal depth and item limits', () => {
     expect(() => estimateCacheValueBytes({ nested: { value: 1 } }, { maxDepth: 1 }))
-      .toMatchObject({ code: 'invalid-byte-size' });
+      .toThrow('cache value exceeded depth limit');
     expect(() => estimateCacheValueBytes([1, 2, 3], { maxVisited: 2 }))
-      .toMatchObject({ code: 'invalid-byte-size' });
+      .toThrow('cache value exceeded item limit');
   });
 
   it('validates sizing options', () => {
