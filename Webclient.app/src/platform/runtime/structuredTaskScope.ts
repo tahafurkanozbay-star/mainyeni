@@ -195,6 +195,7 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
   #sequence = 0;
   #taskSequence = 0;
   #lastObservedAt: number | undefined;
+  #settledNotified = false;
 
   constructor(
     name: string,
@@ -390,7 +391,7 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
     await this.waitForIdle(request.signal);
     if (this.#state !== 'disposed') {
       this.#state = 'closed';
-      this.#onSettled?.();
+      this.#notifySettled();
     }
   }
 
@@ -444,8 +445,7 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
       if (!task.controller.signal.aborted) task.controller.abort(reason);
     }
     for (const child of this.#children) child.dispose(reason);
-    this.#settleIdleWaiters();
-    this.#onSettled?.();
+    this.#checkSettled();
   }
 
   #record(task: ActiveTask, outcome: TaskScopeOutcome, error?: unknown): void {
@@ -467,11 +467,16 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
   }
 
   #checkSettled(): void {
-    if (this.#state === 'closing' && this.#active.size === 0 && this.#children.size === 0) {
-      this.#state = 'closed';
-      this.#onSettled?.();
-    }
+    const idle = this.#active.size === 0 && this.#children.size === 0;
+    if (this.#state === 'closing' && idle) this.#state = 'closed';
+    if ((this.#state === 'closed' || this.#state === 'disposed') && idle) this.#notifySettled();
     this.#settleIdleWaiters();
+  }
+
+  #notifySettled(): void {
+    if (this.#settledNotified) return;
+    this.#settledNotified = true;
+    this.#onSettled?.();
   }
 
   #settleIdleWaiters(): void {
