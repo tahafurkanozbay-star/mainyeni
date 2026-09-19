@@ -24,6 +24,9 @@ export interface DisposableObject {
   destroy?: () => unknown;
   abort?: () => unknown;
 }
+export interface RemovableHandle extends DisposableObject {
+  remove: () => unknown;
+}
 export type Disposable = DisposableObject | (() => unknown);
 
 const mapRegistries = new WeakMap<object, Map<string, Set<unknown>>>();
@@ -83,7 +86,7 @@ const safeRemove = <TLayer>(map: LayerMapLike<TLayer> | null, layer: TLayer): bo
     if (!layerExistsOnMap(map, layer)) return false;
     map.remove(layer);
     return true;
-  } catch (_) { return false; }
+  } catch { return false; }
 };
 
 const safeAdd = <TLayer>(map: LayerMapLike<TLayer> | null, layer: TLayer, index?: number): boolean => {
@@ -92,7 +95,7 @@ const safeAdd = <TLayer>(map: LayerMapLike<TLayer> | null, layer: TLayer, index?
     if (Number.isInteger(index) && Number(index) >= 0) map.add(layer, index);
     else map.add(layer);
     return true;
-  } catch (_) { return false; }
+  } catch { return false; }
 };
 
 export const registerOwnedLayer = <TLayer>(mapOrView: MapOrView<TLayer>, ownerId: unknown, layer: TLayer): TLayer | null => {
@@ -233,6 +236,18 @@ export const createLayerOwner = <TLayer>(mapOrView: MapOrView<TLayer>, ownerId: 
   });
 };
 
+const reportCleanupError = (error: unknown): void => {
+  const reporter = (
+    globalThis as typeof globalThis & {
+      reportError?: (reason: unknown) => void;
+    }
+  ).reportError;
+
+  if (typeof reporter === 'function') {
+    reporter(error);
+  }
+};
+
 const disposeOne = (disposable: Disposable): void => {
   try {
     if (typeof disposable === 'function') disposable();
@@ -241,7 +256,10 @@ const disposeOne = (disposable: Disposable): void => {
       disposable.destroy?.();
       disposable.abort?.();
     }
-  } catch (_) { /* cleanup is deliberately idempotent */ }
+  } catch (error) {
+    // Cleanup remains idempotent, while modern runtimes receive observable failure evidence.
+    reportCleanupError(error);
+  }
 };
 
 export interface DisposableBag {
