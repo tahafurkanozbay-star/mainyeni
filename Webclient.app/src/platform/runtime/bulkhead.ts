@@ -108,7 +108,15 @@ export class BoundedBulkhead {
 
     const queueWaitMs = integer('queueWaitMs', options.queueWaitMs ?? this.maxQueueWaitMs, 1, this.maxQueueWaitMs);
     return new Promise<T>((resolve, reject) => {
-      const entry: QueueEntry<T> = { owner, operation, resolve, reject, signal: options.signal, timer: undefined, abortListener: undefined };
+      const entry: QueueEntry<T> = {
+        owner,
+        operation,
+        resolve,
+        reject,
+        ...(options.signal ? { signal: options.signal } : {}),
+        timer: undefined,
+        abortListener: undefined,
+      };
       entry.timer = setTimeout(() => this.#removeAndReject(entry, 'queue-timeout'), queueWaitMs);
       if (options.signal) {
         entry.abortListener = () => this.#removeAndReject(entry, 'aborted');
