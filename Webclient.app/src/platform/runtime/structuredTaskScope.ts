@@ -344,7 +344,9 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
     }
 
     let child!: BoundedStructuredTaskScope;
+    const propagate = (): void => child.dispose(this.#controller.signal.reason);
     const onSettled = (): void => {
+      this.#controller.signal.removeEventListener('abort', propagate);
       this.#children.delete(child);
       this.#checkSettled();
     };
@@ -362,13 +364,7 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
       onSettled,
     );
     this.#children.add(child);
-
-    const propagate = (): void => child.dispose(this.#controller.signal.reason);
     this.#controller.signal.addEventListener('abort', propagate, { once: true });
-    void child.waitForIdle().finally(() => {
-      this.#controller.signal.removeEventListener('abort', propagate);
-    });
-
     return child;
   }
 
