@@ -103,6 +103,22 @@ const resolveTarget = (
   return target;
 };
 
+const reportObserverError = (
+  reporter: ((error: unknown) => void) | undefined,
+  error: unknown,
+): void => {
+  if (!reporter) {
+    globalThis.reportError?.(error);
+    return;
+  }
+
+  void Promise.resolve()
+    .then(() => reporter(error))
+    .catch((reportingError: unknown) => {
+      globalThis.reportError?.(reportingError);
+    });
+};
+
 const safeFocus = (
   target: HTMLElement | null,
   onError: ((error: unknown) => void) | undefined,
@@ -112,11 +128,7 @@ const safeFocus = (
     target.focus({ preventScroll: true });
     return target.ownerDocument.activeElement === target;
   } catch (error) {
-    try {
-      onError?.(error);
-    } catch (observerError) {
-      globalThis.reportError?.(observerError);
-    }
+    reportObserverError(onError, error);
     return false;
   }
 };
@@ -193,11 +205,7 @@ class FocusScopeController implements FocusScopeHandle {
       try {
         this.#onEscape?.(event);
       } catch (error) {
-        try {
-          this.#onFocusError?.(error);
-        } catch (observerError) {
-          globalThis.reportError?.(observerError);
-        }
+        reportObserverError(this.#onFocusError, error);
       }
       return;
     }
