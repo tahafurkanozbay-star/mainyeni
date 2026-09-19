@@ -146,6 +146,50 @@ describe('BoundedMemoryCache', () => {
     cache.assertConsistent();
   });
 
+  it('does not subtract a replacement from the wrong namespace budget', () => {
+    const cache = new BoundedMemoryCache({
+      maxEntries: 4,
+      maxEntriesPerNamespace: 1,
+      maxBytes: 4096,
+      maxBytesPerNamespace: 2048,
+      maxEntryBytes: 1024,
+    });
+    cache.put({
+      key: 'moving',
+      namespace: 'catalog',
+      value: 'old',
+      ttlMs: 1000,
+      byteSize: 32,
+    });
+    cache.put({
+      key: 'search-existing',
+      namespace: 'search',
+      value: 'existing',
+      ttlMs: 1000,
+      byteSize: 32,
+    });
+
+    cache.put({
+      key: 'moving',
+      namespace: 'search',
+      value: 'new',
+      ttlMs: 1000,
+      byteSize: 32,
+    });
+
+    expect(cache.get('search-existing').hit).toBe(false);
+    expect(cache.get('moving')).toMatchObject({
+      hit: true,
+      value: 'new',
+    });
+    expect(cache.snapshot()).toMatchObject({
+      entries: 1,
+      namespaces: 1,
+      evictions: 1,
+    });
+    cache.assertConsistent();
+  });
+
   it('evicts until the byte budget can admit a value', () => {
     const cache = new BoundedMemoryCache({
       maxEntries: 8,
