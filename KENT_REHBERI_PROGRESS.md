@@ -419,3 +419,10 @@
 - DÜZELTME: Webclient Quality artık PR'larda ve yalnız `main` push'larında çalışır; `agent/**` push duplicate tetikleyicisi kaldırıldı. Concurrency group PR number (non-PR için ref) bazlı ve `cancel-in-progress: true`; aynı PR'da yeni head yalnız superseded eski head run'ını iptal eder.
 - KORUNAN GATE: Webclient Quality timeout 90 dakika, Vitest `forks/maxWorkers=2`, full/exact-base Vitest ve production build/integrity/budget adımları aynen zorunlu. Release QA duplicate full Vitest çalıştırmaz.
 - MERGE: bu orchestration düzeltmesi yeni exact head oluşturur; Platform Architecture Audit + Webclient Quality + Release QA completed+success ve final main/mergeability/security/performance/data-integrity refresh olmadan merge yok.
+
+
+## Deep GIS / release-scorecard workflow cleanup — 2026-09-19
+- PR: #180 canonical GIS merge candidate; pre-fix head `7f97485ce823ec642c271b0cd0ba84ec52dbe0a3`.
+- CI-DRIVEN BULGU: exact-base typed release scorecard, değiştirilen `.github/workflows/webclient-quality.yml` içinde üç `validation-command-failure-suppressed` HIGH finding yakaladı: changed-file filtresi ve iki worktree cleanup trap'i.
+- DÜZELTME: changed-file extension filtresi `grep ... || true` yerine normal başarı semantiğine sahip `awk` filtresine taşındı; typecheck/vitest baseline cleanup trap'lerinden `|| true` kaldırıldı. Gerçek validation exit-code capture için mevcut kontrollü `set +e` blokları korunuyor ve sonuçlar regression script'lerine açıkça aktarılıyor.
+- GATE: yeni exact head için typed release scorecard dahil tüm zorunlu CI tekrar completed+success olmalı; hiçbir test/assertion/build-budget gevşetilmedi.
