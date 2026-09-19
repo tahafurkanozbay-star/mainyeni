@@ -404,3 +404,11 @@
 - DÜZELTME: full Vitest ve exact-base Vitest otoritesi Webclient Quality'de tekilleştirildi. Release QA duplicate full/exact-base Vitest tekrarını kaldırdı; bağımsız typed release scorecard, lint, TypeScript/exact-base TypeScript, native tooling, build-budget, production Vite build/integrity/budgets ve backend Release validation aynen zorunlu kaldı.
 - GATE ZAYIFLATILMADI: hiçbir test/assertion silinmedi; full suite ve exact-base Vitest hâlâ mandatory Webclient Quality check olarak exact PR head üzerinde çalışıyor. Amaç aynı ağır suite'in iki runner'da eşzamanlı kopyasını çalıştırmayı önlemek.
 - MERGE: bu CI düzenlemesi yeni exact head oluşturur. Platform Architecture Audit, Webclient Quality ve Release QA yeni head'de completed+success olmadan merge yapılmayacak.
+
+
+## Deep GIS / CI timeout remediation — 2026-09-19 TRT
+- PR: #175 canonical GIS modernization PR.
+- ROOT CAUSE: exact-head Webclient Quality and Release QA webclient jobs reached their job timeout while `Full Vitest diagnostic visibility` was running. Logs showed no assertion failure before cancellation; the PR-specific `pool: 'forks', maxWorkers: 2` change caused the full suite to stop completing, while the immediately preceding successful exact-head release runs completed the same full Vitest diagnostic in seconds under the repository's established `vmThreads` / 4-worker configuration.
+- FIX: restored `Webclient.app/vitest.config.ts` to the current-main bounded `vmThreads`, `maxWorkers: 4` configuration. Restored Webclient Quality and Release QA webclient job timeouts to the current-main 25/30-minute contracts so a hung test suite cannot be masked by an enlarged 90-minute window.
+- SAFETY: no production runtime, endpoint, WMS/WFS/WMTS, secret/token, telemetry, GIS data contract or icon mapping changed in this remediation; only CI/test execution configuration was corrected.
+- VALIDATION: prior cancelled runs are not accepted as PASS. A fresh exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success cycle is mandatory before merge. The >=4,000 meaningful-additions gate, behind=0/current merge-base, mergeable=true and unresolved-thread=0 checks must be revalidated against the final head immediately before expected-head squash merge.
