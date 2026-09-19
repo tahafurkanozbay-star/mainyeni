@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  MissingBusinessServiceError,
-  createBusinessDiagnostics,
-  createServiceRegistry,
-} from './index';
+import { MissingBusinessServiceError, createBusinessDiagnostics, createServiceRegistry } from './index';
 
 describe('bounded Business diagnostics', () => {
   it('records lifecycle timing with bounded capacity', () => {
