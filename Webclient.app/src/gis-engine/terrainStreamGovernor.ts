@@ -103,6 +103,11 @@ const finiteNonNegative = (value: unknown, label: string): number => {
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
+const normalizeQuality = (quality: unknown): TerrainQuality => {
+  if (quality === 'eco' || quality === 'balanced' || quality === 'quality') return quality;
+  throw new TypeError('terrain quality must be eco, balanced, or quality');
+};
+
 const percentile = (values: readonly number[], ratio: number): number => {
   if (!values.length) return 0;
   const sorted = [...values].sort((left, right) => left - right);
@@ -115,11 +120,13 @@ const tileScore = (tile: TerrainTileSample, budget: TerrainBudget, timestamp: nu
   const screen = clamp(finite(tile.screenPixels), 0, 4_000) * 2;
   const level = clamp(finite(tile.level), 0, budget.maxLevel) * 8;
   const distancePenalty = Math.min(500, Math.max(0, finite(tile.distanceMeters)) / 25);
-  const recency = tile.lastUsedAt ? Math.max(0, 300 - (timestamp - tile.lastUsedAt) / 100) : 0;
+  const recency = tile.lastUsedAt === undefined
+    ? 0
+    : Math.max(0, 300 - Math.max(0, timestamp - tile.lastUsedAt) / 100);
   return visibility + screen + level + recency - distancePenalty;
 };
 
-export const terrainBudgetForQuality = (quality: TerrainQuality): TerrainBudget => QUALITY_BUDGETS[quality];
+export const terrainBudgetForQuality = (quality: TerrainQuality): TerrainBudget => QUALITY_BUDGETS[normalizeQuality(quality)];
 
 export class TerrainStreamGovernor {
   private quality: TerrainQuality;
@@ -136,7 +143,7 @@ export class TerrainStreamGovernor {
   private decisions: TerrainDecision[] = [];
 
   public constructor(options: TerrainStreamGovernorOptions = {}) {
-    this.quality = options.quality ?? 'balanced';
+    this.quality = normalizeQuality(options.quality ?? 'balanced');
     this.now = options.now ?? Date.now;
     this.frameHistorySize = Math.max(16, Math.min(240, Math.floor(finite(options.frameHistorySize, 90))));
     this.maxTilesPerPlan = positiveSafeInteger(
@@ -153,7 +160,7 @@ export class TerrainStreamGovernor {
   }
 
   public setQuality(quality: TerrainQuality): TerrainGovernorSnapshot {
-    this.quality = quality;
+    this.quality = normalizeQuality(quality);
     this.recalculatePressure();
     return this.getSnapshot();
   }
