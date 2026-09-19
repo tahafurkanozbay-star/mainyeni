@@ -15,10 +15,6 @@ export default defineConfig({
       'src/**/*.test.{js,jsx,ts,tsx}',
       'tooling/**/*.test.{js,ts}',
     ],
-    // vmThreads is the repository-proven configuration for this mixed legacy/jsdom
-    // suite. Exact-head successful Webclient Quality runs complete the full
-    // diagnostic in seconds with four bounded workers; process forks can leave
-    // the coordinator waiting indefinitely on child-process teardown.
     pool: 'vmThreads',
     maxWorkers: 4,
     fileParallelism: true,
