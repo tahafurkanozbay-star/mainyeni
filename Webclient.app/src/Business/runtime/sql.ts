@@ -49,6 +49,15 @@ export const numericEqualsPredicate = (
   return `${assertSqlField(field)}=${numeric}`;
 };
 
+export const unsignedIntegerLiteralPredicate = (
+  field: string,
+  value: string | null | undefined,
+): string | null => {
+  if (!value || !/^(?:0|[1-9]\d*)$/u.test(value)) return null;
+  return `${assertSqlField(field)}=${value}`;
+};
+
+
 export const inPredicate = (
   field: string,
   values: unknown,
