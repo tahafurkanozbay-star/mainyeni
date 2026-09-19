@@ -385,3 +385,14 @@
 - SECURITY / NETWORK / LICENSING: yeni endpoint, WMS/WFS/WMTS UI, remote font/CDN, analytics/telemetry transport, recurring polling, secret/token, unsafe HTML veya lisansı belirsiz premium asset eklenmedi. Mevcut deterministic shared GIS icon resolver tek ikon otoritesi olarak korundu.
 - MERGE: expected-head squash merge `merged=true` döndürdü. Merge SHA `d2f11a7d47c3b9fb4d34c531c6caed784a9d60b7`; PR #173 closed+merged ve merge commit merge sonrasında current main olarak doğrulandı.
 - SONRAKİ GÖREV: merged #173 branch yeniden kullanılmamalı. Yeni Experience turu current main'den benzersiz branch ile başlamalı; aynı >=4,000 meaningful additions, exact-head CI, accessibility/responsive/security/performance, release-regression ve final main-refresh kapıları korunmalı.
+
+
+## Deep GIS / merge-closure current-main refresh — 2026-09-19 23:05 TRT
+- TUR / GÖREV: PR #175 merge closure recovery; current-main branch lifecycle refresh after concurrent Experience merge.
+- BASE MAIN: `cdfdb9d9baa6e251a6e0bcdad0a1a20baab0c62d`.
+- YENİ BRANCH: `agent/gis-modernization-20260919-2305-cdfdb9d9`.
+- KANONİK KAYNAK: `e152fd84adfada3ce651fa8a9c9de59352a3969c` head'indeki doğrulanmış GIS/runtime + CI delta. #175'e sonradan gelen ve Release QA duplicate full Vitest'i geri getiren, Webclient timeout'unu 25 dakikaya düşüren ve Vitest'i vmThreads/4 workers'a çeviren commitler taşınmadı.
+- CI GÜVENİLİRLİĞİ: Release QA full/exact-base Vitest tekrarını çalıştırmıyor; Webclient Quality tek full/exact-base Vitest otoritesi. Webclient Quality PR koşularında `cancel-in-progress: false` ile aynı exact-head gate'in metadata/concurrency kaynaklı dış iptali engellendi. Full test kapsamı veya assertion'lar azaltılmadı.
+- GIS KAPSAMI: bounded query/cache/geometry/reference/extent/layer/SceneLayer/LOD/terrain runtime'ları; spatial request pre-abort ve prompt cancellation cleanup; adaptive clustering hard budgets ve typed render fingerprints.
+- SECURITY / NETWORK / İKON: yeni endpoint, direct fetch, WMS/WFS, telemetry, secret/token, unsafe HTML/eval yok; verified ArcGIS REST adapter sınırı ve shared deterministic icon resolver korunuyor.
+- MERGE GATE: yeni PR için >=4,000 additions, exact current-main merge-base/behind=0, Platform Architecture Audit + Webclient Quality + Release QA completed+success, final security/performance/data-integrity review ve expected-head squash merge zorunlu.

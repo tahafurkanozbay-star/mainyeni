@@ -18,12 +18,12 @@ permissions:
 
 concurrency:
   group: webclient-quality-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: Webclient.app

@@ -66,7 +66,7 @@ jobs:
 
   webclient-release-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: Webclient.app
@@ -151,49 +151,10 @@ jobs:
           git -C .. worktree remove --force /tmp/typecheck-baseline
           trap - EXIT
 
-      - name: Full Vitest diagnostic visibility
-        run: |
-          set +e
-          npx vitest run --reporter=json --outputFile=/tmp/current-vitest.json
-          vitest_status=$?
-          set -e
-          test -s /tmp/current-vitest.json
-          node scripts/vitest-regression.mjs --list /tmp/current-vitest.json
-          echo "Full Vitest exit code: $vitest_status. Exact-base regression and strict Platform slices below are authoritative during staged migration."
-
-      - name: Strict Platform supervision and resilience Vitest boundary
-        run: |
-          npx vitest run \
-            src/platform/runtime/supervision/dependencyGraph.test.ts \
-            src/platform/runtime/supervision/healthRegistry.test.ts \
-            src/platform/runtime/supervision/lifecycleCoordinator.test.ts \
-            src/platform/runtime/supervision/requestCoordinator.test.ts \
-            src/platform/runtime/supervision/requestCoordinator.fairness.test.ts \
-            src/platform/runtime/supervision/runtimeSupervisor.test.ts \
-            src/platform/runtime/resilience.hardening.test.ts
-
-      - name: Exact-base Vitest regression gate
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git -C .. fetch --no-tags origin "$BASE_SHA"
-          rm -rf /tmp/vitest-baseline
-          git -C .. worktree add --detach /tmp/vitest-baseline "$BASE_SHA"
-          trap 'git -C .. worktree remove --force /tmp/vitest-baseline >/dev/null 2>&1 || true' EXIT
-          (
-            cd /tmp/vitest-baseline/Webclient.app
-            npm ci --ignore-scripts --no-audit --no-fund >/tmp/vitest-baseline-install.log 2>&1
-            set +e
-            npx vitest run --reporter=json --outputFile=/tmp/baseline-vitest.json
-            baseline_status=$?
-            set -e
-            echo "Baseline Vitest exit code: $baseline_status"
-          )
-          test -s /tmp/baseline-vitest.json
-          node scripts/vitest-regression.mjs /tmp/baseline-vitest.json /tmp/current-vitest.json
-          git -C .. worktree remove --force /tmp/vitest-baseline
-          trap - EXIT
+      # Full-suite and exact-base Vitest regression authority lives in
+      # Webclient Quality. Release QA intentionally avoids re-running the same
+      # memory-intensive jsdom/fork suite in parallel on the same PR, while
+      # retaining independent lint/typecheck/release-scorecard/build gates.
 
       - name: Native tooling regression suite
         run: npm run test:tooling --if-present
