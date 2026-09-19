@@ -1,3 +1,4 @@
+import type { RawRequestConfig } from '../../platform/http/contracts';
 import type {
   ApiRequestControl,
   ApiRuntime,
@@ -20,7 +21,7 @@ const errorCode = (error: unknown): string => {
 const requestOptions = (
   params: Readonly<Record<string, unknown>> | undefined,
   control: ApiRequestControl,
-): Record<string, unknown> => {
+): RawRequestConfig => {
   const normalized = normalizeApiRequestControl(
     control,
     DEFAULT_BUSINESS_RUNTIME_POLICY,
