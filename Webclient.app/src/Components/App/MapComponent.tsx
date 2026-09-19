@@ -28,7 +28,7 @@ import {
 } from '../../gis-engine/viewRuntime';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { ManagedWindowHandle } from '../../experience/contracts';
-import type { MapWidgetManagerLike } from '../Widget/_shared/MapWidgetSurface';
+import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { openExternalUrl } from '../Widget/_shared/MapWidgetRuntime';
 import {
   attachKentRehberiGeoJsonLayer,
@@ -39,9 +39,7 @@ import {
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
 
-interface WindowManagerLike extends MapWidgetManagerLike {
-  readonly SetMapUpdating: (updating: boolean) => void;
-}
+type WindowManagerLike = WindowManagerApi;
 
 interface MapComponentProps {
   windowManager: WindowManagerLike;
