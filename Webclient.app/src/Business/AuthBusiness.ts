@@ -1,9 +1,6 @@
 import { Constants_MessageType } from '../Core/Constants';
 
-export interface RequestHeaders {
-  readonly Accept: 'application/json';
-  readonly 'Content-Type': 'application/json';
-}
+export type RequestHeaders = Readonly<Record<string, string>>;
 
 export interface LegacyBusinessRejection {
   readonly Type: unknown;
