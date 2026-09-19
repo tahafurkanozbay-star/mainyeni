@@ -18,6 +18,7 @@ import {
   readEntityIdentifier,
   routeTypePredicate,
   upperContainsPredicate,
+  unsignedIntegerLiteralPredicate,
 } from './index';
 
 describe('Business runtime input normalization', () => {
@@ -167,6 +168,13 @@ describe('Business runtime SQL planning', () => {
   it('escapes Turkish uppercase text matching', () => {
     expect(upperContainsPredicate('ad', "o'connor"))
       .toContain("O''CONNOR");
+  });
+
+  it('compiles canonical unsigned identities without numeric coercion', () => {
+    expect(unsignedIntegerLiteralPredicate('objectid', '0')).toBe('objectid=0');
+    expect(unsignedIntegerLiteralPredicate('objectid', '42')).toBe('objectid=42');
+    expect(unsignedIntegerLiteralPredicate('objectid', '0042')).toBeNull();
+    expect(unsignedIntegerLiteralPredicate('objectid', '42x')).toBeNull();
   });
 
   it('emits numeric equality only for finite numbers', () => {
