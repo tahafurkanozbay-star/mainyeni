@@ -84,12 +84,14 @@ const recordWeight = (weight: number | undefined): number => {
 /**
  * A deterministic rolling failure budget for shared browser runtime work.
  *
- * This primitive deliberately does not retry, poll, perform network I/O, or
- * schedule background timers. Consumers record outcomes at an existing
- * ownership boundary and inspect the bounded rolling window when deciding
- * whether optional work should be admitted or degraded.
+ * This primitive only records evidence and computes admission state. It never
+ * invokes a consumer operation itself: every record call has exactly one local
+ * attempt and no internal rescheduling. Consumers inspect the bounded rolling
+ * window when deciding whether optional work should be admitted or degraded.
  */
 export class BoundedFailureBudget {
+  /** Static execution contract used by audits/composition: record() never repeats caller work. */
+  readonly maxAttempts = 1;
   readonly windowMs: number;
   readonly bucketMs: number;
   readonly minimumSamples: number;
@@ -110,28 +112,20 @@ export class BoundedFailureBudget {
   constructor(options: FailureBudgetOptions = {}) {
     this.windowMs = integer('windowMs', options.windowMs ?? 60_000, 1_000, 3_600_000);
     this.bucketMs = integer('bucketMs', options.bucketMs ?? 5_000, 100, this.windowMs);
-    if (this.windowMs % this.bucketMs !== 0) {
-      throw new RangeError('windowMs must be divisible by bucketMs');
-    }
+    if (this.windowMs % this.bucketMs !== 0) throw new RangeError('windowMs must be divisible by bucketMs');
     this.minimumSamples = integer('minimumSamples', options.minimumSamples ?? 10, 1, 100_000);
     this.degradedFailureRatio = ratio('degradedFailureRatio', options.degradedFailureRatio ?? 0.2);
     this.exhaustedFailureRatio = ratio('exhaustedFailureRatio', options.exhaustedFailureRatio ?? 0.5);
     this.recoveryFailureRatio = ratio('recoveryFailureRatio', options.recoveryFailureRatio ?? 0.1);
-    if (this.degradedFailureRatio >= this.exhaustedFailureRatio) {
-      throw new RangeError('degradedFailureRatio must be lower than exhaustedFailureRatio');
-    }
-    if (this.recoveryFailureRatio >= this.degradedFailureRatio) {
-      throw new RangeError('recoveryFailureRatio must be lower than degradedFailureRatio');
-    }
+    if (this.degradedFailureRatio >= this.exhaustedFailureRatio) throw new RangeError('degradedFailureRatio must be lower than exhaustedFailureRatio');
+    if (this.recoveryFailureRatio >= this.degradedFailureRatio) throw new RangeError('recoveryFailureRatio must be lower than degradedFailureRatio');
     this.recoverySamples = integer('recoverySamples', options.recoverySamples ?? 5, 1, 100_000);
     this.historyLimit = integer('historyLimit', options.historyLimit ?? 64, 0, 1_000);
     this.#clock = options.clock ?? Date.now;
   }
 
   record(outcome: FailureBudgetOutcome, options: FailureBudgetRecordOptions = {}): FailureBudgetSnapshot {
-    if (outcome !== 'success' && outcome !== 'failure' && outcome !== 'ignored') {
-      throw new TypeError('outcome must be success, failure, or ignored');
-    }
+    if (outcome !== 'success' && outcome !== 'failure' && outcome !== 'ignored') throw new TypeError('outcome must be success, failure, or ignored');
     const owner = ownerKey(options.owner);
     const weight = recordWeight(options.weight);
     const now = this.#now();
@@ -141,7 +135,6 @@ export class BoundedFailureBudget {
     else if (outcome === 'failure') bucket.failureWeight += weight;
     else bucket.ignoredWeight += weight;
     bucket.samples += 1;
-
     const aggregate = this.#aggregate(now);
     this.#record({ kind: 'recorded', state: this.#state, outcome, ...(owner ? { owner } : {}), weight, failureRatio: aggregate.failureRatio }, now);
     this.#evaluate(aggregate, outcome, now);
@@ -156,13 +149,8 @@ export class BoundedFailureBudget {
     return this.#snapshotFrom(now, aggregate);
   }
 
-  history(): readonly FailureBudgetEvent[] {
-    return Object.freeze(this.#history.map(event => Object.freeze({ ...event })));
-  }
-
-  allowsOptionalWork(): boolean {
-    return this.snapshot().state !== 'exhausted';
-  }
+  history(): readonly FailureBudgetEvent[] { return Object.freeze(this.#history.map(event => Object.freeze({ ...event }))); }
+  allowsOptionalWork(): boolean { return this.snapshot().state !== 'exhausted'; }
 
   reset(): FailureBudgetSnapshot {
     const now = this.#now();
@@ -176,9 +164,7 @@ export class BoundedFailureBudget {
   #now(): number {
     const now = this.#clock();
     if (!Number.isFinite(now) || now < 0) throw new RangeError('clock must return a finite non-negative timestamp');
-    if (this.#lastObservedAt !== undefined && now < this.#lastObservedAt) {
-      throw new RangeError('clock must be monotonic');
-    }
+    if (this.#lastObservedAt !== undefined && now < this.#lastObservedAt) throw new RangeError('clock must be monotonic');
     this.#lastObservedAt = now;
     return now;
   }
@@ -197,19 +183,8 @@ export class BoundedFailureBudget {
     while (this.#buckets[0] && this.#buckets[0].startedAt <= cutoff) this.#buckets.shift();
   }
 
-  #aggregate(now: number): {
-    successWeight: number;
-    failureWeight: number;
-    ignoredWeight: number;
-    totalWeight: number;
-    failureRatio: number;
-    samples: number;
-    windowStartedAt: number;
-  } {
-    let successWeight = 0;
-    let failureWeight = 0;
-    let ignoredWeight = 0;
-    let samples = 0;
+  #aggregate(now: number): { successWeight: number; failureWeight: number; ignoredWeight: number; totalWeight: number; failureRatio: number; samples: number; windowStartedAt: number } {
+    let successWeight = 0, failureWeight = 0, ignoredWeight = 0, samples = 0;
     for (const bucket of this.#buckets) {
       successWeight += bucket.successWeight;
       failureWeight += bucket.failureWeight;
@@ -217,45 +192,26 @@ export class BoundedFailureBudget {
       samples += bucket.samples;
     }
     const consideredWeight = successWeight + failureWeight;
-    return {
-      successWeight,
-      failureWeight,
-      ignoredWeight,
-      totalWeight: consideredWeight + ignoredWeight,
-      failureRatio: consideredWeight === 0 ? 0 : failureWeight / consideredWeight,
-      samples,
-      windowStartedAt: this.#buckets[0]?.startedAt ?? now,
-    };
+    return { successWeight, failureWeight, ignoredWeight, totalWeight: consideredWeight + ignoredWeight, failureRatio: consideredWeight === 0 ? 0 : failureWeight / consideredWeight, samples, windowStartedAt: this.#buckets[0]?.startedAt ?? now };
   }
 
-  #evaluate(
-    aggregate: { failureRatio: number; samples: number },
-    outcome: FailureBudgetOutcome | undefined,
-    now: number,
-  ): void {
+  #evaluate(aggregate: { failureRatio: number; samples: number }, outcome: FailureBudgetOutcome | undefined, now: number): void {
     if (aggregate.samples < this.minimumSamples) {
       this.#recoveryProgress = 0;
       if (this.#state !== 'healthy') this.#transition('healthy', aggregate.failureRatio, now);
       return;
     }
-
     if (aggregate.failureRatio >= this.exhaustedFailureRatio) {
       this.#recoveryProgress = 0;
       if (this.#state !== 'exhausted') this.#transition('exhausted', aggregate.failureRatio, now);
       return;
     }
-
     if (aggregate.failureRatio >= this.degradedFailureRatio) {
       this.#recoveryProgress = 0;
       if (this.#state !== 'degraded') this.#transition('degraded', aggregate.failureRatio, now);
       return;
     }
-
-    if (this.#state === 'healthy') {
-      this.#recoveryProgress = 0;
-      return;
-    }
-
+    if (this.#state === 'healthy') { this.#recoveryProgress = 0; return; }
     if (aggregate.failureRatio <= this.recoveryFailureRatio && outcome === 'success') {
       this.#recoveryProgress += 1;
       if (this.#recoveryProgress >= this.recoverySamples) {
@@ -264,7 +220,6 @@ export class BoundedFailureBudget {
       }
       return;
     }
-
     this.#recoveryProgress = 0;
   }
 
@@ -274,31 +229,8 @@ export class BoundedFailureBudget {
     this.#record({ kind: 'transition', state, failureRatio }, now);
   }
 
-  #snapshotFrom(
-    now: number,
-    aggregate: {
-      successWeight: number;
-      failureWeight: number;
-      ignoredWeight: number;
-      totalWeight: number;
-      failureRatio: number;
-      samples: number;
-      windowStartedAt: number;
-    },
-  ): FailureBudgetSnapshot {
-    return Object.freeze({
-      state: this.#state,
-      windowStartedAt: aggregate.windowStartedAt,
-      windowEndsAt: aggregate.windowStartedAt + this.windowMs,
-      totalWeight: aggregate.totalWeight,
-      successWeight: aggregate.successWeight,
-      failureWeight: aggregate.failureWeight,
-      ignoredWeight: aggregate.ignoredWeight,
-      failureRatio: aggregate.failureRatio,
-      samples: aggregate.samples,
-      recoveryProgress: this.#recoveryProgress,
-      transitionCount: this.#transitionCount,
-    });
+  #snapshotFrom(now: number, aggregate: { successWeight: number; failureWeight: number; ignoredWeight: number; totalWeight: number; failureRatio: number; samples: number; windowStartedAt: number }): FailureBudgetSnapshot {
+    return Object.freeze({ state: this.#state, windowStartedAt: aggregate.windowStartedAt, windowEndsAt: aggregate.windowStartedAt + this.windowMs, totalWeight: aggregate.totalWeight, successWeight: aggregate.successWeight, failureWeight: aggregate.failureWeight, ignoredWeight: aggregate.ignoredWeight, failureRatio: aggregate.failureRatio, samples: aggregate.samples, recoveryProgress: this.#recoveryProgress, transitionCount: this.#transitionCount });
   }
 
   #record(event: Omit<FailureBudgetEvent, 'sequence' | 'at'>, now: number): void {
