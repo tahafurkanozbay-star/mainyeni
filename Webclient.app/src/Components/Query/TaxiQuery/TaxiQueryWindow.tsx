@@ -24,6 +24,10 @@ import { createPictureMarkerSymbol } from '../../../gis-engine/iconPresentation'
 import { ButtonLoading } from '../../Common/Loading';
 import { CommonQueryResultItemTools } from '../_Common/CommonQueryResultItemTools';
 import { CommonQueryWindowTools } from '../_Common/CommonQueryWindowTools';
+import type {
+  ManagedQueryWindowHandle,
+  ManagedQueryWindowManager,
+} from '../_Common/QuerySurfaceContracts';
 import {
   buildGoogleDirectionsUrl,
   createLatestRequestGate,
@@ -96,27 +100,10 @@ interface MapViewLike {
   readonly map?: MapLike | null;
 }
 
-interface TaxiWindowHandle {
-  readonly id: string;
-  readonly visible: boolean;
-  readonly minimized: boolean;
-  readonly OnShow: () => void;
-  readonly OnClose: () => void;
-}
-
-interface TaxiWindowManager {
-  RegisterWindow(ref: unknown): void;
-  UnregisterWindow?(windowId: string, ref: unknown): void;
-  IsVisible(windowId: string): boolean;
-  IsMinimized(windowId: string): boolean;
-  ToggleMinimiseWindow(windowId: string): void;
-  ShowMessage(messageType: unknown, message: string): void;
-}
-
 interface TaxiQueryWindowProps {
   readonly id: string;
   readonly windowTitle?: string;
-  readonly windowManager: TaxiWindowManager;
+  readonly windowManager: ManagedQueryWindowManager;
 }
 
 const DEFAULT_QUERY: TaxiQueryState = Object.freeze({
@@ -158,7 +145,7 @@ const mapTaxiRecord = (feature: TaxiFeature): TaxiListItem => Object.freeze({
   Address: normalizeText(feature.attr?.adres, 'Adres bilgisi bulunmuyor'),
 });
 
-export const TaxiQueryWindow = forwardRef<TaxiWindowHandle, TaxiQueryWindowProps>(
+export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWindowProps>(
   ({ id, windowTitle, windowManager }, ref) => {
     const [mapView, setMapView] = useState<MapViewLike | null>(null);
     const [districtList, setDistrictList] = useState<readonly DistrictRecord[]>([]);
