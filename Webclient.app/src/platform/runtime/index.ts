@@ -18,10 +18,48 @@ export * from './loadShedding';
 export * from './drainCoordinator';
 export * from './runtimeHealthPolicy';
 export * from './resourceLeaseRegistry';
-export * from './retryPolicy';
-export * from './circuitBreaker';
-export * from './bulkhead';
-export * from './failureBudget';
-export * from './resilienceCoordinator';
+export { BoundedRetryPolicy, RetryAbortedError } from './retryPolicy';
+export type {
+  RetryPolicyOptions as BoundedRetryPolicyOptions,
+  RetryDecisionReason as BoundedRetryDecisionReason,
+  RetryDecision as BoundedRetryDecision,
+  RetryResult as BoundedRetryResult,
+  RetryAttemptContext as BoundedRetryAttemptContext,
+} from './retryPolicy';
+export { BoundedCircuitBreaker, CircuitOpenError as BoundedCircuitOpenError } from './circuitBreaker';
+export type {
+  CircuitBreakerOptions as BoundedCircuitBreakerOptions,
+  CircuitState as BoundedCircuitState,
+  CircuitOutcome as BoundedCircuitOutcome,
+  CircuitSnapshot as BoundedCircuitSnapshot,
+  CircuitEvent as BoundedCircuitEvent,
+} from './circuitBreaker';
+export { BoundedBulkhead, BulkheadRejectedError } from './bulkhead';
+export type {
+  BulkheadOptions,
+  BulkheadRunOptions,
+  BulkheadSnapshot,
+  BulkheadEvent,
+  BulkheadRejectionReason,
+} from './bulkhead';
+export { BoundedFailureBudget } from './failureBudget';
+export type {
+  FailureBudgetOptions,
+  FailureBudgetRecordOptions,
+  FailureBudgetSnapshot,
+  FailureBudgetEvent,
+  FailureBudgetOutcome,
+  FailureBudgetState,
+} from './failureBudget';
+export { BoundedResilienceCoordinator, ResilienceCoordinatorError } from './resilienceCoordinator';
+export type {
+  ResilienceCoordinatorOptions,
+  ResilienceRequest,
+  ResiliencePriority,
+  ResilienceOutcome as CoordinatedResilienceOutcome,
+  ResilienceEvent,
+  ResilienceSnapshot,
+  ResilienceClock as ResilienceCoordinatorClock,
+} from './resilienceCoordinator';
 export * from './structuredTaskScope';
 export * from './runtimePolicyProfile';
