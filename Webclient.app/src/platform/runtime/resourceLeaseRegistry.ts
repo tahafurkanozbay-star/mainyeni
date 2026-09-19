@@ -143,6 +143,7 @@ export class ResourceLeaseRegistry {
     policy: Partial<ResourceLeasePolicy> = {},
     clock: ResourceLeaseClock = SYSTEM_CLOCK,
   ) {
+    this.#clock = clock;
     this.#policy = Object.freeze({ ...DEFAULT_POLICY, ...policy });
     assertPositiveInteger(this.#policy.maxActiveLeases, 'maxActiveLeases');
     assertPositiveInteger(this.#policy.maxLeaseMs, 'maxLeaseMs');
@@ -242,7 +243,7 @@ export class ResourceLeaseRegistry {
     );
     return Object.freeze({
       active: Object.freeze(active),
-      history: Object.freeze([...this.#history]),
+      history: Object.freeze(this.#history.slice()),
       activeByOwner: Object.freeze(activeByOwner),
       disposed: this.#disposed,
     });
@@ -278,9 +279,7 @@ export class ResourceLeaseRegistry {
     const nextCount = (this.#ownerCounts.get(lease.owner) ?? 1) - 1;
     if (nextCount <= 0) this.#ownerCounts.delete(lease.owner);
     else this.#ownerCounts.set(lease.owner, nextCount);
-    this.#history.push(
-      Object.freeze({ ...snapshotLease(lease), releasedAt, reason }),
-    );
+    this.#history.push(Object.freeze({ ...snapshotLease(lease), releasedAt, reason }));
     const overflow = this.#history.length - this.#policy.historyLimit;
     if (overflow > 0) this.#history.splice(0, overflow);
     return true;
