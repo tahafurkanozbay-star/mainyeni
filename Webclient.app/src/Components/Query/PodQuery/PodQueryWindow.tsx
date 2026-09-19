@@ -186,7 +186,7 @@ export const PodQueryWindow = forwardRef<
   const [districtList, setDistrictList] = useState<readonly DistrictRecord[]>([]);
   const [nbhoodList, setNbhoodList] = useState<readonly DistrictRecord[]>([]);
   const [query, setQuery] = useState<PharmacyQueryState>({ ...DEFAULT_QUERY });
-  const [, setClusterLayer] = useState<LayerLike | null>(null);
+  const clusterLayerRef = useRef<LayerLike | null>(null);
   const [resultList, setResultList] = useState<readonly PharmacyListItem[] | null>(null);
   const [activeTab, setActiveTab] = useState<'form' | 'query'>('form');
   const [loading, setLoading] = useState(false);
@@ -196,16 +196,15 @@ export const PodQueryWindow = forwardRef<
   const isForm = activeTab === 'form';
 
   const removeLastClusterLayer = useCallback((): void => {
-    setClusterLayer((current) => {
-      if (current && mapView?.map?.remove) {
-        try {
-          mapView.map.remove(current);
-        } catch (error) {
-          globalThis.reportError?.(error);
-        }
+    const current = clusterLayerRef.current;
+    clusterLayerRef.current = null;
+    if (current && mapView?.map?.remove) {
+      try {
+        mapView.map.remove(current);
+      } catch (error) {
+        globalThis.reportError?.(error);
       }
-      return null;
-    });
+    }
   }, [mapView]);
 
   const resetSurface = useCallback((): void => {
@@ -374,7 +373,7 @@ export const PodQueryWindow = forwardRef<
 
     removeLastClusterLayer();
     if (layer && mapView?.map?.add) {
-      setClusterLayer(layer);
+      clusterLayerRef.current = layer;
       mapView.map.add(layer);
     }
   }, [mapView, removeLastClusterLayer]);
@@ -466,7 +465,7 @@ export const PodQueryWindow = forwardRef<
 
         removeLastClusterLayer();
         if (nextCluster?.layerObj && mapView?.map?.add) {
-          setClusterLayer(nextCluster.layerObj);
+          clusterLayerRef.current = nextCluster.layerObj;
           mapView.map.add(nextCluster.layerObj);
         }
       }
@@ -640,6 +639,7 @@ export const PodQueryWindow = forwardRef<
                 <span>Nöbetçi Eczane Ara</span>
                 <input
                   type="checkbox"
+                  aria-label="Nöbetçi Eczane Ara"
                   checked={query.showPodOnDuty}
                   onChange={(event) => setQueryField('showPodOnDuty', event.target.checked)}
                 />
@@ -653,6 +653,7 @@ export const PodQueryWindow = forwardRef<
                   id={`${id}-name`}
                   className="form-control"
                   value={query.name}
+                  aria-label="Adı"
                   autoComplete="off"
                   onChange={(event) => setQueryField('name', event.target.value)}
                 />
@@ -667,6 +668,7 @@ export const PodQueryWindow = forwardRef<
                     id={`${id}-district`}
                     className="form-select form-control"
                     value={query.districtId}
+                    aria-label="İlçe"
                     onChange={(event) => void onDistrictChange(event)}
                   >
                     <option value="">Seçiniz..</option>
@@ -684,6 +686,7 @@ export const PodQueryWindow = forwardRef<
                     id={`${id}-neighborhood`}
                     className="form-select"
                     value={query.nbhoodId}
+                    aria-label="Mahalle"
                     onChange={onNeighborhoodChange}
                     disabled={!query.districtId}
                   >
