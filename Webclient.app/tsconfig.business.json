@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false
+  },
+  "include": [
+    "src/Business/contracts.ts",
+    "src/Business/HttpBusiness.ts",
+    "src/Business/RouteQueryBusiness.ts",
+    "src/Business/NumberingQueryBusiness.ts",
+    "src/Business/TkgmQueryBusiness.ts",
+    "src/Business/runtime/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}
