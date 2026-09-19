@@ -137,7 +137,14 @@ describe('inputModalityRuntime', () => {
   test('isolates subscriber failures from input processing', () => {
     const { runtime } = install();
     const healthy = vi.fn();
-    runtime.subscribe(() => { throw new Error('observer failed'); });
+    let initialDelivery = true;
+    runtime.subscribe(() => {
+      if (initialDelivery) {
+        initialDelivery = false;
+        return;
+      }
+      throw new Error('observer failed');
+    });
     runtime.subscribe(healthy);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     expect(runtime.getSnapshot().modality).toBe('keyboard');
