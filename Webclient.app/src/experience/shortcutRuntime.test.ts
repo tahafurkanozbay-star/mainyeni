@@ -170,7 +170,7 @@ describe('shortcutRuntime', () => {
     const textarea = document.createElement('textarea');
     const select = document.createElement('select');
     const editor = document.createElement('div');
-    editor.contentEditable = 'true';
+    editor.setAttribute('contenteditable', 'true');
     const textbox = document.createElement('div');
     textbox.setAttribute('role', 'textbox');
 
