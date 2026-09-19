@@ -24,6 +24,9 @@ export interface DisposableObject {
   destroy?: () => unknown;
   abort?: () => unknown;
 }
+export interface RemovableHandle extends DisposableObject {
+  remove: () => unknown;
+}
 export type Disposable = DisposableObject | (() => unknown);
 
 const mapRegistries = new WeakMap<object, Map<string, Set<unknown>>>();
