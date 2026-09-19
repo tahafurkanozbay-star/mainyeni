@@ -18,14 +18,6 @@ export * from './loadShedding';
 export * from './drainCoordinator';
 export * from './runtimeHealthPolicy';
 export * from './resourceLeaseRegistry';
-export { BoundedRetryPolicy, RetryAbortedError } from './retryPolicy';
-export type {
-  RetryPolicyOptions as BoundedRetryPolicyOptions,
-  RetryDecisionReason as BoundedRetryDecisionReason,
-  RetryDecision as BoundedRetryDecision,
-  RetryResult as BoundedRetryResult,
-  RetryAttemptContext as BoundedRetryAttemptContext,
-} from './retryPolicy';
 export { BoundedCircuitBreaker, CircuitOpenError as BoundedCircuitOpenError } from './circuitBreaker';
 export type {
   CircuitBreakerOptions as BoundedCircuitBreakerOptions,
