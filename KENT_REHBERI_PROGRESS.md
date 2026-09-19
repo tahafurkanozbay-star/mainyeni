@@ -385,3 +385,44 @@
 - SECURITY / NETWORK / LICENSING: yeni endpoint, WMS/WFS/WMTS UI, remote font/CDN, analytics/telemetry transport, recurring polling, secret/token, unsafe HTML veya lisansı belirsiz premium asset eklenmedi. Mevcut deterministic shared GIS icon resolver tek ikon otoritesi olarak korundu.
 - MERGE: expected-head squash merge `merged=true` döndürdü. Merge SHA `d2f11a7d47c3b9fb4d34c531c6caed784a9d60b7`; PR #173 closed+merged ve merge commit merge sonrasında current main olarak doğrulandı.
 - SONRAKİ GÖREV: merged #173 branch yeniden kullanılmamalı. Yeni Experience turu current main'den benzersiz branch ile başlamalı; aynı >=4,000 meaningful additions, exact-head CI, accessibility/responsive/security/performance, release-regression ve final main-refresh kapıları korunmalı.
+
+
+## Deep GIS / merge-closure current-main refresh — 2026-09-19 23:05 TRT
+- TUR / GÖREV: PR #175 merge closure recovery; current-main branch lifecycle refresh after concurrent Experience merge.
+- BASE MAIN: `cdfdb9d9baa6e251a6e0bcdad0a1a20baab0c62d`.
+- YENİ BRANCH: `agent/gis-modernization-20260919-2305-cdfdb9d9`.
+- KANONİK KAYNAK: `e152fd84adfada3ce651fa8a9c9de59352a3969c` head'indeki doğrulanmış GIS/runtime + CI delta. #175'e sonradan gelen ve Release QA duplicate full Vitest'i geri getiren, Webclient timeout'unu 25 dakikaya düşüren ve Vitest'i vmThreads/4 workers'a çeviren commitler taşınmadı.
+- CI GÜVENİLİRLİĞİ: Release QA full/exact-base Vitest tekrarını çalıştırmıyor; Webclient Quality tek full/exact-base Vitest otoritesi. Webclient Quality PR koşularında `cancel-in-progress: false` ile aynı exact-head gate'in metadata/concurrency kaynaklı dış iptali engellendi. Full test kapsamı veya assertion'lar azaltılmadı.
+- GIS KAPSAMI: bounded query/cache/geometry/reference/extent/layer/SceneLayer/LOD/terrain runtime'ları; spatial request pre-abort ve prompt cancellation cleanup; adaptive clustering hard budgets ve typed render fingerprints.
+- SECURITY / NETWORK / İKON: yeni endpoint, direct fetch, WMS/WFS, telemetry, secret/token, unsafe HTML/eval yok; verified ArcGIS REST adapter sınırı ve shared deterministic icon resolver korunuyor.
+- MERGE GATE: yeni PR için >=4,000 additions, exact current-main merge-base/behind=0, Platform Architecture Audit + Webclient Quality + Release QA completed+success, final security/performance/data-integrity review ve expected-head squash merge zorunlu.
+
+
+## Deep GIS / final CI pool remediation — 2026-09-19 TRT
+- PR: #179 current-main canonical GIS merge-closure PR; opening exact head `c5a9e9ba329e198b24b1b6055a728901a2a2a29b`.
+- EVIDENCE: Release QA completed successfully after duplicate full/exact-base Vitest was removed, confirming lint/typecheck/release-scorecard/build/backend gates. The sole Webclient Quality full-suite run remained in `Full Vitest diagnostic visibility` under the PR-only `forks/maxWorkers=2` configuration; the earlier #175 fork-based runs had likewise remained in that step until cancellation. By contrast the repository's established `vmThreads/maxWorkers=4` configuration completed the full diagnostic quickly on the immediately preceding green release heads.
+- FIX: restore the repository-proven bounded `vmThreads/maxWorkers=4` Vitest pool and Webclient Quality's normal `cancel-in-progress: true` / 25-minute timeout so superseded exact-head runs are cancelled and genuine hangs fail promptly. Keep Release QA's de-duplicated Vitest authority design, but restore its webclient validation timeout to the normal 30-minute bound.
+- GATE: this remediation creates a new exact head; no prior CI result is reused. Platform Architecture Audit, Webclient Quality and Release QA must all be completed+success on the final head before merge.
+
+
+## Deep GIS / canonical CI safety correction — 2026-09-19
+- PR: #180 canonical current-main GIS merge candidate; pre-fix head `3d9d8b1858a956ba05c79af8022c281463fe7df9`.
+- DÜZELTİLEN ÇELİŞKİ: önceki progress kaydı `vmThreads/maxWorkers=4` ve 25 dakikalık timeout'u “repository-proven” olarak işaretliyordu; ancak önceki GIS exact-head diagnostikleri bu profilin worker-memory/crash ve timeout riski taşıdığını göstermişti. Bu kayıt önceki iddiayı geçersiz kılar.
+- FINAL CI PROFILE: Webclient Quality `timeout-minutes: 90`, exact-head concurrency key ve `cancel-in-progress: false`; Vitest `pool: 'forks'`, `maxWorkers: 2`, isolate=true. Release QA duplicate full/exact-base Vitest çalıştırmıyor; full/exact-base Vitest otoritesi Webclient Quality.
+- GATE ZAYIFLATILMADI: hiçbir test/assertion/exact-base/build-budget kaldırılmadı. Bu commit yeni exact head oluşturur; Platform Architecture Audit, Webclient Quality ve Release QA completed+success olmadan merge yok.
+- BRANCH LIFECYCLE: current main hâlâ `cdfdb9d9baa6e251a6e0bcdad0a1a20baab0c62d`; PR #180 current-main based olduğu için aynı PR üzerinde düzeltildi, gereksiz supersede yapılmadı.
+
+
+## Deep GIS / Actions saturation remediation — 2026-09-19
+- PR: #180 canonical current-main GIS merge candidate; pre-fix head `4696a2b800ef5f9ed06c628b85b40797a94082e8`.
+- BULGU: repository Actions listesinde aynı anda 10 in-progress run görüldü; çoğu superseded GIS head'leri için hem `push agent/**` hem `pull_request` Webclient Quality tekrarlarıydı. Exact-head #180 PR run'ı job tahsis edilmeden pending kaldı.
+- DÜZELTME: Webclient Quality artık PR'larda ve yalnız `main` push'larında çalışır; `agent/**` push duplicate tetikleyicisi kaldırıldı. Concurrency group PR number (non-PR için ref) bazlı ve `cancel-in-progress: true`; aynı PR'da yeni head yalnız superseded eski head run'ını iptal eder.
+- KORUNAN GATE: Webclient Quality timeout 90 dakika, Vitest `forks/maxWorkers=2`, full/exact-base Vitest ve production build/integrity/budget adımları aynen zorunlu. Release QA duplicate full Vitest çalıştırmaz.
+- MERGE: bu orchestration düzeltmesi yeni exact head oluşturur; Platform Architecture Audit + Webclient Quality + Release QA completed+success ve final main/mergeability/security/performance/data-integrity refresh olmadan merge yok.
+
+
+## Deep GIS / release-scorecard workflow cleanup — 2026-09-19
+- PR: #180 canonical GIS merge candidate; pre-fix head `7f97485ce823ec642c271b0cd0ba84ec52dbe0a3`.
+- CI-DRIVEN BULGU: exact-base typed release scorecard, değiştirilen `.github/workflows/webclient-quality.yml` içinde üç `validation-command-failure-suppressed` HIGH finding yakaladı: changed-file filtresi ve iki worktree cleanup trap'i.
+- DÜZELTME: changed-file extension filtresi `grep ... || true` yerine normal başarı semantiğine sahip `awk` filtresine taşındı; typecheck/vitest baseline cleanup trap'lerinden `|| true` kaldırıldı. Gerçek validation exit-code capture için mevcut kontrollü `set +e` blokları korunuyor ve sonuçlar regression script'lerine açıkça aktarılıyor.
+- GATE: yeni exact head için typed release scorecard dahil tüm zorunlu CI tekrar completed+success olmalı; hiçbir test/assertion/build-budget gevşetilmedi.
