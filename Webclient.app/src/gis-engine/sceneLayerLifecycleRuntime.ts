@@ -56,7 +56,6 @@ interface MutableLayerState<TResource> {
 }
 
 const PRIORITY_WEIGHT: Readonly<Record<SceneLayerPriority, number>> = Object.freeze({ critical: 4, high: 3, normal: 2, low: 1 });
-const DEFAULT_ESTIMATE: SceneLayerResourceEstimate = Object.freeze({ cpuBytes: 0, gpuBytes: 0, featureCount: 0, drawCalls: 0 });
 const finiteNonNegative = (value: unknown, fallback: number): number => { const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : fallback; };
 const normalizeEstimate = (input?: Partial<SceneLayerResourceEstimate>): SceneLayerResourceEstimate => Object.freeze({
   cpuBytes: Math.floor(finiteNonNegative(input?.cpuBytes, 0)), gpuBytes: Math.floor(finiteNonNegative(input?.gpuBytes, 0)),
@@ -135,11 +134,11 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
     }
     await pump(); await evictIfNeeded();
   };
-  const scheduleReconcile = (): Promise<void> => {
+  function scheduleReconcile(): Promise<void> {
     reconcileDirty = true;
     if (!reconcileScheduled) reconcileScheduled = (async () => { while (reconcileDirty && !disposed) { reconcileDirty=false; await reconcileInternal(); } })().finally(()=>{ reconcileScheduled=null; if (reconcileDirty && !disposed) void scheduleReconcile(); });
     return reconcileScheduled;
-  };
+  }
 
   const register = (descriptor: SceneLayerDescriptor, adapter: SceneLayerAdapter<TResource>): SceneLayerSnapshot => { if (disposed) throw new Error('Scene layer runtime is disposed'); const id=descriptor.id.trim(); if (!id) throw new Error('Scene layer id is required'); if (layers.has(id)) throw new Error(`Scene layer already registered: ${id}`); const normalized=Object.freeze({...descriptor,id}); const state: MutableLayerState<TResource>={ descriptor:normalized, adapter, phase:'idle', priority:descriptor.priority??'normal', generation:0, requested:false, manualRequested:false, visible:descriptor.visible!==false, retries:0, lastError:null, loadedAt:null, lastUsedAt:null, resource:null, controller:null, inFlight:null, estimate:normalizeEstimate(descriptor.resourceEstimate) }; layers.set(id,state); emit(state,'registered'); return snapshotLayer(state); };
   const unregister = async (layerId: string, reason='unregister'): Promise<boolean> => { const state=layers.get(layerId); if (!state) return false; state.generation+=1; state.controller?.abort(reason); await disposeResource(state,reason); state.phase='disposed'; emit(state,'disposed',reason); layers.delete(layerId); return true; };
