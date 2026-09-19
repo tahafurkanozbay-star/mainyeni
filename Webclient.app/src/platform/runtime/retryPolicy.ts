@@ -26,13 +26,23 @@ export interface RetryAttemptContext {
   readonly signal?: AbortSignal;
 }
 
-export interface RetryDecision {
-  readonly retry: boolean;
-  readonly reason: RetryDecisionReason;
+export interface RetryContinueDecision {
+  readonly retry: true;
+  readonly reason: 'retryable';
   readonly attempt: number;
   readonly delayMs: number;
   readonly elapsedMs: number;
 }
+
+export interface RetryStopDecision {
+  readonly retry: false;
+  readonly reason: Exclude<RetryDecisionReason, 'retryable'>;
+  readonly attempt: number;
+  readonly delayMs: 0;
+  readonly elapsedMs: number;
+}
+
+export type RetryDecision = RetryContinueDecision | RetryStopDecision;
 
 export interface RetrySuccess<T> {
   readonly ok: true;
@@ -85,19 +95,27 @@ const requireFinite = (name: string, value: number, minimum: number, maximum: nu
 const defaultSleep = (delayMs: number, signal?: AbortSignal): Promise<void> => {
   if (signal?.aborted) return Promise.reject(new RetryAbortedError(signal.reason));
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, delayMs);
-    if (!signal) return;
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      reject(new RetryAbortedError(signal.reason));
+    let settled = false;
+    const cleanup = (): void => {
+      if (signal) signal.removeEventListener('abort', onAbort);
     };
-    signal.addEventListener('abort', onAbort, { once: true });
-    void Promise.resolve().then(() => {
-      if (!signal.aborted) return;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      signal.removeEventListener('abort', onAbort);
-      reject(new RetryAbortedError(signal.reason));
-    });
+      cleanup();
+      reject(new RetryAbortedError(signal?.reason));
+    };
+    const timer = setTimeout(finish, delayMs);
+    if (!signal) return;
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
   });
 };
 
