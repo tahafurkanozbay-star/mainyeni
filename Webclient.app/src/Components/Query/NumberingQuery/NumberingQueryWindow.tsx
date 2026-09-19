@@ -212,7 +212,7 @@ export const NumberingQueryWindow = forwardRef<
       if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
 
       const graphics = (await Promise.all(
-        projected.map((geometry) => GisGraphicsHelper.CreateGraphicFromGeometry(geometry)),
+        projected.map((geometry: unknown) => GisGraphicsHelper.CreateGraphicFromGeometry(geometry)),
       )).filter(Boolean);
 
       if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
