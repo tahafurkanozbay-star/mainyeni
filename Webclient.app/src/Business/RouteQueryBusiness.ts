@@ -7,6 +7,7 @@ import {
   equalsPredicate,
   numericEqualsPredicate,
   routeTypePredicate,
+  unsignedIntegerLiteralPredicate,
   upperContainsPredicate,
 } from './runtime';
 
@@ -21,9 +22,10 @@ export interface RouteQueryInput extends FastAccessQuery {
 
 const routeWhere = (input: RouteQueryInput | null | undefined): string => {
   const query = normalizeRouteQuery(input);
-  const objectIdNumber = query.objectId !== null && /^(?:0|[1-9]\d*)$/u.test(query.objectId)
-    ? Number.parseInt(query.objectId, 10)
-    : null;
+  const objectIdPredicate = unsignedIntegerLiteralPredicate(
+    'objectid',
+    query.objectId,
+  );
   const predicates: Array<string | null> = [
     '(tip=1 or tip=2)',
     upperContainsPredicate('adi', query.name),
@@ -34,9 +36,7 @@ const routeWhere = (input: RouteQueryInput | null | undefined): string => {
       query.objectId !== null,
     ),
     numericEqualsPredicate('zorlukderecesi', query.routeLevel),
-    objectIdNumber !== null
-      ? numericEqualsPredicate('objectid', objectIdNumber)
-      : null,
+    objectIdPredicate,
   ];
 
   return compileRequiredPredicatePlan(predicates).where;
