@@ -50,7 +50,7 @@ describe('BoundedFailureBudget', () => {
   it('prunes expired buckets from the rolling window', () => {
     const time = clock(); const budget = new BoundedFailureBudget({ windowMs: 10_000, bucketMs: 1_000, minimumSamples: 2, clock: time.now });
     budget.record('failure'); time.advance(1_000); budget.record('failure'); expect(budget.snapshot().failureWeight).toBe(2); time.advance(9_000);
-    const snapshot = budget.snapshot(); expect(snapshot.failureWeight).toBe(0); expect(snapshot.samples).toBe(0); expect(snapshot.state).toBe('healthy');
+    const snapshot = budget.snapshot(); expect(snapshot.failureWeight).toBe(0); expect(snapshot.samples).toBe(0); expect(snapshot.state).toBe('exhausted');
   });
 
   it('keeps adjacent buckets and expires them independently', () => {
@@ -60,7 +60,24 @@ describe('BoundedFailureBudget', () => {
 
   it('requires consecutive recovery evidence below the recovery ratio', () => {
     const time = clock(); const budget = new BoundedFailureBudget({ windowMs: 10_000, bucketMs: 1_000, minimumSamples: 2, degradedFailureRatio: 0.25, exhaustedFailureRatio: 0.5, recoveryFailureRatio: 0.1, recoverySamples: 2, clock: time.now });
-    budget.record('failure'); budget.record('failure'); expect(budget.snapshot().state).toBe('exhausted'); time.advance(10_000); const first = budget.record('success'); expect(first.state).toBe('healthy'); expect(first.recoveryProgress).toBe(0);
+    budget.record('failure'); budget.record('failure'); expect(budget.snapshot().state).toBe('exhausted');
+    time.advance(10_000);
+    const first = budget.record('success'); expect(first.state).toBe('exhausted'); expect(first.recoveryProgress).toBe(1); expect(budget.allowsOptionalWork()).toBe(false);
+    const second = budget.record('success'); expect(second.state).toBe('healthy'); expect(second.recoveryProgress).toBe(0); expect(budget.allowsOptionalWork()).toBe(true);
+  });
+
+  it('does not let ignored evidence unlock an exhausted budget', () => {
+    const time = clock(); const budget = new BoundedFailureBudget({ windowMs: 10_000, bucketMs: 1_000, minimumSamples: 2, degradedFailureRatio: 0.25, exhaustedFailureRatio: 0.5, recoveryFailureRatio: 0.1, recoverySamples: 2, clock: time.now });
+    budget.record('failure'); budget.record('failure'); time.advance(10_000);
+    const ignored = budget.record('ignored'); expect(ignored.state).toBe('exhausted'); expect(ignored.recoveryProgress).toBe(0);
+    const success = budget.record('success'); expect(success.state).toBe('exhausted'); expect(success.recoveryProgress).toBe(1);
+  });
+
+  it('resets partial recovery when a new failure arrives', () => {
+    const time = clock(); const budget = new BoundedFailureBudget({ windowMs: 10_000, bucketMs: 1_000, minimumSamples: 2, degradedFailureRatio: 0.25, exhaustedFailureRatio: 0.5, recoveryFailureRatio: 0.1, recoverySamples: 2, clock: time.now });
+    budget.record('failure'); budget.record('failure'); time.advance(10_000);
+    expect(budget.record('success').recoveryProgress).toBe(1);
+    const failed = budget.record('failure'); expect(failed.state).toBe('exhausted'); expect(failed.recoveryProgress).toBe(0);
   });
 
   it('recovers with hysteresis when enough low-failure evidence accumulates', () => {
