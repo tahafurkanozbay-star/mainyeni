@@ -90,7 +90,8 @@ const resolveTarget = (
   if (typeof target === 'function') {
     try {
       return target() ?? null;
-    } catch {
+    } catch (error) {
+      globalThis.reportError?.(error);
       return null;
     }
   }
@@ -113,8 +114,8 @@ const safeFocus = (
   } catch (error) {
     try {
       onError?.(error);
-    } catch {
-      // Observer failures must never break focus recovery.
+    } catch (observerError) {
+      globalThis.reportError?.(observerError);
     }
     return false;
   }
@@ -194,8 +195,8 @@ class FocusScopeController implements FocusScopeHandle {
       } catch (error) {
         try {
           this.#onFocusError?.(error);
-        } catch {
-          // Error reporting must remain isolated from the keyboard lifecycle.
+        } catch (observerError) {
+          globalThis.reportError?.(observerError);
         }
       }
       return;
