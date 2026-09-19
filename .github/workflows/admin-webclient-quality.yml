@@ -23,7 +23,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: Webclient.admin
@@ -31,30 +31,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
+      - name: Setup Node 24
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: Webclient.admin/package-lock.json
 
       - name: Install from lockfile
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Lint when configured
-        run: npm run lint --if-present
+      - name: Dependency contract
+        run: npm run dependency:verify
 
-      - name: Typecheck when configured
-        run: npm run typecheck --if-present
+      - name: Admin modernization audit
+        run: npm run quality:migration
 
-      - name: Test
-        run: npm test -- --watchAll=false --runInBand
+      - name: Strict lint
+        run: npm run lint:strict
 
-      - name: Production build
+      - name: TypeScript 7 strict typecheck
+        run: npm run typecheck
+
+      - name: Vitest regression suite
+        run: npm run test:ci
+
+      - name: Production Vite build and integrity budgets
         env:
           CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
