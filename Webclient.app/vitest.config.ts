@@ -15,14 +15,8 @@ export default defineConfig({
       'src/**/*.test.{js,jsx,ts,tsx}',
       'tooling/**/*.test.{js,ts}',
     ],
-    // The full suite is intentionally process-isolated. vmThreads shares a single
-    // process memory ceiling across long-lived VM contexts; on Node 24 the GIS
-    // lifecycle suite can terminate that worker after the legacy/jsdom suites
-    // have accumulated state. Forks give every worker an independent heap and
-    // make an unexpected test-process failure attributable to one file instead
-    // of taking down Vitest's worker-thread coordinator.
-    pool: 'forks',
-    maxWorkers: 2,
+    pool: 'vmThreads',
+    maxWorkers: 4,
     fileParallelism: true,
     isolate: true,
     passWithNoTests: false,
