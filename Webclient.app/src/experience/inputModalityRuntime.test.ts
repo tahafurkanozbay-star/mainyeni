@@ -92,7 +92,15 @@ describe('inputModalityRuntime', () => {
   test('switches back to pointer mode after mouse interaction', () => {
     const { runtime } = install();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
-    document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+    if ('PointerEvent' in window) {
+      const pointerEvent = new Event('pointerdown', { bubbles: true });
+      Object.defineProperty(pointerEvent, 'pointerType', { value: 'mouse' });
+      document.dispatchEvent(pointerEvent);
+    } else {
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    }
+
     expect(runtime.getSnapshot()).toEqual(expect.objectContaining({
       modality: 'pointer',
       keyboardNavigation: false,
@@ -117,7 +125,7 @@ describe('inputModalityRuntime', () => {
 
   test('deduplicates repeated events that do not change the effective state', () => {
     const { runtime } = install();
-    const listener = jest.fn();
+    const listener = vi.fn();
     runtime.subscribe(listener);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -128,7 +136,7 @@ describe('inputModalityRuntime', () => {
 
   test('isolates subscriber failures from input processing', () => {
     const { runtime } = install();
-    const healthy = jest.fn();
+    const healthy = vi.fn();
     runtime.subscribe(() => { throw new Error('observer failed'); });
     runtime.subscribe(healthy);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
@@ -139,7 +147,7 @@ describe('inputModalityRuntime', () => {
 
   test('unsubscribe prevents later notifications', () => {
     const { runtime } = install();
-    const listener = jest.fn();
+    const listener = vi.fn();
     const release = runtime.subscribe(listener);
     release();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
