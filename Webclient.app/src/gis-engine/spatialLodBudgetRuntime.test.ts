@@ -140,13 +140,14 @@ describe('SpatialLodBudgetRuntime', () => {
     });
   });
 
-  it('restores a previous identity when its replacement cannot survive admission', () => {
+  it('preserves selected resources when a critical candidate cannot be admitted without evicting protected work', () => {
     const runtime = new SpatialLodBudgetRuntime({ maxResources: 1, maxGpuBytes: 500 });
     runtime.admit(resource('same', { selected: true, estimatedGpuBytes: 100 }), 5_000);
-    runtime.admit(resource('critical', { priority: 'critical', estimatedGpuBytes: 100 }), 5_000);
+    const result = runtime.admit(resource('critical', { priority: 'critical', estimatedGpuBytes: 100 }), 5_000);
 
-    expect(runtime.has('same')).toBe(false);
-    expect(runtime.has('critical')).toBe(true);
+    expect(result).toMatchObject({ admitted: false, reason: 'resource-too-large' });
+    expect(runtime.has('same')).toBe(true);
+    expect(runtime.has('critical')).toBe(false);
   });
 
   it('enforces per-layer resource budgets independently', () => {
