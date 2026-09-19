@@ -126,29 +126,12 @@ jobs:
       - name: Full Vitest diagnostic visibility
         run: |
           set +e
-          npx vitest run --reporter=json --outputFile=/tmp/current-vitest.json 2>&1 | tee /tmp/current-vitest-console.log
-          vitest_status=${PIPESTATUS[0]}
+          npx vitest run --reporter=json --outputFile=/tmp/current-vitest.json
+          vitest_status=$?
           set -e
-          printf '%s\n' "$vitest_status" >/tmp/current-vitest-exit-code.txt
-          if [ -s /tmp/current-vitest.json ]; then
-            node scripts/vitest-regression.mjs --list /tmp/current-vitest.json
-          else
-            echo "Vitest did not produce its JSON report; preserving console diagnostics for root-cause analysis." >&2
-          fi
-          echo "Full Vitest exit code: $vitest_status. Exact-base regression and strict Platform slices below are authoritative during staged migration."
           test -s /tmp/current-vitest.json
-
-      - name: Upload Vitest diagnostics
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: webclient-vitest-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            /tmp/current-vitest.json
-            /tmp/current-vitest-console.log
-            /tmp/current-vitest-exit-code.txt
-          if-no-files-found: warn
-          retention-days: 7
+          node scripts/vitest-regression.mjs --list /tmp/current-vitest.json
+          echo "Full Vitest exit code: $vitest_status. Exact-base regression and strict Platform slices below are authoritative during staged migration."
 
       - name: Strict Platform supervision and resilience Vitest boundary
         run: |
