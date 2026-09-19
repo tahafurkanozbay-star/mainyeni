@@ -10,6 +10,9 @@ import {
 } from 'react';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { SIDEBAR_GROUPS, SIDEBAR_ITEMS } from '../App/SidebarCatalog';
+import { createFocusScope } from '../../experience/focusScopeRuntime';
+import { acquireOverlayLease } from '../../experience/overlayLifecycleRuntime';
+import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
 import { EmptyState } from './ExperienceDesignSystem';
 import { normalizeCommandQuery } from './experience-quality-utils';
 
@@ -129,7 +132,7 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const backdropRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(
     () => filterExperienceCommands(EXPERIENCE_COMMANDS, query),
@@ -139,7 +142,6 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
 
   const close = useCallback((): void => {
     setOpen(false);
-    requestAnimationFrame(() => previousFocusRef.current?.focus());
   }, []);
 
   const execute = useCallback((command: ExperienceCommand | undefined): void => {
@@ -158,7 +160,6 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<ExperienceCommandEventDetail>).detail;
       if (detail?.name !== 'command-palette') return;
-      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setOpen(true);
     };
     window.addEventListener('kentrehberi:command', handler);
@@ -169,8 +170,39 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
     if (!open) return;
     setQuery('');
     setActiveIndex(0);
-    requestAnimationFrame(() => inputRef.current?.focus());
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !dialogRef.current) return undefined;
+
+    const overlay = acquireOverlayLease({
+      document,
+      id: 'experience-command-center',
+      modal: true,
+      lockScroll: true,
+      root: backdropRef.current,
+    });
+    const focusScope = createFocusScope({
+      document,
+      container: dialogRef.current,
+      initialFocus: inputRef.current,
+      onEscape: close,
+      onFocusError(error) {
+        runtimeDiagnostics.captureError(
+          error,
+          { source: 'experience.command-center.focus' },
+          'warn',
+        );
+      },
+    });
+
+    focusScope.activate();
+
+    return () => {
+      focusScope.dispose();
+      overlay.release();
+    };
+  }, [close, open]);
 
   useEffect(() => {
     if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
@@ -183,10 +215,9 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
   useEffect(() => {
     if (!open) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        close();
-      } else if (event.key === 'ArrowDown') {
+      if (event.defaultPrevented || event.isComposing) return;
+
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
         setActiveIndex(index => filtered.length ? (index + 1) % filtered.length : 0);
       } else if (event.key === 'ArrowUp') {
@@ -201,23 +232,11 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
       } else if (event.key === 'Enter' && document.activeElement === inputRef.current) {
         event.preventDefault();
         execute(activeCommand);
-      } else if (event.key === 'Tab' && dialogRef.current) {
-        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'));
-        const first = focusable[0];
-        const last = focusable.at(-1);
-        if (!first || !last) return;
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeCommand, close, execute, filtered.length, open]);
+  }, [activeCommand, execute, filtered.length, open]);
 
   if (!open) return null;
 
@@ -231,7 +250,7 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
   };
 
   return (
-    <div className="kr-command-backdrop" role="presentation" onMouseDown={onBackdropMouseDown}>
+    <div ref={backdropRef} className="kr-command-backdrop" role="presentation" onMouseDown={onBackdropMouseDown}>
       <section
         ref={dialogRef}
         className="kr-command kr-command--universal"
