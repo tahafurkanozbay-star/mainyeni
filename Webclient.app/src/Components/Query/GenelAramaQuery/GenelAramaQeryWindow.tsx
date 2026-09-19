@@ -37,6 +37,7 @@ import {
 import type {
   ManagedQueryWindowHandle,
   ManagedQueryWindowManager,
+  normalizeQueryIdentifier,
   UnknownRecord,
 } from '../_Common/QuerySurfaceContracts';
 import './GenelAramaQeryWindow.css';
@@ -169,17 +170,14 @@ export const GenelAramaQeryWindow = forwardRef<
   const getItemDetails = useCallback(async (
     item: NormalizedSearchRecord,
   ): Promise<SearchDetailRecord | null> => {
-    if (
-      item.id === null
-      || item.id === undefined
-      || String(item.id).trim() === ''
-    ) {
+    const objectId = normalizeQueryIdentifier(item.id);
+    if (objectId === null) {
       throw new Error('Kayıt kimliği bulunamadı.');
     }
 
     const requestId = detailGateRef.current.next();
     const result: unknown = await GenelAramaQeryBusiness.Query(
-      { ObjectId: item.id },
+      { ObjectId: objectId },
       true,
     );
 
