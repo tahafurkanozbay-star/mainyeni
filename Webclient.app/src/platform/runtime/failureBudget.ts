@@ -196,9 +196,19 @@ export class BoundedFailureBudget {
   }
 
   #evaluate(aggregate: { failureRatio: number; samples: number }, outcome: FailureBudgetOutcome | undefined, now: number): void {
+    if (this.#state !== 'healthy' && aggregate.failureRatio <= this.recoveryFailureRatio) {
+      if (outcome === 'success') this.#recoveryProgress += 1;
+      else if (outcome === 'failure') this.#recoveryProgress = 0;
+
+      if (aggregate.samples >= this.minimumSamples && this.#recoveryProgress >= this.recoverySamples) {
+        this.#recoveryProgress = 0;
+        this.#transition('healthy', aggregate.failureRatio, now);
+      }
+      return;
+    }
+
     if (aggregate.samples < this.minimumSamples) {
       this.#recoveryProgress = 0;
-      if (this.#state !== 'healthy') this.#transition('healthy', aggregate.failureRatio, now);
       return;
     }
     if (aggregate.failureRatio >= this.exhaustedFailureRatio) {
@@ -211,16 +221,7 @@ export class BoundedFailureBudget {
       if (this.#state !== 'degraded') this.#transition('degraded', aggregate.failureRatio, now);
       return;
     }
-    if (this.#state === 'healthy') { this.#recoveryProgress = 0; return; }
-    if (aggregate.failureRatio <= this.recoveryFailureRatio && outcome === 'success') {
-      this.#recoveryProgress += 1;
-      if (this.#recoveryProgress >= this.recoverySamples) {
-        this.#recoveryProgress = 0;
-        this.#transition('healthy', aggregate.failureRatio, now);
-      }
-      return;
-    }
-    this.#recoveryProgress = 0;
+    if (this.#state === 'healthy') this.#recoveryProgress = 0;
   }
 
   #transition(state: FailureBudgetState, failureRatio: number, now: number): void {
