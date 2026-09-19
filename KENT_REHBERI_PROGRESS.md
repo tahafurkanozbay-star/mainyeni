@@ -396,3 +396,10 @@
 - GIS KAPSAMI: bounded query/cache/geometry/reference/extent/layer/SceneLayer/LOD/terrain runtime'ları; spatial request pre-abort ve prompt cancellation cleanup; adaptive clustering hard budgets ve typed render fingerprints.
 - SECURITY / NETWORK / İKON: yeni endpoint, direct fetch, WMS/WFS, telemetry, secret/token, unsafe HTML/eval yok; verified ArcGIS REST adapter sınırı ve shared deterministic icon resolver korunuyor.
 - MERGE GATE: yeni PR için >=4,000 additions, exact current-main merge-base/behind=0, Platform Architecture Audit + Webclient Quality + Release QA completed+success, final security/performance/data-integrity review ve expected-head squash merge zorunlu.
+
+
+## Deep GIS / final CI pool remediation — 2026-09-19 TRT
+- PR: #179 current-main canonical GIS merge-closure PR; opening exact head `c5a9e9ba329e198b24b1b6055a728901a2a2a29b`.
+- EVIDENCE: Release QA completed successfully after duplicate full/exact-base Vitest was removed, confirming lint/typecheck/release-scorecard/build/backend gates. The sole Webclient Quality full-suite run remained in `Full Vitest diagnostic visibility` under the PR-only `forks/maxWorkers=2` configuration; the earlier #175 fork-based runs had likewise remained in that step until cancellation. By contrast the repository's established `vmThreads/maxWorkers=4` configuration completed the full diagnostic quickly on the immediately preceding green release heads.
+- FIX: restore the repository-proven bounded `vmThreads/maxWorkers=4` Vitest pool and Webclient Quality's normal `cancel-in-progress: true` / 25-minute timeout so superseded exact-head runs are cancelled and genuine hangs fail promptly. Keep Release QA's de-duplicated Vitest authority design, but restore its webclient validation timeout to the normal 30-minute bound.
+- GATE: this remediation creates a new exact head; no prior CI result is reused. Platform Architecture Audit, Webclient Quality and Release QA must all be completed+success on the final head before merge.
