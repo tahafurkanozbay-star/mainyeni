@@ -7,3 +7,4 @@ export * from './serviceRegistry';
 export * from './queryPlan';
 export * from './queryRuntime';
 export * from './apiRuntime';
+export * from './defaultRuntime';
