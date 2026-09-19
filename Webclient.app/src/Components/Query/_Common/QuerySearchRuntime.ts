@@ -1,6 +1,8 @@
 import { createListIconModel } from '../../../gis-engine/iconPresentation';
 import type { ListIconModel } from '../../../gis-engine/contracts';
-import type { CoordinatorRequestInput } from '../../../Toolbox/SearchCoordinatorRuntime';
+import type {
+  CoordinatorRequestInput,
+} from '../../../Toolbox/SearchCoordinatorRuntime';
 import type {
   SessionExecutionResult,
   SessionSearchOptions,
@@ -154,7 +156,12 @@ export const matchesSearchText = (value: unknown, searchText: unknown): boolean 
 
 const recordSources = (record: SearchRecordInput | null | undefined): readonly UnknownRecord[] => {
   if (!record) return [];
-  return [record, record.attr, record.attributes, record.properties].filter(isRecord);
+  return [
+    record,
+    record.attr,
+    record.attributes,
+    record.properties,
+  ].filter(isRecord);
 };
 
 export const readFirstValue = (
@@ -166,43 +173,101 @@ export const readFirstValue = (
   for (const source of sources) {
     for (const key of keys) {
       const value = source[key];
-      if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+      if (
+        value !== null
+        && value !== undefined
+        && String(value).trim() !== ''
+      ) {
+        return value;
+      }
     }
   }
   return fallback;
 };
 
-export const getRecordId = (record: SearchRecordInput | null | undefined): unknown =>
-  readFirstValue(record, ['ObjectId', 'objectId', 'objectid', 'OBJECTID', 'Id', 'id', 'ID'], null);
+export const getRecordId = (
+  record: SearchRecordInput | null | undefined,
+): unknown => readFirstValue(
+  record,
+  ['ObjectId', 'objectId', 'objectid', 'OBJECTID', 'Id', 'id', 'ID'],
+  null,
+);
 
-export const getRecordTitle = (record: SearchRecordInput | null | undefined): string =>
-  normalizeWhitespace(readFirstValue(record, ['Title', 'title', 'ADI', 'adi', 'ad', 'AD', 'name', 'Name'], 'İsimsiz kayıt'));
+export const getRecordTitle = (
+  record: SearchRecordInput | null | undefined,
+): string => normalizeWhitespace(readFirstValue(
+  record,
+  ['Title', 'title', 'ADI', 'adi', 'ad', 'AD', 'name', 'Name'],
+  'İsimsiz kayıt',
+));
 
-export const getRecordAddress = (record: SearchRecordInput | null | undefined): string =>
-  normalizeWhitespace(readFirstValue(record, ['Address', 'address', 'ADRES', 'adres', '_MAHALLE_ADI', 'mahalleAdi'], ''));
+export const getRecordAddress = (
+  record: SearchRecordInput | null | undefined,
+): string => normalizeWhitespace(readFirstValue(
+  record,
+  ['Address', 'address', 'ADRES', 'adres', '_MAHALLE_ADI', 'mahalleAdi'],
+  '',
+));
 
-export const getRecordPhone = (record: SearchRecordInput | null | undefined): string =>
-  normalizeWhitespace(readFirstValue(record, ['Phone', 'phone', 'TELEFON', 'telefon', 'TEL', 'tel'], ''));
+export const getRecordPhone = (
+  record: SearchRecordInput | null | undefined,
+): string => normalizeWhitespace(readFirstValue(
+  record,
+  ['Phone', 'phone', 'TELEFON', 'telefon', 'TEL', 'tel'],
+  '',
+));
 
-export const getRecordCategory = (record: SearchRecordInput | null | undefined): string => {
-  const semanticCategory = normalizeWhitespace(readFirstValue(record, ['Category', 'category', 'kategori', 'KATEGORI'], ''));
+export const getRecordCategory = (
+  record: SearchRecordInput | null | undefined,
+): string => {
+  const semanticCategory = normalizeWhitespace(readFirstValue(
+    record,
+    ['Category', 'category', 'kategori', 'KATEGORI'],
+    '',
+  ));
   if (semanticCategory) return semanticCategory;
+
   const technicalType = normalizeWhitespace(readFirstValue(record, ['type', 'Type'], ''));
   return technicalType || 'Diğer';
 };
 
-export const createStableResultKey = (record: SearchRecordInput | null | undefined, fallbackIndex = 0): string => {
+export const createStableResultKey = (
+  record: SearchRecordInput | null | undefined,
+  fallbackIndex = 0,
+): string => {
   const id = getRecordId(record);
-  if (id !== null && id !== undefined && String(id).trim() !== '') return 'id:' + String(id);
-  return 'record:' + getRecordCategory(record) + '|' + getRecordTitle(record) + '|' + getRecordAddress(record) + '|' + String(fallbackIndex);
+  if (id !== null && id !== undefined && String(id).trim() !== '') {
+    return 'id:' + String(id);
+  }
+
+  return 'record:'
+    + getRecordCategory(record)
+    + '|'
+    + getRecordTitle(record)
+    + '|'
+    + getRecordAddress(record)
+    + '|'
+    + String(fallbackIndex);
 };
 
-export const normalizeSearchRecord = (record: SearchRecordInput, index = 0): NormalizedSearchRecord => {
+export const normalizeSearchRecord = (
+  record: SearchRecordInput,
+  index = 0,
+): NormalizedSearchRecord => {
   const id = getRecordId(record);
   const title = getRecordTitle(record);
   const category = getRecordCategory(record);
-  const type = normalizeWhitespace(readFirstValue(record, ['type', 'Type', 'TYPE', 'tur', 'TUR', 'tip', 'TIP'], ''));
-  const iconKey = normalizeWhitespace(readFirstValue(record, ['iconKey', 'IconKey', 'serviceTitle', 'ServiceTitle'], ''));
+  const type = normalizeWhitespace(readFirstValue(
+    record,
+    ['type', 'Type', 'TYPE', 'tur', 'TUR', 'tip', 'TIP'],
+    '',
+  ));
+  const iconKey = normalizeWhitespace(readFirstValue(
+    record,
+    ['iconKey', 'IconKey', 'serviceTitle', 'ServiceTitle'],
+    '',
+  ));
+
   return Object.freeze({
     raw: record,
     id,
@@ -212,31 +277,60 @@ export const normalizeSearchRecord = (record: SearchRecordInput, index = 0): Nor
     phone: getRecordPhone(record),
     category,
     type,
-    icon: createListIconModel({ id: typeof id === 'string' || typeof id === 'number' ? id : undefined, title, category, type, iconKey }),
+    icon: createListIconModel({
+      id: typeof id === 'string' || typeof id === 'number' ? id : undefined,
+      title,
+      category,
+      type,
+      iconKey,
+    }),
   });
 };
 
-export const normalizeSearchCollection = (records: unknown): readonly NormalizedSearchRecord[] =>
-  Array.isArray(records) ? records.filter(isRecord).map((record, index) => normalizeSearchRecord(record, index)) : [];
+export const normalizeSearchCollection = (
+  records: unknown,
+): readonly NormalizedSearchRecord[] => Array.isArray(records)
+  ? records.filter(isRecord).map((record, index) => normalizeSearchRecord(record, index))
+  : [];
 
-export const groupSearchResults = (records: unknown, groupLimit = DEFAULT_GROUP_LIMIT): GroupedSearchResults => {
+export const groupSearchResults = (
+  records: unknown,
+  groupLimit = DEFAULT_GROUP_LIMIT,
+): GroupedSearchResults => {
   const normalized = normalizeSearchCollection(records);
-  const safeLimit = Number.isFinite(groupLimit) ? Math.max(0, Math.trunc(groupLimit)) : DEFAULT_GROUP_LIMIT;
+  const safeLimit = Number.isFinite(groupLimit)
+    ? Math.max(0, Math.trunc(groupLimit))
+    : DEFAULT_GROUP_LIMIT;
   const groupsByName = new Map<string, NormalizedSearchRecord[]>();
+
   normalized.forEach((record) => {
     const group = groupsByName.get(record.category);
     if (group) group.push(record);
     else groupsByName.set(record.category, [record]);
   });
+
   const groups: SearchResultGroup[] = [];
   const flatItems: NormalizedSearchRecord[] = [];
+
   groupsByName.forEach((items, category) => {
     const visibleItems = items.slice(0, safeLimit);
     const startIndex = flatItems.length;
     flatItems.push(...visibleItems);
-    groups.push(Object.freeze({ category, totalCount: items.length, visibleCount: visibleItems.length, startIndex, items: visibleItems }));
+    groups.push(Object.freeze({
+      category,
+      totalCount: items.length,
+      visibleCount: visibleItems.length,
+      startIndex,
+      items: visibleItems,
+    }));
   });
-  return Object.freeze({ groups, flatItems, totalCount: normalized.length, visibleCount: flatItems.length });
+
+  return Object.freeze({
+    groups,
+    flatItems,
+    totalCount: normalized.length,
+    visibleCount: flatItems.length,
+  });
 };
 
 export const filterBySearchFields = <T extends UnknownRecord>(
@@ -247,22 +341,30 @@ export const filterBySearchFields = <T extends UnknownRecord>(
   if (!Array.isArray(records)) return [];
   const needle = normalizeTurkishSearchText(searchText);
   if (!needle) return [...records];
+
   return records.filter((record) => selectors.some((selector) => {
-    const value = typeof selector === 'function' ? selector(record) : record[selector];
+    const value = typeof selector === 'function'
+      ? selector(record)
+      : record[selector];
     return normalizeTurkishSearchText(value).includes(needle);
   }));
 };
 
-export const normalizeEgoLine = (line: UnknownRecord): EgoLine => ({
+export const normalizeEgoLine = (
+  line: UnknownRecord,
+): EgoLine => ({
   ...line,
   lineNo: normalizeWhitespace(readFirstValue(line, ['haT_NO', 'HAT_NO', 'hatNo'], '')),
   lineName: normalizeWhitespace(readFirstValue(line, ['haT_ADI', 'HAT_ADI', 'hatAdi'], '')),
   lineType: normalizeWhitespace(readFirstValue(line, ['haT_TIPI', 'HAT_TIPI', 'hatTipi'], '')),
 });
 
-const parseLocaleNumber = (value: unknown): number => Number.parseFloat(String(value ?? '').replace(',', '.'));
+const parseLocaleNumber = (value: unknown): number =>
+  Number.parseFloat(String(value ?? '').replace(',', '.'));
 
-export const normalizeEgoStop = (stop: UnknownRecord): EgoStop => ({
+export const normalizeEgoStop = (
+  stop: UnknownRecord,
+): EgoStop => ({
   ...stop,
   stopNo: normalizeWhitespace(readFirstValue(stop, ['duraK_NO', 'DURAK_NO', 'durakNo'], '')),
   stopName: normalizeWhitespace(readFirstValue(stop, ['duraK_ADI', 'DURAK_ADI', 'durakAdi'], '')),
@@ -271,31 +373,52 @@ export const normalizeEgoStop = (stop: UnknownRecord): EgoStop => ({
   longitude: parseLocaleNumber(readFirstValue(stop, ['lng', 'longitude', 'LNG'], '')),
 });
 
-export const filterEgoLines = (lines: readonly UnknownRecord[] | null | undefined, searchText: unknown, showAll = false): readonly EgoLine[] => {
+export const filterEgoLines = (
+  lines: readonly UnknownRecord[] | null | undefined,
+  searchText: unknown,
+  showAll = false,
+): readonly EgoLine[] => {
   const normalized = Array.isArray(lines) ? lines.map(normalizeEgoLine) : [];
   const needle = normalizeTurkishSearchText(searchText);
   if (!needle) return showAll ? normalized : [];
-  return normalized.filter((line) => normalizeTurkishSearchText(line.lineNo).includes(needle) || normalizeTurkishSearchText(line.lineName).includes(needle));
+  return normalized.filter((line) => (
+    normalizeTurkishSearchText(line.lineNo).includes(needle)
+    || normalizeTurkishSearchText(line.lineName).includes(needle)
+  ));
 };
 
-export const filterEgoStops = (stops: readonly UnknownRecord[] | null | undefined, searchText: unknown, showAll = false): readonly EgoStop[] => {
+export const filterEgoStops = (
+  stops: readonly UnknownRecord[] | null | undefined,
+  searchText: unknown,
+  showAll = false,
+): readonly EgoStop[] => {
   const normalized = Array.isArray(stops) ? stops.map(normalizeEgoStop) : [];
   const needle = normalizeTurkishSearchText(searchText);
   if (!needle) return showAll ? normalized : [];
-  return normalized.filter((stop) => normalizeTurkishSearchText(stop.stopNo).includes(needle) || normalizeTurkishSearchText(stop.stopName).includes(needle));
+  return normalized.filter((stop) => (
+    normalizeTurkishSearchText(stop.stopNo).includes(needle)
+    || normalizeTurkishSearchText(stop.stopName).includes(needle)
+  ));
 };
 
-export const parseRouteCoordinatePairs = (value: unknown): readonly (readonly [number, number])[] => {
+export const parseRouteCoordinatePairs = (
+  value: unknown,
+): readonly (readonly [number, number])[] => {
   const tokens = normalizeWhitespace(value).split(' ').filter(Boolean);
   const points: Array<readonly [number, number]> = [];
+
   for (let index = 0; index + 1 < tokens.length; index += 2) {
     const latitudeToken = tokens[index];
     const longitudeToken = tokens[index + 1];
     if (latitudeToken === undefined || longitudeToken === undefined) continue;
+
     const latitude = parseLocaleNumber(latitudeToken);
     const longitude = parseLocaleNumber(longitudeToken);
-    if (Number.isFinite(latitude) && Number.isFinite(longitude)) points.push([longitude, latitude]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      points.push([longitude, latitude]);
+    }
   }
+
   return points;
 };
 
@@ -308,9 +431,14 @@ export const normalizeActiveIndex = (index: unknown, count: unknown): number => 
   return Math.min(boundedCount - 1, Math.max(0, normalizedIndex));
 };
 
-export const moveActiveIndex = (current: unknown, direction: ActiveIndexDirection, count: unknown): number => {
+export const moveActiveIndex = (
+  current: unknown,
+  direction: ActiveIndexDirection,
+  count: unknown,
+): number => {
   const numericCount = Number(count);
   if (!Number.isFinite(numericCount) || numericCount <= 0) return -1;
+
   const boundedCount = Math.trunc(numericCount);
   const normalizedCurrent = normalizeActiveIndex(current, boundedCount);
   if (direction === 'previous') return Math.max(0, normalizedCurrent - 1);
@@ -319,28 +447,43 @@ export const moveActiveIndex = (current: unknown, direction: ActiveIndexDirectio
   return boundedCount - 1;
 };
 
-export const isResultActivationKey = (key: string): boolean => key === 'Enter' || key === ' ';
+export const isResultActivationKey = (key: string): boolean =>
+  key === 'Enter' || key === ' ';
 
-export const createAriaOptionId = (ownerId: unknown, recordKey: unknown): string => {
+export const createAriaOptionId = (
+  ownerId: unknown,
+  recordKey: unknown,
+): string => {
   const safeOwner = normalizeWhitespace(ownerId).replace(/[^a-zA-Z0-9_-]/g, '-') || 'query-search';
   const safeKey = normalizeWhitespace(recordKey).replace(/[^a-zA-Z0-9_-]/g, '-') || 'option';
   return safeOwner + '-' + safeKey;
 };
 
 export const isSmallViewport = (
-  matchMedia: QueryMatchMedia | null | undefined = typeof window !== 'undefined' ? window.matchMedia.bind(window) : null,
+  matchMedia: QueryMatchMedia | null | undefined =
+    typeof window !== 'undefined' ? window.matchMedia.bind(window) : null,
 ): boolean => {
   if (typeof matchMedia !== 'function') return false;
   return Boolean(matchMedia('(max-width: 959px)')?.matches);
 };
 
-export const loadProductionSearchRuntimeModules = async (): Promise<readonly [CoordinatorModule, SessionModule, ObservabilityModule]> => Promise.all([
+/**
+ * Keep the production search stack lazy. Type-only imports above disappear
+ * from emitted JavaScript, so query helpers remain in the initial bundle
+ * while indexing/session/observability are split into separate chunks.
+ */
+export const loadProductionSearchRuntimeModules = async (): Promise<
+  readonly [CoordinatorModule, SessionModule, ObservabilityModule]
+> => Promise.all([
   import('../../../Toolbox/SearchCoordinatorRuntime'),
   import('../../../Toolbox/SearchSessionRuntime'),
   import('../../../Toolbox/SearchObservabilityRuntime'),
 ]);
 
-const getOptionalNow = (searchOptions: SessionSearchOptions, fallback: (() => number) | undefined): (() => number) | undefined => {
+const getOptionalNow = (
+  searchOptions: SessionSearchOptions,
+  fallback: (() => number) | undefined,
+): (() => number) | undefined => {
   const candidate = searchOptions.now;
   return typeof candidate === 'function' ? candidate as () => number : fallback;
 };
@@ -350,21 +493,31 @@ export const createProductionSearchRuntime = async (
 ): Promise<ProductionSearchFacade> => {
   const modules = options.modules ?? await loadProductionSearchRuntimeModules();
   const [coordinatorModule, sessionModule, observabilityModule] = modules;
+
   const createCoordinator = coordinatorModule?.createSearchCoordinator;
   const createSession = sessionModule?.createSearchSession;
   const createObservability = observabilityModule?.createSearchObservability;
   const measureAsync = observabilityModule?.measureAsyncOperation;
 
-  if (typeof createCoordinator !== 'function' || typeof createSession !== 'function' || typeof createObservability !== 'function' || typeof measureAsync !== 'function') {
+  if (
+    typeof createCoordinator !== 'function'
+    || typeof createSession !== 'function'
+    || typeof createObservability !== 'function'
+    || typeof measureAsync !== 'function'
+  ) {
     throw new Error('Production search runtime modules are incomplete');
   }
 
-  const coordinator = options.coordinator ?? createCoordinator(options.coordinatorOptions);
-  const observability = options.observability ?? createObservability(options.observabilityOptions);
-  const session = options.session ?? createSession(coordinator, {
-    ...options.sessionOptions,
-    debounceMs: options.sessionOptions?.debounceMs ?? observability.recommendDebounce({ queryLength: 0 }),
-  });
+  const coordinator = options.coordinator
+    ?? createCoordinator(options.coordinatorOptions);
+  const observability = options.observability
+    ?? createObservability(options.observabilityOptions);
+  const session = options.session
+    ?? createSession(coordinator, {
+      ...options.sessionOptions,
+      debounceMs: options.sessionOptions?.debounceMs
+        ?? observability.recommendDebounce({ queryLength: 0 }),
+    });
 
   const observeEnvelope = (
     envelope: SessionExecutionResult,
@@ -381,48 +534,87 @@ export const createProductionSearchRuntime = async (
   };
 
   const measuredSearch = async (
-    method: (datasetName: unknown, request?: CoordinatorRequestInput, searchOptions?: SessionSearchOptions) => Promise<SessionExecutionResult>,
+    method: (
+      datasetName: unknown,
+      request?: CoordinatorRequestInput,
+      searchOptions?: SessionSearchOptions,
+    ) => Promise<SessionExecutionResult>,
     datasetName: string,
     request: CoordinatorRequestInput,
     searchOptions: SessionSearchOptions,
   ): Promise<SessionExecutionResult> => {
     const now = getOptionalNow(searchOptions, options.now);
-    const measured = await measureAsync(() => method(datasetName, request, searchOptions), now ? { now } : {});
-    return observeEnvelope(measured.value as SessionExecutionResult, measured, { dataset: datasetName, mode: request.mode });
+    const measureOptions = now ? { now } : {};
+    const measured = await measureAsync(
+      () => method(datasetName, request, searchOptions),
+      measureOptions,
+    );
+    return observeEnvelope(measured.value as SessionExecutionResult, measured, {
+      dataset: datasetName,
+      mode: request.mode,
+    });
   };
 
   return {
     coordinator,
     session,
     observability,
+
     ingest(datasetName, payload, ingestOptions = {}) {
       const snapshot = coordinator.ingest(datasetName, payload, ingestOptions);
       observability.recordDatasetSize(snapshot.recordCount, { dataset: snapshot.name });
       return snapshot;
     },
+
     register(datasetName, records, metadata = {}, registerOptions = {}) {
       const snapshot = coordinator.register(datasetName, records, metadata, registerOptions);
       observability.recordDatasetSize(snapshot.recordCount, { dataset: snapshot.name });
       return snapshot;
     },
-    registerLoader(datasetName, loader) { return coordinator.registerLoader(datasetName, loader); },
+
+    registerLoader(datasetName, loader) {
+      return coordinator.registerLoader(datasetName, loader);
+    },
+
     search(datasetName, request = {}, searchOptions = {}) {
-      return measuredSearch(session.searchNow.bind(session), datasetName, request, searchOptions);
+      return measuredSearch(
+        session.searchNow.bind(session),
+        datasetName,
+        request,
+        searchOptions,
+      );
     },
+
     schedule(datasetName, request = {}, searchOptions = {}) {
-      return measuredSearch(session.schedule.bind(session), datasetName, request, searchOptions);
+      return measuredSearch(
+        session.schedule.bind(session),
+        datasetName,
+        request,
+        searchOptions,
+      );
     },
+
     async loadMore(searchOptions = {}) {
       const now = getOptionalNow(searchOptions, options.now);
-      const measured = await measureAsync(() => session.loadMore(searchOptions), now ? { now } : {});
+      const measured = await measureAsync(
+        () => session.loadMore(searchOptions),
+        now ? { now } : {},
+      );
       const state = session.getState();
       return observeEnvelope(measured.value as SessionExecutionResult, measured, {
         dataset: state.dataset,
         mode: isRecord(state.result) ? state.result.mode : undefined,
       });
     },
-    invalidate(datasetName) { return coordinator.invalidate(datasetName); },
-    getState() { return session.getState(); },
+
+    invalidate(datasetName) {
+      return coordinator.invalidate(datasetName);
+    },
+
+    getState() {
+      return session.getState();
+    },
+
     diagnostics() {
       return Object.freeze({
         coordinator: coordinator.diagnostics(),
@@ -431,15 +623,21 @@ export const createProductionSearchRuntime = async (
         performanceGate: observability.evaluate(),
       });
     },
+
     recommendDebounce(query = '') {
       const diagnostics = coordinator.diagnostics();
-      const registry = isRecord(diagnostics) && isRecord(diagnostics.registry) ? diagnostics.registry : {};
+      const registry = isRecord(diagnostics) && isRecord(diagnostics.registry)
+        ? diagnostics.registry
+        : {};
       const totalRecords = Number(registry.totalRecords);
       return observability.recommendDebounce({
         queryLength: normalizeWhitespace(query).length,
         recordCount: Number.isFinite(totalRecords) ? totalRecords : 0,
       });
     },
-    dispose() { return session.dispose(); },
+
+    dispose() {
+      return session.dispose();
+    },
   };
 };
