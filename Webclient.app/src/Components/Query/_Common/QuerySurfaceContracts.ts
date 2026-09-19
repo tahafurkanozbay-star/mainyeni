@@ -21,6 +21,7 @@ export interface ManagedQueryWindowManager extends QueryWindowManagerLike {
   readonly RegisterWindow: (ref: unknown) => void;
   readonly UnregisterWindow?: (windowId: string, ref: unknown) => void;
   readonly ShowWindow: (windowId: string, query?: unknown) => void;
+  readonly GetQueryParams: (windowId: string) => UnknownRecord | null | undefined;
   readonly IsVisible: (windowId: string) => boolean;
 }
 
