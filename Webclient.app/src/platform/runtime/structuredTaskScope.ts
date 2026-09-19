@@ -381,9 +381,7 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
       for (const child of this.#children) child.dispose(reason);
     } else {
       for (const child of this.#children) {
-        void child.close({
-          ...(request.signal ? { signal: request.signal } : {}),
-        });
+        void child.close(request.signal ? { signal: request.signal } : {});
       }
     }
 
