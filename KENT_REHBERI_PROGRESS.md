@@ -344,3 +344,19 @@
 - KALAN SORUNLAR: bu QA scope'unda merge blocker kalmadı. Base'de zaten mevcut olan Vitest diagnostics exact-base gate tarafından yeni regresyon olarak sınıflandırılmadı; sonraki sahiplik turlarında ayrı ele alınmalı.
 - SONRAKİ GÖREV: merged #164 branch yeniden kullanılmamalı. Yeni QA/Release turu o anki current main'den benzersiz branch ile başlamalı; >=4,000 meaningful additions, exact-head CI, final main refresh, security/performance/regression ve conflict-free merge kapıları korunmalı.
 
+
+
+## Deep GIS / Whole-Code Modernization — 2026-09-19 21:16 TRT
+- TUR / GÖREV: Deep GIS current-main continuation; strict-TypeScript spatial runtime, lifecycle, cache, LOD, terrain and CI reliability hardening.
+- BASE MAIN: `7364dfcc571d47d191a0b3e224dd9579daae8b24`; branch remains 0 behind with the same merge-base.
+- BRANCH / PR: `agent/gis-engine-current-main-20260919` / PR #171.
+- HEAD before this progress commit: `874383e723af36a2823946878f421895266f3b69`.
+- MERGE DURUMU: OPEN / DRAFT / NOT MERGED. PR snapshot before this progress commit = 4,517 additions / 600 deletions / 23 files; mandatory >=4,000 meaningful-additions gate is satisfied, but exact-head CI is still mandatory.
+- ÖNEMLİ ÖZELLİKLER: bounded spatial query governance and deterministic query identity; geometry and feature-integrity budgets; deterministic extent index; CPU/GPU/vertex/draw-call LOD governance; bounded layer and SceneLayer lifecycle; subscriber-aware spatial cache cancellation/dedupe; terrain streaming pressure/LOD planner.
+- BU TURDA EK SERTLEŞTİRME: Release QA webclient timeout 30 -> 90 minutes without weakening any gate; SceneLayer unregister cleanup now survives adapter-dispose failures; observer failures cannot replace lifecycle outcomes; each new SceneLayer load generation receives a fresh bounded retry budget; cache observer failures are fully isolated even without a host reportError channel; terrain quality values fail closed and future/epoch last-used timestamps use bounded deterministic recency scoring.
+- TESTLER / CI: focused Vitest regressions added for SceneLayer retry renewal, cleanup and observer isolation plus cache observer isolation and terrain clock-skew/quality validation. Exact-head Platform Architecture Audit, Webclient Quality and Release QA were newly queued for the code head before this progress commit; no PASS is claimed for the new code until the final progress head itself completes required CI.
+- PERFORMANCE / DATA INTEGRITY: bounded concurrency, queues, cache entries/bytes/tags, geometry/features/attributes, SceneLayer CPU/GPU/features/draw calls, LOD resources and terrain tile plans. Deterministic eviction and cancellation prevent runaway CPU/GPU/memory work. Terrain scoring is clock-skew bounded.
+- NETWORK / SECURITY: diff review found no new URL, direct fetch, WMS/WFS, client secret/token, eval or unsafe HTML additions. No endpoint or telemetry transport was invented. Existing verified ArcGIS REST/service adapter boundaries remain authoritative.
+- İKON EŞLEŞTİRME: unchanged; shared deterministic icon registry/resolver remains the single authority.
+- MODERNİZASYON KARARI: do not perform a risky whole-repository one-shot language rewrite. Continue the repository's stable React 19 + Vite 8 + TypeScript 7 + ArcGIS 5 / .NET 10 direction with feature-by-feature strict-TypeScript migration, bounded adapters and exact-base regression gates.
+- KALAN SORUNLAR / SONRAKİ GÖREV: require exact-head Webclient Quality + Release QA + Platform Architecture Audit completed/success, including full Vitest, exact-base Vitest, production Vite build, integrity verification and bundle budgets. Then refresh main, re-check mergeable=true/conflict-free and perform final regression/security/performance review before squash merge. If any exact-head check fails, fix the concrete diagnostic on this same canonical PR.
