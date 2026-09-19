@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { AppConfig } from '../../Core/AppConfig';
-import type { WindowManagerLike } from '../../experience/contracts';
+import type { UnknownRecord } from '../../Business/contracts';
+import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { CompanyLogo } from './CompanyLogo';
 import './NavigationBar.css';
 
-interface SearchQuery {
+interface SearchQuery extends UnknownRecord {
   name: string;
 }
 
 export interface NavigationBarProps {
   readonly id?: string;
-  readonly windowManager: Pick<WindowManagerLike, 'ShowWindow'>;
+  readonly windowManager: Pick<WindowManagerApi, 'ShowWindow'>;
 }
 
 export function NavigationBar({ windowManager }: NavigationBarProps) {
