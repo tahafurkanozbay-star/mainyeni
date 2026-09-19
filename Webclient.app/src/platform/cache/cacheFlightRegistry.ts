@@ -109,10 +109,20 @@ export class CacheFlightRegistry {
     return true;
   }
 
+  cancelAll(reason?: unknown): number {
+    if (this.#disposed) return 0;
+    const keys = [...this.#flights.keys()];
+    let cancelled = 0;
+    for (const key of keys) {
+      if (this.cancel(key, reason)) cancelled += 1;
+    }
+    return cancelled;
+  }
+
   dispose(reason?: unknown): void {
     if (this.#disposed) return;
+    this.cancelAll(reason);
     this.#disposed = true;
-    for (const key of this.#flights.keys()) this.cancel(key, reason);
   }
 
   #subscribe<T>(flight: Flight<T>, signal?: AbortSignal): Promise<T> {
