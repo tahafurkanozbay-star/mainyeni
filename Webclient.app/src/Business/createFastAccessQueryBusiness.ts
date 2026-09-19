@@ -5,12 +5,23 @@ import type {
 } from './contracts';
 import { createFastAccessBusiness } from './fastAccessRuntime';
 
+interface FastAccessGeometryResult {
+  readonly latitude?: unknown;
+  readonly longitude?: unknown;
+  readonly x?: unknown;
+  readonly y?: unknown;
+  readonly centroid?: FastAccessGeometryResult | null;
+  readonly extent?: {
+    readonly center?: FastAccessGeometryResult | null;
+  } | null;
+}
+
 interface FastAccessFeatureResult {
   readonly attr?: UnknownRecord | null;
   readonly attributes?: UnknownRecord | null;
-  readonly geometry?: unknown;
+  readonly geometry?: FastAccessGeometryResult | null;
   readonly raw?: {
-    readonly geometry?: unknown;
+    readonly geometry?: FastAccessGeometryResult | null;
   } | null;
 }
 
