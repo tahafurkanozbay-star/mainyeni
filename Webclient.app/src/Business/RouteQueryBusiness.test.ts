@@ -77,6 +77,17 @@ describe('RouteQueryBusiness strict TypeScript runtime', () => {
     expect(options?.where).not.toContain('tip <> 2');
   });
 
+  it('does not coerce non-canonical object identities into numeric SQL', async () => {
+    await RouteQueryBusiness.Query({
+      Id: '12x',
+      showCultureWalkingRoute: true,
+      showNatureWalkingRoute: true,
+    });
+
+    const options = queryMock.mock.calls[0]?.[0];
+    expect(options?.where).not.toContain('objectid=');
+  });
+
   it('uses the spatial executor and preserves legacy buffer-distance scaling', async () => {
     const point = { x: 1, y: 2 };
     await RouteQueryBusiness.Query({
