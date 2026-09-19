@@ -75,6 +75,12 @@ export class CacheFlightRegistry {
     return subscriber;
   }
 
+  has(rawKey: string): boolean {
+    if (this.#disposed) return false;
+    const key = cacheKey(rawKey, this.#maxKeyLength);
+    return this.#flights.has(key);
+  }
+
   snapshot(): CacheFlightSnapshot {
     let subscribers = 0;
     for (const flight of this.#flights.values()) subscribers += flight.subscribers.size;
