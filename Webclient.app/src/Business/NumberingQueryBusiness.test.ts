@@ -224,7 +224,7 @@ describe('NumberingQueryBusiness strict TypeScript address runtime', () => {
     expect(spatialMock).toHaveBeenCalledWith(expect.objectContaining({
       url: '/gis/BuildingQueryUrl',
       geometry: point,
-      distance: 100,
+      distance: 1,
       units: 'meters',
       spatialRelationship: 'intersects',
     }));
