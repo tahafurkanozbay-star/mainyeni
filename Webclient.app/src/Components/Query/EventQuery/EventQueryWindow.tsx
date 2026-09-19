@@ -514,6 +514,7 @@ export const EventQueryWindow = forwardRef<
                     id={nameId}
                     className="form-control"
                     value={query.name}
+                    aria-label="Adı"
                     autoComplete="off"
                     onChange={(event) => setQueryField('name', event.target.value)}
                   />
@@ -527,6 +528,7 @@ export const EventQueryWindow = forwardRef<
                     <ReactDatePicker
                       id={startDateId}
                       selected={query.startDate}
+                      aria-label="Başlangıç Tarihi"
                       locale="tr"
                       dateFormat="dd.MM.yyyy"
                       className="form-control"
@@ -542,6 +544,7 @@ export const EventQueryWindow = forwardRef<
                     <ReactDatePicker
                       id={endDateId}
                       selected={query.endDate}
+                      aria-label="Bitiş Tarihi"
                       locale="tr"
                       dateFormat="dd.MM.yyyy"
                       className="form-control"
@@ -561,6 +564,7 @@ export const EventQueryWindow = forwardRef<
                     id={districtId}
                     className="form-select form-control"
                     value={query.districtId}
+                    aria-label="İlçe"
                     onChange={(event) => void onDistrictChange(event)}
                   >
                     <option value="">Seçiniz..</option>
@@ -581,6 +585,7 @@ export const EventQueryWindow = forwardRef<
                     id={neighborhoodId}
                     className="form-select"
                     value={query.nbhoodId}
+                    aria-label="Mahalle"
                     onChange={onNeighborhoodChange}
                     disabled={!query.districtId}
                   >
