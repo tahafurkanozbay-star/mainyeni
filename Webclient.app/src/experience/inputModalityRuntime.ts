@@ -17,6 +17,7 @@ export interface InputModalityEnvironment {
   document: Document;
   window: Window;
   matchMedia?: (query: string) => MediaQueryList;
+  reportError?: (error: unknown) => void;
 }
 
 const COARSE_POINTER_QUERY = '(pointer: coarse)';
@@ -82,6 +83,7 @@ export const installInputModalityRuntime = (
   const { document, window } = environment;
   const matchMedia = environment.matchMedia ?? window.matchMedia?.bind(window);
   const coarseQuery = matchMedia?.(COARSE_POINTER_QUERY) ?? null;
+  const reportError = environment.reportError ?? globalThis.reportError?.bind(globalThis);
   const listeners = new Set<(snapshot: InputModalitySnapshot) => void>();
   let disposed = false;
   let sequence = 0;
@@ -92,11 +94,13 @@ export const installInputModalityRuntime = (
     sequence += 1;
     snapshot = { ...next, sequence };
     publishToDocument(document, snapshot);
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(snapshot);
-      } catch {
-        // Observer isolation: an analytics/UI listener must not break input handling.
+      } catch (error) {
+        // Observer isolation: a UI listener must not break input handling, but
+        // failures remain observable through the host diagnostics boundary.
+        reportError?.(error);
       }
     }
   };
