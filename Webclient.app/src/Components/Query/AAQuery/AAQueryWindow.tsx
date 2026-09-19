@@ -518,6 +518,7 @@ export const AssemblyAreaQueryWindow = forwardRef<
                   className="form-control"
                   onChange={(event) => setQueryField('name', event.target.value)}
                   value={query.name}
+                  aria-label="Adı"
                   autoComplete="off"
                 />
               </Form.Group>
