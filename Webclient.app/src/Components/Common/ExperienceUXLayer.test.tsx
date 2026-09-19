@@ -309,7 +309,7 @@ describe('ExperienceUXLayer', () => {
       name: 'Kısayolları ve yardım bilgisini aç',
     }));
     fireEvent.click(screen.getByRole('button', {
-      name: 'Katmanlar Aç',
+      name: /Katmanlar\s*Aç/i,
     }));
 
     expect(screen.queryByRole('dialog', {
