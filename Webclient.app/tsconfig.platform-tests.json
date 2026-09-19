@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "types": ["vite/client", "vitest/globals"]
+  },
+  "include": [
+    "src/platform/offline/**/*.test.ts",
+    "src/platform/network/endpointPolicy.test.ts",
+    "src/platform/config/runtimeConfig.test.ts",
+    "src/platform/platform.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist"
+  ]
+}

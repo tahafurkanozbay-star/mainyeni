@@ -61,7 +61,7 @@ test('cutover module list contains no duplicate stems', () => {
   assert.equal(canonicalTypedModules.length, 18);
 });
 
-test('Platform production JavaScript is reduced to the bounded bootstrap composition adapter', async () => {
+test('Platform production JavaScript is fully eliminated', async () => {
   const files = await walk(PLATFORM);
   const productionJavascript = files
     .filter((file) => file.endsWith('.js'))
@@ -69,19 +69,18 @@ test('Platform production JavaScript is reduced to the bounded bootstrap composi
     .map((file) => normalize(path.relative(ROOT, file)))
     .sort();
 
-  assert.deepEqual(productionJavascript, [
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-  ]);
+  assert.deepEqual(productionJavascript, []);
 });
 
-test('bootstrap adapter remains explicit until its legacy Business dependency is typed', async () => {
-  const bootstrap = path.join(PLATFORM, 'bootstrap', 'bootstrapApplication.js');
+test('bootstrap composition is canonical TypeScript while legacy Business boundary stays declared', async () => {
+  const bootstrap = path.join(PLATFORM, 'bootstrap', 'bootstrapApplication.ts');
   const source = await fs.readFile(bootstrap, 'utf8');
   assert.match(source, /Business\/ConfigurationBusiness/u);
   assert.match(source, /Business\/CommonBusiness/u);
   assert.match(source, /Store\/Managers\/MapManager/u);
   assert.match(source, /\.\/bootstrapDiagnostics/u);
   assert.match(source, /\.\/bootstrapCore/u);
+  assert.doesNotMatch(source, /@ts-(?:nocheck|ignore|expect-error)/u);
 });
 
 test('Platform TypeScript project explicitly disables JavaScript admission', async () => {
@@ -138,16 +137,15 @@ test('package verify pipeline contains every Platform modernization gate', async
   }
 });
 
-test('language baseline permanently ratchets Platform production JavaScript to one adapter', async () => {
+test('language baseline permanently ratchets Platform production JavaScript to zero', async () => {
   const baseline = JSON.parse(await fs.readFile(
     path.join(ROOT, 'tools', 'platform-language-baseline.json'),
     'utf8',
   ));
   assert.equal(baseline.schemaVersion, 1);
-  assert.equal(baseline.domains?.platform, 1);
-  assert.deepEqual(baseline.platformLegacyAllowlist, [
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-  ]);
+  assert.equal(baseline.domains?.platform, 0);
+  assert.equal(baseline.testDomains?.platform, 16);
+  assert.deepEqual(baseline.platformLegacyAllowlist, []);
 });
 
 test('domains already migrated to TypeScript retain zero JavaScript budgets', async () => {

@@ -1,15 +1,16 @@
+import { vi } from 'vitest';
 import { RequestCache } from './cache/requestCache';
 import { createRuntimeConfig } from './config/runtimeConfig';
 import { AppError, getSafeErrorMessage } from './errors/appError';
 import { assertApplicationEndpoint, isSameOriginPath, normalizeApplicationPath } from './network/endpointPolicy';
 import { stableSerialize } from './http/httpClient';
 
-jest.mock('axios', () => {
-  const request = jest.fn();
+vi.mock('axios', () => {
+  const request = vi.fn();
   return {
-    create: jest.fn(() => ({ request })),
+    create: vi.fn(() => ({ request })),
     CancelToken: {
-      source: jest.fn(() => ({ token: {}, cancel: jest.fn() }))
+      source: vi.fn(() => ({ token: {}, cancel: vi.fn() }))
     }
   };
 });
@@ -70,10 +71,10 @@ describe('endpoint policy', () => {
 });
 
 describe('RequestCache', () => {
-  let nowSpy;
+  let nowSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1000);
+    nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1000);
   });
 
   afterEach(() => {
