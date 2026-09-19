@@ -78,6 +78,15 @@ describe('dependency contract', () => {
     ]);
   });
 
+  test('does not misclassify object require methods as CommonJS package imports', () => {
+    assert.deepEqual(collectPackageReferences(`
+      const registry = { require() {} };
+      registry.require('Missing');
+      serviceRegistry.require("AnotherMissing");
+      const actual = require('real-package');
+    `), ['real-package']);
+  });
+
   const sourceCases = [
     ['src/App.test.js', true],
     ['src/__tests__/App.js', true],
