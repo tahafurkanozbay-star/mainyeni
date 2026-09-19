@@ -17,13 +17,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: webclient-quality-${{ github.ref }}
-  cancel-in-progress: true
+  group: webclient-quality-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: Webclient.app

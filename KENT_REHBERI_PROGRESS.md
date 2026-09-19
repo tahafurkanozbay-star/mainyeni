@@ -403,3 +403,11 @@
 - EVIDENCE: Release QA completed successfully after duplicate full/exact-base Vitest was removed, confirming lint/typecheck/release-scorecard/build/backend gates. The sole Webclient Quality full-suite run remained in `Full Vitest diagnostic visibility` under the PR-only `forks/maxWorkers=2` configuration; the earlier #175 fork-based runs had likewise remained in that step until cancellation. By contrast the repository's established `vmThreads/maxWorkers=4` configuration completed the full diagnostic quickly on the immediately preceding green release heads.
 - FIX: restore the repository-proven bounded `vmThreads/maxWorkers=4` Vitest pool and Webclient Quality's normal `cancel-in-progress: true` / 25-minute timeout so superseded exact-head runs are cancelled and genuine hangs fail promptly. Keep Release QA's de-duplicated Vitest authority design, but restore its webclient validation timeout to the normal 30-minute bound.
 - GATE: this remediation creates a new exact head; no prior CI result is reused. Platform Architecture Audit, Webclient Quality and Release QA must all be completed+success on the final head before merge.
+
+
+## Deep GIS / canonical CI safety correction — 2026-09-19
+- PR: #180 canonical current-main GIS merge candidate; pre-fix head `3d9d8b1858a956ba05c79af8022c281463fe7df9`.
+- DÜZELTİLEN ÇELİŞKİ: önceki progress kaydı `vmThreads/maxWorkers=4` ve 25 dakikalık timeout'u “repository-proven” olarak işaretliyordu; ancak önceki GIS exact-head diagnostikleri bu profilin worker-memory/crash ve timeout riski taşıdığını göstermişti. Bu kayıt önceki iddiayı geçersiz kılar.
+- FINAL CI PROFILE: Webclient Quality `timeout-minutes: 90`, exact-head concurrency key ve `cancel-in-progress: false`; Vitest `pool: 'forks'`, `maxWorkers: 2`, isolate=true. Release QA duplicate full/exact-base Vitest çalıştırmıyor; full/exact-base Vitest otoritesi Webclient Quality.
+- GATE ZAYIFLATILMADI: hiçbir test/assertion/exact-base/build-budget kaldırılmadı. Bu commit yeni exact head oluşturur; Platform Architecture Audit, Webclient Quality ve Release QA completed+success olmadan merge yok.
+- BRANCH LIFECYCLE: current main hâlâ `cdfdb9d9baa6e251a6e0bcdad0a1a20baab0c62d`; PR #180 current-main based olduğu için aynı PR üzerinde düzeltildi, gereksiz supersede yapılmadı.
