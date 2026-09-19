@@ -112,11 +112,11 @@ const reportObserverError = (
     return;
   }
 
-  void Promise.resolve()
-    .then(() => reporter(error))
-    .catch((reportingError: unknown) => {
-      globalThis.reportError?.(reportingError);
-    });
+  try {
+    reporter(error);
+  } catch (reportingError) {
+    globalThis.reportError?.(reportingError);
+  }
 };
 
 const safeFocus = (
