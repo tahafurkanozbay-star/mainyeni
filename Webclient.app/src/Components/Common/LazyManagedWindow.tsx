@@ -13,7 +13,7 @@ import type {
 import './LazyManagedWindow.css';
 
 interface WindowLoadingFallbackProps {
-  readonly label?: string;
+  readonly label: string | undefined;
 }
 
 type LazyManagedComponentProps = Readonly<Record<string, unknown>> & {
