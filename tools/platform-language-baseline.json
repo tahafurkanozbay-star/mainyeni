@@ -3,7 +3,7 @@
   "description": "Production and test JavaScript ceilings captured at the current TypeScript migration frontier. Counts may only decrease.",
   "domains": {
     "web-root": 0,
-    "business": 59,
+    "business": 4,
     "components": 70,
     "core": 0,
     "store": 0,
@@ -15,7 +15,7 @@
   },
   "testDomains": {
     "web-root": 2,
-    "business": 3,
+    "business": 1,
     "components": 9,
     "core": 0,
     "store": 2,
