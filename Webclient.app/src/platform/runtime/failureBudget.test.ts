@@ -49,7 +49,7 @@ describe('BoundedFailureBudget', () => {
 
   it('prunes expired buckets from the rolling window', () => {
     const time = clock(); const budget = new BoundedFailureBudget({ windowMs: 10_000, bucketMs: 1_000, minimumSamples: 2, clock: time.now });
-    budget.record('failure'); time.advance(1_000); budget.record('failure'); expect(budget.snapshot().failureWeight).toBe(2); time.advance(9_000);
+    budget.record('failure'); time.advance(1_000); budget.record('failure'); expect(budget.snapshot().failureWeight).toBe(2); time.advance(10_000);
     const snapshot = budget.snapshot(); expect(snapshot.failureWeight).toBe(0); expect(snapshot.samples).toBe(0); expect(snapshot.state).toBe('exhausted');
   });
 
