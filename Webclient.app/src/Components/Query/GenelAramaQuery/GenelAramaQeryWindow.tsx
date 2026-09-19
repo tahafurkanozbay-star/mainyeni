@@ -34,10 +34,10 @@ import {
   type NormalizedSearchRecord,
   type SearchRecordInput,
 } from '../_Common/QuerySearchRuntime';
+import { normalizeQueryIdentifier } from '../_Common/QuerySurfaceContracts';
 import type {
   ManagedQueryWindowHandle,
   ManagedQueryWindowManager,
-  normalizeQueryIdentifier,
   UnknownRecord,
 } from '../_Common/QuerySurfaceContracts';
 import './GenelAramaQeryWindow.css';
