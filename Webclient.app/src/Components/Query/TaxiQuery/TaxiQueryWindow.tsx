@@ -20,7 +20,10 @@ import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
-import { createPictureMarkerSymbol } from '../../../gis-engine/iconPresentation';
+import {
+  createPictureMarkerSymbol,
+  resolveRecordIconUrl,
+} from '../../../gis-engine/iconPresentation';
 import { ButtonLoading } from '../../Common/Loading';
 import { CommonQueryResultItemTools } from '../_Common/CommonQueryResultItemTools';
 import { CommonQueryWindowTools } from '../_Common/CommonQueryWindowTools';
@@ -124,6 +127,10 @@ const TAXI_ICON_RECORD = Object.freeze({
 
 const TAXI_SYMBOL = Object.freeze(
   createPictureMarkerSymbol(TAXI_ICON_RECORD, 12, { minSize: 48, maxSize: 48 }),
+);
+const TAXI_WINDOW_LOGO = resolveRecordIconUrl(
+  TAXI_ICON_RECORD,
+  { fallback: 'images/icons/sidebar/taksi.png' },
 );
 
 const normalizeOptionId = (value: unknown): string =>
@@ -459,7 +466,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
         <header className="common-query-window-header">
           <img
             className="common-query-window-header-icon"
-            src="images/icons/sidebar/taksi.png"
+            src={TAXI_WINDOW_LOGO}
             alt=""
             aria-hidden="true"
           />
