@@ -424,11 +424,17 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const getItemDetailsById = useCallback(async (
       item: ParkRecord,
     ): Promise<ParkFeature> => {
-      const objectId = item.objectId;
-      if (
-        (typeof objectId !== 'string' && typeof objectId !== 'number')
-        || (typeof objectId === 'string' && objectId.trim() === '')
-      ) {
+      const objectIdCandidate = item.objectId;
+      const objectId: string | number | null = (
+        typeof objectIdCandidate === 'number'
+        && Number.isFinite(objectIdCandidate)
+      )
+        ? objectIdCandidate
+        : typeof objectIdCandidate === 'string' && objectIdCandidate.trim() !== ''
+          ? objectIdCandidate.trim()
+          : null;
+
+      if (objectId === null) {
         throw new Error('Öğe kimliği bulunamadı.');
       }
 
