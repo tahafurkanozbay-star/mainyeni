@@ -205,13 +205,18 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
     this.#name = text('scope name', name, 120);
     this.#clock = options.clock ?? SYSTEM_CLOCK;
     this.#maxActiveTasks = integer('maxActiveTasks', options.maxActiveTasks ?? 128, 1, 10_000);
-    this.#maxOwnerTasks = integer('maxOwnerTasks', options.maxOwnerTasks ?? 32, 1, this.#maxActiveTasks);
+    this.#maxOwnerTasks = integer(
+      'maxOwnerTasks',
+      options.maxOwnerTasks ?? Math.min(32, this.#maxActiveTasks),
+      1,
+      this.#maxActiveTasks,
+    );
     this.#maxChildren = integer('maxChildren', options.maxChildren ?? 32, 1, 1_000);
     this.#historyLimit = integer('historyLimit', options.historyLimit ?? 256, 0, 4_096);
     this.#maxTimeoutMs = integer('maxTimeoutMs', options.maxTimeoutMs ?? 120_000, 1, 30 * 60_000);
     this.#defaultTimeoutMs = integer(
       'defaultTimeoutMs',
-      options.defaultTimeoutMs ?? 30_000,
+      options.defaultTimeoutMs ?? Math.min(30_000, this.#maxTimeoutMs),
       1,
       this.#maxTimeoutMs,
     );
