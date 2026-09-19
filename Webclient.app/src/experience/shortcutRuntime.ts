@@ -160,8 +160,8 @@ class KeyboardShortcutRuntime implements ShortcutRuntime {
   ): void {
     try {
       this.#onHandlerError?.(error, shortcut, event);
-    } catch {
-      // Diagnostics observers are isolated from input handling.
+    } catch (observerError) {
+      globalThis.reportError?.(observerError);
     }
   }
 
