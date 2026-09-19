@@ -251,8 +251,8 @@ export class BoundedMemoryCache {
     byteSize: number,
     replacing: CacheStoredValue<unknown> | undefined,
   ): void {
-    let attempts = 0;
-    while (attempts <= this.#limits.maxEntries) {
+    const maximumEvictions = Math.min(this.#entries.size, this.#limits.maxEntries);
+    for (let attempt = 0; attempt <= maximumEvictions; attempt += 1) {
       const namespaceUsage = this.#ledger.usage(namespace);
       const reason = cacheAdmissionReason(this.#limits, {
         byteSize,
@@ -286,7 +286,7 @@ export class BoundedMemoryCache {
         throw new CacheContractError('namespace-limit', 'cache capacity cannot admit entry');
       }
       this.#stats.evictions += 1;
-      attempts += 1;
+      if (attempt === maximumEvictions) break;
     }
     this.#stats.rejectedWrites += 1;
     throw new CacheContractError('namespace-limit', 'cache eviction bound exhausted');
