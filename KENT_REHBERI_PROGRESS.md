@@ -403,3 +403,10 @@
 - EVIDENCE: Release QA completed successfully after duplicate full/exact-base Vitest was removed, confirming lint/typecheck/release-scorecard/build/backend gates. The sole Webclient Quality full-suite run remained in `Full Vitest diagnostic visibility` under the PR-only `forks/maxWorkers=2` configuration; the earlier #175 fork-based runs had likewise remained in that step until cancellation. By contrast the repository's established `vmThreads/maxWorkers=4` configuration completed the full diagnostic quickly on the immediately preceding green release heads.
 - FIX: restore the repository-proven bounded `vmThreads/maxWorkers=4` Vitest pool and Webclient Quality's normal `cancel-in-progress: true` / 25-minute timeout so superseded exact-head runs are cancelled and genuine hangs fail promptly. Keep Release QA's de-duplicated Vitest authority design, but restore its webclient validation timeout to the normal 30-minute bound.
 - GATE: this remediation creates a new exact head; no prior CI result is reused. Platform Architecture Audit, Webclient Quality and Release QA must all be completed+success on the final head before merge.
+
+
+## Deep GIS / recovery CI profile correction — 2026-09-19
+- PR: #179 canonical current-main recovery PR; pre-fix head `3d9d8b1858a956ba05c79af8022c281463fe7df9`.
+- BULGU: PR açıklaması güvenli CI profilini taşıdığını söylüyordu fakat gerçek branch dosyalarında Webclient Quality `timeout-minutes: 25` ve Vitest `vmThreads / maxWorkers: 4` kalmıştı.
+- DÜZELTME: Webclient Quality timeout 90 dakikaya çıkarıldı; full suite `forks` ve `maxWorkers: 2` process-isolation profiline geri döndürüldü. Release QA duplicate full/exact-base Vitest çalıştırmama davranışı korunuyor.
+- GATE: test/assertion kapsamı azaltılmadı. Yeni exact head için Platform Architecture Audit, Webclient Quality ve Release QA completed+success zorunlu; merge öncesi final main/merge-base/mergeable refresh yapılacak.
