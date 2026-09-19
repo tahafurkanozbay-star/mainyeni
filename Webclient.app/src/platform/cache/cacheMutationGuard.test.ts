@@ -119,20 +119,19 @@ describe('CacheMutationGuard', () => {
     });
   });
 
-  it('can release stale generation bookkeeping after lifecycle cleanup', () => {
+  it('keeps invalidation generations monotonic for the guard lifetime', () => {
     const guard = new CacheMutationGuard();
+    const token = guard.capture('catalog|GET|/places', 'catalog', ['places']);
     guard.invalidateKey('catalog|GET|/places');
     guard.invalidateNamespace('catalog');
-    guard.invalidateTags(['places', 'district:1']);
+    guard.invalidateTags(['places']);
 
-    guard.releaseKey('catalog|GET|/places');
-    guard.releaseNamespace('catalog');
-    guard.releaseTags(['places', 'district:1']);
-
+    expect(guard.isCurrent(token)).toBe(false);
     expect(guard.snapshot()).toMatchObject({
-      trackedKeys: 0,
-      trackedNamespaces: 0,
-      trackedTags: 0,
+      trackedKeys: 1,
+      trackedNamespaces: 1,
+      trackedTags: 1,
+      invalidations: 3,
     });
   });
 
