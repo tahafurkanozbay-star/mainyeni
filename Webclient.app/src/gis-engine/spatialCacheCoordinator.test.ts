@@ -206,6 +206,27 @@ describe('createSpatialCacheCoordinator observers', () => {
     }
   });
 
+  it('keeps cache mutations successful when no host error channel exists', () => {
+    vi.stubGlobal('reportError', undefined);
+    try {
+      const cache = createSpatialCacheCoordinator({
+        maxEntries: 1,
+        onEvict: () => {
+          throw new Error('eviction observer failed');
+        },
+        onObserverError: () => {
+          throw new Error('secondary observer failed');
+        },
+      });
+
+      cache.put('one', 1);
+      expect(() => cache.put('two', 2)).not.toThrow();
+      expect(cache.getSnapshot()).toMatchObject({ size: 1, keys: ['two'] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('emits explicit reasons for manual and budget removals', () => {
     const onEvict = vi.fn();
     const cache = createSpatialCacheCoordinator({ maxEntries: 1, onEvict });
