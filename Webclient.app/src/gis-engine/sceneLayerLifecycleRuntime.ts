@@ -91,7 +91,7 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
   let disposed = false; let activeLoads = 0; let viewportScale: number | null = null; let viewportZoom: number | null = null; let viewportInitialized = false;
   let reconcileScheduled: Promise<void> | null = null; let reconcileDirty = false;
 
-  const observerError = (error: unknown): void => { try { options.onObserverError?.(error); } catch (secondary) { const report = (globalThis as typeof globalThis & { reportError?: (e: unknown) => void }).reportError; if (typeof report === 'function') report(secondary); else throw secondary; } };
+  const observerError = (error: unknown): void => { try { options.onObserverError?.(error); } catch (secondary) { try { const report = (globalThis as typeof globalThis & { reportError?: (e: unknown) => void }).reportError; if (typeof report === 'function') report(secondary); } catch { /* observer failures never replace lifecycle outcomes */ } } };
   const emit = (state: MutableLayerState<TResource>, type: SceneLayerEvent['type'], reason?: string): void => { try { options.onEvent?.(Object.freeze({ type, layerId: state.descriptor.id, timestamp: now(), reason, generation: state.generation })); } catch (error) { observerError(error); } };
   const getState = (id: string): MutableLayerState<TResource> => { const state = layers.get(id); if (!state) throw new Error(`Unknown scene layer: ${id}`); return state; };
   const viewportRequests = (state: MutableLayerState<TResource>): boolean => viewportInitialized && state.visible && state.descriptor.visible !== false && inRange(state.descriptor, viewportScale, viewportZoom);
@@ -108,7 +108,7 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
   const executeLoad = async (state: MutableLayerState<TResource>): Promise<void> => {
     if (disposed || state.phase === 'disposed' || !state.requested) return;
     if (state.resource !== null) { await activate(state); return; }
-    activeLoads += 1; state.phase='loading'; state.generation += 1; const generation=state.generation; const controller=new AbortController(); state.controller?.abort('superseded'); state.controller=controller; emit(state,'load-start');
+    activeLoads += 1; state.phase='loading'; state.generation += 1; state.retries=0; const generation=state.generation; const controller=new AbortController(); state.controller?.abort('superseded'); state.controller=controller; emit(state,'load-start');
     try {
       while (!disposed && state.requested && state.generation === generation) {
         try {
@@ -141,7 +141,7 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
   }
 
   const register = (descriptor: SceneLayerDescriptor, adapter: SceneLayerAdapter<TResource>): SceneLayerSnapshot => { if (disposed) throw new Error('Scene layer runtime is disposed'); const id=descriptor.id.trim(); if (!id) throw new Error('Scene layer id is required'); if (layers.has(id)) throw new Error(`Scene layer already registered: ${id}`); const normalized=Object.freeze({...descriptor,id}); const state: MutableLayerState<TResource>={ descriptor:normalized, adapter, phase:'idle', priority:descriptor.priority??'normal', generation:0, requested:false, manualRequested:false, visible:descriptor.visible!==false, retries:0, lastError:null, loadedAt:null, lastUsedAt:null, resource:null, controller:null, inFlight:null, estimate:normalizeEstimate(descriptor.resourceEstimate) }; layers.set(id,state); emit(state,'registered'); return snapshotLayer(state); };
-  const unregister = async (layerId: string, reason='unregister'): Promise<boolean> => { const state=layers.get(layerId); if (!state) return false; state.generation+=1; state.controller?.abort(reason); await disposeResource(state,reason); state.phase='disposed'; emit(state,'disposed',reason); layers.delete(layerId); return true; };
+  const unregister = async (layerId: string, reason='unregister'): Promise<boolean> => { const state=layers.get(layerId); if (!state) return false; state.generation+=1; state.controller?.abort(reason); try { await disposeResource(state,reason); } finally { state.phase='disposed'; emit(state,'disposed',reason); layers.delete(layerId); } return true; };
   const request = async (layerId: string, reason='manual'): Promise<SceneLayerSnapshot> => { const state=getState(layerId); state.visible=true; state.manualRequested=true; state.requested=true; if (state.resource!==null) { if (state.phase!=='ready') await activate(state); } else if (state.phase!=='loading'&&state.phase!=='queued') { state.phase='queued'; emit(state,'requested',reason); } await scheduleReconcile(); if (state.inFlight) await state.inFlight; return snapshotLayer(state); };
   const suspend = async (layerId: string, reason='manual'): Promise<boolean> => { const state=layers.get(layerId); if (!state||state.phase==='disposed') return false; state.manualRequested=false; state.requested=viewportRequests(state); if (state.requested) return true; state.controller?.abort(reason); const resource=state.resource; state.phase=resource!==null?'suspended':'idle'; emit(state,'suspended',reason); if (resource!==null) await state.adapter.suspend?.(resource,reason); return true; };
   const resume = async (layerId: string, reason='manual'): Promise<SceneLayerSnapshot> => request(layerId,reason);
