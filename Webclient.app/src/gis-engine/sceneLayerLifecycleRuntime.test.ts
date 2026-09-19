@@ -268,6 +268,28 @@ describe('scene layer concurrency, retry, and failure isolation', () => {
     expect(snapshot.lastError).toEqual(expect.objectContaining({ message: 'service unavailable' }));
   });
 
+  it('restores the full retry budget for a later load generation', async () => {
+    const load = vi.fn()
+      .mockRejectedValueOnce(new Error('first generation failed'))
+      .mockRejectedValueOnce(new Error('first generation retry failed'))
+      .mockRejectedValueOnce(new Error('second generation transient'))
+      .mockResolvedValueOnce({ id: 'recoverable' });
+    const runtime = createSceneLayerLifecycleRuntime<Resource>({
+      retryLimit: 1,
+      sleep: async () => undefined,
+    });
+    runtime.register({ id: 'recoverable' }, adapter({ load }));
+
+    const first = await runtime.request('recoverable');
+    expect(first.phase).toBe('failed');
+    expect(load).toHaveBeenCalledTimes(2);
+
+    const second = await runtime.request('recoverable');
+    expect(second.phase).toBe('ready');
+    expect(second.retries).toBe(0);
+    expect(load).toHaveBeenCalledTimes(4);
+  });
+
   it('disposes a resource when activation fails instead of leaking it into a retry', async () => {
     const dispose = vi.fn(async () => undefined);
     const load = vi.fn(async () => ({ id: 'activation-failure' }));
@@ -324,6 +346,26 @@ describe('scene layer concurrency, retry, and failure isolation', () => {
       expect(reportError).toHaveBeenCalledWith(expect.objectContaining({
         message: 'secondary observer failed',
       }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps lifecycle outcomes intact when no host error channel exists', async () => {
+    vi.stubGlobal('reportError', undefined);
+    try {
+      const runtime = createSceneLayerLifecycleRuntime<Resource>({
+        onEvent: () => {
+          throw new Error('observer failed');
+        },
+        onObserverError: () => {
+          throw new Error('secondary observer failed');
+        },
+      });
+      runtime.register({ id: 'safe-without-report-error' }, adapter());
+
+      await expect(runtime.request('safe-without-report-error'))
+        .resolves.toMatchObject({ phase: 'ready' });
     } finally {
       vi.unstubAllGlobals();
     }
