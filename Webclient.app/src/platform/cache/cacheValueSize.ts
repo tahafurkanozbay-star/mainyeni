@@ -45,6 +45,19 @@ export const estimateCacheValueBytes = (
       if (current instanceof ArrayBuffer) return Math.max(1, current.byteLength);
       if (ArrayBuffer.isView(current)) return Math.max(1, current.byteLength);
       if (current instanceof Date) return 16;
+      if (current instanceof Map) {
+        let bytes = 32;
+        for (const [key, item] of current) {
+          bytes += measure(key, depth + 1);
+          bytes += measure(item, depth + 1);
+        }
+        return bytes;
+      }
+      if (current instanceof Set) {
+        let bytes = 24;
+        for (const item of current) bytes += measure(item, depth + 1);
+        return bytes;
+      }
       if (Array.isArray(current)) {
         return 16 + current.reduce((sum, item) => sum + measure(item, depth + 1), 0);
       }
