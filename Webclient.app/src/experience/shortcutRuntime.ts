@@ -148,11 +148,11 @@ const reportShortcutObserverError = (
     return;
   }
 
-  void Promise.resolve()
-    .then(() => reporter(error, shortcut, event))
-    .catch((reportingError: unknown) => {
-      globalThis.reportError?.(reportingError);
-    });
+  try {
+    reporter(error, shortcut, event);
+  } catch (reportingError) {
+    globalThis.reportError?.(reportingError);
+  }
 };
 
 class KeyboardShortcutRuntime implements ShortcutRuntime {
