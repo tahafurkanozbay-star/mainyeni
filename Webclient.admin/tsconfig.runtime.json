@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false
+  },
+  "include": [
+    "src/platform/**/*.ts",
+    "src/Core/Constants.ts",
+    "src/Core/Global.ts",
+    "src/Business/AuthBusiness.ts",
+    "src/Core/Toolbox/AjaxHelper.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}
