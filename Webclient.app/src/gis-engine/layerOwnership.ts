@@ -86,7 +86,7 @@ const safeRemove = <TLayer>(map: LayerMapLike<TLayer> | null, layer: TLayer): bo
     if (!layerExistsOnMap(map, layer)) return false;
     map.remove(layer);
     return true;
-  } catch (_) { return false; }
+  } catch { return false; }
 };
 
 const safeAdd = <TLayer>(map: LayerMapLike<TLayer> | null, layer: TLayer, index?: number): boolean => {
@@ -95,7 +95,7 @@ const safeAdd = <TLayer>(map: LayerMapLike<TLayer> | null, layer: TLayer, index?
     if (Number.isInteger(index) && Number(index) >= 0) map.add(layer, index);
     else map.add(layer);
     return true;
-  } catch (_) { return false; }
+  } catch { return false; }
 };
 
 export const registerOwnedLayer = <TLayer>(mapOrView: MapOrView<TLayer>, ownerId: unknown, layer: TLayer): TLayer | null => {
@@ -244,7 +244,7 @@ const disposeOne = (disposable: Disposable): void => {
       disposable.destroy?.();
       disposable.abort?.();
     }
-  } catch (_) { /* cleanup is deliberately idempotent */ }
+  } catch { /* cleanup is deliberately idempotent */ }
 };
 
 export interface DisposableBag {
