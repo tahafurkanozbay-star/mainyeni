@@ -118,8 +118,8 @@ interface MutableStats {
 
 const SYSTEM_CLOCK: TaskScopeClock = Object.freeze({
   now: () => Date.now(),
-  setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
-  clearTimeout: (handle) => globalThis.clearTimeout(handle),
+  setTimeout: (callback: () => void, delayMs: number) => globalThis.setTimeout(callback, delayMs),
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(handle),
 });
 
 const integer = (name: string, value: number, minimum: number, maximum: number): number => {
@@ -387,7 +387,7 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
 
     this.#checkSettled();
     await this.waitForIdle(request.signal);
-    if (this.#state !== 'disposed') {
+    if (!this.#isDisposed()) {
       this.#state = 'closed';
       this.#notifySettled();
     }
@@ -475,6 +475,10 @@ class BoundedStructuredTaskScope implements StructuredTaskScope {
     if (this.#settledNotified) return;
     this.#settledNotified = true;
     this.#onSettled?.();
+  }
+
+  #isDisposed(): boolean {
+    return this.#state === 'disposed';
   }
 
   #settleIdleWaiters(): void {
