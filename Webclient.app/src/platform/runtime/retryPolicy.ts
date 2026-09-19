@@ -164,7 +164,14 @@ export class BoundedRetryPolicy {
         return { ok: false, error: new Error('Retry elapsed-time budget exhausted'), attempts: attempt - 1, elapsedMs, reason: 'elapsed-budget' };
       }
       try {
-        const value = await operation({ attempt, startedAt, elapsedMs, remainingMs: this.maxElapsedMs - elapsedMs, signal });
+        const context: RetryAttemptContext = {
+          attempt,
+          startedAt,
+          elapsedMs,
+          remainingMs: this.maxElapsedMs - elapsedMs,
+          ...(signal ? { signal } : {}),
+        };
+        const value = await operation(context);
         return { ok: true, value, attempts: attempt, elapsedMs: Math.max(0, this.#clock() - startedAt) };
       } catch (error) {
         const decision = this.decide(error, attempt, startedAt, signal);
