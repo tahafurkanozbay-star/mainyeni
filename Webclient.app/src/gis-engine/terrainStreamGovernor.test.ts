@@ -31,6 +31,13 @@ describe('terrainBudgetForQuality', () => {
     expect(balanced.maxLevel).toBeLessThan(quality.maxLevel);
     expect(Object.isFrozen(eco)).toBe(true);
   });
+
+  it('fails closed for an invalid runtime quality value', () => {
+    expect(() => terrainBudgetForQuality('ultra' as TerrainQuality))
+      .toThrow('terrain quality must be eco, balanced, or quality');
+    expect(() => new TerrainStreamGovernor({ quality: 'ultra' as TerrainQuality }))
+      .toThrow(TypeError);
+  });
 });
 
 describe('TerrainStreamGovernor pressure accounting', () => {
@@ -281,6 +288,30 @@ describe('TerrainStreamGovernor request planning', () => {
       action: 'evict',
       reason: 'tile-memory-budget',
     });
+  });
+
+  it('bounds recency scoring when last-used timestamps are in the future', () => {
+    const governor = new TerrainStreamGovernor({ now: () => 1_000 });
+    const snapshot = governor.plan([
+      tile('future', { lastUsedAt: 50_000 }),
+      tile('current', { lastUsedAt: 1_000 }),
+    ]);
+
+    const future = snapshot.decisions.find((decision) => decision.tileId === 'future');
+    const current = snapshot.decisions.find((decision) => decision.tileId === 'current');
+    expect(future?.score).toBe(current?.score);
+  });
+
+  it('treats epoch last-used time as valid recency input instead of missing metadata', () => {
+    const governor = new TerrainStreamGovernor({ now: () => 10_000 });
+    const snapshot = governor.plan([
+      tile('epoch', { lastUsedAt: 0 }),
+      tile('missing'),
+    ]);
+
+    const epoch = snapshot.decisions.find((decision) => decision.tileId === 'epoch');
+    const missing = snapshot.decisions.find((decision) => decision.tileId === 'missing');
+    expect(epoch?.score).toBeGreaterThan(missing?.score ?? Number.NEGATIVE_INFINITY);
   });
 
   it('sorts equal-score tiles by stable normalized id', () => {
