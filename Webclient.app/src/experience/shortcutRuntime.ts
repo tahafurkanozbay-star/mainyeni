@@ -137,6 +137,24 @@ const sortShortcuts = (
     return priorityDelta || left.id.localeCompare(right.id);
   });
 
+const reportShortcutObserverError = (
+  reporter: ShortcutRuntimeOptions['onHandlerError'],
+  error: unknown,
+  shortcut: Readonly<ShortcutDefinition>,
+  event: KeyboardEvent,
+): void => {
+  if (!reporter) {
+    globalThis.reportError?.(error);
+    return;
+  }
+
+  void Promise.resolve()
+    .then(() => reporter(error, shortcut, event))
+    .catch((reportingError: unknown) => {
+      globalThis.reportError?.(reportingError);
+    });
+};
+
 class KeyboardShortcutRuntime implements ShortcutRuntime {
   readonly #document: Document;
   readonly #onHandlerError: ShortcutRuntimeOptions['onHandlerError'];
@@ -158,11 +176,7 @@ class KeyboardShortcutRuntime implements ShortcutRuntime {
     shortcut: Readonly<ShortcutDefinition>,
     event: KeyboardEvent,
   ): void {
-    try {
-      this.#onHandlerError?.(error, shortcut, event);
-    } catch (observerError) {
-      globalThis.reportError?.(observerError);
-    }
+    reportShortcutObserverError(this.#onHandlerError, error, shortcut, event);
   }
 
   #onKeyDown = (event: KeyboardEvent): void => {
