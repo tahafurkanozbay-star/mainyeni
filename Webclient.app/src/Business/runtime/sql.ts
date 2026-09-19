@@ -115,8 +115,9 @@ export const compilePredicatePlan = (
 export const compileRequiredPredicatePlan = (
   predicates: readonly (string | null | undefined | false)[],
   policy: BusinessRuntimePolicy = DEFAULT_BUSINESS_RUNTIME_POLICY,
+  fallback = '1=1',
 ): SqlPredicatePlan => {
-  const plan = compilePredicatePlan(predicates, policy);
+  const plan = compilePredicatePlan(predicates, policy, fallback);
   if (plan.truncated) {
     throw new BusinessQueryPlanError(
       'BUSINESS_WHERE_LIMIT_EXCEEDED',
