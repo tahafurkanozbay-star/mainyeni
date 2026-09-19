@@ -90,7 +90,10 @@ export const createQueryPlanner = (
     if (input.spatial) {
       spatial = true;
       options.geometry = input.spatial.geometry;
-      options.distance = normalizeNearbyDistance(input.spatial.distance, policy) * 100;
+      const explicitMeters = Number(input.spatial.distanceMeters);
+      options.distance = Number.isFinite(explicitMeters) && explicitMeters >= 0
+        ? explicitMeters
+        : normalizeNearbyDistance(input.spatial.distance, policy) * 100;
       options.units = input.spatial.units ?? 'meters';
       options.spatialRelationship =
         input.spatial.spatialRelationship ?? 'intersects';
