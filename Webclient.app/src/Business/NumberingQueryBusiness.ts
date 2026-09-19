@@ -327,7 +327,7 @@ export const NumberingQueryBusiness = Object.freeze({
   ): Promise<unknown> =>
     executeQuery(SERVICE_TITLES.building, {
       geometry: mapPoint,
-      distance: 1,
+      distanceMeters: 1,
       units: 'meters',
       spatialRelationship: 'intersects',
       returnGeometry: true,
