@@ -411,3 +411,11 @@
 - FINAL CI PROFILE: Webclient Quality `timeout-minutes: 90`, exact-head concurrency key ve `cancel-in-progress: false`; Vitest `pool: 'forks'`, `maxWorkers: 2`, isolate=true. Release QA duplicate full/exact-base Vitest çalıştırmıyor; full/exact-base Vitest otoritesi Webclient Quality.
 - GATE ZAYIFLATILMADI: hiçbir test/assertion/exact-base/build-budget kaldırılmadı. Bu commit yeni exact head oluşturur; Platform Architecture Audit, Webclient Quality ve Release QA completed+success olmadan merge yok.
 - BRANCH LIFECYCLE: current main hâlâ `cdfdb9d9baa6e251a6e0bcdad0a1a20baab0c62d`; PR #180 current-main based olduğu için aynı PR üzerinde düzeltildi, gereksiz supersede yapılmadı.
+
+
+## Deep GIS / Actions saturation remediation — 2026-09-19
+- PR: #180 canonical current-main GIS merge candidate; pre-fix head `4696a2b800ef5f9ed06c628b85b40797a94082e8`.
+- BULGU: repository Actions listesinde aynı anda 10 in-progress run görüldü; çoğu superseded GIS head'leri için hem `push agent/**` hem `pull_request` Webclient Quality tekrarlarıydı. Exact-head #180 PR run'ı job tahsis edilmeden pending kaldı.
+- DÜZELTME: Webclient Quality artık PR'larda ve yalnız `main` push'larında çalışır; `agent/**` push duplicate tetikleyicisi kaldırıldı. Concurrency group PR number (non-PR için ref) bazlı ve `cancel-in-progress: true`; aynı PR'da yeni head yalnız superseded eski head run'ını iptal eder.
+- KORUNAN GATE: Webclient Quality timeout 90 dakika, Vitest `forks/maxWorkers=2`, full/exact-base Vitest ve production build/integrity/budget adımları aynen zorunlu. Release QA duplicate full Vitest çalıştırmaz.
+- MERGE: bu orchestration düzeltmesi yeni exact head oluşturur; Platform Architecture Audit + Webclient Quality + Release QA completed+success ve final main/mergeability/security/performance/data-integrity refresh olmadan merge yok.

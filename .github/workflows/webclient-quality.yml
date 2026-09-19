@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - 'agent/**'
     paths:
       - 'Webclient.app/**'
       - '.github/workflows/webclient-quality.yml'
@@ -17,8 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: webclient-quality-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  group: webclient-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
