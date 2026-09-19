@@ -1,3 +1,4 @@
+import type { RawRequestConfig } from '../../platform/http/contracts';
 import type { ArcGisQueryOptions, QueryExecutionControl, ServiceDescriptor } from '../contracts';
 
 export type BusinessPrimitive = string | number | boolean | null;
@@ -210,7 +211,7 @@ export interface NormalizedApiRequestControl {
 export interface ApiClientLike {
   readonly get: <TResult = unknown>(
     url: string,
-    options?: Record<string, unknown>,
+    options?: RawRequestConfig,
   ) => Promise<TResult>;
 }
 
