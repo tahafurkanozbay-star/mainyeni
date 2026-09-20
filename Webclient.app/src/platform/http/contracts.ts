@@ -345,6 +345,13 @@ export interface CoordinatedClient {
   invalidateCacheTags(tags: readonly string[]): number;
   invalidateCacheNamespace(namespace: string): number;
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>>;
+  getRequestScopeSnapshot(): Readonly<Record<string, unknown>>;
+  drain(options?: {
+    readonly cancelActive?: boolean;
+    readonly reason?: unknown;
+    readonly signal?: AbortSignal;
+  }): Promise<void>;
+  dispose(reason?: unknown): void;
   getDiagnostics(options?: DiagnosticsSnapshotOptions): readonly unknown[];
   getDiagnosticSummary(): Readonly<Record<string, unknown>>;
   clearDiagnostics(): void;
