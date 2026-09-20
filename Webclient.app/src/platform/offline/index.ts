@@ -3,3 +3,4 @@ export * from './offlineMutationQueue';
 export * from './offlineSnapshot';
 export * from './offlinePersistence';
 export * from './serviceWorkerPolicy';
+export * from './browserSnapshotStore';
