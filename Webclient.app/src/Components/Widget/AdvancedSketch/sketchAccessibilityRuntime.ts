@@ -33,13 +33,20 @@ export const sketchToolFromShortcut = (
   return SKETCH_TOOL_DESCRIPTORS.find((descriptor) => descriptor.shortcut === key)?.tool ?? null;
 };
 
+const isEditableTarget = (target: HTMLElement): boolean => {
+  if (target.isContentEditable) return true;
+  const ownContentEditable = target.getAttribute('contenteditable');
+  if (ownContentEditable !== null && ownContentEditable.toLowerCase() !== 'false') return true;
+  return target.closest('[contenteditable]:not([contenteditable="false"])') !== null;
+};
+
 export const shouldHandleSketchShortcut = (
   event: Pick<KeyboardEvent, 'target' | 'isComposing' | 'defaultPrevented'>,
 ): boolean => {
   if (event.defaultPrevented || event.isComposing) return false;
   const target = event.target;
   if (!(target instanceof HTMLElement)) return true;
-  if (target.isContentEditable || target.closest('[contenteditable="true"]')) return false;
+  if (isEditableTarget(target)) return false;
   const tag = target.tagName.toLowerCase();
   return tag !== 'input' && tag !== 'textarea' && tag !== 'select';
 };
