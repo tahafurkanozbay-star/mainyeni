@@ -1,3 +1,5 @@
+import type { CacheDataClassification } from '../cache/cachePolicy';
+
 export const REQUEST_PRIORITIES = [
   'critical',
   'high',
@@ -66,9 +68,16 @@ export interface RawRequestConfig<TBody = RequestBody> {
   dedupe?: boolean;
   retryUnsafe?: boolean;
   cacheTtlMs?: number;
+  cacheStaleWhileRevalidateMs?: number;
+  cacheClassification?: CacheDataClassification;
+  cacheNamespace?: string;
+  cacheTags?: readonly string[];
+  cacheVary?: Readonly<Record<string, string | number | boolean | null | undefined>>;
   signal?: AbortSignal | null;
   responseType?: ResponseType | string;
   includeResponseHeaders?: boolean;
+  maxResponseBytes?: number;
+  maxRequestBodyBytes?: number;
   credentials?: RequestCredentials;
   fetchCache?: RequestCache;
   redirect?: RequestRedirect;
@@ -94,6 +103,13 @@ export interface NormalizedRequestConfig<TBody = RequestBody>
   idempotentMethod: boolean;
   containsSensitiveMetadata: boolean;
   cacheTtlMs: number;
+  cacheStaleWhileRevalidateMs: number;
+  cacheClassification: CacheDataClassification;
+  cacheNamespace: string;
+  cacheTags: readonly string[];
+  cacheVary: Readonly<Record<string, string | number | boolean | null | undefined>>;
+  maxResponseBytes: number;
+  maxRequestBodyBytes: number;
 }
 
 export interface ResponseMetadata {
@@ -330,6 +346,16 @@ export interface CoordinatedClient {
   invalidateCache(prefix?: string): number;
   getCacheSize(): number;
   getInFlightSize(): number;
+  invalidateCacheTags(tags: readonly string[]): number;
+  invalidateCacheNamespace(namespace: string): number;
+  getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>>;
+  getRequestScopeSnapshot(): Readonly<Record<string, unknown>>;
+  drain(options?: {
+    readonly cancelActive?: boolean;
+    readonly reason?: unknown;
+    readonly signal?: AbortSignal;
+  }): Promise<void>;
+  dispose(reason?: unknown): void;
   getDiagnostics(options?: DiagnosticsSnapshotOptions): readonly unknown[];
   getDiagnosticSummary(): Readonly<Record<string, unknown>>;
   clearDiagnostics(): void;

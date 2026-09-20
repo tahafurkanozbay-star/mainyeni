@@ -104,14 +104,15 @@ test('legacy Platform production JS is blocking unless explicitly allowlisted', 
   });
 });
 
-test('bootstrapApplication compatibility boundary remains visible but non-blocking', async () => {
+test('typed bootstrapApplication composition is production-language compliant', async () => {
   await withFixture({
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js': 'export const bootstrapApplication = () => null;',
+    'Webclient.app/src/platform/bootstrap/bootstrapApplication.ts': 'export const bootstrapApplication = (): null => null;',
   }, async (root) => {
     const report = await buildPlatformModuleGraph(root);
-    const item = report.findings.find((finding) =>
-      finding.code === 'legacy-platform-javascript-allowlisted');
-    assert.equal(item?.severity, 'warning');
+    assert.equal(report.summary.errors, 0);
+    assert.ok(!report.findings.some((finding) =>
+      finding.code === 'legacy-platform-javascript'
+      || finding.code === 'legacy-platform-javascript-allowlisted'));
     assert.equal(report.summary.passed, true);
   });
 });
@@ -337,16 +338,14 @@ test('markdown contains gate, language metrics, findings and boundary sections',
     assert.match(markdown, /Platform TypeScript \/ JavaScript files/);
     assert.match(markdown, /Duplicate typed \/ JavaScript stems/);
     assert.match(markdown, /Domain boundaries/);
-    assert.match(markdown, /bootstrapApplication\.js/);
+    assert.match(markdown, /strict TypeScript\/native-ESM runtime/);
   });
 });
 
-test('report policy exposes the bounded compatibility allowlist', async () => {
+test('report policy exposes an empty production JavaScript allowlist', async () => {
   await withFixture({}, async (root) => {
     const report = await buildPlatformModuleGraph(root);
-    assert.deepEqual(report.policy.platformLegacyJavascriptAllowlist, [
-      'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-    ]);
+    assert.deepEqual(report.policy.platformLegacyJavascriptAllowlist, []);
   });
 });
 

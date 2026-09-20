@@ -169,7 +169,7 @@ test('ordinary Platform module may import stable Core foundation', async () => {
 
 test('bootstrapApplication adapter may compose Business and Store', async () => {
   await withFixture({
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js': [
+    'Webclient.app/src/platform/bootstrap/bootstrapApplication.ts': [
       "import { business } from '../../Business/business';",
       "import { store } from '../../Store/store';",
       'export { business, store };',
@@ -188,7 +188,7 @@ test('bootstrapApplication adapter may compose Business and Store', async () => 
 
 test('composition adapter does not get unlimited domain access', async () => {
   await withFixture({
-    'Webclient.app/src/platform/bootstrap/bootstrapApplication.js': "import { component } from '../../Components/a'; export { component };",
+    'Webclient.app/src/platform/bootstrap/bootstrapApplication.ts': "import { component } from '../../Components/a'; export { component };",
     'Webclient.app/src/Components/a.ts': 'export const component = 1;',
   }, async (root) => {
     const report = await auditPlatformBoundaries(root);
