@@ -1,7 +1,6 @@
 import type {
   BusinessDiagnosticEvent,
   BusinessDiagnosticHandle,
-  BusinessDiagnosticRecordInput,
   BusinessDiagnostics,
   BusinessDiagnosticSnapshot,
   BusinessDiagnosticStatus,
