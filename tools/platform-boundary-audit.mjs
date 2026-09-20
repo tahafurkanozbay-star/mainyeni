@@ -8,7 +8,7 @@ import {
 
 const DEFAULT_ROOT = path.resolve(process.cwd());
 const PLATFORM_PREFIX = 'Webclient.app/src/platform/';
-const ADAPTER_PATH = 'Webclient.app/src/platform/bootstrap/bootstrapApplication.js';
+const ADAPTER_PATH = 'Webclient.app/src/platform/bootstrap/bootstrapApplication.ts';
 
 const TIER = Object.freeze({
   errors: 0,

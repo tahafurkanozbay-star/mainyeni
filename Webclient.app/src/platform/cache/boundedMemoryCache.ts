@@ -198,6 +198,44 @@ export class BoundedMemoryCache {
     return removed;
   }
 
+  /**
+   * Remove entries whose canonical key begins with a caller-owned prefix.
+   * The scan is bounded by maxEntries and uses the existing LRU index rather
+   * than maintaining a second unbounded reverse index for arbitrary prefixes.
+   */
+  invalidatePrefix(rawPrefix: string): number {
+    this.#assertOpen();
+    const prefix = rawPrefix.trim();
+    if (!prefix) return this.clear();
+    if (prefix.length > this.#limits.maxKeyLength) {
+      throw new RangeError('cache invalidation prefix exceeds maximum key length');
+    }
+
+    let removed = 0;
+    for (const key of this.#lru.keysOldestFirst()) {
+      if (key.startsWith(prefix) && this.#remove(key, 'prefix-invalidation')) {
+        removed += 1;
+      }
+    }
+    if (removed > 0) this.#journal.record('invalidate');
+    return removed;
+  }
+
+  /**
+   * Reuse the cache after a bounded global invalidation. This intentionally
+   * differs from dispose(), which permanently closes the store.
+   */
+  clear(): number {
+    this.#assertOpen();
+    const keys = [...this.#lru.keysOldestFirst()];
+    let removed = 0;
+    for (const key of keys) {
+      if (this.#remove(key, 'clear')) removed += 1;
+    }
+    if (removed > 0) this.#journal.record('invalidate');
+    return removed;
+  }
+
   pruneExpired(limit = this.#limits.maxEntries): number {
     this.#assertOpen();
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > this.#limits.maxEntries) {

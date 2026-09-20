@@ -1,6 +1,5 @@
-import { RequestCache } from '../cache/requestCache';
 import { createNetworkDiagnostics, recordNetworkEvent } from './networkDiagnostics';
-import { createRequestKey, normalizeRequestConfig } from './requestPolicy';
+import { normalizeRequestConfig } from './requestPolicy';
 import { executeWithRetry } from './retryPolicy';
 import {
   getErrorCode,
@@ -8,7 +7,7 @@ import {
   getErrorStatus,
   isAbortSignalLike,
   normalizeRequestPriority,
-  toBoundedInteger
+  toBoundedInteger,
 } from './contracts';
 import type {
   CoordinatedClient,
@@ -22,31 +21,45 @@ import type {
   SchedulerLike,
   SchedulerSnapshot,
   Transport,
-  TransportResult
+  TransportResult,
 } from './contracts';
 import {
   createRequestScheduler,
-  getSchedulerGroupFromPath
+  getSchedulerGroupFromPath,
 } from './requestScheduler';
 import { createRuntimeTuningProfile } from './runtimeCapabilities';
+import {
+  createHttpCacheRuntime,
+  type HttpCacheRuntime,
+  type HttpCacheRuntimeOptions,
+} from './httpCacheRuntime';
+import {
+  createRequestLifetimeScope,
+  type RequestLifetimeCloseOptions,
+  type RequestLifetimeScope,
+  type RequestLifetimeScopeOptions,
+} from '../network/requestLifetimeScope';
 
 const DEFAULT_MAX_CACHE_ENTRIES = 150;
 const DEFAULT_QUEUE_TIMEOUT_MS = 5000;
 
 interface CoordinatorOptions {
-  transport: Transport;
-  timeoutMs?: number;
-  maxRetries?: number;
-  cacheTtlMs?: number;
-  maxCacheEntries?: number;
-  cache?: InstanceType<typeof RequestCache>;
-  diagnostics?: NetworkDiagnosticsLike;
-  clock?: () => number;
-  wait?: (milliseconds: number, signal?: AbortSignal | null) => Promise<void>;
-  retryOptions?: Record<string, unknown>;
-  scheduler?: SchedulerLike;
-  tuningProfile?: RuntimeTuningProfile;
-  schedulerOptions?: Record<string, unknown>;
+  readonly transport: Transport;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
+  readonly cacheTtlMs?: number;
+  readonly maxCacheEntries?: number;
+  readonly cacheRuntime?: HttpCacheRuntime;
+  readonly cacheRuntimeOptions?: Omit<HttpCacheRuntimeOptions, 'onEvent'>;
+  readonly requestScope?: RequestLifetimeScope;
+  readonly requestScopeOptions?: RequestLifetimeScopeOptions;
+  readonly diagnostics?: NetworkDiagnosticsLike;
+  readonly clock?: () => number;
+  readonly wait?: (milliseconds: number, signal?: AbortSignal | null) => Promise<void>;
+  readonly retryOptions?: Record<string, unknown>;
+  readonly scheduler?: SchedulerLike;
+  readonly tuningProfile?: RuntimeTuningProfile;
+  readonly schedulerOptions?: Record<string, unknown>;
 }
 
 interface CoordinatorDefaults {
@@ -63,14 +76,6 @@ const now = (clock: () => number): number => {
   const value = Number(clock());
   return Number.isFinite(value) ? value : Date.now();
 };
-
-const cloneCachedResult = <T>(entry: TransportResult<T>): TransportResult<T> => Object.freeze({
-  ...entry,
-  metadata: entry?.metadata
-    ? Object.freeze({ ...entry.metadata, cache: 'hit' })
-    : Object.freeze({ cache: 'hit' }),
-  fromCache: true
-});
 
 const getDefaultPriority = (config: NormalizedRequestConfig): RequestPriority => {
   const explicit = config.priority;
@@ -96,15 +101,34 @@ const createSchedulerEventBridge = (diagnostics: NetworkDiagnosticsLike) =>
 const getRuntimeSignal = (config: NormalizedRequestConfig): AbortSignal | undefined =>
   isAbortSignalLike(config.signal) ? config.signal : undefined;
 
+const requestScopeOwner = (config: NormalizedRequestConfig): string =>
+  config.schedulerGroup
+    ? String(config.schedulerGroup).slice(0, 160)
+    : getSchedulerGroupFromPath(config.url).slice(0, 160);
+
+const requestScopeKey = (config: NormalizedRequestConfig): string =>
+  `${config.method}:${getSchedulerGroupFromPath(config.url)}`.slice(0, 160);
+
+const withOperationSignal = (
+  config: NormalizedRequestConfig,
+  signal?: AbortSignal,
+): NormalizedRequestConfig => {
+  const { signal: _configuredSignal, ...withoutSignal } = config;
+  return Object.freeze({
+    ...withoutSignal,
+    ...(signal ? { signal } : {}),
+  }) as NormalizedRequestConfig;
+};
+
 export class RequestCoordinator {
   readonly transport: Transport;
   readonly defaults: CoordinatorDefaults;
-  readonly cache: InstanceType<typeof RequestCache>;
   readonly diagnostics: NetworkDiagnosticsLike;
   readonly scheduler: SchedulerLike;
   readonly tuningProfile: RuntimeTuningProfile;
+  readonly cacheRuntime: HttpCacheRuntime;
+  readonly requestScope: RequestLifetimeScope;
 
-  private readonly inFlight = new Map<string, Promise<TransportResult<unknown>>>();
   private readonly clock: () => number;
   private readonly wait: ((milliseconds: number, signal?: AbortSignal | null) => Promise<void>) | undefined;
   private readonly retryOptions: Record<string, unknown>;
@@ -118,11 +142,7 @@ export class RequestCoordinator {
     this.defaults = Object.freeze({
       timeoutMs: options.timeoutMs ?? options.transport.defaults?.timeoutMs ?? 15000,
       maxRetries: options.maxRetries ?? options.transport.defaults?.maxRetries ?? 0,
-      cacheTtlMs: options.cacheTtlMs ?? options.transport.defaults?.cacheTtlMs ?? 0
-    });
-    this.cache = options.cache || new RequestCache({
-      ttlMs: this.defaults.cacheTtlMs,
-      maxEntries: options.maxCacheEntries || DEFAULT_MAX_CACHE_ENTRIES
+      cacheTtlMs: options.cacheTtlMs ?? options.transport.defaults?.cacheTtlMs ?? 0,
     });
     this.diagnostics = options.diagnostics || createNetworkDiagnostics();
     this.clock = options.clock || (() => Date.now());
@@ -131,53 +151,58 @@ export class RequestCoordinator {
     this.tuningProfile = options.tuningProfile || createRuntimeTuningProfile();
     this.scheduler = options.scheduler || createRequestScheduler({
       ...this.tuningProfile.scheduler,
-      ...(options.schedulerOptions || {}),
+      ...options.schedulerOptions,
       clock: this.clock,
-      onEvent: createSchedulerEventBridge(this.diagnostics)
+      onEvent: createSchedulerEventBridge(this.diagnostics),
+    });
+
+    const maxCacheEntries = toBoundedInteger(
+      options.maxCacheEntries,
+      DEFAULT_MAX_CACHE_ENTRIES,
+      1,
+      10000,
+    );
+    this.cacheRuntime = options.cacheRuntime ?? createHttpCacheRuntime({
+      ...options.cacheRuntimeOptions,
+      ...(options.cacheRuntimeOptions?.coordinator
+        ? {}
+        : options.cacheRuntimeOptions?.coordinatorOptions
+          ? {}
+          : {
+              coordinatorOptions: {
+                storeOptions: {
+                  maxEntries: maxCacheEntries,
+                  maxEntriesPerNamespace: Math.min(192, maxCacheEntries),
+                  clock: Object.freeze({ now: this.clock }),
+                },
+              },
+            }),
+      onEvent: createSchedulerEventBridge(this.diagnostics),
+    });
+
+    const scopeMaxActive = Math.max(
+      1,
+      Math.min(10_000, this.tuningProfile.scheduler.maxQueued + this.tuningProfile.scheduler.maxConcurrent),
+    );
+    this.requestScope = options.requestScope ?? createRequestLifetimeScope({
+      maxActiveTasks: scopeMaxActive,
+      maxOwnerTasks: Math.max(
+        1,
+        Math.min(scopeMaxActive, this.tuningProfile.scheduler.maxConcurrentPerGroup * 4),
+      ),
+      historyLimit: 256,
+      clock: this.clock,
+      ...options.requestScopeOptions,
     });
   }
 
   normalize(config: RawRequestConfig = {}): NormalizedRequestConfig {
-    return normalizeRequestConfig(config, this.defaults) as NormalizedRequestConfig;
-  }
-
-  getKey(config: NormalizedRequestConfig): string {
-    return createRequestKey(config);
-  }
-
-  readCache<T>(config: NormalizedRequestConfig, key: string): TransportResult<T> | undefined {
-    if (!config.cache) return undefined;
-
-    const cached = this.cache.get(key) as TransportResult<T> | undefined;
-    if (cached === undefined) {
-      recordNetworkEvent(this.diagnostics, 'network.cache.miss', {
-        method: config.method,
-        url: config.url
-      });
-      return undefined;
-    }
-
-    recordNetworkEvent(this.diagnostics, 'network.cache.hit', {
-      method: config.method,
-      url: config.url
-    });
-    return cloneCachedResult(cached);
-  }
-
-  writeCache<T>(config: NormalizedRequestConfig, key: string, result: TransportResult<T>): void {
-    if (!config.cache || !result || result.status < 200 || result.status >= 300) return;
-    this.cache.set(key, result, config.cacheTtlMs);
-    recordNetworkEvent(this.diagnostics, 'network.cache.write', {
-      method: config.method,
-      url: config.url,
-      status: result.status,
-      cacheTtlMs: config.cacheTtlMs
-    });
+    return normalizeRequestConfig(config, this.defaults);
   }
 
   private scheduleTransportAttempt<T>(
     config: NormalizedRequestConfig,
-    attempt: number
+    attempt: number,
   ): Promise<TransportResult<T>> {
     const priority = getDefaultPriority(config);
     const safePathGroup = getSchedulerGroupFromPath(config.url);
@@ -190,7 +215,7 @@ export class RequestCoordinator {
     const transportConfig: TransportAttemptConfig = {
       ...configWithoutSignal,
       ...(signal ? { signal } : {}),
-      attempt
+      attempt,
     };
 
     return this.scheduler.schedule(
@@ -201,15 +226,12 @@ export class RequestCoordinator {
         label: `${config.method}:${safePathGroup}:attempt-${attempt}`,
         ...(signal ? { signal } : {}),
         queueTimeoutMs,
-        bypass: config.schedulerBypass === true
-      }
+        bypass: config.schedulerBypass === true,
+      },
     );
   }
 
-  async execute<T>(
-    config: NormalizedRequestConfig,
-    key: string
-  ): Promise<TransportResult<T>> {
+  async execute<T>(config: NormalizedRequestConfig): Promise<TransportResult<T>> {
     const startedAt = now(this.clock);
     const signal = getRuntimeSignal(config);
     recordNetworkEvent(this.diagnostics, 'network.request.started', {
@@ -220,7 +242,7 @@ export class RequestCoordinator {
       cache: config.cache,
       dedupe: config.dedupe,
       priority: getDefaultPriority(config),
-      schedulerGroup: config.schedulerGroup || getSchedulerGroupFromPath(config.url)
+      schedulerGroup: config.schedulerGroup || getSchedulerGroupFromPath(config.url),
     });
 
     try {
@@ -236,7 +258,7 @@ export class RequestCoordinator {
             recordNetworkEvent(this.diagnostics, 'network.request.attempt', {
               method: config.method,
               url: config.url,
-              attempt
+              attempt,
             });
           },
           onRetry: ({ error, attempt, nextAttempt, delayMs }: {
@@ -252,25 +274,24 @@ export class RequestCoordinator {
               code: getErrorCode(error),
               attempt,
               nextAttempt,
-              delayMs
+              delayMs,
             });
-          }
-        }
+          },
+        },
       ) as TransportResult<T>;
 
       const durationMs = Math.max(0, now(this.clock) - startedAt);
       const completed: TransportResult<T> = Object.freeze({
         ...result,
         durationMs: result?.durationMs ?? durationMs,
-        fromCache: false
+        fromCache: false,
       });
 
-      this.writeCache(config, key, completed);
       recordNetworkEvent(this.diagnostics, 'network.request.completed', {
         method: config.method,
         url: config.url,
         status: completed.status,
-        durationMs
+        durationMs,
       });
       return completed;
     } catch (error) {
@@ -281,7 +302,7 @@ export class RequestCoordinator {
         status: getErrorStatus(error),
         code: getErrorCode(error),
         retryable: getErrorRetryable(error),
-        durationMs
+        durationMs,
       });
       throw error;
     }
@@ -289,71 +310,68 @@ export class RequestCoordinator {
 
   request<T = unknown>(rawConfig: RawRequestConfig = {}): Promise<TransportResult<T>> {
     let config: NormalizedRequestConfig;
-    let key: string;
-    let cached: TransportResult<T> | undefined;
-
     try {
       config = this.normalize(rawConfig);
-      key = this.getKey(config);
-      cached = this.readCache<T>(config, key);
     } catch (error) {
       return Promise.reject(error);
     }
 
-    if (cached !== undefined) return Promise.resolve(cached);
-
-    if (config.dedupe && this.inFlight.has(key)) {
-      recordNetworkEvent(this.diagnostics, 'network.dedupe.join', {
-        method: config.method,
-        url: config.url
-      });
-      return this.inFlight.get(key) as Promise<TransportResult<T>>;
-    }
-
-    let promise: Promise<TransportResult<T>>;
-    promise = this.execute<T>(config, key)
-      .finally(() => {
-        if (this.inFlight.get(key) === promise) {
-          this.inFlight.delete(key);
-          recordNetworkEvent(this.diagnostics, 'network.dedupe.release', {
-            method: config.method,
-            url: config.url
-          });
-        }
-      });
-
-    if (config.dedupe) {
-      this.inFlight.set(key, promise as Promise<TransportResult<unknown>>);
-      recordNetworkEvent(this.diagnostics, 'network.dedupe.start', {
-        method: config.method,
-        url: config.url
-      });
-    }
-
-    return promise;
+    const externalSignal = getRuntimeSignal(config);
+    return this.requestScope.run({
+      owner: requestScopeOwner(config),
+      key: requestScopeKey(config),
+      label: `${config.method}:${config.url}`.slice(0, 200),
+      ...(externalSignal ? { signal: externalSignal } : {}),
+      task: (scopeSignal) => this.cacheRuntime.resolve<T>(
+        withOperationSignal(config, scopeSignal),
+        (operationSignal) => this.execute<T>(withOperationSignal(config, operationSignal)),
+      ),
+    });
   }
 
   clearCache(): number {
-    const sizeBefore = this.cache.size();
-    this.cache.clear();
-    recordNetworkEvent(this.diagnostics, 'network.cache.clear', { removed: sizeBefore });
-    return sizeBefore;
+    return this.cacheRuntime.clear();
   }
 
   invalidateCache(prefix = ''): number {
-    const removed = prefix ? this.cache.invalidatePrefix(prefix) : this.clearCache();
-    if (prefix) {
-      recordNetworkEvent(this.diagnostics, 'network.cache.invalidate', { prefix, removed });
-    }
-    return removed;
+    return this.cacheRuntime.invalidatePrefix(prefix);
+  }
+
+  invalidateCacheTags(tags: readonly string[]): number {
+    return this.cacheRuntime.invalidateTags(tags);
+  }
+
+  invalidateCacheNamespace(namespace: string): number {
+    return this.cacheRuntime.invalidateNamespace(namespace);
   }
 
   getCacheSize(): number {
-    return this.cache.size();
+    return this.cacheRuntime.cacheSize();
   }
 
   getInFlightSize(): number {
-    return this.inFlight.size;
+    return this.cacheRuntime.inFlightSize();
+  }
+
+  getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>> {
+    return this.cacheRuntime.snapshot() as unknown as Readonly<Record<string, unknown>>;
+  }
+
+  getRequestScopeSnapshot(): Readonly<Record<string, unknown>> {
+    return this.requestScope.snapshot() as unknown as Readonly<Record<string, unknown>>;
+  }
+
+  drain(options: RequestLifetimeCloseOptions = {}): Promise<void> {
+    return this.requestScope.close(options);
+  }
+
+  dispose(reason?: unknown): void {
+    this.requestScope.dispose(reason);
+    this.cacheRuntime.dispose();
+    this.scheduler.cancelQueued('http-client-disposed');
+    recordNetworkEvent(this.diagnostics, 'network.client.disposed', {
+      reason: reason instanceof Error ? reason.name : reason === undefined ? null : typeof reason,
+    });
   }
 
   getDiagnostics(options: DiagnosticsSnapshotOptions = {}): readonly unknown[] {
@@ -402,12 +420,18 @@ export const createCoordinatedClient = (options: CoordinatorOptions): Coordinate
       request<T>({ ...config, url, method: 'delete', cache: false, dedupe: false }),
     clearCache: () => coordinator.clearCache(),
     invalidateCache: (prefix?: string) => coordinator.invalidateCache(prefix),
+    invalidateCacheTags: (tags: readonly string[]) => coordinator.invalidateCacheTags(tags),
+    invalidateCacheNamespace: (namespace: string) => coordinator.invalidateCacheNamespace(namespace),
     getCacheSize: () => coordinator.getCacheSize(),
     getInFlightSize: () => coordinator.getInFlightSize(),
+    getCacheRuntimeSnapshot: () => coordinator.getCacheRuntimeSnapshot(),
+    getRequestScopeSnapshot: () => coordinator.getRequestScopeSnapshot(),
+    drain: (optionsArg?: RequestLifetimeCloseOptions) => coordinator.drain(optionsArg),
+    dispose: (reason?: unknown) => coordinator.dispose(reason),
     getDiagnostics: (optionsArg?: DiagnosticsSnapshotOptions) => coordinator.getDiagnostics(optionsArg),
     getDiagnosticSummary: () => coordinator.getDiagnosticSummary(),
     clearDiagnostics: () => coordinator.clearDiagnostics(),
     getSchedulerSnapshot: () => coordinator.getSchedulerSnapshot(),
-    coordinator
+    coordinator,
   });
 };
