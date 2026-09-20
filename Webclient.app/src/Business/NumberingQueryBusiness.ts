@@ -1,5 +1,4 @@
 import { Constants_ServiceResultType } from '../Core/Constants';
-import type { ArcGisQueryOptions } from './contracts';
 import {
   businessApiRuntime,
   businessDiagnostics,
