@@ -5,3 +5,4 @@ export * from './offlinePersistence';
 export * from './serviceWorkerPolicy';
 export * from './browserSnapshotStore';
 export * from './offlineRuntime';
+export * from './offlineCachePolicy';
