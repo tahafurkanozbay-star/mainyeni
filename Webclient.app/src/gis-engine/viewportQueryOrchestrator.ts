@@ -840,10 +840,7 @@ export class ViewportQueryOrchestrator {
       );
     }
     const estimatedBytes = response.estimatedBytes === undefined
-      ? Math.min(
-        maximumBytes,
-        response.features.length * estimatedBytesPerFeature,
-      )
+      ? response.features.length * estimatedBytesPerFeature
       : finiteNonNegative(response.estimatedBytes, 'response estimatedBytes');
     if (estimatedBytes > maximumBytes) {
       throw new ViewportQueryResponseBudgetError(
