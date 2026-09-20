@@ -3,7 +3,7 @@ import { createOverlayCoordinator, type OverlayDismissReason } from "./overlayCo
 const setup = () => {
     document.body.innerHTML = `
         <main id="app">
-            <button id="trigger">Detay aç</button>
+            <button type="button" id="trigger">Detay aç</button>
             <section id="content"><a href="#x">İçerik</a></section>
             <div id="portal"></div>
         </main>`;
@@ -17,7 +17,7 @@ const dialog = (portal: HTMLElement, id = "dialog"): HTMLElement => {
     const node = document.createElement("section");
     node.id = id;
     node.setAttribute("aria-label", "Detay");
-    node.innerHTML = `<button id="${id}-first">İlk</button><button id="${id}-last">Son</button>`;
+    node.innerHTML = `<button type="button" id="${id}-first">İlk</button><button type="button" id="${id}-last">Son</button>`;
     portal.append(node);
     return node;
 };
