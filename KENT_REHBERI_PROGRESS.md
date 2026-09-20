@@ -450,3 +450,8 @@
 - MERGE: PR #192 was moved from draft to ready only after all exact-head gates were green. Expected-head squash merge returned `merged=true`; merge SHA `4ad9226b64d01cdb08c83293adbdc85c79aa9ea5`. GitHub verified PR closed+merged and current main equaled that merge SHA immediately after merge.
 - KALAN / SONRAKİ GÖREV: merged #192 branch must not be reused. Next GIS/QA turn must start from then-current main on a unique branch, re-read orchestration/progress files, inspect concurrent ownership, preserve >=4,000 meaningful-additions/exact-head CI/final-main-refresh gates, and continue remaining 2D/3D data/render/integration debt without WMS/WFS assumptions or client secrets.
 - POST-MERGE NOTE: this progress-only documentation commit is created after the fully tested squash merge; no CI PASS is inferred for the documentation-only commit itself.
+## Experience merge re-verification — 2026-09-20
+- User requested merge for the completed Experience modernization scope.
+- PR #190 is already `closed+merged`; merged_at `2026-09-20T06:41:34Z`.
+- Squash merge SHA remains `100b2438fc9240ba1f5917329739cef2f1d8b740`; no duplicate merge action was attempted.
+- Current main at re-verification: `52827db033bf5028efe69aa4f9b19c79583ef856`, which has advanced beyond the Experience merge through later canonical repository work.
