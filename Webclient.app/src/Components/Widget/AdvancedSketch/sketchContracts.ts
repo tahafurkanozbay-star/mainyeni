@@ -6,7 +6,6 @@ export type SketchTool =
   | 'polygon'
   | 'circle'
   | 'rectangle'
-  | 'text'
   | 'clear';
 
 export type PointStyle = 'circle' | 'cross' | 'diamond' | 'square';
@@ -233,7 +232,6 @@ export const SKETCH_TOOLS: readonly SketchTool[] = Object.freeze([
   'polygon',
   'circle',
   'rectangle',
-  'text',
   'clear',
 ]);
 
@@ -244,7 +242,6 @@ export const DRAWING_TOOLS: readonly Exclude<SketchTool, 'move' | 'clear'>[] = O
   'polygon',
   'circle',
   'rectangle',
-  'text',
 ]);
 
 export const isSketchTool = (value: unknown): value is SketchTool =>

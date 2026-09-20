@@ -35,11 +35,18 @@ interface SketchEventHandle {
   readonly remove?: () => void;
 }
 
+export type ArcgisSketchCreateTool = 'point' | 'polyline' | 'polygon' | 'circle' | 'rectangle';
+
+export interface ArcgisSketchCreateRequest {
+  readonly tool: ArcgisSketchCreateTool;
+  readonly options: Readonly<{ mode: 'click' | 'freehand' }>;
+}
+
 interface SketchViewModelLike {
   pointSymbol?: unknown;
   polylineSymbol?: unknown;
   polygonSymbol?: unknown;
-  readonly create?: (tool: string, options?: Readonly<Record<string, unknown>>) => void;
+  readonly create?: (tool: ArcgisSketchCreateTool, options?: Readonly<Record<string, unknown>>) => void;
   readonly cancel?: () => void;
   readonly destroy?: () => void;
   readonly on?: (name: string, callback: (event: unknown) => void) => SketchEventHandle;
@@ -117,6 +124,14 @@ const setSymbols = (
   sketchViewModel.polylineSymbol = style.line;
   sketchViewModel.polygonSymbol = style.polygon;
 };
+
+export const resolveArcgisSketchCreateRequest = (
+  tool: Exclude<SketchTool, 'move' | 'clear'>,
+): ArcgisSketchCreateRequest => Object.freeze(
+  tool === 'freehand'
+    ? { tool: 'polyline', options: Object.freeze({ mode: 'freehand' as const }) }
+    : { tool, options: Object.freeze({ mode: 'click' as const }) },
+);
 
 export const createArcgisSketchAdapter = async (
   viewInput: unknown,
@@ -217,7 +232,8 @@ export const createArcgisSketchAdapter = async (
     beginCreate: (tool: Exclude<SketchTool, 'move' | 'clear'>, style) => {
       if (destroyed) throw new Error('ArcGIS sketch adapter is destroyed.');
       setSymbols(sketchViewModel, style);
-      sketchViewModel.create?.(tool, { mode: tool === 'freehand' ? 'freehand' : 'click' });
+      const request = resolveArcgisSketchCreateRequest(tool);
+      sketchViewModel.create?.(request.tool, request.options);
     },
 
     cancelCreate: () => {

@@ -16,7 +16,6 @@ export const SKETCH_TOOL_DESCRIPTORS: readonly SketchToolDescriptor[] = Object.f
   Object.freeze({ tool: 'polygon', label: 'Poligon', description: 'Kapalı alan çiz.', shortcut: 'G', destructive: false }),
   Object.freeze({ tool: 'circle', label: 'Daire', description: 'Merkez ve yarıçap ile daire çiz.', shortcut: 'C', destructive: false }),
   Object.freeze({ tool: 'rectangle', label: 'Dikdörtgen', description: 'Dikdörtgen alan çiz.', shortcut: 'R', destructive: false }),
-  Object.freeze({ tool: 'text', label: 'Metin', description: 'Haritaya açıklama metni yerleştir.', shortcut: 'T', destructive: false }),
   Object.freeze({ tool: 'clear', label: 'Temizle', description: 'Tüm çizimleri temizle.', shortcut: null, destructive: true }),
 ]);
 

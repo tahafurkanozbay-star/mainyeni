@@ -21,7 +21,6 @@ describe('sketchAccessibilityRuntime', () => {
       'polygon',
       'circle',
       'rectangle',
-      'text',
       'clear',
     ]));
   });
@@ -43,7 +42,6 @@ describe('sketchAccessibilityRuntime', () => {
     ['G', 'polygon'],
     ['c', 'circle'],
     ['R', 'rectangle'],
-    ['T', 'text'],
     ['V', 'move'],
   ])('maps shortcut %s to %s', (key, tool) => {
     expect(sketchToolFromShortcut({
@@ -54,6 +52,17 @@ describe('sketchAccessibilityRuntime', () => {
       shiftKey: false,
       defaultPrevented: false,
     })).toBe(tool);
+  });
+
+  it('does not expose shortcuts for unsupported legacy tools', () => {
+    expect(sketchToolFromShortcut({
+      key: 'T',
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+    })).toBeNull();
   });
 
   it('ignores modified and already handled shortcuts', () => {

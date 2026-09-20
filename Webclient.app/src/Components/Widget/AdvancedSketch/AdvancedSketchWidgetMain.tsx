@@ -60,7 +60,7 @@ const toolIcon = (tool: SketchTool): ReactNode => {
   if (tool === 'rectangle') return <BiRectangle aria-hidden="true" />;
   if (tool === 'circle') return <BsCircle aria-hidden="true" />;
   if (tool === 'clear') return <AiOutlineClear aria-hidden="true" />;
-  return <span aria-hidden="true">T</span>;
+  return null;
 };
 
 const LINE_TOOLS = new Set<SketchTool>(['polyline', 'freehand', 'polygon', 'rectangle', 'circle']);
@@ -298,7 +298,7 @@ export const AdvancedSketchWidgetMain = ({
   return (
     <div className="advanced-sketch" aria-busy={initializing}>
       <div className="advanced-sketch-toolbar" role="toolbar" aria-label="Çizim araçları">
-        {SKETCH_TOOL_DESCRIPTORS.filter((descriptor) => descriptor.tool !== 'text').map((descriptor) => (
+        {SKETCH_TOOL_DESCRIPTORS.map((descriptor) => (
           <button
             key={descriptor.tool}
             type="button"
