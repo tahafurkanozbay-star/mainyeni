@@ -6,11 +6,6 @@ import type {
   ApiRuntimeRequestOptions,
 } from './contracts';
 
-interface ApiGetOptions {
-  readonly params?: Readonly<Record<string, unknown>>;
-  readonly control?: ApiRequestControl;
-  readonly serviceKey?: string;
-}
 import {
   DEFAULT_BUSINESS_RUNTIME_POLICY,
   normalizeApiRequestControl,
@@ -49,7 +44,7 @@ export const createApiRuntime = (
   async get<TResult = unknown>(
     operation: string,
     url: string,
-    options: ApiGetOptions = {},
+    options: ApiRuntimeRequestOptions = {},
   ): Promise<TResult> {
     const diagnostic = dependencies.diagnostics.begin(operation, {
       ...(options.serviceKey ? { serviceKey: options.serviceKey } : {}),
