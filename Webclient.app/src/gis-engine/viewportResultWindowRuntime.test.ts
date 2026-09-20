@@ -195,6 +195,38 @@ describe('viewportResultWindowRuntime', () => {
     const runtime = createViewportResultWindowRuntime({ maximumWindows: 1 });
     runtime.begin('a', 1, { pinned: true });
     expect(() => runtime.begin('b', 1, { pinned: true })).toThrow('global result-window budget');
+    expect(runtime.snapshot().windowsSnapshot.map((window) => window.key)).toEqual(['a']);
+  });
+
+  it('restores the previous generation if replacement cannot satisfy global budgets', () => {
+    const runtime = createViewportResultWindowRuntime({ maximumWindows: 1 });
+    runtime.begin('roads', 1, { pinned: true });
+    expect(() => runtime.begin('roads', 2, { pinned: true })).not.toThrow();
+    expect(runtime.snapshot().windowsSnapshot[0]?.generation).toBe(2);
+  });
+
+  it('rolls back a page commit when global feature capacity cannot be satisfied', () => {
+    const runtime = createViewportResultWindowRuntime({
+      maximumWindows: 2,
+      maximumFeaturesPerWindow: 10,
+      maximumTotalFeatures: 2,
+    });
+    runtime.commitPage({
+      windowKey: 'pinned',
+      generation: 1,
+      pageIndex: 0,
+      features: [{ id: 1, payload: 'pinned' }],
+    });
+    runtime.pin('pinned', true);
+    runtime.begin('current', 1, { pinned: true });
+    expect(() => runtime.commitPage({
+      windowKey: 'current',
+      generation: 1,
+      pageIndex: 0,
+      features: [{ id: 2, payload: 'a' }, { id: 3, payload: 'b' }],
+    })).toThrow('global result-window budget');
+    expect(runtime.read('current')).toEqual([]);
+    expect(runtime.snapshot().totalFeatures).toBe(1);
   });
 
   it('expires idle unpinned windows without background timers', () => {
