@@ -474,3 +474,15 @@
 - SONRAKİ PLATFORM GÖREVİ: merged #199 branch must not be reused. Start the next Platform turn from then-current main, re-read orchestration/progress files, re-audit remaining 11 legacy Platform JS tests and whole-code language debt, preserve concurrent team ownership, and keep the >=4,000 meaningful-additions, exact-head CI, security/performance/regression and final-main-refresh gates.
 - POST-MERGE NOTE: this progress-only documentation commit is created after the fully tested squash merge; no CI PASS is inferred for the documentation-only commit itself.
 
+
+
+## Deep GIS / viewport modernization canonical current-main refresh — 2026-09-20
+- BRANCH LIFECYCLE: previous GIS viewport branch based on `b401afa720915b8a61134d70c4e83e0f29a7df76` became 1 commit behind after main advanced only through shared `KENT_REHBERI_PROGRESS.md`. No GIS code-path overlap exists.
+- BASE MAIN: `3162a8f25ea2d2604dd725de4a8888eefb0fa2ea`.
+- BRANCH: `agent/gis-viewport-modernization-20260920-3162a8f`.
+- MIGRATION: 18 GIS production/test/config blobs were reapplied exactly from the validated viewport modernization tree; shared progress was rebuilt from current main and this role-scoped record appended, preserving all concurrent team history.
+- SCOPE: ArcGIS query response integrity guard; viewport query policy and pressure controller; deterministic tile planner; bounded speculative prefetch planner; registered-layer viewport orchestrator; generation-safe transactional result-window ownership; bounded tiled execution runtime; modern GIS kernel integration; strict GIS TypeScript boundary.
+- PERFORMANCE / DATA INTEGRITY: feature/field/pixel/extent/scale/page/tile/window/byte budgets; pressure-aware concurrency/prefetch/feature scaling; supersession cancellation; stale-generation rejection; typed feature identity; transactional global budget eviction/rollback; bounded cache/result memory; no recurring polling.
+- NETWORK / SECURITY: no new endpoint, direct fetch/axios/XMLHttpRequest/WebSocket/EventSource, WMS/WFS/WMTS, client secret/token, telemetry transport, unsafe HTML/eval or remote executable asset. Verified ArcGIS REST/service adapter boundaries remain authoritative.
+- ICON: shared deterministic GIS icon resolver/registry remains unchanged as the single icon authority.
+- MERGE GATE: source scope exceeded 7,700 meaningful additions. Fresh branch must independently verify >=4,000 additions, behind=0/current merge-base, mergeable=true and exact-head Platform Architecture Audit + Webclient Quality + Release QA completed+success before squash merge.
