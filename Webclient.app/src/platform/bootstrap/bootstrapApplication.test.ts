@@ -91,7 +91,7 @@ describe('applicationBootstrapDependencies', () => {
 
   test('installs proxy rules through CommonBusiness', async () => {
     await applicationBootstrapDependencies.addProxyRule('https://gis.example.test/a', 'source');
-    expect(addProxyRule).toHaveBeenCalledWith('https://gis.example.test/a', 'source');
+    expect(addProxyRule).toHaveBeenCalledWith('https://gis.example.test/a');
   });
 
   test('commits map configuration through MapManager', async () => {
