@@ -7,3 +7,4 @@ export * from './browserSnapshotStore';
 export * from './offlineRuntime';
 export * from './offlineCachePolicy';
 export * from './offlineReplayPolicy';
+export * from './offlineReplayBatch';
