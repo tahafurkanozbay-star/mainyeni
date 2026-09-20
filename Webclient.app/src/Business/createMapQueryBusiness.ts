@@ -15,7 +15,7 @@ import {
 } from './contracts';
 
 export interface MapQueryInput extends FastAccessQuery {
-  readonly Id?: string | number | null;
+  readonly Id?: unknown;
   readonly startDate?: Date | null;
   readonly endDate?: Date | null;
 }

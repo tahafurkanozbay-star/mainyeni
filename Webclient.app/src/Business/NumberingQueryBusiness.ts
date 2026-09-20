@@ -28,15 +28,21 @@ const SERVICE_TITLES = Object.freeze({
   numberingInfo: 'NumberingInfoQueryUrl',
 } as const);
 
-type ServiceResult = Readonly<{
-  type?: number;
-  data?: unknown;
-  fields?: unknown;
-}>;
+export interface NumberingFeatureResult {
+  readonly attr?: Record<string, unknown> | null;
+  readonly geometry?: unknown;
+}
 
-type RecordWithAttr = Readonly<{
-  attr?: Readonly<Record<string, unknown>>;
-}>;
+export interface NumberingServiceResult {
+  readonly type?: unknown;
+  readonly data?: readonly NumberingFeatureResult[] | null;
+  readonly fields?: unknown;
+  readonly message?: unknown;
+  readonly errorMessage?: unknown;
+}
+
+type ServiceResult = NumberingServiceResult;
+type RecordWithAttr = NumberingFeatureResult;
 
 export interface NumberingFileRequestOptions {
   readonly signal?: AbortSignal;
@@ -82,10 +88,12 @@ const fieldText = (
 const sortResultData = (
   result: unknown,
   field: string | null,
-): unknown => {
-  if (!field || !result || typeof result !== 'object') return result ?? emptyResult();
+): NumberingServiceResult => {
+  if (!field || !result || typeof result !== 'object') {
+    return (result && typeof result === 'object' ? result : emptyResult()) as NumberingServiceResult;
+  }
   const record = result as { data?: unknown };
-  if (!Array.isArray(record.data)) return result;
+  if (!Array.isArray(record.data)) return result as NumberingServiceResult;
 
   const sorted = [...record.data].sort((left, right) => {
     const leftRecord = left && typeof left === 'object'
@@ -111,13 +119,20 @@ const executeQuery = async (
   serviceKey: string,
   options: Omit<ArcGisQueryOptions, 'url'>,
   sortField: string | null = null,
-): Promise<unknown> => {
+): Promise<NumberingServiceResult> => {
+  const orderByFields = Array.isArray(options.orderByFields)
+    ? options.orderByFields.filter((value): value is string => typeof value === 'string')
+    : [];
+  const outFields = Array.isArray(options.outFields)
+    ? options.outFields.filter((value): value is string => typeof value === 'string')
+    : ['*'];
+  const where = typeof options.where === 'string' ? options.where : '1=1';
   const plan = businessQueryPlanner.plan({
     serviceKey,
     returnGeometry: options.returnGeometry === true,
-    orderByFields: options.orderByFields ?? [],
-    outFields: options.outFields ?? ['*'],
-    where: options.where ?? '1=1',
+    orderByFields,
+    outFields,
+    where,
     ...(options.geometry !== undefined
       ? {
         spatial: {
@@ -168,7 +183,7 @@ const successData = (result: unknown): readonly RecordWithAttr[] =>
   dataArray(result);
 
 export const NumberingQueryBusiness = Object.freeze({
-  GetDistrictById: async (id: unknown): Promise<unknown> =>
+  GetDistrictById: async (id: unknown): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.district, {
       returnGeometry: true,
       orderByFields: ['ad'],
@@ -178,7 +193,7 @@ export const NumberingQueryBusiness = Object.freeze({
       ], undefined, '1=0').where,
     }),
 
-  GetDistricts: async (input: unknown = {}): Promise<unknown> => {
+  GetDistricts: async (input: unknown = {}): Promise<NumberingServiceResult> => {
     const query = normalizeNumberingSearchQuery(input);
     return executeQuery(SERVICE_TITLES.district, {
       returnDistinctValues: true,
@@ -192,7 +207,7 @@ export const NumberingQueryBusiness = Object.freeze({
     }, 'ad');
   },
 
-  GetNeighborhoodById: async (id: unknown): Promise<unknown> =>
+  GetNeighborhoodById: async (id: unknown): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.neighborhood, {
       returnGeometry: true,
       orderByFields: ['ad'],
@@ -202,7 +217,7 @@ export const NumberingQueryBusiness = Object.freeze({
       ], undefined, '1=0').where,
     }),
 
-  GetAllNeighborhoods: async (input: unknown = {}): Promise<unknown> => {
+  GetAllNeighborhoods: async (input: unknown = {}): Promise<NumberingServiceResult> => {
     const query = normalizeNumberingSearchQuery(input);
     return executeQuery(SERVICE_TITLES.neighborhood, {
       returnDistinctValues: true,
@@ -216,7 +231,7 @@ export const NumberingQueryBusiness = Object.freeze({
     }, 'ad');
   },
 
-  GetNeighborhoodsOfDistrict: async (districtId: unknown): Promise<unknown> =>
+  GetNeighborhoodsOfDistrict: async (districtId: unknown): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.neighborhood, {
       returnGeometry: true,
       orderByFields: ['ad'],
@@ -226,7 +241,7 @@ export const NumberingQueryBusiness = Object.freeze({
       ], undefined, '1=0').where,
     }, 'ad'),
 
-  GetStreetsByName: async (name: unknown): Promise<unknown> =>
+  GetStreetsByName: async (name: unknown): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.street, {
       returnGeometry: true,
       orderByFields: ['ad'],
@@ -234,7 +249,7 @@ export const NumberingQueryBusiness = Object.freeze({
       where: upperContainsPredicate('ad', name) ?? '1=0',
     }, 'ad'),
 
-  GetStreets: async (neighborhoodId: unknown): Promise<unknown> => {
+  GetStreets: async (neighborhoodId: unknown): Promise<NumberingServiceResult> => {
     const wayResult = await executeQuery(SERVICE_TITLES.streetCenterLineWay, {
       returnGeometry: false,
       outFields: ['id', 'yolortahatid'],
@@ -274,7 +289,7 @@ export const NumberingQueryBusiness = Object.freeze({
 
   GetStreetWaysofCenterLinesByCenterlineIDs: async (
     centerlineIds: unknown,
-  ): Promise<unknown> => {
+  ): Promise<NumberingServiceResult> => {
     const where = inPredicate('yolortahatid', centerlineIds);
     if (!where) return emptyResult();
     return executeQuery(SERVICE_TITLES.streetCenterLineWay, {
@@ -284,7 +299,7 @@ export const NumberingQueryBusiness = Object.freeze({
     });
   },
 
-  GetDoorsByWayIDs: async (wayIds: unknown): Promise<unknown> => {
+  GetDoorsByWayIDs: async (wayIds: unknown): Promise<NumberingServiceResult> => {
     const where = inPredicate('yolortahatyonid', wayIds);
     if (!where) return emptyResult();
     return executeQuery(SERVICE_TITLES.door, {
@@ -295,7 +310,7 @@ export const NumberingQueryBusiness = Object.freeze({
     });
   },
 
-  GetDoors: async (streetId: unknown): Promise<unknown> => {
+  GetDoors: async (streetId: unknown): Promise<NumberingServiceResult> => {
     const centerLines = await NumberingQueryBusiness.GetStreetCenterLines(streetId);
     const centerLineIds = normalizeIdentifierList(
       centerLines.map(item => item.attr?.id),
@@ -313,7 +328,7 @@ export const NumberingQueryBusiness = Object.freeze({
     return NumberingQueryBusiness.GetDoorsByWayIDs(wayIds);
   },
 
-  GetDoorById: async (doorId: unknown): Promise<unknown> =>
+  GetDoorById: async (doorId: unknown): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.door, {
       returnGeometry: true,
       outFields: ['*'],
@@ -324,7 +339,7 @@ export const NumberingQueryBusiness = Object.freeze({
 
   IntersectBuildingsWithMapPoint: async (
     mapPoint: unknown,
-  ): Promise<unknown> =>
+  ): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.building, {
       geometry: mapPoint,
       distanceMeters: 1,
@@ -337,7 +352,7 @@ export const NumberingQueryBusiness = Object.freeze({
 
   GetStructureInfoOfBuilding: async (
     building: unknown,
-  ): Promise<unknown> =>
+  ): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.structure, {
       returnGeometry: true,
       outFields: ['*'],
@@ -348,7 +363,7 @@ export const NumberingQueryBusiness = Object.freeze({
 
   GetNumberingInfoOfStructure: async (
     structure: unknown,
-  ): Promise<unknown> =>
+  ): Promise<NumberingServiceResult> =>
     executeQuery(SERVICE_TITLES.numberingInfo, {
       returnGeometry: true,
       outFields: ['*'],

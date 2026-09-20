@@ -115,7 +115,7 @@ interface FeatureLayerResult {
   readonly layerObj: FeatureLayerLike;
 }
 
-type PopupSymbol = Readonly<Record<string, unknown>>;
+type PopupSymbol = unknown;
 
 const DEFAULT_MARKER: PopupSymbol = Object.freeze({
   type: 'simple-marker',
@@ -147,7 +147,7 @@ const findService = (titleInput: unknown): ServiceDescriptor | null => {
 const createServiceError = (titleInput: unknown): ErrorWithServiceType =>
   Object.assign(
     new Error(`Servis bulunamadı (${String(titleInput ?? '')})`),
-    { type: Constants_ServiceResultType.Error as const },
+    { type: Constants_ServiceResultType.Error },
   );
 
 const escapeSqlLiteral = (value: unknown): string =>
@@ -436,7 +436,7 @@ const createClusterConfig = (): UnknownRecord => Object.freeze({
 const getPopupInfo = async (feature: PopupFeatureLike): Promise<HTMLDivElement | null> => {
   if (!feature?.graphic) return null;
   changePopup(false);
-  const attributes = feature.graphic.attributes ?? Object.freeze({});
+  const attributes: UnknownRecord = feature.graphic.attributes ?? Object.freeze({});
   const root = createDiv('map-popup');
 
   const titleSection = createDiv('popup-section');
@@ -459,7 +459,7 @@ const getPopupInfo = async (feature: PopupFeatureLike): Promise<HTMLDivElement |
 };
 
 const queryAttachments = async (
-  queryServiceTitle: string,
+  queryServiceTitle: unknown,
   id: unknown,
 ): Promise<GisQueryResult> => {
   const queryService = findService(queryServiceTitle);
@@ -476,7 +476,7 @@ const queryAttachments = async (
 };
 
 const getAttachmentUrl = (
-  queryServiceTitle: string,
+  queryServiceTitle: unknown,
   id: unknown,
   attachmentId: unknown,
 ): string => {
@@ -494,13 +494,13 @@ const attachmentItems = (result: GisQueryResult): readonly GisServiceItem[] =>
 const getInfoWithAttachments = async (
   feature: PopupFeatureLike,
   attachmentQueryUrl: string,
-  queryServiceTitle: string,
+  queryServiceTitle: unknown,
 ): Promise<HTMLDivElement | null> => {
   if (!feature?.graphic) return null;
   changePopup(true);
 
   const graphic = feature.graphic;
-  const attributes = graphic.attributes ?? Object.freeze({});
+  const attributes: UnknownRecord = graphic.attributes ?? Object.freeze({});
   const root = createDiv('map-popup');
   appendTextBlock(root, 'popup-title', attributes.adi, 'İsimsiz kayıt');
 
@@ -600,7 +600,7 @@ const createGeoJsonClusterLayer = async (
 };
 
 const createLayerWithoutClustering = async (
-  queryServiceTitle: string,
+  queryServiceTitle: unknown,
   layerTitle: string,
   query?: FastAccessQuery | null,
   symbol?: PopupSymbol | null,
@@ -644,7 +644,7 @@ const createLayerWithoutClustering = async (
 };
 
 const createClusterLayer = async (
-  queryServiceTitle: string,
+  queryServiceTitle: unknown,
   layerTitle: string,
   query?: FastAccessQuery | null,
   symbol?: PopupSymbol | null,
@@ -740,7 +740,10 @@ export const CommonBusiness = Object.freeze({
     const values: ArcGisCodedValue[] = [];
     for (const layerType of layer.types ?? []) {
       for (const codedValue of layerType.domains?.[fieldName]?.codedValues ?? []) {
-        values.push(Object.freeze({ code: codedValue.code, name: codedValue.name }));
+        values.push(Object.freeze({
+          ...(codedValue.code === undefined ? {} : { code: codedValue.code }),
+          ...(codedValue.name === undefined ? {} : { name: codedValue.name }),
+        }));
       }
     }
     return Object.freeze(values);

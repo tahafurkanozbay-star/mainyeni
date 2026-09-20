@@ -255,7 +255,7 @@ const createRuntimeOptions = (
   ...(options.signal ? { signal: options.signal } : {}),
   cache: options.cache === true && options.live !== true,
   ...(options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs }),
-  tags: Object.freeze([...tags, ...toReadonlyArray(options.cacheTags)]),
+  tags: [...tags, ...toReadonlyArray(options.cacheTags)],
   isCacheable: (result) =>
     result.type === Constants_ServiceResultType.Success
     && result.exceededTransferLimit !== true
