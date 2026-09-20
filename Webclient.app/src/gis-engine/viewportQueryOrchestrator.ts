@@ -943,7 +943,7 @@ export class ViewportQueryOrchestrator {
 
   #invalidateLayerCache(layerId: string): number {
     let removed = 0;
-    for (const [key, entry] of [...this.#cache.entries()]) {
+    for (const [key, entry] of this.#cache) {
       if (entry.layerId !== layerId) continue;
       this.#removeCacheEntry(key, entry, false);
       removed += 1;
@@ -953,7 +953,7 @@ export class ViewportQueryOrchestrator {
 
   #cancelLayerRequests(layerId: string, reason: string): void {
     const marker = `|${layerId}|`;
-    for (const requestKey of [...this.#activeRequestKeys]) {
+    for (const requestKey of this.#activeRequestKeys) {
       if (!requestKey.includes(marker)) continue;
       this.#governance.cancel(requestKey, new Error(reason));
       this.#activeRequestKeys.delete(requestKey);
