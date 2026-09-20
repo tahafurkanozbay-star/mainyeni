@@ -48,6 +48,31 @@ const finite = (name: string, value: number, min: number, max: number): number =
   return value;
 };
 
+const isControlCodePoint = (value: string): boolean => {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 31 || codePoint === 127)) return true;
+  }
+  return false;
+};
+
+const replaceControlCodePoints = (value: string): string => {
+  let result = '';
+  let replacing = false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    const control = codePoint !== undefined && (codePoint <= 31 || codePoint === 127);
+    if (control) {
+      if (!replacing) result += ' ';
+      replacing = true;
+    } else {
+      result += character;
+      replacing = false;
+    }
+  }
+  return result;
+};
+
 const classifyFailure = (signal: ConnectivitySignal): boolean => {
   if (signal.kind === 'probe-failure' || signal.kind === 'request-failure') return true;
   if (signal.kind === 'browser') return signal.online === false;
@@ -175,7 +200,7 @@ export class ConnectivityPolicy {
   #sanitizeReason(reason: string | undefined): string | undefined {
     if (reason === undefined) return undefined;
     if (typeof reason !== 'string') throw new TypeError('reason must be a string');
-    const normalized = reason.trim().replace(/[\u0000-\u001f\u007f]+/gu, ' ');
+    const normalized = (isControlCodePoint(reason) ? replaceControlCodePoints(reason) : reason).trim();
     if (!normalized) return undefined;
     return normalized.slice(0, this.maxReasonLength);
   }
