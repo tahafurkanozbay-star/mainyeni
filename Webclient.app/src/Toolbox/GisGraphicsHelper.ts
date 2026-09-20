@@ -21,6 +21,14 @@ interface GeometryExtentLike {
   expand?: (factor: number) => unknown;
 }
 
+export interface PointLike {
+  readonly x?: number;
+  readonly y?: number;
+  readonly longitude?: number;
+  readonly latitude?: number;
+  readonly spatialReference?: unknown;
+}
+
 interface GeometryLike {
   readonly type?: string;
   readonly extent?: GeometryExtentLike;
