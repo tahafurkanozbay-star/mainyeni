@@ -1,4 +1,4 @@
-import { createFocusTrap, type FocusTrapController } from "./focusNavigation";
+import { createFocusTrap, focusSafely, type FocusTrapController } from "./focusNavigation";
 
 export type OverlayKind = "dialog" | "drawer" | "sheet" | "popover" | "map-panel";
 export type OverlayModality = "modal" | "non-modal";
@@ -54,6 +54,7 @@ export interface OverlayCoordinatorOptions {
 interface OverlayEntry {
     registration: OverlayRegistration;
     trap: FocusTrapController | null;
+    restoreTarget: HTMLElement | null;
     sequence: number;
     open: boolean;
 }
@@ -92,9 +93,11 @@ export class OverlayCoordinator {
         if (this.entries.has(id)) throw new Error(`Overlay id zaten açık: ${id}`);
 
         const normalized: OverlayRegistration = { ...registration, id };
+        const activeElement = this.document.activeElement;
         const entry: OverlayEntry = {
             registration: normalized,
             trap: null,
+            restoreTarget: normalized.trigger ?? (activeElement instanceof HTMLElement ? activeElement : null),
             sequence: ++this.sequence,
             open: true
         };
@@ -118,11 +121,16 @@ export class OverlayCoordinator {
         const entry = this.entries.get(id);
         if (!entry?.open) return;
         entry.open = false;
-        entry.trap?.deactivate({ restoreFocus: entry.registration.restoreFocus !== false });
+        const hadTrap = entry.trap !== null;
+        entry.trap?.deactivate({ restoreFocus: false });
         entry.trap = null;
         this.entries.delete(id);
         entry.registration.element.removeAttribute("data-overlay-topmost");
         this.reconcile();
+        const topmost = this.ordered().at(-1) ?? null;
+        if (hadTrap && entry.registration.restoreFocus !== false && (!topmost || !isModal(topmost))) {
+            focusSafely(entry.restoreTarget);
+        }
         entry.registration.onClose?.(reason);
         this.emit();
     }
