@@ -5,10 +5,10 @@ const setup = () => {
         <form id="form">
             <label id="name-label" for="name">Ad</label>
             <p id="name-hint">En az iki karakter</p>
-            <input id="name" />
+            <input aria-label="Test control" id="name" />
             <p id="name-error"></p>
             <label id="district-label" for="district">İlçe</label>
-            <select id="district"><option value="">Seçin</option><option value="cankaya">Çankaya</option></select>
+            <select aria-label="Test control" id="district"><option value="">Seçin</option><option value="cankaya">Çankaya</option></select>
             <p id="district-error"></p>
             <button type="submit">Kaydet</button>
         </form>
