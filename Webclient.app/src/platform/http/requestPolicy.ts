@@ -6,6 +6,14 @@ import {
   normalizeByteBudget,
   utf8ByteLength,
 } from './byteBudget';
+import {
+  DEFAULT_REQUEST_METADATA_BUDGET,
+  assertHeaderCollectionBudget,
+  assertQueryArrayBudget,
+  assertQueryKeyBudget,
+  assertQueryKeyCount,
+  assertQueryStringBudget,
+} from './requestMetadataBudget';
 import type {
   NormalizedRequestConfig,
   QueryParams,
@@ -194,6 +202,8 @@ export const sanitizeRequestHeaders = (
     ? Array.from((headers as Headers).entries())
     : Object.entries(headers);
 
+  assertHeaderCollectionBudget(entries);
+
   const result: Record<string, string> = {};
   let hasAccept = false;
 
@@ -230,6 +240,7 @@ const appendQueryValue = (searchParams: URLSearchParams, key: string, value: unk
   if (value === null || value === undefined) return;
 
   if (Array.isArray(value)) {
+    assertQueryArrayBudget(value);
     value.forEach((item) => appendQueryValue(searchParams, key, item));
     return;
   }
@@ -249,7 +260,17 @@ const appendQueryValue = (searchParams: URLSearchParams, key: string, value: unk
 
 export const serializeQueryParams = (params?: QueryParams | Record<string, unknown> | null): string => {
   if (!params) return '';
-  if (params instanceof URLSearchParams) return params.toString();
+
+  if (params instanceof URLSearchParams) {
+    const entries = [...params.entries()];
+    assertQueryKeyCount(new Set(entries.map(([key]) => key)).size);
+    for (const [key] of entries) assertQueryKeyBudget(key);
+    assertQueryArrayBudget(entries);
+    const serialized = params.toString();
+    assertQueryStringBudget(serialized);
+    return serialized;
+  }
+
   if (!isPlainRecord(params)) {
     throw new AppError('Request query parameters must be a plain object.', {
       code: 'INVALID_QUERY_PARAMS',
@@ -257,12 +278,16 @@ export const serializeQueryParams = (params?: QueryParams | Record<string, unkno
     });
   }
 
-  const searchParams = new URLSearchParams();
-  Object.keys(params)
-    .sort()
-    .forEach((key) => appendQueryValue(searchParams, key, params[key]));
+  const keys = Object.keys(params).sort();
+  assertQueryKeyCount(keys.length);
+  for (const key of keys) assertQueryKeyBudget(key);
 
-  return searchParams.toString();
+  const searchParams = new URLSearchParams();
+  keys.forEach((key) => appendQueryValue(searchParams, key, params[key]));
+
+  const serialized = searchParams.toString();
+  assertQueryStringBudget(serialized);
+  return serialized;
 };
 
 export const joinApplicationUrl = (
@@ -670,6 +695,7 @@ export const RequestPolicy = Object.freeze({
   normalizeCacheNamespace,
   normalizeCacheTags,
   normalizeCacheVary,
+  DEFAULT_REQUEST_METADATA_BUDGET,
   normalizeRequestConfig,
   hasSensitiveRequestMetadata
 });
