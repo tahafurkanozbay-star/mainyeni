@@ -432,13 +432,11 @@ export const VicinityQueryWindow = forwardRef<
         return;
       }
 
-      const successfulResults = settled
-        .filter(
-          (result): result is PromiseFulfilledResult<unknown> =>
-            result.status === 'fulfilled' && Boolean(result.value),
-        )
-        .map((result) => result.value)
-        .filter((item): item is QueryServiceEnvelope => isRecord(item));
+      const successfulResults: QueryServiceEnvelope[] = [];
+      for (const result of settled) {
+        if (result.status !== 'fulfilled' || !isRecord(result.value)) continue;
+        successfulResults.push(result.value as QueryServiceEnvelope);
+      }
 
       const searchOptions = successfulResults
         .map((item) => createOption(
