@@ -1,6 +1,199 @@
-.drawing-tool-button-icon {
-  vertical-align: 0px;
-  margin-left: 5px;
+.advanced-sketch {
+  display: grid;
+  gap: 0.875rem;
+  padding: 0.75rem;
+  color: var(--bs-body-color, #212529);
 }
 
-.drawing-tool-button-text {}
+.advanced-sketch-toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: 0.375rem;
+}
+
+.advanced-sketch-tool,
+.advanced-sketch-actions button {
+  min-height: 44px;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.5rem;
+  background: var(--bs-body-bg, #fff);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.advanced-sketch-tool:hover:not(:disabled),
+.advanced-sketch-actions button:hover:not(:disabled) {
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  border-color: var(--bs-secondary-color, #6c757d);
+}
+
+.advanced-sketch-tool:focus-visible,
+.advanced-sketch-actions button:focus-visible,
+.advanced-sketch select:focus-visible,
+.advanced-sketch-color-input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--bs-primary, #0d6efd) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.advanced-sketch-tool.is-active {
+  background: var(--bs-primary-bg-subtle, #cfe2ff);
+  border-color: var(--bs-primary, #0d6efd);
+  color: var(--bs-primary-text-emphasis, #052c65);
+}
+
+.advanced-sketch-tool:disabled,
+.advanced-sketch-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.advanced-sketch-tool-icon {
+  display: inline-flex;
+  font-size: 1.1rem;
+}
+
+.advanced-sketch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.advanced-sketch-options {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.625rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin: 0;
+}
+
+.advanced-sketch-options legend {
+  float: none;
+  width: auto;
+  margin: 0;
+  padding-inline: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.advanced-sketch-options label,
+.advanced-sketch-option-row {
+  display: grid;
+  gap: 0.375rem;
+  align-content: start;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.advanced-sketch select {
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid var(--bs-border-color, #ced4da);
+  border-radius: 0.375rem;
+  background: var(--bs-body-bg, #fff);
+  color: inherit;
+  padding-inline: 0.625rem;
+}
+
+.advanced-sketch-color-picker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.advanced-sketch-color-input {
+  width: 100%;
+  min-width: 4rem;
+  min-height: 44px;
+  border: 1px solid var(--bs-border-color, #ced4da);
+  border-radius: 0.375rem;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.advanced-sketch-status {
+  min-height: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.875rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--bs-secondary-bg, #e9ecef);
+  font-size: 0.875rem;
+}
+
+.advanced-sketch-status span {
+  white-space: nowrap;
+}
+
+.widget-window-toolbar-button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.widget-window-toolbar-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--bs-primary, #0d6efd) 55%, transparent);
+  outline-offset: -3px;
+}
+
+@media (max-width: 576px) {
+  .advanced-sketch {
+    padding: 0.5rem;
+  }
+
+  .advanced-sketch-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .advanced-sketch-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .advanced-sketch-actions button {
+    width: 100%;
+  }
+
+  .advanced-sketch-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .advanced-sketch-tool,
+  .advanced-sketch-actions button {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .advanced-sketch-tool.is-active {
+    border: 2px solid Highlight;
+  }
+
+  .advanced-sketch-tool:focus-visible,
+  .advanced-sketch-actions button:focus-visible,
+  .advanced-sketch select:focus-visible,
+  .advanced-sketch-color-input:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

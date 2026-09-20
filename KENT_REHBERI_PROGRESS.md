@@ -455,3 +455,17 @@
 - PR #190 is already `closed+merged`; merged_at `2026-09-20T06:41:34Z`.
 - Squash merge SHA remains `100b2438fc9240ba1f5917329739cef2f1d8b740`; no duplicate merge action was attempted.
 - Current main at re-verification: `52827db033bf5028efe69aa4f9b19c79583ef856`, which has advanced beyond the Experience merge through later canonical repository work.
+
+
+## Deep Experience / Advanced Sketch strict-TypeScript modernization — 2026-09-20
+- TUR / GÖREV: Whole-code modernization wave focused on the non-overlapping Advanced Sketch user-facing GIS surface while active Business #176, Platform #193/#194 and GIS #195 ownership remains untouched.
+- BASE / BRANCH: exact current main `89674ce3069cc3240dee62bdfcd863a0ee6a650f`; branch `agent/experience-sketch-modernization-20260920-89674ce`.
+- DİL MODERNİZASYONU: legacy `AdvancedSketchWidget.js`, `AdvancedSketchWidgetMain.js` and `colorpicker.js` are replaced by strict TypeScript/TSX boundaries. The stable React 19 / TypeScript 7 / Vite 8 / Node 24 / .NET 10 stack is preserved instead of a risky repository-wide language rewrite.
+- MİMARİ: immutable sketch contracts and style normalization, bounded undo/redo history, schema-versioned import/export, geometry integrity budgets, session queue/timeouts, metrics, accessibility shortcuts/live-region, and an ArcGIS adapter with deterministic GraphicsLayer/SketchViewModel cleanup are introduced.
+- UX / ACCESSIBILITY: semantic toolbar buttons, keyboard shortcuts, visible active state, 44px interaction targets, reduced-motion/forced-colors support, native accessible color inputs, status/error announcements, undo/redo and JSON import/export are added.
+- RELIABILITY / DATA INTEGRITY: graphic/history/operation/document/coordinate budgets are explicit; duplicate ids are deterministic; prototype-pollution keys are removed during document/geometry sanitization; non-finite coordinates fail closed; operation timers are cleared in finally; session disposal rejects queued work and owns ArcGIS cleanup.
+- PERFORMANCE: no polling or new network endpoint is added. Bounded history, queue, graphics and document limits prevent unbounded memory growth; ArcGIS modules continue through the shared cached module runtime.
+- SECURITY / NETWORK / GIS CONTRACT: no WMS/WFS, invented endpoint, telemetry transport, remote asset/CDN, unsafe HTML, dynamic code, secret or client token is added. Shared deterministic GIS icon resolver is unchanged.
+- TEST KAPSAMI: focused Vitest regression suites cover style normalization, history bounds, geometry/data integrity, document parsing/serialization limits, session queue/timeout/undo/redo/import/dispose, accessibility shortcuts and metrics. Existing exact-base/full-suite/build-budget/security gates remain unchanged.
+- CI / MERGE DURUMU: implementation commit and draft PR pending. Do not merge until GitHub base...head additions are verified >=4,000, branch is current-main based/behind=0/mergeable=true, and exact-head Platform Architecture Audit, Webclient Quality and Release QA are completed+success.
+- SONRAKİ GÖREV: after this wave, continue remaining legacy JS/JSX cutover only from then-current main and only in paths not owned by concurrent PRs; avoid restoring stale branch-wide configuration or weakening exact-base gates.
