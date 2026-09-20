@@ -106,6 +106,7 @@ export interface NormalizedRequestConfig<TBody = RequestBody>
   cacheNamespace: string;
   cacheTags: readonly string[];
   cacheVary: Readonly<Record<string, string | number | boolean | null | undefined>>;
+  maxResponseBytes: number;
 }
 
 export interface ResponseMetadata {
