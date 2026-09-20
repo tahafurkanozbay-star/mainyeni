@@ -67,8 +67,9 @@ describe("LiveRegionCoordinator delivery", () => {
         coordinator.announce({ message: "Düşük", priority: "low" });
         coordinator.announce({ message: "Yüksek", priority: "high" });
         vi.runOnlyPendingTimers();
-        expect(coordinator.snapshot().lastMessage).toBe("Düşük");
-        expect(coordinator.snapshot().delivered).toBe(2);
+        expect(coordinator.snapshot()).toMatchObject({ lastMessage: "Yüksek", delivered: 1 });
+        vi.runOnlyPendingTimers();
+        expect(coordinator.snapshot()).toMatchObject({ lastMessage: "Düşük", delivered: 2 });
         coordinator.destroy();
     });
 
