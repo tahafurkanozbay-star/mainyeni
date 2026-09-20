@@ -1,6 +1,11 @@
 import { AppError } from '../errors/appError';
 import { normalizeApplicationPath } from '../network/endpointPolicy';
 import { isPlainRecord } from './contracts';
+import {
+  assertWithinByteBudget,
+  normalizeByteBudget,
+  utf8ByteLength,
+} from './byteBudget';
 import type {
   NormalizedRequestConfig,
   QueryParams,
@@ -40,6 +45,82 @@ export interface SerializedBodyResult {
   body: unknown;
   headers: Record<string, string>;
 }
+
+export interface SerializeRequestBodyOptions {
+  readonly maxBodyBytes?: number;
+}
+
+const REQUEST_BODY_BOUNDS = Object.freeze({
+  fallback: 4 * 1024 * 1024,
+  minimum: 1024,
+  maximum: 32 * 1024 * 1024,
+});
+
+const requestBodyTooLarge = (
+  actualBytes: number,
+  limitBytes: number,
+): AppError => new AppError('İstek gövdesi izin verilen boyutu aşıyor.', {
+  code: 'REQUEST_BODY_TOO_LARGE',
+  retryable: false,
+  details: {
+    actualBytes,
+    limitBytes,
+  },
+});
+
+const assertRequestBodyBudget = (
+  actualBytes: number,
+  limitBytes: number,
+): void => {
+  assertWithinByteBudget(actualBytes, limitBytes, (snapshot) =>
+    requestBodyTooLarge(snapshot.actualBytes, snapshot.limitBytes));
+};
+
+const estimateFormDataBytes = (
+  value: FormData,
+  limitBytes: number,
+): number => {
+  let bytes = 0;
+  let fields = 0;
+  value.forEach((entry, key) => {
+    fields += 1;
+    if (fields > 1024) {
+      throw new AppError('FormData alan sayısı izin verilen sınırı aşıyor.', {
+        code: 'REQUEST_BODY_TOO_LARGE',
+        retryable: false,
+        details: { maximumFields: 1024 },
+      });
+    }
+
+    // Multipart boundary/header overhead varies by browser. A conservative
+    // fixed allowance per field keeps the estimate fail-closed without
+    // materializing the complete multipart payload in memory.
+    bytes += utf8ByteLength(key) + 256;
+    if (typeof entry === 'string') {
+      bytes += utf8ByteLength(entry);
+    } else {
+      bytes += Math.max(0, Math.floor(entry.size));
+      const named = entry as Blob & { readonly name?: string };
+      if (typeof named.name === 'string') bytes += utf8ByteLength(named.name);
+      if (entry.type) bytes += utf8ByteLength(entry.type);
+    }
+    assertRequestBodyBudget(bytes, limitBytes);
+  });
+  return bytes;
+};
+
+export const requestBodyByteLength = (
+  value: unknown,
+  kind: RequestBodyKind = classifyRequestBody(value),
+): number | null => {
+  if (kind === 'none') return 0;
+  if (kind === 'text') return utf8ByteLength(value as string);
+  if (kind === 'blob') return Math.max(0, Math.floor((value as Blob).size));
+  if (kind === 'array-buffer') return (value as ArrayBuffer).byteLength;
+  if (kind === 'url-search-params') return utf8ByteLength((value as URLSearchParams).toString());
+  if (kind === 'form-data') return null;
+  return null;
+};
 
 export const normalizeMethod = (value: unknown = 'get'): string => {
   const method = String(value || 'get').trim().toLowerCase();
@@ -253,8 +334,10 @@ const withContentType = (
 export const serializeRequestBody = (
   method: unknown,
   data: RequestBody | unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
+  options: SerializeRequestBodyOptions = {},
 ): SerializedBodyResult => {
+  const maxBodyBytes = normalizeByteBudget(options.maxBodyBytes, REQUEST_BODY_BOUNDS);
   const normalizedMethod = normalizeMethod(method);
   if (!methodAllowsBody(normalizedMethod)) {
     if (data !== undefined && data !== null) {
@@ -270,12 +353,26 @@ export const serializeRequestBody = (
   const type = classifyRequestBody(data);
   if (type === 'none') return { body: undefined, headers };
   if (type === 'text') {
+    assertRequestBodyBudget(utf8ByteLength(data as string), maxBodyBytes);
     return { body: data, headers: withContentType(headers, 'text/plain;charset=UTF-8') };
   }
-  if (type === 'form-data' || type === 'blob' || type === 'array-buffer') {
+  if (type === 'form-data') {
+    estimateFormDataBytes(data as FormData, maxBodyBytes);
+    return { body: data, headers };
+  }
+  if (type === 'blob') {
+    assertRequestBodyBudget((data as Blob).size, maxBodyBytes);
+    return { body: data, headers };
+  }
+  if (type === 'array-buffer') {
+    assertRequestBodyBudget((data as ArrayBuffer).byteLength, maxBodyBytes);
     return { body: data, headers };
   }
   if (type === 'url-search-params') {
+    assertRequestBodyBudget(
+      utf8ByteLength((data as URLSearchParams).toString()),
+      maxBodyBytes,
+    );
     return {
       body: data,
       headers: withContentType(headers, 'application/x-www-form-urlencoded;charset=UTF-8')
@@ -283,11 +380,14 @@ export const serializeRequestBody = (
   }
   if (type === 'json') {
     try {
+      const body = JSON.stringify(data);
+      assertRequestBodyBudget(utf8ByteLength(body), maxBodyBytes);
       return {
-        body: JSON.stringify(data),
+        body,
         headers: withContentType(headers, 'application/json;charset=UTF-8')
       };
     } catch (error) {
+      if (error instanceof AppError) throw error;
       throw new AppError('Request body could not be serialized.', {
         code: 'REQUEST_SERIALIZATION_FAILED',
         retryable: false,
@@ -516,13 +616,12 @@ export const normalizeRequestConfig = (
     10 * 60 * 1000,
     'floor'
   );
-  const maxResponseBytes = finiteClamped(
-    config.maxResponseBytes,
-    16 * 1024 * 1024,
-    1024,
-    64 * 1024 * 1024,
-    'floor'
-  );
+  const maxResponseBytes = normalizeByteBudget(config.maxResponseBytes, {
+    fallback: 16 * 1024 * 1024,
+    minimum: 1024,
+    maximum: 64 * 1024 * 1024,
+  });
+  const maxRequestBodyBytes = normalizeByteBudget(config.maxRequestBodyBytes, REQUEST_BODY_BOUNDS);
 
   return Object.freeze({
     ...config,
@@ -543,7 +642,8 @@ export const normalizeRequestConfig = (
     cacheNamespace,
     cacheTags,
     cacheVary,
-    maxResponseBytes
+    maxResponseBytes,
+    maxRequestBodyBytes
   }) as NormalizedRequestConfig;
 };
 
@@ -556,6 +656,7 @@ export const RequestPolicy = Object.freeze({
   serializeQueryParams,
   joinApplicationUrl,
   classifyRequestBody,
+  requestBodyByteLength,
   serializeRequestBody,
   stableSerialize,
   createRequestKey,
