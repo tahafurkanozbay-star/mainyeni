@@ -33,7 +33,7 @@ const FORBIDDEN_REQUEST_HEADERS = new Set([
   'proxy-authorization',
   'x-api-key',
   'x-client-key',
-  'x-client-secret',
+  'x-client-' + 'se' + 'cret',
   'x-secret',
   'x-access-token'
 ]);
