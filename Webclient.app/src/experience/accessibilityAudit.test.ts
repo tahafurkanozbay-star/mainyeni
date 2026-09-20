@@ -5,6 +5,20 @@ const fixture = (html: string): HTMLElement => {
     return document.querySelector("#fixture") as HTMLElement;
 };
 
+const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attributes: Record<string, string> = {}, text = ""): HTMLElementTagNameMap[K] => {
+    const node = document.createElement(tag);
+    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, value));
+    node.textContent = text;
+    return node;
+};
+
+const rootWith = (...nodes: Node[]): HTMLElement => {
+    const root = element("main", { id: "fixture" });
+    root.append(...nodes);
+    document.body.replaceChildren(root);
+    return root;
+};
+
 afterEach(() => { document.body.replaceChildren(); });
 
 describe("accessibilityAudit", () => {
@@ -29,8 +43,10 @@ describe("accessibilityAudit", () => {
     });
 
     test("reports positive tabindex and aria-hidden interactive controls", () => {
-        const root = fixture('<button tabindex="3" aria-hidden="true">Gizli</button>');
-        const result = auditAccessibility(root);
+        const button = element("button", {}, "Gizli");
+        button.tabIndex = 3;
+        button.setAttribute("aria-hidden", "true");
+        const result = auditAccessibility(rootWith(button));
         expect(result.counts["invalid-positive-tabindex"]).toBe(1);
         expect(result.counts["interactive-aria-hidden"]).toBe(1);
     });
@@ -46,8 +62,11 @@ describe("accessibilityAudit", () => {
     });
 
     test("requires alt attribute but permits empty decorative alt", () => {
-        const root = fixture('<img src="a.png"><img src="b.png" alt="">');
-        expect(auditAccessibility(root).counts["image-without-alt"]).toBe(1);
+        const missingAlt = element("img");
+        missingAlt.src = "a.png";
+        const decorative = element("img", { alt: "" });
+        decorative.src = "b.png";
+        expect(auditAccessibility(rootWith(missingAlt, decorative)).counts["image-without-alt"]).toBe(1);
     });
 
     test("reports unlabelled select and textarea controls", () => {
