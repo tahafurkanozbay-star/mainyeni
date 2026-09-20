@@ -151,7 +151,7 @@ export class RequestCoordinator {
     this.tuningProfile = options.tuningProfile || createRuntimeTuningProfile();
     this.scheduler = options.scheduler || createRequestScheduler({
       ...this.tuningProfile.scheduler,
-      ...(options.schedulerOptions || {}),
+      ...options.schedulerOptions,
       clock: this.clock,
       onEvent: createSchedulerEventBridge(this.diagnostics),
     });
@@ -163,7 +163,7 @@ export class RequestCoordinator {
       10000,
     );
     this.cacheRuntime = options.cacheRuntime ?? createHttpCacheRuntime({
-      ...(options.cacheRuntimeOptions ?? {}),
+      ...options.cacheRuntimeOptions,
       ...(options.cacheRuntimeOptions?.coordinator
         ? {}
         : options.cacheRuntimeOptions?.coordinatorOptions
@@ -192,7 +192,7 @@ export class RequestCoordinator {
       ),
       historyLimit: 256,
       clock: this.clock,
-      ...(options.requestScopeOptions ?? {}),
+      ...options.requestScopeOptions,
     });
   }
 
