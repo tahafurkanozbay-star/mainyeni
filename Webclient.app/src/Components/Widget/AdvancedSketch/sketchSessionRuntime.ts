@@ -58,7 +58,7 @@ export const createSketchSessionRuntime = (
   const budget = normalizeBudget(options.budget);
   const history = createSketchHistoryRuntime([], {
     maxEntries: budget.maxHistoryEntries,
-    now: options.now,
+    ...(options.now ? { now: options.now } : {}),
   });
   const metrics = createSketchMetricsRuntime();
   const sink = options.diagnosticSink ?? noopSink;

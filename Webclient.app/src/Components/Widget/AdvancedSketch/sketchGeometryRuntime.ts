@@ -227,7 +227,10 @@ export const snapshotGeometry = (
     });
   }
   const type = geometryType(geometry.type);
-  const payload = sanitizeObject(geometry.toJSON instanceof Function ? geometry.toJSON() : geometry);
+  const toJson = geometry.toJSON;
+  const payload = sanitizeObject(
+    typeof toJson === 'function' ? toJson.call(geometry) : geometry,
+  );
   const snapshot = Object.freeze({
     type,
     spatialReferenceWkid: readWkid(geometry),

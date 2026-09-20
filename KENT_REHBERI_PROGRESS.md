@@ -471,3 +471,5 @@
 - SONRAKİ GÖREV: after this wave, continue remaining legacy JS/JSX cutover only from then-current main and only in paths not owned by concurrent PRs; avoid restoring stale branch-wide configuration or weakening exact-base gates.
 
 - CI-DRIVEN FIX: Release QA typed scorecard on head `78d16f5740c1547f826e179ae75a75118fde46ab` found one new HIGH `observability-swallowed-exception` in `sketchSessionRuntime.ts`. Diagnostic sink failures are now reported through `globalThis.reportError` while remaining non-authoritative, preserving runtime resilience without swallowing observability failures. No gate or threshold was weakened; fresh exact-head CI is required.
+
+- STRICT TS PRE-CI HARDENING: `createSketchSessionRuntime` now conditionally supplies the optional history clock instead of materializing `now: undefined`, preserving `exactOptionalPropertyTypes`; geometry JSON extraction narrows `toJSON` with `typeof === 'function'` before invocation instead of relying on a broad Function check.
