@@ -3,6 +3,7 @@ import type {
   ApiRequestControl,
   ApiRuntime,
   ApiRuntimeDependencies,
+  ApiRuntimeRequestOptions,
 } from './contracts';
 
 interface ApiGetOptions {
