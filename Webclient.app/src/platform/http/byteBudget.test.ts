@@ -147,14 +147,14 @@ describe('assertWithinByteBudget', () => {
       remainingBytes: 0,
       utilization: 1,
     });
-    expect(Object.isFrozen(observed)).toBe(true);
+    expect(Object.isFrozen(observed as object)).toBe(true);
   });
 
   test('rejects a missing error factory', () => {
     expect(() => assertWithinByteBudget(
       1,
       1,
-      null as unknown as (snapshot: never) => Error,
+      null as unknown as Parameters<typeof assertWithinByteBudget>[2],
     )).toThrow(TypeError);
   });
 });
