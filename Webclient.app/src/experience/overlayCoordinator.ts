@@ -71,7 +71,7 @@ const isModal = (entry: OverlayEntry): boolean => modalityOf(entry.registration)
 export class OverlayCoordinator {
     private readonly document: Document;
     private readonly appRoot: HTMLElement | null;
-    private readonly onChange?: (snapshot: OverlaySnapshot) => void;
+    private readonly onChange: ((snapshot: OverlaySnapshot) => void) | undefined;
     private readonly entries = new Map<string, OverlayEntry>();
     private readonly inertRecords = new Map<HTMLElement, InertRecord>();
     private sequence = 0;
