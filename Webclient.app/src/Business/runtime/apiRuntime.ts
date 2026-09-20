@@ -4,6 +4,12 @@ import type {
   ApiRuntime,
   ApiRuntimeDependencies,
 } from './contracts';
+
+interface ApiGetOptions {
+  readonly params?: Readonly<Record<string, unknown>>;
+  readonly control?: ApiRequestControl;
+  readonly serviceKey?: string;
+}
 import {
   DEFAULT_BUSINESS_RUNTIME_POLICY,
   normalizeApiRequestControl,
@@ -31,7 +37,7 @@ const requestOptions = (
     cache: normalized.cache,
     dedupe: normalized.dedupe,
     cacheTtlMs: normalized.cacheTtlMs,
-    timeoutMs: normalized.timeoutMs,
+    timeout: normalized.timeoutMs,
     ...(normalized.signal ? { signal: normalized.signal } : {}),
   };
 };
@@ -42,7 +48,7 @@ export const createApiRuntime = (
   async get<TResult = unknown>(
     operation: string,
     url: string,
-    options = {},
+    options: ApiGetOptions = {},
   ): Promise<TResult> {
     const diagnostic = dependencies.diagnostics.begin(operation, {
       ...(options.serviceKey ? { serviceKey: options.serviceKey } : {}),

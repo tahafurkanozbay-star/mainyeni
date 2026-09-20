@@ -47,7 +47,7 @@ export const createServiceRegistry = (
     find,
     require: requireService,
     resolveUrl: serviceUrl,
-    requireUrl(serviceKey) {
+    requireUrl(serviceKey: string) {
       const service = requireService(serviceKey);
       const url = serviceUrl(service);
       if (!url) throw new MissingBusinessServiceError(serviceKey);

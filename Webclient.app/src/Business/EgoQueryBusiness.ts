@@ -8,14 +8,20 @@ export interface EgoBusinessFailure {
   readonly message: string;
 }
 
+export interface EgoServiceResult {
+  readonly type?: unknown;
+  readonly data?: unknown;
+  readonly message?: unknown;
+}
+
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error ?? 'Bilinmeyen hata');
 
-const getEgoResource = async (path: string): Promise<unknown> => {
+const getEgoResource = async (path: string): Promise<EgoServiceResult> => {
   const headers = await AuthBusiness.GetRequestHeaders();
 
   try {
-    return await HttpBusiness.Get(AppConfig.Api.BaseUrl + path, { headers });
+    return await HttpBusiness.Get<EgoServiceResult>(AppConfig.Api.BaseUrl + path, { headers });
   } catch (error) {
     throw Object.freeze<EgoBusinessFailure>({
       type: Constants_ServiceResultType.Error,
@@ -25,8 +31,8 @@ const getEgoResource = async (path: string): Promise<unknown> => {
 };
 
 export const EgoQueryBusiness = Object.freeze({
-  GetActiveLines: (): Promise<unknown> => getEgoResource('/Ego/ActiveLines'),
-  GetActiveStops: (): Promise<unknown> => getEgoResource('/Ego/ActiveStops'),
-  GetLineInfo: (lineNo: unknown): Promise<unknown> =>
+  GetActiveLines: (): Promise<EgoServiceResult> => getEgoResource('/Ego/ActiveLines'),
+  GetActiveStops: (): Promise<EgoServiceResult> => getEgoResource('/Ego/ActiveStops'),
+  GetLineInfo: (lineNo: unknown): Promise<EgoServiceResult> =>
     getEgoResource('/Ego/LineInfo/' + encodeURIComponent(String(lineNo ?? ''))),
 });

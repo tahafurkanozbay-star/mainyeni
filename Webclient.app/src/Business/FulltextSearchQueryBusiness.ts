@@ -16,7 +16,7 @@ import {
 
 export interface FulltextSearchQuery extends FastAccessQuery {
   readonly searchText?: unknown;
-  readonly Id?: string | number | null;
+  readonly Id?: unknown;
 }
 
 const escapeSqlLiteral = (value: unknown): string =>

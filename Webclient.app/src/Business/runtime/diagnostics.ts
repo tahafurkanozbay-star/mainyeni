@@ -1,6 +1,7 @@
 import type {
   BusinessDiagnosticEvent,
   BusinessDiagnosticHandle,
+  BusinessDiagnosticRecordInput,
   BusinessDiagnostics,
   BusinessDiagnosticSnapshot,
   BusinessDiagnosticStatus,
@@ -116,7 +117,10 @@ export const createBusinessDiagnostics = (
     const handle: BusinessDiagnosticHandle = Object.freeze({
       operation: normalized,
       startedAt,
-      finish(status, finishDetails = {}) {
+      finish(
+        status: Exclude<BusinessDiagnosticStatus, 'planned' | 'started'>,
+        finishDetails: BusinessDiagnosticRecordInput = {},
+      ) {
         if (finished) {
           return record(normalized, status, {
             ...finishDetails,
