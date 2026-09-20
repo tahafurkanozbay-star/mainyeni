@@ -4,3 +4,4 @@ export * from './offlineSnapshot';
 export * from './offlinePersistence';
 export * from './serviceWorkerPolicy';
 export * from './browserSnapshotStore';
+export * from './offlineRuntime';
