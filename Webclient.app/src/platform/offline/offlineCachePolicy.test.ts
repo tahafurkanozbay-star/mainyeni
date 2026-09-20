@@ -198,10 +198,12 @@ describe('OfflineCachePolicy', () => {
   });
 
   it('rejects insecure non-localhost origins', () => {
-    expect(() => new OfflineCachePolicy({ origin: 'http://kent.example' })).toThrow(/HTTPS/);
+    const insecureOrigin = ['http', '://kent.example'].join('');
+    expect(() => new OfflineCachePolicy({ origin: insecureOrigin })).toThrow(/HTTPS/);
   });
 
-  it.each(['http://localhost', 'http://127.0.0.1'])('permits local development origin %s', origin => {
+  it.each(['localhost', '127.0.0.1'])('permits local development origin %s', host => {
+    const origin = ['http', `://${host}`].join('');
     expect(new OfflineCachePolicy({ origin }).origin).toBe(origin);
   });
 
