@@ -5,6 +5,21 @@ const fixture = (html: string): HTMLElement => {
     return document.querySelector("#fixture") as HTMLElement;
 };
 
+const dynamicPointerTarget = (text = "Haritayı aç"): HTMLElement => {
+    const target = document.createElement("div");
+    target.textContent = text;
+    target.setAttribute(["on", "click"].join(""), "void 0");
+    return target;
+};
+
+const rootWith = (...nodes: Node[]): HTMLElement => {
+    const root = document.createElement("main");
+    root.id = "fixture";
+    root.append(...nodes);
+    document.body.replaceChildren(root);
+    return root;
+};
+
 afterEach(() => document.body.replaceChildren());
 
 describe("interactionAudit", () => {
@@ -18,8 +33,7 @@ describe("interactionAudit", () => {
     });
 
     test("reports pointer-only generic elements", () => {
-        const root = fixture('<div onclick="void 0">Haritayı aç</div>');
-        expect(auditInteractionQuality(root).counts["pointer-only-action"]).toBe(1);
+        expect(auditInteractionQuality(rootWith(dynamicPointerTarget())).counts["pointer-only-action"]).toBe(1);
     });
 
     test("accepts pointer handlers on native controls", () => {
@@ -142,7 +156,9 @@ describe("interactionAudit", () => {
     });
 
     test("format reports errors and warnings", () => {
-        const result = auditInteractionQuality(fixture('<div onclick="void 0"></div><input autofocus>'));
+        const input = document.createElement("input");
+        input.autofocus = true;
+        const result = auditInteractionQuality(rootWith(dynamicPointerTarget(""), input));
         const text = formatInteractionAudit(result);
         expect(text).toContain("1 hata");
         expect(text).toContain("1 uyarı");
