@@ -1,7 +1,7 @@
 import { runtimeConfig } from '../config/runtimeConfig';
 import { createFetchTransport } from './fetchTransport';
 import { createNetworkDiagnostics } from './networkDiagnostics';
-import { createCoordinatedClient } from './requestCoordinator.ts';
+import { createCoordinatedClient } from './requestCoordinator';
 import { stableSerialize } from './requestPolicy';
 import { readErrorLike } from './contracts';
 import type {
