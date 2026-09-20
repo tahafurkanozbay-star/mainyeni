@@ -83,7 +83,6 @@ const budgetError = (
   details: Record<string, unknown>,
 ): AppError => new AppError(message, {
   code,
-  retryable: false,
   details,
 });
 
