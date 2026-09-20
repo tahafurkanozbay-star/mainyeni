@@ -126,8 +126,8 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
   const pump = async (): Promise<void> => { while (!disposed && activeLoads < maxConcurrentLoads) { const next=chooseQueued()[0]; if (!next) break; next.inFlight=executeLoad(next); void next.inFlight.finally(()=>{ void scheduleReconcile(); }); await Promise.resolve(); } };
   const reconcileInternal = async (): Promise<void> => {
     for (const state of layers.values()) {
-      const requested=shouldBeRequested(state); state.requested=requested;
-      if (requested) { if (state.phase==='idle'||state.phase==='failed'||state.phase==='suspended') { if (state.resource!==null) await activate(state); else { state.phase='queued'; emit(state,'requested'); } } }
+      const wasRequested=state.requested; const requested=shouldBeRequested(state); state.requested=requested;
+      if (requested) { if (state.phase==='idle'||state.phase==='suspended'||(state.phase==='failed'&&!wasRequested)) { if (state.resource!==null) await activate(state); else { state.phase='queued'; emit(state,'requested'); } } }
       else if (state.phase==='ready'&&state.resource!==null) { await state.adapter.suspend?.(state.resource,'viewport'); state.phase='suspended'; emit(state,'suspended','viewport'); }
       else if (state.phase==='queued') state.phase='idle';
       else if (state.phase==='loading') { state.controller?.abort('viewport'); state.phase='idle'; }
