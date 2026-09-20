@@ -465,7 +465,10 @@ export const arcGisResponseGuardConfigurationFromCapabilities = (
   objectIdField: capabilities.objectIdField,
   allowedFields: capabilities.fieldNames,
   requireObjectId: capabilities.objectIdField !== null,
-  maxFeaturesPerPage: Math.max(1, capabilities.maxRecordCount),
+  maxFeaturesPerPage: Math.max(
+    1,
+    Math.min(capabilities.maxRecordCount, DEFAULT_CONFIGURATION.maxTotalFeatures),
+  ),
   ...overrides,
 });
 
@@ -550,6 +553,7 @@ export class ArcGisQueryResponseGuard<
     const allowed = allowedFieldSet(this.#configuration);
     const accepted: TFeature[] = [];
     const pageWarnings = new Set<string>();
+    const pageObjectIds = new Set<string>();
     let pageBytes = 0;
     let duplicateFeatureCount = 0;
 
@@ -605,7 +609,8 @@ export class ArcGisQueryResponseGuard<
           'FEATURE_BYTE_BUDGET_EXCEEDED',
         );
       }
-      if (pageBytes + featureBytes > this.#configuration.maxEstimatedBytes) {
+      pageBytes += featureBytes;
+      if (pageBytes > this.#configuration.maxEstimatedBytes) {
         throw new ArcGisResponseIntegrityError(
           'ArcGIS query page exceeds maxEstimatedBytes',
           'RESPONSE_BYTE_BUDGET_EXCEEDED',
@@ -621,7 +626,7 @@ export class ArcGisQueryResponseGuard<
       }
       if (objectId !== null) {
         const key = identityKey(objectId);
-        if (this.#seenObjectIds.has(key)) {
+        if (this.#seenObjectIds.has(key) || pageObjectIds.has(key)) {
           if (this.#configuration.duplicateObjectIdPolicy === 'reject') {
             throw new ArcGisResponseIntegrityError(
               'ArcGIS response contains a duplicate object id',
@@ -632,11 +637,10 @@ export class ArcGisQueryResponseGuard<
           pageWarnings.add('duplicate-object-id-dropped');
           continue;
         }
-        this.#seenObjectIds.add(key);
+        pageObjectIds.add(key);
       }
 
       accepted.push(typedFeature);
-      pageBytes += featureBytes;
     }
 
     const transferLimit = typeof response.exceededTransferLimit === 'boolean'
@@ -663,17 +667,19 @@ export class ArcGisQueryResponseGuard<
     const complete = transferLimit === false;
     const continuationRequired = transferLimit === true;
 
-    this.#pages += 1;
-    this.#rawFeatures += features.length;
-    this.#acceptedFeatures += accepted.length;
-    this.#duplicateFeatures += duplicateFeatureCount;
-    this.#estimatedBytes += pageBytes;
-    if (this.#estimatedBytes > this.#configuration.maxEstimatedBytes) {
+    if (this.#estimatedBytes + pageBytes > this.#configuration.maxEstimatedBytes) {
       throw new ArcGisResponseIntegrityError(
         'ArcGIS query sequence exceeds maxEstimatedBytes',
         'RESPONSE_BYTE_BUDGET_EXCEEDED',
       );
     }
+
+    for (const key of pageObjectIds) this.#seenObjectIds.add(key);
+    this.#pages += 1;
+    this.#rawFeatures += features.length;
+    this.#acceptedFeatures += accepted.length;
+    this.#duplicateFeatures += duplicateFeatureCount;
+    this.#estimatedBytes += pageBytes;
     this.#expectedOffset = nextOffset;
     this.#completed = complete;
     this.#seenRequestKeys.add(requestKey);
