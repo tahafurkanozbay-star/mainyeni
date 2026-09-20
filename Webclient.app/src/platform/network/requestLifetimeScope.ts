@@ -296,7 +296,7 @@ class BoundedRequestLifetimeScope implements RequestLifetimeScope {
 
     this.#settleIdle();
     await this.waitForIdle(options.signal);
-    if (this.#state !== 'disposed') this.#state = 'closed';
+    if (!this.#isDisposed()) this.#state = 'closed';
   }
 
   waitForIdle(signal?: AbortSignal): Promise<void> {
@@ -368,6 +368,10 @@ class BoundedRequestLifetimeScope implements RequestLifetimeScope {
     }));
     const overflow = this.#history.length - this.#historyLimit;
     if (overflow > 0) this.#history.splice(0, overflow);
+  }
+
+  #isDisposed(): boolean {
+    return this.#state === 'disposed';
   }
 
   #settleIdle(): void {
