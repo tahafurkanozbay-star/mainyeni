@@ -61,8 +61,6 @@ const normalizeTimeoutMs = (value: unknown): number => {
   return Math.min(MAX_TIMEOUT_MS, Math.max(1, Math.trunc(numeric)));
 };
 
-const normalizeHeaders = (headers: HeadersInit): Headers => new Headers(headers);
-
 const toRequestBody = (value: unknown): RequestBody => {
   if (value === undefined || value === null) return value;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
