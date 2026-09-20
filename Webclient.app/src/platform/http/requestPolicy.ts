@@ -381,6 +381,12 @@ export const serializeRequestBody = (
   if (type === 'json') {
     try {
       const body = JSON.stringify(data);
+      if (typeof body !== 'string') {
+        throw new AppError('Request body could not be serialized.', {
+          code: 'REQUEST_SERIALIZATION_FAILED',
+          retryable: false
+        });
+      }
       assertRequestBodyBudget(utf8ByteLength(body), maxBodyBytes);
       return {
         body,
