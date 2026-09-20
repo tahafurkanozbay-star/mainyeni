@@ -31,11 +31,12 @@
     "preview": "vite preview --host 0.0.0.0",
     "lint": "oxlint src vite.config.ts vitest.config.ts",
     "lint:strict": "oxlint --deny-warnings src vite.config.ts vitest.config.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "quality:modernization": "node ../tools/admin-modernization-audit.mjs",
-    "verify": "npm run quality:modernization && npm run lint:strict && npm run typecheck && npm run test && npm run build"
+    "quality:modernization": "node ../tools/admin-modernization-audit.mjs --strict",
+    "verify": "npm run quality:modernization && npm run lint:strict && npm run typecheck && npm run test && npm run test:tooling && npm run build",
+    "test:tooling": "node --test ../tools/admin-modernization-audit.test.mjs"
   },
   "engines": {
     "node": ">=24.0.0",
