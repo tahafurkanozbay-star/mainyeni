@@ -59,9 +59,11 @@ const addPair = (a: CoordinateAccumulator, x: unknown, y: unknown, maximum: numb
   if (nx === null || ny === null) { a.invalid += 1; return; }
   a.finite += 1; a.minX = Math.min(a.minX, nx); a.minY = Math.min(a.minY, ny); a.maxX = Math.max(a.maxX, nx); a.maxY = Math.max(a.maxY, ny);
 };
+const isCoordinatePair = (value: readonly unknown[]): boolean =>
+  value.length >= 2 && !Array.isArray(value[0]) && !Array.isArray(value[1]);
 const walkCoordinatePairs = (value: unknown, a: CoordinateAccumulator, budget: Required<SketchGeometryBudget>): void => {
   if (a.count >= budget.maxCoordinates || !Array.isArray(value)) return;
-  if (value.length >= 2 && typeof value[0] !== 'object' && typeof value[1] !== 'object') { addPair(a, value[0], value[1], budget.maxAbsoluteCoordinate); return; }
+  if (isCoordinatePair(value)) { addPair(a, value[0], value[1], budget.maxAbsoluteCoordinate); return; }
   for (const child of value) { if (a.count >= budget.maxCoordinates) break; walkCoordinatePairs(child, a, budget); }
 };
 const readCoordinatePayload = (type: SketchGeometryType, record: Readonly<Record<string, unknown>>): unknown => {
