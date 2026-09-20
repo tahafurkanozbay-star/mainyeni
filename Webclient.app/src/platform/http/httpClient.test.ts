@@ -22,7 +22,7 @@ const transport = (implementation?: HttpTransport['request']): HttpTransport => 
 
 describe('httpClient public facade', () => {
   test('exports compatibility methods', () => {
-    expect(apiClient).toEqual(expect.objectContaining({ request: expect.any(Function), requestRaw: expect.any(Function), get: expect.any(Function), head: expect.any(Function), post: expect.any(Function), put: expect.any(Function), patch: expect.any(Function), delete: expect.any(Function), clearCache: expect.any(Function), invalidateCache: expect.any(Function), getCacheSize: expect.any(Function), getDiagnostics: expect.any(Function), getDiagnosticSummary: expect.any(Function) }));
+    expect(apiClient).toEqual(expect.objectContaining({ request: expect.any(Function), requestRaw: expect.any(Function), get: expect.any(Function), head: expect.any(Function), post: expect.any(Function), put: expect.any(Function), patch: expect.any(Function), delete: expect.any(Function), clearCache: expect.any(Function), invalidateCache: expect.any(Function), invalidateCacheTags: expect.any(Function), invalidateCacheNamespace: expect.any(Function), getCacheSize: expect.any(Function), getCacheRuntimeSnapshot: expect.any(Function), getDiagnostics: expect.any(Function), getDiagnosticSummary: expect.any(Function) }));
   });
 
   test('singleton maintenance helpers expose safe snapshots', () => {
@@ -65,12 +65,16 @@ describe('createApiClient compatibility', () => {
     expect(client.coordinator.defaults).toMatchObject({ maxRetries: 4, timeoutMs: 12000, cacheTtlMs: 45000 });
   });
 
-  test('caller signals prevent dedupe sharing', async () => {
+  test('caller signals use subscriber-aware dedupe sharing', async () => {
     const custom = transport();
     const client = createApiClient({ runtimeConfig: runtime, transport: custom });
-    const controller = new AbortController();
-    await Promise.all([client.get('/items', { signal: controller.signal, dedupe: true }), client.get('/items', { signal: controller.signal, dedupe: true })]);
-    expect(custom.request).toHaveBeenCalledTimes(2);
+    const first = new AbortController();
+    const second = new AbortController();
+    await Promise.all([
+      client.get('/items', { signal: first.signal, dedupe: true }),
+      client.get('/items', { signal: second.signal, dedupe: true })
+    ]);
+    expect(custom.request).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -83,6 +87,7 @@ describe('cache and diagnostics', () => {
     await client.get('/health', { cache: true });
     expect(custom.request).toHaveBeenCalledTimes(2);
     expect(client.invalidateCache('get|/items')).toBe(1);
+    expect(client.getCacheRuntimeSnapshot()).toMatchObject({ store: { entries: 1 } });
     expect(client.clearCache()).toBe(1);
     expect(client.getCacheSize()).toBe(0);
   });
