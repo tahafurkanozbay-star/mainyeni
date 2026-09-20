@@ -42,17 +42,21 @@ export const createSkipNavigation = (options: SkipNavigationOptions): SkipNaviga
             seen.add(id);
             if (!item.target.id) item.target.id = id;
             const restore = ensureFocusable(item.target);
-            cleanups.set(id, restore);
             const link = item.target.ownerDocument.createElement("a");
             link.href = `#${item.target.id}`;
             link.textContent = label;
             link.dataset.skipNavigation = id;
             if (options.className) link.className = options.className;
-            link.addEventListener("click", (event) => {
+            const onClick = (event: MouseEvent): void => {
                 event.preventDefault();
                 item.target.focus({ preventScroll: true });
                 item.target.scrollIntoView({ block: "start", behavior: "auto" });
                 options.onNavigate?.(id);
+            };
+            link.addEventListener("click", onClick);
+            cleanups.set(id, () => {
+                link.removeEventListener("click", onClick);
+                restore();
             });
             options.container.append(link);
         }
