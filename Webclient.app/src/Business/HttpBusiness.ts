@@ -1,17 +1,24 @@
-import { isAbortError } from './contracts';
+import { apiClient } from '../platform/http/httpClient';
+import {
+  isPlainRecord,
+  type RawRequestConfig,
+  type RequestBody,
+} from '../platform/http/contracts';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const MAX_TIMEOUT_MS = 120_000;
+const MAX_TIMEOUT_MS = 60_000;
 
 export type HttpQueryParameters = Readonly<Record<string, unknown>>;
 
 export interface HttpRequestOptions {
   readonly method?: string;
   readonly headers?: HeadersInit;
-  readonly body?: BodyInit | null;
+  readonly body?: unknown;
   readonly params?: HttpQueryParameters;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  readonly cache?: boolean;
+  readonly dedupe?: boolean;
 }
 
 export class HttpRequestError extends Error {
@@ -54,72 +61,44 @@ const normalizeTimeoutMs = (value: unknown): number => {
   return Math.min(MAX_TIMEOUT_MS, Math.max(1, Math.trunc(numeric)));
 };
 
-const appendQuery = (url: string, params?: HttpQueryParameters): string => {
-  if (!params) return url;
+const normalizeHeaders = (headers?: HeadersInit): Headers | undefined =>
+  headers === undefined ? undefined : new Headers(headers);
 
-  const searchParams = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) searchParams.set(key, String(value));
-  });
-
-  const query = searchParams.toString();
-  if (!query) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}${query}`;
+const toRequestBody = (value: unknown): RequestBody => {
+  if (value === undefined || value === null) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value;
+  if (isPlainRecord(value)) return value;
+  if (typeof FormData !== 'undefined' && value instanceof FormData) return value;
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return value;
+  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) return value;
+  if (typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams) return value;
+  throw new TypeError('Unsupported HTTP request body.');
 };
 
-const readResponseData = async (response: Response): Promise<unknown> => {
-  const text = await response.text();
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-};
+const toPlatformConfig = (options: HttpRequestOptions): RawRequestConfig => ({
+  ...(options.headers === undefined ? {} : { headers: normalizeHeaders(options.headers) }),
+  ...(options.params === undefined ? {} : { params: { ...options.params } }),
+  ...(options.signal === undefined ? {} : { signal: options.signal }),
+  timeout: normalizeTimeoutMs(options.timeoutMs),
+  cache: options.cache === true,
+  dedupe: options.dedupe ?? options.signal === undefined,
+  maxRetries: 0,
+  priority: 'high',
+  schedulerGroup: 'business-api',
+});
 
 export const requestData = async <TResult = unknown>(
   url: string,
   options: HttpRequestOptions = {},
 ): Promise<TResult> => {
-  const method = options.method ?? 'GET';
-  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
-  const requestUrl = appendQuery(url, options.params);
-  const controller = new AbortController();
-  let timedOut = false;
-
-  const abortFromParent = (): void => controller.abort(options.signal?.reason);
-  if (options.signal?.aborted) abortFromParent();
-  else options.signal?.addEventListener('abort', abortFromParent, { once: true });
-
-  const timeoutId = globalThis.setTimeout(() => {
-    timedOut = true;
-    controller.abort(new HttpTimeoutError(timeoutMs));
-  }, timeoutMs);
-
-  const requestInit: RequestInit = {
+  const method = String(options.method ?? 'GET').trim().toLowerCase();
+  return apiClient.request<TResult>({
+    ...toPlatformConfig(options),
+    url,
     method,
-    signal: controller.signal,
-  };
-  if (options.headers !== undefined) requestInit.headers = options.headers;
-  if (options.body !== undefined) requestInit.body = options.body;
-
-  try {
-    const response = await fetch(requestUrl, requestInit);
-    const data = await readResponseData(response);
-
-    if (!response.ok) throw new HttpRequestError(response.status, data, requestUrl);
-    return data as TResult;
-  } catch (error) {
-    if (timedOut) throw new HttpTimeoutError(timeoutMs);
-    if (options.signal?.aborted || isAbortError(error)) {
-      throw new HttpAbortError(options.signal?.reason);
-    }
-    throw error;
-  } finally {
-    globalThis.clearTimeout(timeoutId);
-    options.signal?.removeEventListener('abort', abortFromParent);
-  }
+    ...(options.body === undefined ? {} : { data: toRequestBody(options.body) }),
+  });
 };
 
 type MethodlessOptions = Omit<HttpRequestOptions, 'method'>;
@@ -128,18 +107,23 @@ export const HttpBusiness = Object.freeze({
   Get: <TResult = unknown>(
     url: string,
     options: MethodlessOptions = {},
-  ): Promise<TResult> => requestData<TResult>(url, { ...options, method: 'GET' }),
+  ): Promise<TResult> => apiClient.get<TResult>(url, {
+    ...toPlatformConfig(options),
+    cache: options.cache === true,
+    dedupe: options.dedupe ?? options.signal === undefined,
+  }),
 
   Post: <TResult = unknown>(
     url: string,
     data: unknown,
     options: MethodlessOptions = {},
-  ): Promise<TResult> => {
-    const serialized = options.body ?? JSON.stringify(data);
-    return requestData<TResult>(url, {
-      ...options,
-      method: 'POST',
-      ...(serialized === undefined ? {} : { body: serialized }),
-    });
-  },
+  ): Promise<TResult> => apiClient.post<TResult>(
+    url,
+    toRequestBody(data),
+    {
+      ...toPlatformConfig(options),
+      cache: false,
+      dedupe: false,
+    },
+  ),
 });
