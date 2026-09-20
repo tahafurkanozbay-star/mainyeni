@@ -79,6 +79,32 @@ describe("skip navigation", () => {
         controller.destroy();
     });
 
+    test("filters targets whose labels are blank", () => {
+        const view = setup();
+        const controller = createSkipNavigation({
+            container: view.container,
+            targets: [
+                { id: "main", label: "   ", target: view.main },
+                { id: "map", label: "Haritaya geç", target: view.map }
+            ]
+        });
+        expect(view.container.querySelectorAll("a")).toHaveLength(1);
+        expect(view.container.querySelector("a")?.dataset.skipNavigation).toBe("map");
+        controller.destroy();
+    });
+
+    test("refresh restores temporary tabindex before applying the next target set", () => {
+        const view = setup();
+        view.main.removeAttribute("tabindex");
+        view.map.removeAttribute("tabindex");
+        const controller = createSkipNavigation({ container: view.container, targets: [{ id: "main", label: "İçerik", target: view.main }] });
+        expect(view.main.getAttribute("tabindex")).toBe("-1");
+        controller.refresh([{ id: "map", label: "Harita", target: view.map }]);
+        expect(view.main.hasAttribute("tabindex")).toBe(false);
+        expect(view.map.getAttribute("tabindex")).toBe("-1");
+        controller.destroy();
+    });
+
     test("refresh replaces the active target set", () => {
         const view = setup();
         const controller = createSkipNavigation({ container: view.container, targets: [{ id: "main", label: "İçerik", target: view.main }] });
@@ -86,5 +112,15 @@ describe("skip navigation", () => {
         expect(view.container.querySelectorAll("a")).toHaveLength(1);
         expect(view.container.querySelector("a")?.dataset.skipNavigation).toBe("map");
         controller.destroy();
+    });
+
+    test("destroy is idempotent and leaves the container empty", () => {
+        const view = setup();
+        const controller = createSkipNavigation({ container: view.container, targets: [{ id: "main", label: "İçerik", target: view.main }] });
+        controller.destroy();
+        controller.destroy();
+        expect(view.container.childElementCount).toBe(0);
+        controller.refresh([{ id: "map", label: "Harita", target: view.map }]);
+        expect(view.container.childElementCount).toBe(0);
     });
 });
