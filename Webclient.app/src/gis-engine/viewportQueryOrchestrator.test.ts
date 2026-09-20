@@ -638,4 +638,21 @@ describe('ViewportQueryOrchestrator cleanup and diagnostics', () => {
 
     expect(runtime.snapshot().rejectedResponses).toBe(1);
   });
+  it('rejects inferred response bytes that exceed the layer budget', async () => {
+    const runtime = createViewportQueryOrchestrator();
+    register(runtime, async () => ({
+      features: [{ id: 1 }, { id: 2 }],
+      complete: true,
+      exceededTransferLimit: false,
+    }), {
+      estimatedBytesPerFeature: 300,
+      maxResponseBytes: 500,
+    });
+    runtime.setViewport(frame());
+
+    await expect(runtime.queryLayer('roads')).rejects.toThrow(
+      'viewport query response exceeds maxResponseBytes',
+    );
+  });
+
 });
