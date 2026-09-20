@@ -199,7 +199,7 @@ export class ViewportQueryPolicy {
     const density = input.estimatedFeatureDensity;
     const estimatedFeatures = density === undefined
       ? null
-      : Math.max(0, Math.ceil(finitePositive(density, 'estimatedFeatureDensity') * area));
+      : Math.max(0, Math.ceil(finiteNonNegative(density, 'estimatedFeatureDensity') * area));
     if (estimatedFeatures !== null && estimatedFeatures > maxFeatures) warnings.push('estimated-feature-budget-exceeded');
     if (fields.length === this.#configuration.maxFields) warnings.push('field-budget-saturated');
 
