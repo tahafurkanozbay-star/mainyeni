@@ -98,8 +98,7 @@ describe('scene layer registration and viewport lifecycle', () => {
     }, adapter({ load, suspend, activate }));
 
     await runtime.setViewport({ scale: 10_000 });
-    await runtime.request('zoning');
-    expect(runtime.getLayerSnapshot('zoning')?.phase).toBe('ready');
+    await vi.waitFor(() => expect(runtime.getLayerSnapshot('zoning')?.phase).toBe('ready'));
 
     await runtime.setViewport({ scale: 100_000 });
     expect(runtime.getLayerSnapshot('zoning')?.phase).toBe('suspended');
