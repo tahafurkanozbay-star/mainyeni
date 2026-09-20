@@ -149,11 +149,35 @@ export class CacheCoordinator {
     });
   }
 
+  invalidateKey(key: string): boolean {
+    this.#assertOpen();
+    this.#mutations.invalidateKey(key);
+    this.#flights.cancel(key, 'cache-key-invalidation');
+    return this.#store.delete(key);
+  }
+
   invalidateTags(tags: readonly string[]): number {
     this.#assertOpen();
     this.#mutations.invalidateTags(tags);
     this.#flights.cancelAll('cache-tag-invalidation');
     return this.#store.invalidateTags(tags);
+  }
+
+  invalidatePrefix(prefix: string): number {
+    this.#assertOpen();
+    // Prefix invalidation is intentionally conservative: advance the global
+    // mutation generation so no in-flight completion can repopulate a key
+    // that matched the prefix before invalidation.
+    this.#mutations.invalidateAll();
+    this.#flights.cancelAll('cache-prefix-invalidation');
+    return this.#store.invalidatePrefix(prefix);
+  }
+
+  invalidateAll(): number {
+    this.#assertOpen();
+    this.#mutations.invalidateAll();
+    this.#flights.cancelAll('cache-global-invalidation');
+    return this.#store.clear();
   }
 
   invalidateNamespace(namespace: string): number {

@@ -1,3 +1,5 @@
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+
 import { ConfigurationBusiness } from '../../Business/ConfigurationBusiness';
 import { CommonBusiness } from '../../Business/CommonBusiness';
 import MapManager from '../../Store/Managers/MapManager';
@@ -9,27 +11,33 @@ import {
   getApplicationBootstrapDiagnosticSummary
 } from './bootstrapApplication';
 
-jest.mock('../../Business/ConfigurationBusiness', () => ({
+vi.mock('../../Business/ConfigurationBusiness', () => ({
   ConfigurationBusiness: {
-    GetMapConfiguration: jest.fn(),
-    GetConfigServices: jest.fn()
+    GetMapConfiguration: vi.fn(),
+    GetConfigServices: vi.fn()
   }
 }));
 
-jest.mock('../../Business/CommonBusiness', () => ({
+vi.mock('../../Business/CommonBusiness', () => ({
   CommonBusiness: {
-    GenerateUrl: jest.fn(),
-    AddProxyRule: jest.fn()
+    GenerateUrl: vi.fn(),
+    AddProxyRule: vi.fn()
   }
 }));
 
-jest.mock('../../Store/Managers/MapManager', () => ({
-  __esModule: true,
+vi.mock('../../Store/Managers/MapManager', () => ({
   default: {
-    SetMapConfiguration: jest.fn(),
-    SetConfigurationServices: jest.fn()
+    SetMapConfiguration: vi.fn(),
+    SetConfigurationServices: vi.fn()
   }
 }));
+
+const getMapConfiguration = vi.mocked(ConfigurationBusiness.GetMapConfiguration);
+const getConfigServices = vi.mocked(ConfigurationBusiness.GetConfigServices);
+const generateUrl = vi.mocked(CommonBusiness.GenerateUrl);
+const addProxyRule = vi.mocked(CommonBusiness.AddProxyRule);
+const setMapConfiguration = vi.mocked(MapManager.SetMapConfiguration);
+const setConfigurationServices = vi.mocked(MapManager.SetConfigurationServices);
 
 const mapConfiguration = {
   center: [32.85, 39.92],
@@ -42,64 +50,64 @@ const services = [
   { id: 2, title: 'Roads', eg: 'https://gis.example.test/roads' }
 ];
 
-const resetSuccessfulDefaults = () => {
-  ConfigurationBusiness.GetMapConfiguration.mockResolvedValue({
+const resetSuccessfulDefaults = (): void => {
+  getMapConfiguration.mockResolvedValue({
     isSuccess: true,
     data: { configValue: JSON.stringify(mapConfiguration) }
   });
-  ConfigurationBusiness.GetConfigServices.mockResolvedValue({
+  getConfigServices.mockResolvedValue({
     isSuccess: true,
     data: services
   });
-  CommonBusiness.GenerateUrl.mockImplementation((service) => service.eg);
-  CommonBusiness.AddProxyRule.mockResolvedValue(undefined);
-  MapManager.SetMapConfiguration.mockReturnValue(undefined);
-  MapManager.SetConfigurationServices.mockReturnValue(undefined);
+  generateUrl.mockImplementation((service) => service.eg);
+  addProxyRule.mockResolvedValue(undefined);
+  setMapConfiguration.mockReturnValue(undefined);
+  setConfigurationServices.mockReturnValue(undefined);
 };
 
 describe('applicationBootstrapDependencies', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     resetSuccessfulDefaults();
   });
 
   test('loads map configuration through ConfigurationBusiness', async () => {
-    const signal = { aborted: false };
+    const signal = new AbortController().signal;
     await applicationBootstrapDependencies.loadMapConfiguration({ signal });
-    expect(ConfigurationBusiness.GetMapConfiguration).toHaveBeenCalledWith({ signal });
+    expect(getMapConfiguration).toHaveBeenCalledWith({ signal });
   });
 
   test('loads GIS service configuration through ConfigurationBusiness', async () => {
-    const signal = { aborted: false };
+    const signal = new AbortController().signal;
     await applicationBootstrapDependencies.loadConfigurationServices({ signal });
-    expect(ConfigurationBusiness.GetConfigServices).toHaveBeenCalledWith({ signal });
+    expect(getConfigServices).toHaveBeenCalledWith({ signal });
   });
 
   test('generates proxy URLs through CommonBusiness', () => {
     const value = applicationBootstrapDependencies.generateServiceUrl(services[0]);
     expect(value).toBe(services[0].eg);
-    expect(CommonBusiness.GenerateUrl).toHaveBeenCalledWith(services[0]);
+    expect(generateUrl).toHaveBeenCalledWith(services[0]);
   });
 
   test('installs proxy rules through CommonBusiness', async () => {
     await applicationBootstrapDependencies.addProxyRule('https://gis.example.test/a', 'source');
-    expect(CommonBusiness.AddProxyRule).toHaveBeenCalledWith('https://gis.example.test/a', 'source');
+    expect(addProxyRule).toHaveBeenCalledWith('https://gis.example.test/a', 'source');
   });
 
   test('commits map configuration through MapManager', async () => {
     await applicationBootstrapDependencies.setMapConfiguration(mapConfiguration);
-    expect(MapManager.SetMapConfiguration).toHaveBeenCalledWith(mapConfiguration);
+    expect(setMapConfiguration).toHaveBeenCalledWith(mapConfiguration);
   });
 
   test('commits service configuration through MapManager', async () => {
     await applicationBootstrapDependencies.setConfigurationServices(services);
-    expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith(services);
+    expect(setConfigurationServices).toHaveBeenCalledWith(services);
   });
 });
 
 describe('bootstrapApplication integration adapter', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     clearApplicationBootstrapDiagnostics();
     resetSuccessfulDefaults();
   });
@@ -110,29 +118,25 @@ describe('bootstrapApplication integration adapter', () => {
     expect(result.status).toBe('completed');
     expect(result.serviceCount).toBe(2);
     expect(result.proxyRuleCount).toBe(2);
-    expect(ConfigurationBusiness.GetMapConfiguration).toHaveBeenCalledTimes(1);
-    expect(ConfigurationBusiness.GetConfigServices).toHaveBeenCalledTimes(1);
-    expect(CommonBusiness.GenerateUrl).toHaveBeenCalledTimes(2);
-    expect(CommonBusiness.AddProxyRule).toHaveBeenCalledTimes(2);
-    expect(MapManager.SetMapConfiguration).toHaveBeenCalledWith(mapConfiguration);
-    expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith(services);
+    expect(getMapConfiguration).toHaveBeenCalledTimes(1);
+    expect(getConfigServices).toHaveBeenCalledTimes(1);
+    expect(generateUrl).toHaveBeenCalledTimes(2);
+    expect(addProxyRule).toHaveBeenCalledTimes(2);
+    expect(setMapConfiguration).toHaveBeenCalledWith(mapConfiguration);
+    expect(setConfigurationServices).toHaveBeenCalledWith(services);
   });
 
   test('passes a caller cancellation signal to both network loaders', async () => {
-    const signal = {
-      aborted: false,
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
-    };
+    const signal = new AbortController().signal;
 
     await bootstrapApplication({ signal });
 
-    expect(ConfigurationBusiness.GetMapConfiguration).toHaveBeenCalledWith({ signal });
-    expect(ConfigurationBusiness.GetConfigServices).toHaveBeenCalledWith({ signal });
+    expect(getMapConfiguration).toHaveBeenCalledWith({ signal });
+    expect(getConfigServices).toHaveBeenCalledWith({ signal });
   });
 
   test('does not commit configuration when the map request fails', async () => {
-    ConfigurationBusiness.GetMapConfiguration.mockResolvedValue({
+    getMapConfiguration.mockResolvedValue({
       isSuccess: false,
       message: 'map unavailable'
     });
@@ -140,13 +144,13 @@ describe('bootstrapApplication integration adapter', () => {
     await expect(bootstrapApplication()).rejects.toMatchObject({
       code: 'BOOTSTRAP_MAP_REQUEST_FAILED'
     });
-    expect(CommonBusiness.AddProxyRule).not.toHaveBeenCalled();
-    expect(MapManager.SetMapConfiguration).not.toHaveBeenCalled();
-    expect(MapManager.SetConfigurationServices).not.toHaveBeenCalled();
+    expect(addProxyRule).not.toHaveBeenCalled();
+    expect(setMapConfiguration).not.toHaveBeenCalled();
+    expect(setConfigurationServices).not.toHaveBeenCalled();
   });
 
   test('does not commit configuration when the service request fails', async () => {
-    ConfigurationBusiness.GetConfigServices.mockResolvedValue({
+    getConfigServices.mockResolvedValue({
       isSuccess: false,
       message: 'services unavailable'
     });
@@ -154,25 +158,25 @@ describe('bootstrapApplication integration adapter', () => {
     await expect(bootstrapApplication()).rejects.toMatchObject({
       code: 'BOOTSTRAP_SERVICE_REQUEST_FAILED'
     });
-    expect(CommonBusiness.AddProxyRule).not.toHaveBeenCalled();
-    expect(MapManager.SetMapConfiguration).not.toHaveBeenCalled();
+    expect(addProxyRule).not.toHaveBeenCalled();
+    expect(setMapConfiguration).not.toHaveBeenCalled();
   });
 
   test('waits for asynchronous proxy setup before committing MapManager state', async () => {
-    let resolveProxy;
-    const proxyPromise = new Promise((resolve) => { resolveProxy = resolve; });
-    CommonBusiness.AddProxyRule
+    let resolveProxy!: () => void;
+    const proxyPromise = new Promise<void>((resolve) => { resolveProxy = resolve; });
+    addProxyRule
       .mockReturnValueOnce(proxyPromise)
       .mockResolvedValueOnce(undefined);
 
     const execution = bootstrapApplication();
     await Promise.resolve();
     await Promise.resolve();
-    expect(MapManager.SetMapConfiguration).not.toHaveBeenCalled();
+    expect(setMapConfiguration).not.toHaveBeenCalled();
 
     resolveProxy();
     await execution;
-    expect(MapManager.SetMapConfiguration).toHaveBeenCalledTimes(1);
+    expect(setMapConfiguration).toHaveBeenCalledTimes(1);
   });
 
   test('deduplicates identical proxy endpoints while retaining both services', async () => {
@@ -180,7 +184,7 @@ describe('bootstrapApplication integration adapter', () => {
       { id: 1, title: 'A', eg: 'https://gis.example.test/shared' },
       { id: 2, title: 'B', eg: 'https://gis.example.test/shared' }
     ];
-    ConfigurationBusiness.GetConfigServices.mockResolvedValue({
+    getConfigServices.mockResolvedValue({
       isSuccess: true,
       data: sharedServices
     });
@@ -188,12 +192,12 @@ describe('bootstrapApplication integration adapter', () => {
     const result = await bootstrapApplication();
     expect(result.serviceCount).toBe(2);
     expect(result.proxyRuleCount).toBe(1);
-    expect(CommonBusiness.AddProxyRule).toHaveBeenCalledTimes(1);
-    expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith(sharedServices);
+    expect(addProxyRule).toHaveBeenCalledTimes(1);
+    expect(setConfigurationServices).toHaveBeenCalledWith(sharedServices);
   });
 
   test('supports a deployment with no configured GIS services', async () => {
-    ConfigurationBusiness.GetConfigServices.mockResolvedValue({
+    getConfigServices.mockResolvedValue({
       isSuccess: true,
       data: []
     });
@@ -201,12 +205,12 @@ describe('bootstrapApplication integration adapter', () => {
     const result = await bootstrapApplication();
     expect(result.serviceCount).toBe(0);
     expect(result.proxyRuleCount).toBe(0);
-    expect(CommonBusiness.AddProxyRule).not.toHaveBeenCalled();
-    expect(MapManager.SetConfigurationServices).toHaveBeenCalledWith([]);
+    expect(addProxyRule).not.toHaveBeenCalled();
+    expect(setConfigurationServices).toHaveBeenCalledWith([]);
   });
 
   test('uses a caller-provided diagnostics collector instead of the shared collector', async () => {
-    const diagnostics = { record: jest.fn() };
+    const diagnostics = { record: vi.fn() };
     await bootstrapApplication({ diagnostics });
     expect(diagnostics.record).toHaveBeenCalledWith('bootstrap.started', expect.any(Object));
     expect(getApplicationBootstrapDiagnostics()).toEqual([]);
@@ -236,12 +240,12 @@ describe('bootstrapApplication integration adapter', () => {
   });
 
   test('records proxy failures without committing application state', async () => {
-    CommonBusiness.AddProxyRule.mockRejectedValue(new Error('proxy failed'));
+    addProxyRule.mockRejectedValue(new Error('proxy failed'));
     await expect(bootstrapApplication()).rejects.toMatchObject({
       code: 'BOOTSTRAP_PROXY_SETUP_FAILED'
     });
-    expect(MapManager.SetMapConfiguration).not.toHaveBeenCalled();
-    expect(MapManager.SetConfigurationServices).not.toHaveBeenCalled();
+    expect(setMapConfiguration).not.toHaveBeenCalled();
+    expect(setConfigurationServices).not.toHaveBeenCalled();
     expect(getApplicationBootstrapDiagnosticSummary().counters['bootstrap.failed']).toBe(1);
   });
 });
