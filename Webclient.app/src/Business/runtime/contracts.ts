@@ -221,15 +221,17 @@ export interface ApiRuntimeDependencies {
   readonly diagnostics: BusinessDiagnostics;
 }
 
+export interface ApiRuntimeRequestOptions {
+  readonly params?: Readonly<Record<string, unknown>>;
+  readonly control?: ApiRequestControl;
+  readonly serviceKey?: string;
+}
+
 export interface ApiRuntime {
   readonly get: <TResult = unknown>(
     operation: string,
     url: string,
-    options?: {
-      readonly params?: Readonly<Record<string, unknown>>;
-      readonly control?: ApiRequestControl;
-      readonly serviceKey?: string;
-    },
+    options?: ApiRuntimeRequestOptions,
   ) => Promise<TResult>;
 }
 
