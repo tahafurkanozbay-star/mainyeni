@@ -219,6 +219,7 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
     }
 
     if (typeof operation !== 'function') return Promise.reject(new SpatialRequestCoordinatorError('Spatial request operation is required.', 'MISSING_OPERATION'));
+    if (requestOptions.signal?.aborted) return Promise.reject(abortError(requestOptions.signal.reason));
     trimCache();
     const cached = cache.get(key);
     if (cached && cached.expiresAt > now()) return Promise.resolve(cached.value as T);
@@ -251,6 +252,11 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
       const signal = requestOptions.signal ?? null;
       if (signal?.aborted) {
         reject(abortError(signal.reason));
+        if (entry && entry.state === 'queued' && entry.subscribers.size === 0) {
+          entry.state = 'cancelled';
+          entry.finishedAt = now();
+          detachTerminalEntry(entry as Entry<unknown>);
+        }
         return;
       }
       const subscriber: Subscriber<T> = { resolve, reject, signal, abortListener: null };
@@ -260,7 +266,7 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
         reject(abortError(signal?.reason));
         if (entry && entry.subscribers.size === 0) {
           entry.controller.abort('No spatial request subscribers remain');
-          if (entry.state === 'queued') {
+          if (entry.state === 'queued' || entry.state === 'running') {
             entry.state = 'cancelled';
             entry.finishedAt = now();
             detachTerminalEntry(entry as Entry<unknown>);
@@ -279,12 +285,10 @@ export const createSpatialRequestCoordinator = (options: Readonly<{
     const entry = entries.get(key);
     if (!entry) return false;
     entry.controller.abort(reason);
-    if (entry.state === 'queued') {
-      entry.state = 'cancelled';
-      entry.finishedAt = now();
-      detachTerminalEntry(entry);
-      settleSubscribers(entry, undefined, abortError(reason));
-    }
+    entry.state = 'cancelled';
+    entry.finishedAt = now();
+    detachTerminalEntry(entry);
+    settleSubscribers(entry, undefined, abortError(reason));
     return true;
   };
 
