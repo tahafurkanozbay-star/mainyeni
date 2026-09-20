@@ -309,6 +309,24 @@ describe('sketchAccessibilityRuntime', () => {
     expect(items.filter((item) => item.tabIndex === 0)).toHaveLength(1);
   });
 
+  it('focuses only the requested first item', () => {
+    const items = Array.from({ length: 3 }, () => document.createElement('button'));
+    items.forEach((item) => { item.focus = vi.fn(); });
+    focusSketchToolbarItem(items, 2, 'first');
+    expect(items[0]!.focus).toHaveBeenCalledTimes(1);
+    expect(items[1]!.focus).not.toHaveBeenCalled();
+    expect(items[2]!.focus).not.toHaveBeenCalled();
+  });
+
+  it('focuses only the requested last item', () => {
+    const items = Array.from({ length: 3 }, () => document.createElement('button'));
+    items.forEach((item) => { item.focus = vi.fn(); });
+    focusSketchToolbarItem(items, 0, 'last');
+    expect(items[0]!.focus).not.toHaveBeenCalled();
+    expect(items[1]!.focus).not.toHaveBeenCalled();
+    expect(items[2]!.focus).toHaveBeenCalledTimes(1);
+  });
+
   it('returns -1 for an empty toolbar', () => {
     expect(focusSketchToolbarItem([], 0, 'next')).toBe(-1);
   });
