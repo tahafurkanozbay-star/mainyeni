@@ -127,12 +127,10 @@ describe('viewportTilePlanner', () => {
       maxFeatures: 2000,
     });
     const second = planner.plan({
-      ...{
-        extent: { ...extent, xmin: 1 },
-        pixelWidth: 800,
-        pixelHeight: 600,
-        maxFeatures: 2000,
-      },
+      extent: { ...extent, xmin: 1 },
+      pixelWidth: 800,
+      pixelHeight: 600,
+      maxFeatures: 2000,
     });
     expect(second.key).not.toBe(first.key);
   });
