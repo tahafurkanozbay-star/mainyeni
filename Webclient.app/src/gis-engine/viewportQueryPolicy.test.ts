@@ -148,4 +148,12 @@ describe('viewportQueryPolicy', () => {
     const second = policy.plan({ ...input, extent: { ...extent, xmin: 1 } });
     expect(second.key).not.toBe(first.key);
   });
+  it('accepts a verified zero-density estimate without fabricating work', () => {
+    const policy = createViewportQueryPolicy({ maxFeatures: 1_000 });
+    const plan = policy.plan({ ...input, estimatedFeatureDensity: 0 });
+    expect(plan.estimatedFeatures).toBe(0);
+    expect(plan.pressure).toBe('low');
+    expect(plan.warnings).not.toContain('estimated-feature-budget-exceeded');
+  });
+
 });
