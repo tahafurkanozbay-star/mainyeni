@@ -22,7 +22,7 @@ const transport = (implementation?: HttpTransport['request']): HttpTransport => 
 
 describe('httpClient public facade', () => {
   test('exports compatibility methods', () => {
-    expect(apiClient).toEqual(expect.objectContaining({ request: expect.any(Function), requestRaw: expect.any(Function), get: expect.any(Function), head: expect.any(Function), post: expect.any(Function), put: expect.any(Function), patch: expect.any(Function), delete: expect.any(Function), clearCache: expect.any(Function), invalidateCache: expect.any(Function), invalidateCacheTags: expect.any(Function), invalidateCacheNamespace: expect.any(Function), getCacheSize: expect.any(Function), getCacheRuntimeSnapshot: expect.any(Function), getDiagnostics: expect.any(Function), getDiagnosticSummary: expect.any(Function) }));
+    expect(apiClient).toEqual(expect.objectContaining({ request: expect.any(Function), requestRaw: expect.any(Function), get: expect.any(Function), head: expect.any(Function), post: expect.any(Function), put: expect.any(Function), patch: expect.any(Function), delete: expect.any(Function), clearCache: expect.any(Function), invalidateCache: expect.any(Function), invalidateCacheTags: expect.any(Function), invalidateCacheNamespace: expect.any(Function), getCacheSize: expect.any(Function), getCacheRuntimeSnapshot: expect.any(Function), getRequestScopeSnapshot: expect.any(Function), drain: expect.any(Function), dispose: expect.any(Function), getDiagnostics: expect.any(Function), getDiagnosticSummary: expect.any(Function) }));
   });
 
   test('singleton maintenance helpers expose safe snapshots', () => {
