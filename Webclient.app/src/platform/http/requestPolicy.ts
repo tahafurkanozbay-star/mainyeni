@@ -49,6 +49,12 @@ const MANAGED_REQUEST_HEADERS = new Set([
 
 const SECRET_KEY_PATTERN = /(password|passwd|secret|token|credential|authorization|cookie|api[-_]?key|client[-_]?key)/i;
 
+const containsControlCharacter = (value: string): boolean =>
+  [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
+
 export interface SerializedBodyResult {
   body: unknown;
   headers: Record<string, string>;
@@ -516,7 +522,7 @@ export const normalizeCacheTags = (value: unknown): readonly string[] => {
   const tags = new Set<string>();
   for (const item of value) {
     const tag = String(item ?? '').trim();
-    if (!tag || tag.length > 128 || /[\u0000-\u001f\u007f]/.test(tag)) {
+    if (!tag || tag.length > 128 || containsControlCharacter(tag)) {
       throw new AppError('Cache tag is invalid.', {
         code: 'INVALID_CACHE_TAGS',
         retryable: false
