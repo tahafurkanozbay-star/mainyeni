@@ -33,12 +33,12 @@ afterEach(() => {
 
 describe("focus candidate discovery", () => {
     test("discovers native controls and links in document order", () => {
-        const root = mount('<button id="a">A</button><a id="b" href="#x">B</a><input id="c" />');
+        const root = mount('<button type="button" id="a">A</button><a id="b" href="#x">B</a><input aria-label="Test control" id="c" />');
         expect(getFocusCandidates(root).map((item) => item.id)).toEqual(["a", "b", "c"]);
     });
 
     test("excludes disabled, hidden and negative-order controls by default", () => {
-        const root = mount('<button id="a" disabled>A</button><button id="b" hidden>B</button><button id="c">C</button>');
+        const root = mount('<button type="button" id="a" disabled>A</button><button type="button" id="b" hidden>B</button><button type="button" id="c">C</button>');
         const negative = button("D");
         negative.id = "d";
         negative.setAttribute("tabindex", "-1");
@@ -48,30 +48,30 @@ describe("focus candidate discovery", () => {
     });
 
     test("honors inert and aria-hidden ancestors", () => {
-        const root = mount('<section inert><button id="a">A</button></section><section aria-hidden="true"><button id="b">B</button></section><button id="c">C</button>');
+        const root = mount('<section inert><button type="button" id="a">A</button></section><section aria-hidden="true"><button type="button" id="b">B</button></section><button type="button" id="c">C</button>');
         expect(getFocusCandidates(root).map((item) => item.id)).toEqual(["c"]);
     });
 
     test("recognizes hidden input as non-focusable", () => {
-        const root = mount('<input id="secret" type="hidden" /><input id="visible" />');
+        const root = mount('<input aria-label="Test control" id="secret" type="hidden" /><input aria-label="Test control" id="visible" />');
         expect(isFocusable(root.querySelector("#secret") as HTMLElement)).toBe(false);
         expect(isFocusable(root.querySelector("#visible") as HTMLElement)).toBe(true);
     });
 
     test("reports disabled semantics from native and aria contracts", () => {
-        const root = mount('<button id="native" disabled>N</button><button id="aria" aria-disabled="true">A</button>');
+        const root = mount('<button type="button" id="native" disabled>N</button><button type="button" id="aria" aria-disabled="true">A</button>');
         expect(isElementDisabled(root.querySelector("#native") as HTMLElement)).toBe(true);
         expect(isElementDisabled(root.querySelector("#aria") as HTMLElement)).toBe(true);
     });
 
     test("reports hidden semantics from element and ancestor contracts", () => {
-        const root = mount('<div hidden><button id="nested">N</button></div><button id="visible">V</button>');
+        const root = mount('<div hidden><button type="button" id="nested">N</button></div><button type="button" id="visible">V</button>');
         expect(isElementHidden(root.querySelector("#nested") as HTMLElement)).toBe(true);
         expect(isElementHidden(root.querySelector("#visible") as HTMLElement)).toBe(false);
     });
 
     test("can include a focusable container", () => {
-        const root = mount('<button id="child">Child</button>');
+        const root = mount('<button type="button" id="child">Child</button>');
         root.setAttribute("tabindex", "0");
         expect(getFocusCandidates(root, { includeContainer: true })).toEqual([root, root.querySelector("#child")]);
     });
@@ -79,7 +79,7 @@ describe("focus candidate discovery", () => {
 
 describe("safe focus and sequential movement", () => {
     test("focuses connected controls", () => {
-        const root = mount('<button id="target">Target</button>');
+        const root = mount('<button type="button" id="target">Target</button>');
         const target = root.querySelector("#target") as HTMLElement;
         expect(focusSafely(target)).toBe(true);
         expect(document.activeElement).toBe(target);
@@ -90,20 +90,20 @@ describe("safe focus and sequential movement", () => {
     });
 
     test("moves to first and last candidates", () => {
-        const root = mount('<button id="a">A</button><button id="b">B</button>');
+        const root = mount('<button type="button" id="a">A</button><button type="button" id="b">B</button>');
         expect(moveFocus(root, "first").to?.id).toBe("a");
         expect(moveFocus(root, "last").to?.id).toBe("b");
     });
 
     test("moves next and previous from active control", () => {
-        const root = mount('<button id="a">A</button><button id="b">B</button><button id="c">C</button>');
+        const root = mount('<button type="button" id="a">A</button><button type="button" id="b">B</button><button type="button" id="c">C</button>');
         (root.querySelector("#b") as HTMLElement).focus();
         expect(moveFocus(root, "next").to?.id).toBe("c");
         expect(moveFocus(root, "previous").to?.id).toBe("b");
     });
 
     test("wraps sequential movement by default", () => {
-        const root = mount('<button id="a">A</button><button id="b">B</button>');
+        const root = mount('<button type="button" id="a">A</button><button type="button" id="b">B</button>');
         (root.querySelector("#b") as HTMLElement).focus();
         const result = moveFocus(root, "next");
         expect(result.to?.id).toBe("a");
@@ -111,7 +111,7 @@ describe("safe focus and sequential movement", () => {
     });
 
     test("can stop at sequence boundaries", () => {
-        const root = mount('<button id="a">A</button><button id="b">B</button>');
+        const root = mount('<button type="button" id="a">A</button><button type="button" id="b">B</button>');
         (root.querySelector("#b") as HTMLElement).focus();
         const result = moveFocus(root, "next", { loop: false });
         expect(result.moved).toBe(false);
@@ -126,7 +126,7 @@ describe("safe focus and sequential movement", () => {
 
 describe("focus trap", () => {
     test("moves initial focus into the trap", () => {
-        const root = mount('<button id="outside">Outside</button><section id="dialog"><button id="first">First</button><button id="last">Last</button></section>');
+        const root = mount('<button type="button" id="outside">Outside</button><section id="dialog"><button type="button" id="first">First</button><button type="button" id="last">Last</button></section>');
         const outside = root.querySelector("#outside") as HTMLElement;
         outside.focus();
         const trap = createFocusTrap({ container: root.querySelector("#dialog") as HTMLElement });
@@ -137,7 +137,7 @@ describe("focus trap", () => {
     });
 
     test("uses an explicit initial focus target", () => {
-        const root = mount('<section id="dialog"><button id="first">First</button><button id="last">Last</button></section>');
+        const root = mount('<section id="dialog"><button type="button" id="first">First</button><button type="button" id="last">Last</button></section>');
         const last = root.querySelector("#last") as HTMLElement;
         const trap = createFocusTrap({ container: root.querySelector("#dialog") as HTMLElement, initialFocus: last });
         trap.activate();
@@ -146,7 +146,7 @@ describe("focus trap", () => {
     });
 
     test("wraps Tab from the last control", () => {
-        const root = mount('<section id="dialog"><button id="first">First</button><button id="last">Last</button></section>');
+        const root = mount('<section id="dialog"><button type="button" id="first">First</button><button type="button" id="last">Last</button></section>');
         const dialog = root.querySelector("#dialog") as HTMLElement;
         const first = root.querySelector("#first") as HTMLElement;
         const last = root.querySelector("#last") as HTMLElement;
@@ -160,7 +160,7 @@ describe("focus trap", () => {
     });
 
     test("wraps reverse Tab from the first control", () => {
-        const root = mount('<section id="dialog"><button id="first">First</button><button id="last">Last</button></section>');
+        const root = mount('<section id="dialog"><button type="button" id="first">First</button><button type="button" id="last">Last</button></section>');
         const dialog = root.querySelector("#dialog") as HTMLElement;
         const first = root.querySelector("#first") as HTMLElement;
         const last = root.querySelector("#last") as HTMLElement;
@@ -173,7 +173,7 @@ describe("focus trap", () => {
     });
 
     test("recovers focus that escapes the trap", () => {
-        const root = mount('<button id="outside">Outside</button><section id="dialog"><button id="inside">Inside</button></section>');
+        const root = mount('<button type="button" id="outside">Outside</button><section id="dialog"><button type="button" id="inside">Inside</button></section>');
         const outside = root.querySelector("#outside") as HTMLElement;
         const trap = createFocusTrap({ container: root.querySelector("#dialog") as HTMLElement });
         trap.activate();
@@ -195,7 +195,7 @@ describe("focus trap", () => {
     });
 
     test("signals escape without silently deactivating lifecycle", () => {
-        const root = mount('<section id="dialog"><button>Inside</button></section>');
+        const root = mount('<section id="dialog"><button type="button">Inside</button></section>');
         const onEscape = vi.fn();
         const trap = createFocusTrap({ container: root.querySelector("#dialog") as HTMLElement, onEscape });
         trap.activate();
@@ -207,7 +207,7 @@ describe("focus trap", () => {
     });
 
     test("can preserve Escape for an owning surface", () => {
-        const root = mount('<section id="dialog"><button>Inside</button></section>');
+        const root = mount('<section id="dialog"><button type="button">Inside</button></section>');
         const onEscape = vi.fn();
         const trap = createFocusTrap({ container: root.querySelector("#dialog") as HTMLElement, escapeDeactivates: false, onEscape });
         trap.activate();
@@ -218,7 +218,7 @@ describe("focus trap", () => {
     });
 
     test("activation and deactivation are idempotent", () => {
-        const root = mount('<section id="dialog"><button>Inside</button></section>');
+        const root = mount('<section id="dialog"><button type="button">Inside</button></section>');
         const onActivate = vi.fn();
         const onDeactivate = vi.fn();
         const trap = createFocusTrap({ container: root.querySelector("#dialog") as HTMLElement, onActivate, onDeactivate });
@@ -231,7 +231,7 @@ describe("focus trap", () => {
 
 describe("roving focus", () => {
     const setup = (extra: Partial<Parameters<typeof createRovingFocus>[0]> = {}) => {
-        const root = mount('<div id="tabs"><button data-item id="a">Adres</button><button data-item id="b">Bina</button><button data-item id="c">Cadde</button></div>');
+        const root = mount('<div id="tabs"><button type="button" data-item id="a">Adres</button><button type="button" data-item id="b">Bina</button><button type="button" data-item id="c">Cadde</button></div>');
         const container = root.querySelector("#tabs") as HTMLElement;
         const controller = createRovingFocus({ container, itemSelector: "[data-item]", ...extra });
         return { root, container, controller };
