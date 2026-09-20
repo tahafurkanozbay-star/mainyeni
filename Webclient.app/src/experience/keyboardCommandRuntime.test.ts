@@ -66,10 +66,13 @@ describe("KeyboardCommandRuntime execution", () => {
 
     test("honors preventDefault false and stopPropagation true", () => {
         const runtime = createKeyboardCommandRuntime({ target: document });
+        const windowListener = vi.fn();
+        window.addEventListener("keydown", windowListener);
         runtime.register({ id: "help", keys: "F1", label: "Yardım", preventDefault: false, stopPropagation: true, handler: vi.fn() });
-        const event = press(document, "F1");
+        const event = press(document.body, "F1");
         expect(event.defaultPrevented).toBe(false);
-        expect(event.cancelBubble).toBe(true);
+        expect(windowListener).not.toHaveBeenCalled();
+        window.removeEventListener("keydown", windowListener);
         runtime.destroy();
     });
 
