@@ -344,7 +344,8 @@ describe('request-body budget normalization', () => {
 
 describe('fetch transport request-body budget integration', () => {
   test('rejects an oversized JSON body before invoking fetch', async () => {
-    const fetchImpl = vi.fn(async () => okResponse()) as unknown as typeof fetch;
+    const fetchMock = vi.fn(async () => okResponse());
+    const fetchImpl = fetchMock as unknown as typeof fetch;
 
     await expect(executeFetch({
       method: 'post',
@@ -359,7 +360,7 @@ describe('fetch transport request-body budget integration', () => {
       retryable: false,
     });
 
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('sends bounded JSON body with normalized content type', async () => {
@@ -378,8 +379,8 @@ describe('fetch transport request-body budget integration', () => {
       status: 200,
     });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [, options] = fetchImpl.mock.calls[0]!;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, options] = fetchMock.mock.calls[0]!;
     expect(options).toMatchObject({
       method: 'POST',
       body: '{"value":1}',
@@ -406,7 +407,7 @@ describe('fetch transport request-body budget integration', () => {
       code: 'REQUEST_BODY_TOO_LARGE',
     });
 
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(onStart).not.toHaveBeenCalled();
   });
 
@@ -424,6 +425,6 @@ describe('fetch transport request-body budget integration', () => {
       fetchImpl,
     })).resolves.toMatchObject({ status: 200 });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
