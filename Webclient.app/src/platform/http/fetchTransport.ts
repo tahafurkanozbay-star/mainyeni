@@ -189,7 +189,8 @@ export const executeFetch = async <T = unknown>(
   const bodyResult = serializeRequestBody(
     config.method,
     config.data,
-    config.headers
+    config.headers,
+    { maxBodyBytes: config.maxRequestBodyBytes }
   );
 
   const linked = createLinkedAbortScope({
