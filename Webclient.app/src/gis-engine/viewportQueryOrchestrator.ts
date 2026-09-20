@@ -429,9 +429,12 @@ export class ViewportQueryOrchestrator {
         ?? DEFAULT_ESTIMATED_BYTES_PER_FEATURE,
       'defaultEstimatedBytesPerFeature',
     );
-    this.#defaultMaxResponseBytes = positiveSafeInteger(
-      configuration.defaultMaxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
-      'defaultMaxResponseBytes',
+    this.#defaultMaxResponseBytes = Math.min(
+      positiveSafeInteger(
+        configuration.defaultMaxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
+        'defaultMaxResponseBytes',
+      ),
+      this.#governance.budget.maxBytesPerRequest,
     );
     this.#frameCoordinatePrecision = configuration.frameCoordinatePrecision
       ?? DEFAULT_FRAME_COORDINATE_PRECISION;
@@ -690,13 +693,15 @@ export class ViewportQueryOrchestrator {
         this.#staleResults += 1;
         throw new ViewportQueryStaleError(frame.generation, this.#generation);
       }
+      const receivedAt = this.#safeNow();
       const result = this.#validateResponse(
         layerId,
         frame,
         plan,
         response,
         registration.maxResponseBytes,
-        timestamp,
+        registration.estimatedBytesPerFeature,
+        receivedAt,
       );
 
       if (cacheEnabled && result.complete) {
@@ -705,7 +710,7 @@ export class ViewportQueryOrchestrator {
           registration.cacheTtlMs,
           this.#maxCacheTtlMs,
         );
-        if (ttl > 0) this.#writeCache(cacheKey, layerId, result, timestamp + ttl);
+        if (ttl > 0) this.#writeCache(cacheKey, layerId, result, receivedAt + ttl);
       }
       return result;
     } catch (error) {
@@ -823,6 +828,7 @@ export class ViewportQueryOrchestrator {
     plan: ViewportQueryPlan,
     response: ViewportLayerQueryResponse<TFeature>,
     maximumBytes: number,
+    estimatedBytesPerFeature: number,
     receivedAt: number,
   ): ViewportLayerQueryResult<TFeature> {
     if (!Array.isArray(response.features)) {
@@ -836,7 +842,7 @@ export class ViewportQueryOrchestrator {
     const estimatedBytes = response.estimatedBytes === undefined
       ? Math.min(
         maximumBytes,
-        response.features.length * DEFAULT_ESTIMATED_BYTES_PER_FEATURE,
+        response.features.length * estimatedBytesPerFeature,
       )
       : finiteNonNegative(response.estimatedBytes, 'response estimatedBytes');
     if (estimatedBytes > maximumBytes) {
