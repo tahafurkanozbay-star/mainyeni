@@ -3,6 +3,12 @@ import { Constants_ServiceResultType } from '../Core/Constants';
 import { AuthBusiness } from './AuthBusiness';
 import { HttpBusiness } from './HttpBusiness';
 
+export interface EgoBusinessResult {
+  readonly type?: unknown;
+  readonly message?: string;
+  readonly data?: unknown;
+}
+
 export interface EgoBusinessFailure {
   readonly type: unknown;
   readonly message: string;
