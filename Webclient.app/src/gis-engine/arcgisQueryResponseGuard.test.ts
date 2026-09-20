@@ -582,4 +582,74 @@ describe('ArcGisQueryResponseGuard configuration and reset', () => {
       expect((error as ArcGisResponseIntegrityError).code).toBe('FEATURES_ARRAY_MISSING');
     }
   });
+  it('does not poison identity state when a page fails validation', () => {
+    const runtime = guard({ maxStringValueLength: 16 });
+
+    expect(() => runtime.inspectPage({
+      features: [
+        feature(1),
+        feature(2, {
+          attributes: {
+            OBJECTID: 2,
+            NAME: 'x'.repeat(100),
+          },
+        }),
+      ],
+      exceededTransferLimit: false,
+    }, {
+      requestKey: 'failed-page',
+      offset: 0,
+    })).toThrowError(expect.objectContaining({
+      code: 'STRING_BUDGET_EXCEEDED',
+    }));
+
+    expect(runtime.snapshot()).toMatchObject({
+      pages: 0,
+      rawFeatures: 0,
+      acceptedFeatures: 0,
+      seenObjectIds: 0,
+      seenRequestKeys: 0,
+    });
+
+    const retry = runtime.inspectPage({
+      features: [feature(1)],
+      exceededTransferLimit: false,
+    }, {
+      requestKey: 'retry-page',
+      offset: 0,
+    });
+    expect(retry.acceptedFeatureCount).toBe(1);
+  });
+
+  it('charges duplicate features to response byte budgets before dropping them', () => {
+    const baseline = guard();
+    const oneFeature = baseline.inspectPage({
+      features: [feature(2)],
+      exceededTransferLimit: false,
+    }, {
+      requestKey: 'baseline',
+      offset: 0,
+    });
+
+    const runtime = guard();
+    runtime.inspectPage({
+      features: [feature(1)],
+      exceededTransferLimit: true,
+    }, {
+      requestKey: 'first',
+      offset: 0,
+    });
+    const second = runtime.inspectPage({
+      features: [feature(1), feature(2)],
+      exceededTransferLimit: false,
+    }, {
+      requestKey: 'second',
+      offset: 1,
+    });
+
+    expect(second.acceptedFeatureCount).toBe(1);
+    expect(second.duplicateFeatureCount).toBe(1);
+    expect(second.estimatedBytes).toBeGreaterThan(oneFeature.estimatedBytes);
+  });
+
 });
