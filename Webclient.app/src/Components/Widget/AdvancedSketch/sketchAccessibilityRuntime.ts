@@ -35,6 +35,8 @@ export const sketchToolFromShortcut = (
 
 const isEditableTarget = (target: HTMLElement): boolean => {
   if (target.isContentEditable) return true;
+  const reflectedContentEditable = target.contentEditable?.toLowerCase();
+  if (reflectedContentEditable === 'true' || reflectedContentEditable === 'plaintext-only') return true;
   const ownContentEditable = target.getAttribute('contenteditable');
   if (ownContentEditable !== null && ownContentEditable.toLowerCase() !== 'false') return true;
   return target.closest('[contenteditable]:not([contenteditable="false"])') !== null;
