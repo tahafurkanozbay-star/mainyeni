@@ -203,19 +203,19 @@ export const createArcgisSketchAdapter = async (
   if (updatedHandle) handles.push(updatedHandle);
 
   const adapter: SketchViewAdapter = Object.freeze({
-    addGraphic: (graphic) => {
+    addGraphic: (graphic: SketchGraphicSnapshot) => {
       if (destroyed) throw new Error('ArcGIS sketch adapter is destroyed.');
       layer.add?.(toArcgisGraphic(graphic));
     },
 
-    replaceGraphics: (graphics) => {
+    replaceGraphics: (graphics: readonly SketchGraphicSnapshot[]) => {
       if (destroyed) throw new Error('ArcGIS sketch adapter is destroyed.');
       layer.removeAll?.();
       const converted = graphics.map(toArcgisGraphic);
       if (converted.length > 0) layer.addMany?.(converted);
     },
 
-    removeGraphic: (id) => {
+    removeGraphic: (id: string) => {
       if (destroyed) throw new Error('ArcGIS sketch adapter is destroyed.');
       const graphic = layer.graphics?.find?.((item) => {
         const parts = readGraphicParts(item);
@@ -229,7 +229,10 @@ export const createArcgisSketchAdapter = async (
       layer.removeAll?.();
     },
 
-    beginCreate: (tool: Exclude<SketchTool, 'move' | 'clear'>, style) => {
+    beginCreate: (
+      tool: Exclude<SketchTool, 'move' | 'clear'>,
+      style: SketchStyleState,
+    ) => {
       if (destroyed) throw new Error('ArcGIS sketch adapter is destroyed.');
       setSymbols(sketchViewModel, style);
       const request = resolveArcgisSketchCreateRequest(tool);
@@ -256,6 +259,8 @@ export const createArcgisSketchAdapter = async (
   return Object.freeze({
     adapter,
     layerId,
-    destroy: adapter.destroy,
+    destroy: async (): Promise<void> => {
+      await adapter.destroy();
+    },
   });
 };

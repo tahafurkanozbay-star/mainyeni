@@ -29,6 +29,8 @@ const DEFAULT_BUDGET: Required<SketchGeometryBudget> = Object.freeze({
   maxAbsoluteCoordinate: 1_000_000_000,
 });
 
+const EMPTY_RECORD: Readonly<Record<string, unknown>> = Object.freeze({});
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -157,13 +159,15 @@ export const analyzeGeometry = (
   budgetInput: SketchGeometryBudget = {},
 ): SketchGeometryAnalysis => {
   const budget = mergeBudget(budgetInput);
-  const geometryRecord = isRecord(geometry) ? geometry : Object.freeze({});
+  const geometryRecord: Readonly<Record<string, unknown>> = isRecord(geometry)
+    ? geometry
+    : EMPTY_RECORD;
   const type = geometryType(geometryRecord.type);
   const payload = isRecord(geometryRecord.payload)
     ? geometryRecord.payload
     : isRecord(geometry)
       ? geometry
-      : Object.freeze({});
+      : EMPTY_RECORD;
   assertCollectionBudget(type, payload, budget);
 
   const accumulator = emptyAccumulator();

@@ -1,6 +1,9 @@
-import { faSketch } from '@fortawesome/free-brands-svg-icons';
-import { faChevronDown, faChevronUp, faTimes } from '@fortawesome/free-solid-svg-icons';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  BiChevronDown,
+  BiChevronUp,
+  BiShapePolygon,
+  BiX,
+} from 'react-icons/bi';
 import type { WindowManagerApi } from '../../../Store/Managers/WindowManager';
 import { AdvancedSketchWidgetMain } from './AdvancedSketchWidgetMain';
 
@@ -26,7 +29,7 @@ export const AdvancedSketchWidget = ({
       <header className="widget-window-title">
         <div className="row align-items-center">
           <div className="col-9">
-            <FontAwesomeIcon icon={faSketch} size="lg" className="widget-window_Icon" />
+            <BiShapePolygon className="widget-window_Icon" aria-hidden="true" />
             <span className="ms-2">Çizim</span>
           </div>
           <div className="col-3 d-flex justify-content-end">
@@ -36,7 +39,7 @@ export const AdvancedSketchWidget = ({
               onClick={() => windowManager.HideWindow(id)}
               aria-label="Çizim penceresini kapat"
             >
-              <FontAwesomeIcon icon={faTimes} />
+              <BiX aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -45,7 +48,9 @@ export const AdvancedSketchWidget = ({
               aria-label={minimized ? 'Çizim penceresini genişlet' : 'Çizim penceresini küçült'}
               aria-expanded={!minimized}
             >
-              <FontAwesomeIcon icon={minimized ? faChevronDown : faChevronUp} />
+              {minimized
+                ? <BiChevronDown aria-hidden="true" />
+                : <BiChevronUp aria-hidden="true" />}
             </button>
           </div>
         </div>

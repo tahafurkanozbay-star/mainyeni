@@ -41,7 +41,6 @@ const emptyToolCounts = (): Record<SketchTool, number> => ({
   polygon: 0,
   circle: 0,
   rectangle: 0,
-  text: 0,
   clear: 0,
 });
 
@@ -98,7 +97,7 @@ export const createSketchMetricsRuntime = (): SketchMetricsRuntime => {
   };
 
   return Object.freeze({
-    recordToolSelection: (tool) => {
+    recordToolSelection: (tool: SketchTool) => {
       toolSelections = { ...toolSelections, [tool]: toolSelections[tool] + 1 };
     },
     recordImport: () => { imports += 1; },

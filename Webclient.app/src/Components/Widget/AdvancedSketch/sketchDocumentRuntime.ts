@@ -42,6 +42,8 @@ const mergeLimits = (limits: SketchDocumentLimits = {}): Required<SketchDocument
   maxDocumentBytes: Math.min(64 * 1024 * 1024, Math.max(1_024, Math.floor(limits.maxDocumentBytes ?? DEFAULT_LIMITS.maxDocumentBytes))),
 });
 
+const EMPTY_RECORD: Readonly<Record<string, unknown>> = Object.freeze({});
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -107,7 +109,9 @@ const normalizeGeometry = (
   value: unknown,
   limits: Required<SketchDocumentLimits>,
 ): SketchGeometrySnapshot => {
-  const record = isRecord(value) ? value : Object.freeze({});
+  const record: Readonly<Record<string, unknown>> = isRecord(value)
+    ? value
+    : EMPTY_RECORD;
   return Object.freeze({
     type: normalizeGeometryType(record.type),
     spatialReferenceWkid: normalizeWkid(record.spatialReferenceWkid),
@@ -121,7 +125,9 @@ const normalizeGraphic = (
   limits: Required<SketchDocumentLimits>,
   now: number,
 ): SketchGraphicSnapshot => {
-  const record = isRecord(value) ? value : Object.freeze({});
+  const record: Readonly<Record<string, unknown>> = isRecord(value)
+    ? value
+    : EMPTY_RECORD;
   const id = sanitizeString(record.id, 200).trim() || `imported-${index + 1}`;
   const attributes = sanitizeObject(record.attributes, {
     ...limits,
