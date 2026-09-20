@@ -21,3 +21,12 @@
 - SECURITY / PERFORMANCE / NETWORK: no endpoint, WMS/WFS/WMTS, dependency, secret, telemetry, persistence, polling, transport or production behavior was added. Existing bounded diagnostics, cancellation and proxy sequencing assertions remain covered.
 - VALIDATION: new exact-head Actions are required after this progress commit; no PASS is claimed until completed/success results are observed. Remaining bootstrap JS regression suites are `bootstrapCore.test.js` and `bootstrapDiagnostics.test.js`, both candidates for strict TS migration on this same PR.
 - GATE / MERGE: NOT MERGED. PR remains far below the mandatory >=4,000 meaningful-additions threshold; continue real Platform/Architecture work on this same PR and never pad scope merely to reach the threshold.
+
+
+## Deep Platform / Architecture merge-gate recheck — 2026-09-20 09:27 TRT
+- USER ACTION: explicit merge requested for PR #189.
+- MAIN / BASE: current `main` verified at `2c1f0e80cea6ed173503ae18ae2a9e74e028d6a0`; branch is ahead 16 / behind 0 with merge-base exactly current main.
+- PR SNAPSHOT: #189 is open, draft, mergeable=true, 16 commits, 9 changed files, **359 additions / 993 deletions**.
+- EXACT-HEAD CI: `51418e0ca0374615061febed0a8232596a311a16` has Platform Architecture Audit `35490658572` = completed/failure, Webclient Quality `35490658557` = completed/failure, Release QA `35490658555` = completed/failure.
+- MERGE DECISION: NOT MERGED. Mandatory >=4,000 meaningful-additions gate is unmet and all three required exact-head CI workflows are red. Draft/mergeable status does not override these gates.
+- NEXT: keep PR #189 open on the same canonical branch, fix the exact-base architecture/TypeScript regression failures, continue substantive Platform/Architecture scope, then rerun exact-head validation. Merge only after additions>=4,000, all required checks completed+success, no conflict, and final release-risk review.
