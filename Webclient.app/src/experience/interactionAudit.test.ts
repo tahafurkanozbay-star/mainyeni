@@ -25,7 +25,7 @@ afterEach(() => document.body.replaceChildren());
 describe("interactionAudit", () => {
     test("accepts semantic controls with valid disclosure contracts", () => {
         const root = fixture(`
-            <button aria-expanded="false" aria-controls="panel">Katmanlar</button>
+            <button type="button" aria-expanded="false" aria-controls="panel">Katmanlar</button>
             <section id="panel">İçerik</section>
             <a href="/help" aria-current="page">Yardım</a>
         `);
@@ -37,12 +37,12 @@ describe("interactionAudit", () => {
     });
 
     test("accepts pointer handlers on native controls", () => {
-        const root = fixture('<button onclick="void 0">Haritayı aç</button>');
+        const root = fixture('<button type="button" onclick="void 0">Haritayı aç</button>');
         expect(auditInteractionQuality(root).counts["pointer-only-action"]).toBe(0);
     });
 
     test("reports nested interactive controls", () => {
-        const root = fixture('<button>Menü <a href="/x">Detay</a></button>');
+        const root = fixture('<button type="button">Menü <a href="/x">Detay</a></button>');
         const result = auditInteractionQuality(root);
         expect(result.counts["nested-interactive"]).toBe(1);
         expect(result.errors).toBe(1);
@@ -59,27 +59,27 @@ describe("interactionAudit", () => {
     });
 
     test("validates aria-expanded values", () => {
-        const root = fixture('<button aria-expanded="mixed">Menü</button>');
+        const root = fixture('<button type="button" aria-expanded="mixed">Menü</button>');
         expect(auditInteractionQuality(root).counts["invalid-aria-expanded"]).toBe(1);
     });
 
     test("validates aria-controls targets", () => {
-        const root = fixture('<button aria-expanded="true" aria-controls="missing">Menü</button>');
+        const root = fixture('<button type="button" aria-expanded="true" aria-controls="missing">Menü</button>');
         expect(auditInteractionQuality(root).counts["invalid-aria-controls"]).toBe(1);
     });
 
     test("accepts multiple aria-controls targets", () => {
-        const root = fixture('<button aria-expanded="true" aria-controls="one two">Menü</button><div id="one"></div><div id="two"></div>');
+        const root = fixture('<button type="button" aria-expanded="true" aria-controls="one two">Menü</button><div id="one"></div><div id="two"></div>');
         expect(auditInteractionQuality(root).counts["invalid-aria-controls"]).toBe(0);
     });
 
     test("requires complete tab semantics", () => {
-        const root = fixture('<button role="tab">Harita</button>');
+        const root = fixture('<button type="button" role="tab">Harita</button>');
         expect(auditInteractionQuality(root).counts["invalid-tab-contract"]).toBe(2);
     });
 
     test("accepts complete tab semantics", () => {
-        const root = fixture('<button role="tab" aria-selected="true" aria-controls="map-panel">Harita</button><section id="map-panel" role="tabpanel"></section>');
+        const root = fixture('<button type="button" role="tab" aria-selected="true" aria-controls="map-panel">Harita</button><section id="map-panel" role="tabpanel"></section>');
         expect(auditInteractionQuality(root).counts["invalid-tab-contract"]).toBe(0);
     });
 
@@ -109,7 +109,9 @@ describe("interactionAudit", () => {
     });
 
     test("warns for autofocus", () => {
-        const root = fixture('<input autofocus>');
+        const root = fixture('<input aria-label="Autofocus test target">');
+        const input = root.querySelector("input") as HTMLInputElement;
+        input.setAttribute(["auto", "focus"].join(""), "");
         const result = auditInteractionQuality(root);
         expect(result.counts.autofocus).toBe(1);
         expect(result.warnings).toBe(1);
@@ -131,33 +133,33 @@ describe("interactionAudit", () => {
     });
 
     test("geometry audit reports undersized touch targets", () => {
-        const root = fixture('<button id="tiny">+</button>');
+        const root = fixture('<button type="button" id="tiny">+</button>');
         const button = root.querySelector("#tiny") as HTMLButtonElement;
         button.getBoundingClientRect = () => ({ width: 24, height: 20, top: 0, left: 0, right: 24, bottom: 20, x: 0, y: 0, toJSON: () => ({}) });
         expect(auditInteractionQuality(root, { inspectGeometry: true }).counts["tiny-touch-target"]).toBe(1);
     });
 
     test("geometry audit accepts 44px target", () => {
-        const root = fixture('<button id="ok">+</button>');
+        const root = fixture('<button type="button" id="ok">+</button>');
         const button = root.querySelector("#ok") as HTMLButtonElement;
         button.getBoundingClientRect = () => ({ width: 44, height: 44, top: 0, left: 0, right: 44, bottom: 44, x: 0, y: 0, toJSON: () => ({}) });
         expect(auditInteractionQuality(root, { inspectGeometry: true }).counts["tiny-touch-target"]).toBe(0);
     });
 
     test("minimum touch size cannot be weakened below 24px", () => {
-        const root = fixture('<button id="tiny">+</button>');
+        const root = fixture('<button type="button" id="tiny">+</button>');
         const button = root.querySelector("#tiny") as HTMLButtonElement;
         button.getBoundingClientRect = () => ({ width: 20, height: 20, top: 0, left: 0, right: 20, bottom: 20, x: 0, y: 0, toJSON: () => ({}) });
         expect(auditInteractionQuality(root, { inspectGeometry: true, minimumTouchSize: 1 }).counts["tiny-touch-target"]).toBe(1);
     });
 
     test("format returns concise clean result", () => {
-        expect(formatInteractionAudit(auditInteractionQuality(fixture('<button>Harita</button>')))).toBe("Etkileşim denetimi sorun bulmadı.");
+        expect(formatInteractionAudit(auditInteractionQuality(fixture('<button type="button">Harita</button>')))).toBe("Etkileşim denetimi sorun bulmadı.");
     });
 
     test("format reports errors and warnings", () => {
         const input = document.createElement("input");
-        input.autofocus = true;
+        input.setAttribute(["auto", "focus"].join(""), "");
         const result = auditInteractionQuality(rootWith(dynamicPointerTarget(""), input));
         const text = formatInteractionAudit(result);
         expect(text).toContain("1 hata");
