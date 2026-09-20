@@ -1,7 +1,7 @@
 import { ConfigurationBusiness } from '../../Business/ConfigurationBusiness';
 import { CommonBusiness } from '../../Business/CommonBusiness';
 import MapManager from '../../Store/Managers/MapManager';
-import { createBootstrapDiagnostics } from './bootstrapDiagnostics';
+import { createBootstrapDiagnostics, type BootstrapDiagnosticSummary } from './bootstrapDiagnostics';
 import {
   runApplicationBootstrap,
   type BootstrapDependencies,
@@ -30,7 +30,7 @@ export interface ApplicationBootstrapOptions extends BootstrapOptions {
 
 export interface ApplicationBootstrapDiagnosticCollector {
   readonly snapshot: () => readonly unknown[];
-  readonly summary: () => Readonly<Record<string, unknown>>;
+  readonly summary: () => BootstrapDiagnosticSummary;
   readonly clear: () => void;
 }
 
@@ -49,8 +49,8 @@ const loadConfigurationServices = (
 const generateServiceUrl = (service: ConfigurationService): unknown =>
   CommonBusiness.GenerateUrl(service);
 
-const addProxyRule = (url: string, source: string): Promise<unknown> | unknown =>
-  CommonBusiness.AddProxyRule(url, source);
+const addProxyRule = (url: string, _source: string): Promise<unknown> | unknown =>
+  CommonBusiness.AddProxyRule(url);
 
 const setMapConfiguration = (configuration: MapConfiguration): Promise<unknown> | unknown =>
   MapManager.SetMapConfiguration(configuration);
@@ -94,7 +94,7 @@ export const getApplicationBootstrapDiagnostics = (): readonly unknown[] =>
   defaultDiagnostics.snapshot();
 
 /** Return aggregate bootstrap counters without exposing mutable collector state. */
-export const getApplicationBootstrapDiagnosticSummary = (): Readonly<Record<string, unknown>> =>
+export const getApplicationBootstrapDiagnosticSummary = (): BootstrapDiagnosticSummary =>
   defaultDiagnostics.summary();
 
 /** Clear only the shared support collector between application sessions/tests. */
