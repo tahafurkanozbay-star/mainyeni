@@ -60,6 +60,13 @@ describe('sketchAccessibilityRuntime', () => {
     expect(new Set(shortcuts).size).toBe(shortcuts.length);
   });
 
+  it('keeps every descriptor labelled and described for assistive technology', () => {
+    for (const descriptor of SKETCH_TOOL_DESCRIPTORS) {
+      expect(descriptor.label.trim().length).toBeGreaterThan(0);
+      expect(descriptor.description.trim().length).toBeGreaterThan(0);
+    }
+  });
+
   it('returns stable descriptions for tools', () => {
     expect(describeSketchTool('point')).toEqual(expect.objectContaining({
       label: 'Nokta',
@@ -131,11 +138,31 @@ describe('sketchAccessibilityRuntime', () => {
     editable.remove();
   });
 
+  it('does not intercept an empty contenteditable attribute', () => {
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', '');
+    document.body.appendChild(editable);
+    expect(shouldHandleSketchShortcut(shortcutTarget(editable))).toBe(false);
+    editable.remove();
+  });
+
   it('does not intercept descendants of contenteditable surfaces', () => {
     const editable = document.createElement('div');
     editable.setAttribute('contenteditable', 'true');
     const child = document.createElement('span');
     editable.appendChild(child);
+    document.body.appendChild(editable);
+    expect(shouldHandleSketchShortcut(shortcutTarget(child))).toBe(false);
+    editable.remove();
+  });
+
+  it('does not intercept deeply nested descendants of contenteditable surfaces', () => {
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    const wrapper = document.createElement('span');
+    const child = document.createElement('strong');
+    wrapper.appendChild(child);
+    editable.appendChild(wrapper);
     document.body.appendChild(editable);
     expect(shouldHandleSketchShortcut(shortcutTarget(child))).toBe(false);
     editable.remove();
@@ -178,6 +205,14 @@ describe('sketchAccessibilityRuntime', () => {
     first.remove();
   });
 
+  it('appends a newly created live region to the requested document body', () => {
+    document.querySelector('#advanced-sketch-live-region')?.remove();
+    const region = createSketchLiveRegion(document);
+    expect(region.ownerDocument).toBe(document);
+    expect(region.parentElement).toBe(document.body);
+    region.remove();
+  });
+
   it('reuses a pre-existing live region without duplicating it', () => {
     document.querySelector('#advanced-sketch-live-region')?.remove();
     const existing = document.createElement('div');
@@ -204,6 +239,14 @@ describe('sketchAccessibilityRuntime', () => {
     expect(region).toHaveAttribute('aria-live', 'assertive');
     expect(region).toHaveAttribute('aria-atomic', 'true');
     expect(region).toHaveTextContent('Hata');
+  });
+
+  it('replaces rather than appends status messages', () => {
+    const region = document.createElement('div');
+    announceSketchStatus(region, 'Birinci');
+    announceSketchStatus(region, 'İkinci');
+    expect(region).toHaveTextContent('İkinci');
+    expect(region.textContent).toBe('İkinci');
   });
 
   it('can downgrade an assertive region back to polite status', () => {
@@ -249,6 +292,21 @@ describe('sketchAccessibilityRuntime', () => {
     const items = Array.from({ length: 3 }, () => document.createElement('button'));
     expect(focusSketchToolbarItem(items, -1, 'next')).toBe(1);
     expect(items.map((item) => item.tabIndex)).toEqual([-1, 0, -1]);
+  });
+
+  it('normalizes a missing current toolbar index when moving previous', () => {
+    const items = Array.from({ length: 3 }, () => document.createElement('button'));
+    expect(focusSketchToolbarItem(items, -1, 'previous')).toBe(2);
+    expect(items.map((item) => item.tabIndex)).toEqual([-1, -1, 0]);
+  });
+
+  it('keeps exactly one toolbar item in the tab sequence after repeated moves', () => {
+    const items = Array.from({ length: 4 }, () => document.createElement('button'));
+    let index = focusSketchToolbarItem(items, 0, 'next');
+    index = focusSketchToolbarItem(items, index, 'next');
+    index = focusSketchToolbarItem(items, index, 'previous');
+    expect(index).toBe(1);
+    expect(items.filter((item) => item.tabIndex === 0)).toHaveLength(1);
   });
 
   it('returns -1 for an empty toolbar', () => {
