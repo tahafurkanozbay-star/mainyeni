@@ -52,18 +52,8 @@ export interface RovingFocusController {
 }
 
 const INTERACTIVE_SELECTOR = [
-    "a[href]",
-    "area[href]",
-    "button",
-    "input",
-    "select",
-    "textarea",
-    "summary",
-    "iframe",
-    "audio[controls]",
-    "video[controls]",
-    "[contenteditable]",
-    "[tabindex]"
+    "a[href]", "area[href]", "button", "input", "select", "textarea", "summary", "iframe",
+    "audio[controls]", "video[controls]", "[contenteditable]", "[tabindex]"
 ].join(",");
 
 const elementFrom = (value: HTMLElement | (() => HTMLElement | null) | null | undefined): HTMLElement | null =>
@@ -91,11 +81,9 @@ export function isElementDisabled(element: HTMLElement): boolean {
 }
 
 export function isFocusable(element: HTMLElement, options: FocusCandidateOptions = {}): boolean {
-    if (!element.isConnected) return false;
-    if (isElementDisabled(element)) return false;
+    if (!element.isConnected || isElementDisabled(element)) return false;
     if (options.visibleOnly !== false && isElementHidden(element)) return false;
-    if (element.matches("input[type='hidden']")) return false;
-    if (!element.matches(INTERACTIVE_SELECTOR)) return false;
+    if (element.matches("input[type='hidden']") || !element.matches(INTERACTIVE_SELECTOR)) return false;
     if (!options.includeNegativeTabIndex && numericTabIndex(element) < 0) return false;
     return true;
 }
@@ -122,9 +110,7 @@ export function moveFocus(
     options: FocusCandidateOptions & { loop?: boolean } = {}
 ): FocusMoveResult {
     const candidates = getFocusCandidates(container, options);
-    const active = container.ownerDocument.activeElement instanceof HTMLElement
-        ? container.ownerDocument.activeElement
-        : null;
+    const active = container.ownerDocument.activeElement instanceof HTMLElement ? container.ownerDocument.activeElement : null;
     if (candidates.length === 0) return { moved: false, from: active, to: null, wrapped: false };
 
     const currentIndex = active ? candidates.indexOf(active) : -1;
@@ -188,8 +174,8 @@ export function createFocusTrap(options: FocusTrapOptions): FocusTrapController 
             return;
         }
         const current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const first = candidates[0];
-        const last = candidates[candidates.length - 1];
+        const first = candidates[0] ?? null;
+        const last = candidates.at(-1) ?? null;
         if (event.shiftKey && (current === first || !current || !container.contains(current))) {
             event.preventDefault();
             focusSafely(last);
@@ -252,10 +238,10 @@ export function createRovingFocus(options: RovingFocusOptions): RovingFocusContr
     const enabledIndexes = (): number[] => items.map((item, index) => disabled(item) ? -1 : index).filter((index) => index >= 0);
 
     const applyCurrent = (index: number, focus: boolean): boolean => {
-        if (index < 0 || index >= items.length || disabled(items[index])) return false;
+        const target = items[index];
+        if (!target || disabled(target)) return false;
         currentIndex = index;
         items.forEach((item, itemIndex) => item.setAttribute("tabindex", itemIndex === currentIndex ? "0" : "-1"));
-        const target = items[currentIndex];
         if (focus) focusSafely(target);
         options.onCurrentChange?.(target, currentIndex);
         return true;
@@ -273,7 +259,8 @@ export function createRovingFocus(options: RovingFocusOptions): RovingFocusContr
         }
         const preserved = previous ? items.indexOf(previous) : -1;
         const authored = items.findIndex((item) => item.getAttribute("tabindex") === "0" && !disabled(item));
-        currentIndex = preserved >= 0 && !disabled(items[preserved]) ? preserved : authored >= 0 ? authored : enabled[0];
+        const preservedItem = preserved >= 0 ? items[preserved] : undefined;
+        currentIndex = preservedItem && !disabled(preservedItem) ? preserved : authored >= 0 ? authored : (enabled[0] ?? 0);
         items.forEach((item, index) => item.setAttribute("tabindex", index === currentIndex ? "0" : "-1"));
     };
 
@@ -284,7 +271,8 @@ export function createRovingFocus(options: RovingFocusOptions): RovingFocusContr
         let nextPosition = position < 0 ? 0 : position + delta;
         if (loop) nextPosition = (nextPosition + enabled.length) % enabled.length;
         else nextPosition = Math.max(0, Math.min(enabled.length - 1, nextPosition));
-        applyCurrent(enabled[nextPosition], true);
+        const nextIndex = enabled[nextPosition];
+        if (nextIndex !== undefined) applyCurrent(nextIndex, true);
     };
 
     const search = (character: string): void => {
@@ -294,10 +282,14 @@ export function createRovingFocus(options: RovingFocusOptions): RovingFocusContr
         const enabled = enabledIndexes();
         if (enabled.length === 0) return;
         const ordered = [...enabled.filter((index) => index > currentIndex), ...enabled.filter((index) => index <= currentIndex)];
-        let match = ordered.find((index) => normalizedText(items[index]).startsWith(buffer));
+        const matches = (index: number): boolean => {
+            const item = items[index];
+            return item ? normalizedText(item).startsWith(buffer) : false;
+        };
+        let match = ordered.find(matches);
         if (match === undefined && buffer.length > 1) {
             buffer = character.toLocaleLowerCase("tr-TR");
-            match = ordered.find((index) => normalizedText(items[index]).startsWith(buffer));
+            match = ordered.find(matches);
         }
         if (match !== undefined) applyCurrent(match, true);
     };
@@ -314,10 +306,16 @@ export function createRovingFocus(options: RovingFocusOptions): RovingFocusContr
             event.preventDefault(); step(-1); return;
         }
         if (homeEnd && event.key === "Home") {
-            event.preventDefault(); const first = enabledIndexes()[0]; if (first !== undefined) applyCurrent(first, true); return;
+            event.preventDefault();
+            const first = enabledIndexes()[0];
+            if (first !== undefined) applyCurrent(first, true);
+            return;
         }
         if (homeEnd && event.key === "End") {
-            event.preventDefault(); const enabled = enabledIndexes(); const last = enabled.at(-1); if (last !== undefined) applyCurrent(last, true); return;
+            event.preventDefault();
+            const last = enabledIndexes().at(-1);
+            if (last !== undefined) applyCurrent(last, true);
+            return;
         }
         if (typeahead && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) search(event.key);
     };
