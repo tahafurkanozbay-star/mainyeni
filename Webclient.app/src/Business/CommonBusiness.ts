@@ -722,7 +722,7 @@ export const CommonBusiness = Object.freeze({
   AddProxyRule: addProxyRule,
 
   GetDomainValues: async (
-    queryServiceTitle: string,
+    queryServiceTitle: unknown,
     fieldName: string,
   ): Promise<readonly ArcGisCodedValue[] | null> => {
     const layer = await createFeatureLayer(queryServiceTitle);
@@ -732,7 +732,7 @@ export const CommonBusiness = Object.freeze({
   },
 
   GetCodedValueDomains: async (
-    queryServiceTitle: string,
+    queryServiceTitle: unknown,
     fieldName: string,
   ): Promise<readonly ArcGisCodedValue[]> => {
     const layer = await createFeatureLayer(queryServiceTitle);
