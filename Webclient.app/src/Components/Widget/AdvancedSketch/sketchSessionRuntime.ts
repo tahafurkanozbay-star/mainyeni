@@ -82,8 +82,9 @@ export const createSketchSessionRuntime = (
   ): void => {
     try {
       sink.emit(Object.freeze({ type, timestamp: now(), detail }));
-    } catch {
-      // Diagnostics are non-authoritative and must never break sketch behavior.
+    } catch (diagnosticError) {
+      // Diagnostics are non-authoritative, but observer failures must remain visible.
+      globalThis.reportError?.(diagnosticError);
     }
   };
 
