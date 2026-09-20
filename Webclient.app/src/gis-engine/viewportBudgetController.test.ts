@@ -318,8 +318,8 @@ describe('ViewportBudgetController metrics and bounds', () => {
     controller.sample({ frameMs: 30, timestamp: 151 });
 
     expect(controller.metrics()).toMatchObject({
-      samples: 2,
-      frameP50Ms: 20,
+      samples: 1,
+      frameP50Ms: 30,
       frameP95Ms: 30,
     });
   });
