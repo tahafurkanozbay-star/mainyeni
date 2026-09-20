@@ -76,6 +76,8 @@ export interface RawRequestConfig<TBody = RequestBody> {
   signal?: AbortSignal | null;
   responseType?: ResponseType | string;
   includeResponseHeaders?: boolean;
+  maxResponseBytes?: number;
+  maxRequestBodyBytes?: number;
   credentials?: RequestCredentials;
   fetchCache?: RequestCache;
   redirect?: RequestRedirect;
@@ -107,6 +109,7 @@ export interface NormalizedRequestConfig<TBody = RequestBody>
   cacheTags: readonly string[];
   cacheVary: Readonly<Record<string, string | number | boolean | null | undefined>>;
   maxResponseBytes: number;
+  maxRequestBodyBytes: number;
 }
 
 export interface ResponseMetadata {
