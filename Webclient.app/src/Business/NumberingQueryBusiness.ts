@@ -113,7 +113,7 @@ const sortResultData = (
 
 const executeQuery = async (
   serviceKey: string,
-  options: Omit<ArcGisQueryOptions, 'url'>,
+  options: NumberingQueryOptions,
   sortField: string | null = null,
 ): Promise<NumberingServiceResult> => {
   const orderByFields = Array.isArray(options.orderByFields)
