@@ -22,28 +22,15 @@ const graphic = (id: string): SketchGraphicSnapshot => Object.freeze({
 });
 
 const createAdapter = () => {
-  const state: { graphics: SketchGraphicSnapshot[]; destroyed: boolean } = {
-    graphics: [],
-    destroyed: false,
-  };
+  const state: { graphics: SketchGraphicSnapshot[]; destroyed: boolean } = { graphics: [], destroyed: false };
   const adapter: SketchViewAdapter = {
-    addGraphic: vi.fn((item: SketchGraphicSnapshot) => {
-      state.graphics.push(item);
-    }),
-    replaceGraphics: vi.fn((items: readonly SketchGraphicSnapshot[]) => {
-      state.graphics = [...items];
-    }),
-    removeGraphic: vi.fn((id: string) => {
-      state.graphics = state.graphics.filter((item) => item.id !== id);
-    }),
-    clearGraphics: vi.fn(() => {
-      state.graphics = [];
-    }),
+    addGraphic: vi.fn((item: SketchGraphicSnapshot) => { state.graphics.push(item); }),
+    replaceGraphics: vi.fn((items: readonly SketchGraphicSnapshot[]) => { state.graphics = [...items]; }),
+    removeGraphic: vi.fn((id: string) => { state.graphics = state.graphics.filter((item) => item.id !== id); }),
+    clearGraphics: vi.fn(() => { state.graphics = []; }),
     beginCreate: vi.fn(),
     cancelCreate: vi.fn(),
-    destroy: vi.fn(() => {
-      state.destroyed = true;
-    }),
+    destroy: vi.fn(() => { state.destroyed = true; }),
   };
   return { adapter, state };
 };
@@ -52,11 +39,7 @@ describe('sketchSessionRuntime', () => {
   it('starts ready with move selected', () => {
     const { adapter } = createAdapter();
     const runtime = createSketchSessionRuntime(adapter);
-    expect(runtime.snapshot()).toEqual(expect.objectContaining({
-      state: 'ready',
-      selectedTool: 'move',
-      graphicsCount: 0,
-    }));
+    expect(runtime.snapshot()).toEqual(expect.objectContaining({ state: 'ready', selectedTool: 'move', graphicsCount: 0 }));
   });
 
   it('begins drawing with the selected tool and current style', async () => {
@@ -101,10 +84,7 @@ describe('sketchSessionRuntime', () => {
     const { adapter, state } = createAdapter();
     const runtime = createSketchSessionRuntime(adapter);
     await runtime.ingestGraphic(graphic('a'));
-    await runtime.ingestGraphic(Object.freeze({
-      ...graphic('a'),
-      updatedAt: 2,
-    }));
+    await runtime.ingestGraphic(Object.freeze({ ...graphic('a'), updatedAt: 2 }));
     expect(runtime.snapshot().graphicsCount).toBe(1);
     expect(state.graphics).toHaveLength(1);
     expect(adapter.replaceGraphics).toHaveBeenCalled();
@@ -129,9 +109,7 @@ describe('sketchSessionRuntime', () => {
 
   it('enforces the graphic budget for ingest and observe', async () => {
     const { adapter } = createAdapter();
-    const runtime = createSketchSessionRuntime(adapter, {
-      budget: { maxGraphics: 1 },
-    });
+    const runtime = createSketchSessionRuntime(adapter, { budget: { maxGraphics: 1 } });
     await runtime.ingestGraphic(graphic('a'));
     await expect(runtime.ingestGraphic(graphic('b'))).rejects.toThrow('budget');
     expect(() => runtime.observeGraphic(graphic('c'))).toThrow('budget');
@@ -169,11 +147,9 @@ describe('sketchSessionRuntime', () => {
     const runtime = createSketchSessionRuntime(adapter);
     await runtime.ingestGraphic(graphic('a'));
     await runtime.ingestGraphic(graphic('b'));
-
     const undone = await runtime.undo();
     expect(undone.graphicsCount).toBe(1);
     expect(state.graphics.map((item) => item.id)).toEqual(['a']);
-
     const redone = await runtime.redo();
     expect(redone.graphicsCount).toBe(2);
     expect(state.graphics.map((item) => item.id)).toEqual(['a', 'b']);
@@ -183,11 +159,7 @@ describe('sketchSessionRuntime', () => {
     const { adapter, state } = createAdapter();
     const runtime = createSketchSessionRuntime(adapter);
     const style = withLineColor(DEFAULT_SKETCH_STYLE, '#123456');
-    const document: SketchDocument = createSketchDocument(
-      [graphic('imported')],
-      style,
-      'Import',
-    );
+    const document: SketchDocument = createSketchDocument([graphic('imported')], style, 'Import');
     const result = await runtime.importDocument(document);
     expect(result.graphicsCount).toBe(1);
     expect(result.selectedTool).toBe('move');
@@ -208,28 +180,21 @@ describe('sketchSessionRuntime', () => {
   it('updates style immutably', () => {
     const { adapter } = createAdapter();
     const runtime = createSketchSessionRuntime(adapter);
-    const nextStyle = withLineColor(DEFAULT_SKETCH_STYLE, '#abcdef');
-    runtime.setStyle(nextStyle);
+    runtime.setStyle(withLineColor(DEFAULT_SKETCH_STYLE, '#abcdef'));
     expect(DEFAULT_SKETCH_STYLE.line.color).toBe('#828282');
     expect(runtime.exportDocument().style.line.color).toBe('#abcdef');
   });
 
-  it('enforces operation queue capacity', async () => {
+  it('enforces active plus queued operation capacity', async () => {
     let release!: () => void;
     const { adapter } = createAdapter();
-    adapter.beginCreate = vi.fn(() => new Promise<void>((resolve) => {
-      release = resolve;
-    }));
-    const runtime = createSketchSessionRuntime(adapter, {
-      budget: { maxQueuedOperations: 1 },
-    });
-
+    adapter.beginCreate = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const runtime = createSketchSessionRuntime(adapter, { budget: { maxQueuedOperations: 1 } });
     const first = runtime.selectTool('point');
-    const second = runtime.selectTool('polygon');
-    await expect(runtime.selectTool('circle')).rejects.toThrow('queue capacity');
+    await expect(runtime.selectTool('polygon')).rejects.toThrow('queue capacity');
     release();
     await first;
-    await second;
+    await expect(runtime.selectTool('circle')).resolves.toEqual(expect.objectContaining({ selectedTool: 'circle' }));
   });
 
   it('times out stalled adapter operations', async () => {
@@ -237,30 +202,20 @@ describe('sketchSessionRuntime', () => {
     try {
       const { adapter } = createAdapter();
       adapter.beginCreate = vi.fn(() => new Promise<void>(() => undefined));
-      const runtime = createSketchSessionRuntime(adapter, {
-        budget: { operationTimeoutMs: 1_000 },
-      });
+      const runtime = createSketchSessionRuntime(adapter, { budget: { operationTimeoutMs: 1_000 } });
       const pending = runtime.selectTool('point');
       await vi.advanceTimersByTimeAsync(1_000);
       await expect(pending).rejects.toThrow('exceeded 1000ms');
       expect(runtime.snapshot().errors).toBe(1);
       expect(runtime.snapshot().state).toBe('error');
-    } finally {
-      vi.useRealTimers();
-    }
+    } finally { vi.useRealTimers(); }
   });
 
   it('emits diagnostics without allowing sink failures to break operations', async () => {
     const { adapter } = createAdapter();
-    const emit = vi.fn(() => {
-      throw new Error('sink failed');
-    });
-    const runtime = createSketchSessionRuntime(adapter, {
-      diagnosticSink: { emit },
-    });
-    await expect(runtime.selectTool('point')).resolves.toEqual(
-      expect.objectContaining({ selectedTool: 'point' }),
-    );
+    const emit = vi.fn(() => { throw new Error('sink failed'); });
+    const runtime = createSketchSessionRuntime(adapter, { diagnosticSink: { emit } });
+    await expect(runtime.selectTool('point')).resolves.toEqual(expect.objectContaining({ selectedTool: 'point' }));
     expect(emit).toHaveBeenCalled();
   });
 
