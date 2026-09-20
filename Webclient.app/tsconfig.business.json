@@ -5,12 +5,9 @@
     "checkJs": false
   },
   "include": [
-    "src/Business/contracts.ts",
-    "src/Business/HttpBusiness.ts",
-    "src/Business/RouteQueryBusiness.ts",
-    "src/Business/NumberingQueryBusiness.ts",
-    "src/Business/TkgmQueryBusiness.ts",
-    "src/Business/runtime/**/*.ts"
+    "src/Business/**/*.ts",
+    "src/Toolbox/GisGraphicsHelper.ts",
+    "src/Toolbox/GisQueryHelper.ts"
   ],
   "exclude": [
     "node_modules",

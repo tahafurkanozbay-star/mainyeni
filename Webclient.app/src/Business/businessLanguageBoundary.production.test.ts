@@ -11,15 +11,16 @@ const walk = (root: string): string[] => readdirSync(root, { withFileTypes: true
 describe('Business production language boundary', () => {
   const srcRoot = resolve(process.cwd(), 'src');
   const businessRoot = resolve(srcRoot, 'Business');
+  const toolboxRoot = resolve(srcRoot, 'Toolbox');
 
-  it('allows only the explicitly staged CommonBusiness legacy runtime', () => {
+  it('contains no production JavaScript in the Business domain', () => {
     const productionJavaScript = walk(businessRoot)
       .filter(path => ['.js', '.jsx', '.mjs', '.cjs'].includes(extname(path)))
       .filter(path => !/\.(?:test|spec)\.[^.]+$/u.test(path))
       .map(path => path.slice(businessRoot.length + 1).replaceAll('\\', '/'))
       .sort();
 
-    expect(productionJavaScript).toEqual(['CommonBusiness.js']);
+    expect(productionJavaScript).toEqual([]);
   });
 
   it('contains no JavaScript tests in the Business domain', () => {
@@ -30,8 +31,16 @@ describe('Business production language boundary', () => {
     expect(javascriptTests).toEqual([]);
   });
 
-  it('keeps route, numbering and TKGM production surfaces TypeScript-only', () => {
+  it('keeps the shared GIS helpers TypeScript-only', () => {
+    for (const runtime of ['GisGraphicsHelper', 'GisQueryHelper']) {
+      expect(existsSync(resolve(toolboxRoot, `${runtime}.ts`))).toBe(true);
+      expect(existsSync(resolve(toolboxRoot, `${runtime}.js`))).toBe(false);
+    }
+  });
+
+  it('keeps the major Business production surfaces TypeScript-only', () => {
     for (const runtime of [
+      'CommonBusiness',
       'RouteQueryBusiness',
       'NumberingQueryBusiness',
       'TkgmQueryBusiness',
@@ -51,10 +60,9 @@ describe('Business production language boundary', () => {
 
     expect(config.compilerOptions?.allowJs).toBe(false);
     expect(config.compilerOptions?.checkJs).toBe(false);
-    expect(config.include).toContain('src/Business/runtime/**/*.ts');
-    expect(config.include).toContain('src/Business/RouteQueryBusiness.ts');
-    expect(config.include).toContain('src/Business/NumberingQueryBusiness.ts');
-    expect(config.include).toContain('src/Business/TkgmQueryBusiness.ts');
+    expect(config.include).toContain('src/Business/**/*.ts');
+    expect(config.include).toContain('src/Toolbox/GisGraphicsHelper.ts');
+    expect(config.include).toContain('src/Toolbox/GisQueryHelper.ts');
   });
 
   it('keeps Business strict typecheck in the default verification path', () => {
@@ -67,7 +75,7 @@ describe('Business production language boundary', () => {
     expect(packageJson.scripts?.typecheck).toContain('typecheck:business');
   });
 
-  it('ratchets repository language baseline to one production and zero test JavaScript files', () => {
+  it('ratchets production JavaScript ceilings to zero for Business and GIS helpers', () => {
     const baseline = JSON.parse(
       readFileSync(resolve(process.cwd(), '../tools/platform-language-baseline.json'), 'utf8'),
     ) as {
@@ -75,7 +83,8 @@ describe('Business production language boundary', () => {
       testDomains?: Record<string, number>;
     };
 
-    expect(baseline.domains?.business).toBe(1);
+    expect(baseline.domains?.business).toBe(0);
+    expect(baseline.domains?.toolbox).toBe(0);
     expect(baseline.testDomains?.business).toBe(0);
   });
 });
