@@ -239,7 +239,7 @@ describe('ViewportQueryOrchestrator adaptive budgets', () => {
     expect(execute.mock.calls[0]?.[0].maxFeatures).toBe(1);
   });
 
-  it('bounds estimated features by the effective plan budget before governance', async () => {
+  it('bounds governance admission without mutating the executor density estimate', async () => {
     const execute = vi.fn(async () => completeResponse([]));
     const runtime = createViewportQueryOrchestrator({ governance: { maxFeaturesPerRequest: 50, maxBytesPerRequest: 64 * 1024 } });
     register(runtime, execute, {
@@ -250,7 +250,7 @@ describe('ViewportQueryOrchestrator adaptive budgets', () => {
     runtime.setViewport(frame());
     await runtime.queryLayer('roads');
     expect(execute.mock.calls[0]?.[0].maxFeatures).toBe(50);
-    expect(execute.mock.calls[0]?.[0].estimatedFeatures).toBe(50);
+    expect(execute.mock.calls[0]?.[0].estimatedFeatures).toBe(50_000_000);
   });
 });
 
