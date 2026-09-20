@@ -13,9 +13,7 @@ const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', 'coverage', '.git', 
 const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/iu;
 const TYPE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts']);
 const JAVASCRIPT_EXTENSIONS = new Set(['.js', '.jsx', '.mjs']);
-const LEGACY_PLATFORM_ALLOWLIST = new Set([
-  'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-]);
+const LEGACY_PLATFORM_ALLOWLIST = new Set();
 const TYPE_OPT_OUT = /(?:@ts-nocheck|@ts-ignore|@ts-expect-error)/gu;
 const COMMONJS_PATTERN = /\b(?:require\s*\(|module\.exports\b|exports\.[A-Za-z_$])/gu;
 const IMPORT_PATTERNS = Object.freeze([
@@ -542,7 +540,7 @@ export const formatPlatformModuleGraphMarkdown = (report) => {
     '',
     '## Policy',
     '',
-    'The Platform domain is moving to a strict TypeScript/native-ESM runtime. JavaScript/TypeScript shadow pairs, ambiguous extensionless imports, CommonJS production modules and TypeScript diagnostic opt-outs are blocking. The single bootstrapApplication.js adapter is temporarily allowlisted because it still composes a legacy Business module; the audit keeps that debt visible until the upstream dependency is typed.',
+    'The Platform domain uses a strict TypeScript/native-ESM runtime. JavaScript/TypeScript shadow pairs, ambiguous extensionless imports, CommonJS production modules and TypeScript diagnostic opt-outs are blocking. Production JavaScript has no compatibility allowlist; application-domain composition is isolated behind the canonical typed bootstrap adapter.',
     '',
   ].join('\n');
 };
