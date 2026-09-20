@@ -114,7 +114,11 @@ export const FulltextSearchQueryBusiness = Object.freeze({
     );
 
     return Object.freeze({
-      Title: isRecord(configService) ? configService.searchCategoryTitle : undefined,
+      Title: isRecord(configService)
+        && (typeof configService.searchCategoryTitle === 'string'
+          || typeof configService.searchCategoryTitle === 'number')
+        ? configService.searchCategoryTitle
+        : undefined,
       Data: isRecord(result) ? result.data : undefined,
     });
   },
