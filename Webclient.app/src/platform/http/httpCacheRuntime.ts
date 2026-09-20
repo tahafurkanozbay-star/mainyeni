@@ -46,11 +46,7 @@ const emit = (
   name: string,
   metadata: Record<string, unknown> = {},
 ): void => {
-  try {
-    listener?.(name, metadata);
-  } catch {
-    // Diagnostics are intentionally best-effort and must never break requests.
-  }
+  listener?.(name, metadata);
 };
 
 const withQuery = (config: NormalizedRequestConfig): string => {
