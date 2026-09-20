@@ -220,7 +220,8 @@ export const executeFetch = async <T = unknown>(
     if (response.ok !== true) {
       const error = await createHttpResponseError(response as unknown as ResponseLike, {
         method: config.method,
-        responseType: String(config.responseType || 'auto')
+        responseType: String(config.responseType || 'auto'),
+        maxBodyBytes: config.maxResponseBytes
       });
 
       dependencies.onFailure?.({
@@ -235,7 +236,8 @@ export const executeFetch = async <T = unknown>(
 
     const data = await parseResponseBody(response as unknown as ResponseLike, {
       method: config.method,
-      responseType: String(config.responseType || 'auto')
+      responseType: String(config.responseType || 'auto'),
+      maxBodyBytes: config.maxResponseBytes
     }) as T;
 
     const metadata = createResponseMetadata(response as unknown as ResponseLike, {
