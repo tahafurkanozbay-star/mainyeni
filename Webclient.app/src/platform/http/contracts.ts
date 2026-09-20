@@ -1,3 +1,5 @@
+import type { CacheDataClassification } from '../cache/cachePolicy';
+
 export const REQUEST_PRIORITIES = [
   'critical',
   'high',
@@ -66,6 +68,11 @@ export interface RawRequestConfig<TBody = RequestBody> {
   dedupe?: boolean;
   retryUnsafe?: boolean;
   cacheTtlMs?: number;
+  cacheStaleWhileRevalidateMs?: number;
+  cacheClassification?: CacheDataClassification;
+  cacheNamespace?: string;
+  cacheTags?: readonly string[];
+  cacheVary?: Readonly<Record<string, string | number | boolean | null | undefined>>;
   signal?: AbortSignal | null;
   responseType?: ResponseType | string;
   includeResponseHeaders?: boolean;
@@ -94,6 +101,11 @@ export interface NormalizedRequestConfig<TBody = RequestBody>
   idempotentMethod: boolean;
   containsSensitiveMetadata: boolean;
   cacheTtlMs: number;
+  cacheStaleWhileRevalidateMs: number;
+  cacheClassification: CacheDataClassification;
+  cacheNamespace: string;
+  cacheTags: readonly string[];
+  cacheVary: Readonly<Record<string, string | number | boolean | null | undefined>>;
 }
 
 export interface ResponseMetadata {
@@ -330,6 +342,9 @@ export interface CoordinatedClient {
   invalidateCache(prefix?: string): number;
   getCacheSize(): number;
   getInFlightSize(): number;
+  invalidateCacheTags(tags: readonly string[]): number;
+  invalidateCacheNamespace(namespace: string): number;
+  getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>>;
   getDiagnostics(options?: DiagnosticsSnapshotOptions): readonly unknown[];
   getDiagnosticSummary(): Readonly<Record<string, unknown>>;
   clearDiagnostics(): void;
