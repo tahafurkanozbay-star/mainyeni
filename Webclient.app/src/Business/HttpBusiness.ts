@@ -76,7 +76,7 @@ const toRequestBody = (value: unknown): RequestBody => {
 };
 
 const toPlatformConfig = (options: HttpRequestOptions): RawRequestConfig => ({
-  ...(options.headers === undefined ? {} : { headers: normalizeHeaders(options.headers) }),
+  ...(options.headers === undefined ? {} : { headers: new Headers(options.headers) }),
   ...(options.params === undefined ? {} : { params: { ...options.params } }),
   ...(options.signal === undefined ? {} : { signal: options.signal }),
   timeout: normalizeTimeoutMs(options.timeoutMs),
