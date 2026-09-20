@@ -264,7 +264,13 @@ export class ViewportResultWindowRuntime<TPayload = unknown> {
       sequence: this.#sequence++,
     };
     this.#windows.set(key, state);
-    this.#enforceGlobalBudgets(new Set([key]));
+    try {
+      this.#enforceGlobalBudgets(new Set([key]));
+    } catch (error) {
+      this.#windows.delete(key);
+      if (existing) this.#windows.set(key, existing);
+      throw error;
+    }
     return snapshotWindow(state);
   }
 
@@ -351,6 +357,15 @@ export class ViewportResultWindowRuntime<TPayload = unknown> {
       );
     }
 
+    const rollback = {
+      pages: new Set(window.pages),
+      features: new Map([...window.features].map(([id, feature]) => [id, { ...feature }])),
+      complete: window.complete,
+      updatedAt: window.updatedAt,
+      lastAccessAt: window.lastAccessAt,
+      estimatedBytes: window.estimatedBytes,
+    };
+
     let accepted = 0;
     let replaced = 0;
     for (const [id, entry] of staged) {
@@ -383,7 +398,20 @@ export class ViewportResultWindowRuntime<TPayload = unknown> {
     this.#acceptedFeatures += accepted;
     this.#replacedFeatures += replaced;
 
-    const evictedWindows = this.#enforceGlobalBudgets(new Set([key]));
+    let evictedWindows: readonly string[];
+    try {
+      evictedWindows = this.#enforceGlobalBudgets(new Set([key]));
+    } catch (error) {
+      window.pages = rollback.pages;
+      window.features = rollback.features;
+      window.complete = rollback.complete;
+      window.updatedAt = rollback.updatedAt;
+      window.lastAccessAt = rollback.lastAccessAt;
+      window.estimatedBytes = rollback.estimatedBytes;
+      this.#acceptedFeatures -= accepted;
+      this.#replacedFeatures -= replaced;
+      throw error;
+    }
     return Object.freeze({
       windowKey: key,
       generation,
@@ -493,35 +521,46 @@ export class ViewportResultWindowRuntime<TPayload = unknown> {
   }
 
   #enforceGlobalBudgets(protectedKeys: ReadonlySet<string>): readonly string[] {
-    const evicted: string[] = [];
-    let totals = this.#totals();
+    const totals = this.#totals();
+    let projectedWindows = this.#windows.size;
+    let projectedFeatures = totals.features;
+    let projectedBytes = totals.bytes;
+    const candidates = [...this.#windows.values()]
+      .filter((window) => !window.pinned && !protectedKeys.has(window.key))
+      .sort((left, right) => (
+        left.lastAccessAt - right.lastAccessAt
+        || left.updatedAt - right.updatedAt
+        || left.sequence - right.sequence
+        || left.key.localeCompare(right.key)
+      ));
+    const planned: WindowState<TPayload>[] = [];
+    let candidateIndex = 0;
     const exceeded = (): boolean => (
-      this.#windows.size > this.#configuration.maximumWindows
-      || totals.features > this.#configuration.maximumTotalFeatures
-      || totals.bytes > this.#configuration.maximumTotalBytes
+      projectedWindows > this.#configuration.maximumWindows
+      || projectedFeatures > this.#configuration.maximumTotalFeatures
+      || projectedBytes > this.#configuration.maximumTotalBytes
     );
 
     while (exceeded()) {
-      const candidate = [...this.#windows.values()]
-        .filter((window) => !window.pinned && !protectedKeys.has(window.key))
-        .sort((left, right) => (
-          left.lastAccessAt - right.lastAccessAt
-          || left.updatedAt - right.updatedAt
-          || left.sequence - right.sequence
-          || left.key.localeCompare(right.key)
-        ))[0];
+      const candidate = candidates[candidateIndex];
+      candidateIndex += 1;
       if (!candidate) {
         throw new ViewportResultWindowError(
           'global result-window budget cannot be satisfied without evicting protected or pinned data',
           'GLOBAL_BUDGET_EXCEEDED',
         );
       }
-      this.#windows.delete(candidate.key);
-      evicted.push(candidate.key);
-      this.#evictions += 1;
-      totals = this.#totals();
+      planned.push(candidate);
+      projectedWindows -= 1;
+      projectedFeatures -= candidate.features.size;
+      projectedBytes -= candidate.estimatedBytes;
     }
-    return Object.freeze(evicted);
+
+    for (const candidate of planned) {
+      this.#windows.delete(candidate.key);
+      this.#evictions += 1;
+    }
+    return Object.freeze(planned.map((candidate) => candidate.key));
   }
 
   #assertActive(): void {
