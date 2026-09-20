@@ -49,8 +49,8 @@ const loadConfigurationServices = (
 const generateServiceUrl = (service: ConfigurationService): unknown =>
   CommonBusiness.GenerateUrl(service);
 
-const addProxyRule = (url: string, _source: string): Promise<unknown> | unknown =>
-  CommonBusiness.AddProxyRule(url);
+const addProxyRule = (url: string, source: string): Promise<unknown> | unknown =>
+  CommonBusiness.AddProxyRule(url, source);
 
 const setMapConfiguration = (configuration: MapConfiguration): Promise<unknown> | unknown =>
   MapManager.SetMapConfiguration(configuration);
