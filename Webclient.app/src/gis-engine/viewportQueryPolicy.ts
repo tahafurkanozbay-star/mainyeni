@@ -64,6 +64,11 @@ const finitePositive = (value: number, name: string): number => {
   return value;
 };
 
+const finiteNonNegative = (value: number, name: string): number => {
+  if (!Number.isFinite(value) || value < 0) throw new RangeError(`${name} must be finite and non-negative`);
+  return Object.is(value, -0) ? 0 : value;
+};
+
 const normalizeConfiguration = (
   input: Partial<ViewportQueryPolicyConfiguration> = {},
 ): ViewportQueryPolicyConfiguration => {

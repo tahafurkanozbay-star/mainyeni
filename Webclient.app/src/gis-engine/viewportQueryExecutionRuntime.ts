@@ -243,9 +243,11 @@ export class ViewportQueryExecutionRuntime<TPayload = unknown> {
           pixelWidth: input.pixelWidth,
           pixelHeight: input.pixelHeight,
           maxFeatures: 1,
-          estimatedFeatureDensity: input.estimatedFeatureDensity,
           priority: queryPlan.priority,
-          moving: input.moving,
+          ...(input.estimatedFeatureDensity === undefined
+            ? {}
+            : { estimatedFeatureDensity: input.estimatedFeatureDensity }),
+          ...(input.moving === undefined ? {} : { moving: input.moving }),
         }),
         pressure,
         status: 'skipped',
@@ -279,9 +281,11 @@ export class ViewportQueryExecutionRuntime<TPayload = unknown> {
       pixelWidth: input.pixelWidth,
       pixelHeight: input.pixelHeight,
       maxFeatures: adjustedMaxFeatures,
-      estimatedFeatureDensity: input.estimatedFeatureDensity,
       priority: queryPlan.priority,
-      moving: input.moving,
+      ...(input.estimatedFeatureDensity === undefined
+        ? {}
+        : { estimatedFeatureDensity: input.estimatedFeatureDensity }),
+      ...(input.moving === undefined ? {} : { moving: input.moving }),
     });
     warnings.push(...tilePlan.warnings);
     const windowKey = `layer:${layerId}`;
