@@ -1,17 +1,17 @@
-import type { OfflineSnapshot, OfflineSnapshotEntry } from './offlineSnapshot';
+import type { OfflineSnapshotMutation } from './offlineSnapshot';
 
 export type OfflinePersistenceState = 'idle' | 'loading' | 'saving' | 'ready' | 'failed' | 'disposed';
-export type OfflinePersistenceFailureKind = 'read' | 'write' | 'remove' | 'validation' | 'disposed';
+export type OfflinePersistenceFailureKind = 'read' | 'write' | 'remove' | 'disposed';
 
 export interface OfflinePersistenceStore {
-  read(signal: AbortSignal): Promise<unknown | null>;
-  write(snapshot: OfflineSnapshot, signal: AbortSignal): Promise<void>;
+  read(signal: AbortSignal): Promise<string | null>;
+  write(serialized: string, signal: AbortSignal): Promise<void>;
   remove(signal: AbortSignal): Promise<void>;
 }
 
 export interface OfflinePersistenceCodec {
-  decode(value: unknown, now?: number): OfflineSnapshot;
-  encode(entries: readonly OfflineSnapshotEntry[], now?: number): OfflineSnapshot;
+  decode(serialized: string, now?: number): { readonly snapshot: { readonly mutations: readonly OfflineSnapshotMutation[] } };
+  encode(mutations: readonly OfflineSnapshotMutation[], writtenAt?: number): string;
 }
 
 export interface OfflinePersistenceOptions {
@@ -54,12 +54,7 @@ const boundedInteger = (name: string, value: number, min: number, max: number): 
   return value;
 };
 
-/**
- * Coordinates durable offline state without choosing a browser storage mechanism.
- * The store is deliberately injected so IndexedDB/localStorage/service-worker caches
- * cannot leak into the platform domain boundary. All operations are serialized,
- * abortable and generation-aware; stale writes can never replace a newer revision.
- */
+/** Storage-agnostic, serialized persistence ownership for the offline mutation domain. */
 export class OfflinePersistenceCoordinator {
   readonly #store: OfflinePersistenceStore;
   readonly #codec: OfflinePersistenceCodec;
@@ -72,7 +67,7 @@ export class OfflinePersistenceCoordinator {
   #state: OfflinePersistenceState = 'idle';
   #revision = 0;
   #persistedRevision = 0;
-  #entries: readonly OfflineSnapshotEntry[] = Object.freeze([]);
+  #mutations: readonly OfflineSnapshotMutation[] = Object.freeze([]);
   #sequence = 0;
   #consecutiveFailures = 0;
   #lastLoadedAt: number | undefined;
@@ -93,40 +88,33 @@ export class OfflinePersistenceCoordinator {
   }
 
   snapshot(): OfflinePersistenceSnapshot {
-    return Object.freeze({
-      state: this.#state,
-      revision: this.#revision,
-      persistedRevision: this.#persistedRevision,
+    return Object.freeze({ state: this.#state, revision: this.#revision, persistedRevision: this.#persistedRevision,
       pendingSave: this.#saveTimer !== undefined || this.#persistedRevision < this.#revision,
       consecutiveFailures: this.#consecutiveFailures,
       ...(this.#lastLoadedAt === undefined ? {} : { lastLoadedAt: this.#lastLoadedAt }),
       ...(this.#lastSavedAt === undefined ? {} : { lastSavedAt: this.#lastSavedAt }),
-      ...(this.#lastFailureAt === undefined ? {} : { lastFailureAt: this.#lastFailureAt }),
-    });
+      ...(this.#lastFailureAt === undefined ? {} : { lastFailureAt: this.#lastFailureAt }) });
   }
 
   history(): readonly OfflinePersistenceEvent[] {
     return Object.freeze(this.#history.map(event => Object.freeze({ ...event })));
   }
 
-  entries(): readonly OfflineSnapshotEntry[] {
-    return this.#entries;
-  }
+  mutations(): readonly OfflineSnapshotMutation[] { return this.#mutations; }
 
-  async load(): Promise<readonly OfflineSnapshotEntry[]> {
+  async load(): Promise<readonly OfflineSnapshotMutation[]> {
     this.#assertActive();
     this.#cancelScheduledSave();
     const requestedRevision = this.#revision;
     this.#state = 'loading';
     this.#record('load-started', requestedRevision);
-    let loaded: readonly OfflineSnapshotEntry[] = Object.freeze([]);
     await this.#serialize(async () => {
       this.#assertActive();
       try {
         const raw = await this.#store.read(this.#lifetime.signal);
-        if (raw !== null) loaded = this.#codec.decode(raw, this.#clock()).entries;
+        const loaded = raw === null ? Object.freeze([]) : this.#codec.decode(raw, this.#clock()).snapshot.mutations;
         if (this.#revision === requestedRevision) {
-          this.#entries = Object.freeze(loaded.map(entry => Object.freeze({ ...entry })));
+          this.#mutations = Object.freeze(loaded.map(mutation => Object.freeze({ ...mutation })));
           this.#revision += 1;
           this.#persistedRevision = this.#revision;
         }
@@ -134,21 +122,17 @@ export class OfflinePersistenceCoordinator {
         this.#lastLoadedAt = this.#clock();
         this.#state = 'ready';
         this.#record('load-completed', this.#revision);
-      } catch (error) {
-        if (this.#disposed) throw new OfflinePersistenceError('disposed', { cause: error });
-        this.#fail('read', error);
-      }
+      } catch (error) { if (this.#disposed) throw new OfflinePersistenceError('disposed', { cause: error }); this.#fail('read', error); }
     });
-    return this.#entries;
+    return this.#mutations;
   }
 
-  replace(entries: readonly OfflineSnapshotEntry[]): number {
+  replace(mutations: readonly OfflineSnapshotMutation[]): number {
     this.#assertActive();
-    if (!Array.isArray(entries)) throw new TypeError('entries must be an array');
-    // Encode now as a synchronous validation pass. This keeps invalid or oversized
-    // data out of coordinator memory even before a durable write is attempted.
-    const validated = this.#codec.encode(entries, this.#clock()).entries;
-    this.#entries = Object.freeze(validated.map(entry => Object.freeze({ ...entry })));
+    if (!Array.isArray(mutations)) throw new TypeError('mutations must be an array');
+    const serialized = this.#codec.encode(mutations, this.#clock());
+    const validated = this.#codec.decode(serialized, this.#clock()).snapshot.mutations;
+    this.#mutations = Object.freeze(validated.map(mutation => Object.freeze({ ...mutation })));
     this.#revision += 1;
     this.#state = 'ready';
     this.#scheduleSave();
@@ -160,23 +144,20 @@ export class OfflinePersistenceCoordinator {
     this.#cancelScheduledSave();
     const targetRevision = this.#revision;
     if (targetRevision <= this.#persistedRevision) return;
-    const snapshot = this.#codec.encode(this.#entries, this.#clock());
+    const serialized = this.#codec.encode(this.#mutations, this.#clock());
     this.#record('save-started', targetRevision);
     this.#state = 'saving';
     await this.#serialize(async () => {
       this.#assertActive();
       try {
-        await this.#store.write(snapshot, this.#lifetime.signal);
+        await this.#store.write(serialized, this.#lifetime.signal);
         if (targetRevision > this.#persistedRevision) this.#persistedRevision = targetRevision;
         this.#consecutiveFailures = 0;
         this.#lastSavedAt = this.#clock();
         this.#state = 'ready';
         this.#record('save-completed', targetRevision);
         if (this.#revision > targetRevision) this.#scheduleSave();
-      } catch (error) {
-        if (this.#disposed) throw new OfflinePersistenceError('disposed', { cause: error });
-        this.#fail('write', error);
-      }
+      } catch (error) { if (this.#disposed) throw new OfflinePersistenceError('disposed', { cause: error }); this.#fail('write', error); }
     });
   }
 
@@ -184,7 +165,7 @@ export class OfflinePersistenceCoordinator {
     this.#assertActive();
     this.#cancelScheduledSave();
     const targetRevision = ++this.#revision;
-    this.#entries = Object.freeze([]);
+    this.#mutations = Object.freeze([]);
     await this.#serialize(async () => {
       this.#assertActive();
       try {
@@ -193,10 +174,7 @@ export class OfflinePersistenceCoordinator {
         this.#consecutiveFailures = 0;
         this.#state = 'ready';
         this.#record('cleared', targetRevision);
-      } catch (error) {
-        if (this.#disposed) throw new OfflinePersistenceError('disposed', { cause: error });
-        this.#fail('remove', error);
-      }
+      } catch (error) { if (this.#disposed) throw new OfflinePersistenceError('disposed', { cause: error }); this.#fail('remove', error); }
     });
   }
 
@@ -219,32 +197,18 @@ export class OfflinePersistenceCoordinator {
   #scheduleSave(): void {
     this.#cancelScheduledSave();
     this.#record('save-scheduled', this.#revision);
-    if (this.#saveDebounceMs === 0) {
-      void this.flush().catch(() => undefined);
-      return;
-    }
-    this.#saveTimer = setTimeout(() => {
-      this.#saveTimer = undefined;
-      if (!this.#disposed) void this.flush().catch(() => undefined);
-    }, this.#saveDebounceMs);
+    if (this.#saveDebounceMs === 0) { void this.flush().catch(() => undefined); return; }
+    this.#saveTimer = setTimeout(() => { this.#saveTimer = undefined; if (!this.#disposed) void this.flush().catch(() => undefined); }, this.#saveDebounceMs);
   }
 
-  #cancelScheduledSave(): void {
-    if (this.#saveTimer === undefined) return;
-    clearTimeout(this.#saveTimer);
-    this.#saveTimer = undefined;
-  }
+  #cancelScheduledSave(): void { if (this.#saveTimer !== undefined) { clearTimeout(this.#saveTimer); this.#saveTimer = undefined; } }
 
   async #serialize(operation: () => Promise<void>): Promise<void> {
     const previous = this.#operation;
     let release!: () => void;
     this.#operation = new Promise<void>(resolve => { release = resolve; });
     await previous.catch(() => undefined);
-    try {
-      await operation();
-    } finally {
-      release();
-    }
+    try { await operation(); } finally { release(); }
   }
 
   #fail(kind: Exclude<OfflinePersistenceFailureKind, 'disposed'>, cause: unknown): never {
@@ -252,15 +216,11 @@ export class OfflinePersistenceCoordinator {
     this.#lastFailureAt = this.#clock();
     this.#state = 'failed';
     this.#record('failed', this.#revision, kind);
-    // Failure count is intentionally observable rather than triggering an
-    // unbounded retry loop. The owning runtime decides when retry is safe.
     if (this.#consecutiveFailures > this.#maxConsecutiveFailures) this.#cancelScheduledSave();
     throw new OfflinePersistenceError(kind, { cause });
   }
 
-  #assertActive(): void {
-    if (this.#disposed) throw new OfflinePersistenceError('disposed');
-  }
+  #assertActive(): void { if (this.#disposed) throw new OfflinePersistenceError('disposed'); }
 
   #record(type: OfflinePersistenceEvent['type'], revision: number, failure?: OfflinePersistenceFailureKind): void {
     if (this.#historyLimit === 0) return;
