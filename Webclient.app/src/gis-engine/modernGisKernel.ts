@@ -24,6 +24,7 @@ import { createTemporalLayerRuntime } from './temporalLayerRuntime';
 import { createGisEditTransactionRuntime } from './editTransactionRuntime';
 import { createGisMapStatePersistenceRuntime } from './mapStatePersistenceRuntime';
 import { createGisExportRuntime } from './exportPlanRuntime';
+import { createViewportQueryExecutionRuntime } from './viewportQueryExecutionRuntime';
 import {
   createDeterministicFingerprint,
   finiteNumber,
@@ -52,6 +53,7 @@ export interface ModernGisKernelConfiguration {
   readonly edits?: ReturnType<typeof createGisEditTransactionRuntime>;
   readonly mapState?: ReturnType<typeof createGisMapStatePersistenceRuntime>;
   readonly exports?: ReturnType<typeof createGisExportRuntime>;
+  readonly viewportQueries?: ReturnType<typeof createViewportQueryExecutionRuntime>;
   readonly lifecycleAdapters?: Record<string, unknown>;
   readonly schedulerOptions?: Record<string, unknown>;
   readonly layerBudget?: {
@@ -243,6 +245,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
   const edits = configuration.edits || createGisEditTransactionRuntime({ now: clock });
   const mapState = configuration.mapState || createGisMapStatePersistenceRuntime({ now: clock });
   const exports = configuration.exports || createGisExportRuntime();
+  const viewportQueries = configuration.viewportQueries || createViewportQueryExecutionRuntime({ now: clock });
   const lifecycle = configuration.lifecycle || createLayerLifecycleRuntime({
     ...configuration.lifecycleAdapters,
     now: clock,
@@ -732,6 +735,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     health: serviceHealth.getSummary(),
     render: renderGovernor.getSnapshot(),
     streaming: streamingPlanner.getMetrics(),
+    viewportQueries: viewportQueries.snapshot(),
   });
 
   const destroy = async (): Promise<void> => {
@@ -744,6 +748,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     streamingPlanner.destroy();
     temporal.destroy();
     edits.destroy();
+    viewportQueries.dispose();
     observability.destroy();
     services.clear();
     layers.clear();
@@ -773,6 +778,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     edits,
     mapState,
     exports,
+    viewportQueries,
     getService: (serviceId: unknown) => requireService(serviceId),
     getLayer: (layerId: unknown) => requireLayer(layerId).descriptor,
     destroy,
