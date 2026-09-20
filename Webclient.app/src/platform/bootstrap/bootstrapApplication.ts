@@ -21,7 +21,7 @@ import {
  * remains behind ConfigurationBusiness, proxy registration remains behind
  * CommonBusiness, and committed state remains behind MapManager. Keeping those
  * boundaries explicit lets bootstrapCore stay deterministic and independently
- * testable while preventing a second fetch/cache/retry implementation here.
+ * testable while preventing a second fetch/cache/resilience implementation here.
  */
 
 export interface ApplicationBootstrapOptions extends BootstrapOptions {
