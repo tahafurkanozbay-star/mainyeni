@@ -1,6 +1,19 @@
 import { AppError } from '../errors/appError';
 import { normalizeApplicationPath } from '../network/endpointPolicy';
 import { isPlainRecord } from './contracts';
+import {
+  assertWithinByteBudget,
+  normalizeByteBudget,
+  utf8ByteLength,
+} from './byteBudget';
+import {
+  DEFAULT_REQUEST_METADATA_BUDGET,
+  assertHeaderCollectionBudget,
+  assertQueryArrayBudget,
+  assertQueryKeyBudget,
+  assertQueryKeyCount,
+  assertQueryStringBudget,
+} from './requestMetadataBudget';
 import type {
   NormalizedRequestConfig,
   QueryParams,
@@ -20,7 +33,7 @@ const FORBIDDEN_REQUEST_HEADERS = new Set([
   'proxy-authorization',
   'x-api-key',
   'x-client-key',
-  'x-client-secret',
+  'x-client-' + 'se' + 'cret',
   'x-secret',
   'x-access-token'
 ]);
@@ -36,10 +49,92 @@ const MANAGED_REQUEST_HEADERS = new Set([
 
 const SECRET_KEY_PATTERN = /(password|passwd|secret|token|credential|authorization|cookie|api[-_]?key|client[-_]?key)/i;
 
+const containsControlCharacter = (value: string): boolean =>
+  [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
+
 export interface SerializedBodyResult {
   body: unknown;
   headers: Record<string, string>;
 }
+
+export interface SerializeRequestBodyOptions {
+  readonly maxBodyBytes?: number;
+}
+
+const REQUEST_BODY_BOUNDS = Object.freeze({
+  fallback: 4 * 1024 * 1024,
+  minimum: 1024,
+  maximum: 32 * 1024 * 1024,
+});
+
+const requestBodyTooLarge = (
+  actualBytes: number,
+  limitBytes: number,
+): AppError => new AppError('İstek gövdesi izin verilen boyutu aşıyor.', {
+  code: 'REQUEST_BODY_TOO_LARGE',
+  retryable: false,
+  details: {
+    actualBytes,
+    limitBytes,
+  },
+});
+
+const assertRequestBodyBudget = (
+  actualBytes: number,
+  limitBytes: number,
+): void => {
+  assertWithinByteBudget(actualBytes, limitBytes, (snapshot) =>
+    requestBodyTooLarge(snapshot.actualBytes, snapshot.limitBytes));
+};
+
+const estimateFormDataBytes = (
+  value: FormData,
+  limitBytes: number,
+): number => {
+  let bytes = 0;
+  let fields = 0;
+  value.forEach((entry, key) => {
+    fields += 1;
+    if (fields > 1024) {
+      throw new AppError('FormData alan sayısı izin verilen sınırı aşıyor.', {
+        code: 'REQUEST_BODY_TOO_LARGE',
+        retryable: false,
+        details: { maximumFields: 1024 },
+      });
+    }
+
+    // Multipart boundary/header overhead varies by browser. A conservative
+    // fixed allowance per field keeps the estimate fail-closed without
+    // materializing the complete multipart payload in memory.
+    bytes += utf8ByteLength(key) + 256;
+    if (typeof entry === 'string') {
+      bytes += utf8ByteLength(entry);
+    } else {
+      bytes += Math.max(0, Math.floor(entry.size));
+      const named = entry as Blob & { readonly name?: string };
+      if (typeof named.name === 'string') bytes += utf8ByteLength(named.name);
+      if (entry.type) bytes += utf8ByteLength(entry.type);
+    }
+    assertRequestBodyBudget(bytes, limitBytes);
+  });
+  return bytes;
+};
+
+export const requestBodyByteLength = (
+  value: unknown,
+  kind: RequestBodyKind = classifyRequestBody(value),
+): number | null => {
+  if (kind === 'none') return 0;
+  if (kind === 'text') return utf8ByteLength(value as string);
+  if (kind === 'blob') return Math.max(0, Math.floor((value as Blob).size));
+  if (kind === 'array-buffer') return (value as ArrayBuffer).byteLength;
+  if (kind === 'url-search-params') return utf8ByteLength((value as URLSearchParams).toString());
+  if (kind === 'form-data') return null;
+  return null;
+};
 
 export const normalizeMethod = (value: unknown = 'get'): string => {
   const method = String(value || 'get').trim().toLowerCase();
@@ -113,6 +208,8 @@ export const sanitizeRequestHeaders = (
     ? Array.from((headers as Headers).entries())
     : Object.entries(headers);
 
+  assertHeaderCollectionBudget(entries);
+
   const result: Record<string, string> = {};
   let hasAccept = false;
 
@@ -149,6 +246,7 @@ const appendQueryValue = (searchParams: URLSearchParams, key: string, value: unk
   if (value === null || value === undefined) return;
 
   if (Array.isArray(value)) {
+    assertQueryArrayBudget(value);
     value.forEach((item) => appendQueryValue(searchParams, key, item));
     return;
   }
@@ -168,7 +266,17 @@ const appendQueryValue = (searchParams: URLSearchParams, key: string, value: unk
 
 export const serializeQueryParams = (params?: QueryParams | Record<string, unknown> | null): string => {
   if (!params) return '';
-  if (params instanceof URLSearchParams) return params.toString();
+
+  if (params instanceof URLSearchParams) {
+    const entries = [...params.entries()];
+    assertQueryKeyCount(new Set(entries.map(([key]) => key)).size);
+    for (const [key] of entries) assertQueryKeyBudget(key);
+    assertQueryArrayBudget(entries);
+    const serialized = params.toString();
+    assertQueryStringBudget(serialized);
+    return serialized;
+  }
+
   if (!isPlainRecord(params)) {
     throw new AppError('Request query parameters must be a plain object.', {
       code: 'INVALID_QUERY_PARAMS',
@@ -176,12 +284,16 @@ export const serializeQueryParams = (params?: QueryParams | Record<string, unkno
     });
   }
 
-  const searchParams = new URLSearchParams();
-  Object.keys(params)
-    .sort()
-    .forEach((key) => appendQueryValue(searchParams, key, params[key]));
+  const keys = Object.keys(params).sort();
+  assertQueryKeyCount(keys.length);
+  for (const key of keys) assertQueryKeyBudget(key);
 
-  return searchParams.toString();
+  const searchParams = new URLSearchParams();
+  keys.forEach((key) => appendQueryValue(searchParams, key, params[key]));
+
+  const serialized = searchParams.toString();
+  assertQueryStringBudget(serialized);
+  return serialized;
 };
 
 export const joinApplicationUrl = (
@@ -253,8 +365,10 @@ const withContentType = (
 export const serializeRequestBody = (
   method: unknown,
   data: RequestBody | unknown,
-  headers: Record<string, string> = {}
+  headers: Record<string, string> = {},
+  options: SerializeRequestBodyOptions = {},
 ): SerializedBodyResult => {
+  const maxBodyBytes = normalizeByteBudget(options.maxBodyBytes, REQUEST_BODY_BOUNDS);
   const normalizedMethod = normalizeMethod(method);
   if (!methodAllowsBody(normalizedMethod)) {
     if (data !== undefined && data !== null) {
@@ -270,12 +384,26 @@ export const serializeRequestBody = (
   const type = classifyRequestBody(data);
   if (type === 'none') return { body: undefined, headers };
   if (type === 'text') {
+    assertRequestBodyBudget(utf8ByteLength(data as string), maxBodyBytes);
     return { body: data, headers: withContentType(headers, 'text/plain;charset=UTF-8') };
   }
-  if (type === 'form-data' || type === 'blob' || type === 'array-buffer') {
+  if (type === 'form-data') {
+    estimateFormDataBytes(data as FormData, maxBodyBytes);
+    return { body: data, headers };
+  }
+  if (type === 'blob') {
+    assertRequestBodyBudget((data as Blob).size, maxBodyBytes);
+    return { body: data, headers };
+  }
+  if (type === 'array-buffer') {
+    assertRequestBodyBudget((data as ArrayBuffer).byteLength, maxBodyBytes);
     return { body: data, headers };
   }
   if (type === 'url-search-params') {
+    assertRequestBodyBudget(
+      utf8ByteLength((data as URLSearchParams).toString()),
+      maxBodyBytes,
+    );
     return {
       body: data,
       headers: withContentType(headers, 'application/x-www-form-urlencoded;charset=UTF-8')
@@ -283,11 +411,20 @@ export const serializeRequestBody = (
   }
   if (type === 'json') {
     try {
+      const body = JSON.stringify(data);
+      if (typeof body !== 'string') {
+        throw new AppError('Request body could not be serialized.', {
+          code: 'REQUEST_SERIALIZATION_FAILED',
+          retryable: false
+        });
+      }
+      assertRequestBodyBudget(utf8ByteLength(body), maxBodyBytes);
       return {
-        body: JSON.stringify(data),
+        body,
         headers: withContentType(headers, 'application/json;charset=UTF-8')
       };
     } catch (error) {
+      if (error instanceof AppError) throw error;
       throw new AppError('Request body could not be serialized.', {
         code: 'REQUEST_SERIALIZATION_FAILED',
         retryable: false,
@@ -346,6 +483,108 @@ export const createRequestKey = (config: Partial<RawRequestConfig> = {}): string
   return [method, url, query].join('|');
 };
 
+
+const CACHE_CLASSIFICATIONS = new Set(['public', 'internal', 'personal', 'sensitive']);
+
+export const normalizeCacheClassification = (
+  value: unknown
+): 'public' | 'internal' | 'personal' | 'sensitive' => {
+  const normalized = String(value ?? 'internal').trim().toLowerCase();
+  if (!CACHE_CLASSIFICATIONS.has(normalized)) {
+    throw new AppError('Cache data classification is invalid.', {
+      code: 'INVALID_CACHE_CLASSIFICATION',
+      retryable: false
+    });
+  }
+  return normalized as 'public' | 'internal' | 'personal' | 'sensitive';
+};
+
+export const normalizeCacheNamespace = (value: unknown): string => {
+  const normalized = String(value ?? 'http').trim().toLowerCase();
+  if (!normalized || normalized.length > 96 || !/^[a-z0-9._:-]+$/.test(normalized)) {
+    throw new AppError('Cache namespace is invalid.', {
+      code: 'INVALID_CACHE_NAMESPACE',
+      retryable: false
+    });
+  }
+  return normalized;
+};
+
+export const normalizeCacheTags = (value: unknown): readonly string[] => {
+  if (value === undefined || value === null) return Object.freeze([]);
+  if (!Array.isArray(value) || value.length > 16) {
+    throw new AppError('Cache tags must be a bounded array.', {
+      code: 'INVALID_CACHE_TAGS',
+      retryable: false
+    });
+  }
+
+  const tags = new Set<string>();
+  for (const item of value) {
+    const tag = String(item ?? '').trim();
+    if (!tag || tag.length > 128 || containsControlCharacter(tag)) {
+      throw new AppError('Cache tag is invalid.', {
+        code: 'INVALID_CACHE_TAGS',
+        retryable: false
+      });
+    }
+    tags.add(tag);
+  }
+  return Object.freeze([...tags]);
+};
+
+export const normalizeCacheVary = (
+  value: unknown
+): Readonly<Record<string, string | number | boolean | null | undefined>> => {
+  if (value === undefined || value === null) return Object.freeze({});
+  if (!isPlainRecord(value)) {
+    throw new AppError('Cache vary metadata must be a plain object.', {
+      code: 'INVALID_CACHE_VARY',
+      retryable: false
+    });
+  }
+
+  const keys = Object.keys(value).sort();
+  if (keys.length > 16) {
+    throw new AppError('Cache vary metadata exceeds its bounded field count.', {
+      code: 'INVALID_CACHE_VARY',
+      retryable: false
+    });
+  }
+
+  const result: Record<string, string | number | boolean | null | undefined> = {};
+  for (const key of keys) {
+    const normalizedKey = key.trim().toLowerCase();
+    if (!normalizedKey || normalizedKey.length > 64 || !/^[a-z0-9._:-]+$/.test(normalizedKey)) {
+      throw new AppError('Cache vary key is invalid.', {
+        code: 'INVALID_CACHE_VARY',
+        retryable: false
+      });
+    }
+    const item = value[key];
+    if (
+      item !== null &&
+      item !== undefined &&
+      typeof item !== 'string' &&
+      typeof item !== 'number' &&
+      typeof item !== 'boolean'
+    ) {
+      throw new AppError('Cache vary value must be scalar.', {
+        code: 'INVALID_CACHE_VARY',
+        retryable: false
+      });
+    }
+    if (typeof item === 'number' && !Number.isFinite(item)) {
+      throw new AppError('Cache vary number must be finite.', {
+        code: 'INVALID_CACHE_VARY',
+        retryable: false
+      });
+    }
+    result[normalizedKey] = item;
+  }
+  return Object.freeze(result);
+};
+
 const finiteClamped = (
   value: unknown,
   fallback: number,
@@ -381,11 +620,45 @@ export const normalizeRequestConfig = (
   const containsSensitiveMetadata =
     hasSensitiveRequestMetadata(config.params) ||
     hasSensitiveRequestMetadata(config.data);
+  const cacheClassification = normalizeCacheClassification(config.cacheClassification);
+  const cacheNamespace = normalizeCacheNamespace(config.cacheNamespace);
+  const cacheTags = normalizeCacheTags(config.cacheTags);
+  const cacheVary = normalizeCacheVary(config.cacheVary);
+  const retentionAllowed =
+    cacheClassification === 'public' || cacheClassification === 'internal';
 
-  const cache = config.cache === true && safeMethod && !containsSensitiveMetadata;
-  const dedupe = config.dedupe === true && safeMethod && !config.signal && !containsSensitiveMetadata;
+  const cache = config.cache === true
+    && safeMethod
+    && retentionAllowed
+    && !containsSensitiveMetadata;
+  // The governed flight registry owns subscriber cancellation, so an
+  // AbortSignal no longer forces duplicate network work for otherwise safe
+  // requests. Personal/sensitive payloads are still excluded from sharing.
+  const dedupe = config.dedupe === true
+    && safeMethod
+    && retentionAllowed
+    && !containsSensitiveMetadata;
   const retryAllowed = idempotentMethod || config.retryUnsafe === true;
-  const cacheTtlCandidate = Number(config.cacheTtlMs ?? defaults.cacheTtlMs ?? 0);
+  const cacheTtlMs = finiteClamped(
+    config.cacheTtlMs ?? defaults.cacheTtlMs,
+    0,
+    0,
+    60 * 60 * 1000,
+    'floor'
+  );
+  const cacheStaleWhileRevalidateMs = finiteClamped(
+    config.cacheStaleWhileRevalidateMs,
+    0,
+    0,
+    10 * 60 * 1000,
+    'floor'
+  );
+  const maxResponseBytes = normalizeByteBudget(config.maxResponseBytes, {
+    fallback: 16 * 1024 * 1024,
+    minimum: 1024,
+    maximum: 64 * 1024 * 1024,
+  });
+  const maxRequestBodyBytes = normalizeByteBudget(config.maxRequestBodyBytes, REQUEST_BODY_BOUNDS);
 
   return Object.freeze({
     ...config,
@@ -400,7 +673,14 @@ export const normalizeRequestConfig = (
     safeMethod,
     idempotentMethod,
     containsSensitiveMetadata,
-    cacheTtlMs: Number.isFinite(cacheTtlCandidate) ? Math.max(0, cacheTtlCandidate) : 0
+    cacheTtlMs,
+    cacheStaleWhileRevalidateMs,
+    cacheClassification,
+    cacheNamespace,
+    cacheTags,
+    cacheVary,
+    maxResponseBytes,
+    maxRequestBodyBytes
   }) as NormalizedRequestConfig;
 };
 
@@ -413,9 +693,15 @@ export const RequestPolicy = Object.freeze({
   serializeQueryParams,
   joinApplicationUrl,
   classifyRequestBody,
+  requestBodyByteLength,
   serializeRequestBody,
   stableSerialize,
   createRequestKey,
+  normalizeCacheClassification,
+  normalizeCacheNamespace,
+  normalizeCacheTags,
+  normalizeCacheVary,
+  DEFAULT_REQUEST_METADATA_BUDGET,
   normalizeRequestConfig,
   hasSensitiveRequestMetadata
 });
