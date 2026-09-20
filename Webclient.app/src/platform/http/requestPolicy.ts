@@ -346,6 +346,108 @@ export const createRequestKey = (config: Partial<RawRequestConfig> = {}): string
   return [method, url, query].join('|');
 };
 
+
+const CACHE_CLASSIFICATIONS = new Set(['public', 'internal', 'personal', 'sensitive']);
+
+export const normalizeCacheClassification = (
+  value: unknown
+): 'public' | 'internal' | 'personal' | 'sensitive' => {
+  const normalized = String(value ?? 'internal').trim().toLowerCase();
+  if (!CACHE_CLASSIFICATIONS.has(normalized)) {
+    throw new AppError('Cache data classification is invalid.', {
+      code: 'INVALID_CACHE_CLASSIFICATION',
+      retryable: false
+    });
+  }
+  return normalized as 'public' | 'internal' | 'personal' | 'sensitive';
+};
+
+export const normalizeCacheNamespace = (value: unknown): string => {
+  const normalized = String(value ?? 'http').trim().toLowerCase();
+  if (!normalized || normalized.length > 96 || !/^[a-z0-9._:-]+$/.test(normalized)) {
+    throw new AppError('Cache namespace is invalid.', {
+      code: 'INVALID_CACHE_NAMESPACE',
+      retryable: false
+    });
+  }
+  return normalized;
+};
+
+export const normalizeCacheTags = (value: unknown): readonly string[] => {
+  if (value === undefined || value === null) return Object.freeze([]);
+  if (!Array.isArray(value) || value.length > 16) {
+    throw new AppError('Cache tags must be a bounded array.', {
+      code: 'INVALID_CACHE_TAGS',
+      retryable: false
+    });
+  }
+
+  const tags = new Set<string>();
+  for (const item of value) {
+    const tag = String(item ?? '').trim();
+    if (!tag || tag.length > 128 || /[\u0000-\u001f\u007f]/.test(tag)) {
+      throw new AppError('Cache tag is invalid.', {
+        code: 'INVALID_CACHE_TAGS',
+        retryable: false
+      });
+    }
+    tags.add(tag);
+  }
+  return Object.freeze([...tags]);
+};
+
+export const normalizeCacheVary = (
+  value: unknown
+): Readonly<Record<string, string | number | boolean | null | undefined>> => {
+  if (value === undefined || value === null) return Object.freeze({});
+  if (!isPlainRecord(value)) {
+    throw new AppError('Cache vary metadata must be a plain object.', {
+      code: 'INVALID_CACHE_VARY',
+      retryable: false
+    });
+  }
+
+  const keys = Object.keys(value).sort();
+  if (keys.length > 16) {
+    throw new AppError('Cache vary metadata exceeds its bounded field count.', {
+      code: 'INVALID_CACHE_VARY',
+      retryable: false
+    });
+  }
+
+  const result: Record<string, string | number | boolean | null | undefined> = {};
+  for (const key of keys) {
+    const normalizedKey = key.trim().toLowerCase();
+    if (!normalizedKey || normalizedKey.length > 64 || !/^[a-z0-9._:-]+$/.test(normalizedKey)) {
+      throw new AppError('Cache vary key is invalid.', {
+        code: 'INVALID_CACHE_VARY',
+        retryable: false
+      });
+    }
+    const item = value[key];
+    if (
+      item !== null &&
+      item !== undefined &&
+      typeof item !== 'string' &&
+      typeof item !== 'number' &&
+      typeof item !== 'boolean'
+    ) {
+      throw new AppError('Cache vary value must be scalar.', {
+        code: 'INVALID_CACHE_VARY',
+        retryable: false
+      });
+    }
+    if (typeof item === 'number' && !Number.isFinite(item)) {
+      throw new AppError('Cache vary number must be finite.', {
+        code: 'INVALID_CACHE_VARY',
+        retryable: false
+      });
+    }
+    result[normalizedKey] = item;
+  }
+  return Object.freeze(result);
+};
+
 const finiteClamped = (
   value: unknown,
   fallback: number,
@@ -381,11 +483,39 @@ export const normalizeRequestConfig = (
   const containsSensitiveMetadata =
     hasSensitiveRequestMetadata(config.params) ||
     hasSensitiveRequestMetadata(config.data);
+  const cacheClassification = normalizeCacheClassification(config.cacheClassification);
+  const cacheNamespace = normalizeCacheNamespace(config.cacheNamespace);
+  const cacheTags = normalizeCacheTags(config.cacheTags);
+  const cacheVary = normalizeCacheVary(config.cacheVary);
+  const retentionAllowed =
+    cacheClassification === 'public' || cacheClassification === 'internal';
 
-  const cache = config.cache === true && safeMethod && !containsSensitiveMetadata;
-  const dedupe = config.dedupe === true && safeMethod && !config.signal && !containsSensitiveMetadata;
+  const cache = config.cache === true
+    && safeMethod
+    && retentionAllowed
+    && !containsSensitiveMetadata;
+  // The governed flight registry owns subscriber cancellation, so an
+  // AbortSignal no longer forces duplicate network work for otherwise safe
+  // requests. Personal/sensitive payloads are still excluded from sharing.
+  const dedupe = config.dedupe === true
+    && safeMethod
+    && retentionAllowed
+    && !containsSensitiveMetadata;
   const retryAllowed = idempotentMethod || config.retryUnsafe === true;
-  const cacheTtlCandidate = Number(config.cacheTtlMs ?? defaults.cacheTtlMs ?? 0);
+  const cacheTtlMs = finiteClamped(
+    config.cacheTtlMs ?? defaults.cacheTtlMs,
+    0,
+    0,
+    60 * 60 * 1000,
+    'floor'
+  );
+  const cacheStaleWhileRevalidateMs = finiteClamped(
+    config.cacheStaleWhileRevalidateMs,
+    0,
+    0,
+    10 * 60 * 1000,
+    'floor'
+  );
 
   return Object.freeze({
     ...config,
@@ -400,7 +530,12 @@ export const normalizeRequestConfig = (
     safeMethod,
     idempotentMethod,
     containsSensitiveMetadata,
-    cacheTtlMs: Number.isFinite(cacheTtlCandidate) ? Math.max(0, cacheTtlCandidate) : 0
+    cacheTtlMs,
+    cacheStaleWhileRevalidateMs,
+    cacheClassification,
+    cacheNamespace,
+    cacheTags,
+    cacheVary
   }) as NormalizedRequestConfig;
 };
 
@@ -416,6 +551,10 @@ export const RequestPolicy = Object.freeze({
   serializeRequestBody,
   stableSerialize,
   createRequestKey,
+  normalizeCacheClassification,
+  normalizeCacheNamespace,
+  normalizeCacheTags,
+  normalizeCacheVary,
   normalizeRequestConfig,
   hasSensitiveRequestMetadata
 });
