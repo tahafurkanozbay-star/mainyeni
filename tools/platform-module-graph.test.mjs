@@ -337,16 +337,14 @@ test('markdown contains gate, language metrics, findings and boundary sections',
     assert.match(markdown, /Platform TypeScript \/ JavaScript files/);
     assert.match(markdown, /Duplicate typed \/ JavaScript stems/);
     assert.match(markdown, /Domain boundaries/);
-    assert.match(markdown, /bootstrapApplication\.js/);
+    assert.match(markdown, /strict TypeScript\/native-ESM runtime/);
   });
 });
 
-test('report policy exposes the bounded compatibility allowlist', async () => {
+test('report policy exposes an empty production JavaScript allowlist', async () => {
   await withFixture({}, async (root) => {
     const report = await buildPlatformModuleGraph(root);
-    assert.deepEqual(report.policy.platformLegacyJavascriptAllowlist, [
-      'Webclient.app/src/platform/bootstrap/bootstrapApplication.js',
-    ]);
+    assert.deepEqual(report.policy.platformLegacyJavascriptAllowlist, []);
   });
 });
 
