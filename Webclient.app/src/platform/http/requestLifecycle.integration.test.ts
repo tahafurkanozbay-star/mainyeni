@@ -406,7 +406,7 @@ describe('RequestCoordinator lifecycle composition with cache and dedupe', () =>
     await flush();
 
     firstController.abort(new Error('first-route-left'));
-    await expect(first).rejects.toThrow('first-route-left');
+    await expect(first).rejects.toMatchObject({ code: 'subscriber-aborted' });
     expect(coordinator.getInFlightSize()).toBe(1);
 
     gate.resolve(envelope({ value: 2 }));
