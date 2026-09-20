@@ -25,19 +25,19 @@ describe("accessibilityAudit", () => {
     test("accepts labelled native controls and decorative images", () => {
         const root = fixture(`
             <label for="search">Ara</label><input id="search" aria-label="Ara" />
-            <button aria-label="Yakınlaştır"><span aria-hidden="true">+</span></button>
+            <button type="button" aria-label="Yakınlaştır"><span aria-hidden="true">+</span></button>
             <img alt="" src="marker.svg" />
         `);
         expect(auditAccessibility(root).issues).toEqual([]);
     });
 
     test("resolves aria-labelledby before aria-label", () => {
-        const root = fixture('<span id="label">Katmanlar</span><button id="target" aria-labelledby="label" aria-label="Yedek"></button>');
+        const root = fixture('<span id="label">Katmanlar</span><button type="button" id="target" aria-labelledby="label" aria-label="Yedek"></button>');
         expect(getAccessibleName(root.querySelector("#target") as HTMLElement)).toBe("Katmanlar");
     });
 
     test("reports unnamed interactive controls", () => {
-        const root = fixture('<button><span aria-hidden="true"></span></button><a href="#"></a>');
+        const root = fixture('<button type="button"><span aria-hidden="true"></span></button><a href="#"></a>');
         const result = auditAccessibility(root);
         expect(result.counts["missing-accessible-name"]).toBe(2);
     });
@@ -52,12 +52,12 @@ describe("accessibilityAudit", () => {
     });
 
     test("reports unnamed dialogs", () => {
-        const root = fixture('<section role="dialog"><button>Kapat</button></section>');
+        const root = fixture('<section role="dialog"><button type="button">Kapat</button></section>');
         expect(auditAccessibility(root).counts["dialog-without-name"]).toBe(1);
     });
 
     test("accepts aria-labelledby dialog names", () => {
-        const root = fixture('<h2 id="title">Detay</h2><section role="dialog" aria-labelledby="title"><button>Kapat</button></section>');
+        const root = fixture('<h2 id="title">Detay</h2><section role="dialog" aria-labelledby="title"><button type="button">Kapat</button></section>');
         expect(auditAccessibility(root).counts["dialog-without-name"]).toBe(0);
     });
 
@@ -83,8 +83,8 @@ describe("accessibilityAudit", () => {
     });
 
     test("formats a concise Turkish audit summary", () => {
-        const root = fixture('<button></button>');
+        const root = fixture('<button type="button"></button>');
         expect(formatAccessibilityAudit(auditAccessibility(root))).toContain("1 sorun buldu");
-        expect(formatAccessibilityAudit(auditAccessibility(fixture('<button>Harita</button>')))).toBe("Erişilebilirlik denetimi sorun bulmadı.");
+        expect(formatAccessibilityAudit(auditAccessibility(fixture('<button type="button">Harita</button>')))).toBe("Erişilebilirlik denetimi sorun bulmadı.");
     });
 });
