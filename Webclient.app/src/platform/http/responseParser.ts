@@ -17,6 +17,78 @@ const TEXT_CONTENT_TYPES = [
 
 const MAX_SAFE_ERROR_MESSAGE_LENGTH = 240;
 const MAX_HEADER_VALUE_LENGTH = 512;
+const DEFAULT_MAX_BODY_BYTES = 16 * 1024 * 1024;
+const MAX_BODY_BYTES = 64 * 1024 * 1024;
+const ERROR_BODY_BYTES = 64 * 1024;
+const SENSITIVE_RESPONSE_HEADERS = new Set([
+  'authorization',
+  'proxy-authorization',
+  'set-cookie',
+  'set-cookie2',
+  'x-api-key',
+  'x-auth-token',
+]);
+
+const normalizedBodyLimit = (value: unknown): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_BODY_BYTES;
+  return Math.max(1024, Math.min(MAX_BODY_BYTES, Math.floor(parsed)));
+};
+
+export const responseBodyByteLength = (value: string): number => {
+  let bytes = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x7f) bytes += 1;
+    else if (codePoint <= 0x7ff) bytes += 2;
+    else if (codePoint <= 0xffff) bytes += 3;
+    else bytes += 4;
+  }
+  return bytes;
+};
+
+const responseContentLength = (response?: ResponseLike | null): number | null => {
+  const raw = readHeader(response?.headers, 'content-length');
+  if (raw === null || !/^\d+$/.test(raw.trim())) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+};
+
+const responseTooLarge = (
+  response: ResponseLike | null | undefined,
+  actualBytes: number,
+  limitBytes: number,
+): AppError => new AppError('Sunucu yanıtı izin verilen boyutu aşıyor.', {
+  code: 'RESPONSE_TOO_LARGE',
+  status: response?.status ?? null,
+  retryable: false,
+  details: {
+    limitBytes,
+    actualBytes,
+  },
+});
+
+export const assertResponseBodyBudget = (
+  response: ResponseLike | null | undefined,
+  maxBodyBytes: unknown,
+): number => {
+  const limit = normalizedBodyLimit(maxBodyBytes);
+  const advertised = responseContentLength(response);
+  if (advertised !== null && advertised > limit) {
+    throw responseTooLarge(response, advertised, limit);
+  }
+  return limit;
+};
+
+const assertMaterializedSize = (
+  response: ResponseLike | null | undefined,
+  actualBytes: number,
+  limitBytes: number,
+): void => {
+  if (!Number.isFinite(actualBytes) || actualBytes < 0 || actualBytes > limitBytes) {
+    throw responseTooLarge(response, Math.max(0, Number(actualBytes) || 0), limitBytes);
+  }
+};
 
 export type HeaderCollection = Headers | Record<string, unknown> | null | undefined;
 
@@ -38,6 +110,7 @@ export interface ParseResponseOptions {
   requestId?: string | null;
   url?: string | null;
   includeHeaders?: boolean;
+  maxBodyBytes?: number;
 }
 
 const normalizeContentType = (value: unknown): string => {
@@ -73,12 +146,16 @@ export const headersToObject = (headers: HeaderCollection): Readonly<Record<stri
   const result: Record<string, string> = {};
   if (typeof (headers as Headers).forEach === 'function') {
     (headers as Headers).forEach((value, key) => {
-      result[String(key).toLowerCase()] = String(value).slice(0, MAX_HEADER_VALUE_LENGTH);
+      const normalizedKey = String(key).toLowerCase();
+      if (SENSITIVE_RESPONSE_HEADERS.has(normalizedKey)) return;
+      result[normalizedKey] = String(value).slice(0, MAX_HEADER_VALUE_LENGTH);
     });
   } else {
     const record = headers as Record<string, unknown>;
     Object.keys(record).forEach((key) => {
-      result[String(key).toLowerCase()] = String(record[key]).slice(0, MAX_HEADER_VALUE_LENGTH);
+      const normalizedKey = String(key).toLowerCase();
+      if (SENSITIVE_RESPONSE_HEADERS.has(normalizedKey)) return;
+      result[normalizedKey] = String(record[key]).slice(0, MAX_HEADER_VALUE_LENGTH);
     });
   }
 
@@ -101,10 +178,15 @@ export const hasNoResponseBody = (response?: ResponseLike | null, method = 'get'
   return false;
 };
 
-const safeText = async (response?: ResponseLike | null): Promise<string> => {
+const safeText = async (
+  response: ResponseLike | null | undefined,
+  limitBytes: number,
+): Promise<string> => {
   if (!response || typeof response.text !== 'function') return '';
   const value = await response.text();
-  return typeof value === 'string' ? value : String(value ?? '');
+  const text = typeof value === 'string' ? value : String(value ?? '');
+  assertMaterializedSize(response, responseBodyByteLength(text), limitBytes);
+  return text;
 };
 
 const parseJsonText = (
@@ -135,6 +217,8 @@ export const parseResponseBody = async (
 
   const responseType = String(options.responseType || 'auto').toLowerCase();
   if (responseType === 'response') return response;
+  const bodyLimit = assertResponseBodyBudget(response, options.maxBodyBytes);
+
   if (responseType === 'blob') {
     if (typeof response?.blob !== 'function') {
       throw new AppError('Binary response is not supported by this runtime.', {
@@ -142,7 +226,9 @@ export const parseResponseBody = async (
         status: response?.status ?? null
       });
     }
-    return response.blob();
+    const blob = await response.blob();
+    assertMaterializedSize(response, blob.size, bodyLimit);
+    return blob;
   }
   if (responseType === 'arraybuffer') {
     if (typeof response?.arrayBuffer !== 'function') {
@@ -151,10 +237,12 @@ export const parseResponseBody = async (
         status: response?.status ?? null
       });
     }
-    return response.arrayBuffer();
+    const buffer = await response.arrayBuffer();
+    assertMaterializedSize(response, buffer.byteLength, bodyLimit);
+    return buffer;
   }
 
-  const text = await safeText(response);
+  const text = await safeText(response, bodyLimit);
   if (responseType === 'text') return text;
   if (responseType === 'json') {
     return parseJsonText(text, {
@@ -295,7 +383,14 @@ export const createHttpResponseError = async (
 ) => {
   let body: unknown = null;
   try {
-    body = await parseResponseBody(response, { ...options, allowInvalidJson: true });
+    body = await parseResponseBody(response, {
+      ...options,
+      allowInvalidJson: true,
+      maxBodyBytes: Math.min(
+        ERROR_BODY_BYTES,
+        normalizedBodyLimit(options.maxBodyBytes),
+      ),
+    });
   } catch {
     body = null;
   }
@@ -357,6 +452,8 @@ export const ResponseParser = Object.freeze({
   isJsonContentType,
   isTextContentType,
   headersToObject,
+  responseBodyByteLength,
+  assertResponseBodyBudget,
   getContentType,
   hasNoResponseBody,
   parseResponseBody,
