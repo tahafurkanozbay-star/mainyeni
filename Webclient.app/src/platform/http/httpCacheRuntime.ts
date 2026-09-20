@@ -86,7 +86,7 @@ const cacheMetadata = (
   result: TransportResult<unknown>,
   source: CacheResolutionSource,
 ): Readonly<Record<string, unknown>> => Object.freeze({
-  ...(result.metadata ?? {}),
+  ...result.metadata,
   cache: source,
 });
 
