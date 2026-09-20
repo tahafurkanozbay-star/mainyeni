@@ -1,5 +1,5 @@
 import { AppError } from '../errors/appError';
-import { normalizeByteBudget, utf8ByteLength } from './byteBudget';
+import { utf8ByteLength } from './byteBudget';
 
 export interface RequestMetadataBudgetOptions {
   readonly maxHeaderCount?: number;
@@ -50,29 +50,54 @@ const integer = (
   return normalized;
 };
 
+const strictByteBudget = (
+  name: string,
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number => {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new RangeError(`${name} must be finite`);
+  }
+  const normalized = Math.floor(parsed);
+  if (!Number.isSafeInteger(normalized) || normalized < minimum || normalized > maximum) {
+    throw new RangeError(`${name} must be between minimum ${minimum} and maximum ${maximum}`);
+  }
+  return normalized;
+};
+
 export const createRequestMetadataBudget = (
   options: RequestMetadataBudgetOptions = {},
 ): RequestMetadataBudget => Object.freeze({
   maxHeaderCount: integer('maxHeaderCount', options.maxHeaderCount, 64, 1, 256),
   maxHeaderNameBytes: integer('maxHeaderNameBytes', options.maxHeaderNameBytes, 128, 16, 1024),
-  maxHeaderValueBytes: normalizeByteBudget(options.maxHeaderValueBytes, {
-    fallback: 8 * 1024,
-    minimum: 128,
-    maximum: 64 * 1024,
-  }),
-  maxHeaderBytes: normalizeByteBudget(options.maxHeaderBytes, {
-    fallback: 32 * 1024,
-    minimum: 1024,
-    maximum: 256 * 1024,
-  }),
+  maxHeaderValueBytes: strictByteBudget(
+    'maxHeaderValueBytes',
+    options.maxHeaderValueBytes,
+    8 * 1024,
+    128,
+    64 * 1024,
+  ),
+  maxHeaderBytes: strictByteBudget(
+    'maxHeaderBytes',
+    options.maxHeaderBytes,
+    32 * 1024,
+    1024,
+    256 * 1024,
+  ),
   maxQueryKeys: integer('maxQueryKeys', options.maxQueryKeys, 128, 1, 1024),
   maxQueryArrayItems: integer('maxQueryArrayItems', options.maxQueryArrayItems, 256, 1, 4096),
   maxQueryKeyBytes: integer('maxQueryKeyBytes', options.maxQueryKeyBytes, 256, 8, 2048),
-  maxQueryBytes: normalizeByteBudget(options.maxQueryBytes, {
-    fallback: 16 * 1024,
-    minimum: 1024,
-    maximum: 128 * 1024,
-  }),
+  maxQueryBytes: strictByteBudget(
+    'maxQueryBytes',
+    options.maxQueryBytes,
+    16 * 1024,
+    1024,
+    128 * 1024,
+  ),
 });
 
 export const DEFAULT_REQUEST_METADATA_BUDGET = createRequestMetadataBudget();
@@ -108,6 +133,14 @@ export const assertHeaderCollectionBudget = (
         { nameBytes, maximum: budget.maxHeaderNameBytes },
       );
     }
+    totalBytes += nameBytes + 4;
+    if (totalBytes > budget.maxHeaderBytes) {
+      throw budgetError(
+        'REQUEST_HEADER_BUDGET_EXCEEDED',
+        'Request headers exceed the platform byte budget.',
+        { totalBytes, maximum: budget.maxHeaderBytes },
+      );
+    }
     if (rawValue === null || rawValue === undefined) continue;
 
     const valueBytes = utf8ByteLength(String(rawValue));
@@ -119,7 +152,7 @@ export const assertHeaderCollectionBudget = (
       );
     }
 
-    totalBytes += nameBytes + valueBytes + 4;
+    totalBytes += valueBytes;
     if (totalBytes > budget.maxHeaderBytes) {
       throw budgetError(
         'REQUEST_HEADER_BUDGET_EXCEEDED',
