@@ -100,7 +100,7 @@ describe("KeyboardCommandRuntime execution", () => {
 
 describe("editable target safety", () => {
     test("does not steal typing from text inputs by default", () => {
-        document.body.innerHTML = '<input id="query" />';
+        document.body.innerHTML = '<input aria-label="Test control" id="query" />';
         const input = document.querySelector("#query") as HTMLInputElement;
         const handler = vi.fn();
         const runtime = createKeyboardCommandRuntime({ target: document });
@@ -111,7 +111,7 @@ describe("editable target safety", () => {
     });
 
     test("can explicitly allow shortcuts in editable controls", () => {
-        document.body.innerHTML = '<textarea id="notes"></textarea>';
+        document.body.innerHTML = '<textarea aria-label="Test control" id="notes"></textarea>';
         const textarea = document.querySelector("#notes") as HTMLTextAreaElement;
         const handler = vi.fn();
         const runtime = createKeyboardCommandRuntime({ target: document });
@@ -122,7 +122,7 @@ describe("editable target safety", () => {
     });
 
     test("allows shortcuts from non-text input controls", () => {
-        document.body.innerHTML = '<input id="toggle" type="checkbox" />';
+        document.body.innerHTML = '<input aria-label="Test control" id="toggle" type="checkbox" />';
         const checkbox = document.querySelector("#toggle") as HTMLInputElement;
         const handler = vi.fn();
         const runtime = createKeyboardCommandRuntime({ target: document });
