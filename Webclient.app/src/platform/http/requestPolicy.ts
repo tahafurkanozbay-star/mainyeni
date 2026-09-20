@@ -516,6 +516,13 @@ export const normalizeRequestConfig = (
     10 * 60 * 1000,
     'floor'
   );
+  const maxResponseBytes = finiteClamped(
+    config.maxResponseBytes,
+    16 * 1024 * 1024,
+    1024,
+    64 * 1024 * 1024,
+    'floor'
+  );
 
   return Object.freeze({
     ...config,
@@ -535,7 +542,8 @@ export const normalizeRequestConfig = (
     cacheClassification,
     cacheNamespace,
     cacheTags,
-    cacheVary
+    cacheVary,
+    maxResponseBytes
   }) as NormalizedRequestConfig;
 };
 
