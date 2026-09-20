@@ -1,4 +1,5 @@
 import { Constants_ServiceResultType } from '../Core/Constants';
+import type { ArcGisQueryOptions } from './contracts';
 import {
   businessApiRuntime,
   businessDiagnostics,
@@ -51,13 +52,9 @@ export interface NumberingFileRequestOptions {
 
 export type NumberingCallback<TResult> = ((value: TResult) => void) | null | undefined;
 
-const emptyResult = (): Readonly<{
-  type: number;
-  data: readonly unknown[];
-  fields: readonly unknown[];
-}> => Object.freeze({
+const emptyResult = (): NumberingServiceResult => Object.freeze({
   type: Constants_ServiceResultType.Success,
-  data: Object.freeze([]),
+  data: Object.freeze([]) as readonly NumberingFeatureResult[],
   fields: Object.freeze([]),
 });
 

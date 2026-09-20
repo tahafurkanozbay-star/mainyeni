@@ -238,7 +238,7 @@ const addProxyRule = async (urlInput: unknown): Promise<void> => {
   urlUtils.addProxyRule({ urlPrefix: url, proxyUrl });
 };
 
-const createFeatureLayer = async (serviceTitle: string): Promise<FeatureLayerLike> => {
+const createFeatureLayer = async (serviceTitle: unknown): Promise<FeatureLayerLike> => {
   const service = findService(serviceTitle);
   if (!service) throw createServiceError(serviceTitle);
   const url = generateUrl(service);

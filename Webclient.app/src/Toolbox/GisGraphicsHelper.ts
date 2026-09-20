@@ -34,13 +34,6 @@ interface GeometryLike {
   readonly extent?: GeometryExtentLike;
 }
 
-interface PointLike extends GeometryLike {
-  readonly x?: number;
-  readonly y?: number;
-  readonly longitude?: number;
-  readonly latitude?: number;
-}
-
 type ArcgisConstructor<TInstance, TProperties extends object = Record<string, unknown>> =
   new (properties: TProperties) => TInstance;
 
