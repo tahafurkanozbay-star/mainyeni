@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "maxProductionJavascriptFiles": 120,
+  "maxJsxInJavascriptFiles": 80,
+  "protectedTypedPaths": [
+    "Webclient.admin/src/App.tsx",
+    "Webclient.admin/src/main.tsx",
+    "Webclient.admin/src/Business/AuthBusiness.ts",
+    "Webclient.admin/src/Components/AdminErrorBoundary.tsx",
+    "Webclient.admin/src/Components/Checkbox.tsx",
+    "Webclient.admin/src/Components/ConfirmDialog.tsx",
+    "Webclient.admin/src/Components/FileUpload.tsx",
+    "Webclient.admin/src/Components/Loading.tsx",
+    "Webclient.admin/src/Components/Message.tsx",
+    "Webclient.admin/src/Components/MessageToast.tsx",
+    "Webclient.admin/src/Core/Constants.ts",
+    "Webclient.admin/src/Core/Global.ts",
+    "Webclient.admin/src/Core/Toolbox/ObjectHelper.ts",
+    "Webclient.admin/src/Core/Toolbox/TextHelper.ts",
+    "Webclient.admin/src/Pages/Auth/LoginPage.tsx",
+    "Webclient.admin/src/Pages/Home/HomePage.tsx",
+    "Webclient.admin/src/Shared/NavMenu.tsx",
+    "Webclient.admin/src/Shared/SharedPage404.tsx",
+    "Webclient.admin/src/platform/authSession.ts",
+    "Webclient.admin/src/platform/contracts.ts",
+    "Webclient.admin/src/platform/diagnostics.ts",
+    "Webclient.admin/src/platform/httpClient.ts",
+    "Webclient.admin/src/platform/routeManifest.ts",
+    "Webclient.admin/src/platform/runtimeConfig.ts",
+    "Webclient.admin/src/platform/taskRuntime.ts"
+  ]
+}
