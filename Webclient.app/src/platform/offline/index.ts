@@ -6,3 +6,4 @@ export * from './serviceWorkerPolicy';
 export * from './browserSnapshotStore';
 export * from './offlineRuntime';
 export * from './offlineCachePolicy';
+export * from './offlineReplayPolicy';
