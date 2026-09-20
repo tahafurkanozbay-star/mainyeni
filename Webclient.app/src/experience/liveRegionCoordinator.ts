@@ -51,6 +51,7 @@ export class LiveRegionCoordinator {
     private readonly queue: QueueItem[] = [];
     private readonly recent = new Map<string, number>();
     private timer: ReturnType<typeof setTimeout> | undefined;
+    private timerDueAt: number | undefined;
     private sequence = 0;
     private delivered = 0;
     private dropped = 0;
@@ -114,6 +115,7 @@ export class LiveRegionCoordinator {
         this.queue.splice(0);
         if (this.timer) clearTimeout(this.timer);
         this.timer = undefined;
+        this.timerDueAt = undefined;
         if (options.regions !== false) {
             this.polite.textContent = "";
             this.assertive.textContent = "";
@@ -154,11 +156,15 @@ export class LiveRegionCoordinator {
     }
 
     private schedule(): void {
-        if (this.timer || !this.queue.length || this.destroyed) return;
+        if (!this.queue.length || this.destroyed) return;
         const now = this.now();
         const nextReady = Math.min(...this.queue.map((item) => item.readyAt));
+        if (this.timer && this.timerDueAt !== undefined && this.timerDueAt <= nextReady) return;
+        if (this.timer) clearTimeout(this.timer);
+        this.timerDueAt = nextReady;
         this.timer = setTimeout(() => {
             this.timer = undefined;
+            this.timerDueAt = undefined;
             this.flush();
         }, Math.max(0, nextReady - now));
     }
