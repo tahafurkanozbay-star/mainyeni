@@ -24,7 +24,7 @@ afterEach(() => { document.body.replaceChildren(); });
 describe("accessibilityAudit", () => {
     test("accepts labelled native controls and decorative images", () => {
         const root = fixture(`
-            <label for="search">Ara</label><input id="search" />
+            <label for="search">Ara</label><input id="search" aria-label="Ara" />
             <button aria-label="Yakınlaştır"><span aria-hidden="true">+</span></button>
             <img alt="" src="marker.svg" />
         `);
@@ -70,8 +70,10 @@ describe("accessibilityAudit", () => {
     });
 
     test("reports unlabelled select and textarea controls", () => {
-        const root = fixture('<select><option>A</option></select><textarea></textarea>');
-        const result = auditAccessibility(root);
+        const select = element("select");
+        select.append(element("option", {}, "A"));
+        const textarea = element("textarea");
+        const result = auditAccessibility(rootWith(select, textarea));
         expect(result.counts["form-control-without-name"]).toBe(2);
     });
 
