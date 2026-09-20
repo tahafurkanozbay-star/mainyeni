@@ -100,24 +100,24 @@ interface QueueEntry {
   attempts: number;
 }
 
-const priorityWeight: Readonly<Record<OfflineMutationPriority, number>> = Object.freeze({
-  critical: 0,
-  interactive: 1,
-  background: 2,
-});
+const priorityWeight: Readonly<Record<OfflineMutationPriority, number>> = Object.freeze({ critical: 0, interactive: 1, background: 2 });
 
 const boundedInteger = (name: string, value: number, min: number, max: number): number => {
-  if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer between ${min} and ${max}`);
-  }
+  if (!Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`${name} must be an integer between ${min} and ${max}`);
   return value;
+};
+
+const containsControlCharacter = (value: string): boolean => {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f)) return true;
+  }
+  return false;
 };
 
 const boundedText = (name: string, value: string, maxLength = 128): string => {
   const normalized = value.trim();
-  if (!normalized || normalized.length > maxLength || /[\u0000-\u001f\u007f]/u.test(normalized)) {
-    throw new TypeError(`${name} must be non-empty bounded text`);
-  }
+  if (!normalized || normalized.length > maxLength || containsControlCharacter(normalized)) throw new TypeError(`${name} must be non-empty bounded text`);
   return normalized;
 };
 
@@ -128,9 +128,7 @@ const defaultEstimateBytes = (value: unknown): number => {
     if (current === null || current === undefined) return 4;
     if (typeof current === 'string') return new TextEncoder().encode(current).byteLength;
     if (typeof current === 'number' || typeof current === 'boolean') return 8;
-    if (typeof current === 'bigint' || typeof current === 'symbol' || typeof current === 'function') {
-      throw new TypeError('payload contains unsupported value');
-    }
+    if (typeof current === 'bigint' || typeof current === 'symbol' || typeof current === 'function') throw new TypeError('payload contains unsupported value');
     if (current instanceof ArrayBuffer) return current.byteLength;
     if (ArrayBuffer.isView(current)) return current.byteLength;
     if (current instanceof Date) return 24;
@@ -143,9 +141,7 @@ const defaultEstimateBytes = (value: unknown): number => {
       } else {
         const prototype = Object.getPrototypeOf(current);
         if (prototype !== Object.prototype && prototype !== null) throw new TypeError('payload must contain plain data');
-        for (const [key, item] of Object.entries(current as Record<string, unknown>)) {
-          bytes += new TextEncoder().encode(key).byteLength + visit(item, depth + 1);
-        }
+        for (const [key, item] of Object.entries(current as Record<string, unknown>)) bytes += new TextEncoder().encode(key).byteLength + visit(item, depth + 1);
       }
       seen.delete(current);
       return bytes;
@@ -195,17 +191,8 @@ export class OfflineMutationQueue {
     this.#estimateBytes = options.estimateBytes ?? defaultEstimateBytes;
   }
 
-  setExecutor(executor: OfflineMutationExecutor | undefined): void {
-    if (this.#disposed) return;
-    this.#executor = executor;
-    this.#drain();
-  }
-
-  setOnline(online: boolean): void {
-    if (this.#disposed) return;
-    this.#online = online;
-    if (online) this.#drain();
-  }
+  setExecutor(executor: OfflineMutationExecutor | undefined): void { if (!this.#disposed) { this.#executor = executor; this.#drain(); } }
+  setOnline(online: boolean): void { if (!this.#disposed) { this.#online = online; if (online) this.#drain(); } }
 
   enqueue<TPayload>(descriptor: OfflineMutationDescriptor<TPayload>): Promise<OfflineMutationResult> {
     if (this.#disposed) return Promise.reject(this.#reject(descriptor, 'disposed'));
@@ -217,51 +204,33 @@ export class OfflineMutationQueue {
       const id = boundedText('id', descriptor.id, 160);
       const owner = boundedText('owner', descriptor.owner, 128);
       const operation = boundedText('operation', descriptor.operation, 128);
-      if (this.#entries.has(id)) return this.#entries.get(id)!.promise;
+      const sameId = this.#entries.get(id);
+      if (sameId) return sameId.promise;
       if (descriptor.dedupeKey) {
         const dedupeKey = boundedText('dedupeKey', descriptor.dedupeKey, 192);
-        const existing = [...this.#entries.values()].find(entry => entry.descriptor.dedupeKey === dedupeKey);
-        if (existing) {
-          this.#record(existing, 'deduplicated', 0);
-          return existing.promise;
+        for (const entry of this.#entries.values()) {
+          if (entry.descriptor.dedupeKey === dedupeKey) { this.#record(entry, 'deduplicated', 0); return entry.promise; }
         }
       }
       createdAt = descriptor.createdAt ?? this.#clock();
       if (!Number.isFinite(createdAt) || createdAt < 0) throw new TypeError('createdAt must be finite and non-negative');
       expiresAt = descriptor.expiresAt ?? createdAt + this.maxAgeMs;
-      if (!Number.isFinite(expiresAt) || expiresAt <= createdAt || expiresAt - createdAt > this.maxAgeMs) {
-        throw new TypeError('expiresAt must be after createdAt and within maxAgeMs');
-      }
+      if (!Number.isFinite(expiresAt) || expiresAt <= createdAt || expiresAt - createdAt > this.maxAgeMs) throw new TypeError('expiresAt must be after createdAt and within maxAgeMs');
       maxAttempts = boundedInteger('descriptor.maxAttempts', descriptor.maxAttempts ?? this.maxAttempts, 1, this.maxAttempts);
       this.#validateMetadata(descriptor.metadata);
       const bytes = this.#estimateBytes(descriptor.payload);
-      if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > this.maxPayloadBytes) {
-        return Promise.reject(this.#reject(descriptor, 'payload-budget'));
-      }
+      if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > this.maxPayloadBytes) return Promise.reject(this.#reject(descriptor, 'payload-budget'));
       normalized = { ...descriptor, id, owner, operation, payload: descriptor.payload };
     } catch (error) {
       if (error instanceof OfflineMutationRejectedError) return Promise.reject(error);
       return Promise.reject(this.#reject(descriptor, 'invalid-descriptor'));
     }
-
     if (expiresAt <= this.#clock()) return Promise.reject(this.#reject(normalized, 'expired'));
     if (this.#entries.size >= this.maxEntries) return Promise.reject(this.#reject(normalized, 'queue-capacity'));
     if (this.#countOwner(normalized.owner) >= this.maxEntriesPerOwner) return Promise.reject(this.#reject(normalized, 'owner-capacity'));
-
     let resolve!: (value: OfflineMutationResult) => void;
     const promise = new Promise<OfflineMutationResult>(res => { resolve = res; });
-    const entry: QueueEntry = {
-      descriptor: normalized,
-      priority: descriptor.priority ?? 'interactive',
-      createdAt,
-      expiresAt,
-      maxAttempts,
-      controller: new AbortController(),
-      promise,
-      resolve,
-      state: 'queued',
-      attempts: 0,
-    };
+    const entry: QueueEntry = { descriptor: normalized, priority: descriptor.priority ?? 'interactive', createdAt, expiresAt, maxAttempts, controller: new AbortController(), promise, resolve, state: 'queued', attempts: 0 };
     this.#entries.set(normalized.id, entry);
     this.#totalAccepted += 1;
     this.#record(entry, 'accepted', 0);
@@ -280,57 +249,35 @@ export class OfflineMutationQueue {
   cancelOwner(owner: string, reason = 'owner-cancelled'): number {
     const normalized = boundedText('owner', owner, 128);
     let cancelled = 0;
-    for (const entry of [...this.#entries.values()]) {
-      if (entry.descriptor.owner === normalized && this.cancel(entry.descriptor.id, reason)) cancelled += 1;
-    }
+    for (const entry of this.#entries.values()) if (entry.descriptor.owner === normalized && this.cancel(entry.descriptor.id, reason)) cancelled += 1;
     return cancelled;
   }
 
   pruneExpired(): number {
     const now = this.#clock();
     let expired = 0;
-    for (const entry of [...this.#entries.values()]) {
-      if (entry.state === 'queued' && entry.expiresAt <= now) {
-        this.#finish(entry, 'expired', undefined, 'expired-before-replay');
-        expired += 1;
-      }
+    for (const entry of this.#entries.values()) {
+      if (entry.state === 'queued' && entry.expiresAt <= now) { this.#finish(entry, 'expired', undefined, 'expired-before-replay'); expired += 1; }
     }
     return expired;
   }
 
   snapshot(): OfflineMutationSnapshot {
-    return Object.freeze({
-      queued: [...this.#entries.values()].filter(entry => entry.state === 'queued').length,
-      running: this.#running,
-      disposed: this.#disposed,
-      totalAccepted: this.#totalAccepted,
-      totalRejected: this.#totalRejected,
-      totalSucceeded: this.#totalSucceeded,
-      totalFailed: this.#totalFailed,
-      totalCancelled: this.#totalCancelled,
-      totalExpired: this.#totalExpired,
-    });
+    let queued = 0;
+    for (const entry of this.#entries.values()) if (entry.state === 'queued') queued += 1;
+    return Object.freeze({ queued, running: this.#running, disposed: this.#disposed, totalAccepted: this.#totalAccepted, totalRejected: this.#totalRejected, totalSucceeded: this.#totalSucceeded, totalFailed: this.#totalFailed, totalCancelled: this.#totalCancelled, totalExpired: this.#totalExpired });
   }
 
-  history(): readonly OfflineMutationEvent[] {
-    return Object.freeze(this.#history.map(event => Object.freeze({ ...event })));
-  }
+  history(): readonly OfflineMutationEvent[] { return Object.freeze(this.#history.map(event => Object.freeze({ ...event }))); }
 
   pending(): readonly Readonly<OfflineMutationDescriptor>[] {
-    return Object.freeze(
-      [...this.#entries.values()]
-        .sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority] || a.createdAt - b.createdAt || a.descriptor.id.localeCompare(b.descriptor.id))
-        .map(entry => Object.freeze({ ...entry.descriptor, metadata: entry.descriptor.metadata ? Object.freeze({ ...entry.descriptor.metadata }) : undefined })),
-    );
+    return Object.freeze(Array.from(this.#entries.values()).sort((a, b) => this.#compareEntries(a, b)).map(entry => Object.freeze({ ...entry.descriptor, metadata: entry.descriptor.metadata ? Object.freeze({ ...entry.descriptor.metadata }) : undefined })));
   }
 
   dispose(reason = 'queue-disposed'): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    for (const entry of [...this.#entries.values()]) {
-      entry.controller.abort(reason);
-      if (entry.state === 'queued') this.#finish(entry, 'cancelled', undefined, reason);
-    }
+    for (const entry of this.#entries.values()) { entry.controller.abort(reason); if (entry.state === 'queued') this.#finish(entry, 'cancelled', undefined, reason); }
     this.#recordRaw('queue', 'queue', 'queue', 'disposed', 0, reason);
   }
 
@@ -340,17 +287,12 @@ export class OfflineMutationQueue {
     if (entries.length > this.maxMetadataEntries) throw new RangeError('metadata entry budget exceeded');
     for (const [key, value] of entries) {
       boundedText('metadata key', key, 64);
-      if (typeof value !== 'string' || value.length > this.maxMetadataValueLength || /[\u0000-\u001f\u007f]/u.test(value)) {
-        throw new TypeError('metadata value is invalid');
-      }
+      if (typeof value !== 'string' || value.length > this.maxMetadataValueLength || containsControlCharacter(value)) throw new TypeError('metadata value is invalid');
     }
   }
 
-  #countOwner(owner: string): number {
-    let count = 0;
-    for (const entry of this.#entries.values()) if (entry.descriptor.owner === owner) count += 1;
-    return count;
-  }
+  #countOwner(owner: string): number { let count = 0; for (const entry of this.#entries.values()) if (entry.descriptor.owner === owner) count += 1; return count; }
+  #compareEntries(a: QueueEntry, b: QueueEntry): number { return priorityWeight[a.priority] - priorityWeight[b.priority] || a.createdAt - b.createdAt || a.descriptor.id.localeCompare(b.descriptor.id); }
 
   #reject(descriptor: Pick<OfflineMutationDescriptor, 'id' | 'owner' | 'operation'>, reason: OfflineMutationRejectionReason): OfflineMutationRejectedError {
     this.#totalRejected += 1;
@@ -362,9 +304,8 @@ export class OfflineMutationQueue {
     if (!this.#online || !this.#executor || this.#disposed) return;
     this.pruneExpired();
     while (this.#running < this.maxConcurrent) {
-      const next = [...this.#entries.values()]
-        .filter(entry => entry.state === 'queued')
-        .sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority] || a.createdAt - b.createdAt || a.descriptor.id.localeCompare(b.descriptor.id))[0];
+      let next: QueueEntry | undefined;
+      for (const candidate of this.#entries.values()) if (candidate.state === 'queued' && (!next || this.#compareEntries(candidate, next) < 0)) next = candidate;
       if (!next) break;
       this.#start(next);
     }
@@ -373,30 +314,12 @@ export class OfflineMutationQueue {
   #start(entry: QueueEntry): void {
     const executor = this.#executor;
     if (!executor || entry.state !== 'queued') return;
-    entry.state = 'running';
-    entry.attempts += 1;
-    this.#running += 1;
-    this.#record(entry, 'running', entry.attempts);
-    void executor(entry.descriptor.payload, {
-      signal: entry.controller.signal,
-      attempt: entry.attempts,
-      id: entry.descriptor.id,
-      owner: entry.descriptor.owner,
-      operation: entry.descriptor.operation,
-    }).then(
+    entry.state = 'running'; entry.attempts += 1; this.#running += 1; this.#record(entry, 'running', entry.attempts);
+    void executor(entry.descriptor.payload, { signal: entry.controller.signal, attempt: entry.attempts, id: entry.descriptor.id, owner: entry.descriptor.owner, operation: entry.descriptor.operation }).then(
       value => this.#finish(entry, 'succeeded', value),
       error => {
-        if (entry.controller.signal.aborted) {
-          this.#finish(entry, 'cancelled', undefined, String(entry.controller.signal.reason ?? 'aborted'));
-          return;
-        }
-        if (entry.attempts < entry.maxAttempts && entry.expiresAt > this.#clock() && !this.#disposed) {
-          this.#running -= 1;
-          entry.state = 'queued';
-          this.#record(entry, 'failed', entry.attempts, 'retryable');
-          this.#drain();
-          return;
-        }
+        if (entry.controller.signal.aborted) { this.#finish(entry, 'cancelled', undefined, String(entry.controller.signal.reason ?? 'aborted')); return; }
+        if (entry.attempts < entry.maxAttempts && entry.expiresAt > this.#clock() && !this.#disposed) { this.#running -= 1; entry.state = 'queued'; this.#record(entry, 'failed', entry.attempts, 'retryable'); this.#drain(); return; }
         this.#finish(entry, 'failed', undefined, error instanceof Error ? error.message : 'operation-failed', error);
       },
     );
@@ -415,10 +338,7 @@ export class OfflineMutationQueue {
     this.#drain();
   }
 
-  #record(entry: QueueEntry, state: OfflineMutationEvent['state'], attempt: number, reason?: string): void {
-    this.#recordRaw(entry.descriptor.id, entry.descriptor.owner, entry.descriptor.operation, state, attempt, reason);
-  }
-
+  #record(entry: QueueEntry, state: OfflineMutationEvent['state'], attempt: number, reason?: string): void { this.#recordRaw(entry.descriptor.id, entry.descriptor.owner, entry.descriptor.operation, state, attempt, reason); }
   #recordRaw(id: string, owner: string, operation: string, state: OfflineMutationEvent['state'], attempt: number, reason?: string): void {
     if (this.historyLimit === 0) return;
     this.#history.push(Object.freeze({ sequence: ++this.#sequence, at: this.#clock(), id, owner, operation, state, attempt, ...(reason ? { reason } : {}) }));
