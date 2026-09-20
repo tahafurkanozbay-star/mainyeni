@@ -71,7 +71,7 @@ export class BrowserSnapshotStore implements OfflinePersistenceStore {
         return null;
       }
       return value;
-    } catch (error) {
+    } catch {
       if (signal?.aborted) throw signal.reason;
       this.#failures += 1;
       this.#lastFailure = 'read';
