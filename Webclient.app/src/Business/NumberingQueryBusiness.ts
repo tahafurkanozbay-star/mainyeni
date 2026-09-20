@@ -1,5 +1,4 @@
 import { Constants_ServiceResultType } from '../Core/Constants';
-import type { ArcGisQueryOptions } from './contracts';
 import {
   businessApiRuntime,
   businessDiagnostics,
@@ -137,14 +136,17 @@ const executeQuery = async (
       ? {
         spatial: {
           geometry: options.geometry,
-          distance: options.distance ?? 0,
+          distance: options.distance ?? options.distanceMeters ?? 0,
           units: 'meters',
           spatialRelationship: 'intersects',
         } as const,
       }
       : {}),
   });
-  const result = await businessQueryRuntime.execute(plan);
+  const rawResult = await businessQueryRuntime.execute(plan);
+  const result: NumberingServiceResult = rawResult && typeof rawResult === 'object'
+    ? rawResult as NumberingServiceResult
+    : emptyResult();
   return sortResultData(result, sortField);
 };
 
