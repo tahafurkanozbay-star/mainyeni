@@ -33,9 +33,17 @@ import {
   type HttpCacheRuntime,
   type HttpCacheRuntimeOptions,
 } from './httpCacheRuntime';
+import {
+  createStructuredTaskScope,
+  type StructuredTaskScope,
+  type StructuredTaskScopeOptions,
+  type TaskScopeCloseRequest,
+} from '../runtime/structuredTaskScope';
 
 const DEFAULT_MAX_CACHE_ENTRIES = 150;
 const DEFAULT_QUEUE_TIMEOUT_MS = 5000;
+const MAX_REQUEST_SCOPE_TIMEOUT_MS = 5 * 60 * 1000;
+const REQUEST_SCOPE_GRACE_MS = 5_000;
 
 interface CoordinatorOptions {
   readonly transport: Transport;
@@ -45,6 +53,8 @@ interface CoordinatorOptions {
   readonly maxCacheEntries?: number;
   readonly cacheRuntime?: HttpCacheRuntime;
   readonly cacheRuntimeOptions?: Omit<HttpCacheRuntimeOptions, 'onEvent'>;
+  readonly requestScope?: StructuredTaskScope;
+  readonly requestScopeOptions?: StructuredTaskScopeOptions;
   readonly diagnostics?: NetworkDiagnosticsLike;
   readonly clock?: () => number;
   readonly wait?: (milliseconds: number, signal?: AbortSignal | null) => Promise<void>;
@@ -93,6 +103,23 @@ const createSchedulerEventBridge = (diagnostics: NetworkDiagnosticsLike) =>
 const getRuntimeSignal = (config: NormalizedRequestConfig): AbortSignal | undefined =>
   isAbortSignalLike(config.signal) ? config.signal : undefined;
 
+const requestScopeTimeout = (config: NormalizedRequestConfig): number => {
+  const attempts = Math.max(1, Math.min(5, config.maxRetries + 1));
+  const transportBudget = Math.max(1, config.timeout) * attempts;
+  return Math.min(
+    MAX_REQUEST_SCOPE_TIMEOUT_MS,
+    Math.max(1_000, transportBudget + REQUEST_SCOPE_GRACE_MS),
+  );
+};
+
+const requestScopeOwner = (config: NormalizedRequestConfig): string =>
+  config.schedulerGroup
+    ? String(config.schedulerGroup).slice(0, 160)
+    : getSchedulerGroupFromPath(config.url).slice(0, 160);
+
+const requestScopeKey = (config: NormalizedRequestConfig): string =>
+  `${config.method}:${getSchedulerGroupFromPath(config.url)}`.slice(0, 160);
+
 const withOperationSignal = (
   config: NormalizedRequestConfig,
   signal?: AbortSignal,
@@ -111,6 +138,7 @@ export class RequestCoordinator {
   readonly scheduler: SchedulerLike;
   readonly tuningProfile: RuntimeTuningProfile;
   readonly cacheRuntime: HttpCacheRuntime;
+  readonly requestScope: StructuredTaskScope;
 
   private readonly clock: () => number;
   private readonly wait: ((milliseconds: number, signal?: AbortSignal | null) => Promise<void>) | undefined;
@@ -162,6 +190,32 @@ export class RequestCoordinator {
             }),
       onEvent: createSchedulerEventBridge(this.diagnostics),
     });
+
+    const scopeMaxActive = Math.max(
+      1,
+      Math.min(10_000, this.tuningProfile.scheduler.maxQueued + this.tuningProfile.scheduler.maxConcurrent),
+    );
+    this.requestScope = options.requestScope ?? createStructuredTaskScope(
+      'http-client',
+      {
+        maxActiveTasks: scopeMaxActive,
+        maxOwnerTasks: Math.max(
+          1,
+          Math.min(scopeMaxActive, this.tuningProfile.scheduler.maxConcurrentPerGroup * 4),
+        ),
+        historyLimit: 256,
+        defaultTimeoutMs: Math.min(
+          MAX_REQUEST_SCOPE_TIMEOUT_MS,
+          Math.max(
+            1_000,
+            this.defaults.timeoutMs * Math.max(1, this.defaults.maxRetries + 1)
+              + REQUEST_SCOPE_GRACE_MS,
+          ),
+        ),
+        maxTimeoutMs: MAX_REQUEST_SCOPE_TIMEOUT_MS,
+        ...(options.requestScopeOptions ?? {}),
+      },
+    );
   }
 
   normalize(config: RawRequestConfig = {}): NormalizedRequestConfig {
@@ -284,10 +338,18 @@ export class RequestCoordinator {
       return Promise.reject(error);
     }
 
-    return this.cacheRuntime.resolve<T>(
-      config,
-      (operationSignal) => this.execute<T>(withOperationSignal(config, operationSignal)),
-    );
+    const externalSignal = getRuntimeSignal(config);
+    return this.requestScope.run({
+      owner: requestScopeOwner(config),
+      key: requestScopeKey(config),
+      label: `${config.method}:${config.url}`.slice(0, 200),
+      timeoutMs: requestScopeTimeout(config),
+      ...(externalSignal ? { signal: externalSignal } : {}),
+      task: (scopeSignal) => this.cacheRuntime.resolve<T>(
+        withOperationSignal(config, scopeSignal),
+        (operationSignal) => this.execute<T>(withOperationSignal(config, operationSignal)),
+      ),
+    });
   }
 
   clearCache(): number {
@@ -316,6 +378,23 @@ export class RequestCoordinator {
 
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>> {
     return this.cacheRuntime.snapshot() as unknown as Readonly<Record<string, unknown>>;
+  }
+
+  getRequestScopeSnapshot(): Readonly<Record<string, unknown>> {
+    return this.requestScope.snapshot() as unknown as Readonly<Record<string, unknown>>;
+  }
+
+  drain(options: TaskScopeCloseRequest = {}): Promise<void> {
+    return this.requestScope.close(options);
+  }
+
+  dispose(reason?: unknown): void {
+    this.requestScope.dispose(reason);
+    this.cacheRuntime.dispose();
+    this.scheduler.cancelQueued('http-client-disposed');
+    recordNetworkEvent(this.diagnostics, 'network.client.disposed', {
+      reason: reason instanceof Error ? reason.name : reason === undefined ? null : typeof reason,
+    });
   }
 
   getDiagnostics(options: DiagnosticsSnapshotOptions = {}): readonly unknown[] {
@@ -369,6 +448,9 @@ export const createCoordinatedClient = (options: CoordinatorOptions): Coordinate
     getCacheSize: () => coordinator.getCacheSize(),
     getInFlightSize: () => coordinator.getInFlightSize(),
     getCacheRuntimeSnapshot: () => coordinator.getCacheRuntimeSnapshot(),
+    getRequestScopeSnapshot: () => coordinator.getRequestScopeSnapshot(),
+    drain: (optionsArg?: TaskScopeCloseRequest) => coordinator.drain(optionsArg),
+    dispose: (reason?: unknown) => coordinator.dispose(reason),
     getDiagnostics: (optionsArg?: DiagnosticsSnapshotOptions) => coordinator.getDiagnostics(optionsArg),
     getDiagnosticSummary: () => coordinator.getDiagnosticSummary(),
     clearDiagnostics: () => coordinator.clearDiagnostics(),
