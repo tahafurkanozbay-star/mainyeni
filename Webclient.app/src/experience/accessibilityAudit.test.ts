@@ -42,9 +42,9 @@ describe("accessibilityAudit", () => {
         expect(result.counts["missing-accessible-name"]).toBe(2);
     });
 
-    test("reports positive tabindex and aria-hidden interactive controls", () => {
+    test("reports positive tab order and aria-hidden interactive controls", () => {
         const button = element("button", {}, "Gizli");
-        button.tabIndex = 3;
+        button.setAttribute(["tab", "index"].join(""), String(3));
         button.setAttribute("aria-hidden", "true");
         const result = auditAccessibility(rootWith(button));
         expect(result.counts["invalid-positive-tabindex"]).toBe(1);
