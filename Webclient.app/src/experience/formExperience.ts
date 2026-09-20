@@ -174,7 +174,7 @@ export class FormExperience {
         if (this.destroyed) return;
         this.destroyed = true;
         this.form.removeEventListener("submit", this.onSubmit);
-        for (const id of [...this.fields.keys()]) this.unregister(id);
+        for (const id of this.fields.keys()) this.unregister(id);
     }
 
     private prepare(runtime: FieldRuntime): void {
