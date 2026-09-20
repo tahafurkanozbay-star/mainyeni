@@ -324,11 +324,10 @@ export class ViewportQueryExecutionRuntime<TPayload = unknown> {
     let failFastError: unknown = null;
 
     const worker = async (): Promise<void> => {
-      while (true) {
+      while (nextIndex < tilePlan.tiles.length) {
         if (controller.signal.aborted || failFastError !== null) return;
         const position = nextIndex;
         nextIndex += 1;
-        if (position >= tilePlan.tiles.length) return;
         const tile = tilePlan.tiles[position];
         if (!tile) return;
 
