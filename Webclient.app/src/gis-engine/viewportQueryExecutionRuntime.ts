@@ -123,12 +123,6 @@ const normalizeLayerId = (value: string): string => {
   return normalized;
 };
 
-const abortError = (reason: unknown): Error => {
-  const error = new Error(String(reason ?? 'viewport query execution cancelled'));
-  error.name = 'AbortError';
-  return error;
-};
-
 const isAbortError = (value: unknown): boolean => (
   value instanceof Error && value.name === 'AbortError'
 );
@@ -319,7 +313,7 @@ export class ViewportQueryExecutionRuntime<TPayload = unknown> {
       pressure.profile.cacheTtlFactor,
       this.#cacheTtlMaximumMs,
     );
-    const tileResults = new Array<ViewportQueryExecutionTileResult>(tilePlan.tiles.length);
+    const tileResults: Array<ViewportQueryExecutionTileResult | undefined> = Array.from({ length: tilePlan.tiles.length }, () => undefined);
     let nextIndex = 0;
     let failFastError: unknown = null;
 
