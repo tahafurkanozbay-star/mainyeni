@@ -1,7 +1,7 @@
 import { createSkipNavigation } from "./skipNavigation";
 
 const setup = () => {
-    document.body.innerHTML = '<nav id="skip"></nav><main id="main"><button>İçerik</button></main><aside id="map"></aside>';
+    document.body.innerHTML = '<nav id="skip"></nav><main id="main"><button type="button">İçerik</button></main><aside id="map"></aside>';
     return {
         container: document.querySelector("#skip") as HTMLElement,
         main: document.querySelector("#main") as HTMLElement,
