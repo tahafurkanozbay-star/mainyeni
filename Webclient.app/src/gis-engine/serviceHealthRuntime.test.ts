@@ -223,7 +223,7 @@ describe('serviceHealthRuntime', () => {
 
   test('unsubscribe prevents later listener delivery', () => {
     const { runtime } = createHarness();
-    const listener = jest.fn();
+    const listener = vi.fn();
     const unsubscribe = runtime.subscribe(listener);
     unsubscribe();
     const ticket = runtime.beginRequest('places');
