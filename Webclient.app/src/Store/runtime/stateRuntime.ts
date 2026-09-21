@@ -1,3 +1,4 @@
+import { auditStoreAction } from './stateActionAudit';
 import type { RootState } from '../contracts';
 import {
   normalizeStoreRuntimeLimits,
@@ -74,6 +75,7 @@ export class BoundedStoreStateRuntime implements StoreStateRuntime {
     if (!this.#initialized) this.initialize(input.previousState);
 
     const actionType = readActionType(input.action);
+    const actionAudit = auditStoreAction(input.action, this.#limits);
     const beforeProjection = projectStoreState(input.previousState, this.#limits, input.startedAt);
     const afterProjection = projectStoreState(input.nextState, this.#limits, input.completedAt);
     const beforeFingerprint = fingerprintStoreProjection(beforeProjection);
@@ -86,6 +88,7 @@ export class BoundedStoreStateRuntime implements StoreStateRuntime {
 
     const transition = this.#history.record(Object.freeze({
       actionType,
+      actionAudit,
       timestamp: input.completedAt,
       durationMs: duration(input.startedAt, input.completedAt),
       status,
@@ -115,11 +118,13 @@ export class BoundedStoreStateRuntime implements StoreStateRuntime {
     if (!this.#initialized) this.initialize(input.state);
 
     const actionType = readActionType(input.action);
+    const actionAudit = auditStoreAction(input.action, this.#limits);
     const projection = projectStoreState(input.state, this.#limits, input.completedAt);
     const fingerprint = fingerprintStoreProjection(projection);
     const invariants = inspectStoreInvariants(input.state, this.#limits, input.completedAt);
     const transition = this.#history.record(Object.freeze({
       actionType,
+      actionAudit,
       timestamp: input.completedAt,
       durationMs: duration(input.startedAt, input.completedAt),
       status: 'failed',

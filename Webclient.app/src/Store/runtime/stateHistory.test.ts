@@ -3,6 +3,15 @@ import { createStoreTransitionHistory } from './stateHistory';
 
 const entry = (index: number, status: 'changed' | 'noop' | 'failed' = 'changed') => ({
   actionType: 'action/' + index,
+  actionAudit: {
+    actionType: 'action/' + index,
+    payloadKind: 'none' as const,
+    estimatedEntries: 0,
+    maxDepthObserved: 0,
+    hasSensitiveKeys: false,
+    hasFunctions: false,
+    truncated: false,
+  },
   timestamp: index,
   durationMs: index,
   status,

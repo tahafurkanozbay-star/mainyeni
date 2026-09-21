@@ -98,6 +98,7 @@ export interface StoreInvariantReport {
 
 export interface StoreTransitionDescriptor {
   readonly actionType: string;
+  readonly actionAudit: import('./stateActionAudit').StoreActionAudit;
   readonly timestamp: number;
   readonly durationMs: number;
   readonly status: StoreTransitionStatus;

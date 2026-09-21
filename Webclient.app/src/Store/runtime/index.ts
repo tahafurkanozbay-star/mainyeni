@@ -1,3 +1,6 @@
+export * from './stateActionAudit';
+export * from './stateCheckpointRuntime';
+export * from './stateRestoreExecutor';
 export * from './contracts';
 export * from './stateFingerprint';
 export * from './stateHistory';
