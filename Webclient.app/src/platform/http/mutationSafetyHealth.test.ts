@@ -14,6 +14,7 @@ const registrySnapshot = (
   limits: Object.freeze({
     maxEntries: 100,
     maxEntriesPerOwner: 20,
+    maxAttempts: 5,
     retentionMs: 300_000,
     staleInFlightAfterMs: 120_000,
   }),
@@ -178,6 +179,7 @@ describe('evaluateMutationSafetyHealth capacity pressure', () => {
         limits: Object.freeze({
           maxEntries: 100,
           maxEntriesPerOwner: 20,
+          maxAttempts: 5,
           retentionMs: 300_000,
           staleInFlightAfterMs: 120_000,
         }),
@@ -200,6 +202,7 @@ describe('evaluateMutationSafetyHealth capacity pressure', () => {
         limits: Object.freeze({
           maxEntries: 10,
           maxEntriesPerOwner: 10,
+          maxAttempts: 5,
           retentionMs: 300_000,
           staleInFlightAfterMs: 120_000,
         }),
@@ -222,6 +225,7 @@ describe('evaluateMutationSafetyHealth capacity pressure', () => {
         limits: Object.freeze({
           maxEntries: 2,
           maxEntriesPerOwner: 2,
+          maxAttempts: 5,
           retentionMs: 300_000,
           staleInFlightAfterMs: 120_000,
         }),
