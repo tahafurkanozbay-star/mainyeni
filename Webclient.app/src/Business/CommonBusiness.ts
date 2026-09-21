@@ -20,6 +20,7 @@ import {
   type ServiceDescriptor,
   type UnknownRecord,
 } from './contracts';
+import { attachmentIdentifierFromAttributes } from './attachmentRuntime';
 
 interface ErrorWithServiceType extends Error {
   readonly type: typeof Constants_ServiceResultType.Error;
@@ -521,13 +522,10 @@ const getInfoWithAttachments = async (
           ? `${String(attributes.adi)} görseli ${index + 1}`
           : `Ek görsel ${index + 1}`;
         image.loading = 'lazy';
-        const attachmentAttributes = isRecord(attachment.attr)
-          ? attachment.attr
-          : Object.freeze({});
         image.src = getAttachmentUrl(
           queryServiceTitle,
           attributes.objectid,
-          attachmentAttributes.attachmentid,
+          attachmentIdentifierFromAttributes(attachment.attr),
         );
         slide.appendChild(image);
         slides.appendChild(slide);
