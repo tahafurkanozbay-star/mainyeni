@@ -69,6 +69,19 @@ const makeRuntime = ({
 
 type TestAttemptConfig = RawRequestConfig & { readonly attempt?: number };
 
+const makeTransport = (
+  requestImpl: (config: TestAttemptConfig) => Promise<TransportResult> | TransportResult,
+  defaults: RuntimeDefaults = {},
+): RequestTransport => ({
+  defaults: {
+    timeoutMs: 15000,
+    maxRetries: 0,
+    cacheTtlMs: 1000,
+    ...defaults,
+  },
+  request: jest.fn((config) => requestImpl(config as TestAttemptConfig)),
+});
+
 describe('typed runtime integration', () => {
   test('coordinator enforces scheduler concurrency around transport attempts', async () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 2, maxConcurrentPerGroup: 2 });
@@ -124,7 +137,7 @@ describe('typed runtime integration', () => {
 
     const transport = makeTransport(async (config) => {
       calls.push(`${config.url}:${config.attempt ?? 0}`);
-      if (config.url === '/first' && config.attempt ?? 0 === 0) {
+      if (config.url === '/first' && (config.attempt ?? 0) === 0) {
         throw Object.assign(new Error('temporary'), {
           code: 'NETWORK_ERROR',
           retryable: true
