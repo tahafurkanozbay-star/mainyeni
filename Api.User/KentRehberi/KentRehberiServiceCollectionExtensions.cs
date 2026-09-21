@@ -28,8 +28,16 @@ public static class KentRehberiServiceCollectionExtensions
         }
 
         services.AddSingleton(options);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<KentRehberiTelemetry>();
+        services.AddSingleton<KentRehberiAdmissionController>();
+        services.AddSingleton<KentRehberiBoundedResultCache>();
+        services.AddSingleton<KentRehberiSingleFlight<KentRehberiFeatureCollection>>();
+        services.AddSingleton<KentRehberiSingleFlight<KentRehberiFeature?>>();
+        services.AddSingleton<KentRehberiResultIntegrityGuard>();
         services.AddSingleton<KentRehberiConnectionFactory>();
         services.AddScoped<IKentRehberiRepository, KentRehberiRepository>();
+        services.AddScoped<IKentRehberiQueryService, KentRehberiQueryService>();
 
         services.AddHealthChecks()
             .AddCheck<KentRehberiHealthCheck>(
