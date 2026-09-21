@@ -1,60 +1,18 @@
-import axios from "axios";
 import { Constants } from "../Core/Constants";
-import { Global } from "../Core/Global";
 import { IsNull } from "../Core/Toolbox/ObjectHelper";
-import { AuthBusiness } from "./AuthBusiness";
+import { adminApiGet, adminApiPost } from "../runtime/adminApiClient";
 
 export const UserActionBusiness={
 
     List: async (_key) => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise((resolve, reject) => {
-
-            let url = Global.API_URL + "/UserAction/List";
-
-            return axios({
-                method: "get",
-                url: url,
-                headers: _headers
-            })
-                .then(function (response) {
-                    var result = response.data;
-                    resolve(result);
-                })
-                .catch(function (error) {
-                    return AuthBusiness.HandleRejection(error);
-                });
-        });
+        return adminApiGet("/UserAction/List");
     },
 
-
     GroupedList: async (_key) => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise((resolve, reject) => {
-
-            let url = Global.API_URL + "/UserAction/GroupedList";
-
-            return axios({
-                method: "get",
-                url: url,
-                headers: _headers
-            })
-                .then(function (response) {
-                    var result = response.data;
-                    resolve(result);
-                })
-                .catch(function (error) {
-                    return AuthBusiness.HandleRejection(error);
-                });
-        });
+        return adminApiGet("/UserAction/GroupedList");
     },
 
     Validate:(_item) => {
-
         if (IsNull(_item.category)) {
             return { type: Constants.MessageTypes.Error, text: "Lütfen kategori adı giriniz" };
         }
@@ -71,55 +29,11 @@ export const UserActionBusiness={
         return {type:"success",text:""};
     },
 
-
     Save: async (_itemDetails) => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise((resolve, reject) => {
-
-
-            let url = Global.API_URL + "/UserAction/Save";
-            
-            axios({
-                method: "post",
-                url: url,
-                data: JSON.stringify(_itemDetails),
-                headers: _headers
-            })
-                .then(function (response) {
-                    var result = response.data;
-                    resolve(result);
-                })
-                .catch(function (error) {
-                    return AuthBusiness.HandleRejection(error);
-                });
-        });
+        return adminApiPost("/UserAction/Save", _itemDetails);
     },
 
-
     Delete: async (_item) => {
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise((resolve, reject) => {
-
-            let url = Global.API_URL + "/UserAction/Delete";
-
-            axios({
-                method: "post",
-                url: url,
-                data: JSON.stringify(_item),
-                headers: _headers
-            })
-                .then(function (response) {
-                    var result = response.data;
-                    resolve(result);
-                })
-                .catch(function (error) {
-                    return AuthBusiness.HandleRejection(error);
-                });
-        });
+        return adminApiPost("/UserAction/Delete", _item);
     }
-
 };
