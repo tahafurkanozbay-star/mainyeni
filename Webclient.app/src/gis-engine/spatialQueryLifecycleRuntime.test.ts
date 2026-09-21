@@ -32,6 +32,8 @@ describe('normalizeSpatialQueryLifecycleConfig', () => {
     const config = normalizeSpatialQueryLifecycleConfig({
       maxTrackedQueries: 25,
       maxEvents: 50,
+      maxPagesPerQuery: 16,
+      maxFeaturesPerQuery: 25_000,
       maxLifetimeMs: 10_000,
       maxExecutionMs: 5_000,
       maxTerminalAgeMs: 100,
@@ -43,6 +45,8 @@ describe('normalizeSpatialQueryLifecycleConfig', () => {
     expect(config).toMatchObject({
       maxTrackedQueries: 25,
       maxEvents: 50,
+      maxPagesPerQuery: 16,
+      maxFeaturesPerQuery: 25_000,
       maxExecutionMs: 5_000,
       maxTerminalAgeMs: 100,
     });
@@ -52,6 +56,11 @@ describe('normalizeSpatialQueryLifecycleConfig', () => {
     expect(() => normalizeSpatialQueryLifecycleConfig({ maxTrackedQueries: 0 })).toThrow();
     expect(() => normalizeSpatialQueryLifecycleConfig({ maxEvents: 0 })).toThrow();
     expect(() => normalizeSpatialQueryLifecycleConfig({ maxRequestKeyLength: 0 })).toThrow();
+  });
+
+  it('rejects invalid page and feature budgets', () => {
+    expect(() => normalizeSpatialQueryLifecycleConfig({ maxPagesPerQuery: 0 })).toThrow();
+    expect(() => normalizeSpatialQueryLifecycleConfig({ maxFeaturesPerQuery: 0 })).toThrow();
   });
 
   it('rejects an execution deadline larger than the lifecycle deadline', () => {
@@ -212,6 +221,22 @@ describe('createSpatialQueryLifecycleRuntime', () => {
     expect(() => runtime.register(registration({ layerId: -1 }))).toThrow();
     expect(() => runtime.register(registration({ expectedFeatures: -1 }))).toThrow();
     expect(() => runtime.register(registration({ expectedBytes: Number.NaN }))).toThrow();
+  });
+
+  it('enforces explicit page and feature budgets at registration', () => {
+    const runtime = createSpatialQueryLifecycleRuntime({
+      maxPagesPerQuery: 4,
+      maxFeaturesPerQuery: 1_000,
+    });
+    expect(() => runtime.register(registration({ expectedPages: 5 }))).toThrow();
+    expect(() => runtime.register(registration({ expectedFeatures: 1_001 }))).toThrow();
+
+    const accepted = runtime.register(registration({
+      requestKey: 'bounded',
+      expectedPages: 4,
+      expectedFeatures: 1_000,
+    }));
+    expect(accepted).toMatchObject({ expectedPages: 4, expectedFeatures: 1_000 });
   });
 
   it('tracks active expected resource pressure', () => {
