@@ -359,16 +359,14 @@ export const adminApiRequest = async <T>(
     try {
       let response: Response;
       try {
-        response = await fetchImpl(
-          url,
-          {
-            method,
-            credentials: 'same-origin',
-            headers,
-            body,
-            signal: bounded.signal,
-          },
-        );
+        const requestInit: RequestInit = {
+          method,
+          credentials: 'same-origin',
+          headers,
+          signal: bounded.signal,
+          ...(body === undefined ? {} : { body }),
+        };
+        response = await fetchImpl(url, requestInit);
       } catch {
         if (bounded.signal.aborted) {
           throw new AdminApiError(
@@ -403,17 +401,18 @@ export const adminApiRequest = async <T>(
   };
 
   try {
+    const key = singleFlightKey(
+      method,
+      url,
+      timeoutMs,
+      maxResponseBytes,
+      authenticated,
+      options.signal,
+    );
     return await coordinator.schedule(execute, {
-      singleFlightKey: singleFlightKey(
-        method,
-        url,
-        timeoutMs,
-        maxResponseBytes,
-        authenticated,
-        options.signal,
-      ),
-      signal: options.signal,
       queueTimeoutMs: Math.min(timeoutMs, MAX_QUEUE_WAIT_MS),
+      ...(key === undefined ? {} : { singleFlightKey: key }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error) {
     if (error instanceof AdminRequestCoordinatorError) {
