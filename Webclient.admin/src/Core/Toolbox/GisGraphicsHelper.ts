@@ -1,209 +1,191 @@
 import Graphic from '@arcgis/core/Graphic.js';
-import Polygon from '@arcgis/core/geometry/Polygon.js';
 import type Geometry from '@arcgis/core/geometry/Geometry.js';
+import Polygon from '@arcgis/core/geometry/Polygon.js';
+import PictureMarkerSymbol from '@arcgis/core/symbols/PictureMarkerSymbol.js';
+import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol.js';
+import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol.js';
+import type Symbol from '@arcgis/core/symbols/Symbol.js';
 import type MapView from '@arcgis/core/views/MapView.js';
 
-type GraphicCallback = (graphic: Graphic | null) => void;
-type GraphicsCallback = (graphics: readonly Graphic[]) => void;
+import {
+  buildClosedPolygonRing,
+  type XYPointInput,
+} from '../../runtime/adminGeometryRuntime';
 
-export interface XYPoint {
-  readonly X: string | number;
-  readonly Y: string | number;
-}
+export type GraphicCallback = (graphic: Graphic | null) => void;
+export type GraphicsCallback = (graphics: readonly Graphic[]) => void;
 
-const pictureMarkerSymbol = Object.freeze({
-  type: 'picture-marker' as const,
-  url: 'images/pictureMarker.png',
-  width: '32px',
-  height: '32px',
-});
+const DEFAULT_LINE_COLOR: readonly [number, number, number, number] =
+  Object.freeze([78, 229, 255, 1]);
 
-const polylineSymbol = Object.freeze({
-  type: 'simple-line' as const,
-  color: [78, 229, 255, 1] as const,
-  width: 4,
-});
-
-const polygonSymbol = Object.freeze({
-  type: 'simple-fill' as const,
-  color: [78, 229, 255, 0.12] as const,
-  outline: {
-    type: 'simple-line' as const,
-    color: [78, 229, 255, 1] as const,
-    width: 2,
-  },
-});
-
-const parseCoordinate = (value: string | number): number => {
-  const normalized = typeof value === 'number'
-    ? value
-    : Number.parseFloat(value.replace(',', '.'));
-
-  if (!Number.isFinite(normalized)) {
-    throw new RangeError('Coordinate must be a finite number.');
+const createDefaultSymbol = (geometry: Geometry): Symbol | null => {
+  switch (geometry.type) {
+    case 'point':
+    case 'multipoint':
+      return new PictureMarkerSymbol({
+        url: 'images/pictureMarker.png',
+        width: 32,
+        height: 32,
+      });
+    case 'polyline':
+      return new SimpleLineSymbol({
+        color: DEFAULT_LINE_COLOR,
+        width: 4,
+      });
+    case 'polygon':
+    case 'extent':
+      return new SimpleFillSymbol({
+        color: [0, 0, 0, 0],
+        outline: new SimpleLineSymbol({
+          color: DEFAULT_LINE_COLOR,
+          width: 4,
+        }),
+      });
+    default:
+      return null;
   }
-  return normalized;
 };
 
-const goToWithoutAbortNoise = (
-  view: MapView,
-  target: Parameters<MapView['goTo']>[0],
-): void => {
-  void view.goTo(target).catch((error: unknown) => {
-    if (error instanceof Error && error.name === 'AbortError') return;
-    throw error;
+const createGraphic = (
+  geometry: Geometry | null | undefined,
+  symbol?: Symbol | null,
+): Graphic | null => {
+  if (!geometry) return null;
+  const resolvedSymbol = symbol ?? createDefaultSymbol(geometry);
+  if (!resolvedSymbol) return null;
+
+  return new Graphic({
+    geometry,
+    symbol: resolvedSymbol,
   });
 };
 
-export function RemoveGraphics(view: MapView, graphics: Graphic | readonly Graphic[]): void {
+const safeGoTo = (
+  mapView: MapView,
+  target: Parameters<MapView['goTo']>[0],
+): void => {
+  void mapView.goTo(target).catch(() => undefined);
+};
+
+export function RemoveGraphics(
+  mapView: MapView,
+  graphics: Graphic | readonly Graphic[] | null | undefined,
+): void {
+  if (!graphics) return;
   if (Array.isArray(graphics)) {
-    view.graphics.removeMany([...graphics]);
+    mapView.graphics.removeMany([...graphics]);
     return;
   }
-  view.graphics.remove(graphics as Graphic);
+  mapView.graphics.remove(graphics);
 }
 
-export function AddGraphics(view: MapView, graphic: Graphic): Graphic {
-  view.graphics.add(graphic);
+export function AddGraphics(
+  mapView: MapView,
+  graphic: Graphic,
+): Graphic {
+  mapView.graphics.add(graphic);
   return graphic;
+}
+
+export function ZoomToGeometry(
+  mapView: MapView,
+  geometry: Geometry,
+  zoomLevel: number | null | undefined,
+  callback: GraphicCallback,
+): void {
+  const graphic = createGraphic(geometry);
+  if (!graphic) {
+    callback(null);
+    return;
+  }
+
+  AddGraphics(mapView, graphic);
+  safeGoTo(
+    mapView,
+    zoomLevel == null
+      ? geometry
+      : {
+          target: graphic,
+          zoom: zoomLevel,
+        },
+  );
+  callback(graphic);
 }
 
 export function CreateGraphicFromPicture(
   geometry: Geometry | null | undefined,
   pictureUrl: string,
-  width: number | string,
-  height: number | string,
+  width: number,
+  height: number,
   angle: number,
   callback: GraphicCallback,
 ): void {
-  if (!geometry) {
+  if (!geometry || !pictureUrl) {
     callback(null);
     return;
   }
 
   callback(new Graphic({
     geometry,
-    symbol: {
-      type: 'picture-marker',
+    symbol: new PictureMarkerSymbol({
       url: pictureUrl,
       width,
       height,
       angle,
-    },
+    }),
   }));
 }
 
 export function CreateGraphicFromGeometry(
   geometry: Geometry | null | undefined,
-  symbol: Graphic['symbol'] | null | undefined,
+  symbol: Symbol | null | undefined,
   callback: GraphicCallback,
 ): void {
-  if (!geometry) {
-    callback(null);
-    return;
-  }
-
-  let resolvedSymbol: Graphic['symbol'];
-  switch (geometry.type) {
-    case 'point':
-    case 'multipoint':
-      resolvedSymbol = symbol ?? pictureMarkerSymbol;
-      break;
-    case 'polyline':
-      resolvedSymbol = symbol ?? polylineSymbol;
-      break;
-    case 'polygon':
-    case 'extent':
-      resolvedSymbol = symbol ?? polygonSymbol;
-      break;
-    default:
-      resolvedSymbol = symbol ?? null;
-      break;
-  }
-
-  callback(new Graphic({ geometry, symbol: resolvedSymbol }));
-}
-
-export function ZoomToGeometry(
-  view: MapView,
-  geometry: Geometry,
-  zoomLevel: number | null | undefined,
-  callback: GraphicCallback,
-): void {
-  CreateGraphicFromGeometry(geometry, null, (graphic) => {
-    if (!graphic) {
-      callback(null);
-      return;
-    }
-
-    AddGraphics(view, graphic);
-    goToWithoutAbortNoise(
-      view,
-      zoomLevel == null
-        ? geometry
-        : { target: graphic, zoom: zoomLevel },
-    );
-    callback(graphic);
-  });
+  callback(createGraphic(geometry, symbol));
 }
 
 export function ZoomToGeometries(
-  view: MapView,
+  mapView: MapView,
   geometries: readonly Geometry[],
   zoomLevel: number | null | undefined,
   callback: GraphicsCallback,
 ): void {
-  const graphics = geometries.map((geometry) => {
-    const graphic = new Graphic({
-      geometry,
-      symbol: geometry.type === 'polygon'
-        ? polygonSymbol
-        : geometry.type === 'polyline'
-          ? polylineSymbol
-          : pictureMarkerSymbol,
-    });
-    AddGraphics(view, graphic);
-    return graphic;
-  });
+  const graphics = geometries
+    .map((geometry) => createGraphic(geometry))
+    .filter((graphic): graphic is Graphic => graphic !== null);
 
-  if (geometries.length > 0) {
-    goToWithoutAbortNoise(
-      view,
-      zoomLevel == null
-        ? [...geometries]
-        : { target: [...geometries], zoom: zoomLevel },
-    );
+  if (graphics.length === 0) {
+    callback(Object.freeze([]));
+    return;
   }
 
-  callback(Object.freeze(graphics));
+  mapView.graphics.addMany(graphics);
+  safeGoTo(
+    mapView,
+    zoomLevel == null
+      ? [...geometries]
+      : {
+          target: [...geometries],
+          zoom: zoomLevel,
+        },
+  );
+  callback(Object.freeze([...graphics]));
 }
 
 export function CreatePolygonFromXYPoints(
-  xyPoints: readonly XYPoint[],
+  xyPoints: readonly XYPointInput[],
   callback: (polygon: Polygon | null) => void,
 ): void {
-  if (xyPoints.length < 3) {
+  const ring = buildClosedPolygonRing(xyPoints);
+  if (!ring) {
     callback(null);
     return;
   }
 
-  try {
-    const ring = xyPoints.map(({ X, Y }) => [
-      parseCoordinate(X),
-      parseCoordinate(Y),
-    ]);
-
-    const first = ring[0];
-    const last = ring[ring.length - 1];
-    if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
-      ring.push([...first]);
-    }
-
-    callback(new Polygon({
-      rings: [ring],
-      spatialReference: { wkid: 4326 },
-    }));
-  } catch {
-    callback(null);
-  }
+  callback(new Polygon({
+    rings: [ring.map(([x, y]) => [x, y])],
+    spatialReference: {
+      wkid: 4326,
+    },
+  }));
 }
