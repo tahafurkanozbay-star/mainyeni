@@ -193,12 +193,13 @@ describe('AdminRequestCoordinator', () => {
 
     const first = coordinator.schedule(async () => active.promise);
     const queued = coordinator.schedule(async () => 'late');
+    const queuedExpectation = expect(queued).rejects.toMatchObject({
+      code: 'queue-timeout',
+    });
 
     await vi.advanceTimersByTimeAsync(500);
 
-    await expect(queued).rejects.toMatchObject({
-      code: 'queue-timeout',
-    });
+    await queuedExpectation;
     expect(coordinator.snapshot()).toMatchObject({
       queued: 0,
       queueTimedOut: 1,
