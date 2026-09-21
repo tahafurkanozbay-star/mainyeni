@@ -19,7 +19,7 @@ type TestNavigator = Omit<NavigatorLike, 'connection' | 'mozConnection' | 'webki
   language?: string;
   platform?: string;
 };
-type TestRuntime = RuntimeLike & {
+type TestRuntime = Omit<RuntimeLike, 'navigator' | 'crypto' | 'performance'> & {
   navigator: TestNavigator;
   crypto: { subtle?: unknown };
   performance: { now?: unknown };
