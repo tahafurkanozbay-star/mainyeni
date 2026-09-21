@@ -297,6 +297,14 @@ public sealed class KentRehberiResultIntegrityGuard
                     child.MaxGeometryDepth);
             }
         }
+        else if (node is JsonValue jsonValue &&
+                 jsonValue.TryGetValue<double>(
+                     out var numericValue) &&
+                 !double.IsFinite(numericValue))
+        {
+            throw new KentRehberiDataIntegrityException(
+                "Kent Rehberi geometry contains a non-finite numeric coordinate.");
+        }
 
         return new GeometryReport(
             nodes,
