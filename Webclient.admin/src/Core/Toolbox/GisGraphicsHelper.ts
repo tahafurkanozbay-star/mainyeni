@@ -15,8 +15,10 @@ import {
 export type GraphicCallback = (graphic: Graphic | null) => void;
 export type GraphicsCallback = (graphics: readonly Graphic[]) => void;
 
-const DEFAULT_LINE_COLOR: readonly [number, number, number, number] =
-  Object.freeze([78, 229, 255, 1]);
+const createLineSymbol = (): SimpleLineSymbol => new SimpleLineSymbol({
+  color: [78, 229, 255, 1],
+  width: 4,
+});
 
 const createDefaultSymbol = (geometry: Geometry): Symbol | null => {
   switch (geometry.type) {
@@ -28,19 +30,15 @@ const createDefaultSymbol = (geometry: Geometry): Symbol | null => {
         height: 32,
       });
     case 'polyline':
-      return new SimpleLineSymbol({
-        color: DEFAULT_LINE_COLOR,
-        width: 4,
-      });
+      return createLineSymbol();
     case 'polygon':
-    case 'extent':
-      return new SimpleFillSymbol({
+    case 'extent': {
+      const fill = new SimpleFillSymbol({
         color: [0, 0, 0, 0],
-        outline: new SimpleLineSymbol({
-          color: DEFAULT_LINE_COLOR,
-          width: 4,
-        }),
       });
+      fill.outline = createLineSymbol();
+      return fill;
+    }
     default:
       return null;
   }
@@ -54,17 +52,14 @@ const createGraphic = (
   const resolvedSymbol = symbol ?? createDefaultSymbol(geometry);
   if (!resolvedSymbol) return null;
 
-  return new Graphic({
-    geometry,
-    symbol: resolvedSymbol,
-  });
+  const graphic = new Graphic();
+  graphic.geometry = geometry;
+  graphic.symbol = resolvedSymbol;
+  return graphic;
 };
 
-const safeGoTo = (
-  mapView: MapView,
-  target: Parameters<MapView['goTo']>[0],
-): void => {
-  void mapView.goTo(target).catch(() => undefined);
+const observeGoTo = (operation: Promise<void>): void => {
+  void operation.catch(() => undefined);
 };
 
 export function RemoveGraphics(
@@ -72,11 +67,13 @@ export function RemoveGraphics(
   graphics: Graphic | readonly Graphic[] | null | undefined,
 ): void {
   if (!graphics) return;
-  if (Array.isArray(graphics)) {
-    mapView.graphics.removeMany([...graphics]);
+
+  if (graphics instanceof Graphic) {
+    mapView.graphics.remove(graphics);
     return;
   }
-  mapView.graphics.remove(graphics);
+
+  mapView.graphics.removeMany([...graphics]);
 }
 
 export function AddGraphics(
@@ -100,15 +97,10 @@ export function ZoomToGeometry(
   }
 
   AddGraphics(mapView, graphic);
-  safeGoTo(
-    mapView,
-    zoomLevel == null
-      ? geometry
-      : {
-          target: graphic,
-          zoom: zoomLevel,
-        },
-  );
+  if (zoomLevel != null) {
+    mapView.zoom = zoomLevel;
+  }
+  observeGoTo(mapView.goTo(graphic));
   callback(graphic);
 }
 
@@ -125,15 +117,15 @@ export function CreateGraphicFromPicture(
     return;
   }
 
-  callback(new Graphic({
-    geometry,
-    symbol: new PictureMarkerSymbol({
-      url: pictureUrl,
-      width,
-      height,
-      angle,
-    }),
-  }));
+  const graphic = new Graphic();
+  graphic.geometry = geometry;
+  graphic.symbol = new PictureMarkerSymbol({
+    url: pictureUrl,
+    width,
+    height,
+    angle,
+  });
+  callback(graphic);
 }
 
 export function CreateGraphicFromGeometry(
@@ -160,15 +152,10 @@ export function ZoomToGeometries(
   }
 
   mapView.graphics.addMany(graphics);
-  safeGoTo(
-    mapView,
-    zoomLevel == null
-      ? [...geometries]
-      : {
-          target: [...geometries],
-          zoom: zoomLevel,
-        },
-  );
+  if (zoomLevel != null) {
+    mapView.zoom = zoomLevel;
+  }
+  observeGoTo(mapView.goTo(graphics));
   callback(Object.freeze([...graphics]));
 }
 
