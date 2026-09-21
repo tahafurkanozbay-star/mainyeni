@@ -8,6 +8,7 @@ import {
   getCoarseConnectionProfile,
   scaleTimeoutForRuntime
 } from './runtimeCapabilities';
+import type { ConnectionLike, NavigatorLike, RuntimeLike } from './runtimeCapabilities';
 
 type TestConnection = ConnectionLike & Record<string, unknown>;
 type TestNavigator = NavigatorLike & Record<string, unknown> & {
