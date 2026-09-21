@@ -49,7 +49,13 @@ const defaultFrameScheduler: FrameScheduler = (callback) => {
   if (typeof requestAnimationFrame === 'function') { const id = requestAnimationFrame(callback); return () => cancelAnimationFrame(id); }
   const id = setTimeout(callback, 16); return () => clearTimeout(id);
 };
-const safeRemove = (handle?: WatchHandle): void => { try { handle?.remove?.(); } catch { /* idempotent SDK cleanup */ } };
+const safeRemove = (handle: WatchHandle | undefined, onError?: (error: unknown) => void): void => {
+  try {
+    handle?.remove?.();
+  } catch (error) {
+    onError?.(error);
+  }
+};
 
 export interface ViewConstraints { minZoom: number; maxZoom: number; rotationEnabled: boolean; snapToZoom: boolean; }
 export const normalizeViewConstraints = (config: ViewConfiguration = {}): ViewConstraints => {
@@ -151,13 +157,21 @@ export const bindMapViewState = (view: MapViewLike, bridge: ViewStateBridge, opt
     });
   }
   if (options.publishInitial !== false) schedulePublish();
-  return () => { if (disposed) return; disposed = true; if (cancelScheduled) cancelScheduled(); cancelScheduled = null; unsubscribe(); handles.forEach(safeRemove); };
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    if (cancelScheduled) cancelScheduled();
+    cancelScheduled = null;
+    unsubscribe();
+    handles.forEach((handle) => safeRemove(handle, options.onApplyError));
+  };
 };
 
 export interface ViewPerformanceOptions {
   slowThresholdMs?: unknown;
   now?: () => number;
   accessorWatch?: ArcgisAccessorWatch | undefined;
+  onError?: ((error: unknown) => void) | undefined;
 }
 export interface ViewPerformanceSnapshot { updateCycles: number; completedCycles: number; slowCycles: number; totalUpdatingMs: number; longestUpdatingMs: number; averageUpdatingMs: number; active: boolean; lastScale: number | null; lastZoom: number | null; }
 export const createViewPerformanceMonitor = (view: MapViewLike, options: ViewPerformanceOptions = {}) => {
@@ -173,7 +187,12 @@ export const createViewPerformanceMonitor = (view: MapViewLike, options: ViewPer
   });
   return {
     snapshot: (): ViewPerformanceSnapshot => ({ updateCycles: state.updateCycles, completedCycles: state.completedCycles, slowCycles: state.slowCycles, totalUpdatingMs: state.totalUpdatingMs, longestUpdatingMs: state.longestUpdatingMs, averageUpdatingMs: state.completedCycles ? state.totalUpdatingMs / state.completedCycles : 0, active: state.activeSince !== null, lastScale: state.lastScale, lastZoom: state.lastZoom }),
-    dispose: (): void => { if (state.disposed) return; state.disposed = true; handles.forEach(safeRemove); handles.length = 0; },
+    dispose: (): void => {
+      if (state.disposed) return;
+      state.disposed = true;
+      handles.forEach((handle) => safeRemove(handle, options.onError));
+      handles.length = 0;
+    },
   };
 };
 
