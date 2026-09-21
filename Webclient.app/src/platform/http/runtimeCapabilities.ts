@@ -29,20 +29,20 @@ const OPTIONAL_CAPABILITIES = Object.freeze([
   'connectionInfo'
 ]);
 
-type RuntimeLike = Record<string, unknown> & {
+export type RuntimeLike = Record<string, unknown> & {
   navigator?: NavigatorLike;
   crypto?: { subtle?: unknown };
   performance?: { now?: unknown };
 };
 
-interface ConnectionLike {
+export interface ConnectionLike {
   saveData?: unknown;
   effectiveType?: unknown;
   downlink?: unknown;
   rtt?: unknown;
 }
 
-interface NavigatorLike {
+export interface NavigatorLike {
   onLine?: unknown;
   hardwareConcurrency?: unknown;
   deviceMemory?: unknown;
