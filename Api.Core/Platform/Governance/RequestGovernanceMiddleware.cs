@@ -1,4 +1,5 @@
 using Api.Core.Platform.Diagnostics;
+using Api.Core.Platform.Middleware;
 using Api.Core.Platform.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
