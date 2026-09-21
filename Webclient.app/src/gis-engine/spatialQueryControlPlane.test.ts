@@ -726,7 +726,7 @@ describe('SpatialQueryControlPlane disposal and validation', () => {
     plane.dispose('application-shutdown');
 
     await expect(execution).rejects.toMatchObject({
-      code: 'CANCELLED',
+      code: 'DISPOSED',
     });
     await flush();
 
