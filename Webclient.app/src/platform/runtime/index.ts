@@ -59,3 +59,6 @@ export * from './resourceScope';
 export * from './resourceScopeRegistry';
 export * from './resourceScopeAdapters';
 export * from './resourceLifecycleHealth';
+export * from './serviceGraph';
+export * from './serviceContainer';
+export * from './serviceHealth';
