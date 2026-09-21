@@ -43,7 +43,7 @@ namespace Api.Core.Platform.Governance
                 queryLength: query.Length,
                 queryParameterCount: CountQueryParameters(query),
                 containsControlCharacters: ContainsControlCharacters(value),
-                containsBackslash: path.IndexOf('\') >= 0,
+                containsBackslash: path.IndexOf('\\') >= 0,
                 containsPlainTraversal: ContainsPlainTraversal(path),
                 containsEncodedSeparator: ContainsAny(path, EncodedSeparatorTokens),
                 containsEncodedTraversal: ContainsAny(path, EncodedTraversalTokens));
