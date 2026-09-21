@@ -5,7 +5,7 @@ import {
 
 describe('GisServiceRegistry', () => {
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('bounds retry and timeout configuration to protect the client', () => {
@@ -21,7 +21,7 @@ describe('GisServiceRegistry', () => {
 
   test('provides a request-scoped AbortSignal and attempt number to the factory', async () => {
     const registry = new GisServiceRegistry([{ id: 'places', url: '/arcgis/places', retries: 0 }]);
-    const factory = jest.fn((service, context) => Promise.resolve({ service, context }));
+    const factory = vi.fn((service, context) => Promise.resolve({ service, context }));
 
     const result = await registry.request('places', factory);
 
@@ -37,17 +37,17 @@ describe('GisServiceRegistry', () => {
   });
 
   test('cancels timed out work instead of only rejecting the wrapper promise', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const registry = new GisServiceRegistry([{ id: 'slow', url: '/arcgis/slow', retries: 0 }]);
     let requestSignal;
-    const factory = jest.fn((service, context) => {
+    const factory = vi.fn((service, context) => {
       requestSignal = context.signal;
       return new Promise(() => {});
     });
 
     const pending = registry.request('slow', factory, { timeoutMs: 1000 });
     await Promise.resolve();
-    jest.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(1000);
 
     await expect(pending).rejects.toMatchObject({ code: 'TIMEOUT', serviceId: 'slow' });
     if (requestSignal) expect(requestSignal.aborted).toBe(true);
@@ -60,7 +60,7 @@ describe('GisServiceRegistry', () => {
   test('does not retry caller cancellation and keeps health neutral', async () => {
     const registry = new GisServiceRegistry([{ id: 'places', url: '/arcgis/places', retries: 5 }]);
     const controller = new AbortController();
-    const factory = jest.fn(() => new Promise(() => {}));
+    const factory = vi.fn(() => new Promise(() => {}));
 
     const pending = registry.request('places', factory, { signal: controller.signal });
     controller.abort();

@@ -1,7 +1,6 @@
 import {
   cleanModuleId,
   findLegacyBrowserEnvironmentReferences,
-  isLegacyJavascriptSource,
   legacyEnvironmentGuardPlugin,
   legacyJestCompatibilityPlugin,
   legacyPresentationCleanupPlugin,
@@ -21,16 +20,6 @@ describe('shared source transforms', () => {
     ['/workspace/src/App.tsx#fragment', '/workspace/src/App.tsx'],
   ])('cleans Vite module id %s', (input, expected) => {
     expect(cleanModuleId(input)).toBe(expected);
-  });
-
-  test.each([
-    ['/workspace/src/App.js', true],
-    ['/workspace/src/App.js?import', true],
-    ['/workspace/src/App.jsx', false],
-    ['/workspace/src/App.ts', false],
-    ['/workspace/scripts/build.js', false],
-  ])('classifies legacy JavaScript source %s', (input, expected) => {
-    expect(isLegacyJavascriptSource(input)).toBe(expected);
   });
 
   test('finds forbidden browser process.env references while allowing the bounded public URL bridge', () => {
@@ -102,6 +91,12 @@ describe('shared source transforms', () => {
       code: 'vi.fn(); vi.spyOn(object, "method");',
       map: null,
     });
+
+    const typedTestResult = await Promise.resolve(plugin.transform.call({} as never,
+      'jest.fn();',
+      '/workspace/src/example.test.ts',
+    ));
+    expect(typedTestResult).toBeNull();
 
     const productionResult = await Promise.resolve(plugin.transform.call({} as never,
       'jest.fn();',

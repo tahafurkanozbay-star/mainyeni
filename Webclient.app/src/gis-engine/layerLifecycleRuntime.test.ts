@@ -10,7 +10,7 @@ const createHarness = (options = {}) => {
   let nextInstance = 1;
   const calls = [];
   const adapters = {
-    create: jest.fn(async (descriptor) => {
+    create: vi.fn(async (descriptor) => {
       const instance = {
         id: descriptor.id,
         serial: nextInstance,
@@ -20,23 +20,23 @@ const createHarness = (options = {}) => {
       calls.push(['create', descriptor.id]);
       return instance;
     }),
-    attach: jest.fn(async (instance, view) => {
+    attach: vi.fn(async (instance, view) => {
       calls.push(['attach', instance.id, view.id]);
     }),
-    detach: jest.fn(async (instance, context) => {
+    detach: vi.fn(async (instance, context) => {
       calls.push(['detach', instance.id, context.reason]);
     }),
-    destroy: jest.fn(async (instance, context) => {
+    destroy: vi.fn(async (instance, context) => {
       calls.push(['destroy', instance.id, context.reason]);
     }),
-    setVisible: jest.fn(async (instance, visible, context) => {
+    setVisible: vi.fn(async (instance, visible, context) => {
       instance.visible = visible;
       calls.push(['visible', instance.id, visible, context.reason]);
     }),
-    suspend: jest.fn(async (instance, context) => {
+    suspend: vi.fn(async (instance, context) => {
       calls.push(['suspend', instance.id, context.reason]);
     }),
-    resume: jest.fn(async (instance, context) => {
+    resume: vi.fn(async (instance, context) => {
       calls.push(['resume', instance.id, context.reason]);
     }),
   };

@@ -29,20 +29,20 @@ const createWatchableView = (overrides = {}) => {
     },
     map: {
       basemap: { id: 'osm' },
-      watch: jest.fn((property, callback) => {
-        const handle = { remove: jest.fn() };
+      watch: vi.fn((property, callback) => {
+        const handle = { remove: vi.fn() };
         watchers.set(`map:${property}`, callback);
         handles.push(handle);
         return handle;
       }),
     },
-    watch: jest.fn((property, callback) => {
-      const handle = { remove: jest.fn() };
+    watch: vi.fn((property, callback) => {
+      const handle = { remove: vi.fn() };
       watchers.set(property, callback);
       handles.push(handle);
       return handle;
     }),
-    goTo: jest.fn().mockResolvedValue(undefined),
+    goTo: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
   return {
@@ -284,11 +284,11 @@ describe('viewRuntime', () => {
     const { view, emit } = createWatchableView();
     const bridge = createViewStateBridge({ mode: '2d' });
     const scheduled = [];
-    const scheduleFrame = jest.fn((callback) => {
+    const scheduleFrame = vi.fn((callback) => {
       scheduled.push(callback);
-      return jest.fn();
+      return vi.fn();
     });
-    const listener = jest.fn();
+    const listener = vi.fn();
     bridge.subscribe(listener);
 
     const unbind = bindMapViewState(view, bridge, {
@@ -319,13 +319,13 @@ describe('viewRuntime', () => {
     const { view } = createWatchableView();
     const bridge = createViewStateBridge();
     const scheduled = [];
-    const listener = jest.fn();
+    const listener = vi.fn();
     bridge.subscribe(listener);
 
     bindMapViewState(view, bridge, {
       scheduleFrame: (callback) => {
         scheduled.push(callback);
-        return jest.fn();
+        return vi.fn();
       },
     });
 
@@ -339,14 +339,14 @@ describe('viewRuntime', () => {
     const { view, emit } = createWatchableView();
     const bridge = createViewStateBridge(snapshotMapViewState(view));
     const scheduled = [];
-    const listener = jest.fn();
+    const listener = vi.fn();
     bridge.subscribe(listener);
 
     bindMapViewState(view, bridge, {
       publishInitial: false,
       scheduleFrame: (callback) => {
         scheduled.push(callback);
-        return jest.fn();
+        return vi.fn();
       },
     });
 
@@ -416,8 +416,8 @@ describe('viewRuntime', () => {
   test('unbind cancels a scheduled but unpublished frame', () => {
     const { view, emit } = createWatchableView();
     const bridge = createViewStateBridge();
-    const cancel = jest.fn();
-    const scheduleFrame = jest.fn(() => cancel);
+    const cancel = vi.fn();
+    const scheduleFrame = vi.fn(() => cancel);
 
     const unbind = bindMapViewState(view, bridge, {
       scheduleFrame,
@@ -485,7 +485,7 @@ describe('viewRuntime', () => {
     const bridge = createViewStateBridge({ mode: '2d', center: [32, 39], zoom: 10 });
     const coordinator = createViewCoordinator(bridge);
     const sceneView = { id: 'scene' };
-    const applyState = jest.fn().mockResolvedValue(true);
+    const applyState = vi.fn().mockResolvedValue(true);
 
     coordinator.register('3d', { view: sceneView, applyState });
     await expect(coordinator.switchTo('3d', { duration: 0 })).resolves.toBe(true);
@@ -510,11 +510,11 @@ describe('viewRuntime', () => {
 
   test('coordinator reports apply failures without throwing mode state away', async () => {
     const bridge = createViewStateBridge({ mode: '2d' });
-    const onError = jest.fn();
+    const onError = vi.fn();
     const coordinator = createViewCoordinator(bridge, { onError });
     coordinator.register('3d', {
       view: {},
-      applyState: jest.fn().mockRejectedValue(new Error('goTo failed')),
+      applyState: vi.fn().mockRejectedValue(new Error('goTo failed')),
     });
 
     await expect(coordinator.switchTo('3d')).resolves.toBe(false);
@@ -545,8 +545,8 @@ describe('viewRuntime', () => {
   test('registering a replacement view unbinds the previous registration', () => {
     const bridge = createViewStateBridge();
     const coordinator = createViewCoordinator(bridge);
-    const firstUnbind = jest.fn();
-    const secondUnbind = jest.fn();
+    const firstUnbind = vi.fn();
+    const secondUnbind = vi.fn();
 
     coordinator.register('2d', { view: { id: 1 }, unbind: firstUnbind });
     coordinator.register('2d', { view: { id: 2 }, unbind: secondUnbind });
@@ -559,8 +559,8 @@ describe('viewRuntime', () => {
   test('destroy disposes every registered view binding', () => {
     const bridge = createViewStateBridge();
     const coordinator = createViewCoordinator(bridge);
-    const unbind2d = jest.fn();
-    const unbind3d = jest.fn();
+    const unbind2d = vi.fn();
+    const unbind3d = vi.fn();
     coordinator.register('2d', { view: {}, unbind: unbind2d });
     coordinator.register('3d', { view: {}, unbind: unbind3d });
 

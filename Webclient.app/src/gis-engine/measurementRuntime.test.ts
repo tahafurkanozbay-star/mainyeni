@@ -9,12 +9,12 @@ import {
   normalizeMeasurementTool,
 } from './measurementRuntime';
 
-const loadModules = jest.fn();
+const loadModules = vi.fn();
 const arcgisTestTransport = { name: 'measurement-runtime-test', loadModules };
 
 describe('measurementRuntime', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     setArcgisModuleTransport(arcgisTestTransport);
     resetArcgisModuleRuntimeCache();
     clearMeasurementRuntimeCache();
@@ -42,9 +42,9 @@ describe('measurementRuntime', () => {
   });
 
   test('loads the ArcGIS Measurement module once and reuses one widget', async () => {
-    const clear = jest.fn();
-    const destroy = jest.fn();
-    const Measurement = jest.fn().mockImplementation((options) => ({ ...options, clear, destroy }));
+    const clear = vi.fn();
+    const destroy = vi.fn();
+    const Measurement = vi.fn().mockImplementation((options) => ({ ...options, clear, destroy }));
     loadModules.mockResolvedValue([Measurement]);
     const view = { id: 'map-view' };
     const controller = createMeasurementController({ view, container: 'measurementDiv' });
@@ -65,8 +65,8 @@ describe('measurementRuntime', () => {
   });
 
   test('sets distance and area tools on the same widget', async () => {
-    const widget = { activeTool: '', clear: jest.fn(), destroy: jest.fn() };
-    const Measurement = jest.fn().mockImplementation(() => widget);
+    const widget = { activeTool: '', clear: vi.fn(), destroy: vi.fn() };
+    const Measurement = vi.fn().mockImplementation(() => widget);
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: {}, container: 'measurementDiv' });
 
@@ -81,8 +81,8 @@ describe('measurementRuntime', () => {
   });
 
   test('rejects unsupported tools without mutating widget state', async () => {
-    const widget = { activeTool: '', clear: jest.fn(), destroy: jest.fn() };
-    const Measurement = jest.fn().mockImplementation(() => widget);
+    const widget = { activeTool: '', clear: vi.fn(), destroy: vi.fn() };
+    const Measurement = vi.fn().mockImplementation(() => widget);
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: {}, container: 'measurementDiv' });
 
@@ -94,8 +94,8 @@ describe('measurementRuntime', () => {
   });
 
   test('clear delegates to the widget and resets active tool', async () => {
-    const widget = { activeTool: '', clear: jest.fn(), destroy: jest.fn() };
-    const Measurement = jest.fn().mockImplementation(() => widget);
+    const widget = { activeTool: '', clear: vi.fn(), destroy: vi.fn() };
+    const Measurement = vi.fn().mockImplementation(() => widget);
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: {}, container: 'measurementDiv' });
 
@@ -109,7 +109,7 @@ describe('measurementRuntime', () => {
   });
 
   test('allows view and container replacement before widget creation', async () => {
-    const Measurement = jest.fn().mockImplementation((options) => ({ ...options }));
+    const Measurement = vi.fn().mockImplementation((options) => ({ ...options }));
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: { id: 'old' }, container: 'old' });
     const nextView = { id: 'new' };
@@ -126,8 +126,8 @@ describe('measurementRuntime', () => {
   });
 
   test('updates an existing widget when view and container change', async () => {
-    const widget = { activeTool: '', clear: jest.fn(), destroy: jest.fn() };
-    const Measurement = jest.fn().mockImplementation(() => widget);
+    const widget = { activeTool: '', clear: vi.fn(), destroy: vi.fn() };
+    const Measurement = vi.fn().mockImplementation(() => widget);
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: { id: 'old' }, container: 'old' });
     await controller.ensureWidget();
@@ -155,7 +155,7 @@ describe('measurementRuntime', () => {
   });
 
   test('reports module-load failure and can recover on the next attempt', async () => {
-    const Measurement = jest.fn().mockImplementation((options) => ({ ...options }));
+    const Measurement = vi.fn().mockImplementation((options) => ({ ...options }));
     loadModules
       .mockRejectedValueOnce(new Error('sdk unavailable'))
       .mockResolvedValueOnce([Measurement]);
@@ -173,10 +173,10 @@ describe('measurementRuntime', () => {
   });
 
   test('notifies subscribers when lifecycle state changes', async () => {
-    const Measurement = jest.fn().mockImplementation((options) => ({ ...options, clear: jest.fn() }));
+    const Measurement = vi.fn().mockImplementation((options) => ({ ...options, clear: vi.fn() }));
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: {}, container: 'measurementDiv' });
-    const listener = jest.fn();
+    const listener = vi.fn();
     const unsubscribe = controller.subscribe(listener);
 
     await controller.setTool('area');
@@ -191,8 +191,8 @@ describe('measurementRuntime', () => {
   });
 
   test('destroy clears and destroys the widget once', async () => {
-    const widget = { activeTool: '', clear: jest.fn(), destroy: jest.fn() };
-    const Measurement = jest.fn().mockImplementation(() => widget);
+    const widget = { activeTool: '', clear: vi.fn(), destroy: vi.fn() };
+    const Measurement = vi.fn().mockImplementation(() => widget);
     loadModules.mockResolvedValue([Measurement]);
     const controller = createMeasurementController({ view: {}, container: 'measurementDiv' });
     await controller.ensureWidget();

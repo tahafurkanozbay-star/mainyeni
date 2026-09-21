@@ -67,7 +67,7 @@ describe('adaptivePerformanceRuntime', () => {
 
   test('subscriber failures cannot break runtime transitions', () => {
     let time = 0;
-    const onListenerError = jest.fn();
+    const onListenerError = vi.fn();
     const runtime = createAdaptivePerformanceRuntime({
       now: () => time,
       profile: GIS_PERFORMANCE_PROFILE.QUALITY,

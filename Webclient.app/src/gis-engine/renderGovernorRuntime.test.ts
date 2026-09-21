@@ -132,7 +132,7 @@ describe('renderGovernorRuntime', () => {
   });
   test('manual tier changes emit subscriptions', () => {
     const governor = createRenderGovernor({ initialTier: 'balanced' });
-    const listener = jest.fn();
+    const listener = vi.fn();
     governor.subscribe(listener);
     governor.setTier('quality', 'test');
     expect(listener).toHaveBeenCalled();

@@ -18,11 +18,11 @@ const createMap = () => {
   return {
     layers,
     allLayers: { items: layers },
-    add: jest.fn((layer, index) => {
+    add: vi.fn((layer, index) => {
       if (Number.isInteger(index)) layers.splice(index, 0, layer);
       else layers.push(layer);
     }),
-    remove: jest.fn((layer) => {
+    remove: vi.fn((layer) => {
       const index = layers.indexOf(layer);
       if (index >= 0) layers.splice(index, 1);
     }),
@@ -154,10 +154,10 @@ describe('layerOwnership', () => {
 
   test('disposable bag removes handles, functions, abort controllers and widgets', () => {
     const bag = createDisposableBag();
-    const handle = { remove: jest.fn() };
-    const widget = { destroy: jest.fn() };
-    const controller = { abort: jest.fn() };
-    const callback = jest.fn();
+    const handle = { remove: vi.fn() };
+    const widget = { destroy: vi.fn() };
+    const controller = { abort: vi.fn() };
+    const callback = vi.fn();
 
     bag.add(handle);
     bag.add(widget);
@@ -178,7 +178,7 @@ describe('layerOwnership', () => {
   test('adding a disposable after disposal disposes it immediately', () => {
     const bag = createDisposableBag();
     bag.dispose();
-    const handle = { remove: jest.fn() };
+    const handle = { remove: vi.fn() };
 
     bag.add(handle);
 

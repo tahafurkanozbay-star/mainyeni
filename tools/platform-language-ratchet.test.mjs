@@ -148,6 +148,30 @@ test('test files are measured separately and do not consume production JS ceilin
   });
 });
 
+test('test JavaScript ceiling fails closed when a domain regresses', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'kent-language-test-ratchet-'));
+  try {
+    const baselinePath = path.join(root, 'tools/platform-language-baseline.json');
+    await fs.mkdir(path.dirname(baselinePath), { recursive: true });
+    await fs.writeFile(baselinePath, JSON.stringify({
+      schemaVersion: 1,
+      domains: { platform: 0 },
+      testDomains: { platform: 0 },
+      platformLegacyAllowlist: [],
+    }));
+    const testPath = path.join(root, 'Webclient.app/src/platform/runtime/regression.test.js');
+    await fs.mkdir(path.dirname(testPath), { recursive: true });
+    await fs.writeFile(testPath, 'export const regression = true;');
+    const report = await auditLanguageModernization(root);
+    const finding = report.findings.find((item) => item.code === 'test-javascript-budget-regression');
+    assert.equal(finding?.severity, 'error');
+    assert.deepEqual(finding?.detail, { domain: 'platform', current: 1, budget: 0 });
+    assert.equal(report.summary.passed, false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('domain mapping covers core repository architecture buckets', async () => {
   await withFixture({
     'Webclient.app/src/Business/a.ts': 'export {};',
