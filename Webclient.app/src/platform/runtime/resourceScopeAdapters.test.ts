@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import { createResourceScope } from './resourceScope';
 import {
   bindAbortController,
@@ -20,7 +20,7 @@ const flush = async (): Promise<void> => {
 describe('resourceScopeAdapters event listener ownership', () => {
   test('binds and removes an EventTarget listener through scope cleanup', async () => {
     const target = new EventTarget();
-    const listener = jest.fn();
+    const listener = vi.fn();
     const scope = createResourceScope('component');
     const handle = bindEventListener(scope, {
       owner: 'map',
@@ -39,8 +39,8 @@ describe('resourceScopeAdapters event listener ownership', () => {
 
   test('scope close removes every bound listener', async () => {
     const target = new EventTarget();
-    const move = jest.fn();
-    const zoom = jest.fn();
+    const move = vi.fn();
+    const zoom = vi.fn();
     const scope = createResourceScope('component');
 
     bindEventListener(scope, {
@@ -66,10 +66,10 @@ describe('resourceScopeAdapters event listener ownership', () => {
   });
 
   test('forwards capture option consistently to add/remove boundaries', async () => {
-    const addEventListener = jest.fn();
-    const removeEventListener = jest.fn();
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
     const target: EventTargetPort = { addEventListener, removeEventListener };
-    const listener = jest.fn();
+    const listener = vi.fn();
     const scope = createResourceScope('component');
 
     const handle = bindEventListener(scope, {
@@ -95,21 +95,21 @@ describe('resourceScopeAdapters event listener ownership', () => {
   });
 
   test('rolls back listener registration if scope admission rejects', () => {
-    const addEventListener = jest.fn();
-    const removeEventListener = jest.fn();
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
     const target: EventTargetPort = { addEventListener, removeEventListener };
     const scope = createResourceScope('component', {
       maxResources: 1,
       maxOwnerResources: 1,
     });
-    scope.register({ owner: 'owner', key: 'occupied', cleanup: jest.fn() });
+    scope.register({ owner: 'owner', key: 'occupied', cleanup: vi.fn() });
 
     expect(() => bindEventListener(scope, {
       owner: 'owner',
       key: 'listener',
       target,
       type: 'move',
-      listener: jest.fn(),
+      listener: vi.fn(),
     })).toThrow(expect.objectContaining({ code: 'RESOURCE_CAPACITY_EXCEEDED' }));
 
     expect(addEventListener).toHaveBeenCalledTimes(1);
@@ -123,16 +123,16 @@ describe('resourceScopeAdapters event listener ownership', () => {
       key: 'listener',
       target: {
         addEventListener: null as unknown as EventTargetPort['addEventListener'],
-        removeEventListener: jest.fn(),
+        removeEventListener: vi.fn(),
       },
       type: 'move',
-      listener: jest.fn(),
+      listener: vi.fn(),
     })).toThrow(TypeError);
     expect(scope.snapshot().activeResources).toBe(0);
   });
 
   test('validates event target remove capability before side effects', () => {
-    const addEventListener = jest.fn();
+    const addEventListener = vi.fn();
     const scope = createResourceScope('component');
     expect(() => bindEventListener(scope, {
       owner: 'owner',
@@ -142,16 +142,16 @@ describe('resourceScopeAdapters event listener ownership', () => {
         removeEventListener: null as unknown as EventTargetPort['removeEventListener'],
       },
       type: 'move',
-      listener: jest.fn(),
+      listener: vi.fn(),
     })).toThrow(TypeError);
     expect(addEventListener).not.toHaveBeenCalled();
   });
 
   test('rejects invalid event type before touching target', () => {
-    const addEventListener = jest.fn();
+    const addEventListener = vi.fn();
     const target: EventTargetPort = {
       addEventListener,
-      removeEventListener: jest.fn(),
+      removeEventListener: vi.fn(),
     };
     const scope = createResourceScope('component');
 
@@ -160,7 +160,7 @@ describe('resourceScopeAdapters event listener ownership', () => {
       key: 'listener',
       target,
       type: 'move\ninvalid',
-      listener: jest.fn(),
+      listener: vi.fn(),
     })).toThrow(TypeError);
     expect(addEventListener).not.toHaveBeenCalled();
   });
@@ -173,7 +173,7 @@ describe('resourceScopeAdapters event listener ownership', () => {
       key: 'move',
       target,
       type: 'move',
-      listener: jest.fn(),
+      listener: vi.fn(),
       metadata: { component: 'map-view', token: 'private' },
     });
 
@@ -186,7 +186,7 @@ describe('resourceScopeAdapters event listener ownership', () => {
 
 describe('resourceScopeAdapters subscriptions and observers', () => {
   test('bindSubscription invokes async unsubscribe exactly once', async () => {
-    const unsubscribe = jest.fn(async () => undefined);
+    const unsubscribe = vi.fn(async () => undefined);
     const scope = createResourceScope('component');
     const handle = bindSubscription(scope, {
       owner: 'store',
@@ -209,7 +209,7 @@ describe('resourceScopeAdapters subscriptions and observers', () => {
   });
 
   test('bindObserver disconnects observer during release', async () => {
-    const disconnect = jest.fn();
+    const disconnect = vi.fn();
     const scope = createResourceScope('component');
     const handle = bindObserver(scope, {
       owner: 'performance',
@@ -222,7 +222,7 @@ describe('resourceScopeAdapters subscriptions and observers', () => {
   });
 
   test('bindObserver supports asynchronous disconnect', async () => {
-    const disconnect = jest.fn(async () => undefined);
+    const disconnect = vi.fn(async () => undefined);
     const scope = createResourceScope('component');
     bindObserver(scope, {
       owner: 'resize',
@@ -345,7 +345,7 @@ describe('resourceScopeAdapters animation frame ownership', () => {
     const binding = bindAnimationFrame(scope, {
       owner: 'render',
       key: 'next-frame',
-      callback: jest.fn(),
+      callback: vi.fn(),
       port,
     });
 
@@ -360,7 +360,7 @@ describe('resourceScopeAdapters animation frame ownership', () => {
     const binding = bindAnimationFrame(scope, {
       owner: 'render',
       key: 'next-frame',
-      callback: jest.fn(),
+      callback: vi.fn(),
       port,
     });
 
@@ -371,7 +371,7 @@ describe('resourceScopeAdapters animation frame ownership', () => {
 
   test('completed frame invokes callback and self-releases ownership', async () => {
     const port = createFramePort();
-    const callback = jest.fn();
+    const callback = vi.fn();
     const scope = createResourceScope('component');
     const binding = bindAnimationFrame(scope, {
       owner: 'render',
@@ -395,7 +395,7 @@ describe('resourceScopeAdapters animation frame ownership', () => {
     const binding = bindAnimationFrame(scope, {
       owner: 'render',
       key: 'next-frame',
-      callback: jest.fn(),
+      callback: vi.fn(),
       port,
     });
 
@@ -411,12 +411,12 @@ describe('resourceScopeAdapters animation frame ownership', () => {
       maxResources: 1,
       maxOwnerResources: 1,
     });
-    scope.register({ owner: 'render', key: 'occupied', cleanup: jest.fn() });
+    scope.register({ owner: 'render', key: 'occupied', cleanup: vi.fn() });
 
     expect(() => bindAnimationFrame(scope, {
       owner: 'render',
       key: 'frame',
-      callback: jest.fn(),
+      callback: vi.fn(),
       port,
     })).toThrow(expect.objectContaining({ code: 'RESOURCE_CAPACITY_EXCEEDED' }));
 
@@ -439,7 +439,7 @@ describe('resourceScopeAdapters animation frame ownership', () => {
 
 describe('resourceScopeAdapters generic disposable helper', () => {
   test('bindDisposable delegates ownership to ResourceScope', async () => {
-    const dispose = jest.fn();
+    const dispose = vi.fn();
     const scope = createResourceScope('component');
     const handle = bindDisposable(
       scope,
@@ -455,10 +455,10 @@ describe('resourceScopeAdapters generic disposable helper', () => {
   });
 
   test('owner teardown works consistently across adapter types', async () => {
-    const unsubscribe = jest.fn();
-    const disconnect = jest.fn();
+    const unsubscribe = vi.fn();
+    const disconnect = vi.fn();
     const target = new EventTarget();
-    const listener = jest.fn();
+    const listener = vi.fn();
     const scope = createResourceScope('component');
 
     bindSubscription(scope, {
@@ -494,7 +494,7 @@ describe('resourceScopeAdapters generic disposable helper', () => {
     bindSubscription(scope, {
       owner: 'store',
       key: 'subscription',
-      unsubscribe: jest.fn(),
+      unsubscribe: vi.fn(),
     });
     bindAbortController(scope, {
       owner: 'network',
