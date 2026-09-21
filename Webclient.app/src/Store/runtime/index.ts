@@ -1,3 +1,5 @@
+export * from './stateDiff';
+export * from './stateSelectorRegistry';
 export * from './stateActionAudit';
 export * from './stateCheckpointRuntime';
 export * from './stateRestoreExecutor';

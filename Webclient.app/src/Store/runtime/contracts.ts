@@ -103,6 +103,7 @@ export interface StoreTransitionDescriptor {
   readonly durationMs: number;
   readonly status: StoreTransitionStatus;
   readonly changedSlices: readonly StoreSliceName[];
+  readonly changedPaths: readonly string[];
   readonly beforeFingerprint: string;
   readonly afterFingerprint: string;
   readonly invariantErrors: number;

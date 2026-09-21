@@ -16,6 +16,7 @@ const entry = (index: number, status: 'changed' | 'noop' | 'failed' = 'changed')
   durationMs: index,
   status,
   changedSlices: status === 'changed' ? ['Map' as const] : [],
+  changedPaths: status === 'changed' ? ['map.graphicsCount'] : [],
   beforeFingerprint: 'before-' + index,
   afterFingerprint: 'after-' + index,
   invariantErrors: 0,

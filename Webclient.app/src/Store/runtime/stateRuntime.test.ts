@@ -60,6 +60,7 @@ describe('stateRuntime', () => {
       noopTransitions: 1,
     });
     expect(runtime.inspect().history.entries[0]?.status).toBe('noop');
+    expect(runtime.inspect().history.entries[1]?.changedPaths).toContain('map.isUpdating');
   });
 
   it('records failures without retaining error messages or action payloads', () => {

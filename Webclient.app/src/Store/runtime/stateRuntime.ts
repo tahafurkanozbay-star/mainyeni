@@ -1,3 +1,4 @@
+import { diffStoreProjections } from './stateDiff';
 import { auditStoreAction } from './stateActionAudit';
 import type { RootState } from '../contracts';
 import {
@@ -81,6 +82,7 @@ export class BoundedStoreStateRuntime implements StoreStateRuntime {
     const beforeFingerprint = fingerprintStoreProjection(beforeProjection);
     const afterFingerprint = fingerprintStoreProjection(afterProjection);
     const changedSlices = changedStoreSlices(input.previousState, input.nextState);
+    const changedPaths = diffStoreProjections(beforeProjection, afterProjection).changedPaths;
     const invariants = inspectStoreInvariants(input.nextState, this.#limits, input.completedAt);
     const status = changedSlices.length > 0 || beforeFingerprint !== afterFingerprint
       ? 'changed'
@@ -93,6 +95,7 @@ export class BoundedStoreStateRuntime implements StoreStateRuntime {
       durationMs: duration(input.startedAt, input.completedAt),
       status,
       changedSlices,
+      changedPaths,
       beforeFingerprint,
       afterFingerprint,
       invariantErrors: invariants.errorCount,
@@ -129,6 +132,7 @@ export class BoundedStoreStateRuntime implements StoreStateRuntime {
       durationMs: duration(input.startedAt, input.completedAt),
       status: 'failed',
       changedSlices: Object.freeze([]),
+      changedPaths: Object.freeze([]),
       beforeFingerprint: fingerprint,
       afterFingerprint: fingerprint,
       invariantErrors: invariants.errorCount,
