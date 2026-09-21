@@ -625,7 +625,12 @@ class BoundedServiceContainer implements ServiceContainer {
       );
     }
     if (record.status !== 'ready') {
-      await this.#ensureStarted(id, new Set());
+      try {
+        await this.#ensureStarted(id, new Set());
+      } catch (error) {
+        this.#refreshRunningState();
+        throw error;
+      }
       this.#refreshRunningState();
     }
     return this.#readyInstance<T>(id);
@@ -934,17 +939,8 @@ class BoundedServiceContainer implements ServiceContainer {
     return Object.freeze({
       serviceId: descriptor.id,
       signal: record.controller?.signal ?? this.#controller.signal,
-      dependency: <T>(token: ServiceToken<T>): T => {
-        const value = access(token, false);
-        if (value === undefined) {
-          throw new ServiceContainerError(
-            'DEPENDENCY_UNAVAILABLE',
-            'dependency resolved to undefined: ' + token.id,
-            descriptor.id,
-          );
-        }
-        return value;
-      },
+      dependency: <T>(token: ServiceToken<T>): T =>
+        access(token, false) as T,
       optional: <T>(token: ServiceToken<T>): T | undefined => access(token, true),
     });
   }
@@ -1004,7 +1000,7 @@ class BoundedServiceContainer implements ServiceContainer {
     this.#emit('service-stopping', descriptor.id);
 
     try {
-      if (record.definition.stop && record.instance !== undefined) {
+      if (record.definition.stop) {
         const stopController = new AbortController();
         await this.#withTimeout(
           () => record.definition.stop?.(
