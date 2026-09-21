@@ -1,6 +1,7 @@
 import { createNetworkDiagnostics, recordNetworkEvent } from './networkDiagnostics';
 import { normalizeRequestConfig } from './requestPolicy';
 import { executeWithRetry } from './retryPolicy';
+import { evaluateMutationSafetyHealth } from './mutationSafetyHealth';
 import {
   getErrorCode,
   getErrorRetryable,
@@ -398,6 +399,11 @@ export class RequestCoordinator {
     return this.mutationSafety.snapshot() as unknown as Readonly<Record<string, unknown>>;
   }
 
+  getMutationSafetyHealth(): Readonly<Record<string, unknown>> {
+    return evaluateMutationSafetyHealth(this.mutationSafety.snapshot())
+      as unknown as Readonly<Record<string, unknown>>;
+  }
+
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>> {
     return this.cacheRuntime.snapshot() as unknown as Readonly<Record<string, unknown>>;
   }
@@ -471,6 +477,7 @@ export const createCoordinatedClient = (options: CoordinatorOptions): Coordinate
     getCacheSize: () => coordinator.getCacheSize(),
     getInFlightSize: () => coordinator.getInFlightSize(),
     getMutationSafetySnapshot: () => coordinator.getMutationSafetySnapshot(),
+    getMutationSafetyHealth: () => coordinator.getMutationSafetyHealth(),
     getCacheRuntimeSnapshot: () => coordinator.getCacheRuntimeSnapshot(),
     getRequestScopeSnapshot: () => coordinator.getRequestScopeSnapshot(),
     drain: (optionsArg?: RequestLifetimeCloseOptions) => coordinator.drain(optionsArg),
