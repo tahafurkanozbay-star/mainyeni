@@ -267,7 +267,7 @@ describe('viewState', () => {
 
   test('bridge suppresses no-op updates', () => {
     const bridge = createViewStateBridge({ center: [32, 39], zoom: 12 });
-    const listener = jest.fn();
+    const listener = vi.fn();
     bridge.subscribe(listener);
 
     bridge.setState({ center: ['32', '39'], zoom: '12' });
@@ -277,7 +277,7 @@ describe('viewState', () => {
 
   test('bridge notifies subscribers for meaningful updates', () => {
     const bridge = createViewStateBridge({ zoom: 10 });
-    const listener = jest.fn();
+    const listener = vi.fn();
     bridge.subscribe(listener);
 
     const result = bridge.setState((state) => ({ ...state, zoom: 11 }));
@@ -287,9 +287,9 @@ describe('viewState', () => {
   });
 
   test('bridge isolates listener exceptions so later listeners still run', () => {
-    const onListenerError = jest.fn();
+    const onListenerError = vi.fn();
     const bridge = createViewStateBridge({}, { onListenerError });
-    const healthy = jest.fn();
+    const healthy = vi.fn();
     bridge.subscribe(() => { throw new Error('listener failed'); });
     bridge.subscribe(healthy);
 
@@ -301,7 +301,7 @@ describe('viewState', () => {
 
   test('bridge can emit the current state during subscription', () => {
     const bridge = createViewStateBridge({ zoom: 8 }, { emitCurrent: true });
-    const listener = jest.fn();
+    const listener = vi.fn();
 
     bridge.subscribe(listener);
 
@@ -310,7 +310,7 @@ describe('viewState', () => {
 
   test('unsubscribe is idempotent and updates listener count', () => {
     const bridge = createViewStateBridge();
-    const listener = jest.fn();
+    const listener = vi.fn();
     const unsubscribe = bridge.subscribe(listener);
 
     expect(bridge.listenerCount()).toBe(1);
@@ -323,11 +323,11 @@ describe('viewState', () => {
 
   test('destroy clears listeners and prevents new subscriptions', () => {
     const bridge = createViewStateBridge();
-    const existing = jest.fn();
+    const existing = vi.fn();
     bridge.subscribe(existing);
 
     bridge.destroy();
-    const afterDestroy = jest.fn();
+    const afterDestroy = vi.fn();
     const unsubscribe = bridge.subscribe(afterDestroy);
     bridge.setState({ zoom: 13 });
     unsubscribe();
