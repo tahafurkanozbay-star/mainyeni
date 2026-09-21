@@ -54,7 +54,7 @@ namespace Api.Core.Platform.Governance
 
         public static bool IsAllowed(
             string contentType,
-            IReadOnlyCollection<string> allowedMediaTypes)
+            IEnumerable<string> allowedMediaTypes)
         {
             var mediaType = NormalizeMediaType(contentType);
             if (string.IsNullOrEmpty(mediaType) || allowedMediaTypes == null)
