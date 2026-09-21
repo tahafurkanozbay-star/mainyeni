@@ -1,3 +1,4 @@
+export * from './stateTransitionAnalytics';
 export * from './stateDiff';
 export * from './stateSelectorRegistry';
 export * from './stateActionAudit';
