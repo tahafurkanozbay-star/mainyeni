@@ -1,5 +1,6 @@
-import { executeQueryJSON } from '@arcgis/core/rest/query.js';
+import type Graphic from '@arcgis/core/Graphic.js';
 import type Geometry from '@arcgis/core/geometry/Geometry.js';
+import { executeQueryJSON } from '@arcgis/core/rest/query.js';
 
 type ArcGisQueryInput = Parameters<typeof executeQueryJSON>[1];
 type ArcGisRequestOptions = NonNullable<Parameters<typeof executeQueryJSON>[2]>;
@@ -74,13 +75,10 @@ const createBoundedSignal = (
   });
 };
 
-const toResult = (
-  feature: Readonly<{
-    attributes?: Record<string, unknown> | null;
-    geometry?: Geometry | null;
-  }>,
-): GisQueryResult => Object.freeze({
-  attr: Object.freeze(Object.assign({}, feature.attributes)),
+const toResult = (feature: Graphic): GisQueryResult => Object.freeze({
+  attr: Object.freeze(
+    Object.assign({}, feature.attributes),
+  ) as Readonly<Record<string, unknown>>,
   geometry: feature.geometry ?? null,
 });
 
