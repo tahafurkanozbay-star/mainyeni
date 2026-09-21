@@ -63,6 +63,7 @@ const snapshot = (
     rollbacks: 0,
     rejected: 0,
     observerFailures: 0,
+    optionalDependencyFailures: 0,
   }),
   events: Object.freeze([]),
   fingerprint: 'cafebabe',
@@ -103,6 +104,7 @@ describe('evaluateServiceContainerHealth healthy baseline', () => {
       slowStarts: 0,
       slowStops: 0,
       observerFailures: 0,
+      optionalDependencyFailures: 0,
       registrationRejections: 0,
       risks: [],
     });
