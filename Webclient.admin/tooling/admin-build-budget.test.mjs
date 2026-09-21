@@ -69,6 +69,7 @@ test('fails budgets when initial payloads exceed configured ceilings', () => {
     maxInitialJavaScriptGzipBytes: 300,
     maxLargestInitialJavaScriptBytes: 600,
     maxInitialCssBytes: 200,
+    maxInitialCssGzipBytes: 90,
     minDynamicImports: 2,
   });
 
@@ -80,6 +81,7 @@ test('fails budgets when initial payloads exceed configured ceilings', () => {
       'initial-js-gzip-bytes',
       'largest-initial-js-bytes',
       'initial-css-bytes',
+      'initial-css-gzip-bytes',
       'dynamic-import-count',
     ]),
   );
@@ -111,6 +113,7 @@ test('passes a bounded lazy-loaded graph', () => {
     maxInitialJavaScriptGzipBytes: 150,
     maxLargestInitialJavaScriptBytes: 300,
     maxInitialCssBytes: 100,
+    maxInitialCssGzipBytes: 25,
     minDynamicImports: 3,
     forbiddenInitialSources: ['src/Components/Map.tsx'],
   });
