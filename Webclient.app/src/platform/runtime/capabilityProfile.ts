@@ -5,7 +5,12 @@ import {
   type RuntimeTier,
 } from './contracts';
 
-interface NetworkInformationLike extends EventTarget {
+interface EventTargetLike {
+  addEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+  removeEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+}
+
+interface NetworkInformationLike extends EventTargetLike {
   readonly effectiveType?: string;
   readonly downlink?: number;
   readonly rtt?: number;
@@ -22,14 +27,18 @@ interface NavigatorLike {
   readonly scheduling?: { readonly isInputPending?: () => boolean };
 }
 
-interface WindowLike extends EventTarget {
-  matchMedia?: (query: string) => MediaQueryList;
-  Worker?: typeof Worker;
-  OffscreenCanvas?: typeof OffscreenCanvas;
-  IntersectionObserver?: typeof IntersectionObserver;
-  ResizeObserver?: typeof ResizeObserver;
-  PerformanceObserver?: typeof PerformanceObserver;
-  structuredClone?: typeof structuredClone;
+interface MediaQueryLike extends EventTargetLike {
+  readonly matches: boolean;
+}
+
+interface WindowLike extends EventTargetLike {
+  matchMedia?: (query: string) => MediaQueryLike;
+  Worker?: unknown;
+  OffscreenCanvas?: unknown;
+  IntersectionObserver?: unknown;
+  ResizeObserver?: unknown;
+  PerformanceObserver?: unknown;
+  structuredClone?: unknown;
   scheduler?: { readonly postTask?: (...args: unknown[]) => Promise<unknown> };
   trustedTypes?: unknown;
   document?: Document;
@@ -41,6 +50,7 @@ export interface CapabilityDependencies {
   readonly documentRef?: Document | null;
   readonly now?: () => number;
   readonly webglProbe?: () => boolean;
+  readonly onProbeError?: (error: unknown, probe: string) => void;
 }
 
 export interface CapabilityThresholds {
@@ -80,11 +90,16 @@ const safeNavigator = (): NavigatorLike | null =>
 const safeDocument = (): Document | null =>
   typeof document === 'undefined' ? null : document;
 
-const mediaMatches = (windowRef: WindowLike | null, query: string): boolean => {
+const mediaMatches = (
+  windowRef: WindowLike | null,
+  query: string,
+  onProbeError?: CapabilityDependencies['onProbeError'],
+): boolean => {
   if (typeof windowRef?.matchMedia !== 'function') return false;
   try {
     return windowRef.matchMedia(query).matches;
-  } catch {
+  } catch (error) {
+    onProbeError?.(error, 'match-media');
     return false;
   }
 };
@@ -110,16 +125,23 @@ const safeDeviceMemory = (navigatorRef: NavigatorLike | null): number | null => 
   return value === null ? null : clampNumber(value, 0.25, 64, 4);
 };
 
-const createCanvas = (documentRef: Document | null): HTMLCanvasElement | null => {
+const createCanvas = (
+  documentRef: Document | null,
+  onProbeError?: CapabilityDependencies['onProbeError'],
+): HTMLCanvasElement | null => {
   try {
     return documentRef?.createElement?.('canvas') ?? null;
-  } catch {
+  } catch (error) {
+    onProbeError?.(error, 'canvas-create');
     return null;
   }
 };
 
-export const probeWebGL2 = (documentRef: Document | null = safeDocument()): boolean => {
-  const canvas = createCanvas(documentRef);
+export const probeWebGL2 = (
+  documentRef: Document | null = safeDocument(),
+  onProbeError?: CapabilityDependencies['onProbeError'],
+): boolean => {
+  const canvas = createCanvas(documentRef, onProbeError);
   if (!canvas || typeof canvas.getContext !== 'function') return false;
   try {
     return Boolean(canvas.getContext('webgl2', {
@@ -129,7 +151,8 @@ export const probeWebGL2 = (documentRef: Document | null = safeDocument()): bool
       stencil: false,
       failIfMajorPerformanceCaveat: true,
     }));
-  } catch {
+  } catch (error) {
+    onProbeError?.(error, 'webgl2-context');
     return false;
   }
 };
@@ -229,7 +252,7 @@ export const createCapabilityProfile = (
   const deviceMemoryGb = safeDeviceMemory(navigatorRef);
   const saveData = connection?.saveData === true;
   const effectiveConnectionType = safeEffectiveType(connection);
-  const supportsWebGL2 = dependencies.webglProbe?.() ?? probeWebGL2(documentRef);
+  const supportsWebGL2 = dependencies.webglProbe?.() ?? probeWebGL2(documentRef, dependencies.onProbeError);
   const decision = detectTier({
     hardwareConcurrency,
     deviceMemoryGb,
@@ -244,7 +267,7 @@ export const createCapabilityProfile = (
     tier: decision.tier,
     hardwareConcurrency,
     deviceMemoryGb,
-    reducedMotion: mediaMatches(windowRef, '(prefers-reduced-motion: reduce)'),
+    reducedMotion: mediaMatches(windowRef, '(prefers-reduced-motion: reduce)', dependencies.onProbeError),
     saveData,
     effectiveConnectionType,
     downlinkMbps,
@@ -317,11 +340,11 @@ export const createCapabilityWatcher = (
     return next;
   };
 
-  const listen = (target: EventTarget | null | undefined, event: string): void => {
+  const listen = (target: EventTargetLike | null | undefined, event: string): void => {
     if (!target?.addEventListener) return;
-    const handler = () => refresh();
+    const handler: EventListener = () => { refresh(); };
     target.addEventListener(event, handler);
-    cleanups.push(() => target.removeEventListener(event, handler));
+    cleanups.push(() => target.removeEventListener?.(event, handler));
   };
 
   listen(windowRef, 'online');
@@ -332,8 +355,8 @@ export const createCapabilityWatcher = (
     try {
       const motion = windowRef.matchMedia('(prefers-reduced-motion: reduce)');
       listen(motion, 'change');
-    } catch {
-      // Media query observation is optional.
+    } catch (error) {
+      dependencies.onProbeError?.(error, 'match-media-listener');
     }
   }
 

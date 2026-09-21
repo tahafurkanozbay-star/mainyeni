@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import { AppError } from '../errors/appError';
 import {
   buildFetchOptions,
@@ -5,47 +6,16 @@ import {
   createLinkedAbortScope,
   executeFetch
 } from './fetchTransport';
+import type { FetchImplementation } from './fetchTransport';
+import type { ResponseLike } from './responseParser';
 
-class TestAbortSignal {
-  constructor() {
-    this.aborted = false;
-    this.listeners = new Set();
-  }
+const activeSignal = (): AbortSignal => new AbortController().signal;
 
-  addEventListener(name, callback) {
-    if (name === 'abort') this.listeners.add(callback);
-  }
-
-  removeEventListener(name, callback) {
-    if (name === 'abort') this.listeners.delete(callback);
-  }
-
-  dispatchAbort() {
-    if (this.aborted) return;
-    this.aborted = true;
-    [...this.listeners].forEach((listener) => listener());
-  }
-}
-
-class TestAbortController {
-  constructor() {
-    this.signal = new TestAbortSignal();
-  }
-
-  abort() {
-    this.signal.dispatchAbort();
-  }
-}
-
-const createHeaders = (values = {}) => {
-  const normalized = Object.keys(values).reduce((result, key) => {
-    result[key.toLowerCase()] = String(values[key]);
-    return result;
-  }, {});
+const createAbortHarness = () => {
+  const controller = new AbortController();
   return {
-    get: (name) => normalized[String(name).toLowerCase()] ?? null,
-    forEach: (callback) => Object.keys(normalized)
-      .forEach((key) => callback(normalized[key], key))
+    signal: controller.signal,
+    abort: () => controller.abort('test-aborted'),
   };
 };
 
@@ -56,13 +26,37 @@ const response = ({
   headers = {},
   contentType = 'application/json',
   statusText = 'OK'
-} = {}) => ({
+}: {
+  status?: number;
+  ok?: boolean;
+  body?: string;
+  headers?: Readonly<Record<string, string>>;
+  contentType?: string;
+  statusText?: string;
+} = {}): ResponseLike => ({
   status,
   ok,
   statusText,
-  headers: createHeaders({ 'content-type': contentType, ...headers }),
+  headers: new Headers({ 'content-type': contentType, ...headers }),
   text: jest.fn().mockResolvedValue(body)
 });
+
+type FetchMock = ReturnType<typeof jest.fn<FetchImplementation>>;
+
+const fetchResolved = (value: ResponseLike): FetchMock =>
+  jest.fn<FetchImplementation>().mockResolvedValue(value);
+
+const firstFetchCall = (fetchImpl: FetchMock) => {
+  const call = fetchImpl.mock.calls.at(0);
+  if (!call) throw new TypeError('expected one fetch call');
+  return call;
+};
+
+const firstFetchInit = (fetchImpl: FetchMock): RequestInit => {
+  const init = firstFetchCall(fetchImpl)[1];
+  if (!init) throw new TypeError('expected fetch RequestInit');
+  return init;
+};
 
 const defaults = {
   baseUrl: '/api',
@@ -72,16 +66,6 @@ const defaults = {
 };
 
 describe('fetchTransport linked abort scope', () => {
-  const OriginalAbortController = global.AbortController;
-
-  beforeAll(() => {
-    global.AbortController = TestAbortController;
-  });
-
-  afterAll(() => {
-    global.AbortController = OriginalAbortController;
-  });
-
   test('creates an active child signal', () => {
     const scope = createLinkedAbortScope({ timeoutMs: 0 });
     expect(scope.signal.aborted).toBe(false);
@@ -91,31 +75,31 @@ describe('fetchTransport linked abort scope', () => {
   });
 
   test('propagates a pre-aborted parent signal', () => {
-    const parent = new TestAbortSignal();
-    parent.dispatchAbort();
-    const scope = createLinkedAbortScope({ signal: parent, timeoutMs: 0 });
+    const parent = createAbortHarness();
+    parent.abort();
+    const scope = createLinkedAbortScope({ signal: parent.signal, timeoutMs: 0 });
     expect(scope.signal.aborted).toBe(true);
     expect(scope.isParentAborted()).toBe(true);
     scope.dispose();
   });
 
   test('propagates parent abort after creation', () => {
-    const parent = new TestAbortSignal();
-    const scope = createLinkedAbortScope({ signal: parent, timeoutMs: 0 });
-    parent.dispatchAbort();
+    const parent = createAbortHarness();
+    const scope = createLinkedAbortScope({ signal: parent.signal, timeoutMs: 0 });
+    parent.abort();
     expect(scope.signal.aborted).toBe(true);
     expect(scope.isParentAborted()).toBe(true);
     scope.dispose();
   });
 
   test('marks timeout separately from caller abort', () => {
-    let timeoutCallback;
+    const timer: { callback?: TimerHandler } = {};
     const scope = createLinkedAbortScope({
       timeoutMs: 100,
-      setTimeout: (callback) => { timeoutCallback = callback; return 5; },
+      setTimeout: (callback) => { timer.callback = callback; return 5; },
       clearTimeout: jest.fn()
     });
-    timeoutCallback();
+    if (typeof timer.callback === 'function') timer.callback();
     expect(scope.signal.aborted).toBe(true);
     expect(scope.isTimedOut()).toBe(true);
     expect(scope.isParentAborted()).toBe(false);
@@ -134,9 +118,9 @@ describe('fetchTransport linked abort scope', () => {
   });
 
   test('removes parent listener on dispose', () => {
-    const parent = new TestAbortSignal();
-    const removeSpy = jest.spyOn(parent, 'removeEventListener');
-    const scope = createLinkedAbortScope({ signal: parent, timeoutMs: 0 });
+    const parent = createAbortHarness();
+    const removeSpy = jest.spyOn(parent.signal, 'removeEventListener');
+    const scope = createLinkedAbortScope({ signal: parent.signal, timeoutMs: 0 });
     scope.dispose();
     expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function));
   });
@@ -163,7 +147,7 @@ describe('fetchTransport linked abort scope', () => {
 
 describe('fetchTransport fetch option construction', () => {
   test('creates secure same-origin defaults', () => {
-    const signal = {};
+    const signal = activeSignal();
     expect(buildFetchOptions({ method: 'get', signal }, {
       body: undefined,
       headers: { Accept: 'application/json' }
@@ -178,56 +162,46 @@ describe('fetchTransport fetch option construction', () => {
   });
 
   test('includes serialized request body', () => {
-    const result = buildFetchOptions({ method: 'post', signal: {} }, {
+    const result = buildFetchOptions({ method: 'post', signal: activeSignal() }, {
       body: '{"a":1}', headers: { 'Content-Type': 'application/json' }
     });
     expect(result.body).toBe('{"a":1}');
   });
 
   test('supports explicit fetch cache mode', () => {
-    expect(buildFetchOptions({ method: 'get', signal: {}, fetchCache: 'reload' }, {
+    expect(buildFetchOptions({ method: 'get', signal: activeSignal(), fetchCache: 'reload' }, {
       body: undefined, headers: {}
     }).cache).toBe('reload');
   });
 
   test('supports explicit credential mode', () => {
-    expect(buildFetchOptions({ method: 'get', signal: {}, credentials: 'omit' }, {
+    expect(buildFetchOptions({ method: 'get', signal: activeSignal(), credentials: 'omit' }, {
       body: undefined, headers: {}
     }).credentials).toBe('omit');
   });
 
   test('supports explicit redirect policy', () => {
-    expect(buildFetchOptions({ method: 'get', signal: {}, redirect: 'error' }, {
+    expect(buildFetchOptions({ method: 'get', signal: activeSignal(), redirect: 'error' }, {
       body: undefined, headers: {}
     }).redirect).toBe('error');
   });
 
   test('adds optional integrity only when supplied', () => {
-    expect(buildFetchOptions({ method: 'get', signal: {}, integrity: 'sha256-test' }, {
+    expect(buildFetchOptions({ method: 'get', signal: activeSignal(), integrity: 'sha256-test' }, {
       body: undefined, headers: {}
     }).integrity).toBe('sha256-test');
   });
 
   test('adds keepalive only when explicitly enabled', () => {
-    expect(buildFetchOptions({ method: 'post', signal: {}, keepalive: true }, {
+    expect(buildFetchOptions({ method: 'post', signal: activeSignal(), keepalive: true }, {
       body: 'x', headers: {}
     }).keepalive).toBe(true);
   });
 });
 
 describe('fetchTransport executeFetch', () => {
-  const OriginalAbortController = global.AbortController;
-
-  beforeAll(() => {
-    global.AbortController = TestAbortController;
-  });
-
-  afterAll(() => {
-    global.AbortController = OriginalAbortController;
-  });
-
   test('executes same-origin GET and parses JSON response', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(response({ body: '{"name":"Ankara"}' }));
+    const fetchImpl = fetchResolved(response({ body: '{"name":"Ankara"}' }));
     const result = await executeFetch({
       method: 'get',
       url: '/items',
@@ -238,8 +212,8 @@ describe('fetchTransport executeFetch', () => {
       fetchImpl
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(fetchImpl.mock.calls[0][0]).toBe('/api/items?district=%C3%87ankaya&page=2');
-    expect(fetchImpl.mock.calls[0][1]).toMatchObject({
+    expect(firstFetchCall(fetchImpl)[0]).toBe('/api/items?district=%C3%87ankaya&page=2');
+    expect(firstFetchInit(fetchImpl)).toMatchObject({
       method: 'GET', credentials: 'same-origin', cache: 'no-store'
     });
     expect(result.data).toEqual({ name: 'Ankara' });
@@ -248,21 +222,22 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('serializes POST JSON body', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(response({ body: '{"saved":true}' }));
+    const fetchImpl = fetchResolved(response({ body: '{"saved":true}' }));
     await executeFetch({ method: 'post', url: '/items', data: { name: 'Park' } }, {
       defaults, baseUrl: '/api', fetchImpl
     });
-    expect(fetchImpl.mock.calls[0][1].body).toBe('{"name":"Park"}');
-    expect(fetchImpl.mock.calls[0][1].headers['Content-Type'])
+    const init = firstFetchInit(fetchImpl);
+    expect(init.body).toBe('{"name":"Park"}');
+    expect(new Headers(init.headers).get('Content-Type'))
       .toBe('application/json;charset=UTF-8');
   });
 
   test('does not double-prefix API base', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(response());
+    const fetchImpl = fetchResolved(response());
     await executeFetch({ method: 'get', url: '/api/health' }, {
       defaults, baseUrl: '/api', fetchImpl
     });
-    expect(fetchImpl.mock.calls[0][0]).toBe('/api/health');
+    expect(firstFetchCall(fetchImpl)[0]).toBe('/api/health');
   });
 
   test('blocks absolute application endpoint before fetch', async () => {
@@ -284,7 +259,7 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('maps 404 response to NOT_FOUND', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(response({
+    const fetchImpl = fetchResolved(response({
       status: 404, ok: false, body: '{"message":"raw detail"}'
     }));
     await expect(executeFetch({ method: 'get', url: '/missing' }, {
@@ -293,7 +268,7 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('maps 503 response to retryable SERVER_ERROR', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(response({
+    const fetchImpl = fetchResolved(response({
       status: 503,
       ok: false,
       body: '{"message":"internal"}',
@@ -304,51 +279,53 @@ describe('fetchTransport executeFetch', () => {
       throw new Error('expected failure');
     } catch (error) {
       expect(error).toMatchObject({ code: 'SERVER_ERROR', status: 503, retryable: true });
-      expect(error.response.headers.get('retry-after')).toBe('2');
+      if (!(error instanceof AppError)) throw error;
+      const responseHeaders = (error as AppError & { response?: { headers?: Headers } }).response?.headers;
+      expect(responseHeaders?.get('retry-after')).toBe('2');
     }
   });
 
   test('maps network TypeError to NETWORK_ERROR', async () => {
-    const fetchImpl = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const fetchImpl = jest.fn<FetchImplementation>().mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(executeFetch({ method: 'get', url: '/items' }, { defaults, fetchImpl }))
       .rejects.toMatchObject({ code: 'NETWORK_ERROR', retryable: true });
   });
 
   test('maps parent cancellation to ABORTED', async () => {
-    const parent = new TestAbortSignal();
-    const fetchImpl = jest.fn((_url, options) => new Promise((_resolve, reject) => {
-      options.signal.addEventListener('abort', () => {
+    const parent = createAbortHarness();
+    const fetchImpl = jest.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => {
         reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       });
     }));
-    const promise = executeFetch({ method: 'get', url: '/items', signal: parent }, {
+    const promise = executeFetch({ method: 'get', url: '/items', signal: parent.signal }, {
       defaults, fetchImpl
     });
-    parent.dispatchAbort();
+    parent.abort();
     await expect(promise).rejects.toMatchObject({ code: 'ABORTED', retryable: false });
   });
 
   test('maps transport timeout to TIMEOUT', async () => {
-    let timeoutCallback;
-    const fetchImpl = jest.fn((_url, options) => new Promise((_resolve, reject) => {
-      options.signal.addEventListener('abort', () => {
+    const timer: { callback?: TimerHandler } = {};
+    const fetchImpl = jest.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => {
         reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       });
     }));
     const promise = executeFetch({ method: 'get', url: '/items', timeout: 100 }, {
       defaults,
       fetchImpl,
-      setTimeout: (callback) => { timeoutCallback = callback; return 1; },
+      setTimeout: (callback) => { timer.callback = callback; return 1; },
       clearTimeout: jest.fn()
     });
-    timeoutCallback();
+    if (typeof timer.callback === 'function') timer.callback();
     await expect(promise).rejects.toMatchObject({ code: 'TIMEOUT', status: 408, retryable: true });
   });
 
   test('reports start and completion hooks', async () => {
     const onStart = jest.fn();
     const onSuccess = jest.fn();
-    const fetchImpl = jest.fn().mockResolvedValue(response());
+    const fetchImpl = fetchResolved(response());
     const clock = jest.fn().mockReturnValueOnce(100).mockReturnValueOnce(125);
     await executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, clock, onStart, onSuccess
@@ -361,7 +338,7 @@ describe('fetchTransport executeFetch', () => {
 
   test('reports HTTP failure hook once', async () => {
     const onFailure = jest.fn();
-    const fetchImpl = jest.fn().mockResolvedValue(response({ status: 503, ok: false }));
+    const fetchImpl = fetchResolved(response({ status: 503, ok: false }));
     await expect(executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, onFailure
     })).rejects.toBeInstanceOf(AppError);
@@ -371,23 +348,23 @@ describe('fetchTransport executeFetch', () => {
 
   test('reports network failure hook once', async () => {
     const onFailure = jest.fn();
-    const fetchImpl = jest.fn().mockRejectedValue(new TypeError('network'));
+    const fetchImpl = jest.fn<FetchImplementation>().mockRejectedValue(new TypeError('network'));
     await expect(executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, onFailure
     })).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
     expect(onFailure).toHaveBeenCalledTimes(1);
-    expect(onFailure.mock.calls[0][0].error.code).toBe('NETWORK_ERROR');
+    expect(onFailure.mock.calls.at(0)?.at(0)).toMatchObject({ error: expect.objectContaining({ code: 'NETWORK_ERROR' }) });
   });
 
   test('rejects invalid fetch response object', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(null);
+    const fetchImpl = jest.fn<FetchImplementation>().mockResolvedValue(null as never);
     await expect(executeFetch({ method: 'get', url: '/items' }, { defaults, fetchImpl }))
       .rejects.toMatchObject({ code: 'INVALID_FETCH_RESPONSE' });
   });
 
   test('cleans timeout after a successful request', async () => {
     const clearTimeout = jest.fn();
-    const fetchImpl = jest.fn().mockResolvedValue(response());
+    const fetchImpl = fetchResolved(response());
     await executeFetch({ method: 'get', url: '/items', timeout: 100 }, {
       defaults,
       fetchImpl,
@@ -400,7 +377,7 @@ describe('fetchTransport executeFetch', () => {
   test('does not create timeout scope when body serialization fails', async () => {
     const setTimeout = jest.fn();
     const fetchImpl = jest.fn();
-    const circular = {};
+    const circular: Record<string, unknown> = {};
     circular.self = circular;
     await expect(executeFetch({ method: 'post', url: '/items', data: circular }, {
       defaults, fetchImpl, setTimeout
@@ -411,16 +388,6 @@ describe('fetchTransport executeFetch', () => {
 });
 
 describe('fetchTransport factory surface', () => {
-  const OriginalAbortController = global.AbortController;
-
-  beforeAll(() => {
-    global.AbortController = TestAbortController;
-  });
-
-  afterAll(() => {
-    global.AbortController = OriginalAbortController;
-  });
-
   test('publishes immutable defaults', () => {
     const transport = createFetchTransport({
       baseUrl: '/api', timeoutMs: 7000, maxRetries: 3, cacheTtlMs: 9000, fetchImpl: jest.fn()
@@ -435,25 +402,28 @@ describe('fetchTransport factory surface', () => {
   test.each([['get', 'get'], ['head', 'head'], ['delete', 'delete']])(
     '%s helper forwards method',
     async (helper, method) => {
-      const fetchImpl = jest.fn().mockResolvedValue(response({
+      const fetchImpl = fetchResolved(response({
         status: method === 'head' ? 204 : 200,
         ok: true,
         body: method === 'head' ? '' : '{"ok":true}'
       }));
       const transport = createFetchTransport({ ...defaults, fetchImpl });
-      await transport[helper]('/items');
-      expect(fetchImpl.mock.calls[0][1].method).toBe(method.toUpperCase());
+      const methodCall = transport[helper as 'get' | 'head' | 'delete'];
+      await methodCall('/items');
+      expect(firstFetchInit(fetchImpl).method).toBe(method.toUpperCase());
     }
   );
 
   test.each([['post', 'POST'], ['put', 'PUT'], ['patch', 'PATCH']])(
     '%s helper forwards JSON body',
     async (helper, expectedMethod) => {
-      const fetchImpl = jest.fn().mockResolvedValue(response());
+      const fetchImpl = fetchResolved(response());
       const transport = createFetchTransport({ ...defaults, fetchImpl });
-      await transport[helper]('/items', { value: 1 });
-      expect(fetchImpl.mock.calls[0][1].method).toBe(expectedMethod);
-      expect(fetchImpl.mock.calls[0][1].body).toBe('{"value":1}');
+      const methodCall = transport[helper as 'post' | 'put' | 'patch'];
+      await methodCall('/items', { value: 1 });
+      const init = firstFetchInit(fetchImpl);
+      expect(init.method).toBe(expectedMethod);
+      expect(init.body).toBe('{"value":1}');
     }
   );
 });

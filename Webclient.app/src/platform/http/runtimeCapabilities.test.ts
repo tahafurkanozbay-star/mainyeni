@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import {
   RuntimeCapabilityPolicy,
   assertRequiredNetworkCapabilities,
@@ -7,33 +8,57 @@ import {
   getCoarseConnectionProfile,
   scaleTimeoutForRuntime
 } from './runtimeCapabilities';
+import type { ConnectionLike, NavigatorLike, RuntimeLike } from './runtimeCapabilities';
 
-const createRuntime = (overrides = {}) => ({
-  Promise,
-  fetch: jest.fn(),
-  AbortController,
-  URL,
-  URLSearchParams,
-  FormData: typeof FormData === 'undefined' ? function FormDataStub() {} : FormData,
-  Blob: typeof Blob === 'undefined' ? function BlobStub() {} : Blob,
-  ArrayBuffer,
-  structuredClone: jest.fn(),
-  requestIdleCallback: jest.fn(),
-  crypto: { subtle: {} },
-  performance: { now: jest.fn(() => 1) },
-  navigator: {
-    onLine: true,
-    hardwareConcurrency: 8,
-    deviceMemory: 8,
-    connection: {
-      saveData: false,
-      effectiveType: '4g',
-      downlink: 12,
-      rtt: 60
-    }
-  },
-  ...overrides
-});
+type TestConnection = ConnectionLike & Record<string, unknown>;
+type TestNavigator = Omit<NavigatorLike, 'connection' | 'mozConnection' | 'webkitConnection'> & Record<string, unknown> & {
+  connection?: TestConnection | undefined;
+  mozConnection?: TestConnection | undefined;
+  webkitConnection?: TestConnection | undefined;
+  userAgent?: string;
+  language?: string;
+  platform?: string;
+};
+type TestRuntime = Omit<RuntimeLike, 'navigator' | 'crypto' | 'performance'> & {
+  navigator: TestNavigator;
+  crypto: { subtle?: unknown };
+  performance: { now?: unknown };
+};
+
+const createRuntime = (overrides: Partial<TestRuntime> = {}): TestRuntime => {
+  const runtime: TestRuntime = {
+    Promise,
+    fetch: jest.fn(),
+    AbortController,
+    URL,
+    URLSearchParams,
+    FormData: typeof FormData === 'undefined' ? function FormDataStub() {} : FormData,
+    Blob: typeof Blob === 'undefined' ? function BlobStub() {} : Blob,
+    ArrayBuffer,
+    structuredClone: jest.fn(),
+    requestIdleCallback: jest.fn(),
+    crypto: { subtle: {} },
+    performance: { now: jest.fn(() => 1) },
+    navigator: {
+      onLine: true,
+      hardwareConcurrency: 8,
+      deviceMemory: 8,
+      connection: {
+        saveData: false,
+        effectiveType: '4g',
+        downlink: 12,
+        rtt: 60,
+      },
+    },
+  };
+  return { ...runtime, ...overrides };
+};
+
+const connectionOf = (runtime: TestRuntime): TestConnection => {
+  const connection = runtime.navigator.connection;
+  if (!connection) throw new TypeError('expected test network connection');
+  return connection;
+};
 
 describe('runtime capability report', () => {
   test('reports modern essential capabilities as supported', () => {
@@ -133,7 +158,7 @@ describe('coarse connection profile', () => {
 
   test('save-data is always constrained', () => {
     const runtime = createRuntime();
-    runtime.navigator.connection.saveData = true;
+    connectionOf(runtime).saveData = true;
     expect(getCoarseConnectionProfile(runtime).quality).toBe('constrained');
   });
 
@@ -146,10 +171,10 @@ describe('coarse connection profile', () => {
     [undefined, 'normal']
   ])('maps effective type %p to %p', (effectiveType, expected) => {
     const runtime = createRuntime();
-    runtime.navigator.connection.effectiveType = effectiveType;
+    connectionOf(runtime).effectiveType = effectiveType;
     if (effectiveType !== '4g') {
-      runtime.navigator.connection.downlink = undefined;
-      runtime.navigator.connection.rtt = undefined;
+      connectionOf(runtime).downlink = undefined;
+      connectionOf(runtime).rtt = undefined;
     }
     expect(getCoarseConnectionProfile(runtime).quality).toBe(expected);
   });
@@ -166,7 +191,7 @@ describe('coarse connection profile', () => {
     ['bad', 'unknown']
   ])('buckets downlink %p as %p', (downlink, bucket) => {
     const runtime = createRuntime();
-    runtime.navigator.connection.downlink = downlink;
+    connectionOf(runtime).downlink = downlink;
     expect(getCoarseConnectionProfile(runtime).downlinkBucket).toBe(bucket);
   });
 
@@ -182,7 +207,7 @@ describe('coarse connection profile', () => {
     [undefined, 'unknown']
   ])('buckets RTT %p as %p', (rtt, bucket) => {
     const runtime = createRuntime();
-    runtime.navigator.connection.rtt = rtt;
+    connectionOf(runtime).rtt = rtt;
     expect(getCoarseConnectionProfile(runtime).rttBucket).toBe(bucket);
   });
 
@@ -219,7 +244,7 @@ describe('adaptive runtime tuning', () => {
 
   test('constrained network lowers concurrency and disables prefetch/background work', () => {
     const runtime = createRuntime();
-    runtime.navigator.connection.saveData = true;
+    connectionOf(runtime).saveData = true;
     const tuning = createRuntimeTuningProfile(runtime);
 
     expect(tuning.network.quality).toBe('constrained');
@@ -308,7 +333,7 @@ describe('timeout scaling and support summary', () => {
 
   test('constrained network scales timeout but remains bounded', () => {
     const runtime = createRuntime();
-    runtime.navigator.connection.saveData = true;
+    connectionOf(runtime).saveData = true;
     const tuning = createRuntimeTuningProfile(runtime);
     expect(scaleTimeoutForRuntime(15000, tuning)).toBe(27000);
     expect(scaleTimeoutForRuntime(60000, tuning)).toBe(60000);

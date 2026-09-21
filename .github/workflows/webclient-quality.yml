@@ -99,6 +99,9 @@ jobs:
       - name: Strict supervision TypeScript boundary
         run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
 
+      - name: Strict Platform test TypeScript boundary
+        run: npm run typecheck:platform-tests -- --pretty false
+
       - name: Strict modern GIS TypeScript boundary
         run: npm run typecheck:gis-modern-core -- --pretty false
 
