@@ -5,15 +5,15 @@ import { ExperienceWorkspace } from "./ExperienceWorkspace";
 const mediaStates = new Map();
 
 const installMatchMedia = () => {
-    window.matchMedia = jest.fn(query => ({
+    window.matchMedia = vi.fn(query => ({
         matches: Boolean(mediaStates.get(query)),
         media: query,
         onchange: null,
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        dispatchEvent: jest.fn()
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn()
     }));
 };
 
@@ -45,7 +45,7 @@ describe("ExperienceWorkspace", () => {
 
     afterEach(() => {
         document.body.replaceChildren();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     test("renders semantic status and 2B/3B controls", () => {
@@ -57,7 +57,7 @@ describe("ExperienceWorkspace", () => {
     });
 
     test("dispatches a map-mode command instead of mutating GIS state directly", () => {
-        const listener = jest.fn();
+        const listener = vi.fn();
         window.addEventListener("kentrehberi:command", listener);
         render(<ExperienceWorkspace />);
 
