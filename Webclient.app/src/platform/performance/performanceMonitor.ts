@@ -98,6 +98,7 @@ export interface PerformanceMonitorDependencies {
   readonly PerformanceObserverRef?: PerformanceObserverConstructorLike | null;
   readonly navigatorRef?: NavigatorLike | null;
   readonly now?: () => number;
+  readonly onObserverError?: (error: unknown, context: Readonly<{ phase: 'observe' | 'disconnect'; entryType?: string }>) => void;
 }
 
 export interface PerformanceSnapshot {
@@ -305,8 +306,8 @@ export const createPerformanceMonitor = (dependencies: PerformanceMonitorDepende
       const init = { type, buffered: options.buffered !== false, ...options.observe } as PerformanceObserverInit;
       observer.observe(init);
       observers.push(observer);
-    } catch {
-      // Entry support differs by browser; unsupported observers are non-fatal.
+    } catch (error) {
+      dependencies.onObserverError?.(error, { phase: 'observe', entryType: type });
     }
   };
 
@@ -369,7 +370,11 @@ export const createPerformanceMonitor = (dependencies: PerformanceMonitorDepende
 
   const stop = (): void => {
     observers.splice(0).forEach((observer) => {
-      try { observer.disconnect(); } catch { /* optional observer cleanup */ }
+      try {
+        observer.disconnect();
+      } catch (error) {
+        dependencies.onObserverError?.(error, { phase: 'disconnect' });
+      }
     });
     started = false;
   };
