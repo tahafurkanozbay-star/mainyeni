@@ -16,7 +16,42 @@ const priorityOrder: readonly OfflineMutationPriority[] = Object.freeze(['critic
 const boundedInteger = (name: string, value: number, min: number, max: number): number => { if (!Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`${name} must be an integer between ${min} and ${max}`); return value; };
 const containsControlCharacter = (value: string): boolean => { for (const character of value) { const codePoint = character.codePointAt(0); if (codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f)) return true; } return false; };
 const boundedText = (name: string, value: string, maxLength = 128): string => { const normalized = value.trim(); if (!normalized || normalized.length > maxLength || containsControlCharacter(normalized)) throw new TypeError(`${name} must be non-empty bounded text`); return normalized; };
-const defaultEstimateBytes = (value: unknown): number => { const seen = new Set<object>(); const visit = (current: unknown, depth: number): number => { if (depth > 24) throw new RangeError('payload nesting exceeds 24 levels'); if (current === null || current === undefined) return 4; if (typeof current === 'string') return new TextEncoder().encode(current).byteLength; if (typeof current === 'number' || typeof current === 'boolean') return 8; if (typeof current === 'bigint' || typeof current === 'symbol' || typeof current === 'function') throw new TypeError('payload contains unsupported value'); if (current instanceof ArrayBuffer) return current.byteLength; if (ArrayBuffer.isView(current)) return current.byteLength; if (current instanceof Date) return 24; if (typeof current === 'object') { if (seen.has(current)) throw new TypeError('payload must not contain cycles'); seen.add(current); let bytes = 0; if (Array.isArray(current)) { for (const item of current) bytes += visit(item, depth + 1); } else { const prototype = Object.getPrototypeOf(current); if (prototype !== Object.prototype && prototype !== null) throw new TypeError('payload must contain plain data'); for (const [key, item] of Object.entries(current as Record<string, unknown>)) bytes += new TextEncoder().encode(key).byteLength + visit(item, depth + 1); } seen.delete(current); return bytes; } return 0; }; return visit(value, 0); };
+const encoder = new TextEncoder();
+const defaultEstimateBytes = (value: unknown): number => {
+  const seen = new Set<object>();
+  const visit = (current: unknown, depth: number): number => {
+    if (depth > 24) throw new RangeError('payload nesting exceeds 24 levels');
+    if (current === null || current === undefined) return 4;
+    if (typeof current === 'string') return encoder.encode(current).byteLength;
+    if (typeof current === 'number' || typeof current === 'boolean') return 8;
+    if (typeof current === 'bigint' || typeof current === 'symbol' || typeof current === 'function') {
+      throw new TypeError('payload contains unsupported value');
+    }
+    if (current instanceof ArrayBuffer) return current.byteLength;
+    if (ArrayBuffer.isView(current)) return current.byteLength;
+    if (current instanceof Date) return 24;
+    if (typeof current !== 'object') return 0;
+    if (seen.has(current)) throw new TypeError('payload must not contain cycles');
+
+    seen.add(current);
+    try {
+      if (Array.isArray(current)) {
+        return current.reduce((bytes, item) => bytes + visit(item, depth + 1), 0);
+      }
+      const prototype = Object.getPrototypeOf(current);
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new TypeError('payload must contain plain data');
+      }
+      return Object.entries(current as Record<string, unknown>).reduce(
+        (bytes, [key, item]) => bytes + encoder.encode(key).byteLength + visit(item, depth + 1),
+        0,
+      );
+    } finally {
+      seen.delete(current);
+    }
+  };
+  return visit(value, 0);
+};
 
 export class OfflineMutationQueue {
   readonly maxEntries: number; readonly maxEntriesPerOwner: number; readonly maxPayloadBytes: number; readonly maxMetadataEntries: number; readonly maxMetadataValueLength: number; readonly maxConcurrent: number; readonly maxAttempts: number; readonly maxAgeMs: number; readonly historyLimit: number;
@@ -26,13 +61,55 @@ export class OfflineMutationQueue {
   setOnline(online: boolean): void { if (!this.#disposed) { this.#online = online; if (online) this.#drain(); } }
   enqueue<TPayload>(descriptor: OfflineMutationDescriptor<TPayload>): Promise<OfflineMutationResult> { if (this.#disposed) return Promise.reject(this.#reject(descriptor, 'disposed')); let normalized: QueueEntry['descriptor']; let createdAt: number; let expiresAt: number; let maxAttempts: number; let dedupeKey: string | undefined; try { const id = boundedText('id', descriptor.id, 160); const owner = boundedText('owner', descriptor.owner, 128); const operation = boundedText('operation', descriptor.operation, 128); const sameId = this.#entries.get(id); if (sameId) return sameId.promise; if (descriptor.dedupeKey) { dedupeKey = boundedText('dedupeKey', descriptor.dedupeKey, 192); const duplicate = this.#dedupeEntries.get(dedupeKey); if (duplicate) { this.#record(duplicate, 'deduplicated', 0); return duplicate.promise; } } createdAt = descriptor.createdAt ?? this.#clock(); if (!Number.isFinite(createdAt) || createdAt < 0) throw new TypeError('createdAt must be finite and non-negative'); expiresAt = descriptor.expiresAt ?? createdAt + this.maxAgeMs; if (!Number.isFinite(expiresAt) || expiresAt <= createdAt || expiresAt - createdAt > this.maxAgeMs) throw new TypeError('expiresAt must be after createdAt and within maxAgeMs'); maxAttempts = boundedInteger('descriptor.maxAttempts', descriptor.maxAttempts ?? this.maxAttempts, 1, this.maxAttempts); this.#validateMetadata(descriptor.metadata); const bytes = this.#estimateBytes(descriptor.payload); if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > this.maxPayloadBytes) return Promise.reject(this.#reject(descriptor, 'payload-budget')); normalized = { ...descriptor, ...(dedupeKey ? { dedupeKey } : {}), id, owner, operation, payload: descriptor.payload }; } catch (error) { if (error instanceof OfflineMutationRejectedError) return Promise.reject(error); return Promise.reject(this.#reject(descriptor, 'invalid-descriptor')); } if (expiresAt <= this.#clock()) return Promise.reject(this.#reject(normalized, 'expired')); if (this.#entries.size >= this.maxEntries) return Promise.reject(this.#reject(normalized, 'queue-capacity')); if ((this.#ownerCounts.get(normalized.owner) ?? 0) >= this.maxEntriesPerOwner) return Promise.reject(this.#reject(normalized, 'owner-capacity')); let resolve!: (value: OfflineMutationResult) => void; const promise = new Promise<OfflineMutationResult>(res => { resolve = res; }); const entry: QueueEntry = { descriptor: normalized, priority: descriptor.priority ?? 'interactive', createdAt, expiresAt, maxAttempts, controller: new AbortController(), promise, resolve, state: 'queued', attempts: 0 }; this.#entries.set(normalized.id, entry); this.#ownerCounts.set(normalized.owner, (this.#ownerCounts.get(normalized.owner) ?? 0) + 1); if (dedupeKey) this.#dedupeEntries.set(dedupeKey, entry); this.#queueReady(entry); this.#totalAccepted += 1; this.#record(entry, 'accepted', 0); this.#drain(); return promise; }
   cancel(id: string, reason = 'cancelled'): boolean { const entry = this.#entries.get(id); if (!entry) return false; entry.controller.abort(reason); if (entry.state === 'queued') this.#finish(entry, 'cancelled', undefined, reason); return true; }
-  cancelOwner(owner: string, reason = 'owner-cancelled'): number { const normalized = boundedText('owner', owner, 128); let cancelled = 0; for (const entry of this.#entries.values()) if (entry.descriptor.owner === normalized && this.cancel(entry.descriptor.id, reason)) cancelled += 1; return cancelled; }
-  pruneExpired(): number { const now = this.#clock(); let expired = 0; for (const entry of this.#entries.values()) if (entry.state === 'queued' && entry.expiresAt <= now) { this.#finish(entry, 'expired', undefined, 'expired-before-replay'); expired += 1; } return expired; }
-  snapshot(): OfflineMutationSnapshot { let queued = 0; for (const entry of this.#entries.values()) if (entry.state === 'queued') queued += 1; return Object.freeze({ queued, running: this.#running, disposed: this.#disposed, totalAccepted: this.#totalAccepted, totalRejected: this.#totalRejected, totalSucceeded: this.#totalSucceeded, totalFailed: this.#totalFailed, totalCancelled: this.#totalCancelled, totalExpired: this.#totalExpired }); }
+  cancelOwner(owner: string, reason = 'owner-cancelled'): number {
+    const normalized = boundedText('owner', owner, 128);
+    return Array.from(this.#entries.values()).reduce(
+      (cancelled, entry) =>
+        entry.descriptor.owner === normalized && this.cancel(entry.descriptor.id, reason)
+          ? cancelled + 1
+          : cancelled,
+      0,
+    );
+  }
+  pruneExpired(): number {
+    const now = this.#clock();
+    return Array.from(this.#entries.values()).reduce((expired, entry) => {
+      if (entry.state !== 'queued' || entry.expiresAt > now) return expired;
+      this.#finish(entry, 'expired', undefined, 'expired-before-replay');
+      return expired + 1;
+    }, 0);
+  }
+  snapshot(): OfflineMutationSnapshot {
+    const queued = Array.from(this.#entries.values()).reduce(
+      (count, entry) => count + (entry.state === 'queued' ? 1 : 0),
+      0,
+    );
+    return Object.freeze({ queued, running: this.#running, disposed: this.#disposed, totalAccepted: this.#totalAccepted, totalRejected: this.#totalRejected, totalSucceeded: this.#totalSucceeded, totalFailed: this.#totalFailed, totalCancelled: this.#totalCancelled, totalExpired: this.#totalExpired });
+  }
   history(): readonly OfflineMutationEvent[] { return Object.freeze(this.#history.map(event => Object.freeze({ ...event }))); }
   pending(): readonly Readonly<OfflineMutationDescriptor>[] { return Object.freeze(Array.from(this.#entries.values()).sort((a, b) => this.#compareEntries(a, b)).map(entry => { const descriptor = entry.descriptor; return Object.freeze({ ...descriptor, ...(descriptor.metadata ? { metadata: Object.freeze({ ...descriptor.metadata }) } : {}) }); })); }
-  dispose(reason = 'queue-disposed'): void { if (this.#disposed) return; this.#disposed = true; for (const entry of this.#entries.values()) { entry.controller.abort(reason); if (entry.state === 'queued') this.#finish(entry, 'cancelled', undefined, reason); } this.#recordRaw('queue', 'queue', 'queue', 'disposed', 0, reason); }
-  #validateMetadata(metadata: Readonly<Record<string, string>> | undefined): void { if (!metadata) return; const entries = Object.entries(metadata); if (entries.length > this.maxMetadataEntries) throw new RangeError('metadata entry budget exceeded'); for (const [key, value] of entries) { boundedText('metadata key', key, 64); if (typeof value !== 'string' || value.length > this.maxMetadataValueLength || containsControlCharacter(value)) throw new TypeError('metadata value is invalid'); } }
+  dispose(reason = 'queue-disposed'): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    Array.from(this.#entries.values()).reduce((count, entry) => {
+      entry.controller.abort(reason);
+      if (entry.state === 'queued') this.#finish(entry, 'cancelled', undefined, reason);
+      return count + 1;
+    }, 0);
+    this.#recordRaw('queue', 'queue', 'queue', 'disposed', 0, reason);
+  }
+  #validateMetadata(metadata: Readonly<Record<string, string>> | undefined): void {
+    if (!metadata) return;
+    const entries = Object.entries(metadata);
+    if (entries.length > this.maxMetadataEntries) throw new RangeError('metadata entry budget exceeded');
+    entries.reduce((count, [key, value]) => {
+      boundedText('metadata key', key, 64);
+      if (typeof value !== 'string' || value.length > this.maxMetadataValueLength || containsControlCharacter(value)) {
+        throw new TypeError('metadata value is invalid');
+      }
+      return count + 1;
+    }, 0);
+  }
   #compareEntries(a: QueueEntry, b: QueueEntry): number { return priorityWeight[a.priority] - priorityWeight[b.priority] || a.createdAt - b.createdAt || a.descriptor.id.localeCompare(b.descriptor.id); }
   #compareWithinPriority(a: QueueEntry, b: QueueEntry): number { return a.createdAt - b.createdAt || a.descriptor.id.localeCompare(b.descriptor.id); }
   #queueReady(entry: QueueEntry): void { const bucket = this.#ready[entry.priority]; let low = 0; let high = bucket.length; while (low < high) { const middle = (low + high) >>> 1; const candidate = bucket[middle]; if (candidate && this.#compareWithinPriority(candidate, entry) <= 0) low = middle + 1; else high = middle; } bucket.splice(low, 0, entry); }
