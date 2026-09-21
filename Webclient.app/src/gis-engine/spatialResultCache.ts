@@ -268,7 +268,7 @@ export class SpatialResultCache<T> {
     const normalized = normalizeText(tag);
     if (!normalized) return 0;
     let removed = 0;
-    for (const entry of [...this.entries.values()]) {
+    for (const entry of this.entries.values()) {
       if (entry.tags.includes(normalized)) {
         this.deleteEntry(entry);
         removed += 1;
@@ -280,7 +280,7 @@ export class SpatialResultCache<T> {
 
   public invalidateWhere(predicate: (key: string, tags: readonly string[]) => boolean): number {
     let removed = 0;
-    for (const entry of [...this.entries.values()]) {
+    for (const entry of this.entries.values()) {
       if (predicate(entry.key, entry.tags)) {
         this.deleteEntry(entry);
         removed += 1;
@@ -293,7 +293,7 @@ export class SpatialResultCache<T> {
   public sweepExpired(now = Date.now()): number {
     finiteNonNegative(now, 'now');
     let removed = 0;
-    for (const entry of [...this.entries.values()]) {
+    for (const entry of this.entries.values()) {
       if (entry.expiresAt <= now) {
         this.deleteEntry(entry);
         removed += 1;
