@@ -369,6 +369,7 @@ describe('MutationIdempotencyRegistry capacity governance', () => {
     const registry = createMutationIdempotencyRegistry({
       maxEntries: 1,
       maxEntriesPerOwner: 1,
+      maxAttempts: 1,
       retentionMs: 2_000,
       clock: clock.now,
     });
@@ -510,6 +511,19 @@ describe('MutationIdempotencyLease lifecycle', () => {
       startedAt: 10_000,
       ageMs: 325,
     });
+  });
+
+  test('fails closed when logical attempts exceed configured maxAttempts', () => {
+    const registry = createMutationIdempotencyRegistry({ maxAttempts: 2 });
+    const lease = registry.begin({
+      key: 'mutation-attempt-limit-0001',
+      owner: 'catalog',
+      method: 'post',
+    });
+    expect(lease.markAttempt()).toBe(true);
+    expect(lease.markAttempt()).toBe(true);
+    expect(() => lease.markAttempt()).toThrowError(MutationIdempotencyError);
+    expect(lease.snapshot().logicalAttempts).toBe(2);
   });
 
   test('attempts cannot be recorded after settlement', () => {
@@ -747,6 +761,8 @@ describe('MutationIdempotencyRegistry option validation', () => {
   test.each([
     ['maxEntries', 0],
     ['maxEntries', 10_001],
+    ['maxAttempts', 0],
+    ['maxAttempts', 33],
     ['retentionMs', 999],
     ['staleInFlightAfterMs', 999],
     ['maxKeyLength', 15],
