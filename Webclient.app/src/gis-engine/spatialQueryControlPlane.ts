@@ -780,9 +780,11 @@ export const createSpatialQueryControlPlane = (
               ),
               {
                 signal: controller.signal,
-                priority: request.priority === 'foreground'
-                  ? 'normal'
-                  : request.priority,
+                priority: request.priority === 'interactive'
+                  ? 'interactive'
+                  : request.priority === 'background'
+                    ? 'prefetch'
+                    : 'visible',
                 ...(request.cache.ttlMs === undefined
                   ? {}
                   : { ttlMs: request.cache.ttlMs }),
