@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - 'agent/**'
     paths:
       - 'Webclient.admin/**'
       - '.github/workflows/admin-webclient-quality.yml'
@@ -17,44 +16,68 @@ permissions:
   contents: read
 
 concurrency:
-  group: admin-webclient-quality-${{ github.ref }}
+  group: admin-webclient-quality-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: Webclient.admin
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
+      - name: Setup Node 24
         uses: actions/setup-node@v7
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: Webclient.admin/package-lock.json
+          node-version: 24
 
-      - name: Install from lockfile
-        run: npm ci
+      - name: Verify toolchain
+        run: |
+          node --version
+          npm --version
+          node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"
+
+      - name: Generate lock candidate
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Install from generated lock
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Lint when configured
-        run: npm run lint --if-present
+      - name: Full lint visibility
+        run: npm run lint
 
-      - name: Typecheck when configured
-        run: npm run typecheck --if-present
+      - name: Strict modern foundation lint
+        run: npm run lint:strict
 
-      - name: Test
-        run: npm test -- --watchAll=false --runInBand
+      - name: TypeScript migration check
+        run: npm run typecheck
 
-      - name: Production build
+      - name: Strict runtime boundary check
+        run: npm run typecheck:strict
+
+      - name: Vitest
+        run: npm run test:ci
+
+      - name: Production Vite build
         env:
           CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
+          VITE_API_URL: /api
+          VITE_APP_VERSION: ci
         run: npm run build
+
+      - name: Upload generated lockfile
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: admin-package-lock
+          path: Webclient.admin/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
