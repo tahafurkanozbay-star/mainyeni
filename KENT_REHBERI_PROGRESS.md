@@ -474,3 +474,12 @@
 - SONRAKİ PLATFORM GÖREVİ: merged #199 branch must not be reused. Start the next Platform turn from then-current main, re-read orchestration/progress files, re-audit remaining 11 legacy Platform JS tests and whole-code language debt, preserve concurrent team ownership, and keep the >=4,000 meaningful-additions, exact-head CI, security/performance/regression and final-main-refresh gates.
 - POST-MERGE NOTE: this progress-only documentation commit is created after the fully tested squash merge; no CI PASS is inferred for the documentation-only commit itself.
 
+
+
+## Deep GIS merge-gate check — 2026-09-21 08:36 TRT
+- TUR / GÖREV: User-requested merge verification for canonical GIS PR #207.
+- BASE / HEAD BEFORE THIS PROGRESS COMMIT: main `1d11d624cf4155ed3dd4aee267bf093ed2adb49c`; PR head `7175cacb1554a32488031f619fbaa62bf665cf76`.
+- MERGE DURUMU: NOT MERGED. Exact GitHub base...head compare is 2,694 additions / 0 deletions / 10 files, 15 commits ahead / 0 behind, with merge-base exactly current main. The mandatory >=4,000 meaningful-additions gate is not met.
+- CI / TEST / BUILD: Platform Architecture Audit completed+success. Webclient Quality completed+failure at Full lint visibility; later strict lint, TypeScript, Vitest and production build/budget steps were skipped. Release QA completed+failure: typed-release-audit failed at Enforce exact-base PR regression gate; webclient-release-validation failed at Full lint visibility; backend-release-validation succeeded.
+- RELEASE RISK: merge forbidden because both the additions gate and required exact-head CI gate fail. Draft status remains appropriate; no production invariant or CI rule was weakened to force a merge.
+- SONRAKI GÖREV: continue real high-priority GIS cache/query/lifecycle modernization on the same canonical PR while its base remains current and behind=0. Reach >=4,000 meaningful additions without filler, fix the exact lint/release regressions, rerun required CI to completed+success, refresh main/mergeability, then squash merge only if all gates are green.
