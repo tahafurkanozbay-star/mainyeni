@@ -13,6 +13,10 @@
   "include": [
     "src/platform/bootstrap/bootstrapCore.test.ts",
     "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
+    "src/platform/config/runtimeConfig.test.ts",
+    "src/platform/config/runtimeConfigResolution.test.ts",
+    "src/platform/config/runtimeConfigGovernance.test.ts",
+    "src/platform/config/runtimeConfigTransition.test.ts",
     "src/platform/http/fetchTransport.test.ts",
     "src/platform/http/networkDiagnostics.test.ts",
     "src/platform/http/requestScheduler.test.ts",
@@ -25,11 +29,7 @@
     "src/platform/runtime/serviceGraph.test.ts",
     "src/platform/runtime/serviceContainer.test.ts",
     "src/platform/runtime/serviceHealth.test.ts",
-    "src/platform/runtime/serviceComposition.integration.test.ts",
-    "src/platform/config/runtimeConfig.test.ts",
-    "src/platform/config/runtimeConfigResolution.test.ts",
-    "src/platform/config/runtimeConfigGovernance.test.ts",
-    "src/platform/config/runtimeConfigTransition.test.ts"
+    "src/platform/runtime/serviceComposition.integration.test.ts"
   ],
   "exclude": [
     "node_modules",
