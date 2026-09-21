@@ -42,6 +42,14 @@ describe('adminMapRuntime', () => {
     })).toEqual(DEFAULT_ADMIN_MAP_CONFIG);
   });
 
+  test('rejects oversized basemap identifiers and uses the governed fallback', () => {
+    const config = normalizeAdminMapConfig({
+      DefaultBasemapTitle: 'x'.repeat(121),
+    });
+
+    expect(config.basemap).toBe(DEFAULT_ADMIN_MAP_CONFIG.basemap);
+  });
+
   test('returns immutable configuration objects', () => {
     const config = normalizeAdminMapConfig({ Centerx: 30, Centery: 40 });
     expect(Object.isFrozen(config)).toBe(true);
