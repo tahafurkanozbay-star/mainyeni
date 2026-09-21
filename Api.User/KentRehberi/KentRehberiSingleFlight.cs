@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -116,7 +117,7 @@ public sealed class KentRehberiSingleFlight<T> : IDisposable
         string key,
         Entry completedEntry)
     {
-        entries.TryRemove(
+        ((ICollection<KeyValuePair<string, Entry>>)entries).Remove(
             new KeyValuePair<string, Entry>(
                 key,
                 completedEntry));
@@ -133,6 +134,7 @@ public sealed class KentRehberiSingleFlight<T> : IDisposable
     private sealed class Entry : IDisposable
     {
         private readonly CancellationTokenSource workCancellation;
+        private readonly Lazy<Task<T>> taskFactory;
         private readonly Action<string, Entry> completed;
         private readonly string key;
         private int subscribers;
@@ -148,10 +150,12 @@ public sealed class KentRehberiSingleFlight<T> : IDisposable
             this.completed = completed;
             this.key = key;
             workCancellation = new CancellationTokenSource(deadline);
-            Task = ExecuteAsync(factory);
+            taskFactory = new Lazy<Task<T>>(
+                () => ExecuteAsync(factory),
+                LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
-        public Task<T> Task { get; }
+        public Task<T> Task => taskFactory.Value;
 
         public void AddSubscriber()
         {
