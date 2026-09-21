@@ -18,7 +18,8 @@ const TIER = Object.freeze({
   http: 2,
   performance: 3,
   runtime: 3,
-  bootstrap: 4,
+  governance: 4,
+  bootstrap: 5,
 });
 
 const DEFAULT_EXTERNAL_DOMAINS = Object.freeze(['core']);
@@ -206,9 +207,9 @@ export const formatPlatformBoundaryMarkdown = (report) => {
     '',
     '## Responsibility order',
     '',
-    'errors/config/network -> cache -> http -> runtime/performance -> bootstrap',
+    'errors/config/network -> cache -> http -> runtime/performance -> governance -> bootstrap',
     '',
-    'Endpoint/network policy is a pure foundation beside errors/config; transport remains in http. Lower-level modules may not import higher-level responsibilities. External application-domain imports are forbidden except the bounded bootstrap composition adapter and stable Core foundation types.',
+    'Endpoint/network policy is a pure foundation beside errors/config; transport remains in http. Governance composes runtime/performance evidence without becoming a dependency of lower-level runtime modules. Lower-level modules may not import higher-level responsibilities. External application-domain imports are forbidden except the bounded bootstrap composition adapter and stable Core foundation types.',
     '',
     '## Findings',
     '',

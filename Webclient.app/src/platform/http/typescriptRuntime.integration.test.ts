@@ -27,7 +27,7 @@ const makeRuntime = ({
   onLine = true
 } = {}) => ({
   Promise,
-  fetch: jest.fn(),
+  fetch: vi.fn(),
   AbortController,
   URL,
   URLSearchParams,
@@ -54,7 +54,7 @@ const makeTransport = (requestImpl, defaults = {}) => ({
     cacheTtlMs: 1000,
     ...defaults
   },
-  request: jest.fn(requestImpl)
+  request: vi.fn(requestImpl)
 });
 
 describe('typed runtime integration', () => {

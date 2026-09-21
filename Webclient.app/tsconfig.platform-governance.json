@@ -1,0 +1,42 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "useUnknownInCatchVariables": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true
+  },
+  "files": [
+    "src/platform/governance/contracts.ts",
+    "src/platform/governance/schemaRegistry.ts",
+    "src/platform/governance/featurePolicy.ts",
+    "src/platform/governance/manifestRegistry.ts",
+    "src/platform/governance/readinessGate.ts",
+    "src/platform/governance/governanceKernel.ts",
+    "src/platform/governance/defaultPlatformGovernance.ts",
+    "src/platform/governance/index.ts",
+    "src/platform/governance/schemaRegistry.test.ts",
+    "src/platform/governance/featurePolicy.test.ts",
+    "src/platform/governance/manifestRegistry.test.ts",
+    "src/platform/governance/readinessGate.test.ts",
+    "src/platform/governance/governanceKernel.test.ts",
+    "src/platform/governance/defaultPlatformGovernance.test.ts",
+    "src/platform/governance/platformGovernance.integration.test.ts",
+    "src/platform/governance/platformLanguageCutover.test.ts",
+    "src/platform/bootstrap/bootstrapCore.test.ts",
+    "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
+    "src/platform/http/fetchTransport.test.ts",
+    "src/platform/http/networkDiagnostics.test.ts",
+    "src/platform/http/requestScheduler.test.ts",
+    "src/platform/http/retryPolicy.test.ts",
+    "src/platform/http/runtimeCapabilities.test.ts",
+    "src/platform/http/typescriptRuntime.integration.test.ts",
+    "src/platform/performance/performanceMonitor.test.ts",
+    "src/platform/runtime/runtime.test.ts",
+    "src/platform/runtime/runtimeDiagnostics.test.ts"
+  ],
+  "include": [],
+  "exclude": []
+}

@@ -10,17 +10,17 @@ import {
 
 const createRuntime = (overrides = {}) => ({
   Promise,
-  fetch: jest.fn(),
+  fetch: vi.fn(),
   AbortController,
   URL,
   URLSearchParams,
   FormData: typeof FormData === 'undefined' ? function FormDataStub() {} : FormData,
   Blob: typeof Blob === 'undefined' ? function BlobStub() {} : Blob,
   ArrayBuffer,
-  structuredClone: jest.fn(),
-  requestIdleCallback: jest.fn(),
+  structuredClone: vi.fn(),
+  requestIdleCallback: vi.fn(),
   crypto: { subtle: {} },
-  performance: { now: jest.fn(() => 1) },
+  performance: { now: vi.fn(() => 1) },
   navigator: {
     onLine: true,
     hardwareConcurrency: 8,
