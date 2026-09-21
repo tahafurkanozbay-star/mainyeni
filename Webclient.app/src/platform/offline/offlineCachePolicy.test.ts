@@ -142,7 +142,7 @@ describe('OfflineCachePolicy', () => {
     cache.admit({ url: '/assets/b.json' }, response({ headers: { 'content-type': 'application/json' } }));
     now = 2001;
     expect(cache.prune()).toBe(2);
-    expect(cache.snapshot().entries).toBe(0);
+    expect(cache.snapshot()).toMatchObject({ entries: 0, bytes: 0, expired: 2 });
   });
 
   it('evicts least recently used entry when count budget is exceeded', () => {
@@ -156,7 +156,7 @@ describe('OfflineCachePolicy', () => {
     now += 1;
     cache.admit({ url: '/assets/c.json' }, response());
     expect(cache.entries().map(entry => entry.key)).toEqual(['GET:/assets/a.json', 'GET:/assets/c.json']);
-    expect(cache.snapshot().evicted).toBe(1);
+    expect(cache.snapshot()).toMatchObject({ entries: 2, bytes: 256, evicted: 1 });
   });
 
   it('replaces an existing key without increasing entry count', () => {
@@ -170,7 +170,9 @@ describe('OfflineCachePolicy', () => {
     const cache = policy();
     cache.admit({ url: '/assets/a.json' }, response());
     expect(cache.remove('GET:/assets/a.json')).toBe(true);
+    expect(cache.snapshot()).toMatchObject({ entries: 0, bytes: 0 });
     expect(cache.remove('GET:/assets/a.json')).toBe(false);
+    expect(cache.snapshot().bytes).toBe(0);
   });
 
   it('bounds diagnostic history', () => {
