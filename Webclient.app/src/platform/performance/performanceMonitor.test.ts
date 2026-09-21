@@ -1,32 +1,66 @@
 import { vi as jest } from 'vitest';
 import { createPerformanceMonitor, rateWebVital } from './performanceMonitor';
+import type { PerformanceMonitorDependencies, PerformanceObserverConstructorLike } from './performanceMonitor';
+
+type TestPerformanceEntry = Readonly<{
+  name?: string;
+  startTime?: number;
+  duration?: number;
+  responseStart?: number;
+  domContentLoadedEventEnd?: number;
+  loadEventEnd?: number;
+  transferSize?: number;
+  encodedBodySize?: number;
+  decodedBodySize?: number;
+  hadRecentInput?: boolean;
+  value?: number;
+  interactionId?: number;
+}>;
+
+type TestObserverList = Readonly<{ getEntries: () => readonly TestPerformanceEntry[] }>;
+type ObserverCallback = (list: TestObserverList) => void;
 
 const createObserverHarness = () => {
-  const instances = [];
+  const instances: FakePerformanceObserver[] = [];
 
   class FakePerformanceObserver {
-    constructor(callback) {
+    readonly callback: ObserverCallback;
+    options: PerformanceObserverInit | null = null;
+    readonly disconnect = jest.fn();
+
+    constructor(callback: ObserverCallback) {
       this.callback = callback;
-      this.options = null;
-      this.disconnect = jest.fn();
       instances.push(this);
     }
 
-    observe(options) {
+    observe(options: PerformanceObserverInit): void {
       this.options = options;
     }
   }
 
-  const emit = (type, entries) => {
+  const emit = (type: string, entries: readonly TestPerformanceEntry[]): void => {
     const observer = instances.find((item) => item.options?.type === type);
     if (!observer) throw new Error(`No observer for ${type}`);
     observer.callback({ getEntries: () => entries });
   };
 
-  return { FakePerformanceObserver, instances, emit };
+  return {
+    FakePerformanceObserver: FakePerformanceObserver as unknown as PerformanceObserverConstructorLike,
+    instances,
+    emit,
+  };
 };
 
-const createPerformance = () => {
+type TestPerformanceRef = NonNullable<PerformanceMonitorDependencies['performanceRef']> & {
+  memory?: {
+    usedJSHeapSize?: number;
+    totalJSHeapSize?: number;
+    jsHeapSizeLimit?: number;
+  };
+  setNow(value: number): void;
+};
+
+const createPerformance = (): TestPerformanceRef => {
   let now = 100;
   const navigation = {
     responseStart: 45,
@@ -41,8 +75,8 @@ const createPerformance = () => {
 
   return {
     now: () => now,
-    setNow: (value) => { now = value; },
-    getEntriesByType: jest.fn((type) => {
+    setNow: (value: number) => { now = value; },
+    getEntriesByType: jest.fn((type: string): readonly TestPerformanceEntry[] => {
       if (type === 'navigation') return [navigation];
       if (type === 'paint') return paint;
       if (type === 'resource') return resources;
@@ -294,14 +328,18 @@ describe('performance monitor memory and network', () => {
 
 describe('performance monitor observer resilience', () => {
   test('unsupported entry types never block startup', () => {
-    const instances = [];
+    const instances: PartialObserver[] = [];
     class PartialObserver {
-      constructor(callback) {
+      readonly callback: ObserverCallback;
+      readonly disconnect = jest.fn();
+      type: string | undefined;
+
+      constructor(callback: ObserverCallback) {
         this.callback = callback;
-        this.disconnect = jest.fn();
         instances.push(this);
       }
-      observe(options) {
+
+      observe(options: PerformanceObserverInit): void {
         if (options.type === 'event' || options.type === 'longtask') {
           throw new Error('unsupported');
         }
@@ -311,7 +349,7 @@ describe('performance monitor observer resilience', () => {
 
     const monitor = createPerformanceMonitor({
       performanceRef: createPerformance(),
-      PerformanceObserverRef: PartialObserver
+      PerformanceObserverRef: PartialObserver as unknown as PerformanceObserverConstructorLike
     });
 
     expect(() => monitor.start()).not.toThrow();
