@@ -80,7 +80,7 @@ const toResult = (
     geometry?: Geometry | null;
   }>,
 ): GisQueryResult => Object.freeze({
-  attr: Object.freeze({ ...(feature.attributes ?? {}) }),
+  attr: Object.freeze(Object.assign({}, feature.attributes)),
   geometry: feature.geometry ?? null,
 });
 
