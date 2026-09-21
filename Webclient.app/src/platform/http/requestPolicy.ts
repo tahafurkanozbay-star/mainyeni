@@ -26,6 +26,7 @@ export const SAFE_HTTP_METHODS = Object.freeze(['get', 'head'] as const);
 export const IDEMPOTENT_HTTP_METHODS = Object.freeze(['get', 'head', 'put', 'delete', 'options'] as const);
 export const BODYLESS_HTTP_METHODS = Object.freeze(['get', 'head'] as const);
 export const DEFAULT_ACCEPT_HEADER = 'application/json';
+export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 
 const FORBIDDEN_REQUEST_HEADERS = new Set([
   'authorization',
@@ -44,7 +45,8 @@ const MANAGED_REQUEST_HEADERS = new Set([
   'connection',
   'transfer-encoding',
   'origin',
-  'referer'
+  'referer',
+  'idempotency-key'
 ]);
 
 const SECRET_KEY_PATTERN = /(password|passwd|secret|token|credential|authorization|cookie|api[-_]?key|client[-_]?key)/i;
@@ -226,6 +228,96 @@ export const sanitizeRequestHeaders = (
 
   if (!hasAccept) result.Accept = DEFAULT_ACCEPT_HEADER;
   return result;
+};
+
+
+export const normalizeIdempotencyKey = (value: unknown): string | null => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') {
+    throw new AppError('Idempotency key must be a string.', {
+      code: 'INVALID_IDEMPOTENCY_KEY',
+      retryable: false
+    });
+  }
+  const normalized = value.trim();
+  if (
+    normalized.length < 8
+    || normalized.length > 128
+    || !/^[A-Za-z0-9._:-]+$/.test(normalized)
+  ) {
+    throw new AppError('Idempotency key must contain 8-128 safe ASCII characters.', {
+      code: 'INVALID_IDEMPOTENCY_KEY',
+      retryable: false
+    });
+  }
+  return normalized;
+};
+
+export const normalizeIdempotencyPolicy = (
+  value: unknown
+): 'none' | 'server-enforced' => {
+  if (value === undefined || value === null || value === '') return 'none';
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized !== 'server-enforced') {
+    throw new AppError('Idempotency policy is invalid.', {
+      code: 'INVALID_IDEMPOTENCY_POLICY',
+      retryable: false
+    });
+  }
+  return 'server-enforced';
+};
+
+export const applyIdempotencyHeader = (
+  headers: Record<string, string>,
+  idempotencyKey: string | null,
+): Record<string, string> => {
+  if (!idempotencyKey) return headers;
+  return {
+    ...headers,
+    [IDEMPOTENCY_KEY_HEADER]: idempotencyKey,
+  };
+};
+
+const assertIdempotencyContract = (
+  method: string,
+  safeMethod: boolean,
+  idempotentMethod: boolean,
+  retryUnsafe: boolean,
+  idempotencyKey: string | null,
+  idempotencyPolicy: 'none' | 'server-enforced',
+): boolean => {
+  const hasKey = idempotencyKey !== null;
+  const serverEnforced = idempotencyPolicy === 'server-enforced';
+
+  if (safeMethod && (hasKey || serverEnforced)) {
+    throw new AppError('Idempotency keys are not accepted for safe HTTP methods.', {
+      code: 'IDEMPOTENCY_NOT_ALLOWED_FOR_SAFE_METHOD',
+      retryable: false,
+      details: { method }
+    });
+  }
+  if (hasKey && !serverEnforced) {
+    throw new AppError('Idempotency key requires an explicit server-enforced policy.', {
+      code: 'IDEMPOTENCY_POLICY_REQUIRED',
+      retryable: false,
+      details: { method }
+    });
+  }
+  if (!hasKey && serverEnforced) {
+    throw new AppError('Server-enforced idempotency policy requires an idempotency key.', {
+      code: 'IDEMPOTENCY_KEY_REQUIRED',
+      retryable: false,
+      details: { method }
+    });
+  }
+  if (retryUnsafe && !idempotentMethod && (!hasKey || !serverEnforced)) {
+    throw new AppError('Unsafe retries require a server-enforced idempotency key.', {
+      code: 'UNSAFE_RETRY_REQUIRES_IDEMPOTENCY',
+      retryable: false,
+      details: { method }
+    });
+  }
+  return !idempotentMethod && hasKey && serverEnforced;
 };
 
 export const hasSensitiveRequestMetadata = (value: unknown, depth = 0): boolean => {
@@ -617,6 +709,16 @@ export const normalizeRequestConfig = (
 
   const safeMethod = isSafeMethod(method);
   const idempotentMethod = isIdempotentMethod(method);
+  const idempotencyKey = normalizeIdempotencyKey(config.idempotencyKey);
+  const idempotencyPolicy = normalizeIdempotencyPolicy(config.idempotencyPolicy);
+  const mutationProtected = assertIdempotencyContract(
+    method,
+    safeMethod,
+    idempotentMethod,
+    config.retryUnsafe === true,
+    idempotencyKey,
+    idempotencyPolicy,
+  );
   const containsSensitiveMetadata =
     hasSensitiveRequestMetadata(config.params) ||
     hasSensitiveRequestMetadata(config.data);
@@ -638,7 +740,7 @@ export const normalizeRequestConfig = (
     && safeMethod
     && retentionAllowed
     && !containsSensitiveMetadata;
-  const retryAllowed = idempotentMethod || config.retryUnsafe === true;
+  const retryAllowed = idempotentMethod || (config.retryUnsafe === true && mutationProtected);
   const cacheTtlMs = finiteClamped(
     config.cacheTtlMs ?? defaults.cacheTtlMs,
     0,
@@ -672,6 +774,9 @@ export const normalizeRequestConfig = (
     retryAllowed,
     safeMethod,
     idempotentMethod,
+    idempotencyKey,
+    idempotencyPolicy,
+    mutationProtected,
     containsSensitiveMetadata,
     cacheTtlMs,
     cacheStaleWhileRevalidateMs,
@@ -690,6 +795,9 @@ export const RequestPolicy = Object.freeze({
   isIdempotentMethod,
   methodAllowsBody,
   sanitizeRequestHeaders,
+  normalizeIdempotencyKey,
+  normalizeIdempotencyPolicy,
+  applyIdempotencyHeader,
   serializeQueryParams,
   joinApplicationUrl,
   classifyRequestBody,
