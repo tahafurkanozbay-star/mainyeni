@@ -103,19 +103,19 @@ describe("QueryInteractionRuntime", () => {
     describe("external navigation", () => {
         test("opens external links with noopener and noreferrer", () => {
             const openedWindow = { opener: {} };
-            const opener = jest.fn(() => openedWindow);
+            const opener = vi.fn(() => openedWindow);
             expect(openExternalSafely("https://example.com", opener)).toBe(true);
             expect(opener).toHaveBeenCalledWith("https://example.com", "_blank", "noopener,noreferrer");
             expect(openedWindow.opener).toBeNull();
         });
 
         test("reports blocked popups", () => {
-            const opener = jest.fn(() => null);
+            const opener = vi.fn(() => null);
             expect(openExternalSafely("https://example.com", opener)).toBe(false);
         });
 
         test("does not call opener for an empty URL", () => {
-            const opener = jest.fn();
+            const opener = vi.fn();
             expect(openExternalSafely(null, opener)).toBe(false);
             expect(opener).not.toHaveBeenCalled();
         });
@@ -134,18 +134,18 @@ describe("QueryInteractionRuntime", () => {
         });
 
         test("safeClientLog resolves true for successful log calls", async () => {
-            const logger = { CreateClientLog: jest.fn(() => Promise.resolve()) };
+            const logger = { CreateClientLog: vi.fn(() => Promise.resolve()) };
             await expect(safeClientLog(logger, "event", "payload")).resolves.toBe(true);
             expect(logger.CreateClientLog).toHaveBeenCalledWith("event", "payload");
         });
 
         test("safeClientLog absorbs rejected logging requests", async () => {
-            const logger = { CreateClientLog: jest.fn(() => Promise.reject(new Error("offline"))) };
+            const logger = { CreateClientLog: vi.fn(() => Promise.reject(new Error("offline"))) };
             await expect(safeClientLog(logger, "event", "payload")).resolves.toBe(false);
         });
 
         test("safeClientLog absorbs synchronous logger failures", async () => {
-            const logger = { CreateClientLog: jest.fn(() => { throw new Error("bad logger"); }) };
+            const logger = { CreateClientLog: vi.fn(() => { throw new Error("bad logger"); }) };
             await expect(safeClientLog(logger, "event", "payload")).resolves.toBe(false);
         });
     });
@@ -171,7 +171,7 @@ describe("QueryInteractionRuntime", () => {
 
     describe("owned resource registry", () => {
         test("tracks and removes layers independently", () => {
-            const removeLayer = jest.fn();
+            const removeLayer = vi.fn();
             const registry = createOwnedResourceRegistry({ removeLayer });
             const first = { id: "a" };
             const second = { id: "b" };
@@ -184,7 +184,7 @@ describe("QueryInteractionRuntime", () => {
         });
 
         test("tracks and removes graphics independently", () => {
-            const removeGraphic = jest.fn();
+            const removeGraphic = vi.fn();
             const registry = createOwnedResourceRegistry({ removeGraphic });
             const graphic = { id: "graphic" };
             registry.trackGraphic(graphic);
@@ -194,8 +194,8 @@ describe("QueryInteractionRuntime", () => {
         });
 
         test("clear removes every tracked resource once", () => {
-            const removeLayer = jest.fn();
-            const removeGraphic = jest.fn();
+            const removeLayer = vi.fn();
+            const removeGraphic = vi.fn();
             const registry = createOwnedResourceRegistry({ removeLayer, removeGraphic });
             const layer = { id: "layer" };
             const graphic = { id: "graphic" };
@@ -208,7 +208,7 @@ describe("QueryInteractionRuntime", () => {
         });
 
         test("clear is idempotent", () => {
-            const removeLayer = jest.fn();
+            const removeLayer = vi.fn();
             const registry = createOwnedResourceRegistry({ removeLayer });
             registry.trackLayer({ id: "layer" });
             registry.clear();
@@ -217,7 +217,7 @@ describe("QueryInteractionRuntime", () => {
         });
 
         test("cleanup failures do not prevent the remaining resources from being cleared", () => {
-            const removeLayer = jest.fn(layer => {
+            const removeLayer = vi.fn(layer => {
                 if (layer.id === "bad") throw new Error("cannot remove");
             });
             const registry = createOwnedResourceRegistry({ removeLayer });
@@ -263,7 +263,7 @@ describe("QueryInteractionRuntime", () => {
         });
 
         test("requests a bounded and cache-friendly geolocation lookup", async () => {
-            const getCurrentPosition = jest.fn(callback => callback({
+            const getCurrentPosition = vi.fn(callback => callback({
                 coords: { latitude: 39.93, longitude: 32.85 }
             }));
             await createGeolocationRequest({ geolocation: { getCurrentPosition }, timeout: 4321 });

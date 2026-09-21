@@ -110,7 +110,7 @@ describe('modernGisKernel', () => {
   test('executes a planned query through the shared request scheduler', async () => {
     const kernel = createKernel();
     registerPlaces(kernel);
-    const execute = jest.fn(async (request, context) => ({
+    const execute = vi.fn(async (request, context) => ({
       features: [{ attributes: { OBJECTID: 1, NAME: 'A', TYPE: 'park' } }],
       request,
       serviceId: context.serviceId,
@@ -135,7 +135,7 @@ describe('modernGisKernel', () => {
     registerPlaces(kernel);
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
-    const execute = jest.fn(async () => {
+    const execute = vi.fn(async () => {
       await gate;
       return { features: [{ attributes: { OBJECTID: 7, NAME: 'Shared' } }] };
     });
@@ -159,7 +159,7 @@ describe('modernGisKernel', () => {
   test('serves repeated successful requests from the bounded scheduler cache', async () => {
     const kernel = createKernel();
     registerPlaces(kernel);
-    const execute = jest.fn(async () => ({ features: [{ attributes: { OBJECTID: 1 } }] }));
+    const execute = vi.fn(async () => ({ features: [{ attributes: { OBJECTID: 1 } }] }));
     const input = {
       serviceId: 'places',
       layerId: 'places-layer',
@@ -177,7 +177,7 @@ describe('modernGisKernel', () => {
   test('layer cache invalidation removes layer-tagged query entries', async () => {
     const kernel = createKernel();
     registerPlaces(kernel);
-    const execute = jest.fn(async () => ({ features: [] }));
+    const execute = vi.fn(async () => ({ features: [] }));
     await kernel.executeQuery({
       serviceId: 'places',
       layerId: 'places-layer',
