@@ -11,8 +11,10 @@ import {
 import type { ConnectionLike, NavigatorLike, RuntimeLike } from './runtimeCapabilities';
 
 type TestConnection = ConnectionLike & Record<string, unknown>;
-type TestNavigator = NavigatorLike & Record<string, unknown> & {
-  connection: TestConnection;
+type TestNavigator = Omit<NavigatorLike, 'connection' | 'mozConnection' | 'webkitConnection'> & Record<string, unknown> & {
+  connection?: TestConnection | undefined;
+  mozConnection?: TestConnection | undefined;
+  webkitConnection?: TestConnection | undefined;
   userAgent?: string;
   language?: string;
   platform?: string;
