@@ -93,6 +93,9 @@ jobs:
       - name: Vite migration contract
         run: npm run quality:vite --if-present
 
+      - name: GIS query governance contract
+        run: npm run quality:gis-query-governance
+
       - name: Full lint visibility
         run: npm run lint --if-present
 
@@ -112,7 +115,7 @@ jobs:
               Webclient.app/vite.config.ts \
               Webclient.app/vitest.config.ts \
             | sed 's#^Webclient.app/##' \
-            | grep -E '\.(cjs|mjs|js|jsx|ts|tsx)$' || true
+            | awk '/\.(cjs|mjs|js|jsx|ts|tsx)$/'
           )
           if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No changed Webclient lint targets."
@@ -139,7 +142,7 @@ jobs:
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/typecheck-baseline
           git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
-          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1 || true' EXIT
+          trap 'git -C .. worktree remove --force /tmp/typecheck-baseline >/dev/null 2>&1' EXIT
           set +e
           (
             cd /tmp/typecheck-baseline/Webclient.app

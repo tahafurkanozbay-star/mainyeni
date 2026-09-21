@@ -26,6 +26,11 @@ import { createGisMapStatePersistenceRuntime } from './mapStatePersistenceRuntim
 import { createGisExportRuntime } from './exportPlanRuntime';
 import { createViewportQueryExecutionRuntime } from './viewportQueryExecutionRuntime';
 import {
+  createSpatialQueryControlPlane,
+  deriveSpatialLayerNumericId,
+  SpatialQueryControlPlaneError,
+} from './spatialQueryControlPlane';
+import {
   createDeterministicFingerprint,
   finiteNumber,
   normalizeIdentifier,
@@ -54,6 +59,7 @@ export interface ModernGisKernelConfiguration {
   readonly mapState?: ReturnType<typeof createGisMapStatePersistenceRuntime>;
   readonly exports?: ReturnType<typeof createGisExportRuntime>;
   readonly viewportQueries?: ReturnType<typeof createViewportQueryExecutionRuntime>;
+  readonly queryControlPlane?: ReturnType<typeof createSpatialQueryControlPlane>;
   readonly lifecycleAdapters?: Record<string, unknown>;
   readonly schedulerOptions?: Record<string, unknown>;
   readonly layerBudget?: {
@@ -167,9 +173,13 @@ const errorCode = (error: unknown): string | null => {
 };
 
 const isAbortError = (error: unknown): boolean => (
-  Boolean(error)
-  && typeof error === 'object'
-  && String((error as Record<string, unknown>).name || '') === 'AbortError'
+  error instanceof SpatialQueryControlPlaneError
+    ? error.code === 'CANCELLED' || error.code === 'DISPOSED'
+    : (
+      Boolean(error)
+      && typeof error === 'object'
+      && String((error as Record<string, unknown>).name || '') === 'AbortError'
+    )
 );
 
 const isTimeoutError = (error: unknown): boolean => {
@@ -184,6 +194,32 @@ const uniqueTags = (values: readonly unknown[] = []): string[] => [...new Set(
     .filter((value) => value !== null && value !== undefined && String(value).trim())
     .map((value) => String(value).trim()),
 )];
+
+const queryControlPriority = (
+  value: number | string | null | undefined,
+): 'interactive' | 'foreground' | 'background' => {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (
+    normalized === 'interactive'
+    || normalized === 'critical'
+    || normalized === 'high'
+  ) return 'interactive';
+  if (
+    normalized === 'background'
+    || normalized === 'prefetch'
+    || normalized === 'idle'
+    || normalized === 'low'
+  ) return 'background';
+  return 'foreground';
+};
+
+const publicQueryError = (error: unknown): unknown => (
+  error instanceof SpatialQueryControlPlaneError
+  && error.code === 'OPERATION_FAILED'
+  && error.causeValue !== undefined
+    ? error.causeValue
+    : error
+);
 
 export const createModernGisKernel = (configuration: ModernGisKernelConfiguration = {}) => {
   const clock = typeof configuration.now === 'function' ? configuration.now : () => Date.now();
@@ -246,6 +282,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
   const mapState = configuration.mapState || createGisMapStatePersistenceRuntime({ now: clock });
   const exports = configuration.exports || createGisExportRuntime();
   const viewportQueries = configuration.viewportQueries || createViewportQueryExecutionRuntime({ now: clock });
+  const queryControlPlane = configuration.queryControlPlane || createSpatialQueryControlPlane({}, clock);
   const lifecycle = configuration.lifecycle || createLayerLifecycleRuntime({
     ...configuration.lifecycleAdapters,
     now: clock,
@@ -273,6 +310,8 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     if (!layer) throw new Error(`GIS layer is not registered in the modern GIS kernel: ${id}`);
     return layer;
   };
+
+  const serviceIdForLayer = (layer: LayerEntry): string => layer.serviceId;
 
   const propagateBudget = (budget: GisRenderBudget, reason: string): void => {
     scheduler.configure?.({
@@ -365,6 +404,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     if (dependentLayers.length) {
       throw new Error(`Cannot unregister service ${service.id}; ${dependentLayers.length} layer(s) still depend on it.`);
     }
+    queryControlPlane.invalidateService(service.id, 'kernel-service-unregister');
     scheduler.invalidateTag?.(`service:${service.id}`);
     const removed = services.delete(service.id);
     if (removed) serviceHealth.unregisterService(service.id);
@@ -422,6 +462,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
   const unregisterLayer = async (layerId: unknown): Promise<boolean> => {
     assertActive();
     const layer = requireLayer(layerId);
+    queryControlPlane.invalidateLayer(serviceIdForLayer(layer), deriveSpatialLayerNumericId(layer.id), 'kernel-layer-unregister');
     scheduler.invalidateTag?.(`layer:${layer.id}`);
     await lifecycle.dispose?.(layer.id, { reason: 'kernel-unregister' });
     const removed = layers.delete(layer.id);
@@ -500,7 +541,20 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     });
     metrics.queriesExecuted += 1;
     try {
-      const value = await scheduler.schedule({
+      const governedQuery = await queryControlPlane.execute<T>({
+        ownerId: 'modern-gis-kernel',
+        serviceId: service.id,
+        layerId: layer ? deriveSpatialLayerNumericId(layer.id) : 0,
+        operation: 'arcgis-query',
+        priority: queryControlPriority(context.priority),
+        estimatedFeatures: Math.max(0, Number(plan.pageSize || 0)),
+        estimatedBytes: context.estimatedBytes == null ? 0 : context.estimatedBytes,
+        estimatedCpuMs: 0,
+        estimatedGpuBytes: 0,
+        key: Object.freeze({ extra: Object.freeze({ requestKey }) }),
+        cache: Object.freeze({ bypassCache: true }),
+        ...(context.signal == null ? {} : { signal: context.signal }),
+        execute: async ({ signal: governedSignal }) => scheduler.schedule({
         key: requestKey,
         resourceUrl: service.url,
         ...(context.priority === undefined ? {} : { priority: context.priority }),
@@ -514,7 +568,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
         ...(context.estimatedBytes === undefined
           ? {}
           : { estimatedBytes: context.estimatedBytes }),
-        ...(context.signal === undefined ? {} : { signal: context.signal }),
+        signal: governedSignal,
         tags: uniqueTags([
           ...(context.tags || []),
           `service:${service.id}`,
@@ -555,7 +609,9 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
             throw error;
           }
         },
-      }) as T;
+      }) as Promise<T>,
+      });
+      const value = governedQuery.value;
       trace.complete({
         ok: true,
         fields: {
@@ -571,20 +627,26 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
         fromScheduler: true as const,
       });
     } catch (error) {
+      const publicError = publicQueryError(error);
       if (isAbortError(error)) metrics.queryCancellations += 1;
       else metrics.queryFailures += 1;
       trace.complete({
         ok: false,
         cancelled: isAbortError(error),
-        errorCode: errorCode(error),
+        errorCode: errorCode(publicError),
       });
-      throw error;
+      throw publicError;
     }
   };
 
   const invalidateLayer = (layerId: unknown): Readonly<{ queryCache: number }> => {
     assertActive();
     const layer = requireLayer(layerId);
+    const governed = queryControlPlane.invalidateLayer(
+      layer.serviceId,
+      deriveSpatialLayerNumericId(layer.id),
+      'kernel-layer-cache-invalidation',
+    );
     const queryCache = Number(scheduler.invalidateTag?.(`layer:${layer.id}`) || 0);
     metrics.cacheInvalidations += queryCache;
     observability.record({
@@ -592,7 +654,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
       severity: 'debug',
       serviceId: layer.serviceId,
       layerId: layer.id,
-      fields: { queryCache },
+      fields: { queryCache, governedAborts: governed.aborted, governedCacheEntries: governed.cacheEntries },
     });
     return Object.freeze({ queryCache });
   };
@@ -736,11 +798,13 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     render: renderGovernor.getSnapshot(),
     streaming: streamingPlanner.getMetrics(),
     viewportQueries: viewportQueries.snapshot(),
+    queryControlPlane: queryControlPlane.snapshot(),
   });
 
   const destroy = async (): Promise<void> => {
     if (destroyed) return;
     destroyed = true;
+    queryControlPlane.dispose('modern-gis-kernel-destroyed');
     scheduler.destroy?.('Modern GIS kernel destroyed');
     await lifecycle.destroy?.();
     serviceHealth.destroy();
@@ -779,6 +843,7 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
     mapState,
     exports,
     viewportQueries,
+    queryControlPlane,
     getService: (serviceId: unknown) => requireService(serviceId),
     getLayer: (layerId: unknown) => requireLayer(layerId).descriptor,
     destroy,
