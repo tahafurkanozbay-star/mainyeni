@@ -377,7 +377,7 @@ public sealed class KentRehberiResultIntegrityGuardTests
             options =>
             {
                 options.MaxGeometryNodesPerFeature = 1000;
-                options.MaxGeometryNodesPerResponse = 10;
+                options.MaxGeometryNodesPerResponse = 9;
             });
 
         var collection =
@@ -389,6 +389,29 @@ public sealed class KentRehberiResultIntegrityGuardTests
             () =>
                 guard.ValidateCollection(
                     collection));
+    }
+
+    [Fact]
+    public void NonFiniteGeometryCoordinate_IsRejected()
+    {
+        var geometry =
+            new JsonObject
+            {
+                ["type"] = "Point",
+                ["coordinates"] =
+                    new JsonArray(
+                        JsonValue.Create(double.NaN),
+                        JsonValue.Create(39.92))
+            };
+
+        var feature =
+            KentRehberiRuntimeTestData.Feature(
+                geometry: geometry);
+
+        Assert.Throws<KentRehberiDataIntegrityException>(
+            () =>
+                CreateGuard().ValidateFeature(
+                    feature));
     }
 
     [Fact]
