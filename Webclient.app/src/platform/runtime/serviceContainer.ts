@@ -876,15 +876,11 @@ class BoundedServiceContainer implements ServiceContainer {
           await this.#ensureStarted(dependencyId, nextStack);
         } catch (error) {
           this.#counters.optionalDependencyFailures += 1;
-          const diagnosticError = error instanceof ServiceContainerError
-            && error.reason !== undefined
-            ? error.reason
-            : error;
           this.#emit(
             'optional-dependency-failed',
             id,
             errorCode(error, 'DEPENDENCY_UNAVAILABLE'),
-            safeErrorName(diagnosticError),
+            safeErrorName(error),
             undefined,
             dependencyId,
           );
