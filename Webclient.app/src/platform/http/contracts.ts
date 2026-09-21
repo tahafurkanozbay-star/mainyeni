@@ -206,6 +206,8 @@ export interface Transport<TData = unknown> {
   delete: (url: string, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
 }
 
+export type RequestTransport<TData = unknown> = Pick<Transport<TData>, 'defaults' | 'request'>;
+
 export interface DiagnosticEvent {
   readonly id: number;
   readonly name: string;
