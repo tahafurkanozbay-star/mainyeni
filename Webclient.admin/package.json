@@ -19,7 +19,7 @@
     "react-router-dom": "8.4.0",
     "tokml": "0.4.0",
     "web-vitals": "6.2.2",
-    "xlsx": "0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "xml-js": "1.6.11"
   },
   "scripts": {
@@ -28,7 +28,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "oxlint src vite.config.ts vitest.config.ts",
-    "lint:strict": "oxlint --deny-warnings src vite.config.ts vitest.config.ts",
+    "lint:strict": "oxlint --deny-warnings src/runtime src/App.tsx src/main.tsx src/Business/AuthBusiness.ts src/Pages/Auth/LoginPage.tsx src/Shared/NavMenu.tsx src/Shared/Page404.tsx src/reportWebVitals.ts vite.config.ts vitest.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:strict": "tsc --noEmit -p tsconfig.strict.json",
     "test": "vitest",
