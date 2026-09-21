@@ -168,10 +168,10 @@ export class AdminRequestCoordinator {
         operation,
         resolve,
         reject,
-        signal: options.signal,
         queuedAt: this.now(),
         queueTimer: null,
         abortHandler: null,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
       };
       this.scheduledCount += 1;
 
