@@ -202,29 +202,30 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
 
     try {
       const value = await operation(controls);
-      lease.complete();
-      this.#completedExecutions += 1;
-      this.#emit({
-        kind: 'completed',
-        method: config.method,
-        owner,
-        route: config.url,
-      });
-      return value;
-    } catch (error) {
-      if (isCancellation(error, signal)) {
-        lease.cancel(error);
-        this.#cancelledExecutions += 1;
+      if (lease.complete()) {
+        this.#completedExecutions += 1;
         this.#emit({
-          kind: 'cancelled',
+          kind: 'completed',
           method: config.method,
           owner,
           route: config.url,
-          ...(safeErrorCode(error) ? { errorCode: safeErrorCode(error) } : {}),
-          ...(safeErrorName(error) ? { errorName: safeErrorName(error) } : {}),
         });
-      } else {
-        lease.fail(error);
+      }
+      return value;
+    } catch (error) {
+      if (isCancellation(error, signal)) {
+        if (lease.cancel(error)) {
+          this.#cancelledExecutions += 1;
+          this.#emit({
+            kind: 'cancelled',
+            method: config.method,
+            owner,
+            route: config.url,
+            ...(safeErrorCode(error) ? { errorCode: safeErrorCode(error) } : {}),
+            ...(safeErrorName(error) ? { errorName: safeErrorName(error) } : {}),
+          });
+        }
+      } else if (lease.fail(error)) {
         this.#failedExecutions += 1;
         this.#emit({
           kind: 'failed',
