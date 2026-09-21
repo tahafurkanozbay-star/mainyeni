@@ -1,9 +1,9 @@
 {
-  "maxInitialJavaScriptBytes": 450000,
-  "maxInitialJavaScriptGzipBytes": 150000,
-  "maxLargestInitialJavaScriptBytes": 430000,
-  "maxInitialCssBytes": 270000,
-  "maxInitialCssGzipBytes": 38000,
+  "maxInitialJavaScriptBytes": 260000,
+  "maxInitialJavaScriptGzipBytes": 82000,
+  "maxLargestInitialJavaScriptBytes": 255000,
+  "maxInitialCssBytes": 245000,
+  "maxInitialCssGzipBytes": 34000,
   "minDynamicImports": 8,
   "forbiddenInitialSources": [
     "src/Pages/MapSettings/MapSettingsPage.tsx",
@@ -17,5 +17,7 @@
     "src/Business/AuthBusiness.ts",
     "src/Shared/NavMenu.tsx",
     "src/Pages/Home/HomePage.tsx"
-  ]
+  ],
+  "maxInitialJavaScriptFiles": 3,
+  "maxStaticGraphModules": 4
 }
