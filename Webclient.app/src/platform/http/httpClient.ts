@@ -203,6 +203,12 @@ export const getApiClientDiagnosticSummary = () =>
 export const getApiClientSchedulerSnapshot = () =>
   apiClient.getSchedulerSnapshot();
 
+export const getApiClientMutationSafetySnapshot = () =>
+  apiClient.getMutationSafetySnapshot();
+
+export const getApiClientMutationSafetyHealth = () =>
+  apiClient.getMutationSafetyHealth();
+
 export const getApiClientRuntimeSupport = () =>
   apiClient.getRuntimeSupportSummary();
 

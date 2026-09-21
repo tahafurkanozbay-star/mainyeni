@@ -90,7 +90,11 @@ test('Platform test TypeScript project is strict and rejects JavaScript admissio
       "src/platform/http/typescriptRuntime.integration.test.ts",
       "src/platform/performance/performanceMonitor.test.ts",
       "src/platform/runtime/runtime.test.ts",
-      "src/platform/runtime/runtimeDiagnostics.test.ts"
+      "src/platform/runtime/runtimeDiagnostics.test.ts",
+      "src/platform/runtime/serviceGraph.test.ts",
+      "src/platform/runtime/serviceContainer.test.ts",
+      "src/platform/runtime/serviceHealth.test.ts",
+      "src/platform/runtime/serviceComposition.integration.test.ts"
   ]);
 });
 
