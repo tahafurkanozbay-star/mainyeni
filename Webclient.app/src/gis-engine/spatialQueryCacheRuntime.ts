@@ -91,6 +91,13 @@ const abortError = (reason: unknown): Error => {
   return error;
 };
 
+const executionResult = <T>(
+  value: T,
+  source: SpatialQueryExecution<T>['source'],
+  cacheKey: string,
+  sharedRequest: boolean,
+): SpatialQueryExecution<T> => Object.freeze({ value, source, cacheKey, sharedRequest });
+
 export const createSpatialQueryCacheRuntime = (
   policyInput: Partial<SpatialQueryCacheRuntimePolicy> = {},
 ): Readonly<{
@@ -145,18 +152,18 @@ export const createSpatialQueryCacheRuntime = (
       bypasses += 1;
       const value = await operation({ key: cacheKey, cacheKey, signal: options.signal ?? new AbortController().signal });
       operationServed += 1;
-      return Object.freeze({ value, source: 'operation', cacheKey, sharedRequest: false });
+      return executionResult(value, 'operation', cacheKey, false);
     }
 
     if (!options.refresh) {
-      const cached = cache.get(cacheKey, { allowStale: options.allowStale });
+      const cached = cache.get(cacheKey, options.allowStale === undefined ? {} : { allowStale: options.allowStale });
       if (cached.status === 'hit') {
         cacheServed += 1;
-        return Object.freeze({ value: cached.value as T, source: 'cache', cacheKey, sharedRequest: false });
+        return executionResult(cached.value as T, 'cache', cacheKey, false);
       }
       if (cached.status === 'stale') {
         staleServed += 1;
-        return Object.freeze({ value: cached.value as T, source: 'stale-cache', cacheKey, sharedRequest: false });
+        return executionResult(cached.value as T, 'stale-cache', cacheKey, false);
       }
     } else {
       refreshes += 1;
@@ -168,15 +175,18 @@ export const createSpatialQueryCacheRuntime = (
       const result = await operation({ ...context, cacheKey });
       if (!context.signal.aborted) {
         cache.put(cacheKey, result, {
-          ttlMs: options.ttlMs,
-          estimatedBytes: options.estimatedBytes,
-          tags: options.tags,
+          ...(options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs }),
+          ...(options.estimatedBytes === undefined ? {} : { estimatedBytes: options.estimatedBytes }),
+          ...(options.tags === undefined ? {} : { tags: options.tags }),
         });
       }
       return result;
-    }, { priority: options.priority, signal: options.signal });
+    }, {
+      ...(options.priority === undefined ? {} : { priority: options.priority }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
     operationServed += 1;
-    return Object.freeze({ value, source: 'operation', cacheKey, sharedRequest: !operationInvoked });
+    return executionResult(value, 'operation', cacheKey, !operationInvoked);
   };
 
   const lookup = <T>(keyInput: SpatialCacheKeyInput, allowStale = false): SpatialCacheLookup<T> => {
@@ -208,7 +218,7 @@ export const createSpatialQueryCacheRuntime = (
 
   const sweepExpired = (now?: number): number => {
     assertActive();
-    return cache.sweepExpired(now);
+    return now === undefined ? cache.sweepExpired() : cache.sweepExpired(now);
   };
 
   const snapshot = (): SpatialQueryCacheRuntimeSnapshot => Object.freeze({
