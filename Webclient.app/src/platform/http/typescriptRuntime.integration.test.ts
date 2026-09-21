@@ -1,33 +1,53 @@
+import { vi as jest } from 'vitest';
 import { createApiClient } from './httpClient';
 import { createRequestCoordinator } from './requestCoordinator';
 import { createRequestScheduler } from './requestScheduler';
 import { createRuntimeCapabilityReport, createRuntimeTuningProfile } from './runtimeCapabilities';
+import type { RawRequestConfig, RequestTransport, RuntimeDefaults, TransportResult } from './contracts';
 
-const deferred = () => {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
+const deferred = <T = void>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
   return { promise, resolve, reject };
 };
 
-const flush = async () => {
+const flush = async (): Promise<void> => {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
 };
+
+interface TestRuntimeOptions {
+  saveData?: boolean;
+  effectiveType?: string;
+  hardwareConcurrency?: number;
+  deviceMemory?: number;
+  onLine?: boolean;
+}
+
+interface TestRuntime extends Record<string, unknown> {
+  navigator: Record<string, unknown> & {
+    onLine: boolean;
+    hardwareConcurrency: number;
+    deviceMemory: number;
+    connection: Record<string, unknown>;
+    userAgent?: string;
+  };
+}
 
 const makeRuntime = ({
   saveData = false,
   effectiveType = '4g',
   hardwareConcurrency = 8,
   deviceMemory = 8,
-  onLine = true
-} = {}) => ({
+  onLine = true,
+}: TestRuntimeOptions = {}): TestRuntime => ({
   Promise,
-  fetch: vi.fn(),
+  fetch: jest.fn(),
   AbortController,
   URL,
   URLSearchParams,
@@ -42,19 +62,24 @@ const makeRuntime = ({
       saveData,
       effectiveType,
       downlink: effectiveType === '4g' ? 12 : 2,
-      rtt: effectiveType === '4g' ? 50 : 450
-    }
-  }
+      rtt: effectiveType === '4g' ? 50 : 450,
+    },
+  },
 });
 
-const makeTransport = (requestImpl, defaults = {}) => ({
+type TestAttemptConfig = RawRequestConfig & { readonly attempt?: number };
+
+const makeTransport = (
+  requestImpl: (config: TestAttemptConfig) => Promise<TransportResult> | TransportResult,
+  defaults: RuntimeDefaults = {},
+): RequestTransport => ({
   defaults: {
     timeoutMs: 15000,
     maxRetries: 0,
     cacheTtlMs: 1000,
-    ...defaults
+    ...defaults,
   },
-  request: vi.fn(requestImpl)
+  request: jest.fn((config) => requestImpl(config as TestAttemptConfig)),
 });
 
 describe('typed runtime integration', () => {
@@ -67,8 +92,11 @@ describe('typed runtime integration', () => {
     const transport = makeTransport(async (config) => {
       active += 1;
       peak = Math.max(peak, active);
-      const index = Number(config.params.index);
-      await gates[index].promise;
+      const params = config.params && !(config.params instanceof URLSearchParams) ? config.params as Record<string, unknown> : {};
+      const index = Number(params.index);
+      const gate = gates[index];
+      if (!gate) throw new RangeError(`missing request gate ${index}`);
+      await gate.promise;
       active -= 1;
       return { data: index, status: 200, metadata: {} };
     });
@@ -91,11 +119,11 @@ describe('typed runtime integration', () => {
     expect(transport.request).toHaveBeenCalledTimes(2);
     expect(coordinator.getSchedulerSnapshot()).toMatchObject({ running: 2, queued: 1 });
 
-    gates[0].resolve();
+    gates[0]?.resolve();
     await flush();
     expect(transport.request).toHaveBeenCalledTimes(3);
-    gates[1].resolve();
-    gates[2].resolve();
+    gates[1]?.resolve();
+    gates[2]?.resolve();
 
     await Promise.all(requests);
     expect(peak).toBe(2);
@@ -103,13 +131,13 @@ describe('typed runtime integration', () => {
 
   test('retry delay does not retain scheduler execution slot', async () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 1 });
-    const retryWait = deferred();
-    const secondGate = deferred();
-    const calls = [];
+    const retryWait = deferred<void>();
+    const secondGate = deferred<void>();
+    const calls: string[] = [];
 
     const transport = makeTransport(async (config) => {
-      calls.push(`${config.url}:${config.attempt}`);
-      if (config.url === '/first' && config.attempt === 0) {
+      calls.push(`${config.url}:${config.attempt ?? 0}`);
+      if (config.url === '/first' && (config.attempt ?? 0) === 0) {
         throw Object.assign(new Error('temporary'), {
           code: 'NETWORK_ERROR',
           retryable: true
@@ -138,16 +166,16 @@ describe('typed runtime integration', () => {
     expect(calls).toContain('/second:0');
     expect(scheduler.getRunningCount()).toBe(1);
 
-    secondGate.resolve();
+    secondGate.resolve(undefined);
     await second;
-    retryWait.resolve();
+    retryWait.resolve(undefined);
     await first;
     expect(calls).toEqual(['/first:0', '/second:0', '/first:1']);
   });
 
   test('queued AbortSignal cancels before transport invocation', async () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 1 });
-    const gate = deferred();
+    const gate = deferred<void>();
     const controller = new AbortController();
 
     const transport = makeTransport(async (config) => {
@@ -169,12 +197,12 @@ describe('typed runtime integration', () => {
     await expect(queued).rejects.toMatchObject({ code: 'ABORTED' });
     expect(transport.request).toHaveBeenCalledTimes(1);
 
-    gate.resolve();
+    gate.resolve(undefined);
     await blocker;
   });
 
   test('explicit priority is passed to scheduler events', async () => {
-    const events = [];
+    const events: Array<{ name: string; metadata: Readonly<Record<string, unknown>> }> = [];
     const scheduler = createRequestScheduler({
       onEvent: (name, metadata) => events.push({ name, metadata })
     });
@@ -215,7 +243,7 @@ describe('typed runtime integration', () => {
     expect(transport.request).toHaveBeenCalledTimes(1);
     expect(coordinator.getInFlightSize()).toBe(1);
 
-    gate.resolve();
+    gate.resolve(undefined);
     const [a, b] = await Promise.all([first, second]);
     expect(a.data).toEqual({ value: 1 });
     expect(b.data).toEqual({ value: 1 });

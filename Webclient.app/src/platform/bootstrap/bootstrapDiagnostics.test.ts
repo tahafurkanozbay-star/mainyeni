@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import {
   BootstrapDiagnostics,
   createBootstrapDiagnosticBridge,
@@ -7,11 +8,12 @@ import {
   summarizeBootstrapDiagnostics
 } from './bootstrapDiagnostics';
 
-const createClock = (values) => {
+const createClock = (values: readonly number[]) => {
   const queue = [...values];
-  let last = queue.length ? queue[0] : 0;
-  return vi.fn(() => {
-    if (queue.length) last = queue.shift();
+  let last = queue[0] ?? 0;
+  return jest.fn(() => {
+    const next = queue.shift();
+    if (next !== undefined) last = next;
     return last;
   });
 };
@@ -37,6 +39,8 @@ describe('sanitizeDiagnosticValue', () => {
   test('truncates oversized strings', () => {
     const value = 'x'.repeat(400);
     const sanitized = sanitizeDiagnosticValue('message', value);
+    expect(typeof sanitized).toBe('string');
+    if (typeof sanitized !== 'string') throw new TypeError('expected sanitized diagnostic text');
     expect(sanitized.length).toBeLessThanOrEqual(160);
     expect(sanitized.endsWith('…')).toBe(true);
   });
@@ -130,7 +134,9 @@ describe('sanitizeDiagnosticValue', () => {
         }
       }
     };
-    expect(sanitizeDiagnosticValue('metadata', value).a.b.c.d).toBe('[max-depth]');
+    expect(sanitizeDiagnosticValue('metadata', value)).toMatchObject({
+      a: { b: { c: { d: '[max-depth]' } } },
+    });
   });
 });
 
@@ -145,7 +151,7 @@ describe('sanitizeDiagnosticMetadata', () => {
   });
 
   test('keeps only the first bounded set of keys', () => {
-    const metadata = {};
+    const metadata: Record<string, number> = {};
     for (let index = 0; index < 40; index += 1) {
       metadata[`key${index}`] = index;
     }
@@ -245,8 +251,8 @@ describe('BootstrapDiagnostics', () => {
 
     const snapshot = diagnostics.snapshot();
     expect(snapshot).toHaveLength(10);
-    expect(snapshot[0].metadata.index).toBe(8);
-    expect(snapshot[9].metadata.index).toBe(17);
+    expect(snapshot.at(0)?.metadata.index).toBe(8);
+    expect(snapshot.at(9)?.metadata.index).toBe(17);
   });
 
   test('clamps very small capacities to ten events', () => {
@@ -295,8 +301,10 @@ describe('BootstrapDiagnostics', () => {
     diagnostics.record('a', { value: 1 });
     const snapshot = diagnostics.snapshot();
     expect(Object.isFrozen(snapshot)).toBe(true);
-    expect(Object.isFrozen(snapshot[0])).toBe(true);
-    expect(Object.isFrozen(snapshot[0].metadata)).toBe(true);
+    const first = snapshot.at(0);
+    expect(first).toBeDefined();
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first?.metadata)).toBe(true);
   });
 
   test('summary reports retained and dropped event counts', () => {
@@ -365,7 +373,7 @@ describe('createBootstrapDiagnosticBridge', () => {
 
   test('invokes an optional observer with the sanitized event', () => {
     const diagnostics = createBootstrapDiagnostics();
-    const observer = vi.fn();
+    const observer = jest.fn();
     const bridge = createBootstrapDiagnosticBridge(diagnostics, observer);
     bridge.record('request', { password: 'secret', count: 2 });
 
@@ -379,7 +387,7 @@ describe('createBootstrapDiagnosticBridge', () => {
   });
 
   test('rejects a collector without record capability', () => {
-    expect(() => createBootstrapDiagnosticBridge({})).toThrow(TypeError);
+    expect(() => createBootstrapDiagnosticBridge({} as never)).toThrow(TypeError);
   });
 });
 

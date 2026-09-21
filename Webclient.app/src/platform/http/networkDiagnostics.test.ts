@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import {
   DURATION_BUCKETS,
   NetworkDiagnostics,
@@ -10,11 +11,12 @@ import {
   sanitizeNetworkDiagnosticValue
 } from './networkDiagnostics';
 
-const createClock = (values) => {
+const createClock = (values: readonly number[]) => {
   const queue = [...values];
-  let last = queue.length ? queue[0] : 0;
-  return vi.fn(() => {
-    if (queue.length) last = queue.shift();
+  let last = queue[0] ?? 0;
+  return jest.fn(() => {
+    const next = queue.shift();
+    if (next !== undefined) last = next;
     return last;
   });
 };
@@ -43,6 +45,8 @@ describe('networkDiagnostics value redaction', () => {
 
   test('truncates long ordinary strings', () => {
     const result = sanitizeNetworkDiagnosticValue('message', 'x'.repeat(500));
+    expect(typeof result).toBe('string');
+    if (typeof result !== 'string') throw new TypeError('expected sanitized network diagnostic text');
     expect(result.length).toBeLessThanOrEqual(240);
     expect(result.endsWith('…')).toBe(true);
   });
@@ -110,13 +114,21 @@ describe('networkDiagnostics value redaction', () => {
 
   test('bounds nested object depth', () => {
     const input = { a: { b: { c: { d: { e: { value: 'deep' } } } } } };
-    expect(sanitizeNetworkDiagnosticValue('metadata', input).a.b.c.d.e).toBe('[max-depth]');
+    expect(sanitizeNetworkDiagnosticValue('metadata', input)).toMatchObject({
+      a: { b: { c: { d: { e: '[max-depth]' } } } },
+    });
   });
 
   test('limits object key count', () => {
-    const input = {};
+    const input: Record<string, number> = {};
     for (let index = 0; index < 50; index += 1) input[`key${index}`] = index;
-    expect(Object.keys(sanitizeNetworkDiagnosticValue('metadata', input))).toHaveLength(30);
+    const sanitized = sanitizeNetworkDiagnosticValue('metadata', input);
+    expect(sanitized).not.toBeNull();
+    expect(typeof sanitized).toBe('object');
+    if (!sanitized || typeof sanitized !== 'object' || Array.isArray(sanitized)) {
+      throw new TypeError('expected sanitized network diagnostic object');
+    }
+    expect(Object.keys(sanitized)).toHaveLength(30);
   });
 });
 
@@ -219,8 +231,8 @@ describe('NetworkDiagnostics bounded collector', () => {
     const diagnostics = createNetworkDiagnostics({ capacity: 10 });
     for (let index = 0; index < 14; index += 1) diagnostics.record('event', { index });
     const snapshot = diagnostics.snapshot();
-    expect(snapshot[0].metadata.index).toBe(4);
-    expect(snapshot[9].metadata.index).toBe(13);
+    expect(snapshot.at(0)?.metadata.index).toBe(4);
+    expect(snapshot.at(9)?.metadata.index).toBe(13);
   });
 
   test('counts events by normalized name', () => {
@@ -283,8 +295,10 @@ describe('NetworkDiagnostics bounded collector', () => {
     diagnostics.record('a', { value: 1 });
     const snapshot = diagnostics.snapshot();
     expect(Object.isFrozen(snapshot)).toBe(true);
-    expect(Object.isFrozen(snapshot[0])).toBe(true);
-    expect(Object.isFrozen(snapshot[0].metadata)).toBe(true);
+    const first = snapshot.at(0);
+    expect(first).toBeDefined();
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first?.metadata)).toBe(true);
   });
 
   test('counts status codes from metadata', () => {
@@ -364,7 +378,7 @@ describe('networkDiagnostics bridge helpers', () => {
 
   test('bridge forwards sanitized event to observer', () => {
     const diagnostics = createNetworkDiagnostics();
-    const observer = vi.fn();
+    const observer = jest.fn();
     const bridge = createDiagnosticsBridge(diagnostics, observer);
     bridge.record('request', { token: 'secret', method: 'get' });
     expect(observer).toHaveBeenCalledWith(expect.objectContaining({
@@ -381,7 +395,7 @@ describe('networkDiagnostics bridge helpers', () => {
   });
 
   test('bridge rejects invalid diagnostics collector', () => {
-    expect(() => createDiagnosticsBridge({})).toThrow(TypeError);
+    expect(() => createDiagnosticsBridge({} as never)).toThrow(TypeError);
   });
 
   test('recordNetworkEvent tolerates missing diagnostics', () => {
@@ -391,7 +405,7 @@ describe('networkDiagnostics bridge helpers', () => {
   test('recordNetworkEvent delegates to collector', () => {
     const diagnostics = createNetworkDiagnostics();
     const event = recordNetworkEvent(diagnostics, 'event', { status: 200 });
-    expect(event.name).toBe('event');
+    expect(event).toMatchObject({ name: 'event' });
     expect(diagnostics.count('event')).toBe(1);
   });
 });
