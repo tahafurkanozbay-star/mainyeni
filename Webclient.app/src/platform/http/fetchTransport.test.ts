@@ -41,8 +41,22 @@ const response = ({
   text: jest.fn().mockResolvedValue(body)
 });
 
-const fetchResolved = (value: ResponseLike): ReturnType<typeof jest.fn<FetchImplementation>> =>
+type FetchMock = ReturnType<typeof jest.fn<FetchImplementation>>;
+
+const fetchResolved = (value: ResponseLike): FetchMock =>
   jest.fn<FetchImplementation>().mockResolvedValue(value);
+
+const firstFetchCall = (fetchImpl: FetchMock): readonly [string | URL | Request, RequestInit | undefined] => {
+  const call = fetchImpl.mock.calls.at(0);
+  if (!call) throw new TypeError('expected one fetch call');
+  return call;
+};
+
+const firstFetchInit = (fetchImpl: FetchMock): RequestInit => {
+  const init = firstFetchCall(fetchImpl)[1];
+  if (!init) throw new TypeError('expected fetch RequestInit');
+  return init;
+};
 
 const defaults = {
   baseUrl: '/api',
@@ -82,7 +96,7 @@ describe('fetchTransport linked abort scope', () => {
     let timeoutCallback: (() => void) | undefined;
     const scope = createLinkedAbortScope({
       timeoutMs: 100,
-      setTimeout: (callback) => { timeoutCallback = callback; return 5; },
+      setTimeout: (callback) => { if (typeof callback === 'function') timeoutCallback = callback; return 5; },
       clearTimeout: jest.fn()
     });
     timeoutCallback?.();
@@ -198,8 +212,8 @@ describe('fetchTransport executeFetch', () => {
       fetchImpl
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(fetchImpl.mock.calls[0][0]).toBe('/api/items?district=%C3%87ankaya&page=2');
-    expect(fetchImpl.mock.calls[0][1]).toMatchObject({
+    expect(firstFetchCall(fetchImpl)[0]).toBe('/api/items?district=%C3%87ankaya&page=2');
+    expect(firstFetchInit(fetchImpl)).toMatchObject({
       method: 'GET', credentials: 'same-origin', cache: 'no-store'
     });
     expect(result.data).toEqual({ name: 'Ankara' });
@@ -212,8 +226,9 @@ describe('fetchTransport executeFetch', () => {
     await executeFetch({ method: 'post', url: '/items', data: { name: 'Park' } }, {
       defaults, baseUrl: '/api', fetchImpl
     });
-    expect(fetchImpl.mock.calls[0][1].body).toBe('{"name":"Park"}');
-    expect(fetchImpl.mock.calls[0][1].headers['Content-Type'])
+    const init = firstFetchInit(fetchImpl);
+    expect(init.body).toBe('{"name":"Park"}');
+    expect(new Headers(init.headers).get('Content-Type'))
       .toBe('application/json;charset=UTF-8');
   });
 
@@ -222,7 +237,7 @@ describe('fetchTransport executeFetch', () => {
     await executeFetch({ method: 'get', url: '/api/health' }, {
       defaults, baseUrl: '/api', fetchImpl
     });
-    expect(fetchImpl.mock.calls[0][0]).toBe('/api/health');
+    expect(firstFetchCall(fetchImpl)[0]).toBe('/api/health');
   });
 
   test('blocks absolute application endpoint before fetch', async () => {
@@ -300,10 +315,10 @@ describe('fetchTransport executeFetch', () => {
     const promise = executeFetch({ method: 'get', url: '/items', timeout: 100 }, {
       defaults,
       fetchImpl,
-      setTimeout: (callback) => { timeoutCallback = callback; return 1; },
+      setTimeout: (callback) => { if (typeof callback === 'function') timeoutCallback = callback; return 1; },
       clearTimeout: jest.fn()
     });
-    timeoutCallback();
+    timeoutCallback?.();
     await expect(promise).rejects.toMatchObject({ code: 'TIMEOUT', status: 408, retryable: true });
   });
 
@@ -395,7 +410,7 @@ describe('fetchTransport factory surface', () => {
       const transport = createFetchTransport({ ...defaults, fetchImpl });
       const methodCall = transport[helper as 'get' | 'head' | 'delete'];
       await methodCall('/items');
-      expect(fetchImpl.mock.calls[0][1].method).toBe(method.toUpperCase());
+      expect(firstFetchInit(fetchImpl).method).toBe(method.toUpperCase());
     }
   );
 
@@ -406,8 +421,9 @@ describe('fetchTransport factory surface', () => {
       const transport = createFetchTransport({ ...defaults, fetchImpl });
       const methodCall = transport[helper as 'post' | 'put' | 'patch'];
       await methodCall('/items', { value: 1 });
-      expect(fetchImpl.mock.calls[0][1].method).toBe(expectedMethod);
-      expect(fetchImpl.mock.calls[0][1].body).toBe('{"value":1}');
+      const init = firstFetchInit(fetchImpl);
+      expect(init.method).toBe(expectedMethod);
+      expect(init.body).toBe('{"value":1}');
     }
   );
 });
