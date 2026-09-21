@@ -82,7 +82,7 @@ export const Map = ({ config, exportCallBack }: AdminMapProps) => {
         left: 0,
       },
     });
-    view.map = map;
+    view.set('map', map);
 
     viewRef.current = view;
 
