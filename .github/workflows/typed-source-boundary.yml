@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'Webclient.app/src/**'
+      - 'Webclient.admin/src/**'
       - 'tools/typed-source-boundary.mjs'
       - 'tools/typed-source-boundary.test.mjs'
       - '.github/workflows/typed-source-boundary.yml'
@@ -12,6 +13,7 @@ on:
       - main
     paths:
       - 'Webclient.app/src/**'
+      - 'Webclient.admin/src/**'
       - 'tools/typed-source-boundary.mjs'
       - 'tools/typed-source-boundary.test.mjs'
       - '.github/workflows/typed-source-boundary.yml'
