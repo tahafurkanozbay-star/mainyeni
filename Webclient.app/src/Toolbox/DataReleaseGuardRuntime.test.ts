@@ -151,7 +151,7 @@ describe("DataReleaseGuardRuntime", () => {
         });
 
         test("creates an empty snapshot without throwing", () => {
-            const snapshot = createDataQualitySnapshot();
+            const snapshot = createDataQualitySnapshot({});
             expect(snapshot.schema.inputCount).toBe(0);
             expect(snapshot.address.total).toBe(0);
             expect(snapshot.search.scannedCount).toBe(0);
