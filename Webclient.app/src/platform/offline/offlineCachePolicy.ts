@@ -134,6 +134,7 @@ export class OfflineCachePolicy {
   #rejected = 0;
   #evicted = 0;
   #expired = 0;
+  #bytes = 0;
 
   constructor(options: OfflineCachePolicyOptions) {
     if (!options?.origin) throw new TypeError('origin is required');
@@ -183,7 +184,9 @@ export class OfflineCachePolicy {
     const sizeBytes = response.sizeBytes ?? this.#contentLength(headers) ?? 0;
     const existing = this.#entries.get(decision.key);
     const entry: OfflineCacheEntry = Object.freeze({ key: decision.key, url: `${url.pathname}${url.search}`, storedAt: now, expiresAt: decision.expiresAt, sizeBytes, lastAccessedAt: now, hits: existing?.hits ?? 0 });
+    if (existing) this.#bytes -= existing.sizeBytes;
     this.#entries.set(entry.key, entry);
+    this.#bytes += entry.sizeBytes;
     this.#admitted += 1;
     this.#record('admitted', 'admit', entry.key);
     this.#prune(now);
@@ -197,6 +200,7 @@ export class OfflineCachePolicy {
     if (!entry) { this.#record('miss', undefined, key); return undefined; }
     if (entry.expiresAt <= now) {
       this.#entries.delete(key);
+      this.#bytes -= entry.sizeBytes;
       this.#expired += 1;
       this.#record('expired', 'expired', key);
       return undefined;
@@ -207,13 +211,18 @@ export class OfflineCachePolicy {
     return updated;
   }
 
-  remove(key: string): boolean { return this.#entries.delete(key); }
+  remove(key: string): boolean {
+    const entry = this.#entries.get(key);
+    if (!entry) return false;
+    const removed = this.#entries.delete(key);
+    if (removed) this.#bytes -= entry.sizeBytes;
+    return removed;
+  }
 
   prune(): number { return this.#prune(this.#clock()); }
 
   snapshot(): Readonly<OfflineCacheSnapshot> {
-    const bytes = Array.from(this.#entries.values()).reduce((total, entry) => total + entry.sizeBytes, 0);
-    return Object.freeze({ entries: this.#entries.size, bytes, admitted: this.#admitted, rejected: this.#rejected, evicted: this.#evicted, expired: this.#expired });
+    return Object.freeze({ entries: this.#entries.size, bytes: this.#bytes, admitted: this.#admitted, rejected: this.#rejected, evicted: this.#evicted, expired: this.#expired });
   }
 
   entries(): readonly Readonly<OfflineCacheEntry>[] {
@@ -246,6 +255,7 @@ export class OfflineCachePolicy {
     return Array.from(this.#entries.entries()).reduce((removed, [key, entry]) => {
       if (entry.expiresAt > now) return removed;
       this.#entries.delete(key);
+      this.#bytes -= entry.sizeBytes;
       this.#expired += 1;
       this.#record('expired', 'expired', key);
       return removed + 1;
@@ -269,6 +279,7 @@ export class OfflineCachePolicy {
     );
     if (!candidate) return;
     this.#entries.delete(candidate.key);
+    this.#bytes -= candidate.sizeBytes;
     this.#evicted += 1;
     this.#record('evicted', undefined, candidate.key);
   }
