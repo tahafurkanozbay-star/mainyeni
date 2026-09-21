@@ -4,7 +4,7 @@
   "domains": {
     "web-root": 0,
     "business": 59,
-    "components": 70,
+    "components": 0,
     "core": 0,
     "store": 0,
     "toolbox": 2,
@@ -14,16 +14,16 @@
     "platform": 0
   },
   "testDomains": {
-    "web-root": 2,
+    "web-root": 1,
     "business": 3,
-    "components": 9,
+    "components": 0,
     "core": 0,
-    "store": 2,
-    "toolbox": 15,
-    "data-search": 8,
-    "experience": 2,
+    "store": 0,
+    "toolbox": 1,
+    "data-search": 0,
+    "experience": 1,
     "gis": 0,
-    "platform": 11
+    "platform": 0
   },
   "platformLegacyAllowlist": []
 }

@@ -5,15 +5,15 @@ import MapManager from "./MapManager";
 
 let mockState;
 
-jest.mock("../Store", () => ({
+vi.mock("../Store", () => ({
     __esModule: true,
     default: {
-        getState: jest.fn(),
-        dispatch: jest.fn()
+        getState: vi.fn(),
+        dispatch: vi.fn()
     }
 }));
 
-jest.mock("../Reducers/MapReducer", () => ({
+vi.mock("../Reducers/MapReducer", () => ({
     MapReducer_ActionTypes: {
         SetMapView: "SET_MAP_VIEW_TEST",
         SetMapClickEvent: "SET_CLICK_TEST",
@@ -22,18 +22,18 @@ jest.mock("../Reducers/MapReducer", () => ({
     }
 }));
 
-jest.mock("../Reducers/CommonReducer", () => ({
+vi.mock("../Reducers/CommonReducer", () => ({
     CommonReducer_ActionTypes: {
         SetConfigurationServices: "SET_SERVICES_TEST",
         SetMapConfiguration: "SET_CONFIG_TEST"
     }
 }));
 
-jest.mock("../../Toolbox/GisGraphicsHelper", () => ({
+vi.mock("../../Toolbox/GisGraphicsHelper", () => ({
     GisGraphicsHelper: {
-        AddGraphics: jest.fn(),
-        RemoveGraphics: jest.fn(),
-        RemoveAllGraphics: jest.fn()
+        AddGraphics: vi.fn(),
+        RemoveGraphics: vi.fn(),
+        RemoveAllGraphics: vi.fn()
     }
 }));
 
@@ -51,7 +51,7 @@ describe("MapManager GIS state ownership", () => {
                 MapConfiguration: { Centerx: 32.85, Centery: 39.93 }
             }
         };
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         Store.getState.mockImplementation(() => mockState);
         Store.dispatch.mockImplementation(action => {
             if (action.type === "SET_GRAPHICS_TEST") {
@@ -89,8 +89,8 @@ describe("MapManager GIS state ownership", () => {
 
     test("registers one shared view-state bridge", () => {
         const bridge = {
-            getState: jest.fn(() => ({ mode: "2d", zoom: 12 })),
-            setState: jest.fn(next => next)
+            getState: vi.fn(() => ({ mode: "2d", zoom: 12 })),
+            setState: vi.fn(next => next)
         };
 
         expect(MapManager.SetViewStateBridge(bridge)).toBe(bridge);
@@ -100,8 +100,8 @@ describe("MapManager GIS state ownership", () => {
 
     test("forwards view-state updates to the registered bridge", () => {
         const bridge = {
-            getState: jest.fn(() => ({ mode: "2d" })),
-            setState: jest.fn(() => ({ mode: "3d" }))
+            getState: vi.fn(() => ({ mode: "2d" })),
+            setState: vi.fn(() => ({ mode: "3d" }))
         };
         MapManager.SetViewStateBridge(bridge);
 
@@ -135,7 +135,7 @@ describe("MapManager GIS state ownership", () => {
 
     test("registers and exposes view performance snapshot", () => {
         const monitor = {
-            snapshot: jest.fn(() => ({ averageUpdatingMs: 42 }))
+            snapshot: vi.fn(() => ({ averageUpdatingMs: 42 }))
         };
         MapManager.SetViewPerformanceMonitor(monitor);
 
@@ -144,8 +144,8 @@ describe("MapManager GIS state ownership", () => {
     });
 
     test("conditional monitor cleanup protects a newer monitor", () => {
-        const oldMonitor = { snapshot: jest.fn() };
-        const currentMonitor = { snapshot: jest.fn(() => ({ ok: true })) };
+        const oldMonitor = { snapshot: vi.fn() };
+        const currentMonitor = { snapshot: vi.fn(() => ({ ok: true })) };
         MapManager.SetViewPerformanceMonitor(currentMonitor);
 
         expect(MapManager.ClearViewPerformanceMonitor(oldMonitor)).toBe(false);

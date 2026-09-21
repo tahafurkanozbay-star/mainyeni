@@ -102,6 +102,9 @@ jobs:
       - name: Strict modern GIS TypeScript boundary
         run: npm run typecheck:gis-modern-core -- --pretty false
 
+      - name: Typed migrated-test TypeScript boundary
+        run: npx tsc --noEmit -p tsconfig.migrated-tests.json --pretty false
+
       - name: Exact-base TypeScript regression gate
         if: github.event_name == 'pull_request'
         env:
