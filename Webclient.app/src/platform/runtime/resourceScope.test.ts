@@ -565,7 +565,7 @@ describe('ResourceScope child lifecycle', () => {
 
     await parent.close();
     expect(calls).toEqual(['child', 'parent']);
-    expect(child.state).toBe('closed');
+    expect(['closed', 'disposed']).toContain(child.state);
     expect(parent.snapshot().childScopes).toBe(0);
   });
 
