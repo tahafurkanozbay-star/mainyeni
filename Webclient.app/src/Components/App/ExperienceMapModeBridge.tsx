@@ -167,7 +167,7 @@ const nextBrowserFrame = (): Promise<void> => new Promise((resolve) => {
     requestAnimationFrame(() => resolve());
     return;
   }
-  setTimeout(resolve, 16);
+  queueMicrotask(resolve);
 });
 
 /**
@@ -213,9 +213,11 @@ export function ExperienceMapModeBridge({
     sceneExperienceRef.current?.dispose();
     unsubscribeExperienceRef.current?.();
 
+    const attemptLimit = 3;
     const runtime = createSceneExperienceRuntime(view, {
       onError: (error, context) => DebugHelper.Log({ context, error }),
       accessorWatch,
+      maximumRecoveryAttempts: attemptLimit,
       onSnapshot: (snapshot, reason) => {
         if (reason === 'recovery-start') {
           announce('3B grafik motoru yeniden başlatılıyor.', 'assertive');
@@ -276,7 +278,7 @@ export function ExperienceMapModeBridge({
     synchronizeSceneViewSize(scene.view);
 
     if (disposedRef.current) {
-      destroySceneView(scene);
+      destroySceneView(scene, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
       return null;
     }
 
@@ -516,7 +518,7 @@ export function ExperienceMapModeBridge({
     sceneNavigationRef.current?.dispose();
     sceneNavigationRef.current = null;
     sceneNavigationHomeSetRef.current = false;
-    if (sceneRef.current) destroySceneView(sceneRef.current);
+    if (sceneRef.current) destroySceneView(sceneRef.current, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
     sceneRef.current = null;
   }, []);
 
