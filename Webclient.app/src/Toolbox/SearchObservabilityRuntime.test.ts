@@ -155,13 +155,13 @@ describe("SearchObservabilityRuntime", () => {
         });
 
         test("returns empty summary for missing metrics", () => {
-            expect(aggregateMetric({ series: [] }, "missing").count).toBe(0);
+            expect(aggregateMetric(createSearchTelemetryCollector().snapshot(), "missing").count).toBe(0);
         });
     });
 
     describe("budget normalization", () => {
         test("uses production defaults", () => {
-            expect(normalizeSearchPerformanceBudget()).toEqual(DEFAULT_SEARCH_PERFORMANCE_BUDGET);
+            expect(normalizeSearchPerformanceBudget({})).toEqual(DEFAULT_SEARCH_PERFORMANCE_BUDGET);
         });
 
         test("clamps ratios and invalid thresholds", () => {
@@ -290,7 +290,7 @@ describe("SearchObservabilityRuntime", () => {
         test("measures successful async operations using injected clock", async () => {
             const times = [100, 145];
             const result = await measureAsyncOperation(async () => "ok", {
-                now: () => times.shift()
+                now: () => times.shift() ?? 0
             });
             expect(result).toEqual({ value: "ok", durationMs: 45, error: null });
         });
@@ -300,7 +300,7 @@ describe("SearchObservabilityRuntime", () => {
             const error = new Error("boom");
             const result = await measureAsyncOperation(async () => {
                 throw error;
-            }, { now: () => times.shift() });
+            }, { now: () => times.shift() ?? 0 });
             expect(result.error).toBe(error);
             expect(result.durationMs).toBe(30);
         });
