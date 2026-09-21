@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Breadcrumb, Button, Form } from "react-bootstrap";
 import { MdOutlineApps } from "react-icons/md";
 import { SettingsBusiness } from "../../Business/SettingsBusiness";
-import { Map } from "../../Components/Map";
+import { ContainerLoading } from "../../Components/Loading";
 import { Message } from "../../Components/Message";
 import { Constants } from "../../Core/Constants";
 import { IsNull } from "../../Core/Toolbox/ObjectHelper";
+
+const LazyMap = lazy(async () => ({
+    default: (await import("../../Components/Map")).Map,
+}));
 
 export const MapSettingsPage = () => {
 
@@ -183,7 +187,9 @@ export const MapSettingsPage = () => {
                     <div className="col-6">
                         {
                             (mapLoading==Constants.LoadingStatus.SUBMITTED) &&
-                            <Map className="map-container" config={itemDetails} exportCallBack={exportCallBack}></Map> 
+                            <Suspense fallback={<ContainerLoading text="Harita modülü yükleniyor" />}>
+                                <LazyMap config={itemDetails} exportCallBack={exportCallBack} />
+                            </Suspense> 
                         }
                     
                     </div>

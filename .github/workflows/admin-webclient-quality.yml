@@ -79,3 +79,6 @@ jobs:
           VITE_API_URL: /api
           VITE_APP_VERSION: ci
         run: npm run build
+
+      - name: Initial bundle budget
+        run: npm run bundle:budget

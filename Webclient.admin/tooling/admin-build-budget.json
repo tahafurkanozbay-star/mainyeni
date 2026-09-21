@@ -1,0 +1,16 @@
+{
+  "maxInitialJavaScriptBytes": 450000,
+  "maxInitialJavaScriptGzipBytes": 150000,
+  "maxLargestInitialJavaScriptBytes": 430000,
+  "maxInitialCssBytes": 270000,
+  "maxInitialCssGzipBytes": 38000,
+  "minDynamicImports": 6,
+  "forbiddenInitialSources": [
+    "src/Pages/MapSettings/MapSettingsPage.tsx",
+    "src/Pages/ConfigServices/ConfigServicesPage.tsx",
+    "src/Pages/Layers/LayersPage.tsx",
+    "src/Components/Map.tsx",
+    "src/Core/Toolbox/DataHelper.ts",
+    "src/Core/Fonts/UbuntuNormal.ts"
+  ]
+}
