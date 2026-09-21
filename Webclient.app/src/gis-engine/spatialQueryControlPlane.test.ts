@@ -4,7 +4,6 @@ import {
   createSpatialQueryControlPlane,
   deriveSpatialLayerNumericId,
   normalizeSpatialQueryControlPlanePolicy,
-  type SpatialQueryControlPlane,
   type SpatialQueryControlRequest,
 } from './spatialQueryControlPlane';
 
