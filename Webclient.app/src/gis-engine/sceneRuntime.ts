@@ -38,13 +38,13 @@ export interface SceneContainerWaitOptions {
 }
 
 const sceneContainerDimensions = (container: SceneContainerLike | null | undefined): readonly [number, number] => {
-  if (!container) return Object.freeze([0, 0]);
+  if (!container) return [0, 0] as const;
   const rect = typeof container.getBoundingClientRect === 'function'
     ? container.getBoundingClientRect()
     : null;
   const width = finite(rect?.width, finite(container.clientWidth, 0)) ?? 0;
   const height = finite(rect?.height, finite(container.clientHeight, 0)) ?? 0;
-  return Object.freeze([Math.max(0, width), Math.max(0, height)]);
+  return [Math.max(0, width), Math.max(0, height)] as const;
 };
 
 export const isSceneContainerRenderable = (container: SceneContainerLike | null | undefined): boolean => {
