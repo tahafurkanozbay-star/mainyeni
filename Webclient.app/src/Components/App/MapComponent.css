@@ -75,7 +75,7 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--exp-transition, 180ms ease);
-  contain: layout paint size;
+  contain: layout paint;
 }
 
 .experience-scene-host.is-active {
