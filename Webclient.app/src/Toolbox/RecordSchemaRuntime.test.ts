@@ -178,7 +178,7 @@ describe("RecordSchemaRuntime", () => {
 
         test("returns fallback for ambiguous booleans", () => {
             expect(normalizeBoolean("belki", null)).toBeNull();
-            expect(normalizeBoolean(2, "fallback")).toBe("fallback");
+            expect(normalizeBoolean(2, false)).toBe(false);
         });
 
         test("normalizes phone numbers to compact digits", () => {
@@ -252,7 +252,7 @@ describe("RecordSchemaRuntime", () => {
             expect(schema.requiredFields).toEqual(["id", "title"]);
             expect(schema.searchableFields).toEqual(["title", "category"]);
             expect(schema.facetFields).toEqual(["category"]);
-            expect(schema.fieldMap.get("id").type).toBe(FIELD_TYPES.Id);
+            expect(schema.fieldMap.get("id")?.type).toBe(FIELD_TYPES.Id);
         });
 
         test("creates deterministic schema fingerprints", () => {
