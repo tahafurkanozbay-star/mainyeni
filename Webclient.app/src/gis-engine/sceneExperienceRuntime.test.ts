@@ -233,3 +233,25 @@ describe('sceneExperienceRuntime lifecycle', () => {
     runtime.dispose();
   });
 });
+
+
+describe('sceneExperienceRuntime reactive watch boundary', () => {
+  it('uses an injected reactive watcher instead of deprecated Accessor.watch', () => {
+    const view = createView();
+    const legacyWatch = vi.spyOn(view, 'watch');
+    const remove = vi.fn();
+    const accessorWatch = vi.fn(() => ({ remove }));
+
+    const runtime = createSceneExperienceRuntime(view, {
+      accessorWatch,
+      requestFrame: () => 1,
+      cancelFrame: () => undefined,
+    });
+
+    expect(accessorWatch).toHaveBeenCalledWith(view, 'fatalError', expect.any(Function));
+    expect(legacyWatch).not.toHaveBeenCalled();
+
+    runtime.dispose();
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+});
