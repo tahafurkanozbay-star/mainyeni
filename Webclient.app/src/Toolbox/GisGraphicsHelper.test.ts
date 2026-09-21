@@ -88,6 +88,18 @@ describe("GisGraphicsHelper", () => {
     expect(items).not.toContain(existing);
   });
 
+  it("removes every graphic even when the underlying collection mutates", () => {
+    const first: GraphicLike = { id: "first" };
+    const second: GraphicLike = { id: "second" };
+    const third: GraphicLike = { id: "third" };
+    const { view, items, remove } = createView([first, second, third]);
+
+    GisGraphicsHelper.RemoveAllGraphics(view);
+
+    expect(remove).toHaveBeenCalledTimes(3);
+    expect(items).toEqual([]);
+  });
+
   it("chooses deterministic default symbols by geometry type", async () => {
     const point = await GisGraphicsHelper.CreateGraphicFromGeometry({ type: "point" });
     const polyline = await GisGraphicsHelper.CreateGraphicFromGeometry({ type: "polyline" });
