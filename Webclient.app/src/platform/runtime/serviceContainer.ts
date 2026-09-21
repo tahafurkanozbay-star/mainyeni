@@ -719,8 +719,8 @@ class BoundedServiceContainer implements ServiceContainer {
   }
 
   dispose(reason: unknown = 'container-disposed'): Promise<void> {
-    if (this.#state === 'disposed') return Promise.resolve();
     if (this.#disposePromise) return this.#disposePromise;
+    if (this.#state === 'disposed') return Promise.resolve();
 
     const pending = this.#performDispose(reason)
       .finally(() => {
@@ -731,11 +731,13 @@ class BoundedServiceContainer implements ServiceContainer {
   }
 
   async #performDispose(reason: unknown): Promise<void> {
+    const stopping = this.stop({
+      reason,
+      throwOnStopError: false,
+    });
+    this.#state = 'disposed';
     try {
-      await this.stop({
-        reason,
-        throwOnStopError: false,
-      });
+      await stopping;
     } finally {
       this.#state = 'disposed';
       if (!this.#controller.signal.aborted) this.#controller.abort(reason);
@@ -874,11 +876,15 @@ class BoundedServiceContainer implements ServiceContainer {
           await this.#ensureStarted(dependencyId, nextStack);
         } catch (error) {
           this.#counters.optionalDependencyFailures += 1;
+          const diagnosticError = error instanceof ServiceContainerError
+            && error.reason !== undefined
+            ? error.reason
+            : error;
           this.#emit(
             'optional-dependency-failed',
             id,
             errorCode(error, 'DEPENDENCY_UNAVAILABLE'),
-            safeErrorName(error),
+            safeErrorName(diagnosticError),
             undefined,
             dependencyId,
           );
@@ -1026,10 +1032,12 @@ class BoundedServiceContainer implements ServiceContainer {
       }
     });
 
+    const disposing = this.#state === 'disposed';
     this.#state = 'stopped';
     this.#emit('container-stopped');
 
     const snapshot = this.snapshot();
+    if (disposing) this.#state = 'disposed';
     if (failures.length > 0 && options.throwOnStopError !== false) {
       throw new AggregateError(failures, 'one or more services failed to stop');
     }
