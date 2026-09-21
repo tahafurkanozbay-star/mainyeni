@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import {
   DURATION_BUCKETS,
   NetworkDiagnostics,
@@ -14,7 +14,7 @@ import {
 const createClock = (values: readonly number[]) => {
   const queue = [...values];
   let last = queue[0] ?? 0;
-  return jest.fn(() => {
+  return vi.fn(() => {
     const next = queue.shift();
     if (next !== undefined) last = next;
     return last;
@@ -378,7 +378,7 @@ describe('networkDiagnostics bridge helpers', () => {
 
   test('bridge forwards sanitized event to observer', () => {
     const diagnostics = createNetworkDiagnostics();
-    const observer = jest.fn();
+    const observer = vi.fn();
     const bridge = createDiagnosticsBridge(diagnostics, observer);
     bridge.record('request', { token: 'secret', method: 'get' });
     expect(observer).toHaveBeenCalledWith(expect.objectContaining({

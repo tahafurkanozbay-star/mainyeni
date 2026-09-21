@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import { createApiClient } from './httpClient';
 import { createRequestCoordinator } from './requestCoordinator';
 import { createRequestScheduler } from './requestScheduler';
@@ -47,7 +47,7 @@ const makeRuntime = ({
   onLine = true,
 }: TestRuntimeOptions = {}): TestRuntime => ({
   Promise,
-  fetch: jest.fn(),
+  fetch: vi.fn(),
   AbortController,
   URL,
   URLSearchParams,
@@ -79,7 +79,7 @@ const makeTransport = (
     cacheTtlMs: 1000,
     ...defaults,
   },
-  request: jest.fn((config) => requestImpl(config as TestAttemptConfig)),
+  request: vi.fn((config) => requestImpl(config as TestAttemptConfig)),
 });
 
 describe('typed runtime integration', () => {

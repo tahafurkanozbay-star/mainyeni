@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import {
   BootstrapDiagnostics,
   createBootstrapDiagnosticBridge,
@@ -11,7 +11,7 @@ import {
 const createClock = (values: readonly number[]) => {
   const queue = [...values];
   let last = queue[0] ?? 0;
-  return jest.fn(() => {
+  return vi.fn(() => {
     const next = queue.shift();
     if (next !== undefined) last = next;
     return last;
@@ -373,7 +373,7 @@ describe('createBootstrapDiagnosticBridge', () => {
 
   test('invokes an optional observer with the sanitized event', () => {
     const diagnostics = createBootstrapDiagnostics();
-    const observer = jest.fn();
+    const observer = vi.fn();
     const bridge = createBootstrapDiagnosticBridge(diagnostics, observer);
     bridge.record('request', { password: 'secret', count: 2 });
 

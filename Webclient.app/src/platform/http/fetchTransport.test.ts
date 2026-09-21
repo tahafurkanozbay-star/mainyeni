@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import { AppError } from '../errors/appError';
 import {
   buildFetchOptions,
@@ -38,11 +38,11 @@ const response = ({
   ok,
   statusText,
   headers: new Headers({ 'content-type': contentType, ...headers }),
-  text: jest.fn().mockResolvedValue(body)
+  text: vi.fn().mockResolvedValue(body)
 });
 
-const fetchResolved = (value: ResponseLike): ReturnType<typeof jest.fn<FetchImplementation>> =>
-  jest.fn<FetchImplementation>().mockResolvedValue(value);
+const fetchResolved = (value: ResponseLike): ReturnType<typeof vi.fn<FetchImplementation>> =>
+  vi.fn<FetchImplementation>().mockResolvedValue(value);
 
 const defaults = {
   baseUrl: '/api',
@@ -83,7 +83,7 @@ describe('fetchTransport linked abort scope', () => {
     const scope = createLinkedAbortScope({
       timeoutMs: 100,
       setTimeout: (callback) => { timeoutCallback = callback; return 5; },
-      clearTimeout: jest.fn()
+      clearTimeout: vi.fn()
     });
     timeoutCallback?.();
     expect(scope.signal.aborted).toBe(true);
@@ -93,10 +93,10 @@ describe('fetchTransport linked abort scope', () => {
   });
 
   test('clears timeout on dispose', () => {
-    const clearTimeout = jest.fn();
+    const clearTimeout = vi.fn();
     const scope = createLinkedAbortScope({
       timeoutMs: 100,
-      setTimeout: jest.fn(() => 99),
+      setTimeout: vi.fn(() => 99),
       clearTimeout
     });
     scope.dispose();
@@ -105,7 +105,7 @@ describe('fetchTransport linked abort scope', () => {
 
   test('removes parent listener on dispose', () => {
     const parent = createAbortHarness();
-    const removeSpy = jest.spyOn(parent.signal, 'removeEventListener');
+    const removeSpy = vi.spyOn(parent.signal, 'removeEventListener');
     const scope = createLinkedAbortScope({ signal: parent.signal, timeoutMs: 0 });
     scope.dispose();
     expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function));
@@ -119,10 +119,10 @@ describe('fetchTransport linked abort scope', () => {
   });
 
   test('dispose is idempotent', () => {
-    const clearTimeout = jest.fn();
+    const clearTimeout = vi.fn();
     const scope = createLinkedAbortScope({
       timeoutMs: 100,
-      setTimeout: jest.fn(() => 5),
+      setTimeout: vi.fn(() => 5),
       clearTimeout
     });
     scope.dispose();
@@ -226,7 +226,7 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('blocks absolute application endpoint before fetch', async () => {
-    const fetchImpl = jest.fn();
+    const fetchImpl = vi.fn();
     await expect(executeFetch({ method: 'get', url: 'https://evil.example/items' }, {
       defaults, baseUrl: '/api', fetchImpl
     })).rejects.toMatchObject({ code: 'CROSS_ORIGIN_BLOCKED' });
@@ -234,7 +234,7 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('blocks privileged authorization header before fetch', async () => {
-    const fetchImpl = jest.fn();
+    const fetchImpl = vi.fn();
     await expect(executeFetch({
       method: 'get', url: '/items', headers: { Authorization: 'Bearer secret' }
     }, {
@@ -271,14 +271,14 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('maps network TypeError to NETWORK_ERROR', async () => {
-    const fetchImpl = jest.fn<FetchImplementation>().mockRejectedValue(new TypeError('Failed to fetch'));
+    const fetchImpl = vi.fn<FetchImplementation>().mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(executeFetch({ method: 'get', url: '/items' }, { defaults, fetchImpl }))
       .rejects.toMatchObject({ code: 'NETWORK_ERROR', retryable: true });
   });
 
   test('maps parent cancellation to ABORTED', async () => {
     const parent = createAbortHarness();
-    const fetchImpl = jest.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
+    const fetchImpl = vi.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
       options?.signal?.addEventListener('abort', () => {
         reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       });
@@ -292,7 +292,7 @@ describe('fetchTransport executeFetch', () => {
 
   test('maps transport timeout to TIMEOUT', async () => {
     let timeoutCallback;
-    const fetchImpl = jest.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
+    const fetchImpl = vi.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
       options?.signal?.addEventListener('abort', () => {
         reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       });
@@ -301,17 +301,17 @@ describe('fetchTransport executeFetch', () => {
       defaults,
       fetchImpl,
       setTimeout: (callback) => { timeoutCallback = callback; return 1; },
-      clearTimeout: jest.fn()
+      clearTimeout: vi.fn()
     });
     timeoutCallback();
     await expect(promise).rejects.toMatchObject({ code: 'TIMEOUT', status: 408, retryable: true });
   });
 
   test('reports start and completion hooks', async () => {
-    const onStart = jest.fn();
-    const onSuccess = jest.fn();
+    const onStart = vi.fn();
+    const onSuccess = vi.fn();
     const fetchImpl = fetchResolved(response());
-    const clock = jest.fn().mockReturnValueOnce(100).mockReturnValueOnce(125);
+    const clock = vi.fn().mockReturnValueOnce(100).mockReturnValueOnce(125);
     await executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, clock, onStart, onSuccess
     });
@@ -322,7 +322,7 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('reports HTTP failure hook once', async () => {
-    const onFailure = jest.fn();
+    const onFailure = vi.fn();
     const fetchImpl = fetchResolved(response({ status: 503, ok: false }));
     await expect(executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, onFailure
@@ -332,8 +332,8 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('reports network failure hook once', async () => {
-    const onFailure = jest.fn();
-    const fetchImpl = jest.fn<FetchImplementation>().mockRejectedValue(new TypeError('network'));
+    const onFailure = vi.fn();
+    const fetchImpl = vi.fn<FetchImplementation>().mockRejectedValue(new TypeError('network'));
     await expect(executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, onFailure
     })).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
@@ -342,26 +342,26 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('rejects invalid fetch response object', async () => {
-    const fetchImpl = jest.fn<FetchImplementation>().mockResolvedValue(null as never);
+    const fetchImpl = vi.fn<FetchImplementation>().mockResolvedValue(null as never);
     await expect(executeFetch({ method: 'get', url: '/items' }, { defaults, fetchImpl }))
       .rejects.toMatchObject({ code: 'INVALID_FETCH_RESPONSE' });
   });
 
   test('cleans timeout after a successful request', async () => {
-    const clearTimeout = jest.fn();
+    const clearTimeout = vi.fn();
     const fetchImpl = fetchResolved(response());
     await executeFetch({ method: 'get', url: '/items', timeout: 100 }, {
       defaults,
       fetchImpl,
-      setTimeout: jest.fn(() => 55),
+      setTimeout: vi.fn(() => 55),
       clearTimeout
     });
     expect(clearTimeout).toHaveBeenCalledWith(55);
   });
 
   test('does not create timeout scope when body serialization fails', async () => {
-    const setTimeout = jest.fn();
-    const fetchImpl = jest.fn();
+    const setTimeout = vi.fn();
+    const fetchImpl = vi.fn();
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     await expect(executeFetch({ method: 'post', url: '/items', data: circular }, {
@@ -375,7 +375,7 @@ describe('fetchTransport executeFetch', () => {
 describe('fetchTransport factory surface', () => {
   test('publishes immutable defaults', () => {
     const transport = createFetchTransport({
-      baseUrl: '/api', timeoutMs: 7000, maxRetries: 3, cacheTtlMs: 9000, fetchImpl: jest.fn()
+      baseUrl: '/api', timeoutMs: 7000, maxRetries: 3, cacheTtlMs: 9000, fetchImpl: vi.fn()
     });
     expect(transport.defaults).toEqual({
       baseUrl: '/api', timeoutMs: 7000, maxRetries: 3, cacheTtlMs: 9000
