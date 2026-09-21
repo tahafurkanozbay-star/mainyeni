@@ -141,10 +141,10 @@ export const normalizeSpatialQueryExecutionSupervisorPolicy = (
     throw new RangeError('budgetInteractiveReserveRatio must be within [0, 1)');
   }
   return Object.freeze({
-    admission: Object.freeze({ ...(policy.admission ?? {}) }),
+    admission: Object.freeze(Object.assign({}, policy.admission)),
     budgetLimits: normalizeLimits(policy.budgetLimits),
     budgetInteractiveReserveRatio: reserve,
-    epochs: Object.freeze({ ...(policy.epochs ?? {}) }),
+    epochs: Object.freeze(Object.assign({}, policy.epochs)),
   });
 };
 
