@@ -16,7 +16,7 @@ const TEST_FILE_PATTERN = /(?:\.test\.|\.spec\.|\/__tests__\/|\/setupTests\.)/i;
 const PACKAGE_SPECIFIER_PATTERNS = [
   /\b(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?["']([^"']+)["']/g,
   /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
-  /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
+  /(?<![.$\w])require\s*\(\s*["']([^"']+)["']\s*\)/g,
 ];
 const FORBIDDEN_VERSION_SPECIFIER = /^(?:\*|latest|next|https?:|git(?:\+|:)|github:|file:|link:|workspace:)/i;
 const FORBIDDEN_PACKAGES = new Set(['react-scripts']);
