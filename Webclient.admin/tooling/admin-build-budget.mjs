@@ -141,6 +141,21 @@ export const evaluateAdminBuildBudget = (report, config) => {
     }
   }
 
+  const countChecks = [
+    ['initial-js-file-count', report.javascript.files.length, config.maxInitialJavaScriptFiles],
+    ['static-graph-module-count', report.staticGraphKeys.length, config.maxStaticGraphModules],
+  ];
+
+  for (const [id, actual, maximum] of countChecks) {
+    if (Number.isFinite(maximum) && actual > maximum) {
+      violations.push(Object.freeze({
+        id,
+        actual,
+        maximum,
+      }));
+    }
+  }
+
   const minimumDynamicImports = Number(config.minDynamicImports ?? 0);
   if (report.dynamicImports.length < minimumDynamicImports) {
     violations.push(Object.freeze({
