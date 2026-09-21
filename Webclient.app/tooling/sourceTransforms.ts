@@ -2,7 +2,7 @@ import type { Plugin } from 'vite';
 
 const SOURCE_FILE = /\/src\/.*\.[cm]?[jt]sx?$/;
 const LEGACY_JAVASCRIPT_FILE = /\/src\/.*\.js$/;
-const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
+const LEGACY_JAVASCRIPT_TEST_FILE = /\.test\.(?:js|jsx|mjs|cjs)$/;
 const LEGACY_PUBLIC_URL_REFERENCE = 'process.env.PUBLIC_URL';
 const LEGACY_REMOTE_MUKTA_IMPORT = /@import\s+url\(["']https:\/\/fonts\.googleapis\.com\/css\?family=Mukta["']\);?\s*/gi;
 
@@ -58,15 +58,15 @@ export const legacyPresentationCleanupPlugin = (): Plugin => ({
 });
 
 /**
- * Temporary bounded bridge while historical Jest suites move to Vitest. It only
- * rewrites the `jest.` namespace in test modules; production modules and string
- * literals are not globally transformed.
+ * Temporary bounded bridge for the few concurrently owned JavaScript tests that
+ * still use Jest namespace calls. TypeScript tests are deliberately excluded so
+ * all migrated suites must use native Vitest `vi.*` APIs.
  */
 export const legacyJestCompatibilityPlugin = (): Plugin => ({
   name: 'kent-rehberi-jest-to-vitest-compatibility',
   enforce: 'pre',
   transform(code, id) {
-    if (!TEST_FILE.test(cleanModuleId(id))) return null;
+    if (!LEGACY_JAVASCRIPT_TEST_FILE.test(cleanModuleId(id))) return null;
     const transformed = code.replace(/\bjest\./g, 'vi.');
     // Vitest applies this plugin to its own transform tests too, so an already
     // normalized `vi.` input still needs to remain an explicit test transform.
