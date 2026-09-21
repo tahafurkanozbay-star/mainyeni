@@ -245,7 +245,7 @@ describe('arcgisPaginationRuntime', () => {
   test('observes an already-aborted signal before issuing requests', async () => {
     const controller = new AbortController();
     controller.abort();
-    const fetchPage = jest.fn();
+    const fetchPage = vi.fn();
     await expect(executeArcGisPagination({
       metadata: metadata(),
       options: { signal: controller.signal },
