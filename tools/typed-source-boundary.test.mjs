@@ -21,20 +21,41 @@ const withFixture = async (callback) => {
   }
 };
 
-test('passes bounded concurrent migration exceptions and native Vitest TypeScript', async () =>
+test('passes exact concurrent migration exceptions and native Vitest TypeScript', async () =>
   withFixture(async (root) => {
-    await write(root, 'Webclient.app/src/Business/LegacyBusiness.js', 'export const value = 1;');
-    await write(root, 'Webclient.app/src/Toolbox/GisGraphicsHelper.js', 'export const value = 1;');
     await write(root, 'Webclient.app/src/experience/accessibilityRuntime.test.js', 'test("legacy owner", () => {});');
+    await write(root, 'Webclient.app/src/platform/http/retryPolicy.test.js', 'test("platform owner", () => {});');
     await write(root, 'Webclient.app/src/platform/http/runtime.test.ts', 'test("typed", () => { vi.fn(); });');
 
     const report = await auditTypedSourceBoundary(root);
 
     assert.equal(report.passed, true);
-    assert.equal(report.summary.javascriptFiles, 3);
-    assert.equal(report.summary.businessOwnedJavascriptFiles, 1);
+    assert.equal(report.summary.javascriptFiles, 2);
     assert.equal(report.summary.transitionalJavascriptFiles, 2);
     assert.equal(report.summary.violations, 0);
+  }));
+
+test('rejects Business and GIS JavaScript after their production cutovers', async () =>
+  withFixture(async (root) => {
+    await write(root, 'Webclient.app/src/Business/LegacyBusiness.js', 'export const value = 1;');
+    await write(root, 'Webclient.app/src/Toolbox/GisGraphicsHelper.js', 'export const value = 1;');
+
+    const report = await auditTypedSourceBoundary(root);
+
+    assert.equal(report.passed, false);
+    assert.deepEqual(
+      report.findings.map(({ code, file }) => ({ code, file })),
+      [
+        {
+          code: 'unapproved-javascript-source',
+          file: 'Webclient.app/src/Business/LegacyBusiness.js',
+        },
+        {
+          code: 'unapproved-javascript-source',
+          file: 'Webclient.app/src/Toolbox/GisGraphicsHelper.js',
+        },
+      ],
+    );
   }));
 
 test('rejects JavaScript reintroduction outside bounded ownership', async () =>
