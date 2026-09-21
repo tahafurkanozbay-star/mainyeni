@@ -87,23 +87,21 @@ const normalizePrefix = (value: string): string => {
   return url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;
 };
 
-const normalizeHeaders = (headers: Readonly<Record<string, string>> | undefined): ReadonlyMap<string, string> => {
-  const normalized = new Map<string, string>();
-  for (const [name, value] of Object.entries(headers ?? {})) normalized.set(name.trim().toLowerCase(), value.trim());
-  return normalized;
-};
+const normalizeHeaders = (headers: Readonly<Record<string, string>> | undefined): ReadonlyMap<string, string> =>
+  Object.entries(headers ?? {}).reduce((normalized, [name, value]) => {
+    normalized.set(name.trim().toLowerCase(), value.trim());
+    return normalized;
+  }, new Map<string, string>());
 
-const parseCacheControl = (value: string | undefined): ReadonlyMap<string, string | true> => {
-  const directives = new Map<string, string | true>();
-  for (const raw of value?.split(',') ?? []) {
+const parseCacheControl = (value: string | undefined): ReadonlyMap<string, string | true> =>
+  (value?.split(',') ?? []).reduce((directives, raw) => {
     const [rawName, ...rest] = raw.trim().split('=');
     const name = rawName?.toLowerCase();
-    if (!name) continue;
+    if (!name) return directives;
     const joined = rest.join('=').trim();
     directives.set(name, joined ? joined.replace(/^"|"$/g, '') : true);
-  }
-  return directives;
-};
+    return directives;
+  }, new Map<string, string | true>());
 
 const parseMaxAgeMs = (directives: ReadonlyMap<string, string | true>): number | undefined => {
   const raw = directives.get('s-maxage') ?? directives.get('max-age');
@@ -214,8 +212,7 @@ export class OfflineCachePolicy {
   prune(): number { return this.#prune(this.#clock()); }
 
   snapshot(): Readonly<OfflineCacheSnapshot> {
-    let bytes = 0;
-    for (const entry of this.#entries.values()) bytes += entry.sizeBytes;
+    const bytes = Array.from(this.#entries.values()).reduce((total, entry) => total + entry.sizeBytes, 0);
     return Object.freeze({ entries: this.#entries.size, bytes, admitted: this.#admitted, rejected: this.#rejected, evicted: this.#evicted, expired: this.#expired });
   }
 
@@ -226,11 +223,10 @@ export class OfflineCachePolicy {
   history(): readonly Readonly<OfflineCacheEvent>[] { return Object.freeze(this.#history.map(event => Object.freeze({ ...event }))); }
 
   #pathAllowed(pathname: string): boolean {
-    for (const prefix of this.allowedPathPrefixes) {
+    return this.allowedPathPrefixes.some((prefix) => {
       const root = prefix.slice(0, -1);
-      if (pathname === root || pathname.startsWith(prefix)) return true;
-    }
-    return false;
+      return pathname === root || pathname.startsWith(prefix);
+    });
   }
 
   #contentLength(headers: ReadonlyMap<string, string>): number | undefined {
@@ -247,24 +243,34 @@ export class OfflineCachePolicy {
   }
 
   #prune(now: number): number {
-    let removed = 0;
-    for (const [key, entry] of this.#entries) {
-      if (entry.expiresAt <= now) { this.#entries.delete(key); this.#expired += 1; removed += 1; this.#record('expired', 'expired', key); }
-    }
-    return removed;
+    return Array.from(this.#entries.entries()).reduce((removed, [key, entry]) => {
+      if (entry.expiresAt > now) return removed;
+      this.#entries.delete(key);
+      this.#expired += 1;
+      this.#record('expired', 'expired', key);
+      return removed + 1;
+    }, 0);
   }
 
   #enforceEntryBudget(): void {
-    while (this.#entries.size > this.maxEntries) {
-      let candidate: OfflineCacheEntry | undefined;
-      for (const entry of this.#entries.values()) {
-        if (!candidate || entry.lastAccessedAt < candidate.lastAccessedAt || (entry.lastAccessedAt === candidate.lastAccessedAt && entry.storedAt < candidate.storedAt) || (entry.lastAccessedAt === candidate.lastAccessedAt && entry.storedAt === candidate.storedAt && entry.key.localeCompare(candidate.key) < 0)) candidate = entry;
-      }
-      if (!candidate) return;
-      this.#entries.delete(candidate.key);
-      this.#evicted += 1;
-      this.#record('evicted', undefined, candidate.key);
-    }
+    if (this.#entries.size <= this.maxEntries) return;
+    const candidate = Array.from(this.#entries.values()).reduce<OfflineCacheEntry | undefined>(
+      (oldest, entry) => {
+        if (!oldest) return entry;
+        if (entry.lastAccessedAt !== oldest.lastAccessedAt) {
+          return entry.lastAccessedAt < oldest.lastAccessedAt ? entry : oldest;
+        }
+        if (entry.storedAt !== oldest.storedAt) {
+          return entry.storedAt < oldest.storedAt ? entry : oldest;
+        }
+        return entry.key.localeCompare(oldest.key) < 0 ? entry : oldest;
+      },
+      undefined,
+    );
+    if (!candidate) return;
+    this.#entries.delete(candidate.key);
+    this.#evicted += 1;
+    this.#record('evicted', undefined, candidate.key);
   }
 
   #record(type: OfflineCacheEvent['type'], reason?: OfflineCacheDecisionReason, key?: string): void {
