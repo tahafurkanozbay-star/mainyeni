@@ -95,13 +95,17 @@ export function ExperienceDataGrid<Row>({
     [reactId],
   );
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const columnDefinitionById = useMemo(
+    () => new Map(columns.map((column) => [column.id, column] as const)),
+    [columns],
+  );
   const runtime = useMemo(() => createDataGridRuntime<Row>({
     rows,
     columns,
     getRowId,
     selectionMode,
     pageSize,
-    initialSelectedIds: selectedIds,
+    ...(selectedIds ? { initialSelectedIds: selectedIds } : {}),
     initialViewport: { height, rowHeight, overscan },
   }), [columns, getRowId, height, overscan, pageSize, rowHeight, selectionMode]);
 
@@ -245,6 +249,7 @@ export function ExperienceDataGrid<Row>({
                 </th>
               ) : null}
               {snapshot.columns.map((column) => {
+                const definition = columnDefinitionById.get(column.id);
                 const activeSort = snapshot.sort?.columnId === column.id;
                 const ariaSort = activeSort
                   ? snapshot.sort?.direction === "asc" ? "ascending" : "descending"
@@ -266,7 +271,7 @@ export function ExperienceDataGrid<Row>({
                         className="experience-data-grid__sort"
                         onClick={() => toggleSort(column.id)}
                         aria-label={sortLabel(column.label, snapshot.sort, column.id)}
-                        title={column.description}
+                        title={definition?.description}
                       >
                         <span>{column.label}</span>
                         <span className="experience-data-grid__sort-icon" aria-hidden="true">
@@ -274,7 +279,7 @@ export function ExperienceDataGrid<Row>({
                         </span>
                       </button>
                     ) : (
-                      <span title={column.description}>{column.label}</span>
+                      <span title={definition?.description}>{column.label}</span>
                     )}
                   </th>
                 );
@@ -315,6 +320,7 @@ export function ExperienceDataGrid<Row>({
                     </td>
                   ) : null}
                   {snapshot.columns.map((column) => {
+                    const definition = columnDefinitionById.get(column.id);
                     const active = snapshot.activeCell?.rowId === rowId
                       && snapshot.activeCell.columnId === column.id;
                     let value: unknown;
@@ -333,7 +339,7 @@ export function ExperienceDataGrid<Row>({
                         onFocus={() => runtime.setActiveCell({ rowId, columnId: column.id })}
                         onDoubleClick={() => activateRow(row)}
                       >
-                        {column.renderCell ? column.renderCell(row, value) : formatCellValue(value)}
+                        {definition?.renderCell ? definition.renderCell(row, value) : formatCellValue(value)}
                       </td>
                     );
                   })}
