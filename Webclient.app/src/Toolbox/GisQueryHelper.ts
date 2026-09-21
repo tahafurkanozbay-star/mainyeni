@@ -4,7 +4,10 @@ import { stableQueryKey } from "../gis-engine/spatialEngine";
 import {
     createArcGisQueryCachePolicy,
     createQueryRuntime,
-    createQueryRuntimeKey
+    createQueryRuntimeKey,
+    type ArcGisQueryResultLike,
+    type QueryExecuteOptions,
+    type QueryRuntimeConfiguration
 } from "../gis-engine/queryRuntime";
 
 const DEFAULT_PAGE_SIZE = 1000;
@@ -14,18 +17,112 @@ const MAX_ALL_RECORDS = 100000;
 const QUERY_MODULE_IDS = Object.freeze([
     "esri/tasks/QueryTask",
     "esri/tasks/support/Query"
-]);
+] as const);
 
-let queryModulesPromise = null;
+type UnknownRecord = Record<string, unknown>;
+
+export interface GisQueryOptions extends UnknownRecord {
+    url?: unknown;
+    signal?: AbortSignal;
+    cache?: boolean;
+    live?: boolean;
+    ttlMs?: number;
+    cacheTags?: unknown[];
+    pageSize?: unknown;
+    maxRecords?: unknown;
+    resultOffset?: unknown;
+    resultRecordCount?: unknown;
+    returnDistinctValues?: unknown;
+    orderByFields?: unknown;
+    returnGeometry?: unknown;
+    outFields?: unknown;
+    where?: unknown;
+}
+
+export interface GisFeatureRecord {
+    attr: unknown;
+    geometry: unknown;
+}
+
+export interface GisQueryPage {
+    offset: number;
+    count: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+    pages?: number;
+    pageSize?: number;
+    maxRecords?: number;
+    truncated?: boolean;
+}
+
+export interface GisFeatureQuerySuccess extends ArcGisQueryResultLike {
+    type: typeof Constants_ServiceResultType.Success;
+    data: GisFeatureRecord[];
+    fields: unknown[];
+    exceededTransferLimit: boolean;
+    geometryType: unknown;
+    spatialReference: unknown;
+    page: GisQueryPage;
+}
+
+export interface GisCountQuerySuccess extends ArcGisQueryResultLike {
+    type: typeof Constants_ServiceResultType.Success;
+    data: number;
+    count: number;
+    fields: unknown[];
+    exceededTransferLimit: false;
+    page: null;
+}
+
+export interface GisQueryErrorResult {
+    error: unknown;
+    type: typeof Constants_ServiceResultType.Error;
+    data: null;
+    fields: null;
+}
+
+export type GisFeatureQueryResult = GisFeatureQuerySuccess | GisQueryErrorResult;
+export type GisCountQueryResult = GisCountQuerySuccess | GisQueryErrorResult;
+
+interface ArcGisFeatureLike {
+    attributes?: unknown;
+    geometry?: unknown;
+}
+
+interface ArcGisQueryResponseLike {
+    features?: unknown;
+    fields?: unknown;
+    exceededTransferLimit?: unknown;
+    geometryType?: unknown;
+    spatialReference?: unknown;
+}
+
+interface ArcGisQueryTaskLike {
+    execute: (query: UnknownRecord, requestOptions?: { signal: AbortSignal }) => Promise<ArcGisQueryResponseLike>;
+    executeForCount?: (query: UnknownRecord, requestOptions?: { signal: AbortSignal }) => Promise<unknown>;
+    executeForIds?: (query: UnknownRecord, requestOptions?: { signal: AbortSignal }) => Promise<unknown>;
+}
+
+type ArcGisQueryTaskCtor = new (options: { url: string }) => ArcGisQueryTaskLike;
+type ArcGisQueryCtor = new (initial?: UnknownRecord) => UnknownRecord;
+type QueryModules = [ArcGisQueryTaskCtor, ArcGisQueryCtor];
+
+interface GisQueryMetadata {
+    fields: unknown[];
+    geometryType: unknown;
+    spatialReference: unknown;
+}
+
+let queryModulesPromise: Promise<QueryModules> | null = null;
 const queryRuntime = createQueryRuntime({
     ttlMs: 30000,
     maxEntries: 128,
     maxBytes: 8 * 1024 * 1024
 });
 
-const loadQueryModules = () => {
+const loadQueryModules = (): Promise<QueryModules> => {
     if (!queryModulesPromise) {
-        queryModulesPromise = loadModules(QUERY_MODULE_IDS).catch((error) => {
+        queryModulesPromise = loadModules<QueryModules>(QUERY_MODULE_IDS).catch((error: unknown) => {
             queryModulesPromise = null;
             throw error;
         });
@@ -33,30 +130,34 @@ const loadQueryModules = () => {
     return queryModulesPromise;
 };
 
-const cancelledError = () => Object.assign(new Error("GIS query cancelled."), { code: "CANCELLED" });
+const cancelledError = (): Error & { code: string } =>
+    Object.assign(new Error("GIS query cancelled."), { code: "CANCELLED" });
 
-const throwIfAborted = (signal) => {
+const throwIfAborted = (signal?: AbortSignal): void => {
     if (signal?.aborted) throw cancelledError();
 };
 
-const toNonNegativeInteger = (value, fallback = null) => {
+const toNonNegativeInteger = (value: unknown, fallback: number | null = null): number | null => {
     if (value === null || value === undefined || value === "") return fallback;
     const number = Number(value);
     if (!Number.isFinite(number) || number < 0) return fallback;
     return Math.floor(number);
 };
 
-const toBoundedPositiveInteger = (value, fallback, max) => {
+const toBoundedPositiveInteger = (value: unknown, fallback: number, max: number): number => {
     const number = Number(value);
     if (!Number.isFinite(number) || number <= 0) return fallback;
     return Math.min(max, Math.max(1, Math.floor(number)));
 };
 
-const toArray = (value) => Array.isArray(value) ? value : [];
+const toArray = <T = unknown>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
 
-const toServiceResult = (response, options = {}) => {
-    const resultOffset = toNonNegativeInteger(options.resultOffset, 0);
-    const features = toArray(response?.features);
+const toServiceResult = (
+    response: ArcGisQueryResponseLike | null | undefined,
+    options: GisQueryOptions = {}
+): GisFeatureQuerySuccess => {
+    const resultOffset = toNonNegativeInteger(options.resultOffset, 0) ?? 0;
+    const features = toArray<ArcGisFeatureLike | null>(response?.features);
     const data = features.map((feature) => ({
         attr: feature?.attributes ?? null,
         geometry: feature?.geometry ?? null
@@ -80,30 +181,34 @@ const toServiceResult = (response, options = {}) => {
     };
 };
 
-const toCountResult = (count) => ({
-    type: Constants_ServiceResultType.Success,
-    data: Number.isFinite(Number(count)) ? Number(count) : 0,
-    count: Number.isFinite(Number(count)) ? Number(count) : 0,
-    fields: [],
-    exceededTransferLimit: false,
-    page: null
-});
+const toCountResult = (count: unknown): GisCountQuerySuccess => {
+    const numericCount = Number(count);
+    const safeCount = Number.isFinite(numericCount) ? numericCount : 0;
+    return {
+        type: Constants_ServiceResultType.Success,
+        data: safeCount,
+        count: safeCount,
+        fields: [],
+        exceededTransferLimit: false,
+        page: null
+    };
+};
 
-const toErrorResult = (error) => ({
+const toErrorResult = (error: unknown): GisQueryErrorResult => ({
     error,
     type: Constants_ServiceResultType.Error,
     data: null,
     fields: null
 });
 
-const normalizeUrl = (value) => String(value ?? "").trim();
+const normalizeUrl = (value: unknown): string => String(value ?? "").trim();
 
-const createQueryOptions = (options = {}, spatial = false) => {
+const createQueryOptions = (options: GisQueryOptions = {}, spatial = false): UnknownRecord => {
     const resultOffset = toNonNegativeInteger(options.resultOffset);
     const resultRecordCount = toNonNegativeInteger(options.resultRecordCount);
 
     if (spatial) {
-        const queryOptions = { ...options };
+        const queryOptions: UnknownRecord = { ...options };
         delete queryOptions.url;
         delete queryOptions.signal;
         delete queryOptions.cache;
@@ -130,8 +235,12 @@ const createQueryOptions = (options = {}, spatial = false) => {
     };
 };
 
-const createRuntimeKey = (options, spatial, operation = "features") => createQueryRuntimeKey({
-    serviceUrl: normalizeUrl(options?.url),
+const createRuntimeKey = (
+    options: GisQueryOptions,
+    spatial: boolean,
+    operation: "features" | "count" = "features"
+): string => createQueryRuntimeKey({
+    serviceUrl: normalizeUrl(options.url),
     operation,
     queryKey: stableQueryKey({
         spatial,
@@ -139,16 +248,27 @@ const createRuntimeKey = (options, spatial, operation = "features") => createQue
     })
 });
 
-const createRuntimeOptions = (options = {}, tags = []) => ({
-    signal: options.signal,
-    ...createArcGisQueryCachePolicy({
+const createRuntimeOptions = <T extends ArcGisQueryResultLike>(
+    options: GisQueryOptions = {},
+    tags: unknown[] = []
+): QueryExecuteOptions<T> => {
+    const policy = createArcGisQueryCachePolicy({
         cache: options.cache === true && options.live !== true,
-        ttlMs: options.ttlMs,
+        ...(options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs }),
         tags: [...tags, ...toArray(options.cacheTags)]
-    })
-});
+    }) as QueryExecuteOptions<T>;
 
-const createQueryTask = async (options, spatial, signal) => {
+    return {
+        ...policy,
+        ...(options.signal ? { signal: options.signal } : {})
+    };
+};
+
+const createQueryTask = async (
+    options: GisQueryOptions,
+    spatial: boolean,
+    signal?: AbortSignal
+): Promise<{ queryTask: ArcGisQueryTaskLike; query: UnknownRecord }> => {
     const url = normalizeUrl(options.url);
     if (!url) {
         throw Object.assign(new Error("A GIS query URL is required."), { code: "INVALID_GIS_URL" });
@@ -163,35 +283,50 @@ const createQueryTask = async (options, spatial, signal) => {
     return { queryTask, query };
 };
 
-const executeTask = async (options = {}, spatial = false, signal) => {
+const executeTask = async (
+    options: GisQueryOptions = {},
+    spatial = false,
+    signal?: AbortSignal
+): Promise<ArcGisQueryResponseLike> => {
     const { queryTask, query } = await createQueryTask(options, spatial, signal);
     const requestOptions = signal ? { signal } : undefined;
     return queryTask.execute(query, requestOptions);
 };
 
-const executeQuery = async (options = {}, spatial = false) => {
+const executeQuery = async (
+    options: GisQueryOptions = {},
+    spatial = false
+): Promise<GisFeatureQueryResult> => {
     try {
         const key = createRuntimeKey(options, spatial, "features");
-        const result = await queryRuntime.execute(
+        return await queryRuntime.execute<GisFeatureQuerySuccess>(
             key,
             async ({ signal }) => toServiceResult(
                 await executeTask(options, spatial, signal),
                 options
             ),
-            createRuntimeOptions(options, ["features", normalizeUrl(options.url)])
+            createRuntimeOptions<GisFeatureQuerySuccess>(
+                options,
+                ["features", normalizeUrl(options.url)]
+            )
         );
-        return result;
     } catch (error) {
         return toErrorResult(error);
     }
 };
 
-const executeCountTask = async (options = {}, spatial = false, signal) => {
+const executeCountTask = async (
+    options: GisQueryOptions = {},
+    spatial = false,
+    signal?: AbortSignal
+): Promise<number> => {
     const { queryTask, query } = await createQueryTask(options, spatial, signal);
     const requestOptions = signal ? { signal } : undefined;
 
     if (typeof queryTask.executeForCount === "function") {
-        return queryTask.executeForCount(query, requestOptions);
+        const count = await queryTask.executeForCount(query, requestOptions);
+        const numericCount = Number(count);
+        return Number.isFinite(numericCount) ? numericCount : 0;
     }
 
     if (typeof queryTask.executeForIds === "function") {
@@ -205,37 +340,49 @@ const executeCountTask = async (options = {}, spatial = false, signal) => {
     );
 };
 
-const executeCount = async (options = {}, spatial = false) => {
+const executeCount = async (
+    options: GisQueryOptions = {},
+    spatial = false
+): Promise<GisCountQueryResult> => {
     try {
         const key = createRuntimeKey(options, spatial, "count");
-        return await queryRuntime.execute(
+        return await queryRuntime.execute<GisCountQuerySuccess>(
             key,
             async ({ signal }) => toCountResult(
                 await executeCountTask(options, spatial, signal)
             ),
-            createRuntimeOptions(options, ["count", normalizeUrl(options.url)])
+            createRuntimeOptions<GisCountQuerySuccess>(
+                options,
+                ["count", normalizeUrl(options.url)]
+            )
         );
     } catch (error) {
         return toErrorResult(error);
     }
 };
 
-const mergePageMetadata = (aggregate, pageResult) => ({
+const mergePageMetadata = (
+    aggregate: GisQueryMetadata,
+    pageResult: GisFeatureQuerySuccess
+): GisQueryMetadata => ({
     ...aggregate,
     fields: aggregate.fields.length ? aggregate.fields : toArray(pageResult.fields),
     geometryType: aggregate.geometryType ?? pageResult.geometryType ?? null,
     spatialReference: aggregate.spatialReference ?? pageResult.spatialReference ?? null
 });
 
-const executeAllPages = async (options = {}, spatial = false) => {
+const executeAllPages = async (
+    options: GisQueryOptions = {},
+    spatial = false
+): Promise<GisFeatureQueryResult> => {
     const pageSize = toBoundedPositiveInteger(options.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const maxRecords = toBoundedPositiveInteger(options.maxRecords, DEFAULT_MAX_RECORDS, MAX_ALL_RECORDS);
-    const startOffset = toNonNegativeInteger(options.resultOffset, 0);
-    const collected = [];
-    const seenOffsets = new Set();
+    const startOffset = toNonNegativeInteger(options.resultOffset, 0) ?? 0;
+    const collected: GisFeatureRecord[] = [];
+    const seenOffsets = new Set<number>();
     let offset = startOffset;
     let pages = 0;
-    let metadata = {
+    let metadata: GisQueryMetadata = {
         fields: [],
         geometryType: null,
         spatialReference: null
@@ -262,18 +409,18 @@ const executeAllPages = async (options = {}, spatial = false) => {
                 resultRecordCount: currentPageSize
             }, spatial);
 
-            if (pageResult?.type !== Constants_ServiceResultType.Success) {
+            if (pageResult.type !== Constants_ServiceResultType.Success) {
                 return pageResult;
             }
 
             pages += 1;
             metadata = mergePageMetadata(metadata, pageResult);
-            const pageData = toArray(pageResult.data);
+            const pageData = toArray<GisFeatureRecord>(pageResult.data);
             collected.push(...pageData);
-            serviceHasMore = Boolean(pageResult.page?.hasMore);
+            serviceHasMore = Boolean(pageResult.page.hasMore);
 
             if (!serviceHasMore || pageData.length === 0) break;
-            const nextOffset = toNonNegativeInteger(pageResult.page?.nextOffset);
+            const nextOffset = toNonNegativeInteger(pageResult.page.nextOffset);
             if (nextOffset === null || nextOffset <= offset) {
                 throw Object.assign(new Error("GIS pagination did not advance."), {
                     code: "PAGINATION_STALLED",
@@ -308,27 +455,29 @@ const executeAllPages = async (options = {}, spatial = false) => {
     }
 };
 
-export const invalidateGisQueryCache = (selector) => queryRuntime.invalidate(selector);
+export const invalidateGisQueryCache = (selector: unknown): number => queryRuntime.invalidate(selector);
 
-export const invalidateGisQueryCacheTag = (tag) => queryRuntime.invalidateTag(tag);
+export const invalidateGisQueryCacheTag = (tag: unknown): number => queryRuntime.invalidateTag(tag);
 
-export const clearGisQueryRuntime = () => {
+export const clearGisQueryRuntime = (): void => {
     queryRuntime.clear({ abortInFlight: true });
     queryModulesPromise = null;
 };
 
-export const configureGisQueryRuntime = (options = {}) => queryRuntime.configure(options);
+export const configureGisQueryRuntime = (
+    options: QueryRuntimeConfiguration = {}
+) => queryRuntime.configure(options);
 
 export const getGisQueryRuntimeStats = () => ({
     ...queryRuntime.getStats(),
     modulesLoaded: Boolean(queryModulesPromise)
 });
 
-export const GisQueryHelper = {
-    ExecuteQuery: async (options = {}) => executeQuery(options, false),
-    ExecuteSpatialQuery: async (options = {}) => executeQuery(options, true),
-    ExecuteCount: async (options = {}) => executeCount(options, false),
-    ExecuteSpatialCount: async (options = {}) => executeCount(options, true),
-    ExecuteAllPages: async (options = {}) => executeAllPages(options, false),
-    ExecuteAllSpatialPages: async (options = {}) => executeAllPages(options, true)
-};
+export const GisQueryHelper = Object.freeze({
+    ExecuteQuery: (options: GisQueryOptions = {}) => executeQuery(options, false),
+    ExecuteSpatialQuery: (options: GisQueryOptions = {}) => executeQuery(options, true),
+    ExecuteCount: (options: GisQueryOptions = {}) => executeCount(options, false),
+    ExecuteSpatialCount: (options: GisQueryOptions = {}) => executeCount(options, true),
+    ExecuteAllPages: (options: GisQueryOptions = {}) => executeAllPages(options, false),
+    ExecuteAllSpatialPages: (options: GisQueryOptions = {}) => executeAllPages(options, true)
+});
