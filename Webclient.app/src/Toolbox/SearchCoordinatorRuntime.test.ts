@@ -298,7 +298,7 @@ describe("SearchCoordinatorRuntime", () => {
         test("deduplicates concurrent loader work", async () => {
             const coordinator = createSearchCoordinator();
             let release;
-            const loader = jest.fn(() => new Promise(resolve => {
+            const loader = vi.fn(() => new Promise(resolve => {
                 release = resolve;
             }));
             coordinator.registerLoader("places", loader);

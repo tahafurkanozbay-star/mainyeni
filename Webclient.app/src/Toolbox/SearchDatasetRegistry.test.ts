@@ -236,7 +236,7 @@ describe("SearchDatasetRegistry", () => {
         test("does not call loaders when a fresh dataset is cached", async () => {
             const registry = createSearchDatasetRegistry({ ttlMs: 1000 });
             registry.register("places", records(1), {}, { now: 0 });
-            const loader = jest.fn(() => records(2));
+            const loader = vi.fn(() => records(2));
             registry.registerLoader("places", loader);
             const result = await registry.load("places", { now: 10 });
             expect(result.records[0].id).toBe(1);
@@ -255,7 +255,7 @@ describe("SearchDatasetRegistry", () => {
         test("can intentionally return stale local data without loading", async () => {
             const registry = createSearchDatasetRegistry({ ttlMs: 10 });
             registry.register("places", records(1), {}, { now: 0 });
-            const loader = jest.fn(() => records(2));
+            const loader = vi.fn(() => records(2));
             registry.registerLoader("places", loader);
             const result = await registry.load("places", { now: 20, allowStale: true });
             expect(result.stale).toBe(true);
@@ -275,7 +275,7 @@ describe("SearchDatasetRegistry", () => {
 
         test("rejects pre-aborted loads without calling loader", async () => {
             const registry = createSearchDatasetRegistry();
-            const loader = jest.fn(() => records(1));
+            const loader = vi.fn(() => records(1));
             registry.registerLoader("places", loader);
             await expect(registry.load("places", { signal: { aborted: true } })).rejects.toMatchObject({ name: "AbortError" });
             expect(loader).not.toHaveBeenCalled();
@@ -284,7 +284,7 @@ describe("SearchDatasetRegistry", () => {
         test("ensure returns fresh cache before loader", async () => {
             const registry = createSearchDatasetRegistry({ ttlMs: 1000 });
             registry.register("places", records(1), {}, { now: 0 });
-            const loader = jest.fn(() => records(2));
+            const loader = vi.fn(() => records(2));
             registry.registerLoader("places", loader);
             const result = await registry.ensure("places", { now: 50 });
             expect(result.records[0].id).toBe(1);
@@ -296,7 +296,7 @@ describe("SearchDatasetRegistry", () => {
         test("caches a derived index by dataset revision", () => {
             const registry = createSearchDatasetRegistry();
             registry.register("places", records(1));
-            const builder = jest.fn(snapshot => ({ count: snapshot.recordCount }));
+            const builder = vi.fn(snapshot => ({ count: snapshot.recordCount }));
             const first = registry.getOrBuildDerived("places", "index", builder);
             const second = registry.getOrBuildDerived("places", "index", builder);
             expect(first).toEqual({ count: 1 });
