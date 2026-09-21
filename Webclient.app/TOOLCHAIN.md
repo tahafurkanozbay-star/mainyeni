@@ -14,7 +14,7 @@ The production web client uses Node 24 and npm 11 with the lockfile committed un
 - Native Fetch through `platform/http/httpClient`; new business code must not introduce a second HTTP client
 - bounded stale-deployment recovery for Vite preload/dynamic-import failures; one session-scoped reload is allowed and reload loops are suppressed
 
-Legacy JavaScript/JSX remains supported by a shared Vite/Vitest Oxc transform in `tooling/sourceTransforms.ts`. The compatibility transform normalizes Vite query/fragment module ids so hot-reload and transformed legacy modules use the same path classification.
+`Webclient.app/src` is a strict TypeScript/TSX-only source tree. JavaScript/JSX/MJS/CJS files under `src` are rejected by the typed-source boundary and must not be restored as shadow copies beside typed modules. If a local workspace contains stale `.js`/`.jsx` files after updating, treat that workspace as dirty or outdated and refresh it from current `main` rather than adding a JSX-in-JS compatibility transform.
 
 ## Quality gates
 
@@ -38,6 +38,6 @@ Runtime packages must correspond to verified source usage. Do not retain package
 
 ## Migration rules
 
-New or materially rewritten UI/runtime modules should be TypeScript (`.ts`/`.tsx`). Existing JavaScript with JSX is supported only as a bounded compatibility surface so migration can proceed without a risky big-bang rewrite.
+Application UI/runtime source under `Webclient.app/src` must remain TypeScript (`.ts`/`.tsx`). Do not add JavaScript/JSX compatibility transforms or keep generated/stale `.js` shadow files beside canonical typed modules; the typed-source boundary intentionally fails closed on JavaScript reintroduction.
 
 Do not add WMS/WFS fallbacks, invent ArcGIS service URLs, create a second icon authority, or bypass the shared same-origin HTTP policy. Browser secrets, authorization headers and privileged credentials are not part of the frontend contract.

@@ -27,8 +27,11 @@
     "web-vitals": "^6.2.2"
   },
   "scripts": {
+    "predev": "node scripts/setup-local-env.mjs",
     "dev": "vite",
+    "prestart": "node scripts/setup-local-env.mjs",
     "start": "vite --host 0.0.0.0",
+    "setup:local": "node scripts/setup-local-env.mjs",
     "build": "vite build && node scripts/release-artifacts.mjs && node scripts/build-integrity.mjs",
     "build:verify": "node scripts/verify-build.mjs",
     "dependency:verify": "node scripts/dependency-contract.mjs",
