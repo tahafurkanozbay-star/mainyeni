@@ -30,9 +30,11 @@
     "typecheck:strict": "tsc --noEmit -p tsconfig.strict.json",
     "test": "vitest",
     "test:ci": "vitest run",
-    "verify": "npm run audit:language && npm run test:tooling && npm run lint:strict && npm run typecheck && npm run typecheck:strict && npm run test:ci && npm run build",
+    "verify": "npm run audit:language && npm run test:tooling && npm run lint:strict && npm run typecheck && npm run typecheck:strict && npm run test:ci && npm run build && npm run bundle:budget",
     "audit:language": "node tooling/admin-language-boundary.mjs .",
-    "test:tooling": "node --test tooling/*.test.mjs"
+    "test:tooling": "node --test tooling/*.test.mjs",
+    "bundle:report": "node tooling/admin-build-budget.mjs",
+    "bundle:budget": "node tooling/admin-build-budget.mjs --strict"
   },
   "engines": {
     "node": ">=24.0.0",
