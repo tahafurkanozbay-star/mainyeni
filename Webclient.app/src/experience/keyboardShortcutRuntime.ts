@@ -132,18 +132,18 @@ export class KeyboardShortcutRuntime {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.isComposing) return;
     const editable = isEditable(event.target);
-    for (const definition of this.definitions.values()) {
-      if (!scopeMatches(definition, this.current.scope)) continue;
-      if (editable && !definition.allowInEditable) continue;
-      if (!sameChord(definition, event)) continue;
-      if (!this.isEnabled(definition)) continue;
-      if (definition.preventDefault !== false) event.preventDefault();
-      try {
-        definition.run(event);
-      } catch (error) {
-        this.report(error, definition.id);
-      }
-      return;
+    const definition = Array.from(this.definitions.values()).find((candidate) =>
+      scopeMatches(candidate, this.current.scope)
+      && (!editable || candidate.allowInEditable === true)
+      && sameChord(candidate, event)
+      && this.isEnabled(candidate)
+    );
+    if (!definition) return;
+    if (definition.preventDefault !== false) event.preventDefault();
+    try {
+      definition.run(event);
+    } catch (error) {
+      this.report(error, definition.id);
     }
   };
 
@@ -158,12 +158,10 @@ export class KeyboardShortcutRuntime {
   }
 
   private countEnabled(): number {
-    let count = 0;
-    for (const definition of this.definitions.values()) {
-      if (!scopeMatches(definition, this.current.scope)) continue;
-      if (this.isEnabled(definition)) count += 1;
-    }
-    return count;
+    return Array.from(this.definitions.values()).reduce(
+      (count, definition) => count + (scopeMatches(definition, this.current.scope) && this.isEnabled(definition) ? 1 : 0),
+      0,
+    );
   }
 
   private commit(scopeAlreadyChanged = false): void {
@@ -177,7 +175,7 @@ export class KeyboardShortcutRuntime {
       enabled,
       revision: previous.revision + 1,
     };
-    for (const listener of this.listeners) this.notifyOne(listener, this.current, previous);
+    this.listeners.forEach((listener) => this.notifyOne(listener, this.current, previous));
   }
 
   private notifyOne(
