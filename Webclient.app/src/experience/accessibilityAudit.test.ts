@@ -37,9 +37,14 @@ describe("accessibilityAudit", () => {
     });
 
     test("uses associated labels for select and textarea controls", () => {
-        const root = fixture('<label for="layer">Katman</label><select id="layer"><option>A</option></select><label for="note">Not</label><textarea id="note"></textarea>');
-        expect(getAccessibleName(root.querySelector("#layer") as HTMLElement)).toBe("Katman");
-        expect(getAccessibleName(root.querySelector("#note") as HTMLElement)).toBe("Not");
+        const layerLabel = element("label", { for: "layer" }, "Katman");
+        const layerSelect = element("select", { id: "layer" });
+        layerSelect.append(element("option", {}, "A"));
+        const noteLabel = element("label", { for: "note" }, "Not");
+        const noteArea = element("textarea", { id: "note" });
+        const root = rootWith(layerLabel, layerSelect, noteLabel, noteArea);
+        expect(getAccessibleName(layerSelect)).toBe("Katman");
+        expect(getAccessibleName(noteArea)).toBe("Not");
         expect(auditAccessibility(root).counts["form-control-without-name"]).toBe(0);
     });
 
@@ -69,7 +74,7 @@ describe("accessibilityAudit", () => {
     });
 
     test("does not report disabled controls as focusable hidden content", () => {
-        const root = fixture('<section aria-hidden="true"><button disabled>Kapalı</button><input disabled aria-label="Ad" /></section>');
+        const root = fixture('<section aria-hidden="true"><button type="button" disabled>Kapalı</button><input disabled aria-label="Ad" /></section>');
         expect(auditAccessibility(root).counts["focusable-in-hidden-tree"]).toBe(0);
     });
 
@@ -104,12 +109,12 @@ describe("accessibilityAudit", () => {
     });
 
     test("reports every unresolved ARIA id reference", () => {
-        const root = fixture('<button aria-label="Katman" aria-controls="missing-panel" aria-describedby="missing-help">Aç</button>');
+        const root = fixture('<button type="button" aria-label="Katman" aria-controls="missing-panel" aria-describedby="missing-help">Aç</button>');
         expect(auditAccessibility(root).counts["broken-aria-reference"]).toBe(2);
     });
 
     test("accepts resolved multi-id labels and descriptions", () => {
-        const root = fixture('<span id="a">Harita</span><span id="b">Araçları</span><p id="help">Yardım</p><button aria-labelledby="a b" aria-describedby="help">x</button>');
+        const root = fixture('<span id="a">Harita</span><span id="b">Araçları</span><p id="help">Yardım</p><button type="button" aria-labelledby="a b" aria-describedby="help">x</button>');
         expect(getAccessibleName(root.querySelector("button") as HTMLElement)).toBe("Harita Araçları");
         expect(auditAccessibility(root).counts["broken-aria-reference"]).toBe(0);
     });
@@ -146,12 +151,12 @@ describe("accessibilityAudit", () => {
     });
 
     test("requires expanded controls to expose a valid boolean and target", () => {
-        const root = fixture('<button aria-expanded="yes">A</button><button aria-expanded="true">B</button>');
+        const root = fixture('<button type="button" aria-expanded="yes">A</button><button type="button" aria-expanded="true">B</button>');
         expect(auditAccessibility(root).counts["invalid-expanded-control"]).toBe(2);
     });
 
     test("accepts expanded controls with a resolved target", () => {
-        const root = fixture('<button aria-expanded="false" aria-controls="panel">Katmanlar</button><section id="panel"></section>');
+        const root = fixture('<button type="button" aria-expanded="false" aria-controls="panel">Katmanlar</button><section id="panel"></section>');
         expect(auditAccessibility(root).counts["invalid-expanded-control"]).toBe(0);
         expect(auditAccessibility(root).counts["broken-aria-reference"]).toBe(0);
     });
