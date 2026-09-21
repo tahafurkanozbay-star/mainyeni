@@ -9,10 +9,6 @@ import {
 } from './serviceHealth';
 import { createResourceScope } from './resourceScope';
 
-const flush = async (): Promise<void> => {
-  for (let index = 0; index < 10; index += 1) await Promise.resolve();
-};
-
 describe('Platform service composition integration', () => {
   test('composes Platform -> GIS -> Experience without a second transport stack', async () => {
     const config = createServiceToken<{ readonly apiBase: string }>('platform-config');
