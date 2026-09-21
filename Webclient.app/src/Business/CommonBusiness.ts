@@ -521,10 +521,13 @@ const getInfoWithAttachments = async (
           ? `${String(attributes.adi)} görseli ${index + 1}`
           : `Ek görsel ${index + 1}`;
         image.loading = 'lazy';
+        const attachmentAttributes = isRecord(attachment.attr)
+          ? attachment.attr
+          : Object.freeze({});
         image.src = getAttachmentUrl(
           queryServiceTitle,
           attributes.objectid,
-          attachment.attr?.attachmentid,
+          attachmentAttributes.attachmentid,
         );
         slide.appendChild(image);
         slides.appendChild(slide);
