@@ -416,6 +416,10 @@ export class DataGridRuntime<Row> {
   }
 
   private reconcileSelection(values: Iterable<string>): void {
+    if (this.selectionMode === "none") {
+      this.selected = new Set<string>();
+      return;
+    }
     const valid = this.rowIds();
     const next = new Set<string>();
     for (const raw of values) {
@@ -423,7 +427,6 @@ export class DataGridRuntime<Row> {
       if (!id || !valid.has(id)) continue;
       next.add(id);
       if (this.selectionMode === "single") break;
-      if (this.selectionMode === "none") break;
     }
     this.selected = next;
   }
