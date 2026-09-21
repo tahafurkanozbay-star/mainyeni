@@ -1,6 +1,8 @@
-import axios from 'axios';
 import { Constants } from '../Core/Constants';
-import { Global } from '../Core/Global';
+import {
+  adminApiPostForm,
+  type AdminApiError,
+} from '../runtime/adminApiClient';
 import {
   clearAdminSession,
   readAdminSession,
@@ -16,31 +18,32 @@ export interface AdminLoginResult {
   readonly message?: string;
 }
 
-interface AxiosLikeError {
-  readonly response?: {
-    readonly status?: number;
-  };
-}
+const sanitizedFailure = (error: unknown): Readonly<Record<string, unknown>> => {
+  const candidate = error as Partial<AdminApiError> | null;
+  return Object.freeze({
+    code: typeof candidate?.code === 'string' ? candidate.code : 'unknown',
+    status: typeof candidate?.status === 'number' ? candidate.status : null,
+  });
+};
 
 export const AuthBusiness = {
   LoginUser: async (
     username: string,
     password: string,
   ): Promise<AdminLoginResult | null> => {
-    try {
-      const data = new FormData();
-      data.append('UserName', username);
-      data.append('Password', password);
+    const data = new FormData();
+    data.append('UserName', username);
+    data.append('Password', password);
 
-      const response = await axios.post<AdminLoginResult>(
-        `${Global.API_URL}/Auth/Login`,
+    try {
+      return await adminApiPostForm<AdminLoginResult>(
+        '/Auth/Login',
         data,
         {
-          timeout: 15_000,
-          headers: { Accept: 'application/json' },
+          authenticated: false,
+          redirectOnUnauthorized: false,
         },
       );
-      return response.data;
     } catch {
       return null;
     }
@@ -62,23 +65,14 @@ export const AuthBusiness = {
     });
   },
 
-  // Historical names are preserved for caller compatibility while the storage
-  // implementation lives in the lightweight runtime module.
   GetSessionFromLocalStorage: (): AdminSession | null => readAdminSession(),
 
   SetSessionInLocalStorage: (session: unknown): boolean =>
     writeAdminSession(session),
 
-  HandleRejection: async (error: AxiosLikeError): Promise<never> => {
-    const status = error?.response?.status;
-    if (status === 401 || status === 403) {
-      clearAdminSession();
-      window.location.assign('./');
-    }
-
-    return Promise.reject({
+  HandleRejection: async (error: unknown): Promise<never> =>
+    Promise.reject({
       Type: Constants.MessageTypes.Error,
-      Data: error,
-    });
-  },
+      Data: sanitizedFailure(error),
+    }),
 };
