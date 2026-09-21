@@ -13,6 +13,8 @@
     "src/Core/Global.ts",
     "src/Core/Constants.ts",
     "src/reportWebVitals.ts",
-    "src/vite-env.d.ts"
+    "src/vite-env.d.ts",
+    "src/runtime/kmlSerializer.ts",
+    "src/runtime/kmlSerializer.test.ts"
   ]
 }
