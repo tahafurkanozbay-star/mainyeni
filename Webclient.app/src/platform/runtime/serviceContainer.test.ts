@@ -4,7 +4,6 @@ import {
   createServiceToken,
   ServiceContainerError,
   type ServiceContainerClock,
-  type ServiceContainerSnapshot,
 } from './serviceContainer';
 
 const flush = async (): Promise<void> => {
@@ -474,6 +473,41 @@ describe('ServiceContainer deterministic startup', () => {
       code: 'DEPENDENCY_NOT_DECLARED',
       serviceId: 'consumer',
     });
+  });
+
+  test('optional dependency startup failure is retained as explicit evidence', async () => {
+    const failing = createServiceToken<{ readonly ready: true }>('optional-failing');
+    const consumer = createServiceToken<{ readonly ready: true }>('consumer');
+    const container = createServiceContainer();
+
+    container.register({
+      token: failing,
+      version: '1',
+      domain: 'platform',
+      criticality: 'optional',
+      startup: 'lazy',
+      start: () => {
+        throw new Error('private optional failure detail');
+      },
+    });
+    container.register({
+      token: consumer,
+      version: '1',
+      domain: 'platform',
+      optionalDependencies: [failing],
+      start: () => ({ ready: true }),
+    });
+
+    const started = await container.start();
+    expect(started.state).toBe('degraded');
+    expect(started.counters.optionalDependencyFailures).toBe(1);
+    expect(started.events).toContainEqual(expect.objectContaining({
+      kind: 'optional-dependency-failed',
+      serviceId: 'consumer',
+      dependencyId: 'optional-failing',
+      errorName: 'Error',
+    }));
+    expect(JSON.stringify(started)).not.toContain('private optional failure detail');
   });
 
   test('optional accessor returns undefined for absent optional dependency', async () => {
