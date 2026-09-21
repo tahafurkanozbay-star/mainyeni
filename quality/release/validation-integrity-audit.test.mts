@@ -70,7 +70,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: qa-${{ github.ref }}
+  group: qa-\${{ github.ref }}
   cancel-in-progress: true
 jobs:
   test:
