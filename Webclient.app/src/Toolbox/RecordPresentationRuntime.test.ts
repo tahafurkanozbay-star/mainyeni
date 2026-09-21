@@ -109,7 +109,7 @@ describe("RecordPresentationRuntime", () => {
         });
 
         test("reports fallback through the existing resolver callback", () => {
-            const onFallback = jest.fn();
+            const onFallback = vi.fn();
             resolveSharedRecordIcon({ type: "unknown-x" }, { onFallback });
             expect(onFallback).toHaveBeenCalledTimes(1);
             expect(onFallback.mock.calls[0][0]).toEqual(expect.objectContaining({
