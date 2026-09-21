@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import {
   createResourceScopeRegistry,
   ResourceScopeRegistryError,
@@ -73,12 +73,12 @@ describe('ResourceScopeRegistry creation and lookup', () => {
       owner: 'owner',
       scopeOptions: { maxResources: 1, maxOwnerResources: 1 },
     });
-    scope.register({ owner: 'resource-owner', key: 'first', cleanup: jest.fn() });
+    scope.register({ owner: 'resource-owner', key: 'first', cleanup: vi.fn() });
 
     expect(() => scope.register({
       owner: 'resource-owner',
       key: 'second',
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     })).toThrow(expect.objectContaining({ code: 'RESOURCE_CAPACITY_EXCEEDED' }));
   });
 
@@ -216,7 +216,7 @@ describe('ResourceScopeRegistry admission controls', () => {
 
 describe('ResourceScopeRegistry close semantics', () => {
   test('closes one named scope and removes it from lookup', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const registry = createResourceScopeRegistry();
     const scope = registry.create({ name: 'map', owner: 'gis' });
     scope.register({ owner: 'map', key: 'watch', cleanup });
@@ -329,7 +329,7 @@ describe('ResourceScopeRegistry close semantics', () => {
   });
 
   test('closeOwner attempts sibling scopes when one cleanup fails', async () => {
-    const successful = jest.fn();
+    const successful = vi.fn();
     const registry = createResourceScopeRegistry({
       maxScopes: 3,
       maxOwnerScopes: 3,
@@ -349,7 +349,7 @@ describe('ResourceScopeRegistry close semantics', () => {
   });
 
   test('closeAll attempts every scope when cleanup failures occur', async () => {
-    const successful = jest.fn();
+    const successful = vi.fn();
     const registry = createResourceScopeRegistry({
       maxScopes: 3,
       maxOwnerScopes: 3,
@@ -397,7 +397,7 @@ describe('ResourceScopeRegistry stale visibility and self-closed scopes', () => 
     const clock = createClock();
     const registry = createResourceScopeRegistry({ staleAfterMs: 100 }, clock);
     const scope = registry.create({ name: 'map', owner: 'gis' });
-    scope.register({ owner: 'map', key: 'watch', cleanup: jest.fn() });
+    scope.register({ owner: 'map', key: 'watch', cleanup: vi.fn() });
     scope.child('popup');
     clock.advance(100);
 
@@ -458,7 +458,7 @@ describe('ResourceScopeRegistry stale visibility and self-closed scopes', () => 
 
 describe('ResourceScopeRegistry disposal and clock invariants', () => {
   test('dispose closes all scopes and enters terminal state', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const registry = createResourceScopeRegistry({
       maxScopes: 2,
       maxOwnerScopes: 2,
@@ -495,7 +495,7 @@ describe('ResourceScopeRegistry disposal and clock invariants', () => {
   });
 
   test('dispose attempts every scope even when one cleanup fails', async () => {
-    const successful = jest.fn();
+    const successful = vi.fn();
     const registry = createResourceScopeRegistry({
       maxScopes: 2,
       maxOwnerScopes: 2,
