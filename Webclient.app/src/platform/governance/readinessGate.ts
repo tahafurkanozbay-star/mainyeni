@@ -153,7 +153,7 @@ export const createReadinessGate = (options: ReadinessGateOptions = {}): Readine
   };
 
   const notify = (current: ReadinessSnapshot): void => {
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(current);
       } catch (error) {
