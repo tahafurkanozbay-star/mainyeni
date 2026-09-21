@@ -49,6 +49,8 @@ export type RequestBody =
 
 export type RequestHeaders = Record<string, string | number | boolean | null | undefined> | Headers;
 
+export type IdempotencyPolicy = 'server-enforced';
+
 export interface RuntimeDefaults {
   baseUrl?: string;
   timeoutMs?: number;
@@ -67,6 +69,8 @@ export interface RawRequestConfig<TBody = RequestBody> {
   cache?: boolean;
   dedupe?: boolean;
   retryUnsafe?: boolean;
+  idempotencyKey?: string;
+  idempotencyPolicy?: IdempotencyPolicy;
   cacheTtlMs?: number;
   cacheStaleWhileRevalidateMs?: number;
   cacheClassification?: CacheDataClassification;
@@ -90,7 +94,7 @@ export interface RawRequestConfig<TBody = RequestBody> {
 }
 
 export interface NormalizedRequestConfig<TBody = RequestBody>
-  extends Omit<RawRequestConfig<TBody>, 'method' | 'url' | 'headers' | 'timeout' | 'maxRetries' | 'cache' | 'dedupe' | 'cacheTtlMs'> {
+  extends Omit<RawRequestConfig<TBody>, 'method' | 'url' | 'headers' | 'timeout' | 'maxRetries' | 'cache' | 'dedupe' | 'cacheTtlMs' | 'idempotencyKey' | 'idempotencyPolicy'> {
   method: string;
   url: string;
   headers: Record<string, string>;
@@ -101,6 +105,9 @@ export interface NormalizedRequestConfig<TBody = RequestBody>
   retryAllowed: boolean;
   safeMethod: boolean;
   idempotentMethod: boolean;
+  idempotencyKey: string | null;
+  idempotencyPolicy: 'none' | IdempotencyPolicy;
+  mutationProtected: boolean;
   containsSensitiveMetadata: boolean;
   cacheTtlMs: number;
   cacheStaleWhileRevalidateMs: number;
@@ -354,6 +361,7 @@ export interface CoordinatedClient {
   invalidateCache(prefix?: string): number;
   getCacheSize(): number;
   getInFlightSize(): number;
+  getMutationSafetySnapshot(): Readonly<Record<string, unknown>>;
   invalidateCacheTags(tags: readonly string[]): number;
   invalidateCacheNamespace(namespace: string): number;
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>>;
