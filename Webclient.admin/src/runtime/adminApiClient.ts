@@ -1,5 +1,10 @@
 import { Global } from '../Core/Global';
 import {
+  AdminRequestCoordinator,
+  AdminRequestCoordinatorError,
+  adminRequestCoordinator,
+} from './adminRequestCoordinator';
+import {
   clearAdminSession,
   readAdminSession,
 } from './adminSession';
@@ -12,6 +17,8 @@ export type AdminApiErrorCode =
   | 'timeout'
   | 'aborted'
   | 'network-error'
+  | 'queue-full'
+  | 'queue-timeout'
   | 'response-too-large'
   | 'invalid-json'
   | 'invalid-content-type';
@@ -46,6 +53,7 @@ export interface AdminApiRequestOptions {
   readonly redirectOnUnauthorized?: boolean;
   readonly fetchImpl?: typeof fetch;
   readonly baseUrl?: string;
+  readonly coordinator?: AdminRequestCoordinator;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -53,6 +61,7 @@ const MIN_TIMEOUT_MS = 1_000;
 const MAX_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
+const MAX_QUEUE_WAIT_MS = 5_000;
 
 const clampInteger = (
   value: number | undefined,
@@ -60,8 +69,7 @@ const clampInteger = (
   minimum: number,
   maximum: number,
 ): number => {
-  if (value === undefined) return fallback;
-  if (!Number.isFinite(value)) return fallback;
+  if (value === undefined || !Number.isFinite(value)) return fallback;
   return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
 };
 
@@ -230,6 +238,46 @@ const responseError = (response: Response): AdminApiError => {
   );
 };
 
+const coordinatorError = (
+  error: AdminRequestCoordinatorError,
+): AdminApiError => {
+  switch (error.code) {
+    case 'queue-full':
+      return new AdminApiError(
+        'queue-full',
+        'Admin API request queue is at capacity.',
+      );
+    case 'queue-timeout':
+      return new AdminApiError(
+        'queue-timeout',
+        'Admin API request waited too long for network capacity.',
+      );
+    case 'aborted':
+      return new AdminApiError(
+        'aborted',
+        'Admin API request was aborted.',
+      );
+  }
+};
+
+const singleFlightKey = (
+  method: 'GET' | 'POST',
+  url: string,
+  timeoutMs: number,
+  maxResponseBytes: number,
+  authenticated: boolean,
+  externalSignal: AbortSignal | undefined,
+): string | undefined => {
+  if (method !== 'GET' || externalSignal !== undefined) return undefined;
+  return [
+    method,
+    authenticated ? 'auth' : 'public',
+    timeoutMs,
+    maxResponseBytes,
+    url,
+  ].join('|');
+};
+
 export const adminApiRequest = async <T>(
   endpointPath: string,
   options: AdminApiRequestOptions = {},
@@ -250,6 +298,19 @@ export const adminApiRequest = async <T>(
     throw new AdminApiError(
       'invalid-request',
       'Admin API request cannot contain JSON body and FormData together.',
+    );
+  }
+
+  const method = options.method
+    ?? (options.body === undefined && options.formData === undefined ? 'GET' : 'POST');
+
+  if (
+    method === 'GET'
+    && (options.body !== undefined || options.formData !== undefined)
+  ) {
+    throw new AdminApiError(
+      'invalid-request',
+      'GET requests cannot contain request bodies.',
     );
   }
 
@@ -286,55 +347,79 @@ export const adminApiRequest = async <T>(
     1,
     MAX_RESPONSE_BYTES,
   );
-  const bounded = createBoundedSignal(options.signal, timeoutMs);
+  const url = buildRequestUrl(
+    options.baseUrl ?? Global.API_URL,
+    endpointPath,
+    options.query,
+  );
+  const coordinator = options.coordinator ?? adminRequestCoordinator;
 
-  try {
-    let response: Response;
+  const execute = async (): Promise<T> => {
+    const bounded = createBoundedSignal(options.signal, timeoutMs);
     try {
-      response = await fetchImpl(
-        buildRequestUrl(
-          options.baseUrl ?? Global.API_URL,
-          endpointPath,
-          options.query,
-        ),
-        {
-          method: options.method ?? (body === undefined ? 'GET' : 'POST'),
-          credentials: 'same-origin',
-          headers,
-          body,
-          signal: bounded.signal,
-        },
-      );
-    } catch (error) {
-      if (bounded.signal.aborted) {
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          url,
+          {
+            method,
+            credentials: 'same-origin',
+            headers,
+            body,
+            signal: bounded.signal,
+          },
+        );
+      } catch {
+        if (bounded.signal.aborted) {
+          throw new AdminApiError(
+            bounded.timedOut() ? 'timeout' : 'aborted',
+            bounded.timedOut()
+              ? 'Admin API request timed out.'
+              : 'Admin API request was aborted.',
+          );
+        }
         throw new AdminApiError(
-          bounded.timedOut() ? 'timeout' : 'aborted',
-          bounded.timedOut()
-            ? 'Admin API request timed out.'
-            : 'Admin API request was aborted.',
+          'network-error',
+          'Admin API request could not reach the server.',
         );
       }
-      throw new AdminApiError(
-        'network-error',
-        'Admin API request could not reach the server.',
-      );
-    }
 
-    if (!response.ok) {
-      const error = responseError(response);
-      if (
-        redirectOnUnauthorized
-        && (error.code === 'unauthenticated' || error.code === 'forbidden')
-      ) {
-        clearAdminSession();
-        safeRedirectToLogin();
+      if (!response.ok) {
+        const error = responseError(response);
+        if (
+          redirectOnUnauthorized
+          && (error.code === 'unauthenticated' || error.code === 'forbidden')
+        ) {
+          clearAdminSession();
+          safeRedirectToLogin();
+        }
+        throw error;
       }
-      throw error;
-    }
 
-    return await parseJsonResponse<T>(response, maxResponseBytes);
-  } finally {
-    bounded.cleanup();
+      return await parseJsonResponse<T>(response, maxResponseBytes);
+    } finally {
+      bounded.cleanup();
+    }
+  };
+
+  try {
+    return await coordinator.schedule(execute, {
+      singleFlightKey: singleFlightKey(
+        method,
+        url,
+        timeoutMs,
+        maxResponseBytes,
+        authenticated,
+        options.signal,
+      ),
+      signal: options.signal,
+      queueTimeoutMs: Math.min(timeoutMs, MAX_QUEUE_WAIT_MS),
+    });
+  } catch (error) {
+    if (error instanceof AdminRequestCoordinatorError) {
+      throw coordinatorError(error);
+    }
+    throw error;
   }
 };
 
