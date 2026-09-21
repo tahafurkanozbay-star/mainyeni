@@ -8,8 +8,13 @@
   },
   "include": [
     "src/runtime/adminEnvironment.ts",
+    "src/runtime/adminEnvironment.test.ts",
     "src/Business/AuthBusiness.ts",
-    "src/Core/Global.ts",
+    "src/App.tsx",
+    "src/Pages/Auth/LoginPage.tsx",
+    "src/Shared/NavMenu.tsx",
+    "src/Shared/Page404.tsx",
+    "src/main.tsx",
     "src/reportWebVitals.ts",
     "src/vite-env.d.ts"
   ]
