@@ -1,5 +1,6 @@
 import { runtimeConfig } from '../config/runtimeConfig';
 import { createFetchTransport } from './fetchTransport';
+import type { FetchImplementation } from './fetchTransport';
 import { createNetworkDiagnostics } from './networkDiagnostics';
 import { createCoordinatedClient } from './requestCoordinator.ts';
 import { stableSerialize } from './requestPolicy';
@@ -32,7 +33,7 @@ interface ApiClientOptions {
   diagnostics?: ReturnType<typeof createNetworkDiagnostics>;
   diagnosticCapacity?: number;
   transport?: RequestTransport;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: FetchImplementation;
   clock?: () => number;
   setTimeout?: typeof setTimeout;
   clearTimeout?: typeof clearTimeout;
@@ -162,7 +163,7 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
   });
 
   const coordinated = createCoordinatedClient({
-    transport: transport as Transport,
+    transport,
     diagnostics,
     timeoutMs: config.requestTimeoutMs,
     maxRetries: config.maxRetries,
