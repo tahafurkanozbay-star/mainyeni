@@ -18,6 +18,7 @@ export type MutationIdempotencyEventKind =
 export interface MutationIdempotencyRegistryOptions {
   readonly maxEntries?: number;
   readonly maxEntriesPerOwner?: number;
+  readonly maxAttempts?: number;
   readonly retentionMs?: number;
   readonly staleInFlightAfterMs?: number;
   readonly maxKeyLength?: number;
@@ -73,6 +74,7 @@ export interface MutationIdempotencyRegistrySnapshot {
   readonly limits: Readonly<{
     readonly maxEntries: number;
     readonly maxEntriesPerOwner: number;
+    readonly maxAttempts: number;
     readonly retentionMs: number;
     readonly staleInFlightAfterMs: number;
   }>;
@@ -125,6 +127,7 @@ export class MutationIdempotencyError extends Error {
       | 'IDEMPOTENCY_KEY_IN_FLIGHT'
       | 'IDEMPOTENCY_KEY_REUSED'
       | 'MUTATION_ABORTED'
+      | 'ATTEMPT_LIMIT_EXCEEDED'
       | 'INVALID_CLOCK',
     message: string,
     readonly reason?: unknown,
@@ -161,6 +164,7 @@ interface MutableCounters {
 const DEFAULTS = Object.freeze({
   maxEntries: 512,
   maxEntriesPerOwner: 64,
+  maxAttempts: 5,
   retentionMs: 5 * 60_000,
   staleInFlightAfterMs: 2 * 60_000,
   maxKeyLength: 128,
@@ -276,6 +280,7 @@ const freezeCounters = (counters: MutableCounters): MutationIdempotencyCounters 
 class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry {
   readonly #maxEntries: number;
   readonly #maxEntriesPerOwner: number;
+  readonly #maxAttempts: number;
   readonly #retentionMs: number;
   readonly #staleInFlightAfterMs: number;
   readonly #maxKeyLength: number;
@@ -314,6 +319,12 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
       options.maxEntriesPerOwner ?? DEFAULTS.maxEntriesPerOwner,
       1,
       this.#maxEntries,
+    );
+    this.#maxAttempts = boundedInteger(
+      'maxAttempts',
+      options.maxAttempts ?? DEFAULTS.maxAttempts,
+      1,
+      32,
     );
     this.#retentionMs = boundedInteger(
       'retentionMs',
@@ -440,6 +451,7 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
       limits: Object.freeze({
         maxEntries: this.#maxEntries,
         maxEntriesPerOwner: this.#maxEntriesPerOwner,
+        maxAttempts: this.#maxAttempts,
         retentionMs: this.#retentionMs,
         staleInFlightAfterMs: this.#staleInFlightAfterMs,
       }),
@@ -485,6 +497,12 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
       },
       markAttempt: () => {
         if (entry.state !== 'in-flight') return false;
+        if (entry.logicalAttempts >= registry.#maxAttempts) {
+          registry.#reject(
+            'ATTEMPT_LIMIT_EXCEEDED',
+            'Mutation attempt limit is exhausted.',
+          );
+        }
         entry.logicalAttempts += 1;
         registry.#emit({
           kind: 'attempt',
