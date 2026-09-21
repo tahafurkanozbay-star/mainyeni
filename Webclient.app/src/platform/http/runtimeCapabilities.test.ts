@@ -9,30 +9,18 @@ import {
   scaleTimeoutForRuntime
 } from './runtimeCapabilities';
 
-interface TestConnection extends Record<string, unknown> {
-  saveData?: unknown;
-  effectiveType?: unknown;
-  downlink?: unknown;
-  rtt?: unknown;
-}
-
-interface TestNavigator extends Record<string, unknown> {
-  onLine: unknown;
-  hardwareConcurrency: unknown;
-  deviceMemory: unknown;
-  connection: TestConnection | undefined;
-  mozConnection?: TestConnection | undefined;
-  webkitConnection?: TestConnection | undefined;
-  userAgent?: unknown;
-  language?: unknown;
-  platform?: unknown;
-}
-
-interface TestRuntime extends Record<string, unknown> {
+type TestConnection = ConnectionLike & Record<string, unknown>;
+type TestNavigator = NavigatorLike & Record<string, unknown> & {
+  connection: TestConnection;
+  userAgent?: string;
+  language?: string;
+  platform?: string;
+};
+type TestRuntime = RuntimeLike & {
   navigator: TestNavigator;
   crypto: { subtle?: unknown };
   performance: { now?: unknown };
-}
+};
 
 const createRuntime = (overrides: Partial<TestRuntime> = {}): TestRuntime => {
   const runtime: TestRuntime = {
