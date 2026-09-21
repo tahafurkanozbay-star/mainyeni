@@ -149,8 +149,7 @@ const normalizeStringList = (
       name + ' exceeds the configured capacity',
     );
   }
-  const normalized = new Set<string>();
-  for (const value of values) normalized.add(normalizeId(name, value));
+  const normalized = new Set(values.map((value) => normalizeId(name, value)));
   return Object.freeze([...normalized].sort());
 };
 
@@ -263,38 +262,44 @@ export const normalizeServiceDescriptor = (
 const buildCapabilityMap = (
   descriptors: readonly NormalizedServiceDescriptor[],
 ): Readonly<Record<string, readonly string[]>> => {
-  const providers = new Map<string, string[]>();
-  for (const descriptor of descriptors) {
-    for (const capability of descriptor.provides) {
-      const services = providers.get(capability) ?? [];
+  const providers = descriptors.reduce((index, descriptor) => {
+    descriptor.provides.map((capability) => {
+      const services = index.get(capability) ?? [];
       services.push(descriptor.id);
-      providers.set(capability, services);
-    }
-  }
-  const result: Record<string, readonly string[]> = {};
-  for (const [capability, services] of [...providers.entries()].sort(([a], [b]) =>
-    a.localeCompare(b))) {
-    result[capability] = Object.freeze([...services].sort());
-  }
-  return Object.freeze(result);
+      index.set(capability, services);
+      return capability;
+    });
+    return index;
+  }, new Map<string, string[]>());
+
+  return Object.freeze(Object.fromEntries(
+    [...providers.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([capability, services]) => [
+        capability,
+        Object.freeze([...services].sort()),
+      ]),
+  ));
 };
 
 const buildDependentMap = (
   descriptors: readonly NormalizedServiceDescriptor[],
 ): Readonly<Record<string, readonly string[]>> => {
-  const dependents = new Map<string, Set<string>>();
-  for (const descriptor of descriptors) dependents.set(descriptor.id, new Set());
-  for (const descriptor of descriptors) {
-    for (const dependency of descriptor.dependsOn) {
-      dependents.get(dependency)?.add(descriptor.id);
-    }
-  }
-  const result: Record<string, readonly string[]> = {};
-  for (const [serviceId, values] of [...dependents.entries()].sort(([a], [b]) =>
-    a.localeCompare(b))) {
-    result[serviceId] = Object.freeze([...values].sort());
-  }
-  return Object.freeze(result);
+  const dependents = new Map(
+    descriptors.map((descriptor) => [descriptor.id, new Set<string>()] as const),
+  );
+  descriptors.map((descriptor) =>
+    descriptor.dependsOn.map((dependency) =>
+      dependents.get(dependency)?.add(descriptor.id)));
+
+  return Object.freeze(Object.fromEntries(
+    [...dependents.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([serviceId, values]) => [
+        serviceId,
+        Object.freeze([...values].sort()),
+      ]),
+  ));
 };
 
 const appendIssue = (
@@ -316,30 +321,30 @@ const graphIssues = (
   const ids = new Set(descriptors.map((descriptor) => descriptor.id));
   let relationCount = 0;
 
-  for (const descriptor of descriptors) {
+  descriptors.map((descriptor) => {
     relationCount += descriptor.dependsOn.length
       + descriptor.optionalDependencies.length
       + descriptor.provides.length
       + descriptor.consumes.length;
-    for (const dependency of descriptor.dependsOn) {
-      if (!ids.has(dependency)) {
-        appendIssue(issues, maxIssues, {
-          code: 'missing-dependency',
-          serviceId: descriptor.id,
-          target: dependency,
-        });
-      }
-    }
-    for (const capability of descriptor.consumes) {
-      if (!(capability in capabilities)) {
-        appendIssue(issues, maxIssues, {
-          code: 'missing-capability',
-          serviceId: descriptor.id,
-          target: capability,
-        });
-      }
-    }
-  }
+
+    descriptor.dependsOn
+      .filter((dependency) => !ids.has(dependency))
+      .map((dependency) => appendIssue(issues, maxIssues, {
+        code: 'missing-dependency',
+        serviceId: descriptor.id,
+        target: dependency,
+      }));
+
+    descriptor.consumes
+      .filter((capability) => !(capability in capabilities))
+      .map((capability) => appendIssue(issues, maxIssues, {
+        code: 'missing-capability',
+        serviceId: descriptor.id,
+        target: capability,
+      }));
+
+    return descriptor.id;
+  });
 
   if (relationCount > maxRelations && descriptors.length > 0) {
     appendIssue(issues, maxIssues, {
@@ -365,17 +370,19 @@ const topologicalOrder = (
   const indegree = new Map<string, number>();
   const dependents = new Map<string, Set<string>>();
 
-  for (const descriptor of descriptors) {
+  descriptors.map((descriptor) => {
     indegree.set(descriptor.id, 0);
     dependents.set(descriptor.id, new Set());
-  }
-  for (const descriptor of descriptors) {
-    for (const dependency of descriptor.dependsOn) {
-      if (!byId.has(dependency)) continue;
-      indegree.set(descriptor.id, (indegree.get(descriptor.id) ?? 0) + 1);
-      dependents.get(dependency)?.add(descriptor.id);
-    }
-  }
+    return descriptor.id;
+  });
+  descriptors.map((descriptor) =>
+    descriptor.dependsOn
+      .filter((dependency) => byId.has(dependency))
+      .map((dependency) => {
+        indegree.set(descriptor.id, (indegree.get(descriptor.id) ?? 0) + 1);
+        dependents.get(dependency)?.add(descriptor.id);
+        return dependency;
+      }));
 
   let frontier = [...indegree.entries()]
     .filter(([, count]) => count === 0)
@@ -395,16 +402,18 @@ const topologicalOrder = (
     layerIndex += 1;
     frontier = [];
 
-    for (const id of current) {
+    current.map((id) => {
       order.push(id);
       const nextServices = dependents.get(id);
-      if (!nextServices) continue;
-      for (const dependent of [...nextServices].sort()) {
+      if (!nextServices) return id;
+      [...nextServices].sort().map((dependent) => {
         const next = (indegree.get(dependent) ?? 0) - 1;
         indegree.set(dependent, next);
         if (next === 0) frontier.push(dependent);
-      }
-    }
+        return dependent;
+      });
+      return id;
+    });
     frontier.sort();
   }
 
@@ -475,27 +484,27 @@ export const analyzeServiceGraph = (
   );
 
   const seen = new Set<string>();
-  for (const descriptor of descriptors) {
-    if (seen.has(descriptor.id)) {
-      throw new ServiceGraphError(
-        'DUPLICATE_SERVICE',
-        'duplicate service descriptor: ' + descriptor.id,
-      );
-    }
+  const duplicate = descriptors.find((descriptor) => {
+    if (seen.has(descriptor.id)) return true;
     seen.add(descriptor.id);
+    return false;
+  });
+  if (duplicate) {
+    throw new ServiceGraphError(
+      'DUPLICATE_SERVICE',
+      'duplicate service descriptor: ' + duplicate.id,
+    );
   }
 
   const capabilities = buildCapabilityMap(descriptors);
   const dependents = buildDependentMap(descriptors);
   const issues = [...graphIssues(descriptors, capabilities, maxIssues, maxRelations)];
   const ordering = topologicalOrder(descriptors);
-  for (const serviceId of ordering.cycleNodes) {
-    appendIssue(issues, maxIssues, {
-      code: 'dependency-cycle',
-      serviceId,
-      target: serviceId,
-    });
-  }
+  ordering.cycleNodes.map((serviceId) => appendIssue(issues, maxIssues, {
+    code: 'dependency-cycle',
+    serviceId,
+    target: serviceId,
+  }));
 
   const valid = issues.length === 0;
   const startupOrder = valid ? ordering.order : Object.freeze([] as string[]);
