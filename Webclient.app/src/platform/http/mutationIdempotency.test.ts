@@ -77,11 +77,6 @@ describe('MutationIdempotencyRegistry admission', () => {
 
   test('rejects overlong idempotency keys', () => {
     const registry = createMutationIdempotencyRegistry({ maxKeyLength: 32 });
-    expect(() => registry.begin({
-      key: 'x'.repeat(33),
-      owner: 'owner',
-      method: 'post',
-    })).toMatchObject;
     try {
       registry.begin({
         key: 'x'.repeat(33),
