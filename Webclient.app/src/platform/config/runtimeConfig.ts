@@ -603,7 +603,7 @@ const fnv1a = (value: string): string => {
 };
 
 export const runtimeConfigFingerprint = (
-  config: RuntimeConfig,
+  config: RuntimeConfig = runtimeConfig,
 ): string => fnv1a([
   config.apiBaseUrl,
   config.requestTimeoutMs,
