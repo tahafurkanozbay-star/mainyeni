@@ -111,7 +111,7 @@ describe('Platform service composition integration', () => {
     expect(container.state).toBe('ready');
 
     await scope.dispose('application-unmount');
-    await flush();
+    await container.dispose('join-scope-disposal');
 
     expect(container.state).toBe('disposed');
     expect(stopped).toEqual(['config']);
