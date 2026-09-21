@@ -14,16 +14,14 @@ import {
   type SceneViewLike,
 } from '../../gis-engine/sceneRuntime';
 import {
-  createSceneExperienceRuntime,
-  type SceneExperienceRuntime,
   type SceneExperienceSnapshot,
   type SceneExperienceView,
 } from '../../gis-engine/sceneExperienceRuntime';
+import type { SceneNavigateOptions } from '../../gis-engine/sceneNavigationRuntime';
 import {
-  createSceneNavigationRuntime,
-  type SceneNavigateOptions,
-  type SceneNavigationRuntime,
-} from '../../gis-engine/sceneNavigationRuntime';
+  createSceneSupervisionRuntime,
+  type SceneSupervisionRuntime,
+} from '../../gis-engine/sceneSupervisionRuntime';
 import { createViewState } from '../../gis-engine/viewState';
 import {
   EXPERIENCE_ANNOUNCEMENT_EVENT,
@@ -169,11 +167,10 @@ const sceneControlOptions = (reason: string): SceneNavigateOptions => ({
 export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
-  const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
-  const sceneNavigationRef = useRef<SceneNavigationRuntime | null>(null);
+  const sceneSupervisionRef = useRef<SceneSupervisionRuntime | null>(null);
   const sceneNavigationHomeSetRef = useRef(false);
   const unbindSceneRef = useRef<() => void>(() => undefined);
-  const unsubscribeExperienceRef = useRef<() => boolean>(() => false);
+  const unsubscribeSupervisionRef = useRef<() => boolean>(() => false);
   const disposedRef = useRef(false);
   const transitionRef = useRef<Promise<void>>(Promise.resolve());
   const activeModeRef = useRef<ExperienceMapMode>('2d');
@@ -192,48 +189,43 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     setSceneUi(uiStateFromSnapshot(snapshot));
   }, []);
 
-  const bindSceneExperience = useCallback((view: SceneExperienceView) => {
-    sceneExperienceRef.current?.dispose();
-    unsubscribeExperienceRef.current?.();
+  const bindSceneSupervision = useCallback((view: SceneExperienceView) => {
+    sceneSupervisionRef.current?.dispose();
+    unsubscribeSupervisionRef.current?.();
+    sceneNavigationHomeSetRef.current = false;
 
-    const runtime = createSceneExperienceRuntime(view, {
-      onError: (error, context) => DebugHelper.Log({ context, error }),
-      onSnapshot: (snapshot, reason) => {
-        if (reason === 'recovery-start') {
-          announce('3B grafik motoru yeniden başlatılıyor.', 'assertive');
-        } else if (reason === 'recovery-success') {
-          announce('3B grafik motoru başarıyla kurtarıldı.');
-        } else if (reason === 'recovery-failure' && snapshot.status === 'degraded') {
-          announce('3B grafik motoru kurtarılamadı. Güvenli moda geçildi.', 'assertive');
-        }
+    const runtime = createSceneSupervisionRuntime(view, {
+      experience: {
+        onSnapshot: (snapshot, reason) => {
+          if (reason === 'recovery-start') {
+            announce('3B grafik motoru yeniden başlatılıyor.', 'assertive');
+          } else if (reason === 'recovery-success') {
+            announce('3B grafik motoru başarıyla kurtarıldı.');
+          } else if (reason === 'recovery-failure' && snapshot.status === 'degraded') {
+            announce('3B grafik motoru kurtarılamadı. Güvenli moda geçildi.', 'assertive');
+          }
+        },
       },
+      navigation: {
+        reducedMotion: prefersReducedMotion,
+        defaultDurationMs: 220,
+      },
+      onError: (error, context) => DebugHelper.Log({ context, error }),
     });
 
-    sceneExperienceRef.current = runtime;
-    unsubscribeExperienceRef.current = runtime.subscribe((snapshot) => syncSceneUi(snapshot));
-    syncSceneUi(runtime.getSnapshot());
+    sceneSupervisionRef.current = runtime;
+    unsubscribeSupervisionRef.current = runtime.subscribe((snapshot) => syncSceneUi(snapshot.experience));
+    syncSceneUi(runtime.getSnapshot().experience);
     return runtime;
   }, [syncSceneUi]);
-
-  const bindSceneNavigation = useCallback((view: SceneExperienceView) => {
-    sceneNavigationRef.current?.dispose();
-    sceneNavigationHomeSetRef.current = false;
-    const runtime = createSceneNavigationRuntime(view as never, {
-      reducedMotion: prefersReducedMotion,
-      defaultDurationMs: 220,
-      onError: (error, context) => DebugHelper.Log({ context, error }),
-    });
-    sceneNavigationRef.current = runtime;
-    return runtime;
-  }, []);
 
   const ensureScene = useCallback(async (): Promise<SceneHandle | null> => {
     const current = sceneRef.current;
     if (current?.view && !current.view.destroyed) return current;
     if (!mapView || !sceneHostRef.current) return null;
 
-    sceneNavigationRef.current?.dispose();
-    sceneNavigationRef.current = null;
+    sceneSupervisionRef.current?.dispose();
+    sceneSupervisionRef.current = null;
     sceneNavigationHomeSetRef.current = false;
 
     const scene = await createSceneView(sceneHostRef.current, {
@@ -261,11 +253,10 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     }
 
     sceneRef.current = scene;
-    bindSceneExperience(scene.view);
-    bindSceneNavigation(scene.view);
+    bindSceneSupervision(scene.view);
     setSceneReady(true);
     return scene;
-  }, [bindSceneExperience, bindSceneNavigation, mapView]);
+  }, [bindSceneSupervision, mapView]);
 
   const activate3D = useCallback(async (): Promise<void> => {
     if (!mapView || activeModeRef.current === '3d') {
@@ -297,7 +288,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
       });
 
       if (!sceneNavigationHomeSetRef.current) {
-        sceneNavigationRef.current?.setHome();
+        sceneSupervisionRef.current?.navigation.setHome();
         sceneNavigationHomeSetRef.current = true;
       }
 
@@ -311,14 +302,14 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
         onApplyError: (error: unknown) => DebugHelper.Log(error),
       });
 
-      sceneExperienceRef.current?.setActive(true);
+      sceneSupervisionRef.current?.setActive(true);
       if (disposedRef.current) return;
       setMode('3d');
       publishMode('3d');
       announce('3B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
-      sceneExperienceRef.current?.setActive(false);
+      sceneSupervisionRef.current?.setActive(false);
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
       setActiveMode('2d');
@@ -346,7 +337,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
 
       unbindSceneRef.current?.();
       unbindSceneRef.current = () => undefined;
-      sceneExperienceRef.current?.setActive(false);
+      sceneSupervisionRef.current?.setActive(false);
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
       bridge?.setState?.(mapState);
@@ -363,7 +354,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
       announce('2B görünüm etkinleştirildi.');
     } catch (error) {
       DebugHelper.Log(error);
-      sceneExperienceRef.current?.setActive(true);
+      sceneSupervisionRef.current?.setActive(true);
       activeModeRef.current = '3d';
       if (modeRef) modeRef.current = '3d';
       setActiveMode('3d');
@@ -382,7 +373,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
   const executeActiveSceneCommand = useCallback(async (detail: ExperienceCommandDetail): Promise<boolean> => {
     if (activeModeRef.current !== '3d') return false;
     const view = sceneRef.current?.view;
-    const navigation = sceneNavigationRef.current;
+    const navigation = sceneSupervisionRef.current?.navigation;
     if (!view || view.destroyed || !navigation) return false;
 
     return executeSceneRuntimeCommand(detail, {
@@ -400,7 +391,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
 
   const runSceneNavigationAction = useCallback(async (action: SceneNavigationAction): Promise<boolean> => {
     if (activeModeRef.current !== '3d') return false;
-    const navigation = sceneNavigationRef.current;
+    const navigation = sceneSupervisionRef.current?.navigation;
     if (!navigation) return false;
 
     const options = sceneControlOptions(`control-${action}`);
@@ -438,7 +429,7 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     };
 
     const onVisibilityChange = () => {
-      const runtime = sceneExperienceRef.current;
+      const runtime = sceneSupervisionRef.current;
       if (!runtime || activeModeRef.current !== '3d') return;
       runtime.setActive(document.visibilityState === 'visible');
     };
@@ -455,12 +446,10 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
     disposedRef.current = true;
     unbindSceneRef.current?.();
     unbindSceneRef.current = () => undefined;
-    unsubscribeExperienceRef.current?.();
-    unsubscribeExperienceRef.current = () => false;
-    sceneExperienceRef.current?.dispose();
-    sceneExperienceRef.current = null;
-    sceneNavigationRef.current?.dispose();
-    sceneNavigationRef.current = null;
+    unsubscribeSupervisionRef.current?.();
+    unsubscribeSupervisionRef.current = () => false;
+    sceneSupervisionRef.current?.dispose();
+    sceneSupervisionRef.current = null;
     sceneNavigationHomeSetRef.current = false;
     if (sceneRef.current) destroySceneView(sceneRef.current);
     sceneRef.current = null;
