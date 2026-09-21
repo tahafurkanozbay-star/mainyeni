@@ -12,8 +12,9 @@ import {
 } from './resourceScopeAdapters';
 
 const flush = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
 };
 
 describe('resourceScopeAdapters event listener ownership', () => {
