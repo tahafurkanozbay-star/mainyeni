@@ -1,4 +1,3 @@
-import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveRuntime';
 import { createViewState, switchViewMode, updateCamera } from './viewState';
 import type { ViewCameraInput, ViewMode, ViewState, ViewStateBridge, ViewStateInput } from './contracts';
 
@@ -49,13 +48,7 @@ const defaultFrameScheduler: FrameScheduler = (callback) => {
   if (typeof requestAnimationFrame === 'function') { const id = requestAnimationFrame(callback); return () => cancelAnimationFrame(id); }
   const id = setTimeout(callback, 16); return () => clearTimeout(id);
 };
-const safeRemove = (handle: WatchHandle | undefined, onError?: (error: unknown) => void): void => {
-  try {
-    handle?.remove?.();
-  } catch (error) {
-    onError?.(error);
-  }
-};
+const safeRemove = (handle?: WatchHandle): void => { try { handle?.remove?.(); } catch (_) { /* idempotent SDK cleanup */ } };
 
 export interface ViewConstraints { minZoom: number; maxZoom: number; rotationEnabled: boolean; snapToZoom: boolean; }
 export const normalizeViewConstraints = (config: ViewConfiguration = {}): ViewConstraints => {
@@ -127,7 +120,6 @@ export interface BindMapViewOptions {
   goToOptions?: ApplyViewOptions;
   onApplyError?: (error: unknown) => void;
   publishInitial?: boolean;
-  accessorWatch?: ArcgisAccessorWatch | undefined;
 }
 export const bindMapViewState = (view: MapViewLike, bridge: ViewStateBridge, options: BindMapViewOptions = {}): (() => void) => {
   if (!view || !bridge?.getState || !bridge?.setState) return () => {};
@@ -136,14 +128,8 @@ export const bindMapViewState = (view: MapViewLike, bridge: ViewStateBridge, opt
   const scheduleFrame = options.scheduleFrame || defaultFrameScheduler;
   const publish = (): void => { cancelScheduled = null; if (disposed || applyingBridgeState) return; const next = snapshotMapViewState(view, bridge.getState()); if (viewStateApproximatelyEqual(next, lastPublished, options.tolerance)) return; lastPublished = next; bridge.setState(next); options.onState?.(next); };
   const schedulePublish = (): void => { if (disposed || cancelScheduled) return; cancelScheduled = scheduleFrame(publish); };
-  ['center', 'zoom', 'scale', 'rotation', 'extent'].forEach((property) => {
-    const handle = watchArcgisProperty(view, property, schedulePublish, options.accessorWatch);
-    if (handle) handles.push(handle);
-  });
-  if (view?.map?.basemap) {
-    const handle = watchArcgisProperty(view.map, 'basemap', schedulePublish, options.accessorWatch);
-    if (handle) handles.push(handle);
-  }
+  ['center', 'zoom', 'scale', 'rotation', 'extent'].forEach((property) => { if (typeof view.watch === 'function') handles.push(view.watch(property, schedulePublish)); });
+  if (view?.map?.basemap && typeof view.map.watch === 'function') handles.push(view.map.watch('basemap', schedulePublish));
   let unsubscribe: () => boolean | void = () => {};
   if (options.applyIncoming === true && typeof bridge.subscribe === 'function') {
     unsubscribe = bridge.subscribe(async (nextState) => {
@@ -157,42 +143,20 @@ export const bindMapViewState = (view: MapViewLike, bridge: ViewStateBridge, opt
     });
   }
   if (options.publishInitial !== false) schedulePublish();
-  return () => {
-    if (disposed) return;
-    disposed = true;
-    if (cancelScheduled) cancelScheduled();
-    cancelScheduled = null;
-    unsubscribe();
-    handles.forEach((handle) => safeRemove(handle, options.onApplyError));
-  };
+  return () => { if (disposed) return; disposed = true; if (cancelScheduled) cancelScheduled(); cancelScheduled = null; unsubscribe(); handles.forEach(safeRemove); };
 };
 
-export interface ViewPerformanceOptions {
-  slowThresholdMs?: unknown;
-  now?: () => number;
-  accessorWatch?: ArcgisAccessorWatch | undefined;
-  onError?: ((error: unknown) => void) | undefined;
-}
+export interface ViewPerformanceOptions { slowThresholdMs?: unknown; now?: () => number; }
 export interface ViewPerformanceSnapshot { updateCycles: number; completedCycles: number; slowCycles: number; totalUpdatingMs: number; longestUpdatingMs: number; averageUpdatingMs: number; active: boolean; lastScale: number | null; lastZoom: number | null; }
 export const createViewPerformanceMonitor = (view: MapViewLike, options: ViewPerformanceOptions = {}) => {
   const slowThresholdMs = Math.max(1, finite(options.slowThresholdMs, 250) as number); const clock = typeof options.now === 'function' ? options.now : now;
   const state = { updateCycles: 0, completedCycles: 0, slowCycles: 0, totalUpdatingMs: 0, longestUpdatingMs: 0, activeSince: null as number | null, lastScale: finite(view?.scale), lastZoom: finite(view?.zoom), disposed: false };
   const handles: WatchHandle[] = [];
   const onUpdating = (updating: boolean): void => { if (state.disposed) return; const current = clock(); if (updating && state.activeSince === null) { state.updateCycles += 1; state.activeSince = current; return; } if (!updating && state.activeSince !== null) { const duration = Math.max(0, current - state.activeSince); state.completedCycles += 1; state.totalUpdatingMs += duration; state.longestUpdatingMs = Math.max(state.longestUpdatingMs, duration); if (duration >= slowThresholdMs) state.slowCycles += 1; state.activeSince = null; } };
-  const updatingHandle = watchArcgisProperty(view, 'updating', (value) => onUpdating(Boolean(value)), options.accessorWatch);
-  const scaleHandle = watchArcgisProperty(view, 'scale', (value) => { state.lastScale = finite(value); }, options.accessorWatch);
-  const zoomHandle = watchArcgisProperty(view, 'zoom', (value) => { state.lastZoom = finite(value); }, options.accessorWatch);
-  [updatingHandle, scaleHandle, zoomHandle].forEach((handle) => {
-    if (handle) handles.push(handle);
-  });
+  if (typeof view?.watch === 'function') { handles.push(view.watch('updating', onUpdating)); handles.push(view.watch('scale', (value) => { state.lastScale = finite(value); })); handles.push(view.watch('zoom', (value) => { state.lastZoom = finite(value); })); }
   return {
     snapshot: (): ViewPerformanceSnapshot => ({ updateCycles: state.updateCycles, completedCycles: state.completedCycles, slowCycles: state.slowCycles, totalUpdatingMs: state.totalUpdatingMs, longestUpdatingMs: state.longestUpdatingMs, averageUpdatingMs: state.completedCycles ? state.totalUpdatingMs / state.completedCycles : 0, active: state.activeSince !== null, lastScale: state.lastScale, lastZoom: state.lastZoom }),
-    dispose: (): void => {
-      if (state.disposed) return;
-      state.disposed = true;
-      handles.forEach((handle) => safeRemove(handle, options.onError));
-      handles.length = 0;
-    },
+    dispose: (): void => { if (state.disposed) return; state.disposed = true; handles.forEach(safeRemove); handles.length = 0; },
   };
 };
 

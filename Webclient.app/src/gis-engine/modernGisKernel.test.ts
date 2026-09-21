@@ -153,7 +153,8 @@ describe('modernGisKernel', () => {
     const [left, right] = await Promise.all([first, second]);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(left.value).toEqual(right.value);
-    expect(kernel.getDiagnostics().scheduler.metrics.deduped).toBeGreaterThanOrEqual(1);
+    expect(kernel.getDiagnostics().queryControlPlane.queue.dedupedSubscribers)
+      .toBeGreaterThanOrEqual(1);
   });
 
   test('serves repeated successful requests from the bounded scheduler cache', async () => {
