@@ -173,7 +173,7 @@ describe("DataIntegrityHelper", () => {
     test("sorts without mutating source records", () => {
         const records = [{ title: "Z10" }, { title: "z2" }, { title: "Çankaya" }];
         const sorted = sortRecords(records);
-        expect(sorted.map(item => item.title)).toEqual(["Çankaya", "z2", "Z10"]);
+        expect(sorted.map(item => (item as { title: string }).title)).toEqual(["Çankaya", "z2", "Z10"]);
         expect(records.map(item => item.title)).toEqual(["Z10", "z2", "Çankaya"]);
     });
 });
