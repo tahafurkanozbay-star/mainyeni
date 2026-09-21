@@ -168,13 +168,15 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
       });
     } catch (error) {
       this.#rejectedExecutions += 1;
+      const errorCode = safeErrorCode(error);
+      const errorName = safeErrorName(error);
       this.#emit({
         kind: 'rejected',
         method: config.method,
         owner,
         route: config.url,
-        ...(safeErrorCode(error) ? { errorCode: safeErrorCode(error) } : {}),
-        ...(safeErrorName(error) ? { errorName: safeErrorName(error) } : {}),
+        ...(errorCode ? { errorCode } : {}),
+        ...(errorName ? { errorName } : {}),
       });
       throw error;
     }
@@ -219,6 +221,8 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
       }
       return value;
     } catch (error) {
+      const errorCode = safeErrorCode(error);
+      const errorName = safeErrorName(error);
       if (isCancellation(error, signal)) {
         if (lease.cancel(error)) {
           this.#cancelledExecutions += 1;
@@ -227,8 +231,8 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
             method: config.method,
             owner,
             route: config.url,
-            ...(safeErrorCode(error) ? { errorCode: safeErrorCode(error) } : {}),
-            ...(safeErrorName(error) ? { errorName: safeErrorName(error) } : {}),
+            ...(errorCode ? { errorCode } : {}),
+            ...(errorName ? { errorName } : {}),
           });
         }
       } else if (lease.fail(error)) {
@@ -238,8 +242,8 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
           method: config.method,
           owner,
           route: config.url,
-          ...(safeErrorCode(error) ? { errorCode: safeErrorCode(error) } : {}),
-          ...(safeErrorName(error) ? { errorName: safeErrorName(error) } : {}),
+          ...(errorCode ? { errorCode } : {}),
+          ...(errorName ? { errorName } : {}),
         });
       }
       throw error;
@@ -269,9 +273,10 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
     if (this.#disposed) return;
     this.#registry.dispose(reason);
     this.#disposed = true;
+    const errorName = safeErrorName(reason);
     this.#emit({
       kind: 'disposed',
-      ...(safeErrorName(reason) ? { errorName: safeErrorName(reason) } : {}),
+      ...(errorName ? { errorName } : {}),
     });
   }
 
