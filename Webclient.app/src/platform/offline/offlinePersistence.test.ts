@@ -108,12 +108,19 @@ describe('OfflinePersistenceCoordinator', () => {
 
   it('preserves newer in-memory revision when an older load completes', async () => {
     let release!: (value: string | null) => void;
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>(resolve => { markReadStarted = resolve; });
     const store: OfflinePersistenceStore = {
-      read: () => new Promise(resolve => { release = resolve; }), write: async () => undefined, remove: async () => undefined,
+      read: () => {
+        markReadStarted();
+        return new Promise(resolve => { release = resolve; });
+      },
+      write: async () => undefined,
+      remove: async () => undefined,
     };
     const persistence = coordinator(store, { saveDebounceMs: 60_000 });
     const loading = persistence.load();
-    await Promise.resolve();
+    await readStarted;
     persistence.replace([item('newer')]);
     release(new OfflineSnapshotCodec().encode([item('older')], now));
     await loading;
