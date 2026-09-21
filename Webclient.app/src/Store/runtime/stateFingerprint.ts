@@ -1,4 +1,5 @@
 import type { SafeJsonValue, StoreStateProjection } from './contracts';
+import { storeProjectionToSafeValue } from './stateProjectionValue';
 
 const stableSerialize = (value: SafeJsonValue): string => {
   if (value === null) return 'null';
@@ -26,23 +27,8 @@ export const fingerprintSafeValue = (value: SafeJsonValue): string =>
 
 export const fingerprintStoreProjection = (
   projection: StoreStateProjection,
-): string => {
-  const stable: SafeJsonValue = Object.freeze({
-    schemaVersion: projection.schemaVersion,
-    common: projection.common,
-    map: projection.map,
-    contextMenu: projection.contextMenu,
-    dynamicLayers: projection.dynamicLayers,
-  }) as SafeJsonValue;
-  return fingerprintSafeValue(stable);
-};
+): string => fingerprintSafeValue(storeProjectionToSafeValue(projection));
 
 export const stableStoreProjectionText = (
   projection: StoreStateProjection,
-): string => stableSerialize(Object.freeze({
-  schemaVersion: projection.schemaVersion,
-  common: projection.common,
-  map: projection.map,
-  contextMenu: projection.contextMenu,
-  dynamicLayers: projection.dynamicLayers,
-}) as SafeJsonValue);
+): string => stableSerialize(storeProjectionToSafeValue(projection));

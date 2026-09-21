@@ -1,4 +1,5 @@
 import type { SafeJsonValue, StoreStateProjection } from './contracts';
+import { storeProjectionToSafeValue } from './stateProjectionValue';
 
 export interface StoreProjectionDiff {
   readonly changed: boolean;
@@ -8,13 +9,6 @@ export interface StoreProjectionDiff {
 
 const isRecord = (value: SafeJsonValue): value is Readonly<Record<string, SafeJsonValue>> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-
-const projectionValue = (projection: StoreStateProjection): SafeJsonValue => ({
-  common: projection.common,
-  map: projection.map,
-  contextMenu: projection.contextMenu,
-  dynamicLayers: projection.dynamicLayers,
-}) as SafeJsonValue;
 
 export const diffStoreProjections = (
   before: StoreStateProjection,
@@ -97,7 +91,7 @@ export const diffStoreProjections = (
     push(path);
   };
 
-  visit(projectionValue(before), projectionValue(after), '');
+  visit(storeProjectionToSafeValue(before), storeProjectionToSafeValue(after), '');
   return Object.freeze({
     changed: changedPaths.length > 0,
     changedPaths: Object.freeze(changedPaths),

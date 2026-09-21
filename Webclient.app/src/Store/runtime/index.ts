@@ -11,6 +11,7 @@ export * from './stateHistory';
 export * from './stateInvariants';
 export * from './stateMiddleware';
 export * from './stateProjection';
+export * from './stateProjectionValue';
 export * from './stateReadiness';
 export * from './stateRestorePlan';
 export * from './stateRuntime';
