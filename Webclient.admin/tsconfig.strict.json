@@ -10,11 +10,8 @@
     "src/runtime/adminEnvironment.ts",
     "src/runtime/adminEnvironment.test.ts",
     "src/Business/AuthBusiness.ts",
-    "src/App.tsx",
-    "src/Pages/Auth/LoginPage.tsx",
-    "src/Shared/NavMenu.tsx",
-    "src/Shared/Page404.tsx",
-    "src/main.tsx",
+    "src/Core/Global.ts",
+    "src/Core/Constants.ts",
     "src/reportWebVitals.ts",
     "src/vite-env.d.ts"
   ]
