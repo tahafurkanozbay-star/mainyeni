@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 
 const migrated = Object.freeze([
@@ -16,15 +14,27 @@ const migrated = Object.freeze([
   'src/platform/runtime/runtimeDiagnostics.test',
 ]);
 
+const typedPlatformTests = import.meta.glob('/src/platform/**/*.test.ts');
+const legacyPlatformTests = import.meta.glob('/src/platform/**/*.test.js');
+
+const moduleKey = (relativePath: string, extension: 'ts' | 'js'): string =>
+  `/${relativePath}.${extension}`;
+
 describe('Platform legacy test TypeScript cutover', () => {
   test.each(migrated)('%s stays TypeScript-only', (relativePath) => {
-    const root = process.cwd();
-    expect(existsSync(resolve(root, `${relativePath}.ts`))).toBe(true);
-    expect(existsSync(resolve(root, `${relativePath}.js`))).toBe(false);
+    expect(typedPlatformTests).toHaveProperty(moduleKey(relativePath, 'ts'));
+    expect(legacyPlatformTests).not.toHaveProperty(moduleKey(relativePath, 'js'));
   });
 
   test('keeps the cutover scoped to Platform-owned tests', () => {
     expect(migrated).toHaveLength(11);
     expect(migrated.every((path) => path.startsWith('src/platform/'))).toBe(true);
+  });
+
+  test('module graph exposes every migrated test exactly once', () => {
+    const migratedKeys = new Set(migrated.map((path) => moduleKey(path, 'ts')));
+    expect(
+      Object.keys(typedPlatformTests).filter((path) => migratedKeys.has(path)),
+    ).toHaveLength(migrated.length);
   });
 });

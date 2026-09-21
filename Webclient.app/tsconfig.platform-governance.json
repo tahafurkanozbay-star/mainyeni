@@ -9,8 +9,7 @@
     "skipLibCheck": true,
     "types": [
       "vite/client",
-      "vitest/globals",
-      "node"
+      "vitest/globals"
     ]
   },
   "files": [
