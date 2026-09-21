@@ -1,14 +1,23 @@
 import { normalizeApplicationPath } from '../network/endpointPolicy';
 
+const DEFAULT_API_BASE_URL = '/api';
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const DEFAULT_CACHE_TTL_MS = 30_000;
+const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_ENVIRONMENT = 'production';
+const DEFAULT_RELEASE = 'local';
+const DEFAULT_ESRI_API_VERSION = '5.1.24';
+const DEFAULT_TKGM_CITY_ID = '';
+
 export const RUNTIME_CONFIG_DEFAULTS = Object.freeze({
-  apiBaseUrl: '/api',
-  requestTimeoutMs: 15_000,
-  cacheTtlMs: 30_000,
-  maxRetries: 2,
-  environment: 'production',
-  release: 'local',
-  esriApiVersion: '5.1.24',
-  tkgmCityId: '',
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+  cacheTtlMs: DEFAULT_CACHE_TTL_MS,
+  maxRetries: DEFAULT_MAX_RETRIES,
+  environment: DEFAULT_ENVIRONMENT,
+  release: DEFAULT_RELEASE,
+  esriApiVersion: DEFAULT_ESRI_API_VERSION,
+  tkgmCityId: DEFAULT_TKGM_CITY_ID,
   features: Object.freeze({
     adaptiveRuntime: true,
     debugLogging: false,
@@ -377,9 +386,11 @@ const buildModeEvidence = (
   mode: RuntimeConfig['buildMode'],
 ): RuntimeConfigFieldEvidence => {
   if (mode === 'vite-ready') {
-    const key = Object.keys(source).find(
-      (candidate) => candidate.startsWith('VITE_') || VITE_BUILTIN_KEYS.has(candidate),
-    );
+    const key = Object.keys(source)
+      .filter(
+        (candidate) => candidate.startsWith('VITE_') || VITE_BUILTIN_KEYS.has(candidate),
+      )
+      .sort()[0];
     return evidence(
       'buildMode',
       Object.freeze({
@@ -392,7 +403,9 @@ const buildModeEvidence = (
     );
   }
   if (mode === 'legacy-cra') {
-    const key = Object.keys(source).find((candidate) => candidate.startsWith('REACT_APP_'));
+    const key = Object.keys(source)
+      .filter((candidate) => candidate.startsWith('REACT_APP_'))
+      .sort()[0];
     return evidence(
       'buildMode',
       Object.freeze({
