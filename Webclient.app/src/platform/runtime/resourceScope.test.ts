@@ -539,6 +539,23 @@ describe('ResourceScope cleanup failures and timeouts', () => {
   });
 });
 
+describe('ResourceScope diagnostic safety', () => {
+  test('sanitizes control characters from external cleanup reasons', async () => {
+    const scope = createResourceScope('application');
+    const handle = scope.register({
+      owner: 'router',
+      key: 'route-listener',
+      cleanup: vi.fn(),
+    });
+
+    await handle.release('route\n\tchange\rcompleted');
+
+    const entry = scope.snapshot().history[0];
+    expect(entry?.reason).toBe('route  change completed');
+    expect(entry?.reason).not.toMatch(/[\r\n\t]/);
+  });
+});
+
 describe('ResourceScope child lifecycle', () => {
   test('creates bounded child scopes with hierarchical names', () => {
     const scope = createResourceScope('application');
