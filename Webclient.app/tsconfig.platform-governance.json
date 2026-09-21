@@ -8,7 +8,6 @@
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "types": [
-      "node",
       "vitest/globals",
       "vite/client"
     ]
