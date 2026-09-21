@@ -92,6 +92,12 @@ describe('shared source transforms', () => {
       map: null,
     });
 
+    const typedTestResult = await Promise.resolve(plugin.transform.call({} as never,
+      'jest.fn();',
+      '/workspace/src/example.test.ts',
+    ));
+    expect(typedTestResult).toBeNull();
+
     const productionResult = await Promise.resolve(plugin.transform.call({} as never,
       'jest.fn();',
       '/workspace/src/example.js',
