@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'Webclient.app/src/platform/governance/**'
+      - 'Webclient.app/src/platform/config/**'
       - 'Webclient.app/src/platform/bootstrap/*.test.ts'
       - 'Webclient.app/src/platform/http/*.test.ts'
       - 'Webclient.app/src/platform/performance/*.test.ts'
@@ -15,6 +16,7 @@ on:
       - main
     paths:
       - 'Webclient.app/src/platform/governance/**'
+      - 'Webclient.app/src/platform/config/**'
       - 'Webclient.app/tsconfig.platform-governance.json'
       - '.github/workflows/platform-governance-validation.yml'
 
@@ -51,10 +53,11 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Strict lint governance and migrated Platform tests
+      - name: Strict lint governance, config and migrated Platform tests
         run: >-
           npx oxlint --deny-warnings
           src/platform/governance
+          src/platform/config
           src/platform/bootstrap/bootstrapCore.test.ts
           src/platform/bootstrap/bootstrapDiagnostics.test.ts
           src/platform/http/fetchTransport.test.ts
@@ -73,8 +76,8 @@ jobs:
       - name: Strict migrated Platform test TypeScript
         run: npm run typecheck:platform-tests -- --pretty false
 
-      - name: Focused governance tests
-        run: npx vitest run src/platform/governance --reporter=verbose
+      - name: Focused governance and config tests
+        run: npx vitest run src/platform/governance src/platform/config --reporter=verbose
 
       - name: Migrated Platform regression tests
         run: >-

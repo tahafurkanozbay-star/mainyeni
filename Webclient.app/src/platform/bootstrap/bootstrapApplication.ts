@@ -1,6 +1,12 @@
 import { ConfigurationBusiness } from '../../Business/ConfigurationBusiness';
 import { CommonBusiness } from '../../Business/CommonBusiness';
 import MapManager from '../../Store/Managers/MapManager';
+import { runtimeConfigResolution } from '../config/runtimeConfig';
+import {
+  assertRuntimeConfigAdmissible,
+  evaluateRuntimeConfigGovernance,
+  type RuntimeConfigGovernanceSummary,
+} from '../config/runtimeConfigGovernance';
 import { createBootstrapDiagnostics, type BootstrapDiagnosticSummary } from './bootstrapDiagnostics';
 import {
   runApplicationBootstrap,
@@ -79,9 +85,17 @@ export const applicationBootstrapDependencies: BootstrapDependencies = Object.fr
  * A caller-provided diagnostics collector is isolated from the shared support
  * collector; otherwise the bounded default collector is used.
  */
+export const assertApplicationRuntimeConfig = (): true =>
+  assertRuntimeConfigAdmissible(runtimeConfigResolution);
+
+export const getApplicationRuntimeConfigGovernance =
+  (): RuntimeConfigGovernanceSummary =>
+    evaluateRuntimeConfigGovernance(runtimeConfigResolution);
+
 export const bootstrapApplication = (
   options: ApplicationBootstrapOptions = {},
 ): Promise<BootstrapResult> => {
+  assertApplicationRuntimeConfig();
   const diagnostics = options.diagnostics ?? defaultDiagnostics;
   return runApplicationBootstrap(applicationBootstrapDependencies, {
     ...options,
