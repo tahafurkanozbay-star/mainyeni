@@ -317,7 +317,10 @@ const graphIssues = (
   let relationCount = 0;
 
   for (const descriptor of descriptors) {
-    relationCount += descriptor.dependsOn.length + descriptor.optionalDependencies.length;
+    relationCount += descriptor.dependsOn.length
+      + descriptor.optionalDependencies.length
+      + descriptor.provides.length
+      + descriptor.consumes.length;
     for (const dependency of descriptor.dependsOn) {
       if (!ids.has(dependency)) {
         appendIssue(issues, maxIssues, {
