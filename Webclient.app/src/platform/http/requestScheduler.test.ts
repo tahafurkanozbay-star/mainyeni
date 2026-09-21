@@ -6,17 +6,22 @@ import {
   RequestSchedulerPolicy
 } from './requestScheduler';
 
-const deferred = () => {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
+interface SchedulerEventCapture {
+  readonly name: string;
+  readonly metadata: Readonly<Record<string, unknown>>;
+}
+
+const deferred = <T = void>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
   return { promise, resolve, reject };
 };
 
-const flushMicrotasks = async () => {
+const flushMicrotasks = async (): Promise<void> => {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -85,15 +90,15 @@ describe('RequestScheduler concurrency', () => {
     expect(scheduler.getRunningCount()).toBe(2);
     expect(scheduler.getQueuedCount()).toBe(2);
 
-    gates[0].resolve();
+    gates[0]?.resolve();
     await flushMicrotasks();
     expect(active).toBe(2);
     expect(scheduler.getQueuedCount()).toBe(1);
 
-    gates[1].resolve();
-    gates[2].resolve();
+    gates[1]?.resolve();
+    gates[2]?.resolve();
     await flushMicrotasks();
-    gates[3].resolve();
+    gates[3]?.resolve();
 
     await expect(Promise.all(promises)).resolves.toEqual([0, 1, 2, 3]);
     expect(peak).toBe(2);
@@ -106,7 +111,7 @@ describe('RequestScheduler concurrency', () => {
     const a1 = deferred();
     const a2 = deferred();
     const b1 = deferred();
-    const starts = [];
+    const starts: string[] = [];
 
     const first = scheduler.schedule(async () => {
       starts.push('a1');
@@ -141,7 +146,7 @@ describe('RequestScheduler concurrency', () => {
   test('uses another group when the highest-priority group is saturated', async () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 2, maxConcurrentPerGroup: 1 });
     const gate = deferred();
-    const starts = [];
+    const starts: string[] = [];
 
     const running = scheduler.schedule(async () => {
       starts.push('map-running');
@@ -169,7 +174,7 @@ describe('RequestScheduler priority and fairness', () => {
   test('runs higher priority queued work first', async () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 1, highPriorityReserve: 0 });
     const gate = deferred();
-    const order = [];
+    const order: string[] = [];
 
     const blocker = scheduler.schedule(async () => {
       order.push('blocker');
@@ -204,7 +209,7 @@ describe('RequestScheduler priority and fairness', () => {
       clock: () => clock
     });
     const gate = deferred();
-    const order = [];
+    const order: string[] = [];
 
     const blocker = scheduler.schedule(async () => {
       await gate.promise;
@@ -229,7 +234,7 @@ describe('RequestScheduler priority and fairness', () => {
       starvationThresholdMs: 6000
     });
     const gate = deferred();
-    const order = [];
+    const order: string[] = [];
 
     const blocker = scheduler.schedule(async () => {
       await gate.promise;
@@ -251,14 +256,14 @@ describe('RequestScheduler priority and fairness', () => {
   });
 
   test('normalizes unknown priorities to normal', async () => {
-    const events = [];
+    const events: SchedulerEventCapture[] = [];
     const scheduler = createRequestScheduler({
       onEvent: (name, metadata) => events.push({ name, metadata })
     });
 
     await scheduler.schedule(() => 'ok', { priority: 'ultra-super' });
     const queued = events.find((event) => event.name === 'network.scheduler.queued');
-    expect(queued.metadata.priority).toBe('normal');
+    expect(queued?.metadata.priority).toBe('normal');
   });
 });
 
@@ -332,7 +337,7 @@ describe('RequestScheduler cancellation and bounded queue', () => {
 
   test('cancelQueued rejects all waiting work but not active work', async () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 1 });
-    const gate = deferred();
+    const gate = deferred<string>();
     const active = scheduler.schedule(() => gate.promise);
     const first = scheduler.schedule(() => 1);
     const second = scheduler.schedule(() => 2);
@@ -425,14 +430,14 @@ describe('RequestScheduler execution and observability', () => {
     expect(snapshot.peakQueued).toBe(2);
     expect(snapshot.priorities.high).toBe(1);
     expect(snapshot.priorities.low).toBe(1);
-    expect(snapshot.groups.search.queued).toBe(2);
+    expect(snapshot.groups.search?.queued).toBe(2);
 
     gate.resolve();
     await Promise.all([active, high, low]);
   });
 
   test('event metadata never requires request payload data', async () => {
-    const events = [];
+    const events: SchedulerEventCapture[] = [];
     const scheduler = createRequestScheduler({
       onEvent: (name, metadata) => events.push({ name, metadata })
     });
