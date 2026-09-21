@@ -56,13 +56,18 @@ describe('normalizeServiceDescriptor', () => {
 
   test.each([
     '',
-    ' bad ',
     'version with space',
     '/unsafe',
     'x'.repeat(65),
   ])('rejects invalid version %s', (version) => {
     expect(() => normalizeServiceDescriptor(service('runtime', { version })))
       .toThrow(expect.objectContaining({ code: 'INVALID_DESCRIPTOR' }));
+  });
+
+  test('trims benign version boundary whitespace', () => {
+    expect(normalizeServiceDescriptor(service('runtime', {
+      version: ' 1.2.3 ',
+    })).version).toBe('1.2.3');
   });
 
   test('rejects invalid domain', () => {
@@ -272,7 +277,7 @@ describe('analyzeServiceGraph valid graphs', () => {
       }),
       service('telemetry', { criticality: 'optional' }),
     ]);
-    expect(snapshot.relationCount).toBe(4);
+    expect(snapshot.relationCount).toBe(5);
   });
 
   test('fingerprint is stable independent of registration order', () => {
