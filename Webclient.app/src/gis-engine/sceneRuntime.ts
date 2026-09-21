@@ -1,3 +1,4 @@
+import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveRuntime';
 import { loadArcgisModule, resetArcgisModuleRuntimeCache } from './arcgisModuleRuntime';
 import { createViewState, updateSelection } from './viewState';
 import { create3DLayer } from './layerFactory';
@@ -13,12 +14,72 @@ export interface SceneViewLike {
   goTo?: (target: any, options?: any) => Promise<any>;
   watch?: (property: string, callback: (...args: any[]) => void) => { remove?: () => void };
   on?: (event: string, callback: (event: any) => void) => { remove?: () => void };
+  resize?: () => void;
+  when?: () => Promise<unknown>;
+  destroyed?: boolean;
+  width?: number;
+  height?: number;
   destroy?: () => void;
 }
 const sceneCenter = (view: SceneViewLike): [number, number] | null => { const position = view?.camera?.position; const longitude = finite(position?.longitude); const latitude = finite(position?.latitude); if (longitude !== null && latitude !== null) return [longitude, latitude]; const x = finite(position?.x); const y = finite(position?.y); return x !== null && y !== null ? [x, y] : null; };
 const sceneExtent = (view: SceneViewLike) => { const extent = view?.extent; if (!extent) return null; const xmin = finite(extent.xmin); const ymin = finite(extent.ymin); const xmax = finite(extent.xmax); const ymax = finite(extent.ymax); if ([xmin, ymin, xmax, ymax].some((value) => value === null) || xmin === null || ymin === null || xmax === null || ymax === null) return null; return { xmin, ymin, xmax, ymax, wkid: finite(extent.spatialReference?.wkid) }; };
 
 export interface SceneCreateOptions { map?: any; basemap?: any; ground?: any; camera?: any; qualityProfile?: string; environment?: any; constraints?: any; padding?: any; }
+
+export interface SceneContainerLike {
+  clientWidth?: number;
+  clientHeight?: number;
+  getBoundingClientRect?: () => { width?: number; height?: number };
+}
+
+export interface SceneContainerWaitOptions {
+  maxFrames?: number;
+  nextFrame?: () => Promise<void>;
+}
+
+const sceneContainerDimensions = (container: SceneContainerLike | null | undefined): readonly [number, number] => {
+  if (!container) return Object.freeze([0, 0]);
+  const rect = typeof container.getBoundingClientRect === 'function'
+    ? container.getBoundingClientRect()
+    : null;
+  const width = finite(rect?.width, finite(container.clientWidth, 0)) ?? 0;
+  const height = finite(rect?.height, finite(container.clientHeight, 0)) ?? 0;
+  return Object.freeze([Math.max(0, width), Math.max(0, height)]);
+};
+
+export const isSceneContainerRenderable = (container: SceneContainerLike | null | undefined): boolean => {
+  const [width, height] = sceneContainerDimensions(container);
+  return width >= 2 && height >= 2;
+};
+
+const nextSceneFrame = (): Promise<void> => new Promise((resolve) => {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => resolve());
+    return;
+  }
+  setTimeout(resolve, 16);
+});
+
+export const waitForSceneContainer = async (
+  container: SceneContainerLike | null | undefined,
+  options: SceneContainerWaitOptions = {},
+): Promise<void> => {
+  const maxFrames = Math.max(1, Math.min(12, Math.floor(finite(options.maxFrames, 6) ?? 6)));
+  const nextFrame = options.nextFrame ?? nextSceneFrame;
+  for (let frame = 0; frame < maxFrames; frame += 1) {
+    if (isSceneContainerRenderable(container)) return;
+    await nextFrame();
+  }
+  if (!isSceneContainerRenderable(container)) {
+    throw new Error('SceneView container has no renderable layout.');
+  }
+};
+
+export const synchronizeSceneViewSize = (view: SceneViewLike | null | undefined): boolean => {
+  if (!view || view.destroyed || typeof view.resize !== 'function') return false;
+  view.resize();
+  return true;
+};
 const createOwnedSceneMap = async (options: SceneCreateOptions = {}): Promise<any> => { const MapCtor = await loadArcgisModule<any>('esri/Map'); const mapOptions: Record<string, any> = {}; if (options.basemap !== undefined) mapOptions.basemap = options.basemap; if (options.ground !== undefined) mapOptions.ground = options.ground; return new MapCtor(mapOptions); };
 export const resetSceneRuntimeModuleCache = (): void => { resetArcgisModuleRuntimeCache(); };
 export const createSceneView = async (container: unknown, options: SceneCreateOptions = {}): Promise<{ map: any; view: SceneViewLike; ownsMap: boolean }> => {
@@ -62,11 +123,14 @@ export const applyViewStateToSceneView = async (view: SceneViewLike, inputState:
   try { await view.goTo(target, { duration: Math.max(0, finite(options.duration, 0) as number), animate: options.animate === true }); return true; } catch (error) { if (options.signal?.aborted || (error as any)?.name === 'AbortError') return false; throw error; }
 };
 
-export interface BindSceneOptions { include?: any[]; exclude?: any[]; onState?: (state: ViewState) => void; applyIncoming?: boolean; goToOptions?: SceneApplyOptions; onApplyError?: (error: unknown) => void; }
+export interface BindSceneOptions { include?: any[]; exclude?: any[]; onState?: (state: ViewState) => void; applyIncoming?: boolean; goToOptions?: SceneApplyOptions; onApplyError?: (error: unknown) => void; accessorWatch?: ArcgisAccessorWatch | undefined; }
 export const bindSceneState = (view: SceneViewLike, bridge: ViewStateBridge, selectionCallback?: (selection: ScenePick | null, hits: ScenePick[]) => void, options: BindSceneOptions = {}): (() => void) => {
   if (!view || !bridge) return () => {}; const handles: Array<{ remove?: () => void }> = []; let disposed = false; let selectionController: AbortController | null = null; let applyingBridgeState = false; let unsubscribe: () => boolean | void = () => {};
   const sync = (): void => { if (disposed || applyingBridgeState) return; const next = snapshotSceneState(view, bridge.getState()); bridge.setState(next); options.onState?.(next); };
-  if (typeof view.watch === 'function') { handles.push(view.watch('camera', sync)); handles.push(view.watch('scale', sync)); }
+  const cameraHandle = watchArcgisProperty(view, 'camera', sync, options.accessorWatch);
+  const scaleHandle = watchArcgisProperty(view, 'scale', sync, options.accessorWatch);
+  if (cameraHandle) handles.push(cameraHandle);
+  if (scaleHandle) handles.push(scaleHandle);
   const clickHandle = view.on?.('click', async (event: any) => { selectionController?.abort?.(); selectionController = typeof AbortController !== 'undefined' ? new AbortController() : null; const signal = selectionController?.signal; const pickOptions: ScenePickOptions = { ...(signal === undefined ? {} : { signal }), ...(options.include === undefined ? {} : { include: options.include }), ...(options.exclude === undefined ? {} : { exclude: options.exclude }) }; const hits = await pickScene(view, event, pickOptions); if (disposed || signal?.aborted) return; const first = hits[0]; if (!first?.graphic) { bridge.setState((state) => updateSelection(state, { layerId: null, objectId: null })); selectionCallback?.(null, hits); return; } const attributes = first.graphic.attributes || {}; const objectId = attributes.OBJECTID ?? attributes.ObjectID ?? first.graphic.uid ?? first.graphic.id ?? null; bridge.setState((state) => updateSelection(state, { layerId: first.layer?.id, objectId })); selectionCallback?.(first, hits); }); if (clickHandle) handles.push(clickHandle);
   if (options.applyIncoming === true && typeof bridge.subscribe === 'function') unsubscribe = bridge.subscribe(async (nextState) => { if (disposed || nextState.mode !== '3d') return; const current = snapshotSceneState(view, nextState); if (current.center?.[0] === nextState.center?.[0] && current.center?.[1] === nextState.center?.[1] && current.scale === nextState.scale && current.heading === nextState.heading && current.tilt === nextState.tilt) return; applyingBridgeState = true; try { await applyViewStateToSceneView(view, nextState, options.goToOptions || {}); } catch (error) { options.onApplyError?.(error); } finally { applyingBridgeState = false; } });
   return () => { if (disposed) return; disposed = true; selectionController?.abort?.(); unsubscribe(); handles.forEach(safeRemove); };
