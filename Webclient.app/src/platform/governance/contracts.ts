@@ -228,8 +228,15 @@ export interface GovernanceKernelSnapshot {
   readonly fingerprint: string;
 }
 
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._:-]*$/i;
+
+const containsControlCharacter = (value: string): boolean => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+};
 
 export const boundedInteger = (
   value: unknown,
@@ -254,7 +261,7 @@ export const boundedText = (
 
 export const governanceIdentifier = (value: unknown, field = 'identifier', maximumLength = 96): string => {
   const normalized = boundedText(value, '', maximumLength).toLowerCase();
-  if (!normalized || CONTROL_CHARACTER.test(normalized) || !IDENTIFIER.test(normalized)) {
+  if (!normalized || containsControlCharacter(normalized) || !IDENTIFIER.test(normalized)) {
     throw new TypeError(`${field} must be a bounded platform identifier`);
   }
   return normalized;
