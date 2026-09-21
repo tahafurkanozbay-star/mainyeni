@@ -5,6 +5,7 @@ import {
   adminApiPostForm,
   adminApiRequest,
 } from './adminApiClient';
+import { AdminRequestCoordinator } from './adminRequestCoordinator';
 import {
   ADMIN_SESSION_STORAGE_KEY,
   writeAdminSession,
@@ -262,4 +263,141 @@ describe('adminApiClient', () => {
       baseUrl: '/api',
     })).rejects.toBeInstanceOf(AdminApiError);
   });
+
+  test('single-flights concurrent identical GET requests at the client boundary', async () => {
+    writeAdminSession({ accessToken: 'token' });
+    const coordinator = new AdminRequestCoordinator({
+      maxConcurrent: 2,
+      maxQueued: 4,
+    });
+
+    let resolveFetch!: (response: Response) => void;
+    const fetchPromise = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchImpl = vi.fn(async () => fetchPromise);
+
+    const first = adminApiGet('/Gis/Layer/List', {
+      fetchImpl: fetchImpl as typeof fetch,
+      baseUrl: '/api',
+      coordinator,
+    });
+    const second = adminApiGet('/Gis/Layer/List', {
+      fetchImpl: fetchImpl as typeof fetch,
+      baseUrl: '/api',
+      coordinator,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(coordinator.snapshot().singleFlightJoined).toBe(1);
+
+    resolveFetch(new Response(JSON.stringify({ data: [1, 2] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { data: [1, 2] },
+      { data: [1, 2] },
+    ]);
+  });
+
+  test('never single-flights POST mutations', async () => {
+    writeAdminSession({ accessToken: 'token' });
+    const coordinator = new AdminRequestCoordinator({
+      maxConcurrent: 4,
+    });
+    const fetchImpl = vi.fn(async () => new Response(
+      JSON.stringify({ saved: true }),
+      {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      },
+    ));
+
+    await Promise.all([
+      adminApiPost('/Gis/Layer/Save', { id: 1 }, {
+        fetchImpl: fetchImpl as typeof fetch,
+        baseUrl: '/api',
+        coordinator,
+      }),
+      adminApiPost('/Gis/Layer/Save', { id: 1 }, {
+        fetchImpl: fetchImpl as typeof fetch,
+        baseUrl: '/api',
+        coordinator,
+      }),
+    ]);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(coordinator.snapshot().singleFlightJoined).toBe(0);
+  });
+
+  test('maps coordinator capacity rejection to a sanitized AdminApiError', async () => {
+    writeAdminSession({ accessToken: 'token' });
+    const coordinator = new AdminRequestCoordinator({
+      maxConcurrent: 1,
+      maxQueued: 0,
+    });
+
+    let resolveFetch!: (response: Response) => void;
+    const activeFetch = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchImpl = vi.fn(async () => activeFetch);
+
+    const active = adminApiGet('/Slow/A', {
+      fetchImpl: fetchImpl as typeof fetch,
+      baseUrl: '/api',
+      coordinator,
+    });
+    const rejected = adminApiGet('/Slow/B', {
+      fetchImpl: fetchImpl as typeof fetch,
+      baseUrl: '/api',
+      coordinator,
+    });
+
+    await expect(rejected).rejects.toMatchObject({
+      code: 'queue-full',
+      status: null,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    resolveFetch(new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    await active;
+  });
+
+  test('external AbortSignal disables GET single-flight to preserve caller cancellation', async () => {
+    writeAdminSession({ accessToken: 'token' });
+    const coordinator = new AdminRequestCoordinator({
+      maxConcurrent: 4,
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const fetchImpl = vi.fn(async () => new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    await Promise.all([
+      adminApiGet('/Gis/Layer/List', {
+        signal: firstController.signal,
+        fetchImpl: fetchImpl as typeof fetch,
+        baseUrl: '/api',
+        coordinator,
+      }),
+      adminApiGet('/Gis/Layer/List', {
+        signal: secondController.signal,
+        fetchImpl: fetchImpl as typeof fetch,
+        baseUrl: '/api',
+        coordinator,
+      }),
+    ]);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(coordinator.snapshot().singleFlightJoined).toBe(0);
+  });
+
 });
