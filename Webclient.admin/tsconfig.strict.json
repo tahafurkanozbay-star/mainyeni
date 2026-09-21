@@ -26,6 +26,8 @@
     "src/types/vendor.d.ts",
     "src/Core/Fonts/UbuntuNormal.ts",
     "src/runtime/adminSession.ts",
-    "src/runtime/adminSession.test.ts"
+    "src/runtime/adminSession.test.ts",
+    "src/runtime/adminApiClient.ts",
+    "src/runtime/adminApiClient.test.ts"
   ]
 }
