@@ -406,16 +406,29 @@ namespace Api.Core.Platform
                 return;
             }
 
-            ValidateRange(options.KeepAliveTimeoutSeconds, 5, 300, "Transport:KeepAliveTimeoutSeconds", failures);
-            ValidateRange(options.RequestHeadersTimeoutSeconds, 2, 120, "Transport:RequestHeadersTimeoutSeconds", failures);
-            ValidateRange(options.MaxRequestLineSizeBytes, 4096, 32768, "Transport:MaxRequestLineSizeBytes", failures);
-            ValidateRange(options.MaxRequestHeadersTotalSizeBytes, 8192, 131072, "Transport:MaxRequestHeadersTotalSizeBytes", failures);
-            ValidateRange(options.MaxRequestHeaderCount, 16, 256, "Transport:MaxRequestHeaderCount", failures);
-            ValidateRange(options.MaxRequestBodyBytes, 1024, 100L * 1024 * 1024, "Transport:MaxRequestBodyBytes", failures);
+            ValidateTransportRange(options.KeepAliveTimeoutSeconds, 5, 300, "KeepAliveTimeoutSeconds", failures);
+            ValidateTransportRange(options.RequestHeadersTimeoutSeconds, 2, 120, "RequestHeadersTimeoutSeconds", failures);
+            ValidateTransportRange(options.MaxRequestLineSizeBytes, 4096, 32768, "MaxRequestLineSizeBytes", failures);
+            ValidateTransportRange(options.MaxRequestHeadersTotalSizeBytes, 8192, 131072, "MaxRequestHeadersTotalSizeBytes", failures);
+            ValidateTransportRange(options.MaxRequestHeaderCount, 16, 256, "MaxRequestHeaderCount", failures);
+            ValidateTransportRange(options.MaxRequestBodyBytes, 1024, 100L * 1024 * 1024, "MaxRequestBodyBytes", failures);
 
             if (options.RequestHeadersTimeoutSeconds >= options.KeepAliveTimeoutSeconds)
             {
                 failures.Add("Platform:Transport:RequestHeadersTimeoutSeconds must be lower than KeepAliveTimeoutSeconds.");
+            }
+        }
+
+        private static void ValidateTransportRange(
+            long value,
+            long minimum,
+            long maximum,
+            string settingName,
+            ICollection<string> failures)
+        {
+            if (value < minimum || value > maximum)
+            {
+                failures.Add($"Platform:Transport:{settingName} must be between {minimum} and {maximum}.");
             }
         }
 
