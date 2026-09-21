@@ -89,8 +89,9 @@ const normalizeEnvelope = (envelope: SpatialCacheEnvelope | undefined): SpatialC
   if (xmin > xmax || ymin > ymax) throw new RangeError('envelope bounds are inverted');
   if (envelope.spatialReferenceWkid !== undefined) {
     nonNegativeSafeInteger(envelope.spatialReferenceWkid, 'spatialReferenceWkid');
+    return Object.freeze({ xmin, ymin, xmax, ymax, spatialReferenceWkid: envelope.spatialReferenceWkid });
   }
-  return Object.freeze({ xmin, ymin, xmax, ymax, spatialReferenceWkid: envelope.spatialReferenceWkid });
+  return Object.freeze({ xmin, ymin, xmax, ymax });
 };
 
 const normalizeObjectIds = (values: readonly number[] | undefined, maximum: number): ReadonlySet<number> => {
@@ -176,11 +177,12 @@ export const createSpatialCacheInvalidationPlanner = (
     if (!serviceId) throw new TypeError('serviceId is required');
     nonNegativeSafeInteger(dependency.layerId, 'layerId');
     const existing = tracked.has(cacheKey);
+    const envelope = normalizeEnvelope(dependency.envelope);
     const normalized: TrackedDependency = Object.freeze({
       cacheKey,
       serviceId,
       layerId: dependency.layerId,
-      envelope: normalizeEnvelope(dependency.envelope),
+      ...(envelope ? { envelope } : {}),
       objectIds: normalizeObjectIds(dependency.objectIds, policy.maxObjectIdsPerEntry),
       tags: normalizeTags(dependency.tags),
       sequence: ++sequence,
