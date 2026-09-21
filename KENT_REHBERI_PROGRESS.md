@@ -524,3 +524,14 @@
 - SONRAKİ PLATFORM GÖREVİ: merged #209 branch must not be reused. Next Platform turn must start from then-current main, re-read orchestration/progress files, inspect remaining Platform/whole-code language debt and active team ownership, and preserve >=4,000 meaningful additions, exact-head CI, security/performance/regression and final-main-refresh gates.
 - POST-MERGE NOTE: this progress-only documentation commit is created after the fully tested squash merge; no CI PASS is inferred for the documentation-only commit itself.
 
+
+
+## Deep GIS current-main recovery — 2026-09-21 08:49 TRT
+- TUR / GÖREV: bounded spatial cache/query/lifecycle modernization recovery after main advanced during exact-head CI.
+- BASE MAIN: `fe1906202c26b4cd91a4de82616e5f3830447d33`.
+- BRANCH: `agent/gis-spatial-cache-20260921-0849-fe19062`.
+- SOURCE DELTA: only 16 GIS source/test files from frozen superseded head `58c43dedfcf40b6acce52f205470200b67af6e0f`; stale commit history and the old shared-progress version were not carried.
+- ÖNEMLİ ÖZELLİKLER: strict-TypeScript bounded spatial result cache, deterministic invalidation planner, layer epoch registry, query admission controller, resource budget ledger, cache runtime, execution supervisor and deterministic query lifecycle tracking. Explicit maxPages/maxFeatures/maxBytes/time/resource ceilings fail closed.
+- NETWORK / SECURITY: no direct fetch, new endpoint, WMS/WFS/WMTS, telemetry, secret, remote asset or recurring polling was introduced.
+- CI HISTORY: stale-head Architecture Audit passed; syntax errors and the prior high retry-oriented scanner finding were corrected. Typed release gate then identified a +120 medium-risk delta; explicit page/feature budgets were added before recovery. No historical PASS is carried to this branch; exact-head CI remains mandatory.
+- MERGE DURUMU: OPEN / NOT MERGED pending >=4,000 meaningful additions, exact-head required CI completed+success, behind=0, mergeable=true and final security/performance/regression review.
