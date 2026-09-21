@@ -274,11 +274,13 @@ describe('ResourceScopeRegistry close semantics', () => {
 
   test('closeOwner closes only scopes owned by the requested owner', async () => {
     const calls: string[] = [];
+    const clock = createClock();
     const registry = createResourceScopeRegistry({
       maxScopes: 4,
       maxOwnerScopes: 3,
-    });
+    }, clock);
     const map = registry.create({ name: 'map', owner: 'gis' });
+    clock.advance(1);
     const layers = registry.create({ name: 'layers', owner: 'gis' });
     registry.create({ name: 'search', owner: 'search' });
     map.register({ owner: 'map', key: 'watch', cleanup: () => { calls.push('map'); } });
