@@ -86,3 +86,31 @@ test('does not treat plain TypeScript production modules as test sources', async
     assert.equal(report.passed, true);
     assert.equal(report.summary.typedTestFiles, 0);
   }));
+
+test('allows only the exact concurrent Platform JavaScript test paths', async () =>
+  withFixture(async (root) => {
+    await write(
+      root,
+      'Webclient.app/src/platform/http/retryPolicy.test.js',
+      'test("owned by concurrent platform cutover", () => {});',
+    );
+    let report = await auditTypedSourceBoundary(root);
+    assert.equal(report.passed, true);
+    assert.equal(report.summary.transitionalJavascriptFiles, 1);
+
+    await write(
+      root,
+      'Webclient.app/src/platform/http/newLegacyRuntime.test.js',
+      'test("new legacy drift", () => {});',
+    );
+    report = await auditTypedSourceBoundary(root);
+    assert.equal(report.passed, false);
+    assert.deepEqual(
+      report.findings.map(({ code, file }) => ({ code, file })),
+      [{
+        code: 'unapproved-javascript-source',
+        file: 'Webclient.app/src/platform/http/newLegacyRuntime.test.js',
+      }],
+    );
+  }));
+
