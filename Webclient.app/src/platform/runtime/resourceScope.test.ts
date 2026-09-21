@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import {
   createResourceScope,
   ResourceScopeError,
@@ -89,7 +89,7 @@ describe('ResourceScope registration and snapshots', () => {
         enabled: true,
         optional: null,
       },
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
 
     const snapshot = scope.snapshot();
@@ -119,7 +119,7 @@ describe('ResourceScope registration and snapshots', () => {
     const handle = scope.register({
       owner: 'search',
       key: 'subscription',
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     expect(handle.label).toBe('subscription');
     expect(handle.snapshot()?.label).toBe('subscription');
@@ -141,7 +141,7 @@ describe('ResourceScope registration and snapshots', () => {
       owner: 'owner',
       key: 'resource',
       metadata: { [key]: 'private-value' },
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     expect(scope.snapshot().resources[0]?.metadata[key]).toBe('[redacted]');
   });
@@ -158,7 +158,7 @@ describe('ResourceScope registration and snapshots', () => {
         array: [1, 2],
         function: () => undefined,
       },
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     expect(scope.snapshot().resources[0]?.metadata).toEqual({ valid: 7 });
   });
@@ -171,7 +171,7 @@ describe('ResourceScope registration and snapshots', () => {
       metadata: {
         message: 'a\n\tb'.repeat(100),
       },
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     const message = scope.snapshot().resources[0]?.metadata.message;
     expect(typeof message).toBe('string');
@@ -185,7 +185,7 @@ describe('ResourceScope registration and snapshots', () => {
       owner: 'owner',
       key: 'resource',
       metadata: { a: 1, b: 2, c: 3, d: 4, e: 5 },
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     expect(scope.snapshot().resources[0]?.metadata).toEqual({ a: 1, b: 2, c: 3 });
   });
@@ -195,14 +195,14 @@ describe('ResourceScope registration and snapshots', () => {
     const handle = scope.register({
       owner: 'owner',
       key: 'resource',
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     expect(Object.isFrozen(handle)).toBe(true);
     expect(handle.released).toBe(false);
   });
 
   test('handle snapshot disappears after release', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const scope = createResourceScope('application');
     const handle = scope.register({ owner: 'owner', key: 'resource', cleanup });
 
@@ -222,7 +222,7 @@ describe('ResourceScope request validation and admission', () => {
     ['owner', ' '],
   ])('rejects empty owner/key pair %#', (owner, key) => {
     const scope = createResourceScope('application');
-    expect(() => scope.register({ owner, key, cleanup: jest.fn() }))
+    expect(() => scope.register({ owner, key, cleanup: vi.fn() }))
       .toThrow(ResourceScopeError);
   });
 
@@ -231,7 +231,7 @@ describe('ResourceScope request validation and admission', () => {
     expect(() => scope.register({
       owner: 'map\nmanager',
       key: 'watch',
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     })).toThrow(expect.objectContaining({ code: 'INVALID_REQUEST' }));
   });
 
@@ -250,10 +250,10 @@ describe('ResourceScope request validation and admission', () => {
       maxResources: 2,
       maxOwnerResources: 2,
     });
-    scope.register({ owner: 'a', key: '1', cleanup: jest.fn() });
-    scope.register({ owner: 'b', key: '2', cleanup: jest.fn() });
+    scope.register({ owner: 'a', key: '1', cleanup: vi.fn() });
+    scope.register({ owner: 'b', key: '2', cleanup: vi.fn() });
 
-    expect(() => scope.register({ owner: 'c', key: '3', cleanup: jest.fn() }))
+    expect(() => scope.register({ owner: 'c', key: '3', cleanup: vi.fn() }))
       .toThrow(expect.objectContaining({ code: 'RESOURCE_CAPACITY_EXCEEDED' }));
     expect(scope.snapshot().counters.rejected).toBe(1);
   });
@@ -263,9 +263,9 @@ describe('ResourceScope request validation and admission', () => {
       maxResources: 4,
       maxOwnerResources: 1,
     });
-    scope.register({ owner: 'same', key: '1', cleanup: jest.fn() });
+    scope.register({ owner: 'same', key: '1', cleanup: vi.fn() });
 
-    expect(() => scope.register({ owner: 'same', key: '2', cleanup: jest.fn() }))
+    expect(() => scope.register({ owner: 'same', key: '2', cleanup: vi.fn() }))
       .toThrow(expect.objectContaining({ code: 'OWNER_CAPACITY_EXCEEDED' }));
     expect(scope.snapshot().activeResources).toBe(1);
   });
@@ -275,17 +275,17 @@ describe('ResourceScope request validation and admission', () => {
       maxResources: 1,
       maxOwnerResources: 1,
     });
-    const first = scope.register({ owner: 'same', key: '1', cleanup: jest.fn() });
+    const first = scope.register({ owner: 'same', key: '1', cleanup: vi.fn() });
     await first.release();
 
-    expect(() => scope.register({ owner: 'same', key: '2', cleanup: jest.fn() }))
+    expect(() => scope.register({ owner: 'same', key: '2', cleanup: vi.fn() }))
       .not.toThrow();
   });
 
   test('rejects resource registration after close', async () => {
     const scope = createResourceScope('application');
     await scope.close();
-    expect(() => scope.register({ owner: 'owner', key: 'late', cleanup: jest.fn() }))
+    expect(() => scope.register({ owner: 'owner', key: 'late', cleanup: vi.fn() }))
       .toThrow(expect.objectContaining({ code: 'SCOPE_NOT_OPEN' }));
   });
 
@@ -305,7 +305,7 @@ describe('ResourceScope request validation and admission', () => {
 
 describe('ResourceScope cleanup ordering and ownership', () => {
   test('manual release is idempotent', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const scope = createResourceScope('application');
     const handle = scope.register({ owner: 'owner', key: 'resource', cleanup });
 
@@ -343,7 +343,7 @@ describe('ResourceScope cleanup ordering and ownership', () => {
   });
 
   test('releaseOwner surfaces aggregate cleanup failures after attempting siblings', async () => {
-    const goodCleanup = jest.fn();
+    const goodCleanup = vi.fn();
     const scope = createResourceScope('application');
     scope.register({
       owner: 'map',
@@ -358,7 +358,7 @@ describe('ResourceScope cleanup ordering and ownership', () => {
   });
 
   test('registerDisposable owns an async disposable', async () => {
-    const dispose = jest.fn(async () => undefined);
+    const dispose = vi.fn(async () => undefined);
     const scope = createResourceScope('application');
     const handle = scope.registerDisposable('map', 'worker', { dispose }, {
       label: 'Map worker',
@@ -383,7 +383,7 @@ describe('ResourceScope cleanup ordering and ownership', () => {
   });
 
   test('close is idempotent after resources are gone', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const scope = createResourceScope('application');
     scope.register({ owner: 'owner', key: 'resource', cleanup });
 
@@ -394,7 +394,7 @@ describe('ResourceScope cleanup ordering and ownership', () => {
   });
 
   test('dispose is idempotent and leaves terminal disposed state', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const scope = createResourceScope('application');
     scope.register({ owner: 'owner', key: 'resource', cleanup });
 
@@ -520,7 +520,7 @@ describe('ResourceScope cleanup failures and timeouts', () => {
     const handle = scope.register({
       owner: 'owner',
       key: 'resource',
-      cleanup: jest.fn(),
+      cleanup: vi.fn(),
     });
     await expect(handle.release('manual', 501))
       .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
@@ -529,7 +529,7 @@ describe('ResourceScope cleanup failures and timeouts', () => {
   test('aborted close signal rejects before teardown starts', async () => {
     const controller = new AbortController();
     controller.abort('cancel-close');
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const scope = createResourceScope('application');
     scope.register({ owner: 'owner', key: 'resource', cleanup });
 
@@ -579,7 +579,7 @@ describe('ResourceScope child lifecycle', () => {
   });
 
   test('parent dispose propagates abort and cleanup to children', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const parent = createResourceScope('application');
     const child = parent.child('map');
     child.register({ owner: 'map', key: 'watch', cleanup });
@@ -609,7 +609,7 @@ describe('ResourceScope retention, observers and clock invariants', () => {
   test('bounds cleanup history to configured capacity', async () => {
     const scope = createResourceScope('application', { historyLimit: 2 });
     for (const key of ['a', 'b', 'c']) {
-      const handle = scope.register({ owner: 'owner', key, cleanup: jest.fn() });
+      const handle = scope.register({ owner: 'owner', key, cleanup: vi.fn() });
       await handle.release(key);
     }
     expect(scope.snapshot().history).toHaveLength(2);
@@ -618,7 +618,7 @@ describe('ResourceScope retention, observers and clock invariants', () => {
 
   test('supports disabling cleanup history', async () => {
     const scope = createResourceScope('application', { historyLimit: 0 });
-    const handle = scope.register({ owner: 'owner', key: 'resource', cleanup: jest.fn() });
+    const handle = scope.register({ owner: 'owner', key: 'resource', cleanup: vi.fn() });
     await handle.release();
     expect(scope.snapshot().history).toEqual([]);
   });
@@ -642,7 +642,7 @@ describe('ResourceScope retention, observers and clock invariants', () => {
   });
 
   test('observer failures never break registration or cleanup', async () => {
-    const cleanup = jest.fn();
+    const cleanup = vi.fn();
     const scope = createResourceScope('application', {
       onEvent: () => { throw new Error('observer failed'); },
     });
@@ -655,7 +655,7 @@ describe('ResourceScope retention, observers and clock invariants', () => {
 
   test('snapshot collections are defensive immutable copies', async () => {
     const scope = createResourceScope('application');
-    const handle = scope.register({ owner: 'owner', key: 'resource', cleanup: jest.fn() });
+    const handle = scope.register({ owner: 'owner', key: 'resource', cleanup: vi.fn() });
     const active = scope.snapshot();
     await handle.release();
     const released = scope.snapshot();
@@ -681,22 +681,22 @@ describe('ResourceScope retention, observers and clock invariants', () => {
     const clock = createClock();
     const scope = createResourceScope('application', { clock });
     clock.advance(10);
-    scope.register({ owner: 'owner', key: 'first', cleanup: jest.fn() });
+    scope.register({ owner: 'owner', key: 'first', cleanup: vi.fn() });
     clock.rewind(20);
 
-    expect(() => scope.register({ owner: 'owner', key: 'second', cleanup: jest.fn() }))
+    expect(() => scope.register({ owner: 'owner', key: 'second', cleanup: vi.fn() }))
       .toThrow(expect.objectContaining({ code: 'INVALID_REQUEST' }));
   });
 
   test('does not create recurring timers or background polling', () => {
-    const setTimeoutSpy = jest.fn(globalThis.setTimeout);
+    const setTimeoutSpy = vi.fn(globalThis.setTimeout);
     const clock: ResourceScopeClock = {
       now: () => Date.now(),
       setTimeout: setTimeoutSpy,
       clearTimeout: globalThis.clearTimeout,
     };
     const scope = createResourceScope('application', { clock });
-    scope.register({ owner: 'owner', key: 'resource', cleanup: jest.fn() });
+    scope.register({ owner: 'owner', key: 'resource', cleanup: vi.fn() });
 
     expect(setTimeoutSpy).not.toHaveBeenCalled();
   });
