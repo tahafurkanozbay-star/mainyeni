@@ -33,6 +33,7 @@ namespace Api.Core.Platform
             ValidateResponseCompression(options.ResponseCompression, failures);
             ValidateDiagnostics(options.Diagnostics, failures);
             ValidateGovernance(options.Governance, failures);
+            ValidateTransport(options.Transport, failures);
 
             return failures.Count == 0
                 ? ValidateOptionsResult.Success
@@ -392,6 +393,29 @@ namespace Api.Core.Platform
             if (value < minimum || value > maximum)
             {
                 failures.Add($"Platform:Governance:{settingName} must be between {minimum} and {maximum}.");
+            }
+        }
+
+        private static void ValidateTransport(
+            ApiPlatformOptions.TransportOptions options,
+            ICollection<string> failures)
+        {
+            if (options == null)
+            {
+                failures.Add("Platform:Transport configuration is required.");
+                return;
+            }
+
+            ValidateRange(options.KeepAliveTimeoutSeconds, 5, 300, "Transport:KeepAliveTimeoutSeconds", failures);
+            ValidateRange(options.RequestHeadersTimeoutSeconds, 2, 120, "Transport:RequestHeadersTimeoutSeconds", failures);
+            ValidateRange(options.MaxRequestLineSizeBytes, 4096, 32768, "Transport:MaxRequestLineSizeBytes", failures);
+            ValidateRange(options.MaxRequestHeadersTotalSizeBytes, 8192, 131072, "Transport:MaxRequestHeadersTotalSizeBytes", failures);
+            ValidateRange(options.MaxRequestHeaderCount, 16, 256, "Transport:MaxRequestHeaderCount", failures);
+            ValidateRange(options.MaxRequestBodyBytes, 1024, 100L * 1024 * 1024, "Transport:MaxRequestBodyBytes", failures);
+
+            if (options.RequestHeadersTimeoutSeconds >= options.KeepAliveTimeoutSeconds)
+            {
+                failures.Add("Platform:Transport:RequestHeadersTimeoutSeconds must be lower than KeepAliveTimeoutSeconds.");
             }
         }
 
