@@ -14,9 +14,12 @@ import {
   createSceneView,
   destroySceneView,
   focusPickedGraphic,
+  isSceneContainerRenderable,
   pickScene,
   resetSceneRuntimeModuleCache,
   snapshotSceneState,
+  synchronizeSceneViewSize,
+  waitForSceneContainer,
 } from './sceneRuntime';
 
 const loadModules = vi.fn();
@@ -680,5 +683,52 @@ describe('sceneRuntime', () => {
       center: [32, 39],
       scale: 25000,
     });
+  });
+});
+
+
+describe('sceneRuntime render host lifecycle', () => {
+  test('requires a non-zero scene container before WebGL startup', () => {
+    expect(isSceneContainerRenderable({ clientWidth: 0, clientHeight: 600 })).toBe(false);
+    expect(isSceneContainerRenderable({ clientWidth: 800, clientHeight: 600 })).toBe(true);
+    expect(isSceneContainerRenderable({
+      clientWidth: 0,
+      clientHeight: 0,
+      getBoundingClientRect: () => ({ width: 1024, height: 768 }),
+    })).toBe(true);
+  });
+
+  test('waits for the host to become measurable before continuing', async () => {
+    let frame = 0;
+    const nextFrame = vi.fn(async () => {
+      frame += 1;
+    });
+    const host = {
+      getBoundingClientRect: () => ({
+        width: frame >= 2 ? 900 : 0,
+        height: frame >= 2 ? 600 : 0,
+      }),
+    };
+
+    await expect(waitForSceneContainer(host, { maxFrames: 4, nextFrame })).resolves.toBeUndefined();
+    expect(nextFrame).toHaveBeenCalledTimes(2);
+  });
+
+  test('fails closed when a scene host never receives layout', async () => {
+    const nextFrame = vi.fn(async () => undefined);
+    await expect(waitForSceneContainer(
+      { clientWidth: 0, clientHeight: 0 },
+      { maxFrames: 2, nextFrame },
+    )).rejects.toThrow('SceneView container has no renderable layout.');
+    expect(nextFrame).toHaveBeenCalledTimes(2);
+  });
+
+  test('synchronizes a live SceneView with its host size', () => {
+    const resize = vi.fn();
+    expect(synchronizeSceneViewSize({ resize })).toBe(true);
+    expect(resize).toHaveBeenCalledTimes(1);
+
+    expect(synchronizeSceneViewSize({ resize, destroyed: true })).toBe(false);
+    expect(resize).toHaveBeenCalledTimes(1);
   });
 });
