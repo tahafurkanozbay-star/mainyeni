@@ -64,10 +64,10 @@ describe('normalizeServiceDescriptor', () => {
       .toThrow(expect.objectContaining({ code: 'INVALID_DESCRIPTOR' }));
   });
 
-  test('trims benign version boundary whitespace', () => {
-    expect(normalizeServiceDescriptor(service('runtime', {
+  test('rejects version boundary whitespace fail-closed', () => {
+    expect(() => normalizeServiceDescriptor(service('runtime', {
       version: ' 1.2.3 ',
-    })).version).toBe('1.2.3');
+    }))).toThrow(expect.objectContaining({ code: 'INVALID_DESCRIPTOR' }));
   });
 
   test('rejects invalid domain', () => {
