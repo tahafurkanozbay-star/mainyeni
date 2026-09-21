@@ -153,7 +153,7 @@ namespace Api.Core.Platform
             /// </summary>
             public bool Enabled { get; set; } = true;
 
-            public int MaxRawTargetChars { get; set; } = 8192;
+            public int MaxRawTargetChars { get; set; } = 12288;
 
             public int MaxPathChars { get; set; } = 2048;
 
