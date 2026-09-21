@@ -5,6 +5,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_ROOT = 'Webclient.app/src';
+const ADMIN_SOURCE_ROOT = 'Webclient.admin/src';
 const JAVASCRIPT_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 const TYPESCRIPT_TEST_PATTERN = /(?:\.test|\.spec|\.fixture|\.mock)\.(?:ts|tsx)$/u;
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', 'coverage', '.git', '.cache']);
@@ -56,8 +57,10 @@ const finding = (code, file, message) => Object.freeze({ code, file, message });
 
 export const auditTypedSourceBoundary = async (root = process.cwd()) => {
   const resolvedRoot = path.resolve(root);
-  const sourceDirectory = path.join(resolvedRoot, SOURCE_ROOT);
-  const files = (await walk(sourceDirectory)).sort();
+  const sourceDirectories = [SOURCE_ROOT, ADMIN_SOURCE_ROOT].map((root) => path.join(resolvedRoot, root));
+  const files = (await Promise.all(sourceDirectories.map((directory) => walk(directory, []))))
+    .flat()
+    .sort();
   const findings = [];
   const javascript = [];
   const typedTests = [];
@@ -78,9 +81,13 @@ export const auditTypedSourceBoundary = async (root = process.cwd()) => {
         continue;
       }
 
+      const adminJavascript = relative.startsWith(`${ADMIN_SOURCE_ROOT}/`);
       if (
-        !isBusinessOwnedJavascript(relative)
-        && !TRANSITIONAL_JAVASCRIPT_ALLOWLIST.has(relative)
+        adminJavascript
+        || (
+          !isBusinessOwnedJavascript(relative)
+          && !TRANSITIONAL_JAVASCRIPT_ALLOWLIST.has(relative)
+        )
       ) {
         findings.push(finding(
           'unapproved-javascript-source',
@@ -114,6 +121,7 @@ export const auditTypedSourceBoundary = async (root = process.cwd()) => {
     summary: Object.freeze({
       javascriptFiles: javascript.length,
       typedTestFiles: typedTests.length,
+      adminJavascriptFiles: javascript.filter((file) => file.startsWith(`${ADMIN_SOURCE_ROOT}/`)).length,
       businessOwnedJavascriptFiles: javascript.filter(isBusinessOwnedJavascript).length,
       transitionalJavascriptFiles: javascript.filter((file) =>
         TRANSITIONAL_JAVASCRIPT_ALLOWLIST.has(file)).length,
@@ -128,7 +136,8 @@ export const formatTypedSourceBoundary = (report) => {
     '',
     `Gate: **${report.passed ? 'PASS' : 'FAIL'}**`,
     '',
-    `- JavaScript files under \`${SOURCE_ROOT}\`: **${report.summary.javascriptFiles}**`,
+    `- JavaScript files under application source roots: **${report.summary.javascriptFiles}**`,
+    `- Admin JavaScript files under \`${ADMIN_SOURCE_ROOT}\`: **${report.summary.adminJavascriptFiles}**`,
     `- Business-owned JavaScript files: **${report.summary.businessOwnedJavascriptFiles}**`,
     `- Exact concurrent-migration JavaScript exceptions present: **${report.summary.transitionalJavascriptFiles}**`,
     `- TypeScript test files scanned for Jest namespace drift: **${report.summary.typedTestFiles}**`,
@@ -145,7 +154,8 @@ export const formatTypedSourceBoundary = (report) => {
   }
 
   lines.push(
-    'Business JavaScript remains under the concurrent Business migration ratchet. '
+    'Webclient.admin is permanently ratcheted to zero JavaScript. '
+    + 'Business JavaScript remains under the concurrent Business migration ratchet. '
     + 'The exact-path exceptions are pre-existing files owned by concurrent GIS, Experience, and Platform cutovers; '
     + 'missing exceptions are allowed so those PRs can remove them without coordination. '
     + 'Every other application source area is permanently ratcheted away from JavaScript.',
