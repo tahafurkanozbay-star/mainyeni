@@ -26,6 +26,8 @@ export interface SpatialCacheKeyInput {
 export interface SpatialCachePolicy {
   readonly maxEntries: number;
   readonly maxEstimatedBytes: number;
+  readonly maxPagesPerEntry: number;
+  readonly maxFeaturesPerEntry: number;
   readonly defaultTtlMs: number;
   readonly maxTtlMs: number;
   readonly coordinatePrecision: number;
@@ -34,6 +36,8 @@ export interface SpatialCachePolicy {
 export interface SpatialCachePutOptions {
   readonly ttlMs?: number;
   readonly estimatedBytes?: number;
+  readonly pageCount?: number;
+  readonly featureCount?: number;
   readonly tags?: readonly string[];
   readonly now?: number;
 }
@@ -49,6 +53,8 @@ export interface SpatialCacheLookup<T> {
   readonly ageMs?: number;
   readonly expiresInMs?: number;
   readonly estimatedBytes?: number;
+  readonly pageCount?: number;
+  readonly featureCount?: number;
 }
 
 export interface SpatialCacheSnapshot {
@@ -69,6 +75,8 @@ interface CacheEntry<T> {
   readonly createdAt: number;
   readonly expiresAt: number;
   readonly estimatedBytes: number;
+  readonly pageCount: number;
+  readonly featureCount: number;
   readonly tags: readonly string[];
   lastAccessAt: number;
   accessSequence: number;
@@ -77,6 +85,8 @@ interface CacheEntry<T> {
 const DEFAULT_POLICY: SpatialCachePolicy = {
   maxEntries: 256,
   maxEstimatedBytes: 16 * 1024 * 1024,
+  maxPagesPerEntry: 128,
+  maxFeaturesPerEntry: 100_000,
   defaultTtlMs: 30_000,
   maxTtlMs: 5 * 60_000,
   coordinatePrecision: 6,
@@ -124,6 +134,8 @@ export const normalizeSpatialCachePolicy = (policy: Partial<SpatialCachePolicy> 
   const merged = { ...DEFAULT_POLICY, ...policy };
   positiveInteger(merged.maxEntries, 'maxEntries');
   positiveInteger(merged.maxEstimatedBytes, 'maxEstimatedBytes');
+  positiveInteger(merged.maxPagesPerEntry, 'maxPagesPerEntry');
+  positiveInteger(merged.maxFeaturesPerEntry, 'maxFeaturesPerEntry');
   positiveInteger(merged.defaultTtlMs, 'defaultTtlMs');
   positiveInteger(merged.maxTtlMs, 'maxTtlMs');
   if (merged.defaultTtlMs > merged.maxTtlMs) throw new RangeError('defaultTtlMs cannot exceed maxTtlMs');
@@ -194,6 +206,16 @@ export class SpatialResultCache<T> {
     positiveInteger(ttlMs, 'ttlMs');
     const estimatedBytes = Math.ceil(options.estimatedBytes ?? estimateJsonBytes(value));
     positiveInteger(estimatedBytes, 'estimatedBytes');
+    const pageCount = options.pageCount ?? 1;
+    const featureCount = options.featureCount ?? 0;
+    positiveInteger(pageCount, 'pageCount');
+    if (!Number.isSafeInteger(featureCount) || featureCount < 0) {
+      throw new RangeError('featureCount must be a non-negative safe integer');
+    }
+    if (pageCount > this.policy.maxPagesPerEntry || featureCount > this.policy.maxFeaturesPerEntry) {
+      this.rejectedOversize += 1;
+      return false;
+    }
     if (estimatedBytes > this.policy.maxEstimatedBytes) {
       this.rejectedOversize += 1;
       return false;
@@ -212,6 +234,8 @@ export class SpatialResultCache<T> {
       createdAt: now,
       expiresAt: now + ttlMs,
       estimatedBytes,
+      pageCount,
+      featureCount,
       tags,
       lastAccessAt: now,
       accessSequence: ++this.sequence,
@@ -238,7 +262,7 @@ export class SpatialResultCache<T> {
         this.staleHits += 1;
         entry.lastAccessAt = now;
         entry.accessSequence = ++this.sequence;
-        return { status: 'stale', value: entry.value, ageMs, expiresInMs, estimatedBytes: entry.estimatedBytes };
+        return { status: 'stale', value: entry.value, ageMs, expiresInMs, estimatedBytes: entry.estimatedBytes, pageCount: entry.pageCount, featureCount: entry.featureCount };
       }
       this.deleteEntry(entry);
       this.expirations += 1;
@@ -248,7 +272,7 @@ export class SpatialResultCache<T> {
     this.hits += 1;
     entry.lastAccessAt = now;
     entry.accessSequence = ++this.sequence;
-    return { status: 'hit', value: entry.value, ageMs, expiresInMs, estimatedBytes: entry.estimatedBytes };
+    return { status: 'hit', value: entry.value, ageMs, expiresInMs, estimatedBytes: entry.estimatedBytes, pageCount: entry.pageCount, featureCount: entry.featureCount };
   }
 
   public has(key: string, now = Date.now()): boolean {
