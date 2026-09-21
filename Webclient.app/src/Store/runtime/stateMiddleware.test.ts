@@ -35,7 +35,11 @@ describe('stateMiddleware', () => {
 
   it('records reducer failures and rethrows the original error', () => {
     const error = new Error('reducer failed');
-    const failingReducer = (state = 0, action: unknown) => {
+    const initialState = reducer(undefined, { type: '@@store-runtime/test-init' }) as RootState;
+    const failingReducer = (
+      state: RootState = initialState,
+      action: unknown,
+    ): RootState => {
       if ((action as { type?: string }).type === 'boom') throw error;
       return state;
     };

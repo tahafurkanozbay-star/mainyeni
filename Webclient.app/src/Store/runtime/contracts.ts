@@ -244,16 +244,16 @@ export const normalizeStoreRuntimeLimits = (
     maxSubscribers: boundedInteger(value.maxSubscribers, defaults.maxSubscribers, 1, 10_000),
     maxInvariantIssues: boundedInteger(value.maxInvariantIssues, defaults.maxInvariantIssues, 1, 10_000),
     maxSnapshotBytes: boundedInteger(value.maxSnapshotBytes, defaults.maxSnapshotBytes, 1_024, 16 * 1024 * 1024),
-    maxSnapshotAgeMs: boundedInteger(value.maxSnapshotAgeMs, defaults.maxSnapshotAgeMs, 1_000, 30 * 24 * 60 * 60 * 1000),
+    maxSnapshotAgeMs: boundedInteger(value.maxSnapshotAgeMs, defaults.maxSnapshotAgeMs, 1, 30 * 24 * 60 * 60 * 1000),
     maxProjectionDepth: boundedInteger(value.maxProjectionDepth, defaults.maxProjectionDepth, 1, 32),
-    maxProjectionEntries: boundedInteger(value.maxProjectionEntries, defaults.maxProjectionEntries, 16, 100_000),
+    maxProjectionEntries: boundedInteger(value.maxProjectionEntries, defaults.maxProjectionEntries, 1, 100_000),
     maxProjectionTextLength: boundedInteger(value.maxProjectionTextLength, defaults.maxProjectionTextLength, 16, 65_536),
     maxWindows: boundedInteger(value.maxWindows, defaults.maxWindows, 1, 10_000),
     maxVisibleWindows: boundedInteger(value.maxVisibleWindows, defaults.maxVisibleWindows, 1, 1_000),
     maxGraphics: boundedInteger(value.maxGraphics, defaults.maxGraphics, 1, 1_000_000),
     maxDynamicLayers: boundedInteger(value.maxDynamicLayers, defaults.maxDynamicLayers, 1, 100_000),
     maxServices: boundedInteger(value.maxServices, defaults.maxServices, 1, 100_000),
-    maxMessageLength: boundedInteger(value.maxMessageLength, defaults.maxMessageLength, 16, 65_536),
+    maxMessageLength: boundedInteger(value.maxMessageLength, defaults.maxMessageLength, 1, 65_536),
   });
 };
 
