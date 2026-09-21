@@ -21,17 +21,16 @@ const withFixture = async (callback) => {
   }
 };
 
-test('passes exact concurrent migration exceptions and native Vitest TypeScript', async () =>
+test('passes a fully typed application source tree', async () =>
   withFixture(async (root) => {
-    await write(root, 'Webclient.app/src/experience/accessibilityRuntime.test.js', 'test("legacy owner", () => {});');
-    await write(root, 'Webclient.app/src/platform/http/retryPolicy.test.js', 'test("platform owner", () => {});');
     await write(root, 'Webclient.app/src/platform/http/runtime.test.ts', 'test("typed", () => { vi.fn(); });');
+    await write(root, 'Webclient.app/src/experience/accessibilityRuntime.test.ts', 'test("typed experience", () => {});');
 
     const report = await auditTypedSourceBoundary(root);
 
     assert.equal(report.passed, true);
-    assert.equal(report.summary.javascriptFiles, 2);
-    assert.equal(report.summary.transitionalJavascriptFiles, 2);
+    assert.equal(report.summary.javascriptFiles, 0);
+    assert.equal(report.summary.transitionalJavascriptFiles, 0);
     assert.equal(report.summary.violations, 0);
   }));
 
@@ -108,30 +107,35 @@ test('does not treat plain TypeScript production modules as test sources', async
     assert.equal(report.summary.typedTestFiles, 0);
   }));
 
-test('allows only the exact concurrent Platform JavaScript test paths', async () =>
+test('rejects formerly transitional Platform and Experience JavaScript paths', async () =>
   withFixture(async (root) => {
     await write(
       root,
       'Webclient.app/src/platform/http/retryPolicy.test.js',
-      'test("owned by concurrent platform cutover", () => {});',
+      'test("legacy platform drift", () => {});',
     );
-    let report = await auditTypedSourceBoundary(root);
-    assert.equal(report.passed, true);
-    assert.equal(report.summary.transitionalJavascriptFiles, 1);
-
     await write(
       root,
-      'Webclient.app/src/platform/http/newLegacyRuntime.test.js',
-      'test("new legacy drift", () => {});',
+      'Webclient.app/src/experience/accessibilityRuntime.test.js',
+      'test("legacy experience drift", () => {});',
     );
-    report = await auditTypedSourceBoundary(root);
+
+    const report = await auditTypedSourceBoundary(root);
     assert.equal(report.passed, false);
+    assert.equal(report.summary.javascriptFiles, 2);
+    assert.equal(report.summary.transitionalJavascriptFiles, 0);
     assert.deepEqual(
       report.findings.map(({ code, file }) => ({ code, file })),
-      [{
-        code: 'unapproved-javascript-source',
-        file: 'Webclient.app/src/platform/http/newLegacyRuntime.test.js',
-      }],
+      [
+        {
+          code: 'unapproved-javascript-source',
+          file: 'Webclient.app/src/experience/accessibilityRuntime.test.js',
+        },
+        {
+          code: 'unapproved-javascript-source',
+          file: 'Webclient.app/src/platform/http/retryPolicy.test.js',
+        },
+      ],
     );
   }));
 
