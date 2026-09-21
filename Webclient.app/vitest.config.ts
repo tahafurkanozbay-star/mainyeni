@@ -10,7 +10,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.fixture.js'],
+    setupFiles: ['./src/setupTests.fixture.ts'],
     include: [
       'src/**/*.test.{js,jsx,ts,tsx}',
       'tooling/**/*.test.{js,ts}',
