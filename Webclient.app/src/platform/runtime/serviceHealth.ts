@@ -58,6 +58,7 @@ export interface ServiceContainerHealthSummary {
   readonly slowStarts: number;
   readonly slowStops: number;
   readonly observerFailures: number;
+  readonly optionalDependencyFailures: number;
   readonly registrationRejections: number;
   readonly risks: readonly ServiceContainerHealthRisk[];
 }
@@ -452,6 +453,7 @@ export const evaluateServiceContainerHealth = (
     slowStarts,
     slowStops,
     observerFailures: snapshot.counters.observerFailures,
+    optionalDependencyFailures: snapshot.counters.optionalDependencyFailures,
     registrationRejections: snapshot.counters.rejected,
     risks: sortedRisks,
   });
@@ -482,6 +484,7 @@ const sampleFingerprint = (
   summary.slowStarts,
   summary.slowStops,
   summary.observerFailures,
+  summary.optionalDependencyFailures,
   summary.registrationRejections,
   ...summary.risks.map((risk) =>
     [risk.code, risk.status, risk.count, risk.threshold, risk.affectedServices].join(':')),
