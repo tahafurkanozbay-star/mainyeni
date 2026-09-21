@@ -21,10 +21,10 @@ const createSignalHarness = (initiallyAborted = false) => {
   const listeners = new Set();
   const signal = {
     aborted: initiallyAborted,
-    addEventListener: jest.fn((name, callback) => {
+    addEventListener: vi.fn((name, callback) => {
       if (name === 'abort') listeners.add(callback);
     }),
-    removeEventListener: jest.fn((name, callback) => {
+    removeEventListener: vi.fn((name, callback) => {
       if (name === 'abort') listeners.delete(callback);
     })
   };
@@ -225,7 +225,7 @@ describe('retryPolicy backoff calculation', () => {
 
 describe('retryPolicy Retry-After header extraction', () => {
   test('reads Fetch Headers-like objects', () => {
-    const headers = { get: jest.fn((name) => name === 'retry-after' ? '3' : null) };
+    const headers = { get: vi.fn((name) => name === 'retry-after' ? '3' : null) };
     expect(getRetryAfterHeader({ response: { headers } })).toBe('3');
     expect(headers.get).toHaveBeenCalledWith('retry-after');
   });
@@ -258,11 +258,11 @@ describe('retryPolicy Retry-After header extraction', () => {
 describe('retryPolicy cancellation-aware waiting', () => {
   test('resolves when the timer fires', async () => {
     let timerCallback;
-    const setTimer = jest.fn((callback) => {
+    const setTimer = vi.fn((callback) => {
       timerCallback = callback;
       return 11;
     });
-    const clearTimer = jest.fn();
+    const clearTimer = vi.fn();
     const promise = waitForRetry(250, null, { setTimeout: setTimer, clearTimeout: clearTimer });
     expect(setTimer).toHaveBeenCalledWith(expect.any(Function), 250);
     timerCallback();
@@ -273,15 +273,15 @@ describe('retryPolicy cancellation-aware waiting', () => {
   test('rejects immediately when signal is already aborted', async () => {
     const harness = createSignalHarness(true);
     await expect(waitForRetry(250, harness.signal, {
-      setTimeout: jest.fn(), clearTimeout: jest.fn()
+      setTimeout: vi.fn(), clearTimeout: vi.fn()
     })).rejects.toMatchObject({ code: 'ABORTED', retryable: false });
   });
 
   test('rejects when cancellation arrives during sleep', async () => {
     const harness = createSignalHarness();
-    const clearTimer = jest.fn();
+    const clearTimer = vi.fn();
     const promise = waitForRetry(250, harness.signal, {
-      setTimeout: jest.fn(() => 42), clearTimeout: clearTimer
+      setTimeout: vi.fn(() => 42), clearTimeout: clearTimer
     });
     expect(harness.listenerCount()).toBe(1);
     harness.abort();
@@ -294,8 +294,8 @@ describe('retryPolicy cancellation-aware waiting', () => {
     const harness = createSignalHarness();
     let callback;
     const promise = waitForRetry(10, harness.signal, {
-      setTimeout: jest.fn((handler) => { callback = handler; return 7; }),
-      clearTimeout: jest.fn()
+      setTimeout: vi.fn((handler) => { callback = handler; return 7; }),
+      clearTimeout: vi.fn()
     });
     expect(harness.listenerCount()).toBe(1);
     callback();
@@ -304,8 +304,8 @@ describe('retryPolicy cancellation-aware waiting', () => {
   });
 
   test('normalizes negative wait duration to zero', () => {
-    const setTimer = jest.fn(() => 1);
-    waitForRetry(-500, null, { setTimeout: setTimer, clearTimeout: jest.fn() });
+    const setTimer = vi.fn(() => 1);
+    waitForRetry(-500, null, { setTimeout: setTimer, clearTimeout: vi.fn() });
     expect(setTimer).toHaveBeenCalledWith(expect.any(Function), 0);
   });
 });
@@ -343,19 +343,19 @@ describe('retryPolicy decision model', () => {
 
 describe('retryPolicy execution', () => {
   test('returns first successful operation result', async () => {
-    const operation = jest.fn().mockResolvedValue('ok');
+    const operation = vi.fn().mockResolvedValue('ok');
     await expect(executeWithRetry(operation)).resolves.toBe('ok');
     expect(operation).toHaveBeenCalledTimes(1);
     expect(operation).toHaveBeenCalledWith({ attempt: 0, signal: undefined });
   });
 
   test('retries until operation succeeds', async () => {
-    const operation = jest.fn()
+    const operation = vi.fn()
       .mockRejectedValueOnce(retryable())
       .mockRejectedValueOnce(retryable())
       .mockResolvedValueOnce('ok');
-    const wait = jest.fn().mockResolvedValue(undefined);
-    const onRetry = jest.fn();
+    const wait = vi.fn().mockResolvedValue(undefined);
+    const onRetry = vi.fn();
     await expect(executeWithRetry(operation, {
       maxRetries: 2, wait, onRetry, retryOptions: { random: () => 0 }
     })).resolves.toBe('ok');
@@ -366,25 +366,25 @@ describe('retryPolicy execution', () => {
 
   test('exposes monotonically increasing attempt numbers', async () => {
     const attempts = [];
-    const operation = jest.fn(({ attempt }) => {
+    const operation = vi.fn(({ attempt }) => {
       attempts.push(attempt);
       if (attempt < 2) return Promise.reject(retryable());
       return Promise.resolve('ok');
     });
     await executeWithRetry(operation, {
       maxRetries: 2,
-      wait: jest.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
       retryOptions: { random: () => 0 }
     });
     expect(attempts).toEqual([0, 1, 2]);
   });
 
   test('invokes onAttempt before each operation', async () => {
-    const onAttempt = jest.fn();
-    const operation = jest.fn().mockRejectedValueOnce(retryable()).mockResolvedValueOnce('ok');
+    const onAttempt = vi.fn();
+    const operation = vi.fn().mockRejectedValueOnce(retryable()).mockResolvedValueOnce('ok');
     await executeWithRetry(operation, {
       maxRetries: 1,
-      wait: jest.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
       onAttempt,
       retryOptions: { random: () => 0 }
     });
@@ -393,35 +393,35 @@ describe('retryPolicy execution', () => {
 
   test('does not retry an unsafe operation when policy disables retry', async () => {
     const error = retryable();
-    const operation = jest.fn().mockRejectedValue(error);
+    const operation = vi.fn().mockRejectedValue(error);
     await expect(executeWithRetry(operation, {
-      maxRetries: 3, retryAllowed: false, wait: jest.fn()
+      maxRetries: 3, retryAllowed: false, wait: vi.fn()
     })).rejects.toBe(error);
     expect(operation).toHaveBeenCalledTimes(1);
   });
 
   test('does not retry a non-retryable error', async () => {
     const error = new AppError('bad', { code: 'BAD_REQUEST', status: 400, retryable: false });
-    const operation = jest.fn().mockRejectedValue(error);
+    const operation = vi.fn().mockRejectedValue(error);
     await expect(executeWithRetry(operation, {
-      maxRetries: 3, wait: jest.fn()
+      maxRetries: 3, wait: vi.fn()
     })).rejects.toBe(error);
     expect(operation).toHaveBeenCalledTimes(1);
   });
 
   test('stops after configured retry budget', async () => {
     const error = retryable();
-    const operation = jest.fn().mockRejectedValue(error);
+    const operation = vi.fn().mockRejectedValue(error);
     await expect(executeWithRetry(operation, {
       maxRetries: 2,
-      wait: jest.fn().mockResolvedValue(undefined),
+      wait: vi.fn().mockResolvedValue(undefined),
       retryOptions: { random: () => 0 }
     })).rejects.toBe(error);
     expect(operation).toHaveBeenCalledTimes(3);
   });
 
   test('does not execute when caller is already aborted', async () => {
-    const operation = jest.fn();
+    const operation = vi.fn();
     await expect(executeWithRetry(operation, { signal: { aborted: true } }))
       .rejects.toMatchObject({ code: 'ABORTED' });
     expect(operation).not.toHaveBeenCalled();
@@ -429,8 +429,8 @@ describe('retryPolicy execution', () => {
 
   test('stops if cancellation arrives after retry wait', async () => {
     const harness = createSignalHarness();
-    const operation = jest.fn().mockRejectedValue(retryable());
-    const wait = jest.fn(async () => { harness.abort(); });
+    const operation = vi.fn().mockRejectedValue(retryable());
+    const wait = vi.fn(async () => { harness.abort(); });
     await expect(executeWithRetry(operation, {
       maxRetries: 3,
       signal: harness.signal,
