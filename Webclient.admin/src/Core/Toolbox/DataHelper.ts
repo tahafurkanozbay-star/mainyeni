@@ -1,18 +1,10 @@
-import { arcgisToGeoJSON } from '@terraformer/arcgis';
-import SpatialReference from '@arcgis/core/geometry/SpatialReference.js';
-import * as projectOperator from '@arcgis/core/geometry/operators/projectOperator.js';
 import type { GeometryUnion } from '@arcgis/core/geometry/types.js';
-import * as FileSaver from 'file-saver';
-import { jsPDF } from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 import {
   createKmlDocument,
   type KmlDataRecord,
   type KmlGeometry,
 } from '../../runtime/kmlSerializer';
-import { exportFont } from '../Fonts/UbuntuNormal';
 
 type DataRecord = Record<string, unknown>;
 
@@ -65,6 +57,16 @@ const triggerTextDownload = (
 const projectForKml = async (
   geometries: readonly unknown[],
 ): Promise<readonly KmlGeometry[]> => {
+  const [
+    { arcgisToGeoJSON },
+    { default: SpatialReference },
+    projectOperator,
+  ] = await Promise.all([
+    import('@terraformer/arcgis'),
+    import('@arcgis/core/geometry/SpatialReference.js'),
+    import('@arcgis/core/geometry/operators/projectOperator.js'),
+  ]);
+
   if (!projectOperator.isLoaded()) {
     await projectOperator.load();
   }
@@ -106,6 +108,11 @@ export const DataHelper = {
     fields: readonly string[],
     filename: string,
   ): Promise<void> => {
+    const [XLSX, FileSaver] = await Promise.all([
+      import('xlsx'),
+      import('file-saver'),
+    ]);
+
     const resultData = json.map((item) =>
       Object.fromEntries(fields.map((field) => [field, item[field]])),
     );
@@ -126,6 +133,12 @@ export const DataHelper = {
     fields: readonly string[],
     filename: string,
   ): Promise<void> => {
+    const [{ jsPDF }, { autoTable }, { exportFont }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+      import('../Fonts/UbuntuNormal'),
+    ]);
+
     const rows = json.map((item) => fields.map((field) => item[field] ?? ''));
     exportFont();
 
