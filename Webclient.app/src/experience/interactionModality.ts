@@ -124,7 +124,7 @@ export class InteractionModalityRuntime {
         };
         this.reflect();
         const next = clone(this.current);
-        for (const listener of [...this.listeners]) {
+        for (const listener of this.listeners) {
             try {
                 listener(next, clone(previous));
             } catch (error) {
