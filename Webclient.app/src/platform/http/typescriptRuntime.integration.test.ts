@@ -136,8 +136,9 @@ describe('typed runtime integration', () => {
     const calls: string[] = [];
 
     const transport = makeTransport(async (config) => {
-      calls.push(`${config.url}:${config.attempt ?? 0}`);
-      if (config.url === '/first' && (config.attempt ?? 0) === 0) {
+      const attempt = config.attempt ?? 0;
+      calls.push(`${config.url}:${attempt}`);
+      if (config.url === '/first' && attempt === 0) {
         throw Object.assign(new Error('temporary'), {
           code: 'NETWORK_ERROR',
           retryable: true
