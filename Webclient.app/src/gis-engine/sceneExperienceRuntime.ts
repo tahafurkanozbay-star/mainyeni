@@ -220,16 +220,14 @@ export const sceneQualityPolicyForProfile = (
 export const applySceneQualityPolicy = (
   view: SceneExperienceView,
   policy: SceneQualityPolicy,
+  onError?: (error: unknown, context: string) => void,
 ): void => {
   if (!view) return;
 
   try {
     view.qualityProfile = policy.sdkQuality;
-  } catch {
-    // Older SceneView builds may expose qualityProfile as construction-only.
-    // Keeping this assignment best-effort preserves compatibility with the
-    // repository's esri-loader runtime while still allowing newer builds to
-    // adapt quality live.
+  } catch (error) {
+    onError?.(error, 'quality-profile');
   }
 
   const environment = view.environment;
@@ -237,14 +235,14 @@ export const applySceneQualityPolicy = (
 
   try {
     environment.atmosphereEnabled = policy.atmosphereEnabled;
-  } catch {
-    // Best effort: environment capabilities vary across ArcGIS SDK versions.
+  } catch (error) {
+    onError?.(error, 'environment-atmosphere');
   }
 
   try {
     environment.starsEnabled = policy.starsEnabled;
-  } catch {
-    // Best effort.
+  } catch (error) {
+    onError?.(error, 'environment-stars');
   }
 
   const lighting = environment.lighting;
@@ -252,14 +250,14 @@ export const applySceneQualityPolicy = (
 
   try {
     lighting.directShadowsEnabled = policy.directShadowsEnabled;
-  } catch {
-    // Best effort.
+  } catch (error) {
+    onError?.(error, 'lighting-shadows');
   }
 
   try {
     lighting.cameraTrackingEnabled = policy.cameraTrackingEnabled;
-  } catch {
-    // Sun and virtual lighting do not expose an identical property surface.
+  } catch (error) {
+    onError?.(error, 'lighting-camera-tracking');
   }
 };
 
@@ -285,6 +283,7 @@ export const createSceneExperienceRuntime = (
     onListenerError: (error: unknown) => options.onError?.(error, 'adaptive-listener'),
   });
   const ownsAdaptiveRuntime = !options.adaptiveRuntime;
+  const reportRuntimeError = (error: unknown, context: string): void => options.onError?.(error, context);
   const listeners = new Set<(snapshot: SceneExperienceSnapshot, reason: string) => void>();
   const frameHistory: number[] = [];
   const recovery = createRecoverySnapshot();
@@ -334,7 +333,7 @@ export const createSceneExperienceRuntime = (
   const applyPolicy = (reason: string): SceneExperienceSnapshot => {
     const performanceSnapshot = adaptive.getSnapshot();
     const policy = sceneQualityPolicyForProfile(performanceSnapshot.profile, performanceSnapshot.budget);
-    applySceneQualityPolicy(view, policy);
+    applySceneQualityPolicy(view, policy, reportRuntimeError);
     return emit(reason);
   };
 
@@ -352,7 +351,11 @@ export const createSceneExperienceRuntime = (
     if (duration > beforePolicy.targetFrameMs * 1.75) overBudgetFrames += 1;
     const performanceSnapshot = adaptive.recordFrame(duration);
     if (performanceSnapshot.profile !== before) {
-      applySceneQualityPolicy(view, sceneQualityPolicyForProfile(performanceSnapshot.profile, performanceSnapshot.budget));
+      applySceneQualityPolicy(
+      view,
+      sceneQualityPolicyForProfile(performanceSnapshot.profile, performanceSnapshot.budget),
+      reportRuntimeError,
+    );
       return emit('adaptive-profile');
     }
     return buildSnapshot();
@@ -404,6 +407,7 @@ export const createSceneExperienceRuntime = (
     if (disposed) return false;
     if (recoveryInFlight) return recoveryInFlight;
     if (typeof view.tryFatalErrorRecovery !== 'function') return false;
+    const tryFatalErrorRecovery = view.tryFatalErrorRecovery.bind(view);
 
     const elapsed = recovery.lastAttemptAt === null ? Number.POSITIVE_INFINITY : now() - recovery.lastAttemptAt;
     if (elapsed < recoveryCooldownMs || recovery.attempts >= maximumRecoveryAttempts) {
@@ -420,7 +424,7 @@ export const createSceneExperienceRuntime = (
       emit('recovery-start');
 
       try {
-        await view.tryFatalErrorRecovery();
+        await tryFatalErrorRecovery();
         recovery.successes += 1;
         recovery.lastError = null;
         status = active ? 'ready' : 'idle';
@@ -451,7 +455,11 @@ export const createSceneExperienceRuntime = (
 
   const performanceUnsubscribe = adaptive.subscribe((snapshot, reason) => {
     if (disposed) return;
-    applySceneQualityPolicy(view, sceneQualityPolicyForProfile(snapshot.profile, snapshot.budget));
+    applySceneQualityPolicy(
+      view,
+      sceneQualityPolicyForProfile(snapshot.profile, snapshot.budget),
+      reportRuntimeError,
+    );
     emit(`performance:${reason}`);
   });
 
@@ -472,8 +480,8 @@ export const createSceneExperienceRuntime = (
     stopSampler();
     try {
       fatalHandle?.remove?.();
-    } catch {
-      // Idempotent teardown.
+    } catch (error) {
+      reportRuntimeError(error, 'fatal-watch-dispose');
     }
     performanceUnsubscribe?.();
     listeners.clear();
