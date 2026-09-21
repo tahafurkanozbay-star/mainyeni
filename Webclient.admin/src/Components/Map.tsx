@@ -67,7 +67,6 @@ export const Map = ({ config, exportCallBack }: AdminMapProps) => {
     });
     const view = new MapView({
       container: mapDiv.current,
-      map,
       zoom: initialConfig.zoom,
       center: [initialConfig.center[0], initialConfig.center[1]],
       ui: {
@@ -78,8 +77,12 @@ export const Map = ({ config, exportCallBack }: AdminMapProps) => {
       },
       padding: {
         top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
       },
     });
+    view.map = map;
 
     viewRef.current = view;
 
