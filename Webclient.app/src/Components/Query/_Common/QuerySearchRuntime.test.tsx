@@ -317,7 +317,7 @@ describe("QuerySearchRuntime", () => {
         });
 
         test("detects a small viewport using matchMedia", () => {
-            const matchMedia = jest.fn(() => ({ matches: true }));
+            const matchMedia = vi.fn(() => ({ matches: true }));
             expect(isSmallViewport(matchMedia)).toBe(true);
             expect(matchMedia).toHaveBeenCalledWith("(max-width: 959px)");
         });
