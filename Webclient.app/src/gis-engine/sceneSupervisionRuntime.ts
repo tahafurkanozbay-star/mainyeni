@@ -13,13 +13,13 @@ import {
   type SceneNavigationView,
 } from './sceneNavigationRuntime';
 
-export interface SceneSupervisionView extends SceneExperienceView, SceneNavigationView {
+export type SceneSupervisionView = SceneExperienceView & SceneNavigationView & {
   fatalError?: unknown;
   watch?: (
     property: string,
     callback: (value?: unknown, oldValue?: unknown) => void,
   ) => { remove?: () => void };
-}
+};
 
 export interface SceneSupervisionSnapshot {
   disposed: boolean;
