@@ -7,8 +7,8 @@ import {
   invalidateGisQueryCacheTag,
 } from './GisQueryHelper';
 
-jest.mock('../gis-engine/arcgisModuleRuntime', () => ({
-  loadArcgisModules: jest.fn(),
+vi.mock('../gis-engine/arcgisModuleRuntime', () => ({
+  loadArcgisModules: vi.fn(),
 }));
 
 const deferred = () => {
@@ -33,24 +33,24 @@ describe('GisQueryHelper runtime', () => {
   beforeEach(() => {
     clearGisQueryRuntime();
     configureGisQueryRuntime({ ttlMs: 30000, maxEntries: 128, maxBytes: 8 * 1024 * 1024 });
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    execute = jest.fn().mockResolvedValue({
+    execute = vi.fn().mockResolvedValue({
       features: [{ attributes: { OBJECTID: 7 }, geometry: { type: 'point' } }],
       fields: [{ name: 'OBJECTID' }],
       exceededTransferLimit: false,
       geometryType: 'esriGeometryPoint',
       spatialReference: { wkid: 4326 },
     });
-    executeForCount = jest.fn().mockResolvedValue(42);
-    executeForIds = jest.fn().mockResolvedValue([1, 2, 3]);
-    QueryTask = jest.fn().mockImplementation(({ url }) => ({
+    executeForCount = vi.fn().mockResolvedValue(42);
+    executeForIds = vi.fn().mockResolvedValue([1, 2, 3]);
+    QueryTask = vi.fn().mockImplementation(({ url }) => ({
       url,
       execute,
       executeForCount,
       executeForIds,
     }));
-    Query = jest.fn().mockImplementation((initial = {}) => ({ ...initial }));
+    Query = vi.fn().mockImplementation((initial = {}) => ({ ...initial }));
     loadModules.mockResolvedValue([QueryTask, Query]);
   });
 
