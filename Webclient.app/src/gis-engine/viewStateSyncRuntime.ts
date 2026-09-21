@@ -165,7 +165,7 @@ export function createViewStateSyncRuntime(options: {
   function notify(update: ViewStateSyncUpdate | null): void {
     if (observers.size === 0) return;
     const current = snapshot();
-    for (const observer of [...observers]) {
+    for (const observer of observers) {
       try {
         observer(current, update);
       } catch {
