@@ -453,6 +453,25 @@ export function ExperienceMapModeBridge({
   }, []);
 
   useEffect(() => {
+    if (!sceneReady || !sceneHostActive) return undefined;
+    const host = sceneHostRef.current;
+    const view = sceneRef.current?.view;
+    if (!host || !view || view.destroyed) return undefined;
+
+    const resizeScene = () => synchronizeSceneViewSize(view);
+    resizeScene();
+
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(resizeScene);
+      observer.observe(host);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', resizeScene, { passive: true });
+    return () => window.removeEventListener('resize', resizeScene);
+  }, [sceneHostActive, sceneReady]);
+
+  useEffect(() => {
     if (!mapView) return undefined;
     disposedRef.current = false;
     activeModeRef.current = '2d';
