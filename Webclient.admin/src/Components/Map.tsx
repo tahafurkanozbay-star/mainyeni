@@ -1,129 +1,150 @@
+import '@arcgis/core/assets/esri/themes/light/main.css';
+
 import ArcGISMap from '@arcgis/core/Map.js';
-import Basemap from '@arcgis/core/Basemap.js';
+import type Point from '@arcgis/core/geometry/Point.js';
 import MapView from '@arcgis/core/views/MapView.js';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'react-bootstrap';
 import { AiOutlineDoubleLeft } from 'react-icons/ai';
 
-import '@arcgis/core/assets/esri/themes/light/main.css';
+import {
+  normalizeAdminMapConfig,
+  type AdminMapConfigInput,
+  type NormalizedAdminMapConfig,
+} from '../runtime/adminMapRuntime';
 import './Map.css';
 
-export interface AdminMapConfig {
-  readonly Centerx: number | string;
-  readonly Centery: number | string;
-  readonly Zoom: number | string;
-  readonly DefaultBasemapTitle?: string | null;
-}
-
-export interface AdminMapExportDetails {
+export interface AdminMapSnapshot {
   readonly Zoom: number;
-  readonly Center: Readonly<{
-    longitude: number;
-    latitude: number;
-  }>;
+  readonly Center: Point | null;
 }
 
 export interface AdminMapProps {
-  readonly config: AdminMapConfig;
-  readonly exportCallBack: (details: AdminMapExportDetails) => void;
-  readonly className?: string;
+  readonly config?: AdminMapConfigInput | null;
+  readonly exportCallBack: (snapshot: AdminMapSnapshot) => void;
 }
 
-const DEFAULT_CENTER = Object.freeze({ longitude: 32.854, latitude: 39.92 });
-const DEFAULT_ZOOM = 12;
-const DEFAULT_BASEMAP = 'topo-vector';
+type MapStatus = 'initializing' | 'ready' | 'error';
 
-const finiteNumber = (value: number | string | null | undefined, fallback: number): number => {
-  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
-  return Number.isFinite(parsed) ? parsed : fallback;
+const applyConfig = (
+  view: MapView,
+  config: NormalizedAdminMapConfig,
+): void => {
+  view.center = [config.center[0], config.center[1]];
+  view.zoom = config.zoom;
+
+  if (view.map) {
+    view.map.basemap = config.basemap;
+  }
 };
 
-const normalizeBasemapId = (value: string | null | undefined): string => {
-  const candidate = value?.trim();
-  return candidate || DEFAULT_BASEMAP;
-};
-
-export const Map = ({ config, exportCallBack, className }: AdminMapProps) => {
+export const Map = ({ config, exportCallBack }: AdminMapProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<MapView | null>(null);
+  const configRef = useRef<NormalizedAdminMapConfig>(
+    normalizeAdminMapConfig(config),
+  );
+  const [status, setStatus] = useState<MapStatus>('initializing');
+
+  const normalizedConfig = useMemo(
+    () => normalizeAdminMapConfig(config),
+    [
+      config?.Centerx,
+      config?.Centery,
+      config?.Zoom,
+      config?.DefaultBasemapTitle,
+    ],
+  );
+  configRef.current = normalizedConfig;
 
   useEffect(() => {
-    const container = mapDiv.current;
-    if (!container) return undefined;
+    if (!mapDiv.current || viewRef.current) return undefined;
 
-    const longitude = finiteNumber(config.Centerx, DEFAULT_CENTER.longitude);
-    const latitude = finiteNumber(config.Centery, DEFAULT_CENTER.latitude);
-    const zoom = finiteNumber(config.Zoom, DEFAULT_ZOOM);
-    const basemapId = normalizeBasemapId(config.DefaultBasemapTitle);
-
-    const map = new ArcGISMap({ basemap: basemapId });
+    let disposed = false;
+    const initialConfig = configRef.current;
+    const map = new ArcGISMap({
+      basemap: initialConfig.basemap,
+    });
     const view = new MapView({
-      container,
+      container: mapDiv.current,
       map,
-      center: [longitude, latitude],
-      zoom,
-      ui: { components: [] },
-      padding: { top: 0 },
-      constraints: { rotationEnabled: false },
+      zoom: initialConfig.zoom,
+      center: [initialConfig.center[0], initialConfig.center[1]],
+      ui: {
+        components: [],
+      },
+      constraints: {
+        rotationEnabled: false,
+      },
+      padding: {
+        top: 0,
+      },
     });
 
     viewRef.current = view;
 
+    void view.when().then(
+      () => {
+        if (disposed) return;
+        applyConfig(view, configRef.current);
+        setStatus('ready');
+      },
+      () => {
+        if (!disposed) setStatus('error');
+      },
+    );
+
     return () => {
-      viewRef.current = null;
-      view.container = null;
+      disposed = true;
+      if (viewRef.current === view) {
+        viewRef.current = null;
+      }
       view.destroy();
-      map.destroy();
     };
   }, []);
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view) return;
+    if (!view || view.destroyed) return;
+    applyConfig(view, normalizedConfig);
+  }, [
+    normalizedConfig.basemap,
+    normalizedConfig.center,
+    normalizedConfig.zoom,
+  ]);
 
-    const longitude = finiteNumber(config.Centerx, view.center?.longitude ?? DEFAULT_CENTER.longitude);
-    const latitude = finiteNumber(config.Centery, view.center?.latitude ?? DEFAULT_CENTER.latitude);
-    const zoom = finiteNumber(config.Zoom, view.zoom ?? DEFAULT_ZOOM);
-
-    view.center = [longitude, latitude];
-    view.zoom = zoom;
-
-    const basemap = Basemap.fromId(normalizeBasemapId(config.DefaultBasemapTitle));
-    if (basemap) view.map.basemap = basemap;
-  }, [config.Centerx, config.Centery, config.Zoom, config.DefaultBasemapTitle]);
-
-  const exportConfig = useCallback(() => {
+  const exportConfig = (): void => {
     const view = viewRef.current;
-    const center = view?.center;
-    if (!view || !center) return;
+    if (!view || view.destroyed) return;
 
     exportCallBack({
       Zoom: view.zoom,
-      Center: {
-        longitude: center.longitude,
-        latitude: center.latitude,
-      },
+      Center: view.center,
     });
-  }, [exportCallBack]);
+  };
 
   return (
     <>
       <div>
         <Button
-          type="button"
           variant="outline-secondary"
+          type="button"
           onClick={exportConfig}
-          aria-label="Haritadaki mevcut koordinatları başlangıç konumu olarak kullan"
+          disabled={status !== 'ready'}
         >
           <AiOutlineDoubleLeft aria-hidden="true" />
           &nbsp;Bu koordinatları kullan
         </Button>
+        {status === 'error' ? (
+          <div className="alert alert-danger mt-2" role="alert">
+            Harita başlatılamadı. Lütfen harita ayarlarını ve servis erişimini kontrol edin.
+          </div>
+        ) : null}
       </div>
       <div
-        className={`esri-map map-container${className ? ` ${className}` : ''}`}
+        className="esri-map map-container"
         ref={mapDiv}
-        role="region"
-        aria-label="Harita başlangıç konumu önizlemesi"
+        aria-label="Harita ayarları önizlemesi"
       />
     </>
   );
