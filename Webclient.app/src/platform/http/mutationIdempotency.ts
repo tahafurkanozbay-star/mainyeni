@@ -481,14 +481,14 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
     this.#entries.clear();
     this.#ownerCounts.clear();
     this.#disposed = true;
+    const errorName = safeErrorName(reason);
     this.#emit({
       kind: 'disposed',
-      errorName: safeErrorName(reason),
+      ...(errorName ? { errorName } : {}),
     });
   }
 
   #createLease(entry: MutableEntry): MutationIdempotencyLease {
-    const registry = this;
     return Object.freeze({
       owner: entry.owner,
       method: entry.method,
@@ -497,14 +497,14 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
       },
       markAttempt: () => {
         if (entry.state !== 'in-flight') return false;
-        if (entry.logicalAttempts >= registry.#maxAttempts) {
-          registry.#reject(
+        if (entry.logicalAttempts >= this.#maxAttempts) {
+          this.#reject(
             'ATTEMPT_LIMIT_EXCEEDED',
             'Mutation attempt limit is exhausted.',
           );
         }
         entry.logicalAttempts += 1;
-        registry.#emit({
+        this.#emit({
           kind: 'attempt',
           owner: entry.owner,
           method: entry.method,
@@ -512,10 +512,10 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
         });
         return true;
       },
-      complete: () => registry.#settle(entry, 'completed'),
-      fail: (reason?: unknown) => registry.#settle(entry, 'failed', reason),
-      cancel: (reason?: unknown) => registry.#settle(entry, 'cancelled', reason),
-      snapshot: () => registry.#leaseSnapshot(entry),
+      complete: () => this.#settle(entry, 'completed'),
+      fail: (reason?: unknown) => this.#settle(entry, 'failed', reason),
+      cancel: (reason?: unknown) => this.#settle(entry, 'cancelled', reason),
+      snapshot: () => this.#leaseSnapshot(entry),
     });
   }
 
@@ -620,9 +620,10 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
     reason?: unknown,
   ): never {
     this.#counters.rejected += 1;
+    const errorName = safeErrorName(reason);
     this.#emit({
       kind: 'rejected',
-      errorName: safeErrorName(reason),
+      ...(errorName ? { errorName } : {}),
     });
     throw new MutationIdempotencyError(code, message, reason);
   }
