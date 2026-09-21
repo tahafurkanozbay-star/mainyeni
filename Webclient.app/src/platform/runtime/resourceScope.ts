@@ -175,13 +175,21 @@ interface ResourceScopeInternalOptions {
 }
 
 const SENSITIVE_KEY = /authorization|cookie|password|passwd|secret|token|api[-_]?key|session|credential/i;
+const hasControlCharacter = (value: string): boolean => {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+};
+
 const MAX_TEXT = 180;
 const MAX_METADATA_STRING = 200;
 
 const SYSTEM_CLOCK: ResourceScopeClock = Object.freeze({
   now: () => Date.now(),
-  setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
-  clearTimeout: (handle) => globalThis.clearTimeout(handle),
+  setTimeout: (callback: () => void, delayMs: number) => globalThis.setTimeout(callback, delayMs),
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(handle),
 });
 
 const boundedInteger = (
@@ -492,7 +500,11 @@ class BoundedResourceScope implements ResourceScope {
         maxCleanupTimeoutMs: overrides.maxCleanupTimeoutMs ?? this.#maxCleanupTimeoutMs,
         maxMetadataEntries: overrides.maxMetadataEntries ?? this.#maxMetadataEntries,
         clock: overrides.clock ?? this.#clock,
-        onEvent: overrides.onEvent ?? this.#onEvent,
+        ...(overrides.onEvent !== undefined
+          ? { onEvent: overrides.onEvent }
+          : this.#onEvent !== undefined
+            ? { onEvent: this.#onEvent }
+            : {}),
       },
       {
         parentSignal: this.#controller.signal,
@@ -597,8 +609,10 @@ class BoundedResourceScope implements ResourceScope {
         await child.close({
           reason: options.reason ?? 'parent-closing',
           cleanupTimeoutMs: timeoutMs,
-          signal,
-          throwOnCleanupError: options.throwOnCleanupError,
+          ...(signal ? { signal } : {}),
+          ...(options.throwOnCleanupError === undefined
+            ? {}
+            : { throwOnCleanupError: options.throwOnCleanupError }),
         });
       } catch (error) {
         failures.push(error);
