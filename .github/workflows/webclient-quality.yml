@@ -58,6 +58,9 @@ jobs:
       - name: Vite migration contract
         run: npm run quality:vite
 
+      - name: GIS query governance contract
+        run: npm run quality:gis-query-governance
+
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
