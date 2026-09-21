@@ -128,7 +128,7 @@ const normalizeVersion = (value: string): string => {
     throw new ServiceGraphError('INVALID_DESCRIPTOR', 'version must be a string');
   }
   const normalized = value.trim();
-  if (!VERSION_PATTERN.test(normalized)) {
+  if (normalized !== value || !VERSION_PATTERN.test(normalized)) {
     throw new ServiceGraphError(
       'INVALID_DESCRIPTOR',
       'version must contain bounded semver-compatible text',
