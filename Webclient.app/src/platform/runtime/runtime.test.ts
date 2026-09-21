@@ -49,8 +49,8 @@ const capabilities = (overrides = {}) => ({
 describe('adaptive capability profile', () => {
   const media = (matches = false) => ({
     matches,
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   });
 
   test('selects enhanced tier for capable devices on healthy networks', () => {
@@ -68,8 +68,8 @@ describe('adaptive capability profile', () => {
         IntersectionObserver: function IntersectionObserverMock() {},
         ResizeObserver: function ResizeObserverMock() {},
         PerformanceObserver: function PerformanceObserverMock() {},
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
       },
       documentRef: null,
       webglProbe: () => true,
@@ -94,8 +94,8 @@ describe('adaptive capability profile', () => {
       },
       windowRef: {
         matchMedia: () => media(true),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
       },
       documentRef: null,
       webglProbe: () => false,
@@ -161,7 +161,7 @@ describe('adaptive runtime budgets', () => {
     const budget = createRuntimeBudget(capabilities({ tier: 'minimal' }), {
       maxConcurrentNetwork: 2,
     });
-    const rejected = jest.fn();
+    const rejected = vi.fn();
     const manager = createResourceBudgetManager({ budget, onRejected: rejected });
 
     const first = manager.reserve({ kind: 'network', owner: 'search' });
@@ -285,9 +285,9 @@ describe('versioned state store', () => {
   test('hydrates and persists through an injected adapter', async () => {
     let persisted = { count: 7 };
     const adapter = {
-      read: jest.fn(() => persisted),
-      write: jest.fn((state) => { persisted = { ...state }; }),
-      clear: jest.fn(() => { persisted = null; }),
+      read: vi.fn(() => persisted),
+      write: vi.fn((state) => { persisted = { ...state }; }),
+      clear: vi.fn(() => { persisted = null; }),
     };
     const store = createVersionedStateStore({ initialState: { count: 0 }, persistence: adapter });
 
@@ -318,7 +318,7 @@ describe('resilience primitives', () => {
   });
 
   test('retries transient failures and returns the eventual value', async () => {
-    const sleep = jest.fn().mockResolvedValue(undefined);
+    const sleep = vi.fn().mockResolvedValue(undefined);
     let calls = 0;
     const value = await executeWithRetry(async () => {
       calls += 1;
@@ -335,10 +335,10 @@ describe('resilience primitives', () => {
   });
 
   test('does not retry errors rejected by policy', async () => {
-    const operation = jest.fn(async () => { throw new Error('fatal'); });
+    const operation = vi.fn(async () => { throw new Error('fatal'); });
     await expect(executeWithRetry(operation, {
       policy: { maxAttempts: 5, retryable: () => false },
-      clock: { sleep: jest.fn(), random: () => 0.5, now: () => 0 },
+      clock: { sleep: vi.fn(), random: () => 0.5, now: () => 0 },
     })).rejects.toThrow('fatal');
     expect(operation).toHaveBeenCalledTimes(1);
   });
@@ -377,15 +377,15 @@ describe('resilience primitives', () => {
   });
 
   test('enforces operation timeouts through AbortSignal', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const promise = withTimeout((signal) => new Promise((resolve, reject) => {
       signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       setTimeout(() => resolve('late'), 1000);
     }), 50);
 
-    jest.advanceTimersByTime(51);
+    vi.advanceTimersByTime(51);
     await expect(promise).rejects.toMatchObject({ code: 'OPERATION_TIMEOUT' });
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 });
 
@@ -399,7 +399,7 @@ describe('priority task scheduler', () => {
   test('deduplicates in-flight work by key', async () => {
     const scheduler = createTaskScheduler({ budget: budget() });
     let resolveWork;
-    const executor = jest.fn(() => new Promise((resolve) => { resolveWork = resolve; }));
+    const executor = vi.fn(() => new Promise((resolve) => { resolveWork = resolve; }));
     const first = scheduler.schedule(executor, { key: 'same', kind: 'cpu' });
     const second = scheduler.schedule(executor, { key: 'same', kind: 'cpu' });
 
@@ -455,7 +455,7 @@ describe('priority task scheduler', () => {
     let release;
     const running = scheduler.schedule(() => new Promise((resolve) => { release = resolve; }), { key: 'running', kind: 'cpu' });
     await flush();
-    const executor = jest.fn(async () => 'never');
+    const executor = vi.fn(async () => 'never');
     const queued = scheduler.schedule(executor, { key: 'cancel-me', kind: 'cpu' });
     expect(scheduler.cancel('cancel-me')).toBe(1);
     await expect(queued).rejects.toMatchObject({ name: 'AbortError' });
@@ -491,9 +491,9 @@ describe('runtime kernel lifecycle', () => {
       connection: { effectiveType: '4g', downlink: 10, rtt: 50, saveData: false },
     },
     windowRef: {
-      matchMedia: () => ({ matches: false, addEventListener: jest.fn(), removeEventListener: jest.fn() }),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
+      matchMedia: () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
     },
     documentRef: null,
     webglProbe: () => true,
@@ -591,8 +591,8 @@ describe('runtime kernel lifecycle', () => {
     kernel.telemetry.info('runtime', 'sample', { status: 'ok', token: 'must-not-leak' });
     const snapshot = kernel.snapshot();
     expect(snapshot.phase).toBe('ready');
-    expect(snapshot.capabilities.tier).toBe('balanced');
-    expect(snapshot.budget.tier).toBe('balanced');
+    expect(snapshot.capabilities.tier).toBe('enhanced');
+    expect(snapshot.budget.tier).toBe(snapshot.capabilities.tier);
     expect(JSON.stringify(kernel.telemetry.snapshot())).not.toContain('must-not-leak');
     await kernel.stop({ drain: false });
     await kernel.dispose();

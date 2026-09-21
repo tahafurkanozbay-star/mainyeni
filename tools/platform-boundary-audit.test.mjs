@@ -38,7 +38,8 @@ test('policy exposes deterministic default layer order', () => {
   assert.equal(policy.tiers.network, 0);
   assert.equal(policy.tiers.http, 2);
   assert.equal(policy.tiers.runtime, 3);
-  assert.equal(policy.tiers.bootstrap, 4);
+  assert.equal(policy.tiers.governance, 4);
+  assert.equal(policy.tiers.bootstrap, 5);
 });
 
 test('runtime may depend on http, cache and errors', async () => {
@@ -116,6 +117,36 @@ test('errors cannot import bootstrap composition', async () => {
   }, async (root) => {
     const report = await auditPlatformBoundaries(root);
     assert.ok(codes(report).includes('platform-layer-inversion'));
+  });
+});
+
+test('governance may compose runtime and performance responsibilities', async () => {
+  await withFixture({
+    'Webclient.app/src/platform/governance/kernel.ts': [
+      "import { runtime } from '../runtime/runtime';",
+      "import { performance } from '../performance/performance';",
+      'export { runtime, performance };',
+    ].join('\n'),
+    'Webclient.app/src/platform/runtime/runtime.ts': 'export const runtime = 1;',
+    'Webclient.app/src/platform/performance/performance.ts': 'export const performance = 1;',
+  }, async (root) => {
+    const report = await auditPlatformBoundaries(root);
+    assert.equal(report.summary.passed, true);
+    assert.ok(!codes(report).includes('platform-layer-inversion'));
+  });
+});
+
+test('runtime cannot depend on higher-level governance orchestration', async () => {
+  await withFixture({
+    'Webclient.app/src/platform/runtime/runtime.ts': "import { governance } from '../governance/kernel'; export { governance };",
+    'Webclient.app/src/platform/governance/kernel.ts': 'export const governance = 1;',
+  }, async (root) => {
+    const report = await auditPlatformBoundaries(root);
+    const item = report.findings.find((finding) => finding.code === 'platform-layer-inversion');
+    assert.equal(item?.severity, 'error');
+    assert.equal(item?.detail?.sourceArea, 'runtime');
+    assert.equal(item?.detail?.targetArea, 'governance');
+    assert.equal(report.summary.passed, false);
   });
 });
 
@@ -312,6 +343,7 @@ test('markdown exposes gate, order, matrix and incoming dependencies', async () 
     assert.match(markdown, /Platform Boundary Audit/);
     assert.match(markdown, /Gate: \*\*PASS\*\*/);
     assert.match(markdown, /errors\/config\/network/);
+    assert.match(markdown, /governance -> bootstrap/);
     assert.match(markdown, /Platform dependency matrix/);
     assert.match(markdown, /Incoming application dependencies/);
     assert.match(markdown, /runtime -> http/);
