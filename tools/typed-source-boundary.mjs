@@ -15,7 +15,6 @@ const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', 'coverage', '.git', 
  * path outside this bounded set is permitted.
  */
 const TRANSITIONAL_JAVASCRIPT_ALLOWLIST = new Set([
-  'Webclient.app/src/Toolbox/GisGraphicsHelper.js',
   'Webclient.app/src/experience/accessibilityRuntime.test.js',
   'Webclient.app/src/platform/bootstrap/bootstrapCore.test.js',
   'Webclient.app/src/platform/bootstrap/bootstrapDiagnostics.test.js',
@@ -49,9 +48,6 @@ const walk = async (directory, files = []) => {
   return files;
 };
 
-const isBusinessOwnedJavascript = (relative) =>
-  relative.startsWith('Webclient.app/src/Business/');
-
 const finding = (code, file, message) => Object.freeze({ code, file, message });
 
 export const auditTypedSourceBoundary = async (root = process.cwd()) => {
@@ -78,14 +74,11 @@ export const auditTypedSourceBoundary = async (root = process.cwd()) => {
         continue;
       }
 
-      if (
-        !isBusinessOwnedJavascript(relative)
-        && !TRANSITIONAL_JAVASCRIPT_ALLOWLIST.has(relative)
-      ) {
+      if (!TRANSITIONAL_JAVASCRIPT_ALLOWLIST.has(relative)) {
         findings.push(finding(
           'unapproved-javascript-source',
           relative,
-          'JavaScript outside the Business migration tranche and exact concurrent-migration allowlist is forbidden.',
+          'JavaScript outside the exact concurrent-migration allowlist is forbidden across the application source tree.',
         ));
       }
       continue;
@@ -114,7 +107,6 @@ export const auditTypedSourceBoundary = async (root = process.cwd()) => {
     summary: Object.freeze({
       javascriptFiles: javascript.length,
       typedTestFiles: typedTests.length,
-      businessOwnedJavascriptFiles: javascript.filter(isBusinessOwnedJavascript).length,
       transitionalJavascriptFiles: javascript.filter((file) =>
         TRANSITIONAL_JAVASCRIPT_ALLOWLIST.has(file)).length,
       violations: sortedFindings.length,
@@ -129,7 +121,6 @@ export const formatTypedSourceBoundary = (report) => {
     `Gate: **${report.passed ? 'PASS' : 'FAIL'}**`,
     '',
     `- JavaScript files under \`${SOURCE_ROOT}\`: **${report.summary.javascriptFiles}**`,
-    `- Business-owned JavaScript files: **${report.summary.businessOwnedJavascriptFiles}**`,
     `- Exact concurrent-migration JavaScript exceptions present: **${report.summary.transitionalJavascriptFiles}**`,
     `- TypeScript test files scanned for Jest namespace drift: **${report.summary.typedTestFiles}**`,
     `- Violations: **${report.summary.violations}**`,
@@ -145,10 +136,9 @@ export const formatTypedSourceBoundary = (report) => {
   }
 
   lines.push(
-    'Business JavaScript remains under the concurrent Business migration ratchet. '
-    + 'The exact-path exceptions are pre-existing files owned by concurrent GIS, Experience, and Platform cutovers; '
+    'The exact-path exceptions are pre-existing tests owned by concurrent Experience and Platform cutovers; '
     + 'missing exceptions are allowed so those PRs can remove them without coordination. '
-    + 'Every other application source area is permanently ratcheted away from JavaScript.',
+    + 'Every other application source area, including Business and GIS, is permanently ratcheted away from JavaScript.',
     '',
   );
   return lines.join('\n');
