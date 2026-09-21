@@ -335,7 +335,7 @@ describe('OfflineMutationQueue', () => {
     queue.setExecutor(async () => { now = 20; throw new Error('fail'); });
     queue.setOnline(true);
     const result = await queue.enqueue(mutation('a', { createdAt: 0, expiresAt: 10 }));
-    expect(result).toMatchObject({ state: 'failed', attempts: 1 });
+    expect(result).toMatchObject({ state: 'expired', attempts: 1 });
   });
 
   it('tracks accepted, succeeded and failed counters separately', async () => {
@@ -364,7 +364,8 @@ describe('OfflineMutationQueue', () => {
     queue.setOnline(true);
     await queue.enqueue(mutation('a', { payload: { token: 'do-not-log' } }));
     const serialized = JSON.stringify(queue.history());
-    expect(serialized).toContain('server unavailable');
+    expect(serialized).toContain('"reason":"Error"');
+    expect(serialized).not.toContain('server unavailable');
     expect(serialized).not.toContain('do-not-log');
   });
 
