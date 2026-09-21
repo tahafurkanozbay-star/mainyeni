@@ -1,12 +1,14 @@
 import axios from 'axios';
 import { Constants } from '../Core/Constants';
 import { Global } from '../Core/Global';
+import {
+  clearAdminSession,
+  readAdminSession,
+  writeAdminSession,
+  type AdminSession,
+} from '../runtime/adminSession';
 
-export interface AdminSession {
-  readonly accessToken: string;
-  readonly userName?: string;
-  readonly [key: string]: unknown;
-}
+export type { AdminSession } from '../runtime/adminSession';
 
 export interface AdminLoginResult {
   readonly isSuccess: boolean;
@@ -20,31 +22,11 @@ interface AxiosLikeError {
   };
 }
 
-const getSessionKey = (): string => Constants.Session.SessionObjectTitle;
-
-const clearStorageKey = (storage: Storage): void => {
-  try {
-    storage.removeItem(getSessionKey());
-  } catch {
-    // Storage can be unavailable in privacy-restricted contexts.
-  }
-};
-
-const clearLegacySession = (): void => clearStorageKey(localStorage);
-
-const clearSession = (): void => {
-  clearStorageKey(sessionStorage);
-  clearLegacySession();
-};
-
-const isAdminSession = (value: unknown): value is AdminSession => {
-  if (typeof value !== 'object' || value === null) return false;
-  const accessToken = (value as { accessToken?: unknown }).accessToken;
-  return typeof accessToken === 'string' && accessToken.length > 0;
-};
-
 export const AuthBusiness = {
-  LoginUser: async (username: string, password: string): Promise<AdminLoginResult | null> => {
+  LoginUser: async (
+    username: string,
+    password: string,
+  ): Promise<AdminLoginResult | null> => {
     try {
       const data = new FormData();
       data.append('UserName', username);
@@ -65,12 +47,12 @@ export const AuthBusiness = {
   },
 
   LogoutUser: (): void => {
-    clearSession();
+    clearAdminSession();
     window.location.reload();
   },
 
   GetRequestHeaders: async (): Promise<Readonly<Record<string, string>> | null> => {
-    const session = AuthBusiness.GetSessionFromLocalStorage();
+    const session = readAdminSession();
     if (!session) return null;
 
     return Object.freeze({
@@ -80,46 +62,17 @@ export const AuthBusiness = {
     });
   },
 
-  // Historical method names remain for caller compatibility. Session data is
-  // deliberately browser-session scoped and legacy persistent copies are purged.
-  GetSessionFromLocalStorage: (): AdminSession | null => {
-    clearLegacySession();
-    try {
-      const serialized = sessionStorage.getItem(getSessionKey());
-      if (!serialized) return null;
+  // Historical names are preserved for caller compatibility while the storage
+  // implementation lives in the lightweight runtime module.
+  GetSessionFromLocalStorage: (): AdminSession | null => readAdminSession(),
 
-      const session: unknown = JSON.parse(serialized);
-      if (!isAdminSession(session)) {
-        clearSession();
-        return null;
-      }
-      return session;
-    } catch {
-      clearSession();
-      return null;
-    }
-  },
-
-  SetSessionInLocalStorage: (session: unknown): boolean => {
-    clearLegacySession();
-    if (!isAdminSession(session)) {
-      clearSession();
-      return false;
-    }
-
-    try {
-      sessionStorage.setItem(getSessionKey(), JSON.stringify(session));
-      return true;
-    } catch {
-      clearSession();
-      return false;
-    }
-  },
+  SetSessionInLocalStorage: (session: unknown): boolean =>
+    writeAdminSession(session),
 
   HandleRejection: async (error: AxiosLikeError): Promise<never> => {
     const status = error?.response?.status;
     if (status === 401 || status === 403) {
-      clearSession();
+      clearAdminSession();
       window.location.assign('./');
     }
 
