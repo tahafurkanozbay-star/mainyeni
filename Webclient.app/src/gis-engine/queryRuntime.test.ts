@@ -216,6 +216,23 @@ describe('queryRuntime', () => {
     expect(runtime.peek('complete')).toMatchObject({ tags: ['parks'] });
   });
 
+  test('accepts numeric ArcGIS service-result type values in cache policy contracts', async () => {
+    const runtime = createQueryRuntime();
+    const factory = jest.fn().mockResolvedValue({
+      type: 10,
+      data: [{ attr: { OBJECTID: 1 } }],
+      exceededTransferLimit: false,
+      page: { hasMore: false },
+    });
+    const policy = createArcGisQueryCachePolicy();
+
+    await runtime.execute('numeric-service-result', factory, policy);
+    await runtime.execute('numeric-service-result', factory, policy);
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(runtime.peek('numeric-service-result')).not.toBeNull();
+  });
+
   test('treats page.hasMore as incomplete even if transfer flag is absent', async () => {
     const runtime = createQueryRuntime();
     const factory = jest.fn().mockResolvedValue({

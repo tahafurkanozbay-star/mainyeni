@@ -262,6 +262,18 @@ describe('GisQueryHelper runtime', () => {
     expect(loadModules).toHaveBeenCalledTimes(2);
   });
 
+  test('rejects an empty GIS service URL before creating an ArcGIS task', async () => {
+    const result = await GisQueryHelper.ExecuteQuery({
+      url: '   ',
+      where: '1=1',
+    });
+
+    expect(result.data).toBeNull();
+    expect(result.error).toMatchObject({ code: 'INVALID_GIS_URL' });
+    expect(QueryTask).not.toHaveBeenCalled();
+    expect(loadModules).not.toHaveBeenCalled();
+  });
+
   test('rejects a pre-cancelled query before creating an ArcGIS task', async () => {
     const controller = new AbortController();
     controller.abort();
