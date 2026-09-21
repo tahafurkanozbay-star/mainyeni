@@ -1,5 +1,6 @@
 using Api.Core.Platform.Diagnostics;
 using Api.Core.Platform.Health;
+using Api.Core.Platform.Governance;
 using Api.Core.Platform.Middleware;
 using Api.Core.Platform.RateLimiting;
 using Business.Core.Context;
@@ -63,6 +64,7 @@ namespace Api.Core.Platform
             AddResponseCompression(services, options);
             AddRateLimiting(services, options);
             AddDiagnostics(services, options);
+            services.AddSingleton<RequestConcurrencyGovernor>();
 
             services.AddHttpContextAccessor();
             return services;
