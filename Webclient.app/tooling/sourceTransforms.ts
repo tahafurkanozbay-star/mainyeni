@@ -1,7 +1,6 @@
 import type { Plugin } from 'vite';
 
 const SOURCE_FILE = /\/src\/.*\.[cm]?[jt]sx?$/;
-const LEGACY_JAVASCRIPT_FILE = /\/src\/.*\.js$/;
 const LEGACY_JAVASCRIPT_TEST_FILE = /\.test\.(?:js|jsx|mjs|cjs)$/;
 const LEGACY_PUBLIC_URL_REFERENCE = 'process.env.PUBLIC_URL';
 const LEGACY_REMOTE_MUKTA_IMPORT = /@import\s+url\(["']https:\/\/fonts\.googleapis\.com\/css\?family=Mukta["']\);?\s*/gi;
