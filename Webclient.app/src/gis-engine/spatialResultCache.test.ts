@@ -45,15 +45,19 @@ describe('createSpatialCacheKey', () => {
 
 describe('normalizeSpatialCachePolicy', () => {
   it('returns a frozen bounded policy', () => {
-    const policy = normalizeSpatialCachePolicy({ maxEntries: 4, maxEstimatedBytes: 1000 });
+    const policy = normalizeSpatialCachePolicy({ maxEntries: 4, maxEstimatedBytes: 1000, maxPagesPerEntry: 8, maxFeaturesPerEntry: 2_000 });
     expect(policy.maxEntries).toBe(4);
     expect(policy.maxEstimatedBytes).toBe(1000);
+    expect(policy.maxPagesPerEntry).toBe(8);
+    expect(policy.maxFeaturesPerEntry).toBe(2_000);
     expect(Object.isFrozen(policy)).toBe(true);
   });
 
   it('rejects invalid budget combinations', () => {
     expect(() => normalizeSpatialCachePolicy({ maxEntries: 0 })).toThrow();
     expect(() => normalizeSpatialCachePolicy({ maxEstimatedBytes: -1 })).toThrow();
+    expect(() => normalizeSpatialCachePolicy({ maxPagesPerEntry: 0 })).toThrow();
+    expect(() => normalizeSpatialCachePolicy({ maxFeaturesPerEntry: 0 })).toThrow();
     expect(() => normalizeSpatialCachePolicy({ defaultTtlMs: 100, maxTtlMs: 99 })).toThrow();
     expect(() => normalizeSpatialCachePolicy({ coordinatePrecision: 11 })).toThrow();
   });
@@ -64,7 +68,7 @@ describe('SpatialResultCache', () => {
     const cache = new SpatialResultCache<{ id: number }>({ defaultTtlMs: 1000 });
     expect(cache.put('a', { id: 1 }, { now: 100, estimatedBytes: 20 })).toBe(true);
     expect(cache.get('a', { now: 150 })).toEqual({
-      status: 'hit', value: { id: 1 }, ageMs: 50, expiresInMs: 950, estimatedBytes: 20,
+      status: 'hit', value: { id: 1 }, ageMs: 50, expiresInMs: 950, estimatedBytes: 20, pageCount: 1, featureCount: 0,
     });
     expect(cache.snapshot()).toMatchObject({ entries: 1, estimatedBytes: 20, hits: 1, misses: 0 });
   });
@@ -102,6 +106,18 @@ describe('SpatialResultCache', () => {
     expect(cache.snapshot()).toMatchObject({ entries: 1, estimatedBytes: 12, evictions: 1 });
     expect(cache.put('huge', 3, { now: 2, estimatedBytes: 21 })).toBe(false);
     expect(cache.snapshot()).toMatchObject({ entries: 1, rejectedOversize: 1 });
+  });
+
+  it('rejects cache entries that exceed page or feature budgets', () => {
+    const cache = new SpatialResultCache<number>({
+      maxPagesPerEntry: 2,
+      maxFeaturesPerEntry: 100,
+    });
+    expect(cache.put('pages', 1, { pageCount: 3, featureCount: 10, estimatedBytes: 1 })).toBe(false);
+    expect(cache.put('features', 1, { pageCount: 1, featureCount: 101, estimatedBytes: 1 })).toBe(false);
+    expect(cache.put('bounded', 1, { pageCount: 2, featureCount: 100, estimatedBytes: 1 })).toBe(true);
+    expect(cache.get('bounded')).toMatchObject({ pageCount: 2, featureCount: 100 });
+    expect(cache.snapshot().rejectedOversize).toBe(2);
   });
 
   it('replaces entries without leaking byte accounting', () => {
@@ -165,6 +181,8 @@ describe('SpatialResultCache', () => {
     expect(() => cache.put('a', 1, { now: -1 })).toThrow();
     expect(() => cache.put('a', 1, { ttlMs: 0 })).toThrow();
     expect(() => cache.put('a', 1, { estimatedBytes: 0 })).toThrow();
+    expect(() => cache.put('a', 1, { pageCount: 0 })).toThrow();
+    expect(() => cache.put('a', 1, { featureCount: -1 })).toThrow();
     expect(() => cache.get('a', { now: Number.NaN })).toThrow();
   });
 });
