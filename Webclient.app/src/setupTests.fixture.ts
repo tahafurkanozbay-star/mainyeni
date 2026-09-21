@@ -27,13 +27,13 @@ const legacyCompatibleFn = ((implementation?: unknown) => {
   const originalImplementation = mock.mockImplementation.bind(mock);
   const originalImplementationOnce = mock.mockImplementationOnce.bind(mock);
 
-  mock.mockImplementation = ((nextImplementation: UnknownImplementation) =>
-    originalImplementation(makeLegacyConstructible(nextImplementation) as UnknownImplementation))
-    as typeof mock.mockImplementation;
+  const wrappedImplementation = (nextImplementation: UnknownImplementation) =>
+    originalImplementation(makeLegacyConstructible(nextImplementation) as UnknownImplementation);
+  const wrappedImplementationOnce = (nextImplementation: UnknownImplementation) =>
+    originalImplementationOnce(makeLegacyConstructible(nextImplementation) as UnknownImplementation);
 
-  mock.mockImplementationOnce = ((nextImplementation: UnknownImplementation) =>
-    originalImplementationOnce(makeLegacyConstructible(nextImplementation) as UnknownImplementation))
-    as typeof mock.mockImplementationOnce;
+  mock.mockImplementation = wrappedImplementation as typeof mock.mockImplementation;
+  mock.mockImplementationOnce = wrappedImplementationOnce as typeof mock.mockImplementationOnce;
 
   if (implementation !== undefined) {
     mock.mockImplementation(implementation as UnknownImplementation);
