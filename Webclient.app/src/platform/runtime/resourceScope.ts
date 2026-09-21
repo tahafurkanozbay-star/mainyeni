@@ -228,7 +228,7 @@ const safeReason = (reason: unknown): string => {
   if (reason instanceof ResourceScopeError) return reason.code.toLowerCase();
   if (reason instanceof Error && reason.name) return reason.name.slice(0, 80);
   if (typeof reason === 'string') {
-    const normalized = reason.replace(/[\\r\\n\\t]/g, ' ').trim();
+    const normalized = reason.replace(/[\r\n\t]/g, ' ').trim();
     return normalized ? normalized.slice(0, 80) : 'unspecified';
   }
   return reason === undefined ? 'unspecified' : 'external';
