@@ -18,6 +18,7 @@ const basePackage = () => ({
     'typecheck:strict': 'tsc --noEmit -p tsconfig.strict.json',
   },
   dependencies: {
+    '@arcgis/core': '5.1.24',
     react: '19.3.0',
     'react-dom': '19.3.0',
     'react-router': '8.4.0',
@@ -171,6 +172,40 @@ test('rejects legacy React Router component props', () => {
 
     const report = auditAdminLanguageBoundary(root);
     assert.ok(violationIds(report).has('legacy-router-component-prop'));
+  });
+});
+
+test('rejects deprecated esri-loader source imports', () => {
+  withFixture((root) => {
+    fs.writeFileSync(
+      path.join(root, 'src', 'runtime', 'legacy-gis.ts'),
+      "import { loadModules } from 'esri-loader';\nexport const load = () => loadModules([]);\n",
+    );
+
+    const report = auditAdminLanguageBoundary(root);
+    assert.ok(violationIds(report).has('legacy-esri-loader'));
+  });
+});
+
+test('rejects deprecated esri-loader dependency resurrection', () => {
+  withFixture((root) => {
+    const manifest = basePackage();
+    manifest.dependencies['esri-loader'] = '3.0.0';
+    writeJson(path.join(root, 'package.json'), manifest);
+
+    const report = auditAdminLanguageBoundary(root);
+    assert.ok(violationIds(report).has('esri-loader-dependency'));
+  });
+});
+
+test('requires ArcGIS Maps SDK ESM major 5 or newer', () => {
+  withFixture((root) => {
+    const manifest = basePackage();
+    manifest.dependencies['@arcgis/core'] = '4.34.0';
+    writeJson(path.join(root, 'package.json'), manifest);
+
+    const report = auditAdminLanguageBoundary(root);
+    assert.ok(violationIds(report).has('arcgis-esm-version'));
   });
 });
 

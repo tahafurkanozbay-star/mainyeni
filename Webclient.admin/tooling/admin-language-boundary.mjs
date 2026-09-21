@@ -33,6 +33,11 @@ const LEGACY_PATTERNS = Object.freeze([
     message: 'React Router component= routes are forbidden; use element= with React Router 8.',
   },
   {
+    id: 'legacy-esri-loader',
+    pattern: /\bfrom\s+['"]esri-loader['"]|\bloadModules\s*\(/u,
+    message: 'Deprecated esri-loader runtime loading is forbidden; use @arcgis/core ESM imports.',
+  },
+  {
     id: 'commonjs-require',
     pattern: /(^|[^\w])require\s*\(/mu,
     message: 'CommonJS require() is forbidden in admin source; use ESM imports.',
@@ -190,6 +195,24 @@ const auditPackage = (root, violations) => {
   const dependencies = asObject(manifest.dependencies ?? {}, 'package.json dependencies');
   const devDependencies = asObject(manifest.devDependencies ?? {}, 'package.json devDependencies');
   const engines = asObject(manifest.engines ?? {}, 'package.json engines');
+
+  if (dependencies['esri-loader'] || devDependencies['esri-loader']) {
+    violations.push(violation(
+      'esri-loader-dependency',
+      file,
+      'Deprecated esri-loader must not return after the ArcGIS ESM migration.',
+    ));
+  }
+
+  const arcgisMajor = parseMajor(dependencies['@arcgis/core']);
+  if (arcgisMajor === null || arcgisMajor < 5) {
+    violations.push(violation(
+      'arcgis-esm-version',
+      file,
+      '@arcgis/core must remain on major version 5 or newer.',
+      String(dependencies['@arcgis/core'] ?? 'missing'),
+    ));
+  }
 
   if (dependencies['react-scripts'] || devDependencies['react-scripts']) {
     violations.push(violation(
