@@ -24,6 +24,7 @@ namespace Api.Core.Platform
             ResponseCompression = new ResponseCompressionOptions();
             Diagnostics = new DiagnosticsOptions();
             Governance = new GovernanceOptions();
+            Transport = new TransportOptions();
         }
 
         public DatabaseOptions Database { get; set; }
@@ -45,6 +46,23 @@ namespace Api.Core.Platform
         public DiagnosticsOptions Diagnostics { get; set; }
 
         public GovernanceOptions Governance { get; set; }
+
+        public TransportOptions Transport { get; set; }
+
+        public sealed class TransportOptions
+        {
+            public int KeepAliveTimeoutSeconds { get; set; } = 90;
+
+            public int RequestHeadersTimeoutSeconds { get; set; } = 15;
+
+            public int MaxRequestLineSizeBytes { get; set; } = 16384;
+
+            public int MaxRequestHeadersTotalSizeBytes { get; set; } = 32768;
+
+            public int MaxRequestHeaderCount { get; set; } = 64;
+
+            public long MaxRequestBodyBytes { get; set; } = 10L * 1024 * 1024;
+        }
 
         public sealed class DatabaseOptions
         {
