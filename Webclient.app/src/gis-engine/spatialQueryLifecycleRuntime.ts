@@ -223,7 +223,7 @@ export const createSpatialQueryLifecycleRuntime = (
   const config = normalizeSpatialQueryLifecycleConfig(input);
   const records = new Map<number, SpatialQueryLifecycleRecord>();
   const ownerActiveIds = new Map<string, Set<number>>();
-  const eventRing = new Array<SpatialQueryLifecycleEvent | undefined>(config.maxEvents);
+  const eventRing = Array.from({ length: config.maxEvents }, (): SpatialQueryLifecycleEvent | undefined => undefined);
   let eventCursor = 0;
   let eventCount = 0;
   let nextId = 0;
