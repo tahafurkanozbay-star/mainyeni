@@ -524,3 +524,18 @@
 - SONRAKİ PLATFORM GÖREVİ: merged #209 branch must not be reused. Next Platform turn must start from then-current main, re-read orchestration/progress files, inspect remaining Platform/whole-code language debt and active team ownership, and preserve >=4,000 meaningful additions, exact-head CI, security/performance/regression and final-main-refresh gates.
 - POST-MERGE NOTE: this progress-only documentation commit is created after the fully tested squash merge; no CI PASS is inferred for the documentation-only commit itself.
 
+## Deep Experience / Whole-Code Modernization — 2026-09-21 08:58 TRT
+- KANONİK PR: #221 `feat(experience): modernize adaptive shell and enterprise data UX`.
+- BASE MAIN: `5604fb9737c30cf4ea3ace5a8d5e7d4b904a17f4`; PR açılışında exact merge-base ve 0 behind doğrulandı.
+- BRANCH: `agent/experience-modernization-20260921-0855-5604fb9`.
+- SUPERSEDED: diverged #208 ve PR creation sırasında main ilerlediği için race-stale #217 kapatıldı; bu branch’lere yeni iş/merge yapılmayacak.
+- KAPSAM: base...head 4.421 meaningful additions / 463 deletions / 20 files (bu progress commit öncesi), zorunlu >=4.000 Experience kapısı sağlandı.
+- PRODUCTION UI: `App.tsx` artık `ExperienceRuntimeBridge` mount ediyor; responsive placement, input modality, reduced-motion/forced-colors, coarse-pointer ve virtual-keyboard inset sözleşmeleri gerçek uygulama kabuğunda aktif.
+- DATA UX: strict TypeScript `DataGridRuntime` + semantik `ExperienceDataGrid`; stable sort, bounded paging/overscan virtualization, roving cell focus, keyboard navigation, single/multiple selection, loading/empty/pager states, mobile/coarse pointer, reduced motion ve forced colors desteği.
+- ACCESSIBILITY: ARIA id/state/range/required/modal doğrulamaları, hidden/inert focus, heading akışı, live-region ve touch-target audit kapsamı genişletildi; legacy accessibility JS regression typed Vitest’e taşındı.
+- INPUT / RESPONSIVE: deterministic interaction-modality/focus-visible runtime, editable/IME-safe scoped shortcut runtime ve side/overlay/bottom-sheet responsive workspace policy.
+- TESTLER: accessibility preferences/audit/runtime, observer isolation, keyboard shortcuts, responsive workspace, adaptive shell integration ve virtual data-grid için odaklı Vitest regresyonları.
+- GÜVENLİK / AĞ: yeni endpoint, direct browser fetch, WMS/WFS/WMTS, telemetry transport, remote font/CDN, secret, unsafe HTML/eval veya polling loop eklenmedi.
+- İKON STANDARDI: mevcut shared deterministic GIS icon registry/resolver/presentation tek otorite olarak korunuyor.
+- EŞZAMANLI MAIN KORUMASI: Platform offline/PWA (#209) ve GIS strict-query değişiklikleri current-main recovery sırasında korundu; Experience delta yalnız çakışmayan dosyalara yeniden uygulandı.
+- MERGE GATE: final exact-head Platform Architecture Audit + Webclient Quality + Release QA completed/success; current main exact merge-base/0-behind; mergeable=true; unresolved review thread=0; final accessibility/security/performance/regression review clean olmadan merge yok.
