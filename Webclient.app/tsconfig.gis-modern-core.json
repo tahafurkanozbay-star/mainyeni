@@ -55,6 +55,7 @@
     "src/gis-engine/mapStatePersistenceRuntime.ts",
     "src/gis-engine/exportPlanRuntime.ts",
     "src/gis-engine/modernGisKernel.ts",
+    "src/gis-engine/sceneSupervisionRuntime.ts",
     "src/gis-engine/temporalLayerRuntime.test.ts",
     "src/gis-engine/editTransactionRuntime.test.ts",
     "src/gis-engine/mapStatePersistenceRuntime.test.ts",
