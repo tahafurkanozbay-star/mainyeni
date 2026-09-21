@@ -342,10 +342,7 @@ describe('evaluateServiceContainerHealth lifecycle latency', () => {
 
   test('undefined lifecycle timing does not count as slow', () => {
     const health = evaluateServiceContainerHealth(snapshot([
-      service('one', {
-        startDurationMs: undefined,
-        stopDurationMs: undefined,
-      }),
+      service('one'),
     ]), policy());
     expect(health.slowStarts).toBe(0);
     expect(health.slowStops).toBe(0);
