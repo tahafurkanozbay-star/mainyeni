@@ -45,7 +45,7 @@ const safeJsonSize = (value: unknown): number => {
     const serialized = JSON.stringify(value);
     if (serialized === undefined) return 0;
     return serialized.length * 2;
-  } catch (_) { return 0; }
+  } catch { return 0; }
 };
 
 const normalizeKey = (key: unknown): string => {
@@ -251,7 +251,7 @@ export const createQueryRuntime = (configuration: QueryRuntimeConfiguration = {}
 };
 
 export interface ArcGisQueryCachePolicyOptions { cache?: boolean; ttlMs?: number; tags?: unknown[]; }
-export interface ArcGisQueryResultLike extends Dictionary { type?: string; exceededTransferLimit?: boolean; page?: { hasMore?: boolean }; }
+export interface ArcGisQueryResultLike extends Dictionary { type?: string | number; exceededTransferLimit?: boolean; page?: { hasMore?: boolean }; }
 export const createArcGisQueryCachePolicy = (options: ArcGisQueryCachePolicyOptions = {}): QueryExecuteOptions<ArcGisQueryResultLike> => ({
   cache: options.cache !== false,
   ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
