@@ -1,50 +1,70 @@
-/**
- * @author bekir
- * Burada genel bileşenler (yükleniyor, kayıt bulunamadı) bulunur
- * Uygulama içerisindeki bu tür bileşenlere ait kodlar buraya konulmalıdır
- */
-import { useEffect, useState } from "react";
+import { Button } from 'react-bootstrap';
+import { ImTable } from 'react-icons/im';
 
-import { Form, Button, Row, Col } from "react-bootstrap";
-import {ImTable} from "react-icons/im";
-import "./Loading.css";
+import './Loading.css';
 
-const loadinggif="images/ajax-loader.gif";
+const loadingGif = 'images/ajax-loader.gif';
 
-export const ButtonLoading=(props)=>{
-    return (<Button className="w-100 ButtonLoading"
-    disabled={true}>
-        <img src={loadinggif}></img>
-        &nbsp;&nbsp;&nbsp;{props?.text}
-    </Button>);
+export interface LoadingProps {
+  readonly text?: string;
 }
 
-export const ContainerLoading=(props)=>{
-    return (<div className="w-100 h-100 ContainerLoading">
-        <img src={loadinggif}></img>
-        &nbsp;&nbsp;&nbsp;
-        {props?.text} 
-    </div>);
-}
+export const ButtonLoading = ({ text }: LoadingProps) => (
+  <Button
+    className="w-100 ButtonLoading"
+    disabled
+    aria-busy="true"
+  >
+    <img src={loadingGif} alt="" aria-hidden="true" />
+    &nbsp;&nbsp;&nbsp;{text ?? 'İşlem sürüyor'}
+  </Button>
+);
 
-export const FullScreenLoading=(props)=>{
-    return (<div className="FullScreenLoading">
-        
-        <div><img src="logo.png" className="FullScreenLoading_Logo"></img></div>
-        
-        <img src={loadinggif}></img>
-        &nbsp;&nbsp;&nbsp;{props?.text} 
-    </div>);
-}
+export const ContainerLoading = ({ text }: LoadingProps) => (
+  <div
+    className="w-100 h-100 ContainerLoading"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+  >
+    <img src={loadingGif} alt="" aria-hidden="true" />
+    &nbsp;&nbsp;&nbsp;{text ?? 'Yükleniyor'}
+  </div>
+);
 
-export const NoResultsFound=(props)=>{
-    return (
-      <div className="NoResultsFound">
-        {props?.text ?? "Sonuç bulunamadı"}
-      </div>
-    );
-}
+export const FullScreenLoading = ({ text }: LoadingProps) => (
+  <div
+    className="FullScreenLoading"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+  >
+    <div>
+      <img
+        src="logo.png"
+        className="FullScreenLoading_Logo"
+        alt=""
+        aria-hidden="true"
+      />
+    </div>
+    <img src={loadingGif} alt="" aria-hidden="true" />
+    &nbsp;&nbsp;&nbsp;{text ?? 'Yükleniyor'}
+  </div>
+);
 
-export const ImageNotFound=()=>{
-    return (<div className="imageNotFound"><img src='images/imagenotfound.png' style={{width:'100%'}}></img></div>)
-}
+export const NoResultsFound = ({ text }: LoadingProps) => (
+  <div className="NoResultsFound" role="status">
+    <ImTable aria-hidden="true" />
+    &nbsp;{text ?? 'Sonuç bulunamadı'}
+  </div>
+);
+
+export const ImageNotFound = () => (
+  <div className="imageNotFound">
+    <img
+      src="images/imagenotfound.png"
+      style={{ width: '100%' }}
+      alt="Görsel bulunamadı"
+    />
+  </div>
+);
