@@ -129,7 +129,7 @@ export interface TransportResult<TData = unknown> {
   data: TData;
   status: number;
   statusText?: string;
-  headers?: Headers | Record<string, string> | null;
+  headers?: Headers | Record<string, unknown> | null;
   metadata?: ResponseMetadata | Readonly<Record<string, unknown>>;
   durationMs?: number;
   fromCache?: boolean;
