@@ -10,7 +10,7 @@ import {
 const createClock = (values) => {
   const queue = [...values];
   let last = queue.length ? queue[0] : 0;
-  return jest.fn(() => {
+  return vi.fn(() => {
     if (queue.length) last = queue.shift();
     return last;
   });
@@ -365,7 +365,7 @@ describe('createBootstrapDiagnosticBridge', () => {
 
   test('invokes an optional observer with the sanitized event', () => {
     const diagnostics = createBootstrapDiagnostics();
-    const observer = jest.fn();
+    const observer = vi.fn();
     const bridge = createBootstrapDiagnosticBridge(diagnostics, observer);
     bridge.record('request', { password: 'secret', count: 2 });
 
