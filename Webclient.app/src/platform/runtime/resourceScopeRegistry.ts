@@ -122,6 +122,14 @@ const DEFAULT_POLICY: ResourceScopeRegistryPolicy = Object.freeze({
 });
 
 const SENSITIVE_KEY = /authorization|cookie|password|passwd|secret|token|api[-_]?key|session|credential/i;
+const hasControlCharacter = (value: string): boolean => {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+};
+
 
 const positiveInteger = (
   name: string,
