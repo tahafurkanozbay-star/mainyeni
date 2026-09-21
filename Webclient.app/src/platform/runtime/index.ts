@@ -58,3 +58,4 @@ export * from './runtimePolicyProfile';
 export * from './resourceScope';
 export * from './resourceScopeRegistry';
 export * from './resourceScopeAdapters';
+export * from './resourceLifecycleHealth';
