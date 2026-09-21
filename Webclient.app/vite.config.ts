@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react';
 import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard.ts';
 import {
   legacyEnvironmentGuardPlugin,
-  legacyJsxPlugin,
   legacyPresentationCleanupPlugin,
 } from './tooling/sourceTransforms.ts';
 
@@ -161,7 +160,6 @@ export default defineConfig({
     moduleResolutionGuardPlugin(),
     legacyEnvironmentGuardPlugin(),
     legacyPresentationCleanupPlugin(),
-    legacyJsxPlugin(),
     localBootstrapPreviewPlugin(),
     react({ include: /\.[jt]sx?$/ }),
   ],
