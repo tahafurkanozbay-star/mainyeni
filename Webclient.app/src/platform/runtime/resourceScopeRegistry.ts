@@ -121,7 +121,6 @@ const DEFAULT_POLICY: ResourceScopeRegistryPolicy = Object.freeze({
   staleAfterMs: 15 * 60_000,
 });
 
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const SENSITIVE_KEY = /authorization|cookie|password|passwd|secret|token|api[-_]?key|session|credential/i;
 
 const positiveInteger = (
