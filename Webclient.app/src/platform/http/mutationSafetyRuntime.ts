@@ -84,11 +84,11 @@ const isCancellation = (
   signal: AbortSignal | undefined,
 ): boolean => {
   if (signal?.aborted) return true;
-  const code = getErrorCode(error);
+  const code = getErrorCode(error)?.toUpperCase();
   return code === 'ABORTED'
     || code === 'TASK_CANCELLED'
-    || code === 'subscriber-aborted'
-    || code === 'operation-cancelled'
+    || code === 'SUBSCRIBER-ABORTED'
+    || code === 'OPERATION-CANCELLED'
     || code === 'MUTATION_ABORTED';
 };
 
