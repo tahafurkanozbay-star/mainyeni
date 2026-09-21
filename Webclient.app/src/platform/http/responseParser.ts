@@ -100,7 +100,6 @@ export interface ResponseLike {
   text?: () => Promise<string>;
   blob?: () => Promise<Blob>;
   arrayBuffer?: () => Promise<ArrayBuffer>;
-  [key: string]: unknown;
 }
 
 export interface ParseResponseOptions {
