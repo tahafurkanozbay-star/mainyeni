@@ -51,24 +51,36 @@ public sealed class KentRehberiSingleFlight<T> : IDisposable
                 "deadline must be positive.");
         }
 
-        Entry? createdEntry = null;
-        var entry = entries.GetOrAdd(
-            key,
-            _ =>
-            {
-                createdEntry = new Entry(
-                    deadline,
-                    factory,
-                    CompleteEntry,
-                    key);
-                Interlocked.Increment(ref created);
-                return createdEntry;
-            });
+        Entry entry;
 
-        if (!ReferenceEquals(entry, createdEntry))
+        while (true)
         {
-            Interlocked.Increment(ref joined);
-            telemetry.SingleFlightJoined(operation);
+            if (entries.TryGetValue(
+                    key,
+                    out var existing))
+            {
+                entry = existing;
+                Interlocked.Increment(ref joined);
+                telemetry.SingleFlightJoined(operation);
+                break;
+            }
+
+            var candidate = new Entry(
+                deadline,
+                factory,
+                CompleteEntry,
+                key);
+
+            if (entries.TryAdd(
+                    key,
+                    candidate))
+            {
+                entry = candidate;
+                Interlocked.Increment(ref created);
+                break;
+            }
+
+            candidate.Dispose();
         }
 
         entry.AddSubscriber();
