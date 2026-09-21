@@ -1,4 +1,4 @@
-import { transformWithOxc, type Plugin } from 'vite';
+import type { Plugin } from 'vite';
 
 const SOURCE_FILE = /\/src\/.*\.[cm]?[jt]sx?$/;
 const LEGACY_JAVASCRIPT_FILE = /\/src\/.*\.js$/;
@@ -13,24 +13,6 @@ export const cleanModuleId = (id: string): string => {
   const candidates = [queryIndex, hashIndex].filter((index) => index >= 0);
   return candidates.length === 0 ? id : id.slice(0, Math.min(...candidates));
 };
-
-export const isLegacyJavascriptSource = (id: string): boolean =>
-  LEGACY_JAVASCRIPT_FILE.test(cleanModuleId(id));
-
-export const legacyJsxPlugin = (): Plugin => ({
-  name: 'kent-rehberi-legacy-jsx',
-  enforce: 'pre',
-  async transform(code, id) {
-    const sourceId = cleanModuleId(id);
-    if (!isLegacyJavascriptSource(sourceId)) return null;
-
-    const result = await transformWithOxc(code, sourceId, {
-      lang: 'jsx',
-      jsx: { runtime: 'automatic' },
-    });
-    return result.map ? { code: result.code, map: result.map } : { code: result.code };
-  },
-});
 
 export const findLegacyBrowserEnvironmentReferences = (code: string): readonly string[] => {
   const references = code.match(/process\.env\.[A-Z0-9_]+/g) ?? [];
