@@ -36,7 +36,7 @@ describe('spatialMemoRuntime', () => {
 
   test('caches successful CPU computation results', async () => {
     const runtime = createSpatialMemoRuntime();
-    const factory = jest.fn(async () => ({ area: 42 }));
+    const factory = vi.fn(async () => ({ area: 42 }));
     await expect(runtime.execute('area:a', factory)).resolves.toEqual({ area: 42 });
     await expect(runtime.execute('area:a', factory)).resolves.toEqual({ area: 42 });
     expect(factory).toHaveBeenCalledTimes(1);
@@ -50,7 +50,7 @@ describe('spatialMemoRuntime', () => {
   test('deduplicates concurrent computations by stable key', async () => {
     const runtime = createSpatialMemoRuntime();
     const work = deferred();
-    const factory = jest.fn(() => work.promise);
+    const factory = vi.fn(() => work.promise);
     const first = runtime.execute('buffer:a', factory);
     const second = runtime.execute('buffer:a', factory);
     expect(factory).toHaveBeenCalledTimes(1);
@@ -61,7 +61,7 @@ describe('spatialMemoRuntime', () => {
 
   test('can explicitly disable in-flight dedupe', async () => {
     const runtime = createSpatialMemoRuntime();
-    const factory = jest.fn(async () => ({ value: factory.mock.calls.length }));
+    const factory = vi.fn(async () => ({ value: factory.mock.calls.length }));
     const values = await Promise.all([
       runtime.execute('x', factory, { dedupe: false, cache: false }),
       runtime.execute('x', factory, { dedupe: false, cache: false }),
@@ -72,7 +72,7 @@ describe('spatialMemoRuntime', () => {
 
   test('does not cache values rejected by cache policy', async () => {
     const runtime = createSpatialMemoRuntime();
-    const factory = jest.fn(async () => ({ transient: true }));
+    const factory = vi.fn(async () => ({ transient: true }));
     const options = { isCacheable: () => false };
     await runtime.execute('transient', factory, options);
     await runtime.execute('transient', factory, options);
@@ -82,7 +82,7 @@ describe('spatialMemoRuntime', () => {
 
   test('does not cache a value larger than the byte budget', async () => {
     const runtime = createSpatialMemoRuntime({ maxBytes: 10 });
-    const factory = jest.fn(async () => ({ huge: 'x'.repeat(100) }));
+    const factory = vi.fn(async () => ({ huge: 'x'.repeat(100) }));
     await runtime.execute('huge', factory);
     await runtime.execute('huge', factory);
     expect(factory).toHaveBeenCalledTimes(2);
@@ -161,7 +161,7 @@ describe('spatialMemoRuntime', () => {
     const work = deferred();
     const controller = new AbortController();
     let underlyingSignal;
-    const factory = jest.fn(({ signal }) => {
+    const factory = vi.fn(({ signal }) => {
       underlyingSignal = signal;
       return work.promise;
     });
@@ -195,7 +195,7 @@ describe('spatialMemoRuntime', () => {
     const runtime = createSpatialMemoRuntime();
     const controller = new AbortController();
     controller.abort();
-    const factory = jest.fn();
+    const factory = vi.fn();
     await expect(runtime.execute('cancelled', factory, { signal: controller.signal }))
       .rejects.toMatchObject({ code: 'CANCELLED' });
     expect(factory).not.toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('spatialMemoRuntime', () => {
 
   test('does not convert computation failures into cached successes', async () => {
     const runtime = createSpatialMemoRuntime();
-    const factory = jest.fn(async () => {
+    const factory = vi.fn(async () => {
       throw new Error('geometry engine failure');
     });
     await expect(runtime.execute('failure', factory)).rejects.toThrow('geometry engine failure');

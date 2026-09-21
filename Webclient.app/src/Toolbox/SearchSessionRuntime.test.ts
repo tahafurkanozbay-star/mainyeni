@@ -7,7 +7,7 @@ import {
 } from "./SearchSessionRuntime";
 
 const createCoordinatorStub = () => ({
-    search: jest.fn(async (dataset, request) => ({
+    search: vi.fn(async (dataset, request) => ({
         dataset,
         request,
         records: [{ id: request.query || "all" }],
@@ -26,7 +26,7 @@ const createDeferredCoordinator = () => {
     const pending = [];
     return {
         pending,
-        search: jest.fn((dataset, request, options) => new Promise((resolve, reject) => {
+        search: vi.fn((dataset, request, options) => new Promise((resolve, reject) => {
             pending.push({ dataset, request, options, resolve, reject });
         }))
     };
@@ -69,7 +69,7 @@ describe("SearchSessionRuntime", () => {
     describe("manual scheduler", () => {
         test("stores and runs scheduled callbacks", () => {
             const scheduler = createManualSearchScheduler();
-            const callback = jest.fn();
+            const callback = vi.fn();
             const id = scheduler.set(callback, 180);
             expect(scheduler.size()).toBe(1);
             expect(scheduler.entries()).toEqual([{ id, delay: 180 }]);
@@ -80,7 +80,7 @@ describe("SearchSessionRuntime", () => {
 
         test("clears scheduled callbacks", () => {
             const scheduler = createManualSearchScheduler();
-            const callback = jest.fn();
+            const callback = vi.fn();
             const id = scheduler.set(callback, 180);
             scheduler.clear(id);
             expect(scheduler.run(id)).toBe(false);
@@ -89,8 +89,8 @@ describe("SearchSessionRuntime", () => {
 
         test("runs all queued callbacks", () => {
             const scheduler = createManualSearchScheduler();
-            const one = jest.fn();
-            const two = jest.fn();
+            const one = vi.fn();
+            const two = vi.fn();
             scheduler.set(one, 1);
             scheduler.set(two, 2);
             expect(scheduler.runAll()).toBe(2);
@@ -269,7 +269,7 @@ describe("SearchSessionRuntime", () => {
     describe("errors", () => {
         test("stores non-abort errors", async () => {
             const coordinator = {
-                search: jest.fn(() => Promise.reject(new Error("backend failed")))
+                search: vi.fn(() => Promise.reject(new Error("backend failed")))
             };
             const session = createSearchSession(coordinator);
             await expect(session.search("places", { query: "park" })).rejects.toThrow("backend failed");
@@ -293,7 +293,7 @@ describe("SearchSessionRuntime", () => {
 
         test("loadMore executes the next offset", async () => {
             const coordinator = {
-                search: jest.fn(async (_dataset, request) => ({
+                search: vi.fn(async (_dataset, request) => ({
                     request,
                     records: [{ id: request.offset || 0 }],
                     page: request.offset
@@ -313,7 +313,7 @@ describe("SearchSessionRuntime", () => {
         test("notifies listeners on state changes", async () => {
             const coordinator = createCoordinatorStub();
             const session = createSearchSession(coordinator);
-            const listener = jest.fn();
+            const listener = vi.fn();
             const unsubscribe = session.subscribe(listener);
             await session.search("places", { query: "park" });
             expect(listener).toHaveBeenCalled();

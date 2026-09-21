@@ -265,7 +265,7 @@ describe('RequestScheduler cancellation and bounded queue', () => {
   test('rejects pre-aborted requests without running task', async () => {
     const controller = new AbortController();
     controller.abort();
-    const task = jest.fn();
+    const task = vi.fn();
     const scheduler = createRequestScheduler();
 
     await expect(scheduler.schedule(task, { signal: controller.signal }))
@@ -278,7 +278,7 @@ describe('RequestScheduler cancellation and bounded queue', () => {
     const scheduler = createRequestScheduler({ maxConcurrent: 1 });
     const gate = deferred();
     const controller = new AbortController();
-    const task = jest.fn(() => 'never');
+    const task = vi.fn(() => 'never');
 
     const blocker = scheduler.schedule(() => gate.promise);
     const queued = scheduler.schedule(task, { signal: controller.signal });
@@ -311,21 +311,21 @@ describe('RequestScheduler cancellation and bounded queue', () => {
   });
 
   test('rejects queued work after queue wait budget expires', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       const scheduler = createRequestScheduler({ maxConcurrent: 1 });
       const gate = deferred();
       const blocker = scheduler.schedule(() => gate.promise);
       const queued = scheduler.schedule(() => 'late', { queueTimeoutMs: 250 });
 
-      jest.advanceTimersByTime(251);
+      vi.advanceTimersByTime(251);
       await expect(queued).rejects.toMatchObject({ code: 'SCHEDULER_QUEUE_TIMEOUT' });
       expect(scheduler.getQueuedCount()).toBe(0);
 
       gate.resolve();
       await blocker;
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 

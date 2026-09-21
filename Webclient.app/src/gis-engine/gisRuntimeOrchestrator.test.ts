@@ -67,7 +67,7 @@ describe('gisRuntimeOrchestrator', () => {
   test('deduplicates and caches layer queries through shared query runtime', async () => {
     const runtime = createGisRuntimeOrchestrator();
     registerPlaces(runtime);
-    const factory = jest.fn(async () => ({ features: [feature(1)] }));
+    const factory = vi.fn(async () => ({ features: [feature(1)] }));
     const first = runtime.executeLayerQuery('places', 'visible:all', factory);
     const second = runtime.executeLayerQuery('places', 'visible:all', factory);
     await expect(Promise.all([first, second])).resolves.toEqual([
@@ -84,7 +84,7 @@ describe('gisRuntimeOrchestrator', () => {
   test('invalidates layer-scoped query cache on demand', async () => {
     const runtime = createGisRuntimeOrchestrator();
     registerPlaces(runtime);
-    const factory = jest.fn(async () => ({ features: [feature(1)] }));
+    const factory = vi.fn(async () => ({ features: [feature(1)] }));
     await runtime.executeLayerQuery('places', 'all', factory);
     expect(runtime.invalidateLayerCaches('places').queryRemoved).toBe(1);
     await runtime.executeLayerQuery('places', 'all', factory);
@@ -146,7 +146,7 @@ describe('gisRuntimeOrchestrator', () => {
   test('memoizes CPU-heavy spatial work separately from network query cache', async () => {
     const runtime = createGisRuntimeOrchestrator();
     registerPlaces(runtime);
-    const factory = jest.fn(async () => ({ distance: 10 }));
+    const factory = vi.fn(async () => ({ distance: 10 }));
     const args = [{ x: 32, y: 39 }, { x: 33, y: 40 }];
     await runtime.executeSpatial('places', 'distance', args, factory);
     await runtime.executeSpatial('places', 'distance', args, factory);
@@ -252,7 +252,7 @@ describe('gisRuntimeOrchestrator', () => {
   test('schedules layer loads under the adaptive scheduler budget', async () => {
     const runtime = createGisRuntimeOrchestrator({ profile: GIS_PERFORMANCE_PROFILE.ECO });
     registerPlaces(runtime);
-    const loader = jest.fn(async ({ layerId }) => ({ layerId, loaded: true }));
+    const loader = vi.fn(async ({ layerId }) => ({ layerId, loaded: true }));
     await expect(runtime.scheduleLayerLoad({ id: 'places' }, loader))
       .resolves.toEqual({ layerId: 'places', loaded: true });
     expect(loader).toHaveBeenCalledTimes(1);
@@ -291,7 +291,7 @@ describe('gisRuntimeOrchestrator', () => {
   });
 
   test('listener exceptions do not break GIS runtime actions', () => {
-    const onListenerError = jest.fn();
+    const onListenerError = vi.fn();
     const runtime = createGisRuntimeOrchestrator({ onListenerError });
     runtime.subscribe(() => {
       throw new Error('observer failed');
