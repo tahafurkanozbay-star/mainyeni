@@ -1,224 +1,178 @@
-import React, { Component } from 'react';
-import { loadModules } from "esri-loader";
-import { IsNull } from './ObjectHelper';
+import Graphic from '@arcgis/core/Graphic.js';
+import type Geometry from '@arcgis/core/geometry/Geometry.js';
+import Polygon from '@arcgis/core/geometry/Polygon.js';
+import PictureMarkerSymbol from '@arcgis/core/symbols/PictureMarkerSymbol.js';
+import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol.js';
+import SimpleLineSymbol from '@arcgis/core/symbols/SimpleLineSymbol.js';
+import type Symbol from '@arcgis/core/symbols/Symbol.js';
+import type MapView from '@arcgis/core/views/MapView.js';
 
-export function RemoveGraphics(_mapView, _graphics) {
-  _mapView.graphics.remove(_graphics);
-}
+import {
+  buildClosedPolygonRing,
+  type XYPointInput,
+} from '../../runtime/adminGeometryRuntime';
 
-export function AddGraphics(_mapView, _graphic) {
+export type GraphicCallback = (graphic: Graphic | null) => void;
+export type GraphicsCallback = (graphics: readonly Graphic[]) => void;
 
-  _mapView.graphics.add(_graphic);
+const createLineSymbol = (): SimpleLineSymbol => new SimpleLineSymbol({
+  color: [78, 229, 255, 1],
+  width: 4,
+});
 
-  return _graphic;
-}
-
-export function ZoomToGeometry(_mapView, _geometry, _zoomLevel, _callback) {
-
-  loadModules(["esri/Graphic",
-    "esri/symbols/SimpleFillSymbol", "esri/symbols/SimpleLineSymbol", "esri/Color"]).
-    then(([Graphic, SimpleFillSymbol, SimpleLineSymbol, Color]) => {
-
-      CreateGraphicFromGeometry(_geometry, null, function (graphic) {
-
-        if (graphic != null) {
-
-          AddGraphics(_mapView, graphic);
-
-          if (!IsNull(_zoomLevel)) {
-            _mapView.goTo({
-              target: graphic,
-              zoom: _zoomLevel
-            });
-          }
-          else {
-            _mapView.goTo(_geometry);
-          }
-
-          _callback(graphic);
-
-        }
-        else {
-          _callback(null);
-        }
-
+const createDefaultSymbol = (geometry: Geometry): Symbol | null => {
+  switch (geometry.type) {
+    case 'point':
+    case 'multipoint':
+      return new PictureMarkerSymbol({
+        url: 'images/pictureMarker.png',
+        width: 32,
+        height: 32,
       });
-
-    });
-}
-
-
-export function CreateGraphicFromPicture(_geometry, _pictureUrl, _width, _height, _angle, _callback) {
-
-  loadModules(["esri/Graphic",
-    "esri/symbols/SimpleFillSymbol", "esri/symbols/SimpleLineSymbol", "esri/symbols/PictureMarkerSymbol", "esri/Color"]).
-    then(([Graphic, SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Color]) => {
-
-      if (_geometry != null) {
-        var pointSymbol = {
-          type: "picture-marker",
-          url: _pictureUrl,
-          width: _width,
-          height: _height,
-          angle: _angle
-        };
-
-        var graphic = null;
-
-        graphic = new Graphic({
-          geometry: _geometry,
-          symbol: pointSymbol
-        });
-
-
-        _callback(graphic);
-
-      }
-      else {
-        _callback(null);
-      }
-
-    });
-}
-
-
-export function CreateGraphicFromGeometry(_geometry, _symbol, _callback) {
-
-  loadModules(["esri/Graphic",
-    "esri/symbols/SimpleFillSymbol", "esri/symbols/SimpleLineSymbol", "esri/symbols/PictureMarkerSymbol", "esri/Color"]).
-    then(([Graphic, SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Color]) => {
-
-
-      if (_geometry != null) {
-        var pointSymbol = {
-          type: "picture-marker",
-          url: 'images/pictureMarker.png',
-          width: "32px",
-          height: "32px"
-        };
-
-        var polylineSymbol = {
-          type: "simple-line",
-          color: [78, 229, 255],
-          width: 4
-        };
-
-        var polygonSymbol = {
-          type: "simple-line",
-          color: [78, 229, 255],
-          width: 4
-        };
-
-        var graphic = null;
-
-
-        if (_geometry.type == 'point') {
-          graphic = new Graphic({
-            geometry: _geometry,
-            symbol: _symbol != null ? _symbol : pointSymbol
-          });
-        }
-
-        if (_geometry.type == 'line' || _geometry.type == 'polyline') {
-          graphic = new Graphic({
-            geometry: _geometry,
-            symbol: _symbol != null ? _symbol : polylineSymbol
-          });
-        }
-
-        if (_geometry.type == 'polygon') {
-          graphic = new Graphic({
-            geometry: _geometry,
-            symbol: _symbol != null ? _symbol : polygonSymbol
-          });
-        }
-
-        _callback(graphic);
-
-      }
-      else {
-        _callback(null);
-      }
-
-    });
-
-}
-
-
-export function ZoomToGeometries(_mapView, _geometries, _zoomLevel, _callback) {
-
-  var graphicsArray = [];
-  var counter = 0;
-
-  _geometries.forEach(geometry => {
-
-    CreateGraphicFromGeometry(geometry, null, function (graphic) {
-
-      graphicsArray.push(graphic);
-      AddGraphics(_mapView, graphic);
-
-      counter++;
-
-      if (counter === _geometries.length) {
-        if (_zoomLevel != null) {
-          _mapView.goTo({
-            target: _geometries,
-            zoom: _zoomLevel
-          }).catch(function (error) {
-            console.error(error);
-          });
-
-        }
-        else {
-          _mapView.goTo(_geometries).catch(function (error) {
-            console.error(error);
-          });
-
-        }
-
-
-        _callback(graphicsArray);
-      }
-
-    });
-  });
-
-
-
-}
-
-
-
-//bu fonksiyon verilen X Y noktalarından polygon oluşturur
-export function CreatePolygonFromXYPoints(_xyPoints, _callback) {
-
-  loadModules(["esri/geometry/Polygon", "esri/geometry/Point", "esri/geometry/SpatialReference"]).
-    then(([Polygon, Point, SpatialReference]) => {
-
-
-      let _rings = []
-      _xyPoints.forEach(_xyPoint => {
-
-        let x = parseFloat(_xyPoint.X.replace(",", "."));
-        let y = parseFloat(_xyPoint.Y.replace(",", "."));
-        _rings.push([x, y]);
-
+    case 'polyline':
+      return createLineSymbol();
+    case 'polygon':
+    case 'extent': {
+      const fill = new SimpleFillSymbol({
+        color: [0, 0, 0, 0],
       });
+      fill.set('outline', createLineSymbol());
+      return fill;
+    }
+    default:
+      return null;
+  }
+};
 
-      let _ringsWrapper = [];
-      _ringsWrapper.push(_rings);
+const createGraphic = (
+  geometry: Geometry | null | undefined,
+  symbol?: Symbol | null,
+): Graphic | null => {
+  if (!geometry) return null;
+  const resolvedSymbol = symbol ?? createDefaultSymbol(geometry);
+  if (!resolvedSymbol) return null;
 
+  const graphic = new Graphic();
+  graphic.geometry = geometry;
+  graphic.set('symbol', resolvedSymbol);
+  return graphic;
+};
 
-      let _polygon = new Polygon({
-        rings: _rings,
-        spatialReference: {
-          wkid: 4326
-        }
-      });
+const observeGoTo = (operation: Promise<void>): void => {
+  void operation.catch(() => undefined);
+};
 
-      _callback(_polygon);
+export function RemoveGraphics(
+  mapView: MapView,
+  graphics: Graphic | readonly Graphic[] | null | undefined,
+): void {
+  if (!graphics) return;
 
-    });
+  if (graphics instanceof Graphic) {
+    mapView.graphics.remove(graphics);
+    return;
+  }
 
+  mapView.graphics.removeMany([...graphics]);
+}
 
+export function AddGraphics(
+  mapView: MapView,
+  graphic: Graphic,
+): Graphic {
+  mapView.graphics.add(graphic);
+  return graphic;
+}
+
+export function ZoomToGeometry(
+  mapView: MapView,
+  geometry: Geometry,
+  zoomLevel: number | null | undefined,
+  callback: GraphicCallback,
+): void {
+  const graphic = createGraphic(geometry);
+  if (!graphic) {
+    callback(null);
+    return;
+  }
+
+  AddGraphics(mapView, graphic);
+  if (zoomLevel != null) {
+    mapView.zoom = zoomLevel;
+  }
+  observeGoTo(mapView.goTo(graphic));
+  callback(graphic);
+}
+
+export function CreateGraphicFromPicture(
+  geometry: Geometry | null | undefined,
+  pictureUrl: string,
+  width: number,
+  height: number,
+  angle: number,
+  callback: GraphicCallback,
+): void {
+  if (!geometry || !pictureUrl) {
+    callback(null);
+    return;
+  }
+
+  const graphic = new Graphic();
+  graphic.geometry = geometry;
+  graphic.set('symbol', new PictureMarkerSymbol({
+    url: pictureUrl,
+    width,
+    height,
+    angle,
+  }));
+  callback(graphic);
+}
+
+export function CreateGraphicFromGeometry(
+  geometry: Geometry | null | undefined,
+  symbol: Symbol | null | undefined,
+  callback: GraphicCallback,
+): void {
+  callback(createGraphic(geometry, symbol));
+}
+
+export function ZoomToGeometries(
+  mapView: MapView,
+  geometries: readonly Geometry[],
+  zoomLevel: number | null | undefined,
+  callback: GraphicsCallback,
+): void {
+  const graphics = geometries
+    .map((geometry) => createGraphic(geometry))
+    .filter((graphic): graphic is Graphic => graphic !== null);
+
+  if (graphics.length === 0) {
+    callback(Object.freeze([]));
+    return;
+  }
+
+  mapView.graphics.addMany(graphics);
+  if (zoomLevel != null) {
+    mapView.zoom = zoomLevel;
+  }
+  observeGoTo(mapView.goTo(graphics));
+  callback(Object.freeze([...graphics]));
+}
+
+export function CreatePolygonFromXYPoints(
+  xyPoints: readonly XYPointInput[],
+  callback: (polygon: Polygon | null) => void,
+): void {
+  const ring = buildClosedPolygonRing(xyPoints);
+  if (!ring) {
+    callback(null);
+    return;
+  }
+
+  callback(new Polygon({
+    rings: [ring.map(([x, y]) => [x, y])],
+    spatialReference: {
+      wkid: 4326,
+    },
+  }));
 }

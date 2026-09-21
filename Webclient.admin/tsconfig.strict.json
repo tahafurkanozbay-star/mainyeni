@@ -11,6 +11,19 @@
     "src/Business/AuthBusiness.ts",
     "src/Core/Global.ts",
     "src/reportWebVitals.ts",
-    "src/vite-env.d.ts"
+    "src/vite-env.d.ts",
+    "src/runtime/adminMapRuntime.ts",
+    "src/runtime/adminMapRuntime.test.ts",
+    "src/runtime/adminGeometryRuntime.ts",
+    "src/runtime/adminGeometryRuntime.test.ts",
+    "src/runtime/kmlSerializer.ts",
+    "src/runtime/kmlSerializer.test.ts",
+    "src/Core/Toolbox/GisQueryHelper.ts",
+    "src/Core/Toolbox/GisQueryHelper.test.ts",
+    "src/Core/Toolbox/GisGraphicsHelper.ts",
+    "src/Core/Toolbox/DataHelper.ts",
+    "src/Components/Map.tsx",
+    "src/types/vendor.d.ts",
+    "src/Core/Fonts/UbuntuNormal.ts"
   ]
 }
