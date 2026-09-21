@@ -269,12 +269,12 @@ export class SpatialQueryBudgetLedger {
   }
 
   list(): readonly SpatialQueryBudgetLease[] {
-    return [...this.#leases.values()].sort((left, right) => {
+    return Object.freeze([...this.#leases.values()].sort((left, right) => {
       const priority = PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority];
       if (priority !== 0) return priority;
       if (left.acquiredAt !== right.acquiredAt) return left.acquiredAt - right.acquiredAt;
       return left.id.localeCompare(right.id);
-    });
+    }));
   }
 
   snapshot(): SpatialQueryBudgetSnapshot {
