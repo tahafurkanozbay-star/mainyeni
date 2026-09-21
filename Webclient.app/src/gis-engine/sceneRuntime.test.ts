@@ -19,11 +19,11 @@ import {
   snapshotSceneState,
 } from './sceneRuntime';
 
-const loadModules = jest.fn();
+const loadModules = vi.fn();
 const arcgisTestTransport = { name: 'scene-runtime-test', loadModules };
 
-jest.mock('./layerFactory', () => ({
-  create3DLayer: jest.fn(),
+vi.mock('./layerFactory', () => ({
+  create3DLayer: vi.fn(),
 }));
 
 const flush = () => Promise.resolve().then(() => Promise.resolve());
@@ -49,23 +49,23 @@ const createScene = (overrides = {}) => {
     map: {
       basemap: { id: 'shared-basemap' },
       ground: { opacity: 1 },
-      add: jest.fn(),
+      add: vi.fn(),
     },
-    watch: jest.fn((property, callback) => {
+    watch: vi.fn((property, callback) => {
       watchers.set(property, callback);
-      const handle = { remove: jest.fn() };
+      const handle = { remove: vi.fn() };
       handles.push(handle);
       return handle;
     }),
-    on: jest.fn((eventName, handler) => {
+    on: vi.fn((eventName, handler) => {
       if (eventName === 'click') clickHandler = handler;
-      const handle = { remove: jest.fn() };
+      const handle = { remove: vi.fn() };
       handles.push(handle);
       return handle;
     }),
-    hitTest: jest.fn().mockResolvedValue({ results: [] }),
-    goTo: jest.fn().mockResolvedValue(undefined),
-    destroy: jest.fn(),
+    hitTest: vi.fn().mockResolvedValue({ results: [] }),
+    goTo: vi.fn().mockResolvedValue(undefined),
+    destroy: vi.fn(),
     ...overrides,
   };
   return {
@@ -79,14 +79,14 @@ const createScene = (overrides = {}) => {
 
 describe('sceneRuntime', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     setArcgisModuleTransport(arcgisTestTransport);
     resetSceneRuntimeModuleCache();
   });
 
   test('reuses a caller-owned map and does not load esri/Map', async () => {
     const sharedMap = { id: 'shared-map' };
-    const SceneView = jest.fn().mockImplementation((options) => ({ ...options, type: '3d' }));
+    const SceneView = vi.fn().mockImplementation((options) => ({ ...options, type: '3d' }));
     loadModules.mockImplementation(([name]) => {
       if (name === 'esri/views/SceneView') return Promise.resolve([SceneView]);
       throw new Error(`Unexpected module: ${name}`);
@@ -110,8 +110,8 @@ describe('sceneRuntime', () => {
   });
 
   test('creates a local Map without silently requesting a basemap or world elevation', async () => {
-    const Map = jest.fn().mockImplementation((options) => ({ options }));
-    const SceneView = jest.fn().mockImplementation((options) => ({ ...options }));
+    const Map = vi.fn().mockImplementation((options) => ({ options }));
+    const SceneView = vi.fn().mockImplementation((options) => ({ ...options }));
     loadModules.mockImplementation(([name]) => Promise.resolve([
       name === 'esri/Map' ? Map : SceneView,
     ]));
@@ -126,8 +126,8 @@ describe('sceneRuntime', () => {
   });
 
   test('uses basemap and ground only when explicitly supplied', async () => {
-    const Map = jest.fn().mockImplementation((options) => ({ options }));
-    const SceneView = jest.fn().mockImplementation((options) => options);
+    const Map = vi.fn().mockImplementation((options) => ({ options }));
+    const SceneView = vi.fn().mockImplementation((options) => options);
     loadModules.mockImplementation(([name]) => Promise.resolve([
       name === 'esri/Map' ? Map : SceneView,
     ]));
@@ -144,8 +144,8 @@ describe('sceneRuntime', () => {
   });
 
   test('caches SceneView and Map modules across scene creation', async () => {
-    const Map = jest.fn().mockImplementation(() => ({}));
-    const SceneView = jest.fn().mockImplementation((options) => options);
+    const Map = vi.fn().mockImplementation(() => ({}));
+    const SceneView = vi.fn().mockImplementation((options) => options);
     loadModules.mockImplementation(([name]) => Promise.resolve([
       name === 'esri/Map' ? Map : SceneView,
     ]));
@@ -158,8 +158,8 @@ describe('sceneRuntime', () => {
   });
 
   test('resetSceneRuntimeModuleCache permits SDK loader recovery', async () => {
-    const SceneViewA = jest.fn().mockImplementation((options) => ({ ...options, sdk: 'a' }));
-    const SceneViewB = jest.fn().mockImplementation((options) => ({ ...options, sdk: 'b' }));
+    const SceneViewA = vi.fn().mockImplementation((options) => ({ ...options, sdk: 'a' }));
+    const SceneViewB = vi.fn().mockImplementation((options) => ({ ...options, sdk: 'b' }));
     loadModules
       .mockResolvedValueOnce([SceneViewA])
       .mockResolvedValueOnce([SceneViewB]);
@@ -173,7 +173,7 @@ describe('sceneRuntime', () => {
   });
 
   test('destroySceneView detaches the container before SDK destruction', () => {
-    const view = { container: {}, destroy: jest.fn() };
+    const view = { container: {}, destroy: vi.fn() };
 
     destroySceneView(view);
 
@@ -182,7 +182,7 @@ describe('sceneRuntime', () => {
   });
 
   test('destroySceneView accepts the createSceneView result shape', () => {
-    const view = { container: {}, destroy: jest.fn() };
+    const view = { container: {}, destroy: vi.fn() };
 
     destroySceneView({ view, map: {} });
 
@@ -324,7 +324,7 @@ describe('sceneRuntime', () => {
   test('pickScene normalizes hit-test results', async () => {
     const graphic = { id: 1, layer: { id: 'parks' } };
     const { view } = createScene({
-      hitTest: jest.fn().mockResolvedValue({
+      hitTest: vi.fn().mockResolvedValue({
         results: [{ graphic, mapPoint: { x: 1, y: 2 } }],
       }),
     });
@@ -358,7 +358,7 @@ describe('sceneRuntime', () => {
   test('pickScene ignores late SDK hit results after cancellation', async () => {
     let resolveHit;
     const { view } = createScene({
-      hitTest: jest.fn(() => new Promise((resolve) => { resolveHit = resolve; })),
+      hitTest: vi.fn(() => new Promise((resolve) => { resolveHit = resolve; })),
     });
     const controller = new AbortController();
 
@@ -396,7 +396,7 @@ describe('sceneRuntime', () => {
 
   test('focusPickedGraphic treats abort-related goTo rejection as cancellation', async () => {
     const { view } = createScene({
-      goTo: jest.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+      goTo: vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' })),
     });
 
     await expect(focusPickedGraphic(view, { geometry: {} })).resolves.toBe(false);
@@ -481,10 +481,10 @@ describe('sceneRuntime', () => {
   test('removes scene handles and ignores async hit results after teardown', async () => {
     let resolveHit;
     const { view, handles, click } = createScene({
-      hitTest: jest.fn(() => new Promise((resolve) => { resolveHit = resolve; })),
+      hitTest: vi.fn(() => new Promise((resolve) => { resolveHit = resolve; })),
     });
     const bridge = createViewStateBridge({ mode: '3d' });
-    const selectionCallback = jest.fn();
+    const selectionCallback = vi.fn();
 
     const unbind = bindSceneState(view, bridge, selectionCallback);
     const pendingClick = click();
@@ -505,12 +505,12 @@ describe('sceneRuntime', () => {
       layer: { id: 'parks' },
     };
     const { view, click } = createScene({
-      hitTest: jest.fn()
+      hitTest: vi.fn()
         .mockReturnValueOnce(firstHit.promise)
         .mockResolvedValueOnce({ results: [{ graphic: secondGraphic }] }),
     });
     const bridge = createViewStateBridge({ mode: '3d' });
-    const callback = jest.fn();
+    const callback = vi.fn();
 
     bindSceneState(view, bridge, callback);
     const firstClick = click({ x: 1, y: 1 });
@@ -537,7 +537,7 @@ describe('sceneRuntime', () => {
       selectedLayerId: 'parks',
       selectedObjectId: 1,
     });
-    const callback = jest.fn();
+    const callback = vi.fn();
 
     bindSceneState(view, bridge, callback);
     await click();
@@ -552,7 +552,7 @@ describe('sceneRuntime', () => {
   test('scene camera watch publishes shared state', () => {
     const { view, emit } = createScene();
     const bridge = createViewStateBridge({ mode: '3d' });
-    const listener = jest.fn();
+    const listener = vi.fn();
     bridge.subscribe(listener);
 
     bindSceneState(view, bridge);
@@ -649,7 +649,7 @@ describe('sceneRuntime', () => {
 
   test('applySceneBookmark handles SDK abort as a cancelled navigation', async () => {
     const { view } = createScene({
-      goTo: jest.fn().mockRejectedValue(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
+      goTo: vi.fn().mockRejectedValue(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
     });
 
     await expect(applySceneBookmark(view, { camera: {} })).resolves.toBe(false);

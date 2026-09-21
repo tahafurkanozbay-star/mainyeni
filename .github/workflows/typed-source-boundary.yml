@@ -1,0 +1,44 @@
+name: Typed Source Boundary
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/src/**'
+      - 'tools/typed-source-boundary.mjs'
+      - 'tools/typed-source-boundary.test.mjs'
+      - '.github/workflows/typed-source-boundary.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Webclient.app/src/**'
+      - 'tools/typed-source-boundary.mjs'
+      - 'tools/typed-source-boundary.test.mjs'
+      - '.github/workflows/typed-source-boundary.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: typed-source-boundary-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typed-source-boundary:
+    name: typed-source-boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Audit unit tests
+        run: node --test tools/typed-source-boundary.test.mjs
+
+      - name: Enforce typed source boundary
+        run: node tools/typed-source-boundary.mjs --strict

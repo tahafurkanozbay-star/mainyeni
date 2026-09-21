@@ -4,49 +4,49 @@ import {
 
 const createHarness = () => {
     const coordinator = {
-        ingest: jest.fn((_dataset, payload) => ({ name: "places", recordCount: payload.length })),
-        register: jest.fn((_dataset, records) => ({ name: "places", recordCount: records.length })),
-        registerLoader: jest.fn(() => jest.fn()),
-        invalidate: jest.fn(() => true),
-        diagnostics: jest.fn(() => ({ registry: { totalRecords: 2500 } }))
+        ingest: vi.fn((_dataset, payload) => ({ name: "places", recordCount: payload.length })),
+        register: vi.fn((_dataset, records) => ({ name: "places", recordCount: records.length })),
+        registerLoader: vi.fn(() => vi.fn()),
+        invalidate: vi.fn(() => true),
+        diagnostics: vi.fn(() => ({ registry: { totalRecords: 2500 } }))
     };
     const session = {
-        searchNow: jest.fn(async (dataset, request) => ({
+        searchNow: vi.fn(async (dataset, request) => ({
             result: { dataset, mode: request.mode || "text", diagnostics: { candidateCount: 3, matchedCount: 1 } },
             stale: false,
             requestId: 1
         })),
-        schedule: jest.fn(async (dataset, request) => ({
+        schedule: vi.fn(async (dataset, request) => ({
             result: { dataset, mode: request.mode || "text", diagnostics: { candidateCount: 2, matchedCount: 1 } },
             stale: false,
             requestId: 2
         })),
-        loadMore: jest.fn(async () => ({
+        loadMore: vi.fn(async () => ({
             result: { dataset: "places", mode: "text", diagnostics: { candidateCount: 1, matchedCount: 1 } },
             stale: false,
             requestId: 3
         })),
-        getState: jest.fn(() => ({
+        getState: vi.fn(() => ({
             dataset: "places",
             result: { mode: "text" }
         })),
-        diagnostics: jest.fn(() => ({ status: "success" })),
-        dispose: jest.fn(() => true)
+        diagnostics: vi.fn(() => ({ status: "success" })),
+        dispose: vi.fn(() => true)
     };
     const observability = {
-        recordDatasetSize: jest.fn(),
-        recordSearch: jest.fn(),
-        recordError: jest.fn(),
-        recommendDebounce: jest.fn(() => 140),
-        snapshot: jest.fn(() => ({ seriesCount: 1 })),
-        evaluate: jest.fn(() => ({ withinBudget: true }))
+        recordDatasetSize: vi.fn(),
+        recordSearch: vi.fn(),
+        recordError: vi.fn(),
+        recommendDebounce: vi.fn(() => 140),
+        snapshot: vi.fn(() => ({ seriesCount: 1 })),
+        evaluate: vi.fn(() => ({ withinBudget: true }))
     };
     const modules = [
-        { createSearchCoordinator: jest.fn(() => coordinator) },
-        { createSearchSession: jest.fn(() => session) },
+        { createSearchCoordinator: vi.fn(() => coordinator) },
+        { createSearchSession: vi.fn(() => session) },
         {
-            createSearchObservability: jest.fn(() => observability),
-            measureAsyncOperation: jest.fn(async operation => {
+            createSearchObservability: vi.fn(() => observability),
+            measureAsyncOperation: vi.fn(async operation => {
                 try {
                     return { value: await operation(), durationMs: 25, error: null };
                 } catch (error) {
@@ -96,7 +96,7 @@ describe("QuerySearchRuntime production facade", () => {
     test("delegates loader registration", async () => {
         const harness = createHarness();
         const runtime = await createProductionSearchRuntime({ modules: harness.modules });
-        const loader = jest.fn();
+        const loader = vi.fn();
         runtime.registerLoader("places", loader);
         expect(harness.coordinator.registerLoader).toHaveBeenCalledWith("places", loader);
     });

@@ -4,45 +4,45 @@ import App from './App';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 
-jest.mock('./platform/bootstrap/bootstrapApplication', () => ({
-  bootstrapApplication: jest.fn()
+vi.mock('./platform/bootstrap/bootstrapApplication', () => ({
+  bootstrapApplication: vi.fn()
 }));
 
 // CRA enables resetMocks, so lifecycle-independent collaborators use plain functions here.
-// Otherwise Jest clears factory-provided jest.fn implementations before every test.
-jest.mock('./platform/bootstrap/bootstrapCore', () => ({
+// Otherwise Jest clears factory-provided vi.fn implementations before every test.
+vi.mock('./platform/bootstrap/bootstrapCore', () => ({
   isBootstrapAbortError: (error) => error?.code === 'BOOTSTRAP_ABORTED'
 }));
 
-jest.mock('./Components/App/MapComponent', () => ({
+vi.mock('./Components/App/MapComponent', () => ({
   MapComponent: ({ windowManager }) => (
     <div data-testid="map-shell" data-manager-id={windowManager?.id || 'none'} />
   )
 }));
 
-jest.mock('./Components/Common/ExperienceUXLayer', () => ({
+vi.mock('./Components/Common/ExperienceUXLayer', () => ({
   ExperienceUXLayer: ({ windowManager }) => (
     <div data-testid="experience-layer" data-manager-id={windowManager?.id || 'none'} />
   )
 }));
 
-jest.mock('./Components/Common/ExperienceCommandCenter', () => ({
+vi.mock('./Components/Common/ExperienceCommandCenter', () => ({
   ExperienceCommandCenter: ({ windowManager }) => (
     <div data-testid="command-center" data-manager-id={windowManager?.id || 'none'} />
   )
 }));
 
-jest.mock('./Components/Common/ExperienceCommandCenterModern', () => ({
+vi.mock('./Components/Common/ExperienceCommandCenterModern', () => ({
   ExperienceCommandCenterModern: ({ windowManager }) => (
     <div data-testid="command-center" data-manager-id={windowManager?.id || 'none'} />
   )
 }));
 
-jest.mock('./Store/Managers/WindowManager', () => ({
+vi.mock('./Store/Managers/WindowManager', () => ({
   useWindowManager: () => ({ id: 'window-manager-1' })
 }));
 
-jest.mock('./gis-engine/arcgisModuleRuntime', () => ({ configureArcgisModuleRuntime: jest.fn() }));
+vi.mock('./gis-engine/arcgisModuleRuntime', () => ({ configureArcgisModuleRuntime: vi.fn() }));
 
 const deferred = () => {
   let resolve;
@@ -56,7 +56,7 @@ const deferred = () => {
 
 describe('App bootstrap lifecycle', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     configureArcgisModuleRuntime.mockReturnValue({ backend: 'arcgis-core-esm' });
     bootstrapApplication.mockImplementation(() => new Promise(() => {}));
   });

@@ -2,15 +2,14 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import {
   legacyJestCompatibilityPlugin,
-  legacyJsxPlugin,
 } from './tooling/sourceTransforms.ts';
 
 export default defineConfig({
-  plugins: [legacyJestCompatibilityPlugin(), legacyJsxPlugin(), react({ include: /\.[jt]sx?$/ })],
+  plugins: [legacyJestCompatibilityPlugin(), react({ include: /\.[jt]sx?$/ })],
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.fixture.js'],
+    setupFiles: ['./src/setupTests.fixture.ts'],
     include: [
       'src/**/*.test.{js,jsx,ts,tsx}',
       'tooling/**/*.test.{js,ts}',
