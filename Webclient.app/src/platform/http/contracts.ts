@@ -198,7 +198,15 @@ export interface TransportDefaults extends RuntimeDefaults {
 export interface Transport<TData = unknown> {
   defaults?: RuntimeDefaults;
   request: (config: NormalizedRequestConfig | RawRequestConfig) => Promise<TransportResult<TData>>;
+  get: (url: string, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
+  head: (url: string, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
+  post: (url: string, data: RequestBody, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
+  put: (url: string, data: RequestBody, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
+  patch: (url: string, data: RequestBody, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
+  delete: (url: string, config?: RawRequestConfig) => Promise<TransportResult<TData>>;
 }
+
+export type RequestTransport<TData = unknown> = Pick<Transport<TData>, 'defaults' | 'request'>;
 
 export interface DiagnosticEvent {
   readonly id: number;

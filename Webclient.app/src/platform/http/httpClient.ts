@@ -11,7 +11,7 @@ import type {
   RuntimeTuningProfile,
   SchedulerLike,
   SchedulerOptions,
-  Transport
+  RequestTransport
 } from './contracts';
 import {
   assertRequiredNetworkCapabilities,
@@ -31,7 +31,7 @@ interface ApiClientOptions {
   runtimeConfig?: ApiRuntimeConfig;
   diagnostics?: ReturnType<typeof createNetworkDiagnostics>;
   diagnosticCapacity?: number;
-  transport?: Transport;
+  transport?: RequestTransport;
   fetchImpl?: typeof fetch;
   clock?: () => number;
   setTimeout?: typeof setTimeout;
