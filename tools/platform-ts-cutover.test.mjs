@@ -79,7 +79,19 @@ test('Platform test TypeScript project is strict and rejects JavaScript admissio
   assert.equal(config.compilerOptions?.allowJs, false);
   assert.equal(config.compilerOptions?.strict, true);
   assert.deepEqual(config.compilerOptions?.types, ['vitest/globals', 'vite/client']);
-  assert.deepEqual(config.include, ['src/platform/**/*.test.ts', 'src/platform/**/*.integration.test.ts']);
+  assert.deepEqual(config.include, [
+      "src/platform/bootstrap/bootstrapCore.test.ts",
+      "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
+      "src/platform/http/fetchTransport.test.ts",
+      "src/platform/http/networkDiagnostics.test.ts",
+      "src/platform/http/requestScheduler.test.ts",
+      "src/platform/http/retryPolicy.test.ts",
+      "src/platform/http/runtimeCapabilities.test.ts",
+      "src/platform/http/typescriptRuntime.integration.test.ts",
+      "src/platform/performance/performanceMonitor.test.ts",
+      "src/platform/runtime/runtime.test.ts",
+      "src/platform/runtime/runtimeDiagnostics.test.ts"
+  ]);
 });
 
 test('root compatibility bridge does not weaken Platform boundary', async () => {
