@@ -251,7 +251,7 @@ export const createQueryRuntime = (configuration: QueryRuntimeConfiguration = {}
 };
 
 export interface ArcGisQueryCachePolicyOptions { cache?: boolean; ttlMs?: number; tags?: unknown[]; }
-export interface ArcGisQueryResultLike extends Dictionary { type?: string | number; exceededTransferLimit?: boolean; page?: { hasMore?: boolean }; }
+export interface ArcGisQueryResultLike extends Dictionary { type?: string | number; exceededTransferLimit?: boolean; page?: { hasMore?: boolean } | null; }
 export const createArcGisQueryCachePolicy = (options: ArcGisQueryCachePolicyOptions = {}): QueryExecuteOptions<ArcGisQueryResultLike> => ({
   cache: options.cache !== false,
   ...(options.ttlMs !== undefined ? { ttlMs: options.ttlMs } : {}),
