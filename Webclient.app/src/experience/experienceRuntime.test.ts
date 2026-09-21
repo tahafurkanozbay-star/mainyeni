@@ -140,8 +140,8 @@ describe("experienceRuntime preference store", () => {
         const storage = new MemoryStorage();
         const target = new EventTarget();
         const bus = createExperienceBus(target);
-        const eventListener = jest.fn();
-        const subscriber = jest.fn();
+        const eventListener = vi.fn();
+        const subscriber = vi.fn();
         const releaseEvent = bus.on(EXPERIENCE_PREFERENCE_EVENT, eventListener);
         const store = createPreferenceStore({ storage, bus });
         const releaseSubscriber = store.subscribe(subscriber);
@@ -255,7 +255,7 @@ describe("experienceRuntime command catalog", () => {
     test("event bus emits normalized command events and supports unsubscribe", () => {
         const target = new EventTarget();
         const bus = createExperienceBus(target);
-        const listener = jest.fn();
+        const listener = vi.fn();
         const release = bus.on(EXPERIENCE_COMMAND_EVENT, listener);
 
         expect(bus.command({ name: "map-mode", mode: "3d", source: "test" })).toBe(true);
