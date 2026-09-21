@@ -81,9 +81,7 @@ function isFocusable(element: HTMLElement): boolean {
     return isNaturallyFocusable(element) || element.isContentEditable;
 }
 function isHiddenFromAccessibilityTree(element: HTMLElement): boolean {
-    let current: HTMLElement | null = element;
-    while (current) { if (current.getAttribute("aria-hidden") === "true" || current.hasAttribute("inert") || current.hidden) return true; current = current.parentElement; }
-    return false;
+    return element.closest('[aria-hidden="true"], [inert], [hidden]') !== null;
 }
 function push(issues: AccessibilityIssue[], kind: AccessibilityIssueKind, element: HTMLElement, message: string): void { issues.push({ kind, element, message }); }
 function auditReferences(element: HTMLElement, issues: AccessibilityIssue[]): void {
