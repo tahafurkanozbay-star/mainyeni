@@ -79,6 +79,14 @@ export interface AnimationFrameBinding {
 }
 
 
+const hasControlCharacter = (value: string): boolean => {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+};
+
 const safeText = (name: string, value: string, maximum = 180): string => {
   if (typeof value !== 'string') throw new TypeError(name + ' must be a string');
   const normalized = value.trim();
