@@ -23,6 +23,7 @@ namespace Api.Core.Platform
             RateLimiting = new RateLimitOptions();
             ResponseCompression = new ResponseCompressionOptions();
             Diagnostics = new DiagnosticsOptions();
+            Governance = new GovernanceOptions();
         }
 
         public DatabaseOptions Database { get; set; }
@@ -42,6 +43,8 @@ namespace Api.Core.Platform
         public ResponseCompressionOptions ResponseCompression { get; set; }
 
         public DiagnosticsOptions Diagnostics { get; set; }
+
+        public GovernanceOptions Governance { get; set; }
 
         public sealed class DatabaseOptions
         {
@@ -139,6 +142,83 @@ namespace Api.Core.Platform
             /// alongside attacker-controlled HTML, so HTTPS compression is enabled by default.
             /// </summary>
             public bool EnableForHttps { get; set; } = true;
+        }
+
+        public sealed class GovernanceOptions
+        {
+            /// <summary>
+            /// Enables the metadata preflight and concurrency bulkhead. This boundary runs before
+            /// controllers and model binding so malformed/oversized request metadata is rejected
+            /// before expensive application allocations occur.
+            /// </summary>
+            public bool Enabled { get; set; } = true;
+
+            public int MaxRawTargetChars { get; set; } = 8192;
+
+            public int MaxPathChars { get; set; } = 2048;
+
+            public int MaxQueryStringChars { get; set; } = 6144;
+
+            public int MaxQueryParameters { get; set; } = 128;
+
+            public int MaxHeaderCount { get; set; } = 64;
+
+            public int MaxHeaderValues { get; set; } = 128;
+
+            public long MaxHeaderBytes { get; set; } = 32768;
+
+            public long MaxAuthorizationHeaderBytes { get; set; } = 8192;
+
+            public long MaxCookieHeaderBytes { get; set; } = 16384;
+
+            public long MaxContentTypeHeaderBytes { get; set; } = 512;
+
+            public long MaxForwardedForHeaderBytes { get; set; } = 4096;
+
+            public bool RejectTraceAndConnect { get; set; } = true;
+
+            public bool RejectBackslashInPath { get; set; } = true;
+
+            public bool RejectPathTraversal { get; set; } = true;
+
+            public bool RejectEncodedPathSeparators { get; set; } = true;
+
+            public bool RejectHeaderNewlines { get; set; } = true;
+
+            public bool RequireKnownContentTypeForBodyRequests { get; set; } = true;
+
+            public IList<string> AllowedBodyContentTypes { get; set; } = new List<string>
+            {
+                "application/json",
+                "application/*+json",
+                "application/geo+json",
+                "application/problem+json",
+                "application/x-www-form-urlencoded",
+                "multipart/form-data"
+            };
+
+            public ConcurrencyOptions Concurrency { get; set; } = new ConcurrencyOptions();
+        }
+
+        public sealed class ConcurrencyOptions
+        {
+            public bool Enabled { get; set; } = true;
+
+            public int MaxConcurrentRequests { get; set; } = 512;
+
+            public int MaxConcurrentPerClient { get; set; } = 32;
+
+            public int MaxTrackedClients { get; set; } = 4096;
+
+            public int ClientIdleSeconds { get; set; } = 120;
+
+            public int CleanupInterval { get; set; } = 128;
+
+            public bool ExemptOptionsRequests { get; set; } = true;
+
+            public bool ExemptHealthChecks { get; set; } = true;
+
+            public int RetryAfterSeconds { get; set; } = 1;
         }
 
         public sealed class DiagnosticsOptions
