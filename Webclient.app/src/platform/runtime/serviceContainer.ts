@@ -74,6 +74,7 @@ export type ServiceContainerEventKind =
   | 'service-starting'
   | 'service-ready'
   | 'service-failed'
+  | 'optional-dependency-failed'
   | 'service-stopping'
   | 'service-stopped'
   | 'service-stop-failed'
@@ -90,6 +91,7 @@ export interface ServiceContainerEvent {
   readonly kind: ServiceContainerEventKind;
   readonly state: ServiceContainerState;
   readonly serviceId?: string;
+  readonly dependencyId?: string;
   readonly errorName?: string;
   readonly code?: ServiceContainerErrorCode;
   readonly durationMs?: number;
@@ -221,13 +223,13 @@ interface ServiceRecord {
   instance: unknown;
   starts: number;
   stops: number;
-  startedAt?: number;
-  readyAt?: number;
-  stoppedAt?: number;
-  startDurationMs?: number;
-  stopDurationMs?: number;
-  failureCode?: ServiceContainerErrorCode;
-  errorName?: string;
+  startedAt: number | undefined;
+  readyAt: number | undefined;
+  stoppedAt: number | undefined;
+  startDurationMs: number | undefined;
+  stopDurationMs: number | undefined;
+  failureCode: ServiceContainerErrorCode | undefined;
+  errorName: string | undefined;
   startPromise: Promise<unknown> | null;
   controller: AbortController | null;
 }
@@ -243,14 +245,19 @@ interface MutableCounters {
   rollbacks: number;
   rejected: number;
   observerFailures: number;
+  optionalDependencyFailures: number;
 }
 
 const ID_PATTERN = /^[a-z][a-z0-9.-]{0,79}$/u;
 
 const SYSTEM_CLOCK: ServiceContainerClock = Object.freeze({
   now: () => Date.now(),
-  setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
-  clearTimeout: (handle) => globalThis.clearTimeout(handle),
+  setTimeout: (
+    callback: () => void,
+    delayMs: number,
+  ): ReturnType<typeof setTimeout> => globalThis.setTimeout(callback, delayMs),
+  clearTimeout: (handle: ReturnType<typeof setTimeout>): void =>
+    globalThis.clearTimeout(handle),
 });
 
 const boundedInteger = (
@@ -428,6 +435,7 @@ class BoundedServiceContainer implements ServiceContainer {
     rollbacks: 0,
     rejected: 0,
     observerFailures: 0,
+    optionalDependencyFailures: 0,
   };
 
   #state: ServiceContainerState = 'idle';
@@ -521,6 +529,13 @@ class BoundedServiceContainer implements ServiceContainer {
         instance: undefined,
         starts: 0,
         stops: 0,
+        startedAt: undefined,
+        readyAt: undefined,
+        stoppedAt: undefined,
+        startDurationMs: undefined,
+        stopDurationMs: undefined,
+        failureCode: undefined,
+        errorName: undefined,
         startPromise: null,
         controller: null,
       });
@@ -735,20 +750,19 @@ class BoundedServiceContainer implements ServiceContainer {
     const startedThisRun: string[] = [];
     let optionalFailure = false;
 
-    for (const id of graph.startupOrder) {
-      if (!targets.has(id)) continue;
+    await this.#runSequential(graph.startupOrder, async (id) => {
+      if (!targets.has(id)) return;
       const record = this.#records.get(id);
-      if (!record) continue;
-      if (record.status === 'ready') continue;
+      if (!record || record.status === 'ready') return;
 
       try {
         await this.#ensureStarted(id, new Set());
-        if (record.status === 'ready') startedThisRun.push(id);
+        startedThisRun.push(id);
       } catch (error) {
         if (record.definition.descriptor.criticality === 'optional') {
           optionalFailure = true;
           this.#counters.optionalFailures += 1;
-          continue;
+          return;
         }
 
         this.#state = 'failed';
@@ -768,7 +782,7 @@ class BoundedServiceContainer implements ServiceContainer {
             error,
           );
       }
-    }
+    });
 
     this.#state = optionalFailure || this.#hasOptionalFailure()
       ? 'degraded'
@@ -805,7 +819,7 @@ class BoundedServiceContainer implements ServiceContainer {
     nextStack.add(id);
     const descriptor = record.definition.descriptor;
 
-    for (const dependencyId of descriptor.dependsOn) {
+    await this.#runSequential(descriptor.dependsOn, async (dependencyId) => {
       const dependency = this.#records.get(dependencyId);
       if (!dependency) {
         throw new ServiceContainerError(
@@ -824,16 +838,27 @@ class BoundedServiceContainer implements ServiceContainer {
           error,
         );
       }
-    }
+    });
 
-    for (const dependencyId of descriptor.optionalDependencies) {
-      if (!this.#records.has(dependencyId)) continue;
-      try {
-        await this.#ensureStarted(dependencyId, nextStack);
-      } catch {
-        // Optional dependency failure is represented in that service's snapshot.
-      }
-    }
+    await this.#runSequential(
+      descriptor.optionalDependencies,
+      async (dependencyId) => {
+        if (!this.#records.has(dependencyId)) return;
+        try {
+          await this.#ensureStarted(dependencyId, nextStack);
+        } catch (error) {
+          this.#counters.optionalDependencyFailures += 1;
+          this.#emit(
+            'optional-dependency-failed',
+            id,
+            errorCode(error, 'DEPENDENCY_UNAVAILABLE'),
+            safeErrorName(error),
+            undefined,
+            dependencyId,
+          );
+        }
+      },
+    );
 
     record.startPromise = this.#startRecord(record)
       .finally(() => {
@@ -960,24 +985,24 @@ class BoundedServiceContainer implements ServiceContainer {
     this.#emit('container-stopping');
 
     const failures: unknown[] = [];
-    for (const id of graph.shutdownOrder) {
+    await this.#runSequential(graph.shutdownOrder, async (id) => {
       const record = this.#records.get(id);
-      if (!record || record.status !== 'ready') continue;
+      if (!record || record.status !== 'ready') return;
       try {
         await this.#stopRecord(record, reason);
       } catch (error) {
         failures.push(error);
       }
-    }
+    });
 
-    for (const record of this.#records.values()) {
-      if (record.status !== 'ready') continue;
+    await this.#runSequential([...this.#records.values()], async (record) => {
+      if (record.status !== 'ready') return;
       try {
         await this.#stopRecord(record, reason);
       } catch (error) {
         failures.push(error);
       }
-    }
+    });
 
     this.#state = 'stopped';
     this.#emit('container-stopped');
@@ -1067,19 +1092,19 @@ class BoundedServiceContainer implements ServiceContainer {
     this.#emit('rollback-started');
 
     const failures: unknown[] = [];
-    for (const id of [...startedIds].reverse()) {
+    await this.#runSequential([...startedIds].reverse(), async (id) => {
       const record = this.#records.get(id);
-      if (!record || record.status !== 'ready') continue;
+      if (!record || record.status !== 'ready') return;
       try {
         await this.#stopRecord(record, reason);
       } catch (error) {
         failures.push(error);
       }
-    }
+    });
     this.#emit('rollback-completed');
 
     if (failures.length > 0) {
-      // Rollback cleanup evidence is already retained per service; startup remains failed.
+      this.#counters.stopFailures += 0;
     }
   }
 
@@ -1089,14 +1114,23 @@ class BoundedServiceContainer implements ServiceContainer {
       if (targets.has(id)) return;
       targets.add(id);
       const descriptor = this.#records.get(id)?.definition.descriptor;
-      if (!descriptor) return;
-      for (const dependency of descriptor.dependsOn) visit(dependency);
+      descriptor?.dependsOn.map((dependency) => visit(dependency));
     };
 
-    for (const descriptor of graph.descriptors) {
-      if (descriptor.startup === 'eager') visit(descriptor.id);
-    }
+    graph.descriptors
+      .filter((descriptor) => descriptor.startup === 'eager')
+      .map((descriptor) => visit(descriptor.id));
     return targets;
+  }
+
+  async #runSequential<T>(
+    values: readonly T[],
+    operation: (value: T) => void | Promise<void>,
+  ): Promise<void> {
+    await values.reduce<Promise<void>>(
+      (pending, value) => pending.then(() => operation(value)),
+      Promise.resolve(),
+    );
   }
 
   #readyInstance<T>(id: string): T {
@@ -1206,6 +1240,7 @@ class BoundedServiceContainer implements ServiceContainer {
     code?: ServiceContainerErrorCode,
     errorName?: string,
     durationMs?: number,
+    dependencyId?: string,
   ): void {
     const event = Object.freeze({
       sequence: ++this.#eventSequence,
@@ -1213,6 +1248,7 @@ class BoundedServiceContainer implements ServiceContainer {
       kind,
       state: this.#state,
       ...(serviceId === undefined ? {} : { serviceId }),
+      ...(dependencyId === undefined ? {} : { dependencyId }),
       ...(code === undefined ? {} : { code }),
       ...(errorName === undefined ? {} : { errorName }),
       ...(durationMs === undefined ? {} : { durationMs }),
