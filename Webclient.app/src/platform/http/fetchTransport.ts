@@ -7,6 +7,7 @@ import {
 } from './responseParser.ts';
 import type { ResponseLike } from './responseParser.ts';
 import {
+  applyIdempotencyHeader,
   joinApplicationUrl,
   normalizeRequestConfig,
   serializeRequestBody
@@ -196,7 +197,7 @@ export const executeFetch = async <T = unknown>(
   const bodyResult = serializeRequestBody(
     config.method,
     config.data,
-    config.headers,
+    applyIdempotencyHeader(config.headers, config.idempotencyKey),
     { maxBodyBytes: config.maxRequestBodyBytes }
   );
 
