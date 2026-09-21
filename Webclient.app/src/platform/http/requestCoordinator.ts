@@ -400,8 +400,9 @@ export class RequestCoordinator {
   }
 
   getMutationSafetyHealth(): Readonly<Record<string, unknown>> {
-    return evaluateMutationSafetyHealth(this.mutationSafety.snapshot())
-      as unknown as Readonly<Record<string, unknown>>;
+    return evaluateMutationSafetyHealth(
+      this.mutationSafety.snapshot(),
+    ) as unknown as Readonly<Record<string, unknown>>;
   }
 
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>> {
