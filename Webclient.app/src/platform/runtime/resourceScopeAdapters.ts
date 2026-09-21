@@ -83,7 +83,7 @@ const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const safeText = (name: string, value: string, maximum = 180): string => {
   if (typeof value !== 'string') throw new TypeError(name + ' must be a string');
   const normalized = value.trim();
-  if (!normalized || normalized.length > maximum || CONTROL_CHARACTER.test(normalized)) {
+  if (!normalized || normalized.length > maximum || hasControlCharacter(normalized)) {
     throw new TypeError(name + ' must contain bounded printable text');
   }
   return normalized;
