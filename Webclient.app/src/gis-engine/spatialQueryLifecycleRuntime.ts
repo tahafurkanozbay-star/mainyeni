@@ -16,6 +16,8 @@ export type SpatialQueryLifecycleTerminalPhase = Extract<
 export interface SpatialQueryLifecycleConfig {
   readonly maxTrackedQueries: number;
   readonly maxEvents: number;
+  readonly maxPagesPerQuery: number;
+  readonly maxFeaturesPerQuery: number;
   readonly maxLifetimeMs: number;
   readonly maxExecutionMs: number;
   readonly maxTerminalAgeMs: number;
@@ -30,6 +32,7 @@ export interface SpatialQueryLifecycleRegistration {
   readonly ownerId: string;
   readonly requestKey: string;
   readonly priority?: SpatialQueryLifecyclePriority;
+  readonly expectedPages?: number;
   readonly expectedFeatures?: number;
   readonly expectedBytes?: number;
   readonly now?: number;
@@ -42,6 +45,7 @@ export interface SpatialQueryLifecycleRecord {
   readonly ownerId: string;
   readonly requestKey: string;
   readonly priority: SpatialQueryLifecyclePriority;
+  readonly expectedPages: number;
   readonly expectedFeatures: number;
   readonly expectedBytes: number;
   readonly phase: SpatialQueryLifecyclePhase;
@@ -106,6 +110,8 @@ export interface SpatialQueryLifecycleRuntime {
 const DEFAULT_CONFIG: SpatialQueryLifecycleConfig = {
   maxTrackedQueries: 2_048,
   maxEvents: 4_096,
+  maxPagesPerQuery: 128,
+  maxFeaturesPerQuery: 100_000,
   maxLifetimeMs: 120_000,
   maxExecutionMs: 60_000,
   maxTerminalAgeMs: 30_000,
@@ -175,6 +181,8 @@ export const normalizeSpatialQueryLifecycleConfig = (
   const config = { ...DEFAULT_CONFIG, ...input };
   normalizePositiveSafeInteger(config.maxTrackedQueries, 'maxTrackedQueries', 100_000);
   normalizePositiveSafeInteger(config.maxEvents, 'maxEvents', 200_000);
+  normalizePositiveSafeInteger(config.maxPagesPerQuery, 'maxPagesPerQuery', 10_000);
+  normalizePositiveSafeInteger(config.maxFeaturesPerQuery, 'maxFeaturesPerQuery', 100_000_000);
   normalizePositiveSafeInteger(config.maxLifetimeMs, 'maxLifetimeMs', 24 * 60 * 60_000);
   normalizePositiveSafeInteger(config.maxExecutionMs, 'maxExecutionMs', 24 * 60 * 60_000);
   normalizeNonNegativeSafeInteger(config.maxTerminalAgeMs, 'maxTerminalAgeMs', 24 * 60 * 60_000);
@@ -360,10 +368,15 @@ export const createSpatialQueryLifecycleRuntime = (
     if (!Number.isSafeInteger(registration.layerId) || registration.layerId < 0) {
       throw new RangeError('layerId must be a non-negative safe integer');
     }
+    const expectedPages = normalizePositiveSafeInteger(
+      registration.expectedPages ?? 1,
+      'expectedPages',
+      config.maxPagesPerQuery,
+    );
     const expectedFeatures = normalizeNonNegativeSafeInteger(
       registration.expectedFeatures ?? 0,
       'expectedFeatures',
-      100_000_000,
+      config.maxFeaturesPerQuery,
     );
     const expectedBytes = normalizeNonNegativeSafeInteger(
       registration.expectedBytes ?? 0,
@@ -378,6 +391,7 @@ export const createSpatialQueryLifecycleRuntime = (
       ownerId,
       requestKey,
       priority: normalizePriority(registration.priority),
+      expectedPages,
       expectedFeatures,
       expectedBytes,
       phase: 'registered',
