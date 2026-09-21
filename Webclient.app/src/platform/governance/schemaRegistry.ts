@@ -3,7 +3,6 @@ import {
   boundedText,
   freezeArray,
   governanceIdentifier,
-  isPlainRecord,
   stableFingerprint,
   stableStringify,
   type BooleanConfigDescriptor,
