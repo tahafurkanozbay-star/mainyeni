@@ -126,6 +126,7 @@ export interface ServiceContainerCounters {
   readonly rollbacks: number;
   readonly rejected: number;
   readonly observerFailures: number;
+  readonly optionalDependencyFailures: number;
 }
 
 export interface ServiceContainerSnapshot {
@@ -1091,21 +1092,16 @@ class BoundedServiceContainer implements ServiceContainer {
     this.#counters.rollbacks += 1;
     this.#emit('rollback-started');
 
-    const failures: unknown[] = [];
     await this.#runSequential([...startedIds].reverse(), async (id) => {
       const record = this.#records.get(id);
       if (!record || record.status !== 'ready') return;
       try {
         await this.#stopRecord(record, reason);
       } catch (error) {
-        failures.push(error);
+        if (!(error instanceof ServiceContainerError)) throw error;
       }
     });
     this.#emit('rollback-completed');
-
-    if (failures.length > 0) {
-      this.#counters.stopFailures += 0;
-    }
   }
 
   #eagerTargets(graph: ServiceGraphSnapshot): Set<string> {
