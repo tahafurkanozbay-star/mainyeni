@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "allowImportingTsExtensions": true
-  },
-  "include": ["src/gis-engine/**/*.ts"],
-  "exclude": ["node_modules", "build", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
-}
