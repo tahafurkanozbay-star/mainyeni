@@ -150,15 +150,14 @@ export const createGovernanceTelemetry = (
     const name = boundedText(nameInput, '', 96);
     if (!domain || !name) return null;
 
+    const safeAttributes = sanitizeAttributes(attributes);
     const event = Object.freeze({
       sequence: ++sequence,
       timestamp: options.clock.now(),
       level,
       domain,
       name,
-      ...(sanitizeAttributes(attributes) === undefined
-        ? {}
-        : { attributes: sanitizeAttributes(attributes) }),
+      ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
     }) as GovernanceTelemetryEvent;
 
     if (count === capacity) droppedEvents += 1;
