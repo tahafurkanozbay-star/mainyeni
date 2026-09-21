@@ -749,3 +749,12 @@
 - MODERNİZASYON KARARI: framework major churn yapılmadı; mevcut React 19.3 / Vite 8.3 / TypeScript 7 / Node 24 / ArcGIS 5.1 stack üzerinde lazy loading, code splitting ve measurable budget ile gerçek runtime maliyeti azaltıldı.
 - MERGE DURUMU: NOT MERGED at this checkpoint. Bu progress append final head'i değiştirdiğinden final merge için progress-bearing exact head CI tekrar completed+success olmalı; current main exact merge-base/behind=0, mergeable=true ve unresolved review thread=0 kalmalı.
 - SONRAKİ GÖREV: final progress-bearing CI yeşilse PR #258 ready yapılmalı, expected-head squash merge uygulanmalı ve merge sonrası main üzerinde route splitting + export lazy loading + build budget dosyaları doğrulanmalı. Merged branch sonraki turda yeniden kullanılmamalı.
+
+## Deep Admin Performance merge closure — 2026-09-21 15:25 TRT
+- KANONİK PR / FINAL HEAD: PR #258 `feat(admin-perf): split admin routes and heavy export modules`; exact final tested/progress-bearing head `90b573c1ec949701be5fb8c46109e4083a8114f1`.
+- FINAL GATE: exact base/merge-base `2dc567a691dcc05891510e1ca793f26d9a3b74fd`; behind=0; mergeable=true; unresolved review thread=0; 538 additions / 77 deletions / 12 files.
+- FINAL EXACT-HEAD CI: Admin Webclient Quality #224 (`35598712171`), Platform Architecture Audit #1821 (`35598712259`) ve Release QA #1946 (`35598712203`) completed+success. Release QA backend/webclient/audit alt job'ları da success.
+- PERFORMANCE: doğrulanmış initial JS graph 407,386 B raw / 132,133 B gzip; largest initial JS 393,905 B; initial CSS 233,425 B / 31,664 B gzip; dynamicImports=7; committed build budget PASS.
+- MERGE: expected-head squash merge `merged=true`; merge SHA `70bc17567b0720d834725558c5829cff850479f2`. GitHub `main` merge sonrasında aynı SHA olarak doğrulandı.
+- POST-MERGE VERIFY: `main` üzerinde route lazy loading, action-time XLSX/jsPDF/KML dynamic imports ve admin build-budget tooling dosyaları ayrı ayrı doğrulandı.
+- SONRAKİ GÖREV: merged #258 branch tekrar kullanılmamalı. Sonraki tur current main'den fresh branch ile backend/API güvenlik ve rate-limit sertleştirmesine geçebilir.
