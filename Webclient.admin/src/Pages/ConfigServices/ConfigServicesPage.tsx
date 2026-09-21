@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Accordion, Breadcrumb, Button, Form, Table } from "react-bootstrap";
 import { MdOutlineApps } from "react-icons/md";
 import { BiEdit } from "react-icons/bi";
-import { TbPackgeImport, TbPackgeExport } from "react-icons/tb";
+import { TbPackageImport, TbPackageExport } from "react-icons/tb";
 import { FiExternalLink } from "react-icons/fi";
 import { IoAddCircleOutline } from "react-icons/io5";
 import { RiDeleteBin2Fill } from "react-icons/ri";
@@ -126,12 +126,12 @@ export const ConfigServicesPage = () => {
                     </Button>
 
                     <Button variant="outline-secondary" className="page-tools-button" onClick={(e) => showImportPage()}>
-                        <TbPackgeImport></TbPackgeImport>
+                        <TbPackageImport></TbPackageImport>
                         <span>İçeri Aktar</span>
                     </Button>
 
                     <Button variant="outline-secondary" className="page-tools-button"  onClick={(e) => exportToCsv()}>
-                        <TbPackgeExport></TbPackgeExport>
+                        <TbPackageExport></TbPackageExport>
                         <span>Dışarı Aktar</span>
                     </Button>
 

@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - 'agent/**'
     paths:
       - 'Webclient.admin/**'
       - '.github/workflows/admin-webclient-quality.yml'
@@ -17,44 +16,66 @@ permissions:
   contents: read
 
 concurrency:
-  group: admin-webclient-quality-${{ github.ref }}
+  group: admin-webclient-quality-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: Webclient.admin
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Setup Node
+      - name: Setup Node 24
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: Webclient.admin/package-lock.json
 
+      - name: Verify toolchain
+        run: |
+          node --version
+          npm --version
+          node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"
+
       - name: Install from lockfile
-        run: npm ci
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Lint when configured
-        run: npm run lint --if-present
+      - name: Admin language boundary
+        run: npm run audit:language
 
-      - name: Typecheck when configured
-        run: npm run typecheck --if-present
+      - name: Language boundary regression tests
+        run: npm run test:tooling
 
-      - name: Test
-        run: npm test -- --watchAll=false --runInBand
+      - name: Full lint visibility
+        run: npm run lint
 
-      - name: Production build
+      - name: Strict modern foundation lint
+        run: npm run lint:strict
+
+      - name: TypeScript migration check
+        run: npm run typecheck
+
+      - name: Strict runtime boundary check
+        run: npm run typecheck:strict
+
+      - name: Vitest
+        run: npm run test:ci
+
+      - name: Production Vite build
         env:
           CI: true
-          NODE_OPTIONS: --openssl-legacy-provider
+          VITE_API_URL: /api
+          VITE_APP_VERSION: ci
         run: npm run build

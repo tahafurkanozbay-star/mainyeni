@@ -4,7 +4,7 @@ import { BasemapLayerBusiness } from "../../Business/BasemapLayerBusiness";
 import { Constants } from "../../Core/Constants";
 import { MdOutlineApps } from "react-icons/md";
 import { BiEdit } from "react-icons/bi";
-import { TbPackgeImport, TbPackgeExport } from "react-icons/tb";
+import { TbPackageImport, TbPackageExport } from "react-icons/tb";
 import { FiExternalLink } from "react-icons/fi";
 import { IoAddCircleOutline } from "react-icons/io5";
 import { RiDeleteBin2Fill } from "react-icons/ri";
