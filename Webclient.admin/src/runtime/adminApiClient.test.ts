@@ -249,9 +249,12 @@ describe('adminApiClient', () => {
       fetchImpl: fetchImpl as typeof fetch,
       baseUrl: '/api',
     });
+    const timeoutExpectation = expect(request).rejects.toMatchObject({
+      code: 'timeout',
+    });
 
     await vi.advanceTimersByTimeAsync(1_000);
-    await expect(request).rejects.toMatchObject({ code: 'timeout' });
+    await timeoutExpectation;
   });
 
   test('rejects simultaneous JSON and FormData bodies', async () => {
