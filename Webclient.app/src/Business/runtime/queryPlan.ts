@@ -81,6 +81,9 @@ export const createQueryPlanner = (
     const options: ArcGisQueryOptions = {
       url: requireServiceUrl(serviceKey),
       returnGeometry: input.returnGeometry === true,
+      ...(input.returnDistinctValues !== undefined
+        ? { returnDistinctValues: input.returnDistinctValues === true }
+        : {}),
       orderByFields: normalizeFields(input.orderByFields, []),
       outFields: normalizeFields(input.outFields, ['*']),
       where: normalizeWhere(input.where, policy),
@@ -102,6 +105,7 @@ export const createQueryPlanner = (
     const fingerprint = hash(stableText({
       serviceKey,
       returnGeometry: options.returnGeometry,
+      returnDistinctValues: options.returnDistinctValues ?? false,
       orderByFields: options.orderByFields,
       outFields: options.outFields,
       where: options.where,

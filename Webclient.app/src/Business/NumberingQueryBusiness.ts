@@ -43,6 +43,19 @@ export interface NumberingServiceResult {
 type ServiceResult = NumberingServiceResult;
 type RecordWithAttr = NumberingFeatureResult;
 
+interface NumberingQueryOptions {
+  readonly returnGeometry?: boolean;
+  readonly returnDistinctValues?: boolean;
+  readonly orderByFields?: readonly string[];
+  readonly outFields?: readonly string[];
+  readonly where?: string;
+  readonly geometry?: unknown;
+  readonly distance?: number;
+  readonly distanceMeters?: number;
+  readonly units?: 'meters';
+  readonly spatialRelationship?: 'intersects';
+}
+
 export interface NumberingFileRequestOptions {
   readonly signal?: AbortSignal;
   readonly cacheTtlMs?: number;
@@ -128,6 +141,9 @@ const executeQuery = async (
     orderByFields,
     outFields,
     where,
+    ...(options.returnDistinctValues !== undefined
+      ? { returnDistinctValues: options.returnDistinctValues }
+      : {}),
     ...(options.geometry !== undefined
       ? {
         spatial: {

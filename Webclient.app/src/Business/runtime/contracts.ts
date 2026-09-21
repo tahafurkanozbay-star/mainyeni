@@ -167,6 +167,7 @@ export interface QueryPlanner {
 export interface QueryPlannerInput {
   readonly serviceKey: string;
   readonly returnGeometry?: boolean;
+  readonly returnDistinctValues?: boolean;
   readonly where?: string;
   readonly orderByFields?: readonly string[];
   readonly outFields?: readonly string[];
