@@ -26,25 +26,45 @@ const write = (root, relative, content) => {
   fs.writeFileSync(absolute, content);
 };
 
-test('measures only statically reachable entry assets', () => {
+test('measures only statically reachable entry assets while discovering nested lazy imports', () => {
   withFixture((root) => {
     write(root, 'build/assets/index.js', 'a'.repeat(100));
     write(root, 'build/assets/vendor.js', 'b'.repeat(80));
+    write(root, 'build/assets/shell.js', 's'.repeat(400));
     write(root, 'build/assets/route.js', 'c'.repeat(500));
+    write(root, 'build/assets/map.js', 'm'.repeat(700));
+    write(root, 'build/assets/login.js', 'l'.repeat(300));
     write(root, 'build/assets/index.css', 'd'.repeat(40));
     write(root, 'build/.vite/manifest.json', JSON.stringify({
       'src/main.tsx': {
         file: 'assets/index.js',
         isEntry: true,
         imports: ['_vendor.js'],
-        dynamicImports: ['src/Pages/MapSettings/MapSettingsPage.tsx'],
+        dynamicImports: [
+          'src/Components/AdminAuthenticatedShell.tsx',
+          'src/Pages/Auth/LoginPage.tsx',
+        ],
         css: ['assets/index.css'],
       },
       '_vendor.js': {
         file: 'assets/vendor.js',
       },
+      'src/Components/AdminAuthenticatedShell.tsx': {
+        file: 'assets/shell.js',
+        isDynamicEntry: true,
+        dynamicImports: ['src/Pages/MapSettings/MapSettingsPage.tsx'],
+      },
       'src/Pages/MapSettings/MapSettingsPage.tsx': {
         file: 'assets/route.js',
+        isDynamicEntry: true,
+        dynamicImports: ['src/Components/Map.tsx'],
+      },
+      'src/Components/Map.tsx': {
+        file: 'assets/map.js',
+        isDynamicEntry: true,
+      },
+      'src/Pages/Auth/LoginPage.tsx': {
+        file: 'assets/login.js',
         isDynamicEntry: true,
       },
     }));
@@ -53,7 +73,15 @@ test('measures only statically reachable entry assets', () => {
 
     assert.equal(report.javascript.bytes, 180);
     assert.equal(report.css.bytes, 40);
-    assert.equal(report.dynamicImports.length, 1);
+    assert.deepEqual(
+      new Set(report.dynamicImports),
+      new Set([
+        'src/Components/AdminAuthenticatedShell.tsx',
+        'src/Pages/Auth/LoginPage.tsx',
+        'src/Pages/MapSettings/MapSettingsPage.tsx',
+        'src/Components/Map.tsx',
+      ]),
+    );
     assert.deepEqual(report.staticGraphKeys, ['src/main.tsx', '_vendor.js']);
   });
 });
