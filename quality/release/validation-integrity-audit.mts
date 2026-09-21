@@ -45,7 +45,6 @@ const WORKFLOW = /^\.github\/workflows\/[^/]+\.ya?ml$/i;
 const PACKAGE_JSON = /(^|\/)package\.json$/;
 const TSCONFIG = /(^|\/)tsconfig(?:\.[^/]+)?\.json$/;
 const GENERATED = /(^|\/)(?:node_modules|dist|build|coverage)(\/|$)/i;
-const JOB_HEADER = /^  [a-zA-Z0-9_-]+:\s*$/gm;
 const JOBS_BLOCK = /^jobs:\s*$/m;
 const TIMEOUT = /^\s{4}timeout-minutes\s*:\s*\d+\s*$/gm;
 const CONTINUE_ON_ERROR = /^\s*continue-on-error\s*:\s*true\s*$/gim;
@@ -115,12 +114,25 @@ function tsconfigFiles(inventory: RepositoryInventory): SourceFile[] {
   return inventory.files.filter(file => TSCONFIG.test(file.repositoryPath) && !GENERATED.test(file.repositoryPath));
 }
 
+function workflowJobCount(text: string): number {
+  const lines = text.split(/\r?\n/u);
+  const jobsIndex = lines.findIndex(line => /^jobs:\s*(?:#.*)?$/u.test(line));
+  if (jobsIndex < 0) return 0;
+  const tail = lines.slice(jobsIndex + 1);
+  const nextTopLevel = tail.findIndex(line =>
+    line.trim().length > 0 &&
+    !line.startsWith(' ') &&
+    !line.trimStart().startsWith('#'));
+  const jobsSection = nextTopLevel < 0 ? tail : tail.slice(0, nextTopLevel);
+  return jobsSection.filter(line => /^  [a-zA-Z0-9_-]+:\s*(?:#.*)?$/u.test(line)).length;
+}
+
 function workflowSignal(file: SourceFile): ValidationWorkflowSignal {
   const hasJobs = JOBS_BLOCK.test(file.text);
   JOBS_BLOCK.lastIndex = 0;
   return {
     file: file.repositoryPath,
-    jobCount: hasJobs ? locate(file, JOB_HEADER, 100).length : 0,
+    jobCount: hasJobs ? workflowJobCount(file.text) : 0,
     timeoutCount: locate(file, TIMEOUT, 100).length,
     continueOnErrorCount: locate(file, CONTINUE_ON_ERROR, 100).length,
     npmInstallCount: locate(file, NPM_INSTALL, 100).length,
