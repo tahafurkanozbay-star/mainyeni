@@ -103,7 +103,7 @@ describe('createSpatialQueryAdmissionController', () => {
       interactiveReserve: 0,
     });
     expect(controller.request(query('parks')).decision).toBe('admit');
-    expect(controller.request(query('parks')).toMatchObject({ decision: 'defer', reason: 'service-concurrency' });
+    expect(controller.request(query('parks'))).toMatchObject({ decision: 'defer', reason: 'service-concurrency' });
     expect(controller.request(query('roads')).decision).toBe('admit');
   });
 
