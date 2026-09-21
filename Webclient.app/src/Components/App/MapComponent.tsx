@@ -71,7 +71,7 @@ interface MapClickEvent {
   [key: string]: unknown;
 }
 
-interface WatchUtilsLike {
+interface ReactiveCompatLike {
   watch: ArcgisAccessorWatch;
   whenTrue: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
   whenFalse: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
@@ -128,19 +128,19 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
     const initializeMap = async (): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
-      const [MapCtor, MapViewCtor, watchUtils] = await loadArcgisModules<[
+      const [MapCtor, MapViewCtor, reactiveCompat] = await loadArcgisModules<[
         ArcgisMapConstructor,
         ArcgisMapViewConstructor,
-        WatchUtilsLike,
+        ReactiveCompatLike,
       ]>([
         'esri/Map',
         'esri/views/MapView',
-        'esri/core/watchUtils',
+        'esri/core/reactiveCompat',
       ]);
 
       if (disposed || !mapDiv.current) return;
 
-      accessorWatchRef.current = watchUtils.watch;
+      accessorWatchRef.current = reactiveCompat.watch;
       const map = new MapCtor({ basemap: 'osm' });
       view = new MapViewCtor(createMapViewOptions({
         container: mapDiv.current,
@@ -159,18 +159,19 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         applyIncoming: true,
         goToOptions: { duration: 0, animate: false },
         onApplyError: (error: unknown) => DebugHelper.Log(error),
-        accessorWatch: watchUtils.watch,
+        accessorWatch: reactiveCompat.watch,
       });
 
       performanceMonitor = createViewPerformanceMonitor(view as never, {
         slowThresholdMs: 250,
-        accessorWatch: watchUtils.watch,
+        accessorWatch: reactiveCompat.watch,
+        onError: (error: unknown) => DebugHelper.Log(error),
       });
       MapManager.SetViewPerformanceMonitor?.(performanceMonitor);
 
       handles.push(
-        watchUtils.whenTrue(view, 'updating', () => windowManager.SetMapUpdating(true)),
-        watchUtils.whenFalse(view, 'updating', () => windowManager.SetMapUpdating(false)),
+        reactiveCompat.whenTrue(view, 'updating', () => windowManager.SetMapUpdating(true)),
+        reactiveCompat.whenFalse(view, 'updating', () => windowManager.SetMapUpdating(false)),
       );
 
       const popupHandle = view.popup.on?.('trigger-action', (event) => {
