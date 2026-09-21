@@ -90,7 +90,6 @@ describe('sceneSupervisionRuntime', () => {
     view.fatalError = new Error('gpu-reset');
 
     const runtime = createSceneSupervisionRuntime(view, {
-      autoRecoverFatalErrors: false,
       experience: {
         requestFrame: () => 1,
         cancelFrame: vi.fn(),
@@ -122,7 +121,9 @@ describe('sceneSupervisionRuntime', () => {
 
     await expect(runtime.navigation.resetNorth()).resolves.toBe(true);
     expect(goTo).toHaveBeenCalledWith(
-      expect.objectContaining({ heading: 0 }),
+      expect.objectContaining({
+        camera: expect.objectContaining({ heading: 0 }),
+      }),
       expect.objectContaining({ animate: false, duration: 0 }),
     );
 
