@@ -362,6 +362,7 @@ export interface CoordinatedClient {
   getCacheSize(): number;
   getInFlightSize(): number;
   getMutationSafetySnapshot(): Readonly<Record<string, unknown>>;
+  getMutationSafetyHealth(): Readonly<Record<string, unknown>>;
   invalidateCacheTags(tags: readonly string[]): number;
   invalidateCacheNamespace(namespace: string): number;
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>>;
