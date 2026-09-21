@@ -573,3 +573,31 @@ describe('viewRuntime', () => {
     expect(coordinator.getView('3d')).toBeNull();
   });
 });
+
+
+describe('viewRuntime reactive watch boundary', () => {
+  test('prefers injected reactive watchers over deprecated MapView.watch', () => {
+    const { view } = createWatchableView();
+    const bridge = createViewStateBridge({ mode: '2d' });
+    const handles = [];
+    const accessorWatch = vi.fn((_target, _property, _callback) => {
+      const handle = { remove: vi.fn() };
+      handles.push(handle);
+      return handle;
+    });
+
+    const unbind = bindMapViewState(view, bridge, {
+      accessorWatch,
+      publishInitial: false,
+    });
+    const monitor = createViewPerformanceMonitor(view, { accessorWatch });
+
+    expect(accessorWatch).toHaveBeenCalledTimes(9);
+    expect(view.watch).not.toHaveBeenCalled();
+    expect(view.map.watch).not.toHaveBeenCalled();
+
+    unbind();
+    monitor.dispose();
+    handles.forEach((handle) => expect(handle.remove).toHaveBeenCalledTimes(1));
+  });
+});

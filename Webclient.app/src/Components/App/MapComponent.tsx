@@ -19,6 +19,7 @@ import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
+import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { createViewStateBridge } from '../../gis-engine/viewState';
 import {
   bindMapViewState,
@@ -71,6 +72,7 @@ interface MapClickEvent {
 }
 
 interface WatchUtilsLike {
+  watch: ArcgisAccessorWatch;
   whenTrue: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
   whenFalse: (target: unknown, propertyName: string, callback: () => void) => RemovableHandle;
 }
@@ -100,6 +102,7 @@ const safeRemove = (handle: RemovableHandle | null | undefined): void => {
  */
 export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
+  const accessorWatchRef = useRef<ArcgisAccessorWatch | null>(null);
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const sidebarRef = useRef<unknown>(null);
@@ -137,6 +140,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
       if (disposed || !mapDiv.current) return;
 
+      accessorWatchRef.current = watchUtils.watch;
       const map = new MapCtor({ basemap: 'osm' });
       view = new MapViewCtor(createMapViewOptions({
         container: mapDiv.current,
@@ -155,10 +159,13 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         applyIncoming: true,
         goToOptions: { duration: 0, animate: false },
         onApplyError: (error: unknown) => DebugHelper.Log(error),
+        accessorWatch: watchUtils.watch,
       });
 
       performanceMonitor = createViewPerformanceMonitor(view as never, {
         slowThresholdMs: 250,
+        accessorWatch: watchUtils.watch,
+        onError: (error: unknown) => DebugHelper.Log(error),
       });
       MapManager.SetViewPerformanceMonitor?.(performanceMonitor);
 
@@ -226,6 +233,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     return () => {
       disposed = true;
       activeViewModeRef.current = '2d';
+      accessorWatchRef.current = null;
       kentRehberiAbortController.abort();
       kentRehberiLayerHandle?.dispose();
       kentRehberiLayerHandle = null;
@@ -263,7 +271,11 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     >
       {mapView && (
         <>
-          <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} />
+          <ExperienceMapModeBridge
+            mapView={mapView as never}
+            modeRef={activeViewModeRef}
+            accessorWatch={accessorWatchRef.current ?? undefined}
+          />
           <NavigationBar id="mainbar" windowManager={windowManager} />
           <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
           <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} />
