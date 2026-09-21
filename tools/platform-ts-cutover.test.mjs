@@ -63,6 +63,37 @@ test('Platform TypeScript project explicitly disables JavaScript admission', asy
   assert.deepEqual(config.include, ['src/platform/**/*.ts']);
 });
 
+test('Platform test JavaScript is fully eliminated and permanently ratcheted to zero', async () => {
+  const files = await walk(PLATFORM);
+  const testJavascript = files
+    .filter((file) => /\.(?:test|spec)\.js$/u.test(file))
+    .map((file) => normalize(path.relative(ROOT, file)))
+    .sort();
+  assert.deepEqual(testJavascript, []);
+  const baseline = JSON.parse(await fs.readFile(path.join(ROOT, 'tools', 'platform-language-baseline.json'), 'utf8'));
+  assert.equal(baseline.testDomains?.platform, 0);
+});
+
+test('Platform test TypeScript project is strict and rejects JavaScript admission', async () => {
+  const config = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.platform-tests.json'), 'utf8'));
+  assert.equal(config.compilerOptions?.allowJs, false);
+  assert.equal(config.compilerOptions?.strict, true);
+  assert.deepEqual(config.compilerOptions?.types, ['vitest/globals', 'vite/client']);
+  assert.deepEqual(config.include, [
+      "src/platform/bootstrap/bootstrapCore.test.ts",
+      "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
+      "src/platform/http/fetchTransport.test.ts",
+      "src/platform/http/networkDiagnostics.test.ts",
+      "src/platform/http/requestScheduler.test.ts",
+      "src/platform/http/retryPolicy.test.ts",
+      "src/platform/http/runtimeCapabilities.test.ts",
+      "src/platform/http/typescriptRuntime.integration.test.ts",
+      "src/platform/performance/performanceMonitor.test.ts",
+      "src/platform/runtime/runtime.test.ts",
+      "src/platform/runtime/runtimeDiagnostics.test.ts"
+  ]);
+});
+
 test('root compatibility bridge does not weaken Platform boundary', async () => {
   const rootConfig = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.json'), 'utf8'));
   const platformConfig = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.platform.json'), 'utf8'));

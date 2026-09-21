@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import { AppError } from '../errors/appError';
 import {
   BootstrapErrorCode,
@@ -44,21 +44,21 @@ const createDependencies = (
   overrides: Partial<BootstrapDependencies> = {},
 ): BootstrapDependencies => {
   const defaults: BootstrapDependencies = {
-    loadMapConfiguration: jest.fn().mockResolvedValue(successfulMapResult()),
-    loadConfigurationServices: jest.fn().mockResolvedValue(successfulServicesResult([
+    loadMapConfiguration: vi.fn().mockResolvedValue(successfulMapResult()),
+    loadConfigurationServices: vi.fn().mockResolvedValue(successfulServicesResult([
       service(1),
       service(2),
     ])),
-    generateServiceUrl: jest.fn((item: ConfigurationService) => item.eg),
-    addProxyRule: jest.fn().mockResolvedValue(undefined),
-    setMapConfiguration: jest.fn().mockResolvedValue(undefined),
-    setConfigurationServices: jest.fn().mockResolvedValue(undefined),
+    generateServiceUrl: vi.fn((item: ConfigurationService) => item.eg),
+    addProxyRule: vi.fn().mockResolvedValue(undefined),
+    setMapConfiguration: vi.fn().mockResolvedValue(undefined),
+    setConfigurationServices: vi.fn().mockResolvedValue(undefined),
   };
   return { ...defaults, ...overrides };
 };
 
 const createDiagnostics = () => ({
-  record: jest.fn<(event: string, payload?: Readonly<Record<string, unknown>>) => void>(),
+  record: vi.fn<(event: string, payload?: Readonly<Record<string, unknown>>) => void>(),
 });
 
 const requireAppError = (error: unknown): AppError => {
@@ -358,8 +358,8 @@ describe('runApplicationBootstrap', () => {
     const mapPromise = new Promise<ReturnType<typeof successfulMapResult>>((resolve) => { mapResolve = resolve; });
     const servicesPromise = new Promise<ReturnType<typeof successfulServicesResult>>((resolve) => { servicesResolve = resolve; });
     const dependencies = createDependencies({
-      loadMapConfiguration: jest.fn(() => mapPromise),
-      loadConfigurationServices: jest.fn(() => servicesPromise)
+      loadMapConfiguration: vi.fn(() => mapPromise),
+      loadConfigurationServices: vi.fn(() => servicesPromise)
     });
 
     const execution = runApplicationBootstrap(dependencies);
@@ -374,7 +374,7 @@ describe('runApplicationBootstrap', () => {
   test('passes the same cancellation signal to both configuration loaders', async () => {
     const signal = createSignal(false);
     const dependencies = createDependencies({
-      loadConfigurationServices: jest.fn().mockResolvedValue(successfulServicesResult([]))
+      loadConfigurationServices: vi.fn().mockResolvedValue(successfulServicesResult([]))
     });
 
     await runApplicationBootstrap(dependencies, { signal });
@@ -386,13 +386,13 @@ describe('runApplicationBootstrap', () => {
   test('awaits every proxy rule before committing configuration', async () => {
     const calls: string[] = [];
     const dependencies = createDependencies({
-      addProxyRule: jest.fn(async (url: string) => {
+      addProxyRule: vi.fn(async (url: string) => {
         calls.push(`proxy:${url}`);
       }),
-      setMapConfiguration: jest.fn(async () => {
+      setMapConfiguration: vi.fn(async () => {
         calls.push('commit:map');
       }),
-      setConfigurationServices: jest.fn(async () => {
+      setConfigurationServices: vi.fn(async () => {
         calls.push('commit:services');
       })
     });
@@ -419,7 +419,7 @@ describe('runApplicationBootstrap', () => {
   test('commits the parsed map configuration rather than the service wrapper', async () => {
     const configuration = { center: [32, 40], zoom: 11 };
     const dependencies = createDependencies({
-      loadMapConfiguration: jest.fn().mockResolvedValue(successfulMapResult(configuration))
+      loadMapConfiguration: vi.fn().mockResolvedValue(successfulMapResult(configuration))
     });
 
     await runApplicationBootstrap(dependencies);
@@ -430,7 +430,7 @@ describe('runApplicationBootstrap', () => {
     const first = service(1);
     const duplicate = { ...first, title: 'Duplicate' };
     const dependencies = createDependencies({
-      loadConfigurationServices: jest.fn().mockResolvedValue(
+      loadConfigurationServices: vi.fn().mockResolvedValue(
         successfulServicesResult([first, duplicate])
       )
     });
@@ -441,7 +441,7 @@ describe('runApplicationBootstrap', () => {
 
   test('does not commit state when proxy setup fails', async () => {
     const dependencies = createDependencies({
-      addProxyRule: jest.fn()
+      addProxyRule: vi.fn()
         .mockResolvedValueOnce(undefined)
         .mockRejectedValueOnce(new Error('proxy unavailable'))
     });
@@ -465,7 +465,7 @@ describe('runApplicationBootstrap', () => {
   test('stops before proxy setup when cancellation arrives after loading', async () => {
     const controller = new AbortController();
     const dependencies = createDependencies({
-      loadConfigurationServices: jest.fn(async () => {
+      loadConfigurationServices: vi.fn(async () => {
         controller.abort('after-load');
         return successfulServicesResult([service(1)]);
       })
@@ -480,7 +480,7 @@ describe('runApplicationBootstrap', () => {
   test('stops between proxy rules when cancellation arrives during setup', async () => {
     const controller = new AbortController();
     const dependencies = createDependencies({
-      addProxyRule: jest.fn(async () => {
+      addProxyRule: vi.fn(async () => {
         controller.abort('during-proxy');
       })
     });
@@ -493,7 +493,7 @@ describe('runApplicationBootstrap', () => {
 
   test('classifies map transport failure as a map request failure', async () => {
     const dependencies = createDependencies({
-      loadMapConfiguration: jest.fn().mockResolvedValue({
+      loadMapConfiguration: vi.fn().mockResolvedValue({
         isSuccess: false,
         message: 'map failed'
       })
@@ -507,7 +507,7 @@ describe('runApplicationBootstrap', () => {
 
   test('classifies service transport failure as a service request failure', async () => {
     const dependencies = createDependencies({
-      loadConfigurationServices: jest.fn().mockResolvedValue({
+      loadConfigurationServices: vi.fn().mockResolvedValue({
         isSuccess: false,
         message: 'services failed'
       })
@@ -521,7 +521,7 @@ describe('runApplicationBootstrap', () => {
 
   test('classifies unexpected commit exceptions as commit failures', async () => {
     const dependencies = createDependencies({
-      setMapConfiguration: jest.fn(() => {
+      setMapConfiguration: vi.fn(() => {
         throw new Error('store failed');
       })
     });
@@ -552,7 +552,7 @@ describe('runApplicationBootstrap', () => {
   test('records a failed event without exposing the raw thrown error', async () => {
     const diagnostics = createDiagnostics();
     const dependencies = createDependencies({
-      addProxyRule: jest.fn().mockRejectedValue(new Error('secret upstream details'))
+      addProxyRule: vi.fn().mockRejectedValue(new Error('secret upstream details'))
     });
 
     await expect(runApplicationBootstrap(dependencies, { diagnostics })).rejects.toBeInstanceOf(AppError);
@@ -584,7 +584,7 @@ describe('runApplicationBootstrap', () => {
 
   test('supports a successful bootstrap with zero configuration services', async () => {
     const dependencies = createDependencies({
-      loadConfigurationServices: jest.fn().mockResolvedValue(successfulServicesResult([]))
+      loadConfigurationServices: vi.fn().mockResolvedValue(successfulServicesResult([]))
     });
     const result = await runApplicationBootstrap(dependencies);
     expect(result.serviceCount).toBe(0);

@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import { createApiClient } from './httpClient';
 import { createRequestCoordinator } from './requestCoordinator';
 import { createRequestScheduler } from './requestScheduler';
@@ -47,7 +47,7 @@ const makeRuntime = ({
   onLine = true,
 }: TestRuntimeOptions = {}): TestRuntime => ({
   Promise,
-  fetch: jest.fn(),
+  fetch: vi.fn(),
   AbortController,
   URL,
   URLSearchParams,
@@ -79,7 +79,7 @@ const makeTransport = (
     cacheTtlMs: 1000,
     ...defaults,
   },
-  request: jest.fn((config) => requestImpl(config as TestAttemptConfig)),
+  request: vi.fn(async (config) => requestImpl(config as TestAttemptConfig)),
 });
 
 describe('typed runtime integration', () => {
@@ -136,8 +136,9 @@ describe('typed runtime integration', () => {
     const calls: string[] = [];
 
     const transport = makeTransport(async (config) => {
-      calls.push(`${config.url}:${config.attempt ?? 0}`);
-      if (config.url === '/first' && (config.attempt ?? 0) === 0) {
+      const attempt = config.attempt ?? 0;
+      calls.push(`${config.url}:${attempt}`);
+      if (config.url === '/first' && attempt === 0) {
         throw Object.assign(new Error('temporary'), {
           code: 'NETWORK_ERROR',
           retryable: true

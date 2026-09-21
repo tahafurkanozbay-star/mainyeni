@@ -43,6 +43,7 @@ const MODERN_WEB_BASELINE = Object.freeze({
 const EXPECTED_TSC_PROJECTS = Object.freeze([
   'tsconfig.json',
   'tsconfig.platform.json',
+  'tsconfig.platform-tests.json',
   'tsconfig.gis.json',
   'tsconfig.experience.json',
   'tsconfig.data-search.json',

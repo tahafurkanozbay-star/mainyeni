@@ -1,4 +1,4 @@
-import { vi as jest } from 'vitest';
+import { vi } from 'vitest';
 import { createPerformanceMonitor, rateWebVital } from './performanceMonitor';
 import type { PerformanceMonitorDependencies, PerformanceObserverConstructorLike } from './performanceMonitor';
 
@@ -26,7 +26,7 @@ const createObserverHarness = () => {
   class FakePerformanceObserver {
     readonly callback: ObserverCallback;
     options: PerformanceObserverInit | null = null;
-    readonly disconnect = jest.fn();
+    readonly disconnect = vi.fn();
 
     constructor(callback: ObserverCallback) {
       this.callback = callback;
@@ -76,7 +76,7 @@ const createPerformance = (): TestPerformanceRef => {
   return {
     now: () => now,
     setNow: (value: number) => { now = value; },
-    getEntriesByType: jest.fn((type: string): readonly TestPerformanceEntry[] => {
+    getEntriesByType: vi.fn((type: string): readonly TestPerformanceEntry[] => {
       if (type === 'navigation') return [navigation];
       if (type === 'paint') return paint;
       if (type === 'resource') return resources;
@@ -331,7 +331,7 @@ describe('performance monitor observer resilience', () => {
     const instances: PartialObserver[] = [];
     class PartialObserver {
       readonly callback: ObserverCallback;
-      readonly disconnect = jest.fn();
+      readonly disconnect = vi.fn();
       type: string | undefined;
 
       constructor(callback: ObserverCallback) {
