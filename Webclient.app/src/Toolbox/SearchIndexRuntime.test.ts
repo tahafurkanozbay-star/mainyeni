@@ -234,7 +234,7 @@ describe("SearchIndexRuntime", () => {
             expect(index.prefixPostings.get("par")).toEqual(new Set([0, 1]));
             expect(index.categoryPostings.get("parklar")).toEqual(new Set([0, 1]));
             expect(index.typePostings.get("park")).toEqual(new Set([0, 1]));
-            expect(index.districtPostings.get("cankaya").size).toBe(5);
+            expect(index.districtPostings.get("cankaya")?.size).toBe(5);
             expect(index.neighborhoodPostings.get("kizilay")).toEqual(new Set([2, 3]));
         });
 
@@ -415,7 +415,7 @@ describe("SearchIndexRuntime", () => {
         });
 
         test("skips blank facet values", () => {
-            expect(createFacetSummary([{ category: "" }]).category).toEqual([]);
+            expect(createFacetSummary([normalizeSearchDocument({ category: "" }, 0)]).category).toEqual([]);
         });
     });
 
