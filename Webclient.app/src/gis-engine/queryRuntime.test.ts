@@ -19,14 +19,14 @@ const flush = () => Promise.resolve().then(() => Promise.resolve());
 
 describe('queryRuntime', () => {
   afterEach(() => {
-    jest.restoreAllMocks();
-    jest.useRealTimers();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   test('deduplicates identical in-flight work', async () => {
     const runtime = createQueryRuntime();
     const request = deferred();
-    const factory = jest.fn(() => request.promise);
+    const factory = vi.fn(() => request.promise);
 
     const first = runtime.execute('parks:all', factory, { cache: false });
     const second = runtime.execute('parks:all', factory, { cache: false });
@@ -51,7 +51,7 @@ describe('queryRuntime', () => {
     const runtime = createQueryRuntime();
     const request = deferred();
     let sharedSignal;
-    const factory = jest.fn(({ signal }) => {
+    const factory = vi.fn(({ signal }) => {
       sharedSignal = signal;
       return request.promise;
     });
@@ -86,7 +86,7 @@ describe('queryRuntime', () => {
     const runtime = createQueryRuntime();
     let sharedSignal;
     const never = new Promise(() => {});
-    const factory = jest.fn(({ signal }) => {
+    const factory = vi.fn(({ signal }) => {
       sharedSignal = signal;
       return never;
     });
@@ -119,7 +119,7 @@ describe('queryRuntime', () => {
 
   test('rejects a pre-aborted consumer before starting network work', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn();
+    const factory = vi.fn();
     const controller = new AbortController();
     controller.abort();
 
@@ -132,9 +132,9 @@ describe('queryRuntime', () => {
 
   test('serves a complete result from cache until TTL expiry', async () => {
     let clock = 1000;
-    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
     const runtime = createQueryRuntime({ ttlMs: 5000 });
-    const factory = jest.fn().mockResolvedValue({ features: [{ id: 1 }] });
+    const factory = vi.fn().mockResolvedValue({ features: [{ id: 1 }] });
 
     await expect(runtime.execute('cached', factory)).resolves.toEqual({
       features: [{ id: 1 }],
@@ -159,9 +159,9 @@ describe('queryRuntime', () => {
 
   test('allows per-request TTL overrides', async () => {
     let clock = 100;
-    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
     const runtime = createQueryRuntime({ ttlMs: 5000 });
-    const factory = jest.fn().mockResolvedValue('value');
+    const factory = vi.fn().mockResolvedValue('value');
 
     await runtime.execute('short-lived', factory, { ttlMs: 50 });
     clock = 151;
@@ -172,7 +172,7 @@ describe('queryRuntime', () => {
 
   test('does not cache when cache=false', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn().mockResolvedValue({ ok: true });
+    const factory = vi.fn().mockResolvedValue({ ok: true });
 
     await runtime.execute('live', factory, { cache: false });
     await runtime.execute('live', factory, { cache: false });
@@ -187,7 +187,7 @@ describe('queryRuntime', () => {
 
   test('does not cache values rejected by the cacheability policy', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn().mockResolvedValue({
+    const factory = vi.fn().mockResolvedValue({
       features: [1, 2],
       exceededTransferLimit: true,
     });
@@ -202,7 +202,7 @@ describe('queryRuntime', () => {
 
   test('caches complete ArcGIS-style results', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn().mockResolvedValue({
+    const factory = vi.fn().mockResolvedValue({
       data: [{ attr: { OBJECTID: 1 } }],
       exceededTransferLimit: false,
       page: { hasMore: false },
@@ -218,7 +218,7 @@ describe('queryRuntime', () => {
 
   test('accepts numeric ArcGIS service-result type values in cache policy contracts', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn().mockResolvedValue({
+    const factory = vi.fn().mockResolvedValue({
       type: 10,
       data: [{ attr: { OBJECTID: 1 } }],
       exceededTransferLimit: false,
@@ -235,7 +235,7 @@ describe('queryRuntime', () => {
 
   test('treats page.hasMore as incomplete even if transfer flag is absent', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn().mockResolvedValue({
+    const factory = vi.fn().mockResolvedValue({
       data: [{ attr: { OBJECTID: 1 } }],
       page: { hasMore: true },
     });
@@ -246,7 +246,7 @@ describe('queryRuntime', () => {
 
   test('evicts the least recently used entry when maxEntries is exceeded', async () => {
     const runtime = createQueryRuntime({ maxEntries: 2, maxBytes: 100000 });
-    const factory = (value) => jest.fn().mockResolvedValue(value);
+    const factory = (value) => vi.fn().mockResolvedValue(value);
 
     await runtime.execute('a', factory('A'));
     await runtime.execute('b', factory('B'));
@@ -316,7 +316,7 @@ describe('queryRuntime', () => {
 
   test('sweeps expired entries without touching live cache values', async () => {
     let clock = 10;
-    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
     const runtime = createQueryRuntime({ ttlMs: 100 });
 
     await runtime.execute('old', () => Promise.resolve(1), { ttlMs: 20 });
@@ -332,7 +332,7 @@ describe('queryRuntime', () => {
     const runtime = createQueryRuntime();
     const firstRequest = deferred();
     const secondRequest = deferred();
-    const factory = jest.fn()
+    const factory = vi.fn()
       .mockImplementationOnce(() => firstRequest.promise)
       .mockImplementationOnce(() => secondRequest.promise);
 
@@ -349,7 +349,7 @@ describe('queryRuntime', () => {
 
   test('factory failures are not cached', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn()
+    const factory = vi.fn()
       .mockRejectedValueOnce(new Error('network'))
       .mockResolvedValueOnce('recovered');
 
@@ -362,7 +362,7 @@ describe('queryRuntime', () => {
 
   test('prefetch warms the cache for a later interactive caller', async () => {
     const runtime = createQueryRuntime();
-    const factory = jest.fn().mockResolvedValue({ id: 1 });
+    const factory = vi.fn().mockResolvedValue({ id: 1 });
 
     await runtime.prefetch('prefetched', factory);
     await expect(runtime.execute('prefetched', factory)).resolves.toEqual({ id: 1 });
@@ -437,7 +437,7 @@ describe('queryRuntime', () => {
 
   test('records request durations for observability', async () => {
     let clock = 100;
-    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
     const runtime = createQueryRuntime();
 
     const result = runtime.execute('timed', () => {

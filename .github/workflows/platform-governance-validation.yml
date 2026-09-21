@@ -1,0 +1,93 @@
+name: Platform Governance Validation
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/src/platform/governance/**'
+      - 'Webclient.app/src/platform/bootstrap/*.test.ts'
+      - 'Webclient.app/src/platform/http/*.test.ts'
+      - 'Webclient.app/src/platform/performance/*.test.ts'
+      - 'Webclient.app/src/platform/runtime/*.test.ts'
+      - 'Webclient.app/tsconfig.platform-governance.json'
+      - '.github/workflows/platform-governance-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Webclient.app/src/platform/governance/**'
+      - 'Webclient.app/tsconfig.platform-governance.json'
+      - '.github/workflows/platform-governance-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-governance-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Install from lockfile
+        run: npm ci
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Strict lint governance and migrated Platform tests
+        run: >-
+          npx oxlint --deny-warnings
+          src/platform/governance
+          src/platform/bootstrap/bootstrapCore.test.ts
+          src/platform/bootstrap/bootstrapDiagnostics.test.ts
+          src/platform/http/fetchTransport.test.ts
+          src/platform/http/networkDiagnostics.test.ts
+          src/platform/http/requestScheduler.test.ts
+          src/platform/http/retryPolicy.test.ts
+          src/platform/http/runtimeCapabilities.test.ts
+          src/platform/http/typescriptRuntime.integration.test.ts
+          src/platform/performance/performanceMonitor.test.ts
+          src/platform/runtime/runtime.test.ts
+          src/platform/runtime/runtimeDiagnostics.test.ts
+
+      - name: Strict TypeScript governance boundary
+        run: npx tsc --noEmit -p tsconfig.platform-governance.json --pretty false
+
+      - name: Strict migrated Platform test TypeScript
+        run: npm run typecheck:platform-tests -- --pretty false
+
+      - name: Focused governance tests
+        run: npx vitest run src/platform/governance --reporter=verbose
+
+      - name: Migrated Platform regression tests
+        run: >-
+          npx vitest run
+          src/platform/bootstrap/bootstrapCore.test.ts
+          src/platform/bootstrap/bootstrapDiagnostics.test.ts
+          src/platform/http/fetchTransport.test.ts
+          src/platform/http/networkDiagnostics.test.ts
+          src/platform/http/requestScheduler.test.ts
+          src/platform/http/retryPolicy.test.ts
+          src/platform/http/runtimeCapabilities.test.ts
+          src/platform/http/typescriptRuntime.integration.test.ts
+          src/platform/performance/performanceMonitor.test.ts
+          src/platform/runtime/runtime.test.ts
+          src/platform/runtime/runtimeDiagnostics.test.ts
+          --reporter=verbose

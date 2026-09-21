@@ -84,6 +84,11 @@ export interface GisQueryErrorResult {
 export type GisFeatureQueryResult = GisFeatureQuerySuccess | GisQueryErrorResult;
 export type GisCountQueryResult = GisCountQuerySuccess | GisQueryErrorResult;
 
+// Backward-compatible public aliases used by Business consumers during the strict-TypeScript cutover.
+// Keep these aliases bound to the canonical typed query contracts so callers cannot drift from runtime semantics.
+export type GisServiceItem = GisFeatureRecord;
+export type GisQueryResult = GisFeatureQueryResult;
+
 interface ArcGisFeatureLike {
     attributes?: unknown;
     geometry?: unknown;

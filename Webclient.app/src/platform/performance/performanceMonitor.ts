@@ -11,10 +11,32 @@ interface MemoryInfoLike {
   readonly jsHeapSizeLimit?: number;
 }
 
+interface PerformanceEntryLike {
+  readonly name?: string;
+  readonly startTime?: number;
+  readonly duration?: number;
+  readonly responseStart?: number;
+  readonly domContentLoadedEventEnd?: number;
+  readonly loadEventEnd?: number;
+}
+
 interface PerformanceLike {
   readonly memory?: MemoryInfoLike;
   now?: () => number;
-  getEntriesByType?: (type: string) => PerformanceEntry[];
+  getEntriesByType?: (type: string) => readonly PerformanceEntryLike[];
+}
+
+interface PerformanceObserverEntryListLike {
+  getEntries(): readonly PerformanceEntryLike[];
+}
+
+interface PerformanceObserverLike {
+  observe(options: PerformanceObserverInit): void;
+  disconnect(): void;
+}
+
+export interface PerformanceObserverConstructorLike {
+  new (callback: (list: PerformanceObserverEntryListLike) => void): PerformanceObserverLike;
 }
 
 interface NetworkInfoLike {
@@ -30,18 +52,18 @@ interface NavigatorLike {
   readonly webkitConnection?: NetworkInfoLike;
 }
 
-interface ResourceLike extends PerformanceEntry {
+interface ResourceLike extends PerformanceEntryLike {
   readonly transferSize?: number;
   readonly encodedBodySize?: number;
   readonly decodedBodySize?: number;
 }
 
-interface LayoutShiftLike extends PerformanceEntry {
+interface LayoutShiftLike extends PerformanceEntryLike {
   readonly hadRecentInput?: boolean;
   readonly value?: number;
 }
 
-interface EventTimingLike extends PerformanceEntry {
+interface EventTimingLike extends PerformanceEntryLike {
   readonly interactionId?: number;
 }
 
@@ -73,9 +95,10 @@ interface PerformanceMonitorState {
 
 export interface PerformanceMonitorDependencies {
   readonly performanceRef?: PerformanceLike | null;
-  readonly PerformanceObserverRef?: typeof PerformanceObserver | null;
+  readonly PerformanceObserverRef?: PerformanceObserverConstructorLike | null;
   readonly navigatorRef?: NavigatorLike | null;
   readonly now?: () => number;
+  readonly onObserverError?: (error: unknown, context: Readonly<{ phase: 'observe' | 'disconnect'; entryType?: string }>) => void;
 }
 
 export interface PerformanceSnapshot {
@@ -215,7 +238,7 @@ const addResourceEntry = (state: PerformanceMonitorState, entry: ResourceLike): 
   }
 };
 
-const applyEntry = (state: PerformanceMonitorState, type: string, entry: PerformanceEntry): void => {
+const applyEntry = (state: PerformanceMonitorState, type: string, entry: PerformanceEntryLike): void => {
   if (type === 'paint' && entry.name === 'first-contentful-paint') {
     state.firstContentfulPaintMs = Math.max(state.firstContentfulPaintMs ?? 0, Number(entry.startTime) || 0);
     return;
@@ -248,7 +271,7 @@ const applyEntry = (state: PerformanceMonitorState, type: string, entry: Perform
 
 const collectExistingEntries = (performanceRef: PerformanceLike | null, state: PerformanceMonitorState): void => {
   if (!performanceRef?.getEntriesByType) return;
-  const navigation = performanceRef.getEntriesByType('navigation')?.[0] as PerformanceNavigationTiming | undefined;
+  const navigation = performanceRef.getEntriesByType('navigation')?.[0];
   if (navigation) {
     state.navigation.ttfbMs = Math.max(0, Number(navigation.responseStart) || 0);
     state.navigation.domContentLoadedMs = Math.max(0, Number(navigation.domContentLoadedEventEnd) || 0);
@@ -262,14 +285,14 @@ export const createPerformanceMonitor = (dependencies: PerformanceMonitorDepende
     ? (typeof performance !== 'undefined' ? performance as unknown as PerformanceLike : null)
     : dependencies.performanceRef;
   const PerformanceObserverRef = dependencies.PerformanceObserverRef === undefined
-    ? (typeof PerformanceObserver !== 'undefined' ? PerformanceObserver : null)
+    ? (typeof PerformanceObserver !== 'undefined' ? PerformanceObserver as unknown as PerformanceObserverConstructorLike : null)
     : dependencies.PerformanceObserverRef;
   const navigatorRef: NavigatorLike | null = dependencies.navigatorRef === undefined
     ? (typeof navigator !== 'undefined' ? navigator as unknown as NavigatorLike : null)
     : dependencies.navigatorRef;
   const wallTime = dependencies.now ?? Date.now;
   let state = createInitialState();
-  const observers: PerformanceObserver[] = [];
+  const observers: PerformanceObserverLike[] = [];
   let started = false;
   let startedAt: number | null = null;
 
@@ -283,8 +306,8 @@ export const createPerformanceMonitor = (dependencies: PerformanceMonitorDepende
       const init = { type, buffered: options.buffered !== false, ...options.observe } as PerformanceObserverInit;
       observer.observe(init);
       observers.push(observer);
-    } catch {
-      // Entry support differs by browser; unsupported observers are non-fatal.
+    } catch (error) {
+      dependencies.onObserverError?.(error, { phase: 'observe', entryType: type });
     }
   };
 
@@ -347,7 +370,11 @@ export const createPerformanceMonitor = (dependencies: PerformanceMonitorDepende
 
   const stop = (): void => {
     observers.splice(0).forEach((observer) => {
-      try { observer.disconnect(); } catch { /* optional observer cleanup */ }
+      try {
+        observer.disconnect();
+      } catch (error) {
+        dependencies.onObserverError?.(error, { phase: 'disconnect' });
+      }
     });
     started = false;
   };

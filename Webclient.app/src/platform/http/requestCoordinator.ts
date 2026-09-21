@@ -20,7 +20,7 @@ import type {
   RuntimeTuningProfile,
   SchedulerLike,
   SchedulerSnapshot,
-  Transport,
+  RequestTransport,
   TransportResult,
 } from './contracts';
 import {
@@ -44,7 +44,7 @@ const DEFAULT_MAX_CACHE_ENTRIES = 150;
 const DEFAULT_QUEUE_TIMEOUT_MS = 5000;
 
 interface CoordinatorOptions {
-  readonly transport: Transport;
+  readonly transport: RequestTransport;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
   readonly cacheTtlMs?: number;
@@ -121,7 +121,7 @@ const withOperationSignal = (
 };
 
 export class RequestCoordinator {
-  readonly transport: Transport;
+  readonly transport: RequestTransport;
   readonly defaults: CoordinatorDefaults;
   readonly diagnostics: NetworkDiagnosticsLike;
   readonly scheduler: SchedulerLike;

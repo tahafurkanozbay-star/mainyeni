@@ -11,9 +11,9 @@ import {
   identifyMapServices,
 } from './identifyRuntime';
 
-jest.mock('./arcgisModuleRuntime', () => ({
-  evictArcgisModule: jest.fn(),
-  loadArcgisModules: jest.fn(),
+vi.mock('./arcgisModuleRuntime', () => ({
+  evictArcgisModule: vi.fn(),
+  loadArcgisModules: vi.fn(),
 }));
 
 const createView = (layers = []) => ({
@@ -21,13 +21,13 @@ const createView = (layers = []) => ({
   height: 800,
   extent: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 },
   map: { allLayers: { items: layers } },
-  hitTest: jest.fn().mockResolvedValue({ results: [] }),
+  hitTest: vi.fn().mockResolvedValue({ results: [] }),
 });
 
 describe('identifyRuntime', () => {
   beforeEach(() => {
     clearIdentifyRuntimeCache();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('classifies visible ArcGIS map and feature layers without treating groups as identify targets', () => {
@@ -59,8 +59,8 @@ describe('identifyRuntime', () => {
   });
 
   test('executes MapServer identify with view dimensions and normalized results', async () => {
-    const identify = { identify: jest.fn().mockResolvedValue({ results: [{ layerId: 7, layerName: 'Roads', displayFieldName: 'NAME', value: 'Atatürk Bulvarı', feature: { attributes: { OBJECTID: 11, NAME: 'Atatürk Bulvarı' }, geometry: { type: 'polyline' } } }] }) };
-    const IdentifyParameters = jest.fn().mockImplementation((initial) => ({ ...initial }));
+    const identify = { identify: vi.fn().mockResolvedValue({ results: [{ layerId: 7, layerName: 'Roads', displayFieldName: 'NAME', value: 'Atatürk Bulvarı', feature: { attributes: { OBJECTID: 11, NAME: 'Atatürk Bulvarı' }, geometry: { type: 'polyline' } } }] }) };
+    const IdentifyParameters = vi.fn().mockImplementation((initial) => ({ ...initial }));
     loadModules.mockResolvedValue([identify, IdentifyParameters]);
     const view = createView([{ id: 'roads', title: 'Road service', type: 'map-image', url: '/roads/MapServer' }]);
     const response = await identifyMapServices(view, { x: 1, y: 2 });
@@ -73,8 +73,8 @@ describe('identifyRuntime', () => {
   });
 
   test('isolates one MapServer failure while retaining successful identify results', async () => {
-    const identify = { identify: jest.fn((url) => url.includes('broken') ? Promise.reject(new Error('service unavailable')) : Promise.resolve({ results: [{ layerId: 1, layerName: 'Good', feature: { attributes: { OBJECTID: 1 } } }] })) };
-    const IdentifyParameters = jest.fn().mockImplementation((initial) => ({ ...initial }));
+    const identify = { identify: vi.fn((url) => url.includes('broken') ? Promise.reject(new Error('service unavailable')) : Promise.resolve({ results: [{ layerId: 1, layerName: 'Good', feature: { attributes: { OBJECTID: 1 } } }] })) };
+    const IdentifyParameters = vi.fn().mockImplementation((initial) => ({ ...initial }));
     loadModules.mockResolvedValue([identify, IdentifyParameters]);
     const view = createView([{ id: 'good', type: 'map-image', url: '/good/MapServer' }, { id: 'broken', type: 'map-image', url: '/broken/MapServer' }]);
     const response = await identifyMapServices(view, { x: 1, y: 1 }, undefined, { concurrency: 1 });
@@ -127,8 +127,8 @@ describe('identifyRuntime', () => {
   test('executes map-service identify and feature hit-test together', async () => {
     const mapLayer = { id: 'map', title: 'Map', type: 'map-image', url: '/map/MapServer' };
     const featureLayer = { id: 'feature', title: 'Feature', type: 'feature', url: '/feature/FeatureServer/0' };
-    const identify = { identify: jest.fn().mockResolvedValue({ results: [{ layerId: 4, layerName: 'Map sublayer', feature: { attributes: { OBJECTID: 8 } } }] }) };
-    const IdentifyParameters = jest.fn().mockImplementation((initial) => ({ ...initial }));
+    const identify = { identify: vi.fn().mockResolvedValue({ results: [{ layerId: 4, layerName: 'Map sublayer', feature: { attributes: { OBJECTID: 8 } } }] }) };
+    const IdentifyParameters = vi.fn().mockImplementation((initial) => ({ ...initial }));
     loadModules.mockResolvedValue([identify, IdentifyParameters]);
     const view = createView([mapLayer, featureLayer]);
     view.hitTest.mockResolvedValue({ results: [{ graphic: { layer: featureLayer, attributes: { OBJECTID: 9 }, geometry: { x: 1, y: 1 } } }] });
@@ -153,8 +153,8 @@ describe('identifyRuntime', () => {
     const mapLayer = { id: 'map', type: 'map-image', url: '/map/MapServer' };
     let markFirstStarted;
     const firstStarted = new Promise((resolve) => { markFirstStarted = resolve; });
-    const identify = { identify: jest.fn().mockImplementationOnce(() => { markFirstStarted(); return new Promise(() => {}); }).mockResolvedValueOnce({ results: [] }) };
-    const IdentifyParameters = jest.fn().mockImplementation((initial) => ({ ...initial }));
+    const identify = { identify: vi.fn().mockImplementationOnce(() => { markFirstStarted(); return new Promise(() => {}); }).mockResolvedValueOnce({ results: [] }) };
+    const IdentifyParameters = vi.fn().mockImplementation((initial) => ({ ...initial }));
     loadModules.mockResolvedValue([identify, IdentifyParameters]);
     const view = createView([mapLayer]);
     const session = createIdentifySession();

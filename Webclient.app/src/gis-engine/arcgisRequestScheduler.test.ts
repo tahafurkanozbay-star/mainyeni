@@ -175,7 +175,7 @@ describe('createArcGisRequestScheduler', () => {
 
   test('deduplicates matching in-flight requests without duplicating adapter execution', async () => {
     const gate = deferred();
-    const execute = jest.fn(() => gate.promise);
+    const execute = vi.fn(() => gate.promise);
     const scheduler = createArcGisRequestScheduler();
 
     const first = scheduler.schedule({
@@ -274,7 +274,7 @@ describe('createArcGisRequestScheduler', () => {
 
   test('serves fresh cache entries and avoids a second adapter execution', async () => {
     let now = 100;
-    const execute = jest.fn(async () => ({ value: execute.mock.calls.length }));
+    const execute = vi.fn(async () => ({ value: execute.mock.calls.length }));
     const scheduler = createArcGisRequestScheduler({
       now: () => now,
       cacheTtlMs: 50,
@@ -394,7 +394,7 @@ describe('createArcGisRequestScheduler', () => {
 
   test('rejects WMS/WFS resources before any request adapter can run', () => {
     const scheduler = createArcGisRequestScheduler();
-    const execute = jest.fn();
+    const execute = vi.fn();
 
     expect(() => scheduler.schedule({
       key: 'forbidden',

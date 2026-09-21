@@ -257,7 +257,7 @@ describe('layer load scheduler', () => {
     const requests = [deferred(), deferred(), deferred(), deferred()];
     let active = 0;
     let peak = 0;
-    const loader = jest.fn(({ layer }) => {
+    const loader = vi.fn(({ layer }) => {
       const index = Number(layer.id);
       active += 1;
       peak = Math.max(peak, active);
@@ -286,7 +286,7 @@ describe('layer load scheduler', () => {
     const scheduler = createLayerLoadScheduler({ maxConcurrent: 1 });
     const blocker = deferred();
     const order = [];
-    const loader = jest.fn(({ layer }) => {
+    const loader = vi.fn(({ layer }) => {
       order.push(layer.id);
       if (layer.id === 'blocker') return blocker.promise;
       return Promise.resolve(layer.id);
@@ -329,7 +329,7 @@ describe('layer load scheduler', () => {
   test('deduplicates same-layer queued work', async () => {
     const scheduler = createLayerLoadScheduler({ maxConcurrent: 1 });
     const request = deferred();
-    const loader = jest.fn(() => request.promise);
+    const loader = vi.fn(() => request.promise);
 
     const first = scheduler.schedule({ id: 'parks' }, loader);
     const second = scheduler.schedule({ id: 'parks' }, loader);
@@ -381,7 +381,7 @@ describe('layer load scheduler', () => {
     const scheduler = createLayerLoadScheduler();
     const request = deferred();
     let sharedSignal;
-    const loader = jest.fn(({ signal }) => {
+    const loader = vi.fn(({ signal }) => {
       sharedSignal = signal;
       return request.promise;
     });
@@ -425,7 +425,7 @@ describe('layer load scheduler', () => {
     const scheduler = createLayerLoadScheduler();
     const controller = new AbortController();
     controller.abort();
-    const loader = jest.fn();
+    const loader = vi.fn();
 
     await expect(scheduler.schedule({ id: 'parks' }, loader, {
       signal: controller.signal,
@@ -437,7 +437,7 @@ describe('layer load scheduler', () => {
   test('queued request is removed when its only consumer cancels', async () => {
     const scheduler = createLayerLoadScheduler({ maxConcurrent: 1 });
     const blocker = deferred();
-    const loader = jest.fn(({ layer }) => layer.id === 'blocker' ? blocker.promise : Promise.resolve(layer.id));
+    const loader = vi.fn(({ layer }) => layer.id === 'blocker' ? blocker.promise : Promise.resolve(layer.id));
     const running = scheduler.schedule({ id: 'blocker' }, loader);
     const controller = new AbortController();
     const queued = scheduler.schedule({ id: 'parks' }, loader, { signal: controller.signal });
@@ -514,7 +514,7 @@ describe('layer load scheduler', () => {
   test('setMaxConcurrent can increase throughput for queued work', async () => {
     const scheduler = createLayerLoadScheduler({ maxConcurrent: 1 });
     const requests = [deferred(), deferred(), deferred()];
-    const loader = jest.fn(({ layer }) => requests[Number(layer.id)].promise);
+    const loader = vi.fn(({ layer }) => requests[Number(layer.id)].promise);
     const promises = [0, 1, 2].map((id) => scheduler.schedule({ id: String(id) }, loader));
     await flush();
     expect(loader).toHaveBeenCalledTimes(1);
@@ -635,8 +635,8 @@ describe('layer runtime loader integration', () => {
     });
     scheduler = createLayerLoadScheduler({ maxConcurrent: 2 });
     residency = createLayerResidencyTracker({ idleMs: 1000 });
-    loadLayer = jest.fn(async (layer) => ({ id: `${layer.id}-sdk` }));
-    unloadLayer = jest.fn().mockResolvedValue(undefined);
+    loadLayer = vi.fn(async (layer) => ({ id: `${layer.id}-sdk` }));
+    unloadLayer = vi.fn().mockResolvedValue(undefined);
     runtime = createLayerRuntimeLoader({
       scheduler,
       getTree: () => tree,

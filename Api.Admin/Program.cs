@@ -1,5 +1,6 @@
 using Api.Admin.Filters;
 using Api.Core.Platform;
+using Api.Core.Platform.Transport;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -14,6 +15,8 @@ public static class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        builder.WebHost.ConfigureKentRehberiTransport(builder.Configuration);
 
         builder.WebHost.ConfigureKestrel(options =>
         {
