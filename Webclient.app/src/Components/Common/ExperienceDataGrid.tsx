@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -48,10 +49,11 @@ const alignmentClass = (align: DataGridColumn<unknown>["align"]): string =>
 const formatCellValue = (value: unknown): string => {
   if (value == null) return "—";
   if (value instanceof Date) {
-    return new Intl.DateTimeFormat("tr-TR", {
-      dateStyle: "medium",
-      timeStyle: value.getHours() || value.getMinutes() || value.getSeconds() ? "short" : undefined,
-    }).format(value);
+    const options: Intl.DateTimeFormatOptions =
+      value.getHours() || value.getMinutes() || value.getSeconds()
+        ? { dateStyle: "medium", timeStyle: "short" }
+        : { dateStyle: "medium" };
+    return new Intl.DateTimeFormat("tr-TR", options).format(value);
   }
   if (typeof value === "boolean") return value ? "Evet" : "Hayır";
   if (typeof value === "number") {
@@ -87,9 +89,10 @@ export function ExperienceDataGrid<Row>({
   onActivateRow,
   className = "",
 }: ExperienceDataGridProps<Row>): ReactNode {
+  const reactId = useId();
   const descriptionId = useMemo(
-    () => `experience-grid-description-${Math.random().toString(36).slice(2)}`,
-    [],
+    () => `experience-grid-description-${reactId.replace(/:/g, "")}`,
+    [reactId],
   );
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const runtime = useMemo(() => createDataGridRuntime<Row>({
