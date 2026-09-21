@@ -93,6 +93,9 @@ jobs:
       - name: Vite migration contract
         run: npm run quality:vite --if-present
 
+      - name: GIS query governance contract
+        run: npm run quality:gis-query-governance
+
       - name: Full lint visibility
         run: npm run lint --if-present
 
