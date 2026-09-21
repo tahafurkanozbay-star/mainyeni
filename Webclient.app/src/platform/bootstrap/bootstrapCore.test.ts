@@ -258,7 +258,7 @@ describe('normalizeProxyUrl', () => {
     } catch (error) {
       const appError = requireAppError(error);
       expect(appError.code).toBe(BootstrapErrorCode.SERVICE_URL_INVALID);
-      expect(appError.details.serviceIndex).toBe(5);
+      expect(appError.details?.serviceIndex).toBe(5);
     }
   });
 });
@@ -274,7 +274,7 @@ describe('createBootstrapPlan', () => {
     const plan = createBootstrapPlan({
       mapConfiguration: { zoom: 9 },
       configurationServices: services,
-      generateServiceUrl: (item) => item.eg
+      generateServiceUrl: (item: ConfigurationService) => item.eg
     });
 
     expect(plan.summary).toEqual({ serviceCount: 3, proxyRuleCount: 2 });
@@ -290,7 +290,7 @@ describe('createBootstrapPlan', () => {
     createBootstrapPlan({
       mapConfiguration: { zoom: 9 },
       configurationServices: services,
-      generateServiceUrl: (item) => item.eg
+      generateServiceUrl: (item: ConfigurationService) => item.eg
     });
     expect(services).toEqual(snapshot);
   });
@@ -299,7 +299,7 @@ describe('createBootstrapPlan', () => {
     const plan = createBootstrapPlan({
       mapConfiguration: { zoom: 9 },
       configurationServices: [service(1)],
-      generateServiceUrl: (item) => item.eg
+      generateServiceUrl: (item: ConfigurationService) => item.eg
     });
     expect(Object.isFrozen(plan)).toBe(true);
     expect(Object.isFrozen(plan.configurationServices)).toBe(true);
@@ -335,7 +335,7 @@ describe('bootstrap cancellation helpers', () => {
     } catch (error) {
       const appError = requireAppError(error);
       expect(appError.code).toBe(BootstrapErrorCode.ABORTED);
-      expect(appError.details.stage).toBe(BootstrapStage.PROXY);
+      expect(appError.details?.stage).toBe(BootstrapStage.PROXY);
       expect(isBootstrapAbortError(appError)).toBe(true);
     }
   });
@@ -537,7 +537,7 @@ describe('runApplicationBootstrap', () => {
 
     const stages = diagnostics.record.mock.calls
       .filter(([eventName]) => eventName === 'bootstrap.stage')
-      .map(([, metadata]) => metadata.stage);
+      .map(([, metadata]) => metadata?.stage);
 
     expect(stages).toEqual([
       BootstrapStage.LOAD,
