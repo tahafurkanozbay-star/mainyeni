@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'Webclient.app/src/platform/offline/**'
+      - 'Webclient.app/tsconfig.offline.json'
       - '.github/workflows/platform-offline-validation.yml'
   push:
     branches:
       - main
     paths:
       - 'Webclient.app/src/platform/offline/**'
+      - 'Webclient.app/tsconfig.offline.json'
       - '.github/workflows/platform-offline-validation.yml'
 
 permissions:
@@ -44,7 +46,7 @@ jobs:
         run: npx oxlint --deny-warnings src/platform/offline
 
       - name: Typecheck offline runtime
-        run: npx tsc --noEmit -p tsconfig.json --pretty false
+        run: npx tsc --noEmit -p tsconfig.offline.json --pretty false
 
       - name: Focused offline runtime tests
         run: npx vitest run src/platform/offline --reporter=verbose
