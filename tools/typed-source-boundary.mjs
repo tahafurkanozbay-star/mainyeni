@@ -10,24 +10,10 @@ const TYPESCRIPT_TEST_PATTERN = /(?:\.test|\.spec|\.fixture|\.mock)\.(?:ts|tsx)$
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', 'coverage', '.git', '.cache']);
 
 /**
- * Exact-path exceptions owned by concurrent canonical migration PRs.
- * They may disappear without requiring an audit change, but no new JavaScript
- * path outside this bounded set is permitted.
+ * Application source is fully typed. No JavaScript exception is retained:
+ * any future JavaScript source/test file under Webclient.app/src is a regression.
  */
-const TRANSITIONAL_JAVASCRIPT_ALLOWLIST = new Set([
-  'Webclient.app/src/experience/accessibilityRuntime.test.js',
-  'Webclient.app/src/platform/bootstrap/bootstrapCore.test.js',
-  'Webclient.app/src/platform/bootstrap/bootstrapDiagnostics.test.js',
-  'Webclient.app/src/platform/http/fetchTransport.test.js',
-  'Webclient.app/src/platform/http/networkDiagnostics.test.js',
-  'Webclient.app/src/platform/http/requestScheduler.test.js',
-  'Webclient.app/src/platform/http/retryPolicy.test.js',
-  'Webclient.app/src/platform/http/runtimeCapabilities.test.js',
-  'Webclient.app/src/platform/http/typescriptRuntime.integration.test.js',
-  'Webclient.app/src/platform/performance/performanceMonitor.test.js',
-  'Webclient.app/src/platform/runtime/runtime.test.js',
-  'Webclient.app/src/platform/runtime/runtimeDiagnostics.test.js',
-]);
+const TRANSITIONAL_JAVASCRIPT_ALLOWLIST = new Set();
 
 const normalizePath = (value) => value.split(path.sep).join('/');
 
@@ -78,7 +64,7 @@ export const auditTypedSourceBoundary = async (root = process.cwd()) => {
         findings.push(finding(
           'unapproved-javascript-source',
           relative,
-          'JavaScript outside the exact concurrent-migration allowlist is forbidden across the application source tree.',
+          'JavaScript is forbidden across the fully typed application source tree.',
         ));
       }
       continue;
@@ -136,9 +122,8 @@ export const formatTypedSourceBoundary = (report) => {
   }
 
   lines.push(
-    'The exact-path exceptions are pre-existing tests owned by concurrent Experience and Platform cutovers; '
-    + 'missing exceptions are allowed so those PRs can remove them without coordination. '
-    + 'Every other application source area, including Business and GIS, is permanently ratcheted away from JavaScript.',
+    'Webclient.app/src is permanently ratcheted to TypeScript/TSX only. '
+    + 'No transitional JavaScript exception remains; any JavaScript source or test file is a blocking regression.',
     '',
   );
   return lines.join('\n');
