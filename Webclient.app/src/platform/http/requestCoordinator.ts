@@ -29,6 +29,12 @@ import {
 } from './requestScheduler';
 import { createRuntimeTuningProfile } from './runtimeCapabilities';
 import {
+  createMutationSafetyRuntime,
+  type MutationSafetyEvent,
+  type MutationSafetyRuntime,
+  type MutationSafetyRuntimeOptions,
+} from './mutationSafetyRuntime';
+import {
   createHttpCacheRuntime,
   type HttpCacheRuntime,
   type HttpCacheRuntimeOptions,
@@ -51,6 +57,8 @@ interface CoordinatorOptions {
   readonly maxCacheEntries?: number;
   readonly cacheRuntime?: HttpCacheRuntime;
   readonly cacheRuntimeOptions?: Omit<HttpCacheRuntimeOptions, 'onEvent'>;
+  readonly mutationSafety?: MutationSafetyRuntime;
+  readonly mutationSafetyOptions?: MutationSafetyRuntimeOptions;
   readonly requestScope?: RequestLifetimeScope;
   readonly requestScopeOptions?: RequestLifetimeScopeOptions;
   readonly diagnostics?: NetworkDiagnosticsLike;
@@ -98,6 +106,19 @@ const createSchedulerEventBridge = (diagnostics: NetworkDiagnosticsLike) =>
     recordNetworkEvent(diagnostics, eventName, metadata);
   };
 
+const createMutationEventBridge = (diagnostics: NetworkDiagnosticsLike) =>
+  (event: MutationSafetyEvent): void => {
+    if (event.kind === 'bypassed') return;
+    recordNetworkEvent(diagnostics, 'network.mutation.' + event.kind, {
+      ...(event.method ? { method: event.method } : {}),
+      ...(event.route ? { url: event.route } : {}),
+      ...(event.owner ? { owner: event.owner } : {}),
+      ...(event.attempt === undefined ? {} : { attempt: event.attempt }),
+      ...(event.errorCode ? { code: event.errorCode } : {}),
+      ...(event.errorName ? { errorName: event.errorName } : {}),
+    });
+  };
+
 const getRuntimeSignal = (config: NormalizedRequestConfig): AbortSignal | undefined =>
   isAbortSignalLike(config.signal) ? config.signal : undefined;
 
@@ -127,6 +148,7 @@ export class RequestCoordinator {
   readonly scheduler: SchedulerLike;
   readonly tuningProfile: RuntimeTuningProfile;
   readonly cacheRuntime: HttpCacheRuntime;
+  readonly mutationSafety: MutationSafetyRuntime;
   readonly requestScope: RequestLifetimeScope;
 
   private readonly clock: () => number;
@@ -180,6 +202,14 @@ export class RequestCoordinator {
       onEvent: createSchedulerEventBridge(this.diagnostics),
     });
 
+    this.mutationSafety = options.mutationSafety ?? createMutationSafetyRuntime({
+      ...options.mutationSafetyOptions,
+      ...(options.mutationSafetyOptions?.clock ? {} : { clock: this.clock }),
+      ...(options.mutationSafetyOptions?.onEvent
+        ? {}
+        : { onEvent: createMutationEventBridge(this.diagnostics) }),
+    });
+
     const scopeMaxActive = Math.max(
       1,
       Math.min(10_000, this.tuningProfile.scheduler.maxQueued + this.tuningProfile.scheduler.maxConcurrent),
@@ -231,7 +261,10 @@ export class RequestCoordinator {
     );
   }
 
-  async execute<T>(config: NormalizedRequestConfig): Promise<TransportResult<T>> {
+  private async executeTransport<T>(
+    config: NormalizedRequestConfig,
+    markMutationAttempt: (attempt: number) => void,
+  ): Promise<TransportResult<T>> {
     const startedAt = now(this.clock);
     const signal = getRuntimeSignal(config);
     recordNetworkEvent(this.diagnostics, 'network.request.started', {
@@ -255,6 +288,7 @@ export class RequestCoordinator {
           retryOptions: this.retryOptions,
           ...(this.wait ? { wait: this.wait } : {}),
           onAttempt: ({ attempt }: { attempt: number }) => {
+            markMutationAttempt(attempt);
             recordNetworkEvent(this.diagnostics, 'network.request.attempt', {
               method: config.method,
               url: config.url,
@@ -308,6 +342,13 @@ export class RequestCoordinator {
     }
   }
 
+  async execute<T>(config: NormalizedRequestConfig): Promise<TransportResult<T>> {
+    return this.mutationSafety.run(
+      config,
+      ({ markAttempt }) => this.executeTransport<T>(config, markAttempt),
+    );
+  }
+
   request<T = unknown>(rawConfig: RawRequestConfig = {}): Promise<TransportResult<T>> {
     let config: NormalizedRequestConfig;
     try {
@@ -350,7 +391,11 @@ export class RequestCoordinator {
   }
 
   getInFlightSize(): number {
-    return this.cacheRuntime.inFlightSize();
+    return this.cacheRuntime.inFlightSize() + this.mutationSafety.snapshot().registry.inFlight;
+  }
+
+  getMutationSafetySnapshot(): Readonly<Record<string, unknown>> {
+    return this.mutationSafety.snapshot() as unknown as Readonly<Record<string, unknown>>;
   }
 
   getCacheRuntimeSnapshot(): Readonly<Record<string, unknown>> {
@@ -368,6 +413,7 @@ export class RequestCoordinator {
   dispose(reason?: unknown): void {
     this.requestScope.dispose(reason);
     this.cacheRuntime.dispose();
+    this.mutationSafety.dispose(reason);
     this.scheduler.cancelQueued('http-client-disposed');
     recordNetworkEvent(this.diagnostics, 'network.client.disposed', {
       reason: reason instanceof Error ? reason.name : reason === undefined ? null : typeof reason,
@@ -424,6 +470,7 @@ export const createCoordinatedClient = (options: CoordinatorOptions): Coordinate
     invalidateCacheNamespace: (namespace: string) => coordinator.invalidateCacheNamespace(namespace),
     getCacheSize: () => coordinator.getCacheSize(),
     getInFlightSize: () => coordinator.getInFlightSize(),
+    getMutationSafetySnapshot: () => coordinator.getMutationSafetySnapshot(),
     getCacheRuntimeSnapshot: () => coordinator.getCacheRuntimeSnapshot(),
     getRequestScopeSnapshot: () => coordinator.getRequestScopeSnapshot(),
     drain: (optionsArg?: RequestLifetimeCloseOptions) => coordinator.drain(optionsArg),
