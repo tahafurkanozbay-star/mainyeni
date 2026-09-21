@@ -1,35 +1,18 @@
-import axios from "axios";
 import { Constants } from "../Core/Constants";
-import { Global } from "../Core/Global";
 import { IsNull } from "../Core/Toolbox/ObjectHelper";
-import { AuthBusiness } from "./AuthBusiness";
-import {DataHelper} from "../Core/Toolbox/DataHelper";
+import { DataHelper } from "../Core/Toolbox/DataHelper";
+import {
+  adminApiGet,
+  adminApiPost,
+  adminApiPostForm,
+} from "../runtime/adminApiClient";
 
 export const ConfigServicesBusiness = {
-  
   List: async (_key) => {
-    let _headers = await AuthBusiness.GetRequestHeaders();
-
-    return new Promise((resolve, reject) => {
-      let url = Global.API_URL + "/Gis/ConfigService/List";
-
-      return axios({
-        method: "get",
-        url: url,
-        headers: _headers,
-      })
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
-    });
+    return adminApiGet("/Gis/ConfigService/List");
   },
 
   Validate: (_item) => {
-
     if (IsNull(_item.title)) {
       return {
         type: Constants.MessageTypes.Error,
@@ -84,7 +67,6 @@ export const ConfigServicesBusiness = {
       }
     }
 
-
     if (_item.showInSearch) {
       if (IsNull(_item.searchCategoryTitle)) {
         return {
@@ -107,107 +89,49 @@ export const ConfigServicesBusiness = {
   },
 
   Save: async (_itemDetails) => {
-    let _headers = await AuthBusiness.GetRequestHeaders();
-
-    return new Promise((resolve, reject) => {
-      let url = Global.API_URL + "/Gis/ConfigService/Save";
-
-      axios({
-        method: "post",
-        url: url,
-        data: JSON.stringify(_itemDetails),
-        headers: _headers,
-      })
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
-    });
+    return adminApiPost("/Gis/ConfigService/Save", _itemDetails);
   },
 
   Delete: async (_item) => {
-    let _headers = await AuthBusiness.GetRequestHeaders();
-
-    return new Promise((resolve, reject) => {
-      let url = Global.API_URL + "/Gis/ConfigService/Delete";
-
-      axios({
-        method: "post",
-        url: url,
-        data: JSON.stringify({
-          Id: _item.id
-        }),
-        headers: _headers,
-      })
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
+    return adminApiPost("/Gis/ConfigService/Delete", {
+      Id: _item.id
     });
   },
 
   Import: async(_files) => {
+    const file = _files?.[0];
+    if (!file) {
+      throw new TypeError("İçe aktarılacak dosya bulunamadı.");
+    }
 
-    const requestHeaders = await AuthBusiness.GetRequestHeaders();
-    const headers = {
-      ...(requestHeaders ?? {}),
-      "Content-Type": "multipart/form-data",
-    };
+    const data = new FormData();
+    data.append('file', file);
 
-    const data = new FormData()
-    data.append('file', _files[0]);
-    
-    return new Promise((resolve, reject) => {
-    
-      let url = Global.API_URL + "/Gis/ConfigService/Import";
-
-      let config = {headers};
-
-      axios.post(url, data, config)
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
-    });
-
+    return adminApiPostForm("/Gis/ConfigService/Import", data);
   },
 
-  Export:async(_format)=>{  
+  Export:async(_format)=>{
+    const result = await adminApiGet("/Gis/ConfigService/Export", {
+      query: { format: _format }
+    });
 
-      let _headers = await AuthBusiness.GetRequestHeaders();
-  
-      return new Promise((resolve, reject) => {
-        
-        let url = Global.API_URL + "/Gis/ConfigService/Export?format="+_format;
-  
-        return axios({
-          method: "get",
-          url: url,
-          headers: _headers,
-        })
-          .then(function (response) {
-            var result = response.data;
-            
-            DataHelper.ExportJsonToCsv(result.data,["category","title","url","description","requiresSC","scUserName","scPassword","showInSearch","searchCategoryTitle","isIdentifiable","identifyLayers"],"configservices.csv");
+    await DataHelper.ExportJsonToCsv(
+      result.data,
+      [
+        "category",
+        "title",
+        "url",
+        "description",
+        "requiresSC",
+        "scUserName",
+        "showInSearch",
+        "searchCategoryTitle",
+        "isIdentifiable",
+        "identifyLayers"
+      ],
+      "configservices.csv"
+    );
 
-            resolve(result);
-          })
-          .catch(function (error) {
-            reject({
-              Type: Constants.MessageTypes.Error,
-              Data: error,
-            });
-          });
-      });
+    return result;
   }
-
 };

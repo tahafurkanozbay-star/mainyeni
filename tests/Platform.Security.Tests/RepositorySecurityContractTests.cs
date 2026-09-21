@@ -63,13 +63,17 @@ public sealed class RepositorySecurityContractTests
     public void AdminSessionStorage_DoesNotPersistBearerTokenAcrossBrowserSessions()
     {
         var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.ts");
+        var sessionRuntime = Read("Webclient.admin/src/runtime/adminSession.ts");
         var constants = Read("Webclient.admin/src/Core/Constants.ts");
 
-        Assert.Contains("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
-        Assert.Contains("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("localStorage.getItem", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("localStorage.setItem", authBusiness, StringComparison.Ordinal);
+        Assert.Contains("from '../runtime/adminSession'", authBusiness, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage?.getItem", sessionRuntime, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage?.setItem", sessionRuntime, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage.getItem", sessionRuntime, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage.setItem", sessionRuntime, StringComparison.Ordinal);
+        Assert.DoesNotContain("CryptoJS.AES", sessionRuntime, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS.AES", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("Session.Pk", sessionRuntime, StringComparison.Ordinal);
         Assert.DoesNotContain("Session.Pk", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Pk:", constants, StringComparison.Ordinal);
     }

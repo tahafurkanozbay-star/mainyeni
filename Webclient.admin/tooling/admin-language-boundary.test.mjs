@@ -209,6 +209,29 @@ test('requires ArcGIS Maps SDK ESM major 5 or newer', () => {
   });
 });
 
+test('rejects axios source imports', () => {
+  withFixture((root) => {
+    fs.writeFileSync(
+      path.join(root, 'src', 'runtime', 'legacy-http.ts'),
+      "import axios from 'axios';\nexport const load = () => axios.get('/api');\n",
+    );
+
+    const report = auditAdminLanguageBoundary(root);
+    assert.ok(violationIds(report).has('legacy-axios-client'));
+  });
+});
+
+test('rejects axios dependency resurrection', () => {
+  withFixture((root) => {
+    const manifest = basePackage();
+    manifest.dependencies.axios = '1.20.0';
+    writeJson(path.join(root, 'package.json'), manifest);
+
+    const report = auditAdminLanguageBoundary(root);
+    assert.ok(violationIds(report).has('axios-dependency'));
+  });
+});
+
 test('rejects CommonJS require in source', () => {
   withFixture((root) => {
     fs.writeFileSync(

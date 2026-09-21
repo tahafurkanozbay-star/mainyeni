@@ -24,6 +24,12 @@
     "src/Core/Toolbox/DataHelper.ts",
     "src/Components/Map.tsx",
     "src/types/vendor.d.ts",
-    "src/Core/Fonts/UbuntuNormal.ts"
+    "src/Core/Fonts/UbuntuNormal.ts",
+    "src/runtime/adminSession.ts",
+    "src/runtime/adminSession.test.ts",
+    "src/runtime/adminApiClient.ts",
+    "src/runtime/adminApiClient.test.ts",
+    "src/runtime/adminRequestCoordinator.ts",
+    "src/runtime/adminRequestCoordinator.test.ts"
   ]
 }

@@ -1,29 +1,10 @@
-import axios from "axios";
 import { Constants } from "../Core/Constants";
-import { Global } from "../Core/Global";
 import { IsNull } from "../Core/Toolbox/ObjectHelper";
-import { AuthBusiness } from "./AuthBusiness";
+import { adminApiGet, adminApiPost } from "../runtime/adminApiClient";
 
 export const LayerBusiness = {
   List: async (_key) => {
-    let _headers = await AuthBusiness.GetRequestHeaders();
-
-    return new Promise((resolve, reject) => {
-      let url = Global.API_URL + "/Gis/Layer/List";
-
-      return axios({
-        method: "get",
-        url: url,
-        headers: _headers,
-      })
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
-    });
+    return adminApiGet("/Gis/Layer/List");
   },
 
   Validate: (_item) => {
@@ -65,7 +46,6 @@ export const LayerBusiness = {
       };
     }
 
-
     if (IsNull(_item.url)) {
       return {
         type: Constants.MessageTypes.Error,
@@ -82,7 +62,6 @@ export const LayerBusiness = {
             text: "Lütfen geçerli bir bağlantı adresi (url) giriniz",
           };
         }
-
     }
 
     if (_item.requiresSC) {
@@ -104,48 +83,12 @@ export const LayerBusiness = {
   },
 
   Save: async (_itemDetails) => {
-    let _headers = await AuthBusiness.GetRequestHeaders();
-
-    return new Promise((resolve, reject) => {
-      let url = Global.API_URL + "/Gis/Layer/Save";
-
-      axios({
-        method: "post",
-        url: url,
-        data: JSON.stringify(_itemDetails),
-        headers: _headers,
-      })
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
-    });
+    return adminApiPost("/Gis/Layer/Save", _itemDetails);
   },
 
   Delete: async (_item) => {
-    let _headers = await AuthBusiness.GetRequestHeaders();
-
-    return new Promise((resolve, reject) => {
-      let url = Global.API_URL + "/Gis/Layer/Delete";
-
-      axios({
-        method: "post",
-        url: url,
-        data: JSON.stringify({
-          Id:_item.id
-        }),
-        headers: _headers,
-      })
-        .then(function (response) {
-          var result = response.data;
-          resolve(result);
-        })
-        .catch(function (error) {
-          return AuthBusiness.HandleRejection(error);
-        });
+    return adminApiPost("/Gis/Layer/Delete", {
+      Id: _item.id
     });
   },
 };

@@ -37,19 +37,46 @@ const findEntry = (manifest) => {
   return entries[0][0];
 };
 
+const requireChunk = (manifest, key) => {
+  const chunk = manifest[key];
+  if (!chunk) {
+    throw new Error(`Manifest import ${key} was not found.`);
+  }
+  return chunk;
+};
+
 const collectStaticGraph = (manifest, entryKey) => {
   const visited = new Set();
+
   const visit = (key) => {
     if (visited.has(key)) return;
-    const chunk = manifest[key];
-    if (!chunk) {
-      throw new Error(`Manifest import ${key} was not found.`);
-    }
+    const chunk = requireChunk(manifest, key);
     visited.add(key);
     for (const imported of chunk.imports ?? []) visit(imported);
   };
+
   visit(entryKey);
   return [...visited];
+};
+
+const collectReachableDynamicImports = (manifest, entryKey) => {
+  const visited = new Set();
+  const dynamicImports = new Set();
+
+  const visit = (key) => {
+    if (visited.has(key)) return;
+    const chunk = requireChunk(manifest, key);
+    visited.add(key);
+
+    for (const imported of chunk.imports ?? []) visit(imported);
+    for (const dynamicImport of chunk.dynamicImports ?? []) {
+      dynamicImports.add(dynamicImport);
+      visit(dynamicImport);
+    }
+  };
+
+  visit(entryKey);
+  return [...dynamicImports];
 };
 
 export const analyzeAdminBuild = ({
@@ -60,6 +87,7 @@ export const analyzeAdminBuild = ({
   const manifest = readJson(manifestAbsolute);
   const entryKey = findEntry(manifest);
   const staticGraphKeys = collectStaticGraph(manifest, entryKey);
+  const dynamicImports = collectReachableDynamicImports(manifest, entryKey);
 
   const jsFiles = unique(
     staticGraphKeys
@@ -69,12 +97,6 @@ export const analyzeAdminBuild = ({
   const cssFiles = unique(
     staticGraphKeys.flatMap((key) =>
       Array.isArray(manifest[key]?.css) ? manifest[key].css : []),
-  );
-  const dynamicImports = unique(
-    staticGraphKeys.flatMap((key) =>
-      Array.isArray(manifest[key]?.dynamicImports)
-        ? manifest[key].dynamicImports
-        : []),
   );
 
   const js = jsFiles.map((file) => fileStats(root, path.join(DEFAULT_BUILD_DIR, file)));
@@ -110,6 +132,21 @@ export const evaluateAdminBuildBudget = (report, config) => {
   ];
 
   for (const [id, actual, maximum] of checks) {
+    if (Number.isFinite(maximum) && actual > maximum) {
+      violations.push(Object.freeze({
+        id,
+        actual,
+        maximum,
+      }));
+    }
+  }
+
+  const countChecks = [
+    ['initial-js-file-count', report.javascript.files?.length ?? 0, config.maxInitialJavaScriptFiles],
+    ['static-graph-module-count', report.staticGraphKeys.length, config.maxStaticGraphModules],
+  ];
+
+  for (const [id, actual, maximum] of countChecks) {
     if (Number.isFinite(maximum) && actual > maximum) {
       violations.push(Object.freeze({
         id,

@@ -1,6 +1,3 @@
-import { Button } from 'react-bootstrap';
-import { ImTable } from 'react-icons/im';
-
 import './Loading.css';
 
 const loadingGif = 'images/ajax-loader.gif';
@@ -9,15 +6,16 @@ export interface LoadingProps {
   readonly text?: string;
 }
 
-export const ButtonLoading = ({ text }: LoadingProps) => (
-  <Button
-    className="w-100 ButtonLoading"
+export const ButtonLoading = ({ text }: LoadingProps = {}) => (
+  <button
+    type="button"
+    className="btn btn-primary w-100 ButtonLoading"
     disabled
     aria-busy="true"
   >
     <img src={loadingGif} alt="" aria-hidden="true" />
     &nbsp;&nbsp;&nbsp;{text ?? 'İşlem sürüyor'}
-  </Button>
+  </button>
 );
 
 export const ContainerLoading = ({ text }: LoadingProps) => (
@@ -54,7 +52,7 @@ export const FullScreenLoading = ({ text }: LoadingProps) => (
 
 export const NoResultsFound = ({ text }: LoadingProps) => (
   <div className="NoResultsFound" role="status">
-    <ImTable aria-hidden="true" />
+    <span aria-hidden="true" className="NoResultsFound_Icon">▦</span>
     &nbsp;{text ?? 'Sonuç bulunamadı'}
   </div>
 );

@@ -55,6 +55,9 @@ jobs:
       - name: Admin language boundary
         run: npm run audit:language
 
+      - name: Admin bootstrap dependency boundary
+        run: npm run audit:bootstrap
+
       - name: Language boundary regression tests
         run: npm run test:tooling
 

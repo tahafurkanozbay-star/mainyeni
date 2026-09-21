@@ -1,60 +1,18 @@
-import axios from "axios";
 import { Constants } from "../Core/Constants";
-import { Global } from "../Core/Global";
 import { IsNull } from "../Core/Toolbox/ObjectHelper";
-import { AuthBusiness } from "./AuthBusiness";
+import { adminApiGet, adminApiPost } from "../runtime/adminApiClient";
 
 export const SettingsBusiness={
 
     Get:async(_key)=>{
-
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise((resolve, reject) => {
-
-            let url = Global.API_URL + "/AppSettings/List?key="+_key;
-
-            return axios({
-                method: "get",
-                url: url,
-                headers: _headers
-            })
-                .then(function (response) {
-                    var result = response.data;
-                    resolve(result);
-                })
-                .catch(function (error) {
-                    return AuthBusiness.HandleRejection(error);
-                });
+        return adminApiGet("/AppSettings/List", {
+            query: { key: _key }
         });
-
     },
 
     Save:async(_config)=>{
-        
-        let _headers = await AuthBusiness.GetRequestHeaders();
-
-        return new Promise((resolve, reject) => {
-
-            let url = Global.API_URL + "/AppSettings/Save";
-
-            axios({
-                method: "post",
-                url: url,
-                data: JSON.stringify(_config),
-                headers: _headers
-            })
-                .then(function (response) {
-                    var result = response.data;
-                    resolve(result);
-                })
-                .catch(function (error) {
-                    return AuthBusiness.HandleRejection(error);
-                });
-        });
+        return adminApiPost("/AppSettings/Save", _config);
     },
-
-
 
     ValidateGisMapConfig:(_config)=>{
 
