@@ -1,4 +1,5 @@
 using Api.Core.Platform.Health;
+using Api.Core.Platform.Governance;
 using Api.Core.Platform.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -49,8 +50,11 @@ namespace Api.Core.Platform
             // can reference the same safe request identifier.
             app.UseMiddleware<CorrelationIdMiddleware>();
             app.UseMiddleware<ApiExceptionMiddleware>();
-            app.UseMiddleware<RequestGuardMiddleware>();
+            // Security headers wrap all downstream early-rejection paths, including governance and
+            // payload-budget failures, so malformed requests do not receive a weaker baseline.
             app.UseMiddleware<SecurityHeadersMiddleware>();
+            app.UseMiddleware<RequestGovernanceMiddleware>();
+            app.UseMiddleware<RequestGuardMiddleware>();
 
             return app;
         }
