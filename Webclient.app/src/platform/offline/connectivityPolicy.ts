@@ -48,29 +48,28 @@ const finite = (name: string, value: number, min: number, max: number): number =
   return value;
 };
 
-const isControlCodePoint = (value: string): boolean => {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint !== undefined && (codePoint <= 31 || codePoint === 127)) return true;
-  }
-  return false;
+const isControlCharacter = (character: string): boolean => {
+  const codePoint = character.codePointAt(0);
+  return codePoint !== undefined && (codePoint <= 31 || codePoint === 127);
 };
 
+const isControlCodePoint = (value: string): boolean =>
+  Array.from(value).some(isControlCharacter);
+
 const replaceControlCodePoints = (value: string): string => {
-  let result = '';
-  let replacing = false;
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    const control = codePoint !== undefined && (codePoint <= 31 || codePoint === 127);
-    if (control) {
-      if (!replacing) result += ' ';
-      replacing = true;
-    } else {
-      result += character;
-      replacing = false;
-    }
-  }
-  return result;
+  const normalized = Array.from(value).reduce(
+    (state, character) => {
+      const control = isControlCharacter(character);
+      if (control) {
+        return state.replacing
+          ? state
+          : { result: state.result + ' ', replacing: true };
+      }
+      return { result: state.result + character, replacing: false };
+    },
+    { result: '', replacing: false },
+  );
+  return normalized.result;
 };
 
 const classifyFailure = (signal: ConnectivitySignal): boolean => {
