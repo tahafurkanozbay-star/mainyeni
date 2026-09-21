@@ -177,13 +177,13 @@ export class DataGridRuntime<Row> {
 
   constructor(options: DataGridRuntimeOptions<Row>) {
     if (!options.columns.length) throw new Error("DataGridRuntime en az bir kolon gerektirir.");
-    const seen = new Set<string>();
-    for (const column of options.columns) {
+    options.columns.reduce((seen, column) => {
       const id = normalizeId(column.id);
       if (!id) throw new Error("DataGrid kolon id alanı boş olamaz.");
       if (seen.has(id)) throw new Error(`DataGrid kolon id benzersiz olmalıdır: ${id}`);
       seen.add(id);
-    }
+      return seen;
+    }, new Set<string>());
     this.columns = freezeColumns(options.columns);
     this.columnById = new Map(this.columns.map((column) => [column.id, column]));
     this.getRowId = options.getRowId;
@@ -398,12 +398,7 @@ export class DataGridRuntime<Row> {
   }
 
   private rowIds(): Set<string> {
-    const ids = new Set<string>();
-    for (const row of this.rows) {
-      const id = this.safeRowId(row);
-      if (id) ids.add(id);
-    }
-    return ids;
+    return new Set(this.rows.map((row) => this.safeRowId(row)).filter(Boolean));
   }
 
   private safeRowId(row: Row): string {
@@ -421,14 +416,9 @@ export class DataGridRuntime<Row> {
       return;
     }
     const valid = this.rowIds();
-    const next = new Set<string>();
-    for (const raw of values) {
-      const id = normalizeId(raw);
-      if (!id || !valid.has(id)) continue;
-      next.add(id);
-      if (this.selectionMode === "single") break;
-    }
-    this.selected = next;
+    const normalized = Array.from(values, (raw) => normalizeId(raw))
+      .filter((id) => id.length > 0 && valid.has(id));
+    this.selected = new Set(this.selectionMode === "single" ? normalized.slice(0, 1) : normalized);
   }
 
   private sortedRows(): readonly Row[] {
@@ -512,7 +502,7 @@ export class DataGridRuntime<Row> {
     const previous = this.snapshotValue;
     this.revision += 1;
     this.snapshotValue = this.buildSnapshot();
-    for (const listener of this.listeners) this.notifyOne(listener, this.snapshotValue, previous);
+    this.listeners.forEach((listener) => this.notifyOne(listener, this.snapshotValue, previous));
     return this.snapshotValue;
   }
 
