@@ -85,7 +85,7 @@ describe('OfflineSnapshotCodec', () => {
   });
 
   it('enforces snapshot byte budget before JSON parsing', () => {
-    const codec = new OfflineSnapshotCodec({ maxSnapshotBytes: 1024 });
+    const codec = new OfflineSnapshotCodec({ maxSnapshotBytes: 1024, maxPayloadBytes: 512 });
     expect(() => codec.decode(' '.repeat(1025), now)).toThrow(/byte budget/);
   });
 
