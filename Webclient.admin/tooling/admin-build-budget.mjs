@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { gzipSync } from 'node:zlib';
+import { fileURLToPath } from 'node:url';
 
 const DEFAULT_BUILD_DIR = 'build';
 const DEFAULT_MANIFEST = path.join(DEFAULT_BUILD_DIR, '.vite', 'manifest.json');
@@ -105,6 +106,7 @@ export const evaluateAdminBuildBudget = (report, config) => {
     ['initial-js-gzip-bytes', report.javascript.gzipBytes, config.maxInitialJavaScriptGzipBytes],
     ['largest-initial-js-bytes', report.javascript.largestBytes, config.maxLargestInitialJavaScriptBytes],
     ['initial-css-bytes', report.css.bytes, config.maxInitialCssBytes],
+    ['initial-css-gzip-bytes', report.css.gzipBytes, config.maxInitialCssGzipBytes],
   ];
 
   for (const [id, actual, maximum] of checks) {
@@ -165,7 +167,7 @@ export const formatAdminBuildReport = (report, evaluation = null) => {
 };
 
 const isDirectExecution = process.argv[1]
-  && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirectExecution) {
   const root = process.cwd();
