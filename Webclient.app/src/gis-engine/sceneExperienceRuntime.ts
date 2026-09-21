@@ -420,7 +420,7 @@ export const createSceneExperienceRuntime = (
       emit('recovery-start');
 
       try {
-        await view.tryFatalErrorRecovery?.();
+        await view.tryFatalErrorRecovery();
         recovery.successes += 1;
         recovery.lastError = null;
         status = active ? 'ready' : 'idle';
