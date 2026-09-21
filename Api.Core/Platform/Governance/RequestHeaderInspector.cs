@@ -51,7 +51,11 @@ namespace Api.Core.Platform.Governance
                 authorizationBytes: GetHeaderUtf8Length(headers, "Authorization"),
                 cookieBytes: GetHeaderUtf8Length(headers, "Cookie"),
                 contentTypeBytes: GetHeaderUtf8Length(headers, "Content-Type"),
-                forwardedForBytes: GetHeaderUtf8Length(headers, "X-Forwarded-For"));
+                forwardedForBytes: GetHeaderUtf8Length(headers, "X-Forwarded-For"),
+                authorizationValueCount: GetHeaderValueCount(headers, "Authorization"),
+                contentLengthValueCount: GetHeaderValueCount(headers, "Content-Length"),
+                transferEncodingValueCount: GetHeaderValueCount(headers, "Transfer-Encoding"),
+                hostValueCount: GetHeaderValueCount(headers, "Host"));
         }
 
         public static long GetHeaderUtf8Length(
@@ -79,6 +83,20 @@ namespace Api.Core.Platform.Governance
             }
 
             return total;
+        }
+
+        public static int GetHeaderValueCount(
+            IHeaderDictionary headers,
+            string headerName)
+        {
+            if (headers == null || string.IsNullOrWhiteSpace(headerName))
+            {
+                return 0;
+            }
+
+            return headers.TryGetValue(headerName, out var values)
+                ? values.Count
+                : 0;
         }
 
         public static bool ContainsNewline(IHeaderDictionary headers)
@@ -145,7 +163,11 @@ namespace Api.Core.Platform.Governance
             long authorizationBytes,
             long cookieBytes,
             long contentTypeBytes,
-            long forwardedForBytes)
+            long forwardedForBytes,
+            int authorizationValueCount,
+            int contentLengthValueCount,
+            int transferEncodingValueCount,
+            int hostValueCount)
         {
             HeaderCount = headerCount;
             HeaderValueCount = headerValueCount;
@@ -154,6 +176,10 @@ namespace Api.Core.Platform.Governance
             CookieBytes = cookieBytes;
             ContentTypeBytes = contentTypeBytes;
             ForwardedForBytes = forwardedForBytes;
+            AuthorizationValueCount = authorizationValueCount;
+            ContentLengthValueCount = contentLengthValueCount;
+            TransferEncodingValueCount = transferEncodingValueCount;
+            HostValueCount = hostValueCount;
         }
 
         public int HeaderCount { get; }
@@ -169,5 +195,13 @@ namespace Api.Core.Platform.Governance
         public long ContentTypeBytes { get; }
 
         public long ForwardedForBytes { get; }
+
+        public int AuthorizationValueCount { get; }
+
+        public int ContentLengthValueCount { get; }
+
+        public int TransferEncodingValueCount { get; }
+
+        public int HostValueCount { get; }
     }
 }
