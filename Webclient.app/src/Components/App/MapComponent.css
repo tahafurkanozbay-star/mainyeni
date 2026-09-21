@@ -59,12 +59,10 @@
   isolation: isolate;
 }
 
-/* The SceneView is created lazily inside this overlay and shares the same Map
- * object as the 2D MapView. The host deliberately stays fully laid out while
- * inactive: SceneView measures its container during WebGL initialization, so
- * display/content-visibility suppression can leave a logically active 3D mode
- * with a blank rendering surface. Opacity and pointer-events hide the inactive
- * scene without collapsing its geometry. */
+/* SceneView stays laid out while inactive so WebGL can measure a stable host.
+ * It shares the 2D Map and remains mounted to avoid context churn.
+ * Opacity and pointer-events hide the scene without collapsing its geometry
+ * or using content-visibility, which can suppress SceneView rendering. */
 .experience-scene-host {
   position: absolute;
   inset: 0;
@@ -76,11 +74,13 @@
   pointer-events: none;
   transition: opacity var(--exp-transition, 180ms ease);
   contain: layout paint;
+  /* Intentionally no content-visibility: the WebGL host must stay measurable. */
 }
 
 .experience-scene-host.is-active {
   opacity: 1;
   pointer-events: auto;
+  /* Activation changes paint/interaction only, never the host's layout size. */
 }
 
 .experience-scene-host.is-inactive {
