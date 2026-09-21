@@ -118,7 +118,8 @@ describe('createSpatialQueryCacheRuntime', () => {
   it('propagates active cancellation through the request coordinator', async () => {
     const runtime = createSpatialQueryCacheRuntime();
     const controller = new AbortController();
-    const execution = runtime.execute(key(), ({ signal }) => new Promise<number>((_resolve, reject) => {
+    const execution = runtime.execute(key(), ({ signal }) => new Promise<number>((resolve, reject) => {
+      void resolve;
       signal.addEventListener('abort', () => reject(signal.reason), { once: true });
     }), { signal: controller.signal });
     await Promise.resolve();
