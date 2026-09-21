@@ -524,3 +524,12 @@
 - SONRAKİ PLATFORM GÖREVİ: merged #209 branch must not be reused. Next Platform turn must start from then-current main, re-read orchestration/progress files, inspect remaining Platform/whole-code language debt and active team ownership, and preserve >=4,000 meaningful additions, exact-head CI, security/performance/regression and final-main-refresh gates.
 - POST-MERGE NOTE: this progress-only documentation commit is created after the fully tested squash merge; no CI PASS is inferred for the documentation-only commit itself.
 
+
+
+## 2026-09-21 — Business strict TypeScript modernization recovery
+- PR #211 became stale after current main advanced from `1d11d624cf4155ed3dd4aee267bf093ed2adb49c` to `fe1906202c26b4cd91a4de82616e5f3830447d33`; the 109 Business modernization paths had zero overlap with the intervening offline Platform work.
+- Recovery is rebuilt from current main and preserves all offline Platform code and progress history.
+- Production Business JavaScript and Business JavaScript tests are ratcheted to zero; migrated GIS query/graphics helpers are TypeScript-only.
+- Exact-base regressions are fixed rather than suppressed: API tests assert the real Platform `RawRequestConfig.timeout` contract, Numbering preserves explicit `distanceMeters`, and sparse/null ArcGIS feature rows are normalized without dereference failures.
+- No new dependency, WMS/WFS/WMTS integration, invented endpoint, direct browser fetch stack, client secret, browser-storage surface, telemetry/analytics, or polling loop is added. Existing Google Maps/TKGM destinations are preserved and the shared deterministic icon resolver remains canonical.
+- Merge requires fresh exact-head Platform Architecture Audit, Webclient Quality and Release QA success, additions >= 4,000, behind=0, current-main merge-base, mergeable=true and zero unresolved review threads.
