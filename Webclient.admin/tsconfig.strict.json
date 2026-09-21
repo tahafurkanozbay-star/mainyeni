@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noCheck": false
+  },
+  "include": [
+    "src/runtime/adminEnvironment.ts",
+    "src/Business/AuthBusiness.ts",
+    "src/Core/Global.ts",
+    "src/reportWebVitals.ts",
+    "src/vite-env.d.ts"
+  ]
+}

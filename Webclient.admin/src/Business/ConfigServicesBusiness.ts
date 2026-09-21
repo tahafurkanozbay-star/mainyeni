@@ -154,11 +154,12 @@ export const ConfigServicesBusiness = {
 
   Import: async(_files) => {
 
-    let headers = await AuthBusiness.GetRequestHeaders();
-    
-    headers["Content-Type"]="multipart/form-data";
-    
-    
+    const requestHeaders = await AuthBusiness.GetRequestHeaders();
+    const headers = {
+      ...(requestHeaders ?? {}),
+      "Content-Type": "multipart/form-data",
+    };
+
     const data = new FormData()
     data.append('file', _files[0]);
     

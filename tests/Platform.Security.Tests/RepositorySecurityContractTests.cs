@@ -62,8 +62,8 @@ public sealed class RepositorySecurityContractTests
     [Fact]
     public void AdminSessionStorage_DoesNotPersistBearerTokenAcrossBrowserSessions()
     {
-        var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.js");
-        var constants = Read("Webclient.admin/src/Core/Constants.js");
+        var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.ts");
+        var constants = Read("Webclient.admin/src/Core/Constants.ts");
 
         Assert.Contains("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
         Assert.Contains("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
