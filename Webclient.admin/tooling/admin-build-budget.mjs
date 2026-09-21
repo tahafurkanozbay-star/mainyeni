@@ -142,7 +142,7 @@ export const evaluateAdminBuildBudget = (report, config) => {
   }
 
   const countChecks = [
-    ['initial-js-file-count', report.javascript.files.length, config.maxInitialJavaScriptFiles],
+    ['initial-js-file-count', report.javascript.files?.length ?? 0, config.maxInitialJavaScriptFiles],
     ['static-graph-module-count', report.staticGraphKeys.length, config.maxStaticGraphModules],
   ];
 
