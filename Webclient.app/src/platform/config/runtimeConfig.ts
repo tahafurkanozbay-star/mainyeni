@@ -345,10 +345,8 @@ export const normalizeApiBaseUrl = (value: unknown): string => {
     return normalizeRelativeApiPath(parsed.pathname)
       ?? RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
   } catch {
-    // Build/runtime configuration is untrusted input and fails closed.
+    return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
   }
-
-  return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
 };
 
 /**
