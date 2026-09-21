@@ -46,7 +46,7 @@ describe('Business API request policy', () => {
       cache: true,
       dedupe: true,
       cacheTtlMs: 30000,
-      timeoutMs: 15000,
+      timeout: 15000,
     });
   });
 });
@@ -96,7 +96,7 @@ describe('Business API runtime', () => {
       control: {
         signal: controller.signal,
         cacheTtlMs: 5000,
-        timeoutMs: 7000,
+        timeout: 7000,
       },
     });
 

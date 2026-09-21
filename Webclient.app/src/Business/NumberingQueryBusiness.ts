@@ -148,9 +148,11 @@ const executeQuery = async (
       ? {
         spatial: {
           geometry: options.geometry,
-          distance: options.distance ?? options.distanceMeters ?? 0,
-          units: 'meters',
-          spatialRelationship: 'intersects',
+          ...(options.distanceMeters !== undefined
+            ? { distanceMeters: options.distanceMeters }
+            : { distance: options.distance ?? 0 }),
+          units: options.units ?? 'meters',
+          spatialRelationship: options.spatialRelationship ?? 'intersects',
         } as const,
       }
       : {}),
