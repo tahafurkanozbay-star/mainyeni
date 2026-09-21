@@ -36,7 +36,7 @@ const createDefaultSymbol = (geometry: Geometry): Symbol | null => {
       const fill = new SimpleFillSymbol({
         color: [0, 0, 0, 0],
       });
-      fill.outline = createLineSymbol();
+      fill.set('outline', createLineSymbol());
       return fill;
     }
     default:
@@ -54,7 +54,7 @@ const createGraphic = (
 
   const graphic = new Graphic();
   graphic.geometry = geometry;
-  graphic.symbol = resolvedSymbol;
+  graphic.set('symbol', resolvedSymbol);
   return graphic;
 };
 
@@ -119,12 +119,12 @@ export function CreateGraphicFromPicture(
 
   const graphic = new Graphic();
   graphic.geometry = geometry;
-  graphic.symbol = new PictureMarkerSymbol({
+  graphic.set('symbol', new PictureMarkerSymbol({
     url: pictureUrl,
     width,
     height,
     angle,
-  });
+  }));
   callback(graphic);
 }
 
