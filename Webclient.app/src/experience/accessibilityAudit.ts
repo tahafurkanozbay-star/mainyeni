@@ -98,10 +98,14 @@ function auditReferences(element: HTMLElement, issues: AccessibilityIssue[]): vo
     })));
 }
 function auditBooleanAttributes(element: HTMLElement, issues: AccessibilityIssue[]): void {
-    for (const attribute of BOOLEAN_ARIA) {
-        const value = element.getAttribute(attribute);
-        if (value !== null && !["true", "false"].includes(value)) push(issues, "invalid-aria-boolean", element, `${attribute} boolean olmalı: ${value}`);
-    }
+    const invalid = BOOLEAN_ARIA
+        .map(attribute => ({ attribute, value: element.getAttribute(attribute) }))
+        .filter(({ value }) => value !== null && !["true", "false"].includes(value));
+    issues.push(...invalid.map(({ attribute, value }) => ({
+        kind: "invalid-aria-boolean" as const,
+        element,
+        message: `${attribute} boolean olmalı: ${value}`
+    })));
 }
 function auditStateAttributes(element: HTMLElement, issues: AccessibilityIssue[]): void {
     const current = element.getAttribute("aria-current");
