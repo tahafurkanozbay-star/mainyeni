@@ -12,6 +12,10 @@ describe('LayerBusiness', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   test('loads grouped layers through the same-origin platform client', async () => {
     const payload = [{ id: 'transport' }];
     apiClient.get.mockResolvedValue(payload);
@@ -21,12 +25,14 @@ describe('LayerBusiness', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/Gis/Layer/ListGrouped');
   });
 
-  test('preserves the legacy null contract when the request fails', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    apiClient.get.mockRejectedValue(new Error('offline'));
+  test('preserves the legacy null contract and reports transport failure', async () => {
+    const error = new Error('offline');
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    apiClient.get.mockRejectedValue(error);
 
     await expect(LayerBusiness.GetLayers()).resolves.toBeNull();
-    expect(consoleSpy).toHaveBeenCalledTimes(1);
-    consoleSpy.mockRestore();
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError).toHaveBeenCalledWith(error);
   });
 });

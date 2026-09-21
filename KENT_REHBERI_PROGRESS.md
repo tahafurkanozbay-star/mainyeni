@@ -551,3 +551,17 @@
 - SECURITY / NETWORK: final changed-file scan found no new direct fetch/axios/XMLHttpRequest/WebSocket/EventSource, WMS/WFS/WMTS, recurring timer/polling, unsafe HTML/dynamic code, hard-coded secret, console debugging or second icon resolver.
 - MERGE: expected-head squash merge returned `merged=true`; merge SHA `24da298c70fce2a28a1cf0e1694401ca3cbf401e`. PR #216 verified closed+merged and GitHub main was verified at exactly the same SHA immediately after merge.
 - POST-MERGE NOTE: this closure entry is documentation-only and is appended after the already validated/merged code SHA; no additional code-behavior claim is derived from this documentation commit.
+
+
+## Deep QA / Business current-main recovery — 2026-09-21 09:07 TRT
+- TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization; strict-TypeScript Business/API recovery after concurrent GIS merge advanced main.
+- BASE MAIN: `3c524fd1aaada3e61da14812c255acb4987bb49f`.
+- BRANCH: `agent/business-ts-modernization-20260921-0907-3c524fd`.
+- RECOVERY: stale #218 had become behind=2 after a non-overlapping GIS merge. Its validated Business delta was rebuilt GitHub-native from the exact old base...head file delta onto the new main Git tree; `KENT_REHBERI_PROGRESS.md` was intentionally excluded from transplant so the newer GIS history on main remains canonical.
+- KAPSAM / GATE: pre-progress exact base...head = 5,327 additions / 1,945 deletions / 110 files, ahead=1, behind=0, merge-base exact current main. >=4,000 meaningful-additions gate is satisfied independently of this documentation entry.
+- DİL MODERNİZASYONU: Business production JavaScript -> 0; Business JS tests -> 0; shared GisGraphicsHelper -> strict TypeScript; dedicated `tsconfig.business.json`; existing main-owned strict `GisQueryHelper.ts` preserved and extended only with canonical compatibility type aliases.
+- RUNTIME / GÜVENLİK: bounded typed Business API/query runtime; governed Platform apiClient instead of duplicate fetch transport; bounded timeouts/no retries; cancellation/dedupe; strict input/identifier/coordinate normalization; SQL field validation/literal escaping; bounded privacy-safe diagnostics; bounded polygon materialization; attachment identifiers narrowed through a dedicated runtime guard.
+- TOOLCHAIN: keep current stable React 19.3 / Vite 8.3 / TypeScript 7 and supported Node 24 LTS / .NET 10 LTS. No prerelease or runtime-major churn solely for novelty.
+- NETWORK: no WMS/WFS/WMTS, new endpoint, client secret, telemetry, browser persistence, remote runtime asset or polling loop. Existing Google Maps/TKGM destinations remain pre-existing behavior.
+- CONCURRENCY: new-main GIS files are preserved because recovery is based directly on the current main tree; no GIS production file is part of this Business delta. Concurrent Experience work remains non-overlapping at the production-path level.
+- CI / MERGE: new current-main PR must be opened from this head and exact-head Architecture Audit, Webclient Quality, Platform Backend Validation and Release QA must all complete successfully. Merge only with additions>=4,000, behind=0, merge-base=current main, mergeable=true, unresolved review threads=0 and final security/performance/regression review clean.
