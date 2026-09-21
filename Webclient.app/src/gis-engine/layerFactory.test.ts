@@ -1,14 +1,14 @@
 import { resetArcgisModuleRuntimeCache, setArcgisModuleTransport } from './arcgisModuleRuntime';
 import { create2DLayer, create3DLayer } from './layerFactory';
 
-const loadModules = jest.fn();
+const loadModules = vi.fn();
 const arcgisTestTransport = { name: 'layer-factory-test', loadModules };
 
-const FeatureLayer = jest.fn().mockImplementation(function FeatureLayerMock(options) { return { ...options }; });
-const MapImageLayer = jest.fn().mockImplementation(function MapImageLayerMock(options) { return { ...options }; });
-const VectorTileLayer = jest.fn().mockImplementation(function VectorTileLayerMock(options) { return { ...options }; });
-const ImageryLayer = jest.fn().mockImplementation(function ImageryLayerMock(options) { return { ...options }; });
-const SceneLayer = jest.fn().mockImplementation(function SceneLayerMock(options) { return { ...options }; });
+const FeatureLayer = vi.fn().mockImplementation(function FeatureLayerMock(options) { return { ...options }; });
+const MapImageLayer = vi.fn().mockImplementation(function MapImageLayerMock(options) { return { ...options }; });
+const VectorTileLayer = vi.fn().mockImplementation(function VectorTileLayerMock(options) { return { ...options }; });
+const ImageryLayer = vi.fn().mockImplementation(function ImageryLayerMock(options) { return { ...options }; });
+const SceneLayer = vi.fn().mockImplementation(function SceneLayerMock(options) { return { ...options }; });
 
 const sdkModules = {
   'esri/layers/FeatureLayer': FeatureLayer,
@@ -22,7 +22,7 @@ const absolute = (path) => new URL(path, window.location.origin).toString().repl
 
 describe('layerFactory', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     setArcgisModuleTransport(arcgisTestTransport);
     resetArcgisModuleRuntimeCache();
     loadModules.mockImplementation(([name]) => Promise.resolve([sdkModules[name]]));
