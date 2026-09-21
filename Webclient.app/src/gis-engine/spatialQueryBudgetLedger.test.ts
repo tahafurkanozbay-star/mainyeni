@@ -154,6 +154,7 @@ describe('SpatialQueryBudgetLedger', () => {
     ledger.acquire(request('background', { priority: 'background' }));
     ledger.acquire(request('interactive', { priority: 'interactive' }));
     expect(ledger.list().map((lease) => lease.priority)).toEqual(['interactive', 'normal', 'background']);
+    expect(Object.isFrozen(ledger.list())).toBe(true);
   });
 
   it('bounds diagnostic history to the configured tail', () => {
