@@ -149,3 +149,31 @@ test('passes a bounded lazy-loaded graph', () => {
   assert.equal(evaluation.ok, true);
   assert.equal(evaluation.violations.length, 0);
 });
+
+test('fails graph cardinality budgets when bootstrap fan-out regresses', () => {
+  const evaluation = evaluateAdminBuildBudget({
+    javascript: {
+      bytes: 100,
+      gzipBytes: 50,
+      largestBytes: 60,
+      files: [{}, {}, {}, {}],
+    },
+    css: { bytes: 10, gzipBytes: 5, files: [] },
+    dynamicImports: ['a', 'b'],
+    staticGraphKeys: ['src/main.tsx', 'a', 'b', 'c', 'd'],
+  }, {
+    maxInitialJavaScriptFiles: 3,
+    maxStaticGraphModules: 4,
+    minDynamicImports: 2,
+  });
+
+  assert.equal(evaluation.ok, false);
+  assert.deepEqual(
+    new Set(evaluation.violations.map((item) => item.id)),
+    new Set([
+      'initial-js-file-count',
+      'static-graph-module-count',
+    ]),
+  );
+});
+
