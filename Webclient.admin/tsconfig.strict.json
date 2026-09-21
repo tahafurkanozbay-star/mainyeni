@@ -22,6 +22,8 @@
     "src/Core/Toolbox/GisQueryHelper.test.ts",
     "src/Core/Toolbox/GisGraphicsHelper.ts",
     "src/Core/Toolbox/DataHelper.ts",
-    "src/Components/Map.tsx"
+    "src/Components/Map.tsx",
+    "src/types/vendor.d.ts",
+    "src/Core/Fonts/UbuntuNormal.ts"
   ]
 }
