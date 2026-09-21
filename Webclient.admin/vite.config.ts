@@ -12,6 +12,7 @@ export default defineConfig({
     sourcemap: false,
     cssCodeSplit: true,
     reportCompressedSize: true,
+    manifest: true,
   },
   server: {
     host: '0.0.0.0',
