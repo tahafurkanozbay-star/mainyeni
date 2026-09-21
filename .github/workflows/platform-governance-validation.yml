@@ -70,6 +70,9 @@ jobs:
       - name: Strict TypeScript governance boundary
         run: npx tsc --noEmit -p tsconfig.platform-governance.json --pretty false
 
+      - name: Strict migrated Platform test TypeScript
+        run: npm run typecheck:platform-tests -- --pretty false
+
       - name: Focused governance tests
         run: npx vitest run src/platform/governance --reporter=verbose
 
