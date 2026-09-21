@@ -266,7 +266,7 @@ describe('analyzeServiceGraph valid graphs', () => {
     expect(snapshot.dependents.telemetry).toEqual([]);
   });
 
-  test('counts dependency and capability relations', () => {
+  test('counts every dependency and capability declaration', () => {
     const snapshot = analyzeServiceGraph([
       service('config', { provides: ['runtime-config'] }),
       service('network', {
