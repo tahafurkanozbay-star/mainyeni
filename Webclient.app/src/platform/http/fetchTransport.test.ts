@@ -46,7 +46,7 @@ type FetchMock = ReturnType<typeof jest.fn<FetchImplementation>>;
 const fetchResolved = (value: ResponseLike): FetchMock =>
   jest.fn<FetchImplementation>().mockResolvedValue(value);
 
-const firstFetchCall = (fetchImpl: FetchMock): readonly [string | URL | Request, RequestInit?] => {
+const firstFetchCall = (fetchImpl: FetchMock) => {
   const call = fetchImpl.mock.calls.at(0);
   if (!call) throw new TypeError('expected one fetch call');
   return call;
@@ -306,7 +306,7 @@ describe('fetchTransport executeFetch', () => {
   });
 
   test('maps transport timeout to TIMEOUT', async () => {
-    let timeoutCallback;
+    const timer: { callback?: TimerHandler } = {};
     const fetchImpl = jest.fn<FetchImplementation>((_url, options) => new Promise<ResponseLike>((_resolve, reject) => {
       options?.signal?.addEventListener('abort', () => {
         reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
