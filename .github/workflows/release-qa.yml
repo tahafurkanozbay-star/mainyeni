@@ -115,7 +115,7 @@ jobs:
               Webclient.app/vite.config.ts \
               Webclient.app/vitest.config.ts \
             | sed 's#^Webclient.app/##' \
-            | grep -E '\.(cjs|mjs|js|jsx|ts|tsx)$' || true
+            | awk '/\.(cjs|mjs|js|jsx|ts|tsx)$/'
           )
           if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No changed Webclient lint targets."
