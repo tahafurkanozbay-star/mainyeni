@@ -32,6 +32,7 @@ namespace Api.Core.Platform
             ValidateRateLimiting(options.RateLimiting, failures);
             ValidateResponseCompression(options.ResponseCompression, failures);
             ValidateDiagnostics(options.Diagnostics, failures);
+            ValidateGovernance(options.Governance, failures);
 
             return failures.Count == 0
                 ? ValidateOptionsResult.Success
@@ -307,6 +308,90 @@ namespace Api.Core.Platform
             if (options == null)
             {
                 failures.Add("Platform:Diagnostics configuration is required.");
+            }
+        }
+
+        private static void ValidateGovernance(
+            ApiPlatformOptions.GovernanceOptions options,
+            ICollection<string> failures)
+        {
+            if (options == null)
+            {
+                failures.Add("Platform:Governance configuration is required.");
+                return;
+            }
+
+            if (!options.Enabled)
+            {
+                return;
+            }
+
+            ValidateRange(options.MaxRawTargetChars, 256, 32768, "MaxRawTargetChars", failures);
+            ValidateRange(options.MaxPathChars, 128, options.MaxRawTargetChars, "MaxPathChars", failures);
+            ValidateRange(options.MaxQueryStringChars, 0, options.MaxRawTargetChars, "MaxQueryStringChars", failures);
+            ValidateRange(options.MaxQueryParameters, 1, 1024, "MaxQueryParameters", failures);
+            ValidateRange(options.MaxHeaderCount, 8, 256, "MaxHeaderCount", failures);
+            ValidateRange(options.MaxHeaderValues, options.MaxHeaderCount, 1024, "MaxHeaderValues", failures);
+            ValidateRange(options.MaxHeaderBytes, 4096, 262144, "MaxHeaderBytes", failures);
+            ValidateRange(options.MaxAuthorizationHeaderBytes, 256, options.MaxHeaderBytes, "MaxAuthorizationHeaderBytes", failures);
+            ValidateRange(options.MaxCookieHeaderBytes, 256, options.MaxHeaderBytes, "MaxCookieHeaderBytes", failures);
+            ValidateRange(options.MaxContentTypeHeaderBytes, 64, 4096, "MaxContentTypeHeaderBytes", failures);
+            ValidateRange(options.MaxForwardedForHeaderBytes, 64, options.MaxHeaderBytes, "MaxForwardedForHeaderBytes", failures);
+
+            if (options.MaxPathChars + options.MaxQueryStringChars + 1 > options.MaxRawTargetChars)
+            {
+                failures.Add("Platform:Governance path/query budgets cannot exceed MaxRawTargetChars.");
+            }
+
+            if (options.AllowedBodyContentTypes == null || options.AllowedBodyContentTypes.Count == 0)
+            {
+                failures.Add("Platform:Governance:AllowedBodyContentTypes must contain at least one media type.");
+            }
+            else
+            {
+                foreach (var mediaType in options.AllowedBodyContentTypes)
+                {
+                    if (string.IsNullOrWhiteSpace(mediaType) ||
+                        mediaType.Length > 128 ||
+                        mediaType.Contains("\r", StringComparison.Ordinal) ||
+                        mediaType.Contains("\n", StringComparison.Ordinal) ||
+                        !mediaType.Contains("/", StringComparison.Ordinal))
+                    {
+                        failures.Add($"Invalid request media type '{mediaType ?? "<null>"}'.");
+                    }
+                }
+            }
+
+            var concurrency = options.Concurrency;
+            if (concurrency == null)
+            {
+                failures.Add("Platform:Governance:Concurrency configuration is required.");
+                return;
+            }
+
+            if (!concurrency.Enabled)
+            {
+                return;
+            }
+
+            ValidateRange(concurrency.MaxConcurrentRequests, 1, 100000, "Concurrency:MaxConcurrentRequests", failures);
+            ValidateRange(concurrency.MaxConcurrentPerClient, 1, concurrency.MaxConcurrentRequests, "Concurrency:MaxConcurrentPerClient", failures);
+            ValidateRange(concurrency.MaxTrackedClients, 16, 100000, "Concurrency:MaxTrackedClients", failures);
+            ValidateRange(concurrency.ClientIdleSeconds, 5, 86400, "Concurrency:ClientIdleSeconds", failures);
+            ValidateRange(concurrency.CleanupInterval, 16, 100000, "Concurrency:CleanupInterval", failures);
+            ValidateRange(concurrency.RetryAfterSeconds, 1, 3600, "Concurrency:RetryAfterSeconds", failures);
+        }
+
+        private static void ValidateRange(
+            long value,
+            long minimum,
+            long maximum,
+            string settingName,
+            ICollection<string> failures)
+        {
+            if (value < minimum || value > maximum)
+            {
+                failures.Add($"Platform:Governance:{settingName} must be between {minimum} and {maximum}.");
             }
         }
 
