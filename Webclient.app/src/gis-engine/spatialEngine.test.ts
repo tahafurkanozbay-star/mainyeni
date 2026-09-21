@@ -9,19 +9,19 @@ import {
   stableQueryKey,
 } from './spatialEngine';
 
-const loadModules = jest.fn();
+const loadModules = vi.fn();
 const arcgisTestTransport = { name: 'spatial-engine-test', loadModules };
 
 describe('spatialEngine runtime', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     setArcgisModuleTransport(arcgisTestTransport);
     resetArcgisModuleRuntimeCache();
   });
   test('loads each ArcGIS module once and reuses the resolved module', async () => {
     const geometryEngine = {
-      geodesicDistance: jest.fn(() => 12),
-      geodesicArea: jest.fn(() => 42),
+      geodesicDistance: vi.fn(() => 12),
+      geodesicArea: vi.fn(() => 42),
     };
     loadModules.mockResolvedValue([geometryEngine]);
 
@@ -51,7 +51,7 @@ describe('spatialEngine runtime', () => {
 
   test('passes AbortSignal to FeatureLayer-like query calls', async () => {
     const signal = { aborted: false };
-    const layer = { queryFeatures: jest.fn().mockResolvedValue({ features: [] }) };
+    const layer = { queryFeatures: vi.fn().mockResolvedValue({ features: [] }) };
 
     await queryByGeometry(layer, {
       geometry: { type: 'point' },
@@ -71,7 +71,7 @@ describe('spatialEngine runtime', () => {
   });
 
   test('rejects an already cancelled query before touching the layer', async () => {
-    const layer = { queryFeatures: jest.fn() };
+    const layer = { queryFeatures: vi.fn() };
 
     await expect(queryByGeometry(layer, { signal: { aborted: true } })).rejects.toMatchObject({
       code: 'CANCELLED',
@@ -82,7 +82,7 @@ describe('spatialEngine runtime', () => {
   test('rejects a query that becomes cancelled while the layer request is resolving', async () => {
     const signal = { aborted: false };
     const layer = {
-      queryFeatures: jest.fn().mockImplementation(async () => {
+      queryFeatures: vi.fn().mockImplementation(async () => {
         signal.aborted = true;
         return { features: [{ id: 1 }] };
       }),
