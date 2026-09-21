@@ -1,5 +1,5 @@
-import { createRuntimeTelemetry, type RuntimeTelemetry } from '../runtime/privacyTelemetry';
-import { createVersionedStateStore, type VersionedStateStore } from '../runtime/stateStore';
+import { createGovernanceStateStore, type GovernanceStateStore } from './governanceState';
+import { createGovernanceTelemetry, type GovernanceTelemetry } from './governanceTelemetry';
 import {
   freezeArray,
   stableFingerprint,
@@ -37,8 +37,8 @@ export interface PlatformGovernanceKernel {
   readonly features: FeaturePolicy;
   readonly manifest: RuntimeManifestRegistry;
   readonly readiness: ReadinessGate;
-  readonly telemetry: RuntimeTelemetry;
-  readonly state: VersionedStateStore<GovernanceKernelState>;
+  readonly telemetry: GovernanceTelemetry;
+  readonly state: GovernanceStateStore;
   readonly start: (options?: GovernanceStartOptions) => GovernanceKernelSnapshot;
   readonly stop: () => GovernanceKernelSnapshot;
   readonly reconfigure: (source: Readonly<Record<string, unknown>>, options?: Omit<GovernanceStartOptions, 'configSource'>) => GovernanceKernelSnapshot;
@@ -87,13 +87,13 @@ export const createPlatformGovernanceKernel = (
     clock,
     onListenerError: options.readiness?.onListenerError ?? options.onListenerError,
   });
-  const telemetry = createRuntimeTelemetry({
+  const telemetry = createGovernanceTelemetry({
     capacity: options.telemetryCapacity ?? 400,
-    now: () => clock.now(),
+    clock,
   });
-  const state = createVersionedStateStore<GovernanceKernelState>({
+  const state = createGovernanceStateStore({
     initialState: initialState(clock.now()),
-    now: () => clock.now(),
+    clock,
     validate: validateKernelState,
     historyLimit: 64,
     onListenerError: options.onListenerError,
