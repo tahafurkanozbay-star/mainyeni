@@ -167,6 +167,35 @@ namespace Api.Core.Platform.Governance
             RequestHeaderSnapshot headers,
             IHeaderDictionary values)
         {
+            if (headers.ContentLengthValueCount > 0 &&
+                headers.TransferEncodingValueCount > 0)
+            {
+                return RejectBadRequest(
+                    "ambiguous-body-framing",
+                    "Content-Length and Transfer-Encoding cannot be combined.");
+            }
+
+            if (headers.ContentLengthValueCount > 1)
+            {
+                return RejectBadRequest(
+                    "multiple-content-length",
+                    "Multiple Content-Length header values are not accepted.");
+            }
+
+            if (headers.AuthorizationValueCount > 1)
+            {
+                return RejectBadRequest(
+                    "multiple-authorization-values",
+                    "Multiple Authorization header values are not accepted.");
+            }
+
+            if (headers.HostValueCount > 1)
+            {
+                return RejectBadRequest(
+                    "multiple-host-values",
+                    "Multiple Host header values are not accepted.");
+            }
+
             if (headers.HeaderCount > governance.MaxHeaderCount)
             {
                 return RejectHeaders("too-many-headers", "The request contains too many headers.");
