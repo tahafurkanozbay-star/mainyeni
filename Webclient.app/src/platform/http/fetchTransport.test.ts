@@ -46,7 +46,7 @@ type FetchMock = ReturnType<typeof jest.fn<FetchImplementation>>;
 const fetchResolved = (value: ResponseLike): FetchMock =>
   jest.fn<FetchImplementation>().mockResolvedValue(value);
 
-const firstFetchCall = (fetchImpl: FetchMock): readonly [string | URL | Request, RequestInit | undefined] => {
+const firstFetchCall = (fetchImpl: FetchMock): readonly [string | URL | Request, RequestInit?] => {
   const call = fetchImpl.mock.calls.at(0);
   if (!call) throw new TypeError('expected one fetch call');
   return call;
@@ -93,13 +93,13 @@ describe('fetchTransport linked abort scope', () => {
   });
 
   test('marks timeout separately from caller abort', () => {
-    let timeoutCallback: (() => void) | undefined;
+    const timer: { callback?: TimerHandler } = {};
     const scope = createLinkedAbortScope({
       timeoutMs: 100,
-      setTimeout: (callback) => { if (typeof callback === 'function') timeoutCallback = callback; return 5; },
+      setTimeout: (callback) => { timer.callback = callback; return 5; },
       clearTimeout: jest.fn()
     });
-    timeoutCallback?.();
+    if (typeof timer.callback === 'function') timer.callback();
     expect(scope.signal.aborted).toBe(true);
     expect(scope.isTimedOut()).toBe(true);
     expect(scope.isParentAborted()).toBe(false);
@@ -315,10 +315,10 @@ describe('fetchTransport executeFetch', () => {
     const promise = executeFetch({ method: 'get', url: '/items', timeout: 100 }, {
       defaults,
       fetchImpl,
-      setTimeout: (callback) => { if (typeof callback === 'function') timeoutCallback = callback; return 1; },
+      setTimeout: (callback) => { timer.callback = callback; return 1; },
       clearTimeout: jest.fn()
     });
-    timeoutCallback?.();
+    if (typeof timer.callback === 'function') timer.callback();
     await expect(promise).rejects.toMatchObject({ code: 'TIMEOUT', status: 408, retryable: true });
   });
 
