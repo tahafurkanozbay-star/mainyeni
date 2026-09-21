@@ -1,19 +1,11 @@
-const axiosPost = vi.hoisted(() => vi.fn());
-
-vi.mock('axios', () => ({
-  default: {
-    post: axiosPost,
-  },
-}));
-
 import { AuthBusiness } from './Business/AuthBusiness';
 import { Constants } from './Core/Constants';
 
-describe('admin authentication storage contract', () => {
+describe('admin authentication contract', () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
-    axiosPost.mockReset();
+    vi.restoreAllMocks();
   });
 
   test('stores valid bearer sessions only for the browser session', () => {
@@ -44,20 +36,27 @@ describe('admin authentication storage contract', () => {
     expect(localStorage.getItem(Constants.Session.SessionObjectTitle)).toBeNull();
   });
 
-  test('login posts credentials with a bounded timeout and returns response data', async () => {
-    axiosPost.mockResolvedValue({ data: { isSuccess: true } });
+  test('login posts FormData through bounded native fetch transport', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ isSuccess: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     await expect(AuthBusiness.LoginUser('admin@example.test', 'example-password'))
       .resolves.toEqual({ isSuccess: true });
 
-    expect(axiosPost).toHaveBeenCalledTimes(1);
-    expect(axiosPost.mock.calls[0]?.[0]).toMatch(/\/Auth\/Login$/u);
-    expect(axiosPost.mock.calls[0]?.[1]).toBeInstanceOf(FormData);
-    expect(axiosPost.mock.calls[0]?.[2]).toEqual(expect.objectContaining({ timeout: 15_000 }));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] ?? [];
+    expect(String(url)).toMatch(/\/Auth\/Login$/u);
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
   test('login returns null on transport failure without persisting credentials', async () => {
-    axiosPost.mockRejectedValue(new Error('network unavailable'));
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network unavailable'));
 
     await expect(AuthBusiness.LoginUser('admin@example.test', 'example-password'))
       .resolves.toBeNull();
