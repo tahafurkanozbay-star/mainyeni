@@ -7,7 +7,7 @@ const createObserverHarness = () => {
     constructor(callback) {
       this.callback = callback;
       this.options = null;
-      this.disconnect = jest.fn();
+      this.disconnect = vi.fn();
       instances.push(this);
     }
 
@@ -41,7 +41,7 @@ const createPerformance = () => {
   return {
     now: () => now,
     setNow: (value) => { now = value; },
-    getEntriesByType: jest.fn((type) => {
+    getEntriesByType: vi.fn((type) => {
       if (type === 'navigation') return [navigation];
       if (type === 'paint') return paint;
       if (type === 'resource') return resources;
@@ -297,7 +297,7 @@ describe('performance monitor observer resilience', () => {
     class PartialObserver {
       constructor(callback) {
         this.callback = callback;
-        this.disconnect = jest.fn();
+        this.disconnect = vi.fn();
         instances.push(this);
       }
       observe(options) {
