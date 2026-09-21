@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdaptiveResilienceController, type ResilienceControllerOptions } from './adaptiveResilienceController';
+import { AdaptiveResilienceController, type ResilienceControllerOptions, type ResilienceSample } from './adaptiveResilienceController';
 
 const options = (override: Partial<ResilienceControllerOptions> = {}): ResilienceControllerOptions => ({
   minConcurrency: 2,
@@ -22,6 +22,12 @@ const complete = (controller: AdaptiveResilienceController, latencyMs: number, s
   const lease = controller.acquire('background');
   expect(lease).not.toBeNull();
   lease?.complete({ latencyMs, success });
+};
+
+const completeBatch = (controller: AdaptiveResilienceController, samples: readonly ResilienceSample[]): void => {
+  const leases = samples.map(() => controller.acquire('critical'));
+  expect(leases.every(lease => lease !== null)).toBe(true);
+  leases.forEach((lease, index) => lease?.complete(samples[index] ?? { latencyMs: 0, success: true }));
 };
 
 describe('AdaptiveResilienceController', () => {
@@ -76,16 +82,13 @@ describe('AdaptiveResilienceController', () => {
 
   it('multiplicatively decreases concurrency under sustained latency pressure', () => {
     const controller = new AdaptiveResilienceController(options());
-    complete(controller, 120);
-    complete(controller, 130);
-    complete(controller, 140);
-    complete(controller, 150);
+    completeBatch(controller, [120, 130, 140, 150].map(latencyMs => ({ latencyMs, success: true })));
     expect(controller.snapshot()).toMatchObject({ concurrencyLimit: 3, adjustments: 1, latencyP95Ms: 150 });
   });
 
   it('never decreases below the configured minimum', () => {
-    const controller = new AdaptiveResilienceController(options({ initialConcurrency: 3 }));
-    for (let i = 0; i < 12; i += 1) complete(controller, 500);
+    const controller = new AdaptiveResilienceController(options({ initialConcurrency: 4 }));
+    completeBatch(controller, Array.from({ length: 4 }, () => ({ latencyMs: 500, success: true })));
     expect(controller.snapshot().concurrencyLimit).toBe(2);
   });
 
@@ -108,10 +111,12 @@ describe('AdaptiveResilienceController', () => {
 
   it('decreases on rolling error pressure', () => {
     const controller = new AdaptiveResilienceController(options());
-    complete(controller, 10, false);
-    complete(controller, 10, true);
-    complete(controller, 10, true);
-    complete(controller, 10, true);
+    completeBatch(controller, [
+      { latencyMs: 10, success: false },
+      { latencyMs: 10, success: true },
+      { latencyMs: 10, success: true },
+      { latencyMs: 10, success: true },
+    ]);
     expect(controller.snapshot()).toMatchObject({ concurrencyLimit: 3, errorRate: 0.25, failed: 1 });
   });
 
@@ -152,12 +157,16 @@ describe('AdaptiveResilienceController', () => {
   it('honors adjustment cooldown using an injected monotonic clock', () => {
     let now = 100;
     const controller = new AdaptiveResilienceController(options({ cooldownMs: 100 }), { now: () => now });
-    for (let i = 0; i < 4; i += 1) complete(controller, 200);
+    completeBatch(controller, [120, 120, 120, 120].map(latencyMs => ({ latencyMs, success: true })));
     expect(controller.snapshot().concurrencyLimit).toBe(3);
-    complete(controller, 200);
+    const duringCooldown = controller.acquire('critical');
+    expect(duringCooldown).not.toBeNull();
+    duringCooldown?.complete({ latencyMs: 120, success: true });
     expect(controller.snapshot().concurrencyLimit).toBe(3);
     now = 201;
-    complete(controller, 200);
+    const afterCooldown = controller.acquire('critical');
+    expect(afterCooldown).not.toBeNull();
+    afterCooldown?.complete({ latencyMs: 120, success: true });
     expect(controller.snapshot().concurrencyLimit).toBe(2);
   });
 
@@ -167,6 +176,16 @@ describe('AdaptiveResilienceController', () => {
     complete(controller, 10);
     complete(controller, 10);
     expect(() => complete(controller, 10)).toThrow(RangeError);
+  });
+
+  it('keeps lease ownership when completion validation fails', () => {
+    const controller = new AdaptiveResilienceController(options());
+    const lease = controller.acquire('interactive');
+    expect(lease).not.toBeNull();
+    expect(() => lease?.complete({ latencyMs: Number.NaN, success: true })).toThrow(RangeError);
+    expect(controller.snapshot()).toMatchObject({ active: 1, completed: 0, sampleCount: 0 });
+    lease?.complete({ latencyMs: 10, success: true });
+    expect(controller.snapshot()).toMatchObject({ active: 0, completed: 1, sampleCount: 1 });
   });
 
   it('tracks admission and completion counters independently', () => {
