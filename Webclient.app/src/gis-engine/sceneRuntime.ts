@@ -5,7 +5,16 @@ import { create3DLayer } from './layerFactory';
 import type { ArcGisGraphicLike, ArcGisLayerLike, GisServiceInput, ViewState, ViewStateBridge, ViewStateInput } from './contracts';
 
 const finite = (value: unknown, fallback: number | null = null): number | null => { const numeric = Number(value); return Number.isFinite(numeric) ? numeric : fallback; };
-const safeRemove = (handle: { remove?: () => void } | null | undefined): void => { try { handle?.remove?.(); } catch { /* idempotent scene cleanup */ } };
+const safeRemove = (
+  handle: { remove?: () => void } | null | undefined,
+  onError?: (error: unknown) => void,
+): void => {
+  try {
+    handle?.remove?.();
+  } catch (error) {
+    onError?.(error);
+  }
+};
 
 export interface SceneViewLike {
   camera?: any; extent?: any; scale?: number; container?: any;
@@ -57,7 +66,7 @@ const nextSceneFrame = (): Promise<void> => new Promise((resolve) => {
     requestAnimationFrame(() => resolve());
     return;
   }
-  setTimeout(resolve, 16);
+  queueMicrotask(resolve);
 });
 
 export const waitForSceneContainer = async (
@@ -87,7 +96,19 @@ export const createSceneView = async (container: unknown, options: SceneCreateOp
   if (options.camera !== undefined) viewOptions.camera = options.camera; viewOptions.qualityProfile = options.qualityProfile !== undefined ? options.qualityProfile : 'medium'; if (options.environment !== undefined) viewOptions.environment = options.environment; if (options.constraints !== undefined) viewOptions.constraints = options.constraints; if (options.padding !== undefined) viewOptions.padding = options.padding;
   const view = new SceneViewCtor(viewOptions) as SceneViewLike; return { map, view, ownsMap };
 };
-export const destroySceneView = (scene: SceneViewLike | { view?: SceneViewLike } | null | undefined): void => { const view = (scene as { view?: SceneViewLike })?.view || scene as SceneViewLike; if (!view) return; try { view.container = null; view.destroy?.(); } catch { /* partial initialization teardown */ } };
+export const destroySceneView = (
+  scene: SceneViewLike | { view?: SceneViewLike } | null | undefined,
+  onError?: (error: unknown) => void,
+): void => {
+  const view = (scene as { view?: SceneViewLike })?.view || scene as SceneViewLike;
+  if (!view) return;
+  try {
+    view.container = null;
+    view.destroy?.();
+  } catch (error) {
+    onError?.(error);
+  }
+};
 export interface GroundOptions { opacity?: unknown; navigationConstraint?: any; surfaceColor?: any; }
 export const configureGround = async (view: SceneViewLike, options: GroundOptions = {}): Promise<SceneViewLike> => { if (!view?.map?.ground) return view; if (options.opacity !== undefined) { const numericOpacity = Number(options.opacity); view.map.ground.opacity = Number.isFinite(numericOpacity) ? Math.max(0, Math.min(1, numericOpacity)) : 1; } if (options.navigationConstraint) view.map.ground.navigationConstraint = options.navigationConstraint; if (options.surfaceColor !== undefined) view.map.ground.surfaceColor = options.surfaceColor; return view; };
 
@@ -133,7 +154,13 @@ export const bindSceneState = (view: SceneViewLike, bridge: ViewStateBridge, sel
   if (scaleHandle) handles.push(scaleHandle);
   const clickHandle = view.on?.('click', async (event: any) => { selectionController?.abort?.(); selectionController = typeof AbortController !== 'undefined' ? new AbortController() : null; const signal = selectionController?.signal; const pickOptions: ScenePickOptions = { ...(signal === undefined ? {} : { signal }), ...(options.include === undefined ? {} : { include: options.include }), ...(options.exclude === undefined ? {} : { exclude: options.exclude }) }; const hits = await pickScene(view, event, pickOptions); if (disposed || signal?.aborted) return; const first = hits[0]; if (!first?.graphic) { bridge.setState((state) => updateSelection(state, { layerId: null, objectId: null })); selectionCallback?.(null, hits); return; } const attributes = first.graphic.attributes || {}; const objectId = attributes.OBJECTID ?? attributes.ObjectID ?? first.graphic.uid ?? first.graphic.id ?? null; bridge.setState((state) => updateSelection(state, { layerId: first.layer?.id, objectId })); selectionCallback?.(first, hits); }); if (clickHandle) handles.push(clickHandle);
   if (options.applyIncoming === true && typeof bridge.subscribe === 'function') unsubscribe = bridge.subscribe(async (nextState) => { if (disposed || nextState.mode !== '3d') return; const current = snapshotSceneState(view, nextState); if (current.center?.[0] === nextState.center?.[0] && current.center?.[1] === nextState.center?.[1] && current.scale === nextState.scale && current.heading === nextState.heading && current.tilt === nextState.tilt) return; applyingBridgeState = true; try { await applyViewStateToSceneView(view, nextState, options.goToOptions || {}); } catch (error) { options.onApplyError?.(error); } finally { applyingBridgeState = false; } });
-  return () => { if (disposed) return; disposed = true; selectionController?.abort?.(); unsubscribe(); handles.forEach(safeRemove); };
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    selectionController?.abort?.();
+    unsubscribe();
+    handles.forEach((handle) => safeRemove(handle, options.onApplyError));
+  };
 };
 
 export interface SceneBookmark { id: string; title: string; mode: '3d'; camera: any; scale: number | null; }
