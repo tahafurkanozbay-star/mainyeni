@@ -114,3 +114,22 @@ test('allows only the exact concurrent Platform JavaScript test paths', async ()
     );
   }));
 
+test('ratchets Webclient.admin to zero JavaScript', async () =>
+  withFixture(async (root) => {
+    await write(root, 'Webclient.admin/src/App.tsx', 'export const App = () => null;');
+    let report = await auditTypedSourceBoundary(root);
+    assert.equal(report.passed, true);
+    assert.equal(report.summary.adminJavascriptFiles, 0);
+
+    await write(root, 'Webclient.admin/src/legacy.js', 'export const legacy = true;');
+    report = await auditTypedSourceBoundary(root);
+    assert.equal(report.passed, false);
+    assert.equal(report.summary.adminJavascriptFiles, 1);
+    assert.deepEqual(
+      report.findings.map(({ code, file }) => ({ code, file })),
+      [{
+        code: 'unapproved-javascript-source',
+        file: 'Webclient.admin/src/legacy.js',
+      }],
+    );
+  }));
