@@ -149,7 +149,7 @@ const text = (name: string, value: string, maximum = 160): string => {
       name + ' must contain 1-' + maximum + ' characters',
     );
   }
-  if (CONTROL_CHARACTER.test(normalized)) {
+  if (hasControlCharacter(normalized)) {
     throw new ResourceScopeRegistryError(
       'INVALID_REQUEST',
       name + ' cannot contain control characters',
@@ -461,7 +461,7 @@ class BoundedResourceScopeRegistry implements ResourceScopeRegistry {
   }
 
   #sweepTerminal(): void {
-    for (const record of [...this.#records.values()]) {
+    for (const record of this.#records.values()) {
       if (record.closing) continue;
       if (record.scope.state === 'closed' || record.scope.state === 'disposed') {
         this.#completeRecord(record, 'scope-self-closed', false);
