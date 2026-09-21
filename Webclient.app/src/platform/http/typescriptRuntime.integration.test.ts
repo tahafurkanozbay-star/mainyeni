@@ -79,7 +79,7 @@ const makeTransport = (
     cacheTtlMs: 1000,
     ...defaults,
   },
-  request: jest.fn((config) => requestImpl(config as TestAttemptConfig)),
+  request: jest.fn(async (config) => requestImpl(config as TestAttemptConfig)),
 });
 
 describe('typed runtime integration', () => {
