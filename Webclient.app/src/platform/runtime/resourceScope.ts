@@ -175,7 +175,6 @@ interface ResourceScopeInternalOptions {
 }
 
 const SENSITIVE_KEY = /authorization|cookie|password|passwd|secret|token|api[-_]?key|session|credential/i;
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const MAX_TEXT = 180;
 const MAX_METADATA_STRING = 200;
 
