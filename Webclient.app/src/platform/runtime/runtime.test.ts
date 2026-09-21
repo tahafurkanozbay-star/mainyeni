@@ -19,10 +19,11 @@ import {
   telemetryHealthScore,
   withTimeout,
 } from './index';
+import type { CapabilityDependencies, RuntimeCapabilities, StateChange } from './index';
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const capabilities = (overrides = {}) => ({
+const capabilities = (overrides: Partial<RuntimeCapabilities> = {}): RuntimeCapabilities => ({
   tier: 'balanced',
   hardwareConcurrency: 4,
   deviceMemoryGb: 4,
@@ -175,6 +176,7 @@ describe('adaptive runtime budgets', () => {
     expect(rejected).toHaveBeenCalledTimes(1);
     expect(manager.snapshot().used.network).toBe(2);
     expect(isBudgetConstrained(manager.snapshot(), 0.9)).toBe(true);
+    if (!first) throw new TypeError('expected first resource reservation');
 
     expect(first.release()).toBe(true);
     expect(first.release()).toBe(false);
@@ -207,9 +209,9 @@ describe('privacy-safe telemetry', () => {
     });
 
     expect(sanitized).toEqual({ status: 'success', count: 12, tier: 'enhanced' });
-    expect(sanitized.token).toBeUndefined();
-    expect(sanitized.address).toBeUndefined();
-    expect(sanitized.unknownField).toBeUndefined();
+    expect(sanitized?.token).toBeUndefined();
+    expect(sanitized?.address).toBeUndefined();
+    expect(sanitized?.unknownField).toBeUndefined();
   });
 
   test('uses a bounded ring buffer and reports dropped events', () => {
@@ -235,16 +237,14 @@ describe('privacy-safe telemetry', () => {
     await expect(telemetry.measure('network', 'request', async () => 42, { operation: 'load' }))
       .resolves.toBe(42);
     await expect(telemetry.measure('network', 'request', async () => {
-      const error = new Error('private payload');
-      error.code = 'SERVER_ERROR';
-      throw error;
+      throw Object.assign(new Error('private payload'), { code: 'SERVER_ERROR' });
     }, { operation: 'load' })).rejects.toThrow('private payload');
 
     const events = telemetry.snapshot();
     expect(events).toHaveLength(2);
-    expect(events[0].attributes.result).toBe('success');
-    expect(events[1].attributes.result).toBe('failure');
-    expect(events[1].attributes.code).toBe('SERVER_ERROR');
+    expect(events.at(0)?.attributes?.result).toBe('success');
+    expect(events.at(1)?.attributes?.result).toBe('failure');
+    expect(events.at(1)?.attributes?.code).toBe('SERVER_ERROR');
     expect(JSON.stringify(events)).not.toContain('private payload');
   });
 });
@@ -257,8 +257,8 @@ describe('versioned state store', () => {
       now: () => ++now,
     });
 
-    const changes = [];
-    const unsubscribe = store.subscribe((change) => changes.push(change));
+    const changes: StateChange<{ count: number; mode: string }>[] = [];
+    const unsubscribe = store.subscribe((change) => { changes.push(change); });
     const first = store.update((state) => ({ ...state, count: state.count + 1 }), 'increment');
     expect(first.version).toBe(1);
     expect(store.get()).toEqual({ count: 1, mode: '2d' });
@@ -266,6 +266,8 @@ describe('versioned state store', () => {
 
     expect(store.compareAndSet(0, (state) => ({ ...state, count: 9 }))).toBeNull();
     const second = store.compareAndSet(1, (state) => ({ ...state, mode: '3d' }), 'switch-mode');
+    expect(second).not.toBeNull();
+    if (!second) throw new TypeError('expected compare-and-set state change');
     expect(second.version).toBe(2);
     expect(store.get().mode).toBe('3d');
     expect(changes.map((change) => change.reason)).toEqual(['increment', 'switch-mode']);
@@ -284,7 +286,7 @@ describe('versioned state store', () => {
   });
 
   test('hydrates and persists through an injected adapter', async () => {
-    let persisted = { count: 7 };
+    let persisted: { count: number } | null = { count: 7 };
     const adapter = {
       read: jest.fn(() => persisted),
       write: jest.fn((state) => { persisted = { ...state }; }),
@@ -346,7 +348,7 @@ describe('resilience primitives', () => {
 
   test('opens a circuit after the configured failure threshold', async () => {
     let now = 1000;
-    const transitions = [];
+    const transitions: string[] = [];
     const circuit = createCircuitBreaker({
       now: () => now,
       policy: {
@@ -356,7 +358,7 @@ describe('resilience primitives', () => {
         successThreshold: 1,
         rollingWindowMs: 1000,
       },
-      onTransition: (next, previous) => transitions.push(`${previous}->${next}`),
+      onTransition: (next, previous) => { transitions.push(`${previous}->${next}`); },
     });
 
     await expect(circuit.execute(async () => { throw new Error('a'); })).rejects.toThrow('a');
@@ -399,8 +401,8 @@ describe('priority task scheduler', () => {
 
   test('deduplicates in-flight work by key', async () => {
     const scheduler = createTaskScheduler({ budget: budget() });
-    let resolveWork;
-    const executor = jest.fn(() => new Promise((resolve) => { resolveWork = resolve; }));
+    let resolveWork!: (value: string | PromiseLike<string>) => void;
+    const executor = jest.fn(() => new Promise<string>((resolve) => { resolveWork = resolve; }));
     const first = scheduler.schedule(executor, { key: 'same', kind: 'cpu' });
     const second = scheduler.schedule(executor, { key: 'same', kind: 'cpu' });
 
@@ -415,9 +417,9 @@ describe('priority task scheduler', () => {
 
   test('prioritizes critical queued work ahead of background work', async () => {
     const scheduler = createTaskScheduler({ budget: budget() });
-    const order = [];
-    let releaseFirst;
-    const first = scheduler.schedule(() => new Promise((resolve) => {
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    const first = scheduler.schedule(() => new Promise<void>((resolve) => {
       releaseFirst = () => { order.push('running'); resolve(); };
     }), { key: 'running', kind: 'cpu', priority: 'normal' });
 
@@ -439,8 +441,8 @@ describe('priority task scheduler', () => {
       maxConcurrentCpu: 1,
       maxQueuedTasks: 1,
     }) });
-    let release;
-    const running = scheduler.schedule(() => new Promise((resolve) => { release = resolve; }), { kind: 'cpu' });
+    let release!: () => void;
+    const running = scheduler.schedule(() => new Promise<void>((resolve) => { release = resolve; }), { kind: 'cpu' });
     await flush();
     const queued = scheduler.schedule(async () => 'queued', { kind: 'cpu' });
     await expect(scheduler.schedule(async () => 'overflow', { kind: 'cpu' }))
@@ -453,8 +455,8 @@ describe('priority task scheduler', () => {
 
   test('cancels queued work by key without running it', async () => {
     const scheduler = createTaskScheduler({ budget: budget() });
-    let release;
-    const running = scheduler.schedule(() => new Promise((resolve) => { release = resolve; }), { key: 'running', kind: 'cpu' });
+    let release!: () => void;
+    const running = scheduler.schedule(() => new Promise<void>((resolve) => { release = resolve; }), { key: 'running', kind: 'cpu' });
     await flush();
     const executor = jest.fn(async () => 'never');
     const queued = scheduler.schedule(executor, { key: 'cancel-me', kind: 'cpu' });
@@ -468,8 +470,8 @@ describe('priority task scheduler', () => {
 
   test('drains after all queued and active work completes', async () => {
     const scheduler = createTaskScheduler({ budget: budget() });
-    let release;
-    const work = scheduler.schedule(() => new Promise((resolve) => { release = resolve; }), { kind: 'cpu' });
+    let release!: () => void;
+    const work = scheduler.schedule(() => new Promise<void>((resolve) => { release = resolve; }), { kind: 'cpu' });
     await flush();
     let drained = false;
     const drain = scheduler.drain().then(() => { drained = true; });
@@ -484,7 +486,7 @@ describe('priority task scheduler', () => {
 });
 
 describe('runtime kernel lifecycle', () => {
-  const capabilityDependencies = {
+  const capabilityDependencies: CapabilityDependencies = {
     navigatorRef: {
       hardwareConcurrency: 4,
       deviceMemory: 4,
@@ -501,23 +503,23 @@ describe('runtime kernel lifecycle', () => {
   };
 
   test('starts required modules in order and stops in reverse order', async () => {
-    const calls = [];
+    const calls: string[] = [];
     const kernel = createRuntimeKernel({ capabilityDependencies });
     kernel.registerModule({
       id: 'second',
       order: 20,
       required: true,
-      start: () => calls.push('start-second'),
-      ready: () => calls.push('ready-second'),
-      stop: () => calls.push('stop-second'),
+      start: () => { calls.push('start-second'); },
+      ready: () => { calls.push('ready-second'); },
+      stop: () => { calls.push('stop-second'); },
     });
     kernel.registerModule({
       id: 'first',
       order: 10,
       required: true,
-      start: () => calls.push('start-first'),
-      ready: () => calls.push('ready-first'),
-      stop: () => calls.push('stop-first'),
+      start: () => { calls.push('start-first'); },
+      ready: () => { calls.push('ready-first'); },
+      stop: () => { calls.push('stop-first'); },
     });
 
     const started = await kernel.start();
@@ -535,7 +537,7 @@ describe('runtime kernel lifecycle', () => {
     const snapshot = await kernel.start();
     expect(snapshot.phase).toBe('degraded');
     expect(snapshot.failures).toHaveLength(1);
-    expect(snapshot.failures[0].domain).toContain('optional');
+    expect(snapshot.failures.at(0)?.domain).toContain('optional');
     await kernel.stop({ drain: false });
     await kernel.dispose();
   });
@@ -549,14 +551,14 @@ describe('runtime kernel lifecycle', () => {
   });
 
   test('suspends and resumes registered modules', async () => {
-    const calls = [];
+    const calls: string[] = [];
     const kernel = createRuntimeKernel({ capabilityDependencies });
     kernel.registerModule({
       id: 'lifecycle',
-      start: () => calls.push('start'),
-      suspend: () => calls.push('suspend'),
-      resume: () => calls.push('resume'),
-      stop: () => calls.push('stop'),
+      start: () => { calls.push('start'); },
+      suspend: () => { calls.push('suspend'); },
+      resume: () => { calls.push('resume'); },
+      stop: () => { calls.push('stop'); },
     });
     await kernel.start();
     expect((await kernel.suspend()).phase).toBe('suspended');
