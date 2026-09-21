@@ -82,6 +82,10 @@ test('Platform test TypeScript project is strict and rejects JavaScript admissio
   assert.deepEqual(config.include, [
       "src/platform/bootstrap/bootstrapCore.test.ts",
       "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
+      "src/platform/config/runtimeConfig.test.ts",
+      "src/platform/config/runtimeConfigResolution.test.ts",
+      "src/platform/config/runtimeConfigGovernance.test.ts",
+      "src/platform/config/runtimeConfigTransition.test.ts",
       "src/platform/http/fetchTransport.test.ts",
       "src/platform/http/networkDiagnostics.test.ts",
       "src/platform/http/requestScheduler.test.ts",
