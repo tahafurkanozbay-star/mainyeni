@@ -45,7 +45,7 @@ describe('provider-neutral geocoding runtime', () => {
   });
 
   test('caches normalized requests and exposes cache hits', async () => {
-    const forward = jest.fn(request => geocodePayload(request.query));
+    const forward = vi.fn(request => geocodePayload(request.query));
     const runtime = createGeocodingRuntime({ cacheTtlMs: 10_000 });
     runtime.register({ id: 'local', forward });
 
@@ -60,7 +60,7 @@ describe('provider-neutral geocoding runtime', () => {
 
   test('deduplicates concurrent identical requests', async () => {
     let resolveProvider;
-    const forward = jest.fn(() => new Promise(resolve => { resolveProvider = resolve; }));
+    const forward = vi.fn(() => new Promise(resolve => { resolveProvider = resolve; }));
     const runtime = createGeocodingRuntime();
     runtime.register({ id: 'local', forward });
 
@@ -93,7 +93,7 @@ describe('provider-neutral geocoding runtime', () => {
   });
 
   test('normalizes reverse coordinates before provider invocation', async () => {
-    const reverse = jest.fn(request => ({
+    const reverse = vi.fn(request => ({
       address: { Match_addr: `${request.coordinates.latitude},${request.coordinates.longitude}` },
       location: { x: request.coordinates.longitude, y: request.coordinates.latitude },
     }));
@@ -156,7 +156,7 @@ describe('race-safe search session', () => {
   });
 
   test('executes immediate search and exposes state', async () => {
-    const executor = jest.fn((_dataset, request) => response(request.query));
+    const executor = vi.fn((_dataset, request) => response(request.query));
     const session = createSearchSession(executor, { debounceMs: 0 });
 
     const envelope = await session.searchNow('places', { query: 'park' });
@@ -168,7 +168,7 @@ describe('race-safe search session', () => {
 
   test('new immediate search aborts an active superseded request', async () => {
     let releaseFirst;
-    const executor = jest.fn((_dataset, request) => {
+    const executor = vi.fn((_dataset, request) => {
       if (request.query === 'first') {
         return new Promise((resolve, reject) => {
           releaseFirst = () => request.signal.aborted
@@ -189,37 +189,37 @@ describe('race-safe search session', () => {
   });
 
   test('scheduled search debounces and executes only after the delay', async () => {
-    jest.useFakeTimers();
-    const executor = jest.fn((_dataset, request) => response(request.query));
+    vi.useFakeTimers();
+    const executor = vi.fn((_dataset, request) => response(request.query));
     const session = createSearchSession(executor, { debounceMs: 100 });
     const scheduled = session.schedule('places', { query: 'park' });
 
     expect(executor).not.toHaveBeenCalled();
-    jest.advanceTimersByTime(99);
+    vi.advanceTimersByTime(99);
     await Promise.resolve();
     expect(executor).not.toHaveBeenCalled();
-    jest.advanceTimersByTime(1);
+    vi.advanceTimersByTime(1);
     await expect(scheduled).resolves.toEqual(expect.objectContaining({ stale: false }));
     expect(executor).toHaveBeenCalledTimes(1);
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('superseding a scheduled request rejects the old promise', async () => {
-    jest.useFakeTimers();
-    const executor = jest.fn((_dataset, request) => response(request.query));
+    vi.useFakeTimers();
+    const executor = vi.fn((_dataset, request) => response(request.query));
     const session = createSearchSession(executor, { debounceMs: 100 });
     const first = session.schedule('places', { query: 'a' });
     const second = session.schedule('places', { query: 'ab' });
 
     await expect(first).rejects.toMatchObject({ name: 'AbortError' });
-    jest.advanceTimersByTime(100);
+    vi.advanceTimersByTime(100);
     await expect(second).resolves.toEqual(expect.objectContaining({ stale: false }));
     expect(executor).toHaveBeenCalledTimes(1);
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('loadMore advances using previous nextOffset', async () => {
-    const executor = jest.fn((_dataset, request) => response(request.query, Number(request.offset) || 0, !request.offset));
+    const executor = vi.fn((_dataset, request) => response(request.query, Number(request.offset) || 0, !request.offset));
     const session = createSearchSession(executor);
     await session.searchNow('places', { query: 'park', limit: 1 });
     const next = await session.loadMore();
