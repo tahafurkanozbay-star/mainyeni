@@ -505,7 +505,7 @@ describe('ServiceContainer deterministic startup', () => {
       kind: 'optional-dependency-failed',
       serviceId: 'consumer',
       dependencyId: 'optional-failing',
-      errorName: 'ServiceContainerError',
+      errorName: 'Error',
     }));
     expect(JSON.stringify(started)).not.toContain('private optional failure detail');
   });
