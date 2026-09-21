@@ -49,7 +49,7 @@ const defaultFrameScheduler: FrameScheduler = (callback) => {
   if (typeof requestAnimationFrame === 'function') { const id = requestAnimationFrame(callback); return () => cancelAnimationFrame(id); }
   const id = setTimeout(callback, 16); return () => clearTimeout(id);
 };
-const safeRemove = (handle?: WatchHandle): void => { try { handle?.remove?.(); } catch (_) { /* idempotent SDK cleanup */ } };
+const safeRemove = (handle?: WatchHandle): void => { try { handle?.remove?.(); } catch { /* idempotent SDK cleanup */ } };
 
 export interface ViewConstraints { minZoom: number; maxZoom: number; rotationEnabled: boolean; snapToZoom: boolean; }
 export const normalizeViewConstraints = (config: ViewConfiguration = {}): ViewConstraints => {
