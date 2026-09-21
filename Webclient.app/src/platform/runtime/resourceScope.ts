@@ -98,6 +98,7 @@ export interface ResourceScopeSnapshot {
   readonly counters: ResourceScopeCounters;
   readonly resources: readonly ResourceSnapshot[];
   readonly history: readonly ResourceCleanupHistoryEntry[];
+  readonly events: readonly ResourceScopeEvent[];
 }
 
 export interface ManagedResourceHandle {
@@ -534,6 +535,7 @@ class BoundedResourceScope implements ResourceScope {
   close(options: ResourceScopeCloseOptions = {}): Promise<void> {
     if (this.#state === 'closed' || this.#state === 'disposed') return Promise.resolve();
     if (this.#closePromise) return this.#closePromise;
+    if (options.signal?.aborted) return Promise.reject(cancellationError(options.signal.reason));
 
     this.#state = 'closing';
     const reason = options.reason ?? 'scope-closing';
@@ -561,6 +563,7 @@ class BoundedResourceScope implements ResourceScope {
       counters: freezeCounters(this.#counters),
       resources: Object.freeze(resources),
       history: Object.freeze(this.#history.slice()),
+      events: Object.freeze(this.#events.slice()),
     });
   }
 
@@ -635,9 +638,9 @@ class BoundedResourceScope implements ResourceScope {
   ): Promise<boolean> {
     const resource = this.#resources.get(id);
     if (!resource || resource.released || resource.releasing) return false;
-    resource.releasing = true;
-    const startedAt = this.#now();
     const timeoutMs = this.#normalizeCleanupTimeout(requestedTimeoutMs);
+    const startedAt = this.#now();
+    resource.releasing = true;
 
     try {
       await this.#runCleanup(resource.cleanup, timeoutMs);
