@@ -505,7 +505,7 @@ describe('ServiceContainer deterministic startup', () => {
       kind: 'optional-dependency-failed',
       serviceId: 'consumer',
       dependencyId: 'optional-failing',
-      errorName: 'Error',
+      errorName: 'ServiceContainerError',
     }));
     expect(JSON.stringify(started)).not.toContain('private optional failure detail');
   });
@@ -1112,7 +1112,7 @@ describe('ServiceContainer parent cancellation and disposal', () => {
     });
     await container.start();
     parent.abort('application-shutdown');
-    await flush();
+    await container.dispose('join-parent-shutdown');
     expect(container.state).toBe('disposed');
     expect(stop).toHaveBeenCalledOnce();
   });
