@@ -92,19 +92,14 @@ describe('RuntimeCapacityPlanner', () => {
     expect(planner.snapshot().concurrencyLimit).toBe(2);
   });
 
-  it('recovers additively after configured stable samples', () => {
+  it('recovers additively only after the pressure sample rolls out and enough healthy samples arrive', () => {
     const planner = new RuntimeCapacityPlanner(options());
     planner.observe(sample(200));
     expect(planner.snapshot().concurrencyLimit).toBe(4);
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
-    planner.observe(sample(10));
+    // The planner deliberately uses a rolling p95 window. The hot sample remains
+    // authoritative until it is evicted; recoveryStableSamples only starts then.
+    for (let index = 0; index < 10; index += 1) planner.observe(sample(10));
+    expect(planner.snapshot().pressure).toBe('healthy');
     expect(planner.snapshot().concurrencyLimit).toBeGreaterThanOrEqual(4);
   });
 
@@ -167,13 +162,7 @@ describe('RuntimeCapacityPlanner', () => {
     planner.observe(sample(500));
     expect(planner.snapshot().adjustments).toBe(1);
     planner.reset();
-    expect(planner.snapshot()).toMatchObject({
-      pressure: 'healthy',
-      concurrencyLimit: 8,
-      sampleCount: 0,
-      stableSamples: 0,
-      adjustments: 0,
-    });
+    expect(planner.snapshot()).toMatchObject({ pressure: 'healthy', concurrencyLimit: 8, sampleCount: 0, stableSamples: 0, adjustments: 0 });
     expect(planner.history()).toEqual([]);
   });
 
@@ -218,7 +207,7 @@ describe('RuntimeCapacityPlanner', () => {
     expect(planner.snapshot().sampleCount).toBe(0);
   });
 
-  it('rejects non-finite clocks only when adjustment evaluation runs', () => {
+  it('rejects non-finite clocks when adjustment evaluation runs', () => {
     const planner = new RuntimeCapacityPlanner(options(), { now: () => Number.NaN });
     expect(() => planner.observe(sample())).toThrow(/clock/);
   });
