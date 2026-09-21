@@ -61,6 +61,32 @@ jobs:
   assert.ok(!ids(section).includes('validation-job-timeout-missing'));
 });
 
+test('counts only top-level entries under jobs as executable jobs', () => {
+  const section = workflow(`name: QA
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/**'
+permissions:
+  contents: read
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - run: npm test
+`);
+  assert.ok(!ids(section).includes('validation-job-timeout-missing'));
+  assert.equal(section.summary.workflowSignals[0]?.jobCount, 1);
+  assert.equal(section.summary.workflowSignals[0]?.timeoutCount, 1);
+});
+
 test('flags continue-on-error on validation', () => {
   const section = workflow(`jobs:
   test:
