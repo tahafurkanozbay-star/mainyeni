@@ -55,7 +55,7 @@ export interface SpatialQueryAdmissionResult {
     | 'queue-budget'
     | 'service-queue-budget';
   readonly ticket?: SpatialQueryAdmissionTicket;
-  readonly retryable: boolean;
+  readonly mayResubmit: boolean;
 }
 
 export interface SpatialQueryAdmissionSnapshot {
@@ -222,7 +222,7 @@ export const createSpatialQueryAdmissionController = (
       request.estimatedCpuMs > policy.maxSingleEstimatedCpuMs ||
       request.estimatedGpuBytes > policy.maxSingleEstimatedGpuBytes) {
       rejected += 1;
-      return Object.freeze({ decision: 'reject', reason: 'single-request-budget', retryable: false });
+      return Object.freeze({ decision: 'reject', reason: 'single-request-budget', mayResubmit: false });
     }
     return undefined;
   };
@@ -254,7 +254,7 @@ export const createSpatialQueryAdmissionController = (
     active.set(ticket.id, ticket);
     admitted += 1;
     generation += 1;
-    return Object.freeze({ decision: 'admit', reason: 'admitted', ticket, retryable: false });
+    return Object.freeze({ decision: 'admit', reason: 'admitted', ticket, mayResubmit: false });
   };
 
   const request = (requestInput: SpatialQueryAdmissionRequest, now = Date.now()): SpatialQueryAdmissionResult => {
@@ -262,14 +262,14 @@ export const createSpatialQueryAdmissionController = (
     const normalized = normalizeRequest(requestInput);
     if (normalized.cacheHit) {
       cacheHits += 1;
-      return Object.freeze({ decision: 'admit', reason: 'cache-hit', retryable: false });
+      return Object.freeze({ decision: 'admit', reason: 'cache-hit', mayResubmit: false });
     }
     const budgetFailure = rejectSingleBudget(normalized);
     if (budgetFailure) return budgetFailure;
     const capacityFailure = evaluateCapacity(normalized);
     if (capacityFailure) {
       deferred += 1;
-      return Object.freeze({ decision: 'defer', reason: capacityFailure, retryable: true });
+      return Object.freeze({ decision: 'defer', reason: capacityFailure, mayResubmit: true });
     }
     return admit(normalized, now);
   };
@@ -282,17 +282,17 @@ export const createSpatialQueryAdmissionController = (
     if (budgetFailure) return budgetFailure;
     if (queued.length >= policy.maxQueued) {
       rejected += 1;
-      return Object.freeze({ decision: 'reject', reason: 'queue-budget', retryable: true });
+      return Object.freeze({ decision: 'reject', reason: 'queue-budget', mayResubmit: true });
     }
     if (queuedForService(normalized.serviceId) >= policy.maxQueuedPerService) {
       rejected += 1;
-      return Object.freeze({ decision: 'reject', reason: 'service-queue-budget', retryable: true });
+      return Object.freeze({ decision: 'reject', reason: 'service-queue-budget', mayResubmit: true });
     }
     queued.push(Object.freeze({ ...normalized, sequence: ++sequence, queuedAt: now }));
     queued.sort((left, right) => priorityRank(right.priority) - priorityRank(left.priority) || left.sequence - right.sequence);
     deferred += 1;
     generation += 1;
-    return Object.freeze({ decision: 'defer', reason: evaluateCapacity(normalized) ?? 'global-concurrency', retryable: true });
+    return Object.freeze({ decision: 'defer', reason: evaluateCapacity(normalized) ?? 'global-concurrency', mayResubmit: true });
   };
 
   const drain = (now = Date.now()): readonly SpatialQueryAdmissionTicket[] => {
