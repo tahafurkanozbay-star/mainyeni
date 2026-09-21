@@ -76,6 +76,24 @@ describe('ReadinessGate', () => {
     expect(gate.snapshot().requirements[0]?.stale).toBe(true);
   });
 
+  test('non-expiring requirement snapshots omit the internal TTL sentinel', () => {
+    const { gate } = gateWithClock();
+    gate.register({
+      id: 'config',
+      severity: 'critical',
+      required: true,
+      description: 'Configuration is valid',
+    });
+    const requirement = gate.snapshot().requirements[0]?.requirement;
+    expect(requirement).toEqual({
+      id: 'config',
+      severity: 'critical',
+      required: true,
+      description: 'Configuration is valid',
+    });
+    expect(requirement).not.toHaveProperty('ttlMs');
+  });
+
   test('non-expiring evidence remains valid indefinitely', () => {
     const { gate, advance } = gateWithClock();
     gate.register({

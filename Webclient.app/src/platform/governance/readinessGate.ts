@@ -41,13 +41,23 @@ export interface ReadinessGate {
   readonly dispose: () => void;
 }
 
-interface NormalizedRequirement extends ReadinessRequirement {
+interface NormalizedRequirement {
   readonly id: string;
   readonly severity: 'critical' | 'degraded';
   readonly ttlMs: number | null;
   readonly required: boolean;
   readonly description: string;
 }
+
+const publicRequirement = (
+  requirement: NormalizedRequirement,
+): ReadinessRequirement => Object.freeze({
+  id: requirement.id,
+  severity: requirement.severity,
+  ...(requirement.ttlMs === null ? {} : { ttlMs: requirement.ttlMs }),
+  required: requirement.required,
+  ...(requirement.description ? { description: requirement.description } : {}),
+});
 
 const normalizeRequirement = (requirement: ReadinessRequirement): NormalizedRequirement => {
   if (!requirement || typeof requirement !== 'object') throw new TypeError('readiness requirement is required');
@@ -120,7 +130,7 @@ export const createReadinessGate = (options: ReadinessGateOptions = {}): Readine
         else degraded.push(requirement.id);
       }
       snapshots.push(Object.freeze({
-        requirement,
+        requirement: publicRequirement(requirement),
         evidence: current,
         stale,
         effectiveStatus,
@@ -191,13 +201,16 @@ export const createReadinessGate = (options: ReadinessGateOptions = {}): Readine
       : clock.now();
     const expiresAt = requirement.ttlMs === null ? null : observedAt + requirement.ttlMs;
     const code = boundedText(recordOptions.code, '', 80) || undefined;
+    const detail = recordOptions.detail === undefined
+      ? undefined
+      : sanitizeEvidenceDetail(recordOptions.detail);
     evidence.set(normalizedId, Object.freeze({
       id: normalizedId,
       status: normalizedStatus,
       observedAt,
       expiresAt,
       ...(code ? { code } : {}),
-      ...(recordOptions.detail ? { detail: sanitizeEvidenceDetail(recordOptions.detail) } : {}),
+      ...(detail === undefined ? {} : { detail }),
     }));
     const current = snapshot();
     remember(normalizedId, normalizedStatus, current.state, code);

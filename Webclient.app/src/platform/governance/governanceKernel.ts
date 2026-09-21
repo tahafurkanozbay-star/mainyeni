@@ -82,10 +82,13 @@ export const createPlatformGovernanceKernel = (
   const config = createConfigSchemaRegistry({ ...options.config, clock });
   const features = createFeaturePolicy(options.features);
   const manifest = createRuntimeManifestRegistry(options.manifest);
+  const readinessListenerError = options.readiness?.onListenerError ?? options.onListenerError;
   const readiness = createReadinessGate({
     ...options.readiness,
     clock,
-    onListenerError: options.readiness?.onListenerError ?? options.onListenerError,
+    ...(readinessListenerError === undefined
+      ? {}
+      : { onListenerError: readinessListenerError }),
   });
   const telemetry = createRuntimeTelemetry({
     capacity: options.telemetryCapacity ?? 400,
@@ -96,7 +99,9 @@ export const createPlatformGovernanceKernel = (
     now: () => clock.now(),
     validate: validateKernelState,
     historyLimit: 64,
-    onListenerError: options.onListenerError,
+    ...(options.onListenerError === undefined
+      ? {}
+      : { onListenerError: options.onListenerError }),
   });
   let disposed = false;
 
