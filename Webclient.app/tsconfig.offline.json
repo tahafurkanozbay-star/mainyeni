@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/platform/offline/**/*.ts",
+    "src/platform/offline/**/*.tsx"
+  ]
+}
