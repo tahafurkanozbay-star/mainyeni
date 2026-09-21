@@ -189,6 +189,12 @@ class BoundedMutationSafetyRuntime implements MutationSafetyRuntime {
 
     const controls: MutationSafetyRunControls = Object.freeze({
       markAttempt: (attempt: number) => {
+        if (!Number.isFinite(attempt) || attempt < 0 || attempt > config.maxRetries) {
+          throw new MutationIdempotencyError(
+            'ATTEMPT_LIMIT_EXCEEDED',
+            'Mutation attempt exceeds normalized maxRetries.',
+          );
+        }
         if (!lease.markAttempt()) return;
         this.#emit({
           kind: 'attempt',
