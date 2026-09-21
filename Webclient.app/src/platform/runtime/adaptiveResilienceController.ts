@@ -136,16 +136,17 @@ export class AdaptiveResilienceController {
       id,
       complete: (sample: ResilienceSample) => {
         if (settled) return;
-        settled = true;
         this.#complete(id, sample);
+        settled = true;
       },
     });
   }
 
   #complete(id: number, sample: ResilienceSample): void {
-    if (!this.#active.delete(id)) return;
+    if (!this.#active.has(id)) return;
     finite(sample.latencyMs, 'latencyMs');
     if (sample.latencyMs < 0) throw new RangeError('latencyMs cannot be negative.');
+    this.#active.delete(id);
     this.#samples.push(Object.freeze({ latencyMs: sample.latencyMs, success: sample.success }));
     if (this.#samples.length > this.#options.sampleWindow) this.#samples.splice(0, this.#samples.length - this.#options.sampleWindow);
     this.#counters.completed += 1;
