@@ -70,6 +70,12 @@ export interface MutationIdempotencyCounters {
 
 export interface MutationIdempotencyRegistrySnapshot {
   readonly disposed: boolean;
+  readonly limits: Readonly<{
+    readonly maxEntries: number;
+    readonly maxEntriesPerOwner: number;
+    readonly retentionMs: number;
+    readonly staleInFlightAfterMs: number;
+  }>;
   readonly entries: number;
   readonly inFlight: number;
   readonly retained: number;
@@ -431,6 +437,12 @@ class BoundedMutationIdempotencyRegistry implements MutationIdempotencyRegistry 
 
     return Object.freeze({
       disposed: this.#disposed,
+      limits: Object.freeze({
+        maxEntries: this.#maxEntries,
+        maxEntriesPerOwner: this.#maxEntriesPerOwner,
+        retentionMs: this.#retentionMs,
+        staleInFlightAfterMs: this.#staleInFlightAfterMs,
+      }),
       entries: this.#entries.size,
       inFlight,
       retained,
