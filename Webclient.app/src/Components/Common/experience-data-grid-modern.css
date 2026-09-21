@@ -1,6 +1,6 @@
 .experience-data-grid {
   --experience-grid-row-height: 44px;
-  min-width: 0;
+  min-inline-size: 0;
   border: 1px solid var(--exp-border);
   border-radius: 14px;
   background: var(--exp-surface);
@@ -10,7 +10,7 @@
 }
 
 .experience-data-grid__heading {
-  min-height: 64px;
+  min-block-size: 4rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -38,7 +38,7 @@
 
 .experience-data-grid__count {
   flex: 0 0 auto;
-  min-height: 28px;
+  min-block-size: 1.75rem;
   display: inline-flex;
   align-items: center;
   padding: 0 9px;
@@ -52,7 +52,7 @@
 
 .experience-data-grid__viewport {
   position: relative;
-  width: 100%;
+  inline-size: 100%;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -65,8 +65,8 @@
 }
 
 .experience-data-grid__table {
-  width: 100%;
-  min-width: 640px;
+  inline-size: 100%;
+  min-inline-size: 100%;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -159,8 +159,8 @@
 }
 
 .experience-data-grid__sort-icon {
-  width: 18px;
-  height: 18px;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -172,14 +172,14 @@
 
 .experience-data-grid__selection-column,
 .experience-data-grid__selection-cell {
-  width: 48px;
-  max-width: 48px;
+  inline-size: 3rem;
+  max-inline-size: 3rem;
   text-align: center;
 }
 
 .experience-data-grid__selection-cell input {
-  width: 17px;
-  height: 17px;
+  inline-size: 1.0625rem;
+  block-size: 1.0625rem;
   margin: 0;
   accent-color: var(--exp-accent, #2563eb);
   cursor: pointer;
@@ -224,8 +224,8 @@
 }
 
 .experience-data-grid__spinner {
-  width: 16px;
-  height: 16px;
+  inline-size: 1rem;
+  block-size: 1rem;
   display: inline-block;
   border: 2px solid currentColor;
   border-inline-end-color: transparent;
@@ -288,7 +288,7 @@
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 45rem) {
   .experience-data-grid {
     border-inline: 0;
     border-radius: 0;
@@ -297,10 +297,6 @@
   .experience-data-grid__heading {
     align-items: flex-start;
     padding: 10px 12px;
-  }
-
-  .experience-data-grid__table {
-    min-width: 560px;
   }
 
   .experience-data-grid__pager {
@@ -316,8 +312,8 @@
   }
 
   .experience-data-grid__selection-cell input {
-    width: 20px;
-    height: 20px;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
   }
 
   .experience-data-grid__table td {
