@@ -77,7 +77,7 @@ describe('query plan runtime', () => {
 
     expect(plan.estimatedCandidateCount).toBe(100);
     expect(plan.warnings).toContain('candidate-budget-reached');
-    expect(plan.stages.find(stage => stage.kind === 'candidate-index').bounded).toBe(true);
+    expect(plan.stages.find(stage => stage.kind === 'candidate-index')?.bounded).toBe(true);
   });
 
   test('compares plan regression by work and risk', () => {
