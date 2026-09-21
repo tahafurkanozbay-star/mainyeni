@@ -484,9 +484,15 @@ describe('runtime config deterministic evidence fingerprints', () => {
     expect(first.evidenceFingerprint).not.toBe(second.evidenceFingerprint);
   });
 
-  test('evidence fingerprint changes when source family changes', () => {
-    const modern = resolveRuntimeConfig({ VITE_API_URL: '/api' });
-    const legacy = resolveRuntimeConfig({ REACT_APP_API_URL: '/api' });
+  test('evidence fingerprint changes when source family changes with equal canonical config', () => {
+    const modern = resolveRuntimeConfig({
+      VITE_API_URL: '/api',
+      VITE_RELEASE: 'r1',
+    });
+    const legacy = resolveRuntimeConfig({
+      REACT_APP_API_URL: '/api',
+      VITE_RELEASE: 'r1',
+    });
     expect(modern.configFingerprint).toBe(legacy.configFingerprint);
     expect(modern.evidenceFingerprint).not.toBe(legacy.evidenceFingerprint);
   });
