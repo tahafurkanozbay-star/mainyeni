@@ -212,13 +212,27 @@ export const bindAnimationFrame = (
   if (typeof request.callback !== 'function') {
     throw new TypeError('animation frame callback must be a function');
   }
+
   const port = request.port ?? browserAnimationFramePort();
   let completed = false;
-  let handle!: ManagedResourceHandle;
+  let releaseRequested = false;
+  let handle: ManagedResourceHandle | undefined;
+
+  const releaseCompletedFrame = (): void => {
+    if (!handle) {
+      releaseRequested = true;
+      return;
+    }
+    void handle.release('animation-frame-completed').catch(() => undefined);
+  };
+
   const frameId = port.requestAnimationFrame((timestamp) => {
     completed = true;
-    request.callback(timestamp);
-    void handle.release('animation-frame-completed').catch(() => undefined);
+    try {
+      request.callback(timestamp);
+    } finally {
+      releaseCompletedFrame();
+    }
   });
 
   try {
@@ -232,9 +246,11 @@ export const bindAnimationFrame = (
       },
     });
   } catch (error) {
-    port.cancelAnimationFrame(frameId);
+    if (!completed) port.cancelAnimationFrame(frameId);
     throw error;
   }
+
+  if (releaseRequested) releaseCompletedFrame();
 
   return Object.freeze({ frameId, handle });
 };
