@@ -1,3 +1,4 @@
+import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveRuntime';
 import {
   createAdaptivePerformanceRuntime,
   GIS_PERFORMANCE_PROFILE,
@@ -82,6 +83,7 @@ export interface SceneExperienceRuntimeOptions {
   frameHistorySize?: number;
   onSnapshot?: (snapshot: SceneExperienceSnapshot, reason: string) => void;
   onError?: (error: unknown, context: string) => void;
+  accessorWatch?: ArcgisAccessorWatch | undefined;
 }
 
 export interface SceneExperienceRuntime {
@@ -442,12 +444,10 @@ export const createSceneExperienceRuntime = (
     return recoveryInFlight;
   };
 
-  const fatalHandle = typeof view.watch === 'function'
-    ? view.watch('fatalError', (error: unknown) => {
-      if (!error || disposed) return;
-      void recoverFatalError();
-    })
-    : null;
+  const fatalHandle = watchArcgisProperty(view, 'fatalError', (error: unknown) => {
+    if (!error || disposed) return;
+    void recoverFatalError();
+  }, options.accessorWatch);
 
   const performanceUnsubscribe = adaptive.subscribe((snapshot, reason) => {
     if (disposed) return;
