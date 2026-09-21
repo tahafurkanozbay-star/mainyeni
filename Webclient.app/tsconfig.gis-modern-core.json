@@ -60,7 +60,8 @@
     "src/gis-engine/mapStatePersistenceRuntime.test.ts",
     "src/gis-engine/exportPlanRuntime.test.ts",
     "src/gis-engine/modernGisOperationalIntegration.test.ts",
-    "src/Toolbox/GisQueryHelper.ts"
+    "src/Toolbox/GisQueryHelper.ts",
+    "src/Toolbox/GisGraphicsHelper.ts"
   ],
   "include": [],
   "exclude": [
