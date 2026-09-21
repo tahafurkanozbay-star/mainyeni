@@ -51,14 +51,6 @@ export interface SceneSupervisionRuntime {
   dispose: () => void;
 }
 
-const safeRemove = (handle: { remove?: () => void } | null | undefined): void => {
-  try {
-    handle?.remove?.();
-  } catch {
-    // SceneView watch handles are best-effort during partial teardown.
-  }
-};
-
 export const createSceneSupervisionRuntime = (
   view: SceneSupervisionView,
   options: SceneSupervisionOptions = {},
@@ -81,8 +73,16 @@ export const createSceneSupervisionRuntime = (
     lastError = error;
     try {
       options.onError?.(error, context);
-    } catch {
-      // Observer failures must never destabilize the SceneView lifecycle.
+    } catch (observerError) {
+      lastError = observerError;
+    }
+  };
+
+  const safeRemove = (handle: { remove?: () => void } | null | undefined): void => {
+    try {
+      handle?.remove?.();
+    } catch (error) {
+      reportError(error, 'scene-supervision-remove-handle');
     }
   };
 
