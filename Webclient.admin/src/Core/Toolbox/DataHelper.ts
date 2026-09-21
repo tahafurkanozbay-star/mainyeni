@@ -1,6 +1,7 @@
 import { arcgisToGeoJSON } from '@terraformer/arcgis';
 import * as FileSaver from 'file-saver';
-import { loadModules } from 'esri-loader';
+import SpatialReference from '@arcgis/core/geometry/SpatialReference.js';
+import * as projectOperator from '@arcgis/core/geometry/operators/projectOperator.js';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -190,19 +191,18 @@ export const DataHelper = {
   ): Promise<readonly GeoJsonGeometry[] | null> => {
     if (!geometries || geometries.length === 0) return null;
 
-    const [projection, SpatialReference] = await loadModules([
-      'esri/geometry/projection',
-      'esri/geometry/SpatialReference',
-    ]);
-
-    await projection.load?.();
+    if (!projectOperator.isLoaded()) {
+      await projectOperator.load();
+    }
 
     const outSpatialReference = new SpatialReference({ wkid: 4326 });
-    const projected = projection.project(geometries, outSpatialReference);
-    const projectedList = Array.isArray(projected) ? projected : [projected];
+    const projectedList = projectOperator.executeMany(
+      [...geometries] as Parameters<typeof projectOperator.executeMany>[0],
+      outSpatialReference,
+    );
 
     const geoJsonList = projectedList
-      .filter(Boolean)
+      .filter((geometry): geometry is NonNullable<typeof geometry> => geometry !== null)
       .map((geometry) => arcgisToGeoJSON(geometry) as GeoJsonGeometry);
 
     const kml = createKmlDocument(geoJsonList, attributes ?? []);
