@@ -135,8 +135,13 @@ export const createLinkedAbortScope = (
   });
 };
 
+type FetchOptionConfig = Pick<
+  NormalizedRequestConfig,
+  'method' | 'signal' | 'credentials' | 'fetchCache' | 'redirect' | 'integrity' | 'keepalive'
+>;
+
 export const buildFetchOptions = (
-  config: NormalizedRequestConfig,
+  config: FetchOptionConfig,
   bodyResult: { body: unknown; headers: Record<string, string> }
 ): RequestInit => {
   const options: RequestInit = {
