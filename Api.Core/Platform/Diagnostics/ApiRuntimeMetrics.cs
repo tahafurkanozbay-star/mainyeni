@@ -30,6 +30,7 @@ namespace Api.Core.Platform.Diagnostics
         private readonly Counter<long> exceptionCounter;
         private readonly Counter<long> cancellationCounter;
         private readonly Counter<long> rateLimitCounter;
+        private readonly Counter<long> governanceRejectionCounter;
         private bool disposed;
 
         public ApiRuntimeMetrics()
@@ -67,6 +68,10 @@ namespace Api.Core.Platform.Diagnostics
                 "http.server.rate_limit.rejection.count",
                 unit: "{request}",
                 description: "Requests rejected by the server-side rate limiter.");
+            governanceRejectionCounter = meter.CreateCounter<long>(
+                "http.server.governance.rejection.count",
+                unit: "{request}",
+                description: "Requests rejected by bounded API metadata or concurrency governance.");
         }
 
         public void RequestStarted(string method, string route)
@@ -122,6 +127,18 @@ namespace Api.Core.Platform.Diagnostics
         {
             ThrowIfDisposed();
             rateLimitCounter.Add(1, BuildTags(method, route, StatusCodes.Status429TooManyRequests));
+        }
+
+        public void GovernanceRejected(
+            string method,
+            string route,
+            int statusCode,
+            string policyCode)
+        {
+            ThrowIfDisposed();
+            var tags = BuildTags(method, route, statusCode);
+            tags.Add("kentrehberi.governance.policy", NormalizePolicyCode(policyCode));
+            governanceRejectionCounter.Add(1, tags);
         }
 
         public void Dispose()
@@ -190,6 +207,38 @@ namespace Api.Core.Platform.Diagnostics
             }
 
             return value;
+        }
+
+        internal static string NormalizePolicyCode(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "unknown";
+            }
+
+            var source = value.Trim();
+            var buffer = new char[Math.Min(source.Length, 64)];
+            var length = 0;
+
+            foreach (var character in source)
+            {
+                if (length >= buffer.Length)
+                {
+                    break;
+                }
+
+                if (char.IsAsciiLetterOrDigit(character) ||
+                    character == '-' ||
+                    character == '_' ||
+                    character == '.')
+                {
+                    buffer[length++] = char.ToLowerInvariant(character);
+                }
+            }
+
+            return length == 0
+                ? "unknown"
+                : new string(buffer, 0, length);
         }
 
         private static string NormalizeExceptionType(Exception exception)
