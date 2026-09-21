@@ -588,7 +588,7 @@ const normalizeRequest = <T>(
     serviceId,
     layerId,
     operation,
-    ...(request.key ?? {}),
+    ...request.key,
   });
   const cache = freezeCacheOptions(request.cache, policy);
 
