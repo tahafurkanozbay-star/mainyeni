@@ -405,6 +405,53 @@ describe('resourceScopeAdapters animation frame ownership', () => {
     expect(port.cancelled).toEqual([]);
   });
 
+  test('self-releases frame ownership even when the callback throws', async () => {
+    const port = createFramePort();
+    const scope = createResourceScope('component');
+    const binding = bindAnimationFrame(scope, {
+      owner: 'render',
+      key: 'throwing-frame',
+      callback: () => { throw new Error('frame failed'); },
+      port,
+    });
+
+    expect(() => port.fire(binding.frameId, 24)).toThrow('frame failed');
+    await flush();
+
+    expect(binding.handle.released).toBe(true);
+    expect(scope.snapshot().activeResources).toBe(0);
+    expect(port.cancelled).toEqual([]);
+  });
+
+  test('supports ports that invoke a frame callback synchronously', async () => {
+    const callback = vi.fn();
+    const cancelled: number[] = [];
+    const port: AnimationFramePort = {
+      requestAnimationFrame: (frameCallback) => {
+        frameCallback(8);
+        return 17;
+      },
+      cancelAnimationFrame: (frameId) => {
+        cancelled.push(frameId);
+      },
+    };
+    const scope = createResourceScope('component');
+
+    const binding = bindAnimationFrame(scope, {
+      owner: 'render',
+      key: 'synchronous-frame',
+      callback,
+      port,
+    });
+    await flush();
+
+    expect(binding.frameId).toBe(17);
+    expect(callback).toHaveBeenCalledWith(8);
+    expect(binding.handle.released).toBe(true);
+    expect(scope.snapshot().activeResources).toBe(0);
+    expect(cancelled).toEqual([]);
+  });
+
   test('rolls back frame registration when scope admission fails', () => {
     const port = createFramePort();
     const scope = createResourceScope('component', {
