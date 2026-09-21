@@ -102,9 +102,10 @@ const normalizeObjectIds = (values: readonly number[] | undefined, maximum: numb
   return normalized;
 };
 
-const normalizeTags = (tags: readonly string[] | undefined): readonly string[] => Object.freeze(
-  [...new Set((tags ?? []).map(normalizeText).filter(Boolean))].sort(),
-);
+const normalizeTags = (tags: readonly string[] | undefined): readonly string[] => {
+  const unique = new Set((tags ?? []).map(normalizeText).filter(Boolean));
+  return Object.freeze(Array.from(unique).sort());
+};
 
 const sameSpatialReference = (left: SpatialCacheEnvelope, right: SpatialCacheEnvelope): boolean => {
   if (left.spatialReferenceWkid === undefined || right.spatialReferenceWkid === undefined) return true;
