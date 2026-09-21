@@ -2,9 +2,11 @@ import { useEffect, type ReactNode } from "react";
 import { createExperienceShellRuntime } from "../../experience/experienceShellRuntime";
 import { runtimeDiagnostics } from "../../platform/runtime/runtimeDiagnostics";
 
+const supportsExperienceMediaRuntime = (target: Window): boolean => typeof target.matchMedia === "function";
+
 export const ExperienceRuntimeBridge = (): ReactNode => {
   useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") return undefined;
+    if (typeof window === "undefined" || typeof document === "undefined" || !supportsExperienceMediaRuntime(window)) return undefined;
 
     const runtime = createExperienceShellRuntime({
       window,
