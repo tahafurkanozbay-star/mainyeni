@@ -78,7 +78,6 @@ export interface AnimationFrameBinding {
   readonly handle: ManagedResourceHandle;
 }
 
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
 const safeText = (name: string, value: string, maximum = 180): string => {
   if (typeof value !== 'string') throw new TypeError(name + ' must be a string');
