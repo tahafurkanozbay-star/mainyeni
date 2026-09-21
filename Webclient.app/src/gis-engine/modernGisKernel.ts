@@ -28,6 +28,7 @@ import { createViewportQueryExecutionRuntime } from './viewportQueryExecutionRun
 import {
   createSpatialQueryControlPlane,
   deriveSpatialLayerNumericId,
+  SpatialQueryControlPlaneError,
 } from './spatialQueryControlPlane';
 import {
   createDeterministicFingerprint,
@@ -172,9 +173,13 @@ const errorCode = (error: unknown): string | null => {
 };
 
 const isAbortError = (error: unknown): boolean => (
-  Boolean(error)
-  && typeof error === 'object'
-  && String((error as Record<string, unknown>).name || '') === 'AbortError'
+  error instanceof SpatialQueryControlPlaneError
+    ? error.code === 'CANCELLED' || error.code === 'DISPOSED'
+    : (
+      Boolean(error)
+      && typeof error === 'object'
+      && String((error as Record<string, unknown>).name || '') === 'AbortError'
+    )
 );
 
 const isTimeoutError = (error: unknown): boolean => {
@@ -207,6 +212,14 @@ const queryControlPriority = (
   ) return 'background';
   return 'foreground';
 };
+
+const publicQueryError = (error: unknown): unknown => (
+  error instanceof SpatialQueryControlPlaneError
+  && error.code === 'OPERATION_FAILED'
+  && error.causeValue !== undefined
+    ? error.causeValue
+    : error
+);
 
 export const createModernGisKernel = (configuration: ModernGisKernelConfiguration = {}) => {
   const clock = typeof configuration.now === 'function' ? configuration.now : () => Date.now();
@@ -614,14 +627,15 @@ export const createModernGisKernel = (configuration: ModernGisKernelConfiguratio
         fromScheduler: true as const,
       });
     } catch (error) {
+      const publicError = publicQueryError(error);
       if (isAbortError(error)) metrics.queryCancellations += 1;
       else metrics.queryFailures += 1;
       trace.complete({
         ok: false,
         cancelled: isAbortError(error),
-        errorCode: errorCode(error),
+        errorCode: errorCode(publicError),
       });
-      throw error;
+      throw publicError;
     }
   };
 
