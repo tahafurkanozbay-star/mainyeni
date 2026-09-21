@@ -491,7 +491,7 @@ describe('runtime kernel lifecycle', () => {
       hardwareConcurrency: 4,
       deviceMemory: 4,
       onLine: true,
-      connection: { effectiveType: '4g', downlink: 10, rtt: 50, saveData: false },
+      connection: { effectiveType: '4g', downlink: 8, rtt: 50, saveData: false },
     },
     windowRef: {
       matchMedia: () => ({ matches: false, addEventListener: jest.fn(), removeEventListener: jest.fn() }),
