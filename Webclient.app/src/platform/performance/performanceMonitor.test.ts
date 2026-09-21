@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import { createPerformanceMonitor, rateWebVital } from './performanceMonitor';
 
 const createObserverHarness = () => {

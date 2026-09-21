@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import { createApiClient } from './httpClient';
 import { createRequestCoordinator } from './requestCoordinator';
 import { createRequestScheduler } from './requestScheduler';

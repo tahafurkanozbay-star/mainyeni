@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import { AppError } from '../errors/appError';
 import {
   DEFAULT_RETRY_AFTER_MAX_MS,

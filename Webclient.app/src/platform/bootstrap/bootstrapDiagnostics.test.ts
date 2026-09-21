@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import {
   BootstrapDiagnostics,
   createBootstrapDiagnosticBridge,
