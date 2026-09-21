@@ -46,7 +46,7 @@ public sealed class RepositorySecurityContractTests
     public void LegacyUserApiClientSecret_IsNotEmbeddedOrSynthesizedInBrowserSource()
     {
         var apiConfiguration = Read("Api.User/Controllers/Base/ApiConfiguration.cs");
-        var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.js");
+        var authBusiness = Read("Webclient.app/src/Business/AuthBusiness.ts");
         var envExample = Read("Webclient.app/.env.example");
         var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.app", ".env");
 
