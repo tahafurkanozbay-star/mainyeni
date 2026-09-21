@@ -16,20 +16,20 @@ namespace Api.User.KentRehberi;
 [ServiceFilter(typeof(AppRequestFilterAttribute))]
 public sealed class KentRehberiController : ControllerBase
 {
-    private readonly IKentRehberiRepository repository;
+    private readonly IKentRehberiQueryService queryService;
     private readonly KentRehberiOptions options;
     private readonly ILogger<KentRehberiController> logger;
 
     public KentRehberiController(
-        IKentRehberiRepository repository,
+        IKentRehberiQueryService queryService,
         KentRehberiOptions options,
         ILogger<KentRehberiController> logger)
     {
-        ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(queryService);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
-        this.repository = repository;
+        this.queryService = queryService;
         this.options = options;
         this.logger = logger;
     }
@@ -68,7 +68,7 @@ public sealed class KentRehberiController : ControllerBase
                 limit,
                 options);
 
-            var result = await repository.SearchAsync(
+            var result = await queryService.SearchAsync(
                 criteria,
                 cancellationToken);
 
@@ -107,7 +107,7 @@ public sealed class KentRehberiController : ControllerBase
         {
             EnsureAvailable();
 
-            var result = await repository.GetByObjectIdAsync(
+            var result = await queryService.GetByObjectIdAsync(
                 objectId,
                 cancellationToken);
 
@@ -167,7 +167,7 @@ public sealed class KentRehberiController : ControllerBase
                 limit,
                 options);
 
-            var result = await repository.FindNearbyAsync(
+            var result = await queryService.FindNearbyAsync(
                 criteria,
                 cancellationToken);
 
@@ -227,7 +227,7 @@ public sealed class KentRehberiController : ControllerBase
 
     private void EnsureAvailable()
     {
-        if (!options.Enabled || !repository.IsConfigured)
+        if (!options.Enabled || !queryService.IsConfigured)
         {
             throw new KentRehberiDataUnavailableException(
                 "Kent Rehberi data source is unavailable.");
@@ -253,6 +253,11 @@ public sealed class KentRehberiController : ControllerBase
     private IActionResult DataUnavailable(Exception exception)
     {
         Response.Headers.CacheControl = "no-store";
+
+        if (exception is KentRehberiOverloadedException)
+        {
+            Response.Headers["Retry-After"] = "1";
+        }
 
         logger.LogWarning(
             "Kent Rehberi data request failed with {FailureType}. TraceId: {TraceId}",
@@ -284,6 +289,8 @@ public sealed class KentRehberiController : ControllerBase
 
     private static bool IsDataAvailabilityFailure(Exception exception) =>
         exception is KentRehberiDataUnavailableException or
+        KentRehberiOverloadedException or
+        KentRehberiDataIntegrityException or
         NpgsqlException or
         TimeoutException;
 }
