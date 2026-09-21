@@ -99,7 +99,7 @@ export class QueryLifecycleCoordinator {
 
   #subscribe<T>(item: WorkItem<T>, signal?: AbortSignal): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const subscriber: Subscriber<T> = { resolve, reject, signal, settled: false };
+      const subscriber: Subscriber<T> = { resolve, reject, ...(signal ? { signal } : {}), settled: false };
       if (signal) {
         subscriber.abortListener = () => {
           if (subscriber.settled) return; subscriber.settled = true; item.subscribers.delete(subscriber); this.#cancelled += 1;
