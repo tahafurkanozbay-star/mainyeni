@@ -446,6 +446,7 @@ class BoundedServiceContainer implements ServiceContainer {
   #lastObservedAt: number | undefined;
   #startPromise: Promise<ServiceContainerSnapshot> | null = null;
   #stopPromise: Promise<ServiceContainerSnapshot> | null = null;
+  #disposePromise: Promise<void> | null = null;
   #controller = new AbortController();
   #parentAbortCleanup: (() => void) | null = null;
 
@@ -717,8 +718,19 @@ class BoundedServiceContainer implements ServiceContainer {
     return this.#stopPromise;
   }
 
-  async dispose(reason: unknown = 'container-disposed'): Promise<void> {
-    if (this.#state === 'disposed') return;
+  dispose(reason: unknown = 'container-disposed'): Promise<void> {
+    if (this.#state === 'disposed') return Promise.resolve();
+    if (this.#disposePromise) return this.#disposePromise;
+
+    const pending = this.#performDispose(reason)
+      .finally(() => {
+        if (this.#disposePromise === pending) this.#disposePromise = null;
+      });
+    this.#disposePromise = pending;
+    return pending;
+  }
+
+  async #performDispose(reason: unknown): Promise<void> {
     try {
       await this.stop({
         reason,
@@ -731,11 +743,12 @@ class BoundedServiceContainer implements ServiceContainer {
       this.#parentAbortCleanup = null;
       this.#emit('container-disposed');
       this.#graph.dispose();
-      for (const record of this.#records.values()) {
+      [...this.#records.values()].map((record) => {
         record.instance = undefined;
         record.controller = null;
         record.startPromise = null;
-      }
+        return record.definition.descriptor.id;
+      });
       this.#records.clear();
     }
   }
@@ -794,31 +807,43 @@ class BoundedServiceContainer implements ServiceContainer {
     return this.snapshot();
   }
 
-  async #ensureStarted(
+  #ensureStarted(
     id: string,
     stack: Set<string>,
   ): Promise<unknown> {
     const record = this.#records.get(id);
     if (!record) {
-      throw new ServiceContainerError(
+      return Promise.reject(new ServiceContainerError(
         'SERVICE_NOT_FOUND',
         'service is not registered: ' + id,
         id,
-      );
+      ));
     }
-    if (record.status === 'ready') return record.instance;
-    if (record.startPromise) return record.startPromise;
+    if (record.status === 'ready') return Promise.resolve(record.instance);
     if (stack.has(id)) {
-      throw new ServiceContainerError(
+      return Promise.reject(new ServiceContainerError(
         'GRAPH_INVALID',
         'runtime dependency cycle detected at ' + id,
         id,
-      );
+      ));
     }
+    if (record.startPromise) return record.startPromise;
 
     const nextStack = new Set(stack);
     nextStack.add(id);
+    record.startPromise = this.#startWithDependencies(record, nextStack)
+      .finally(() => {
+        record.startPromise = null;
+      });
+    return record.startPromise;
+  }
+
+  async #startWithDependencies(
+    record: ServiceRecord,
+    nextStack: Set<string>,
+  ): Promise<unknown> {
     const descriptor = record.definition.descriptor;
+    const id = descriptor.id;
 
     await this.#runSequential(descriptor.dependsOn, async (dependencyId) => {
       const dependency = this.#records.get(dependencyId);
@@ -861,11 +886,7 @@ class BoundedServiceContainer implements ServiceContainer {
       },
     );
 
-    record.startPromise = this.#startRecord(record)
-      .finally(() => {
-        record.startPromise = null;
-      });
-    return record.startPromise;
+    return this.#startRecord(record);
   }
 
   async #startRecord(record: ServiceRecord): Promise<unknown> {
