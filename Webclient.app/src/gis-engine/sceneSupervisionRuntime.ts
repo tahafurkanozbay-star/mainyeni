@@ -34,7 +34,6 @@ export interface SceneSupervisionSnapshot {
 export interface SceneSupervisionOptions {
   experience?: SceneExperienceRuntimeOptions;
   navigation?: SceneNavigationOptions;
-  autoRecoverFatalErrors?: boolean;
   onSnapshot?: (snapshot: SceneSupervisionSnapshot, reason: string) => void;
   onError?: (error: unknown, context: string) => void;
 }
@@ -58,13 +57,8 @@ export const createSceneSupervisionRuntime = (
   if (!view) throw new Error('Scene supervision requires a SceneView.');
 
   const listeners = new Set<(snapshot: SceneSupervisionSnapshot, reason: string) => void>();
-  const handles: Array<{ remove?: () => void }> = [];
-  const autoRecoverFatalErrors = options.autoRecoverFatalErrors !== false;
-
   let disposed = false;
   let active = false;
-  let recoveryPending = false;
-  let fatalError: unknown = view.fatalError ?? null;
   let lastError: unknown = null;
   let recoveryInFlight: Promise<boolean> | null = null;
   let initialized = false;
@@ -78,26 +72,21 @@ export const createSceneSupervisionRuntime = (
     }
   };
 
-  const safeRemove = (handle: { remove?: () => void } | null | undefined): void => {
-    try {
-      handle?.remove?.();
-    } catch (error) {
-      reportError(error, 'scene-supervision-remove-handle');
-    }
-  };
-
   let experience!: SceneExperienceRuntime;
   let navigation!: SceneNavigationRuntime;
 
-  const buildSnapshot = (): SceneSupervisionSnapshot => Object.freeze({
-    disposed,
-    active,
-    recoveryPending,
-    fatalError,
-    lastError,
-    experience: experience.getSnapshot(),
-    navigation: navigation.getSnapshot(),
-  });
+  const buildSnapshot = (): SceneSupervisionSnapshot => {
+    const experienceSnapshot = experience.getSnapshot();
+    return Object.freeze({
+      disposed,
+      active,
+      recoveryPending: recoveryInFlight !== null || experienceSnapshot.status === 'recovering',
+      fatalError: view.fatalError ?? null,
+      lastError,
+      experience: experienceSnapshot,
+      navigation: navigation.getSnapshot(),
+    });
+  };
 
   const emit = (reason: string): SceneSupervisionSnapshot => {
     const snapshot = buildSnapshot();
@@ -148,40 +137,26 @@ export const createSceneSupervisionRuntime = (
     if (disposed) return false;
     if (recoveryInFlight) return recoveryInFlight;
 
-    recoveryPending = true;
     emit(`recovery:${reason}:start`);
 
     recoveryInFlight = experience.recoverFatalError()
       .then((recovered) => {
-        fatalError = recovered ? null : (view.fatalError ?? fatalError);
         if (recovered) lastError = null;
         emit(recovered ? `recovery:${reason}:success` : `recovery:${reason}:failed`);
         return recovered;
       })
       .catch((error: unknown) => {
-        fatalError = view.fatalError ?? fatalError;
         reportError(error, 'scene-supervision-recovery');
         emit(`recovery:${reason}:error`);
         return false;
       })
       .finally(() => {
-        recoveryPending = false;
         recoveryInFlight = null;
         if (!disposed) emit(`recovery:${reason}:settled`);
       });
 
     return recoveryInFlight;
   };
-
-  if (typeof view.watch === 'function') {
-    const fatalHandle = view.watch('fatalError', (value) => {
-      if (disposed) return;
-      fatalError = value ?? view.fatalError ?? null;
-      emit(fatalError ? 'fatal-error' : 'fatal-error-cleared');
-      if (fatalError && autoRecoverFatalErrors) void recoverFatalError('fatal-error');
-    });
-    if (fatalHandle) handles.push(fatalHandle);
-  }
 
   const setActive = (nextActive: boolean): SceneSupervisionSnapshot => {
     if (disposed) return buildSnapshot();
@@ -202,7 +177,6 @@ export const createSceneSupervisionRuntime = (
     if (disposed) return;
     disposed = true;
     active = false;
-    handles.splice(0).forEach(safeRemove);
     experience.dispose();
     navigation.dispose();
     listeners.clear();
