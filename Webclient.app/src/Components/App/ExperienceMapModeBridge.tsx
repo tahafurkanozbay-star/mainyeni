@@ -34,6 +34,10 @@ import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experie
 
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
+const SCENE_RECOVERY_POLICY = Object.freeze({
+  maxAttempts: 3,
+  cooldownMs: 3_000,
+});
 
 type SceneNavigationAction =
   | 'back'
@@ -196,6 +200,8 @@ export function ExperienceMapModeBridge({ mapView, modeRef }: ExperienceMapModeB
 
     const runtime = createSceneSupervisionRuntime(view, {
       experience: {
+        maximumRecoveryAttempts: SCENE_RECOVERY_POLICY.maxAttempts,
+        recoveryCooldownMs: SCENE_RECOVERY_POLICY.cooldownMs,
         onSnapshot: (snapshot, reason) => {
           if (reason === 'recovery-start') {
             announce('3B grafik motoru yeniden başlatılıyor.', 'assertive');
