@@ -301,6 +301,10 @@ export const createSpatialQueryAdmissionController = (
     let index = 0;
     while (index < queued.length) {
       const candidate = queued[index];
+      if (!candidate) {
+        index += 1;
+        continue;
+      }
       const failure = evaluateCapacity(candidate);
       if (failure) {
         index += 1;
@@ -330,6 +334,7 @@ export const createSpatialQueryAdmissionController = (
     let removed = 0;
     for (let index = queued.length - 1; index >= 0; index -= 1) {
       const candidate = queued[index];
+      if (!candidate) continue;
       if (candidate.serviceId === serviceId && (layerId === undefined || candidate.layerId === layerId)) {
         queued.splice(index, 1);
         removed += 1;
