@@ -203,6 +203,14 @@ const toErrorResult = (error: unknown): GisQueryErrorResult => ({
 
 const normalizeUrl = (value: unknown): string => String(value ?? "").trim();
 
+const requireQueryUrl = (options: GisQueryOptions): string => {
+    const url = normalizeUrl(options.url);
+    if (!url) {
+        throw Object.assign(new Error("A GIS query URL is required."), { code: "INVALID_GIS_URL" });
+    }
+    return url;
+};
+
 const createQueryOptions = (options: GisQueryOptions = {}, spatial = false): UnknownRecord => {
     const resultOffset = toNonNegativeInteger(options.resultOffset);
     const resultRecordCount = toNonNegativeInteger(options.resultRecordCount);
@@ -240,7 +248,7 @@ const createRuntimeKey = (
     spatial: boolean,
     operation: "features" | "count" = "features"
 ): string => createQueryRuntimeKey({
-    serviceUrl: normalizeUrl(options.url),
+    serviceUrl: requireQueryUrl(options),
     operation,
     queryKey: stableQueryKey({
         spatial,
@@ -269,10 +277,7 @@ const createQueryTask = async (
     spatial: boolean,
     signal?: AbortSignal
 ): Promise<{ queryTask: ArcGisQueryTaskLike; query: UnknownRecord }> => {
-    const url = normalizeUrl(options.url);
-    if (!url) {
-        throw Object.assign(new Error("A GIS query URL is required."), { code: "INVALID_GIS_URL" });
-    }
+    const url = requireQueryUrl(options);
 
     throwIfAborted(signal);
     const [QueryTask, Query] = await loadQueryModules();
