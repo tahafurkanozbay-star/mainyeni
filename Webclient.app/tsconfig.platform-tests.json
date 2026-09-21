@@ -25,7 +25,11 @@
     "src/platform/runtime/serviceGraph.test.ts",
     "src/platform/runtime/serviceContainer.test.ts",
     "src/platform/runtime/serviceHealth.test.ts",
-    "src/platform/runtime/serviceComposition.integration.test.ts"
+    "src/platform/runtime/serviceComposition.integration.test.ts",
+    "src/platform/config/runtimeConfig.test.ts",
+    "src/platform/config/runtimeConfigResolution.test.ts",
+    "src/platform/config/runtimeConfigGovernance.test.ts",
+    "src/platform/config/runtimeConfigTransition.test.ts"
   ],
   "exclude": [
     "node_modules",
