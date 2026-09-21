@@ -38,6 +38,11 @@ const LEGACY_PATTERNS = Object.freeze([
     message: 'Deprecated esri-loader runtime loading is forbidden; use @arcgis/core ESM imports.',
   },
   {
+    id: 'legacy-axios-client',
+    pattern: /\bfrom\s+['"]axios['"]|\baxios\s*(?:\.|\()/u,
+    message: 'Axios is forbidden in admin source; use the bounded native adminApiClient runtime.',
+  },
+  {
     id: 'commonjs-require',
     pattern: /(^|[^\w])require\s*\(/mu,
     message: 'CommonJS require() is forbidden in admin source; use ESM imports.',
@@ -201,6 +206,14 @@ const auditPackage = (root, violations) => {
       'esri-loader-dependency',
       file,
       'Deprecated esri-loader must not return after the ArcGIS ESM migration.',
+    ));
+  }
+
+  if (dependencies.axios || devDependencies.axios) {
+    violations.push(violation(
+      'axios-dependency',
+      file,
+      'Axios must not return after the bounded native fetch migration.',
     ));
   }
 
