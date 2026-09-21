@@ -56,7 +56,7 @@ describe('createSpatialQueryAdmissionController', () => {
   it('rejects work that exceeds a single-request feature budget', () => {
     const controller = createSpatialQueryAdmissionController({ maxSingleEstimatedFeatures: 100 });
     const result = controller.request({ ...query(), estimatedFeatures: 101 });
-    expect(result).toEqual({ decision: 'reject', reason: 'single-request-budget', retryable: false });
+    expect(result).toEqual({ decision: 'reject', reason: 'single-request-budget', mayResubmit: false });
     expect(controller.snapshot().rejected).toBe(1);
   });
 
@@ -92,7 +92,7 @@ describe('createSpatialQueryAdmissionController', () => {
     });
     expect(controller.request(query('a')).decision).toBe('admit');
     expect(controller.request(query('b')).decision).toBe('admit');
-    expect(controller.request(query('c')).toMatchObject({ decision: 'defer', reason: 'global-concurrency' });
+    expect(controller.request(query('c'))).toMatchObject({ decision: 'defer', reason: 'global-concurrency' });
     expect(controller.request({ ...query('c'), priority: 'interactive' }).decision).toBe('admit');
   });
 
@@ -191,7 +191,7 @@ describe('createSpatialQueryAdmissionController', () => {
   it('caps the global queue', () => {
     const controller = createSpatialQueryAdmissionController({ maxQueued: 1, maxQueuedPerService: 1 });
     expect(controller.enqueue(query('a')).decision).toBe('defer');
-    expect(controller.enqueue(query('b'))).toMatchObject({ decision: 'reject', reason: 'queue-budget', retryable: true });
+    expect(controller.enqueue(query('b'))).toMatchObject({ decision: 'reject', reason: 'queue-budget', mayResubmit: true });
   });
 
   it('caps each service queue independently', () => {
