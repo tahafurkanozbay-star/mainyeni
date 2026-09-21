@@ -225,8 +225,10 @@ export const executeFetch = async <T = unknown>(
       });
     }
 
+    const responseStatus = Number(response.status) || 0;
+
     if (response.ok !== true) {
-      const error = await createHttpResponseError(response as unknown as ResponseLike, {
+      const error = await createHttpResponseError(response, {
         method: config.method,
         responseType: String(config.responseType || 'auto'),
         maxBodyBytes: config.maxResponseBytes
@@ -236,19 +238,19 @@ export const executeFetch = async <T = unknown>(
         method: config.method,
         url,
         durationMs,
-        status: response.status,
+        status: response.status ?? null,
         error
       });
       throw error;
     }
 
-    const data = await parseResponseBody(response as unknown as ResponseLike, {
+    const data = await parseResponseBody(response, {
       method: config.method,
       responseType: String(config.responseType || 'auto'),
       maxBodyBytes: config.maxResponseBytes
     }) as T;
 
-    const metadata = createResponseMetadata(response as unknown as ResponseLike, {
+    const metadata = createResponseMetadata(response, {
       method: config.method,
       url,
       includeHeaders: config.includeResponseHeaders === true
@@ -258,13 +260,13 @@ export const executeFetch = async <T = unknown>(
       method: config.method,
       url,
       durationMs,
-      status: response.status,
+      status: responseStatus,
       metadata
     });
 
     return Object.freeze({
       data,
-      status: Number(response.status) || 0,
+      status: responseStatus,
       statusText: String(response.statusText || ''),
       headers: response.headers || null,
       metadata,
