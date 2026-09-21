@@ -30,9 +30,9 @@ const OPTIONAL_CAPABILITIES = Object.freeze([
 ]);
 
 export type RuntimeLike = Record<string, unknown> & {
-  navigator?: NavigatorLike;
-  crypto?: { subtle?: unknown };
-  performance?: { now?: unknown };
+  navigator?: NavigatorLike | undefined;
+  crypto?: { subtle?: unknown } | undefined;
+  performance?: { now?: unknown } | undefined;
 };
 
 export interface ConnectionLike {
@@ -46,9 +46,9 @@ export interface NavigatorLike {
   onLine?: unknown;
   hardwareConcurrency?: unknown;
   deviceMemory?: unknown;
-  connection?: ConnectionLike;
-  mozConnection?: ConnectionLike;
-  webkitConnection?: ConnectionLike;
+  connection?: ConnectionLike | undefined;
+  mozConnection?: ConnectionLike | undefined;
+  webkitConnection?: ConnectionLike | undefined;
 }
 
 const hasFunction = (runtime: RuntimeLike, key: string): boolean =>
