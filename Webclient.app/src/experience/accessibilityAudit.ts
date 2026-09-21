@@ -84,10 +84,18 @@ function isHiddenFromAccessibilityTree(element: HTMLElement): boolean {
     return element.closest('[aria-hidden="true"], [inert], [hidden]') !== null;
 }
 function push(issues: AccessibilityIssue[], kind: AccessibilityIssueKind, element: HTMLElement, message: string): void { issues.push({ kind, element, message }); }
+const ARIA_REFERENCE_ATTRIBUTES = ["aria-labelledby", "aria-describedby", "aria-controls", "aria-owns", "aria-activedescendant"] as const;
 function auditReferences(element: HTMLElement, issues: AccessibilityIssue[]): void {
-    for (const attribute of ["aria-labelledby", "aria-describedby", "aria-controls", "aria-owns", "aria-activedescendant"] as const) {
-        for (const id of referencedIds(element, attribute)) if (!element.ownerDocument.getElementById(id)) push(issues, "broken-aria-reference", element, `${attribute} bulunamayan bir id'ye başvuruyor: ${id}`);
-    }
+    const missing = ARIA_REFERENCE_ATTRIBUTES.flatMap(attribute =>
+        referencedIds(element, attribute)
+            .filter(id => !element.ownerDocument.getElementById(id))
+            .map(id => ({ attribute, id }))
+    );
+    issues.push(...missing.map(({ attribute, id }) => ({
+        kind: "broken-aria-reference" as const,
+        element,
+        message: `${attribute} bulunamayan bir id'ye başvuruyor: ${id}`
+    })));
 }
 function auditBooleanAttributes(element: HTMLElement, issues: AccessibilityIssue[]): void {
     for (const attribute of BOOLEAN_ARIA) {
