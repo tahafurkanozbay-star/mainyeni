@@ -1,123 +1,58 @@
-import React, { Component } from 'react';
-import { loadModules } from "esri-loader";
+import type Geometry from '@arcgis/core/geometry/Geometry.js';
+import type { QueryProperties } from '@arcgis/core/rest/support/Query.js';
+import { executeQueryJSON } from '@arcgis/core/rest/query.js';
 
-
-export const GisQueryHelper = {
-
-    //esri gis sorgu çalıştırma
-    ExecuteQueryAsync: async (_options) => {
-
-        return new Promise(resolve => {
-            loadModules(["esri/tasks/QueryTask", "esri/tasks/support/Query"]).then(([QueryTask, Query]) => {
-
-                // Represents the REST endpoint for a layer of cities.
-                var queryTask = new QueryTask({
-                    url: _options.url
-                });
-                var query = new Query();
-                query.returnDistinctValues = _options.returnDistinctValues || false;
-                query.orderByFields = _options.orderByFields || null;
-                query.returnGeometry = _options.returnGeometry || false;
-                query.outFields = _options.outFields; //["*"];
-                query.where = _options.where || null;//"1=1";  
-
-                return queryTask.execute(query).then(function (result) {
-
-                    let resultArray = result.features.map(x => {
-                        return ({
-                            attr: x.attributes,
-                            geometry: x.geometry
-                        });
-                    });
-
-                    resolve(resultArray);
-
-                }, function (error) {
-
-                    console.log(error);
-                    resolve(null);
-                });
-
-            });
-
-        });
-    },
-
-    ExecuteQuery: async (_options) => {
-
-
-        return new Promise((resolve, reject) => {
-
-            loadModules(["esri/tasks/QueryTask", "esri/tasks/support/Query"]).then(([QueryTask, Query]) => {
-
-                // Represents the REST endpoint for a layer of cities.
-                var queryTask = new QueryTask({
-                    url: _options.url
-                });
-                var query = new Query();
-                query.returnDistinctValues = _options.returnDistinctValues || false;
-                query.orderByFields = _options.orderByFields || null;
-                query.returnGeometry = _options.returnGeometry || false;
-                query.outFields = _options.outFields; //["*"];
-                query.where = _options.where || null;//"1=1";  
-
-                return queryTask.execute(query).then(function (result) {
-
-                    let resultArray = result.features.map(x => {
-                        return ({
-                            attr: x.attributes,
-                            geometry: x.geometry
-                        });
-                    });
-
-
-                    resolve(resultArray);
-
-                }, function (error) {
-
-                    console.log(error);
-                    resolve(null);
-                });
-
-
-
-            });
-
-        });
-    },
-
-    ExecuteSpatialQuery: async (_options) => {
-
-
-        return new Promise((resolve, reject)=>{
-
-            loadModules(["esri/tasks/QueryTask", "esri/tasks/support/Query"]).then(([QueryTask, Query]) => {
-
-                // Represents the REST endpoint for a layer of cities.
-                var queryTask = new QueryTask({
-                    url: _options.url
-                });
-                var query = new Query(_options);
-    
-                return queryTask.execute(query).then(function (result) {
-                    let resultArray = result.features.map(x => {
-                        return ({
-                            attr: x.attributes,
-                            geometry: x.geometry
-                        });
-                    });
-    
-                    resolve(resultArray);
-    
-                }, function (error) {
-                    console.log(error);
-                    resolve(null);
-                });
-    
-            });
-
-        });
-      
-    }
-
+export interface GisQueryOptions extends QueryProperties {
+  readonly url: string;
 }
+
+export interface GisQueryResultItem {
+  readonly attr: Readonly<Record<string, unknown>>;
+  readonly geometry: Geometry | null;
+}
+
+const toQueryProperties = ({ url: _url, ...query }: GisQueryOptions): QueryProperties => ({
+  ...query,
+  returnDistinctValues: query.returnDistinctValues ?? false,
+  returnGeometry: query.returnGeometry ?? false,
+  outFields: query.outFields ?? ['*'],
+  where: query.where ?? '1=1',
+});
+
+const execute = async (
+  options: GisQueryOptions,
+): Promise<readonly GisQueryResultItem[] | null> => {
+  try {
+    const result = await executeQueryJSON(options.url, toQueryProperties(options));
+    return Object.freeze(
+      result.features.map((feature) => Object.freeze({
+        attr: Object.freeze({ ...(feature.attributes ?? {}) }),
+        geometry: feature.geometry ?? null,
+      })),
+    );
+  } catch {
+    return null;
+  }
+};
+
+export const GisQueryHelper = Object.freeze({
+  ExecuteQueryAsync: execute,
+  ExecuteQuery: execute,
+
+  ExecuteSpatialQuery: async (
+    options: GisQueryOptions,
+  ): Promise<readonly GisQueryResultItem[] | null> => {
+    try {
+      const { url, ...query } = options;
+      const result = await executeQueryJSON(url, query);
+      return Object.freeze(
+        result.features.map((feature) => Object.freeze({
+          attr: Object.freeze({ ...(feature.attributes ?? {}) }),
+          geometry: feature.geometry ?? null,
+        })),
+      );
+    } catch {
+      return null;
+    }
+  },
+});
