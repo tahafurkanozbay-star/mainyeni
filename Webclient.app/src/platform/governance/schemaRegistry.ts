@@ -51,7 +51,6 @@ export interface ConfigSchemaRegistry {
 interface NormalizedDescriptorBase {
   readonly key: string;
   readonly aliases: readonly string[];
-  readonly kind: ConfigDescriptor['kind'];
   readonly required: boolean;
   readonly secret: boolean;
   readonly description: string;
@@ -79,7 +78,6 @@ const normalizeDescriptor = (descriptor: ConfigDescriptor): NormalizedDescriptor
   const base: NormalizedDescriptorBase = {
     key,
     aliases: toAliases(key, descriptor.aliases),
-    kind: descriptor.kind,
     required: descriptor.required === true,
     secret: descriptor.secret === true,
     description: boundedText(descriptor.description, '', 240),
@@ -89,16 +87,16 @@ const normalizeDescriptor = (descriptor: ConfigDescriptor): NormalizedDescriptor
     case 'string': {
       const minimum = boundedInteger(descriptor.minLength, 0, 0, 16_384);
       const maximum = boundedInteger(descriptor.maxLength, 512, Math.max(1, minimum), 64 * 1024);
-      return Object.freeze({ ...descriptor, ...base, minLength: minimum, maxLength: maximum });
+      return Object.freeze({ ...descriptor, ...base, kind: 'string' as const, minLength: minimum, maxLength: maximum });
     }
     case 'integer': {
       const minimum = Number.isFinite(descriptor.minimum) ? Number(descriptor.minimum) : Number.MIN_SAFE_INTEGER;
       const maximum = Number.isFinite(descriptor.maximum) ? Number(descriptor.maximum) : Number.MAX_SAFE_INTEGER;
       if (minimum > maximum) throw new RangeError(`config ${key} minimum exceeds maximum`);
-      return Object.freeze({ ...descriptor, ...base, minimum, maximum });
+      return Object.freeze({ ...descriptor, ...base, kind: 'integer' as const, minimum, maximum });
     }
     case 'boolean':
-      return Object.freeze({ ...descriptor, ...base });
+      return Object.freeze({ ...descriptor, ...base, kind: 'boolean' as const });
     case 'enum': {
       const values = freezeArray(
         Array.from(new Set(descriptor.values.map((value) => boundedText(value, '', 120)).filter(Boolean))),
@@ -107,12 +105,13 @@ const normalizeDescriptor = (descriptor: ConfigDescriptor): NormalizedDescriptor
       if (descriptor.defaultValue !== undefined && !values.includes(descriptor.defaultValue)) {
         throw new TypeError(`config ${key} default enum value is not allowed`);
       }
-      return Object.freeze({ ...descriptor, ...base, values });
+      return Object.freeze({ ...descriptor, ...base, kind: 'enum' as const, values });
     }
     case 'json':
       return Object.freeze({
         ...descriptor,
         ...base,
+        kind: 'json' as const,
         maxBytes: boundedInteger(descriptor.maxBytes, 64 * 1024, 32, 2 * 1024 * 1024),
       });
     default:
