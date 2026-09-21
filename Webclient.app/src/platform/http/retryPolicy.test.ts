@@ -1,3 +1,4 @@
+import { vi as jest } from 'vitest';
 import { AppError } from '../errors/appError';
 import {
   DEFAULT_RETRY_AFTER_MAX_MS,
@@ -18,27 +19,31 @@ import {
 } from './retryPolicy';
 
 const createSignalHarness = (initiallyAborted = false) => {
-  const listeners = new Set();
-  const signal = {
-    aborted: initiallyAborted,
-    addEventListener: jest.fn((name, callback) => {
-      if (name === 'abort') listeners.add(callback);
-    }),
-    removeEventListener: jest.fn((name, callback) => {
-      if (name === 'abort') listeners.delete(callback);
-    })
-  };
+  const controller = new AbortController();
+  if (initiallyAborted) controller.abort('initially-aborted');
+
+  let listeners = 0;
+  const originalAdd = controller.signal.addEventListener.bind(controller.signal);
+  const originalRemove = controller.signal.removeEventListener.bind(controller.signal);
+
+  jest.spyOn(controller.signal, 'addEventListener').mockImplementation((type, listener, options) => {
+    if (type === 'abort') listeners += 1;
+    originalAdd(type, listener, options);
+  });
+  jest.spyOn(controller.signal, 'removeEventListener').mockImplementation((type, listener, options) => {
+    if (type === 'abort') listeners = Math.max(0, listeners - 1);
+    originalRemove(type, listener, options);
+  });
 
   return {
-    signal,
-    abort: () => {
-      if (signal.aborted) return;
-      signal.aborted = true;
-      [...listeners].forEach((listener) => listener());
-    },
-    listenerCount: () => listeners.size
+    signal: controller.signal,
+    abort: () => controller.abort('test-aborted'),
+    listenerCount: () => listeners
   };
 };
+
+const activeSignal = (): AbortSignal => new AbortController().signal;
+const abortedSignal = (): AbortSignal => AbortSignal.abort('test-aborted');
 
 const retryable = (status = 503, code = 'SERVER_ERROR') =>
   new AppError('temporary', { code, status, retryable: true });
@@ -82,7 +87,7 @@ describe('retryPolicy option normalization', () => {
       maxDelayMs: 'x',
       jitterMs: 'x',
       retryAfterMaxMs: 'x'
-    })).toEqual({
+    } as never)).toEqual({
       baseDelayMs: DEFAULT_RETRY_BASE_DELAY_MS,
       maxDelayMs: DEFAULT_RETRY_MAX_DELAY_MS,
       jitterMs: DEFAULT_RETRY_JITTER_MS,
@@ -211,7 +216,7 @@ describe('retryPolicy backoff calculation', () => {
   });
 
   test('handles non-numeric random return safely', () => {
-    expect(calculateBackoffDelay(0, { ...base, random: () => 'invalid' })).toBe(250);
+    expect(calculateBackoffDelay(0, { ...base, random: () => 'invalid' as never })).toBe(250);
   });
 
   test('clamps huge attempt values', () => {
@@ -257,7 +262,7 @@ describe('retryPolicy Retry-After header extraction', () => {
 
 describe('retryPolicy cancellation-aware waiting', () => {
   test('resolves when the timer fires', async () => {
-    let timerCallback;
+    let timerCallback: (() => void) | undefined;
     const setTimer = jest.fn((callback) => {
       timerCallback = callback;
       return 11;
@@ -265,7 +270,7 @@ describe('retryPolicy cancellation-aware waiting', () => {
     const clearTimer = jest.fn();
     const promise = waitForRetry(250, null, { setTimeout: setTimer, clearTimeout: clearTimer });
     expect(setTimer).toHaveBeenCalledWith(expect.any(Function), 250);
-    timerCallback();
+    timerCallback?.();
     await expect(promise).resolves.toBeUndefined();
     expect(clearTimer).toHaveBeenCalledWith(11);
   });
@@ -292,13 +297,13 @@ describe('retryPolicy cancellation-aware waiting', () => {
 
   test('removes abort listener when timer wins', async () => {
     const harness = createSignalHarness();
-    let callback;
+    let callback: (() => void) | undefined;
     const promise = waitForRetry(10, harness.signal, {
       setTimeout: jest.fn((handler) => { callback = handler; return 7; }),
       clearTimeout: jest.fn()
     });
     expect(harness.listenerCount()).toBe(1);
-    callback();
+    callback?.();
     await promise;
     expect(harness.listenerCount()).toBe(0);
   });
@@ -336,7 +341,7 @@ describe('retryPolicy decision model', () => {
   });
 
   test('stops when signal is aborted', () => {
-    expect(createRetryDecision({ error: retryable(), attempt: 0, maxRetries: 2, signal: { aborted: true } }))
+    expect(createRetryDecision({ error: retryable(), attempt: 0, maxRetries: 2, signal: abortedSignal() }))
       .toMatchObject({ retry: false, reason: 'aborted' });
   });
 });
@@ -365,7 +370,7 @@ describe('retryPolicy execution', () => {
   });
 
   test('exposes monotonically increasing attempt numbers', async () => {
-    const attempts = [];
+    const attempts: number[] = [];
     const operation = jest.fn(({ attempt }) => {
       attempts.push(attempt);
       if (attempt < 2) return Promise.reject(retryable());
@@ -422,7 +427,7 @@ describe('retryPolicy execution', () => {
 
   test('does not execute when caller is already aborted', async () => {
     const operation = jest.fn();
-    await expect(executeWithRetry(operation, { signal: { aborted: true } }))
+    await expect(executeWithRetry(operation, { signal: abortedSignal() }))
       .rejects.toMatchObject({ code: 'ABORTED' });
     expect(operation).not.toHaveBeenCalled();
   });
@@ -441,7 +446,7 @@ describe('retryPolicy execution', () => {
   });
 
   test('rejects non-function operations', async () => {
-    await expect(executeWithRetry(null)).rejects.toBeInstanceOf(TypeError);
+    await expect(executeWithRetry(null as never)).rejects.toBeInstanceOf(TypeError);
   });
 });
 
@@ -451,15 +456,16 @@ describe('retryPolicy throwIfAborted', () => {
   });
 
   test('does not throw for active signal', () => {
-    expect(() => throwIfAborted({ aborted: false })).not.toThrow();
+    expect(() => throwIfAborted(activeSignal())).not.toThrow();
   });
 
   test('throws typed AppError for aborted signal', () => {
     try {
-      throwIfAborted({ aborted: true });
+      throwIfAborted(abortedSignal());
       throw new Error('expected abort');
     } catch (error) {
       expect(error).toBeInstanceOf(AppError);
+      if (!(error instanceof AppError)) throw error;
       expect(error.code).toBe('ABORTED');
       expect(error.retryable).toBe(false);
     }

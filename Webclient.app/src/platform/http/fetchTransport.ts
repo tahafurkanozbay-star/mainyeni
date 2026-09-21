@@ -39,10 +39,12 @@ export interface LinkedAbortScope {
   isParentAborted(): boolean;
 }
 
+export type FetchImplementation = (input: string | URL | Request, init?: RequestInit) => Promise<ResponseLike>;
+
 interface FetchDependencies {
   defaults?: RuntimeDefaults;
   baseUrl?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: FetchImplementation;
   clock?: () => number;
   setTimeout?: typeof setTimeout;
   clearTimeout?: typeof clearTimeout;
@@ -133,8 +135,13 @@ export const createLinkedAbortScope = (
   });
 };
 
+type FetchOptionConfig = Pick<
+  NormalizedRequestConfig,
+  'method' | 'signal' | 'credentials' | 'fetchCache' | 'redirect' | 'integrity' | 'keepalive'
+>;
+
 export const buildFetchOptions = (
-  config: NormalizedRequestConfig,
+  config: FetchOptionConfig,
   bodyResult: { body: unknown; headers: Record<string, string> }
 ): RequestInit => {
   const options: RequestInit = {
@@ -152,14 +159,14 @@ export const buildFetchOptions = (
   return options;
 };
 
-const resolveFetchImplementation = (candidate: unknown): typeof fetch => {
+const resolveFetchImplementation = (candidate: unknown): FetchImplementation => {
   if (typeof candidate !== 'function') {
     throw new AppError('Fetch API is unavailable.', {
       code: 'FETCH_UNAVAILABLE',
       retryable: false
     });
   }
-  return candidate as typeof fetch;
+  return candidate as FetchImplementation;
 };
 
 const now = (clock: () => number): number => {
@@ -173,8 +180,8 @@ export const executeFetch = async <T = unknown>(
 ): Promise<TransportResult<T>> => {
   const defaults = dependencies.defaults || {};
   const config = normalizeRequestConfig(rawConfig, defaults);
-  const nativeFetch = typeof globalThis.fetch === 'function'
-    ? globalThis.fetch.bind(globalThis)
+  const nativeFetch: FetchImplementation | undefined = typeof globalThis.fetch === 'function'
+    ? async (input, init) => globalThis.fetch(input, init)
     : undefined;
   const fetchImpl = resolveFetchImplementation(dependencies.fetchImpl || nativeFetch);
 

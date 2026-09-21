@@ -5,7 +5,12 @@ import {
   type RuntimeTier,
 } from './contracts';
 
-interface NetworkInformationLike extends EventTarget {
+interface EventTargetLike {
+  addEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+  removeEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+}
+
+interface NetworkInformationLike extends EventTargetLike {
   readonly effectiveType?: string;
   readonly downlink?: number;
   readonly rtt?: number;
@@ -22,14 +27,18 @@ interface NavigatorLike {
   readonly scheduling?: { readonly isInputPending?: () => boolean };
 }
 
-interface WindowLike extends EventTarget {
-  matchMedia?: (query: string) => MediaQueryList;
-  Worker?: typeof Worker;
-  OffscreenCanvas?: typeof OffscreenCanvas;
-  IntersectionObserver?: typeof IntersectionObserver;
-  ResizeObserver?: typeof ResizeObserver;
-  PerformanceObserver?: typeof PerformanceObserver;
-  structuredClone?: typeof structuredClone;
+interface MediaQueryLike extends EventTargetLike {
+  readonly matches: boolean;
+}
+
+interface WindowLike extends EventTargetLike {
+  matchMedia?: (query: string) => MediaQueryLike;
+  Worker?: unknown;
+  OffscreenCanvas?: unknown;
+  IntersectionObserver?: unknown;
+  ResizeObserver?: unknown;
+  PerformanceObserver?: unknown;
+  structuredClone?: unknown;
   scheduler?: { readonly postTask?: (...args: unknown[]) => Promise<unknown> };
   trustedTypes?: unknown;
   document?: Document;
@@ -317,11 +326,11 @@ export const createCapabilityWatcher = (
     return next;
   };
 
-  const listen = (target: EventTarget | null | undefined, event: string): void => {
+  const listen = (target: EventTargetLike | null | undefined, event: string): void => {
     if (!target?.addEventListener) return;
-    const handler = () => refresh();
+    const handler: EventListener = () => { refresh(); };
     target.addEventListener(event, handler);
-    cleanups.push(() => target.removeEventListener(event, handler));
+    cleanups.push(() => target.removeEventListener?.(event, handler));
   };
 
   listen(windowRef, 'online');

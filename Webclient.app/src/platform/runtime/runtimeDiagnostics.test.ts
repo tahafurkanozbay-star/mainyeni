@@ -77,9 +77,13 @@ describe('runtime diagnostics privacy and retention', () => {
     error.stack = 'Error: failed\n    at https://example.test/app.js?session=private#frame';
 
     const sanitized = sanitizeRuntimeDiagnosticValue(error);
-    expect(sanitized.message).toBe('GET https://example.test/api failed');
-    expect(sanitized.stack).not.toContain('private');
-    expect(sanitized.stack).not.toContain('session=');
+    expect(sanitized).toMatchObject({ message: 'GET https://example.test/api failed' });
+    if (!sanitized || typeof sanitized !== 'object' || Array.isArray(sanitized)) {
+      throw new TypeError('expected sanitized error record');
+    }
+    const record = sanitized as Readonly<Record<string, unknown>>;
+    expect(record.stack).not.toContain('private');
+    expect(record.stack).not.toContain('session=');
   });
 
   test('normalizes non-finite numbers instead of storing invalid JSON values', () => {
@@ -110,7 +114,9 @@ describe('runtime diagnostics privacy and retention', () => {
     const longText = sanitizeRuntimeDiagnosticText('x'.repeat(2000), 50);
 
     expect(sanitizedValues).toHaveLength(50);
-    expect(sanitizedNested.a.b.c.d.e).toBe('[max-depth]');
+    expect(sanitizedNested).toMatchObject({ a: { b: { c: { d: { e: '[max-depth]' } } } } });
+    expect(longText).not.toBeNull();
+    if (longText === null) throw new TypeError('expected bounded diagnostic text');
     expect(longText.length).toBe(50);
     expect(longText.endsWith('…')).toBe(true);
   });
@@ -125,8 +131,8 @@ describe('runtime diagnostics privacy and retention', () => {
     const snapshot = diagnostics.snapshot();
     expect(snapshot.size).toBe(10);
     expect(snapshot.dropped).toBe(5);
-    expect(snapshot.events[0].details.index).toBe(5);
-    expect(snapshot.events[9].details.index).toBe(14);
+    expect(snapshot.events.at(0)?.details.index).toBe(5);
+    expect(snapshot.events.at(9)?.details.index).toBe(14);
   });
 
   test('captures non-Error failures without leaking secret text', () => {
@@ -136,7 +142,9 @@ describe('runtime diagnostics privacy and retention', () => {
       address: 'private address',
     });
 
-    const [event] = diagnostics.snapshot().events;
+    const event = diagnostics.snapshot().events.at(0);
+    expect(event).toBeDefined();
+    if (!event) throw new TypeError('expected captured runtime diagnostic event');
     expect(event.message).toBe('Bearer [redacted] request failed');
     expect(event.details.address).toBe('[redacted]');
     expect(JSON.stringify(event)).not.toContain('abc.def.ghi');

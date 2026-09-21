@@ -1,0 +1,68 @@
+name: Platform Typed Test Validation
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/src/platform/**/*.test.ts'
+      - 'Webclient.app/src/platform/**/*.integration.test.ts'
+      - 'Webclient.app/tsconfig.platform-tests.json'
+      - 'Webclient.app/package.json'
+      - 'tools/platform-language-baseline.json'
+      - 'tools/platform-language-ratchet.mjs'
+      - 'tools/platform-ts-cutover.test.mjs'
+      - '.github/workflows/platform-typed-test-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Webclient.app/src/platform/**/*.test.ts'
+      - 'Webclient.app/src/platform/**/*.integration.test.ts'
+      - 'Webclient.app/tsconfig.platform-tests.json'
+      - 'tools/platform-language-baseline.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-typed-test-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typed-platform-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Install from lockfile
+        run: npm ci
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Enforce Platform language ratchet
+        working-directory: .
+        run: node tools/platform-language-ratchet.mjs --strict
+
+      - name: Enforce Platform cutover contracts
+        working-directory: .
+        run: node --test tools/platform-ts-cutover.test.mjs tools/platform-language-ratchet.test.mjs
+
+      - name: Strict Platform test TypeScript
+        run: npm run typecheck:platform-tests -- --pretty false
+
+      - name: Focused migrated Platform tests
+        run: npx vitest run src/platform/bootstrap src/platform/http src/platform/performance src/platform/runtime --reporter=verbose
