@@ -134,7 +134,7 @@ export const createGovernanceTelemetry = (
   options: GovernanceTelemetryOptions,
 ): GovernanceTelemetry => {
   const capacity = boundedInteger(options.capacity, 400, 1, 4_096);
-  const ring = new Array<GovernanceTelemetryEvent | undefined>(capacity);
+  const ring: (GovernanceTelemetryEvent | undefined)[] = Array.from({ length: capacity });
   let cursor = 0;
   let count = 0;
   let sequence = 0;
