@@ -1032,12 +1032,10 @@ class BoundedServiceContainer implements ServiceContainer {
       }
     });
 
-    const disposing = this.#state === 'disposed';
     this.#state = 'stopped';
     this.#emit('container-stopped');
 
     const snapshot = this.snapshot();
-    if (disposing) this.#state = 'disposed';
     if (failures.length > 0 && options.throwOnStopError !== false) {
       throw new AggregateError(failures, 'one or more services failed to stop');
     }
