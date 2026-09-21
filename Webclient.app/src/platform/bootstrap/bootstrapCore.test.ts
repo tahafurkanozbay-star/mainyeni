@@ -14,47 +14,58 @@ import {
   runApplicationBootstrap,
   throwIfBootstrapAborted
 } from './bootstrapCore';
+import type { BootstrapDependencies, ConfigurationService, MapConfiguration } from './bootstrapCore';
 
-const successfulMapResult = (configuration = { wkid: 4326, zoom: 9 }) => ({
+const successfulMapResult = (configuration: MapConfiguration = { wkid: 4326, zoom: 9 }) => ({
   isSuccess: true,
   data: {
     configValue: JSON.stringify(configuration)
   }
 });
 
-const successfulServicesResult = (services = []) => ({
+const successfulServicesResult = (services: readonly unknown[] = []) => ({
   isSuccess: true,
   data: services
 });
 
-const service = (id, url = `https://gis.example.test/${id}`) => ({
+const service = (id: number | string, url = `https://gis.example.test/${id}`): ConfigurationService => ({
   id,
   title: `Service ${id}`,
   eg: url
 });
 
-const createSignal = (aborted = false) => ({
-  aborted,
-  addEventListener: jest.fn(),
-  removeEventListener: jest.fn()
-});
+const createSignal = (aborted = false): AbortSignal => {
+  const controller = new AbortController();
+  if (aborted) controller.abort('bootstrap-test-abort');
+  return controller.signal;
+};
 
-const createDependencies = (overrides = {}) => ({
-  loadMapConfiguration: jest.fn().mockResolvedValue(successfulMapResult()),
-  loadConfigurationServices: jest.fn().mockResolvedValue(successfulServicesResult([
-    service(1),
-    service(2)
-  ])),
-  generateServiceUrl: jest.fn((item) => item.eg),
-  addProxyRule: jest.fn().mockResolvedValue(undefined),
-  setMapConfiguration: jest.fn().mockResolvedValue(undefined),
-  setConfigurationServices: jest.fn().mockResolvedValue(undefined),
-  ...overrides
-});
+const createDependencies = (
+  overrides: Partial<BootstrapDependencies> = {},
+): BootstrapDependencies => {
+  const defaults: BootstrapDependencies = {
+    loadMapConfiguration: jest.fn().mockResolvedValue(successfulMapResult()),
+    loadConfigurationServices: jest.fn().mockResolvedValue(successfulServicesResult([
+      service(1),
+      service(2),
+    ])),
+    generateServiceUrl: jest.fn((item: ConfigurationService) => item.eg),
+    addProxyRule: jest.fn().mockResolvedValue(undefined),
+    setMapConfiguration: jest.fn().mockResolvedValue(undefined),
+    setConfigurationServices: jest.fn().mockResolvedValue(undefined),
+  };
+  return { ...defaults, ...overrides };
+};
 
 const createDiagnostics = () => ({
-  record: jest.fn()
+  record: jest.fn<(event: string, payload?: Readonly<Record<string, unknown>>) => void>(),
 });
+
+const requireAppError = (error: unknown): AppError => {
+  expect(error).toBeInstanceOf(AppError);
+  if (!(error instanceof AppError)) throw error;
+  return error;
+};
 
 describe('assertSuccessfulServiceResult', () => {
   test('returns the same successful result object', () => {
@@ -84,10 +95,10 @@ describe('assertSuccessfulServiceResult', () => {
       });
       throw new Error('expected failure');
     } catch (error) {
-      expect(error).toBeInstanceOf(AppError);
-      expect(error.message).toBe('Controlled failure');
-      expect(error.code).toBe('CONTROLLED');
-      expect(error.retryable).toBe(true);
+      const appError = requireAppError(error);
+      expect(appError.message).toBe('Controlled failure');
+      expect(appError.code).toBe('CONTROLLED');
+      expect(appError.retryable).toBe(true);
     }
   });
 
@@ -131,7 +142,8 @@ describe('parseMapConfiguration', () => {
       parseMapConfiguration(result);
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.MAP_PAYLOAD_MISSING);
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.MAP_PAYLOAD_MISSING);
     }
   });
 
@@ -146,8 +158,9 @@ describe('parseMapConfiguration', () => {
       parseMapConfiguration({ isSuccess: true, data: { configValue } });
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.MAP_PAYLOAD_INVALID);
-      expect(error.retryable).toBe(false);
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.MAP_PAYLOAD_INVALID);
+      expect(appError.retryable).toBe(false);
     }
   });
 
@@ -156,8 +169,9 @@ describe('parseMapConfiguration', () => {
       parseMapConfiguration({ isSuccess: false, message: 'Map unavailable' });
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.MAP_REQUEST_FAILED);
-      expect(error.message).toBe('Map unavailable');
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.MAP_REQUEST_FAILED);
+      expect(appError.message).toBe('Map unavailable');
     }
   });
 });
@@ -193,7 +207,8 @@ describe('normalizeConfigurationServices', () => {
       normalizeConfigurationServices({ isSuccess: true, data: { id: 1 } });
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.SERVICE_PAYLOAD_INVALID);
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.SERVICE_PAYLOAD_INVALID);
     }
   });
 
@@ -202,7 +217,8 @@ describe('normalizeConfigurationServices', () => {
       normalizeConfigurationServices(successfulServicesResult([invalidEntry]));
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.SERVICE_PAYLOAD_INVALID);
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.SERVICE_PAYLOAD_INVALID);
     }
   });
 
@@ -211,8 +227,9 @@ describe('normalizeConfigurationServices', () => {
       normalizeConfigurationServices({ isSuccess: false, message: 'Services unavailable' });
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.SERVICE_REQUEST_FAILED);
-      expect(error.message).toBe('Services unavailable');
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.SERVICE_REQUEST_FAILED);
+      expect(appError.message).toBe('Services unavailable');
     }
   });
 });
@@ -239,8 +256,9 @@ describe('normalizeProxyUrl', () => {
       normalizeProxyUrl(value, { serviceIndex: 5 });
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.SERVICE_URL_INVALID);
-      expect(error.details.serviceIndex).toBe(5);
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.SERVICE_URL_INVALID);
+      expect(appError.details.serviceIndex).toBe(5);
     }
   });
 });
@@ -315,9 +333,10 @@ describe('bootstrap cancellation helpers', () => {
       throwIfBootstrapAborted(createSignal(true), BootstrapStage.PROXY);
       throw new Error('expected failure');
     } catch (error) {
-      expect(error.code).toBe(BootstrapErrorCode.ABORTED);
-      expect(error.details.stage).toBe(BootstrapStage.PROXY);
-      expect(isBootstrapAbortError(error)).toBe(true);
+      const appError = requireAppError(error);
+      expect(appError.code).toBe(BootstrapErrorCode.ABORTED);
+      expect(appError.details.stage).toBe(BootstrapStage.PROXY);
+      expect(isBootstrapAbortError(appError)).toBe(true);
     }
   });
 
@@ -334,10 +353,10 @@ describe('bootstrap cancellation helpers', () => {
 
 describe('runApplicationBootstrap', () => {
   test('loads map and service configuration concurrently', async () => {
-    let mapResolve;
-    let servicesResolve;
-    const mapPromise = new Promise((resolve) => { mapResolve = resolve; });
-    const servicesPromise = new Promise((resolve) => { servicesResolve = resolve; });
+    let mapResolve!: (value: ReturnType<typeof successfulMapResult>) => void;
+    let servicesResolve!: (value: ReturnType<typeof successfulServicesResult>) => void;
+    const mapPromise = new Promise<ReturnType<typeof successfulMapResult>>((resolve) => { mapResolve = resolve; });
+    const servicesPromise = new Promise<ReturnType<typeof successfulServicesResult>>((resolve) => { servicesResolve = resolve; });
     const dependencies = createDependencies({
       loadMapConfiguration: jest.fn(() => mapPromise),
       loadConfigurationServices: jest.fn(() => servicesPromise)
@@ -365,9 +384,9 @@ describe('runApplicationBootstrap', () => {
   });
 
   test('awaits every proxy rule before committing configuration', async () => {
-    const calls = [];
+    const calls: string[] = [];
     const dependencies = createDependencies({
-      addProxyRule: jest.fn(async (url) => {
+      addProxyRule: jest.fn(async (url: string) => {
         calls.push(`proxy:${url}`);
       }),
       setMapConfiguration: jest.fn(async () => {
@@ -444,29 +463,29 @@ describe('runApplicationBootstrap', () => {
   });
 
   test('stops before proxy setup when cancellation arrives after loading', async () => {
-    const signal = createSignal(false);
+    const controller = new AbortController();
     const dependencies = createDependencies({
       loadConfigurationServices: jest.fn(async () => {
-        signal.aborted = true;
+        controller.abort('after-load');
         return successfulServicesResult([service(1)]);
       })
     });
 
-    await expect(runApplicationBootstrap(dependencies, { signal }))
+    await expect(runApplicationBootstrap(dependencies, { signal: controller.signal }))
       .rejects.toMatchObject({ code: BootstrapErrorCode.ABORTED });
     expect(dependencies.addProxyRule).not.toHaveBeenCalled();
     expect(dependencies.setMapConfiguration).not.toHaveBeenCalled();
   });
 
   test('stops between proxy rules when cancellation arrives during setup', async () => {
-    const signal = createSignal(false);
+    const controller = new AbortController();
     const dependencies = createDependencies({
       addProxyRule: jest.fn(async () => {
-        signal.aborted = true;
+        controller.abort('during-proxy');
       })
     });
 
-    await expect(runApplicationBootstrap(dependencies, { signal }))
+    await expect(runApplicationBootstrap(dependencies, { signal: controller.signal }))
       .rejects.toMatchObject({ code: BootstrapErrorCode.ABORTED });
     expect(dependencies.addProxyRule).toHaveBeenCalledTimes(1);
     expect(dependencies.setMapConfiguration).not.toHaveBeenCalled();
@@ -540,6 +559,7 @@ describe('runApplicationBootstrap', () => {
 
     const failedCall = diagnostics.record.mock.calls.find(([name]) => name === 'bootstrap.failed');
     expect(failedCall).toBeDefined();
+    if (!failedCall) throw new TypeError('expected bootstrap.failed diagnostic');
     expect(failedCall[1]).toMatchObject({
       failedStage: BootstrapStage.PROXY,
       errorCode: BootstrapErrorCode.PROXY_SETUP_FAILED,
@@ -592,9 +612,9 @@ describe('createBootstrapDependencies', () => {
     'generateServiceUrl',
     'addProxyRule',
     'setMapConfiguration',
-    'setConfigurationServices'
-  ])('rejects missing dependency %s', (key) => {
-    const dependencies = createDependencies();
+    'setConfigurationServices',
+  ] as const)('rejects missing dependency %s', (key) => {
+    const dependencies: Partial<BootstrapDependencies> = { ...createDependencies() };
     delete dependencies[key];
     expect(() => createBootstrapDependencies(dependencies)).toThrow(AppError);
   });
