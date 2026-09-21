@@ -34,12 +34,12 @@ describe('CommonReducer window state', () => {
       payload: { windowid: 'search', query: { name: 'park' } }
     });
 
-    expect(next.WindowList.find(item => item.id === 'sidebar').visible).toBe(false);
+    expect(next.WindowList.find(item => item.id === 'sidebar')?.visible).toBe(false);
     expect(next.WindowList.find(item => item.id === 'search')).toMatchObject({
       visible: true,
       query: { name: 'park' }
     });
-    expect(seeded.WindowList[0].visible).toBe(true);
+    expect(seeded.WindowList[0]?.visible).toBe(true);
   });
 
   test('hiding an unknown window is a safe no-op for existing entries', () => {
