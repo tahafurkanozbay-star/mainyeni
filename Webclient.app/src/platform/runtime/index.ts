@@ -15,7 +15,13 @@ export * from './runtimeWorkloadGovernor';
 export * from './adaptiveRuntimeModule';
 export * from './capacityEnvelope';
 export * from './loadShedding';
-export * from './loadSheddingPolicy';
+export { LoadSheddingPolicy as AdaptiveLoadSheddingPolicy } from './loadSheddingPolicy';
+export type {
+  LoadSheddingPriority as AdaptiveLoadSheddingPriority,
+  LoadSheddingSample as AdaptiveLoadSheddingSample,
+  LoadSheddingThresholds as AdaptiveLoadSheddingThresholds,
+  LoadSheddingDecision as AdaptiveLoadSheddingDecision,
+} from './loadSheddingPolicy';
 export * from './resilienceEnvelope';
 export * from './runtimeSignalWindow';
 export * from './runtimeDeadlineLedger';
