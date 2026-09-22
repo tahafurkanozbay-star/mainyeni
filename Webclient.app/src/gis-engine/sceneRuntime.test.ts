@@ -405,6 +405,21 @@ describe('sceneRuntime', () => {
     await expect(focusPickedGraphic(view, { geometry: {} })).resolves.toBe(false);
   });
 
+  test('focusPickedGraphic forwards AbortSignal to the ArcGIS navigation call', async () => {
+    const { view } = createScene();
+    const controller = new AbortController();
+
+    await expect(focusPickedGraphic(view, { geometry: {} }, {
+      signal: controller.signal,
+      duration: 125,
+    })).resolves.toBe(true);
+
+    expect(view.goTo).toHaveBeenCalledWith({}, expect.objectContaining({
+      duration: 125,
+      signal: controller.signal,
+    }));
+  });
+
   test('snapshots scene camera into the shared view-state contract', () => {
     const { view } = createScene();
 
@@ -478,6 +493,20 @@ describe('sceneRuntime', () => {
     await expect(applyViewStateToSceneView(view, {
       mode: '2d', center: [33, 40], scale: 10000,
     })).resolves.toBe(false);
+    expect(view.goTo).not.toHaveBeenCalled();
+  });
+
+  test('does not start SceneView navigation when the apply signal is already aborted', async () => {
+    const { view } = createScene();
+    const controller = new AbortController();
+    controller.abort('superseded');
+
+    await expect(applyViewStateToSceneView(view, {
+      mode: '3d',
+      center: [33, 40],
+      scale: 10000,
+    }, { signal: controller.signal })).resolves.toBe(false);
+
     expect(view.goTo).not.toHaveBeenCalled();
   });
 
@@ -656,6 +685,26 @@ describe('sceneRuntime', () => {
     });
 
     await expect(applySceneBookmark(view, { camera: {} })).resolves.toBe(false);
+  });
+
+  test('applySceneBookmark forwards AbortSignal and fails fast when already cancelled', async () => {
+    const { view } = createScene();
+    const controller = new AbortController();
+    const bookmark = { camera: { heading: 15, tilt: 40 } };
+
+    await expect(applySceneBookmark(view, bookmark, {
+      signal: controller.signal,
+      duration: 180,
+    })).resolves.toBe(true);
+    expect(view.goTo).toHaveBeenCalledWith(
+      { camera: bookmark.camera },
+      expect.objectContaining({ duration: 180, signal: controller.signal }),
+    );
+
+    vi.mocked(view.goTo!).mockClear();
+    controller.abort('closed');
+    await expect(applySceneBookmark(view, bookmark, { signal: controller.signal })).resolves.toBe(false);
+    expect(view.goTo).not.toHaveBeenCalled();
   });
 
   test('publishes explicit supported measurement contracts', () => {
