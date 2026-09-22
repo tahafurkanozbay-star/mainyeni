@@ -86,6 +86,83 @@ describe('sceneContentOrchestrator', () => {
     expect(runtime.getSnapshot().ready).toBe(1);
   });
 
+  it('bounds the pending content queue and admits higher-priority work first', async () => {
+    const { map } = createMap();
+    let releaseFirst: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const started: string[] = [];
+    const factory = vi.fn(async ({ definition }: { definition: Readonly<SceneContentDefinition> }) => {
+      started.push(definition.id);
+      if (started.length === 1) await firstGate;
+      return { id: definition.id, loaded: true };
+    });
+    const runtime = createSceneContentOrchestrator({ map }, factory, {
+      concurrency: 1,
+      maximumQueueDepth: 2,
+    });
+
+    runtime.registerMany([
+      feature('prefetch-a', { priority: 'prefetch' }),
+      feature('prefetch-b', { priority: 'prefetch' }),
+      feature('visible', { priority: 'visible' }),
+      feature('critical', { priority: 'critical' }),
+    ]);
+
+    runtime.setActive(true);
+    await Promise.resolve();
+
+    const pressured = runtime.getSnapshot();
+    expect(started[0]).toBe('critical');
+    expect(pressured.queueCapacity).toBe(2);
+    expect(pressured.queueDepth).toBeLessThanOrEqual(2);
+    expect(pressured.deferred).toBe(1);
+    expect(pressured.records.filter((record) => record.queueDeferred)).toHaveLength(1);
+
+    releaseFirst?.();
+    await runtime.reconcile('drain-backpressure');
+
+    const completed = runtime.getSnapshot();
+    expect(completed.queueDepth).toBe(0);
+    expect(completed.deferred).toBe(0);
+    expect(completed.ready).toBe(4);
+    expect(started).toEqual(['critical', 'visible', 'prefetch-a', 'prefetch-b']);
+  });
+
+  it('removes stale queue entries when a registered definition is replaced', async () => {
+    const { map } = createMap();
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const factory = vi.fn(async ({ definition }: { definition: Readonly<SceneContentDefinition> }) => {
+      if (definition.id === 'blocker') await gate;
+      return { id: definition.id, loaded: true };
+    });
+    const runtime = createSceneContentOrchestrator({ map }, factory, {
+      concurrency: 1,
+      maximumQueueDepth: 2,
+    });
+
+    runtime.registerMany([
+      feature('blocker', { priority: 'critical' }),
+      feature('replace-me', { priority: 'visible' }),
+    ]);
+    runtime.setActive(true);
+    await Promise.resolve();
+
+    runtime.register(feature('replace-me', { priority: 'interactive', title: 'Updated' }));
+    const queued = runtime.getSnapshot();
+    expect(queued.queueDepth).toBeLessThanOrEqual(1);
+
+    release?.();
+    await runtime.reconcile('replacement');
+
+    expect(factory.mock.calls.filter(([context]) => context.definition.id === 'replace-me')).toHaveLength(1);
+    expect(runtime.getSnapshot().records.find((record) => record.id === 'replace-me')).toMatchObject({
+      status: 'ready',
+      priority: 'interactive',
+      queueDeferred: false,
+    });
+  });
+
   it('honors visible scale ranges and hides loaded layers outside range', async () => {
     const { map, layers } = createMap();
     const factory = vi.fn(async () => ({ loaded: true }));
