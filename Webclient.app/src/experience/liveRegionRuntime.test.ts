@@ -29,7 +29,7 @@ describe('liveRegionRuntime', () => {
     const runtime = createLiveRegionRuntime({ document });
     expect(runtime.announce('  12   sonuç bulundu  ')).toBe(true);
     expect(runtime.getSnapshot().queued).toBe(1);
-    vi.runOnlyPendingTimers();
+    vi.advanceTimersByTime(0);
     expect(document.querySelector('[data-experience-live-region="polite"]')?.textContent).toBe('12 sonuç bulundu');
     expect(runtime.getSnapshot()).toMatchObject({ queued: 0, delivered: 1, dropped: 0 });
   });
@@ -37,7 +37,7 @@ describe('liveRegionRuntime', () => {
   it('routes urgent announcements to the assertive region', () => {
     const runtime = createLiveRegionRuntime({ document });
     runtime.announce('Bağlantı kesildi', { priority: 'assertive' });
-    vi.runOnlyPendingTimers();
+    vi.advanceTimersByTime(0);
     expect(document.querySelector('[data-experience-live-region="assertive"]')?.textContent).toBe('Bağlantı kesildi');
   });
 
