@@ -61,6 +61,9 @@ jobs:
       - name: GIS query governance contract
         run: npm run quality:gis-query-governance
 
+      - name: Spatial selection index contract
+        run: npm run quality:spatial-selection-index
+
       - name: Kent Rehberi all-layer contract
         run: npm run quality:kent-rehberi-all-layers
 
