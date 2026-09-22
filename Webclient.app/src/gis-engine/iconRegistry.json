@@ -1,47 +1,497 @@
 [
-  {"id":"parklar","type":"park","category":"Yeşil Alanlar","aliases":["park","parklar","parklar qery","yeşil alan","YeniParklarQeryUrl"],"icon":"images/icons/map/ABB/parklar.svg"},
-  {"id":"aileyasam","type":"aile yaşam merkezi","category":"Aile Yaşam Merkezleri","aliases":["aileyasam","aile yasam merkezi","YeniAileYasamMerkezleriQeryUrl"],"icon":"images/icons/map/ABB/aileyasammerkezi.svg"},
-  {"id":"belmek","type":"belmek","category":"BELMEK","aliases":["belmek beltek","YeniBelmekBeltekQeryUrl"],"icon":"images/icons/map/ABB/belmek.svg"},
-  {"id":"cocuketkinlik","type":"çocuk etkinlik merkezi","category":"Çocuk Etkinlik Merkezleri","aliases":["cocuk etkinlik merkezi","çocuk merkezleri","YeniCocukEtkinlikMerkezleriQeryUrl"],"icon":"images/icons/map/ABB/cocuketkinlikmerkezleri.svg"},
-  {"id":"engelsizkres","type":"engelsiz kreş","category":"Kreşler","aliases":["engelsiz kres","kres","YeniEngelliCocukQueryUrl"],"icon":"images/icons/map/ABB/engelsizkres.svg"},
-  {"id":"engelsizyasam","type":"engelsiz yaşam","category":"Engelli Hizmetleri","aliases":["engelsiz yasam","engelli yaşam","YeniEngelliBireyQeryUrl"],"icon":"images/icons/map/ABB/engelsizyasam.svg"},
-  {"id":"espor","type":"espor tesisi","category":"Spor Tesisleri","aliases":["espor tesisleri","e-spor","YeniSporTesisleriQeryUrl"],"icon":"images/icons/map/ABB/esportesisleri.svg"},
-  {"id":"gazi","type":"gazi merkezi","category":"Gaziler Merkezleri","aliases":["gaziler merkezi","gazi merkezi","YeniGazilerMerkeziQeyUrl"],"icon":"images/icons/map/ABB/gazimerkezleri.svg"},
-  {"id":"kadin","type":"kadın danışma merkezi","category":"Kadın Hizmetleri","aliases":["kadin danisma merkezi","kadın dayanışma merkezi","YeniKadinDanismaQueryUrl"],"icon":"images/icons/map/ABB/kadindayanismamerkezi.svg"},
-  {"id":"kadinlarlokali","type":"kadınlar lokali","category":"Kadın Hizmetleri","aliases":["kadinlar lokali","YeniKadinlarLokaliQeryUrl"],"icon":"images/icons/map/ABB/kadinlarlokali.svg"},
-  {"id":"kultur","type":"kültür sanat","category":"Kültür Sanat","aliases":["kultur sanat","kültür ve sanat","YeniKültürSanatQueryUrl"],"icon":"images/icons/map/ABB/kultursanat.svg"},
-  {"id":"kutuphane","type":"kütüphane","category":"Kütüphaneler","aliases":["kutuphane","kütüphaneler","YeniKutuphanelerQueryUrl"],"icon":"images/icons/map/ABB/kutuphane.svg"},
-  {"id":"park","type":"park","category":"Parklar","aliases":["yeşil alan","green area"],"icon":"images/icons/map/ABB/parklar.svg"},
-  {"id":"pati","type":"pati dostu","category":"Pati Dostu Uygulamalar","aliases":["patidostu","pati dostu","YeniPatiDostuQeryUrl"],"icon":"images/icons/map/ABB/patidostuuygulamalar.svg"},
-  {"id":"sosyal","type":"sosyal hizmetler","category":"Sosyal Hizmetler","aliases":["sosyal hizmet","sosyal tesis","YeniSosyalHizmetlerQueryUrl"],"icon":"images/icons/map/ABB/sosyalhizmetler.svg"},
-  {"id":"teknoloji","type":"teknoloji merkezi","category":"Teknoloji Merkezleri","aliases":["teknoloji merkezleri","YeniTeknolojiMerkezleriQueryUrl"],"icon":"images/icons/map/ABB/teknolojimerkezleri.svg"},
-  {"id":"wifi","type":"wifi erişim noktası","category":"WiFi","aliases":["wifi","wi-fi","wifierisimnoktalari","YeniWifiNoktalariQeryUrl"],"icon":"images/icons/map/ABB/wifierisimnoktalari.svg"},
-  {"id":"yasli","type":"yaşlı dostu uygulama","category":"Yaşlı Dostu","aliases":["yasli dostu","yaşlı dostu mekan","YeniYasliDostuQueryUrl"],"icon":"images/icons/map/ABB/yaslidostuuygulamalar.svg"},
-  {"id":"askibaraj","type":"baraj","category":"ASKİ","aliases":["aski baraj","askibaraj","YeniAskiBarajQeryUrl"],"icon":"images/icons/map/ASKİ/askibaraj.svg"},
-  {"id":"askikart","type":"kart dolum","category":"ASKİ","aliases":["aski kart dolum","askikartdolum","YeniAskiKartDolumOdemeQueryUrl"],"icon":"images/icons/map/ASKİ/askikartdolum.svg"},
-  {"id":"askiatiksu","type":"atıksu tesisi","category":"ASKİ","aliases":["aski atiksu","atıksu tesisleri","YeniAskiAtıkSuTesisleriQeryUrl"],"icon":"images/icons/map/ASKİ/atiksutesisleri.svg"},
-  {"id":"askibolge","type":"bölge müdürlüğü","category":"ASKİ","aliases":["aski bölge müdürlüğü","bolgemudurlukleri","YeniAskiBolgeMudurlukleriQeryUrl"],"icon":"images/icons/map/ASKİ/bolgemudurlukleri.svg"},
-  {"id":"askisumatik","type":"sumatik","category":"ASKİ","aliases":["aski sumatik","YeniAskiSumatikQeryUrl"],"icon":"images/icons/map/ASKİ/sumatik.svg"},
-  {"id":"askitahsilat","type":"tahsilat şubesi","category":"ASKİ","aliases":["aski tahsilat","tahsilat subeleri","YeniAskiTahsilatSubeQueryUrl"],"icon":"images/icons/map/ASKİ/tahsilatsubeleri.svg"},
-  {"id":"ankaray","type":"ankaray durağı","category":"EGO","aliases":["ankaray","ankaray durakları","YeniEgoAnkarayDuraklariQueryUrl"],"icon":"images/icons/map/EGO/ankaray.svg"},
-  {"id":"baskentray","type":"başkentray durağı","category":"EGO","aliases":["baskentray","başkentray","YeniEgoBaskentrayDuraklariQueryUrl"],"icon":"images/icons/map/EGO/baskentray.svg"},
-  {"id":"bisiklet","type":"elektrikli bisiklet istasyonu","category":"EGO","aliases":["elektrikli bisiklet","bisiklet istasyonu","YeniEgoElektrikliBisikletİstasyonlariQueryUrl"],"icon":"images/icons/map/EGO/elektirklibisiklet.svg"},
-  {"id":"egoKart","type":"kart dolum noktası","category":"EGO","aliases":["ego kart dolum","YeniEgoKartDolumNoktalariQeryUrl"],"icon":"images/icons/map/EGO/kartdolum.svg"},
-  {"id":"egoSatis","type":"kart satış noktası","category":"EGO","aliases":["ego kart satış","YeniEgoKartSatisNoktalariQueryUrl"],"icon":"images/icons/map/EGO/kartsatis.svg"},
-  {"id":"metro","type":"metro hattı","category":"EGO","aliases":["metro","metrohatti","YeniEgoMetroDuraklariQueryUrl"],"icon":"images/icons/map/EGO/metrohatti.svg"},
-  {"id":"otobus","type":"otobüs durağı","category":"EGO","aliases":["otobus duraklari","otobüs durağı","YeniEgoOtobusDuraklariQueryUrl"],"icon":"images/icons/map/EGO/otobusduraklari.svg"},
-  {"id":"teleferik","type":"teleferik durağı","category":"EGO","aliases":["teleferik","YeniEgoTeleferikDuraklariQueryUrl"],"icon":"images/icons/map/EGO/teleferik.svg"},
-  {"id":"anfaBitki","type":"anfa bitki evi","category":"İştirakler","aliases":["anfa bitki evi","YeniAnfaBitkiEviQeryUrl"],"icon":"images/icons/map/ISTIRAK/anfabitkievi.svg"},
-  {"id":"anfaKafe","type":"anfa kafe","category":"İştirakler","aliases":["anfa kafeler","YeniAnfaKafelerQeryUrl"],"icon":"images/icons/map/ISTIRAK/anfakafeler.svg"},
-  {"id":"anfaOtopark","type":"anfa otopark","category":"İştirakler","aliases":["anfa otopark","YeniAnfaOtoparkQeryUrl"],"icon":"images/icons/map/ISTIRAK/anfaotopark.svg"},
-  {"id":"baskentmarket","type":"başkent market","category":"İştirakler","aliases":["baskent market","başkent market","YeniBaskentMarketQueryUrl"],"icon":"images/icons/map/ISTIRAK/baskentmarket.svg"},
-  {"id":"belko","type":"belko meyve suyu","category":"İştirakler","aliases":["belko meyve suyu","YeniBelkoMeyveSuyuSatisBufeleriQueryUrl"],"icon":"images/icons/map/ISTIRAK/belkomeyvesuyu.svg"},
-  {"id":"halekmek","type":"halk ekmek","category":"İştirakler","aliases":["halk ekmek","halkekmek","YeniHalkEkmekQueryUrl"],"icon":"images/icons/map/ISTIRAK/halkekmek.svg"},
-  {"id":"portas","type":"portas asfalt","category":"İştirakler","aliases":["portas","asfalt üretim","YeniPortasAsfaltUretimQeryUrl"],"icon":"images/icons/map/ISTIRAK/portas.svg"},
-  {"id":"segmen","type":"segmen su","category":"İştirakler","aliases":["segmen su","segmen su fabrikası","YeniSegmenSuFabrikalarıQeryUrl","YeniSegmenSuSatisBayileriQeryUrl"],"icon":"images/icons/map/ISTIRAK/segmensu.svg"},
-  {"id":"aciltoplanma","type":"acil toplanma alanı","category":"Acil Toplanma Alanları","aliases":["acil toplanma alanı","acil toplanma alanları","assembly area","AssemblyAreaQueryUrl"],"icon":"images/icons/sidebar/aciltoplanmaalani.png"},
-  {"id":"etkinlik","type":"etkinlik","category":"Etkinlikler","aliases":["etkinlik","etkinlikler","event","EventQueryUrl"],"icon":"images/icons/sidebar/etkinlikler.png"},
-  {"id":"eczane","type":"eczane","category":"Eczaneler","aliases":["eczane","eczaneler","pharmacy","PharmacyQueryUrl","nöbetçi eczane"],"icon":"images/icons/sidebar/eczane.png"},
-  {"id":"taksi","type":"taksi durağı","category":"Taksi","aliases":["taksi","taksi durağı","taxi","TaxiQueryUrl"],"icon":"images/icons/sidebar/taksi.png"},
-  {"id":"default","type":"default","category":"default","aliases":["unknown","bilinmeyen","fallback"],"icon":"images/icons/map/pictureMarker.png"}
+  {
+    "id": "parklar",
+    "type": "park",
+    "category": "Yeşil Alanlar",
+    "aliases": [
+      "park",
+      "parklar",
+      "parklar qery",
+      "yeşil alan",
+      "YeniParklarQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/parklar.svg"
+  },
+  {
+    "id": "aileyasam",
+    "type": "aile yaşam merkezi",
+    "category": "Aile Yaşam Merkezleri",
+    "aliases": [
+      "aileyasam",
+      "aile yasam merkezi",
+      "YeniAileYasamMerkezleriQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/aileyasammerkezi.svg"
+  },
+  {
+    "id": "belmek",
+    "type": "belmek",
+    "category": "BELMEK",
+    "aliases": [
+      "belmek beltek",
+      "YeniBelmekBeltekQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/belmek.svg"
+  },
+  {
+    "id": "cocuketkinlik",
+    "type": "çocuk etkinlik merkezi",
+    "category": "Çocuk Etkinlik Merkezleri",
+    "aliases": [
+      "cocuk etkinlik merkezi",
+      "çocuk merkezleri",
+      "YeniCocukEtkinlikMerkezleriQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/cocuketkinlikmerkezleri.svg"
+  },
+  {
+    "id": "engelsizkres",
+    "type": "engelsiz kreş",
+    "category": "Kreşler",
+    "aliases": [
+      "engelsiz kres",
+      "kres",
+      "YeniEngelliCocukQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/engelsizkres.svg"
+  },
+  {
+    "id": "engelsizyasam",
+    "type": "engelsiz yaşam",
+    "category": "Engelli Hizmetleri",
+    "aliases": [
+      "engelsiz yasam",
+      "engelli yaşam",
+      "YeniEngelliBireyQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/engelsizyasam.svg"
+  },
+  {
+    "id": "espor",
+    "type": "espor tesisi",
+    "category": "Spor Tesisleri",
+    "aliases": [
+      "espor tesisleri",
+      "e-spor",
+      "YeniSporTesisleriQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/esportesisleri.svg"
+  },
+  {
+    "id": "gazi",
+    "type": "gazi merkezi",
+    "category": "Gaziler Merkezleri",
+    "aliases": [
+      "gaziler merkezi",
+      "gazi merkezi",
+      "YeniGazilerMerkeziQeyUrl"
+    ],
+    "icon": "images/icons/map/ABB/gazimerkezleri.svg"
+  },
+  {
+    "id": "kadin",
+    "type": "kadın danışma merkezi",
+    "category": "Kadın Hizmetleri",
+    "aliases": [
+      "kadin danisma merkezi",
+      "kadın dayanışma merkezi",
+      "YeniKadinDanismaQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/kadindayanismamerkezi.svg"
+  },
+  {
+    "id": "kadinlarlokali",
+    "type": "kadınlar lokali",
+    "category": "Kadın Hizmetleri",
+    "aliases": [
+      "kadinlar lokali",
+      "YeniKadinlarLokaliQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/kadinlarlokali.svg"
+  },
+  {
+    "id": "kultur",
+    "type": "kültür sanat",
+    "category": "Kültür Sanat",
+    "aliases": [
+      "kultur sanat",
+      "kültür ve sanat",
+      "YeniKültürSanatQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/kultursanat.svg"
+  },
+  {
+    "id": "kutuphane",
+    "type": "kütüphane",
+    "category": "Kütüphaneler",
+    "aliases": [
+      "kutuphane",
+      "kütüphaneler",
+      "YeniKutuphanelerQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/kutuphane.svg"
+  },
+  {
+    "id": "park",
+    "type": "park",
+    "category": "Parklar",
+    "aliases": [
+      "yeşil alan",
+      "green area"
+    ],
+    "icon": "images/icons/map/ABB/parklar.svg"
+  },
+  {
+    "id": "pati",
+    "type": "pati dostu",
+    "category": "Pati Dostu Uygulamalar",
+    "aliases": [
+      "patidostu",
+      "pati dostu",
+      "YeniPatiDostuQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/patidostuuygulamalar.svg"
+  },
+  {
+    "id": "sosyal",
+    "type": "sosyal hizmetler",
+    "category": "Sosyal Hizmetler",
+    "aliases": [
+      "sosyal hizmet",
+      "sosyal tesis",
+      "YeniSosyalHizmetlerQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/sosyalhizmetler.svg"
+  },
+  {
+    "id": "teknoloji",
+    "type": "teknoloji merkezi",
+    "category": "Teknoloji Merkezleri",
+    "aliases": [
+      "teknoloji merkezleri",
+      "YeniTeknolojiMerkezleriQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/teknolojimerkezleri.svg"
+  },
+  {
+    "id": "wifi",
+    "type": "wifi erişim noktası",
+    "category": "WiFi",
+    "aliases": [
+      "wifi",
+      "wi-fi",
+      "wifierisimnoktalari",
+      "YeniWifiNoktalariQeryUrl"
+    ],
+    "icon": "images/icons/map/ABB/wifierisimnoktalari.svg"
+  },
+  {
+    "id": "yasli",
+    "type": "yaşlı dostu uygulama",
+    "category": "Yaşlı Dostu",
+    "aliases": [
+      "yasli dostu",
+      "yaşlı dostu mekan",
+      "YeniYasliDostuQueryUrl"
+    ],
+    "icon": "images/icons/map/ABB/yaslidostuuygulamalar.svg"
+  },
+  {
+    "id": "askibaraj",
+    "type": "baraj",
+    "category": "ASKİ",
+    "aliases": [
+      "aski baraj",
+      "askibaraj",
+      "YeniAskiBarajQeryUrl"
+    ],
+    "icon": "images/icons/map/ASKİ/askibaraj.svg"
+  },
+  {
+    "id": "askikart",
+    "type": "kart dolum",
+    "category": "ASKİ",
+    "aliases": [
+      "aski kart dolum",
+      "askikartdolum",
+      "YeniAskiKartDolumOdemeQueryUrl"
+    ],
+    "icon": "images/icons/map/ASKİ/askikartdolum.svg"
+  },
+  {
+    "id": "askiatiksu",
+    "type": "atıksu tesisi",
+    "category": "ASKİ",
+    "aliases": [
+      "aski atiksu",
+      "atıksu tesisleri",
+      "YeniAskiAtıkSuTesisleriQeryUrl"
+    ],
+    "icon": "images/icons/map/ASKİ/atiksutesisleri.svg"
+  },
+  {
+    "id": "askibolge",
+    "type": "bölge müdürlüğü",
+    "category": "ASKİ",
+    "aliases": [
+      "aski bölge müdürlüğü",
+      "bolgemudurlukleri",
+      "YeniAskiBolgeMudurlukleriQeryUrl"
+    ],
+    "icon": "images/icons/map/ASKİ/bolgemudurlukleri.svg"
+  },
+  {
+    "id": "askisumatik",
+    "type": "sumatik",
+    "category": "ASKİ",
+    "aliases": [
+      "aski sumatik",
+      "YeniAskiSumatikQeryUrl",
+      "YeniAskiSumatikQueryUrl"
+    ],
+    "icon": "images/icons/map/ASKİ/sumatik.svg"
+  },
+  {
+    "id": "askitahsilat",
+    "type": "tahsilat şubesi",
+    "category": "ASKİ",
+    "aliases": [
+      "aski tahsilat",
+      "tahsilat subeleri",
+      "YeniAskiTahsilatSubeQueryUrl"
+    ],
+    "icon": "images/icons/map/ASKİ/tahsilatsubeleri.svg"
+  },
+  {
+    "id": "ankaray",
+    "type": "ankaray durağı",
+    "category": "EGO",
+    "aliases": [
+      "ankaray",
+      "ankaray durakları",
+      "YeniEgoAnkarayDuraklariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/ankaray.svg"
+  },
+  {
+    "id": "baskentray",
+    "type": "başkentray durağı",
+    "category": "EGO",
+    "aliases": [
+      "baskentray",
+      "başkentray",
+      "YeniEgoBaskentrayDuraklariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/baskentray.svg"
+  },
+  {
+    "id": "bisiklet",
+    "type": "elektrikli bisiklet istasyonu",
+    "category": "EGO",
+    "aliases": [
+      "elektrikli bisiklet",
+      "bisiklet istasyonu",
+      "YeniEgoElektrikliBisikletİstasyonlariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/elektirklibisiklet.svg"
+  },
+  {
+    "id": "egoKart",
+    "type": "kart dolum noktası",
+    "category": "EGO",
+    "aliases": [
+      "ego kart dolum",
+      "YeniEgoKartDolumNoktalariQeryUrl"
+    ],
+    "icon": "images/icons/map/EGO/kartdolum.svg"
+  },
+  {
+    "id": "egoSatis",
+    "type": "kart satış noktası",
+    "category": "EGO",
+    "aliases": [
+      "ego kart satış",
+      "YeniEgoKartSatisNoktalariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/kartsatis.svg"
+  },
+  {
+    "id": "metro",
+    "type": "metro hattı",
+    "category": "EGO",
+    "aliases": [
+      "metro",
+      "metrohatti",
+      "YeniEgoMetroDuraklariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/metrohatti.svg"
+  },
+  {
+    "id": "otobus",
+    "type": "otobüs durağı",
+    "category": "EGO",
+    "aliases": [
+      "otobus duraklari",
+      "otobüs durağı",
+      "YeniEgoOtobusDuraklariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/otobusduraklari.svg"
+  },
+  {
+    "id": "teleferik",
+    "type": "teleferik durağı",
+    "category": "EGO",
+    "aliases": [
+      "teleferik",
+      "YeniEgoTeleferikDuraklariQueryUrl"
+    ],
+    "icon": "images/icons/map/EGO/teleferik.svg"
+  },
+  {
+    "id": "anfaBitki",
+    "type": "anfa bitki evi",
+    "category": "İştirakler",
+    "aliases": [
+      "anfa bitki evi",
+      "YeniAnfaBitkiEviQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/anfabitkievi.svg"
+  },
+  {
+    "id": "anfaKafe",
+    "type": "anfa kafe",
+    "category": "İştirakler",
+    "aliases": [
+      "anfa kafeler",
+      "YeniAnfaKafelerQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/anfakafeler.svg"
+  },
+  {
+    "id": "anfaOtopark",
+    "type": "anfa otopark",
+    "category": "İştirakler",
+    "aliases": [
+      "anfa otopark",
+      "YeniAnfaOtoparkQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/anfaotopark.svg"
+  },
+  {
+    "id": "baskentmarket",
+    "type": "başkent market",
+    "category": "İştirakler",
+    "aliases": [
+      "baskent market",
+      "başkent market",
+      "YeniBaskentMarketQueryUrl",
+      "YeniBaskentMarketQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/baskentmarket.svg"
+  },
+  {
+    "id": "belko",
+    "type": "belko meyve suyu",
+    "category": "İştirakler",
+    "aliases": [
+      "belko meyve suyu",
+      "YeniBelkoMeyveSuyuSatisBufeleriQueryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/belkomeyvesuyu.svg"
+  },
+  {
+    "id": "halekmek",
+    "type": "halk ekmek",
+    "category": "İştirakler",
+    "aliases": [
+      "halk ekmek",
+      "halkekmek",
+      "YeniHalkEkmekQueryUrl",
+      "YeniHalkEkmekSatisNoktalariQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/halkekmek.svg"
+  },
+  {
+    "id": "portas",
+    "type": "portas asfalt",
+    "category": "İştirakler",
+    "aliases": [
+      "portas",
+      "asfalt üretim",
+      "YeniPortasAsfaltUretimQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/portas.svg"
+  },
+  {
+    "id": "segmen",
+    "type": "segmen su",
+    "category": "İştirakler",
+    "aliases": [
+      "segmen su",
+      "segmen su fabrikası",
+      "YeniSegmenSuFabrikalarıQeryUrl",
+      "YeniSegmenSuSatisBayileriQeryUrl"
+    ],
+    "icon": "images/icons/map/ISTIRAK/segmensu.svg"
+  },
+  {
+    "id": "aciltoplanma",
+    "type": "acil toplanma alanı",
+    "category": "Acil Toplanma Alanları",
+    "aliases": [
+      "acil toplanma alanı",
+      "acil toplanma alanları",
+      "assembly area",
+      "AssemblyAreaQueryUrl"
+    ],
+    "icon": "images/icons/sidebar/aciltoplanmaalani.png"
+  },
+  {
+    "id": "etkinlik",
+    "type": "etkinlik",
+    "category": "Etkinlikler",
+    "aliases": [
+      "etkinlik",
+      "etkinlikler",
+      "event",
+      "EventQueryUrl"
+    ],
+    "icon": "images/icons/sidebar/etkinlikler.png"
+  },
+  {
+    "id": "eczane",
+    "type": "eczane",
+    "category": "Eczaneler",
+    "aliases": [
+      "eczane",
+      "eczaneler",
+      "pharmacy",
+      "PharmacyQueryUrl",
+      "nöbetçi eczane"
+    ],
+    "icon": "images/icons/sidebar/eczane.png"
+  },
+  {
+    "id": "taksi",
+    "type": "taksi durağı",
+    "category": "Taksi",
+    "aliases": [
+      "taksi",
+      "taksi durağı",
+      "taxi",
+      "TaxiQueryUrl"
+    ],
+    "icon": "images/icons/sidebar/taksi.png"
+  },
+  {
+    "id": "default",
+    "type": "default",
+    "category": "default",
+    "aliases": [
+      "unknown",
+      "bilinmeyen",
+      "fallback"
+    ],
+    "icon": "images/icons/map/pictureMarker.png"
+  }
 ]
