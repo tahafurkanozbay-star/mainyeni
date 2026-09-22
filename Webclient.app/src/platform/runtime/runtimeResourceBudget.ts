@@ -49,9 +49,8 @@ export interface RuntimeResourceBudgetSnapshot {
 }
 
 const LANES: readonly ResourceLane[] = ['critical', 'interactive', 'background'];
-const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
 const DEFAULT_CONFIG: RuntimeResourceBudgetConfig = {
-  maxBytes: DEFAULT_MAX_BYTES,
+  maxBytes: 64 * 1024 * 1024,
   maxItems: 256,
   criticalReservedBytes: 8 * 1024 * 1024,
   interactiveReservedBytes: 8 * 1024 * 1024,
