@@ -222,7 +222,7 @@ export const DEFAULT_SPATIAL_SELECTION_INDEX_POLICY: NormalizedSpatialSelectionI
   maxCellsPerRecord: 4_096,
   maxGridBucketSize: 10_000,
   nearestInitialRadius: 250,
-  nearestMaxRadius: 100_000,
+  nearestMaxRadius: 30_000,
   nearestExpansionSteps: 10,
   degradedBudgetRatio: 0.72,
   blockedBudgetRatio: 0.92,
@@ -283,13 +283,13 @@ export const normalizeSpatialSelectionIndexPolicy = (
   );
   const maxEntriesPerLayer = positiveInteger(
     options.maxEntriesPerLayer,
-    DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxEntriesPerLayer,
+    Math.min(DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxEntriesPerLayer, maxEntries),
     maxEntries,
     'maxEntriesPerLayer',
   );
   const maxBytesPerLayer = positiveInteger(
     options.maxBytesPerLayer,
-    DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxBytesPerLayer,
+    Math.min(DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxBytesPerLayer, maxBytes),
     maxBytes,
     'maxBytesPerLayer',
   );
@@ -301,13 +301,13 @@ export const normalizeSpatialSelectionIndexPolicy = (
   );
   const maxQueryResults = positiveInteger(
     options.maxQueryResults,
-    DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxQueryResults,
+    Math.min(DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxQueryResults, maxEntries),
     maxEntries,
     'maxQueryResults',
   );
   const maxQueryCandidates = positiveInteger(
     options.maxQueryCandidates,
-    DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxQueryCandidates,
+    Math.min(DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxQueryCandidates, maxEntries, 100_000),
     Math.min(maxEntries, 100_000),
     'maxQueryCandidates',
   );
