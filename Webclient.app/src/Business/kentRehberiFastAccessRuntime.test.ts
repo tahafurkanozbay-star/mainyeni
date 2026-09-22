@@ -5,6 +5,7 @@ import type {
 } from '../data-services/kentRehberiGeoJsonLayer';
 import {
   createKentRehberiFastAccessRuntime,
+  resolveKentRehberiTypesFromCatalog,
   selectDominantKentRehberiTur,
 } from './kentRehberiFastAccessRuntime';
 import {
@@ -45,6 +46,12 @@ const collection = (
   meta: Object.freeze({ count: features.length, limit: 2000, hasMore: false }),
 });
 
+const emptyTypeCatalog = Object.freeze({
+  types: Object.freeze([]),
+});
+
+const emptyTypeCatalogFetch = vi.fn(async () => emptyTypeCatalog);
+
 describe('kentRehberiFastAccessRuntime', () => {
   it('owns every current sidebar fast-access service profile exactly once', () => {
     expect(KENT_REHBERI_FAST_ACCESS_PROFILES).toHaveLength(40);
@@ -71,6 +78,103 @@ describe('kentRehberiFastAccessRuntime', () => {
     ], profile!)).toBe(31);
   });
 
+  it('resolves a single fast-access type from bounded backend catalog samples', () => {
+    const profile = getKentRehberiFastAccessProfile('YeniKadinDanismaQueryUrl');
+    expect(profile).not.toBeNull();
+
+    const resolved = resolveKentRehberiTypesFromCatalog({
+      types: [
+        {
+          tur: 7,
+          count: 300,
+          samples: [
+            { objectid: 1, adi: 'Genel Hizmet Binası', adres: 'Ankara', durakNo: null },
+            { objectid: 2, adi: 'Belediye Birimi', adres: 'Ankara', durakNo: null },
+          ],
+        },
+        {
+          tur: 31,
+          count: 18,
+          samples: [
+            { objectid: 3, adi: 'Kadın Danışma Merkezi Çankaya', adres: 'Çankaya', durakNo: null },
+            { objectid: 4, adi: 'Kadın Dayanışma Merkezi', adres: 'Keçiören', durakNo: null },
+          ],
+        },
+      ],
+    }, profile!);
+
+    expect(resolved).toEqual([31]);
+  });
+
+  it('resolves multiple type ids for intentional union profiles', () => {
+    const profile = getKentRehberiFastAccessProfile('YeniBelmekBeltekQeryUrl');
+    expect(profile?.mode).toBe('union');
+
+    const resolved = resolveKentRehberiTypesFromCatalog({
+      types: [
+        {
+          tur: 2,
+          count: 25,
+          samples: [
+            { objectid: 1, adi: 'BELMEK Çankaya', adres: 'Ankara', durakNo: null },
+          ],
+        },
+        {
+          tur: 9,
+          count: 19,
+          samples: [
+            { objectid: 2, adi: 'BELTEK Sincan', adres: 'Ankara', durakNo: null },
+          ],
+        },
+      ],
+    }, profile!);
+
+    expect(resolved).toEqual([2, 9]);
+  });
+
+  it('prefers catalog discovery and avoids text probes when confidence is sufficient', async () => {
+    const fetchTypeCatalog = vi.fn(async () => ({
+      types: [
+        {
+          tur: 12,
+          count: 3,
+          samples: [
+            { objectid: 101, adi: 'Kadın Danışma Merkezi', adres: 'Çankaya', durakNo: null },
+            { objectid: 102, adi: 'Kadın Dayanışma Merkezi', adres: 'Sincan', durakNo: null },
+          ],
+        },
+      ],
+    }));
+    const fetchCollection = vi.fn(async (options?: { q?: string; tur?: number; limit?: number }) => {
+      expect(options?.q).toBeUndefined();
+      expect(options?.tur).toBe(12);
+      expect(options?.limit).toBe(2000);
+      return collection([
+        feature(101, 12, 'Kadın Danışma Merkezi Çankaya'),
+        feature(102, 12, 'Kadın Dayanışma Merkezi Sincan'),
+        feature(103, 12, 'Kadın Danışma Merkezi Yenimahalle'),
+      ]);
+    });
+
+    const runtime = createKentRehberiFastAccessRuntime({
+      fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: fetchTypeCatalog as never,
+      now: () => 100,
+      cacheTtlMs: 10_000,
+    });
+    const business = runtime.createBusiness('YeniKadinDanismaQueryUrl');
+
+    const result = await business?.Query({}, false);
+
+    expect(result?.data).toHaveLength(3);
+    expect(fetchTypeCatalog).toHaveBeenCalledTimes(1);
+    expect(fetchCollection).toHaveBeenCalledTimes(1);
+
+    await business?.Query({}, false);
+    expect(fetchTypeCatalog).toHaveBeenCalledTimes(1);
+    expect(fetchCollection).toHaveBeenCalledTimes(1);
+  });
+
   it('discovers a type with a bounded probe and then loads the whole category', async () => {
     const fetchCollection = vi.fn(async (options?: { q?: string; tur?: number; limit?: number }) => {
       if (options?.q) {
@@ -91,6 +195,7 @@ describe('kentRehberiFastAccessRuntime', () => {
 
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: emptyTypeCatalogFetch as never,
       now: () => 100,
       cacheTtlMs: 10_000,
     });
@@ -108,7 +213,7 @@ describe('kentRehberiFastAccessRuntime', () => {
 
     await business?.Query({}, false);
     expect(fetchCollection).toHaveBeenCalledTimes(2);
-    expect(runtime.cacheSize()).toBe(1);
+    expect(runtime.cacheSize()).toBe(2);
   });
 
   it('uses direct probe matches when a safe type cannot be inferred', async () => {
@@ -118,6 +223,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     ]));
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: emptyTypeCatalogFetch as never,
       cacheTtlMs: 5000,
     });
     const business = runtime.createBusiness('YeniBelmekBeltekQeryUrl');
@@ -136,6 +242,7 @@ describe('kentRehberiFastAccessRuntime', () => {
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: vi.fn(async () => collection([])) as never,
       fetchFeature: fetchFeature as never,
+      fetchTypeCatalog: emptyTypeCatalogFetch as never,
     });
     const business = runtime.createBusiness('YeniParklarQeryUrl');
 
@@ -156,6 +263,7 @@ describe('kentRehberiFastAccessRuntime', () => {
         ]));
     const runtime = createKentRehberiFastAccessRuntime({
       fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: emptyTypeCatalogFetch as never,
     });
     const business = runtime.createBusiness('YeniParklarQeryUrl');
 
