@@ -56,6 +56,10 @@ type MutableEntry = {
   residentSince?: number | undefined;
 };
 
+type MutableUsage = {
+  -readonly [Key in keyof LayerResidencyCost]: LayerResidencyCost[Key];
+} & { residentLayers: number };
+
 const PRIORITY_WEIGHT: Readonly<Record<LayerResidencyPriority, number>> = Object.freeze({
   critical: 4,
   high: 3,
@@ -63,7 +67,7 @@ const PRIORITY_WEIGHT: Readonly<Record<LayerResidencyPriority, number>> = Object
   low: 1,
 });
 
-const ZERO_USAGE = (): LayerResidencyCost & { residentLayers: number } => ({
+const ZERO_USAGE = (): MutableUsage => ({
   cpuBytes: 0,
   gpuBytes: 0,
   featureCount: 0,
@@ -112,7 +116,7 @@ const fitsCost = (cost: LayerResidencyCost, budget: LayerResidencyBudget): boole
   cost.featureCount <= budget.featureCount &&
   cost.drawCalls <= budget.drawCalls;
 
-const addCost = (usage: LayerResidencyCost & { residentLayers: number }, cost: LayerResidencyCost, delta: 1 | -1): void => {
+const addCost = (usage: MutableUsage, cost: LayerResidencyCost, delta: 1 | -1): void => {
   usage.cpuBytes += cost.cpuBytes * delta;
   usage.gpuBytes += cost.gpuBytes * delta;
   usage.featureCount += cost.featureCount * delta;
@@ -267,7 +271,7 @@ export class LayerResidencyRuntime {
     this.revision += 1;
   }
 
-  private currentUsage(): LayerResidencyCost & { residentLayers: number } {
+  private currentUsage(): MutableUsage {
     const usage = ZERO_USAGE();
     for (const entry of this.entries.values()) if (entry.state === 'resident') addCost(usage, entry.descriptor.cost, 1);
     return usage;
