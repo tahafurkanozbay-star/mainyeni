@@ -44,6 +44,18 @@ import {
   type SpatialSelectionResult,
 } from './spatialSelectionRuntime';
 import {
+  createSpatialSelectionIndexRuntime,
+  type SpatialSelectionIndexOptions,
+  type SpatialSelectionIndexRuntime,
+  type SpatialSelectionLayerSnapshot,
+  type SpatialSelectionMutation,
+  type SpatialSelectionNearestQuery,
+  type SpatialSelectionQuery,
+  type SpatialSelectionQueryResult,
+  type SpatialSelectionRecord,
+  type SpatialSelectionSnapshot,
+} from './spatialSelectionIndexRuntime';
+import {
   classifyCategoryValue,
   classifyNumericValue,
   createCategoryClassification,
@@ -72,6 +84,7 @@ import type {
 export type ModernSpatialAnalysisKernelConfiguration = Readonly<{
   geometry: GeometryAnalysisBudget;
   selection: SpatialSelectionBudget;
+  selectionIndex?: SpatialSelectionIndexOptions;
   aggregation: SpatialAggregationBudget;
   join: SpatialJoinBudgets;
   topology: SpatialTopologyBudget;
@@ -88,6 +101,7 @@ export type PolygonAnalysisResult = Readonly<{
 export type ModernSpatialAnalysisKernelSnapshot = Readonly<{
   disposed: boolean;
   jobs: SpatialAnalysisJobRuntimeSnapshot;
+  selectionIndex: SpatialSelectionSnapshot;
 }>;
 
 export type KernelSubmitOptions = Readonly<{
@@ -104,11 +118,15 @@ const disposedError = (): Error & { code: string } => Object.assign(
 export class ModernSpatialAnalysisKernel {
   #configuration: ModernSpatialAnalysisKernelConfiguration;
   #jobs: SpatialAnalysisJobRuntime;
+  #selectionIndex: SpatialSelectionIndexRuntime<unknown>;
   #disposed = false;
 
   constructor(configuration: ModernSpatialAnalysisKernelConfiguration) {
     this.#configuration = configuration;
     this.#jobs = createSpatialAnalysisJobRuntime(configuration.jobs);
+    this.#selectionIndex = createSpatialSelectionIndexRuntime<unknown>(
+      configuration.selectionIndex,
+    );
   }
 
   get disposed(): boolean {
@@ -163,6 +181,73 @@ export class ModernSpatialAnalysisKernel {
   ): SpatialSelectionResult<T> {
     this.#assertActive();
     return selectByPolygon(features, polygon, this.#configuration.selection, signal);
+  }
+
+  indexSelection<T>(
+    input: Omit<SpatialSelectionRecord<T>, 'revision'>,
+  ): SpatialSelectionRecord<T> | null {
+    this.#assertActive();
+    return this.#selectionIndex.upsert(input) as SpatialSelectionRecord<T> | null;
+  }
+
+  indexedSelection<T = unknown>(id: string): SpatialSelectionRecord<T> | null {
+    this.#assertActive();
+    return this.#selectionIndex.get(id) as SpatialSelectionRecord<T> | null;
+  }
+
+  hasIndexedSelection(id: string): boolean {
+    this.#assertActive();
+    return this.#selectionIndex.has(id);
+  }
+
+  querySelectionIndex<T = unknown>(
+    query: SpatialSelectionQuery,
+  ): SpatialSelectionQueryResult<T> {
+    this.#assertActive();
+    return this.#selectionIndex.query(query) as SpatialSelectionQueryResult<T>;
+  }
+
+  nearestIndexedSelection<T = unknown>(
+    query: SpatialSelectionNearestQuery,
+  ): SpatialSelectionQueryResult<T> {
+    this.#assertActive();
+    return this.#selectionIndex.nearest(query) as SpatialSelectionQueryResult<T>;
+  }
+
+  indexedSelectionsForLayer<T = unknown>(
+    layerId: string,
+    limit?: number,
+  ): readonly SpatialSelectionRecord<T>[] {
+    this.#assertActive();
+    return this.#selectionIndex.recordsForLayer(
+      layerId,
+      limit,
+    ) as readonly SpatialSelectionRecord<T>[];
+  }
+
+  removeIndexedSelection(id: string): boolean {
+    this.#assertActive();
+    return this.#selectionIndex.remove(id);
+  }
+
+  removeIndexedSelectionLayer(layerId: string): number {
+    this.#assertActive();
+    return this.#selectionIndex.removeLayer(layerId);
+  }
+
+  clearSelectionIndex(): void {
+    this.#assertActive();
+    this.#selectionIndex.clear();
+  }
+
+  selectionIndexLayers(): readonly SpatialSelectionLayerSnapshot[] {
+    this.#assertActive();
+    return this.#selectionIndex.layerSnapshots();
+  }
+
+  selectionIndexHistory(limit?: number): readonly SpatialSelectionMutation[] {
+    this.#assertActive();
+    return this.#selectionIndex.history(limit);
   }
 
   bufferPoint(center: SpatialPoint, options: BufferOptions, signal?: AbortSignal): BufferPolygon {
@@ -266,12 +351,14 @@ export class ModernSpatialAnalysisKernel {
     return {
       disposed: this.#disposed,
       jobs: this.#jobs.snapshot(),
+      selectionIndex: this.#selectionIndex.snapshot(),
     };
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#selectionIndex.dispose();
     this.#jobs.dispose();
   }
 
