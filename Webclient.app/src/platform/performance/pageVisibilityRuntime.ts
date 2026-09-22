@@ -21,7 +21,7 @@ export const createPageVisibilityRuntime = (
 
   const onVisibilityChange = (): void => {
     const visible = isVisible();
-    for (const listener of [...listeners]) listener(visible);
+    listeners.forEach((listener) => listener(visible));
   };
 
   let listening = false;
