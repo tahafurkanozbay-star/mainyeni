@@ -4,6 +4,7 @@ import type {
   UnknownRecord,
 } from './contracts';
 import { createFastAccessBusiness } from './fastAccessRuntime';
+import { createKentRehberiFastAccessBusiness } from './kentRehberiFastAccessRuntime';
 
 interface FastAccessGeometryResult {
   readonly latitude?: unknown;
@@ -46,7 +47,12 @@ const asFastAccessServiceResult = (value: unknown): FastAccessServiceResult => {
 };
 
 export const createFastAccessQueryBusiness = (serviceKey: string): FastAccessQueryBusiness => {
-  const business = createFastAccessBusiness(serviceKey);
+  const kentRehberiBusiness = createKentRehberiFastAccessBusiness(serviceKey);
+  const legacyBusiness = kentRehberiBusiness ? null : createFastAccessBusiness(serviceKey);
+  const business = kentRehberiBusiness ?? legacyBusiness;
+  if (!business) {
+    throw new Error(`Fast-access business could not be created for ${serviceKey}.`);
+  }
 
   return Object.freeze({
     Query: async (
