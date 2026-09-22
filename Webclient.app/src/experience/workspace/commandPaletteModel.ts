@@ -53,9 +53,8 @@ const GROUP_WEIGHT: Readonly<Record<CommandPaletteGroup, number>> = Object.freez
 const normalizeText = (value: unknown): string => String(value ?? '')
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '')
-  .replace(/ı/g, 'i')
-  .replace(/İ/g, 'I')
   .toLocaleLowerCase('tr-TR')
+  .replace(/ı/g, 'i')
   .replace(/[^a-z0-9çğıöşü\s-]/gi, ' ')
   .replace(/\s+/g, ' ')
   .trim();
