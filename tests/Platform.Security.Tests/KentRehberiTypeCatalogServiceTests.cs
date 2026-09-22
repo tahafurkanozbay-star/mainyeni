@@ -246,28 +246,10 @@ public sealed class KentRehberiTypeCatalogServiceTests
                     options.MaxQueuedQueries = 0;
                 });
 
-        var gate =
-            new TaskCompletionSource<bool>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-
-        fixture.Repository.TypeCatalogHandler =
-            async token =>
-            {
-                await gate.Task.WaitAsync(token);
-                return KentRehberiRuntimeTestData.TypeCatalog();
-            };
-
-        var first =
-            fixture.Service.GetAsync(
+        using var occupied =
+            await fixture.Admission.AcquireAsync(
+                "synthetic-existing-work",
                 CancellationToken.None);
-
-        await WaitUntilAsync(
-            () =>
-                fixture.Admission
-                    .GetSnapshot()
-                    .Active == 1);
-
-        fixture.Cache.Clear();
 
         await Assert.ThrowsAsync<
             KentRehberiOverloadedException>(
@@ -275,8 +257,11 @@ public sealed class KentRehberiTypeCatalogServiceTests
                 fixture.Service.GetAsync(
                     CancellationToken.None));
 
-        gate.SetResult(true);
-        await first;
+        Assert.Equal(
+            1,
+            fixture.Telemetry
+                .GetSnapshot()
+                .AdmissionRejected);
     }
 
     [Fact]
