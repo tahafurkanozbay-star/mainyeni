@@ -22,7 +22,14 @@ export interface KentRehberiGeoJsonFeatureCollection {
   readonly meta?: JsonObject;
 }
 
-export interface KentRehberiFetchOptions {
+export interface KentRehberiRequestFilters {
+  readonly q?: string;
+  readonly tur?: number;
+  readonly ilce?: string;
+  readonly mahalle?: string;
+}
+
+export interface KentRehberiFetchOptions extends KentRehberiRequestFilters {
   readonly apiBaseUrl?: string;
   readonly limit?: number;
   readonly signal?: AbortSignal;
@@ -47,6 +54,12 @@ export interface KentRehberiLayerHandle {
   readonly layer: KentRehberiGeoJsonLayerLike;
   readonly featureCount: number;
   dispose(): void;
+}
+
+export interface KentRehberiLayerPresentationOptions {
+  readonly id?: string;
+  readonly title?: string;
+  readonly renderer?: Readonly<Record<string, unknown>>;
 }
 
 interface GeoJsonLayerConstructor {
@@ -87,9 +100,34 @@ const normalizePositiveInteger = (value: number | undefined, fallback: number, m
   return candidate;
 };
 
+const normalizeRequestText = (
+  value: unknown,
+  name: string,
+  minimumLength: number,
+  maximumLength: number,
+): string | null => {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  if (normalized.length < minimumLength || normalized.length > maximumLength) {
+    throw new RangeError(`${name} must be between ${minimumLength} and ${maximumLength} characters.`);
+  }
+  return normalized;
+};
+
+const normalizeTur = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < -32768 || numeric > 32767) {
+    throw new RangeError('tur must be a valid 16-bit integer.');
+  }
+  return numeric;
+};
+
 export const buildKentRehberiRequestPath = (
   apiBaseUrl: string = runtimeConfig.apiBaseUrl,
   limit: number = DEFAULT_LIMIT,
+  filters: KentRehberiRequestFilters = {},
 ): string => {
   const rawBase = String(apiBaseUrl).trim().replace(/\/+$/u, '');
   const normalizedBase = normalizeApiBaseUrl(rawBase);
@@ -98,7 +136,57 @@ export const buildKentRehberiRequestPath = (
   }
 
   const search = new URLSearchParams({ limit: String(normalizeLimit(limit)) });
+  const query = normalizeRequestText(filters.q, 'q', 2, 120);
+  const district = normalizeRequestText(filters.ilce, 'ilce', 1, 50);
+  const neighborhood = normalizeRequestText(filters.mahalle, 'mahalle', 1, 50);
+  const tur = normalizeTur(filters.tur);
+  if (query) search.set('q', query);
+  if (district) search.set('ilce', district);
+  if (neighborhood) search.set('mahalle', neighborhood);
+  if (tur !== null) search.set('tur', String(tur));
   return `${normalizedBase}/kent-rehberi?${search.toString()}`;
+};
+
+export const buildKentRehberiFeaturePath = (
+  apiBaseUrl: string = runtimeConfig.apiBaseUrl,
+  objectId: number,
+): string => {
+  const rawBase = String(apiBaseUrl).trim().replace(/\/+$/u, '');
+  const normalizedBase = normalizeApiBaseUrl(rawBase);
+  if (normalizedBase !== rawBase) {
+    throw new Error('Kent Rehberi API base URL must be a canonical same-origin relative path.');
+  }
+  if (!Number.isSafeInteger(objectId) || objectId <= 0) {
+    throw new RangeError('Kent Rehberi objectId must be a positive integer.');
+  }
+  return `${normalizedBase}/kent-rehberi/${objectId}`;
+};
+
+export const validateKentRehberiFeature = (
+  candidate: unknown,
+  index = 0,
+): KentRehberiGeoJsonFeature => {
+  if (!isJsonObject(candidate) || candidate.type !== 'Feature') {
+    throw new TypeError(`Kent Rehberi feature ${index} is invalid.`);
+  }
+  if (candidate.geometry !== null && !isJsonObject(candidate.geometry)) {
+    throw new TypeError(`Kent Rehberi feature ${index} has an invalid geometry.`);
+  }
+  if (!isJsonObject(candidate.properties)) {
+    throw new TypeError(`Kent Rehberi feature ${index} has invalid properties.`);
+  }
+
+  const objectId = candidate.properties.objectid;
+  if (typeof objectId !== 'number' || !Number.isInteger(objectId) || objectId <= 0) {
+    throw new TypeError(`Kent Rehberi feature ${index} is missing a valid objectid.`);
+  }
+
+  return Object.freeze({
+    type: 'Feature',
+    geometry: candidate.geometry as JsonObject | null,
+    properties: candidate.properties,
+    ...(candidate.id === undefined ? {} : { id: candidate.id as string | number }),
+  });
 };
 
 export const validateKentRehberiFeatureCollection = (
@@ -112,30 +200,8 @@ export const validateKentRehberiFeatureCollection = (
     throw new RangeError('Kent Rehberi response exceeded the bounded feature limit.');
   }
 
-  const features = value.features.map((candidate, index) => {
-    if (!isJsonObject(candidate) || candidate.type !== 'Feature') {
-      throw new TypeError(`Kent Rehberi feature ${index} is invalid.`);
-    }
-    if (candidate.geometry !== null && !isJsonObject(candidate.geometry)) {
-      throw new TypeError(`Kent Rehberi feature ${index} has an invalid geometry.`);
-    }
-    if (!isJsonObject(candidate.properties)) {
-      throw new TypeError(`Kent Rehberi feature ${index} has invalid properties.`);
-    }
-
-    const objectId = candidate.properties.objectid;
-    if (typeof objectId !== 'number' || !Number.isInteger(objectId) || objectId <= 0) {
-      throw new TypeError(`Kent Rehberi feature ${index} is missing a valid objectid.`);
-    }
-
-    const feature: KentRehberiGeoJsonFeature = {
-      type: 'Feature',
-      geometry: candidate.geometry as JsonObject | null,
-      properties: candidate.properties,
-      ...(candidate.id === undefined ? {} : { id: candidate.id as string | number }),
-    };
-    return Object.freeze(feature);
-  });
+  const features = value.features.map((candidate, index) =>
+    validateKentRehberiFeature(candidate, index));
 
   return Object.freeze({
     type: 'FeatureCollection',
@@ -180,10 +246,10 @@ const createRequestSignal = (
   };
 };
 
-const parseBoundedResponse = async (
+const readBoundedJsonResponse = async (
   response: Response,
   maxPayloadBytes: number,
-): Promise<KentRehberiGeoJsonFeatureCollection> => {
+): Promise<unknown> => {
   const advertisedLength = Number.parseInt(response.headers.get('content-length') ?? '', 10);
   if (Number.isFinite(advertisedLength) && advertisedLength > maxPayloadBytes) {
     throw new RangeError('Kent Rehberi response exceeded the payload budget.');
@@ -194,19 +260,25 @@ const parseBoundedResponse = async (
     throw new TypeError('Kent Rehberi endpoint returned an unexpected content type.');
   }
 
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > maxPayloadBytes) {
+  const body = await response.text();
+  if (new TextEncoder().encode(body).byteLength > maxPayloadBytes) {
     throw new RangeError('Kent Rehberi response exceeded the payload budget.');
   }
 
-  let payload: unknown;
   try {
-    payload = JSON.parse(text) as unknown;
+    return JSON.parse(body) as unknown;
   } catch {
     throw new TypeError('Kent Rehberi endpoint returned malformed JSON.');
   }
-  return validateKentRehberiFeatureCollection(payload);
 };
+
+const parseBoundedResponse = async (
+  response: Response,
+  maxPayloadBytes: number,
+): Promise<KentRehberiGeoJsonFeatureCollection> =>
+  validateKentRehberiFeatureCollection(
+    await readBoundedJsonResponse(response, maxPayloadBytes),
+  );
 
 export const fetchKentRehberiGeoJson = async (
   options: KentRehberiFetchOptions = {},
@@ -230,7 +302,7 @@ export const fetchKentRehberiGeoJson = async (
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
     const response = await fetchImpl(
-      buildKentRehberiRequestPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, limit),
+      buildKentRehberiRequestPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, limit, options),
       {
         method: 'GET',
         credentials: 'same-origin',
@@ -243,6 +315,48 @@ export const fetchKentRehberiGeoJson = async (
       throw new Error(`Kent Rehberi endpoint returned HTTP ${response.status}.`);
     }
     return await parseBoundedResponse(response, maxPayloadBytes);
+  } finally {
+    request.dispose();
+  }
+};
+
+export const fetchKentRehberiFeature = async (
+  objectId: number,
+  options: KentRehberiFetchOptions = {},
+): Promise<KentRehberiGeoJsonFeature | null> => {
+  const timeoutMs = normalizePositiveInteger(
+    options.timeoutMs,
+    Math.min(runtimeConfig.requestTimeoutMs, 10_000),
+    60_000,
+  );
+  const maxPayloadBytes = normalizePositiveInteger(
+    options.maxPayloadBytes,
+    Math.min(DEFAULT_MAX_PAYLOAD_BYTES, 1024 * 1024),
+    8 * 1024 * 1024,
+  );
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('Fetch API is unavailable for the Kent Rehberi layer.');
+  }
+
+  const request = createRequestSignal(options.signal, timeoutMs);
+  try {
+    const response = await fetchImpl(
+      buildKentRehberiFeaturePath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, objectId),
+      {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/geo+json, application/json;q=0.9' },
+        signal: request.signal,
+      },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`Kent Rehberi endpoint returned HTTP ${response.status}.`);
+    }
+    return validateKentRehberiFeature(
+      await readBoundedJsonResponse(response, maxPayloadBytes),
+    );
   } finally {
     request.dispose();
   }
@@ -276,6 +390,7 @@ const popupFieldInfos = Object.freeze([
 export const createKentRehberiGeoJsonLayer = async (
   geojson: KentRehberiGeoJsonFeatureCollection,
   moduleLoader: typeof loadArcgisModule = loadArcgisModule,
+  presentation: KentRehberiLayerPresentationOptions = {},
 ): Promise<KentRehberiGeoJsonLayerLike> => {
   if (typeof URL.createObjectURL !== 'function' || typeof URL.revokeObjectURL !== 'function') {
     throw new Error('Blob URL support is unavailable for the Kent Rehberi layer.');
@@ -288,8 +403,8 @@ export const createKentRehberiGeoJsonLayer = async (
 
   try {
     layer = new GeoJSONLayer({
-      id: LAYER_ID,
-      title: LAYER_TITLE,
+      id: String(presentation.id ?? LAYER_ID).trim() || LAYER_ID,
+      title: String(presentation.title ?? LAYER_TITLE).trim() || LAYER_TITLE,
       url: objectUrl,
       objectIdField: 'objectid',
       fields: kentRehberiFields,
@@ -300,6 +415,7 @@ export const createKentRehberiGeoJsonLayer = async (
         outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo'],
         content: [{ type: 'fields', fieldInfos: popupFieldInfos }],
       },
+      ...(presentation.renderer ? { renderer: presentation.renderer } : {}),
     });
     await layer.load?.();
     return layer;
