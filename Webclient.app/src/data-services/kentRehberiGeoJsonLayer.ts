@@ -22,6 +22,23 @@ export interface KentRehberiGeoJsonFeatureCollection {
   readonly meta?: JsonObject;
 }
 
+export interface KentRehberiTypeSample {
+  readonly objectid: number;
+  readonly adi: string | null;
+  readonly adres: string | null;
+  readonly durakNo: string | null;
+}
+
+export interface KentRehberiTypeDescriptor {
+  readonly tur: number;
+  readonly count: number;
+  readonly samples: readonly KentRehberiTypeSample[];
+}
+
+export interface KentRehberiTypeCatalog {
+  readonly types: readonly KentRehberiTypeDescriptor[];
+}
+
 export interface KentRehberiRequestFilters {
   readonly q?: string;
   readonly tur?: number;
@@ -162,6 +179,17 @@ export const buildKentRehberiFeaturePath = (
   return `${normalizedBase}/kent-rehberi/${objectId}`;
 };
 
+export const buildKentRehberiTypeCatalogPath = (
+  apiBaseUrl: string = runtimeConfig.apiBaseUrl,
+): string => {
+  const rawBase = String(apiBaseUrl).trim().replace(/\/+$/u, '');
+  const normalizedBase = normalizeApiBaseUrl(rawBase);
+  if (normalizedBase !== rawBase) {
+    throw new Error('Kent Rehberi API base URL must be a canonical same-origin relative path.');
+  }
+  return `${normalizedBase}/kent-rehberi/types`;
+};
+
 export const validateKentRehberiFeature = (
   candidate: unknown,
   index = 0,
@@ -207,6 +235,99 @@ export const validateKentRehberiFeatureCollection = (
     type: 'FeatureCollection',
     features: Object.freeze(features),
     ...(isJsonObject(value.meta) ? { meta: value.meta } : {}),
+  });
+};
+
+const validateCatalogText = (
+  value: unknown,
+  field: string,
+): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') {
+    throw new TypeError(`Kent Rehberi type catalog ${field} must be a string or null.`);
+  }
+  if (value.length > 1024) {
+    throw new RangeError(`Kent Rehberi type catalog ${field} exceeded the text budget.`);
+  }
+  for (const character of value) {
+    if (/\p{Cc}/u.test(character)) {
+      throw new TypeError(`Kent Rehberi type catalog ${field} contains control characters.`);
+    }
+  }
+  return value;
+};
+
+export const validateKentRehberiTypeCatalog = (
+  value: unknown,
+): KentRehberiTypeCatalog => {
+  if (!isJsonObject(value) || !Array.isArray(value.types)) {
+    throw new TypeError('Kent Rehberi type catalog response is invalid.');
+  }
+  if (value.types.length > 1024) {
+    throw new RangeError('Kent Rehberi type catalog exceeded the type budget.');
+  }
+
+  const seenTypes = new Set<number>();
+  const types = value.types.map((candidate, typeIndex) => {
+    if (!isJsonObject(candidate)) {
+      throw new TypeError(`Kent Rehberi type catalog item ${typeIndex} is invalid.`);
+    }
+    const tur = Number(candidate.tur);
+    const count = Number(candidate.count);
+    if (!Number.isInteger(tur) || tur < -32768 || tur > 32767) {
+      throw new TypeError(`Kent Rehberi type catalog item ${typeIndex} has an invalid tur.`);
+    }
+    if (seenTypes.has(tur)) {
+      throw new TypeError('Kent Rehberi type catalog contains duplicate tur values.');
+    }
+    seenTypes.add(tur);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new TypeError(`Kent Rehberi type catalog item ${typeIndex} has an invalid count.`);
+    }
+    if (!Array.isArray(candidate.samples) || candidate.samples.length > 32) {
+      throw new RangeError(`Kent Rehberi type catalog item ${typeIndex} exceeded the sample budget.`);
+    }
+    if (candidate.samples.length > count) {
+      throw new TypeError(`Kent Rehberi type catalog item ${typeIndex} has more samples than records.`);
+    }
+
+    const seenObjectIds = new Set<number>();
+    const samples = candidate.samples.map((sample, sampleIndex) => {
+      if (!isJsonObject(sample)) {
+        throw new TypeError(
+          `Kent Rehberi type catalog sample ${typeIndex}:${sampleIndex} is invalid.`,
+        );
+      }
+      const objectid = Number(sample.objectid);
+      if (!Number.isSafeInteger(objectid) || objectid <= 0) {
+        throw new TypeError(
+          `Kent Rehberi type catalog sample ${typeIndex}:${sampleIndex} has an invalid objectid.`,
+        );
+      }
+      if (seenObjectIds.has(objectid)) {
+        throw new TypeError(
+          `Kent Rehberi type catalog item ${typeIndex} contains duplicate sample ids.`,
+        );
+      }
+      seenObjectIds.add(objectid);
+
+      return Object.freeze({
+        objectid,
+        adi: validateCatalogText(sample.adi, 'adi'),
+        adres: validateCatalogText(sample.adres, 'adres'),
+        durakNo: validateCatalogText(sample.durakNo, 'durakNo'),
+      });
+    });
+
+    return Object.freeze({
+      tur,
+      count,
+      samples: Object.freeze(samples),
+    });
+  });
+
+  return Object.freeze({
+    types: Object.freeze(types),
   });
 };
 
@@ -355,6 +476,46 @@ export const fetchKentRehberiFeature = async (
       throw new Error(`Kent Rehberi endpoint returned HTTP ${response.status}.`);
     }
     return validateKentRehberiFeature(
+      await readBoundedJsonResponse(response, maxPayloadBytes),
+    );
+  } finally {
+    request.dispose();
+  }
+};
+
+export const fetchKentRehberiTypeCatalog = async (
+  options: KentRehberiFetchOptions = {},
+): Promise<KentRehberiTypeCatalog> => {
+  const timeoutMs = normalizePositiveInteger(
+    options.timeoutMs,
+    Math.min(runtimeConfig.requestTimeoutMs, 10_000),
+    60_000,
+  );
+  const maxPayloadBytes = normalizePositiveInteger(
+    options.maxPayloadBytes,
+    512 * 1024,
+    4 * 1024 * 1024,
+  );
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('Fetch API is unavailable for the Kent Rehberi type catalog.');
+  }
+
+  const request = createRequestSignal(options.signal, timeoutMs);
+  try {
+    const response = await fetchImpl(
+      buildKentRehberiTypeCatalogPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl),
+      {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        signal: request.signal,
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Kent Rehberi type catalog endpoint returned HTTP ${response.status}.`);
+    }
+    return validateKentRehberiTypeCatalog(
       await readBoundedJsonResponse(response, maxPayloadBytes),
     );
   } finally {
