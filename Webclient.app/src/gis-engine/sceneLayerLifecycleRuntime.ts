@@ -15,7 +15,8 @@ export interface SceneLayerAdapter<TResource = unknown> {
 }
 export interface SceneLayerRuntimeOptions {
   maxConcurrentLoads?: number; maxLoadedLayers?: number; maxCpuBytes?: number; maxGpuBytes?: number; maxFeatures?: number; maxDrawCalls?: number;
-  retryLimit?: number; retryBaseDelayMs?: number; now?: () => number; sleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
+  retryLimit?: number; retryBaseDelayMs?: number; retryMaxDelayMs?: number; retryJitterRatio?: number;
+  random?: () => number; now?: () => number; sleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
   onEvent?: (event: SceneLayerEvent) => void; onObserverError?: (error: unknown) => void;
 }
 export interface SceneLayerSnapshot {
@@ -27,8 +28,9 @@ export interface SceneLayerRuntimeSnapshot {
   totalCpuBytes: number; totalGpuBytes: number; totalFeatures: number; totalDrawCalls: number;
 }
 export interface SceneLayerEvent {
-  type: 'registered' | 'requested' | 'load-start' | 'load-ready' | 'load-failed' | 'suspended' | 'resumed' | 'evicted' | 'disposed' | 'visibility';
+  type: 'registered' | 'requested' | 'load-start' | 'retry-scheduled' | 'load-ready' | 'load-failed' | 'suspended' | 'resumed' | 'evicted' | 'disposed' | 'visibility';
   layerId: string; timestamp: number; reason?: string | undefined; generation: number;
+  retryAttempt?: number | undefined; delayMs?: number | undefined;
 }
 export interface SceneLayerLifecycleRuntime<TResource = unknown> {
   register: (descriptor: SceneLayerDescriptor, adapter: SceneLayerAdapter<TResource>) => SceneLayerSnapshot;
@@ -57,6 +59,28 @@ interface MutableLayerState<TResource> {
 
 const PRIORITY_WEIGHT: Readonly<Record<SceneLayerPriority, number>> = Object.freeze({ critical: 4, high: 3, normal: 2, low: 1 });
 const finiteNonNegative = (value: unknown, fallback: number): number => { const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : fallback; };
+const clampUnit = (value: unknown, fallback = 0.5): number => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(1, numeric)) : fallback;
+};
+export const calculateSceneLayerRetryDelay = (
+  attempt: number,
+  options: {
+    baseDelayMs: number;
+    maxDelayMs: number;
+    jitterRatio: number;
+    randomValue: number;
+  },
+): number => {
+  const safeAttempt = Math.max(1, Math.floor(finiteNonNegative(attempt, 1)));
+  const baseDelayMs = Math.max(1, finiteNonNegative(options.baseDelayMs, 1));
+  const maxDelayMs = Math.max(baseDelayMs, finiteNonNegative(options.maxDelayMs, baseDelayMs));
+  const jitterRatio = Math.max(0, Math.min(1, finiteNonNegative(options.jitterRatio, 0)));
+  const randomValue = clampUnit(options.randomValue);
+  const exponential = baseDelayMs * (2 ** (safeAttempt - 1));
+  const jitterMultiplier = 1 + ((randomValue * 2) - 1) * jitterRatio;
+  return Math.max(0, Math.min(maxDelayMs, Math.round(exponential * jitterMultiplier)));
+};
 const normalizeEstimate = (input?: Partial<SceneLayerResourceEstimate>): SceneLayerResourceEstimate => Object.freeze({
   cpuBytes: Math.floor(finiteNonNegative(input?.cpuBytes, 0)), gpuBytes: Math.floor(finiteNonNegative(input?.gpuBytes, 0)),
   featureCount: Math.floor(finiteNonNegative(input?.featureCount, 0)), drawCalls: Math.floor(finiteNonNegative(input?.drawCalls, 0)),
@@ -86,13 +110,34 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
   const maxDrawCalls = Math.max(1, Math.floor(finiteNonNegative(options.maxDrawCalls, 10_000)));
   const retryLimit = Math.max(0, Math.floor(finiteNonNegative(options.retryLimit, 2)));
   const retryBaseDelayMs = Math.max(10, Math.floor(finiteNonNegative(options.retryBaseDelayMs, 250)));
+  const retryMaxDelayMs = Math.max(retryBaseDelayMs, Math.floor(finiteNonNegative(options.retryMaxDelayMs, 8_000)));
+  const retryJitterRatio = Math.max(0, Math.min(1, finiteNonNegative(options.retryJitterRatio, 0.2)));
+  const random = options.random ?? Math.random;
   const now = options.now ?? Date.now; const sleep = options.sleep ?? defaultSleep;
   const layers = new Map<string, MutableLayerState<TResource>>();
   let disposed = false; let activeLoads = 0; let viewportScale: number | null = null; let viewportZoom: number | null = null; let viewportInitialized = false;
   let reconcileScheduled: Promise<void> | null = null; let reconcileDirty = false;
 
   const observerError = (error: unknown): void => { try { options.onObserverError?.(error); } catch (secondary) { const report = (globalThis as typeof globalThis & { reportError?: (e: unknown) => void }).reportError; if (typeof report === 'function') report(secondary); } };
-  const emit = (state: MutableLayerState<TResource>, type: SceneLayerEvent['type'], reason?: string): void => { try { options.onEvent?.(Object.freeze({ type, layerId: state.descriptor.id, timestamp: now(), reason, generation: state.generation })); } catch (error) { observerError(error); } };
+  const emit = (
+    state: MutableLayerState<TResource>,
+    type: SceneLayerEvent['type'],
+    reason?: string,
+    details: Pick<SceneLayerEvent, 'retryAttempt' | 'delayMs'> = {},
+  ): void => {
+    try {
+      options.onEvent?.(Object.freeze({
+        type,
+        layerId: state.descriptor.id,
+        timestamp: now(),
+        reason,
+        generation: state.generation,
+        ...details,
+      }));
+    } catch (error) {
+      observerError(error);
+    }
+  };
   const getState = (id: string): MutableLayerState<TResource> => { const state = layers.get(id); if (!state) throw new Error(`Unknown scene layer: ${id}`); return state; };
   const viewportRequests = (state: MutableLayerState<TResource>): boolean => viewportInitialized && state.visible && state.descriptor.visible !== false && inRange(state.descriptor, viewportScale, viewportZoom);
   const shouldBeRequested = (state: MutableLayerState<TResource>): boolean => state.manualRequested || viewportRequests(state);
@@ -118,7 +163,25 @@ export const createSceneLayerLifecycleRuntime = <TResource = unknown>(options: S
           if (!(await evictIfNeeded(state.descriptor.id))) { const error=new SceneLayerResourceBudgetError(state.descriptor.id); state.lastError=error; await disposeResource(state,'resource-budget'); state.phase='failed'; state.loadedAt=null; emit(state,'load-failed','resource-budget'); return; }
           try { await state.adapter.activate?.(resource,{ signal: controller.signal, generation, descriptor: state.descriptor }); } catch (error) { state.lastError=error; await disposeResource(state,'activation-failed'); state.phase='failed'; state.loadedAt=null; emit(state,'load-failed','activation-failed'); return; }
           state.retries=0; emit(state,'load-ready'); return;
-        } catch (error) { if (controller.signal.aborted || disposed || state.generation !== generation) return; state.lastError=error; if (state.retries >= retryLimit) { state.phase='failed'; emit(state,'load-failed'); return; } state.retries += 1; await sleep(retryBaseDelayMs * (2 ** (state.retries - 1)), controller.signal); }
+        } catch (error) {
+          if (controller.signal.aborted || disposed || state.generation !== generation) return;
+          state.lastError=error;
+          if (state.retries >= retryLimit) { state.phase='failed'; emit(state,'load-failed'); return; }
+          state.retries += 1;
+          const delayMs = calculateSceneLayerRetryDelay(state.retries, {
+            baseDelayMs: retryBaseDelayMs,
+            maxDelayMs: retryMaxDelayMs,
+            jitterRatio: retryJitterRatio,
+            randomValue: random(),
+          });
+          emit(state, 'retry-scheduled', 'load-retry', { retryAttempt: state.retries, delayMs });
+          try {
+            await sleep(delayMs, controller.signal);
+          } catch (sleepError) {
+            if (controller.signal.aborted || disposed || state.generation !== generation || (sleepError as { name?: string })?.name === 'AbortError') return;
+            throw sleepError;
+          }
+        }
       }
     } finally { activeLoads=Math.max(0,activeLoads-1); state.inFlight=null; }
   };

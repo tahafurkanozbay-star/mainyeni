@@ -238,6 +238,7 @@ describe('scene layer concurrency, retry, and failure isolation', () => {
     const runtime = createSceneLayerLifecycleRuntime<Resource>({
       retryLimit: 1,
       retryBaseDelayMs: 25,
+      retryJitterRatio: 0,
       sleep: async (delay) => {
         delays.push(delay);
       },
@@ -249,6 +250,75 @@ describe('scene layer concurrency, retry, and failure isolation', () => {
     expect(snapshot.phase).toBe('ready');
     expect(load).toHaveBeenCalledTimes(2);
     expect(delays).toEqual([25]);
+  });
+
+  it('adds deterministic jitter, caps exponential backoff, and emits retry telemetry', async () => {
+    const delays: number[] = [];
+    const events: Array<{ type: string; retryAttempt?: number; delayMs?: number }> = [];
+    const load = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary-1'))
+      .mockRejectedValueOnce(new Error('temporary-2'))
+      .mockResolvedValueOnce({ id: 'jittered' });
+    const runtime = createSceneLayerLifecycleRuntime<Resource>({
+      retryLimit: 2,
+      retryBaseDelayMs: 100,
+      retryMaxDelayMs: 150,
+      retryJitterRatio: 0.2,
+      random: () => 0.75,
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+      onEvent: (event) => {
+        if (event.type === 'retry-scheduled') events.push(event);
+      },
+    });
+    runtime.register({ id: 'jittered' }, adapter({ load }));
+
+    const snapshot = await runtime.request('jittered');
+
+    expect(snapshot.phase).toBe('ready');
+    expect(load).toHaveBeenCalledTimes(3);
+    expect(delays).toEqual([110, 150]);
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'retry-scheduled', retryAttempt: 1, delayMs: 110 }),
+      expect.objectContaining({ type: 'retry-scheduled', retryAttempt: 2, delayMs: 150 }),
+    ]);
+  });
+
+  it('treats abort during retry sleep as cancellation instead of a rejected request', async () => {
+    const sleepStarted = deferred<void>();
+    let retrySignal: AbortSignal | null = null;
+    const runtime = createSceneLayerLifecycleRuntime<Resource>({
+      retryLimit: 2,
+      retryBaseDelayMs: 50,
+      retryJitterRatio: 0,
+      sleep: async (_delay, signal) => {
+        retrySignal = signal;
+        sleepStarted.resolve();
+        return new Promise<void>((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            const error = new Error('retry cancelled');
+            error.name = 'AbortError';
+            reject(error);
+          }, { once: true });
+        });
+      },
+    });
+    runtime.register({ id: 'cancel-retry' }, adapter({
+      load: async () => {
+        throw new Error('temporary');
+      },
+    }));
+
+    const pending = runtime.request('cancel-retry');
+    await sleepStarted.promise;
+    await runtime.suspend('cancel-retry', 'viewport-left');
+
+    expect(retrySignal?.aborted).toBe(true);
+    await expect(pending).resolves.toMatchObject({
+      phase: 'idle',
+      requested: false,
+    });
   });
 
   it('marks the layer failed after the retry budget is exhausted', async () => {
