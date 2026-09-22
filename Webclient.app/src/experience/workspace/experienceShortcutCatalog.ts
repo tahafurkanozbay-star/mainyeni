@@ -38,6 +38,8 @@ export const createWorkspaceShortcuts = (document: Document): readonly ShortcutD
     id: 'experience-command-palette',
     key: 'k',
     ctrlOrMeta: true,
+    alt: false,
+    shift: false,
     allowInEditable: true,
     priority: 100,
     handler: () => experienceBus.command({
