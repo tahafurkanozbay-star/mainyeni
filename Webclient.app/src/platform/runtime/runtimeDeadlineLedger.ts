@@ -173,7 +173,7 @@ export class RuntimeDeadlineLedger {
   sweep(nowMs: number): number {
     const now = this.#observeNow(nowMs);
     let count = 0;
-    for (const entry of [...this.#entries.values()]) {
+    for (const entry of this.#entries.values()) {
       if (!entry.settled && now >= entry.deadlineMs) {
         this.#settle(entry, now, 'expired');
         count += 1;
