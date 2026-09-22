@@ -34,6 +34,7 @@ export interface SpatialPressurePlan {
   sequence: number;
   profile: GisPerformanceProfile;
   lod: SpatialLodDecision;
+  observedPressure: LodPressure;
   clusterTarget: number;
   concurrentRequests: number;
   visibleFeatureBudget: number;
@@ -41,6 +42,7 @@ export interface SpatialPressurePlan {
   residentLayerBudget: number;
   prefetch: boolean;
   pressureChanged: boolean;
+  transitionSuppressed: boolean;
 }
 
 export interface SpatialPressureCoordinatorMetrics {
@@ -113,7 +115,7 @@ function validatePolicy(policy: SpatialPressureCoordinatorPolicy): void {
   if (!isPositiveInteger(policy.hysteresisSamples)) throw new TypeError('hysteresisSamples must be a positive integer');
 }
 
-const copyMetrics = (metrics: SpatialPressureCoordinatorMetrics): SpatialPressureCoordinatorMetrics => ({ ...metrics });
+const copyMetrics = (metrics: SpatialPressureCoordinatorMetrics): SpatialPressureCoordinatorMetrics => Object.freeze({ ...metrics });
 
 export function createSpatialPressureCoordinator(
   initialProfile: GisPerformanceProfile,
@@ -154,10 +156,10 @@ export function createSpatialPressureCoordinator(
     pendingSamples = 0;
   };
 
-  const stabilizePressure = (candidate: LodPressure): { pressure: LodPressure; changed: boolean } => {
+  const stabilizePressure = (candidate: LodPressure): { pressure: LodPressure; changed: boolean; suppressed: boolean } => {
     if (candidate === stablePressure) {
       resetPending();
-      return { pressure: stablePressure, changed: false };
+      return { pressure: stablePressure, changed: false, suppressed: false };
     }
     if (candidate !== pendingPressure) {
       pendingPressure = candidate;
@@ -167,12 +169,12 @@ export function createSpatialPressureCoordinator(
     }
     if (pendingSamples < policy.hysteresisSamples) {
       metrics.suppressedTransitions += 1;
-      return { pressure: stablePressure, changed: false };
+      return { pressure: stablePressure, changed: false, suppressed: true };
     }
     stablePressure = candidate;
     metrics.pressureTransitions += 1;
     resetPending();
-    return { pressure: stablePressure, changed: true };
+    return { pressure: stablePressure, changed: true, suppressed: false };
   };
 
   const decide = (observation: SpatialPressureObservation): SpatialLodDecision | null => {
@@ -195,8 +197,9 @@ export function createSpatialPressureCoordinator(
       metrics.rejectedObservations += 1;
       return null;
     }
-    const stabilized = stabilizePressure(candidate.pressure);
-    const stabilizedDecision: SpatialLodDecision = stabilized.pressure === candidate.pressure
+    const observedPressure = candidate.pressure;
+    const stabilized = stabilizePressure(observedPressure);
+    const stabilizedDecision: SpatialLodDecision = stabilized.pressure === observedPressure
       ? candidate
       : {
           ...candidate,
@@ -212,6 +215,7 @@ export function createSpatialPressureCoordinator(
       sequence,
       profile,
       lod: Object.freeze(stabilizedDecision),
+      observedPressure,
       clusterTarget: clamp(clusterTarget, policy.minClusterTarget, policy.maxClusterTarget),
       concurrentRequests: clamp(requestBudget, policy.minConcurrentRequests, policy.maxConcurrentRequests),
       visibleFeatureBudget: budget.maxVisibleFeatures,
@@ -219,6 +223,7 @@ export function createSpatialPressureCoordinator(
       residentLayerBudget: budget.maxResidentLayers,
       prefetch: budget.prefetch && stabilized.pressure === 'normal',
       pressureChanged: stabilized.changed,
+      transitionSuppressed: stabilized.suppressed,
     });
     return lastPlan;
   };
