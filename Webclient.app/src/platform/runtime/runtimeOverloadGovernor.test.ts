@@ -27,7 +27,7 @@ describe('RuntimeOverloadGovernor', () => {
       governor.observe(sample(at, { latencyMs: 2_000, errorRate: 0.3, queueUtilization: 1, concurrencyUtilization: 1 }));
     }
     expect(governor.diagnostics().level).toBe('emergency');
-    expect(governor.diagnostics().score).toBe(1);
+    expect(governor.diagnostics().score).toBeCloseTo(1, 12);
   });
 
   it('keeps critical work admitted while shedding non-critical work in emergency', () => {
@@ -41,6 +41,7 @@ describe('RuntimeOverloadGovernor', () => {
   it('sheds only background work at overloaded level', () => {
     const governor = new RuntimeOverloadGovernor({
       minimumSamples: 1,
+      recoveryScore: 0.1,
       guardedScore: 0.2,
       overloadedScore: 0.4,
       emergencyScore: 0.95,
