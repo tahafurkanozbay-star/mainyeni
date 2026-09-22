@@ -66,6 +66,16 @@ const ratioPressure = (ratio: number, policy: SpatialLodPolicy): LodPressure => 
 
 const strongerPressure = (a: LodPressure, b: LodPressure): LodPressure => pressureWeight(a) >= pressureWeight(b) ? a : b;
 
+function dataPressureReason(
+  featurePressure: LodPressure,
+  vertexPressure: LodPressure,
+): SpatialLodDecision["reason"] {
+  const featureWeight = pressureWeight(featurePressure);
+  const vertexWeight = pressureWeight(vertexPressure);
+  if (featureWeight === 0 && vertexWeight === 0) return "none";
+  return featureWeight >= vertexWeight ? "feature-budget" : "vertex-budget";
+}
+
 export function decideSpatialLod(
   input: SpatialLodInput,
   policyInput: Partial<SpatialLodPolicy> = {},
@@ -80,18 +90,22 @@ export function decideSpatialLod(
   const vertexRatio = input.estimatedVertices / policy.maxEstimatedVertices;
   const framePressure = input.framePressure ?? "normal";
   if (!(["normal", "warm", "hot", "critical"] as const).includes(framePressure)) return null;
-  const dataPressure = strongerPressure(ratioPressure(featureRatio, policy), ratioPressure(vertexRatio, policy));
+  const featurePressure = ratioPressure(featureRatio, policy);
+  const vertexPressure = ratioPressure(vertexRatio, policy);
+  const dataPressure = strongerPressure(featurePressure, vertexPressure);
   const pressure = strongerPressure(dataPressure, framePressure);
   const reduction = pressureWeight(pressure);
   const effectiveLevel = clamp(requestedLevel - reduction, policy.minLevel, policy.maxLevel);
-  const featureExceeded = featureRatio >= 1;
-  const vertexExceeded = vertexRatio >= 1;
-  const frameExceeded = pressureWeight(framePressure) > 0;
-  let reason: SpatialLodDecision["reason"] = "none";
-  if ((featureExceeded || vertexExceeded) && frameExceeded) reason = "combined";
-  else if (featureExceeded) reason = "feature-budget";
-  else if (vertexExceeded) reason = "vertex-budget";
-  else if (frameExceeded || pressure !== "normal") reason = "frame-pressure";
+  const dataReason = dataPressureReason(featurePressure, vertexPressure);
+  const hasDataPressure = dataReason !== "none";
+  const hasFramePressure = pressureWeight(framePressure) > 0;
+  const reason: SpatialLodDecision["reason"] = hasDataPressure && hasFramePressure
+    ? "combined"
+    : hasDataPressure
+      ? dataReason
+      : hasFramePressure
+        ? "frame-pressure"
+        : "none";
   return {
     requestedLevel,
     effectiveLevel,
