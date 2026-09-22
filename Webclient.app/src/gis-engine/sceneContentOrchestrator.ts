@@ -106,6 +106,7 @@ export interface SceneContentRecordSnapshot {
   layerAttached: boolean;
   loadPolicy: SceneContentLoadPolicy;
   priority: ScenePriority;
+  queueDeferred: boolean;
 }
 
 export interface SceneContentSnapshot {
@@ -118,6 +119,8 @@ export interface SceneContentSnapshot {
   blocked: number;
   failed: number;
   queueDepth: number;
+  queueCapacity: number;
+  deferred: number;
   inFlight: number;
   budget: SceneBudgetSnapshot;
   records: readonly SceneContentRecordSnapshot[];
@@ -127,6 +130,7 @@ export interface SceneContentOrchestratorOptions {
   concurrency?: number;
   limits?: Partial<SceneBudgetLimits>;
   maximumAttempts?: number;
+  maximumQueueDepth?: number;
   ownLayers?: boolean;
   onSnapshot?: (snapshot: SceneContentSnapshot, reason: string) => void;
   onError?: (error: unknown, context: string, id: string) => void;
@@ -158,10 +162,12 @@ interface MutableSceneContentRecord {
   attempts: number;
   lastError: unknown;
   queued: boolean;
+  queueDeferred: boolean;
 }
 
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_MAXIMUM_ATTEMPTS = 3;
+const DEFAULT_MAXIMUM_QUEUE_DEPTH = 64;
 const PRIORITY_WEIGHT: Readonly<Record<ScenePriority, number>> = Object.freeze({
   critical: 4,
   interactive: 3,
@@ -298,6 +304,7 @@ const snapshotRecord = (
   layerAttached: Boolean(record.layer),
   loadPolicy: record.definition.loadPolicy ?? 'visible',
   priority: record.definition.priority ?? 'visible',
+  queueDeferred: record.queueDeferred,
 });
 
 const applyLayerPresentation = (
@@ -324,6 +331,10 @@ export const createSceneContentOrchestrator = (
 
   const concurrency = Math.max(1, Math.min(8, Math.floor(Number(options.concurrency) || DEFAULT_CONCURRENCY)));
   const maximumAttempts = Math.max(1, Math.min(8, Math.floor(Number(options.maximumAttempts) || DEFAULT_MAXIMUM_ATTEMPTS)));
+  const maximumQueueDepth = Math.max(
+    1,
+    Math.min(512, Math.floor(Number(options.maximumQueueDepth) || DEFAULT_MAXIMUM_QUEUE_DEPTH)),
+  );
   const ownLayers = options.ownLayers !== false;
   const budget = createSceneResourceBudget('3d', options.limits);
   const records = new Map<string, MutableSceneContentRecord>();
@@ -350,6 +361,8 @@ export const createSceneContentOrchestrator = (
       blocked: recordSnapshots.filter((record) => record.status === 'blocked').length,
       failed: recordSnapshots.filter((record) => record.status === 'failed').length,
       queueDepth: queue.length,
+      queueCapacity: maximumQueueDepth,
+      deferred: recordSnapshots.filter((record) => record.queueDeferred).length,
       inFlight,
       budget: budget.snapshot(),
       records: Object.freeze(recordSnapshots),
@@ -392,10 +405,23 @@ export const createSceneContentOrchestrator = (
     record.admitted = false;
   };
 
+  const removeQueuedId = (id: string): number => {
+    let removed = 0;
+    let index = queue.indexOf(id);
+    while (index >= 0) {
+      queue.splice(index, 1);
+      removed += 1;
+      index = queue.indexOf(id);
+    }
+    return removed;
+  };
+
   const cancelRecord = (record: MutableSceneContentRecord): void => {
     record.controller?.abort();
     record.controller = null;
+    removeQueuedId(record.definition.id);
     record.queued = false;
+    record.queueDeferred = false;
   };
 
   const applyVisibility = (record: MutableSceneContentRecord): void => {
@@ -410,18 +436,64 @@ export const createSceneContentOrchestrator = (
     }
   };
 
+  const compareQueueIds = (leftId: string, rightId: string): number => {
+    const left = records.get(leftId)?.definition.priority ?? 'visible';
+    const right = records.get(rightId)?.definition.priority ?? 'visible';
+    return PRIORITY_WEIGHT[right] - PRIORITY_WEIGHT[left] || leftId.localeCompare(rightId);
+  };
+
+  const markDeferred = (record: MutableSceneContentRecord): void => {
+    record.queued = false;
+    record.queueDeferred = true;
+    if (record.status === 'queued') record.status = 'registered';
+  };
+
   const enqueue = (record: MutableSceneContentRecord): boolean => {
     if (disposed || record.queued || record.status === 'loading' || record.layer) return false;
     if (record.attempts >= maximumAttempts && record.status === 'failed') return false;
+
+    if (queue.length >= maximumQueueDepth) {
+      const lowestId = queue.at(-1);
+      const lowest = lowestId ? records.get(lowestId) : undefined;
+      const candidateWeight = PRIORITY_WEIGHT[record.definition.priority ?? 'visible'];
+      const lowestWeight = PRIORITY_WEIGHT[lowest?.definition.priority ?? 'visible'];
+
+      if (!lowest || candidateWeight <= lowestWeight) {
+        markDeferred(record);
+        return false;
+      }
+
+      queue.pop();
+      markDeferred(lowest);
+    }
+
     record.queued = true;
+    record.queueDeferred = false;
     record.status = 'queued';
     queue.push(record.definition.id);
-    queue.sort((leftId, rightId) => {
-      const left = records.get(leftId)?.definition.priority ?? 'visible';
-      const right = records.get(rightId)?.definition.priority ?? 'visible';
-      return PRIORITY_WEIGHT[right] - PRIORITY_WEIGHT[left] || leftId.localeCompare(rightId);
-    });
+    queue.sort(compareQueueIds);
     return true;
+  };
+
+  const refillQueue = (): void => {
+    if (disposed || queue.length >= maximumQueueDepth) return;
+    const candidates = [...records.values()]
+      .filter((record) => (
+        record.queueDeferred
+        && !record.layer
+        && record.status !== 'loading'
+        && shouldLoad(record, active, scale)
+      ))
+      .sort((left, right) => (
+        PRIORITY_WEIGHT[right.definition.priority ?? 'visible']
+        - PRIORITY_WEIGHT[left.definition.priority ?? 'visible']
+        || left.definition.id.localeCompare(right.definition.id)
+      ));
+
+    for (const candidate of candidates) {
+      if (queue.length >= maximumQueueDepth) break;
+      enqueue(candidate);
+    }
   };
 
   const ensureAdmission = (record: MutableSceneContentRecord): boolean => {
@@ -449,6 +521,7 @@ export const createSceneContentOrchestrator = (
     const record = records.get(id);
     if (!record || disposed) return;
     record.queued = false;
+    record.queueDeferred = false;
     if (!shouldLoad(record, active, scale)) {
       record.status = record.layer ? 'hidden' : 'registered';
       return;
@@ -498,7 +571,9 @@ export const createSceneContentOrchestrator = (
       while (!disposed) {
         const id = queue.shift();
         if (!id) return;
+        refillQueue();
         await loadRecord(id);
+        refillQueue();
       }
     });
     await Promise.all(workers);
@@ -537,6 +612,7 @@ export const createSceneContentOrchestrator = (
         attempts: 0,
         lastError: null,
         queued: false,
+        queueDeferred: false,
       });
     }
     emit(existing ? 'register-update' : 'register');
@@ -557,8 +633,8 @@ export const createSceneContentOrchestrator = (
     detachLayer(record);
     record.status = 'disposed';
     records.delete(id);
-    const queueIndex = queue.indexOf(id);
-    if (queueIndex >= 0) queue.splice(queueIndex, 1);
+    removeQueuedId(id);
+    refillQueue();
     emit('unregister');
     return true;
   };
@@ -578,6 +654,13 @@ export const createSceneContentOrchestrator = (
     if (!record || disposed) return buildSnapshot();
     record.definition = Object.freeze({ ...record.definition, visible });
     applyVisibility(record);
+    if (!shouldLoad(record, active, scale) && (record.queued || record.queueDeferred)) {
+      removeQueuedId(id);
+      record.queued = false;
+      record.queueDeferred = false;
+      if (!record.layer) record.status = 'registered';
+      refillQueue();
+    }
     if (visible && shouldLoad(record, active, scale)) {
       enqueue(record);
       void scheduleDrain();
@@ -599,7 +682,9 @@ export const createSceneContentOrchestrator = (
     records.forEach((record) => {
       applyVisibility(record);
       if (shouldLoad(record, active, scale) && !record.layer) enqueue(record);
+      else if (!shouldLoad(record, active, scale) && record.queueDeferred) record.queueDeferred = false;
     });
+    refillQueue();
     emit(`${reason}:queued`);
     await scheduleDrain();
     records.forEach((record) => applyVisibility(record));
@@ -613,6 +698,7 @@ export const createSceneContentOrchestrator = (
     record.attempts = 0;
     record.lastError = null;
     record.status = 'registered';
+    record.queueDeferred = false;
     enqueue(record);
     await scheduleDrain();
     return ['ready', 'hidden'].includes(String(records.get(id)?.status));
