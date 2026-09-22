@@ -114,6 +114,50 @@ public sealed class KentRehberiPlanAskiSourceTests
                 .GetValue<string>());
     }
 
+    [Theory]
+    [InlineData("""{"isSuccess":true,"data":null}""")]
+    [InlineData("""{"success":true,"results":null}""")]
+    public async Task GetType_TreatsExplicitSuccessfulNullEnvelopeAsEmpty(
+        string payload)
+    {
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        var records =
+            await fixture.Source.GetTypeAsync(
+                7,
+                CancellationToken.None);
+
+        Assert.Empty(records);
+    }
+
+    [Theory]
+    [InlineData("""{"isSuccess":false,"data":null}""")]
+    [InlineData("""{"success":false,"results":[]}""")]
+    public async Task GetType_RejectsExplicitUnsuccessfulEnvelope(
+        string payload)
+    {
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        await Assert.ThrowsAsync<
+            KentRehberiPlanAskiProtocolException>(
+            () =>
+                fixture.Source.GetTypeAsync(
+                    7,
+                    CancellationToken.None));
+    }
+
     [Fact]
     public async Task GetType_ParsesDataEnvelope()
     {
