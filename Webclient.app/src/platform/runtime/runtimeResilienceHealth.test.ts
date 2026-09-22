@@ -12,9 +12,9 @@ import {
 const createSupervisor = () => createRuntimeResilienceSupervisor({
   policy: {
     minimumSignalSamples: {
-      critical: 1,
-      interactive: 1,
-      background: 1,
+      critical: 1_000,
+      interactive: 1_000,
+      background: 1_000,
     },
     maxErrorRate: {
       critical: 0.5,
@@ -53,7 +53,7 @@ const complete = (
   outcome: 'success' | 'failure',
   latencyMs: number,
 ): void => {
-  const startedAt = index * 10;
+  const startedAt = index * (latencyMs + 10);
   const result = supervisor.begin({
     key: lane + ':' + index,
     lane,
