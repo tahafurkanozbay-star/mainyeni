@@ -165,6 +165,7 @@ export const createSceneNavigationRuntime = (
   let moving = false;
   let sequence = 0;
   let activeSequence = 0;
+  let activeNavigationController: AbortController | null = null;
   let historyIndex = -1;
   let homePose: Readonly<SceneNavigationPose> | null = null;
   let lastError: unknown = null;
@@ -263,6 +264,10 @@ export const createSceneNavigationRuntime = (
     const target = targetForPose(pose);
     if (Object.keys(target).length === 0) return false;
 
+    activeNavigationController?.abort('superseded-navigation');
+    const navigationController = new AbortController();
+    activeNavigationController = navigationController;
+
     ensureInitialHistory();
     sequence += 1;
     const currentSequence = sequence;
@@ -277,19 +282,24 @@ export const createSceneNavigationRuntime = (
       : 0;
 
     const onAbort = (): void => {
+      if (!navigationController.signal.aborted) navigationController.abort(navigation.signal?.reason);
       if (activeSequence === currentSequence) activeSequence += 1;
     };
     navigation.signal?.addEventListener('abort', onAbort, { once: true });
 
     try {
-      await view.goTo?.(target, { animate: shouldAnimate, duration });
-      if (disposed || navigation.signal?.aborted || activeSequence !== currentSequence) return false;
+      await view.goTo?.(target, {
+        animate: shouldAnimate,
+        duration,
+        signal: navigationController.signal,
+      });
+      if (disposed || navigationController.signal.aborted || activeSequence !== currentSequence) return false;
       if (navigation.recordHistory !== false) pushHistory(capture());
       moving = false;
       emit(navigation.reason ?? 'navigate-success');
       return true;
     } catch (error) {
-      if (navigation.signal?.aborted || activeSequence !== currentSequence || (error as { name?: string })?.name === 'AbortError') {
+      if (navigationController.signal.aborted || activeSequence !== currentSequence || (error as { name?: string })?.name === 'AbortError') {
         if (activeSequence === currentSequence) moving = false;
         return false;
       }
@@ -300,6 +310,7 @@ export const createSceneNavigationRuntime = (
       return false;
     } finally {
       navigation.signal?.removeEventListener('abort', onAbort);
+      if (activeNavigationController === navigationController) activeNavigationController = null;
       if (activeSequence === currentSequence) moving = false;
     }
   };
@@ -412,6 +423,8 @@ export const createSceneNavigationRuntime = (
     disposed = true;
     moving = false;
     activeSequence += 1;
+    activeNavigationController?.abort('scene-navigation-dispose');
+    activeNavigationController = null;
     bookmarks.clear();
     history.length = 0;
     historyIndex = -1;
