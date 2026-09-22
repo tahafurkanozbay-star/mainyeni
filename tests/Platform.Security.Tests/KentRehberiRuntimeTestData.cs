@@ -15,6 +15,15 @@ internal static class KentRehberiRuntimeTestData
         var options = new KentRehberiOptions
         {
             Enabled = true,
+            Source = KentRehberiOptions.PlanAskiSource,
+            PlanAskiBaseUri = KentRehberiOptions.OfficialPlanAskiBaseUri,
+            PlanAskiMinTur = 0,
+            PlanAskiMaxTur = 42,
+            PlanAskiRequestTimeoutSeconds = 5,
+            PlanAskiCacheTtlSeconds = 60,
+            PlanAskiMaxConcurrentRequests = 4,
+            PlanAskiMaxRecordsPerType = 1_000,
+            PlanAskiMaxResponseBytesPerType = 1024 * 1024,
             DefaultLimit = 50,
             MaxLimit = 200,
             MaxRadiusMeters = 50_000,
