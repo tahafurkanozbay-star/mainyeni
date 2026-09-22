@@ -122,6 +122,8 @@ describe('experienceShortcutCatalog', () => {
     const runtime = createShortcutRuntime({ document, shortcuts: createWorkspaceShortcuts(document) });
 
     dispatch(document, 'k');
+    dispatch(document, 'k', { ctrlKey: true, altKey: true });
+    dispatch(document, 'k', { metaKey: true, shiftKey: true });
     dispatch(document, 'm', { altKey: true, shiftKey: true });
     dispatch(document, 's', { altKey: true, ctrlKey: true });
 
