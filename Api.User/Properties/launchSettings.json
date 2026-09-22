@@ -4,26 +4,34 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:4039",
-      "sslPort": 44357
+      "applicationUrl": "http://localhost:3002",
+      "sslPort": 3003
     }
   },
   "profiles": {
     "IIS Express": {
       "commandName": "IISExpress",
       "launchBrowser": true,
-      "launchUrl": "swagger",
+      "launchUrl": "health/ready",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "KentRehberiData__Source": "PlanAski",
+        "KentRehberiData__PlanAskiBaseUri": "https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi",
+        "KentRehberiData__PlanAskiMinTur": "0",
+        "KentRehberiData__PlanAskiMaxTur": "42"
       }
     },
     "api.user": {
       "commandName": "Project",
       "launchBrowser": true,
-      "launchUrl": "weatherforecast",
+      "launchUrl": "health/ready",
       "applicationUrl": "https://localhost:3003;http://localhost:3002",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "KentRehberiData__Source": "PlanAski",
+        "KentRehberiData__PlanAskiBaseUri": "https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi",
+        "KentRehberiData__PlanAskiMinTur": "0",
+        "KentRehberiData__PlanAskiMaxTur": "42"
       }
     }
   }
