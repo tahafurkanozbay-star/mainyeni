@@ -65,7 +65,11 @@
     "src/gis-engine/queryLifecycle.test.ts",
     "src/gis-engine/spatialQueryControlPlane.ts",
     "src/gis-engine/spatialQueryControlPlane.test.ts",
-    "src/gis-engine/modernGisQueryControlPlane.integration.test.ts"
+    "src/gis-engine/modernGisQueryControlPlane.integration.test.ts",
+    "src/gis-engine/spatialSelectionIndexContracts.ts",
+    "src/gis-engine/spatialSelectionIndexRuntime.ts",
+    "src/gis-engine/spatialSelectionIndexRuntime.test.ts",
+    "src/gis-engine/modernSpatialAnalysisSelectionIndex.integration.test.ts"
   ],
   "include": [],
   "exclude": [
