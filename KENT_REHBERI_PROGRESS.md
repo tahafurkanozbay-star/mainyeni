@@ -838,3 +838,15 @@
 - NETWORK NOTU: external live endpoint could not be fetched from the current assistant web runtime (tool returned DisabledError), so response-shape assumptions are deliberately covered by a strict multi-envelope parser and deterministic tests; deployment smoke test against real PlanASKI remains mandatory before claiming live-network validation.
 - MERGE DURUMU: NOT MERGED. Next steps are PR creation, exact-head GitHub Actions, repair of any real compile/test/audit failures, second verification, current-main refresh, mergeability/security/performance review, then expected-head squash merge only if all required checks are green.
 
+## PlanASKI upstream verification checkpoint — 2026-09-22
+- PR: #287 `feat(kent-rehberi): use official PlanASKI tur 0-42 upstream`.
+- VERIFIED HEAD BEFORE THIS PROGRESS APPEND: `fb70f6b7ea102baa1be17c662249db940af88cb1`.
+- DIFF: 5536 additions / 348 deletions / 19 files; meaningful-additions target remains satisfied.
+- FIRST REPAIR PASS: Release QA exposed three compile errors (unqualified `Timeout` and duplicate local geometry names); fixed on the same branch.
+- SECOND REPAIR PASS: backend build then exposed a missing test namespace import; fixed on the same branch.
+- THIRD REPAIR PASS: xUnit exposed Turkish/ASCII search-folding mismatch; repository search now folds diacritics plus dotless `ı` deterministically and the regression passed.
+- EXACT-HEAD VERIFICATION: Platform Architecture Audit #1990, Platform Backend Validation #409, Release QA #2137 and Webclient Quality #4366 all completed successfully for `fb70f6b...`. Backend Release build, 935+ xUnit tests, User/Admin publish, all-layer audit, TypeScript gates, Vitest regression gates, production Vite build, integrity verification and build budgets were successful.
+- SECURITY / NETWORK REVIEW: upstream URI remains exact-host/path HTTPS pinned, redirects disabled, TLS validation not bypassed, browser stays same-origin, payload/record/concurrency/time budgets remain bounded, error bodies are not reflected, PostGIS remains only explicit compatibility fallback.
+- LIVE NETWORK LIMITATION: assistant web runtime still cannot fetch the external PlanASKI endpoint directly, so no claim is made that this environment observed live `tur=0..42` response bodies. Deployment smoke against the official endpoint remains required; deterministic tests cover accepted response envelope variants and failure behavior.
+- MERGE DURUMU: still NOT MERGED because this progress append changes the PR head. Final exact-head CI must run again after this commit; only if all required checks are completed+success, main remains the exact base/behind=0, mergeable=true and no unresolved review threads remain should PR #287 be marked ready and expected-head squash-merged.
+
