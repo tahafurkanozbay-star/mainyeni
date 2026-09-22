@@ -29,6 +29,7 @@ export * from './runtimeResilienceSupervisor';
 export * from './runtimeResilienceHealth';
 export * from './runtimeFailureBudget';
 export * from './runtimeAdmissionController';
+export * from './runtimeOverloadGuard';
 export * from './drainCoordinator';
 export * from './runtimeHealthPolicy';
 export * from './resourceLeaseRegistry';
