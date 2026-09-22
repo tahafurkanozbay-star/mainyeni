@@ -61,37 +61,37 @@ const REQUIRED_SOURCE_CONTRACTS = Object.freeze([
   {
     file: PATHS.contracts,
     id: 'global-entry-budget',
-    pattern: /maxEntries/u,
+    pattern: /\\bmaxEntries\\b/u,
     message: 'selection contracts must define a global entry budget',
   },
   {
     file: PATHS.contracts,
     id: 'global-byte-budget',
-    pattern: /maxBytes/u,
+    pattern: /\\bmaxBytes\\b/u,
     message: 'selection contracts must define a global byte budget',
   },
   {
     file: PATHS.contracts,
     id: 'layer-entry-budget',
-    pattern: /maxEntriesPerLayer/u,
+    pattern: /\\bmaxEntriesPerLayer\\b/u,
     message: 'selection contracts must define a per-layer entry budget',
   },
   {
     file: PATHS.contracts,
     id: 'layer-byte-budget',
-    pattern: /maxBytesPerLayer/u,
+    pattern: /\\bmaxBytesPerLayer\\b/u,
     message: 'selection contracts must define a per-layer byte budget',
   },
   {
     file: PATHS.contracts,
     id: 'layer-count-budget',
-    pattern: /maxLayers/u,
+    pattern: /\\bmaxLayers\\b/u,
     message: 'selection contracts must define a layer-count budget',
   },
   {
     file: PATHS.contracts,
     id: 'bounded-history-contract',
-    pattern: /maxHistory/u,
+    pattern: /\\bmaxHistory\\b/u,
     message: 'selection contracts must define a bounded mutation history',
   },
   {
@@ -296,11 +296,11 @@ const checkGridPrimitive = (
   if (!source) return;
   const required = [
     ['linear-grid-cursor', /single linear cursor|Array\.from\(\{ length: range\.count \}/u],
-    ['bounded-grid-features', /maximumFeatures/u],
-    ['bounded-grid-cells', /maximumCells/u],
-    ['bounded-grid-references', /maximumReferences/u],
-    ['bounded-grid-feature-cells', /maximumCellsPerFeature/u],
-    ['bounded-grid-bucket', /maximumBucketSize/u],
+    ['bounded-grid-features', /\\bmaximumFeatures\\b/u],
+    ['bounded-grid-cells', /\\bmaximumCells\\b/u],
+    ['bounded-grid-references', /\\bmaximumReferences\\b/u],
+    ['bounded-grid-feature-cells', /\\bmaximumCellsPerFeature\\b/u],
+    ['bounded-grid-bucket', /\\bmaximumBucketSize\\b/u],
   ];
   required.map(([id, pattern]) => {
     if (!pattern.test(source)) {
