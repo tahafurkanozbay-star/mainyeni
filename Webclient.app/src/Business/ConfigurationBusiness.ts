@@ -36,8 +36,27 @@ const publicBootstrapOptions = (
   cacheTtlMs: options.cacheTtlMs ?? 120_000,
 });
 
-const localBootstrapPreviewEnabled = import.meta.env.DEV
-  && import.meta.env.VITE_LOCAL_BOOTSTRAP_PREVIEW === 'true';
+export const resolveLocalBootstrapPreviewEnabled = (
+  dev: unknown,
+  mode: unknown,
+  configured: unknown,
+): boolean => {
+  if (dev !== true) return false;
+
+  const normalizedMode = String(mode ?? '').trim().toLowerCase();
+  if (normalizedMode === 'test') return false;
+
+  const normalizedSetting = String(configured ?? '').trim().toLowerCase();
+  if (!normalizedSetting) return true;
+
+  return !['0', 'false', 'no', 'off', 'disabled'].includes(normalizedSetting);
+};
+
+const localBootstrapPreviewEnabled = resolveLocalBootstrapPreviewEnabled(
+  import.meta.env.DEV,
+  import.meta.env.MODE,
+  import.meta.env.VITE_LOCAL_BOOTSTRAP_PREVIEW,
+);
 
 const localPreviewMapConfiguration = Object.freeze({
   Centerx: 32.854,
