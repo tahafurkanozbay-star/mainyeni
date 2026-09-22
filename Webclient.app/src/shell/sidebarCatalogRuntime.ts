@@ -10,6 +10,7 @@ export interface ShellSidebarItem {
   readonly label: string;
   readonly windowId: string;
   readonly iconType?: string;
+  readonly serviceKey?: string;
 }
 
 export interface SidebarSearchOptions {
@@ -28,6 +29,7 @@ export interface SidebarCatalogSnapshot {
 export interface SidebarCatalogRuntime {
   readonly getGroup: (groupId: string) => ShellSidebarGroup | null;
   readonly getItem: (windowId: string) => ShellSidebarItem | null;
+  readonly getItemByServiceKey: (serviceKey: string) => ShellSidebarItem | null;
   readonly itemsForGroup: (groupId: string) => readonly ShellSidebarItem[];
   readonly search: (query: string, options?: SidebarSearchOptions) => readonly ShellSidebarItem[];
   readonly snapshot: () => SidebarCatalogSnapshot;
@@ -82,6 +84,9 @@ const cloneItem = (item: ShellSidebarItem): ShellSidebarItem => Object.freeze({
   ...(typeof item.iconType === 'string' && item.iconType.trim()
     ? { iconType: item.iconType.trim().slice(0, 160) }
     : {}),
+  ...(typeof item.serviceKey === 'string' && item.serviceKey.trim()
+    ? { serviceKey: normalizeId(item.serviceKey, 'Sidebar item service key') }
+    : {}),
 });
 
 const limitOf = (value: unknown, fallback: number): number => {
@@ -101,6 +106,7 @@ export const createSidebarCatalogRuntime = (
   const items = Object.freeze(input.items.map(cloneItem));
   const groupMap = new Map<string, ShellSidebarGroup>();
   const itemMap = new Map<string, ShellSidebarItem>();
+  const serviceKeyMap = new Map<string, ShellSidebarItem>();
   const groupItems = new Map<string, ShellSidebarItem[]>();
 
   for (const group of groups) {
@@ -112,6 +118,12 @@ export const createSidebarCatalogRuntime = (
   for (const item of items) {
     if (itemMap.has(item.windowId)) throw new Error(`Duplicate sidebar window id: ${item.windowId}`);
     itemMap.set(item.windowId, item);
+    if (item.serviceKey) {
+      if (serviceKeyMap.has(item.serviceKey)) {
+        throw new Error(`Duplicate sidebar service key: ${item.serviceKey}`);
+      }
+      serviceKeyMap.set(item.serviceKey, item);
+    }
     const bucket = groupItems.get(item.group);
     if (!bucket) throw new Error(`Sidebar item references unknown group: ${item.group}`);
     bucket.push(item);
@@ -127,6 +139,7 @@ export const createSidebarCatalogRuntime = (
     text: normalizeSidebarSearchText([
       item.label,
       item.iconType ?? '',
+      item.serviceKey ?? '',
       item.group,
       item.windowId,
     ].join(' ')),
@@ -137,6 +150,9 @@ export const createSidebarCatalogRuntime = (
 
   const getItem = (windowId: string): ShellSidebarItem | null =>
     itemMap.get(normalizeId(windowId, 'Sidebar window id')) ?? null;
+
+  const getItemByServiceKey = (serviceKey: string): ShellSidebarItem | null =>
+    serviceKeyMap.get(normalizeId(serviceKey, 'Sidebar item service key')) ?? null;
 
   const itemsForGroup = (groupId: string): readonly ShellSidebarItem[] => {
     const normalized = normalizeId(groupId, 'Sidebar group id');
@@ -184,5 +200,12 @@ export const createSidebarCatalogRuntime = (
     orphanGroups: Object.freeze([]),
   });
 
-  return Object.freeze({ getGroup, getItem, itemsForGroup, search, snapshot });
+  return Object.freeze({
+    getGroup,
+    getItem,
+    getItemByServiceKey,
+    itemsForGroup,
+    search,
+    snapshot,
+  });
 };
