@@ -133,6 +133,22 @@ export function createViewStateSyncRuntime(options: {
     return left !== null && viewStatesEquivalent(left, right, syncPolicy.equivalenceTolerance, viewStatePolicy);
   }
 
+  function equivalentTarget(source: ViewState, targetState: ViewState | null, converted: ViewState): boolean {
+    if (targetState === null) return false;
+    if (source.mode !== "2d" || targetState.mode !== "3d" || converted.mode !== "3d") {
+      return equivalent(targetState, converted);
+    }
+    const targetWithoutAltitude: ViewState = {
+      ...targetState,
+      center: {
+        x: targetState.center.x,
+        y: targetState.center.y,
+        spatialReference: targetState.center.spatialReference,
+      },
+    };
+    return equivalent(targetWithoutAltitude, converted);
+  }
+
   function pruneRecent(timestamp: number): void {
     recent = recent.filter((transaction) => transaction.expiresAt > timestamp);
     if (recent.length > syncPolicy.maxRecentTransactions) {
@@ -224,7 +240,7 @@ export function createViewStateSyncRuntime(options: {
     }
 
     const targetState = target === "2d" ? state2d : state3d;
-    if (equivalent(targetState, converted)) {
+    if (equivalentTarget(normalized, targetState, converted)) {
       counters.deduplicated += 1;
       revision += 1;
       notify(null);
