@@ -23,6 +23,9 @@ const PATHS = Object.freeze({
   releaseWorkflow: '../.github/workflows/release-qa.yml',
   backendController: '../Api.User/Controllers/KentRehberiController.cs',
   backendRepository: '../Api.User/KentRehberi/KentRehberiRepository.cs',
+  backendPlanAskiSource: '../Api.User/KentRehberi/KentRehberiPlanAskiSource.cs',
+  backendPlanAskiRepository: '../Api.User/KentRehberi/KentRehberiPlanAskiRepository.cs',
+  backendRegistration: '../Api.User/KentRehberi/KentRehberiServiceCollectionExtensions.cs',
   backendOptions: '../Api.User/KentRehberi/KentRehberiOptions.cs',
   backendSettings: '../Api.User/appsettings.json',
 });
@@ -137,23 +140,54 @@ const validFixture = () => {
     `,
     [PATHS.backendRepository]: `
       const string Table = "kent_rehberi.kent_rehberi_tumu_pggeom";
-      public Task GetTypeCatalogAsync() {
-        const string sql = "LIMIT @maxTypes LIMIT @samplesPerType";
-        return Task.CompletedTask;
-      }
+      command.Parameters.AddWithValue("tur", tur);
+    `,
+    [PATHS.backendPlanAskiSource]: `
+      const string Host = "planaski.ankara.bel.tr";
+      const string Path = "/kentrehberiapi/api/kentrehberi";
+      var query = "tur=" + tur;
+      var bytes = options.PlanAskiMaxResponseBytesPerType;
+      var records = options.PlanAskiMaxRecordsPerType;
+      var ttl = options.PlanAskiCacheTtlSeconds;
+      var gate = new SemaphoreSlim(6, 6);
+    `,
+    [PATHS.backendPlanAskiRepository]: `
+      public Task GetAll() => source.GetAllTypesAsync(default);
+      public Task GetOne(short tur) => source.GetTypeAsync(tur, default);
+      public Task GetTypeCatalogAsync() => Task.CompletedTask;
+      private double HaversineMeters() => 0;
+    `,
+    [PATHS.backendRegistration]: `
+      services.AddHttpClient("KentRehberi.PlanAski");
+      var handler = new HttpClientHandler { AllowAutoRedirect = false };
+      if (configured.Source == KentRehberiOptions.PlanAskiSource) return planAski;
     `,
     [PATHS.backendOptions]: `
+      public const string PlanAskiSource = "PlanAski";
+      public string PlanAskiBaseUri { get; set; } =
+        "https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi";
+      public short PlanAskiMinTur { get; set; }
+      public short PlanAskiMaxTur { get; set; }
       public int TypeCatalogMaxTypes { get; set; }
       public int TypeCatalogSamplesPerType { get; set; }
       public int TypeCatalogMaxResponseBytes { get; set; }
     `,
     [PATHS.backendSettings]: JSON.stringify({
       KentRehberiData: {
-        TypeCatalogMaxTypes: 256,
-        TypeCatalogSamplesPerType: 8,
+        Source: 'PlanAski',
+        PlanAskiBaseUri: 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi',
+        PlanAskiMinTur: 0,
+        PlanAskiMaxTur: 42,
+        PlanAskiRequestTimeoutSeconds: 10,
+        PlanAskiCacheTtlSeconds: 300,
+        PlanAskiMaxConcurrentRequests: 6,
+        PlanAskiMaxRecordsPerType: 20000,
+        PlanAskiMaxResponseBytesPerType: 8388608,
+        TypeCatalogMaxTypes: 43,
+        TypeCatalogSamplesPerType: 16,
         TypeCatalogCacheTtlSeconds: 300,
         TypeCatalogMaxTextLength: 240,
-        TypeCatalogMaxResponseBytes: 524288,
+        TypeCatalogMaxResponseBytes: 1048576,
       },
     }),
   };
@@ -255,7 +289,7 @@ describe('Kent Rehberi all-layer release contract', () => {
     );
   });
 
-  test('requires every sidebar service key to have one PostGIS profile', () => {
+  test('requires every sidebar service key to have one Kent Rehberi profile', () => {
     const files = validFixture();
     const items = inventory();
     files[PATHS.profiles] = profileSource(items.slice(1));
@@ -407,23 +441,62 @@ describe('Kent Rehberi all-layer release contract', () => {
     assert.equal(ids.has('missing-types-cache-control'), true);
   });
 
-  test('requires fixed-table and parameterized type-catalog SQL', () => {
+  test('requires the official PlanASKI host, path and bounded tur transport', () => {
+    const files = validFixture();
+    files[PATHS.backendPlanAskiSource] = 'public sealed class KentRehberiPlanAskiSource {}';
+
+    const result = auditKentRehberiAllLayersSources(files);
+    const ids = new Set(result.errors.map((entry) => entry.id));
+
+    assert.equal(ids.has('missing-official-planaski-host'), true);
+    assert.equal(ids.has('missing-planaski-path'), true);
+    assert.equal(ids.has('missing-planaski-tur-query'), true);
+    assert.equal(ids.has('missing-planaski-byte-budget'), true);
+    assert.equal(ids.has('missing-planaski-record-budget'), true);
+    assert.equal(ids.has('missing-planaski-concurrency'), true);
+    assert.equal(ids.has('missing-planaski-cache'), true);
+  });
+
+  test('requires PlanASKI repository coverage and nearby behavior', () => {
+    const files = validFixture();
+    files[PATHS.backendPlanAskiRepository] = 'public sealed class KentRehberiPlanAskiRepository {}';
+
+    const result = auditKentRehberiAllLayersSources(files);
+    const ids = new Set(result.errors.map((entry) => entry.id));
+
+    assert.equal(ids.has('missing-planaski-all-types'), true);
+    assert.equal(ids.has('missing-planaski-single-type'), true);
+    assert.equal(ids.has('missing-planaski-catalog'), true);
+    assert.equal(ids.has('missing-planaski-nearby'), true);
+  });
+
+  test('requires server-owned PlanASKI transport without redirects', () => {
+    const files = validFixture();
+    files[PATHS.backendRegistration] = 'public static class Registration {}';
+
+    const result = auditKentRehberiAllLayersSources(files);
+    const ids = new Set(result.errors.map((entry) => entry.id));
+
+    assert.equal(ids.has('missing-planaski-http-client'), true);
+    assert.equal(ids.has('missing-planaski-no-redirect'), true);
+    assert.equal(ids.has('missing-planaski-source-selection'), true);
+  });
+
+  test('retains fixed-table parameterized PostGIS compatibility fallback', () => {
     const files = validFixture();
     files[PATHS.backendRepository] = 'public sealed class KentRehberiRepository {}';
 
     const result = auditKentRehberiAllLayersSources(files);
     const ids = new Set(result.errors.map((entry) => entry.id));
 
-    assert.equal(ids.has('missing-fixed-table'), true);
-    assert.equal(ids.has('missing-type-limit-parameter'), true);
-    assert.equal(ids.has('missing-sample-limit-parameter'), true);
-    assert.equal(ids.has('missing-type-catalog-query'), true);
+    assert.equal(ids.has('missing-postgis-fallback-table'), true);
+    assert.equal(ids.has('missing-postgis-parameterization'), true);
   });
 
   test('requires reviewed backend catalog budgets', () => {
     const files = validFixture();
     const settings = JSON.parse(files[PATHS.backendSettings]);
-    settings.KentRehberiData.TypeCatalogMaxTypes = 999;
+    settings.KentRehberiData.PlanAskiMaxTur = 99;
     delete settings.KentRehberiData.TypeCatalogMaxResponseBytes;
     files[PATHS.backendSettings] = JSON.stringify(settings);
 

@@ -1,86 +1,143 @@
-# Kent Rehberi PostGIS JSON / GeoJSON API
+# Kent Rehberi PlanASKI upstream + same-origin GeoJSON API
 
 ## Amaç
 
-Bu servis, tarayıcının PostgreSQL/PostGIS'e doğrudan bağlanmasını engeller ve
-Kent Rehberi verisini mevcut `Api.User` uygulaması üzerinden same-origin bir
-JSON/GeoJSON sözleşmesiyle sunar. Dış istemci yalnızca reverse proxy üzerindeki
-`/api/kent-rehberi` yolunu görür; PostgreSQL hostu, portu, kullanıcı adı ve
-parola browser bundle'ına girmez.
+Kent Rehberi tarayıcısı dış veri kaynağına doğrudan bağlanmaz. React/Vite
+istemcisi yalnız same-origin `/api/kent-rehberi` sözleşmesini çağırır.
+`Api.User`, Ankara Büyükşehir Belediyesi'nin resmi PlanASKI Kent Rehberi
+endpointini server-side upstream olarak kullanır, gelen veriyi doğrular,
+normalize eder, sınırlar ve kısa süreli cache'ler.
 
-Repo zaten .NET 10, C# 14, PostgreSQL/Npgsql, merkezi rate limiting, CORS,
-request timeout, response compression, security headers ve health-check
-altyapısına sahip olduğu için ikinci bir Node/Go/Python runtime eklenmemiştir.
-Bu, deployment yüzeyini ve secret dağıtımını küçültür.
-
-## Veri kaynağı
-
-Sunucu tarafındaki sabit kaynak:
-
-- şema: `kent_rehberi`
-- tablo: `kent_rehberi_tumu_pggeom`
-- geometri: `shape`, EPSG:4326
-- public API'de kullanılan alanlar: `objectid`, `adi`, `adres`, `ilce`,
-  `mahalle`, `x`, `y`, `tur`, `yapan`, `web_sayfasi`,
-  `durak_no`, `shape`
-
-`gdb_geomattr_data` bilinçli olarak sorgulanmaz ve istemciye gönderilmez.
-
-## Secret / environment
-
-Tracked `appsettings.json` içinde bağlantı dizesi boş kalır. Deployment secret
-store veya process environment üzerinden aşağıdaki anahtar verilir:
-
-`ConnectionStrings__KentRehberi`
-
-Örnek biçim:
+Primary upstream:
 
 ```text
-Host=<internal-postgres-host>;Port=5432;Database=<database>;Username=kent_rehberi_select;Password=<secret>;Pooling=true
+https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi
 ```
 
-Gerçek host, veritabanı adı, kullanıcı/parola veya başka internal network
-bilgileri GitHub'a commit edilmemelidir.
+Kategori çağrıları yalnız `tur` query parametresiyle yapılır. Tracked
+configuration inclusive aralığı `tur=0` ile `tur=42` olarak sınırlar.
 
-Mevcut `ConnectionStrings__Primary` başka uygulama verileri için kullanılmaya
-devam eder. Kent Rehberi bağlantısı ayrıdır; yanlış DB'ye bağlanma veya mevcut
-BusinessContext'i istemeden başka veritabanına yöneltme riski bu şekilde
-önlenir.
+Örnek upstream istekleri:
 
-## Endpoint sözleşmesi
+```text
+https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=0
+https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=1
+...
+https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=42
+```
+
+Browser bu URL'leri görmez veya çağırmaz; bütün dış network erişimi User API
+tarafındadır.
+
+## Kaynak seçimi
+
+`KentRehberiData:Source` iki server-side mod destekler:
+
+- `PlanAski` — varsayılan ve primary kaynak.
+- `Postgis` — mevcut internal PostgreSQL/PostGIS repository için kontrollü
+  compatibility fallback.
+
+Tracked `appsettings.json` primary kaynağı açıkça `PlanAski` seçer.
+PostGIS fallback etkinleştirilirse connection string source code'a yazılmaz;
+deployment secret/environment üzerinden aşağıdaki anahtar kullanılır:
+
+```text
+ConnectionStrings__KentRehberi
+```
+
+Bu fallback için mevcut server-owned tablo
+`kent_rehberi.kent_rehberi_tumu_pggeom` olarak kalır. Browser hiçbir modda
+database hostu, kullanıcı adı, parola veya SQL topolojisi görmez.
+
+## PlanASKI güvenlik ve kaynak sınırları
+
+Upstream URI serbest config edilen genel amaçlı bir proxy değildir. Startup
+validation yalnız şu canonical hedefe izin verir:
+
+```text
+scheme: https
+host:   planaski.ankara.bel.tr
+port:   443
+path:   /kentrehberiapi/api/kentrehberi
+query:  empty in configured base URI
+user-info: empty
+fragment: empty
+```
+
+Her runtime request bu sabit URI'ye yalnız `tur=<0..42>` ekler.
+Redirect takip edilmez. TLS sertifika doğrulaması gevşetilmez.
+
+Default upstream bütçeleri:
+
+- `PlanAskiMinTur = 0`
+- `PlanAskiMaxTur = 42`
+- request timeout: 10 saniye
+- cache TTL: 300 saniye
+- aynı anda en fazla 6 upstream request
+- tür başına en fazla 20.000 kayıt
+- tür başına en fazla 8 MiB response
+
+Aynı `tur` için eşzamanlı istekler single in-flight fetch üzerinde
+birleştirilir. Başarılı response tür bazında cache'e yazılır. Caller
+cancellation shared upstream fetch'i başka aboneler için bozmaz; abonelik bekleyişi
+iptal edilir, fetch kendi bounded timeout'una kadar devam eder.
+
+## Upstream response normalizasyonu
+
+PlanASKI endpointinin tarayıcıya aynen forward edilmesi yerine User API
+aşağıdaki güvenli alanları normalize eder:
+
+- `objectid`
+- `adi`
+- `adres`
+- `ilce`
+- `mahalle`
+- `x`
+- `y`
+- `tur`
+- `yapan`
+- `web_sayfasi` / `webSayfasi`
+- `durak_no` / `durakNo`
+- varsa Point GeoJSON geometry
+
+Parser flat array, yaygın `data/results/items/records/features/result`
+envelope'ları ve GeoJSON FeatureCollection biçimlerini kabul eder. Alan
+isimleri için yaygın case/snake/camel varyasyonları normalize edilir.
+
+Fail-closed kontroller:
+
+- pozitif integer `objectid`,
+- requested `tur` ile response `tur` uyumu,
+- tür içinde duplicate `objectid` reddi,
+- eksik/tek taraflı coordinate pair reddi,
+- EPSG:4326 longitude/latitude bounds,
+- finite numeric değerler,
+- bounded text alanları ve control-character reddi,
+- bounded JSON depth,
+- bounded payload bytes,
+- bounded record count,
+- beklenmeyen content-type reddi,
+- HTTP error body veya upstream içeriğinin public hata mesajına yansıtılmaması.
+
+## Public same-origin endpoint sözleşmesi
 
 Reverse proxy `/api/` prefix'ini User API'ye aktarıyorsa public yollar:
 
-### Liste / viewport
+### Liste / kategori
 
 ```http
 GET /api/kent-rehberi
-GET /api/kent-rehberi?ilce=Çankaya
-GET /api/kent-rehberi?ilce=Çankaya&mahalle=Kızılay&tur=5
-GET /api/kent-rehberi?q=belediye
-GET /api/kent-rehberi?bbox=32.80,39.85,32.95,40.00
-GET /api/kent-rehberi?bbox=32.80,39.85,32.95,40.00&limit=1000
-GET /api/kent-rehberi?afterObjectId=12345&limit=500
+GET /api/kent-rehberi?tur=0
+GET /api/kent-rehberi?tur=42
+GET /api/kent-rehberi?tur=12&limit=500
+GET /api/kent-rehberi?ilce=Çankaya&tur=12
+GET /api/kent-rehberi?q=belediye&tur=12
+GET /api/kent-rehberi?bbox=32.80,39.85,32.95,40.00&tur=12
 ```
 
-`bbox` sırası `minLon,minLat,maxLon,maxLat` ve SRID EPSG:4326'dır.
-Bbox filtresi önce GiST bounding-box operatörünü, ardından
-`ST_Intersects` kontrolünü uygular.
-
-Listeleme `objectid` üzerinden artan sırada keyset pagination kullanabilir.
-Kaynak DDL `objectid` için UNIQUE constraint göstermediği için cursor özelliği
-tracked config'te **fail-closed kapalıdır**. Önce
-`database/kent-rehberi-api.sql` içindeki duplicate preflight çalıştırılmalı,
-sorgu sıfır satır döndürmeli ve cursor açılmadan önce ObjectID benzersizliğini
-kalıcı olarak garanti eden unique index/constraint oluşturulmalıdır. Bundan
-sonra deployment config'inde:
-
-`KentRehberiData__ObjectIdCursorEnabled=true`
-
-verilebilir. Özellik açıkken ilk response `meta.hasMore=true` ise
-`meta.nextAfterObjectId` sonraki istekte `afterObjectId` olarak kullanılır.
-Özellik kapalıyken istemciden `afterObjectId` gönderilmesi 400 döner ve
-capabilities response'u cursor desteğinin kapalı olduğunu açıkça belirtir.
+PlanASKI mode'da `tur` 0..42 dışında gönderilirse request 400 ile
+fail-closed reddedilir. Tek bir `tur` verildiğinde yalnız o upstream kategori
+çağrılır; diğer 42 kategori gereksiz yere indirilmez.
 
 ### Tek kayıt
 
@@ -88,28 +145,19 @@ capabilities response'u cursor desteğinin kapalı olduğunu açıkça belirtir.
 GET /api/kent-rehberi/12345
 ```
 
-Bulunmazsa 404 döner.
+Object lookup mevcut public contract nedeniyle bütün configured tür cache'i
+üzerinden benzersiz `objectid` arar. Aynı objectid farklı türlerde görülürse
+sessizce yanlış kayıt seçmek yerine data-integrity hatası üretir.
 
 ### Yakındaki kayıtlar
 
 ```http
-GET /api/kent-rehberi/nearby?lon=32.85&lat=39.92
-GET /api/kent-rehberi/nearby?lon=32.85&lat=39.92&radiusMeters=2000&tur=5
-GET /api/kent-rehberi/nearby?lon=32.85&lat=39.92&radiusMeters=5000&ilce=Çankaya
+GET /api/kent-rehberi/nearby?lon=32.85&lat=39.92&radiusMeters=2000&tur=12
 ```
 
-Mesafe `shape::geography` ile metre cinsinden hesaplanır. Varsayılan yarıçap
-2000 m, tracked config'teki varsayılan üst sınır 50000 m'dir. Sonuçlar
-`distanceMeters` artan sırasıyla gelir.
-
-### Capability bilgisi
-
-```http
-GET /api/kent-rehberi/capabilities
-```
-
-Bu endpoint DB hostu veya connection state açıklamadan public limit ve filtre
-sözleşmesini verir.
+PlanASKI Point koordinatları üzerinde Haversine mesafesi hesaplanır ve sonuç
+`distanceMeters` artan sırada döner. Coordinate bilgisi olmayan kayıtlar
+nearby sonucuna alınmaz.
 
 ### Tür kataloğu
 
@@ -117,27 +165,44 @@ sözleşmesini verir.
 GET /api/kent-rehberi/types
 ```
 
-Bu endpoint, eski hızlı erişim menüsündeki tüm belediye katmanlarının sayısal
-`tur` kimliğini hard-code etmeden çözebilmesi için sınırlı bir katalog döndürür.
-Her tür için yalnız toplam kayıt sayısı ve küçük bir public örnek kümesi
-(`objectid`, `adi`, `adres`, `durakNo`) bulunur. SQL, host, schema
-topolojisi, connection bilgisi veya hata ayrıntısı response'a eklenmez.
+Catalog, configured aralığın tamamını inclusive biçimde temsil eder:
 
-Varsayılan güvenlik bütçeleri:
+```text
+0, 1, 2, ... 42
+```
 
-- en fazla 256 tür,
-- tür başına en fazla 8 örnek,
-- örnek metin alanlarında en fazla 240 karakter,
-- katalog response'u en fazla 512 KiB,
-- server-side katalog cache TTL'i 300 saniye.
+Boş türler de katalogda `count: 0` ile kalır; böylece browser tür aralığını
+tahmin etmez. Her tür için küçük, dağıtılmış bir public sample kümesi kullanılır.
 
-Browser bu katalog üzerinden servis profillerini sınıflandırır ve güvenli bir
-`tur` sonucu oluştuğunda kategori verisini doğrudan
-`GET /api/kent-rehberi?tur=<id>&limit=2000` ile yükler. Katalog yetersizse eski
-metin probe davranışı yalnız bounded fallback olarak korunur; bu fallback
-PostGIS API dışına çıkmaz.
+Tracked catalog bütçeleri:
 
-## Örnek response
+- en fazla 43 tür,
+- tür başına en fazla 16 sample,
+- sample text alanı en fazla 240 karakter,
+- serialized catalog en fazla 1 MiB,
+- catalog cache TTL 300 saniye.
+
+Frontend mevcut fast-access profile terimlerini bu sample'lara karşı
+sınıflandırır. Güvenli bir tür çözülürse:
+
+```http
+GET /api/kent-rehberi?tur=<id>&limit=2000
+```
+
+çağrısı yapılır. Catalog sınıflandırması güven vermezse bounded text-probe
+fallback yine aynı User API üzerinden çalışır; browser PlanASKI'ye doğrudan
+çıkmaz.
+
+### Capability
+
+```http
+GET /api/kent-rehberi/capabilities
+```
+
+Response public query limitlerini verir; upstream URL, DB connection state,
+SQL veya exception ayrıntısı açıklamaz.
+
+## Örnek GeoJSON response
 
 ```json
 {
@@ -158,7 +223,7 @@ PostGIS API dışına çıkmaz.
         "mahalle": "Kızılay",
         "x": 32.8541,
         "y": 39.9208,
-        "tur": 5,
+        "tur": 12,
         "yapan": null,
         "webSayfasi": null,
         "durakNo": null
@@ -173,194 +238,148 @@ PostGIS API dışına çıkmaz.
 }
 ```
 
-## Güvenlik özellikleri
+## Cache ve performans davranışı
 
-- SQL kullanıcı girdisiyle string interpolation yapmaz. Filtre değerleri
-  Npgsql parameter olarak gönderilir.
-- Şema ve tablo adı server-owned sabittir; query parametresinden alınmaz.
-- `q` içindeki `%`, `_` ve backslash LIKE wildcard olarak değil literal
-  veri olarak escape edilir.
-- İlçe/mahalle uzunluğu 50 karakterle sınırlıdır; serbest metin `q`
-  araması en az 2, en fazla 120 karakter kabul eder. Böylece tek karakterli
-  pahalı `%q%` taramaları public endpointte engellenir.
-- `limit`, radius, koordinat ve bbox sınırları fail-closed doğrulanır.
-- Request cancellation PostgreSQL komutuna aktarılır.
-- Command timeout ve connection timeout ayrıca sınırlandırılır.
-- Ayrı Kent Rehberi datasource'u `/health/ready` readiness zincirine dahildir;
-  feature enabled iken secret eksikse veya tablo okunamıyorsa readiness unhealthy
-  olur. Public health payload DB hostu/SQL/exception ayrıntısı içermez.
-- DB erişim hatalarında controller logu exception mesajı/stack yerine yalnız
-  güvenli hata sınıfı + trace id kaydeder.
-- Npgsql error detail kapalıdır; HTTP 503 cevabı internal exception/host/SQL
-  ayrıntısı döndürmez.
-- Global Platform rate limiter ve request timeout yeni endpointleri de kapsar.
-- Public response yalnız gerekli kolonları içerir; binary GDB metadata dışarı
-  verilmez.
-- DB kullanıcısı için tablo seviyesinde geniş SELECT yerine column-level
-  least-privilege grant önerilir.
+İki cache katmanı birbirini tamamlar:
 
-## Reverse proxy
+1. PlanASKI source cache — upstream response'u tür bazında 300 saniye saklar.
+2. Mevcut bounded query-result cache — normalize edilmiş public query
+   sonuçlarını kısa süreli saklar.
 
-Uygulamanın mevcut same-origin modelini koruyun. Örnek Nginx parçası:
+Böylece `/types` için 43 kategori bir kez warm olduktan sonra kullanıcı her
+sidebar katmanına tıkladığında yeniden 43 dış istek yapılmaz. Bir kategori
+seçildiğinde ilgili `tur` cache'te ise dış network çağrısı olmadan sonuç
+üretilir.
 
-```nginx
-location /api/ {
-    proxy_pass http://127.0.0.1:<user-api-port>/;
-    proxy_http_version 1.1;
+Upstream fan-out en fazla 6 eşzamanlı request ile sınırlandırılır; `Task.WhenAll`
+oluşturulan işleri başlatabilir ancak network gate aynı anda çalışan bağlantı
+sayısını bounded tutar.
 
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+## Readiness
 
-    proxy_connect_timeout 3s;
-    proxy_send_timeout 15s;
-    proxy_read_timeout 15s;
-}
-```
+`/health/ready` içindeki `kent-rehberi-data` check configured source'a göre
+davranır:
 
-User API portunu internetten doğrudan publish etmeyin. PostgreSQL portunu da
-public network'e açmayın. Uygulama sunucusundan DB subnet'ine yalnız gerekli
-port için firewall/ACL erişimi verin.
+- PlanASKI mode: official upstream üzerinde bounded probe.
+- PostGIS mode: mevcut table visibility / SELECT probe.
 
-Forwarded-header işleme yalnız gerçekten güvenilen reverse proxy katmanından
-gelen trafiğe göre yapılandırılmalıdır. Client tarafından doğrudan gönderilen
-`X-Forwarded-For` bir kimlik veya authorization kaynağı değildir.
+Health payload süre gibi güvenli diagnostic değerler taşıyabilir; upstream
+response body, URL query ayrıntısı, DB hostu, SQL veya secret taşımamalıdır.
 
-## PostgreSQL hazırlığı
+## Frontend GeoJSONLayer bağlantısı
 
-`database/kent-rehberi-api.sql`:
-
-1. runtime rolüne yalnız schema usage + gerekli kolonlarda SELECT verir,
-2. `objectid` pagination indexini ekler,
-3. `shape` için geometry GiST indexini ekler,
-4. metre bazlı nearby sorgusu için `shape::geography` expression GiST indexini
-   ekler,
-5. ilçe/mahalle/tür filtreleri için yardımcı indexleri ekler,
-6. ObjectID duplicate preflight sağlar,
-7. preflight temizlendikten sonra cursor özelliğinin deployment config ile
-   explicit açılmasını gerektirir.
-
-`CREATE INDEX CONCURRENTLY` komutlarını explicit transaction içinde
-çalıştırmayın.
-
-## Performans davranışı
-
-Harita pan/zoom sırasında bütün tabloyu tekrar indirmek yerine güncel viewport
-bbox'ı kullanılmalıdır. Default 500, maksimum 2000 kayıt sınırı browser memory,
-JSON boyutu ve render maliyetini sınırlar.
-
-Response'lar kısa süreli public cache header taşır. Reverse proxy/CDN eklemek
-zorunlu değildir; same-origin reverse proxy kendi cache politikasını ayrıca
-uygulayabilir. User-specific veri bu endpointlere eklenirse public cache
-politikasının yeniden değerlendirilmesi zorunludur.
-
-Substring `q` araması ilk sürümde extension zorunluluğu yaratmaz. Gerçek
-production profiling aramanın sıcak yol olduğunu gösterirse DBA onayıyla
-`pg_trgm` indexi ayrıca değerlendirilebilir.
-
-## Deployment smoke test
-
-Secret/config uygulandıktan ve SQL hazırlığı tamamlandıktan sonra:
+Webclient yalnız same-origin endpoint kullanır:
 
 ```text
-GET /api/kent-rehberi/capabilities
-GET /api/kent-rehberi?limit=1
-GET /api/kent-rehberi?bbox=<known-small-bbox>&limit=10
-GET /api/kent-rehberi/nearby?lon=<known-lon>&lat=<known-lat>&radiusMeters=500&limit=10
+GET /api/kent-rehberi/types
+GET /api/kent-rehberi?tur=<resolved>&limit=2000
+```
+
+Response ArcGIS constructor'a verilmeden önce:
+
+- content-type doğrulanır,
+- HTTP body hata mesajına yansıtılmaz,
+- FeatureCollection/Feature/objectid doğrulanır,
+- max feature/payload budgets uygulanır,
+- request timeout ve AbortSignal kullanılır,
+- API base yalnız canonical same-origin relative path kabul eder.
+
+Doğrulanan data Blob üzerinden ArcGIS `GeoJSONLayer` olarak yüklenir ve
+existing deterministic icon registry renderer'ı kullanılır.
+
+## Local development
+
+Vite synthetic demo data üretmez. `/api` local development'ta gerçek
+`Api.User` HTTPS endpointine proxy edilir:
+
+```text
+https://localhost:3003
+```
+
+Beklenen local akış:
+
+```text
+Webclient
+  -> /api/kent-rehberi/types
+  -> Api.User
+  -> https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=0..42
+  -> validation/cache/type catalog
+  -> /api/kent-rehberi?tur=<resolved>
+  -> GeoJSONLayer
+```
+
+Local makinede outbound HTTPS erişimi yoksa readiness ve gerçek data smoke
+testi başarısız olabilir; frontend demo kaynağa sessizce düşmez.
+
+## PostGIS compatibility fallback
+
+PlanASKI geçici olarak deployment stratejisinden çıkarılmak istenirse
+`KentRehberiData__Source=Postgis` seçilebilir. Bu mod mevcut Npgsql repository,
+fixed table ve parameterized SQL yolunu kullanır.
+
+Secret yalnız deployment tarafında verilir:
+
+```text
+ConnectionStrings__KentRehberi=Host=<internal-host>;Port=5432;Database=<db>;Username=<read-only-user>;Password=<secret>
+```
+
+Tracked repository hiçbir gerçek internal host/username/password içermez.
+`database/kent-rehberi-api.sql` read-only grant/index/preflight runbook'u bu
+fallback için korunur.
+
+## Deployment smoke testi
+
+Primary PlanASKI mode için:
+
+```text
 GET /health/ready
-GET /api/kent-rehberi/capabilities
+GET /api/kent-rehberi/types
+GET /api/kent-rehberi?tur=0&limit=1
+GET /api/kent-rehberi?tur=42&limit=1
+GET /api/kent-rehberi?tur=12&limit=10
+GET /api/kent-rehberi/nearby?lon=32.85&lat=39.92&radiusMeters=2000&tur=12&limit=10
 ```
 
 Kontrol edin:
 
-- response'da DB host/parola veya exception detail yok,
-- GeoJSON geometry doğru ve longitude/latitude sırası korunuyor,
-- `Cache-Control`, correlation id, security headers ve rate limiting mevcut,
-- bbox planı geometry GiST indexini,
-- nearby planı geography expression GiST indexini kullanıyor,
-- büyük result setler limit ile bounded kalıyor,
-- `/health/ready` içinde `kent-rehberi-data` healthy görünüyor,
-- ObjectID duplicate preflight temizlenmeden cursor özelliği açılmıyor.
+- `/types` 0..42 aralığını içeriyor,
+- boş türler güvenli biçimde count 0 dönüyor,
+- upstream error body public response'a sızmıyor,
+- timeout/cancellation çalışıyor,
+- category response 2000 feature limitini aşmıyor,
+- geometry longitude/latitude sırası doğru,
+- same-origin security headers/rate limiting/correlation-id korunuyor,
+- `/health/ready` içindeki `kent-rehberi-data` healthy.
 
-Gerçek DB credentials olmadan CI yalnız contract/validation/build testlerini
-çalıştırır; production DB bağlantısı deployment ortamında smoke test edilir.
-
-## Frontend GeoJSONLayer bağlantısı
-
-Webclient harita kabuğu açıldığında `src/data-services/kentRehberiGeoJsonLayer.ts`
-üzerinden same-origin:
-
-`GET /api/kent-rehberi?limit=500`
-
-isteğini yapar. Response doğrudan ArcGIS constructor'a verilmez; önce aşağıdaki
-sınırlar uygulanır:
-
-- response yalnız `application/geo+json` / `application/json` kabul eder,
-- HTTP error body istemci hata mesajına yansıtılmaz,
-- FeatureCollection ve her Feature yapısı doğrulanır,
-- her kayıtta pozitif integer `properties.objectid` zorunludur,
-- feature sayısı public API üst sınırı olan 2000'i aşamaz,
-- frontend payload bütçesi varsayılan 8 MiB ile sınırlıdır,
-- request timeout + AbortSignal ile iptal edilebilir,
-- API base yalnız canonical same-origin relative path kabul eder.
-
-Doğrulanmış FeatureCollection bir Blob'a çevrilir ve ArcGIS 5.1
-`GeoJSONLayer` Blob URL desteği kullanılarak yüklenir. Alan şeması explicit
-tanımlanır; ilk feature içindeki null değerlerden field type tahmini yapılmaz.
-Layer load tamamlanınca Blob URL revoke edilir. React map shell dispose olursa
-pending request abort edilir ve eklenmiş katman map'ten kaldırılıp destroy
-edilir.
-
-Bu katman yüklemesi **best-effort** çalışır: Kent Rehberi datasource geçici
-olarak 503 dönerse ana harita ve diğer GIS yetenekleri açılmaya devam eder;
-veritabanı hatası browser'a ayrıntılı olarak yansıtılmaz.
-
-### Yerel Vite gerçek-backend akışı
-
-Synthetic Kent Rehberi middleware kaldırılmıştır. Vite development server
-`/api` isteklerini local User API'nin HTTPS endpointine proxy eder:
-
-`https://localhost:3003`
-
-Böylece development ve production aynı controller, validation, cache,
-PostGIS repository ve GeoJSON sözleşmesini kullanır. Browser PostgreSQL'e
-doğrudan bağlanmaz; DB bağlantı dizesi yalnız User API process environment /
-secret store tarafında kalır.
-
-Yerel doğrulama için önce `Api.User` HTTPS profilini, sonra
-`Webclient.app` Vite server'ını başlatın. Aşağıdaki akışın tamamı gerçek
-backend üzerinden çalışmalıdır:
-
-`/api/kent-rehberi/types -> tur çözümü -> /api/kent-rehberi?tur=... -> FeatureCollection validation -> GeoJSONLayer -> map.add()`
-
+CI gerçek external endpointi zorunlu dependency yapmaz. Upstream parser,
+caching, concurrency, timeout, failure behavior ve tur=0..42 fan-out sentetik
+HTTP handler'larla deterministic test edilir. Deployment ortamındaki smoke
+test gerçek PlanASKI network erişimini doğrular.
 
 ## 40 katmanlı hızlı erişim sözleşmesi
 
-ABB, EGO, ASKİ ve iştirak gruplarındaki toplam 40 hızlı erişim kaydı artık
-`SidebarCatalog.ts` içinde explicit `serviceKey` taşır. Bu kimlik aynı anda:
+ABB, EGO, ASKİ ve iştirak gruplarındaki 40 hızlı erişim kaydı explicit
+`serviceKey` taşır. Bu identity:
 
-1. `kentRehberiFastAccessProfiles.ts` profilini,
-2. `iconRegistry.json` içindeki tekil ikon alias'ını,
-3. lazy query-window kaydını,
-4. PostGIS tabanlı fast-access runtime'ını
+1. sidebar item,
+2. lazy query window,
+3. fast-access profile,
+4. icon registry alias,
+5. same-origin Kent Rehberi runtime
 
-birbirine bağlayan stable identity'dir.
+arasında tekil bağlantıdır.
 
-`createFastAccessQueryBusiness`, bu 40 key için önce Kent Rehberi runtime'ını
-seçer. Eski service runtime yalnız bu profile dahil olmayan servisler için
-compatibility fallback olarak kalır. Sonuçlar
-`source: "kent-rehberi"` ile işaretlenir ve kategori layer'ı paylaşılan
-GeoJSON renderer + ikon registry üzerinden oluşturulur.
+Frontend service key'i doğrudan external URL'ye çevirmiyor. Profile
+classification `/types` catalog'undan bir `tur` seçer; data User API
+üzerinden gelir.
 
-Release sırasında aşağıdaki fail-closed audit çalışır:
+Fail-closed release audit:
 
 ```text
 npm run quality:kent-rehberi-all-layers
 ```
 
-Audit; 40 sidebar kaydının grup dağılımını, service-key benzersizliğini,
-query-window kapsamasını, profil kapsamasını, service-key → ikon alias
-tekilliğini, katalog-first runtime sözleşmesini, same-origin/abort/payload
-sınırlarını, gerçek HTTPS local proxy kullanımını, backend `/types`
-endpointini, parameterized katalog SQL'ini ve CI/package entegrasyonunu kontrol
-eder. Webclient Quality ve Release QA bu audit başarısızsa release'i durdurur.
+Audit; 40-layer inventory, profile/query-window/icon coverage, same-origin
+frontend transport, official PlanASKI host/path pinning, 0..42 config,
+bounded concurrency/cache/byte/record budgets, no-redirect HTTP transport,
+PostGIS compatibility fallback ve CI wiring'ini denetler.

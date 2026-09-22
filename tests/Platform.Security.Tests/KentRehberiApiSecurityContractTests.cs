@@ -1,3 +1,4 @@
+using Api.User.KentRehberi;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,10 +27,74 @@ public sealed class KentRehberiApiSecurityContractTests
         Assert.DoesNotContain("192.168.101.161", appsettings, StringComparison.Ordinal);
         Assert.DoesNotContain("Password=", appsettings, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("User ID=", appsettings, StringComparison.OrdinalIgnoreCase);
+
+        var data = document.RootElement
+            .GetProperty("KentRehberiData");
+
+        Assert.Equal(
+            "PlanAski",
+            data.GetProperty("Source").GetString());
+        Assert.Equal(
+            KentRehberiOptions.OfficialPlanAskiBaseUri,
+            data.GetProperty("PlanAskiBaseUri").GetString());
+        Assert.Equal(
+            0,
+            data.GetProperty("PlanAskiMinTur").GetInt32());
+        Assert.Equal(
+            42,
+            data.GetProperty("PlanAskiMaxTur").GetInt32());
     }
 
     [Fact]
-    public void Repository_UsesFixedServerOwnedTableAndParameterizedUserInput()
+    public void PlanAskiSource_IsPinnedToOfficialHttpsEndpointAndBounded()
+    {
+        var source = Read(
+            "Api.User/KentRehberi/KentRehberiPlanAskiSource.cs");
+        var registration = Read(
+            "Api.User/KentRehberi/KentRehberiServiceCollectionExtensions.cs");
+        var options = Read(
+            "Api.User/KentRehberi/KentRehberiOptions.cs");
+
+        Assert.Contains(
+            "planaski.ankara.bel.tr",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "/kentrehberiapi/api/kentrehberi",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"tur=\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "PlanAskiMaxResponseBytesPerType",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "PlanAskiMaxRecordsPerType",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "SemaphoreSlim",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AllowAutoRedirect = false",
+            registration,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Uri.UriSchemeHttps",
+            options,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "DangerousAcceptAnyServerCertificateValidator",
+            registration,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PostgisFallback_UsesFixedServerOwnedTableAndParameterizedUserInput()
     {
         var source = Read("Api.User/KentRehberi/KentRehberiRepository.cs");
 
@@ -160,6 +225,18 @@ public sealed class KentRehberiApiSecurityContractTests
         Assert.DoesNotContain("192.168.101.161", guide, StringComparison.Ordinal);
         Assert.Contains(
             "ConnectionStrings__KentRehberi",
+            guide,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "planaski.ankara.bel.tr",
+            guide,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "tur=0",
+            guide,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "tur=42",
             guide,
             StringComparison.Ordinal);
         Assert.Contains("/api/kent-rehberi", guide, StringComparison.Ordinal);

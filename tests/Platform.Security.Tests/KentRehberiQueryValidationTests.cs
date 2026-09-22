@@ -112,6 +112,66 @@ public sealed class KentRehberiQueryValidationTests
         Assert.Contains("limit", error.Errors.Keys);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(43)]
+    public void NormalizeSearch_RejectsTurOutsidePlanAskiRange(
+        short tur)
+    {
+        var error = Assert.Throws<KentRehberiValidationException>(() =>
+            KentRehberiQueryValidation.NormalizeSearch(
+                null,
+                null,
+                tur,
+                null,
+                null,
+                null,
+                null,
+                CreateOptions()));
+
+        Assert.Contains("tur", error.Errors.Keys);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(43)]
+    public void NormalizeNearby_RejectsTurOutsidePlanAskiRange(
+        short tur)
+    {
+        var error = Assert.Throws<KentRehberiValidationException>(() =>
+            KentRehberiQueryValidation.NormalizeNearby(
+                32.85,
+                39.92,
+                1000,
+                null,
+                null,
+                tur,
+                null,
+                null,
+                CreateOptions()));
+
+        Assert.Contains("tur", error.Errors.Keys);
+    }
+
+    [Fact]
+    public void NormalizeSearch_PostgisFallbackDoesNotApplyPlanAskiTurRange()
+    {
+        var options = CreateOptions();
+        options.Source = KentRehberiOptions.PostgisSource;
+
+        var result = KentRehberiQueryValidation.NormalizeSearch(
+            null,
+            null,
+            100,
+            null,
+            null,
+            null,
+            null,
+            options);
+
+        Assert.Equal((short)100, result.Tur);
+    }
+
     [Fact]
     public void NormalizeSearch_RejectsCursorUntilUniquenessIsExplicitlyVerified()
     {

@@ -68,6 +68,7 @@ public static class KentRehberiQueryValidation
         ValidateQueryLength(normalizedQuery, errors);
         var normalizedBounds = ParseBounds(bbox, errors);
         var normalizedLimit = NormalizeLimit(limit, options, errors);
+        ValidateTur(tur, options, errors);
 
         if (afterObjectId is <= 0)
         {
@@ -112,6 +113,7 @@ public static class KentRehberiQueryValidation
         var normalizedQuery = NormalizeText(query, MaxQueryLength, "q", errors);
         ValidateQueryLength(normalizedQuery, errors);
         var normalizedLimit = NormalizeLimit(limit, options, errors);
+        ValidateTur(tur, options, errors);
 
         if (!longitude.HasValue || !double.IsFinite(longitude.Value) ||
             longitude.Value is < -180 or > 180)
@@ -259,6 +261,32 @@ public static class KentRehberiQueryValidation
         }
 
         return bounds;
+    }
+
+    private static void ValidateTur(
+        short? tur,
+        KentRehberiOptions options,
+        IDictionary<string, List<string>> errors)
+    {
+        if (!tur.HasValue ||
+            !string.Equals(
+                options.Source,
+                KentRehberiOptions.PlanAskiSource,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (tur.Value <
+                options.PlanAskiMinTur ||
+            tur.Value >
+                options.PlanAskiMaxTur)
+        {
+            AddError(
+                errors,
+                "tur",
+                $"tur must be between {options.PlanAskiMinTur} and {options.PlanAskiMaxTur} for the configured PlanASKI source.");
+        }
     }
 
     private static int NormalizeLimit(

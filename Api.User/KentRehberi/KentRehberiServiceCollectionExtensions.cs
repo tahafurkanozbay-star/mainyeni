@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 
 namespace Api.User.KentRehberi;
 
@@ -29,6 +31,26 @@ public static class KentRehberiServiceCollectionExtensions
 
         services.AddSingleton(options);
         services.AddSingleton(TimeProvider.System);
+
+        services.AddHttpClient(
+                KentRehberiPlanAskiSource.HttpClientName,
+                client =>
+                {
+                    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                        "Ankara-Kent-Rehberi-User-API/1.0");
+                })
+            .ConfigurePrimaryHttpMessageHandler(
+                static () =>
+                    new HttpClientHandler
+                    {
+                        AllowAutoRedirect = false,
+                        AutomaticDecompression =
+                            DecompressionMethods.GZip |
+                            DecompressionMethods.Deflate |
+                            DecompressionMethods.Brotli,
+                        UseCookies = false
+                    });
         services.AddSingleton<KentRehberiTelemetry>();
         services.AddSingleton<KentRehberiAdmissionController>();
         services.AddSingleton<KentRehberiBoundedResultCache>();
@@ -39,7 +61,27 @@ public static class KentRehberiServiceCollectionExtensions
         services.AddSingleton<KentRehberiTypeCatalogIntegrityGuard>();
         services.AddSingleton<KentRehberiTypeCatalogCache>();
         services.AddSingleton<KentRehberiConnectionFactory>();
-        services.AddScoped<IKentRehberiRepository, KentRehberiRepository>();
+        services.AddSingleton<KentRehberiPlanAskiSource>();
+        services.AddScoped<KentRehberiRepository>();
+        services.AddScoped<KentRehberiPlanAskiRepository>();
+        services.AddScoped<IKentRehberiRepository>(
+            provider =>
+            {
+                var configured =
+                    provider.GetRequiredService<KentRehberiOptions>();
+
+                if (string.Equals(
+                        configured.Source,
+                        KentRehberiOptions.PlanAskiSource,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return provider.GetRequiredService<
+                        KentRehberiPlanAskiRepository>();
+                }
+
+                return provider.GetRequiredService<
+                    KentRehberiRepository>();
+            });
         services.AddScoped<IKentRehberiQueryService, KentRehberiQueryService>();
         services.AddScoped<IKentRehberiTypeCatalogService, KentRehberiTypeCatalogService>();
 
