@@ -34,10 +34,14 @@ public static class KentRehberiServiceCollectionExtensions
         services.AddSingleton<KentRehberiBoundedResultCache>();
         services.AddSingleton<KentRehberiSingleFlight<KentRehberiFeatureCollection>>();
         services.AddSingleton<KentRehberiSingleFlight<KentRehberiFeature?>>();
+        services.AddSingleton<KentRehberiSingleFlight<KentRehberiTypeCatalog>>();
         services.AddSingleton<KentRehberiResultIntegrityGuard>();
+        services.AddSingleton<KentRehberiTypeCatalogIntegrityGuard>();
+        services.AddSingleton<KentRehberiTypeCatalogCache>();
         services.AddSingleton<KentRehberiConnectionFactory>();
         services.AddScoped<IKentRehberiRepository, KentRehberiRepository>();
         services.AddScoped<IKentRehberiQueryService, KentRehberiQueryService>();
+        services.AddScoped<IKentRehberiTypeCatalogService, KentRehberiTypeCatalogService>();
 
         services.AddHealthChecks()
             .AddCheck<KentRehberiHealthCheck>(
