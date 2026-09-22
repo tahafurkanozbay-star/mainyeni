@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,15 +11,6 @@ namespace Api.User.KentRehberi;
 public sealed class KentRehberiPlanAskiRepository :
     IKentRehberiRepository
 {
-    private static readonly CompareInfo TurkishCompare =
-        CultureInfo
-            .GetCultureInfo("tr-TR")
-            .CompareInfo;
-
-    private const CompareOptions TextCompareOptions =
-        CompareOptions.IgnoreCase |
-        CompareOptions.IgnoreNonSpace;
-
     private readonly KentRehberiPlanAskiSource source;
     private readonly KentRehberiOptions options;
 
@@ -374,10 +366,51 @@ public sealed class KentRehberiPlanAskiRepository :
             return false;
         }
 
-        return TurkishCompare.IndexOf(
-                value,
-                expected,
-                TextCompareOptions) >= 0;
+        var foldedValue =
+            FoldSearchText(value);
+        var foldedExpected =
+            FoldSearchText(expected);
+
+        return foldedValue.Contains(
+            foldedExpected,
+            StringComparison.Ordinal);
+    }
+
+    private static string FoldSearchText(
+        string value)
+    {
+        var normalized =
+            value
+                .Trim()
+                .ToLowerInvariant()
+                .Normalize(
+                    NormalizationForm.FormD);
+
+        var builder =
+            new StringBuilder(
+                normalized.Length);
+
+        foreach (var character in
+                 normalized)
+        {
+            if (CharUnicodeInfo
+                    .GetUnicodeCategory(
+                        character) ==
+                UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            builder.Append(
+                character == 'ı'
+                    ? 'i'
+                    : character);
+        }
+
+        return builder
+            .ToString()
+            .Normalize(
+                NormalizationForm.FormC);
     }
 
     private static bool MatchesBounds(
