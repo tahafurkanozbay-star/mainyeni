@@ -298,8 +298,8 @@ export const validateKentRehberiTypeCatalog = (
           `Kent Rehberi type catalog sample ${typeIndex}:${sampleIndex} is invalid.`,
         );
       }
-      const objectid = Number(sample.objectid);
-      if (!Number.isSafeInteger(objectid) || objectid <= 0) {
+      const objectid = sample.objectid;
+      if (typeof objectid !== 'number' || !Number.isSafeInteger(objectid) || objectid <= 0) {
         throw new TypeError(
           `Kent Rehberi type catalog sample ${typeIndex}:${sampleIndex} has an invalid objectid.`,
         );
