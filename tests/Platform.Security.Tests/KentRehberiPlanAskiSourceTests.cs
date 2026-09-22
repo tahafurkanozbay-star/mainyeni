@@ -881,6 +881,68 @@ public sealed class KentRehberiPlanAskiSourceTests
     }
 
     [Fact]
+    public async Task QueuedTypes_ReceiveFullRequestTimeoutAfterConcurrencyAdmission()
+    {
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    async (request, token) =>
+                    {
+                        var query =
+                            request.RequestUri!
+                                .Query
+                                .TrimStart('?')
+                                .Split('=')[1];
+                        var tur =
+                            short.Parse(
+                                query,
+                                System.Globalization
+                                    .CultureInfo
+                                    .InvariantCulture);
+
+                        await Task.Delay(
+                            tur == 0
+                                ? 700
+                                : 500,
+                            token);
+
+                        return KentRehberiPlanAskiTestSupport
+                            .JsonResponse(
+                                KentRehberiPlanAskiTestSupport
+                                    .ArrayPayload(
+                                        tur,
+                                        (
+                                            100 + tur,
+                                            $"Tür {tur}",
+                                            32.85,
+                                            39.92,
+                                            null,
+                                            null)));
+                    },
+                    options =>
+                    {
+                        options.PlanAskiMinTur = 0;
+                        options.PlanAskiMaxTur = 1;
+                        options.PlanAskiMaxConcurrentRequests = 1;
+                        options.PlanAskiRequestTimeoutSeconds = 1;
+                        options.QueryDeadlineMilliseconds = 5_000;
+                    });
+
+        var all =
+            await fixture.Source.GetAllTypesAsync(
+                CancellationToken.None);
+
+        Assert.Equal(2, all.Count);
+        Assert.Single(all[0]);
+        Assert.Single(all[1]);
+        Assert.Equal(
+            2,
+            fixture.Source
+                .GetSnapshot()
+                .FetchCompleted);
+    }
+
+    [Fact]
     public async Task GetAllTypes_RespectsConfiguredNetworkConcurrency()
     {
         var probe =

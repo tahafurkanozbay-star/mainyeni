@@ -381,23 +381,40 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
     {
         ValidateConfigured();
 
-        using var timeout =
+        using var admissionTimeout =
             CancellationTokenSource
                 .CreateLinkedTokenSource(
                     cancellationToken);
-        timeout.CancelAfter(
-            TimeSpan.FromSeconds(
-                options.PlanAskiRequestTimeoutSeconds));
+        admissionTimeout.CancelAfter(
+            TimeSpan.FromMilliseconds(
+                options.QueryDeadlineMilliseconds));
 
-        await concurrency.WaitAsync(
-                timeout.Token)
-            .ConfigureAwait(false);
+        try
+        {
+            await concurrency.WaitAsync(
+                    admissionTimeout.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+            when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new KentRehberiPlanAskiUnavailableException(
+                "The official Kent Rehberi upstream request could not enter the bounded concurrency window before the query deadline.");
+        }
 
         Interlocked.Increment(
             ref fetchStarted);
 
         try
         {
+            using var requestTimeout =
+                CancellationTokenSource
+                    .CreateLinkedTokenSource(
+                        cancellationToken);
+            requestTimeout.CancelAfter(
+                TimeSpan.FromSeconds(
+                    options.PlanAskiRequestTimeoutSeconds));
+
             var client =
                 httpClientFactory.CreateClient(
                     HttpClientName);
@@ -421,7 +438,7 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
                 await client.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead,
-                        timeout.Token)
+                        requestTimeout.Token)
                     .ConfigureAwait(false);
 
             if (IsRedirect(response.StatusCode))
@@ -442,7 +459,7 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
             var payload =
                 await ReadBoundedPayloadAsync(
                         response.Content,
-                        timeout.Token)
+                        requestTimeout.Token)
                     .ConfigureAwait(false);
 
             var features =
