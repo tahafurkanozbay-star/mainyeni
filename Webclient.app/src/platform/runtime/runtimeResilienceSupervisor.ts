@@ -682,6 +682,9 @@ export const createRuntimeResilienceSupervisor = (
       });
     }
 
+    if (!LANES.includes(request.lane)) {
+      throw new TypeError('runtime resilience lane is invalid');
+    }
     const key = normalizeKey(request.key, policy.maxKeyLength);
     const nowMs = observeNow(request.nowMs);
     if (active.has(key)) {
