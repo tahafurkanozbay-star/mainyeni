@@ -24,6 +24,9 @@ public interface IKentRehberiRepository
     Task<KentRehberiFeatureCollection> FindNearbyAsync(
         KentRehberiNearbyCriteria criteria,
         CancellationToken cancellationToken);
+
+    Task<KentRehberiTypeCatalog> GetTypeCatalogAsync(
+        CancellationToken cancellationToken);
 }
 
 public sealed class KentRehberiRepository : IKentRehberiRepository
@@ -258,6 +261,111 @@ public sealed class KentRehberiRepository : IKentRehberiRepository
             features,
             criteria.Limit,
             hasMore);
+    }
+
+    public async Task<KentRehberiTypeCatalog> GetTypeCatalogAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connectionFactory.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        const string sql = """
+            SELECT
+                type_counts.tur,
+                type_counts.item_count,
+                samples.objectid,
+                samples.adi,
+                samples.adres,
+                samples.durak_no
+            FROM (
+                SELECT
+                    t.tur,
+                    COUNT(*)::bigint AS item_count
+                FROM kent_rehberi.kent_rehberi_tumu_pggeom AS t
+                WHERE t.tur IS NOT NULL
+                GROUP BY t.tur
+                ORDER BY t.tur ASC
+                LIMIT @maxTypes
+            ) AS type_counts
+            LEFT JOIN LATERAL (
+                SELECT
+                    s.objectid,
+                    s.adi,
+                    s.adres,
+                    s.durak_no
+                FROM kent_rehberi.kent_rehberi_tumu_pggeom AS s
+                WHERE s.tur = type_counts.tur
+                ORDER BY s.objectid ASC
+                LIMIT @samplesPerType
+            ) AS samples ON TRUE
+            ORDER BY type_counts.tur ASC, samples.objectid ASC
+            """;
+
+        await using var command = CreateCommand(connection);
+        command.CommandText = sql;
+        command.Parameters.AddWithValue(
+            "maxTypes",
+            options.TypeCatalogMaxTypes);
+        command.Parameters.AddWithValue(
+            "samplesPerType",
+            options.TypeCatalogSamplesPerType);
+
+        var descriptors =
+            new List<KentRehberiTypeDescriptor>();
+        short? currentType = null;
+        long currentCount = 0;
+        List<KentRehberiTypeSample>? samples = null;
+
+        await using var reader = await command.ExecuteReaderAsync(
+            CommandBehavior.SequentialAccess,
+            cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var type = reader.GetInt16(0);
+            var count = reader.GetInt64(1);
+
+            if (currentType != type)
+            {
+                if (currentType.HasValue && samples is not null)
+                {
+                    descriptors.Add(
+                        new KentRehberiTypeDescriptor(
+                            currentType.Value,
+                            currentCount,
+                            samples));
+                }
+
+                currentType = type;
+                currentCount = count;
+                samples =
+                    new List<KentRehberiTypeSample>(
+                        options.TypeCatalogSamplesPerType);
+            }
+
+            if (reader.IsDBNull(2))
+            {
+                continue;
+            }
+
+            samples!.Add(
+                new KentRehberiTypeSample(
+                    reader.GetInt32(2),
+                    ReadNullableString(reader, 3),
+                    ReadNullableString(reader, 4),
+                    ReadNullableString(reader, 5)));
+        }
+
+        if (currentType.HasValue && samples is not null)
+        {
+            descriptors.Add(
+                new KentRehberiTypeDescriptor(
+                    currentType.Value,
+                    currentCount,
+                    samples));
+        }
+
+        return KentRehberiTypeCatalog.Create(descriptors);
     }
 
     private NpgsqlCommand CreateCommand(NpgsqlConnection connection)

@@ -17,19 +17,23 @@ namespace Api.User.KentRehberi;
 public sealed class KentRehberiController : ControllerBase
 {
     private readonly IKentRehberiQueryService queryService;
+    private readonly IKentRehberiTypeCatalogService typeCatalogService;
     private readonly KentRehberiOptions options;
     private readonly ILogger<KentRehberiController> logger;
 
     public KentRehberiController(
         IKentRehberiQueryService queryService,
+        IKentRehberiTypeCatalogService typeCatalogService,
         KentRehberiOptions options,
         ILogger<KentRehberiController> logger)
     {
         ArgumentNullException.ThrowIfNull(queryService);
+        ArgumentNullException.ThrowIfNull(typeCatalogService);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
         this.queryService = queryService;
+        this.typeCatalogService = typeCatalogService;
         this.options = options;
         this.logger = logger;
     }
@@ -177,6 +181,47 @@ public sealed class KentRehberiController : ControllerBase
         catch (KentRehberiValidationException ex)
         {
             return ValidationFailure(ex);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsDataAvailabilityFailure(ex))
+        {
+            return DataUnavailable(ex);
+        }
+    }
+
+    /// <summary>
+    /// Returns a bounded catalog of numeric type identifiers with small public
+    /// samples so the frontend can resolve every fast-access layer without
+    /// hard-coding database-specific type ids.
+    /// </summary>
+    [HttpGet("types")]
+    [AllowAnonymous]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(KentRehberiTypeCatalog), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> Types(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            EnsureAvailable();
+
+            var result =
+                await typeCatalogService.GetAsync(
+                    cancellationToken);
+
+            var maxAge = Math.Clamp(
+                options.TypeCatalogCacheTtlSeconds,
+                1,
+                3600);
+            Response.Headers.CacheControl =
+                $"public, max-age={maxAge}, stale-while-revalidate={Math.Min(maxAge, 300)}";
+
+            return Ok(result);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)

@@ -7,11 +7,11 @@ const groups = [
 ] as const;
 
 const items = [
-  { group: 'ABB', label: 'Kadın Danışma Merkezleri', windowId: 'women', iconType: 'kadın danışma merkezi' },
-  { group: 'ABB', label: 'Kültür ve Sanat', windowId: 'culture', iconType: 'kültür sanat' },
-  { group: 'ABB', label: 'Wi-Fi Noktaları', windowId: 'wifi', iconType: 'wifi erişim noktası' },
-  { group: 'EGO', label: 'Otobüs Durakları', windowId: 'bus', iconType: 'otobüs durağı' },
-  { group: 'EGO', label: 'Elektrikli Bisiklet İstasyonları', windowId: 'bike', iconType: 'elektrikli bisiklet istasyonu' },
+  { group: 'ABB', label: 'Kadın Danışma Merkezleri', windowId: 'women', iconType: 'kadın danışma merkezi', serviceKey: 'YeniKadinDanismaQueryUrl' },
+  { group: 'ABB', label: 'Kültür ve Sanat', windowId: 'culture', iconType: 'kültür sanat', serviceKey: 'YeniKültürSanatQueryUrl' },
+  { group: 'ABB', label: 'Wi-Fi Noktaları', windowId: 'wifi', iconType: 'wifi erişim noktası', serviceKey: 'YeniWifiNoktalariQeryUrl' },
+  { group: 'EGO', label: 'Otobüs Durakları', windowId: 'bus', iconType: 'otobüs durağı', serviceKey: 'YeniEgoOtobusDuraklariQueryUrl' },
+  { group: 'EGO', label: 'Elektrikli Bisiklet İstasyonları', windowId: 'bike', iconType: 'elektrikli bisiklet istasyonu', serviceKey: 'YeniEgoElektrikliBisikletİstasyonlariQueryUrl' },
 ] as const;
 
 describe('normalizeSidebarSearchText', () => {
@@ -41,6 +41,19 @@ describe('createSidebarCatalogRuntime', () => {
     expect(runtime.getGroup('ABB')?.label).toContain('Ankara');
     expect(runtime.getItem('bus')?.label).toBe('Otobüs Durakları');
     expect(runtime.getItem('missing')).toBeNull();
+  });
+
+  it('looks fast-access items up by stable service key', () => {
+    const runtime = createSidebarCatalogRuntime({ groups, items });
+    expect(runtime.getItemByServiceKey('YeniEgoOtobusDuraklariQueryUrl')?.windowId).toBe('bus');
+    expect(runtime.getItemByServiceKey('missing')).toBeNull();
+  });
+
+  it('trims service-key lookups without changing stored identity', () => {
+    const runtime = createSidebarCatalogRuntime({ groups, items });
+    const item = runtime.getItemByServiceKey('  YeniKadinDanismaQueryUrl  ');
+    expect(item?.serviceKey).toBe('YeniKadinDanismaQueryUrl');
+    expect(item?.windowId).toBe('women');
   });
 
   it('trims lookup ids', () => {
@@ -75,6 +88,11 @@ describe('createSidebarCatalogRuntime', () => {
   it('searches icon type', () => {
     const runtime = createSidebarCatalogRuntime({ groups, items });
     expect(runtime.search('erişim').map((item) => item.windowId)).toEqual(['wifi']);
+  });
+
+  it('searches stable service keys for diagnostics and deep links', () => {
+    const runtime = createSidebarCatalogRuntime({ groups, items });
+    expect(runtime.search('YeniEgoOtobusDuraklariQueryUrl').map((item) => item.windowId)).toEqual(['bus']);
   });
 
   it('requires all query tokens', () => {
@@ -152,6 +170,21 @@ describe('createSidebarCatalogRuntime', () => {
     })).toThrow(/duplicate sidebar window/i);
   });
 
+  it('rejects duplicate service keys when service identity is present', () => {
+    expect(() => createSidebarCatalogRuntime({
+      groups,
+      items: [
+        ...items,
+        {
+          group: 'EGO',
+          label: 'Duplicate service',
+          windowId: 'bus-copy',
+          serviceKey: 'YeniEgoOtobusDuraklariQueryUrl',
+        },
+      ],
+    })).toThrow(/duplicate sidebar service key/i);
+  });
+
   it('rejects orphan items', () => {
     expect(() => createSidebarCatalogRuntime({
       groups,
@@ -182,11 +215,18 @@ describe('createSidebarCatalogRuntime', () => {
 
   it('detaches normalized objects from mutable caller input', () => {
     const mutableGroups = [{ id: 'ABB', label: 'Original' }];
-    const mutableItems = [{ group: 'ABB', label: 'Service', windowId: 'service' }];
+    const mutableItems = [{
+      group: 'ABB',
+      label: 'Service',
+      windowId: 'service',
+      serviceKey: 'YeniServiceQueryUrl',
+    }];
     const runtime = createSidebarCatalogRuntime({ groups: mutableGroups, items: mutableItems });
     mutableGroups[0]!.label = 'Mutated';
     mutableItems[0]!.label = 'Mutated';
+    mutableItems[0]!.serviceKey = 'MutatedServiceKey';
     expect(runtime.getGroup('ABB')?.label).toBe('Original');
     expect(runtime.getItem('service')?.label).toBe('Service');
+    expect(runtime.getItem('service')?.serviceKey).toBe('YeniServiceQueryUrl');
   });
 });

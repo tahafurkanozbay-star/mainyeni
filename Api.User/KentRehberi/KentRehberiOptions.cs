@@ -29,6 +29,11 @@ public sealed class KentRehberiOptions
     public int MaxGeometryDepth { get; set; } = 32;
     public int MaxGeometryNodesPerFeature { get; set; } = 100_000;
     public int MaxGeometryNodesPerResponse { get; set; } = 500_000;
+    public int TypeCatalogMaxTypes { get; set; } = 256;
+    public int TypeCatalogSamplesPerType { get; set; } = 8;
+    public int TypeCatalogCacheTtlSeconds { get; set; } = 300;
+    public int TypeCatalogMaxTextLength { get; set; } = 240;
+    public int TypeCatalogMaxResponseBytes { get; set; } = 512 * 1024;
 
     // Cursor pagination is fail-closed because the source DDL does not declare
     // objectid UNIQUE. Enable only after the deployment duplicate preflight is clean.
@@ -146,6 +151,31 @@ public sealed class KentRehberiOptions
         if (MaxGeometryNodesPerResponse < MaxGeometryNodesPerFeature)
         {
             failures.Add("KentRehberiData:MaxGeometryNodesPerResponse cannot be lower than MaxGeometryNodesPerFeature.");
+        }
+
+        if (TypeCatalogMaxTypes is < 1 or > 1024)
+        {
+            failures.Add("KentRehberiData:TypeCatalogMaxTypes must be between 1 and 1024.");
+        }
+
+        if (TypeCatalogSamplesPerType is < 1 or > 32)
+        {
+            failures.Add("KentRehberiData:TypeCatalogSamplesPerType must be between 1 and 32.");
+        }
+
+        if (TypeCatalogCacheTtlSeconds is < 1 or > 3600)
+        {
+            failures.Add("KentRehberiData:TypeCatalogCacheTtlSeconds must be between 1 and 3600.");
+        }
+
+        if (TypeCatalogMaxTextLength is < 32 or > 1024)
+        {
+            failures.Add("KentRehberiData:TypeCatalogMaxTextLength must be between 32 and 1024.");
+        }
+
+        if (TypeCatalogMaxResponseBytes is < 32768 or > 4194304)
+        {
+            failures.Add("KentRehberiData:TypeCatalogMaxResponseBytes must be between 32 KiB and 4 MiB.");
         }
 
         return failures;

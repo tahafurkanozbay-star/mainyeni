@@ -111,6 +111,32 @@ GET /api/kent-rehberi/capabilities
 Bu endpoint DB hostu veya connection state açıklamadan public limit ve filtre
 sözleşmesini verir.
 
+### Tür kataloğu
+
+```http
+GET /api/kent-rehberi/types
+```
+
+Bu endpoint, eski hızlı erişim menüsündeki tüm belediye katmanlarının sayısal
+`tur` kimliğini hard-code etmeden çözebilmesi için sınırlı bir katalog döndürür.
+Her tür için yalnız toplam kayıt sayısı ve küçük bir public örnek kümesi
+(`objectid`, `adi`, `adres`, `durakNo`) bulunur. SQL, host, schema
+topolojisi, connection bilgisi veya hata ayrıntısı response'a eklenmez.
+
+Varsayılan güvenlik bütçeleri:
+
+- en fazla 256 tür,
+- tür başına en fazla 8 örnek,
+- örnek metin alanlarında en fazla 240 karakter,
+- katalog response'u en fazla 512 KiB,
+- server-side katalog cache TTL'i 300 saniye.
+
+Browser bu katalog üzerinden servis profillerini sınıflandırır ve güvenli bir
+`tur` sonucu oluştuğunda kategori verisini doğrudan
+`GET /api/kent-rehberi?tur=<id>&limit=2000` ile yükler. Katalog yetersizse eski
+metin probe davranışı yalnız bounded fallback olarak korunur; bu fallback
+PostGIS API dışına çıkmaz.
+
 ## Örnek response
 
 ```json
@@ -289,18 +315,52 @@ Bu katman yüklemesi **best-effort** çalışır: Kent Rehberi datasource geçic
 olarak 503 dönerse ana harita ve diğer GIS yetenekleri açılmaya devam eder;
 veritabanı hatası browser'a ayrıntılı olarak yansıtılmaz.
 
-### Yerel Vite demo akışı
+### Yerel Vite gerçek-backend akışı
 
-Vite development server yalnız yerel geliştirme için aynı
-`/api/kent-rehberi` yolunda üç adet açıkça `Yerel Demo` adı taşıyan Ankara
-noktası döndürür. Response header'ında
-`x-kent-rehberi-demo: vite-local-only` bulunur. Bu middleware production
-bundle içinde çalışan bir veri kaynağı değildir; production deployment gerçek
-User API + PostGIS datasource'u kullanır.
+Synthetic Kent Rehberi middleware kaldırılmıştır. Vite development server
+`/api` isteklerini local User API'nin HTTPS endpointine proxy eder:
 
-Bu ayrım sayesinde DB/VPN erişimi olmayan frontend geliştirme ortamında bile
-gerçek akış:
+`https://localhost:3003`
 
-`fetch('/api/kent-rehberi') -> FeatureCollection validation -> Blob -> GeoJSONLayer -> map.add()`
+Böylece development ve production aynı controller, validation, cache,
+PostGIS repository ve GeoJSON sözleşmesini kullanır. Browser PostgreSQL'e
+doğrudan bağlanmaz; DB bağlantı dizesi yalnız User API process environment /
+secret store tarafında kalır.
 
-şeklinde test edilebilir.
+Yerel doğrulama için önce `Api.User` HTTPS profilini, sonra
+`Webclient.app` Vite server'ını başlatın. Aşağıdaki akışın tamamı gerçek
+backend üzerinden çalışmalıdır:
+
+`/api/kent-rehberi/types -> tur çözümü -> /api/kent-rehberi?tur=... -> FeatureCollection validation -> GeoJSONLayer -> map.add()`
+
+
+## 40 katmanlı hızlı erişim sözleşmesi
+
+ABB, EGO, ASKİ ve iştirak gruplarındaki toplam 40 hızlı erişim kaydı artık
+`SidebarCatalog.ts` içinde explicit `serviceKey` taşır. Bu kimlik aynı anda:
+
+1. `kentRehberiFastAccessProfiles.ts` profilini,
+2. `iconRegistry.json` içindeki tekil ikon alias'ını,
+3. lazy query-window kaydını,
+4. PostGIS tabanlı fast-access runtime'ını
+
+birbirine bağlayan stable identity'dir.
+
+`createFastAccessQueryBusiness`, bu 40 key için önce Kent Rehberi runtime'ını
+seçer. Eski service runtime yalnız bu profile dahil olmayan servisler için
+compatibility fallback olarak kalır. Sonuçlar
+`source: "kent-rehberi"` ile işaretlenir ve kategori layer'ı paylaşılan
+GeoJSON renderer + ikon registry üzerinden oluşturulur.
+
+Release sırasında aşağıdaki fail-closed audit çalışır:
+
+```text
+npm run quality:kent-rehberi-all-layers
+```
+
+Audit; 40 sidebar kaydının grup dağılımını, service-key benzersizliğini,
+query-window kapsamasını, profil kapsamasını, service-key → ikon alias
+tekilliğini, katalog-first runtime sözleşmesini, same-origin/abort/payload
+sınırlarını, gerçek HTTPS local proxy kullanımını, backend `/types`
+endpointini, parameterized katalog SQL'ini ve CI/package entegrasyonunu kontrol
+eder. Webclient Quality ve Release QA bu audit başarısızsa release'i durdurur.

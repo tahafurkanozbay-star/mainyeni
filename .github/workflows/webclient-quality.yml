@@ -61,6 +61,9 @@ jobs:
       - name: GIS query governance contract
         run: npm run quality:gis-query-governance
 
+      - name: Kent Rehberi all-layer contract
+        run: npm run quality:kent-rehberi-all-layers
+
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 

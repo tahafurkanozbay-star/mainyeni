@@ -41,7 +41,7 @@
     "quality:vite": "node scripts/vite-migration-audit.mjs --self-test && node scripts/vite-migration-audit.mjs",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs",
+    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:platform-tests && npm run typecheck:gis && npm run typecheck:gis-modern-core && npm run typecheck:experience && npm run typecheck:modern-shell && npm run typecheck:data-search && npm run typecheck:performance && npm run typecheck:shared-shell && npm run typecheck:business",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",
@@ -51,7 +51,7 @@
     "typecheck:shell": "tsc --noEmit -p tsconfig.shell.json",
     "typecheck:modern-shell": "tsc --noEmit -p tsconfig.modern-shell.json",
     "typecheck:data-search": "tsc --noEmit -p tsconfig.data-search.json",
-    "verify": "npm run dependency:verify && npm run quality:module-graph && npm run quality:language-ratchet && npm run quality:platform-boundaries && npm run quality:browser-runtime && npm run quality:gis-query-governance && npm run lint:strict && npm run quality:experience && npm run quality:vite && npm run typecheck && npm run test:ci && npm run test:tooling && npm run test:build-budget && npm run build && npm run build:verify",
+    "verify": "npm run dependency:verify && npm run quality:module-graph && npm run quality:language-ratchet && npm run quality:platform-boundaries && npm run quality:browser-runtime && npm run quality:gis-query-governance && npm run quality:kent-rehberi-all-layers && npm run lint:strict && npm run quality:experience && npm run quality:vite && npm run typecheck && npm run test:ci && npm run test:tooling && npm run test:build-budget && npm run build && npm run build:verify",
     "preview": "vite preview --host 0.0.0.0",
     "quality:module-graph": "node ../tools/platform-module-graph.mjs --strict",
     "quality:language-ratchet": "node ../tools/platform-language-ratchet.mjs --strict",
@@ -61,7 +61,8 @@
     "typecheck:shared-shell": "tsc --noEmit -p tsconfig.shared-shell.json",
     "typecheck:business": "tsc --noEmit -p tsconfig.business.json",
     "typecheck:platform-tests": "tsc --noEmit -p tsconfig.platform-tests.json",
-    "quality:gis-query-governance": "node scripts/gis-query-governance-audit.mjs --strict"
+    "quality:gis-query-governance": "node scripts/gis-query-governance-audit.mjs --strict",
+    "quality:kent-rehberi-all-layers": "node scripts/kent-rehberi-all-layers-audit.mjs --strict"
   },
   "engines": {
     "node": ">=24.0.0",
