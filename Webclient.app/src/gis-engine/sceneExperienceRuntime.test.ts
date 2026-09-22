@@ -116,6 +116,67 @@ describe('sceneExperienceRuntime lifecycle', () => {
     runtime.dispose();
   });
 
+  it('pauses sampling while hidden and resets the frame clock on resume', () => {
+    const view = createView();
+    const scheduled = new Map<number, FrameRequestCallback>();
+    const visibilityListeners = new Set<(visible: boolean) => void>();
+    let nextHandle = 0;
+    let visible = true;
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      nextHandle += 1;
+      scheduled.set(nextHandle, callback);
+      return nextHandle;
+    });
+    const cancelFrame = vi.fn((handle: number) => {
+      scheduled.delete(handle);
+    });
+    const pageVisibility = {
+      isVisible: () => visible,
+      subscribe: (listener: (nextVisible: boolean) => void) => {
+        visibilityListeners.add(listener);
+        return () => visibilityListeners.delete(listener);
+      },
+    };
+
+    const runtime = createSceneExperienceRuntime(view, {
+      requestFrame,
+      cancelFrame,
+      pageVisibility,
+    });
+
+    const runNextFrame = (timestamp: number): void => {
+      const [handle, callback] = scheduled.entries().next().value as [number, FrameRequestCallback];
+      scheduled.delete(handle);
+      callback(timestamp);
+    };
+
+    runtime.setActive(true);
+    runNextFrame(100);
+    runNextFrame(116);
+    expect(runtime.getSnapshot()).toMatchObject({
+      framesObserved: 1,
+      lastFrameMs: 16,
+    });
+
+    visible = false;
+    visibilityListeners.forEach((listener) => listener(false));
+    expect(scheduled.size).toBe(0);
+
+    visible = true;
+    visibilityListeners.forEach((listener) => listener(true));
+    runNextFrame(30_000);
+    expect(runtime.getSnapshot().framesObserved).toBe(1);
+
+    runNextFrame(30_016);
+    expect(runtime.getSnapshot()).toMatchObject({
+      framesObserved: 2,
+      lastFrameMs: 16,
+    });
+
+    runtime.dispose();
+    expect(visibilityListeners.size).toBe(0);
+  });
+
   it('adapts down from quality under repeated long frames', () => {
     const view = createView();
     let clock = 0;
