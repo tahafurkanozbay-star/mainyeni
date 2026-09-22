@@ -1,10 +1,11 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard.ts';
 import {
   legacyEnvironmentGuardPlugin,
   legacyPresentationCleanupPlugin,
 } from './tooling/sourceTransforms.ts';
+import { resolveLocalApiProxyTarget } from './tooling/localApiProxy.ts';
 
 const arcgisLeafChunk = (id: string, prefix: string, chunkPrefix: string): string | undefined => {
   const marker = `/@arcgis/core/${prefix}/`;
@@ -51,7 +52,13 @@ const manualChunk = (id: string): string | undefined => {
   return undefined;
 };
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  const apiProxyTarget = resolveLocalApiProxyTarget(
+    env.VITE_API_PROXY_TARGET,
+  );
+
+  return {
   base: './',
   envPrefix: ['VITE_'],
   define: {
@@ -83,7 +90,7 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       '/api': {
-        target: 'https://localhost:3003',
+        target: apiProxyTarget,
         changeOrigin: false,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/u, ''),
@@ -91,4 +98,5 @@ export default defineConfig({
     },
   },
   preview: { host: '0.0.0.0', port: 4173 },
+  };
 });
