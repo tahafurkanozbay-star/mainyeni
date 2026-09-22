@@ -16,6 +16,9 @@ const REQUIRED_PATHS = Object.freeze({
   releaseWorkflow: '../.github/workflows/release-qa.yml',
   backendController: '../Api.User/Controllers/KentRehberiController.cs',
   backendRepository: '../Api.User/KentRehberi/KentRehberiRepository.cs',
+  backendPlanAskiSource: '../Api.User/KentRehberi/KentRehberiPlanAskiSource.cs',
+  backendPlanAskiRepository: '../Api.User/KentRehberi/KentRehberiPlanAskiRepository.cs',
+  backendRegistration: '../Api.User/KentRehberi/KentRehberiServiceCollectionExtensions.cs',
   backendOptions: '../Api.User/KentRehberi/KentRehberiOptions.cs',
   backendSettings: '../Api.User/appsettings.json',
 });
@@ -228,7 +231,7 @@ const checkProfileCoverage = (files, items, errors) => {
     errors.push(finding(
       'missing-profile',
       REQUIRED_PATHS.profiles,
-      `sidebar service key has no PostGIS fast-access profile: ${item.serviceKey}`,
+      `sidebar service key has no Kent Rehberi fast-access profile: ${item.serviceKey}`,
     ));
   }
 
@@ -334,7 +337,7 @@ const checkFrontendRuntimeContracts = (files, errors) => {
     {
       id: 'missing-fast-access-source-tag',
       pattern: /KENT_REHBERI_FAST_ACCESS_SOURCE\s*=\s*'kent-rehberi'/u,
-      message: 'PostGIS-backed results must retain a stable source tag',
+      message: 'Kent Rehberi-backed results must retain a stable source tag',
     },
   ], errors);
 
@@ -404,30 +407,114 @@ const checkBackendContracts = (files, errors) => {
     },
   ], errors);
 
+  requirePatterns(files, REQUIRED_PATHS.backendPlanAskiSource, [
+    {
+      id: 'missing-official-planaski-host',
+      pattern: /planaski\.ankara\.bel\.tr/u,
+      message: 'primary upstream source must be pinned to the official PlanASKI host',
+    },
+    {
+      id: 'missing-planaski-path',
+      pattern: /kentrehberiapi\/api\/kentrehberi/u,
+      message: 'primary upstream source must use the official Kent Rehberi path',
+    },
+    {
+      id: 'missing-planaski-tur-query',
+      pattern: /"tur="\s*\+/u,
+      message: 'PlanASKI source must issue bounded tur queries',
+    },
+    {
+      id: 'missing-planaski-byte-budget',
+      pattern: /PlanAskiMaxResponseBytesPerType/u,
+      message: 'PlanASKI source must bound response bytes per type',
+    },
+    {
+      id: 'missing-planaski-record-budget',
+      pattern: /PlanAskiMaxRecordsPerType/u,
+      message: 'PlanASKI source must bound records per type',
+    },
+    {
+      id: 'missing-planaski-concurrency',
+      pattern: /SemaphoreSlim/u,
+      message: 'PlanASKI source must bound upstream concurrency',
+    },
+    {
+      id: 'missing-planaski-cache',
+      pattern: /PlanAskiCacheTtlSeconds/u,
+      message: 'PlanASKI source must cache successful type responses',
+    },
+  ], errors);
+
+  requirePatterns(files, REQUIRED_PATHS.backendPlanAskiRepository, [
+    {
+      id: 'missing-planaski-all-types',
+      pattern: /GetAllTypesAsync/u,
+      message: 'PlanASKI repository must support the configured inclusive type catalog',
+    },
+    {
+      id: 'missing-planaski-single-type',
+      pattern: /GetTypeAsync/u,
+      message: 'PlanASKI repository must fetch a requested category without loading unrelated types',
+    },
+    {
+      id: 'missing-planaski-catalog',
+      pattern: /GetTypeCatalogAsync/u,
+      message: 'PlanASKI repository must expose the bounded type catalog',
+    },
+    {
+      id: 'missing-planaski-nearby',
+      pattern: /HaversineMeters/u,
+      message: 'PlanASKI repository must preserve nearby-query behavior',
+    },
+  ], errors);
+
+  requirePatterns(files, REQUIRED_PATHS.backendRegistration, [
+    {
+      id: 'missing-planaski-http-client',
+      pattern: /AddHttpClient/u,
+      message: 'User API must own the PlanASKI HTTP transport server-side',
+    },
+    {
+      id: 'missing-planaski-no-redirect',
+      pattern: /AllowAutoRedirect\s*=\s*false/u,
+      message: 'PlanASKI HTTP transport must not follow redirects',
+    },
+    {
+      id: 'missing-planaski-source-selection',
+      pattern: /KentRehberiOptions\.PlanAskiSource/u,
+      message: 'repository selection must honor the configured PlanASKI source',
+    },
+  ], errors);
+
   requirePatterns(files, REQUIRED_PATHS.backendRepository, [
     {
-      id: 'missing-fixed-table',
+      id: 'missing-postgis-fallback-table',
       pattern: /kent_rehberi\.kent_rehberi_tumu_pggeom/u,
-      message: 'backend repository must retain a server-owned fixed table',
+      message: 'PostGIS compatibility repository must retain its server-owned fixed table',
     },
     {
-      id: 'missing-type-limit-parameter',
-      pattern: /@maxTypes/u,
-      message: 'type catalog SQL must parameterize the maximum type count',
-    },
-    {
-      id: 'missing-sample-limit-parameter',
-      pattern: /@samplesPerType/u,
-      message: 'type catalog SQL must parameterize samples per type',
-    },
-    {
-      id: 'missing-type-catalog-query',
-      pattern: /GetTypeCatalogAsync/u,
-      message: 'repository must expose the bounded type catalog query',
+      id: 'missing-postgis-parameterization',
+      pattern: /AddWithValue/u,
+      message: 'PostGIS fallback must continue parameterizing user input',
     },
   ], errors);
 
   requirePatterns(files, REQUIRED_PATHS.backendOptions, [
+    {
+      id: 'missing-planaski-source-option',
+      pattern: /PlanAskiSource/u,
+      message: 'backend options must expose the reviewed PlanASKI source mode',
+    },
+    {
+      id: 'missing-planaski-range-options',
+      pattern: /PlanAskiMinTur[\s\S]*PlanAskiMaxTur/u,
+      message: 'backend options must bound the official PlanASKI tur range',
+    },
+    {
+      id: 'missing-planaski-url-validation',
+      pattern: /planaski\.ankara\.bel\.tr/u,
+      message: 'backend options must pin the upstream to the official PlanASKI host',
+    },
     {
       id: 'missing-type-budget-option',
       pattern: /TypeCatalogMaxTypes/u,
@@ -459,11 +546,20 @@ const checkBackendContracts = (files, errors) => {
   }
 
   const expected = {
-    TypeCatalogMaxTypes: 256,
-    TypeCatalogSamplesPerType: 8,
+    Source: 'PlanAski',
+    PlanAskiBaseUri: 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi',
+    PlanAskiMinTur: 0,
+    PlanAskiMaxTur: 42,
+    PlanAskiRequestTimeoutSeconds: 10,
+    PlanAskiCacheTtlSeconds: 300,
+    PlanAskiMaxConcurrentRequests: 6,
+    PlanAskiMaxRecordsPerType: 20000,
+    PlanAskiMaxResponseBytesPerType: 8388608,
+    TypeCatalogMaxTypes: 43,
+    TypeCatalogSamplesPerType: 16,
     TypeCatalogCacheTtlSeconds: 300,
     TypeCatalogMaxTextLength: 240,
-    TypeCatalogMaxResponseBytes: 524288,
+    TypeCatalogMaxResponseBytes: 1048576,
   };
   for (const [key, value] of Object.entries(expected)) {
     if (config[key] === value) continue;
