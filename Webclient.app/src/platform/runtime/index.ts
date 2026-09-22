@@ -28,6 +28,7 @@ export * from './runtimeDeadlineLedger';
 export * from './runtimeResilienceSupervisor';
 export * from './runtimeResilienceHealth';
 export * from './runtimeFailureBudget';
+export * from './runtimeAdmissionController';
 export * from './drainCoordinator';
 export * from './runtimeHealthPolicy';
 export * from './resourceLeaseRegistry';
