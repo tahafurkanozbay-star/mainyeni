@@ -2,10 +2,13 @@ import {
   attachKentRehberiGeoJsonLayer,
   buildKentRehberiFeaturePath,
   buildKentRehberiRequestPath,
+  buildKentRehberiTypeCatalogPath,
   createKentRehberiGeoJsonLayer,
   fetchKentRehberiFeature,
   fetchKentRehberiGeoJson,
+  fetchKentRehberiTypeCatalog,
   validateKentRehberiFeatureCollection,
+  validateKentRehberiTypeCatalog,
   type KentRehberiGeoJsonFeatureCollection,
 } from './kentRehberiGeoJsonLayer';
 
@@ -231,6 +234,113 @@ describe('kentRehberiGeoJsonLayer', () => {
       renderer,
     }));
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:https://local.test/category');
+  });
+
+
+  test('builds a same-origin type catalog path', () => {
+    expect(buildKentRehberiTypeCatalogPath('/api')).toBe('/api/kent-rehberi/types');
+    expect(() => buildKentRehberiTypeCatalogPath('https://evil.example/api'))
+      .toThrow(/same-origin/i);
+  });
+
+  test('validates bounded type catalog payloads before classification', () => {
+    const catalog = validateKentRehberiTypeCatalog({
+      types: [
+        {
+          tur: 12,
+          count: 2,
+          samples: [
+            {
+              objectid: 101,
+              adi: 'Kadın Danışma Merkezi',
+              adres: 'Çankaya',
+              durakNo: null,
+            },
+            {
+              objectid: 102,
+              adi: 'Kadın Dayanışma Merkezi',
+              adres: 'Sincan',
+              durakNo: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(catalog.types[0]).toMatchObject({ tur: 12, count: 2 });
+    expect(Object.isFrozen(catalog)).toBe(true);
+    expect(Object.isFrozen(catalog.types)).toBe(true);
+    expect(Object.isFrozen(catalog.types[0]?.samples)).toBe(true);
+
+    expect(() => validateKentRehberiTypeCatalog({
+      types: [
+        { tur: 12, count: 1, samples: [] },
+        { tur: 12, count: 1, samples: [] },
+      ],
+    })).toThrow(/duplicate tur/i);
+
+    expect(() => validateKentRehberiTypeCatalog({
+      types: [
+        {
+          tur: 12,
+          count: 1,
+          samples: [
+            { objectid: 0, adi: 'invalid', adres: null, durakNo: null },
+          ],
+        },
+      ],
+    })).toThrow(/objectid/i);
+  });
+
+  test('fetches the bounded type catalog from the real same-origin API contract', async () => {
+    const payload = {
+      types: [
+        {
+          tur: 5,
+          count: 1,
+          samples: [
+            { objectid: 7, adi: 'Park', adres: 'Ankara', durakNo: null },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(input).toBe('/api/kent-rehberi/types');
+      expect(init?.credentials).toBe('same-origin');
+      expect(new Headers(init?.headers).get('Accept')).toBe('application/json');
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const result = await fetchKentRehberiTypeCatalog({
+      apiBaseUrl: '/api',
+      timeoutMs: 1000,
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    expect(result.types[0]?.tur).toBe(5);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not reflect type catalog server bodies into errors', async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      'Host=private-db;Password=secret',
+      { status: 503, headers: { 'content-type': 'text/plain' } },
+    ));
+
+    await expect(fetchKentRehberiTypeCatalog({
+      apiBaseUrl: '/api',
+      timeoutMs: 1000,
+      fetchImpl: fetchImpl as typeof fetch,
+    })).rejects.toThrow('Kent Rehberi type catalog endpoint returned HTTP 503.');
+
+    await expect(fetchKentRehberiTypeCatalog({
+      apiBaseUrl: '/api',
+      timeoutMs: 1000,
+      fetchImpl: fetchImpl as typeof fetch,
+    })).rejects.not.toThrow(/private-db|password/i);
   });
 
 });
