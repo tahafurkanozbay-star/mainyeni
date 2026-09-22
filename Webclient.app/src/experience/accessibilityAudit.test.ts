@@ -36,10 +36,21 @@ describe("accessibilityAudit", () => {
         expect(getAccessibleName(root.querySelector("#target") as HTMLElement)).toBe("Katmanlar");
     });
 
+    test("uses associated labels for select and textarea controls", () => {
+        const layerLabel = element("label", { for: "layer" }, "Katman");
+        const layerSelect = element("select", { id: "layer" });
+        layerSelect.append(element("option", {}, "A"));
+        const noteLabel = element("label", { for: "note" }, "Not");
+        const noteArea = element("textarea", { id: "note" });
+        const root = rootWith(layerLabel, layerSelect, noteLabel, noteArea);
+        expect(getAccessibleName(layerSelect)).toBe("Katman");
+        expect(getAccessibleName(noteArea)).toBe("Not");
+        expect(auditAccessibility(root).counts["form-control-without-name"]).toBe(0);
+    });
+
     test("reports unnamed interactive controls", () => {
         const root = fixture('<button type="button"><span aria-hidden="true"></span></button><a href="#"></a>');
-        const result = auditAccessibility(root);
-        expect(result.counts["missing-accessible-name"]).toBe(2);
+        expect(auditAccessibility(root).counts["missing-accessible-name"]).toBe(2);
     });
 
     test("reports positive tab order and aria-hidden interactive controls", () => {
@@ -49,6 +60,22 @@ describe("accessibilityAudit", () => {
         const result = auditAccessibility(rootWith(button));
         expect(result.counts["invalid-positive-tabindex"]).toBe(1);
         expect(result.counts["interactive-aria-hidden"]).toBe(1);
+        expect(result.counts["focusable-in-hidden-tree"]).toBe(1);
+    });
+
+    test("finds focusable descendants hidden by an ancestor", () => {
+        const root = fixture('<section aria-hidden="true"><a href="/map">Harita</a><button type="button">Aç</button></section>');
+        expect(auditAccessibility(root).counts["focusable-in-hidden-tree"]).toBe(2);
+    });
+
+    test("finds focusable descendants of inert surfaces", () => {
+        const root = fixture('<section inert><button type="button">Kaydet</button><input aria-label="Ad" /></section>');
+        expect(auditAccessibility(root).counts["focusable-in-hidden-tree"]).toBe(2);
+    });
+
+    test("does not report disabled controls as focusable hidden content", () => {
+        const root = fixture('<section aria-hidden="true"><button type="button" disabled>Kapalı</button><input disabled aria-label="Ad" /></section>');
+        expect(auditAccessibility(root).counts["focusable-in-hidden-tree"]).toBe(0);
     });
 
     test("reports unnamed dialogs", () => {
@@ -73,13 +100,75 @@ describe("accessibilityAudit", () => {
         const select = element("select");
         select.append(element("option", {}, "A"));
         const textarea = element("textarea");
-        const result = auditAccessibility(rootWith(select, textarea));
-        expect(result.counts["form-control-without-name"]).toBe(2);
+        expect(auditAccessibility(rootWith(select, textarea)).counts["form-control-without-name"]).toBe(2);
     });
 
     test("detects duplicate ids after the first occurrence", () => {
         const root = fixture('<div id="same"></div><span id="same"></span><p id="same"></p>');
         expect(auditAccessibility(root).counts["duplicate-id"]).toBe(2);
+    });
+
+    test("reports every unresolved ARIA id reference", () => {
+        const root = fixture('<button type="button" aria-label="Katman" aria-controls="missing-panel" aria-describedby="missing-help">Aç</button>');
+        expect(auditAccessibility(root).counts["broken-aria-reference"]).toBe(2);
+    });
+
+    test("accepts resolved multi-id labels and descriptions", () => {
+        const root = fixture('<span id="a">Harita</span><span id="b">Araçları</span><p id="help">Yardım</p><button type="button" aria-labelledby="a b" aria-describedby="help">x</button>');
+        expect(getAccessibleName(root.querySelector("button") as HTMLElement)).toBe("Harita Araçları");
+        expect(auditAccessibility(root).counts["broken-aria-reference"]).toBe(0);
+    });
+
+    test("reports heading level jumps", () => {
+        const root = fixture('<h1>Kent Rehberi</h1><h3>Katmanlar</h3><h4>Alt grup</h4>');
+        expect(auditAccessibility(root).counts["invalid-heading-order"]).toBe(1);
+    });
+
+    test("accepts descending and sequential heading levels", () => {
+        const root = fixture('<h1>A</h1><h2>B</h2><h3>C</h3><h2>D</h2>');
+        expect(auditAccessibility(root).counts["invalid-heading-order"]).toBe(0);
+    });
+
+    test("reports empty headings", () => {
+        const root = fixture('<h1>Başlık</h1><h2>   </h2>');
+        expect(auditAccessibility(root).counts["empty-heading"]).toBe(1);
+    });
+
+    test.each(["polite", "assertive", "off"])("accepts valid aria-live value %s", value => {
+        expect(auditAccessibility(fixture(`<div aria-live="${value}">Durum</div>`)).counts["invalid-live-region"]).toBe(0);
+    });
+
+    test("reports invalid live region politeness", () => {
+        expect(auditAccessibility(fixture('<div aria-live="urgent">Durum</div>')).counts["invalid-live-region"]).toBe(1);
+    });
+
+    test.each(["page", "step", "location", "date", "time", "true", "false"])("accepts aria-current %s", value => {
+        expect(auditAccessibility(fixture(`<a href="#" aria-current="${value}">Konum</a>`)).counts["invalid-current-value"]).toBe(0);
+    });
+
+    test("reports invalid aria-current values", () => {
+        expect(auditAccessibility(fixture('<a href="#" aria-current="active">Konum</a>')).counts["invalid-current-value"]).toBe(1);
+    });
+
+    test("requires expanded controls to expose a valid boolean and target", () => {
+        const root = fixture('<button type="button" aria-expanded="yes">A</button><button type="button" aria-expanded="true">B</button>');
+        expect(auditAccessibility(root).counts["invalid-expanded-control"]).toBe(2);
+    });
+
+    test("accepts expanded controls with a resolved target", () => {
+        const root = fixture('<button type="button" aria-expanded="false" aria-controls="panel">Katmanlar</button><section id="panel"></section>');
+        expect(auditAccessibility(root).counts["invalid-expanded-control"]).toBe(0);
+        expect(auditAccessibility(root).counts["broken-aria-reference"]).toBe(0);
+    });
+
+    test("reports non-boolean selected state", () => {
+        const root = fixture('<div role="option" aria-label="A" aria-selected="yes"></div>');
+        expect(auditAccessibility(root).counts["invalid-selected-state"]).toBe(1);
+    });
+
+    test.each(["true", "false"])("accepts aria-selected %s", value => {
+        const root = fixture(`<div role="option" aria-label="A" aria-selected="${value}"></div>`);
+        expect(auditAccessibility(root).counts["invalid-selected-state"]).toBe(0);
     });
 
     test("formats a concise Turkish audit summary", () => {
