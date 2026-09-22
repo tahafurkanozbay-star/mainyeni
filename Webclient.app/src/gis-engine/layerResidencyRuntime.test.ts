@@ -13,13 +13,22 @@ const layer = (
   id: string,
   priority: LayerResidencyDescriptor['priority'] = 'normal',
   overrides: Partial<LayerResidencyDescriptor> = {},
-): LayerResidencyDescriptor => ({
-  id,
-  mode: '2d',
-  priority,
-  cost: { cpuBytes: 40, gpuBytes: 40, featureCount: 40, drawCalls: 2 },
-  ...overrides,
-});
+): LayerResidencyDescriptor => {
+  const {
+    id: _ignoredId,
+    mode = '2d',
+    priority: overridePriority = priority,
+    cost = { cpuBytes: 40, gpuBytes: 40, featureCount: 40, drawCalls: 2 },
+    ...optionalOverrides
+  } = overrides;
+  return {
+    ...optionalOverrides,
+    id,
+    mode,
+    priority: overridePriority,
+    cost,
+  };
+};
 
 describe('LayerResidencyRuntime', () => {
   it('admits layers while every resource budget remains bounded', () => {
