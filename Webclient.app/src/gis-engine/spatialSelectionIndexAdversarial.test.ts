@@ -121,7 +121,7 @@ describe('SpatialSelectionIndexRuntime adversarial regression', () => {
     }
   });
 
-  it('keeps query results bounded when a broad extent covers every admitted record', () => {
+  it('keeps query results bounded when a broad valid extent covers every admitted record', () => {
     const runtime = new SpatialSelectionIndexRuntime<Payload>({
       maxEntries: 250,
       maxBytes: 128_000,
@@ -130,7 +130,7 @@ describe('SpatialSelectionIndexRuntime adversarial regression', () => {
       maxLayers: 4,
       maxQueryResults: 17,
       maxQueryCandidates: 31,
-      gridCellSize: 8,
+      gridCellSize: 256,
       maxGridCells: 20_000,
       maxGridReferences: 50_000,
       maxCellsPerRecord: 32,
@@ -141,8 +141,11 @@ describe('SpatialSelectionIndexRuntime adversarial regression', () => {
       runtime.upsert(record(ordinal, 'dense-layer', 'normal', 64));
     }
 
+    // All records lie inside x=0..599/y=0..400.  With 256-unit cells this
+    // extent spans only 12 cells, so the test exercises candidate/result
+    // truncation without violating the shared grid's allocation-span guard.
     const result = runtime.query({
-      bounds: { xmin: -1, ymin: -1, xmax: 10_000, ymax: 10_000 },
+      bounds: { xmin: -1, ymin: -1, xmax: 600, ymax: 400 },
       limit: 1_000,
     });
 
