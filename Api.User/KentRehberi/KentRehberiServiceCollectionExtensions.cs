@@ -36,7 +36,7 @@ public static class KentRehberiServiceCollectionExtensions
                 KentRehberiPlanAskiSource.HttpClientName,
                 client =>
                 {
-                    client.Timeout = Timeout.InfiniteTimeSpan;
+                    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
                     client.DefaultRequestHeaders.UserAgent.ParseAdd(
                         "Ankara-Kent-Rehberi-User-API/1.0");
                 })
