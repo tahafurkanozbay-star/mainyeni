@@ -310,7 +310,7 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
 
         await FetchTypeCoreAsync(
                 tur,
-                requestTimeout.Token,
+                timeout.Token,
                 cacheResult: false)
             .ConfigureAwait(false);
     }
