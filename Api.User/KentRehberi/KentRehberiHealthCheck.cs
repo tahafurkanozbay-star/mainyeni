@@ -120,14 +120,13 @@ public sealed class KentRehberiHealthCheck : IHealthCheck
                 "Kent Rehberi readiness probe timed out.",
                 data: CreateSafeDiagnosticData(stopwatch.ElapsedMilliseconds));
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             stopwatch.Stop();
 
             return HealthCheckResult.Unhealthy(
                 "Kent Rehberi readiness probe failed.",
-                exception,
-                CreateSafeDiagnosticData(stopwatch.ElapsedMilliseconds));
+                data: CreateSafeDiagnosticData(stopwatch.ElapsedMilliseconds));
         }
     }
 
