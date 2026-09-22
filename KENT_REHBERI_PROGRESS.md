@@ -821,3 +821,20 @@
 - MERGE DURUMU: DRAFT / NOT MERGED at this checkpoint. Bu progress append final head'i değiştirecek; merge öncesi progress-bearing exact head için tüm gerekli workflow'lar yeniden completed+success olmalı, `main` hâlâ exact base olmalı, mergeable=true kalmalı ve final security/performance/regression review yapılmalı.
 - SONRAKİ GÖREV NOTU: exact-head CI sonuçlarını izle; gerçek failure varsa aynı branch/PR üzerinde düzelt ve ikinci doğrulama çalıştır. Tüm checkler yeşil + current-main refresh temiz ise PR #284'ü ready yap, expected-head squash merge et, `merged=true` + merge SHA + immediate post-merge `main` SHA doğrula. Merge edilmiş branch sonraki turda tekrar kullanılmamalı.
 
+## GIS Data / Official PlanASKI upstream cutover — 2026-09-22
+- TUR / GÖREV: GIS Data/Services + Final QA; Kent Rehberi primary data source is being moved from direct PostGIS reads to the official server-side PlanASKI Kent Rehberi API while preserving the same-origin browser contract and PostGIS as an explicit compatibility fallback.
+- BASE MAIN: `3d45b388014e4778cd6c3bab286a8273bc25ef7e`.
+- BRANCH: `agent/kent-rehberi-planaski-upstream-20260922-3d45b38`.
+- HEAD before this progress append: `a049a5907de81ec70109cc4bec98a47da322d033`.
+- KAYNAK: primary upstream is pinned to `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi`; configured inclusive type range is `tur=0..42`. Browser never calls the upstream directly.
+- BACKEND: new bounded `KentRehberiPlanAskiSource` owns HTTPS fetch, exact-host/path validation, redirect rejection, timeout, byte/record budgets, 6-request concurrency gate, per-type TTL cache and same-type in-flight dedupe. Parser accepts flat arrays, common data/results/items/records/features/result envelopes and GeoJSON FeatureCollection while normalizing common field-name variants.
+- REPOSITORY: new `KentRehberiPlanAskiRepository` implements existing search, bbox, nearby, object lookup and type-catalog contracts over normalized upstream records. A request containing `tur` loads only that category; untyped catalog/search paths fan out across the configured 0..42 range through bounded source concurrency.
+- CONFIG: tracked `KentRehberiData:Source` is now `PlanAski`; official URI, min/max type, upstream timeout/cache/concurrency/record/byte budgets are validated fail-closed. `Postgis` remains a selectable compatibility source and keeps the fixed-table parameterized repository.
+- READINESS: `kent-rehberi-data` probes the configured source. PlanASKI mode performs a bounded official-upstream probe and does not expose upstream/database exception detail in health output.
+- FRONTEND: public browser contract remains `/api/kent-rehberi` + `/api/kent-rehberi/types`; existing 40-layer profile/icon/window routing stays unchanged. Type catalog now represents 43 configured values (0..42), including empty categories.
+- TEST / GOVERNANCE: deterministic HTTP handler test harness plus PlanASKI protocol/cache/concurrency/tur-range/repository/search/bbox/nearby/catalog/security/readiness regressions added. The existing all-layer release audit now verifies official host/path pinning, no redirects, source selection, bounded upstream budgets and retained PostGIS fallback.
+- DOCS: `docs/kent-rehberi-postgis-api.md` rewritten as the PlanASKI-primary/same-origin runbook, retaining PostGIS fallback instructions.
+- DIFF before this progress append: 5,485 additions / 348 deletions / 18 files, so the repository's >=4,000 meaningful-additions target is satisfied without padding.
+- NETWORK NOTU: external live endpoint could not be fetched from the current assistant web runtime (tool returned DisabledError), so response-shape assumptions are deliberately covered by a strict multi-envelope parser and deterministic tests; deployment smoke test against real PlanASKI remains mandatory before claiming live-network validation.
+- MERGE DURUMU: NOT MERGED. Next steps are PR creation, exact-head GitHub Actions, repair of any real compile/test/audit failures, second verification, current-main refresh, mergeability/security/performance review, then expected-head squash merge only if all required checks are green.
+
