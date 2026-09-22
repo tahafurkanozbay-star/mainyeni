@@ -35,6 +35,11 @@ internal static class KentRehberiRuntimeTestData
             MaxGeometryDepth = 32,
             MaxGeometryNodesPerFeature = 20_000,
             MaxGeometryNodesPerResponse = 100_000,
+            TypeCatalogMaxTypes = 64,
+            TypeCatalogSamplesPerType = 4,
+            TypeCatalogCacheTtlSeconds = 60,
+            TypeCatalogMaxTextLength = 240,
+            TypeCatalogMaxResponseBytes = 256 * 1024,
             ObjectIdCursorEnabled = true
         };
 
@@ -116,6 +121,43 @@ internal static class KentRehberiRuntimeTestData
                 distanceMeters));
     }
 
+    public static KentRehberiTypeCatalog TypeCatalog(
+        short firstType = 7,
+        int typeCount = 2,
+        int samplesPerType = 2)
+    {
+        var types = new List<KentRehberiTypeDescriptor>();
+
+        for (var typeIndex = 0; typeIndex < typeCount; typeIndex++)
+        {
+            var type = (short)(firstType + typeIndex);
+            var samples = new List<KentRehberiTypeSample>();
+
+            for (var sampleIndex = 0; sampleIndex < samplesPerType; sampleIndex++)
+            {
+                var objectId =
+                    1 + typeIndex * 100 + sampleIndex;
+
+                samples.Add(
+                    new KentRehberiTypeSample(
+                        objectId,
+                        $"Tür {type} Örnek {sampleIndex + 1}",
+                        "Ankara",
+                        sampleIndex % 2 == 0
+                            ? objectId.ToString()
+                            : null));
+            }
+
+            types.Add(
+                new KentRehberiTypeDescriptor(
+                    type,
+                    samplesPerType + 10,
+                    samples));
+        }
+
+        return KentRehberiTypeCatalog.Create(types);
+    }
+
     public static KentRehberiFeatureCollection Collection(
         int count = 1,
         int limit = 50,
@@ -170,6 +212,7 @@ internal sealed class FakeKentRehberiRepository :
     public int SearchCalls { get; private set; }
     public int NearbyCalls { get; private set; }
     public int ObjectCalls { get; private set; }
+    public int TypeCatalogCalls { get; private set; }
 
     public Func<KentRehberiSearchCriteria,
         CancellationToken,
@@ -185,6 +228,10 @@ internal sealed class FakeKentRehberiRepository :
         CancellationToken,
         Task<KentRehberiFeature?>>?
         ObjectHandler { get; set; }
+
+    public Func<CancellationToken,
+        Task<KentRehberiTypeCatalog>>?
+        TypeCatalogHandler { get; set; }
 
     public Task<KentRehberiFeatureCollection> SearchAsync(
         KentRehberiSearchCriteria criteria,
@@ -238,5 +285,19 @@ internal sealed class FakeKentRehberiRepository :
             : NearbyHandler(
                 criteria,
                 cancellationToken);
+    }
+
+    public Task<KentRehberiTypeCatalog> GetTypeCatalogAsync(
+        CancellationToken cancellationToken)
+    {
+        lock (sync)
+        {
+            TypeCatalogCalls++;
+        }
+
+        return TypeCatalogHandler is null
+            ? Task.FromResult(
+                KentRehberiRuntimeTestData.TypeCatalog())
+            : TypeCatalogHandler(cancellationToken);
     }
 }
