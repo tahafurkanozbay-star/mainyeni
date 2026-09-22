@@ -122,122 +122,59 @@ export const DEFAULT_RENDER_BUDGET_POLICY: RenderBudgetPolicy = Object.freeze({
   idleTtlMs: 90_000,
 });
 
-const PRIORITY_WEIGHT: Readonly<Record<RenderPriority, number>> = Object.freeze({
-  background: 0,
-  normal: 1,
-  important: 2,
-  critical: 3,
-});
+const PRIORITY_WEIGHT: Readonly<Record<RenderPriority, number>> = Object.freeze({ background: 0, normal: 1, important: 2, critical: 3 });
+const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const positiveInteger = (value: unknown): value is number => finite(value) && Number.isInteger(value) && value > 0;
+const nonNegativeInteger = (value: unknown): value is number => finite(value) && Number.isInteger(value) && value >= 0;
 
-function finite(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-  return finite(value) && Number.isInteger(value) && value >= 0;
-}
-
-function positiveInteger(value: unknown): value is number {
-  return finite(value) && Number.isInteger(value) && value > 0;
-}
-
-function validPolicy(policy: RenderBudgetPolicy): boolean {
-  return positiveInteger(policy.maxResources)
-    && positiveInteger(policy.maxCpuBytes)
-    && positiveInteger(policy.maxGpuBytes)
-    && positiveInteger(policy.maxDrawCalls2d)
-    && positiveInteger(policy.maxDrawCalls3d)
-    && positiveInteger(policy.maxVisibleFeatures2d)
-    && positiveInteger(policy.maxVisibleFeatures3d)
-    && positiveInteger(policy.maxPendingAdmissions)
-    && positiveInteger(policy.maxObservers)
-    && positiveInteger(policy.maxEvents)
+function requirePolicy(policy: RenderBudgetPolicy): void {
+  const valid = positiveInteger(policy.maxResources)
+    && positiveInteger(policy.maxCpuBytes) && positiveInteger(policy.maxGpuBytes)
+    && positiveInteger(policy.maxDrawCalls2d) && positiveInteger(policy.maxDrawCalls3d)
+    && positiveInteger(policy.maxVisibleFeatures2d) && positiveInteger(policy.maxVisibleFeatures3d)
+    && positiveInteger(policy.maxPendingAdmissions) && positiveInteger(policy.maxObservers) && positiveInteger(policy.maxEvents)
     && finite(policy.targetFrameMs) && policy.targetFrameMs > 0
     && finite(policy.warmFrameMs) && policy.warmFrameMs >= policy.targetFrameMs
     && finite(policy.hotFrameMs) && policy.hotFrameMs >= policy.warmFrameMs
     && finite(policy.criticalFrameMs) && policy.criticalFrameMs >= policy.hotFrameMs
-    && positiveInteger(policy.pressureWindow)
-    && positiveInteger(policy.recoverySamples)
+    && positiveInteger(policy.pressureWindow) && positiveInteger(policy.recoverySamples)
     && finite(policy.idleTtlMs) && policy.idleTtlMs >= 0;
-}
-
-function requirePolicy(policy: RenderBudgetPolicy): void {
-  if (!validPolicy(policy)) throw new Error("Invalid GIS render-budget policy");
-}
-
-function validId(value: string): boolean {
-  return value.length > 0 && value.length <= 160 && value.trim() === value;
+  if (!valid) throw new Error("Invalid GIS render-budget policy");
 }
 
 function normalizeRequest(request: RenderResourceRequest): Omit<RenderResourceSnapshot, "admittedAt" | "lastUsedAt" | "sequence"> | null {
-  if (!validId(request.id)) return null;
+  if (!request.id || request.id.length > 160 || request.id.trim() !== request.id) return null;
   if (!nonNegativeInteger(request.cpuBytes) || !nonNegativeInteger(request.gpuBytes)) return null;
   if (!nonNegativeInteger(request.drawCalls) || !nonNegativeInteger(request.visibleFeatures)) return null;
   const priority = request.priority ?? "normal";
   if (!(priority in PRIORITY_WEIGHT)) return null;
-  return {
-    id: request.id,
-    kind: request.kind,
-    mode: request.mode,
-    priority,
-    cpuBytes: request.cpuBytes,
-    gpuBytes: request.gpuBytes,
-    drawCalls: request.drawCalls,
-    visibleFeatures: request.visibleFeatures,
-    pinned: request.pinned === true,
-  };
+  return { id: request.id, kind: request.kind, mode: request.mode, priority, cpuBytes: request.cpuBytes, gpuBytes: request.gpuBytes, drawCalls: request.drawCalls, visibleFeatures: request.visibleFeatures, pinned: request.pinned === true };
 }
 
-function emptyUsage(): RenderBudgetUsage {
-  return {
-    resources: 0,
-    cpuBytes: 0,
-    gpuBytes: 0,
-    drawCalls2d: 0,
-    drawCalls3d: 0,
-    visibleFeatures2d: 0,
-    visibleFeatures3d: 0,
-  };
-}
+const emptyUsage = (): RenderBudgetUsage => ({ resources: 0, cpuBytes: 0, gpuBytes: 0, drawCalls2d: 0, drawCalls3d: 0, visibleFeatures2d: 0, visibleFeatures3d: 0 });
 
-function addResource(usage: RenderBudgetUsage, resource: RenderResourceSnapshot): RenderBudgetUsage {
-  const contributes2d = resource.mode === "2d" || resource.mode === "shared";
-  const contributes3d = resource.mode === "3d" || resource.mode === "shared";
+function adjustUsage(usage: RenderBudgetUsage, resource: RenderResourceSnapshot, direction: 1 | -1): RenderBudgetUsage {
+  const in2d = resource.mode === "2d" || resource.mode === "shared";
+  const in3d = resource.mode === "3d" || resource.mode === "shared";
   return {
-    resources: usage.resources + 1,
-    cpuBytes: usage.cpuBytes + resource.cpuBytes,
-    gpuBytes: usage.gpuBytes + resource.gpuBytes,
-    drawCalls2d: usage.drawCalls2d + (contributes2d ? resource.drawCalls : 0),
-    drawCalls3d: usage.drawCalls3d + (contributes3d ? resource.drawCalls : 0),
-    visibleFeatures2d: usage.visibleFeatures2d + (contributes2d ? resource.visibleFeatures : 0),
-    visibleFeatures3d: usage.visibleFeatures3d + (contributes3d ? resource.visibleFeatures : 0),
-  };
-}
-
-function removeResource(usage: RenderBudgetUsage, resource: RenderResourceSnapshot): RenderBudgetUsage {
-  const contributes2d = resource.mode === "2d" || resource.mode === "shared";
-  const contributes3d = resource.mode === "3d" || resource.mode === "shared";
-  return {
-    resources: Math.max(0, usage.resources - 1),
-    cpuBytes: Math.max(0, usage.cpuBytes - resource.cpuBytes),
-    gpuBytes: Math.max(0, usage.gpuBytes - resource.gpuBytes),
-    drawCalls2d: Math.max(0, usage.drawCalls2d - (contributes2d ? resource.drawCalls : 0)),
-    drawCalls3d: Math.max(0, usage.drawCalls3d - (contributes3d ? resource.drawCalls : 0)),
-    visibleFeatures2d: Math.max(0, usage.visibleFeatures2d - (contributes2d ? resource.visibleFeatures : 0)),
-    visibleFeatures3d: Math.max(0, usage.visibleFeatures3d - (contributes3d ? resource.visibleFeatures : 0)),
+    resources: Math.max(0, usage.resources + direction),
+    cpuBytes: Math.max(0, usage.cpuBytes + direction * resource.cpuBytes),
+    gpuBytes: Math.max(0, usage.gpuBytes + direction * resource.gpuBytes),
+    drawCalls2d: Math.max(0, usage.drawCalls2d + direction * (in2d ? resource.drawCalls : 0)),
+    drawCalls3d: Math.max(0, usage.drawCalls3d + direction * (in3d ? resource.drawCalls : 0)),
+    visibleFeatures2d: Math.max(0, usage.visibleFeatures2d + direction * (in2d ? resource.visibleFeatures : 0)),
+    visibleFeatures3d: Math.max(0, usage.visibleFeatures3d + direction * (in3d ? resource.visibleFeatures : 0)),
   };
 }
 
 function withinBudget(usage: RenderBudgetUsage, policy: RenderBudgetPolicy): boolean {
-  return usage.resources <= policy.maxResources
-    && usage.cpuBytes <= policy.maxCpuBytes
-    && usage.gpuBytes <= policy.maxGpuBytes
-    && usage.drawCalls2d <= policy.maxDrawCalls2d
-    && usage.drawCalls3d <= policy.maxDrawCalls3d
-    && usage.visibleFeatures2d <= policy.maxVisibleFeatures2d
-    && usage.visibleFeatures3d <= policy.maxVisibleFeatures3d;
+  return usage.resources <= policy.maxResources && usage.cpuBytes <= policy.maxCpuBytes && usage.gpuBytes <= policy.maxGpuBytes
+    && usage.drawCalls2d <= policy.maxDrawCalls2d && usage.drawCalls3d <= policy.maxDrawCalls3d
+    && usage.visibleFeatures2d <= policy.maxVisibleFeatures2d && usage.visibleFeatures3d <= policy.maxVisibleFeatures3d;
 }
 
+const pressureWeight = (value: RenderPressure): number => ({ normal: 0, warm: 1, hot: 2, critical: 3 })[value];
+const qualityScale = (value: RenderPressure): number => ({ normal: 1, warm: 0.82, hot: 0.65, critical: 0.5 })[value];
 function pressureForFrame(frameMs: number, policy: RenderBudgetPolicy): RenderPressure {
   if (frameMs >= policy.criticalFrameMs) return "critical";
   if (frameMs >= policy.hotFrameMs) return "hot";
@@ -245,28 +182,7 @@ function pressureForFrame(frameMs: number, policy: RenderBudgetPolicy): RenderPr
   return "normal";
 }
 
-function pressureWeight(pressure: RenderPressure): number {
-  switch (pressure) {
-    case "critical": return 3;
-    case "hot": return 2;
-    case "warm": return 1;
-    default: return 0;
-  }
-}
-
-function qualityScale(pressure: RenderPressure): number {
-  switch (pressure) {
-    case "critical": return 0.5;
-    case "hot": return 0.65;
-    case "warm": return 0.82;
-    default: return 1;
-  }
-}
-
-export function createRenderBudgetRuntime(
-  policy: RenderBudgetPolicy = DEFAULT_RENDER_BUDGET_POLICY,
-  initialMode: RenderMode = "2d",
-): RenderBudgetRuntime {
+export function createRenderBudgetRuntime(policy: RenderBudgetPolicy = DEFAULT_RENDER_BUDGET_POLICY, initialMode: RenderMode = "2d"): RenderBudgetRuntime {
   requirePolicy(policy);
   let mode = initialMode;
   let pressure: RenderPressure = "normal";
@@ -279,57 +195,40 @@ export function createRenderBudgetRuntime(
   const observers = new Set<(snapshot: RenderBudgetSnapshot, event: RenderBudgetEvent) => void>();
   const eventLog: RenderBudgetEvent[] = [];
   const frameWindow: number[] = [];
-  const counters = {
-    admissions: 0,
-    releases: 0,
-    evictions: 0,
-    rejections: 0,
-    pressureTransitions: 0,
-    modeTransitions: 0,
-    observerErrors: 0,
-    frameSamples: 0,
-  };
+  const counters = { admissions: 0, releases: 0, evictions: 0, rejections: 0, pressureTransitions: 0, modeTransitions: 0, observerErrors: 0, frameSamples: 0 };
 
   const currentSnapshot = (): RenderBudgetSnapshot => ({
-    mode,
-    pressure,
-    qualityScale: qualityScale(pressure),
-    usage: { ...usage },
-    resources: [...resources.values()].sort((a, b) => a.sequence - b.sequence),
-    pendingAdmissions,
-    disposed,
+    mode, pressure, qualityScale: qualityScale(pressure), usage: { ...usage },
+    resources: Array.from(resources.values()).sort((a, b) => a.sequence - b.sequence), pendingAdmissions, disposed,
   });
 
-  const emit = (event: RenderBudgetEvent): void => {
+  const notify = (event: RenderBudgetEvent): void => {
     eventLog.push(event);
     if (eventLog.length > policy.maxEvents) eventLog.splice(0, eventLog.length - policy.maxEvents);
     const snapshot = currentSnapshot();
-    for (const observer of [...observers]) {
+    for (const observer of Array.from(observers)) {
       try { observer(snapshot, event); } catch { counters.observerErrors += 1; }
     }
   };
 
-  const evictable = (incoming: Omit<RenderResourceSnapshot, "admittedAt" | "lastUsedAt" | "sequence">): RenderResourceSnapshot[] => {
+  const remove = (resource: RenderResourceSnapshot, type: "released" | "evicted", now: number): void => {
+    if (!resources.delete(resource.id)) return;
+    usage = adjustUsage(usage, resource, -1);
+    if (type === "released") counters.releases += 1; else counters.evictions += 1;
+    notify({ type, at: now, resourceId: resource.id });
+  };
+
+  const evictionCandidates = (incoming: Omit<RenderResourceSnapshot, "admittedAt" | "lastUsedAt" | "sequence">): RenderResourceSnapshot[] => {
     const incomingWeight = PRIORITY_WEIGHT[incoming.priority];
-    return [...resources.values()]
+    return Array.from(resources.values())
       .filter((resource) => !resource.pinned && PRIORITY_WEIGHT[resource.priority] <= incomingWeight)
       .sort((a, b) => {
         const priorityDelta = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
-        if (priorityDelta !== 0) return priorityDelta;
-        const activePenaltyA = a.mode === mode || a.mode === "shared" ? 1 : 0;
-        const activePenaltyB = b.mode === mode || b.mode === "shared" ? 1 : 0;
-        if (activePenaltyA !== activePenaltyB) return activePenaltyA - activePenaltyB;
-        if (a.lastUsedAt !== b.lastUsedAt) return a.lastUsedAt - b.lastUsedAt;
-        return a.sequence - b.sequence;
+        if (priorityDelta) return priorityDelta;
+        const activeDelta = Number(a.mode === mode || a.mode === "shared") - Number(b.mode === mode || b.mode === "shared");
+        if (activeDelta) return activeDelta;
+        return a.lastUsedAt - b.lastUsedAt || a.sequence - b.sequence;
       });
-  };
-
-  const remove = (resource: RenderResourceSnapshot, type: "released" | "evicted", now: number): void => {
-    if (!resources.delete(resource.id)) return;
-    usage = removeResource(usage, resource);
-    if (type === "released") counters.releases += 1;
-    else counters.evictions += 1;
-    emit({ type, at: now, resourceId: resource.id });
   };
 
   const admit = (request: RenderResourceRequest, now = Date.now()): RenderAdmissionResult => {
@@ -342,29 +241,27 @@ export function createRenderBudgetRuntime(
     pendingAdmissions += 1;
     try {
       const candidate: RenderResourceSnapshot = { ...normalized, admittedAt: now, lastUsedAt: now, sequence: ++sequence };
-      let projected = addResource(usage, candidate);
+      let projected = adjustUsage(usage, candidate, 1);
       const victims: RenderResourceSnapshot[] = [];
       if (!withinBudget(projected, policy)) {
-        for (const victim of evictable(normalized)) {
+        for (const victim of evictionCandidates(normalized)) {
           victims.push(victim);
-          projected = removeResource(projected, victim);
+          projected = adjustUsage(projected, victim, -1);
           if (withinBudget(projected, policy)) break;
         }
       }
       if (!withinBudget(projected, policy)) {
         counters.rejections += 1;
-        emit({ type: "rejected", at: now, resourceId: normalized.id, detail: "budget" });
+        notify({ type: "rejected", at: now, resourceId: normalized.id, detail: "budget" });
         return { admitted: false, reason: "budget", evicted: [] };
       }
       for (const victim of victims) remove(victim, "evicted", now);
       resources.set(candidate.id, candidate);
-      usage = addResource(usage, candidate);
+      usage = adjustUsage(usage, candidate, 1);
       counters.admissions += 1;
-      emit({ type: "admitted", at: now, resourceId: candidate.id });
+      notify({ type: "admitted", at: now, resourceId: candidate.id });
       return { admitted: true, resource: candidate, evicted: victims.map((victim) => victim.id) };
-    } finally {
-      pendingAdmissions -= 1;
-    }
+    } finally { pendingAdmissions -= 1; }
   };
 
   const release = (id: string, now = Date.now()): boolean => {
@@ -387,7 +284,7 @@ export function createRenderBudgetRuntime(
     if (disposed || nextMode === mode || !finite(now)) return;
     mode = nextMode;
     counters.modeTransitions += 1;
-    emit({ type: "mode", at: now, detail: nextMode });
+    notify({ type: "mode", at: now, detail: nextMode });
   };
 
   const sampleFrame = (frameMs: number, now = Date.now()): RenderPressure => {
@@ -395,37 +292,23 @@ export function createRenderBudgetRuntime(
     counters.frameSamples += 1;
     frameWindow.push(frameMs);
     if (frameWindow.length > policy.pressureWindow) frameWindow.shift();
-    const sorted = [...frameWindow].sort((a, b) => a - b);
-    const p95Index = Math.max(0, Math.ceil(sorted.length * 0.95) - 1);
-    const observed = pressureForFrame(sorted[p95Index] ?? frameMs, policy);
+    const sorted = frameWindow.toSorted((a, b) => a - b);
+    const observed = pressureForFrame(sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? frameMs, policy);
     const previous = pressure;
-    if (pressureWeight(observed) > pressureWeight(pressure)) {
-      pressure = observed;
-      recoveryCount = 0;
-    } else if (pressureWeight(observed) < pressureWeight(pressure)) {
+    if (pressureWeight(observed) > pressureWeight(pressure)) { pressure = observed; recoveryCount = 0; }
+    else if (pressureWeight(observed) < pressureWeight(pressure)) {
       recoveryCount += 1;
-      if (recoveryCount >= policy.recoverySamples) {
-        pressure = observed;
-        recoveryCount = 0;
-      }
-    } else {
-      recoveryCount = 0;
-    }
-    if (previous !== pressure) {
-      counters.pressureTransitions += 1;
-      emit({ type: "pressure", at: now, detail: pressure });
-    }
+      if (recoveryCount >= policy.recoverySamples) { pressure = observed; recoveryCount = 0; }
+    } else recoveryCount = 0;
+    if (previous !== pressure) { counters.pressureTransitions += 1; notify({ type: "pressure", at: now, detail: pressure }); }
     return pressure;
   };
 
   const sweepIdle = (now = Date.now()): readonly string[] => {
     if (disposed || !finite(now)) return [];
     const removed: string[] = [];
-    for (const resource of [...resources.values()]) {
-      if (resource.pinned) continue;
-      if (now - resource.lastUsedAt < policy.idleTtlMs) continue;
-      removed.push(resource.id);
-      remove(resource, "evicted", now);
+    for (const resource of resources.values()) {
+      if (!resource.pinned && now - resource.lastUsedAt >= policy.idleTtlMs) { removed.push(resource.id); remove(resource, "evicted", now); }
     }
     return removed;
   };
@@ -434,41 +317,22 @@ export function createRenderBudgetRuntime(
     if (disposed || observers.size >= policy.maxObservers) return () => undefined;
     observers.add(observer);
     let active = true;
-    return () => {
-      if (!active) return;
-      active = false;
-      observers.delete(observer);
-    };
+    return () => { if (active) { active = false; observers.delete(observer); } };
   };
 
   const dispose = (now = Date.now()): void => {
     if (disposed) return;
     disposed = true;
-    resources.clear();
-    usage = emptyUsage();
-    frameWindow.length = 0;
-    pendingAdmissions = 0;
+    resources.clear(); usage = emptyUsage(); frameWindow.length = 0; pendingAdmissions = 0;
     const event: RenderBudgetEvent = { type: "disposed", at: finite(now) ? now : Date.now() };
     eventLog.push(event);
     if (eventLog.length > policy.maxEvents) eventLog.splice(0, eventLog.length - policy.maxEvents);
     const snapshot = currentSnapshot();
-    for (const observer of [...observers]) {
+    for (const observer of Array.from(observers)) {
       try { observer(snapshot, event); } catch { counters.observerErrors += 1; }
     }
     observers.clear();
   };
 
-  return {
-    snapshot: currentSnapshot,
-    metrics: () => ({ ...counters }),
-    events: () => eventLog.map((event) => ({ ...event })),
-    admit,
-    release,
-    touch,
-    setMode,
-    sampleFrame,
-    sweepIdle,
-    subscribe,
-    dispose,
-  };
+  return { snapshot: currentSnapshot, metrics: () => ({ ...counters }), events: () => eventLog.map((event) => ({ ...event })), admit, release, touch, setMode, sampleFrame, sweepIdle, subscribe, dispose };
 }
