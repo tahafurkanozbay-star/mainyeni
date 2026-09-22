@@ -675,6 +675,16 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
                         MaxDepth = 64
                     });
 
+            EnsureSuccessfulEnvelope(
+                document.RootElement);
+
+            if (IsExplicitEmptyEnvelope(
+                    document.RootElement))
+            {
+                return Array.Empty<
+                    KentRehberiFeature>();
+            }
+
             var records =
                 ExtractRecordArray(
                     document.RootElement);
@@ -727,6 +737,94 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
             throw new KentRehberiPlanAskiProtocolException(
                 "The official Kent Rehberi upstream returned malformed JSON.");
         }
+    }
+
+    private static void EnsureSuccessfulEnvelope(
+        JsonElement root)
+    {
+        if (root.ValueKind !=
+            JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var name in
+                 new[]
+                 {
+                     "isSuccess",
+                     "success",
+                     "successful"
+                 })
+        {
+            if (!TryGetProperty(
+                    root,
+                    name,
+                    out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind ==
+                    JsonValueKind.False)
+            {
+                throw new KentRehberiPlanAskiProtocolException(
+                    "The official Kent Rehberi upstream reported an unsuccessful response.");
+            }
+
+            if (value.ValueKind is
+                not JsonValueKind.True and
+                not JsonValueKind.Null and
+                not JsonValueKind.Undefined)
+            {
+                throw new KentRehberiPlanAskiProtocolException(
+                    "The official Kent Rehberi upstream returned an invalid success flag.");
+            }
+
+            return;
+        }
+    }
+
+    private static bool IsExplicitEmptyEnvelope(
+        JsonElement root)
+    {
+        if (root.ValueKind !=
+            JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var foundEnvelope =
+            false;
+
+        foreach (var name in
+                 EnvelopeArrayNames)
+        {
+            if (!TryGetProperty(
+                    root,
+                    name,
+                    out var value))
+            {
+                continue;
+            }
+
+            foundEnvelope = true;
+
+            if (value.ValueKind is
+                JsonValueKind.Array or
+                JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (value.ValueKind is
+                not JsonValueKind.Null and
+                not JsonValueKind.Undefined)
+            {
+                return false;
+            }
+        }
+
+        return foundEnvelope;
     }
 
     private static JsonElement ExtractRecordArray(
