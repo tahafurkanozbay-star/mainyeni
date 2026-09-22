@@ -18,6 +18,9 @@ const PATHS = Object.freeze({
   transport: 'src/data-services/kentRehberiGeoJsonLayer.ts',
   icons: 'src/gis-engine/iconRegistry.json',
   vite: 'vite.config.ts',
+  localProxy: 'tooling/localApiProxy.ts',
+  configurationBusiness: 'src/Business/ConfigurationBusiness.ts',
+  envExample: '.env.example',
   package: 'package.json',
   qualityWorkflow: '../.github/workflows/webclient-quality.yml',
   releaseWorkflow: '../.github/workflows/release-qa.yml',
@@ -28,6 +31,7 @@ const PATHS = Object.freeze({
   backendRegistration: '../Api.User/KentRehberi/KentRehberiServiceCollectionExtensions.cs',
   backendOptions: '../Api.User/KentRehberi/KentRehberiOptions.cs',
   backendSettings: '../Api.User/appsettings.json',
+  backendLaunchSettings: '../Api.User/Properties/launchSettings.json',
 });
 
 const GROUPS = Object.freeze([
@@ -111,15 +115,27 @@ const validFixture = () => {
     `,
     [PATHS.icons]: iconSource(items),
     [PATHS.vite]: `
+      const apiProxyTarget = resolveLocalApiProxyTarget(process.env.VITE_API_PROXY_TARGET);
       export default {
         server: {
           proxy: {
             '/api': {
-              target: 'https://localhost:3003',
+              target: apiProxyTarget,
             },
           },
         },
       };
+    `,
+    [PATHS.localProxy]: `
+      const allowedHosts = new Set(['localhost', '127.0.0.1']);
+      const DEFAULT_LOCAL_API_PROXY_TARGET = 'https://localhost:3003';
+    `,
+    [PATHS.configurationBusiness]: `
+      export const resolveLocalBootstrapPreviewEnabled = () => true;
+    `,
+    [PATHS.envExample]: `
+      VITE_API_PROXY_TARGET=https://localhost:3003
+      VITE_LOCAL_BOOTSTRAP_PREVIEW=true
     `,
     [PATHS.package]: JSON.stringify({
       scripts: {
@@ -188,6 +204,33 @@ const validFixture = () => {
         TypeCatalogCacheTtlSeconds: 300,
         TypeCatalogMaxTextLength: 240,
         TypeCatalogMaxResponseBytes: 1048576,
+      },
+    }),
+    [PATHS.backendLaunchSettings]: JSON.stringify({
+      iisSettings: {
+        iisExpress: {
+          applicationUrl: 'http://localhost:3002',
+          sslPort: 3003,
+        },
+      },
+      profiles: {
+        'IIS Express': {
+          environmentVariables: {
+            KentRehberiData__Source: 'PlanAski',
+            KentRehberiData__PlanAskiBaseUri: 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi',
+            KentRehberiData__PlanAskiMinTur: '0',
+            KentRehberiData__PlanAskiMaxTur: '42',
+          },
+        },
+        'api.user': {
+          applicationUrl: 'https://localhost:3003;http://localhost:3002',
+          environmentVariables: {
+            KentRehberiData__Source: 'PlanAski',
+            KentRehberiData__PlanAskiBaseUri: 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi',
+            KentRehberiData__PlanAskiMinTur: '0',
+            KentRehberiData__PlanAskiMaxTur: '42',
+          },
+        },
       },
     }),
   };
@@ -415,10 +458,10 @@ describe('Kent Rehberi all-layer release contract', () => {
     );
   });
 
-  test('requires Vite to proxy to the real local HTTPS User API', () => {
+  test('requires Vite to use the validated local Api.User proxy target', () => {
     const files = validFixture();
     files[PATHS.vite] = `
-      const config = { target: 'localhost' };
+      const config = { target: 'https://planaski.ankara.bel.tr' };
     `;
 
     const result = auditKentRehberiAllLayersSources(files);
@@ -426,6 +469,53 @@ describe('Kent Rehberi all-layer release contract', () => {
     assert.equal(
       result.errors.some((entry) => entry.id === 'insecure-or-missing-dev-api-proxy'),
       true,
+    );
+  });
+
+  test('requires local proxy validation and bootstrap env defaults', () => {
+    const files = validFixture();
+    files[PATHS.localProxy] = 'export const target = "https://planaski.ankara.bel.tr";';
+    files[PATHS.configurationBusiness] = 'export const ConfigurationBusiness = {};';
+    files[PATHS.envExample] = 'VITE_API_URL=/api';
+
+    const result = auditKentRehberiAllLayersSources(files);
+    const ids = new Set(result.errors.map((entry) => entry.id));
+
+    assert.equal(ids.has('missing-default-local-api-target'), true);
+    assert.equal(ids.has('missing-local-proxy-host-allowlist'), true);
+    assert.equal(ids.has('missing-local-bootstrap-preview-policy'), true);
+    assert.equal(ids.has('missing-local-api-proxy-env'), true);
+    assert.equal(ids.has('missing-local-bootstrap-preview-env'), true);
+  });
+
+  test('requires IIS Express and project launch profiles to share Api.User ports', () => {
+    const files = validFixture();
+    const launch = JSON.parse(files[PATHS.backendLaunchSettings]);
+    launch.iisSettings.iisExpress.applicationUrl = 'http://localhost:4039';
+    launch.iisSettings.iisExpress.sslPort = 44357;
+    launch.profiles['api.user'].applicationUrl = 'https://localhost:3003;http://localhost:3002';
+    files[PATHS.backendLaunchSettings] = JSON.stringify(launch);
+
+    const result = auditKentRehberiAllLayersSources(files);
+
+    assert.equal(
+      result.errors.some((entry) => entry.id === 'local-api-profile-port-drift'),
+      true,
+    );
+  });
+
+  test('requires local launch profiles to explicitly use PlanASKI tur 0 through 42', () => {
+    const files = validFixture();
+    const launch = JSON.parse(files[PATHS.backendLaunchSettings]);
+    launch.profiles['IIS Express'].environmentVariables.KentRehberiData__Source = 'Postgis';
+    delete launch.profiles['api.user'].environmentVariables.KentRehberiData__PlanAskiMaxTur;
+    files[PATHS.backendLaunchSettings] = JSON.stringify(launch);
+
+    const result = auditKentRehberiAllLayersSources(files);
+
+    assert.equal(
+      result.errors.filter((entry) => entry.id === 'local-api-planaski-profile-drift').length,
+      2,
     );
   });
 
