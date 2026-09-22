@@ -3,13 +3,13 @@ export type CommandPaletteGroup = 'navigation' | 'map' | 'tools' | 'view' | 'hel
 export interface CommandPaletteItem {
   readonly id: string;
   readonly label: string;
-  readonly description?: string;
-  readonly keywords?: readonly string[];
+  readonly description?: string | undefined;
+  readonly keywords?: readonly string[] | undefined;
   readonly group: CommandPaletteGroup;
-  readonly shortcut?: string;
-  readonly disabled?: boolean;
-  readonly disabledReason?: string;
-  readonly priority?: number;
+  readonly shortcut?: string | undefined;
+  readonly disabled?: boolean | undefined;
+  readonly disabledReason?: string | undefined;
+  readonly priority?: number | undefined;
 }
 
 export interface CommandPaletteMatch {
@@ -30,7 +30,7 @@ export interface CommandPaletteState {
 
 export interface CommandPaletteModelOptions {
   readonly items: readonly CommandPaletteItem[];
-  readonly maxResults?: number;
+  readonly maxResults?: number | undefined;
 }
 
 export interface CommandPaletteModel {
@@ -48,13 +48,7 @@ export interface CommandPaletteModel {
 const DEFAULT_MAX_RESULTS = 12;
 const MAX_ITEMS = 256;
 const MAX_QUERY_LENGTH = 120;
-const GROUP_WEIGHT: Readonly<Record<CommandPaletteGroup, number>> = Object.freeze({
-  navigation: 50,
-  map: 45,
-  tools: 40,
-  view: 35,
-  help: 20,
-});
+const GROUP_WEIGHT: Readonly<Record<CommandPaletteGroup, number>> = Object.freeze({ navigation: 50, map: 45, tools: 40, view: 35, help: 20 });
 
 const normalizeText = (value: unknown): string => String(value ?? '')
   .normalize('NFKD')
@@ -67,10 +61,7 @@ const normalizeText = (value: unknown): string => String(value ?? '')
   .trim();
 
 const normalizeQuery = (value: unknown): string => normalizeText(value).slice(0, MAX_QUERY_LENGTH);
-
-const tokenize = (value: string): readonly string[] => Object.freeze(
-  [...new Set(normalizeText(value).split(' ').filter(Boolean))],
-);
+const tokenize = (value: string): readonly string[] => Object.freeze([...new Set(normalizeText(value).split(' ').filter(Boolean))]);
 
 const freezeItem = (item: CommandPaletteItem): Readonly<CommandPaletteItem> => {
   const id = String(item.id ?? '').trim();
@@ -139,15 +130,12 @@ const scoreField = (query: string, field: string, weight: number): number => {
 
 const matchItem = (item: Readonly<CommandPaletteItem>, query: string): CommandPaletteMatch | null => {
   const tokens = tokenize(query);
-  if (!tokens.length) {
-    return Object.freeze({ item, score: GROUP_WEIGHT[item.group] + (item.priority ?? 0), labelRanges: Object.freeze([]), keywordMatches: Object.freeze([]) });
-  }
+  if (!tokens.length) return Object.freeze({ item, score: GROUP_WEIGHT[item.group] + (item.priority ?? 0), labelRanges: Object.freeze([]), keywordMatches: Object.freeze([]) });
   const label = normalizeText(item.label);
   const description = normalizeText(item.description);
   const keywords = (item.keywords ?? []).map(normalizeText);
   const searchable = [label, description, ...keywords].join(' ');
   if (tokens.some((token) => !searchable.includes(token) && subsequenceScore(token, searchable) === 0)) return null;
-
   let score = GROUP_WEIGHT[item.group] + (item.priority ?? 0);
   const keywordMatches: string[] = [];
   for (const token of tokens) {
@@ -161,26 +149,17 @@ const matchItem = (item: Readonly<CommandPaletteItem>, query: string): CommandPa
       }
     }
   }
-  return Object.freeze({
-    item,
-    score,
-    labelRanges: findRanges(item.label, tokens),
-    keywordMatches: Object.freeze(keywordMatches),
-  });
+  return Object.freeze({ item, score, labelRanges: findRanges(item.label, tokens), keywordMatches: Object.freeze(keywordMatches) });
 };
 
 const rank = (items: readonly Readonly<CommandPaletteItem>[], query: string, maxResults: number): readonly CommandPaletteMatch[] => Object.freeze(
-  items
-    .map((item) => matchItem(item, query))
+  items.map((item) => matchItem(item, query))
     .filter((match): match is CommandPaletteMatch => Boolean(match))
     .sort((left, right) => right.score - left.score || left.item.label.localeCompare(right.item.label, 'tr') || left.item.id.localeCompare(right.item.id))
     .slice(0, maxResults),
 );
 
-const freezeState = (state: CommandPaletteState): CommandPaletteState => Object.freeze({
-  ...state,
-  matches: Object.freeze([...state.matches]),
-});
+const freezeState = (state: CommandPaletteState): CommandPaletteState => Object.freeze({ ...state, matches: Object.freeze([...state.matches]) });
 
 export const createCommandPaletteModel = (options: CommandPaletteModelOptions): CommandPaletteModel => {
   const maxResults = Math.max(1, Math.min(MAX_ITEMS, Math.trunc(options.maxResults ?? DEFAULT_MAX_RESULTS)));
@@ -205,13 +184,13 @@ export const createCommandPaletteModel = (options: CommandPaletteModelOptions): 
   return Object.freeze({
     open: () => publish(true, state.query),
     close: () => publish(false, ''),
-    setQuery: (query) => publish(state.open, normalizeQuery(query), null),
-    move: (direction) => moveTo(state.activeIndex + direction),
+    setQuery: (query: string) => publish(state.open, normalizeQuery(query), null),
+    move: (direction: 1 | -1) => moveTo(state.activeIndex + direction),
     home: () => moveTo(0),
     end: () => moveTo(state.matches.length - 1),
     getActive: () => state.activeIndex >= 0 ? state.matches[state.activeIndex]?.item ?? null : null,
     getState: () => state,
-    replaceItems: (nextItems) => {
+    replaceItems: (nextItems: readonly CommandPaletteItem[]) => {
       items = normalizeItems(nextItems);
       return publish(state.open, state.query, state.activeId);
     },
