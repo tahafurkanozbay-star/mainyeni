@@ -289,27 +289,79 @@ existing deterministic icon registry renderer'ı kullanılır.
 
 ## Local development
 
-Vite synthetic demo data üretmez. `/api` local development'ta gerçek
-`Api.User` HTTPS endpointine proxy edilir:
+Browser PlanASKI'ye doğrudan gitmez. Local geliştirmede veri akışı:
 
 ```text
-https://localhost:3003
+Webclient /api
+  -> Vite localhost proxy
+  -> Api.User
+  -> https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=0..42
 ```
+
+Tracked `Api.User/Properties/launchSettings.json` içindeki iki geliştirme
+profili artık aynı portları kullanır:
+
+```text
+api.user Project : https://localhost:3003 / http://localhost:3002
+IIS Express      : https://localhost:3003 / http://localhost:3002
+```
+
+Her iki profil de development ortamında explicit olarak:
+
+```text
+KentRehberiData__Source=PlanAski
+KentRehberiData__PlanAskiBaseUri=https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi
+KentRehberiData__PlanAskiMinTur=0
+KentRehberiData__PlanAskiMaxTur=42
+```
+
+ayarlarıyla başlar. Böylece hangi Visual Studio profili seçilirse seçilsin
+Vite'ın varsayılan backend hedefi ile port uyuşmazlığı oluşmaz.
+
+Vite varsayılan hedefi:
+
+```text
+VITE_API_PROXY_TARGET=https://localhost:3003
+```
+
+olarak doğrulanır. Bu ayar yalnız `localhost`, `127.0.0.1` veya loopback
+IPv6 HTTP(S) origin'lerine izin verir; PlanASKI gibi external bir host Vite
+proxy target olarak kabul edilmez. Özel bir local profil gerekiyorsa örneğin:
+
+```text
+VITE_API_PROXY_TARGET=https://localhost:44357
+```
+
+ile yalnız local override yapılabilir.
+
+Fresh checkout'ta `VITE_LOCAL_BOOTSTRAP_PREVIEW=true` kullanılır. Bu preview
+yalnız eski `AppSettings/List` ve `Gis/ConfigService/List` map bootstrap
+bağımlılığını local geliştirmede güvenli varsayılanlarla karşılar. Kent Rehberi
+verisini mock'lamaz; `/api/kent-rehberi` ve `/api/kent-rehberi/types`
+gerçek Api.User -> PlanASKI akışında kalır.
 
 Beklenen local akış:
 
 ```text
 Webclient
+  -> local bootstrap preview (yalnız map shell config)
   -> /api/kent-rehberi/types
-  -> Api.User
-  -> https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=0..42
+  -> Api.User https://localhost:3003
+  -> official PlanASKI tur=0..42
   -> validation/cache/type catalog
   -> /api/kent-rehberi?tur=<resolved>
   -> GeoJSONLayer
 ```
 
-Local makinede outbound HTTPS erişimi yoksa readiness ve gerçek data smoke
-testi başarısız olabilir; frontend demo kaynağa sessizce düşmez.
+Mevcut bir Visual Studio workspace'i eski IIS Express binding'ini
+`https://localhost:44357` olarak cache'lemişse, yeni launchSettings'i
+uygulamak için backend'i kapatıp workspace'i yeniden açın; gerekirse local
+`.vs` klasörünü yeniden oluşturun. Alternatif olarak yalnız geliştirme için
+`VITE_API_PROXY_TARGET=https://localhost:44357` override'ı kullanılabilir.
+
+Local makinede official PlanASKI'ya outbound HTTPS erişimi yoksa readiness ve
+gerçek data smoke testi başarısız olabilir. Frontend Kent Rehberi verisi için
+synthetic/demo kaynağa sessizce düşmez.
 
 ## PostGIS compatibility fallback
 

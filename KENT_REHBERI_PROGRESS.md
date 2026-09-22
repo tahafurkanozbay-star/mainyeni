@@ -863,3 +863,17 @@
 - VALIDATION ROUND 1: PR #289 exact head before this progress append is under GitHub Actions. Architecture audit completed its steps successfully; backend/release validation were still running when this checkpoint was written. This progress commit intentionally changes the head, so merge requires a fresh exact-head CI pass after this append.
 - MERGE DURUMU: NOT MERGED at this checkpoint. Do not merge until the progress-bearing exact head is green, main remains the exact base with behind=0, mergeable=true, unresolved review threads are zero, and expected-head squash merge is used.
 
+## Local Api.User / PlanASKI profile alignment — 2026-09-22
+- TUR / GÖREV: Local development bootstrap + backend profile consistency.
+- BASE MAIN: `10b67831a2bbea2fb1d3e358fe120b0bd2a73a3a`.
+- BRANCH: `agent/planaski-local-profile-align-20260922-r2`.
+- PORT NOTU: unrelated 3D runtime work advanced main during validation, so this fix was replayed onto the latest main before the final exact-head CI cycle; the branch must remain behind=0 before merge.
+- KULLANICI BULGUSU: Visual Studio'da `api.user` Project profili `https://localhost:3003;http://localhost:3002`, IIS Express ise `https://localhost:44357;http://localhost:4039` dinliyordu. Vite ise hard-coded `https://localhost:3003` hedefine proxy yapıyordu. IIS Express seçildiğinde browser -> Vite -> Api.User zincirinde backend port mismatch oluşabiliyordu.
+- PROFIL DÜZELTMESI: tracked IIS Express ve Project profilleri aynı local originlere hizalandı: HTTPS 3003 / HTTP 3002. Her iki profil de explicit `KentRehberiData__Source=PlanAski`, official PlanASKI base URI ve `tur=0..42` environment contract'ı taşıyor.
+- VITE DÜZELTMESI: proxy target artık `VITE_API_PROXY_TARGET` üzerinden okunuyor; default `https://localhost:3003`. Resolver yalnız localhost/loopback bare HTTP(S) origin'lerini kabul ediyor. External PlanASKI origin'i Vite proxy target olarak reddediliyor; browser doğrudan PlanASKI'ye çıkarılmıyor.
+- BOOTSTRAP DÜZELTMESI: local Vite development'ta `VITE_LOCAL_BOOTSTRAP_PREVIEW` eksikse safe bootstrap preview default-on. Production/test kapalı; explicit false destekli. Preview yalnız map shell `AppSettings/List` + `Gis/ConfigService/List` bağımlılığını localde karşılıyor; `/api/kent-rehberi` ve `/types` gerçek Api.User -> PlanASKI akışında kalıyor.
+- ENV / DOCS: `.env.example` tracked default proxy + bootstrap flags içeriyor. Runbook her iki Visual Studio profilinin aynı portları kullandığını, old cached IIS Express binding için workspace/.vs refresh veya localhost-only proxy override seçeneğini açıklıyor.
+- TEST / GOVERNANCE: Vitest local proxy allowlist/default tests, ConfigurationBusiness preview policy tests, .NET tracked launch-profile security contract ve all-layer audit launch/profile/env checks eklendi. Audit BOM-safe launchSettings JSON parsing yapıyor.
+- SECURITY: TLS validation gevşetilmedi; Vite `secure:false` yalnız local development self-signed Api.User proxy içindir. PlanASKI external HTTPS çağrısı hâlâ yalnız server-side Api.User içindedir.
+- MERGE DURUMU: NOT MERGED. Fresh PR exact-head CI, current-main refresh, mergeability ve unresolved-review kontrolü sonrası expected-head squash merge yapılmalı.
+
