@@ -138,12 +138,13 @@ export function createViewStateSyncRuntime(options: {
     if (source.mode !== "2d" || targetState.mode !== "3d" || converted.mode !== "3d") {
       return equivalent(targetState, converted);
     }
+    const spatialReference = targetState.center.spatialReference;
     const targetWithoutAltitude: ViewState = {
       ...targetState,
       center: {
         x: targetState.center.x,
         y: targetState.center.y,
-        spatialReference: targetState.center.spatialReference,
+        ...(spatialReference === undefined ? {} : { spatialReference }),
       },
     };
     return equivalent(targetWithoutAltitude, converted);
