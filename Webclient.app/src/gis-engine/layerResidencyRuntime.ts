@@ -53,7 +53,7 @@ type MutableEntry = {
   descriptor: LayerResidencyDescriptor;
   state: LayerResidencyState;
   lastTouchedAt: number;
-  residentSince?: number;
+  residentSince?: number | undefined;
 };
 
 const PRIORITY_WEIGHT: Readonly<Record<LayerResidencyPriority, number>> = Object.freeze({
