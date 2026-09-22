@@ -62,17 +62,18 @@ public sealed class KentRehberiOptions
             failures.Add("KentRehberiData:Source must be PlanAski or Postgis.");
         }
 
-        if (!Uri.TryCreate(PlanAskiBaseUri, UriKind.Absolute, out var planAskiUri) ||
-            !string.Equals(planAskiUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(planAskiUri.Host, "planaski.ankara.bel.tr", StringComparison.OrdinalIgnoreCase) ||
-            planAskiUri.Port != 443 ||
-            !string.Equals(
-                planAskiUri.AbsolutePath.TrimEnd('/'),
-                "/kentrehberiapi/api/kentrehberi",
-                StringComparison.OrdinalIgnoreCase) ||
-            !string.IsNullOrEmpty(planAskiUri.UserInfo) ||
-            !string.IsNullOrEmpty(planAskiUri.Query) ||
-            !string.IsNullOrEmpty(planAskiUri.Fragment))
+        if (string.Equals(Source, PlanAskiSource, StringComparison.OrdinalIgnoreCase) &&
+            (!Uri.TryCreate(PlanAskiBaseUri, UriKind.Absolute, out var planAskiUri) ||
+             !string.Equals(planAskiUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(planAskiUri.Host, "planaski.ankara.bel.tr", StringComparison.OrdinalIgnoreCase) ||
+             planAskiUri.Port != 443 ||
+             !string.Equals(
+                 planAskiUri.AbsolutePath.TrimEnd('/'),
+                 "/kentrehberiapi/api/kentrehberi",
+                 StringComparison.OrdinalIgnoreCase) ||
+             !string.IsNullOrEmpty(planAskiUri.UserInfo) ||
+             !string.IsNullOrEmpty(planAskiUri.Query) ||
+             !string.IsNullOrEmpty(planAskiUri.Fragment)))
         {
             failures.Add(
                 "KentRehberiData:PlanAskiBaseUri must be the official HTTPS planaski.ankara.bel.tr Kent Rehberi endpoint.");
