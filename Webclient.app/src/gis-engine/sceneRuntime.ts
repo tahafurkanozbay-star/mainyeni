@@ -147,18 +147,69 @@ export const applyViewStateToSceneView = async (view: SceneViewLike, inputState:
 
 export interface BindSceneOptions { include?: any[]; exclude?: any[]; onState?: (state: ViewState) => void; applyIncoming?: boolean; goToOptions?: SceneApplyOptions; onApplyError?: (error: unknown) => void; accessorWatch?: ArcgisAccessorWatch | undefined; }
 export const bindSceneState = (view: SceneViewLike, bridge: ViewStateBridge, selectionCallback?: (selection: ScenePick | null, hits: ScenePick[]) => void, options: BindSceneOptions = {}): (() => void) => {
-  if (!view || !bridge) return () => {}; const handles: Array<{ remove?: () => void }> = []; let disposed = false; let selectionController: AbortController | null = null; let applyingBridgeState = false; let unsubscribe: () => boolean | void = () => {};
+  if (!view || !bridge) return () => {};
+  const handles: Array<{ remove?: () => void }> = [];
+  let disposed = false;
+  let selectionController: AbortController | null = null;
+  let applyController: AbortController | null = null;
+  let applyGeneration = 0;
+  let applyingBridgeState = false;
+  let unsubscribe: () => boolean | void = () => {};
   const sync = (): void => { if (disposed || applyingBridgeState) return; const next = snapshotSceneState(view, bridge.getState()); bridge.setState(next); options.onState?.(next); };
   const cameraHandle = watchArcgisProperty(view, 'camera', sync, options.accessorWatch);
   const scaleHandle = watchArcgisProperty(view, 'scale', sync, options.accessorWatch);
   if (cameraHandle) handles.push(cameraHandle);
   if (scaleHandle) handles.push(scaleHandle);
   const clickHandle = view.on?.('click', async (event: any) => { selectionController?.abort?.(); selectionController = typeof AbortController !== 'undefined' ? new AbortController() : null; const signal = selectionController?.signal; const pickOptions: ScenePickOptions = { ...(signal === undefined ? {} : { signal }), ...(options.include === undefined ? {} : { include: options.include }), ...(options.exclude === undefined ? {} : { exclude: options.exclude }) }; const hits = await pickScene(view, event, pickOptions); if (disposed || signal?.aborted) return; const first = hits[0]; if (!first?.graphic) { bridge.setState((state) => updateSelection(state, { layerId: null, objectId: null })); selectionCallback?.(null, hits); return; } const attributes = first.graphic.attributes || {}; const objectId = attributes.OBJECTID ?? attributes.ObjectID ?? first.graphic.uid ?? first.graphic.id ?? null; bridge.setState((state) => updateSelection(state, { layerId: first.layer?.id, objectId })); selectionCallback?.(first, hits); }); if (clickHandle) handles.push(clickHandle);
-  if (options.applyIncoming === true && typeof bridge.subscribe === 'function') unsubscribe = bridge.subscribe(async (nextState) => { if (disposed || nextState.mode !== '3d') return; const current = snapshotSceneState(view, nextState); if (current.center?.[0] === nextState.center?.[0] && current.center?.[1] === nextState.center?.[1] && current.scale === nextState.scale && current.heading === nextState.heading && current.tilt === nextState.tilt) return; applyingBridgeState = true; try { await applyViewStateToSceneView(view, nextState, options.goToOptions || {}); } catch (error) { options.onApplyError?.(error); } finally { applyingBridgeState = false; } });
+  if (options.applyIncoming === true && typeof bridge.subscribe === 'function') {
+    unsubscribe = bridge.subscribe(async (nextState) => {
+      if (disposed || nextState.mode !== '3d') return;
+      const current = snapshotSceneState(view, nextState);
+      if (
+        current.center?.[0] === nextState.center?.[0]
+        && current.center?.[1] === nextState.center?.[1]
+        && current.scale === nextState.scale
+        && current.heading === nextState.heading
+        && current.tilt === nextState.tilt
+      ) return;
+
+      applyController?.abort('superseded-scene-state');
+      const controller = new AbortController();
+      applyController = controller;
+      applyGeneration += 1;
+      const generation = applyGeneration;
+      const externalSignal = options.goToOptions?.signal;
+      const onExternalAbort = (): void => {
+        if (!controller.signal.aborted) controller.abort(externalSignal?.reason);
+      };
+      if (externalSignal?.aborted) onExternalAbort();
+      else externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+
+      applyingBridgeState = true;
+      try {
+        await applyViewStateToSceneView(view, nextState, {
+          ...options.goToOptions,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (!controller.signal.aborted) options.onApplyError?.(error);
+      } finally {
+        externalSignal?.removeEventListener('abort', onExternalAbort);
+        if (generation === applyGeneration) {
+          applyingBridgeState = false;
+          if (applyController === controller) applyController = null;
+        }
+      }
+    });
+  }
   return () => {
     if (disposed) return;
     disposed = true;
     selectionController?.abort?.();
+    applyGeneration += 1;
+    applyController?.abort('scene-binding-dispose');
+    applyController = null;
+    applyingBridgeState = false;
     unsubscribe();
     handles.forEach((handle) => safeRemove(handle, options.onApplyError));
   };
