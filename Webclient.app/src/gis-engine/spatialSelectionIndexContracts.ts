@@ -47,6 +47,7 @@ export interface SpatialSelectionIndexOptions {
   readonly maxBytesPerLayer?: number;
   readonly maxLayers?: number;
   readonly maxQueryResults?: number;
+  readonly maxQueryCandidates?: number;
   readonly maxHistory?: number;
   readonly maxIdLength?: number;
   readonly maxLayerIdLength?: number;
@@ -69,6 +70,7 @@ export interface NormalizedSpatialSelectionIndexPolicy {
   readonly maxBytesPerLayer: number;
   readonly maxLayers: number;
   readonly maxQueryResults: number;
+  readonly maxQueryCandidates: number;
   readonly maxHistory: number;
   readonly maxIdLength: number;
   readonly maxLayerIdLength: number;
@@ -210,6 +212,7 @@ export const DEFAULT_SPATIAL_SELECTION_INDEX_POLICY: NormalizedSpatialSelectionI
   maxBytesPerLayer: 16 * 1024 * 1024,
   maxLayers: 256,
   maxQueryResults: 1_000,
+  maxQueryCandidates: 10_000,
   maxHistory: 512,
   maxIdLength: 512,
   maxLayerIdLength: 256,
@@ -301,6 +304,12 @@ export const normalizeSpatialSelectionIndexPolicy = (
     DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxQueryResults,
     maxEntries,
     'maxQueryResults',
+  );
+  const maxQueryCandidates = positiveInteger(
+    options.maxQueryCandidates,
+    DEFAULT_SPATIAL_SELECTION_INDEX_POLICY.maxQueryCandidates,
+    Math.min(maxEntries, 100_000),
+    'maxQueryCandidates',
   );
   const maxHistory = positiveInteger(
     options.maxHistory,
@@ -399,6 +408,7 @@ export const normalizeSpatialSelectionIndexPolicy = (
     maxBytesPerLayer,
     maxLayers,
     maxQueryResults,
+    maxQueryCandidates,
     maxHistory,
     maxIdLength,
     maxLayerIdLength,
