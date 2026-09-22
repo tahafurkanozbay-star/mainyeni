@@ -629,6 +629,67 @@ describe('sceneRuntime', () => {
     unbind();
   });
 
+  test('new incoming 3d state aborts an older in-flight SceneView navigation', async () => {
+    let callCount = 0;
+    let firstSignal: AbortSignal | undefined;
+    let secondSignal: AbortSignal | undefined;
+    const { view } = createScene({
+      goTo: vi.fn(async (_target: unknown, options?: unknown) => {
+        callCount += 1;
+        const signal = (options as { signal?: AbortSignal } | undefined)?.signal;
+        if (callCount === 1) {
+          firstSignal = signal;
+          return new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => {
+              const error = new Error('superseded');
+              error.name = 'AbortError';
+              reject(error);
+            }, { once: true });
+          });
+        }
+        secondSignal = signal;
+      }),
+    });
+    const bridge = createViewStateBridge(snapshotSceneState(view));
+    const unbind = bindSceneState(view, bridge, undefined, { applyIncoming: true });
+
+    bridge.setState({ mode: '3d', center: [31, 41], scale: 50_000, heading: 30, tilt: 60 });
+    await Promise.resolve();
+    bridge.setState({ mode: '3d', center: [32, 40], scale: 25_000, heading: 10, tilt: 45 });
+    await flush();
+
+    expect(view.goTo).toHaveBeenCalledTimes(2);
+    expect(firstSignal?.aborted).toBe(true);
+    expect(secondSignal?.aborted).toBe(false);
+    unbind();
+  });
+
+  test('unbind aborts an active incoming SceneView navigation', async () => {
+    let sdkSignal: AbortSignal | undefined;
+    const { view } = createScene({
+      goTo: vi.fn(async (_target: unknown, options?: unknown) => {
+        sdkSignal = (options as { signal?: AbortSignal } | undefined)?.signal;
+        return new Promise<void>((_resolve, reject) => {
+          sdkSignal?.addEventListener('abort', () => {
+            const error = new Error('disposed');
+            error.name = 'AbortError';
+            reject(error);
+          }, { once: true });
+        });
+      }),
+    });
+    const bridge = createViewStateBridge(snapshotSceneState(view));
+    const unbind = bindSceneState(view, bridge, undefined, { applyIncoming: true });
+
+    bridge.setState({ mode: '3d', center: [31, 41], scale: 50_000 });
+    await Promise.resolve();
+    expect(sdkSignal?.aborted).toBe(false);
+
+    unbind();
+    expect(sdkSignal?.aborted).toBe(true);
+    await flush();
+  });
+
   test('incoming 2d bridge state is ignored by SceneView binding', async () => {
     const { view } = createScene();
     const bridge = createViewStateBridge(snapshotSceneState(view));
