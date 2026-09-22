@@ -2,9 +2,12 @@ import { Constants_ServiceResultType } from '../Core/Constants';
 import {
   fetchKentRehberiFeature,
   fetchKentRehberiGeoJson,
+  fetchKentRehberiTypeCatalog,
   type KentRehberiFetchOptions,
   type KentRehberiGeoJsonFeature,
   type KentRehberiGeoJsonFeatureCollection,
+  type KentRehberiTypeCatalog,
+  type KentRehberiTypeDescriptor,
 } from '../data-services/kentRehberiGeoJsonLayer';
 import { runtimeConfig } from '../platform/config/runtimeConfig';
 import type {
@@ -67,6 +70,9 @@ export interface KentRehberiFastAccessDependencies {
     objectId: number,
     options?: KentRehberiFetchOptions,
   ) => Promise<KentRehberiGeoJsonFeature | null>;
+  readonly fetchTypeCatalog?: (
+    options?: KentRehberiFetchOptions,
+  ) => Promise<KentRehberiTypeCatalog>;
   readonly now?: () => number;
   readonly cacheTtlMs?: number;
   readonly maxCacheEntries?: number;
@@ -74,6 +80,11 @@ export interface KentRehberiFastAccessDependencies {
 
 interface CacheEntry {
   readonly collection: KentRehberiGeoJsonFeatureCollection;
+  readonly expiresAt: number;
+}
+
+interface TypeCatalogCacheEntry {
+  readonly catalog: KentRehberiTypeCatalog;
   readonly expiresAt: number;
 }
 
@@ -198,6 +209,117 @@ export const selectDominantKentRehberiTur = (
     return best.tur;
   }
   return null;
+};
+
+interface CatalogTypeScore {
+  readonly tur: number;
+  readonly score: number;
+  readonly matchedSamples: number;
+  readonly preferredHits: number;
+  readonly probeHits: number;
+  readonly count: number;
+}
+
+const descriptorSearchTexts = (
+  descriptor: KentRehberiTypeDescriptor,
+): readonly string[] => Object.freeze(
+  descriptor.samples.map((sample) => normalizeSearchText([
+    sample.adi,
+    sample.adres,
+    sample.durakNo,
+  ].filter((value) => value !== null && value !== undefined && value !== '').join(' '))),
+);
+
+const scoreCatalogDescriptor = (
+  descriptor: KentRehberiTypeDescriptor,
+  profile: KentRehberiFastAccessProfile,
+): CatalogTypeScore => {
+  const probes = profileTerms(profile.probes);
+  const preferred = profileTerms(profile.preferTerms);
+  const excluded = profileTerms(profile.excludeTerms);
+  let score = 0;
+  let matchedSamples = 0;
+  let preferredHits = 0;
+  let probeHits = 0;
+
+  for (const text of descriptorSearchTexts(descriptor)) {
+    if (!text) continue;
+    const excludedHit = excluded.some((term) => text.includes(term));
+    const sampleProbeHits = probes.reduce(
+      (count, term) => count + (text.includes(term) ? 1 : 0),
+      0,
+    );
+    const samplePreferredHits = preferred.reduce(
+      (count, term) => count + (text.includes(term) ? 1 : 0),
+      0,
+    );
+
+    if (excludedHit && sampleProbeHits === 0 && samplePreferredHits === 0) {
+      score -= 16;
+      continue;
+    }
+
+    if (sampleProbeHits > 0 || samplePreferredHits > 0) {
+      matchedSamples += 1;
+    }
+    probeHits += sampleProbeHits;
+    preferredHits += samplePreferredHits;
+    score += sampleProbeHits * 12;
+    score += samplePreferredHits * 7;
+    if (sampleProbeHits > 0 && samplePreferredHits > 0) score += 5;
+    if (excludedHit) score -= 10;
+  }
+
+  if (matchedSamples > 1) score += Math.min(12, (matchedSamples - 1) * 3);
+
+  return Object.freeze({
+    tur: descriptor.tur,
+    score,
+    matchedSamples,
+    preferredHits,
+    probeHits,
+    count: descriptor.count,
+  });
+};
+
+export const resolveKentRehberiTypesFromCatalog = (
+  catalog: KentRehberiTypeCatalog,
+  profile: KentRehberiFastAccessProfile,
+): readonly number[] => {
+  const scores = catalog.types
+    .map((descriptor) => scoreCatalogDescriptor(descriptor, profile))
+    .filter((entry) => entry.score > 0 && entry.matchedSamples > 0)
+    .sort((left, right) =>
+      right.score - left.score
+      || right.probeHits - left.probeHits
+      || right.preferredHits - left.preferredHits
+      || right.matchedSamples - left.matchedSamples
+      || right.count - left.count
+      || left.tur - right.tur);
+
+  const best = scores[0];
+  if (!best || best.score < 12) return Object.freeze([]);
+
+  if (profile.mode === 'first') {
+    const second = scores[1];
+    const confident =
+      !second
+      || best.score >= second.score + 8
+      || best.score >= second.score * 1.35
+      || (
+        best.probeHits > second.probeHits
+        && best.preferredHits >= second.preferredHits
+      );
+    return confident ? Object.freeze([best.tur]) : Object.freeze([]);
+  }
+
+  const floor = Math.max(12, Math.floor(best.score * 0.55));
+  return Object.freeze(
+    scores
+      .filter((entry) => entry.score >= floor)
+      .slice(0, 6)
+      .map((entry) => entry.tur),
+  );
 };
 
 const makeFeatureCollection = (
@@ -328,6 +450,7 @@ export const createKentRehberiFastAccessRuntime = (
 ): KentRehberiFastAccessRuntime => {
   const fetchCollection = dependencies.fetchCollection ?? fetchKentRehberiGeoJson;
   const fetchFeature = dependencies.fetchFeature ?? fetchKentRehberiFeature;
+  const fetchTypeCatalog = dependencies.fetchTypeCatalog ?? fetchKentRehberiTypeCatalog;
   const now = dependencies.now ?? (() => Date.now());
   const defaultCacheTtlMs = normalizeCacheTtl(
     dependencies.cacheTtlMs,
@@ -335,6 +458,8 @@ export const createKentRehberiFastAccessRuntime = (
   );
   const maxCacheEntries = normalizeCacheCapacity(dependencies.maxCacheEntries);
   const cache = new Map<string, CacheEntry>();
+  let typeCatalogCache: TypeCatalogCacheEntry | null = null;
+  let typeCatalogInFlight: Promise<KentRehberiTypeCatalog> | null = null;
 
   const pruneCache = (timestamp: number): void => {
     for (const [key, entry] of cache) {
@@ -380,6 +505,51 @@ export const createKentRehberiFastAccessRuntime = (
     pruneCache(timestamp);
   };
 
+  const loadTypeCatalog = async (
+    control: QueryExecutionControl,
+  ): Promise<KentRehberiTypeCatalog | null> => {
+    const timestamp = Number(now());
+    if (
+      control.cache !== false
+      && Number.isFinite(timestamp)
+      && typeCatalogCache
+      && typeCatalogCache.expiresAt > timestamp
+    ) {
+      return typeCatalogCache.catalog;
+    }
+
+    const fetchNow = async (): Promise<KentRehberiTypeCatalog> =>
+      fetchTypeCatalog(buildFetchOptions(control, {}));
+
+    try {
+      const catalog = control.signal
+        ? await fetchNow()
+        : await (typeCatalogInFlight ??= fetchNow().finally(() => {
+          typeCatalogInFlight = null;
+        }));
+
+      if (control.cache !== false && Number.isFinite(timestamp)) {
+        typeCatalogCache = Object.freeze({
+          catalog,
+          expiresAt: timestamp + defaultCacheTtlMs,
+        });
+      }
+      return catalog;
+    } catch (error) {
+      if (control.signal?.aborted) throw error;
+      return null;
+    }
+  };
+
+  const resolveCatalogTypes = async (
+    profile: KentRehberiFastAccessProfile,
+    control: QueryExecutionControl,
+  ): Promise<readonly number[]> => {
+    const catalog = await loadTypeCatalog(control);
+    if (!catalog) return Object.freeze([]);
+    return resolveKentRehberiTypesFromCatalog(catalog, profile);
+  };
+
   const resolveProbe = async (
     profile: KentRehberiFastAccessProfile,
     probe: string,
@@ -405,15 +575,19 @@ export const createKentRehberiFastAccessRuntime = (
     const cached = readCache(profile.serviceKey, control);
     if (cached) return cached;
 
-    const resolvedTur = new Set<number>();
+    const resolvedTur = new Set<number>(
+      await resolveCatalogTypes(profile, control),
+    );
     const directMatches: KentRehberiGeoJsonFeature[] = [];
 
-    for (const probe of profile.probes) {
-      const resolution = await resolveProbe(profile, probe, control);
-      for (const feature of resolution.features) directMatches.push(feature);
-      if (resolution.tur !== null) {
-        resolvedTur.add(resolution.tur);
-        if (profile.mode === 'first') break;
+    if (resolvedTur.size === 0) {
+      for (const probe of profile.probes) {
+        const resolution = await resolveProbe(profile, probe, control);
+        for (const feature of resolution.features) directMatches.push(feature);
+        if (resolution.tur !== null) {
+          resolvedTur.add(resolution.tur);
+          if (profile.mode === 'first') break;
+        }
       }
     }
 
@@ -498,8 +672,12 @@ export const createKentRehberiFastAccessRuntime = (
 
   return Object.freeze({
     createBusiness,
-    clearCache: () => cache.clear(),
-    cacheSize: () => cache.size,
+    clearCache: () => {
+      cache.clear();
+      typeCatalogCache = null;
+      typeCatalogInFlight = null;
+    },
+    cacheSize: () => cache.size + (typeCatalogCache ? 1 : 0),
   });
 };
 
