@@ -253,11 +253,8 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
                 if (task.IsCompleted)
                 {
                     inFlight.TryRemove(
-                        new KeyValuePair<
-                            short,
-                            Task<IReadOnlyList<KentRehberiFeature>>>(
-                            tur,
-                            task));
+                        tur,
+                        out _);
                 }
             }
         }
@@ -510,9 +507,8 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
             timeProvider.GetUtcNow())
         {
             cache.TryRemove(
-                new KeyValuePair<short, CacheEntry>(
-                    tur,
-                    entry));
+                tur,
+                out _);
             features = null!;
             return false;
         }
