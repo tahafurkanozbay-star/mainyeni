@@ -19,7 +19,7 @@ describe('ExperienceFormField', () => {
   it('associates its visible label with the control id', () => {
     render(
       <ExperienceFormField id="address" label="Adres" required>
-        <input id="address" />
+        <input id="address" aria-label="Adres" />
       </ExperienceFormField>,
     );
     expect(screen.getByLabelText('Adres *')).toBeInTheDocument();
@@ -28,7 +28,7 @@ describe('ExperienceFormField', () => {
   it('shows optional context for non-required fields', () => {
     render(
       <ExperienceFormField id="note" label="Not">
-        <textarea id="note" />
+        <textarea id="note" aria-label="Not" />
       </ExperienceFormField>,
     );
     expect(screen.getByText('İsteğe bağlı')).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe('ExperienceFormField', () => {
   it('supports localized optional copy', () => {
     render(
       <ExperienceFormField id="note" label="Not" optionalLabel="Zorunlu değil">
-        <textarea id="note" />
+        <textarea id="note" aria-label="Not" />
       </ExperienceFormField>,
     );
     expect(screen.getByText('Zorunlu değil')).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe('ExperienceFormField', () => {
   it('renders hints with deterministic ids', () => {
     render(
       <ExperienceFormField id="query" label="Arama" hint="En az üç karakter girin.">
-        <input id="query" />
+        <input id="query" aria-label="Arama" />
       </ExperienceFormField>,
     );
     expect(screen.getByText('En az üç karakter girin.')).toHaveAttribute('id', 'query-hint');
@@ -59,7 +59,7 @@ describe('ExperienceFormField', () => {
         label="Adres"
         state={state({ invalid: true, issues: [{ code: 'required', message: 'Adres zorunludur.', severity: 'error' }] })}
       >
-        <input id="address" />
+        <input id="address" aria-label="Adres" />
       </ExperienceFormField>,
     );
     const alert = screen.getByRole('alert');
@@ -74,7 +74,7 @@ describe('ExperienceFormField', () => {
         label="Geometri"
         state={state({ issues: [{ code: 'precision', message: 'Yaklaşık konum.', severity: 'warning' }] })}
       >
-        <input id="geometry" />
+        <input id="geometry" aria-label="Geometri" />
       </ExperienceFormField>,
     );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -84,7 +84,7 @@ describe('ExperienceFormField', () => {
   it('exposes validation progress through a polite status', () => {
     render(
       <ExperienceFormField id="parcel" label="Parsel" state={state({ validating: true })}>
-        <input id="parcel" />
+        <input id="parcel" aria-label="Parsel" />
       </ExperienceFormField>,
     );
     expect(screen.getByRole('status')).toHaveTextContent('Doğrulanıyor');
