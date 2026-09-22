@@ -16,6 +16,7 @@ import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
+import { ExperienceRuntimeBridge } from './Components/Common/ExperienceRuntimeBridge';
 import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
 import { isBootstrapAbortError } from './platform/bootstrap/bootstrapCore';
@@ -99,6 +100,7 @@ function App() {
 
   return (
     <ExperienceThemeProvider>
+      <ExperienceRuntimeBridge />
       <div id="app-shell">
         {configLoadStatus === Constants_LoadingStatus.LOADING ? <FullScreenLoading /> :
           configLoadStatus === Constants_LoadingStatus.ERROR ? <FullScreenError message={configErrorMessage || 'Harita yapılandırması yüklenemedi. Lütfen bağlantınızı kontrol edip sayfayı yenileyin.'} /> :
