@@ -16,10 +16,11 @@ import {
   createLiveRegion,
   getMediaPreferenceSnapshot,
   installMediaPreferenceObserver,
-  shouldHandleGlobalShortcut,
   type LivePoliteness,
   type MediaPreferenceSnapshot,
 } from '../accessibilityRuntime';
+import { createShortcutRuntime } from '../shortcutRuntime';
+import { createWorkspaceShortcuts } from './experienceShortcutCatalog';
 import {
   experienceBus,
   getExperiencePreferences,
@@ -46,7 +47,6 @@ export const useExperienceViewport = (): ExperienceViewport => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
-
     let animationFrame = 0;
     const publish = (): void => {
       animationFrame = 0;
@@ -56,7 +56,6 @@ export const useExperienceViewport = (): ExperienceViewport => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(publish);
     };
-
     window.addEventListener('resize', onResize, { passive: true });
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
@@ -116,19 +115,16 @@ export const useExperienceAnnouncements = (): ExperienceAnnouncer => {
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
-
     const liveRegion = createLiveRegion(document.body, {
       id: 'experience-global-live-region',
       politeness: 'polite',
     });
     regionRef.current = liveRegion;
-
     const release = experienceBus.on('kentrehberi:announcement', (detail) => {
       const message = String(detail?.message ?? '').trim();
       if (!message) return;
       liveRegion.announce(message, detail.politeness ?? 'polite');
     });
-
     return () => {
       release();
       if (regionRef.current === liveRegion) regionRef.current = null;
@@ -148,27 +144,19 @@ export const focusExperienceTarget = (selector: string): boolean => {
   return target instanceof HTMLElement ? activateSkipTarget(target) : false;
 };
 
+/**
+ * Installs the single deterministic keyboard-shortcut authority for the workspace.
+ * The runtime owns editable-target suppression, composition/repeat handling,
+ * priority and cleanup, while the catalog owns product command semantics.
+ */
 export const useExperienceGlobalShortcuts = (): void => {
   useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (!shouldHandleGlobalShortcut(event)) return;
-      const key = event.key.toLowerCase();
-
-      if (event.altKey && key === 'm') {
-        event.preventDefault();
-        focusExperienceTarget('#esri-map-container');
-        return;
-      }
-      if (event.altKey && key === 's') {
-        event.preventDefault();
-        focusExperienceTarget('#sidebar');
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    if (typeof document === 'undefined') return undefined;
+    const runtime = createShortcutRuntime({
+      document,
+      shortcuts: createWorkspaceShortcuts(document),
+    });
+    return () => runtime.dispose();
   }, []);
 };
 
@@ -192,7 +180,6 @@ export const useExperienceDocumentContract = (
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
-
     const root = document.documentElement;
     setDataset(root, 'experienceTheme', contract.theme);
     setDataset(root, 'experienceDensity', contract.density);
@@ -203,7 +190,6 @@ export const useExperienceDocumentContract = (
     setDataset(root, 'experienceForcedColors', contract.forcedColors);
     root.style.colorScheme = contract.theme;
     updateThemeColorMeta(presentation.themeColor);
-
     return undefined;
   }, [contract, presentation.themeColor]);
 };
@@ -219,7 +205,6 @@ export const useExperienceRuntimeSnapshot = (input: {
   useEffect(() => {
     const reducedMotion = preferences.motion === 'reduced'
       || (preferences.motion === 'system' && media.reducedMotion);
-
     experienceBus.emit('kentrehberi:runtime', {
       preferences,
       connectivity: online ? 'online' : 'offline',
