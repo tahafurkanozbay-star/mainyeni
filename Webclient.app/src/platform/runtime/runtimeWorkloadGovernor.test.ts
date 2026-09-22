@@ -173,11 +173,9 @@ describe('runtime workload governor resilience integration', () => {
         reducedMotion: false,
         deviceMemoryGb: 8,
       },
-      {
-        ...(options.maxConcurrentNetwork === undefined
-          ? {}
-          : { maxConcurrentNetwork: options.maxConcurrentNetwork }),
-      },
+      options.maxConcurrentNetwork === undefined
+        ? {}
+        : { maxConcurrentNetwork: options.maxConcurrentNetwork },
     );
     const resources = createResourceBudgetManager({ budget });
     const control = createAdaptiveRuntimeControl({
