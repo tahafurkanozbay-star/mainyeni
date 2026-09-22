@@ -9,6 +9,7 @@ import {
 } from './adaptivePerformanceRuntime';
 import type { SceneViewLike } from './sceneRuntime';
 import type { SceneBudgetLimits } from './sceneResourceBudget';
+import { createPageVisibilityRuntime, type PageVisibilityRuntime } from '../platform/performance/pageVisibilityRuntime';
 
 export type SceneSdkQualityProfile = 'low' | 'medium' | 'high';
 export type SceneRuntimeStatus = 'idle' | 'warming' | 'ready' | 'recovering' | 'degraded' | 'disposed';
@@ -81,6 +82,7 @@ export interface SceneExperienceRuntimeOptions {
   recoveryCooldownMs?: number;
   maximumRecoveryAttempts?: number;
   frameHistorySize?: number;
+  pageVisibility?: PageVisibilityRuntime;
   onSnapshot?: (snapshot: SceneExperienceSnapshot, reason: string) => void;
   onError?: (error: unknown, context: string) => void;
   accessorWatch?: ArcgisAccessorWatch | undefined;
@@ -276,6 +278,7 @@ export const createSceneExperienceRuntime = (
   const now = options.now ?? runtimeNow;
   const requestFrame = options.requestFrame ?? defaultRequestFrame;
   const cancelFrame = options.cancelFrame ?? defaultCancelFrame;
+  const pageVisibility = options.pageVisibility ?? createPageVisibilityRuntime();
   const recoveryCooldownMs = Math.max(250, finite(options.recoveryCooldownMs, 3_000));
   const maximumRecoveryAttempts = Math.max(1, Math.floor(finite(options.maximumRecoveryAttempts, 3)));
   const frameHistorySize = Math.max(12, Math.min(240, Math.floor(finite(options.frameHistorySize, 90))));
@@ -363,7 +366,10 @@ export const createSceneExperienceRuntime = (
 
   const onAnimationFrame = (timestamp: number): void => {
     frameHandle = null;
-    if (disposed || !active) return;
+    if (disposed || !active || !pageVisibility.isVisible()) {
+      previousFrameAt = null;
+      return;
+    }
 
     if (previousFrameAt !== null) recordFrame(timestamp - previousFrameAt);
     previousFrameAt = timestamp;
@@ -377,10 +383,19 @@ export const createSceneExperienceRuntime = (
   };
 
   const startSampler = (): void => {
-    if (frameHandle !== null || disposed || !active) return;
+    if (frameHandle !== null || disposed || !active || !pageVisibility.isVisible()) return;
     previousFrameAt = null;
     frameHandle = requestFrame(onAnimationFrame);
   };
+
+  const visibilityUnsubscribe = pageVisibility.subscribe((visible) => {
+    if (disposed) return;
+    if (!visible) {
+      stopSampler();
+      return;
+    }
+    if (active) startSampler();
+  });
 
   const setActive = (nextActive: boolean): SceneExperienceSnapshot => {
     if (disposed) return buildSnapshot();
@@ -484,6 +499,7 @@ export const createSceneExperienceRuntime = (
       reportRuntimeError(error, 'fatal-watch-dispose');
     }
     performanceUnsubscribe?.();
+    visibilityUnsubscribe?.();
     listeners.clear();
     if (ownsAdaptiveRuntime) adaptive.destroy();
     status = 'disposed';
