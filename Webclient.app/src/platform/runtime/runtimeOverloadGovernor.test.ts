@@ -83,7 +83,8 @@ describe('RuntimeOverloadGovernor', () => {
 
   it('uses p95 latency so a hot tail remains visible inside the bounded window', () => {
     const governor = new RuntimeOverloadGovernor({ windowSize: 20, minimumSamples: 1 });
-    for (let at = 1; at <= 19; at += 1) governor.observe(sample(at));
+    for (let at = 1; at <= 18; at += 1) governor.observe(sample(at));
+    governor.observe(sample(19, { latencyMs: 1_500 }));
     governor.observe(sample(20, { latencyMs: 1_500 }));
     expect(governor.diagnostics().p95LatencyMs).toBe(1_500);
   });
