@@ -25,6 +25,98 @@ public sealed class KentRehberiRuntimeConfigurationTests
         Assert.True(options.MaxResponseBytes > 0);
         Assert.True(options.MaxGeometryNodesPerResponse >=
                     options.MaxGeometryNodesPerFeature);
+        Assert.Equal(
+            KentRehberiOptions.PlanAskiSource,
+            options.Source);
+        Assert.Equal(
+            KentRehberiOptions.OfficialPlanAskiBaseUri,
+            options.PlanAskiBaseUri);
+        Assert.Equal((short)0, options.PlanAskiMinTur);
+        Assert.Equal((short)42, options.PlanAskiMaxTur);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Unknown")]
+    public void UnsupportedDataSource_IsRejected(
+        string source)
+    {
+        var options =
+            KentRehberiRuntimeTestData.Options(
+                item =>
+                    item.Source = source);
+
+        Assert.Contains(
+            options.Validate(),
+            failure =>
+                failure.Contains(
+                    "Source",
+                    StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("http://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi")]
+    [InlineData("https://example.invalid/kentrehberiapi/api/kentrehberi")]
+    [InlineData("https://planaski.ankara.bel.tr/other")]
+    [InlineData("https://user@planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi")]
+    [InlineData("https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=1")]
+    public void NonCanonicalPlanAskiEndpoint_IsRejected(
+        string uri)
+    {
+        var options =
+            KentRehberiRuntimeTestData.Options(
+                item =>
+                    item.PlanAskiBaseUri = uri);
+
+        Assert.Contains(
+            options.Validate(),
+            failure =>
+                failure.Contains(
+                    "PlanAskiBaseUri",
+                    StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(-1, 42)]
+    [InlineData(0, 43)]
+    [InlineData(10, 9)]
+    public void InvalidPlanAskiTurRange_IsRejected(
+        short minimum,
+        short maximum)
+    {
+        var options =
+            KentRehberiRuntimeTestData.Options(
+                item =>
+                {
+                    item.PlanAskiMinTur = minimum;
+                    item.PlanAskiMaxTur = maximum;
+                });
+
+        Assert.Contains(
+            options.Validate(),
+            failure =>
+                failure.Contains(
+                    "PlanAski",
+                    StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(13)]
+    public void PlanAskiConcurrencyOutsideBounds_IsRejected(
+        int value)
+    {
+        var options =
+            KentRehberiRuntimeTestData.Options(
+                item =>
+                    item.PlanAskiMaxConcurrentRequests = value);
+
+        Assert.Contains(
+            options.Validate(),
+            failure =>
+                failure.Contains(
+                    "PlanAskiMaxConcurrentRequests",
+                    StringComparison.Ordinal));
     }
 
     [Theory]
@@ -231,6 +323,7 @@ public sealed class KentRehberiRuntimeConfigurationTests
                     })
                 .Build();
 
+        services.AddLogging();
         services.AddKentRehberiData(
             configuration);
 
@@ -272,6 +365,20 @@ public sealed class KentRehberiRuntimeConfigurationTests
             services,
             descriptor =>
                 descriptor.ServiceType ==
+                typeof(KentRehberiPlanAskiSource) &&
+                descriptor.Lifetime ==
+                ServiceLifetime.Singleton);
+        Assert.Contains(
+            services,
+            descriptor =>
+                descriptor.ServiceType ==
+                typeof(KentRehberiPlanAskiRepository) &&
+                descriptor.Lifetime ==
+                ServiceLifetime.Scoped);
+        Assert.Contains(
+            services,
+            descriptor =>
+                descriptor.ServiceType ==
                 typeof(IKentRehberiQueryService) &&
                 descriptor.Lifetime ==
                 ServiceLifetime.Scoped);
@@ -291,6 +398,7 @@ public sealed class KentRehberiRuntimeConfigurationTests
                     })
                 .Build();
 
+        services.AddLogging();
         services.AddKentRehberiData(
             configuration);
 
@@ -299,7 +407,8 @@ public sealed class KentRehberiRuntimeConfigurationTests
             typeof(KentRehberiTelemetry),
             typeof(KentRehberiAdmissionController),
             typeof(KentRehberiBoundedResultCache),
-            typeof(KentRehberiResultIntegrityGuard)
+            typeof(KentRehberiResultIntegrityGuard),
+            typeof(KentRehberiPlanAskiSource)
         };
 
         foreach (var type in sharedTypes)
