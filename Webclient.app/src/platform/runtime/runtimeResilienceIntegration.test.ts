@@ -40,7 +40,7 @@ describe('runtime resilience primitive composition', () => {
   });
 
   it('allows caller policy to require both overload and resource admission', () => {
-    const governor = new RuntimeOverloadGovernor({ minimumSamples: 1 });
+    const governor = new RuntimeOverloadGovernor({ minimumSamples: 1, windowSize: 1 });
     const resources = new RuntimeResourceBudget({ maxBytes: 5 * MB, maxItemBytes: 5 * MB, criticalReservedBytes: MB, interactiveReservedBytes: MB });
     const admit = (key: string, lane: OverloadLane, bytes: number): boolean => {
       if (!governor.admit(lane).admitted) return false;
