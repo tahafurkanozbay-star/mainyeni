@@ -1073,30 +1073,30 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
             };
         }
 
-        var geometryLongitude =
+        var fallbackLongitude =
             ReadNullableDouble(
                 geometry,
                 LongitudeNames);
-        var geometryLatitude =
+        var fallbackLatitude =
             ReadNullableDouble(
                 geometry,
                 LatitudeNames);
 
-        if (geometryLongitude.HasValue &&
-            geometryLatitude.HasValue)
+        if (fallbackLongitude.HasValue &&
+            fallbackLatitude.HasValue)
         {
             longitude ??=
-                geometryLongitude.Value;
+                fallbackLongitude.Value;
             latitude ??=
-                geometryLatitude.Value;
+                fallbackLatitude.Value;
 
             return new JsonObject
             {
                 ["type"] = "Point",
                 ["coordinates"] =
                     new JsonArray(
-                        geometryLongitude.Value,
-                        geometryLatitude.Value)
+                        fallbackLongitude.Value,
+                        fallbackLatitude.Value)
             };
         }
 
