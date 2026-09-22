@@ -482,16 +482,39 @@ export class SpatialSelectionIndexRuntime<T> {
       this.#policy.nearestExpansionSteps,
       'expansionSteps',
     );
-    const growth = steps <= 1 || initialRadius === maxRadius
+    const linearCellSpan = Math.max(
+      1,
+      Math.floor(Math.sqrt(this.#policy.maxCellsPerRecord)),
+    );
+    const gridSafeRadius = Math.max(
+      this.#policy.gridCellSize / 2,
+      ((linearCellSpan - 1) * this.#policy.gridCellSize) / 2,
+    );
+    const effectiveMaxRadius = Math.min(maxRadius, gridSafeRadius);
+    const effectiveInitialRadius = Math.min(initialRadius, effectiveMaxRadius);
+    const growth = steps <= 1 || effectiveInitialRadius === effectiveMaxRadius
       ? 1
-      : Math.pow(maxRadius / initialRadius, 1 / (steps - 1));
+      : Math.pow(effectiveMaxRadius / effectiveInitialRadius, 1 / (steps - 1));
     const radii = Array.from({ length: steps }, (_, index) => (
       index === steps - 1
-        ? maxRadius
-        : Math.min(maxRadius, initialRadius * Math.pow(growth, index))
+        ? effectiveMaxRadius
+        : Math.min(
+          effectiveMaxRadius,
+          effectiveInitialRadius * Math.pow(growth, index),
+        )
     ));
 
     const candidateIds = new Set<string>();
+    const eligibleCandidateCount = (): number => Array.from(candidateIds).reduce(
+      (count, id) => {
+        const entry = this.#records.get(id);
+        if (!entry) return count;
+        if (layers && !layers.has(entry.record.layerId)) return count;
+        if (SELECTION_PRIORITY_RANK[entry.record.priority] < minimumRank) return count;
+        return count + 1;
+      },
+      0,
+    );
     let gridQueries = 0;
     radii.some((radius) => {
       throwIfSelectionAborted(input.signal);
@@ -509,7 +532,10 @@ export class SpatialSelectionIndexRuntime<T> {
         set.add(String(hit.id));
         return set;
       }, candidateIds);
-      return candidateIds.size >= this.#policy.maxQueryCandidates;
+      return (
+        candidateIds.size >= this.#policy.maxQueryCandidates
+        || eligibleCandidateCount() >= limit
+      );
     });
     throwIfSelectionAborted(input.signal);
 
@@ -543,6 +569,7 @@ export class SpatialSelectionIndexRuntime<T> {
     this.#queries += 1;
     this.#nearestQueries += 1;
     const truncated = candidateIds.size >= this.#policy.maxQueryCandidates
+      || effectiveMaxRadius < maxRadius
       || ranked.length > selected.length;
 
     return Object.freeze({
