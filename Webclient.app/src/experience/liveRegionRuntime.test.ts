@@ -72,7 +72,8 @@ describe('liveRegionRuntime', () => {
     runtime.announce('Critical', { priority: 'assertive' });
     runtime.announce('Polite two');
     expect(runtime.getSnapshot()).toMatchObject({ queued: 2, dropped: 1 });
-    vi.runOnlyPendingTimers();
+    vi.advanceTimersToNextTimer();
+    vi.advanceTimersToNextTimer();
     expect(runtime.getSnapshot().delivered).toBe(2);
   });
 
@@ -82,8 +83,9 @@ describe('liveRegionRuntime', () => {
     runtime.announce('Critical two', { priority: 'assertive' });
     runtime.announce('Critical three', { priority: 'assertive' });
     expect(runtime.getSnapshot()).toMatchObject({ queued: 2, dropped: 1 });
-    vi.runOnlyPendingTimers();
-    expect(document.querySelector('[data-experience-live-region="assertive"]')?.textContent).toBe('');
+    vi.advanceTimersToNextTimer();
+    vi.advanceTimersToNextTimer();
+    expect(document.querySelector('[data-experience-live-region="assertive"]')?.textContent).toBe('Critical three');
     expect(runtime.getSnapshot().delivered).toBe(2);
   });
 
@@ -121,7 +123,7 @@ describe('liveRegionRuntime', () => {
     expect(runtime.getSnapshot().queued).toBe(0);
     expect(document.querySelector('[data-experience-live-region="polite"]')?.textContent).toBe('');
     expect(runtime.announce('Üç')).toBe(true);
-    vi.runOnlyPendingTimers();
+    vi.advanceTimersByTime(0);
     expect(runtime.getSnapshot().delivered).toBe(2);
   });
 
@@ -148,7 +150,8 @@ describe('liveRegionRuntime', () => {
     const runtime = createLiveRegionRuntime({ document, clearDelayMs: 100, dedupeWindowMs: 0 });
     runtime.announce('Polite');
     runtime.announce('Assertive', { priority: 'assertive' });
-    vi.advanceTimersByTime(0);
+    vi.advanceTimersToNextTimer();
+    vi.advanceTimersToNextTimer();
     expect(runtime.getSnapshot().delivered).toBe(2);
     expect(document.querySelector('[data-experience-live-region="polite"]')?.textContent).toBe('Polite');
     expect(document.querySelector('[data-experience-live-region="assertive"]')?.textContent).toBe('Assertive');
