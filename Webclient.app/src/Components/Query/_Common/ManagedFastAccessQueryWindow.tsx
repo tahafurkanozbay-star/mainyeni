@@ -17,6 +17,10 @@ import MapManager from '../../../Store/Managers/MapManager';
 import { DebugHelper } from '../../../Toolbox/DebugHelper';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { createPictureMarkerSymbol } from '../../../gis-engine/iconPresentation';
+import {
+  createKentRehberiGeoJsonLayer,
+  type KentRehberiGeoJsonFeatureCollection,
+} from '../../../data-services/kentRehberiGeoJsonLayer';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import {
   buildGoogleDirectionsUrl,
@@ -62,6 +66,8 @@ export interface FastAccessServiceResult {
   readonly data?: readonly FastAccessFeature[] | null;
   readonly message?: unknown;
   readonly errorMessage?: unknown;
+  readonly source?: unknown;
+  readonly featureCollection?: KentRehberiGeoJsonFeatureCollection | null;
 }
 
 export interface FastAccessBusiness {
@@ -89,6 +95,7 @@ interface MapViewLike {
 
 interface LayerLike {
   readonly queryExtent?: () => Promise<{ readonly extent?: ExtentLike | null } | null>;
+  readonly destroy?: () => void;
 }
 
 interface LayerEnvelope {
@@ -233,6 +240,11 @@ const safeRemoveLayer = (
   } catch (error) {
     DebugHelper.Log(error);
   }
+  try {
+    layer?.destroy?.();
+  } catch (error) {
+    DebugHelper.Log(error);
+  }
 };
 
 const getMapView = (): MapViewLike | null => {
@@ -304,6 +316,7 @@ export function createManagedFastAccessQueryWindow({
 
     const renderLayer = useCallback(async (
       query: Readonly<Record<string, unknown>>,
+      result: FastAccessServiceResult,
     ): Promise<void> => {
       const mapView = mapViewRef.current;
       if (!mapView?.map) return;
@@ -314,14 +327,34 @@ export function createManagedFastAccessQueryWindow({
         { minSize: 28, maxSize: 44 },
       );
 
-      const nextLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
-        serviceKey,
-        title,
-        query,
-        symbol,
-      ) as LayerEnvelope | null;
+      let nextLayer: LayerEnvelope | null = null;
+      if (result.source === 'kent-rehberi' && result.featureCollection) {
+        const layer = await createKentRehberiGeoJsonLayer(
+          result.featureCollection,
+          undefined,
+          {
+            id: `kent-rehberi-${serviceKey}`,
+            title,
+            renderer: Object.freeze({
+              type: 'simple',
+              symbol,
+            }),
+          },
+        );
+        nextLayer = Object.freeze({ layerObj: layer as LayerLike });
+      } else {
+        nextLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
+          serviceKey,
+          title,
+          query,
+          symbol,
+        ) as LayerEnvelope | null;
+      }
 
-      if (!mountedRef.current || !nextLayer?.layerObj) return;
+      if (!mountedRef.current || !nextLayer?.layerObj) {
+        nextLayer?.layerObj?.destroy?.();
+        return;
+      }
 
       clearOwnedLayer();
       layerRef.current = nextLayer;
@@ -364,7 +397,7 @@ export function createManagedFastAccessQueryWindow({
           : [];
 
         setRecords(nextRecords);
-        await renderLayer(query);
+        await renderLayer(query, result);
       } catch (error) {
         if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
           showError(error);
