@@ -78,10 +78,11 @@ describe('sceneNavigationRuntime', () => {
       defaultDurationMs: 800,
     });
     await runtime.zoomBy(0.5);
-    expect(view.goTo).toHaveBeenCalledWith(expect.anything(), {
+    expect(view.goTo).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       animate: false,
       duration: 0,
-    });
+      signal: expect.anything(),
+    }));
   });
 
   it('zooms by a multiplicative scale factor', async () => {
@@ -227,19 +228,55 @@ describe('sceneNavigationRuntime', () => {
     expect(view.goTo).not.toHaveBeenCalled();
   });
 
-  it('suppresses stale results after a navigation is aborted in flight', async () => {
+  it('forwards caller cancellation into the ArcGIS goTo signal', async () => {
     const controller = new AbortController();
-    let release: (() => void) | undefined;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let sdkSignal: AbortSignal | undefined;
     const view = createView({
-      goTo: vi.fn(async () => gate),
+      goTo: vi.fn(async (_target: unknown, options?: unknown) => {
+        sdkSignal = (options as { signal?: AbortSignal } | undefined)?.signal;
+        return new Promise<void>((_resolve, reject) => {
+          sdkSignal?.addEventListener('abort', () => {
+            const error = new Error('cancelled');
+            error.name = 'AbortError';
+            reject(error);
+          }, { once: true });
+        });
+      }),
     });
     const runtime = createSceneNavigationRuntime(view);
     const pending = runtime.navigate({ scale: 10_000 }, { signal: controller.signal });
     await Promise.resolve();
-    controller.abort();
-    release?.();
+    expect(sdkSignal?.aborted).toBe(false);
+    controller.abort('caller-cancelled');
+    expect(sdkSignal?.aborted).toBe(true);
     await expect(pending).resolves.toBe(false);
+  });
+
+  it('aborts the previous SDK navigation when a newer move supersedes it', async () => {
+    let callCount = 0;
+    let firstSignal: AbortSignal | undefined;
+    const view = createView({
+      goTo: vi.fn(async (_target: unknown, options?: unknown) => {
+        callCount += 1;
+        const signal = (options as { signal?: AbortSignal } | undefined)?.signal;
+        if (callCount !== 1) return;
+        firstSignal = signal;
+        return new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            const error = new Error('superseded');
+            error.name = 'AbortError';
+            reject(error);
+          }, { once: true });
+        });
+      }),
+    });
+    const runtime = createSceneNavigationRuntime(view);
+    const first = runtime.navigate({ center: [31, 39], scale: 10_000 });
+    await Promise.resolve();
+    const second = runtime.navigate({ center: [32, 39], scale: 8_000 });
+    expect(firstSignal?.aborted).toBe(true);
+    await expect(second).resolves.toBe(true);
+    await expect(first).resolves.toBe(false);
   });
 
   it('treats ArcGIS AbortError as a cancelled move instead of a runtime failure', async () => {
