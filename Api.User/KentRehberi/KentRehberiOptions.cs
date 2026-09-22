@@ -7,8 +7,21 @@ public sealed class KentRehberiOptions
 {
     public const string SectionName = "KentRehberiData";
     public const string ConnectionStringName = "KentRehberi";
+    public const string PlanAskiSource = "PlanAski";
+    public const string PostgisSource = "Postgis";
+    public const string OfficialPlanAskiBaseUri =
+        "https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi";
 
     public bool Enabled { get; set; } = true;
+    public string Source { get; set; } = PlanAskiSource;
+    public string PlanAskiBaseUri { get; set; } = OfficialPlanAskiBaseUri;
+    public short PlanAskiMinTur { get; set; } = 0;
+    public short PlanAskiMaxTur { get; set; } = 42;
+    public int PlanAskiRequestTimeoutSeconds { get; set; } = 10;
+    public int PlanAskiCacheTtlSeconds { get; set; } = 300;
+    public int PlanAskiMaxConcurrentRequests { get; set; } = 6;
+    public int PlanAskiMaxRecordsPerType { get; set; } = 20_000;
+    public long PlanAskiMaxResponseBytesPerType { get; set; } = 8 * 1024 * 1024;
     public int DefaultLimit { get; set; } = 500;
     public int MaxLimit { get; set; } = 2_000;
     public int MaxRadiusMeters { get; set; } = 50_000;
@@ -42,6 +55,69 @@ public sealed class KentRehberiOptions
     public IReadOnlyList<string> Validate()
     {
         var failures = new List<string>();
+
+        if (!string.Equals(Source, PlanAskiSource, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(Source, PostgisSource, StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add("KentRehberiData:Source must be PlanAski or Postgis.");
+        }
+
+        if (!Uri.TryCreate(PlanAskiBaseUri, UriKind.Absolute, out var planAskiUri) ||
+            !string.Equals(planAskiUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(planAskiUri.Host, "planaski.ankara.bel.tr", StringComparison.OrdinalIgnoreCase) ||
+            planAskiUri.Port != 443 ||
+            !string.Equals(
+                planAskiUri.AbsolutePath.TrimEnd('/'),
+                "/kentrehberiapi/api/kentrehberi",
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrEmpty(planAskiUri.UserInfo) ||
+            !string.IsNullOrEmpty(planAskiUri.Query) ||
+            !string.IsNullOrEmpty(planAskiUri.Fragment))
+        {
+            failures.Add(
+                "KentRehberiData:PlanAskiBaseUri must be the official HTTPS planaski.ankara.bel.tr Kent Rehberi endpoint.");
+        }
+
+        if (PlanAskiMinTur < 0 || PlanAskiMinTur > 42)
+        {
+            failures.Add("KentRehberiData:PlanAskiMinTur must be between 0 and 42.");
+        }
+
+        if (PlanAskiMaxTur < 0 || PlanAskiMaxTur > 42)
+        {
+            failures.Add("KentRehberiData:PlanAskiMaxTur must be between 0 and 42.");
+        }
+
+        if (PlanAskiMinTur > PlanAskiMaxTur)
+        {
+            failures.Add("KentRehberiData:PlanAskiMinTur cannot exceed PlanAskiMaxTur.");
+        }
+
+        if (PlanAskiRequestTimeoutSeconds is < 1 or > 60)
+        {
+            failures.Add("KentRehberiData:PlanAskiRequestTimeoutSeconds must be between 1 and 60.");
+        }
+
+        if (PlanAskiCacheTtlSeconds is < 15 or > 3600)
+        {
+            failures.Add("KentRehberiData:PlanAskiCacheTtlSeconds must be between 15 and 3600.");
+        }
+
+        if (PlanAskiMaxConcurrentRequests is < 1 or > 12)
+        {
+            failures.Add("KentRehberiData:PlanAskiMaxConcurrentRequests must be between 1 and 12.");
+        }
+
+        if (PlanAskiMaxRecordsPerType is < 1 or > 100_000)
+        {
+            failures.Add("KentRehberiData:PlanAskiMaxRecordsPerType must be between 1 and 100000.");
+        }
+
+        if (PlanAskiMaxResponseBytesPerType is < 262_144 or > 33_554_432)
+        {
+            failures.Add(
+                "KentRehberiData:PlanAskiMaxResponseBytesPerType must be between 256 KiB and 32 MiB.");
+        }
 
         if (DefaultLimit is < 1 or > 2_000)
         {
