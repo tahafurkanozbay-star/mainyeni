@@ -96,6 +96,9 @@ jobs:
       - name: GIS query governance contract
         run: npm run quality:gis-query-governance
 
+      - name: Kent Rehberi all-layer contract
+        run: npm run quality:kent-rehberi-all-layers
+
       - name: Full lint visibility
         run: npm run lint --if-present
 
