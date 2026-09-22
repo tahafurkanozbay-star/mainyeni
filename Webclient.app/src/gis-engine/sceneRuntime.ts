@@ -188,7 +188,7 @@ export const bindSceneState = (view: SceneViewLike, bridge: ViewStateBridge, sel
       applyingBridgeState = true;
       try {
         await applyViewStateToSceneView(view, nextState, {
-          ...(options.goToOptions || {}),
+          ...options.goToOptions,
           signal: controller.signal,
         });
       } catch (error) {
