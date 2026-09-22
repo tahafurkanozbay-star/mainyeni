@@ -82,7 +82,7 @@ export function createLiveRegionRuntime(options: LiveRegionOptions): LiveRegionR
   const scheduleClear = (priority: AnnouncementPriority) => {
     const region = priority === 'assertive' ? assertive : polite;
     const existing = priority === 'assertive' ? clearAssertiveTimer : clearPoliteTimer;
-    if (existing) clearTimer(existing);
+    if (existing !== null) clearTimer(existing);
     const timer = setTimer(() => {
       region.textContent = '';
       if (priority === 'assertive') clearAssertiveTimer = null;
@@ -106,7 +106,7 @@ export function createLiveRegionRuntime(options: LiveRegionOptions): LiveRegionR
   };
 
   const scheduleFlush = () => {
-    if (!flushTimer) flushTimer = setTimer(flush, 0);
+    if (flushTimer === null) flushTimer = setTimer(flush, 0);
   };
 
   return {
@@ -140,9 +140,9 @@ export function createLiveRegionRuntime(options: LiveRegionOptions): LiveRegionR
       queue.splice(0);
       polite.textContent = '';
       assertive.textContent = '';
-      if (flushTimer) clearTimer(flushTimer);
-      if (clearPoliteTimer) clearTimer(clearPoliteTimer);
-      if (clearAssertiveTimer) clearTimer(clearAssertiveTimer);
+      if (flushTimer !== null) clearTimer(flushTimer);
+      if (clearPoliteTimer !== null) clearTimer(clearPoliteTimer);
+      if (clearAssertiveTimer !== null) clearTimer(clearAssertiveTimer);
       flushTimer = clearPoliteTimer = clearAssertiveTimer = null;
     },
     getSnapshot() {
