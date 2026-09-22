@@ -17,6 +17,14 @@ import {
   type RuntimeHealthJournal,
   type RuntimeHealthSummary,
 } from './runtimeHealthJournal';
+import {
+  RuntimeResilienceRejectedError,
+  type RuntimeResilienceLane,
+  type RuntimeResilienceLease,
+  type RuntimeResilienceOutcome,
+  type RuntimeResilienceSupervisor,
+  type RuntimeResilienceSupervisorSnapshot,
+} from './runtimeResilienceSupervisor';
 
 export interface RuntimeWorkloadResourceClaim {
   readonly kind: ResourceKind;
@@ -29,6 +37,7 @@ export interface RuntimeWorkloadRequest extends AdmissionRequest {
   readonly owner?: string;
   readonly resources?: readonly RuntimeWorkloadResourceClaim[];
   readonly deadlineMs?: number;
+  readonly parentDeadlineMs?: number;
 }
 
 export interface RuntimeWorkloadLease {
@@ -61,7 +70,9 @@ export interface RuntimeWorkloadGovernorOptions {
   readonly journal?: RuntimeHealthJournal;
   readonly now?: () => number;
   readonly policy?: Partial<RuntimeWorkloadGovernorPolicy>;
+  readonly resilience?: RuntimeResilienceSupervisor;
   readonly disposeControl?: boolean;
+  readonly disposeResilience?: boolean;
 }
 
 export interface RuntimeWorkloadGovernorCounters {
@@ -83,6 +94,7 @@ export interface RuntimeWorkloadGovernorSnapshot {
   readonly activeByLane: Readonly<Record<string, number>>;
   readonly activeResources: Readonly<Record<ResourceKind, number>>;
   readonly health: RuntimeHealthSummary;
+  readonly resilience: RuntimeResilienceSupervisorSnapshot | null;
 }
 
 export interface RuntimeWorkloadGovernor {
@@ -140,6 +152,7 @@ interface InternalWorkload {
   readonly startedAt: number;
   readonly externalSignal: AbortSignal | null;
   readonly externalAbort: (() => void) | null;
+  readonly resilience: RuntimeResilienceLease | null;
   timer: ReturnType<typeof setTimeout> | null;
   internalAbortCleanup: (() => void) | null;
   released: boolean;
@@ -199,6 +212,32 @@ const classifyOutcome = (reason: unknown): ReleaseOutcome => {
   return 'failed';
 };
 
+const resilienceLaneFor = (
+  request: RuntimeWorkloadRequest,
+): RuntimeResilienceLane => {
+  if (request.priority === 'critical') return 'critical';
+  const lane = request.lane?.trim().toLowerCase();
+  if (
+    request.priority === 'background'
+    || lane === 'background'
+    || lane === 'prefetch'
+    || lane === 'maintenance'
+  ) {
+    return 'background';
+  }
+  return 'interactive';
+};
+
+const resilienceOutcomeFor = (
+  outcome: ReleaseOutcome,
+): RuntimeResilienceOutcome => {
+  if (outcome === 'completed') return 'success';
+  if (outcome === 'failed') return 'failure';
+  if (outcome === 'timed-out') return 'timeout';
+  if (outcome === 'disposed') return 'released';
+  return 'cancelled';
+};
+
 export const createRuntimeWorkloadGovernor = (
   options: RuntimeWorkloadGovernorOptions,
 ): RuntimeWorkloadGovernor => {
@@ -214,6 +253,7 @@ export const createRuntimeWorkloadGovernor = (
   let timedOut = 0;
   let rejected = 0;
   let resourceRejected = 0;
+  let resilienceSequence = 0;
   let disposed = false;
 
   const assertActive = (): void => {
@@ -266,7 +306,13 @@ export const createRuntimeWorkloadGovernor = (
     releaseResources(internal.resources);
     internal.admission.release();
     incrementOutcome(outcome);
-    const durationMs = Math.max(0, now() - internal.startedAt);
+    const finishedAt = now();
+    const durationMs = Math.max(0, finishedAt - internal.startedAt);
+    internal.resilience?.finish({
+      outcome: resilienceOutcomeFor(outcome),
+      nowMs: finishedAt,
+      latencyMs: durationMs,
+    });
     if (outcome === 'completed') {
       record('latency', 'info', 'workload-completed', internal.admission.lane, durationMs);
     } else if (outcome === 'timed-out') {
@@ -327,11 +373,47 @@ export const createRuntimeWorkloadGovernor = (
     const owner = normalizeOwner(request.owner, policy.maxOwnerLength);
     const controller = new AbortController();
     const externalSignal = request.signal ?? null;
-    const deadlineMs = positiveInteger(
+    const requestedDeadlineMs = positiveInteger(
       request.deadlineMs,
       policy.defaultDeadlineMs,
       Math.max(policy.defaultDeadlineMs, policy.maxDeadlineMs),
     );
+    const startedAt = now();
+    let resilienceLease: RuntimeResilienceLease | null = null;
+
+    if (options.resilience) {
+      const adaptive = options.control.snapshot();
+      resilienceSequence += 1;
+      const result = options.resilience.begin({
+        key: 'workload:' + resilienceSequence.toString(36),
+        lane: resilienceLaneFor(request),
+        nowMs: startedAt,
+        timeoutMs: requestedDeadlineMs,
+        ...(request.parentDeadlineMs === undefined
+          ? {}
+          : { parentDeadlineMs: request.parentDeadlineMs }),
+        load: {
+          active: adaptive.admission.active,
+          queued: adaptive.admission.queued,
+        },
+      });
+      if (!result.admitted) {
+        rejected += 1;
+        record(
+          'admission',
+          'warning',
+          'resilience-shed',
+          request.lane?.trim() || 'default',
+        );
+        throw new RuntimeResilienceRejectedError(
+          result.reason,
+          result.decision,
+        );
+      }
+      resilienceLease = result.lease;
+    }
+
+    const deadlineMs = resilienceLease?.timeoutMs ?? requestedDeadlineMs;
 
     const externalAbort = externalSignal
       ? (): void => {
@@ -341,6 +423,11 @@ export const createRuntimeWorkloadGovernor = (
 
     if (externalSignal?.aborted) {
       controller.abort(abortReason(externalSignal));
+      resilienceLease?.finish({
+        outcome: 'cancelled',
+        nowMs: startedAt,
+        latencyMs: 0,
+      });
     } else if (externalSignal && externalAbort) {
       externalSignal.addEventListener('abort', externalAbort, { once: true });
     }
@@ -365,6 +452,14 @@ export const createRuntimeWorkloadGovernor = (
       const outcome = controller.signal.aborted ? classifyOutcome(abortReason(controller.signal)) : 'failed';
       if (outcome === 'timed-out') timedOut += 1;
       else if (outcome === 'cancelled') cancelled += 1;
+      resilienceLease?.finish({
+        outcome: outcome === 'timed-out'
+          ? 'timeout'
+          : outcome === 'cancelled'
+            ? 'cancelled'
+            : 'rejected',
+        nowMs: now(),
+      });
       record(
         outcome === 'timed-out' ? 'failure' : 'admission',
         outcome === 'timed-out' ? 'warning' : 'info',
@@ -381,6 +476,10 @@ export const createRuntimeWorkloadGovernor = (
       clearTimeout(timer);
       externalSignal?.removeEventListener('abort', externalAbort as EventListener);
       admission.release();
+      resilienceLease?.finish({
+        outcome: 'rejected',
+        nowMs: now(),
+      });
       throw error;
     }
 
@@ -392,6 +491,10 @@ export const createRuntimeWorkloadGovernor = (
       const reason = abortReason(controller.signal);
       const outcome = classifyOutcome(reason);
       incrementOutcome(outcome);
+      resilienceLease?.finish({
+        outcome: resilienceOutcomeFor(outcome),
+        nowMs: now(),
+      });
       throw reason;
     }
 
@@ -415,9 +518,10 @@ export const createRuntimeWorkloadGovernor = (
       controller,
       resources,
       publicLease: Object.freeze(publicLease),
-      startedAt: now(),
+      startedAt,
       externalSignal,
       externalAbort,
+      resilience: resilienceLease,
       timer,
       internalAbortCleanup: null,
       released: false,
@@ -513,6 +617,7 @@ export const createRuntimeWorkloadGovernor = (
       activeByLane: Object.freeze(activeByLane),
       activeResources: Object.freeze(activeResources),
       health: journal.summary(),
+      resilience: options.resilience?.snapshot() ?? null,
     });
   };
 
@@ -522,6 +627,9 @@ export const createRuntimeWorkloadGovernor = (
     cancelQueued();
     cancelActive(() => true, reason);
     if (options.disposeControl === true) options.control.dispose();
+    if (options.disposeResilience === true && options.resilience) {
+      options.resilience.dispose(now());
+    }
     if (ownsJournal) journal.dispose();
   };
 
