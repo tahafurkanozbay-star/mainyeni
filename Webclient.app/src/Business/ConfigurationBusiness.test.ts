@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { ConfigurationBusiness } from './ConfigurationBusiness';
+import {
+  ConfigurationBusiness,
+  resolveLocalBootstrapPreviewEnabled,
+} from './ConfigurationBusiness';
 import { apiClient } from '../platform/http/httpClient';
 
 vi.mock('../platform/http/httpClient', () => ({
@@ -9,6 +12,24 @@ vi.mock('../platform/http/httpClient', () => ({
 }));
 
 const mockedGet = vi.mocked(apiClient.get);
+
+describe('local bootstrap preview policy', () => {
+  test('defaults to enabled in Vite development when the env flag is missing', () => {
+    expect(resolveLocalBootstrapPreviewEnabled(true, 'development', undefined)).toBe(true);
+  });
+
+  test.each(['false', '0', 'off', 'disabled'])(
+    'supports explicit local preview opt-out with %s',
+    (value) => {
+      expect(resolveLocalBootstrapPreviewEnabled(true, 'development', value)).toBe(false);
+    },
+  );
+
+  test('stays disabled in production and test mode', () => {
+    expect(resolveLocalBootstrapPreviewEnabled(false, 'production', 'true')).toBe(false);
+    expect(resolveLocalBootstrapPreviewEnabled(true, 'test', 'true')).toBe(false);
+  });
+});
 
 describe('ConfigurationBusiness platform integration', () => {
   beforeEach(() => {

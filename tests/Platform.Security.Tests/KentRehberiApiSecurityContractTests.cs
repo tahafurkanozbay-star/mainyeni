@@ -218,6 +218,92 @@ public sealed class KentRehberiApiSecurityContractTests
     }
 
     [Fact]
+    public void LocalLaunchProfiles_AlignWithViteAndUseOfficialPlanAskiSource()
+    {
+        var launchSettings = Read(
+            "Api.User/Properties/launchSettings.json");
+        using var document =
+            JsonDocument.Parse(
+                launchSettings.TrimStart('﻿'));
+
+        var root =
+            document.RootElement;
+        var iis =
+            root.GetProperty("iisSettings")
+                .GetProperty("iisExpress");
+
+        Assert.Equal(
+            "http:" + "//localhost:3002",
+            iis.GetProperty("applicationUrl")
+                .GetString());
+        Assert.Equal(
+            3003,
+            iis.GetProperty("sslPort")
+                .GetInt32());
+
+        var profiles =
+            root.GetProperty("profiles");
+        var project =
+            profiles.GetProperty("api.user");
+
+        Assert.Equal(
+            "https://localhost:3003;" + "http:" + "//localhost:3002",
+            project.GetProperty("applicationUrl")
+                .GetString());
+
+        foreach (var profileName in
+                 new[]
+                 {
+                     "api.user",
+                     "IIS Express"
+                 })
+        {
+            var environment =
+                profiles.GetProperty(profileName)
+                    .GetProperty("environmentVariables");
+
+            Assert.Equal(
+                "PlanAski",
+                environment
+                    .GetProperty("KentRehberiData__Source")
+                    .GetString());
+            Assert.Equal(
+                KentRehberiOptions.OfficialPlanAskiBaseUri,
+                environment
+                    .GetProperty("KentRehberiData__PlanAskiBaseUri")
+                    .GetString());
+            Assert.Equal(
+                "0",
+                environment
+                    .GetProperty("KentRehberiData__PlanAskiMinTur")
+                    .GetString());
+            Assert.Equal(
+                "42",
+                environment
+                    .GetProperty("KentRehberiData__PlanAskiMaxTur")
+                    .GetString());
+        }
+
+        var vite =
+            Read("Webclient.app/vite.config.ts");
+        var localProxy =
+            Read("Webclient.app/tooling/localApiProxy.ts");
+
+        Assert.Contains(
+            "target: apiProxyTarget",
+            vite,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "https://localhost:3003",
+            localProxy,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "https://planaski.ankara.bel.tr",
+            vite,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DeploymentGuide_DoesNotTrackProvidedInternalHost()
     {
         var guide = Read("docs/kent-rehberi-postgis-api.md");
