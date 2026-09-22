@@ -49,8 +49,9 @@ export interface RuntimeResourceBudgetSnapshot {
 }
 
 const LANES: readonly ResourceLane[] = ['critical', 'interactive', 'background'];
+const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
 const DEFAULT_CONFIG: RuntimeResourceBudgetConfig = {
-  maxBytes: 64 * 1024 * 1024,
+  maxBytes: DEFAULT_MAX_BYTES,
   maxItems: 256,
   criticalReservedBytes: 8 * 1024 * 1024,
   interactiveReservedBytes: 8 * 1024 * 1024,
@@ -69,7 +70,14 @@ function nonNegativeSafeInteger(value: number, name: string): number {
 }
 
 function validateConfig(input: Partial<RuntimeResourceBudgetConfig>): RuntimeResourceBudgetConfig {
-  const config = { ...DEFAULT_CONFIG, ...input };
+  const maxBytes = input.maxBytes ?? DEFAULT_CONFIG.maxBytes;
+  const derivedReserve = Math.floor(maxBytes / 8);
+  const config: RuntimeResourceBudgetConfig = {
+    ...DEFAULT_CONFIG,
+    ...input,
+    criticalReservedBytes: input.criticalReservedBytes ?? derivedReserve,
+    interactiveReservedBytes: input.interactiveReservedBytes ?? derivedReserve,
+  };
   safePositiveInteger(config.maxBytes, 'maxBytes');
   safePositiveInteger(config.maxItems, 'maxItems');
   safePositiveInteger(config.maxItemBytes, 'maxItemBytes');
