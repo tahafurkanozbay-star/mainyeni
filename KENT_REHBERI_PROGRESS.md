@@ -863,3 +863,14 @@
 - VALIDATION ROUND 1: PR #289 exact head before this progress append is under GitHub Actions. Architecture audit completed its steps successfully; backend/release validation were still running when this checkpoint was written. This progress commit intentionally changes the head, so merge requires a fresh exact-head CI pass after this append.
 - MERGE DURUMU: NOT MERGED at this checkpoint. Do not merge until the progress-bearing exact head is green, main remains the exact base with behind=0, mergeable=true, unresolved review threads are zero, and expected-head squash merge is used.
 
+## Local bootstrap preview regression fix — 2026-09-22
+- TUR / GÖREV: Webclient startup regression after PlanASKI cutover.
+- BASE MAIN: `eaccc4345d8ad878a7555481afe334fb96df5480`.
+- BRANCH: `agent/local-bootstrap-preview-fix-20260922`; PR #292.
+- KULLANICI BELİRTİSİ: fresh local checkout on `localhost:3001` stopped before map mount with `BOOTSTRAP_UNEXPECTED`.
+- KÖK NEDEN: `ConfigurationBusiness` still had the local bootstrap preview path, but tracked `Webclient.app/.env.example` no longer declared `VITE_LOCAL_BOOTSTRAP_PREVIEW`. `setup-local-env.mjs` copies that template only when `.env` is missing and preserves existing files afterward. A fresh checkout therefore disabled the preview implicitly and tried `/AppSettings/List` + `/Gis/ConfigService/List`, which require the legacy bootstrap DB configuration.
+- DÜZELTME: Vite development now defaults the local bootstrap preview to enabled when the flag is absent; explicit `VITE_LOCAL_BOOTSTRAP_PREVIEW=false` remains supported. Production and Vitest test mode remain disabled. `.env.example` again documents `VITE_LOCAL_BOOTSTRAP_PREVIEW=true`.
+- VERİ SINIRI: preview still affects only map bootstrap/config-service placeholders. It does NOT intercept `/api/kent-rehberi`, `/api/kent-rehberi/types`, or official PlanASKI data. Real Kent Rehberi data continues through Api.User.
+- REGRESSION TESTLERİ: added pure policy tests for development default-on, explicit opt-out, and production/test disabled behavior. Existing ConfigurationBusiness transport tests remain in test mode and therefore continue exercising the real same-origin client path.
+- MERGE DURUMU: NOT MERGED at this checkpoint. PR #292 exact-head CI must be green, main must remain the exact base/behind=0, mergeable=true, unresolved review threads=0, then expected-head squash merge.
+
