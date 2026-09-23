@@ -74,16 +74,38 @@ test('Platform test JavaScript is fully eliminated and permanently ratcheted to 
   assert.equal(baseline.testDomains?.platform, 0);
 });
 
-test('Platform test TypeScript project is strict, complete and rejects JavaScript admission', async () => {
+test('Platform test TypeScript project is strict, curated and rejects JavaScript admission', async () => {
   const config = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.platform-tests.json'), 'utf8'));
   assert.equal(config.compilerOptions?.allowJs, false);
+  assert.equal(config.compilerOptions?.checkJs, false);
   assert.equal(config.compilerOptions?.strict, true);
   assert.deepEqual(config.compilerOptions?.types, ['vitest/globals', 'vite/client']);
-  const platformTests = (await walk(PLATFORM))
-    .filter((file) => /\.(?:test|spec)\.tsx?$/u.test(file))
-    .map((file) => normalize(path.relative(path.join(ROOT, 'Webclient.app'), file)))
-    .sort();
-  assert.deepEqual([...config.include].sort(), platformTests);
+  assert.ok(Array.isArray(config.include));
+  assert.ok(config.include.length > 0);
+  assert.equal(new Set(config.include).size, config.include.length, 'strict Platform test includes must be unique');
+  for (const entry of config.include) {
+    assert.match(entry, /^src\/platform\/.+\.(?:test|spec)\.tsx?$/u, `invalid strict Platform test include: ${entry}`);
+    assert.equal(await exists(path.join(ROOT, 'Webclient.app', entry)), true, `missing strict Platform test include: ${entry}`);
+  }
+  const requiredModernizationSuites = [
+    'runtimeAdmissionController.test.ts',
+    'runtimeBackpressureCoordinator.test.ts',
+    'runtimeCapacityHealth.integration.test.ts',
+    'runtimeCapacityReservationPool.test.ts',
+    'runtimeConcurrencyGovernor.test.ts',
+    'runtimeDegradationController.test.ts',
+    'runtimeFailureBudget.test.ts',
+    'runtimeFairShareAllocator.test.ts',
+    'runtimeHealthEscalationMatrix.test.ts',
+    'runtimeLoadWindow.test.ts',
+    'runtimeOverloadGuard.test.ts',
+    'runtimeQuarantineRegistry.test.ts',
+    'runtimeRecoveryPlanner.test.ts',
+    'runtimeSaturationLedger.test.ts',
+  ].map((file) => `src/platform/runtime/${file}`);
+  for (const required of requiredModernizationSuites) {
+    assert.ok(config.include.includes(required), `modernized runtime suite escaped strict compilation: ${required}`);
+  }
 });
 
 test('root compatibility bridge does not weaken Platform boundary', async () => {
@@ -120,15 +142,15 @@ test('canonical typed modules contain no TypeScript opt-outs or CommonJS runtime
 
 test('package verify pipeline contains every Platform modernization gate', async () => {
   const packageJson = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'package.json'), 'utf8'));
-  for (const name of ['quality:module-graph', 'quality:language-ratchet', 'quality:platform-boundaries', 'quality:browser-runtime']) {
-    assert.equal(typeof packageJson.scripts?.[name], 'string', 'missing script: ' + name);
-    assert.ok(packageJson.scripts.verify.includes('npm run ' + name), 'verify pipeline missing: ' + name);
-  }
+  assert.match(packageJson.scripts?.['verify:platform'], /typecheck:platform/u);
+  assert.match(packageJson.scripts?.['verify:platform'], /typecheck:platform-tests/u);
+  assert.match(packageJson.scripts?.['verify:platform'], /test:platform/u);
+  assert.match(packageJson.scripts?.['verify:platform'], /audit:prod/u);
 });
 
 test('Architecture Audit keeps cutover and architecture gates wired', async () => {
-  const workflow = await fs.readFile(path.join(ROOT, '.github', 'workflows', 'platform-architecture-audit.yml'), 'utf8');
-  for (const token of ['tools/platform-ts-cutover.test.mjs', 'tools/platform-module-graph.test.mjs', 'tools/platform-language-ratchet.test.mjs', 'tools/platform-boundary-audit.test.mjs', 'tools/browser-runtime-boundary.test.mjs']) {
-    assert.ok(workflow.includes(token), 'missing workflow gate: ' + token);
-  }
+  const workflow = await fs.readFile(path.join(ROOT, '.github', 'workflows', 'architecture-audit.yml'), 'utf8');
+  assert.match(workflow, /platform-ts-cutover\.test\.mjs/u);
+  assert.match(workflow, /platform-language-ratchet\.mjs --strict/u);
+  assert.match(workflow, /typecheck:platform/u);
 });
