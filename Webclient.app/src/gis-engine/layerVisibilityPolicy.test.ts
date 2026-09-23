@@ -4,12 +4,13 @@ import { LayerVisibilityPolicy } from './layerVisibilityPolicy';
 const context = { mode: '2d' as const, scale: 5_000, pressure: 'normal' as const };
 
 describe('LayerVisibilityPolicy', () => {
-  it('applies mode scale opacity and enabled gates', () => {
+  it('applies mode ArcGIS scale opacity and enabled gates', () => {
     const policy = new LayerVisibilityPolicy();
-    policy.register({ id: 'roads', enabled: true, modes: ['2d'], minScale: 1_000, maxScale: 10_000, opacity: 0.5 });
+    policy.register({ id: 'roads', enabled: true, modes: ['2d'], minScale: 10_000, maxScale: 1_000, opacity: 0.5 });
     expect(policy.decide('roads', context)).toMatchObject({ visible: true, effectiveOpacity: 0.5 });
     expect(policy.decide('roads', { ...context, mode: '3d' }).reason).toBe('mode');
     expect(policy.decide('roads', { ...context, scale: 20_000 }).reason).toBe('scale');
+    expect(policy.decide('roads', { ...context, scale: 500 }).reason).toBe('scale');
   });
 
   it('propagates hidden parent state', () => {
@@ -41,6 +42,7 @@ describe('LayerVisibilityPolicy', () => {
     expect(() => new LayerVisibilityPolicy(0)).toThrow();
     expect(() => new LayerVisibilityPolicy().register({ id: ' ', enabled: true, modes: ['2d'] })).toThrow();
     expect(() => new LayerVisibilityPolicy().register({ id: 'x', enabled: true, modes: [] })).toThrow();
+    expect(() => new LayerVisibilityPolicy().register({ id: 'range', enabled: true, modes: ['2d'], minScale: 1_000, maxScale: 10_000 })).toThrow();
   });
 
   it('prevents orphan parents and unsafe removals', () => {
