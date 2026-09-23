@@ -165,21 +165,15 @@ export class LayerPanelModel {
     this.#repairFocus();
     this.#commit();
     const count = this.#snapshot.resultCount;
-    this.#announce(
-      next ? `${count} katman sonucu bulundu.` : `${this.#snapshot.totalCount} katman gösteriliyor.`,
-      'polite',
-    );
+    this.#announce(next ? `${count} katman sonucu bulundu.` : `${this.#snapshot.totalCount} katman gösteriliyor.`, 'polite');
   }
 
-  clearQuery(): void {
-    this.setQuery('');
-  }
+  clearQuery(): void { this.setQuery(''); }
 
   toggleExpanded(id: string): void {
     const node = this.#nodes.get(id);
     if (!node || node.kind !== 'group' || node.disabled) return;
-    if (this.#expanded.has(id)) this.#expanded.delete(id);
-    else this.#expanded.add(id);
+    if (this.#expanded.has(id)) this.#expanded.delete(id); else this.#expanded.add(id);
     this.#repairFocus();
     this.#commit();
     this.#announce(`${node.label} ${this.#expanded.has(id) ? 'genişletildi' : 'daraltıldı'}.`, 'polite');
@@ -222,21 +216,10 @@ export class LayerPanelModel {
     this.#commit();
   }
 
-  focusNext(): void {
-    this.#moveFocus(1);
-  }
-
-  focusPrevious(): void {
-    this.#moveFocus(-1);
-  }
-
-  focusFirst(): void {
-    this.#focusBoundary(false);
-  }
-
-  focusLast(): void {
-    this.#focusBoundary(true);
-  }
+  focusNext(): void { this.#moveFocus(1); }
+  focusPrevious(): void { this.#moveFocus(-1); }
+  focusFirst(): void { this.#focusBoundary(false); }
+  focusLast(): void { this.#focusBoundary(true); }
 
   focusParent(): void {
     const focused = this.#focusedId ? this.#nodes.get(this.#focusedId) : undefined;
@@ -247,13 +230,8 @@ export class LayerPanelModel {
   focusFirstChild(): void {
     const focused = this.#focusedId ? this.#nodes.get(this.#focusedId) : undefined;
     if (!focused || focused.kind !== 'group') return;
-    if (!this.#expanded.has(focused.id)) {
-      this.#expanded.add(focused.id);
-      this.#commit();
-    }
-    const child = focused.children
-      .map((id) => this.#nodes.get(id))
-      .find((node) => node !== undefined && !node.disabled);
+    if (!this.#expanded.has(focused.id)) { this.#expanded.add(focused.id); this.#commit(); }
+    const child = focused.children.map((id) => this.#nodes.get(id)).find((node) => node !== undefined && !node.disabled);
     if (child) this.focus(child.id);
   }
 
@@ -262,8 +240,7 @@ export class LayerPanelModel {
     if (enabled.length === 0) return;
     const index = enabled.findIndex((row) => row.id === this.#focusedId);
     const start = index < 0 ? (delta === 1 ? -1 : 0) : index;
-    const nextIndex = (start + delta + enabled.length) % enabled.length;
-    const next = enabled[nextIndex];
+    const next = enabled[(start + delta + enabled.length) % enabled.length];
     if (next) this.focus(next.id);
   }
 
@@ -287,35 +264,19 @@ export class LayerPanelModel {
         if (!node.normalizedLabel.includes(query)) continue;
         matched.add(node.id);
         let parentId = node.parentId;
-        while (parentId) {
-          matched.add(parentId);
-          parentId = this.#nodes.get(parentId)?.parentId;
-        }
+        while (parentId) { matched.add(parentId); parentId = this.#nodes.get(parentId)?.parentId; }
       }
     }
-
     const rows: LayerPanelRow[] = [];
     const visit = (id: string, level: number, positionInSet: number, setSize: number): void => {
       const node = this.#nodes.get(id);
       if (!node || (query && !matched.has(id))) return;
       const isMatch = !query || node.normalizedLabel.includes(query);
-      rows.push({
-        id: node.id,
-        label: node.label,
-        kind: node.kind,
-        level,
-        positionInSet,
-        setSize,
+      rows.push({ id: node.id, label: node.label, kind: node.kind, level, positionInSet, setSize,
         expanded: node.kind === 'group' ? this.#expanded.has(node.id) || Boolean(query) : undefined,
-        visible: node.visible,
-        disabled: node.disabled,
-        status: node.status,
-        errorMessage: node.errorMessage,
-        tabIndex: node.id === this.#focusedId ? 0 : -1,
-        selected: node.id === this.#selectedId,
-        match: isMatch,
-        targetSize: this.#targetSize,
-      });
+        visible: node.visible, disabled: node.disabled, status: node.status, errorMessage: node.errorMessage,
+        tabIndex: node.id === this.#focusedId ? 0 : -1, selected: node.id === this.#selectedId,
+        match: isMatch, targetSize: this.#targetSize });
       if (node.kind !== 'group' || (!this.#expanded.has(node.id) && !query)) return;
       node.children.forEach((childId, index) => visit(childId, level + 1, index + 1, node.children.length));
     };
@@ -325,23 +286,11 @@ export class LayerPanelModel {
 
   #buildSnapshot(): LayerPanelSnapshot {
     const rows = Object.freeze(this.#computeRows());
-    const directMatches = this.#query
-      ? rows.filter((row) => row.match).length
-      : this.#nodes.size;
+    const directMatches = this.#query ? rows.filter((row) => row.match).length : this.#nodes.size;
     const emptyReason = this.#nodes.size === 0 ? 'no-layers' : directMatches === 0 ? 'no-results' : 'none';
-    return Object.freeze({
-      revision: this.#revision,
-      rows,
-      focusedId: this.#focusedId,
-      selectedId: this.#selectedId,
-      query: this.#query,
-      resultCount: directMatches,
-      totalCount: this.#nodes.size,
-      density: this.#density,
-      reducedMotion: this.#reducedMotion,
-      forcedColors: this.#forcedColors,
-      emptyReason,
-    });
+    return Object.freeze({ revision: this.#revision, rows, focusedId: this.#focusedId, selectedId: this.#selectedId,
+      query: this.#query, resultCount: directMatches, totalCount: this.#nodes.size, density: this.#density,
+      reducedMotion: this.#reducedMotion, forcedColors: this.#forcedColors, emptyReason });
   }
 
   #commit(): void {
@@ -350,16 +299,20 @@ export class LayerPanelModel {
     for (const listener of this.#listeners) this.#notifyOne(listener);
   }
 
+  #reportObserverError(error: unknown): void {
+    if (!this.#onObserverError) return;
+    try {
+      this.#onObserverError(error);
+    } catch (reportingError) {
+      void reportingError;
+    }
+  }
+
   #notifyOne(listener: Listener): void {
     try {
       listener(this.#snapshot);
     } catch (error) {
-      if (!this.#onObserverError) return;
-      try {
-        this.#onObserverError(error);
-      } catch {
-        // Error reporting cannot break layer interaction state.
-      }
+      this.#reportObserverError(error);
     }
   }
 
@@ -368,30 +321,20 @@ export class LayerPanelModel {
     try {
       this.#onAnnouncement({ message, priority });
     } catch (error) {
-      if (!this.#onObserverError) return;
-      try {
-        this.#onObserverError(error);
-      } catch {
-        // Announcement adapters are optional observers.
-      }
+      this.#reportObserverError(error);
     }
   }
 
   #validateGraph(): void {
     for (const node of this.#nodes.values()) {
-      if (node.parentId && !this.#nodes.has(node.parentId)) {
-        throw new Error(`Unknown parent ${node.parentId} for ${node.id}.`);
-      }
-      if (node.kind === 'layer' && node.children.length > 0) {
-        throw new Error(`Layer ${node.id} cannot contain children.`);
-      }
+      if (node.parentId && !this.#nodes.has(node.parentId)) throw new Error(`Unknown parent ${node.parentId} for ${node.id}.`);
+      if (node.kind === 'layer' && node.children.length > 0) throw new Error(`Layer ${node.id} cannot contain children.`);
       for (const childId of node.children) {
         const child = this.#nodes.get(childId);
         if (!child) throw new Error(`Unknown child ${childId} for ${node.id}.`);
         if (child.parentId !== node.id) throw new Error(`Parent/child mismatch for ${childId}.`);
       }
     }
-
     const visiting = new Set<string>();
     const visited = new Set<string>();
     const visit = (id: string): void => {
