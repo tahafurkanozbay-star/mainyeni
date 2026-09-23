@@ -118,7 +118,7 @@ function rankControls(controls: readonly MapControlDefinition[]): readonly MapCo
 export class MapControlModel {
   readonly #controls: readonly MapControlDefinition[];
   readonly #listeners = new Set<Listener>();
-  readonly #onObserverError?: (error: unknown) => void;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   #environment: MapControlEnvironment;
   #state: MapControlState;
   #focusId: MapControlId;
