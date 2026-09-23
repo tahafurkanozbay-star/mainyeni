@@ -85,3 +85,5 @@ export * from './runtimeConcurrencyGovernor';
 export * from './runtimeLoadWindow';
 export * from './runtimeDegradationController';
 export * from './runtimeFairShareAllocator';
+export * from './runtimeCapacityReservationPool';
+export * from './runtimeHealthEscalationMatrix';
