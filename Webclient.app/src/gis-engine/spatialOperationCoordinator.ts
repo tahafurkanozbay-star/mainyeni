@@ -189,7 +189,7 @@ export class SpatialOperationCoordinator<TInput, TResult> {
     }
     const identity = kind && key !== undefined ? `${kind}:${normalizeKey(key)}` : undefined;
     let removed = 0;
-    for (const cacheKey of [...this.cache.keys()]) {
+    for (const cacheKey of this.cache.keys()) {
       if (identity ? cacheKey === identity : kind ? cacheKey.startsWith(`${kind}:`) : true) {
         this.cache.delete(cacheKey);
         removed += 1;
@@ -224,7 +224,7 @@ export class SpatialOperationCoordinator<TInput, TResult> {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const item of [...this.inFlight.values()]) {
+    for (const item of this.inFlight.values()) {
       this.cancelItem(item, abortError('Spatial operation coordinator disposed'));
     }
     this.queue.length = 0;
