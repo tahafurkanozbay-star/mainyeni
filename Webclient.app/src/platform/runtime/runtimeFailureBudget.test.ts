@@ -84,7 +84,7 @@ describe('RuntimeFailureBudget', () => {
     expect(() => budget.record('unknown' as never, 'success')).toThrow(TypeError);
     expect(() => budget.record('critical', 'unknown' as never)).toThrow(TypeError);
     expect(() => budget.lane('unknown' as never)).toThrow(TypeError);
-    expect(() => budget.recordMany('critical', new Array(10_001).fill('success'))).toThrow(RangeError);
+    expect(() => budget.recordMany('critical', Array.from({ length: 10_001 }, () => 'success' as const))).toThrow(RangeError);
     expect(budget.snapshot().sequence).toBe(0);
   });
 });
