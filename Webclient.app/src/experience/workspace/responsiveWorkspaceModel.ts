@@ -31,6 +31,10 @@ export interface WorkspaceSnapshot {
   transitionMs: number;
 }
 
+export interface ResponsiveWorkspaceModelOptions {
+  onObserverError?: (error: unknown) => void;
+}
+
 export interface ResponsiveWorkspaceModel {
   snapshot(): WorkspaceSnapshot;
   setViewport(input: WorkspaceViewportInput): void;
@@ -50,7 +54,6 @@ const MIN_HEIGHT = 240;
 const MAX_HEIGHT = 16_384;
 const COMPACT_MAX = 719;
 const MEDIUM_MAX = 1199;
-const MAX_LISTENERS = 64;
 
 const clampDimension = (value: number, min: number, max: number): number => {
   if (!Number.isFinite(value)) return min;
@@ -77,6 +80,7 @@ const isOverlay = (panel: WorkspacePanel, viewport: WorkspaceViewport): boolean 
 
 export const createResponsiveWorkspaceModel = (
   initial: WorkspaceViewportInput = { width: 1280, height: 800 },
+  options: ResponsiveWorkspaceModelOptions = {},
 ): ResponsiveWorkspaceModel => {
   let width = clampDimension(initial.width, MIN_WIDTH, MAX_WIDTH);
   let height = clampDimension(initial.height, MIN_HEIGHT, MAX_HEIGHT);
@@ -124,14 +128,22 @@ export const createResponsiveWorkspaceModel = (
     });
   };
 
+  const reportObserverError = (error: unknown): void => {
+    try {
+      options.onObserverError?.(error);
+    } catch (reportingError) {
+      void reportingError;
+    }
+  };
+
   const publish = (): void => {
     revision += 1;
     const next = buildSnapshot();
     for (const listener of listeners) {
       try {
         listener(next);
-      } catch {
-        // Observer failures must not interrupt workspace state transitions.
+      } catch (error) {
+        reportObserverError(error);
       }
     }
   };
@@ -188,17 +200,11 @@ export const createResponsiveWorkspaceModel = (
       activeSurface = surface;
       publish();
     },
-    openPanel(panel) {
-      mutatePanel(panel, true);
-    },
-    closePanel(panel) {
-      mutatePanel(panel, false);
-    },
-    togglePanel(panel) {
-      mutatePanel(panel, !openPanels.has(panel));
-    },
+    openPanel(panel) { mutatePanel(panel, true); },
+    closePanel(panel) { mutatePanel(panel, false); },
+    togglePanel(panel) { mutatePanel(panel, !openPanels.has(panel)); },
     pinPanel(panel, pinned) {
-      if (isOverlay(panel, viewport)) return;
+      if (pinned && isOverlay(panel, viewport)) return;
       const changed = pinned ? !pinnedPanels.has(panel) : pinnedPanels.has(panel);
       if (!changed) return;
       if (pinned) {
@@ -210,20 +216,15 @@ export const createResponsiveWorkspaceModel = (
       publish();
     },
     closeOverlays() {
-      const overlays = PANEL_ORDER.filter((panel) => openPanels.has(panel) && isOverlay(panel, viewport));
-      if (!overlays.length) return;
-      for (const panel of overlays) openPanels.delete(panel);
-      publish();
+      let changed = false;
+      for (const panel of PANEL_ORDER) {
+        if (isOverlay(panel, viewport) && openPanels.delete(panel)) changed = true;
+      }
+      if (changed) publish();
     },
     subscribe(listener) {
-      if (listeners.size >= MAX_LISTENERS) throw new Error(`Workspace listener capacity exceeded (${MAX_LISTENERS})`);
       listeners.add(listener);
-      let active = true;
-      return () => {
-        if (!active) return;
-        active = false;
-        listeners.delete(listener);
-      };
+      return () => { listeners.delete(listener); };
     },
   };
 };
