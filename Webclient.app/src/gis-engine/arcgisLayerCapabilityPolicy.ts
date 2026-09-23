@@ -4,18 +4,18 @@ export type ArcGisQueryOperation = 'count' | 'extent' | 'features' | 'ids' | 'st
 export interface ArcGisLayerCapabilities {
   readonly serviceKind: ArcGisLayerServiceKind;
   readonly supportsQuery: boolean;
-  readonly supportsPagination?: boolean;
-  readonly supportsOrderBy?: boolean;
-  readonly supportsStatistics?: boolean;
-  readonly supportsDistinct?: boolean;
-  readonly supportsReturningGeometry?: boolean;
-  readonly supportsQuantization?: boolean;
-  readonly supportsClustering?: boolean;
-  readonly supportsZ?: boolean;
-  readonly maxRecordCount?: number;
-  readonly maxRecordCountFactor?: number;
-  readonly objectIdField?: string;
-  readonly globalIdField?: string;
+  readonly supportsPagination?: boolean | undefined;
+  readonly supportsOrderBy?: boolean | undefined;
+  readonly supportsStatistics?: boolean | undefined;
+  readonly supportsDistinct?: boolean | undefined;
+  readonly supportsReturningGeometry?: boolean | undefined;
+  readonly supportsQuantization?: boolean | undefined;
+  readonly supportsClustering?: boolean | undefined;
+  readonly supportsZ?: boolean | undefined;
+  readonly maxRecordCount?: number | undefined;
+  readonly maxRecordCountFactor?: number | undefined;
+  readonly objectIdField?: string | undefined;
+  readonly globalIdField?: string | undefined;
 }
 
 export interface ArcGisQueryIntent {
@@ -116,49 +116,29 @@ export class ArcGisLayerCapabilityPolicy {
     const pageSize = Math.min(requestedRecordCount ?? this.defaultPageSize, effectiveAdvertisedMax, this.hardMaxPageSize);
 
     const returnGeometry = intent.returnGeometry === true;
-    if (returnGeometry && capabilities.supportsReturningGeometry !== true) {
-      reasons.push('geometry return was requested but is not explicitly supported');
-    }
+    if (returnGeometry && capabilities.supportsReturningGeometry !== true) reasons.push('geometry return was requested but is not explicitly supported');
 
     const useOrderBy = orderBy.length > 0;
-    if (useOrderBy && capabilities.supportsOrderBy !== true) {
-      reasons.push('orderBy was requested but is not explicitly supported');
-    }
+    if (useOrderBy && capabilities.supportsOrderBy !== true) reasons.push('orderBy was requested but is not explicitly supported');
 
     const useStatistics = statistics.length > 0 || intent.operation === 'statistics';
-    if (useStatistics && capabilities.supportsStatistics !== true) {
-      reasons.push('statistics were requested but are not explicitly supported');
-    }
+    if (useStatistics && capabilities.supportsStatistics !== true) reasons.push('statistics were requested but are not explicitly supported');
 
     const useDistinct = intent.distinct === true;
-    if (useDistinct && capabilities.supportsDistinct !== true) {
-      reasons.push('distinct values were requested but are not explicitly supported');
-    }
+    if (useDistinct && capabilities.supportsDistinct !== true) reasons.push('distinct values were requested but are not explicitly supported');
 
     const useQuantization = intent.quantize === true;
-    if (useQuantization && capabilities.supportsQuantization !== true) {
-      reasons.push('quantization was requested but is not explicitly supported');
-    }
+    if (useQuantization && capabilities.supportsQuantization !== true) reasons.push('quantization was requested but is not explicitly supported');
 
     const stableIdField = capabilities.objectIdField ?? capabilities.globalIdField;
     const wantsPaging = intent.operation === 'features' && (requestedRecordCount === undefined || requestedRecordCount > pageSize);
     const usePagination = wantsPaging && capabilities.supportsPagination === true;
-    if (wantsPaging && !usePagination && intent.requireStablePaging === true) {
-      reasons.push('stable paging was required but pagination is not explicitly supported');
-    }
-    if (usePagination && intent.requireStablePaging === true && stableIdField === undefined) {
-      reasons.push('stable paging requires a verified object/global id field');
-    }
+    if (wantsPaging && !usePagination && intent.requireStablePaging === true) reasons.push('stable paging was required but pagination is not explicitly supported');
+    if (usePagination && intent.requireStablePaging === true && stableIdField === undefined) reasons.push('stable paging requires a verified object/global id field');
 
-    if (intent.operation === 'statistics' && statistics.length === 0) {
-      reasons.push('statistics operation requires at least one statistic expression');
-    }
-    if (intent.operation === 'extent' && returnGeometry) {
-      reasons.push('extent operation must not request feature geometry payloads');
-    }
-    if ((intent.operation === 'count' || intent.operation === 'ids') && returnGeometry) {
-      reasons.push(`${intent.operation} operation must not request geometry`);
-    }
+    if (intent.operation === 'statistics' && statistics.length === 0) reasons.push('statistics operation requires at least one statistic expression');
+    if (intent.operation === 'extent' && returnGeometry) reasons.push('extent operation must not request feature geometry payloads');
+    if ((intent.operation === 'count' || intent.operation === 'ids') && returnGeometry) reasons.push(`${intent.operation} operation must not request geometry`);
 
     return Object.freeze({
       allowed: reasons.length === 0,
@@ -191,12 +171,14 @@ export class ArcGisLayerCapabilityPolicy {
     if (maxRecordCountFactor !== undefined && (!Number.isFinite(maxRecordCountFactor) || maxRecordCountFactor <= 0 || maxRecordCountFactor > 100)) {
       throw new RangeError('maxRecordCountFactor must be finite and between 0 and 100');
     }
+    const objectIdField = normalizeField(input.objectIdField);
+    const globalIdField = normalizeField(input.globalIdField);
     return Object.freeze({
       ...input,
       ...(maxRecordCount === undefined ? {} : { maxRecordCount }),
       ...(maxRecordCountFactor === undefined ? {} : { maxRecordCountFactor }),
-      ...(normalizeField(input.objectIdField) === undefined ? {} : { objectIdField: normalizeField(input.objectIdField) }),
-      ...(normalizeField(input.globalIdField) === undefined ? {} : { globalIdField: normalizeField(input.globalIdField) }),
+      ...(objectIdField === undefined ? {} : { objectIdField }),
+      ...(globalIdField === undefined ? {} : { globalIdField }),
     });
   }
 }
