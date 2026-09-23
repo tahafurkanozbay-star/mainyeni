@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createResponsiveWorkspaceModel } from './responsiveWorkspaceModel';
+import { createResponsiveWorkspaceModel, type WorkspaceSnapshot } from './responsiveWorkspaceModel';
 
 describe('responsiveWorkspaceModel', () => {
   it('starts wide with persistent navigation and layers', () => {
@@ -112,14 +112,14 @@ describe('responsiveWorkspaceModel', () => {
 
   it('publishes immutable snapshots for observable transitions', () => {
     const model = createResponsiveWorkspaceModel({ width: 1280, height: 800 });
-    const listener = vi.fn();
-    model.subscribe(listener);
+    let observed: WorkspaceSnapshot | undefined;
+    model.subscribe((snapshot) => { observed = snapshot; });
     model.openPanel('details');
-    expect(listener).toHaveBeenCalledTimes(1);
-    const snapshot = listener.mock.calls[0]?.[0];
-    expect(Object.isFrozen(snapshot)).toBe(true);
-    expect(Object.isFrozen(snapshot.panels)).toBe(true);
-    expect(Object.isFrozen(snapshot.panels[0])).toBe(true);
+    expect(observed).toBeDefined();
+    if (observed === undefined) throw new Error('Expected an observed workspace snapshot');
+    expect(Object.isFrozen(observed)).toBe(true);
+    expect(Object.isFrozen(observed.panels)).toBe(true);
+    expect(Object.isFrozen(observed.panels[0])).toBe(true);
   });
 
   it('isolates observer failures from workspace transitions', () => {
