@@ -68,14 +68,14 @@ export function createLiveAnnouncementQueue(options: LiveAnnouncementQueueOption
 
   const snapshot = (): LiveAnnouncementSnapshot => Object.freeze({
     current,
-    pending: Object.freeze([...pending]),
+    pending: Object.freeze(pending.slice()),
     revision,
   });
 
   const emit = () => {
     revision += 1;
     const next = snapshot();
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       try {
         listener(next);
       } catch {
