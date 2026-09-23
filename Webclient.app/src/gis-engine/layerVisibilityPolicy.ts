@@ -49,7 +49,7 @@ function normalize(input: LayerVisibilityDescriptor): NormalizedDescriptor {
   if (modes.length === 0) throw new TypeError('layer visibility modes must not be empty');
   const minScale = scale(input.minScale, 'minScale');
   const maxScale = scale(input.maxScale, 'maxScale');
-  if (minScale !== undefined && maxScale !== undefined && minScale > maxScale) throw new RangeError('minScale must be <= maxScale');
+  if (minScale !== undefined && maxScale !== undefined && minScale < maxScale) throw new RangeError('minScale must be >= maxScale for an ArcGIS visible scale range');
   const opacity = input.opacity ?? 1;
   if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) throw new RangeError('opacity must be between 0 and 1');
   const parentId = input.parentId?.trim();
@@ -110,8 +110,8 @@ export class LayerVisibilityPolicy {
     let reason: LayerVisibilityReason = 'visible';
     if (!descriptor.enabled) reason = 'disabled';
     else if (!descriptor.modes.includes(context.mode)) reason = 'mode';
-    else if (descriptor.minScale !== undefined && context.scale < descriptor.minScale) reason = 'scale';
-    else if (descriptor.maxScale !== undefined && context.scale > descriptor.maxScale) reason = 'scale';
+    else if (descriptor.minScale !== undefined && context.scale > descriptor.minScale) reason = 'scale';
+    else if (descriptor.maxScale !== undefined && context.scale < descriptor.maxScale) reason = 'scale';
     else if (descriptor.opacity === 0) reason = 'opacity';
     else if (context.pressure === 'critical' && !descriptor.essential) reason = 'resource-pressure';
     else if (descriptor.parentId) {
