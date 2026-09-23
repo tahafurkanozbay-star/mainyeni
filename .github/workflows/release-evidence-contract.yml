@@ -52,3 +52,6 @@ jobs:
 
       - name: Audit embedded smoke fixtures
         run: node scripts/release-evidence-audit.mjs --self-test
+
+      - name: Enforce candidate release evidence
+        run: node scripts/release-evidence-audit.mjs --strict
