@@ -9,6 +9,7 @@ on:
       - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-permissions-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-reliability-contract.test.mjs'
       - '.github/workflows/webclient-quality.yml'
       - '.github/workflows/release-evidence-contract.yml'
   push:
@@ -21,6 +22,7 @@ on:
       - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-permissions-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-reliability-contract.test.mjs'
       - '.github/workflows/webclient-quality.yml'
       - '.github/workflows/release-evidence-contract.yml'
 
@@ -61,6 +63,9 @@ jobs:
 
       - name: Workflow permission and trigger contract
         run: node --test scripts/workflow-permissions-contract.test.mjs
+
+      - name: Workflow bounded-execution reliability contract
+        run: node --test scripts/workflow-reliability-contract.test.mjs
 
       - name: Audit embedded smoke fixtures
         run: node scripts/release-evidence-audit.mjs --self-test
