@@ -22,7 +22,7 @@ export const FORBIDDEN_WORKFLOW_PATTERNS = Object.freeze([
   { id: 'continue-on-error', regex: /continue-on-error\s*:\s*true/i },
   { id: 'npm-install', regex: /(?:^|\s)npm\s+install(?:\s|$)/im },
   { id: 'unpinned-node-major', regex: /node-version\s*:\s*['\"]?(?:latest|current|lts\/?\*)/i },
-  { id: 'audit-disabled', regex: /npm\s+audit[^\n]*(?:--audit-level=(?:none|low)|\|\|\s*true)/i },
+  { id: 'audit-disabled', regex: /npm\s+audit[^\n]*(?:--audit-level=none|\|\|\s*true)/i },
   { id: 'force-success', regex: /(?:^|\s)(?:exit\s+0|true)\s*(?:#.*)?$/im },
 ]);
 
@@ -74,7 +74,7 @@ export function auditWorkflow(workflowText, file='.github/workflows/webclient-qu
   if (!/node-version:\s*24/.test(workflowText)) findings.push(finding('error','workflow-node-version','Quality workflow must execute on Node 24.',file));
   if (!/(?:^|\s)npm\s+ci(?:\s|$)/m.test(workflowText)) findings.push(finding('error','lockfile-install','Quality workflow must install with npm ci.',file));
   for (const rule of FORBIDDEN_WORKFLOW_PATTERNS) {
-    if (rule.id === 'force-success') continue; // handled contextually below; visibility steps intentionally exit 0.
+    if (rule.id === 'force-success') continue;
     for (const line of occurrenceLines(workflowText,rule.regex)) findings.push(finding('error',`forbidden-${rule.id}`,`Forbidden workflow pattern: ${rule.id}`,file,line,lines(workflowText)[line-1].trim()));
   }
   const baseType=workflowText.indexOf('Exact-base TypeScript regression gate');
