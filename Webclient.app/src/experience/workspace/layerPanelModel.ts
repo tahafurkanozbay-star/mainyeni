@@ -85,24 +85,6 @@ interface LayerNode {
 const normalize = (value: string): string =>
   value.trim().toLocaleLowerCase('tr-TR').replaceAll('ı', 'i');
 
-const safeCall = (
-  callback: ((value: never) => void) | undefined,
-  value: never,
-  report: ((error: unknown) => void) | undefined,
-): void => {
-  if (!callback) return;
-  try {
-    callback(value);
-  } catch (error) {
-    if (!report) return;
-    try {
-      report(error);
-    } catch {
-      // Observer reporting is deliberately isolated from interaction state.
-    }
-  }
-};
-
 export class LayerPanelModel {
   readonly #nodes = new Map<string, LayerNode>();
   readonly #roots: readonly string[];
