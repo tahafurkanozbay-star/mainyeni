@@ -79,3 +79,4 @@ export * from './runtimeAdmissionController';
 export * from './runtimeOverloadGuard';
 export * from './runtimeRecoveryPlanner';
 export * from './runtimeSaturationLedger';
+export * from './runtimeBackpressureCoordinator';
