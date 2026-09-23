@@ -29,7 +29,7 @@ function checkoutBlocks(text) {
 
   for (let index = 0; index < source.length; index += 1) {
     const line = source[index];
-    if (!/^\s*uses:\s*actions\/checkout@/.test(line)) continue;
+    if (!/^\s*-?\s*uses:\s*actions\/checkout@/.test(line)) continue;
 
     const usesIndent = indentation(line);
     const start = index;
@@ -137,6 +137,12 @@ for (const workflow of WORKFLOWS) {
     }
   });
 }
+
+test('checkout parser recognizes YAML list-item checkout steps', () => {
+  const blocks = checkoutBlocks('steps:\n  - uses: actions/checkout@v4\n    with:\n      persist-credentials: false\n');
+  assert.equal(blocks.length, 1);
+  assert.match(blocks[0].text, /actions\/checkout@v4/);
+});
 
 test('checkout parser isolates sibling steps', () => {
   const fixture = `steps:\n  - uses: actions/checkout@v4\n    with:\n      persist-credentials: false\n  - name: sibling\n    run: echo persist-credentials: true\n`;
