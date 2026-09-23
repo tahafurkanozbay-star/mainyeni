@@ -41,7 +41,7 @@
     "quality:vite": "node scripts/vite-migration-audit.mjs --self-test && node scripts/vite-migration-audit.mjs",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs scripts/spatial-selection-index-audit.test.mjs scripts/release-evidence-audit.test.mjs scripts/workflow-security-contract.test.mjs",
+    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs scripts/spatial-selection-index-audit.test.mjs scripts/release-evidence-audit.test.mjs scripts/workflow-security-contract.test.mjs scripts/workflow-permissions-contract.test.mjs scripts/workflow-job-permissions-contract.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:platform-tests && npm run typecheck:gis && npm run typecheck:gis-modern-core && npm run typecheck:experience && npm run typecheck:modern-shell && npm run typecheck:data-search && npm run typecheck:performance && npm run typecheck:shared-shell && npm run typecheck:business",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",
