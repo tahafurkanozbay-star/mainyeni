@@ -36,7 +36,9 @@ describe('FeatureClusterBudgetCoordinator', () => {
 
   it('honors ArcGIS scale visibility semantics', () => {
     const coordinator = new FeatureClusterBudgetCoordinator({ budget });
-    coordinator.register(layer('roads', { minScale: 1_000, maxScale: 10_000 }));
+    // ArcGIS minScale is the zoomed-out denominator and maxScale is the
+    // zoomed-in denominator, so a visible band is minScale >= scale >= maxScale.
+    coordinator.register(layer('roads', { minScale: 10_000, maxScale: 1_000 }));
     expect(coordinator.plan({ ...viewport, scale: 500 }).admissions[0]?.reason).toBe('scale');
     expect(coordinator.plan({ ...viewport, scale: 5_000 }).admissions[0]?.admitted).toBe(true);
     expect(coordinator.plan({ ...viewport, scale: 20_000 }).admissions[0]?.reason).toBe('scale');
@@ -108,7 +110,7 @@ describe('FeatureClusterBudgetCoordinator', () => {
     const coordinator = new FeatureClusterBudgetCoordinator({ budget });
     expect(() => coordinator.register(layer(' '))).toThrow();
     expect(() => coordinator.register(layer('bad-radius', { targetPixelRadius: 0 }))).toThrow();
-    expect(() => coordinator.register(layer('bad-range', { minScale: 10_000, maxScale: 1_000 }))).toThrow();
+    expect(() => coordinator.register(layer('bad-range', { minScale: 1_000, maxScale: 10_000 }))).toThrow();
     expect(() => coordinator.plan({ ...viewport, width: 0 })).toThrow();
   });
 
