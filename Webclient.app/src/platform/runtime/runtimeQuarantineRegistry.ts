@@ -128,7 +128,8 @@ export class RuntimeQuarantineRegistry {
       this.#record('release', entry, at, 'healthy');
       return true;
     }
-    if (entry.probationAttempts >= this.#policy.maxProbationAttempts) {
+    const maxAttempts = this.#policy.maxProbationAttempts;
+    if (entry.probationAttempts >= maxAttempts) {
       this.#record('reject', entry, at, 'attempt-budget');
       return false;
     }
