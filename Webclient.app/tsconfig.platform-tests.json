@@ -41,6 +41,7 @@
     "src/platform/runtime/runtimeBackpressureCoordinator.test.ts",
     "src/platform/runtime/runtimeCapacityHealth.integration.test.ts",
     "src/platform/runtime/runtimeCapacityReservationPool.test.ts",
+    "src/platform/runtime/runtimeCapacityReservationPromotion.test.ts",
     "src/platform/runtime/runtimeConcurrencyGovernor.test.ts",
     "src/platform/runtime/runtimeDegradationController.test.ts",
     "src/platform/runtime/runtimeFailureBudget.test.ts",
