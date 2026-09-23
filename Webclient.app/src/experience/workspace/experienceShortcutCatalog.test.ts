@@ -1,10 +1,10 @@
 import { vi } from 'vitest';
 import type { ShortcutContext, ShortcutDefinition } from '../shortcutRuntime';
-import { experienceBus } from '../experienceSession';
+import { createExperienceBus } from '../experienceRuntime';
 import { createWorkspaceShortcuts, WORKSPACE_SHORTCUT_HINTS } from './experienceShortcutCatalog';
 
-const shortcutById = (id: string): ShortcutDefinition => {
-  const shortcut = createWorkspaceShortcuts(document).find((candidate) => candidate.id === id);
+const shortcutById = (id: string, bus = createExperienceBus(window)): ShortcutDefinition => {
+  const shortcut = createWorkspaceShortcuts(document, bus).find((candidate) => candidate.id === id);
   if (!shortcut) throw new Error(`Missing workspace shortcut: ${id}`);
   return shortcut;
 };
@@ -31,19 +31,21 @@ describe('experienceShortcutCatalog', () => {
     expect(Object.isFrozen(WORKSPACE_SHORTCUT_HINTS)).toBe(true);
   });
 
-  test('routes command palette through the shared experience command bus', () => {
+  test('routes command palette through the injected experience command bus', () => {
+    const bus = createExperienceBus(new EventTarget());
     const listener = vi.fn();
-    const release = experienceBus.on('kentrehberi:command', listener);
-    invoke(shortcutById('experience-command-palette'));
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ name: 'command-palette', source: 'experience-keyboard' }));
+    const release = bus.on('kentrehberi:command', listener);
+    invoke(shortcutById('experience-command-palette', bus));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ name: 'command-palette', source: 'experience-keyboard' }), expect.any(Event));
     release();
   });
 
-  test('routes help through the shared experience command bus', () => {
+  test('routes help through the injected experience command bus', () => {
+    const bus = createExperienceBus(new EventTarget());
     const listener = vi.fn();
-    const release = experienceBus.on('kentrehberi:command', listener);
-    invoke(shortcutById('experience-help'));
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ name: 'help', source: 'experience-keyboard' }));
+    const release = bus.on('kentrehberi:command', listener);
+    invoke(shortcutById('experience-help', bus));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ name: 'help', source: 'experience-keyboard' }), expect.any(Event));
     release();
   });
 
@@ -62,10 +64,11 @@ describe('experienceShortcutCatalog', () => {
 
   test('announces unavailable focus targets instead of failing silently', () => {
     document.querySelector('#esri-map-container')?.remove();
+    const bus = createExperienceBus(new EventTarget());
     const listener = vi.fn();
-    const release = experienceBus.on('kentrehberi:announcement', listener);
-    invoke(shortcutById('experience-focus-map'));
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ message: 'harita şu anda kullanılamıyor.', politeness: 'polite' }));
+    const release = bus.on('kentrehberi:announcement', listener);
+    invoke(shortcutById('experience-focus-map', bus));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ message: 'harita şu anda kullanılamıyor.', politeness: 'polite' }), expect.any(Event));
     release();
   });
 
