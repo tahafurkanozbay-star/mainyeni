@@ -130,8 +130,8 @@ function normalizeDescriptor(input: ClusterLayerDescriptor): NormalizedDescripto
   return Object.freeze({
     layerId,
     priority: input.priority,
-    minScale,
-    maxScale,
+    ...(minScale === undefined ? {} : { minScale }),
+    ...(maxScale === undefined ? {} : { maxScale }),
     targetPixelRadius,
     minPixelRadius,
     maxPixelRadius,
