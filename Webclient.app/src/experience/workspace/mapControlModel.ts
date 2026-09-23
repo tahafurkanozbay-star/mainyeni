@@ -142,7 +142,7 @@ export class MapControlModel {
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);
-    listener(this.#snapshot);
+    this.#notify(listener);
     return () => this.#listeners.delete(listener);
   }
 
@@ -254,19 +254,21 @@ export class MapControlModel {
     this.#snapshot = this.#deriveSnapshot();
   }
 
+  #notify(listener: Listener): void {
+    try {
+      listener(this.#snapshot);
+    } catch (error) {
+      try {
+        this.#onObserverError?.(error);
+      } catch (reporterError) {
+        void reporterError;
+      }
+    }
+  }
+
   #commit(): void {
     this.#snapshot = this.#deriveSnapshot();
     this.#repairFocus();
-    for (const listener of this.#listeners) {
-      try {
-        listener(this.#snapshot);
-      } catch (error) {
-        try {
-          this.#onObserverError?.(error);
-        } catch (reporterError) {
-          void reporterError;
-        }
-      }
-    }
+    for (const listener of this.#listeners) this.#notify(listener);
   }
 }
