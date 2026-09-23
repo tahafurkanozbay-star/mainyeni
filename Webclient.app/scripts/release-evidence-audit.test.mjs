@@ -35,7 +35,8 @@ test('concurrency cancellation absence is visible',()=>assert.ok(codes(auditWork
 test('node latest is rejected',()=>{const text=workflowFixture().replace('node-version: 24','node-version: latest');const c=codes(auditWorkflow(text));assert.ok(c.has('workflow-node-version'));assert.ok(c.has('forbidden-unpinned-node-major'))});
 test('npm install is rejected',()=>{const text=workflowFixture().replace('run: npm ci','run: npm install');const c=codes(auditWorkflow(text));assert.ok(c.has('lockfile-install'));assert.ok(c.has('forbidden-npm-install'))});
 test('continue-on-error is rejected',()=>assert.ok(codes(auditWorkflow(workflowFixture('\ncontinue-on-error: true'))).has('forbidden-continue-on-error')));
-test('disabled audit is rejected',()=>assert.ok(codes(auditWorkflow(workflowFixture('\nrun: npm audit --omit=dev --audit-level=low'))).has('forbidden-audit-disabled')));
+test('npm audit low threshold remains an active audit',()=>assert.ok(!codes(auditWorkflow(workflowFixture('\nrun: npm audit --omit=dev --audit-level=low'))).has('forbidden-audit-disabled')));
+test('npm audit success bypass is rejected',()=>assert.ok(codes(auditWorkflow(workflowFixture('\nrun: npm audit --omit=dev --audit-level=high || true'))).has('forbidden-audit-disabled')));
 test('every required workflow step is independently guarded',()=>{for(const name of REQUIRED_WORKFLOW_STEPS){const text=workflowFixture().replace(`- name: ${name}`,`- name: removed-${name}`);assert.ok(auditWorkflow(text).some(x=>x.code==='required-step-missing'&&x.evidence===name),name)}});
 test('exact PR base SHA is mandatory',()=>assert.ok(codes(auditWorkflow(workflowFixture().replaceAll('github.event.pull_request.base.sha','github.sha'))).has('exact-base-source')));
 test('detached worktree isolation is mandatory',()=>assert.ok(codes(auditWorkflow(workflowFixture().replace('worktree add --detach','worktree add'))).has('baseline-worktree')));
