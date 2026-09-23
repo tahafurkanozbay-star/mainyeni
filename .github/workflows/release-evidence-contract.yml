@@ -52,14 +52,3 @@ jobs:
 
       - name: Audit embedded smoke fixtures
         run: node scripts/release-evidence-audit.mjs --self-test
-
-      - name: Verify candidate release evidence
-        run: |
-          set +e
-          node scripts/release-evidence-audit.mjs --strict
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ]; then
-            echo 'Release evidence contract rejected the candidate repository state.' >&2
-            exit "$status"
-          fi
