@@ -126,7 +126,8 @@ export class RuntimeRecoveryPlanner {
     }
     lane.stableSamples = 0;
     if (now < lane.nextEligibleAt) return this.#decision(signal.lane, 'none', 'cooldown', lane.nextEligibleAt);
-    if (lane.attempts >= this.#policy.maximumAttempts) return this.#decision(signal.lane, 'none', 'attempt-budget', now);
+    const maxAttempts = this.#policy.maximumAttempts;
+    if (lane.attempts >= maxAttempts) return this.#decision(signal.lane, 'none', 'attempt-budget', now);
     if (signal.overload === 'overloaded') return this.#commit(signal.lane, 'drain', 'overload', now, this.#policy.overloadedCooldown);
     if (currentPressure > 0) return this.#commit(signal.lane, 'throttle', 'pressure', now, this.#policy.pressuredCooldown);
     return this.#decision(signal.lane, 'none', 'pressure', now);
