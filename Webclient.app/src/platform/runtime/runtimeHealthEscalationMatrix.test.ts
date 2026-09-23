@@ -51,8 +51,12 @@ describe('RuntimeHealthEscalationMatrix', () => {
     matrix.record(signal(1, 0.6)); matrix.record(signal(2, 0.6));
     matrix.record(signal(3, 0));
     expect(matrix.snapshot().lanes.interactive.healthyRecoverySamples).toBe(1);
-    matrix.record(signal(4, 0.6));
+    // The rolling window is [0, 1] here, so the score is exactly the degraded
+    // threshold. That makes the target equal the current degraded severity and
+    // must clear (rather than advance) the recovery streak.
+    matrix.record(signal(4, 1));
     expect(matrix.snapshot().lanes.interactive.healthyRecoverySamples).toBe(0);
+    expect(matrix.snapshot().lanes.interactive.severity).toBe('degraded');
   });
 
   it('tracks lanes independently and aggregates worst severity', () => {
