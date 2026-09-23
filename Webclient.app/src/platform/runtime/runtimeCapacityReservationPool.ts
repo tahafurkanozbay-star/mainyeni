@@ -133,24 +133,14 @@ export class RuntimeCapacityReservationPool {
   #sequence = 0;
   #lastAt: number | null = null;
 
-  constructor(policy: Partial<RuntimeCapacityReservationPolicy> = {}) {
-    this.#policy = normalizePolicy(policy);
-  }
-
-  policy(): RuntimeCapacityReservationPolicy {
-    return this.#policy;
-  }
+  constructor(policy: Partial<RuntimeCapacityReservationPolicy> = {}) { this.#policy = normalizePolicy(policy); }
+  policy(): RuntimeCapacityReservationPolicy { return this.#policy; }
 
   request(input: RuntimeCapacityReservationRequest): RuntimeCapacityReservationDecision {
-    this.#validateRequest(input);
-    this.#advance(input.at);
-    this.#expire(input.at);
+    this.#validateRequest(input); this.#advance(input.at); this.#expire(input.at);
     if (this.#active.has(input.id) || this.#queuedIds.has(input.id)) return this.#decision(input, 'rejected', 'duplicate');
     if (input.units > this.#policy.maximumReservationUnits) return this.#decision(input, 'rejected', 'oversized');
-    if (this.#queuedCount() === 0 && this.#canReserve(input.lane, input.units)) {
-      this.#reserve(input, input.at);
-      return this.#decision(input, 'reserved', 'capacity');
-    }
+    if (this.#queuedCount() === 0 && this.#canReserve(input.lane, input.units)) { this.#reserve(input, input.at); return this.#decision(input, 'reserved', 'capacity'); }
     if (this.#queuedCount() >= this.#policy.maximumQueue) return this.#decision(input, 'rejected', 'queue-full');
     const queue = this.#queues[input.lane];
     if (queue.length >= this.#policy.maximumPerLaneQueue) return this.#decision(input, 'rejected', 'lane-queue-full');
@@ -161,10 +151,7 @@ export class RuntimeCapacityReservationPool {
   }
 
   release(id: string, at: number): readonly RuntimeCapacityReservation[] {
-    assertId(id);
-    assertAt(at);
-    this.#advance(at);
-    this.#expire(at);
+    assertId(id); assertAt(at); this.#advance(at); this.#expire(at);
     const reservation = this.#active.get(id);
     if (!reservation) return Object.freeze([]);
     this.#active.delete(id);
@@ -173,189 +160,73 @@ export class RuntimeCapacityReservationPool {
   }
 
   cancel(id: string, at: number): boolean {
-    assertId(id);
-    assertAt(at);
-    this.#advance(at);
-    this.#expire(at);
+    assertId(id); assertAt(at); this.#advance(at); this.#expire(at);
     for (const lane of LANES) {
-      const queue = this.#queues[lane];
-      const index = queue.findIndex((entry) => entry.id === id);
+      const queue = this.#queues[lane]; const index = queue.findIndex((entry) => entry.id === id);
       if (index < 0) continue;
-      const [removed] = queue.splice(index, 1);
-      this.#queuedIds.delete(id);
+      const [removed] = queue.splice(index, 1); this.#queuedIds.delete(id);
       if (removed) this.#record({ id, lane, disposition: 'cancelled', reason: 'cancelled', units: removed.units, at });
       return true;
     }
     return false;
   }
 
-  sweep(at: number): readonly RuntimeCapacityReservation[] {
-    assertAt(at);
-    this.#advance(at);
-    const expired = this.#expire(at);
-    if (expired === 0) return Object.freeze([]);
-    return this.#promote(at);
-  }
-
-  active(): readonly RuntimeCapacityReservation[] {
-    return Object.freeze([...this.#active.values()].map((entry) => Object.freeze({ ...entry })));
-  }
-
-  history(): readonly RuntimeCapacityReservationDecision[] {
-    return Object.freeze(this.#history.map((entry) => Object.freeze({ ...entry })));
-  }
+  sweep(at: number): readonly RuntimeCapacityReservation[] { assertAt(at); this.#advance(at); return this.#expire(at) === 0 ? Object.freeze([]) : this.#promote(at); }
+  active(): readonly RuntimeCapacityReservation[] { return Object.freeze([...this.#active.values()].map((entry) => Object.freeze({ ...entry }))); }
+  history(): readonly RuntimeCapacityReservationDecision[] { return Object.freeze(this.#history.map((entry) => Object.freeze({ ...entry }))); }
 
   snapshot(at?: number): RuntimeCapacityReservationSnapshot {
-    if (at !== undefined) {
-      assertAt(at);
-      this.#advance(at);
-      this.#expire(at);
-    }
-    const lanes = Object.freeze({
-      critical: this.#laneSnapshot('critical'),
-      interactive: this.#laneSnapshot('interactive'),
-      background: this.#laneSnapshot('background'),
-    });
+    if (at !== undefined) { assertAt(at); this.#advance(at); this.#expire(at); }
+    const lanes = Object.freeze({ critical: this.#laneSnapshot('critical'), interactive: this.#laneSnapshot('interactive'), background: this.#laneSnapshot('background') });
     let nextExpiryAt: number | null = null;
-    for (const reservation of this.#active.values()) {
-      if (nextExpiryAt === null || reservation.expiresAt < nextExpiryAt) nextExpiryAt = reservation.expiresAt;
-    }
-    const activeUnits = this.#activeUnits();
-    let queuedUnits = 0;
+    for (const reservation of this.#active.values()) if (nextExpiryAt === null || reservation.expiresAt < nextExpiryAt) nextExpiryAt = reservation.expiresAt;
+    const activeUnits = this.#activeUnits(); let queuedUnits = 0;
     for (const lane of LANES) for (const request of this.#queues[lane]) queuedUnits += request.units;
-    return Object.freeze({
-      capacity: this.#policy.capacity,
-      activeReservations: this.#active.size,
-      activeUnits,
-      availableUnits: this.#policy.capacity - activeUnits,
-      queuedReservations: this.#queuedCount(),
-      queuedUnits,
-      nextExpiryAt,
-      lanes,
-    });
+    return Object.freeze({ capacity: this.#policy.capacity, activeReservations: this.#active.size, activeUnits, availableUnits: this.#policy.capacity - activeUnits, queuedReservations: this.#queuedCount(), queuedUnits, nextExpiryAt, lanes });
   }
 
   reset(lane?: RuntimeFailureBudgetLane): void {
-    if (lane === undefined) {
-      this.#active.clear();
-      this.#queuedIds.clear();
-      this.#history.length = 0;
-      for (const laneName of LANES) this.#queues[laneName].length = 0;
-      this.#sequence = 0;
-      this.#lastAt = null;
-      return;
-    }
+    if (lane === undefined) { this.#active.clear(); this.#queuedIds.clear(); this.#history.length = 0; for (const laneName of LANES) this.#queues[laneName].length = 0; this.#sequence = 0; this.#lastAt = null; return; }
     assertLane(lane);
     for (const [id, reservation] of this.#active) if (reservation.lane === lane) this.#active.delete(id);
     for (const request of this.#queues[lane]) this.#queuedIds.delete(request.id);
     this.#queues[lane].length = 0;
   }
 
-  #validateRequest(input: RuntimeCapacityReservationRequest): void {
-    assertId(input.id);
-    assertLane(input.lane);
-    assertPriority(input.priority);
-    assertAt(input.at);
-    boundedInteger(input.units, 'units', 1, 100_000);
-    boundedInteger(input.leaseDurationMs, 'leaseDurationMs', 1, this.#policy.maximumLeaseDurationMs);
-  }
-
-  #advance(at: number): void {
-    if (this.#lastAt !== null && at < this.#lastAt) throw new RangeError('reservation pool time must be monotonic');
-    this.#lastAt = at;
-  }
-
-  #activeUnits(): number {
-    let total = 0;
-    for (const reservation of this.#active.values()) total += reservation.units;
-    return total;
-  }
-
-  #queuedCount(): number {
-    return this.#queuedIds.size;
-  }
-
-  #laneActiveUnits(lane: RuntimeFailureBudgetLane): number {
-    let total = 0;
-    for (const reservation of this.#active.values()) if (reservation.lane === lane) total += reservation.units;
-    return total;
-  }
-
-  #protectedReserveFor(lane: RuntimeFailureBudgetLane): number {
-    if (lane === 'critical') return 0;
-    const criticalShortfall = Math.max(0, this.#policy.minimumCriticalReserve - this.#laneActiveUnits('critical'));
-    if (lane === 'interactive') return criticalShortfall;
-    const interactiveShortfall = Math.max(0, this.#policy.minimumInteractiveReserve - this.#laneActiveUnits('interactive'));
-    return criticalShortfall + interactiveShortfall;
-  }
-
-  #canReserve(lane: RuntimeFailureBudgetLane, units: number): boolean {
-    const available = this.#policy.capacity - this.#activeUnits();
-    return units <= Math.max(0, available - this.#protectedReserveFor(lane));
-  }
-
-  #reserve(input: RuntimeCapacityReservationRequest, at: number): RuntimeCapacityReservation {
-    const expiresAt = at + input.leaseDurationMs;
-    if (!Number.isSafeInteger(expiresAt)) throw new RangeError('reservation expiry exceeds safe integer range');
-    const reservation = Object.freeze({ id: input.id, lane: input.lane, priority: input.priority, units: input.units, reservedAt: at, expiresAt });
-    this.#active.set(input.id, reservation);
-    this.#queuedIds.delete(input.id);
-    return reservation;
-  }
-
-  #expire(at: number): number {
-    let expired = 0;
-    for (const [id, reservation] of this.#active) {
-      if (reservation.expiresAt > at) continue;
-      this.#active.delete(id);
-      expired += 1;
-      this.#record({ id, lane: reservation.lane, disposition: 'expired', reason: 'expired', units: reservation.units, at });
-    }
-    return expired;
-  }
+  #validateRequest(input: RuntimeCapacityReservationRequest): void { assertId(input.id); assertLane(input.lane); assertPriority(input.priority); assertAt(input.at); boundedInteger(input.units, 'units', 1, 100_000); boundedInteger(input.leaseDurationMs, 'leaseDurationMs', 1, this.#policy.maximumLeaseDurationMs); }
+  #advance(at: number): void { if (this.#lastAt !== null && at < this.#lastAt) throw new RangeError('reservation pool time must be monotonic'); this.#lastAt = at; }
+  #activeUnits(): number { let total = 0; for (const reservation of this.#active.values()) total += reservation.units; return total; }
+  #queuedCount(): number { return this.#queuedIds.size; }
+  #laneActiveUnits(lane: RuntimeFailureBudgetLane): number { let total = 0; for (const reservation of this.#active.values()) if (reservation.lane === lane) total += reservation.units; return total; }
+  #protectedReserveFor(lane: RuntimeFailureBudgetLane): number { if (lane === 'critical') return 0; const criticalShortfall = Math.max(0, this.#policy.minimumCriticalReserve - this.#laneActiveUnits('critical')); if (lane === 'interactive') return criticalShortfall; const interactiveShortfall = Math.max(0, this.#policy.minimumInteractiveReserve - this.#laneActiveUnits('interactive')); return criticalShortfall + interactiveShortfall; }
+  #canReserve(lane: RuntimeFailureBudgetLane, units: number): boolean { const available = this.#policy.capacity - this.#activeUnits(); return units <= Math.max(0, available - this.#protectedReserveFor(lane)); }
+  #reserve(input: RuntimeCapacityReservationRequest, at: number): RuntimeCapacityReservation { const expiresAt = at + input.leaseDurationMs; if (!Number.isSafeInteger(expiresAt)) throw new RangeError('reservation expiry exceeds safe integer range'); const reservation = Object.freeze({ id: input.id, lane: input.lane, priority: input.priority, units: input.units, reservedAt: at, expiresAt }); this.#active.set(input.id, reservation); this.#queuedIds.delete(input.id); return reservation; }
+  #expire(at: number): number { let expired = 0; for (const [id, reservation] of this.#active) { if (reservation.expiresAt > at) continue; this.#active.delete(id); expired += 1; this.#record({ id, lane: reservation.lane, disposition: 'expired', reason: 'expired', units: reservation.units, at }); } return expired; }
 
   #promote(at: number): readonly RuntimeCapacityReservation[] {
     const promoted: RuntimeCapacityReservation[] = [];
-    let progressed = true;
-    while (progressed && this.#queuedCount() > 0) {
-      progressed = false;
-      for (const lane of LANES) {
-        const queue = this.#queues[lane];
-        const next = queue[0];
-        if (!next || !this.#canReserve(lane, next.units)) continue;
-        queue.shift();
-        const reservation = this.#reserve(next, at);
-        promoted.push(reservation);
-        this.#record({ id: next.id, lane, disposition: 'reserved', reason: 'capacity', units: next.units, at });
-        progressed = true;
-      }
+    const maximumVisits = this.#queuedCount() * LANES.length;
+    let visits = 0;
+    let laneIndex = 0;
+    let misses = 0;
+    while (this.#queuedCount() > 0 && visits < maximumVisits && misses < LANES.length) {
+      const lane = LANES[laneIndex];
+      laneIndex = (laneIndex + 1) % LANES.length;
+      visits += 1;
+      if (!lane) break;
+      const queue = this.#queues[lane];
+      const next = queue[0];
+      if (!next || !this.#canReserve(lane, next.units)) { misses += 1; continue; }
+      queue.shift();
+      const reservation = this.#reserve(next, at);
+      promoted.push(reservation);
+      this.#record({ id: next.id, lane, disposition: 'reserved', reason: 'capacity', units: next.units, at });
+      misses = 0;
     }
     return Object.freeze(promoted);
   }
 
-  #laneSnapshot(lane: RuntimeFailureBudgetLane): RuntimeCapacityReservationLaneSnapshot {
-    let activeReservations = 0;
-    let activeUnits = 0;
-    for (const reservation of this.#active.values()) {
-      if (reservation.lane !== lane) continue;
-      activeReservations += 1;
-      activeUnits += reservation.units;
-    }
-    let queuedUnits = 0;
-    for (const request of this.#queues[lane]) queuedUnits += request.units;
-    return Object.freeze({ lane, activeReservations, activeUnits, queuedReservations: this.#queues[lane].length, queuedUnits });
-  }
-
-  #decision(input: RuntimeCapacityReservationRequest, disposition: RuntimeReservationDisposition, reason: RuntimeReservationReason): RuntimeCapacityReservationDecision {
-    return this.#record({ id: input.id, lane: input.lane, disposition, reason, units: input.units, at: input.at });
-  }
-
-  #record(decision: RuntimeCapacityReservationDecision): RuntimeCapacityReservationDecision {
-    const frozen = Object.freeze({ ...decision });
-    if (this.#policy.maximumHistory > 0) {
-      this.#history.push(frozen);
-      if (this.#history.length > this.#policy.maximumHistory) this.#history.splice(0, this.#history.length - this.#policy.maximumHistory);
-    }
-    return frozen;
-  }
+  #laneSnapshot(lane: RuntimeFailureBudgetLane): RuntimeCapacityReservationLaneSnapshot { let activeReservations = 0; let activeUnits = 0; for (const reservation of this.#active.values()) { if (reservation.lane !== lane) continue; activeReservations += 1; activeUnits += reservation.units; } let queuedUnits = 0; for (const request of this.#queues[lane]) queuedUnits += request.units; return Object.freeze({ lane, activeReservations, activeUnits, queuedReservations: this.#queues[lane].length, queuedUnits }); }
+  #decision(input: RuntimeCapacityReservationRequest, disposition: RuntimeReservationDisposition, reason: RuntimeReservationReason): RuntimeCapacityReservationDecision { return this.#record({ id: input.id, lane: input.lane, disposition, reason, units: input.units, at: input.at }); }
+  #record(decision: RuntimeCapacityReservationDecision): RuntimeCapacityReservationDecision { const frozen = Object.freeze({ ...decision }); if (this.#policy.maximumHistory > 0) { this.#history.push(frozen); if (this.#history.length > this.#policy.maximumHistory) this.#history.splice(0, this.#history.length - this.#policy.maximumHistory); } return frozen; }
 }
