@@ -118,8 +118,8 @@ function normalizeDescriptor(input: ClusterLayerDescriptor): NormalizedDescripto
   if (!layerId) throw new TypeError('layerId must not be empty');
   const minScale = optionalScale(input.minScale, 'minScale');
   const maxScale = optionalScale(input.maxScale, 'maxScale');
-  if (minScale !== undefined && maxScale !== undefined && minScale > maxScale) {
-    throw new RangeError('minScale must be <= maxScale');
+  if (minScale !== undefined && maxScale !== undefined && minScale < maxScale) {
+    throw new RangeError('minScale must be >= maxScale for an ArcGIS visible scale range');
   }
   const targetPixelRadius = positiveFinite(input.targetPixelRadius, 'targetPixelRadius');
   const minPixelRadius = positiveFinite(input.minPixelRadius ?? Math.max(4, targetPixelRadius * 0.5), 'minPixelRadius');
@@ -163,8 +163,8 @@ function normalizeViewport(input: ClusterViewport): ClusterViewport {
 }
 
 function isScaleVisible(descriptor: NormalizedDescriptor, scale: number): boolean {
-  if (descriptor.minScale !== undefined && scale < descriptor.minScale) return false;
-  if (descriptor.maxScale !== undefined && scale > descriptor.maxScale) return false;
+  if (descriptor.minScale !== undefined && scale > descriptor.minScale) return false;
+  if (descriptor.maxScale !== undefined && scale < descriptor.maxScale) return false;
   return true;
 }
 
