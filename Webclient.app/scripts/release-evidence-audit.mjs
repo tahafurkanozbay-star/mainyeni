@@ -43,6 +43,11 @@ function stableSort(findings) {
   const rank = { error: 0, warning: 1, info: 2 };
   return [...findings].sort((a,b) => (rank[a.severity]-rank[b.severity]) || a.file.localeCompare(b.file) || ((a.line ?? 0)-(b.line ?? 0)) || a.code.localeCompare(b.code));
 }
+function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function verifyRunsScript(command, name) {
+  const escaped=escapeRegex(name);
+  return new RegExp(`(?:^|(?:&&|;)\\s*)npm\\s+run\\s+${escaped}(?=\\s*(?:&&|;|$))`).test(command);
+}
 
 export function auditPackage(packageText, file='Webclient.app/package.json') {
   const findings=[];
@@ -54,7 +59,7 @@ export function auditPackage(packageText, file='Webclient.app/package.json') {
   for (const name of REQUIRED_PACKAGE_SCRIPTS) if (typeof scripts[name] !== 'string' || !scripts[name].trim()) findings.push(finding('error','required-script-missing',`Required release script is missing: ${name}`,file,null,name));
   const verify=String(scripts.verify ?? '');
   for (const name of ['dependency:verify','lint:strict','typecheck','test:ci','test:tooling','test:build-budget','build','build:verify']) {
-    if (!verify.includes(`npm run ${name}`)) findings.push(finding('error','verify-chain-gap',`verify does not execute ${name}.`,file,null,name));
+    if (!verifyRunsScript(verify,name)) findings.push(finding('error','verify-chain-gap',`verify does not execute ${name}.`,file,null,name));
   }
   const node=String(pkg.engines?.node ?? '');
   const npm=String(pkg.engines?.npm ?? '');
@@ -66,7 +71,7 @@ export function auditPackage(packageText, file='Webclient.app/package.json') {
 export function auditWorkflow(workflowText, file='.github/workflows/webclient-quality.yml') {
   const findings=[];
   for (const step of REQUIRED_WORKFLOW_STEPS) {
-    const escaped=step.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const escaped=escapeRegex(step);
     if (!new RegExp(`name:\\s*${escaped}(?:\\s*$|\\r?$)`,'m').test(workflowText)) findings.push(finding('error','required-step-missing',`Required quality step is missing: ${step}`,file,null,step));
   }
   if (!/permissions:\s*\n\s*contents:\s*read/m.test(workflowText)) findings.push(finding('error','workflow-permissions','Quality workflow must explicitly use read-only contents permission.',file));
