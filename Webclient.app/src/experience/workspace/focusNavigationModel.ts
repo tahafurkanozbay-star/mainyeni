@@ -26,7 +26,7 @@ export interface WorkspaceFocusModel {
   readonly activate: (id: string | null) => WorkspaceFocusSnapshot;
   readonly move: (move: FocusMove) => WorkspaceFocusSnapshot;
   readonly moveRegion: (region: WorkspaceFocusRegion, edge?: 'first' | 'last') => WorkspaceFocusSnapshot;
-  readonly enterModal: (scope: string, preferredId?: string | null) => WorkspaceFocusSnapshot;
+  readonly enterModal: (scope: string, preferredId?: string | null | undefined) => WorkspaceFocusSnapshot;
   readonly leaveModal: () => WorkspaceFocusSnapshot;
 }
 
@@ -91,13 +91,14 @@ export const createWorkspaceFocusModel = (initialTargets: readonly WorkspaceFocu
     const next = (current + delta + list.length) % list.length;
     return publish(list[next]?.id ?? null);
   };
-  return Object.freeze({
+  const model: WorkspaceFocusModel = {
     getSnapshot: () => snapshot,
-    replaceTargets: (nextTargets) => { targets = normalizeTargets(nextTargets); if (activeId && !targets.some((target) => target.id === activeId && isAvailable(target, modalScope))) activeId = null; return publish(activeId); },
-    activate: (id) => { if (id === null) return publish(null); const target = targets.find((candidate) => candidate.id === id); return publish(target && isAvailable(target, modalScope) ? target.id : activeId); },
+    replaceTargets: (nextTargets: readonly WorkspaceFocusTarget[]) => { targets = normalizeTargets(nextTargets); if (activeId && !targets.some((target) => target.id === activeId && isAvailable(target, modalScope))) activeId = null; return publish(activeId); },
+    activate: (id: string | null) => { if (id === null) return publish(null); const target = targets.find((candidate) => candidate.id === id); return publish(target && isAvailable(target, modalScope) ? target.id : activeId); },
     move,
-    moveRegion: (region, edge = 'first') => { const regionTargets = available().filter((target) => target.region === region); if (!regionTargets.length) return publish(activeId); return publish(edge === 'last' ? regionTargets[regionTargets.length - 1]?.id ?? null : regionTargets[0]?.id ?? null); },
-    enterModal: (scope, preferredId = null) => { const normalizedScope = String(scope ?? '').trim(); if (!normalizedScope) throw new Error('Workspace modal focus scope is required.'); if (modalScope === null && activeId) returnStack.push(activeId); modalScope = normalizedScope; const scoped = available(); const preferred = preferredId ? scoped.find((target) => target.id === preferredId) : null; return publish(preferred?.id ?? scoped[0]?.id ?? null); },
+    moveRegion: (region: WorkspaceFocusRegion, edge: 'first' | 'last' = 'first') => { const regionTargets = available().filter((target) => target.region === region); if (!regionTargets.length) return publish(activeId); return publish(edge === 'last' ? regionTargets[regionTargets.length - 1]?.id ?? null : regionTargets[0]?.id ?? null); },
+    enterModal: (scope: string, preferredId: string | null = null) => { const normalizedScope = String(scope ?? '').trim(); if (!normalizedScope) throw new Error('Workspace modal focus scope is required.'); if (modalScope === null && activeId) returnStack.push(activeId); modalScope = normalizedScope; const scoped = available(); const preferred = preferredId ? scoped.find((target) => target.id === preferredId) : null; return publish(preferred?.id ?? scoped[0]?.id ?? null); },
     leaveModal: () => { if (modalScope === null) return snapshot; modalScope = null; const restore = returnStack.pop() ?? null; const validRestore = restore && targets.some((target) => target.id === restore && isAvailable(target, null)) ? restore : null; return publish(validRestore); },
-  });
+  };
+  return Object.freeze(model);
 };
