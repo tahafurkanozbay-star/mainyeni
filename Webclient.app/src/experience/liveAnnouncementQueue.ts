@@ -26,6 +26,7 @@ export interface LiveAnnouncementQueueOptions {
   readonly maxPending?: number;
   readonly defaultTtlMs?: number | null;
   readonly now?: () => number;
+  readonly onObserverError?: (error: unknown) => void;
 }
 
 const DEFAULT_MAX_PENDING = 24;
@@ -72,14 +73,22 @@ export function createLiveAnnouncementQueue(options: LiveAnnouncementQueueOption
     revision,
   });
 
+  const reportObserverError = (error: unknown): void => {
+    try {
+      options.onObserverError?.(error);
+    } catch (reportingError) {
+      void reportingError;
+    }
+  };
+
   const emit = () => {
     revision += 1;
     const next = snapshot();
     for (const listener of listeners) {
       try {
         listener(next);
-      } catch {
-        // A presentation observer must never break the accessibility channel.
+      } catch (error) {
+        reportObserverError(error);
       }
     }
   };
@@ -125,8 +134,6 @@ export function createLiveAnnouncementQueue(options: LiveAnnouncementQueueOption
     });
 
     if (item.politeness === 'assertive') {
-      // Assertive feedback is promoted immediately, but the interrupted polite
-      // item is preserved at the front so information is not silently lost.
       if (current?.politeness === 'polite') pending.unshift(current);
       current = item;
     } else if (!current) {
