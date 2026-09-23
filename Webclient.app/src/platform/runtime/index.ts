@@ -81,3 +81,4 @@ export * from './runtimeRecoveryPlanner';
 export * from './runtimeSaturationLedger';
 export * from './runtimeBackpressureCoordinator';
 export * from './runtimeQuarantineRegistry';
+export * from './runtimeConcurrencyGovernor';
