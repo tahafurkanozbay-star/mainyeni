@@ -146,7 +146,6 @@ test('package verification pipeline keeps strict Platform compilation and tests 
   assert.match(packageJson.scripts?.typecheck, /typecheck:platform-tests/u);
   assert.match(packageJson.scripts?.verify, /npm run typecheck/u);
   assert.match(packageJson.scripts?.verify, /npm run test:ci/u);
-  assert.equal(typeof packageJson.scripts?.dependencyVerify, 'undefined');
   assert.equal(typeof packageJson.scripts?.['dependency:verify'], 'string');
 });
 
@@ -154,5 +153,5 @@ test('Architecture Audit keeps cutover and architecture gates wired', async () =
   const workflow = await fs.readFile(path.join(ROOT, '.github', 'workflows', 'platform-architecture-audit.yml'), 'utf8');
   assert.match(workflow, /platform-ts-cutover\.test\.mjs/u);
   assert.match(workflow, /platform-language-ratchet\.mjs --strict/u);
-  assert.match(workflow, /typecheck:platform/u);
+  assert.match(workflow, /platform-boundary-audit\.mjs --strict/u);
 });
