@@ -15,6 +15,7 @@ const WRITE_LEVELS = new Set(['write', 'write-all']);
 const DANGEROUS_TRIGGERS = new Set(['pull_request_target', 'workflow_run']);
 const UNTRUSTED_EVENT_EXPRESSION = /\$\{\{[^}\n]*github\.event\.(?:pull_request\.(?:title|body)|issue\.(?:title|body)|comment\.body|head_commit\.message)[^}\n]*\}\}/;
 const UNTRUSTED_CHECKOUT_REF = /\$\{\{\s*(?:github\.head_ref|github\.event\.pull_request\.head\.(?:ref|label|sha))\s*\}\}/;
+const UNTRUSTED_CHECKOUT_REPOSITORY = /\$\{\{[^}\n]*(?:github\.event\.pull_request\.head\.repo\.(?:full_name|name)|github\.head_repository)[^}\n]*\}\}/;
 
 function readWorkflow(relativePath) {
   return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
@@ -122,7 +123,7 @@ function expressionRunFindings(text) {
   }
   return findings;
 }
-function checkoutRefFindings(text) {
+function checkoutInputFindings(text) {
   const source = lines(text);
   const findings = [];
   for (let index = 0; index < source.length; index += 1) {
@@ -132,8 +133,11 @@ function checkoutRefFindings(text) {
       const line = source[cursor];
       if (!line.trim()) continue;
       if (indentation(line) <= usesIndent) break;
-      const refMatch = stripComment(line).match(/^\s*ref:\s*(.*?)\s*$/);
-      if (refMatch && UNTRUSTED_CHECKOUT_REF.test(refMatch[1])) findings.push(cursor + 1);
+      const inputMatch = stripComment(line).match(/^\s*(ref|repository):\s*(.*?)\s*$/);
+      if (!inputMatch) continue;
+      const [, input, value] = inputMatch;
+      if (input === 'ref' && UNTRUSTED_CHECKOUT_REF.test(value)) findings.push(Object.freeze({ line: cursor + 1, input }));
+      if (input === 'repository' && UNTRUSTED_CHECKOUT_REPOSITORY.test(value)) findings.push(Object.freeze({ line: cursor + 1, input }));
     }
   }
   return findings;
@@ -146,7 +150,7 @@ for (const workflow of WORKFLOWS) {
   });
   test(`${workflow} avoids privileged event triggers`, () => assert.deepEqual(dangerousTriggers(readWorkflow(workflow)), []));
   test(`${workflow} keeps untrusted event text out of shell run bodies`, () => assert.deepEqual(expressionRunFindings(readWorkflow(workflow)), []));
-  test(`${workflow} does not checkout an untrusted PR head ref explicitly`, () => assert.deepEqual(checkoutRefFindings(readWorkflow(workflow)), []));
+  test(`${workflow} does not select attacker-controlled checkout inputs`, () => assert.deepEqual(checkoutInputFindings(readWorkflow(workflow)), []));
 }
 
 test('permission contract rejects a non-contents write scope', () => {
@@ -199,7 +203,10 @@ test('run-expression contract rejects issue title and commit message interpolati
   assert.deepEqual(expressionRunFindings(fixture), [2, 3]);
 });
 test('run-expression contract allows trusted static github metadata', () => assert.deepEqual(expressionRunFindings(`steps:\n  - run: echo "${'${{ github.sha }}'}"\n`), []));
-test('checkout contract rejects explicit untrusted head ref', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.event.pull_request.head.ref }}'}\n`), [4]));
-test('checkout contract rejects explicit untrusted head SHA', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.event.pull_request.head.sha }}'}\n`), [4]));
-test('checkout contract rejects github.head_ref shorthand', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.head_ref }}'}\n`), [4]));
-test('checkout contract allows default event checkout', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      persist-credentials: false\n`), []));
+test('checkout contract rejects explicit untrusted head ref', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.event.pull_request.head.ref }}'}\n`), [{ line: 4, input: 'ref' }]));
+test('checkout contract rejects explicit untrusted head SHA', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.event.pull_request.head.sha }}'}\n`), [{ line: 4, input: 'ref' }]));
+test('checkout contract rejects github.head_ref shorthand', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.head_ref }}'}\n`), [{ line: 4, input: 'ref' }]));
+test('checkout contract rejects attacker-controlled fork repository', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      repository: ${'${{ github.event.pull_request.head.repo.full_name }}'}\n`), [{ line: 4, input: 'repository' }]));
+test('checkout contract rejects attacker-controlled repository inside expression', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      repository: ${'${{ format(\'{0}\', github.event.pull_request.head.repo.name) }}'}\n`), [{ line: 4, input: 'repository' }]));
+test('checkout contract allows a static reviewed repository', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      repository: tahafurkanozbay-star/mainyeni\n      persist-credentials: false\n`), []));
+test('checkout contract allows default event checkout', () => assert.deepEqual(checkoutInputFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      persist-credentials: false\n`), []));
