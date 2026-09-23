@@ -83,3 +83,4 @@ export * from './runtimeBackpressureCoordinator';
 export * from './runtimeQuarantineRegistry';
 export * from './runtimeConcurrencyGovernor';
 export * from './runtimeLoadWindow';
+export * from './runtimeDegradationController';
