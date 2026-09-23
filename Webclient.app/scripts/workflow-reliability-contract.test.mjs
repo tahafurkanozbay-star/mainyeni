@@ -12,15 +12,8 @@ const WORKFLOWS = Object.freeze([
 function readWorkflow(relativePath) {
   return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
 }
-
-function lines(text) {
-  return text.split(/\r?\n/);
-}
-
-function indentation(line) {
-  return line.length - line.trimStart().length;
-}
-
+function lines(text) { return text.split(/\r?\n/); }
+function indentation(line) { return line.length - line.trimStart().length; }
 function clean(line) {
   let quoted = false;
   let quote = '';
@@ -34,7 +27,6 @@ function clean(line) {
   }
   return line;
 }
-
 function topLevelBlock(text, key) {
   const source = lines(text);
   const start = source.findIndex((line) => new RegExp(`^${key}:\\s*$`).test(clean(line)));
@@ -46,7 +38,6 @@ function topLevelBlock(text, key) {
   }
   return source.slice(start, end);
 }
-
 function concurrencyContract(text) {
   const block = topLevelBlock(text, 'concurrency');
   if (!block) return { ok: false, reason: 'missing-concurrency' };
@@ -54,12 +45,9 @@ function concurrencyContract(text) {
   const cancel = block.find((line) => /^\s+cancel-in-progress:\s*true\s*$/.test(clean(line)));
   if (!group) return { ok: false, reason: 'missing-group' };
   if (!cancel) return { ok: false, reason: 'missing-cancellation' };
-  if (!/github\.(?:event\.pull_request\.number|ref)/.test(group)) {
-    return { ok: false, reason: 'group-not-ref-scoped' };
-  }
+  if (!/github\.(?:event\.pull_request\.number|ref)/.test(group)) return { ok: false, reason: 'group-not-ref-scoped' };
   return { ok: true, reason: null };
 }
-
 function jobBlocks(text) {
   const source = lines(text);
   const jobsStart = source.findIndex((line) => /^jobs:\s*$/.test(clean(line)));
@@ -82,14 +70,13 @@ function jobBlocks(text) {
   }
   return jobs;
 }
-
 function timeoutMinutes(job) {
-  const match = job.text.match(/^\s{4}timeout-minutes:\s*([^\s#]+)\s*$/m);
-  if (!match) return null;
-  if (!/^\d+$/.test(match[1])) return Number.NaN;
-  return Number(match[1]);
+  const line = job.text.split(/\r?\n/).find((candidate) => /^\s{4}timeout-minutes\s*:/.test(clean(candidate)));
+  if (!line) return null;
+  const value = clean(line).replace(/^\s{4}timeout-minutes\s*:\s*/, '').trim();
+  if (!/^\d+$/.test(value)) return Number.NaN;
+  return Number(value);
 }
-
 function timeoutContract(text, maximum = 120) {
   const jobs = jobBlocks(text);
   if (jobs.length === 0) return { ok: false, reason: 'missing-jobs', findings: [] };
@@ -102,7 +89,6 @@ function timeoutContract(text, maximum = 120) {
   }
   return { ok: findings.length === 0, reason: findings.length ? 'invalid-timeout' : null, findings };
 }
-
 function runnerContract(text) {
   const findings = [];
   for (const job of jobBlocks(text)) {
@@ -113,76 +99,70 @@ function runnerContract(text) {
   }
   return { ok: findings.length === 0, findings };
 }
-
 for (const workflow of WORKFLOWS) {
   test(`${workflow} cancels superseded ref-scoped runs`, () => {
     const result = concurrencyContract(readWorkflow(workflow));
     assert.equal(result.ok, true, `${workflow} concurrency contract failed: ${result.reason}`);
   });
-
   test(`${workflow} bounds every job with a finite timeout`, () => {
     const result = timeoutContract(readWorkflow(workflow));
     assert.deepEqual(result.findings, [], `${workflow} has unbounded or invalid job timeout evidence`);
   });
-
   test(`${workflow} keeps QA execution on the reviewed hosted runner`, () => {
     const result = runnerContract(readWorkflow(workflow));
     assert.deepEqual(result.findings, [], `${workflow} changed runner provenance`);
   });
 }
-
 test('concurrency contract rejects a workflow without concurrency', () => {
   assert.equal(concurrencyContract('jobs:\n  quality:\n    runs-on: ubuntu-latest\n').reason, 'missing-concurrency');
 });
-
 test('concurrency contract rejects missing cancellation', () => {
   const fixture = 'concurrency:\n  group: qa-${{ github.ref }}\njobs: {}\n';
   assert.equal(concurrencyContract(fixture).reason, 'missing-cancellation');
 });
-
 test('concurrency contract rejects a global constant group', () => {
   const fixture = 'concurrency:\n  group: global-qa\n  cancel-in-progress: true\njobs: {}\n';
   assert.equal(concurrencyContract(fixture).reason, 'group-not-ref-scoped');
 });
-
 test('concurrency contract accepts pull-request/ref fallback grouping', () => {
   const fixture = 'concurrency:\n  group: qa-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true\njobs: {}\n';
   assert.equal(concurrencyContract(fixture).ok, true);
 });
-
 test('timeout contract rejects missing timeout', () => {
   const fixture = 'jobs:\n  quality:\n    runs-on: ubuntu-latest\n    steps: []\n';
   assert.deepEqual(timeoutContract(fixture).findings, [{ job: 'quality', line: 2, reason: 'missing-timeout' }]);
 });
-
 test('timeout contract rejects zero and excessive timeout values', () => {
   for (const timeout of [0, 121, 999]) {
     const fixture = `jobs:\n  quality:\n    runs-on: ubuntu-latest\n    timeout-minutes: ${timeout}\n    steps: []\n`;
     assert.equal(timeoutContract(fixture).ok, false);
   }
 });
-
-test('timeout contract rejects expression-driven timeout values', () => {
-  const fixture = 'jobs:\n  quality:\n    runs-on: ubuntu-latest\n    timeout-minutes: ${{ inputs.timeout }}\n    steps: []\n';
-  assert.equal(timeoutContract(fixture).findings[0].reason, 'dynamic-timeout');
+test('timeout contract rejects expression-driven timeout values even when expressions contain spaces', () => {
+  for (const value of ['${{ inputs.timeout }}', '${{ matrix.timeout }}', '${{ fromJSON(inputs.timeout) }}']) {
+    const fixture = `jobs:\n  quality:\n    runs-on: ubuntu-latest\n    timeout-minutes: ${value}\n    steps: []\n`;
+    assert.equal(timeoutContract(fixture).findings[0].reason, 'dynamic-timeout');
+  }
 });
-
+test('timeout contract rejects non-numeric static timeout scalars', () => {
+  for (const value of ['fast', '10m', 'null', '"10"']) {
+    const fixture = `jobs:\n  quality:\n    runs-on: ubuntu-latest\n    timeout-minutes: ${value}\n`;
+    assert.equal(timeoutContract(fixture).findings[0].reason, 'dynamic-timeout');
+  }
+});
 test('timeout contract validates every job independently', () => {
   const fixture = 'jobs:\n  lint:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 30\n';
   assert.equal(timeoutContract(fixture).ok, true);
   assert.equal(jobBlocks(fixture).length, 2);
 });
-
 test('runner contract rejects self-hosted execution drift', () => {
   const fixture = 'jobs:\n  quality:\n    runs-on: self-hosted\n    timeout-minutes: 10\n';
   assert.deepEqual(runnerContract(fixture).findings, [{ job: 'quality', reason: 'unexpected-runner', runner: 'self-hosted' }]);
 });
-
 test('runner contract rejects expression-selected runner provenance', () => {
   const fixture = 'jobs:\n  quality:\n    runs-on: ${{ inputs.runner }}\n    timeout-minutes: 10\n';
   assert.equal(runnerContract(fixture).ok, false);
 });
-
 test('runner contract accepts the reviewed GitHub-hosted runner', () => {
   const fixture = 'jobs:\n  quality:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n';
   assert.equal(runnerContract(fixture).ok, true);
