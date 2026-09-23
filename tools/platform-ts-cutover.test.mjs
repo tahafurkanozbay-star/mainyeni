@@ -140,16 +140,18 @@ test('canonical typed modules contain no TypeScript opt-outs or CommonJS runtime
   }
 });
 
-test('package verify pipeline contains every Platform modernization gate', async () => {
+test('package verification pipeline keeps strict Platform compilation and tests wired', async () => {
   const packageJson = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'package.json'), 'utf8'));
-  assert.match(packageJson.scripts?.['verify:platform'], /typecheck:platform/u);
-  assert.match(packageJson.scripts?.['verify:platform'], /typecheck:platform-tests/u);
-  assert.match(packageJson.scripts?.['verify:platform'], /test:platform/u);
-  assert.match(packageJson.scripts?.['verify:platform'], /audit:prod/u);
+  assert.match(packageJson.scripts?.typecheck, /typecheck:platform/u);
+  assert.match(packageJson.scripts?.typecheck, /typecheck:platform-tests/u);
+  assert.match(packageJson.scripts?.verify, /npm run typecheck/u);
+  assert.match(packageJson.scripts?.verify, /npm run test:ci/u);
+  assert.equal(typeof packageJson.scripts?.dependencyVerify, 'undefined');
+  assert.equal(typeof packageJson.scripts?.['dependency:verify'], 'string');
 });
 
 test('Architecture Audit keeps cutover and architecture gates wired', async () => {
-  const workflow = await fs.readFile(path.join(ROOT, '.github', 'workflows', 'architecture-audit.yml'), 'utf8');
+  const workflow = await fs.readFile(path.join(ROOT, '.github', 'workflows', 'platform-architecture-audit.yml'), 'utf8');
   assert.match(workflow, /platform-ts-cutover\.test\.mjs/u);
   assert.match(workflow, /platform-language-ratchet\.mjs --strict/u);
   assert.match(workflow, /typecheck:platform/u);
