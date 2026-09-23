@@ -74,39 +74,16 @@ test('Platform test JavaScript is fully eliminated and permanently ratcheted to 
   assert.equal(baseline.testDomains?.platform, 0);
 });
 
-test('Platform test TypeScript project is strict and rejects JavaScript admission', async () => {
+test('Platform test TypeScript project is strict, complete and rejects JavaScript admission', async () => {
   const config = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.platform-tests.json'), 'utf8'));
   assert.equal(config.compilerOptions?.allowJs, false);
   assert.equal(config.compilerOptions?.strict, true);
   assert.deepEqual(config.compilerOptions?.types, ['vitest/globals', 'vite/client']);
-  assert.deepEqual(config.include, [
-      "src/platform/bootstrap/bootstrapCore.test.ts",
-      "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
-      "src/platform/config/runtimeConfig.test.ts",
-      "src/platform/config/runtimeConfigResolution.test.ts",
-      "src/platform/config/runtimeConfigGovernance.test.ts",
-      "src/platform/config/runtimeConfigTransition.test.ts",
-      "src/platform/http/fetchTransport.test.ts",
-      "src/platform/http/networkDiagnostics.test.ts",
-      "src/platform/http/requestScheduler.test.ts",
-      "src/platform/http/retryPolicy.test.ts",
-      "src/platform/http/runtimeCapabilities.test.ts",
-      "src/platform/http/typescriptRuntime.integration.test.ts",
-      "src/platform/performance/performanceMonitor.test.ts",
-      "src/platform/runtime/runtime.test.ts",
-      "src/platform/runtime/runtimeDiagnostics.test.ts",
-      "src/platform/runtime/loadSheddingPolicy.test.ts",
-      "src/platform/runtime/resilienceEnvelope.test.ts",
-      "src/platform/runtime/runtimeDeadlineLedger.test.ts",
-      "src/platform/runtime/runtimeResilienceHealth.test.ts",
-      "src/platform/runtime/runtimeResilienceSupervisor.test.ts",
-      "src/platform/runtime/runtimeSignalWindow.test.ts",
-      "src/platform/runtime/runtimeWorkloadGovernor.test.ts",
-      "src/platform/runtime/serviceGraph.test.ts",
-      "src/platform/runtime/serviceContainer.test.ts",
-      "src/platform/runtime/serviceHealth.test.ts",
-      "src/platform/runtime/serviceComposition.integration.test.ts"
-  ]);
+  const platformTests = (await walk(PLATFORM))
+    .filter((file) => /\.(?:test|spec)\.tsx?$/u.test(file))
+    .map((file) => normalize(path.relative(path.join(ROOT, 'Webclient.app'), file)))
+    .sort();
+  assert.deepEqual([...config.include].sort(), platformTests);
 });
 
 test('root compatibility bridge does not weaken Platform boundary', async () => {
