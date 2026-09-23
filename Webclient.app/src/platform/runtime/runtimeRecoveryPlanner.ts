@@ -128,7 +128,13 @@ export class RuntimeRecoveryPlanner {
 
     if (signal.overload === 'healthy') {
       lane.stableSamples += 1;
-      if (lane.stableSamples >= this.#policy.stableSamplesForRecovery) lane.attempts = 0;
+      if (lane.stableSamples >= this.#policy.stableSamplesForRecovery) {
+        lane.attempts = 0;
+        lane.lastAction = 'none';
+        lane.lastActionAt = null;
+        lane.nextEligibleAt = 0;
+        return this.#decision(signal.lane, 'none', 'healthy', now);
+      }
       if (lane.lastAction !== 'none' && now >= lane.nextEligibleAt) {
         return this.#commit(signal.lane, 'probe', 'recovery-probe', now, this.#policy.healthyProbeInterval);
       }
