@@ -1,24 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLiveAnnouncementQueue } from './liveAnnouncementQueue';
 
+const required = <T>(value: T | null, label: string): T => {
+  if (value === null) throw new Error(`Expected ${label} announcement`);
+  return value;
+};
+
 describe('liveAnnouncementQueue', () => {
   it('normalizes messages and sequences polite announcements', () => {
     const queue = createLiveAnnouncementQueue();
-    const first = queue.enqueue({ message: '  Harita   hazır  ' });
-    const second = queue.enqueue({ message: 'Katmanlar yüklendi' });
+    const first = required(queue.enqueue({ message: '  Harita   hazır  ' }), 'first');
+    const second = required(queue.enqueue({ message: 'Katmanlar yüklendi' }), 'second');
 
-    expect(first?.message).toBe('Harita hazır');
-    expect(queue.snapshot().current?.id).toBe(first?.id);
-    expect(queue.snapshot().pending.map((item) => item.id)).toEqual([second?.id]);
+    expect(first.message).toBe('Harita hazır');
+    expect(queue.snapshot().current?.id).toBe(first.id);
+    expect(queue.snapshot().pending.map((item) => item.id)).toEqual([second.id]);
 
-    expect(queue.acknowledge(first!.id)).toBe(true);
-    expect(queue.snapshot().current?.id).toBe(second?.id);
+    expect(queue.acknowledge(first.id)).toBe(true);
+    expect(queue.snapshot().current?.id).toBe(second.id);
   });
 
   it('promotes assertive feedback without losing interrupted polite feedback', () => {
     const queue = createLiveAnnouncementQueue();
-    const polite = queue.enqueue({ message: 'Arama tamamlandı' })!;
-    const urgent = queue.enqueue({ message: 'Bağlantı kesildi', politeness: 'assertive' })!;
+    const polite = required(queue.enqueue({ message: 'Arama tamamlandı' }), 'polite');
+    const urgent = required(queue.enqueue({ message: 'Bağlantı kesildi', politeness: 'assertive' }), 'urgent');
 
     expect(queue.snapshot().current).toMatchObject({ id: urgent.id, politeness: 'assertive' });
     expect(queue.snapshot().pending[0]?.id).toBe(polite.id);
@@ -48,7 +53,7 @@ describe('liveAnnouncementQueue', () => {
   it('expires stale feedback only when explicitly swept', () => {
     let clock = 100;
     const queue = createLiveAnnouncementQueue({ now: () => clock, defaultTtlMs: 50 });
-    const first = queue.enqueue({ message: 'Geçici durum' })!;
+    const first = required(queue.enqueue({ message: 'Geçici durum' }), 'expiring');
     queue.enqueue({ message: 'Sonraki durum', ttlMs: 200 });
 
     clock = 151;
@@ -70,9 +75,9 @@ describe('liveAnnouncementQueue', () => {
 
   it('supports targeted dismissal and clear without disturbing unrelated entries', () => {
     const queue = createLiveAnnouncementQueue();
-    const current = queue.enqueue({ message: 'current' })!;
-    const remove = queue.enqueue({ message: 'remove' })!;
-    const keep = queue.enqueue({ message: 'keep' })!;
+    const current = required(queue.enqueue({ message: 'current' }), 'current');
+    const remove = required(queue.enqueue({ message: 'remove' }), 'removable');
+    const keep = required(queue.enqueue({ message: 'keep' }), 'retained');
 
     expect(queue.dismiss(remove.id)).toBe(true);
     expect(queue.snapshot().pending.map((item) => item.id)).toEqual([keep.id]);
@@ -110,7 +115,7 @@ describe('liveAnnouncementQueue', () => {
   it('increments revisions only for observable mutations', () => {
     const queue = createLiveAnnouncementQueue();
     expect(queue.snapshot().revision).toBe(0);
-    const item = queue.enqueue({ message: 'Hazır' })!;
+    const item = required(queue.enqueue({ message: 'Hazır' }), 'revision');
     expect(queue.snapshot().revision).toBe(1);
     expect(queue.dismiss(999)).toBe(false);
     expect(queue.snapshot().revision).toBe(1);
