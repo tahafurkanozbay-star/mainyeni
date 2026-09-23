@@ -14,6 +14,7 @@ const WORKFLOWS = Object.freeze([
 const WRITE_LEVELS = new Set(['write', 'write-all']);
 const DANGEROUS_TRIGGERS = new Set(['pull_request_target', 'workflow_run']);
 const UNTRUSTED_EVENT_EXPRESSION = /\$\{\{[^}\n]*github\.event\.(?:pull_request\.(?:title|body)|issue\.(?:title|body)|comment\.body|head_commit\.message)[^}\n]*\}\}/;
+const UNTRUSTED_CHECKOUT_REF = /\$\{\{\s*(?:github\.head_ref|github\.event\.pull_request\.head\.(?:ref|label|sha))\s*\}\}/;
 
 function readWorkflow(relativePath) {
   return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
@@ -34,17 +35,22 @@ function stripComment(line) {
   return line;
 }
 function scalar(value) { return stripComment(value).trim().replace(/^['"]|['"]$/g, '').toLowerCase(); }
-function topLevelBlock(text, key) {
+function topLevelDeclaration(text, key) {
   const source = lines(text);
-  const start = source.findIndex((line) => new RegExp(`^${key}:\\s*(?:#.*)?$`).test(line));
-  if (start < 0) return null;
-  let end = source.length;
-  for (let index = start + 1; index < source.length; index += 1) {
-    const line = source[index];
+  const index = source.findIndex((line) => new RegExp(`^${key}:`).test(stripComment(line)));
+  if (index < 0) return null;
+  return Object.freeze({ index, line: stripComment(source[index]).trim(), source });
+}
+function topLevelBlock(text, key) {
+  const declaration = topLevelDeclaration(text, key);
+  if (!declaration) return null;
+  let end = declaration.source.length;
+  for (let index = declaration.index + 1; index < declaration.source.length; index += 1) {
+    const line = declaration.source[index];
     if (!line.trim() || /^\s*#/.test(line)) continue;
     if (indentation(line) === 0) { end = index; break; }
   }
-  return source.slice(start, end);
+  return declaration.source.slice(declaration.index, end);
 }
 function permissionEntries(text) {
   const block = topLevelBlock(text, 'permissions');
@@ -57,19 +63,36 @@ function permissionEntries(text) {
   return entries;
 }
 function permissionContract(text) {
-  const block = topLevelBlock(text, 'permissions');
-  if (!block) return { ok: false, reason: 'missing-permissions', entries: [] };
-  const header = stripComment(block[0]).trim();
-  if (/^permissions:\s*(?:write-all|read-all)\s*$/i.test(header)) return { ok: false, reason: 'aggregate-permission', entries: [] };
+  const declaration = topLevelDeclaration(text, 'permissions');
+  if (!declaration) return { ok: false, reason: 'missing-permissions', entries: [] };
+  const inline = declaration.line.match(/^permissions:\s*(.*?)\s*$/i)?.[1] ?? '';
+  if (inline) {
+    const level = scalar(inline);
+    if (level === 'read-all' || WRITE_LEVELS.has(level)) return { ok: false, reason: 'aggregate-permission', entries: [] };
+    if (level === '{}') return { ok: false, reason: 'contents-not-read', entries: [] };
+    return { ok: false, reason: 'unsupported-permission-scalar', entries: [] };
+  }
   const entries = permissionEntries(text);
   if (!entries.some((entry) => entry.scope === 'contents' && entry.level === 'read')) return { ok: false, reason: 'contents-not-read', entries };
   const writable = entries.filter((entry) => WRITE_LEVELS.has(entry.level));
   if (writable.length > 0) return { ok: false, reason: 'write-permission', entries };
   return { ok: true, reason: null, entries };
 }
+function inlineTriggerNames(value) {
+  const normalized = stripComment(value).trim();
+  if (!normalized) return [];
+  if (normalized.startsWith('[') && normalized.endsWith(']')) {
+    return normalized.slice(1, -1).split(',').map((item) => scalar(item)).filter(Boolean);
+  }
+  if (/^[a-zA-Z_][\w-]*$/.test(normalized)) return [normalized];
+  return [];
+}
 function triggerNames(text) {
-  const block = topLevelBlock(text, 'on');
-  if (!block) return [];
+  const declaration = topLevelDeclaration(text, 'on');
+  if (!declaration) return [];
+  const inline = declaration.line.match(/^on:\s*(.*?)\s*$/)?.[1] ?? '';
+  if (inline) return inlineTriggerNames(inline);
+  const block = topLevelBlock(text, 'on') ?? [];
   const names = [];
   for (const line of block.slice(1)) {
     const match = stripComment(line).match(/^\s{2}([a-zA-Z_][\w-]*):(?:\s|$)/);
@@ -109,7 +132,8 @@ function checkoutRefFindings(text) {
       const line = source[cursor];
       if (!line.trim()) continue;
       if (indentation(line) <= usesIndent) break;
-      if (/^\s*ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(?:ref|label)\s*\}\}/.test(line)) findings.push(cursor + 1);
+      const refMatch = stripComment(line).match(/^\s*ref:\s*(.*?)\s*$/);
+      if (refMatch && UNTRUSTED_CHECKOUT_REF.test(refMatch[1])) findings.push(cursor + 1);
     }
   }
   return findings;
@@ -135,8 +159,28 @@ test('permission contract rejects missing contents read', () => {
   assert.equal(result.ok, false); assert.equal(result.reason, 'contents-not-read');
 });
 test('permission contract accepts additional explicit read scopes', () => assert.equal(permissionContract(`permissions:\n  contents: read\n  checks: read\n  pull-requests: read\njobs: {}\n`).ok, true));
+test('permission contract rejects inline write-all', () => {
+  const result = permissionContract(`permissions: write-all\njobs: {}\n`);
+  assert.equal(result.ok, false); assert.equal(result.reason, 'aggregate-permission');
+});
+test('permission contract rejects inline read-all because contents must be explicit', () => {
+  const result = permissionContract(`permissions: read-all\njobs: {}\n`);
+  assert.equal(result.ok, false); assert.equal(result.reason, 'aggregate-permission');
+});
+test('permission contract rejects inline empty permissions because contents read is required', () => {
+  const result = permissionContract(`permissions: {}\njobs: {}\n`);
+  assert.equal(result.ok, false); assert.equal(result.reason, 'contents-not-read');
+});
+test('permission contract rejects unknown inline scalar fail-closed', () => {
+  const result = permissionContract(`permissions: custom\njobs: {}\n`);
+  assert.equal(result.ok, false); assert.equal(result.reason, 'unsupported-permission-scalar');
+});
 test('trigger contract detects pull_request_target', () => assert.deepEqual(dangerousTriggers(`on:\n  pull_request_target:\n    branches: [main]\njobs: {}\n`), ['pull_request_target']));
 test('trigger contract detects workflow_run', () => assert.deepEqual(dangerousTriggers(`on:\n  workflow_run:\n    workflows: [CI]\njobs: {}\n`), ['workflow_run']));
+test('trigger contract detects inline scalar pull_request_target', () => assert.deepEqual(dangerousTriggers(`on: pull_request_target\njobs: {}\n`), ['pull_request_target']));
+test('trigger contract detects privileged trigger inside inline array', () => assert.deepEqual(dangerousTriggers(`on: [push, pull_request_target]\njobs: {}\n`), ['pull_request_target']));
+test('trigger contract detects workflow_run inside quoted inline array', () => assert.deepEqual(dangerousTriggers(`on: ["pull_request", "workflow_run"]\njobs: {}\n`), ['workflow_run']));
+test('trigger contract allows inline ordinary pull_request and push', () => assert.deepEqual(dangerousTriggers(`on: [pull_request, push]\njobs: {}\n`), []));
 test('trigger contract allows ordinary pull_request and push', () => assert.deepEqual(dangerousTriggers(`on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\njobs: {}\n`), []));
 test('run-expression contract rejects pull request title interpolation', () => {
   const fixture = `steps:\n  - run: echo "${'${{ github.event.pull_request.title }}'}"\n`;
@@ -156,4 +200,6 @@ test('run-expression contract rejects issue title and commit message interpolati
 });
 test('run-expression contract allows trusted static github metadata', () => assert.deepEqual(expressionRunFindings(`steps:\n  - run: echo "${'${{ github.sha }}'}"\n`), []));
 test('checkout contract rejects explicit untrusted head ref', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.event.pull_request.head.ref }}'}\n`), [4]));
+test('checkout contract rejects explicit untrusted head SHA', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.event.pull_request.head.sha }}'}\n`), [4]));
+test('checkout contract rejects github.head_ref shorthand', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      ref: ${'${{ github.head_ref }}'}\n`), [4]));
 test('checkout contract allows default event checkout', () => assert.deepEqual(checkoutRefFindings(`steps:\n  - uses: actions/checkout@0000000000000000000000000000000000000000\n    with:\n      persist-credentials: false\n`), []));
