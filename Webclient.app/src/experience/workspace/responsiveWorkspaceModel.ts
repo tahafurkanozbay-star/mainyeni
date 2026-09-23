@@ -90,7 +90,7 @@ export const createResponsiveWorkspaceModel = (
   const pinnedPanels = new Set<WorkspacePanel>();
 
   const normalize = (): void => {
-    for (const panel of [...pinnedPanels]) {
+    for (const panel of pinnedPanels) {
       if (isOverlay(panel, viewport)) pinnedPanels.delete(panel);
     }
 
