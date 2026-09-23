@@ -142,4 +142,79 @@ describe('ArcGisLayerCapabilityPolicy', () => {
     expect(Object.isFrozen(plan)).toBe(true);
     expect(Object.isFrozen(plan.reasons)).toBe(true);
   });
+
+  it('keeps explicit unknown capability facts fail-closed under exact optional typing', () => {
+    const policy = new ArcGisLayerCapabilityPolicy();
+    const unknown = capabilities({
+      supportsPagination: undefined,
+      supportsOrderBy: undefined,
+      supportsStatistics: undefined,
+      supportsDistinct: undefined,
+      supportsReturningGeometry: undefined,
+      supportsQuantization: undefined,
+      supportsClustering: undefined,
+      supportsZ: undefined,
+      maxRecordCount: undefined,
+      maxRecordCountFactor: undefined,
+      objectIdField: undefined,
+      globalIdField: undefined,
+    });
+    const plan = policy.plan(unknown, {
+      operation: 'features',
+      requestedRecordCount: 5_000,
+      returnGeometry: true,
+      orderBy: ['NAME ASC'],
+      distinct: true,
+      quantize: true,
+      requireStablePaging: true,
+    });
+    expect(plan.allowed).toBe(false);
+    expect(plan.usePagination).toBe(false);
+    expect(plan.pageSize).toBe(500);
+    expect(plan.stableIdField).toBeUndefined();
+    expect(policy.canCluster(unknown)).toBe(false);
+    expect(policy.canRenderZ(unknown)).toBe(false);
+  });
+
+  it('normalizes verified identity fields before exposing a stable paging key', () => {
+    const policy = new ArcGisLayerCapabilityPolicy();
+    const objectIdPlan = policy.plan(capabilities({ objectIdField: '  OBJECTID  ' }), {
+      operation: 'features', requestedRecordCount: 2_000, requireStablePaging: true,
+    });
+    const globalIdPlan = policy.plan(capabilities({ objectIdField: '   ', globalIdField: '  GLOBALID  ' }), {
+      operation: 'features', requestedRecordCount: 2_000, requireStablePaging: true,
+    });
+    expect(objectIdPlan.allowed).toBe(true);
+    expect(objectIdPlan.stableIdField).toBe('OBJECTID');
+    expect(globalIdPlan.allowed).toBe(true);
+    expect(globalIdPlan.stableIdField).toBe('GLOBALID');
+  });
+
+  it('does not paginate a request that fits inside the admitted page', () => {
+    const policy = new ArcGisLayerCapabilityPolicy();
+    const plan = policy.plan(capabilities({ maxRecordCount: 2_000 }), {
+      operation: 'features', requestedRecordCount: 750, requireStablePaging: true,
+    });
+    expect(plan.allowed).toBe(true);
+    expect(plan.pageSize).toBe(750);
+    expect(plan.usePagination).toBe(false);
+  });
+
+  it('fails stable paging closed when pagination support is explicitly false', () => {
+    const policy = new ArcGisLayerCapabilityPolicy();
+    const plan = policy.plan(capabilities({ supportsPagination: false }), {
+      operation: 'features', requestedRecordCount: 5_000, requireStablePaging: true,
+    });
+    expect(plan.allowed).toBe(false);
+    expect(plan.usePagination).toBe(false);
+    expect(plan.reasons).toContain('stable paging was required but pagination is not explicitly supported');
+  });
+
+  it('keeps render capability checks independent from query admission', () => {
+    const policy = new ArcGisLayerCapabilityPolicy();
+    const nonQueryable = capabilities({ supportsQuery: false, supportsClustering: true, supportsZ: true });
+    expect(policy.plan(nonQueryable, { operation: 'features' }).allowed).toBe(false);
+    expect(policy.canCluster(nonQueryable)).toBe(true);
+    expect(policy.canRenderZ(nonQueryable)).toBe(true);
+  });
 });
