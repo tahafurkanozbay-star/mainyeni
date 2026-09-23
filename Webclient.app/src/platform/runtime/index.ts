@@ -75,3 +75,4 @@ export * from './serviceGraph';
 export * from './serviceContainer';
 export * from './serviceHealth';
 export * from './runtimeFailureBudget';
+export * from './runtimeAdmissionController';
