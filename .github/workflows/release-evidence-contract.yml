@@ -1,0 +1,65 @@
+name: Release Evidence Contract
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/package.json'
+      - 'Webclient.app/package-lock.json'
+      - 'Webclient.app/scripts/release-evidence-audit.mjs'
+      - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - '.github/workflows/webclient-quality.yml'
+      - '.github/workflows/release-evidence-contract.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Webclient.app/package.json'
+      - 'Webclient.app/package-lock.json'
+      - 'Webclient.app/scripts/release-evidence-audit.mjs'
+      - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - '.github/workflows/webclient-quality.yml'
+      - '.github/workflows/release-evidence-contract.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Release evidence self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v7
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Verify runtime major
+        run: node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"
+
+      - name: Audit adversarial fixture suite
+        run: node --test scripts/release-evidence-audit.test.mjs
+
+      - name: Audit embedded smoke fixtures
+        run: node scripts/release-evidence-audit.mjs --self-test
+
+      - name: Verify candidate release evidence
+        run: |
+          set +e
+          node scripts/release-evidence-audit.mjs --strict
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo 'Release evidence contract rejected the candidate repository state.' >&2
+            exit "$status"
+          fi
