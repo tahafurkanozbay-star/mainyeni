@@ -82,8 +82,8 @@ const validateRequest = (request: RuntimeConcurrencyRequest): RuntimeConcurrency
  * Deterministic, transport-neutral admission primitive for runtime work.
  *
  * The governor owns only concurrency accounting. It deliberately does not start
- * timers, perform I/O, retry work, or execute callbacks. Callers retain task
- * lifecycle ownership and must call release/cancel explicitly.
+ * timers, perform I/O, repeat failed work, or execute callbacks. Callers retain
+ * task lifecycle ownership and must call release/cancel explicitly.
  */
 export class RuntimeConcurrencyGovernor {
   readonly #policy: RuntimeConcurrencyPolicy;
