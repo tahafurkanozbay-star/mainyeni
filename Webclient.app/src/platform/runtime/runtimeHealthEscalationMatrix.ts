@@ -1,6 +1,6 @@
 import type { RuntimeFailureBudgetLane } from './runtimeFailureBudget';
 
-export type RuntimeHealthSeverity = 'healthy' | 'watch' | 'degraded' | 'critical';
+export type RuntimeHealthEscalationSeverity = 'healthy' | 'watch' | 'degraded' | 'critical';
 export type RuntimeHealthSignalKind = 'availability' | 'latency' | 'saturation' | 'integrity';
 
 export interface RuntimeHealthEscalationPolicy {
@@ -24,10 +24,10 @@ export interface RuntimeHealthSignal {
   readonly at: number;
 }
 
-export interface RuntimeHealthTransition {
+export interface RuntimeHealthEscalationTransition {
   readonly lane: RuntimeFailureBudgetLane;
-  readonly from: RuntimeHealthSeverity;
-  readonly to: RuntimeHealthSeverity;
+  readonly from: RuntimeHealthEscalationSeverity;
+  readonly to: RuntimeHealthEscalationSeverity;
   readonly score: number;
   readonly sampleCount: number;
   readonly at: number;
@@ -35,7 +35,7 @@ export interface RuntimeHealthTransition {
 
 export interface RuntimeHealthLaneSnapshot {
   readonly lane: RuntimeFailureBudgetLane;
-  readonly severity: RuntimeHealthSeverity;
+  readonly severity: RuntimeHealthEscalationSeverity;
   readonly mature: boolean;
   readonly score: number;
   readonly sampleCount: number;
@@ -44,7 +44,7 @@ export interface RuntimeHealthLaneSnapshot {
 }
 
 export interface RuntimeHealthEscalationSnapshot {
-  readonly severity: RuntimeHealthSeverity;
+  readonly severity: RuntimeHealthEscalationSeverity;
   readonly lanes: Readonly<Record<RuntimeFailureBudgetLane, RuntimeHealthLaneSnapshot>>;
 }
 
@@ -55,14 +55,14 @@ interface Sample {
 }
 
 interface LaneState {
-  severity: RuntimeHealthSeverity;
+  severity: RuntimeHealthEscalationSeverity;
   samples: Sample[];
   healthyRecoverySamples: number;
 }
 
 const LANES: readonly RuntimeFailureBudgetLane[] = Object.freeze(['critical', 'interactive', 'background']);
 const KINDS: readonly RuntimeHealthSignalKind[] = Object.freeze(['availability', 'latency', 'saturation', 'integrity']);
-const SEVERITY_ORDER: Readonly<Record<RuntimeHealthSeverity, number>> = Object.freeze({ healthy: 0, watch: 1, degraded: 2, critical: 3 });
+const SEVERITY_ORDER: Readonly<Record<RuntimeHealthEscalationSeverity, number>> = Object.freeze({ healthy: 0, watch: 1, degraded: 2, critical: 3 });
 const DEFAULT_POLICY: RuntimeHealthEscalationPolicy = Object.freeze({
   windowSize: 24,
   minimumSamples: 6,
@@ -120,7 +120,7 @@ export class RuntimeHealthEscalationMatrix {
     interactive: { severity: 'healthy', samples: [], healthyRecoverySamples: 0 },
     background: { severity: 'healthy', samples: [], healthyRecoverySamples: 0 },
   };
-  readonly #history: RuntimeHealthTransition[] = [];
+  readonly #history: RuntimeHealthEscalationTransition[] = [];
   #lastAt: number | null = null;
 
   constructor(policy: Partial<RuntimeHealthEscalationPolicy> = {}) {
@@ -155,12 +155,12 @@ export class RuntimeHealthEscalationMatrix {
       interactive: this.#laneSnapshot('interactive'),
       background: this.#laneSnapshot('background'),
     });
-    let severity: RuntimeHealthSeverity = 'healthy';
+    let severity: RuntimeHealthEscalationSeverity = 'healthy';
     for (const lane of LANES) if (SEVERITY_ORDER[lanes[lane].severity] > SEVERITY_ORDER[severity]) severity = lanes[lane].severity;
     return Object.freeze({ severity, lanes });
   }
 
-  history(): readonly RuntimeHealthTransition[] {
+  history(): readonly RuntimeHealthEscalationTransition[] {
     return Object.freeze(this.#history.map((entry) => Object.freeze({ ...entry })));
   }
 
@@ -206,7 +206,7 @@ export class RuntimeHealthEscalationMatrix {
     return totalWeight === 0 ? 0 : weightedPressure / totalWeight;
   }
 
-  #targetSeverity(score: number): RuntimeHealthSeverity {
+  #targetSeverity(score: number): RuntimeHealthEscalationSeverity {
     if (score >= this.#policy.criticalScore) return 'critical';
     if (score >= this.#policy.degradedScore) return 'degraded';
     if (score >= this.#policy.watchScore) return 'watch';
@@ -233,11 +233,11 @@ export class RuntimeHealthEscalationMatrix {
     if (state.healthyRecoverySamples < this.#policy.recoverySamples) return;
     state.healthyRecoverySamples = 0;
     const nextRank = Math.max(targetRank, currentRank - 1);
-    const next = (Object.keys(SEVERITY_ORDER) as RuntimeHealthSeverity[]).find((severity) => SEVERITY_ORDER[severity] === nextRank) ?? 'healthy';
+    const next = (Object.keys(SEVERITY_ORDER) as RuntimeHealthEscalationSeverity[]).find((severity) => SEVERITY_ORDER[severity] === nextRank) ?? 'healthy';
     this.#transition(lane, next, score, at);
   }
 
-  #transition(lane: RuntimeFailureBudgetLane, to: RuntimeHealthSeverity, score: number, at: number): void {
+  #transition(lane: RuntimeFailureBudgetLane, to: RuntimeHealthEscalationSeverity, score: number, at: number): void {
     const state = this.#lanes[lane];
     const from = state.severity;
     if (from === to) return;
