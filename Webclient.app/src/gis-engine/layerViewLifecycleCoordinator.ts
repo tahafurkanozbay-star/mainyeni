@@ -10,7 +10,7 @@ export interface LayerViewSnapshot { readonly key: LayerViewKey; readonly priori
 export interface LayerViewCoordinatorSnapshot { readonly entries: readonly LayerViewSnapshot[]; readonly activeLoads: number; readonly readyResources: number; readonly revision: number; readonly disposed: boolean; }
 export interface LayerViewCoordinatorOptions { readonly maxEntries?: number; readonly maxConcurrentLoads?: number; readonly maxReadyResources?: number; readonly now?: () => number; }
 
-type MutableEntry = { registration: LayerViewRegistration; phase: LayerViewPhase; generation: number; lastTouchedAt: number; controller?: AbortController; resource?: LayerViewResource; loadPromise?: Promise<LayerViewSnapshot>; error?: string; };
+type MutableEntry = { registration: LayerViewRegistration; phase: LayerViewPhase; generation: number; lastTouchedAt: number; controller?: AbortController | undefined; resource?: LayerViewResource | undefined; loadPromise?: Promise<LayerViewSnapshot> | undefined; error?: string | undefined; };
 const PRIORITY: Readonly<Record<LayerViewPriority, number>> = Object.freeze({ critical: 4, high: 3, normal: 2, low: 1 });
 const positiveInteger = (value: number, field: string): number => { if (!Number.isInteger(value) || value <= 0) throw new Error(`${field} must be a positive integer`); return value; };
 const normalizeKey = (key: LayerViewKey): LayerViewKey => { const layerId = key.layerId.trim(); if (!layerId) throw new Error('layerId must not be empty'); return Object.freeze({ layerId, mode: key.mode }); };
