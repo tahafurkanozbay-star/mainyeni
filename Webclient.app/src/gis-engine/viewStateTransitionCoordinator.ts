@@ -98,6 +98,11 @@ function nonNegativeFinite(value: number, name: string): number {
   return value;
 }
 
+function positiveFinite(value: number, name: string): number {
+  if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be finite and positive`);
+  return value;
+}
+
 function finite(value: number, name: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite`);
   return value;
@@ -146,19 +151,12 @@ function clonePoint(input: ViewPointState): ViewPointState {
 }
 
 function cloneState(input: UnifiedViewState): UnifiedViewState {
-  if (input.mode === '2d') {
-    return Object.freeze({ ...input, center: clonePoint(input.center) });
-  }
-  return Object.freeze({
-    ...input,
-    camera: Object.freeze({ ...input.camera, position: clonePoint(input.camera.position) }),
-  });
+  if (input.mode === '2d') return Object.freeze({ ...input, center: clonePoint(input.center) });
+  return Object.freeze({ ...input, camera: Object.freeze({ ...input.camera, position: clonePoint(input.camera.position) }) });
 }
 
 function stateKey(input: UnifiedViewState): string {
-  if (input.mode === '2d') {
-    return `2d:${input.center.x}:${input.center.y}:${input.scale}:${input.rotation}:${spatialReferenceKey(input.center.spatialReference)}`;
-  }
+  if (input.mode === '2d') return `2d:${input.center.x}:${input.center.y}:${input.scale}:${input.rotation}:${spatialReferenceKey(input.center.spatialReference)}`;
   return `3d:${input.camera.position.x}:${input.camera.position.y}:${input.camera.position.z ?? 0}:${input.scale}:${input.camera.heading}:${input.camera.tilt}:${spatialReferenceKey(input.camera.position.spatialReference)}`;
 }
 
@@ -210,10 +208,7 @@ export class ViewStateTransitionCoordinator {
     this.assertActive();
     if (request.signal?.aborted) throw abortError('View transition cancelled before start');
     const target = this.normalizeState(request.target);
-    const durationMs = request.reducedMotion === true ? 0 : Math.min(
-      nonNegativeFinite(request.durationMs ?? this.defaultDurationMs, 'durationMs'),
-      this.maxDurationMs,
-    );
+    const durationMs = request.reducedMotion === true ? 0 : Math.min(nonNegativeFinite(request.durationMs ?? this.defaultDurationMs, 'durationMs'), this.maxDurationMs);
     this.cancelPending('View transition superseded');
     const controller = new AbortController();
     const sequence = ++this.sequence;
@@ -226,8 +221,8 @@ export class ViewStateTransitionCoordinator {
     const pending: PendingTransition = {
       sequence,
       controller,
-      externalSignal: request.signal,
-      externalAbort,
+      ...(request.signal === undefined ? {} : { externalSignal: request.signal }),
+      ...(externalAbort === undefined ? {} : { externalAbort }),
     };
     this.pending = pending;
     const context: ViewTransitionContext = Object.freeze({
@@ -264,13 +259,8 @@ export class ViewStateTransitionCoordinator {
     }
   }
 
-  canGoBack(): boolean {
-    return this.historyIndex > 0;
-  }
-
-  canGoForward(): boolean {
-    return this.historyIndex >= 0 && this.historyIndex < this.history.length - 1;
-  }
+  canGoBack(): boolean { return this.historyIndex > 0; }
+  canGoForward(): boolean { return this.historyIndex >= 0 && this.historyIndex < this.history.length - 1; }
 
   historyBack(): UnifiedViewState | undefined {
     this.assertActive();
@@ -293,17 +283,7 @@ export class ViewStateTransitionCoordinator {
   }
 
   snapshot(): ViewTransitionSnapshot {
-    return Object.freeze({
-      revision: this.revision,
-      ...(this.current === undefined ? {} : { current: cloneState(this.current) }),
-      pending: this.pending !== undefined,
-      historySize: this.history.length,
-      historyIndex: this.historyIndex,
-      completed: this.completed,
-      cancelled: this.cancelled,
-      failed: this.failed,
-      staleCompletions: this.staleCompletions,
-    });
+    return Object.freeze({ revision: this.revision, ...(this.current === undefined ? {} : { current: cloneState(this.current) }), pending: this.pending !== undefined, historySize: this.history.length, historyIndex: this.historyIndex, completed: this.completed, cancelled: this.cancelled, failed: this.failed, staleCompletions: this.staleCompletions });
   }
 
   dispose(): void {
@@ -316,23 +296,8 @@ export class ViewStateTransitionCoordinator {
   }
 
   private normalizeState(input: UnifiedViewState): UnifiedViewState {
-    if (input.mode === '2d') {
-      return Object.freeze({
-        mode: '2d',
-        center: normalizePoint(input.center, this.coordinateLimit),
-        scale: positiveFinite(input.scale, 'scale'),
-        rotation: normalizeRotation(input.rotation),
-      });
-    }
-    return Object.freeze({
-      mode: '3d',
-      camera: Object.freeze({
-        position: normalizePoint(input.camera.position, this.coordinateLimit),
-        heading: normalizeHeading(input.camera.heading),
-        tilt: normalizeTilt(input.camera.tilt),
-      }),
-      scale: positiveFinite(input.scale, 'scale'),
-    });
+    if (input.mode === '2d') return Object.freeze({ mode: '2d', center: normalizePoint(input.center, this.coordinateLimit), scale: positiveFinite(input.scale, 'scale'), rotation: normalizeRotation(input.rotation) });
+    return Object.freeze({ mode: '3d', camera: Object.freeze({ position: normalizePoint(input.camera.position, this.coordinateLimit), heading: normalizeHeading(input.camera.heading), tilt: normalizeTilt(input.camera.tilt) }), scale: positiveFinite(input.scale, 'scale') });
   }
 
   private pushHistory(state: UnifiedViewState): void {
@@ -355,9 +320,7 @@ export class ViewStateTransitionCoordinator {
   }
 
   private detachPending(pending: PendingTransition): void {
-    if (pending.externalSignal && pending.externalAbort) {
-      pending.externalSignal.removeEventListener('abort', pending.externalAbort);
-    }
+    if (pending.externalSignal && pending.externalAbort) pending.externalSignal.removeEventListener('abort', pending.externalAbort);
   }
 
   private assertActive(): void {
