@@ -10,6 +10,7 @@ on:
       - 'Webclient.app/scripts/verify-chain-security.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-shell-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-permissions-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-reliability-contract.test.mjs'
       - '.github/workflows/webclient-quality.yml'
@@ -25,6 +26,7 @@ on:
       - 'Webclient.app/scripts/verify-chain-security.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-shell-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-permissions-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-reliability-contract.test.mjs'
       - '.github/workflows/webclient-quality.yml'
@@ -70,6 +72,9 @@ jobs:
 
       - name: Workflow action allowlist contract
         run: node --test scripts/workflow-action-allowlist-contract.test.mjs
+
+      - name: Workflow shell security contract
+        run: node --test scripts/workflow-shell-security-contract.test.mjs
 
       - name: Workflow permission and trigger contract
         run: node --test scripts/workflow-permissions-contract.test.mjs
