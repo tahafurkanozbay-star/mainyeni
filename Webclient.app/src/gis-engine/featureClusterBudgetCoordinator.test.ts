@@ -66,7 +66,8 @@ describe('FeatureClusterBudgetCoordinator', () => {
     }));
     const admission = coordinator.plan(viewport).admissions[0];
     expect(admission).toBeDefined();
-    if (admission?.admitted) {
+    if (!admission) throw new Error('expected dense cluster admission');
+    if (admission.admitted) {
       expect(admission.pixelRadius).toBeGreaterThanOrEqual(16);
       expect(admission.visibleFeatureBudget).toBeLessThanOrEqual(4_000);
     } else {
