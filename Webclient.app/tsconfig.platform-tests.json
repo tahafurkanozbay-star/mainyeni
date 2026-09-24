@@ -49,6 +49,7 @@
     "src/platform/runtime/runtimeHealthEscalationMatrix.test.ts",
     "src/platform/runtime/runtimeLoadWindow.test.ts",
     "src/platform/runtime/runtimeOverloadGuard.test.ts",
+    "src/platform/runtime/runtimePressureOrchestrator.test.ts",
     "src/platform/runtime/runtimeQuarantineRegistry.test.ts",
     "src/platform/runtime/runtimeRecoveryPlanner.test.ts",
     "src/platform/runtime/runtimeSaturationLedger.test.ts"
