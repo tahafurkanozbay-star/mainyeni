@@ -122,6 +122,7 @@ interface CacheEntry<TResult> {
 
 interface ScheduledEntry<TResult> {
   readonly requestId: string;
+  readonly resolve: (value: AddressResolutionEnvelope<TResult>) => void;
   readonly reject: (reason: unknown) => void;
   readonly timer: ReturnType<typeof setTimeout>;
 }
@@ -254,9 +255,7 @@ export class AddressResolutionSession<TResult> {
   private setState(next: AddressResolutionState<TResult>): void { this.state = Object.freeze(next); }
 
   private pruneExpired(now: number): void {
-    [...this.cache.entries()]
-      .filter(([, entry]) => entry.expiresAt <= now)
-      .map(([key]) => this.cache.delete(key));
+    [...this.cache.entries()].filter(([, entry]) => entry.expiresAt <= now).map(([key]) => this.cache.delete(key));
   }
 
   private cacheGet(fingerprint: string, now: number): TResult | null {
@@ -389,7 +388,7 @@ export class AddressResolutionSession<TResult> {
         options.signal?.removeEventListener('abort', onAbort);
         this.execute(request, requestId, options.signal).then(resolve, reject);
       }, this.options.debounceMs);
-      this.scheduled = { requestId, reject, timer };
+      this.scheduled = { requestId, resolve, reject, timer };
     });
   }
 
