@@ -11,6 +11,7 @@ import type {
 import { canonicalizeAddressText } from './addressSemantics';
 import {
   hashFingerprint,
+  normalizeCoordinates,
   normalizeInteger,
   normalizeSearchText,
   normalizeText,
@@ -18,7 +19,7 @@ import {
 } from './normalization';
 import { haversineDistanceMeters } from './spatialIndex';
 
-export const GEOCODING_CONSENSUS_VERSION = '2026-09-24.v3';
+export const GEOCODING_CONSENSUS_VERSION = '2026-09-24.v4';
 
 export type GeocodingConsensusFailureKind =
   | 'unsupported'
@@ -205,6 +206,31 @@ const normalizeOptions = (input: GeocodingConsensusOptions = {}): NormalizedOpti
   });
 };
 
+const normalizeRequest = (operation: GeocodingOperation, request: Request): Request => {
+  if (operation === 'forward') {
+    const forward = request as ForwardGeocodeRequest;
+    const query = normalizeText(forward.query);
+    if (!query) throw new TypeError('Forward geocoding query is required');
+    const bias = forward.bias ? normalizeCoordinates(forward.bias) : null;
+    if (forward.bias && !bias) throw new TypeError('Forward geocoding bias coordinates are invalid');
+    return Object.freeze({
+      ...forward,
+      query,
+      countryCode: normalizeText(forward.countryCode) || null,
+      language: normalizeText(forward.language) || null,
+      bias,
+    });
+  }
+  const reverse = request as ReverseGeocodeRequest;
+  const coordinates = normalizeCoordinates(reverse.coordinates);
+  if (!coordinates) throw new TypeError('Reverse geocoding requires valid coordinates');
+  return Object.freeze({
+    ...reverse,
+    coordinates,
+    language: normalizeText(reverse.language) || null,
+  });
+};
+
 const supports = (provider: GeocodingConsensusProvider, operation: GeocodingOperation): boolean =>
   operation === 'forward'
     ? typeof provider.forward === 'function'
@@ -253,8 +279,6 @@ const adapt = (
   offset: 'offset' in request ? request.offset : 0,
   limit: Math.min(Number(request.limit) || options.maxCandidatesPerProvider, options.maxCandidatesPerProvider),
   minimumScore: request.minimumScore,
-  // Consensus owns per-provider canonical deduplication so it can retain the
-  // strongest evidence row instead of whichever duplicate the payload listed first.
   dedupe: false,
 });
 
@@ -578,15 +602,16 @@ export const executeGeocodingConsensus = async (
 ): Promise<GeocodingConsensusResult> => {
   throwIfAborted(execution.signal);
   const options = normalizeOptions(optionsInput);
+  const normalizedRequest = normalizeRequest(operation, request);
   const providers = selectProviders(providerInput, operation, execution, options);
   if (providers.length === 0) {
     throw new Error(`No geocoding consensus provider supports ${operation}`);
   }
-  const requestFingerprint = createRequestFingerprint(operation, request, providers);
+  const requestFingerprint = createRequestFingerprint(operation, normalizedRequest, providers);
   const results = await runBounded(
     providers,
     operation,
-    request,
+    normalizedRequest,
     requestFingerprint,
     execution,
     options,
