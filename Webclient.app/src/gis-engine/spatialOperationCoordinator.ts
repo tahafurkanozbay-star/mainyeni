@@ -143,7 +143,12 @@ export class SpatialOperationCoordinator<TInput, TResult> {
     if (this.disposed) return Promise.reject(new Error('SpatialOperationCoordinator is disposed'));
     if (request.signal?.aborted) return Promise.reject(abortError());
 
-    const key = normalizeKey(request.key);
+    let key: string;
+    try {
+      key = normalizeKey(request.key);
+    } catch (error: unknown) {
+      return Promise.reject(error);
+    }
     const identity = `${request.kind}:${key}`;
     this.pruneExpiredCache();
 
