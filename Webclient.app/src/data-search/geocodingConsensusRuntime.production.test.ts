@@ -27,6 +27,17 @@ const provider = (
   ...options,
 });
 
+const waitForMicrotaskCondition = async (
+  predicate: () => boolean,
+  message: string,
+): Promise<void> => {
+  for (let turn = 0; turn < 40; turn += 1) {
+    if (predicate()) return;
+    await Promise.resolve();
+  }
+  throw new Error(message);
+};
+
 describe('geocoding consensus runtime', () => {
   test('merges equivalent canonical labels across independent providers', async () => {
     const result = await executeForwardGeocodingConsensus([
@@ -149,6 +160,7 @@ describe('geocoding consensus runtime', () => {
   test('bounds concurrent provider execution', async () => {
     let active = 0;
     let peak = 0;
+    let released = 0;
     const resolvers: Array<() => void> = [];
     const providers: GeocodingConsensusProvider[] = Array.from({ length: 5 }, (_, index) => ({
       id: `p-${index}`,
@@ -166,16 +178,22 @@ describe('geocoding consensus runtime', () => {
       maxConcurrentProviders: 2,
       providerTimeoutMs: 5_000,
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForMicrotaskCondition(
+      () => resolvers.length === 2,
+      'expected the first two bounded consensus providers to start',
+    );
     expect(peak).toBe(2);
 
-    while (resolvers.length > 0) {
-      const current = resolvers.splice(0, 2);
+    while (released < providers.length) {
+      await waitForMicrotaskCondition(
+        () => resolvers.length > 0,
+        'expected another bounded consensus provider to start',
+      );
+      const current = resolvers.splice(0, Math.min(2, providers.length - released));
+      released += current.length;
       current.forEach(resolve => resolve());
-      await Promise.resolve();
-      await Promise.resolve();
     }
+
     await pending;
     expect(peak).toBeLessThanOrEqual(2);
   });
@@ -234,8 +252,8 @@ describe('geocoding consensus runtime', () => {
       reverse: request => ({
         address: { Match_addr: label },
         location: {
-          x: 'coordinates' in request ? request.coordinates.longitude : 32.85,
-          y: 'coordinates' in request ? request.coordinates.latitude : 39.92,
+          x: request.coordinates.longitude,
+          y: request.coordinates.latitude,
         },
       }),
     });
