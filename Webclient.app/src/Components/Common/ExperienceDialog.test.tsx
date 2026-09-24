@@ -71,6 +71,7 @@ describe("ExperienceDialog", () => {
     test("closes with Escape and reports backdrop intent only for backdrop clicks", async () => {
         render(<DialogHarness />);
         const opener = screen.getByRole("button", { name: "Aç" });
+        opener.focus();
         fireEvent.click(opener);
         await screen.findByRole("dialog");
 
