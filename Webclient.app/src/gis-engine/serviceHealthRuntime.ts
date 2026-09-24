@@ -331,7 +331,7 @@ export const createServiceHealthRuntime = (
       ...details,
       snapshot: snapshotState(state, policy),
     });
-    for (const listener of [...listeners]) {
+    for (const listener of Array.from(listeners)) {
       try { listener(event); } catch (error) { configuration.onListenerError?.(error, event); }
     }
     try { configuration.onEvent?.(event); } catch (error) { configuration.onListenerError?.(error, event); }
