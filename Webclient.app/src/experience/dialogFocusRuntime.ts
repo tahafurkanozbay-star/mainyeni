@@ -1,4 +1,8 @@
 import type { DialogStackSnapshot } from './dialogStackModel';
+import {
+  acquireOverlayLease,
+  type OverlayLease,
+} from './overlayLifecycleRuntime';
 
 export interface DialogFocusRuntimeOptions {
   readonly document: Document;
@@ -47,17 +51,15 @@ const restoreTarget = (document: Document, targetId: string | null): HTMLElement
   return target instanceof HTMLElement && isElementVisible(target) ? target : null;
 };
 
+type OverlayLeaseMode = 'none' | 'non-modal' | 'modal';
+
 export const createDialogFocusRuntime = (options: DialogFocusRuntimeOptions): DialogFocusRuntime => {
   const backgroundRoots = [...(options.backgroundRoots ?? [])];
   const originalBackgroundState = new Map<HTMLElement, { inert: boolean; ariaHidden: string | null }>();
-  const documentElement = options.document.documentElement;
-  const body = options.document.body;
-  const originalDocumentModalOpen = documentElement.hasAttribute('data-experience-modal-open');
-  const originalDocumentOverlayCount = documentElement.getAttribute('data-experience-overlay-count');
-  const originalBodyOverflow = body.style.overflow;
-  const originalBodyOverscrollBehavior = body.style.overscrollBehavior;
   let current: DialogStackSnapshot | null = null;
   let previousActiveId: string | null = null;
+  let lifecycleLease: OverlayLease | null = null;
+  let lifecycleLeaseMode: OverlayLeaseMode = 'none';
   let disposed = false;
 
   const report = (error: unknown): void => {
@@ -91,19 +93,26 @@ export const createDialogFocusRuntime = (options: DialogFocusRuntimeOptions): Di
     });
   };
 
-  const applyDocumentState = (snapshot: DialogStackSnapshot): void => {
-    documentElement.toggleAttribute('data-experience-modal-open', snapshot.pageInert);
-    documentElement.setAttribute('data-experience-overlay-count', String(snapshot.dialogs.length));
-    body.style.overflow = snapshot.pageInert ? 'hidden' : originalBodyOverflow;
-    body.style.overscrollBehavior = snapshot.pageInert ? 'none' : originalBodyOverscrollBehavior;
-  };
+  const synchronizeOverlayLease = (snapshot: DialogStackSnapshot): void => {
+    const desiredMode: OverlayLeaseMode = snapshot.dialogs.length === 0
+      ? 'none'
+      : snapshot.pageInert
+        ? 'modal'
+        : 'non-modal';
+    if (desiredMode === lifecycleLeaseMode) return;
 
-  const restoreDocumentState = (): void => {
-    documentElement.toggleAttribute('data-experience-modal-open', originalDocumentModalOpen);
-    if (originalDocumentOverlayCount === null) documentElement.removeAttribute('data-experience-overlay-count');
-    else documentElement.setAttribute('data-experience-overlay-count', originalDocumentOverlayCount);
-    body.style.overflow = originalBodyOverflow;
-    body.style.overscrollBehavior = originalBodyOverscrollBehavior;
+    lifecycleLease?.release();
+    lifecycleLease = null;
+    lifecycleLeaseMode = desiredMode;
+    if (desiredMode === 'none') return;
+
+    lifecycleLease = acquireOverlayLease({
+      document: options.document,
+      id: 'experience-dialog-stack',
+      modal: desiredMode === 'modal',
+      lockScroll: desiredMode === 'modal',
+      root: options.overlayRoot,
+    });
   };
 
   const focusSurface = (surface: HTMLElement): void => {
@@ -176,7 +185,7 @@ export const createDialogFocusRuntime = (options: DialogFocusRuntimeOptions): Di
       const previous = current;
       current = snapshot;
       applyBackgroundState(snapshot.pageInert);
-      applyDocumentState(snapshot);
+      synchronizeOverlayLease(snapshot);
 
       options.overlayRoot.dataset.experienceOverlayActive = snapshot.activeId ?? '';
       options.overlayRoot.dataset.experienceReducedMotion = String(snapshot.reducedMotion);
@@ -221,13 +230,15 @@ export const createDialogFocusRuntime = (options: DialogFocusRuntimeOptions): Di
       disposed = true;
       options.document.removeEventListener('keydown', onKeyDown, true);
       options.document.removeEventListener('focusin', onFocusIn, true);
+      lifecycleLease?.release();
+      lifecycleLease = null;
+      lifecycleLeaseMode = 'none';
       originalBackgroundState.forEach((state, element) => {
         element.inert = state.inert;
         if (state.ariaHidden === null) element.removeAttribute('aria-hidden');
         else element.setAttribute('aria-hidden', state.ariaHidden);
       });
       originalBackgroundState.clear();
-      restoreDocumentState();
       options.overlayRoot.removeAttribute('data-experience-overlay-active');
       options.overlayRoot.removeAttribute('data-experience-reduced-motion');
       options.overlayRoot.removeAttribute('data-experience-forced-colors');
