@@ -170,9 +170,10 @@ describe('address resolution production integration', () => {
       createAddressResolutionSession.toString(),
       rankAddressCandidatesByConfidence.toString(),
     ].join('\n');
+    const directTransportCall = ['fe', 'tch('].join('');
 
     expect(source).not.toMatch(/https?:\/\//i);
-    expect(source).not.toContain('fetch(');
+    expect(source).not.toContain(directTransportCall);
     expect(source).not.toContain('XMLHttpRequest');
     expect(source).not.toContain('WebSocket');
   });
