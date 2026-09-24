@@ -54,6 +54,10 @@ const utf8Bytes = (value: string): number => {
 };
 
 const normalizeLongitude = (value: number): number => {
+  // Preserve already-canonical coordinates exactly. Running an in-range decimal
+  // through modulo arithmetic can introduce IEEE-754 drift (for example
+  // 32.85 -> 32.85000000000002), which makes persisted state non-idempotent.
+  if (value >= -180 && value < 180) return Object.is(value, -0) ? 0 : value;
   const wrapped = ((value + 180) % 360 + 360) % 360 - 180;
   return Object.is(wrapped, -0) ? 0 : wrapped;
 };
