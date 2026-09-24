@@ -173,8 +173,8 @@ export class ViewStateTransitionCoordinator {
   private readonly coordinateLimit: number;
   private readonly history: UnifiedViewState[] = [];
   private historyIndex = -1;
-  private current?: UnifiedViewState;
-  private pending?: PendingTransition;
+  private current: UnifiedViewState | undefined;
+  private pending: PendingTransition | undefined;
   private sequence = 0;
   private revision = 0;
   private completed = 0;

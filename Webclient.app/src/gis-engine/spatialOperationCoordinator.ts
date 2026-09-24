@@ -6,7 +6,7 @@ export interface SpatialOperationRequest<TInput> {
   readonly kind: SpatialOperationKind;
   readonly input: TInput;
   readonly priority?: SpatialOperationPriority;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   readonly cache?: boolean;
 }
 
@@ -46,7 +46,7 @@ interface Subscriber<TResult> {
   readonly resolve: (value: TResult) => void;
   readonly reject: (reason: unknown) => void;
   readonly signal?: AbortSignal;
-  abortListener?: () => void;
+  abortListener?: (() => void) | undefined;
   settled: boolean;
 }
 
