@@ -173,8 +173,8 @@ export class ViewStateTransitionCoordinator {
   private readonly coordinateLimit: number;
   private readonly history: UnifiedViewState[] = [];
   private historyIndex = -1;
-  private current: UnifiedViewState | undefined;
-  private pending: PendingTransition | undefined;
+  private current: UnifiedViewState | null = null;
+  private pending: PendingTransition | null = null;
   private sequence = 0;
   private revision = 0;
   private completed = 0;
@@ -230,7 +230,7 @@ export class ViewStateTransitionCoordinator {
       sequence,
       intent,
       durationMs,
-      ...(this.current === undefined ? {} : { from: cloneState(this.current) }),
+      ...(this.current === null ? {} : { from: cloneState(this.current) }),
       target: cloneState(target),
     });
     try {
@@ -240,7 +240,7 @@ export class ViewStateTransitionCoordinator {
         return Object.freeze({ sequence, state: cloneState(executed), stale: true });
       }
       this.detachPending(pending);
-      this.pending = undefined;
+      this.pending = null;
       this.current = executed;
       this.pushHistory(executed);
       this.completed += 1;
@@ -250,7 +250,7 @@ export class ViewStateTransitionCoordinator {
       const isCurrent = this.pending?.sequence === sequence;
       if (isCurrent) {
         this.detachPending(pending);
-        this.pending = undefined;
+        this.pending = null;
       }
       if (controller.signal.aborted) this.cancelled += 1;
       else this.failed += 1;
@@ -267,9 +267,11 @@ export class ViewStateTransitionCoordinator {
     if (!this.canGoBack()) return undefined;
     this.cancelPending('View transition cancelled by history navigation');
     this.historyIndex -= 1;
-    this.current = this.history[this.historyIndex];
+    const next = this.history[this.historyIndex];
+    if (!next) return undefined;
+    this.current = next;
     this.revision += 1;
-    return this.current === undefined ? undefined : cloneState(this.current);
+    return cloneState(next);
   }
 
   historyForward(): UnifiedViewState | undefined {
@@ -277,20 +279,22 @@ export class ViewStateTransitionCoordinator {
     if (!this.canGoForward()) return undefined;
     this.cancelPending('View transition cancelled by history navigation');
     this.historyIndex += 1;
-    this.current = this.history[this.historyIndex];
+    const next = this.history[this.historyIndex];
+    if (!next) return undefined;
+    this.current = next;
     this.revision += 1;
-    return this.current === undefined ? undefined : cloneState(this.current);
+    return cloneState(next);
   }
 
   snapshot(): ViewTransitionSnapshot {
-    return Object.freeze({ revision: this.revision, ...(this.current === undefined ? {} : { current: cloneState(this.current) }), pending: this.pending !== undefined, historySize: this.history.length, historyIndex: this.historyIndex, completed: this.completed, cancelled: this.cancelled, failed: this.failed, staleCompletions: this.staleCompletions });
+    return Object.freeze({ revision: this.revision, ...(this.current === null ? {} : { current: cloneState(this.current) }), pending: this.pending !== null, historySize: this.history.length, historyIndex: this.historyIndex, completed: this.completed, cancelled: this.cancelled, failed: this.failed, staleCompletions: this.staleCompletions });
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.cancelPending('View transition coordinator disposed');
     this.history.length = 0;
-    this.current = undefined;
+    this.current = null;
     this.disposed = true;
     this.revision += 1;
   }
@@ -314,7 +318,7 @@ export class ViewStateTransitionCoordinator {
     if (!pending) return;
     this.detachPending(pending);
     pending.controller.abort(abortError(message));
-    this.pending = undefined;
+    this.pending = null;
     this.cancelled += 1;
     this.revision += 1;
   }
