@@ -104,7 +104,7 @@ export interface GeocodingConsensusResult {
   readonly fingerprint: string;
 }
 
-interface NormalizedConsensusOptions {
+interface NormalizedOptions {
   readonly maxProviders: number;
   readonly maxConcurrentProviders: number;
   readonly providerTimeoutMs: number;
@@ -117,20 +117,22 @@ interface NormalizedConsensusOptions {
   readonly allowPartial: boolean;
 }
 
-interface ProviderExecutionSuccess {
+interface ProviderSuccess {
   readonly ok: true;
   readonly providerId: string;
   readonly providerWeight: number;
   readonly page: GeocodePage;
 }
 
-interface ProviderExecutionFailure {
+interface ProviderFailure {
   readonly ok: false;
   readonly providerId: string;
   readonly kind: GeocodingConsensusFailureKind;
 }
 
-type ProviderExecutionResult = ProviderExecutionSuccess | ProviderExecutionFailure;
+type ProviderResult = ProviderSuccess | ProviderFailure;
+
+type Request = ForwardGeocodeRequest | ReverseGeocodeRequest;
 
 interface CandidateGroup {
   readonly key: string;
@@ -139,163 +141,107 @@ interface CandidateGroup {
   readonly byProvider: Map<string, GeocodingConsensusEvidence>;
 }
 
-const clamp = (value: number, minimum: number, maximum: number): number =>
-  Math.max(minimum, Math.min(maximum, value));
+const clamp = (value: number, min = 0, max = 100): number => Math.max(min, Math.min(max, value));
 
-const normalizeProviderId = (value: unknown): string => normalizeSearchText(value)
+const providerId = (value: unknown): string => normalizeSearchText(value)
   .replace(/[^a-z0-9_-]+/g, '-')
   .replace(/^-+|-+$/g, '')
   .slice(0, 80);
 
-const normalizeProviderWeight = (value: unknown): number => {
+const providerWeight = (value: unknown): number => {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 1;
-  return clamp(parsed, 0.05, 100);
+  return Number.isFinite(parsed) && parsed > 0 ? clamp(parsed, 0.05, 100) : 1;
 };
 
-const normalizeOptions = (
-  options: GeocodingConsensusOptions = {},
-): NormalizedConsensusOptions => {
-  const maxProviders = normalizeInteger(options.maxProviders, { min: 1, max: 64, fallback: 8 });
-  const maxConcurrentProviders = normalizeInteger(options.maxConcurrentProviders, {
-    min: 1,
-    max: maxProviders,
-    fallback: Math.min(4, maxProviders),
-  });
-  const minimumSuccessfulProviders = normalizeInteger(options.minimumSuccessfulProviders, {
-    min: 1,
-    max: maxProviders,
-    fallback: 1,
-  });
+const normalizeOptions = (input: GeocodingConsensusOptions = {}): NormalizedOptions => {
+  const maxProviders = normalizeInteger(input.maxProviders, { min: 1, max: 64, fallback: 8 });
   return Object.freeze({
     maxProviders,
-    maxConcurrentProviders,
-    providerTimeoutMs: normalizeInteger(options.providerTimeoutMs, {
-      min: 100,
-      max: 120_000,
-      fallback: 8_000,
-    }),
-    maxCandidatesPerProvider: normalizeInteger(options.maxCandidatesPerProvider, {
+    maxConcurrentProviders: normalizeInteger(input.maxConcurrentProviders, {
       min: 1,
-      max: 1_000,
-      fallback: 50,
+      max: maxProviders,
+      fallback: Math.min(4, maxProviders),
     }),
-    maxConsensusCandidates: normalizeInteger(options.maxConsensusCandidates, {
-      min: 1,
-      max: 5_000,
-      fallback: 100,
-    }),
-    maxEvidenceItems: normalizeInteger(options.maxEvidenceItems, {
-      min: 1,
-      max: 50_000,
-      fallback: 2_000,
-    }),
-    coordinateToleranceMeters: normalizeInteger(options.coordinateToleranceMeters, {
-      min: 1,
-      max: 100_000,
-      fallback: 75,
-    }),
-    minimumSuccessfulProviders,
-    minimumAgreementProviders: normalizeInteger(options.minimumAgreementProviders, {
+    providerTimeoutMs: normalizeInteger(input.providerTimeoutMs, { min: 100, max: 120_000, fallback: 8_000 }),
+    maxCandidatesPerProvider: normalizeInteger(input.maxCandidatesPerProvider, { min: 1, max: 1_000, fallback: 50 }),
+    maxConsensusCandidates: normalizeInteger(input.maxConsensusCandidates, { min: 1, max: 5_000, fallback: 100 }),
+    maxEvidenceItems: normalizeInteger(input.maxEvidenceItems, { min: 1, max: 50_000, fallback: 2_000 }),
+    coordinateToleranceMeters: normalizeInteger(input.coordinateToleranceMeters, { min: 1, max: 100_000, fallback: 75 }),
+    minimumSuccessfulProviders: normalizeInteger(input.minimumSuccessfulProviders, {
       min: 1,
       max: maxProviders,
       fallback: 1,
     }),
-    allowPartial: options.allowPartial !== false,
+    minimumAgreementProviders: normalizeInteger(input.minimumAgreementProviders, {
+      min: 1,
+      max: maxProviders,
+      fallback: 1,
+    }),
+    allowPartial: input.allowPartial !== false,
   });
 };
 
-const supportsOperation = (
-  provider: GeocodingConsensusProvider,
-  operation: GeocodingOperation,
-): boolean => operation === 'forward'
-  ? typeof provider.forward === 'function'
-  : typeof provider.reverse === 'function';
+const supports = (provider: GeocodingConsensusProvider, operation: GeocodingOperation): boolean =>
+  operation === 'forward' ? typeof provider.forward === 'function' : typeof provider.reverse === 'function';
 
-const normalizedProviders = (
-  providers: readonly GeocodingConsensusProvider[],
+const selectProviders = (
+  input: readonly GeocodingConsensusProvider[],
   operation: GeocodingOperation,
   execution: GeocodingConsensusExecutionOptions,
-  options: NormalizedConsensusOptions,
+  options: NormalizedOptions,
 ): readonly GeocodingConsensusProvider[] => {
   const requested = execution.providerIds
-    ? new Set(execution.providerIds.map(normalizeProviderId).filter(Boolean))
+    ? new Set(execution.providerIds.map(providerId).filter(Boolean))
     : null;
   const seen = new Set<string>();
-  const result: GeocodingConsensusProvider[] = [];
-  for (const provider of providers) {
-    const id = normalizeProviderId(provider.id);
+  const eligible: GeocodingConsensusProvider[] = [];
+  for (const candidate of input) {
+    const id = providerId(candidate.id);
     if (!id || seen.has(id)) continue;
     seen.add(id);
     if (requested && !requested.has(id)) continue;
-    if (!supportsOperation(provider, operation)) continue;
-    result.push(Object.freeze({ ...provider, id }));
-    if (result.length >= options.maxProviders) break;
+    if (!supports(candidate, operation)) continue;
+    eligible.push(Object.freeze({ ...candidate, id }));
   }
-  return Object.freeze(result.sort((left, right) =>
+  eligible.sort((left, right) =>
     (Number(right.priority) || 0) - (Number(left.priority) || 0)
-    || left.id.localeCompare(right.id, 'en')));
+    || left.id.localeCompare(right.id, 'en'));
+  return Object.freeze(eligible.slice(0, options.maxProviders));
 };
 
-const requestFingerprint = (
+const createRequestFingerprint = (
   operation: GeocodingOperation,
-  request: ForwardGeocodeRequest | ReverseGeocodeRequest,
-  providerIds: readonly string[],
+  request: Request,
+  providers: readonly GeocodingConsensusProvider[],
 ): string => hashFingerprint(stableSerialize({
   version: GEOCODING_CONSENSUS_VERSION,
   operation,
   request,
-  providerIds,
+  providerIds: providers.map(provider => provider.id),
 }));
 
-const timeoutError = (): Error => {
-  const error = new Error('Geocoding consensus provider timed out');
-  error.name = 'TimeoutError';
-  return error;
-};
+const adapt = (payload: unknown, request: Request, options: NormalizedOptions): GeocodePage =>
+  adaptGeocodingPayload(payload, {
+    offset: 'offset' in request ? request.offset : 0,
+    limit: Math.min(Number(request.limit) || options.maxCandidatesPerProvider, options.maxCandidatesPerProvider),
+    minimumScore: request.minimumScore,
+    dedupe: true,
+  });
 
-const abortPromise = (signal: AbortSignal): Promise<never> => new Promise((_resolve, reject) => {
-  if (signal.aborted) {
-    reject(createAbortError('Geocoding consensus provider aborted'));
-    return;
-  }
-  signal.addEventListener('abort', () => {
-    reject(createAbortError('Geocoding consensus provider aborted'));
-  }, { once: true });
-});
-
-const adaptProviderPayload = (
-  payload: unknown,
-  request: ForwardGeocodeRequest | ReverseGeocodeRequest,
-  options: NormalizedConsensusOptions,
-): GeocodePage => adaptGeocodingPayload(payload, {
-  offset: 'offset' in request ? request.offset : 0,
-  limit: Math.min(Number(request.limit) || options.maxCandidatesPerProvider, options.maxCandidatesPerProvider),
-  minimumScore: request.minimumScore,
-  dedupe: true,
-});
-
-const invokeProvider = async (
+const executeProvider = async (
   provider: GeocodingConsensusProvider,
   operation: GeocodingOperation,
-  request: ForwardGeocodeRequest | ReverseGeocodeRequest,
+  request: Request,
   requestId: string,
   externalSignal: AbortSignal | null | undefined,
-  options: NormalizedConsensusOptions,
-): Promise<ProviderExecutionResult> => {
+  options: NormalizedOptions,
+): Promise<ProviderResult> => {
+  if (externalSignal?.aborted) return Object.freeze({ ok: false, providerId: provider.id, kind: 'aborted' });
   const controller = new AbortController();
-  let timedOut = false;
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  const onExternalAbort = (): void => controller.abort();
-  if (externalSignal) {
-    if (externalSignal.aborted) return Object.freeze({ ok: false, providerId: provider.id, kind: 'aborted' });
-    externalSignal.addEventListener('abort', onExternalAbort, { once: true });
-  }
-  const timeoutMs = normalizeInteger(provider.timeoutMs, {
-    min: 100,
-    max: 120_000,
-    fallback: options.providerTimeoutMs,
-  });
+  let timedOut = false;
+  const forwardAbort = (): void => controller.abort();
+  externalSignal?.addEventListener('abort', forwardAbort, { once: true });
   const context: GeocodingProviderContext = Object.freeze({
     signal: controller.signal,
     requestId,
@@ -303,36 +249,42 @@ const invokeProvider = async (
     operation,
   });
   try {
-    const providerCall = operation === 'forward'
+    const call = operation === 'forward'
       ? provider.forward?.(request as ForwardGeocodeRequest, context)
       : provider.reverse?.(request as ReverseGeocodeRequest, context);
-    if (providerCall === undefined) {
-      return Object.freeze({ ok: false, providerId: provider.id, kind: 'unsupported' });
-    }
+    if (call === undefined) return Object.freeze({ ok: false, providerId: provider.id, kind: 'unsupported' });
+    const timeoutMs = normalizeInteger(provider.timeoutMs, {
+      min: 100,
+      max: 120_000,
+      fallback: options.providerTimeoutMs,
+    });
     const timeout = new Promise<never>((_resolve, reject) => {
       timeoutHandle = setTimeout(() => {
         timedOut = true;
         controller.abort();
-        reject(timeoutError());
+        const error = new Error('Geocoding consensus provider timed out');
+        error.name = 'TimeoutError';
+        reject(error);
       }, timeoutMs);
     });
-    const payload = await Promise.race([
-      Promise.resolve(providerCall),
-      timeout,
-      abortPromise(controller.signal),
-    ]);
+    const abort = new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => {
+        reject(createAbortError('Geocoding consensus provider aborted'));
+      }, { once: true });
+    });
+    const payload = await Promise.race([Promise.resolve(call), timeout, abort]);
     throwIfAborted(externalSignal);
-    const page = adaptProviderPayload(payload, request, options);
+    const page = adapt(payload, request, options);
     if (page.candidates.length === 0) {
       return Object.freeze({ ok: false, providerId: provider.id, kind: 'empty-result' });
     }
     return Object.freeze({
       ok: true,
       providerId: provider.id,
-      providerWeight: normalizeProviderWeight(provider.weight),
+      providerWeight: providerWeight(provider.weight),
       page,
     });
-  } catch (_error) {
+  } catch {
     if (timedOut) return Object.freeze({ ok: false, providerId: provider.id, kind: 'timeout' });
     if (controller.signal.aborted || externalSignal?.aborted) {
       return Object.freeze({ ok: false, providerId: provider.id, kind: 'aborted' });
@@ -340,48 +292,47 @@ const invokeProvider = async (
     return Object.freeze({ ok: false, providerId: provider.id, kind: 'provider-error' });
   } finally {
     if (timeoutHandle !== null) clearTimeout(timeoutHandle);
-    externalSignal?.removeEventListener('abort', onExternalAbort);
+    externalSignal?.removeEventListener('abort', forwardAbort);
   }
 };
 
 const runBounded = async (
   providers: readonly GeocodingConsensusProvider[],
   operation: GeocodingOperation,
-  request: ForwardGeocodeRequest | ReverseGeocodeRequest,
+  request: Request,
   fingerprint: string,
   execution: GeocodingConsensusExecutionOptions,
-  options: NormalizedConsensusOptions,
-): Promise<readonly ProviderExecutionResult[]> => {
-  const results: ProviderExecutionResult[] = new Array(providers.length);
+  options: NormalizedOptions,
+): Promise<readonly ProviderResult[]> => {
+  const results: Array<ProviderResult | undefined> = Array.from({ length: providers.length });
   let cursor = 0;
-  const workers = Array.from({ length: Math.min(options.maxConcurrentProviders, providers.length) }, (_, worker) =>
-    (async (): Promise<void> => {
-      while (true) {
-        throwIfAborted(execution.signal);
-        const index = cursor;
-        cursor += 1;
-        if (index >= providers.length) return;
-        const provider = providers[index];
-        if (!provider) return;
-        const result = await invokeProvider(
-          provider,
-          operation,
-          request,
-          `geocode-consensus-${fingerprint}-${worker}-${index}`,
-          execution.signal,
-          options,
-        );
-        results[index] = result;
-      }
-    })());
+  const workerCount = Math.min(options.maxConcurrentProviders, providers.length);
+  const workers = Array.from({ length: workerCount }, (_, worker) => (async (): Promise<void> => {
+    while (true) {
+      throwIfAborted(execution.signal);
+      const index = cursor;
+      cursor += 1;
+      if (index >= providers.length) return;
+      const provider = providers[index];
+      if (!provider) return;
+      results[index] = await executeProvider(
+        provider,
+        operation,
+        request,
+        `geocode-consensus-${fingerprint}-${worker}-${index}`,
+        execution.signal,
+        options,
+      );
+    }
+  })());
   await Promise.all(workers);
   throwIfAborted(execution.signal);
-  return Object.freeze(results.filter((value): value is ProviderExecutionResult => value !== undefined));
+  return Object.freeze(results.filter((result): result is ProviderResult => result !== undefined));
 };
 
-const candidateGroupKey = (candidate: GeocodeCandidate): string => {
-  const canonical = canonicalizeAddressText(candidate.label);
-  if (canonical) return `label:${canonical}`;
+const groupKey = (candidate: GeocodeCandidate): string => {
+  const label = canonicalizeAddressText(candidate.label);
+  if (label) return `label:${label}`;
   if (candidate.id) return `id:${normalizeSearchText(candidate.id)}`;
   return `fp:${candidate.fingerprint}`;
 };
@@ -392,33 +343,32 @@ const betterEvidence = (
 ): GeocodingConsensusEvidence => {
   const leftWeighted = left.candidate.score * left.providerWeight;
   const rightWeighted = right.candidate.score * right.providerWeight;
-  if (leftWeighted !== rightWeighted) return leftWeighted > rightWeighted ? left : right;
-  if (left.candidate.score !== right.candidate.score) return left.candidate.score > right.candidate.score ? left : right;
-  return left.candidate.fingerprint.localeCompare(right.candidate.fingerprint, 'en') <= 0 ? left : right;
+  if (leftWeighted !== rightWeighted) return rightWeighted > leftWeighted ? right : left;
+  if (left.candidate.score !== right.candidate.score) return right.candidate.score > left.candidate.score ? right : left;
+  return right.candidate.fingerprint.localeCompare(left.candidate.fingerprint, 'en') < 0 ? right : left;
 };
 
-const buildGroups = (
-  successes: readonly ProviderExecutionSuccess[],
-  options: NormalizedConsensusOptions,
+const groupCandidates = (
+  successes: readonly ProviderSuccess[],
+  options: NormalizedOptions,
 ): Readonly<{ groups: readonly CandidateGroup[]; inputCandidates: number; evidenceTruncated: boolean }> => {
   const groups = new Map<string, CandidateGroup>();
   let inputCandidates = 0;
-  let evidenceCount = 0;
+  let evidenceItems = 0;
   let evidenceTruncated = false;
   for (const success of successes) {
     for (const candidate of success.page.candidates.slice(0, options.maxCandidatesPerProvider)) {
       inputCandidates += 1;
-      if (evidenceCount >= options.maxEvidenceItems) {
+      if (evidenceItems >= options.maxEvidenceItems) {
         evidenceTruncated = true;
         continue;
       }
-      evidenceCount += 1;
-      const key = candidateGroupKey(candidate);
-      const canonicalLabel = canonicalizeAddressText(candidate.label);
+      evidenceItems += 1;
+      const key = groupKey(candidate);
       const existing = groups.get(key);
       const group = existing ?? {
         key,
-        canonicalLabel,
+        canonicalLabel: canonicalizeAddressText(candidate.label),
         label: normalizeText(candidate.label),
         byProvider: new Map<string, GeocodingConsensusEvidence>(),
       };
@@ -435,20 +385,22 @@ const buildGroups = (
   return Object.freeze({ groups: Object.freeze([...groups.values()]), inputCandidates, evidenceTruncated });
 };
 
-const candidateCentroid = (
-  evidence: readonly GeocodingConsensusEvidence[],
-): Coordinate | null => {
+const centroid = (evidence: readonly GeocodingConsensusEvidence[]): Coordinate | null => {
   const coordinates = evidence
     .map(item => item.candidate.coordinates)
     .filter((value): value is Coordinate => value !== null);
   if (coordinates.length === 0) return null;
-  let latitude = 0;
-  let longitude = 0;
-  for (const coordinate of coordinates) {
-    latitude += coordinate.latitude;
-    longitude += coordinate.longitude;
-  }
-  return Object.freeze({ latitude: latitude / coordinates.length, longitude: longitude / coordinates.length });
+  const totals = coordinates.reduce(
+    (result, coordinate) => ({
+      latitude: result.latitude + coordinate.latitude,
+      longitude: result.longitude + coordinate.longitude,
+    }),
+    { latitude: 0, longitude: 0 },
+  );
+  return Object.freeze({
+    latitude: totals.latitude / coordinates.length,
+    longitude: totals.longitude / coordinates.length,
+  });
 };
 
 const coordinateSpread = (
@@ -458,56 +410,39 @@ const coordinateSpread = (
   if (!center) return 0;
   let maximum = 0;
   for (const item of evidence) {
-    const coordinate = item.candidate.coordinates;
-    if (!coordinate) continue;
-    const distance = haversineDistanceMeters(center, coordinate);
+    if (!item.candidate.coordinates) continue;
+    const distance = haversineDistanceMeters(center, item.candidate.coordinates);
     if (distance !== null) maximum = Math.max(maximum, distance);
   }
   return Math.round(maximum);
 };
 
-const weightedProviderScore = (
-  evidence: readonly GeocodingConsensusEvidence[],
-): number => {
-  let weighted = 0;
-  let totalWeight = 0;
-  for (const item of evidence) {
-    weighted += clamp(item.candidate.score, 0, 100) * item.providerWeight;
-    totalWeight += item.providerWeight;
-  }
-  return totalWeight > 0 ? Math.round(weighted / totalWeight) : 0;
-};
-
-const representativeEvidence = (
-  evidence: readonly GeocodingConsensusEvidence[],
-): GeocodingConsensusEvidence => {
-  const sorted = [...evidence].sort((left, right) => {
-    const leftWeighted = left.candidate.score * left.providerWeight;
-    const rightWeighted = right.candidate.score * right.providerWeight;
-    return rightWeighted - leftWeighted
-      || right.candidate.score - left.candidate.score
-      || left.providerId.localeCompare(right.providerId, 'en');
-  });
-  const first = sorted[0];
-  if (!first) throw new Error('Consensus candidate requires at least one evidence item');
+const representative = (evidence: readonly GeocodingConsensusEvidence[]): GeocodingConsensusEvidence => {
+  const first = [...evidence].sort((left, right) =>
+    right.candidate.score * right.providerWeight - left.candidate.score * left.providerWeight
+    || right.candidate.score - left.candidate.score
+    || left.providerId.localeCompare(right.providerId, 'en'))[0];
+  if (!first) throw new Error('Geocoding consensus candidate requires evidence');
   return first;
 };
 
-const freezeConsensusCandidate = (
+const freezeCandidate = (
   group: CandidateGroup,
-  successfulProviderCount: number,
-  options: NormalizedConsensusOptions,
+  successfulProviders: number,
+  options: NormalizedOptions,
 ): GeocodingConsensusCandidate => {
   const evidence = Object.freeze([...group.byProvider.values()]
     .sort((left, right) => left.providerId.localeCompare(right.providerId, 'en')));
-  const representative = representativeEvidence(evidence);
+  const selected = representative(evidence);
   const providerIds = Object.freeze(evidence.map(item => item.providerId));
-  const coordinates = candidateCentroid(evidence);
+  const coordinates = centroid(evidence);
   const coordinateSpreadMeters = coordinateSpread(evidence, coordinates);
-  const weightedScore = weightedProviderScore(evidence);
+  const totalWeight = evidence.reduce((sum, item) => sum + item.providerWeight, 0);
+  const weightedProviderScore = totalWeight > 0
+    ? Math.round(evidence.reduce((sum, item) => sum + clamp(item.candidate.score) * item.providerWeight, 0) / totalWeight)
+    : 0;
   const agreementCount = providerIds.length;
-  const agreementRatio = successfulProviderCount > 0 ? agreementCount / successfulProviderCount : 0;
-  const agreementScore = Math.round(agreementRatio * 100);
+  const agreementScore = successfulProviders > 0 ? Math.round(agreementCount / successfulProviders * 100) : 0;
   const coordinateConflict = coordinateSpreadMeters > options.coordinateToleranceMeters;
   const coordinateScore = coordinates === null
     ? 50
@@ -515,27 +450,26 @@ const freezeConsensusCandidate = (
       ? Math.max(0, Math.round(100 * (1 - coordinateSpreadMeters / Math.max(1, options.coordinateToleranceMeters * 4))))
       : Math.max(60, Math.round(100 * (1 - coordinateSpreadMeters / Math.max(1, options.coordinateToleranceMeters))));
   const confidence = clamp(Math.round(
-    weightedScore * 0.55
-    + agreementScore * 0.30
-    + coordinateScore * 0.15,
-  ), 0, 100);
+    weightedProviderScore * 0.55 + agreementScore * 0.30 + coordinateScore * 0.15,
+  ));
   const fingerprint = hashFingerprint(stableSerialize({
     key: group.key,
     providerIds,
-    weightedScore,
+    weightedProviderScore,
+    agreementScore,
     coordinates,
     coordinateSpreadMeters,
     confidence,
   }));
   return Object.freeze({
     key: group.key,
-    label: representative.candidate.label || group.label,
+    label: selected.candidate.label || group.label,
     canonicalLabel: group.canonicalLabel,
-    representative: representative.candidate,
+    representative: selected.candidate,
     providerIds,
     providerCount: providerIds.length,
     agreementCount,
-    weightedProviderScore: weightedScore,
+    weightedProviderScore,
     agreementScore,
     coordinateScore,
     confidence,
@@ -547,16 +481,16 @@ const freezeConsensusCandidate = (
   });
 };
 
-const createDiagnostics = (
+const diagnostics = (
   providers: readonly GeocodingConsensusProvider[],
-  results: readonly ProviderExecutionResult[],
+  results: readonly ProviderResult[],
   inputCandidates: number,
   outputCandidates: number,
   evidenceTruncated: boolean,
   candidateTruncated: boolean,
 ): GeocodingConsensusDiagnostics => {
   const failures = Object.freeze(results
-    .filter((result): result is ProviderExecutionFailure => !result.ok)
+    .filter((result): result is ProviderFailure => !result.ok)
     .map(result => Object.freeze({ providerId: result.providerId, kind: result.kind })));
   return Object.freeze({
     requestedProviders: providers.length,
@@ -574,30 +508,31 @@ const createDiagnostics = (
 };
 
 export const executeGeocodingConsensus = async (
-  providersInput: readonly GeocodingConsensusProvider[],
+  providerInput: readonly GeocodingConsensusProvider[],
   operation: GeocodingOperation,
-  request: ForwardGeocodeRequest | ReverseGeocodeRequest,
+  request: Request,
   optionsInput: GeocodingConsensusOptions = {},
   execution: GeocodingConsensusExecutionOptions = {},
 ): Promise<GeocodingConsensusResult> => {
   throwIfAborted(execution.signal);
   const options = normalizeOptions(optionsInput);
-  const providers = normalizedProviders(providersInput, operation, execution, options);
+  const providers = selectProviders(providerInput, operation, execution, options);
   if (providers.length === 0) throw new Error(`No geocoding consensus provider supports ${operation}`);
-  const fingerprint = requestFingerprint(operation, request, providers.map(provider => provider.id));
-  const results = await runBounded(providers, operation, request, fingerprint, execution, options);
+  const requestFingerprint = createRequestFingerprint(operation, request, providers);
+  const results = await runBounded(providers, operation, request, requestFingerprint, execution, options);
   throwIfAborted(execution.signal);
-  const successes = results.filter((result): result is ProviderExecutionSuccess => result.ok);
+  const successes = results.filter((result): result is ProviderSuccess => result.ok);
   if (successes.length < options.minimumSuccessfulProviders) {
     throw new Error(
       `Geocoding consensus requires ${options.minimumSuccessfulProviders} successful provider(s); received ${successes.length}.`,
     );
   }
-  const grouped = buildGroups(successes, options);
+  const grouped = groupCandidates(successes, options);
   let candidates = grouped.groups
-    .map(group => freezeConsensusCandidate(group, successes.length, options))
+    .map(group => freezeCandidate(group, successes.length, options))
     .filter(candidate => candidate.agreementCount >= options.minimumAgreementProviders)
-    .sort((left, right) => right.confidence - left.confidence
+    .sort((left, right) =>
+      right.confidence - left.confidence
       || right.agreementCount - left.agreementCount
       || right.weightedProviderScore - left.weightedProviderScore
       || left.label.localeCompare(right.label, 'tr-TR', { sensitivity: 'base', numeric: true })
@@ -605,11 +540,9 @@ export const executeGeocodingConsensus = async (
   const candidateTruncated = candidates.length > options.maxConsensusCandidates;
   if (candidateTruncated) candidates = candidates.slice(0, options.maxConsensusCandidates);
   const partial = successes.length < providers.length;
-  if (partial && !options.allowPartial) {
-    throw new Error('Geocoding consensus rejected partial provider results.');
-  }
+  if (partial && !options.allowPartial) throw new Error('Geocoding consensus rejected partial provider results.');
   const frozenCandidates = Object.freeze(candidates);
-  const diagnostics = createDiagnostics(
+  const resultDiagnostics = diagnostics(
     providers,
     results,
     grouped.inputCandidates,
@@ -617,25 +550,25 @@ export const executeGeocodingConsensus = async (
     grouped.evidenceTruncated,
     candidateTruncated,
   );
-  const resultFingerprint = hashFingerprint(stableSerialize({
+  const fingerprint = hashFingerprint(stableSerialize({
     version: GEOCODING_CONSENSUS_VERSION,
     operation,
-    requestFingerprint: fingerprint,
+    requestFingerprint,
     candidates: frozenCandidates.map(candidate => ({
       fingerprint: candidate.fingerprint,
       confidence: candidate.confidence,
       providerIds: candidate.providerIds,
     })),
-    diagnostics,
+    diagnostics: resultDiagnostics,
   }));
   return Object.freeze({
     version: GEOCODING_CONSENSUS_VERSION,
     operation,
-    requestFingerprint: fingerprint,
+    requestFingerprint,
     candidates: frozenCandidates,
-    diagnostics,
+    diagnostics: resultDiagnostics,
     partial,
-    fingerprint: resultFingerprint,
+    fingerprint,
   });
 };
 
