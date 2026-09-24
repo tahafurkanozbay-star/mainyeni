@@ -1,4 +1,5 @@
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -9,11 +10,18 @@ import React, {
 } from 'react';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
-import { createFocusScope } from '../../experience/focusScopeRuntime';
-import { acquireOverlayLease } from '../../experience/overlayLifecycleRuntime';
+import {
+  DialogStackModel,
+  type DialogKind,
+  type DialogPresentation,
+} from '../../experience/dialogStackModel';
+import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { createShortcutRuntime } from '../../experience/shortcutRuntime';
 import './experience-ui.css';
+import './experience-ux-layer-modern.css';
 import { useExperienceTheme } from './ExperienceDesignSystem';
+import { ExperienceNotificationCenter } from './ExperienceNotificationCenter';
+import { ExperienceOverlayStack } from './ExperienceOverlayStack';
 import { LayerListWidget } from '../Widget/LayerList/LayerListWidget';
 
 type ActionIconType =
@@ -53,6 +61,11 @@ interface LayerListProps {
 const ManagedLayerListWidget = LayerListWidget as unknown as ForwardRefExoticComponent<
   LayerListProps & RefAttributes<LayerListHandle>
 >;
+
+const HELP_DIALOG_ID = 'experience-help';
+const NOTIFICATION_DIALOG_ID = 'experience-notification-center';
+const HELP_TRIGGER_ID = 'experience-utility-help';
+const NOTIFICATION_TRIGGER_ID = 'experience-utility-notifications';
 
 const reportUxRuntimeError = (
   error: unknown,
@@ -143,12 +156,66 @@ export function ExperienceUXLayer({
   windowManager,
 }: ExperienceUXLayerProps): ReactNode {
   const { theme, toggleTheme } = useExperienceTheme();
-  const [helpOpen, setHelpOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const dialogRef = useRef<HTMLElement | null>(null);
-  const backdropRef = useRef<HTMLDivElement | null>(null);
   const layerListRef = useRef<LayerListHandle | null>(null);
+  const dialogStack = useMemo(() => new DialogStackModel({
+    onObserverError: error => reportUxRuntimeError(
+      error,
+      'experience.ux-layer.dialog-observer',
+    ),
+  }), []);
+  const notifications = useMemo(() => new NotificationCenterModel({
+    capacity: 48,
+    onObserverError: error => reportUxRuntimeError(
+      error,
+      'experience.ux-layer.notification-observer',
+    ),
+  }), []);
+  const backgroundRoots = useMemo<readonly HTMLElement[]>(() => {
+    if (typeof document === 'undefined') return [];
+    const applicationRoot = document.getElementById('root');
+    return applicationRoot ? [applicationRoot] : [];
+  }, []);
+
+  const openSurface = useCallback((
+    id: string,
+    kind: DialogKind,
+    label: string,
+    restoreFocusTo: string,
+  ): void => {
+    if (dialogStack.snapshot().dialogs.some(dialog => dialog.id === id)) return;
+    dialogStack.open({
+      id,
+      kind,
+      label,
+      restoreFocusTo,
+    });
+  }, [dialogStack]);
+
+  const openHelp = useCallback((): void => {
+    openSurface(HELP_DIALOG_ID, 'modal', 'Hızlı kullanım', HELP_TRIGGER_ID);
+  }, [openSurface]);
+
+  const openNotifications = useCallback((): void => {
+    openSurface(
+      NOTIFICATION_DIALOG_ID,
+      'drawer',
+      'Bildirim merkezi',
+      NOTIFICATION_TRIGGER_ID,
+    );
+  }, [openSurface]);
+
+  const toggleThemeWithFeedback = useCallback((): void => {
+    toggleTheme();
+    notifications.push({
+      id: 'experience-theme-feedback',
+      dedupeKey: 'experience-theme-feedback',
+      title: theme === 'dark' ? 'Açık tema seçildi' : 'Koyu tema seçildi',
+      message: 'Arayüz tercihiniz bu tarayıcı için güncellendi.',
+      category: 'Görünüm',
+      expiresAt: Date.now() + 7_000,
+    });
+  }, [notifications, theme, toggleTheme]);
 
   useEffect(() => {
     document.documentElement.dataset.experienceTheme = theme;
@@ -160,12 +227,39 @@ export function ExperienceUXLayer({
   }, [theme]);
 
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const forcedColors = window.matchMedia('(forced-colors: active)');
+    const coarsePointer = window.matchMedia('(pointer: coarse)');
+    const synchronize = (): void => dialogStack.setPreferences({
+      reducedMotion: reducedMotion.matches,
+      forcedColors: forcedColors.matches,
+      coarsePointer: coarsePointer.matches,
+    });
+
+    synchronize();
+    reducedMotion.addEventListener('change', synchronize);
+    forcedColors.addEventListener('change', synchronize);
+    coarsePointer.addEventListener('change', synchronize);
+    return () => {
+      reducedMotion.removeEventListener('change', synchronize);
+      forcedColors.removeEventListener('change', synchronize);
+      coarsePointer.removeEventListener('change', synchronize);
+    };
+  }, [dialogStack]);
+
+  useEffect(() => {
     const onCommand = (event: Event): void => {
       const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
       const name = detail?.name;
 
       if (name === 'help') {
-        setHelpOpen(true);
+        openHelp();
+        return;
+      }
+
+      if (name === 'notifications') {
+        openNotifications();
         return;
       }
 
@@ -181,7 +275,7 @@ export function ExperienceUXLayer({
 
     window.addEventListener('kentrehberi:command', onCommand);
     return () => window.removeEventListener('kentrehberi:command', onCommand);
-  }, [windowManager]);
+  }, [openHelp, openNotifications, windowManager]);
 
   useEffect(() => {
     const shortcuts = createShortcutRuntime({
@@ -203,47 +297,93 @@ export function ExperienceUXLayer({
         {
           id: 'help',
           key: '?',
-          handler: () => setHelpOpen(true),
+          handler: openHelp,
         },
       ],
     });
 
     return () => shortcuts.dispose();
-  }, []);
-
-  useEffect(() => {
-    if (!helpOpen || !dialogRef.current) return undefined;
-
-    const overlay = acquireOverlayLease({
-      document,
-      id: 'experience-help',
-      modal: true,
-      lockScroll: true,
-      root: backdropRef.current,
-    });
-
-    const focusScope = createFocusScope({
-      document,
-      container: dialogRef.current,
-      initialFocus: closeButtonRef.current,
-      onEscape: () => setHelpOpen(false),
-      onFocusError: error => reportUxRuntimeError(
-        error,
-        'experience.ux-layer.help-focus',
-      ),
-    });
-    focusScope.activate();
-
-    return () => {
-      focusScope.dispose();
-      overlay.release();
-    };
-  }, [helpOpen]);
+  }, [openHelp]);
 
   const themeLabel = useMemo(
     () => theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç',
     [theme],
   );
+
+  const closeSurfaceAndDispatch = useCallback((
+    dialogId: string,
+    command: 'layers' | 'legend',
+  ): void => {
+    dialogStack.close(dialogId);
+    dispatchExperienceCommand(command);
+  }, [dialogStack]);
+
+  const renderOverlayContent = useCallback((dialog: DialogPresentation): ReactNode => {
+    if (dialog.id === NOTIFICATION_DIALOG_ID) {
+      return (
+        <ExperienceNotificationCenter
+          model={notifications}
+          mode="center"
+          label="Bildirim merkezi"
+        />
+      );
+    }
+
+    if (dialog.id !== HELP_DIALOG_ID) return null;
+    return (
+      <div className="experience-help__stack-content">
+        <p className="experience-help__intro">
+          Harita ve veri araçlarına klavye ile hızlı erişin. Odak, Escape kapatma ve
+          arka plan yalıtımı ortak erişilebilir overlay runtime tarafından yönetilir.
+        </p>
+        <div className="experience-help__grid">
+          <div className="experience-shortcut">
+            <span>Komut merkezi</span>
+            <kbd>Ctrl</kbd><b>+</b><kbd>K</kbd>
+          </div>
+          <div className="experience-shortcut">
+            <span>Yardım</span><kbd>?</kbd>
+          </div>
+          <div className="experience-shortcut">
+            <span>Pencereyi kapat</span><kbd>Esc</kbd>
+          </div>
+
+          <button
+            className="experience-shortcut experience-shortcut--action"
+            type="button"
+            onClick={() => closeSurfaceAndDispatch(dialog.id, 'layers')}
+          >
+            <span>Katmanlar</span><strong>Aç</strong>
+          </button>
+
+          <button
+            className="experience-shortcut experience-shortcut--action"
+            type="button"
+            onClick={() => closeSurfaceAndDispatch(dialog.id, 'legend')}
+          >
+            <span>Lejand</span><strong>Aç</strong>
+          </button>
+
+          <button
+            className="experience-shortcut experience-shortcut--action"
+            type="button"
+            onClick={toggleThemeWithFeedback}
+          >
+            <span>Tema</span>
+            <strong>{theme === 'dark' ? 'Açık' : 'Koyu'}</strong>
+          </button>
+        </div>
+
+        <footer className="experience-help__footer">
+          <ActionIcon type="info" size={16} />
+          <span>
+            Mevcut GIS sorgu, katman ve popup işlevleri korunur; bu yüzey
+            yalnızca keşif, erişilebilirlik ve hızlı erişim sağlar.
+          </span>
+        </footer>
+      </div>
+    );
+  }, [closeSurfaceAndDispatch, notifications, theme, toggleThemeWithFeedback]);
 
   return (
     <>
@@ -291,9 +431,22 @@ export function ExperienceUXLayer({
           </button>
 
           <button
+            id={NOTIFICATION_TRIGGER_ID}
             className="experience-utility__button"
             type="button"
-            onClick={() => setHelpOpen(true)}
+            onClick={openNotifications}
+            aria-label="Bildirim merkezini aç"
+            title="Bildirimler"
+          >
+            <ActionIcon type="info" />
+            {!collapsed ? <span>Bildirimler</span> : null}
+          </button>
+
+          <button
+            id={HELP_TRIGGER_ID}
+            className="experience-utility__button"
+            type="button"
+            onClick={openHelp}
             aria-label="Kısayolları ve yardım bilgisini aç"
             title="Kısayollar"
           >
@@ -304,7 +457,7 @@ export function ExperienceUXLayer({
           <button
             className="experience-utility__button"
             type="button"
-            onClick={toggleTheme}
+            onClick={toggleThemeWithFeedback}
             aria-label={themeLabel}
             title={themeLabel}
           >
@@ -337,96 +490,22 @@ export function ExperienceUXLayer({
         ref={layerListRef}
       />
 
-      {helpOpen ? (
-        <div
-          ref={backdropRef}
-          className="experience-help-backdrop"
-          role="presentation"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) setHelpOpen(false);
-          }}
-        >
-          <section
-            ref={dialogRef}
-            className="experience-help"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="experience-help-title"
-            aria-describedby="experience-help-description"
-          >
-            <header className="experience-help__header">
-              <div>
-                <span className="experience-eyebrow">KENT REHBERİ</span>
-                <h2 id="experience-help-title">Hızlı kullanım</h2>
-                <p id="experience-help-description">
-                  Harita ve veri araçlarına klavye ile hızlı erişin.
-                </p>
-              </div>
-              <button
-                ref={closeButtonRef}
-                className="experience-close"
-                type="button"
-                onClick={() => setHelpOpen(false)}
-                aria-label="Yardım penceresini kapat"
-              >
-                ×
-              </button>
-            </header>
+      <ExperienceNotificationCenter
+        model={notifications}
+        mode="toasts"
+        label="Anlık bildirimler"
+      />
 
-            <div className="experience-help__grid">
-              <div className="experience-shortcut">
-                <span>Komut merkezi</span>
-                <kbd>Ctrl</kbd><b>+</b><kbd>K</kbd>
-              </div>
-              <div className="experience-shortcut">
-                <span>Yardım</span><kbd>?</kbd>
-              </div>
-              <div className="experience-shortcut">
-                <span>Pencereyi kapat</span><kbd>Esc</kbd>
-              </div>
-
-              <button
-                className="experience-shortcut experience-shortcut--action"
-                type="button"
-                onClick={() => {
-                  setHelpOpen(false);
-                  dispatchExperienceCommand('layers');
-                }}
-              >
-                <span>Katmanlar</span><strong>Aç</strong>
-              </button>
-
-              <button
-                className="experience-shortcut experience-shortcut--action"
-                type="button"
-                onClick={() => {
-                  setHelpOpen(false);
-                  dispatchExperienceCommand('legend');
-                }}
-              >
-                <span>Lejand</span><strong>Aç</strong>
-              </button>
-
-              <button
-                className="experience-shortcut experience-shortcut--action"
-                type="button"
-                onClick={toggleTheme}
-              >
-                <span>Tema</span>
-                <strong>{theme === 'dark' ? 'Açık' : 'Koyu'}</strong>
-              </button>
-            </div>
-
-            <footer className="experience-help__footer">
-              <ActionIcon type="info" size={16} />
-              <span>
-                Mevcut GIS sorgu, katman ve popup işlevleri korunur; bu yüzey
-                yalnızca keşif, erişilebilirlik ve hızlı erişim sağlar.
-              </span>
-            </footer>
-          </section>
-        </div>
-      ) : null}
+      <ExperienceOverlayStack
+        model={dialogStack}
+        backgroundRoots={backgroundRoots}
+        renderContent={renderOverlayContent}
+        closeLabel="Kapat"
+        onObserverError={error => reportUxRuntimeError(
+          error,
+          'experience.ux-layer.overlay-runtime',
+        )}
+      />
     </>
   );
 }
