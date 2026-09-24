@@ -38,6 +38,27 @@ function stripYamlScalar(value) {
   return trimmed;
 }
 
+function multilineBody(source, startIndex, runIndent) {
+  const rawBody = [];
+  for (let cursor = startIndex; cursor < source.length; cursor += 1) {
+    const candidate = source[cursor];
+    if (!candidate.trim()) {
+      rawBody.push(candidate);
+      continue;
+    }
+    if (indentation(candidate) <= runIndent) break;
+    rawBody.push(candidate);
+  }
+
+  const nonBlank = rawBody.filter((line) => line.trim());
+  if (nonBlank.length === 0) return '';
+  const contentIndent = Math.min(...nonBlank.map(indentation));
+  return rawBody
+    .map((line) => (line.trim() ? line.slice(Math.min(line.length, contentIndent)) : ''))
+    .join('\n')
+    .replace(/\n+$/, '');
+}
+
 function shellBlocks(text) {
   const source = String(text ?? '').split(/\r?\n/);
   const blocks = [];
@@ -49,14 +70,11 @@ function shellBlocks(text) {
     const rawValue = match[2].trim();
     const lineNumber = index + 1;
     if (['|', '>', '|-', '>-'].includes(rawValue)) {
-      const body = [];
-      for (let cursor = index + 1; cursor < source.length; cursor += 1) {
-        const candidate = source[cursor];
-        if (!candidate.trim()) { body.push(''); continue; }
-        if (indentation(candidate) <= runIndent) break;
-        body.push(candidate.slice(Math.min(candidate.length, runIndent + 2)));
-      }
-      blocks.push(Object.freeze({ line: lineNumber, command: body.join('\n'), multiline: true }));
+      blocks.push(Object.freeze({
+        line: lineNumber,
+        command: multilineBody(source, index + 1, runIndent),
+        multiline: true,
+      }));
     } else {
       blocks.push(Object.freeze({ line: lineNumber, command: stripYamlScalar(rawValue), multiline: false }));
     }
@@ -99,11 +117,26 @@ test('parses compact and named run steps', () => {
   ]);
 });
 
-test('preserves reviewed multiline shell as one auditable block', () => {
+test('preserves compact multiline shell as one normalized auditable block', () => {
   const [block] = shellBlocks('steps:\n  - run: |\n      npm ci\n      npm test\n');
   assert.equal(block.multiline, true);
   assert.equal(block.command, 'npm ci\nnpm test');
   assert.deepEqual(auditShellBlock(block), []);
+});
+
+test('normalizes named multiline shell independently of YAML key indentation', () => {
+  const [block] = shellBlocks('steps:\n  - name: Test\n    run: |\n      npm ci\n      npm test\n');
+  assert.equal(block.command, 'npm ci\nnpm test');
+});
+
+test('preserves relative indentation inside multiline shell', () => {
+  const [block] = shellBlocks('steps:\n  - run: |\n      if true; then\n        npm test\n      fi\n');
+  assert.equal(block.command, 'if true; then\n  npm test\nfi');
+});
+
+test('blank multiline shell remains fail-closed', () => {
+  const [block] = shellBlocks('steps:\n  - run: |\n\n  - name: next\n    run: npm test\n');
+  assert.deepEqual(auditShellBlock(block), ['empty-run']);
 });
 
 test('strips matching scalar quotes', () => {
