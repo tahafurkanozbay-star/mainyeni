@@ -34,7 +34,7 @@ describe('LayerVisibilityPolicy pressure regressions', () => {
 
   it('preserves exact scale boundaries', () => {
     const policy = new LayerVisibilityPolicy();
-    policy.register({ id: 'bounded', enabled: true, modes: ['3d'], minScale: 1_000, maxScale: 10_000 });
+    policy.register({ id: 'bounded', enabled: true, modes: ['3d'], minScale: 10_000, maxScale: 1_000 });
     expect(policy.decide('bounded', { ...context, scale: 1_000 }).visible).toBe(true);
     expect(policy.decide('bounded', { ...context, scale: 10_000 }).visible).toBe(true);
     expect(policy.decide('bounded', { ...context, scale: 999 }).reason).toBe('scale');
