@@ -15,7 +15,7 @@ import {
 } from './normalization';
 import { haversineDistanceMeters } from './spatialIndex';
 
-export const ADDRESS_CONFIDENCE_VERSION = '2026-09-24.v1';
+export const ADDRESS_CONFIDENCE_VERSION = '2026-09-24.v2';
 
 export type AddressConfidenceStatus = 'trusted' | 'ambiguous' | 'rejected';
 
@@ -224,7 +224,6 @@ const findHierarchyMatch = (
   candidate: GeocodeCandidate,
   fields: AddressCandidateFields,
   hierarchy: AddressHierarchyRuntime,
-  policy: NormalizedConfidencePolicy,
 ): AddressHierarchyMatch | null => {
   const target = deepestTarget(fields, candidate.label);
   if (!target.value) return null;
@@ -234,7 +233,6 @@ const findHierarchyMatch = (
     neighborhood: fields.neighborhood || null,
     street: fields.street || null,
     center: candidate.coordinates,
-    radiusMeters: candidate.coordinates ? policy.maxCoordinateDistanceMeters : null,
     limit: 8,
     minimumScore: 1,
     requireHierarchyMatch: false,
@@ -359,7 +357,7 @@ export const evaluateAddressCandidateConfidence = (
 ): AddressConfidenceEvaluation => {
   const policy = normalizePolicy(policyInput);
   const candidateFields = extractAddressCandidateFields(candidate);
-  const hierarchyMatch = findHierarchyMatch(candidate, candidateFields, hierarchy, policy);
+  const hierarchyMatch = findHierarchyMatch(candidate, candidateFields, hierarchy);
   const hierarchyPath = hierarchyMatch
     ? Object.freeze(hierarchy.getPath(hierarchyMatch.node.key))
     : Object.freeze([] as AddressHierarchyNode[]);
