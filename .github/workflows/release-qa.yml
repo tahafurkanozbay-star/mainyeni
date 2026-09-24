@@ -20,20 +20,27 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout with baseline history
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
 
       - name: Verify Node native TypeScript runtime
         run: node --version
 
+      - name: Install typed release toolchain from lockfile
+        working-directory: Webclient.app
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: TypeScript 7.0.2 strict typecheck
-        run: npx --yes --package=typescript@7.0.2 tsc -p quality/release/tsconfig.json
+        run: ./Webclient.app/node_modules/.bin/tsc -p quality/release/tsconfig.json
 
       - name: Typed QA unit and regression tests
         run: node --test quality/release/*.test.mts
@@ -55,9 +62,13 @@ jobs:
           --current-commit "${{ github.sha }}"
           --output qa-artifacts/release
 
+      - name: Cleanup exact PR base tree
+        if: always() && github.event_name == 'pull_request'
+        run: git worktree remove --force /tmp/release-baseline >/dev/null 2>&1 || true
+
       - name: Upload typed release QA artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: typed-release-qa
           path: qa-artifacts/release
@@ -72,10 +83,12 @@ jobs:
         working-directory: Webclient.app
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: npm
@@ -127,18 +140,18 @@ jobs:
             echo "No changed Webclient lint targets."
           else
             printf 'Strict lint targets:\n - %s\n' "${changed_files[@]}"
-            npx oxlint --deny-warnings "${changed_files[@]}"
+            npx --no-install oxlint --deny-warnings "${changed_files[@]}"
           fi
 
       - name: Full TypeScript diagnostic visibility
         run: |
           set +e
-          npx tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
+          npx --no-install tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
           echo "Full TypeScript diagnostics remain visible; staged migration is enforced by the exact-base regression gate."
           exit 0
 
       - name: Strict supervision TypeScript boundary
-        run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
+        run: npx --no-install tsc --noEmit -p tsconfig.supervision.json --pretty false
 
       - name: Exact-base TypeScript regression gate
         if: github.event_name == 'pull_request'
@@ -153,7 +166,7 @@ jobs:
           (
             cd /tmp/typecheck-baseline/Webclient.app
             npm ci --ignore-scripts --no-audit --no-fund >/tmp/typecheck-baseline-install.log 2>&1
-            npx tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
+            npx --no-install tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
           )
           set -e
           node scripts/typecheck-regression.mjs /tmp/baseline-typecheck.log /tmp/current-typecheck.log
@@ -191,10 +204,12 @@ jobs:
       NUGET_XMLDOC_MODE: skip
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup .NET 10 LTS
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
