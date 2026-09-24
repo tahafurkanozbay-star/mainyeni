@@ -16,24 +16,18 @@
   isolation: isolate;
 }
 
-.experience-overlay-layer[aria-hidden='true'] {
-  pointer-events: none;
-}
-
+.experience-overlay-layer[aria-hidden='true'] { pointer-events: none; }
 .experience-overlay-layer--modal {
   align-items: center;
   justify-content: center;
-  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
-    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
 }
-
 .experience-overlay-layer--drawer {
   align-items: stretch;
   justify-content: flex-end;
   padding-block: env(safe-area-inset-top) env(safe-area-inset-bottom);
   padding-inline-end: env(safe-area-inset-right);
 }
-
 .experience-overlay-layer--popover {
   inset: auto 1rem 1rem auto;
   width: min(24rem, calc(100vw - 2rem));
@@ -52,41 +46,27 @@
   background: var(--experience-surface, #ffffff);
   color: var(--experience-fg, #172033);
   box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 24%);
-  outline: none;
   transform-origin: center;
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
-
 .experience-overlay-surface:focus-visible {
   outline: 3px solid var(--experience-focus, #2563eb);
   outline-offset: 3px;
 }
-
-.experience-overlay-surface--modal {
-  inline-size: min(42rem, calc(100vw - 2rem));
-}
-
+.experience-overlay-surface--modal { inline-size: min(42rem, calc(100vw - 2rem)); }
 .experience-overlay-surface--drawer {
   inline-size: min(28rem, calc(100vw - 1rem));
   block-size: 100%;
   max-block-size: 100dvh;
   border-radius: 1rem 0 0 1rem;
 }
-
 .experience-overlay-surface--popover {
   inline-size: 100%;
   max-block-size: min(32rem, 70dvh);
   border-radius: 0.875rem;
   box-shadow: 0 1rem 2.5rem rgb(15 23 42 / 18%);
 }
-
-.experience-overlay-surface.is-background {
-  opacity: 0;
-  transform: scale(0.985);
-}
-
+.experience-overlay-surface.is-background { opacity: 0; transform: scale(0.985); }
 .experience-overlay-surface__header {
   display: flex;
   align-items: center;
@@ -96,7 +76,6 @@
   border-block-end: 1px solid var(--experience-border, #d5dae2);
   background: var(--experience-surface-elevated, #ffffff);
 }
-
 .experience-overlay-surface__title {
   flex: 1 1 auto;
   min-inline-size: 0;
@@ -108,7 +87,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .experience-overlay-surface__close {
   flex: 0 0 auto;
   display: inline-grid;
@@ -125,16 +103,11 @@
   line-height: 1;
   cursor: pointer;
 }
-
-.experience-overlay-surface__close:hover {
-  background: color-mix(in srgb, currentColor 8%, transparent);
-}
-
+.experience-overlay-surface__close:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .experience-overlay-surface__close:focus-visible {
   outline: 3px solid var(--experience-focus, #2563eb);
   outline-offset: 2px;
 }
-
 .experience-overlay-surface__body {
   min-block-size: 0;
   overflow: auto;
@@ -142,99 +115,48 @@
   padding: 1rem;
   scrollbar-gutter: stable;
 }
+.experience-overlay-stack[data-experience-coarse-pointer='true'] .experience-overlay-surface__close { inline-size: 3rem; block-size: 3rem; }
+.experience-overlay-stack[data-experience-reduced-motion='true'] .experience-overlay-surface { transition: none; }
 
-.experience-overlay-stack[data-experience-coarse-pointer='true'] .experience-overlay-surface__close {
-  inline-size: 3rem;
-  block-size: 3rem;
-}
-
-.experience-overlay-stack[data-experience-reduced-motion='true'] .experience-overlay-surface {
-  transition: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .experience-overlay-surface {
-    transition: none;
-  }
-}
-
+@media (prefers-reduced-motion: reduce) { .experience-overlay-surface { transition: none; } }
 @media (max-width: 45rem) {
-  .experience-overlay-layer--modal {
-    align-items: flex-end;
-    padding: 0;
-  }
-
+  .experience-overlay-layer--modal { align-items: flex-end; padding: 0; }
   .experience-overlay-surface--modal {
     inline-size: 100%;
     max-block-size: min(92dvh, 52rem);
     border-radius: 1rem 1rem 0 0;
     padding-block-end: env(safe-area-inset-bottom);
   }
-
-  .experience-overlay-layer--drawer {
-    padding: 0;
-  }
-
+  .experience-overlay-layer--drawer { padding: 0; }
   .experience-overlay-surface--drawer {
     inline-size: 100%;
     max-inline-size: none;
     border-radius: 0;
     padding-block-end: env(safe-area-inset-bottom);
   }
-
-  .experience-overlay-layer--popover {
-    inset: auto 0 0;
-    width: 100%;
-  }
-
-  .experience-overlay-surface--popover {
-    border-radius: 1rem 1rem 0 0;
-    padding-block-end: env(safe-area-inset-bottom);
-  }
+  .experience-overlay-layer--popover { inset: auto 0 0; width: 100%; }
+  .experience-overlay-surface--popover { border-radius: 1rem 1rem 0 0; padding-block-end: env(safe-area-inset-bottom); }
 }
-
 @media (max-height: 36rem) and (orientation: landscape) {
-  .experience-overlay-layer--modal {
-    align-items: stretch;
-    padding-block: 0.5rem;
-  }
-
-  .experience-overlay-surface--modal {
-    max-block-size: calc(100dvh - 1rem);
-  }
-
-  .experience-overlay-surface__header {
-    min-block-size: 3rem;
-    padding-block: 0.5rem;
-  }
+  .experience-overlay-layer--modal { align-items: stretch; padding-block: 0.5rem; }
+  .experience-overlay-surface--modal { max-block-size: calc(100dvh - 1rem); }
+  .experience-overlay-surface__header { min-block-size: 3rem; padding-block: 0.5rem; }
 }
-
 @media (forced-colors: active) {
-  .experience-overlay-layer {
-    background: Canvas;
-  }
-
+  .experience-overlay-layer { background: Canvas; }
   .experience-overlay-surface {
     border: 2px solid CanvasText;
     background: Canvas;
     color: CanvasText;
     box-shadow: none;
   }
-
-  .experience-overlay-surface__header {
-    border-block-end: 1px solid CanvasText;
-    background: Canvas;
-  }
-
+  .experience-overlay-surface__header { border-block-end: 1px solid CanvasText; background: Canvas; }
   .experience-overlay-surface__close {
     border: 1px solid ButtonText;
     background: ButtonFace;
     color: ButtonText;
     forced-color-adjust: none;
   }
-
   .experience-overlay-surface__close:focus-visible,
-  .experience-overlay-surface:focus-visible {
-    outline-color: Highlight;
-  }
+  .experience-overlay-surface:focus-visible { outline-color: Highlight; }
 }
