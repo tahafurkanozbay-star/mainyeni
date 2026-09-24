@@ -29,7 +29,7 @@ export interface SpatialMemoSettings {
 
 export interface SpatialMemoKeyOptions {
   namespace?: string | number;
-  version?: string | number;
+  version?: unknown;
 }
 
 export interface SpatialMemoExecutionContext {
@@ -161,7 +161,7 @@ const safeJsonSize = (value: unknown): number => {
   try {
     const serialized = JSON.stringify(value);
     return serialized === undefined ? 0 : serialized.length * 2;
-  } catch (_) {
+  } catch {
     return 0;
   }
 };
@@ -256,7 +256,7 @@ const safeAbort = (controller: AbortController | null): boolean => {
   try {
     controller.abort();
     return true;
-  } catch (_) {
+  } catch {
     return false;
   }
 };

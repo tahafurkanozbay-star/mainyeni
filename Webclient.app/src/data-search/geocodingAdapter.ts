@@ -347,13 +347,13 @@ export const mergeGeocodePages = (
 export const geocodeCandidateToRecordSource = (
   candidate: GeocodeCandidate,
 ): Readonly<Record<string, unknown>> => Object.freeze({
+  ...candidate.attributes,
   id: candidate.id,
   title: candidate.label,
   address: candidate.label,
   latitude: candidate.coordinates?.latitude ?? null,
   longitude: candidate.coordinates?.longitude ?? null,
   score: candidate.score,
-  ...candidate.attributes,
 });
 
 export const isProjectedCoordinateCandidate = (value: unknown): boolean => {
