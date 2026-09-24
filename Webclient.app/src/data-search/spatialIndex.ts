@@ -179,13 +179,51 @@ const enumerateCellKeys = (
 ): readonly string[] => {
   const range = cellRange(bounds, index.cellSizeDegrees);
   const keys: string[] = [];
-  for (let latitudeCell = range.minLatitudeCell; latitudeCell <= range.maxLatitudeCell; latitudeCell += 1) {
+  const centerLatitudeCell = Math.floor((range.minLatitudeCell + range.maxLatitudeCell) / 2);
+  const centerLongitudeCell = Math.floor((range.minLongitudeCell + range.maxLongitudeCell) / 2);
+  const maxRing = Math.max(
+    centerLatitudeCell - range.minLatitudeCell,
+    range.maxLatitudeCell - centerLatitudeCell,
+    centerLongitudeCell - range.minLongitudeCell,
+    range.maxLongitudeCell - centerLongitudeCell,
+  );
+
+  const append = (latitudeCell: number, longitudeCell: number): boolean => {
+    if (
+      latitudeCell < range.minLatitudeCell
+      || latitudeCell > range.maxLatitudeCell
+      || longitudeCell < range.minLongitudeCell
+      || longitudeCell > range.maxLongitudeCell
+    ) return false;
+    keys.push(`${latitudeCell}:${longitudeCell}`);
+    return keys.length >= maximum;
+  };
+
+  for (let ring = 0; ring <= maxRing; ring += 1) {
     throwIfAborted(signal);
-    for (let longitudeCell = range.minLongitudeCell; longitudeCell <= range.maxLongitudeCell; longitudeCell += 1) {
-      if (keys.length >= maximum) return Object.freeze(keys);
-      keys.push(`${latitudeCell}:${longitudeCell}`);
+    if (ring === 0) {
+      if (append(centerLatitudeCell, centerLongitudeCell)) break;
+      continue;
+    }
+
+    const minLatitudeCell = centerLatitudeCell - ring;
+    const maxLatitudeCell = centerLatitudeCell + ring;
+    const minLongitudeCell = centerLongitudeCell - ring;
+    const maxLongitudeCell = centerLongitudeCell + ring;
+
+    for (let longitudeCell = minLongitudeCell; longitudeCell <= maxLongitudeCell; longitudeCell += 1) {
+      throwIfAborted(signal);
+      if (append(minLatitudeCell, longitudeCell)) return Object.freeze(keys);
+      if (append(maxLatitudeCell, longitudeCell)) return Object.freeze(keys);
+    }
+
+    for (let latitudeCell = minLatitudeCell + 1; latitudeCell < maxLatitudeCell; latitudeCell += 1) {
+      throwIfAborted(signal);
+      if (append(latitudeCell, minLongitudeCell)) return Object.freeze(keys);
+      if (append(latitudeCell, maxLongitudeCell)) return Object.freeze(keys);
     }
   }
+
   return Object.freeze(keys);
 };
 
