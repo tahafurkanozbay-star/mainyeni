@@ -1,0 +1,76 @@
+name: GIS focused Vitest regression fix
+
+on:
+  push:
+    branches:
+      - agent/gis-deep-20260924-0912-00810ca
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[gis-vitest-fix]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/gis-deep-20260924-0912-00810ca
+          fetch-depth: 0
+      - name: Apply focused regression fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          capability = Path('Webclient.app/src/gis-engine/arcgisLayerCapabilityPolicy.ts')
+          text = capability.read_text()
+          old = '''    return Object.freeze({
+              ...input,
+              ...(maxRecordCount === undefined ? {} : { maxRecordCount }),
+              ...(maxRecordCountFactor === undefined ? {} : { maxRecordCountFactor }),
+              ...(objectIdField === undefined ? {} : { objectIdField }),
+              ...(globalIdField === undefined ? {} : { globalIdField }),
+            });'''
+          # tolerate the repository's two-space indentation exactly as written
+          old = old.replace('              ', '      ')
+          new = '''    return Object.freeze({
+              ...input,
+              maxRecordCount,
+              maxRecordCountFactor,
+              objectIdField,
+              globalIdField,
+            });'''.replace('              ', '      ')
+          if old not in text:
+              raise SystemExit('missing capability normalization marker')
+          capability.write_text(text.replace(old, new, 1))
+
+          visibility = Path('Webclient.app/src/gis-engine/layerVisibilityPolicy.pressure.test.ts')
+          text = visibility.read_text()
+          old = "policy.register({ id: 'bounded', enabled: true, modes: ['3d'], minScale: 1_000, maxScale: 10_000 });"
+          new = "policy.register({ id: 'bounded', enabled: true, modes: ['3d'], minScale: 10_000, maxScale: 1_000 });"
+          if old not in text:
+              raise SystemExit('missing scale-boundary test marker')
+          visibility.write_text(text.replace(old, new, 1))
+
+          spatial = Path('Webclient.app/src/gis-engine/spatialOperationCoordinator.ts')
+          text = spatial.read_text()
+          old = "    const key = normalizeKey(request.key);"
+          new = """    let key: string;
+              try {
+                key = normalizeKey(request.key);
+              } catch (error: unknown) {
+                return Promise.reject(error);
+              }""".replace('              ', '    ')
+          if old not in text:
+              raise SystemExit('missing spatial key validation marker')
+          spatial.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit focused regression fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Webclient.app/src/gis-engine/arcgisLayerCapabilityPolicy.ts Webclient.app/src/gis-engine/layerVisibilityPolicy.pressure.test.ts Webclient.app/src/gis-engine/spatialOperationCoordinator.ts
+          git commit -m "fix(gis): close recovered runtime Vitest regressions [gis-vitest-fix]"
+          git push origin HEAD:agent/gis-deep-20260924-0912-00810ca
