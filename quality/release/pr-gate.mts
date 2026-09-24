@@ -17,6 +17,11 @@ import {
   type ChangeRiskSummary,
 } from './change-risk-audit.mts';
 import {
+  auditSafetyContractDelta,
+  safetyContractDeltaMarkdown,
+  type SafetyContractDeltaSummary,
+} from './safety-contract-delta-audit.mts';
+import {
   compareBaseline,
   createBaseline,
   decideReleaseGate,
@@ -31,6 +36,7 @@ export interface PullRequestGateResult {
   readonly currentRiskScore: number;
   readonly delta: RegressionDelta;
   readonly changeRisk: AuditSection<ChangeRiskSummary>;
+  readonly safetyDelta: AuditSection<SafetyContractDeltaSummary>;
   readonly regressionFindings: readonly Finding[];
   readonly decision: ReleaseGateDecision;
 }
@@ -185,7 +191,7 @@ export function decidePullRequestRegression(
 }
 
 function markdown(result: PullRequestGateResult): string {
-  const { delta, decision, changeRisk } = result;
+  const { delta, decision, changeRisk, safetyDelta } = result;
   const lines = [
     '# Kent Rehberi — PR Regression Gate',
     '',
@@ -205,6 +211,9 @@ function markdown(result: PullRequestGateResult): string {
     `- Test file changes: ${changeRisk.summary.testChanges}`,
     `- Change-risk areas: ${changeRisk.summary.changedAreas.join(', ') || 'none'}`,
     `- Change-risk findings: ${changeRisk.findings.length}`,
+    `- Protective safety losses: ${safetyDelta.summary.protectiveLosses}`,
+    `- Dangerous safety introductions: ${safetyDelta.summary.dangerousIntroductions}`,
+    `- Safety-delta findings: ${safetyDelta.findings.length}`,
     `- Gate: **${decision.state.toUpperCase()}**`,
     '',
   ];
@@ -222,6 +231,14 @@ function markdown(result: PullRequestGateResult): string {
     lines.push('No uncovered changed-surface risk findings.');
   } else {
     for (const item of changeRisk.findings) {
+      lines.push(`- **${item.severity.toUpperCase()}** \`${item.id}\`: ${item.title}`);
+    }
+  }
+  lines.push('', '## Exact-base safety-contract findings', '');
+  if (safetyDelta.findings.length === 0) {
+    lines.push('No removed safety contracts or newly introduced dangerous primitives.');
+  } else {
+    for (const item of safetyDelta.findings) {
       lines.push(`- **${item.severity.toUpperCase()}** \`${item.id}\`: ${item.title}`);
     }
   }
@@ -251,7 +268,11 @@ export async function runPullRequestGate(options: {
   const rawDelta = compareBaseline(currentExecution.report, baseline);
   const delta = reconcileLanguageMigrationDelta(rawDelta);
   const changeRisk = auditChangeRisk(baselineInventory, currentInventory);
-  const gate = decidePullRequestRegression(delta, changeRisk.findings);
+  const safetyDelta = auditSafetyContractDelta(baselineInventory, currentInventory);
+  const gate = decidePullRequestRegression(delta, [
+    ...changeRisk.findings,
+    ...safetyDelta.findings,
+  ]);
   const result: PullRequestGateResult = {
     baselineCommit: options.baselineCommit,
     currentCommit: options.currentCommit,
@@ -259,6 +280,7 @@ export async function runPullRequestGate(options: {
     currentRiskScore: currentExecution.report.decision.riskScore,
     delta,
     changeRisk,
+    safetyDelta,
     regressionFindings: gate.findings,
     decision: gate.decision,
   };
@@ -268,6 +290,8 @@ export async function runPullRequestGate(options: {
   writeFileSync(resolve(options.outputDirectory, 'pr-regression-gate.md'), markdown(result), 'utf8');
   writeFileSync(resolve(options.outputDirectory, 'change-risk-gate.json'), `${JSON.stringify(changeRisk, null, 2)}\n`, 'utf8');
   writeFileSync(resolve(options.outputDirectory, 'change-risk-gate.md'), changeRiskMarkdown(changeRisk), 'utf8');
+  writeFileSync(resolve(options.outputDirectory, 'safety-contract-delta.json'), `${JSON.stringify(safetyDelta, null, 2)}\n`, 'utf8');
+  writeFileSync(resolve(options.outputDirectory, 'safety-contract-delta.md'), safetyContractDeltaMarkdown(safetyDelta), 'utf8');
   return result;
 }
 
@@ -282,7 +306,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   const result = await runPullRequestGate({ currentRoot, baselineRoot, currentCommit, baselineCommit, outputDirectory });
   process.stdout.write(markdown(result));
   if (result.decision.state === 'block') {
-    process.stderr.write('PR regression gate blocked by exact-base static/change-risk regression.\n');
+    process.stderr.write('PR regression gate blocked by exact-base static/change-risk/safety-contract regression.\n');
     return 1;
   }
   return 0;
