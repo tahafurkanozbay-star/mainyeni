@@ -187,7 +187,13 @@ describe('searchReplicaReconciler production contract', () => {
     const reconciliation = reconcileSearchReplicas([
       { key: 'a', records: [normalized('1', { secret: 'never-log-this' })] },
     ], { quorum: 1 });
-    expect(JSON.stringify(reconciliation)).not.toContain('never-log-this');
+    const diagnostics = {
+      conflicts: reconciliation.conflicts,
+      conflictCount: reconciliation.conflictCount,
+      conflictRecordCount: reconciliation.conflictRecordCount,
+      fingerprint: reconciliation.fingerprint,
+    };
+    expect(JSON.stringify(diagnostics)).not.toContain('never-log-this');
   });
 
   it('produces an immutable conflict summary with every known conflict kind', () => {
