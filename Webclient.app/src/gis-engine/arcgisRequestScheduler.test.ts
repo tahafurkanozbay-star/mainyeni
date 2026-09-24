@@ -392,15 +392,15 @@ describe('createArcGisRequestScheduler', () => {
     scheduler.destroy();
   });
 
-  test('rejects WMS/WFS resources before any request adapter can run', () => {
+  test('rejects WMS/WFS resources before any request adapter can run', async () => {
     const scheduler = createArcGisRequestScheduler();
     const execute = vi.fn();
 
-    expect(() => scheduler.schedule({
+    await expect(scheduler.schedule({
       key: 'forbidden',
       resourceUrl: 'https://example.test/geoserver/wms?service=WMS',
       execute,
-    })).toThrow();
+    })).rejects.toBeDefined();
 
     expect(execute).not.toHaveBeenCalled();
     scheduler.destroy();
