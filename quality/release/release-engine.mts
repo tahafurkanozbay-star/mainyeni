@@ -33,10 +33,12 @@ import { auditModernization } from './modernization-audit.mts';
 import { auditNetwork } from './network-audit.mts';
 import { auditPerformance } from './performance-audit.mts';
 import { auditObservability } from './observability-audit.mts';
+import { auditReleaseEvidenceMatrix } from './release-evidence-matrix.mts';
 import { auditResponsive } from './responsive-audit.mts';
 import { auditRuntimeResilience } from './runtime-resilience-audit.mts';
 import { auditSecurity } from './security-audit.mts';
 import { auditValidationIntegrity } from './validation-integrity-audit.mts';
+import { auditWorkflowEvidence } from './workflow-evidence-audit.mts';
 import { scanSource } from './source-audit.mts';
 import { auditTestContracts } from './test-contracts.mts';
 import { auditUx } from './ux-audit.mts';
@@ -239,6 +241,8 @@ export async function runReleaseEngine(
     auditBackendSecurity(inventory),
     auditDependencies(inventory),
     auditCiIntegrity(inventory),
+    auditWorkflowEvidence(inventory),
+    auditReleaseEvidenceMatrix(inventory),
     auditValidationIntegrity(inventory),
     auditNetwork(inventory),
     auditGis(inventory),

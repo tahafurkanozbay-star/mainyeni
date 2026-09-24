@@ -65,4 +65,4 @@ jobs:
         run: npm run typecheck:platform-tests -- --pretty false
 
       - name: Focused migrated Platform tests
-        run: npx vitest run src/platform/bootstrap src/platform/http src/platform/performance src/platform/runtime --reporter=verbose
+        run: npx --no-install vitest run src/platform/bootstrap src/platform/http src/platform/performance src/platform/runtime --reporter=verbose

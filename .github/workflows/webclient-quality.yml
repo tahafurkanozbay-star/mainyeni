@@ -28,10 +28,12 @@ jobs:
         working-directory: Webclient.app
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: npm
@@ -95,18 +97,18 @@ jobs:
             echo "No changed Webclient lint targets."
           else
             printf 'Strict lint targets:\n - %s\n' "${changed_files[@]}"
-            npx oxlint --deny-warnings "${changed_files[@]}"
+            npx --no-install oxlint --deny-warnings "${changed_files[@]}"
           fi
 
       - name: Full TypeScript diagnostic visibility
         run: |
           set +e
-          npx tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
+          npx --no-install tsc --noEmit -p tsconfig.json --pretty false 2>&1 | tee /tmp/current-typecheck.log
           echo "Full current-main-compatible TypeScript diagnostics are recorded above; the exact-base gate below is authoritative during staged migration."
           exit 0
 
       - name: Strict supervision TypeScript boundary
-        run: npx tsc --noEmit -p tsconfig.supervision.json --pretty false
+        run: npx --no-install tsc --noEmit -p tsconfig.supervision.json --pretty false
 
       - name: Strict Platform test TypeScript boundary
         run: npm run typecheck:platform-tests -- --pretty false
@@ -119,6 +121,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Baseline source: github.event.pull_request.base.sha
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/typecheck-baseline
           git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
@@ -127,7 +130,7 @@ jobs:
           (
             cd /tmp/typecheck-baseline/Webclient.app
             npm ci --ignore-scripts --no-audit --no-fund >/tmp/typecheck-baseline-install.log 2>&1
-            npx tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
+            npx --no-install tsc --noEmit -p tsconfig.json --pretty false >/tmp/baseline-typecheck.log 2>&1
           )
           set -e
           node scripts/typecheck-regression.mjs /tmp/baseline-typecheck.log /tmp/current-typecheck.log
@@ -137,7 +140,7 @@ jobs:
       - name: Full Vitest diagnostic visibility
         run: |
           set +e
-          npx vitest run --reporter=json --outputFile=/tmp/current-vitest.json
+          npx --no-install vitest run --reporter=json --outputFile=/tmp/current-vitest.json
           vitest_status=$?
           set -e
           test -s /tmp/current-vitest.json
@@ -146,7 +149,7 @@ jobs:
 
       - name: Strict Platform supervision and resilience Vitest boundary
         run: |
-          npx vitest run \
+          npx --no-install vitest run \
             src/platform/runtime/supervision/dependencyGraph.test.ts \
             src/platform/runtime/supervision/healthRegistry.test.ts \
             src/platform/runtime/supervision/lifecycleCoordinator.test.ts \
@@ -160,6 +163,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Baseline source: github.event.pull_request.base.sha
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/vitest-baseline
           git -C .. worktree add --detach /tmp/vitest-baseline "$BASE_SHA"
@@ -168,7 +172,7 @@ jobs:
             cd /tmp/vitest-baseline/Webclient.app
             npm ci --ignore-scripts --no-audit --no-fund >/tmp/vitest-baseline-install.log 2>&1
             set +e
-            npx vitest run --reporter=json --outputFile=/tmp/baseline-vitest.json
+            npx --no-install vitest run --reporter=json --outputFile=/tmp/baseline-vitest.json
             baseline_status=$?
             set -e
             echo "Baseline Vitest exit code: $baseline_status"

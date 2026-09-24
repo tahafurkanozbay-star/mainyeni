@@ -35,6 +35,7 @@ export interface LineIndex {
   readonly offsets: readonly number[];
   lineAt(index: number): number;
   columnAt(index: number): number;
+  offsetAt(line: number): number;
 }
 
 export interface JsonDocument<T = unknown> {
@@ -172,6 +173,10 @@ export function createLineIndex(text: string): LineIndex {
       const lineIndex = locate(index);
       const lineStart = offsets[lineIndex] ?? 0;
       return Math.max(1, index - lineStart + 1);
+    },
+    offsetAt(line: number): number {
+      const normalized = Math.max(1, Math.min(offsets.length, Math.trunc(line)));
+      return offsets[normalized - 1] ?? 0;
     },
   };
 }
