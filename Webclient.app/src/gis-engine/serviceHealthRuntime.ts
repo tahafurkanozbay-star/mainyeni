@@ -403,6 +403,10 @@ export const createServiceHealthRuntime = (
       if (state.circuit !== 'closed') closeCircuit(state, 'request-succeeded');
       return;
     }
+    if (sample.status === 503) {
+      openCircuit(state, 'service-unavailable');
+      return;
+    }
     const failureRatio = weightedFailureRatio(state, policy);
     const ratioSampleFloorReached = state.samples.length >= policy.consecutiveFailureLimit;
     if (
