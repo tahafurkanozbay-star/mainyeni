@@ -9,9 +9,15 @@ import {
 } from './normalization';
 import { canonicalizeAddressText } from './addressSemantics';
 
-export const ADDRESS_RESOLUTION_SESSION_VERSION = '2026-09-24.v2';
+export const ADDRESS_RESOLUTION_SESSION_VERSION = '2026-09-24.v3';
 
-export type AddressResolutionStatus = 'idle' | 'scheduled' | 'running' | 'success' | 'error' | 'aborted';
+export type AddressResolutionStatus =
+  | 'idle'
+  | 'scheduled'
+  | 'running'
+  | 'success'
+  | 'error'
+  | 'aborted';
 
 export interface AddressResolutionRequest {
   readonly query?: string | null;
@@ -122,9 +128,10 @@ interface CacheEntry<TResult> {
 
 interface ScheduledEntry<TResult> {
   readonly requestId: string;
-  readonly resolve: (value: AddressResolutionEnvelope<TResult>) => void;
   readonly reject: (reason: unknown) => void;
   readonly timer: ReturnType<typeof setTimeout>;
+  readonly cleanup: () => void;
+  readonly resultType?: TResult;
 }
 
 interface ActiveEntry<TResult> {
@@ -160,7 +167,10 @@ const safeNow = (clock: () => number): number => {
 
 const normalizeProviderIds = (values: readonly string[] | undefined): readonly string[] => Object.freeze(
   Array.from(new Set((values ?? [])
-    .map(value => normalizeText(value).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, ''))
+    .map(value => normalizeText(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, ''))
     .filter(Boolean)))
     .sort((left, right) => left.localeCompare(right, 'en')),
 );
@@ -186,8 +196,12 @@ export const normalizeAddressResolutionRequest = (
   const query = normalizeText(request.query);
   const canonicalQuery = canonicalizeAddressText(query);
   const coordinates = request.coordinates ? normalizeCoordinates(request.coordinates) : null;
-  if (!query && !coordinates) throw new TypeError('Address resolution requires a query or valid coordinates');
-  if (request.coordinates && !coordinates) throw new TypeError('Address resolution coordinates are invalid');
+  if (request.coordinates && !coordinates) {
+    throw new TypeError('Address resolution coordinates are invalid');
+  }
+  if (!query && !coordinates) {
+    throw new TypeError('Address resolution requires a query or valid coordinates');
+  }
   const normalized = {
     query,
     canonicalQuery,
@@ -197,7 +211,11 @@ export const normalizeAddressResolutionRequest = (
     neighborhood: canonicalizeAddressText(request.neighborhood),
     street: canonicalizeAddressText(request.street),
     providerIds: normalizeProviderIds(request.providerIds),
-    limit: normalizeInteger(request.limit, { min: 1, max: options.maxLimit, fallback: options.defaultLimit }),
+    limit: normalizeInteger(request.limit, {
+      min: 1,
+      max: options.maxLimit,
+      fallback: options.defaultLimit,
+    }),
   };
   const fingerprint = hashFingerprint(stableSerialize({
     version: ADDRESS_RESOLUTION_SESSION_VERSION,
@@ -229,6 +247,7 @@ const initialState = <TResult>(): AddressResolutionState<TResult> => Object.free
 const errorName = (error: unknown): string => error instanceof Error
   ? normalizeText(error.name || 'Error').slice(0, 80) || 'Error'
   : 'Error';
+
 const isAbortError = (error: unknown): boolean => error instanceof Error && error.name === 'AbortError';
 
 export class AddressResolutionSession<TResult> {
@@ -236,41 +255,69 @@ export class AddressResolutionSession<TResult> {
   private readonly options: NormalizedSessionOptions;
   private readonly cache = new Map<string, CacheEntry<TResult>>();
   private readonly history: AddressResolutionHistoryEntry[] = [];
-  private readonly stats: MutableStats = { executions: 0, cacheHits: 0, cacheMisses: 0, aborts: 0, failures: 0 };
+  private readonly stats: MutableStats = {
+    executions: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    aborts: 0,
+    failures: 0,
+  };
   private state: AddressResolutionState<TResult> = initialState<TResult>();
   private scheduled: ScheduledEntry<TResult> | null = null;
   private active: ActiveEntry<TResult> | null = null;
   private sequence = 0;
   private disposed = false;
 
-  constructor(executor: AddressResolutionExecutor<TResult>, options: AddressResolutionSessionOptions = {}) {
-    if (typeof executor !== 'function') throw new TypeError('Address resolution executor is required');
+  constructor(
+    executor: AddressResolutionExecutor<TResult>,
+    options: AddressResolutionSessionOptions = {},
+  ) {
+    if (typeof executor !== 'function') {
+      throw new TypeError('Address resolution executor is required');
+    }
     this.executor = executor;
     this.options = normalizeOptions(options);
   }
 
-  private now(): number { return safeNow(this.options.clock); }
-  private nextRequestId(): string { this.sequence += 1; return `address-resolution-${this.sequence}`; }
-  private assertActiveSession(): void { if (this.disposed) throw new Error('Address resolution session has been disposed'); }
-  private setState(next: AddressResolutionState<TResult>): void { this.state = Object.freeze(next); }
-
-  private pruneExpired(now: number): void {
-    [...this.cache.entries()].filter(([, entry]) => entry.expiresAt <= now).map(([key]) => this.cache.delete(key));
+  private now(): number {
+    return safeNow(this.options.clock);
   }
 
-  private cacheGet(fingerprint: string, now: number): TResult | null {
+  private nextRequestId(): string {
+    this.sequence += 1;
+    return `address-resolution-${this.sequence}`;
+  }
+
+  private assertActiveSession(): void {
+    if (this.disposed) throw new Error('Address resolution session has been disposed');
+  }
+
+  private setState(next: AddressResolutionState<TResult>): void {
+    this.state = Object.freeze(next);
+  }
+
+  private pruneExpired(now: number): void {
+    for (const [key, entry] of this.cache) {
+      if (entry.expiresAt <= now) this.cache.delete(key);
+    }
+  }
+
+  private cacheGet(fingerprint: string, now: number): CacheEntry<TResult> | null {
     this.pruneExpired(now);
-    const entry = this.cache.get(fingerprint);
+    const entry = this.cache.get(fingerprint) ?? null;
     if (!entry) return null;
     this.cache.delete(fingerprint);
     this.cache.set(fingerprint, entry);
-    return entry.result;
+    return entry;
   }
 
   private cacheSet(fingerprint: string, result: TResult, now: number): void {
     this.pruneExpired(now);
     this.cache.delete(fingerprint);
-    this.cache.set(fingerprint, Object.freeze({ expiresAt: now + this.options.cacheTtlMs, result }));
+    this.cache.set(fingerprint, Object.freeze({
+      expiresAt: now + this.options.cacheTtlMs,
+      result,
+    }));
     if (this.cache.size > this.options.cacheSize) {
       const oldest = this.cache.keys().next().value as string | undefined;
       if (oldest) this.cache.delete(oldest);
@@ -280,16 +327,19 @@ export class AddressResolutionSession<TResult> {
   private pushHistory(entry: AddressResolutionHistoryEntry): void {
     if (this.options.historySize <= 0) return;
     this.history.push(Object.freeze(entry));
-    if (this.history.length > this.options.historySize) this.history.splice(0, this.history.length - this.options.historySize);
+    if (this.history.length > this.options.historySize) {
+      this.history.splice(0, this.history.length - this.options.historySize);
+    }
   }
 
   private cancelScheduled(reason = 'Address resolution schedule superseded'): void {
     const scheduled = this.scheduled;
     if (!scheduled) return;
     clearTimeout(scheduled.timer);
+    scheduled.cleanup();
     this.scheduled = null;
-    scheduled.reject(createAbortError(reason));
     this.stats.aborts += 1;
+    scheduled.reject(createAbortError(reason));
   }
 
   private cancelActive(reason = 'Address resolution request superseded'): void {
@@ -299,61 +349,173 @@ export class AddressResolutionSession<TResult> {
     active.controller.abort(reason);
   }
 
-  private completeCached(requestId: string, request: NormalizedAddressResolutionRequest, result: TResult, startedAt: number): AddressResolutionEnvelope<TResult> {
+  private completeCached(
+    requestId: string,
+    request: NormalizedAddressResolutionRequest,
+    result: TResult,
+    startedAt: number,
+  ): AddressResolutionEnvelope<TResult> {
     const completedAt = this.now();
-    const envelope = Object.freeze({ requestId, fingerprint: request.fingerprint, result, cacheHit: true, elapsedMs: Math.max(0, completedAt - startedAt), stale: false });
-    this.setState({ version: ADDRESS_RESOLUTION_SESSION_VERSION, status: 'success', requestId, fingerprint: request.fingerprint, startedAt, completedAt, result, errorName: null, cacheHit: true, sequence: this.sequence });
-    this.pushHistory({ requestId, fingerprint: request.fingerprint, status: 'success', startedAt, completedAt, elapsedMs: envelope.elapsedMs, cacheHit: true, errorName: null });
+    const envelope: AddressResolutionEnvelope<TResult> = Object.freeze({
+      requestId,
+      fingerprint: request.fingerprint,
+      result,
+      cacheHit: true,
+      elapsedMs: Math.max(0, completedAt - startedAt),
+      stale: false,
+    });
+    this.setState({
+      version: ADDRESS_RESOLUTION_SESSION_VERSION,
+      status: 'success',
+      requestId,
+      fingerprint: request.fingerprint,
+      startedAt,
+      completedAt,
+      result,
+      errorName: null,
+      cacheHit: true,
+      sequence: this.sequence,
+    });
+    this.pushHistory({
+      requestId,
+      fingerprint: request.fingerprint,
+      status: 'success',
+      startedAt,
+      completedAt,
+      elapsedMs: envelope.elapsedMs,
+      cacheHit: true,
+      errorName: null,
+    });
     return envelope;
   }
 
-  private execute(request: NormalizedAddressResolutionRequest, requestId: string, externalSignal?: AbortSignal | null): Promise<AddressResolutionEnvelope<TResult>> {
+  private execute(
+    request: NormalizedAddressResolutionRequest,
+    requestId: string,
+    externalSignal?: AbortSignal | null,
+  ): Promise<AddressResolutionEnvelope<TResult>> {
     throwIfAborted(externalSignal);
     const startedAt = this.now();
     const cached = this.cacheGet(request.fingerprint, startedAt);
-    if (cached !== null) {
+    if (cached) {
       this.stats.cacheHits += 1;
-      return Promise.resolve(this.completeCached(requestId, request, cached, startedAt));
+      return Promise.resolve(this.completeCached(requestId, request, cached.result, startedAt));
     }
+
     this.stats.cacheMisses += 1;
     this.stats.executions += 1;
     const controller = new AbortController();
     const onExternalAbort = (): void => controller.abort('Address resolution caller aborted');
     externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
-    this.setState({ version: ADDRESS_RESOLUTION_SESSION_VERSION, status: 'running', requestId, fingerprint: request.fingerprint, startedAt, completedAt: null, result: null, errorName: null, cacheHit: false, sequence: this.sequence });
-    const context: AddressResolutionExecutionContext = Object.freeze({ signal: controller.signal, requestId, fingerprint: request.fingerprint });
-    const promise = Promise.resolve()
-      .then(() => this.executor(request, context))
-      .then(result => {
+
+    this.setState({
+      version: ADDRESS_RESOLUTION_SESSION_VERSION,
+      status: 'running',
+      requestId,
+      fingerprint: request.fingerprint,
+      startedAt,
+      completedAt: null,
+      result: null,
+      errorName: null,
+      cacheHit: false,
+      sequence: this.sequence,
+    });
+
+    const context: AddressResolutionExecutionContext = Object.freeze({
+      signal: controller.signal,
+      requestId,
+      fingerprint: request.fingerprint,
+    });
+
+    const promise = (async (): Promise<AddressResolutionEnvelope<TResult>> => {
+      try {
+        throwIfAborted(controller.signal);
+        const result = await this.executor(request, context);
         throwIfAborted(controller.signal);
         const completedAt = this.now();
         const stale = this.state.requestId !== requestId;
         if (!stale) {
           this.cacheSet(request.fingerprint, result, completedAt);
-          this.setState({ version: ADDRESS_RESOLUTION_SESSION_VERSION, status: 'success', requestId, fingerprint: request.fingerprint, startedAt, completedAt, result, errorName: null, cacheHit: false, sequence: this.sequence });
+          this.setState({
+            version: ADDRESS_RESOLUTION_SESSION_VERSION,
+            status: 'success',
+            requestId,
+            fingerprint: request.fingerprint,
+            startedAt,
+            completedAt,
+            result,
+            errorName: null,
+            cacheHit: false,
+            sequence: this.sequence,
+          });
         }
-        this.pushHistory({ requestId, fingerprint: request.fingerprint, status: 'success', startedAt, completedAt, elapsedMs: Math.max(0, completedAt - startedAt), cacheHit: false, errorName: null });
-        return Object.freeze({ requestId, fingerprint: request.fingerprint, result, cacheHit: false, elapsedMs: Math.max(0, completedAt - startedAt), stale });
-      })
-      .catch(error => {
+        this.pushHistory({
+          requestId,
+          fingerprint: request.fingerprint,
+          status: 'success',
+          startedAt,
+          completedAt,
+          elapsedMs: Math.max(0, completedAt - startedAt),
+          cacheHit: false,
+          errorName: null,
+        });
+        return Object.freeze({
+          requestId,
+          fingerprint: request.fingerprint,
+          result,
+          cacheHit: false,
+          elapsedMs: Math.max(0, completedAt - startedAt),
+          stale,
+        });
+      } catch (error) {
         const completedAt = this.now();
-        const aborted = isAbortError(error) || controller.signal.aborted || externalSignal?.aborted === true;
+        const aborted = isAbortError(error)
+          || controller.signal.aborted
+          || externalSignal?.aborted === true;
         if (aborted) this.stats.aborts += 1;
         else this.stats.failures += 1;
-        if (this.state.requestId === requestId) this.setState({ version: ADDRESS_RESOLUTION_SESSION_VERSION, status: aborted ? 'aborted' : 'error', requestId, fingerprint: request.fingerprint, startedAt, completedAt, result: null, errorName: aborted ? 'AbortError' : errorName(error), cacheHit: false, sequence: this.sequence });
-        this.pushHistory({ requestId, fingerprint: request.fingerprint, status: aborted ? 'aborted' : 'error', startedAt, completedAt, elapsedMs: Math.max(0, completedAt - startedAt), cacheHit: false, errorName: aborted ? 'AbortError' : errorName(error) });
-        if (aborted && !isAbortError(error)) throw createAbortError('Address resolution request aborted');
+        if (this.state.requestId === requestId) {
+          this.setState({
+            version: ADDRESS_RESOLUTION_SESSION_VERSION,
+            status: aborted ? 'aborted' : 'error',
+            requestId,
+            fingerprint: request.fingerprint,
+            startedAt,
+            completedAt,
+            result: null,
+            errorName: aborted ? 'AbortError' : errorName(error),
+            cacheHit: false,
+            sequence: this.sequence,
+          });
+        }
+        this.pushHistory({
+          requestId,
+          fingerprint: request.fingerprint,
+          status: aborted ? 'aborted' : 'error',
+          startedAt,
+          completedAt,
+          elapsedMs: Math.max(0, completedAt - startedAt),
+          cacheHit: false,
+          errorName: aborted ? 'AbortError' : errorName(error),
+        });
+        if (aborted && !isAbortError(error)) {
+          throw createAbortError('Address resolution request aborted');
+        }
         throw error;
-      })
-      .finally(() => {
+      } finally {
         externalSignal?.removeEventListener('abort', onExternalAbort);
         if (this.active?.requestId === requestId) this.active = null;
-      });
+      }
+    })();
+
     this.active = Object.freeze({ requestId, controller, promise });
     return promise;
   }
 
-  resolveNow(requestInput: AddressResolutionRequest, options: { readonly signal?: AbortSignal | null; readonly bypassCache?: boolean } = {}): Promise<AddressResolutionEnvelope<TResult>> {
+  resolveNow(
+    requestInput: AddressResolutionRequest,
+    options: { readonly signal?: AbortSignal | null; readonly bypassCache?: boolean } = {},
+  ): Promise<AddressResolutionEnvelope<TResult>> {
     this.assertActiveSession();
     this.cancelScheduled();
     const request = normalizeAddressResolutionRequest(requestInput, this.options);
@@ -363,7 +525,10 @@ export class AddressResolutionSession<TResult> {
     return this.execute(request, requestId, options.signal);
   }
 
-  schedule(requestInput: AddressResolutionRequest, options: { readonly signal?: AbortSignal | null; readonly bypassCache?: boolean } = {}): Promise<AddressResolutionEnvelope<TResult>> {
+  schedule(
+    requestInput: AddressResolutionRequest,
+    options: { readonly signal?: AbortSignal | null; readonly bypassCache?: boolean } = {},
+  ): Promise<AddressResolutionEnvelope<TResult>> {
     this.assertActiveSession();
     throwIfAborted(options.signal);
     this.cancelScheduled();
@@ -371,12 +536,29 @@ export class AddressResolutionSession<TResult> {
     const requestId = this.nextRequestId();
     this.cancelActive();
     if (options.bypassCache) this.cache.delete(request.fingerprint);
-    if (this.options.debounceMs === 0) return this.execute(request, requestId, options.signal);
-    this.setState({ version: ADDRESS_RESOLUTION_SESSION_VERSION, status: 'scheduled', requestId, fingerprint: request.fingerprint, startedAt: null, completedAt: null, result: null, errorName: null, cacheHit: false, sequence: this.sequence });
+    if (this.options.debounceMs === 0) {
+      return this.execute(request, requestId, options.signal);
+    }
+
+    this.setState({
+      version: ADDRESS_RESOLUTION_SESSION_VERSION,
+      status: 'scheduled',
+      requestId,
+      fingerprint: request.fingerprint,
+      startedAt: null,
+      completedAt: null,
+      result: null,
+      errorName: null,
+      cacheHit: false,
+      sequence: this.sequence,
+    });
+
     return new Promise<AddressResolutionEnvelope<TResult>>((resolve, reject) => {
+      const cleanup = (): void => options.signal?.removeEventListener('abort', onAbort);
       const onAbort = (): void => {
         if (this.scheduled?.requestId !== requestId) return;
         clearTimeout(this.scheduled.timer);
+        cleanup();
         this.scheduled = null;
         this.stats.aborts += 1;
         reject(createAbortError('Scheduled address resolution aborted'));
@@ -384,11 +566,11 @@ export class AddressResolutionSession<TResult> {
       options.signal?.addEventListener('abort', onAbort, { once: true });
       const timer = setTimeout(() => {
         if (this.scheduled?.requestId !== requestId) return;
+        cleanup();
         this.scheduled = null;
-        options.signal?.removeEventListener('abort', onAbort);
         this.execute(request, requestId, options.signal).then(resolve, reject);
       }, this.options.debounceMs);
-      this.scheduled = { requestId, resolve, reject, timer };
+      this.scheduled = { requestId, reject, timer, cleanup };
     });
   }
 
@@ -399,11 +581,30 @@ export class AddressResolutionSession<TResult> {
     return count;
   }
 
-  getState(): AddressResolutionState<TResult> { return this.state; }
-  getHistory(): readonly AddressResolutionHistoryEntry[] { return Object.freeze([...this.history]); }
-  snapshot(): AddressResolutionSessionSnapshot {
-    return Object.freeze({ status: this.state.status, sequence: this.sequence, cacheEntries: this.cache.size, historyEntries: this.history.length, hasScheduledRequest: this.scheduled !== null, hasActiveRequest: this.active !== null, executions: this.stats.executions, cacheHits: this.stats.cacheHits, cacheMisses: this.stats.cacheMisses, aborts: this.stats.aborts, failures: this.stats.failures });
+  getState(): AddressResolutionState<TResult> {
+    return this.state;
   }
+
+  getHistory(): readonly AddressResolutionHistoryEntry[] {
+    return Object.freeze([...this.history]);
+  }
+
+  snapshot(): AddressResolutionSessionSnapshot {
+    return Object.freeze({
+      status: this.state.status,
+      sequence: this.sequence,
+      cacheEntries: this.cache.size,
+      historyEntries: this.history.length,
+      hasScheduledRequest: this.scheduled !== null,
+      hasActiveRequest: this.active !== null,
+      executions: this.stats.executions,
+      cacheHits: this.stats.cacheHits,
+      cacheMisses: this.stats.cacheMisses,
+      aborts: this.stats.aborts,
+      failures: this.stats.failures,
+    });
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -413,4 +614,7 @@ export class AddressResolutionSession<TResult> {
   }
 }
 
-export const createAddressResolutionSession = <TResult>(executor: AddressResolutionExecutor<TResult>, options: AddressResolutionSessionOptions = {}): AddressResolutionSession<TResult> => new AddressResolutionSession(executor, options);
+export const createAddressResolutionSession = <TResult>(
+  executor: AddressResolutionExecutor<TResult>,
+  options: AddressResolutionSessionOptions = {},
+): AddressResolutionSession<TResult> => new AddressResolutionSession(executor, options);
