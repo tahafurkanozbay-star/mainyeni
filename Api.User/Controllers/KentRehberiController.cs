@@ -336,6 +336,8 @@ public sealed class KentRehberiController : ControllerBase
         exception is KentRehberiDataUnavailableException or
         KentRehberiOverloadedException or
         KentRehberiDataIntegrityException or
+        KentRehberiPlanAskiUnavailableException or
+        KentRehberiPlanAskiProtocolException or
         NpgsqlException or
         TimeoutException;
 }
