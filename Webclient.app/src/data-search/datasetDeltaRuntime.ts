@@ -149,6 +149,12 @@ const normalizeOptions = (
   options: DatasetDeltaRuntimeOptions = {},
 ): NormalizedRuntimeOptions => {
   const maxRecords = normalizeInteger(options.maxRecords, { min: 1, max: 1_000_000, fallback: 100_000 });
+  const normalization: RecordNormalizationOptions = {
+    maxRecords,
+    ...(options.schema === undefined ? {} : { schema: options.schema }),
+    ...(options.dedupe === undefined ? {} : { dedupe: options.dedupe }),
+    ...(options.keepInvalid === undefined ? {} : { keepInvalid: options.keepInvalid }),
+  };
   return Object.freeze({
     datasetKey: normalizeDatasetKey(options.datasetKey),
     maxRecords,
@@ -160,12 +166,7 @@ const normalizeOptions = (
     historySize: normalizeInteger(options.historySize, { min: 0, max: 10_000, fallback: 128 }),
     schemaEnforcement: normalizeEnforcement(options.schemaEnforcement),
     schemaProfile: options.schemaProfile ?? {},
-    normalization: Object.freeze({
-      schema: options.schema,
-      dedupe: options.dedupe,
-      keepInvalid: options.keepInvalid,
-      maxRecords,
-    }),
+    normalization: Object.freeze(normalization),
     clock: typeof options.clock === 'function' ? options.clock : () => Date.now(),
   });
 };
@@ -536,6 +537,10 @@ export const createDatasetSchemaBaseline = (
   schema?: RecordAliasSchema,
   options: SchemaProfileOptions = {},
 ): DatasetSchemaProfile => {
-  const normalized = normalizeRecordCollection(records, { schema, maxRecords: records.length || 1 });
+  const normalizationOptions: RecordNormalizationOptions = {
+    maxRecords: records.length || 1,
+    ...(schema === undefined ? {} : { schema }),
+  };
+  const normalized = normalizeRecordCollection(records, normalizationOptions);
   return profileDatasetSchema(schemaInput(normalized.records), options);
 };
