@@ -6,7 +6,8 @@ export interface AsyncSurfaceSnapshot {
   readonly busy: boolean;
   readonly message: string | undefined;
   readonly errorMessage: string | undefined;
-  readonly retryable: boolean;
+  /** Presentation fact only: whether the UI may offer an explicit user-initiated recovery action. */
+  readonly recoverable: boolean;
   readonly resultCount: number | undefined;
   readonly ariaLive: 'off' | 'polite' | 'assertive';
   readonly reducedMotion: boolean;
@@ -36,7 +37,7 @@ export class AsyncSurfaceState {
   #phase: AsyncSurfacePhase = 'idle';
   #message: string | undefined;
   #errorMessage: string | undefined;
-  #retryable = false;
+  #recoverable = false;
   #resultCount: number | undefined;
   #revision = 0;
   #snapshot: AsyncSurfaceSnapshot;
@@ -59,34 +60,34 @@ export class AsyncSurfaceState {
 
   reset(): void {
     if (this.#phase === 'idle') return;
-    this.#phase = 'idle'; this.#message = undefined; this.#errorMessage = undefined; this.#retryable = false; this.#resultCount = undefined; this.#commit();
+    this.#phase = 'idle'; this.#message = undefined; this.#errorMessage = undefined; this.#recoverable = false; this.#resultCount = undefined; this.#commit();
   }
 
   loading(message = 'Yükleniyor…'): void {
     const normalized = message.trim() || 'Yükleniyor…';
-    this.#phase = 'loading'; this.#message = normalized; this.#errorMessage = undefined; this.#retryable = false; this.#resultCount = undefined; this.#commit();
+    this.#phase = 'loading'; this.#message = normalized; this.#errorMessage = undefined; this.#recoverable = false; this.#resultCount = undefined; this.#commit();
   }
 
   ready(resultCount?: number, message?: string): void {
     if (resultCount !== undefined && (!Number.isInteger(resultCount) || resultCount < 0)) throw new RangeError('resultCount must be a non-negative integer.');
     if (resultCount === 0) { this.empty(message); return; }
-    this.#phase = 'ready'; this.#message = message?.trim() || undefined; this.#errorMessage = undefined; this.#retryable = false; this.#resultCount = resultCount; this.#commit();
+    this.#phase = 'ready'; this.#message = message?.trim() || undefined; this.#errorMessage = undefined; this.#recoverable = false; this.#resultCount = resultCount; this.#commit();
     if (message?.trim()) this.#announce(message.trim(), 'polite');
   }
 
   empty(message = 'Gösterilecek sonuç bulunamadı.'): void {
     const normalized = message.trim() || 'Gösterilecek sonuç bulunamadı.';
-    this.#phase = 'empty'; this.#message = normalized; this.#errorMessage = undefined; this.#retryable = false; this.#resultCount = 0; this.#commit(); this.#announce(normalized, 'polite');
+    this.#phase = 'empty'; this.#message = normalized; this.#errorMessage = undefined; this.#recoverable = false; this.#resultCount = 0; this.#commit(); this.#announce(normalized, 'polite');
   }
 
-  error(message: string, retryable = true): void {
+  error(message: string, recoverable = true): void {
     const normalized = message.trim();
     if (!normalized) throw new Error('Error message must be non-empty.');
-    this.#phase = 'error'; this.#message = undefined; this.#errorMessage = normalized; this.#retryable = retryable; this.#resultCount = undefined; this.#commit(); this.#announce(normalized, 'assertive');
+    this.#phase = 'error'; this.#message = undefined; this.#errorMessage = normalized; this.#recoverable = recoverable; this.#resultCount = undefined; this.#commit(); this.#announce(normalized, 'assertive');
   }
 
   #buildSnapshot(): AsyncSurfaceSnapshot {
-    return Object.freeze({ revision: this.#revision, phase: this.#phase, busy: this.#phase === 'loading', message: this.#message, errorMessage: this.#errorMessage, retryable: this.#retryable, resultCount: this.#resultCount, ariaLive: this.#phase === 'error' ? 'assertive' : this.#phase === 'empty' || this.#phase === 'ready' ? 'polite' : 'off', reducedMotion: this.#reducedMotion, targetSize: this.#targetSize });
+    return Object.freeze({ revision: this.#revision, phase: this.#phase, busy: this.#phase === 'loading', message: this.#message, errorMessage: this.#errorMessage, recoverable: this.#recoverable, resultCount: this.#resultCount, ariaLive: this.#phase === 'error' ? 'assertive' : this.#phase === 'empty' || this.#phase === 'ready' ? 'polite' : 'off', reducedMotion: this.#reducedMotion, targetSize: this.#targetSize });
   }
 
   #commit(): void { this.#revision += 1; this.#snapshot = this.#buildSnapshot(); for (const listener of this.#listeners) this.#notifyOne(listener); }
