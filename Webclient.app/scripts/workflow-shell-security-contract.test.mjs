@@ -59,15 +59,32 @@ function multilineBody(source, startIndex, runIndent) {
     .replace(/\n+$/, '');
 }
 
+function isStepRunKey(source, index, runIndent, compact) {
+  if (compact) return true;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const candidate = source[cursor];
+    if (!candidate.trim()) continue;
+    const candidateIndent = indentation(candidate);
+    if (candidateIndent < runIndent) {
+      return /^\s*-\s+(?:name|uses|id|if|env|continue-on-error|timeout-minutes|shell|working-directory):/.test(candidate);
+    }
+    if (candidateIndent === runIndent && /^\s*-\s+/.test(candidate)) return true;
+    if (candidateIndent < runIndent) return false;
+  }
+  return false;
+}
+
 function shellBlocks(text) {
   const source = String(text ?? '').split(/\r?\n/);
   const blocks = [];
   for (let index = 0; index < source.length; index += 1) {
     const line = source[index];
-    const match = line.match(/^(\s*)(?:-\s*)?run:\s*(.*)$/);
+    const match = line.match(/^(\s*)(-\s*)?run:\s*(.*)$/);
     if (!match) continue;
     const runIndent = indentation(line);
-    const rawValue = match[2].trim();
+    const compact = Boolean(match[2]);
+    if (!isStepRunKey(source, index, runIndent, compact)) continue;
+    const rawValue = match[3].trim();
     const lineNumber = index + 1;
     if (['|', '>', '|-', '>-'].includes(rawValue)) {
       blocks.push(Object.freeze({
@@ -115,6 +132,18 @@ test('parses compact and named run steps', () => {
     { line: 2, command: 'npm ci' },
     { line: 4, command: 'npm test' },
   ]);
+});
+
+test('ignores defaults.run configuration mappings', () => {
+  const blocks = shellBlocks('jobs:\n  quality:\n    defaults:\n      run:\n        working-directory: Webclient.app\n    steps:\n      - run: npm ci\n');
+  assert.deepEqual(blocks.map(({ line, command }) => ({ line, command })), [
+    { line: 7, command: 'npm ci' },
+  ]);
+});
+
+test('keeps an empty named step run fail-closed', () => {
+  const [block] = shellBlocks('steps:\n  - name: broken\n    run:\n');
+  assert.deepEqual(auditShellBlock(block), ['empty-run']);
 });
 
 test('preserves compact multiline shell as one normalized auditable block', () => {
