@@ -191,7 +191,7 @@ export const createAdaptivePerformanceRuntime = (
   configuration: AdaptivePerformanceConfiguration = {},
 ): AdaptivePerformanceRuntime => {
   const clock = typeof configuration.now === 'function' ? configuration.now : runtimeNow;
-  const settings: GisPerformanceSettings = { ...DEFAULTS, ...(configuration.settings || {}) };
+  const settings: GisPerformanceSettings = { ...DEFAULTS, ...configuration.settings };
   const capabilities = configuration.capabilities || detectGisDeviceCapabilities(configuration.environment || defaultEnvironment());
   let profile: GisPerformanceProfile = configuration.profile || capabilities.profile;
   let budget = performanceBudgetForProfile(profile, capabilities);
