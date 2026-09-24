@@ -33,13 +33,13 @@ function multilineRun(name: string, command: string): string {
 
 function cleanWebclient(): FixtureFileInput {
   const exactType = [
-    'BASE_SHA=${{ github.event.pull_request.base.sha }}',
+    '# Baseline source: github.event.pull_request.base.sha',
     'git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"',
     "trap 'git -C .. worktree remove --force /tmp/typecheck-baseline' EXIT",
     'npx --no-install tsc --noEmit -p tsconfig.json',
   ].join('\n');
   const exactVitest = [
-    'BASE_SHA=${{ github.event.pull_request.base.sha }}',
+    '# Baseline source: github.event.pull_request.base.sha',
     'git -C .. worktree add --detach /tmp/vitest-baseline "$BASE_SHA"',
     "trap 'git -C .. worktree remove --force /tmp/vitest-baseline' EXIT",
     'npx --no-install vitest run',
@@ -67,7 +67,7 @@ function cleanWebclient(): FixtureFileInput {
 
 function cleanReleaseQa(): FixtureFileInput {
   const exactBase = [
-    'BASE_SHA=${{ github.event.pull_request.base.sha }}',
+    '# Baseline source: github.event.pull_request.base.sha',
     'git worktree add --detach /tmp/base "$BASE_SHA"',
     "trap 'git worktree remove --force /tmp/base' EXIT",
     'node --test quality/release/*.test.mts',
