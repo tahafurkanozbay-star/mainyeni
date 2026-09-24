@@ -1,0 +1,76 @@
+.experience-help__stack-content {
+  display: grid;
+  min-width: 0;
+}
+
+.experience-help__intro {
+  margin: 0;
+  padding: 18px 24px 0;
+  color: var(--exp-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.experience-overlay-surface--modal .experience-help__stack-content {
+  width: min(620px, 100%);
+}
+
+.experience-overlay-surface--drawer .experience-notifications--center {
+  min-width: 0;
+  width: 100%;
+}
+
+.experience-utility__button {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .experience-utility__button,
+  .experience-utility__collapse,
+  .experience-shortcut--action {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 576px) {
+  .experience-utility__actions {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .experience-utility__button {
+    min-width: 0;
+    min-height: 48px;
+    padding-inline: 2px;
+  }
+
+  .experience-help__intro {
+    padding: 14px 18px 0;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 390px) {
+  .experience-utility__actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 4px;
+  }
+}
+
+@media (forced-colors: active) {
+  .experience-help__stack-content,
+  .experience-utility__button {
+    forced-color-adjust: auto;
+  }
+
+  .experience-utility__button {
+    border-color: ButtonText;
+  }
+}
+
+@media print {
+  .experience-notifications--toasts,
+  .experience-overlay-stack {
+    display: none !important;
+  }
+}
