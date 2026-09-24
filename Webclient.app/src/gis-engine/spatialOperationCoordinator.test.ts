@@ -154,12 +154,12 @@ describe('SpatialOperationCoordinator', () => {
     expect(executor).toHaveBeenCalledTimes(2);
   });
 
-  it('validates budgets and keys fail closed', () => {
+  it('validates budgets and keys fail closed', async () => {
     expect(() => new SpatialOperationCoordinator({ maxConcurrent: 0 })).toThrow('maxConcurrent');
     expect(() => new SpatialOperationCoordinator({ maxQueued: Number.NaN })).toThrow('maxQueued');
     expect(() => new SpatialOperationCoordinator({ cacheTtlMs: -1 })).toThrow('cacheTtlMs');
     const coordinator = new SpatialOperationCoordinator<number, number>();
-    expect(() => coordinator.execute({ key: '   ', kind: 'buffer', input: 1 }, async (value) => value)).toThrow('must not be empty');
+    await expect(coordinator.execute({ key: '   ', kind: 'buffer', input: 1 }, async (value) => value)).rejects.toThrow('must not be empty');
     expect(() => coordinator.invalidate(undefined, 'key')).toThrow('kind is required');
   });
 
