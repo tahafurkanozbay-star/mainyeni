@@ -1,0 +1,94 @@
+name: Release Evidence Contract
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/package.json'
+      - 'Webclient.app/package-lock.json'
+      - 'Webclient.app/scripts/release-evidence-audit.mjs'
+      - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - 'Webclient.app/scripts/verify-chain-security.test.mjs'
+      - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-shell-security-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-npx-security-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-permissions-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-reliability-contract.test.mjs'
+      - '.github/workflows/webclient-quality.yml'
+      - '.github/workflows/release-evidence-contract.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Webclient.app/package.json'
+      - 'Webclient.app/package-lock.json'
+      - 'Webclient.app/scripts/release-evidence-audit.mjs'
+      - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - 'Webclient.app/scripts/verify-chain-security.test.mjs'
+      - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-shell-security-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-npx-security-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-permissions-contract.test.mjs'
+      - 'Webclient.app/scripts/workflow-reliability-contract.test.mjs'
+      - '.github/workflows/webclient-quality.yml'
+      - '.github/workflows/release-evidence-contract.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Release evidence self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Webclient.app
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      - name: Verify runtime major
+        run: node -e "if (Number(process.versions.node.split('.')[0]) !== 24) process.exit(1)"
+
+      - name: Audit adversarial fixture suite
+        run: node --test scripts/release-evidence-audit.test.mjs
+
+      - name: Verify-chain bypass security contract
+        run: node --test scripts/verify-chain-security.test.mjs
+
+      - name: Workflow supply-chain security contract
+        run: node --test scripts/workflow-security-contract.test.mjs
+
+      - name: Workflow action allowlist contract
+        run: node --test scripts/workflow-action-allowlist-contract.test.mjs
+
+      - name: Workflow shell security contract
+        run: node --test scripts/workflow-shell-security-contract.test.mjs
+
+      - name: Workflow npx local-only security contract
+        run: node --test scripts/workflow-npx-security-contract.test.mjs
+
+      - name: Workflow permission and trigger contract
+        run: node --test scripts/workflow-permissions-contract.test.mjs
+
+      - name: Workflow bounded-execution reliability contract
+        run: node --test scripts/workflow-reliability-contract.test.mjs
+
+      - name: Audit embedded smoke fixtures
+        run: node scripts/release-evidence-audit.mjs --self-test
+
+      - name: Enforce candidate release evidence
+        run: node scripts/release-evidence-audit.mjs --strict
