@@ -17,7 +17,6 @@
   border: 1px solid transparent;
   border-radius: 0.625rem;
   cursor: default;
-  outline: none;
 }
 
 .experience-disclosure-tree__item:hover:not([aria-disabled='true']) {
