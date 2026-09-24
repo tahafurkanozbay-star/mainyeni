@@ -41,7 +41,7 @@
     "quality:vite": "node scripts/vite-migration-audit.mjs --self-test && node scripts/vite-migration-audit.mjs",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs scripts/spatial-selection-index-audit.test.mjs",
+    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs scripts/spatial-selection-index-audit.test.mjs scripts/release-evidence-audit.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:platform-tests && npm run typecheck:gis && npm run typecheck:gis-modern-core && npm run typecheck:experience && npm run typecheck:modern-shell && npm run typecheck:data-search && npm run typecheck:performance && npm run typecheck:shared-shell && npm run typecheck:business",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",
@@ -65,35 +65,7 @@
     "quality:kent-rehberi-all-layers": "node scripts/kent-rehberi-all-layers-audit.mjs --strict",
     "quality:spatial-selection-index": "node scripts/spatial-selection-index-audit.mjs --strict"
   },
-  "engines": {
-    "node": ">=24.0.0",
-    "npm": ">=11.0.0"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all",
-      "supports es6-module"
-    ],
-    "development": [
-      "last 2 chrome version",
-      "last 2 firefox version",
-      "last 2 safari version"
-    ]
-  },
-  "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/google.maps": "^3.58.1",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.0",
-    "jsdom": "^30.0.1",
-    "oxlint": "^1.36.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.0",
-    "vitest": "^5.0.1"
-  }
+  "engines": {"node": ">=24.0.0", "npm": ">=11.0.0"},
+  "browserslist": {"production": [">0.2%", "not dead", "not op_mini all", "supports es6-module"], "development": ["last 2 chrome version", "last 2 firefox version", "last 2 safari version"]},
+  "devDependencies": {"@testing-library/jest-dom":"^6.9.1","@testing-library/react":"^16.3.3","@testing-library/user-event":"^14.6.1","@types/google.maps":"^3.58.1","@types/react":"^19.2.7","@types/react-dom":"^19.2.3","@vitejs/plugin-react":"^6.0.0","jsdom":"^30.0.1","oxlint":"^1.36.0","typescript":"^7.0.2","vite":"^8.3.0","vitest":"^5.0.1"}
 }
