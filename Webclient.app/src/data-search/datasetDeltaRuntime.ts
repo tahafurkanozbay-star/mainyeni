@@ -445,7 +445,7 @@ export class DatasetDeltaRuntime {
     const changed = afterFingerprint !== this.#fingerprint;
     const accepted = rejectionReasons.length === 0;
     const nextRevision = changed ? this.#revision + 1 : this.#revision;
-    const metadata = Object.freeze({ ...(mutation.metadata ?? {}) });
+    const metadata = Object.freeze({ ...mutation.metadata });
     const preview: DatasetDeltaPreview = Object.freeze({
       version: DATASET_DELTA_VERSION,
       datasetKey: this.#options.datasetKey,
