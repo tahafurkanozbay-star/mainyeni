@@ -50,21 +50,32 @@ jobs:
 
       - name: Materialize exact PR base tree
         if: github.event_name == 'pull_request'
-        run: git worktree add --detach /tmp/release-baseline "${{ github.event.pull_request.base.sha }}"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Baseline source: github.event.pull_request.base.sha
+          git worktree add --detach /tmp/release-baseline "$BASE_SHA"
 
       - name: Enforce exact-base PR regression gate
         if: github.event_name == 'pull_request'
-        run: >-
-          node quality/release/pr-gate.mts
-          --root .
-          --baseline-root /tmp/release-baseline
-          --baseline-commit "${{ github.event.pull_request.base.sha }}"
-          --current-commit "${{ github.sha }}"
-          --output qa-artifacts/release
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          # Baseline source: github.event.pull_request.base.sha
+          node quality/release/pr-gate.mts \
+            --root . \
+            --baseline-root /tmp/release-baseline \
+            --baseline-commit "$BASE_SHA" \
+            --current-commit "$CURRENT_SHA" \
+            --output qa-artifacts/release
 
       - name: Cleanup exact PR base tree
         if: always() && github.event_name == 'pull_request'
-        run: git worktree remove --force /tmp/release-baseline >/dev/null 2>&1 || true
+        run: |
+          if [ -d /tmp/release-baseline ]; then
+            git worktree remove --force /tmp/release-baseline
+          fi
 
       - name: Upload typed release QA artifacts
         if: always()
@@ -158,6 +169,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # Baseline source: github.event.pull_request.base.sha
           git -C .. fetch --no-tags origin "$BASE_SHA"
           rm -rf /tmp/typecheck-baseline
           git -C .. worktree add --detach /tmp/typecheck-baseline "$BASE_SHA"
