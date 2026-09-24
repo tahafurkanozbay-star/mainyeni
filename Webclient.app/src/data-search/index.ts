@@ -196,3 +196,11 @@ export * from './searchWorkloadGovernor';
 export * from './federatedSearchRuntime';
 export * from './datasetDeltaRuntime';
 export * from './searchReplicaReconciler';
+
+// Production v4 address authority. These layers remain provider-neutral and
+// endpoint-free: hierarchy, confidence, provider consensus and race-safe
+// resolution are composed over verified local records and injected adapters.
+export * from './addressHierarchyRuntime';
+export * from './addressConfidenceRuntime';
+export * from './geocodingConsensusRuntime';
+export * from './addressResolutionSession';
