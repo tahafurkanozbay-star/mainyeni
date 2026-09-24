@@ -17,7 +17,7 @@ import {
   tokenizeSearchText,
 } from './normalization';
 
-export const ADDRESS_QUERY_VERSION = '3.0.0';
+export const ADDRESS_QUERY_VERSION = '3.1.0';
 
 export const ADDRESS_LEVELS = Object.freeze({
   District: 'district',
@@ -131,8 +131,17 @@ export const canonicalizeAddressToken = (value: unknown): string => {
 export const canonicalizeAddressTokens = (value: unknown): string[] =>
   unique(tokenizeAddressSemanticText(value).map(canonicalizeAddressToken));
 
+/**
+ * Canonical text is an identity representation, so token order and multiplicity
+ * are preserved. Search token sets intentionally deduplicate separately via
+ * canonicalizeAddressTokens(). This prevents paths such as `Sokak 0-1-0` and
+ * `Sokak 0-1-1` from collapsing to the same canonical address identity.
+ */
 export const canonicalizeAddressText = (value: unknown): string =>
-  canonicalizeAddressTokens(value).join(' ');
+  tokenizeAddressSemanticText(value)
+    .map(canonicalizeAddressToken)
+    .filter(Boolean)
+    .join(' ');
 
 export const classifyAddressToken = (value: unknown): AddressTokenClass => {
   const token = canonicalizeAddressToken(value);
@@ -226,7 +235,7 @@ const createAddressQuerySignature = (
   options: AddressQueryOptions,
 ): string => JSON.stringify({
   v: ADDRESS_QUERY_VERSION,
-  q: analysis.canonicalTokens,
+  q: analysis.canonicalText,
   district: canonicalizeAddressText(options.district),
   neighborhood: canonicalizeAddressText(options.neighborhood),
   street: canonicalizeAddressText(options.street),
@@ -262,7 +271,7 @@ export const analyzeAddressQuery = (
     version: ADDRESS_QUERY_VERSION,
     raw: normalizeText(query),
     normalizedText,
-    canonicalText: canonicalTokens.join(' '),
+    canonicalText: descriptors.map(item => item.canonical).filter(Boolean).join(' '),
     rawTokens: Object.freeze(rawTokens),
     descriptors: Object.freeze(descriptors),
     canonicalTokens: Object.freeze(canonicalTokens),
