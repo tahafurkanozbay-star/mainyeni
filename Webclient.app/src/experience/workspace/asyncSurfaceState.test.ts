@@ -17,10 +17,10 @@ describe('AsyncSurfaceState', () => {
     expect(model.snapshot).toMatchObject({ phase: 'empty', resultCount: 0 });
   });
 
-  it('models retryable assertive errors', () => {
+  it('models recoverable assertive errors without scheduling automatic work', () => {
     const model = new AsyncSurfaceState();
     model.error('Bağlantı kurulamadı.');
-    expect(model.snapshot).toMatchObject({ phase: 'error', retryable: true, errorMessage: 'Bağlantı kurulamadı.', ariaLive: 'assertive' });
+    expect(model.snapshot).toMatchObject({ phase: 'error', recoverable: true, errorMessage: 'Bağlantı kurulamadı.', ariaLive: 'assertive' });
   });
 
   it('announces empty, ready and error outcomes with correct priority', () => {
@@ -39,7 +39,7 @@ describe('AsyncSurfaceState', () => {
   it('resets transient state', () => {
     const model = new AsyncSurfaceState();
     model.error('Hata'); model.reset();
-    expect(model.snapshot).toMatchObject({ phase: 'idle', errorMessage: undefined, retryable: false, resultCount: undefined });
+    expect(model.snapshot).toMatchObject({ phase: 'idle', errorMessage: undefined, recoverable: false, resultCount: undefined });
   });
 
   it('rejects invalid counts and blank errors', () => {
