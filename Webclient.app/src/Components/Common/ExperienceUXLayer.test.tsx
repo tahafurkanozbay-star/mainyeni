@@ -53,6 +53,7 @@ describe('ExperienceUXLayer', () => {
     document.documentElement.removeAttribute('data-experience-theme');
     document.documentElement.removeAttribute('data-experience-overlay-count');
     document.documentElement.removeAttribute('data-experience-modal-open');
+    document.documentElement.style.overscrollBehavior = '';
     document.body.removeAttribute('style');
   });
 
@@ -82,6 +83,10 @@ describe('ExperienceUXLayer', () => {
 
     expect(screen.getByRole('button', {
       name: 'Lejandı aç',
+    })).toBeInTheDocument();
+
+    expect(screen.getByRole('button', {
+      name: 'Bildirim merkezini aç',
     })).toBeInTheDocument();
   });
 
@@ -153,7 +158,7 @@ describe('ExperienceUXLayer', () => {
     expect(screen.getByText('Çalışma alanı')).toBeInTheDocument();
   });
 
-  test('opens help from the utility button and focuses the close control', () => {
+  test('opens help through the shared overlay stack and focuses the close control', () => {
     const manager = createWindowManager();
     render(<ExperienceUXLayer windowManager={manager} />);
 
@@ -165,7 +170,7 @@ describe('ExperienceUXLayer', () => {
       name: 'Hızlı kullanım',
     });
     const close = screen.getByRole('button', {
-      name: 'Yardım penceresini kapat',
+      name: 'Hızlı kullanım: Kapat',
     });
 
     expect(dialog).toHaveAttribute('aria-modal', 'true');
@@ -174,7 +179,34 @@ describe('ExperienceUXLayer', () => {
       'data-experience-modal-open',
       'true',
     );
+    expect(document.documentElement).toHaveAttribute(
+      'data-experience-overlay-count',
+      '1',
+    );
     expect(document.body.style.overflow).toBe('hidden');
+  });
+
+  test('opens the notification center as an accessible drawer', () => {
+    const manager = createWindowManager();
+    render(<ExperienceUXLayer windowManager={manager} />);
+
+    const opener = screen.getByRole('button', {
+      name: 'Bildirim merkezini aç',
+    });
+    opener.focus();
+    fireEvent.click(opener);
+
+    expect(screen.getByRole('dialog', {
+      name: 'Bildirim merkezi',
+    })).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByText('Yeni bildirim yok')).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', {
+      name: 'Bildirim merkezi',
+    })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(opener);
   });
 
   test('opens help with the question-mark shortcut outside editable fields', () => {
@@ -274,11 +306,9 @@ describe('ExperienceUXLayer', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
-  test('clicking the backdrop closes help without treating dialog clicks as backdrop clicks', () => {
+  test('clicking the shared backdrop closes help without treating dialog clicks as backdrop clicks', () => {
     const manager = createWindowManager();
-    const { container } = render(
-      <ExperienceUXLayer windowManager={manager} />,
-    );
+    render(<ExperienceUXLayer windowManager={manager} />);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Kısayolları ve yardım bilgisini aç',
@@ -290,9 +320,11 @@ describe('ExperienceUXLayer', () => {
     fireEvent.mouseDown(dialog);
     expect(dialog).toBeInTheDocument();
 
-    const backdrop = container.querySelector('.experience-help-backdrop');
+    const backdrop = document.querySelector(
+      '[data-experience-dialog-id="experience-help"]',
+    );
     if (!(backdrop instanceof HTMLElement)) {
-      throw new Error('Help backdrop was not rendered');
+      throw new Error('Shared help backdrop was not rendered');
     }
     fireEvent.mouseDown(backdrop);
 
@@ -318,7 +350,7 @@ describe('ExperienceUXLayer', () => {
     expect(mocks.layerOnShow).toHaveBeenCalledWith('layers');
   });
 
-  test('theme control exposes the next action and delegates to the theme provider', () => {
+  test('theme control exposes the next action, delegates to the provider, and emits bounded feedback', () => {
     const manager = createWindowManager();
     render(<ExperienceUXLayer windowManager={manager} />);
 
@@ -335,6 +367,7 @@ describe('ExperienceUXLayer', () => {
     expect(window.localStorage.getItem(
       'kent-rehberi-experience-theme',
     )).toBe('light');
+    expect(screen.getByText('Koyu tema seçildi')).toBeInTheDocument();
   });
 
   test('renders the dark-theme action label when dark theme is active', () => {
@@ -369,7 +402,7 @@ describe('ExperienceUXLayer', () => {
     setItem.mockRestore();
   });
 
-  test('releases global modal and shortcut lifecycle on unmount', () => {
+  test('releases shared modal and shortcut lifecycle on unmount', () => {
     const manager = createWindowManager();
     const listener = vi.fn();
     window.addEventListener('kentrehberi:command', listener);
@@ -388,6 +421,9 @@ describe('ExperienceUXLayer', () => {
     expect(document.body.style.overflow).toBe('');
     expect(document.documentElement).not.toHaveAttribute(
       'data-experience-modal-open',
+    );
+    expect(document.documentElement).not.toHaveAttribute(
+      'data-experience-overlay-count',
     );
 
     fireEvent.keyDown(document.body, {
