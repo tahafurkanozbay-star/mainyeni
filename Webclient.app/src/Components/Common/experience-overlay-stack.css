@@ -52,7 +52,6 @@
   background: var(--experience-surface, #ffffff);
   color: var(--experience-fg, #172033);
   box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 24%);
-  outline: none;
   transform-origin: center;
   transition:
     opacity 180ms ease,
