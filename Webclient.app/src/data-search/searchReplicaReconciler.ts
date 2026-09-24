@@ -205,7 +205,8 @@ const createCoordinateConflict = (
       const a = geocoded[left]?.record.coordinates;
       const b = geocoded[right]?.record.coordinates;
       if (!a || !b) continue;
-      maxDistance = Math.max(maxDistance, haversineDistanceMeters(a, b));
+      const distance = haversineDistanceMeters(a, b);
+      if (distance !== null) maxDistance = Math.max(maxDistance, distance);
     }
   }
   if (maxDistance <= toleranceMeters) return null;
