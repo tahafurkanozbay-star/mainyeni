@@ -104,13 +104,13 @@ const OPERATOR_LABELS: Readonly<Record<FilterOperator, string>> = Object.freeze(
   'is-not-empty': 'boş değil',
 });
 
-const DEFAULT_OPERATORS: Readonly<Record<FilterFieldType, readonly FilterOperator[]>> = Object.freeze({
-  text: Object.freeze(['contains', 'equals', 'not-equals', 'starts-with', 'is-empty', 'is-not-empty']),
-  number: Object.freeze(['equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty']),
-  select: Object.freeze(['equals', 'not-equals', 'in', 'is-empty', 'is-not-empty']),
-  boolean: Object.freeze(['equals', 'not-equals']),
-  date: Object.freeze(['equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty']),
-});
+const DEFAULT_OPERATORS = {
+  text: ['contains', 'equals', 'not-equals', 'starts-with', 'is-empty', 'is-not-empty'],
+  number: ['equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty'],
+  select: ['equals', 'not-equals', 'in', 'is-empty', 'is-not-empty'],
+  boolean: ['equals', 'not-equals'],
+  date: ['equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty'],
+} as const satisfies Readonly<Record<FilterFieldType, readonly FilterOperator[]>>;
 
 const cleanId = (value: string, kind: string): string => {
   const id = value.trim();
@@ -131,7 +131,7 @@ const normalizeFields = (fields: readonly FilterFieldDefinition[]): Map<string, 
     if (!label) throw new Error(`Filter field label is required: ${id}`);
     const operators = field.operators ?? DEFAULT_OPERATORS[field.type];
     if (operators.length === 0) throw new Error(`Filter field must expose at least one operator: ${id}`);
-    const supported = new Set(DEFAULT_OPERATORS[field.type]);
+    const supported = new Set<FilterOperator>(DEFAULT_OPERATORS[field.type]);
     operators.forEach((operator) => {
       if (!supported.has(operator)) throw new Error(`Operator ${operator} is not valid for ${field.type} field ${id}.`);
     });
