@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DialogStackModel } from './dialogStackModel';
 import { createDialogFocusRuntime } from './dialogFocusRuntime';
+import { acquireOverlayLease } from './overlayLifecycleRuntime';
 
 const mounted: HTMLElement[] = [];
 
@@ -29,6 +30,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   document.body.style.overflow = '';
   document.body.style.overscrollBehavior = '';
+  document.documentElement.style.overscrollBehavior = '';
   document.documentElement.removeAttribute('data-experience-modal-open');
   document.documentElement.removeAttribute('data-experience-overlay-count');
 });
@@ -55,50 +57,61 @@ describe('dialogFocusRuntime', () => {
     runtime.dispose();
   });
 
-  it('locks document scrolling while a modal is active and restores the page on close', () => {
+  it('locks document scrolling through the canonical overlay lifecycle and restores the page on close', () => {
     const overlay = mount();
     addSurface(overlay, 'settings');
     document.body.style.overflow = 'clip';
-    document.body.style.overscrollBehavior = 'contain';
+    document.body.style.overscrollBehavior = 'auto';
+    document.documentElement.style.overscrollBehavior = 'auto';
     const model = new DialogStackModel();
     const runtime = createDialogFocusRuntime({ document, overlayRoot: overlay });
 
     model.open({ id: 'settings', kind: 'modal', label: 'Ayarlar' });
     runtime.apply(model.snapshot());
 
-    expect(document.documentElement).toHaveAttribute('data-experience-modal-open');
+    expect(document.documentElement).toHaveAttribute('data-experience-modal-open', 'true');
     expect(document.documentElement).toHaveAttribute('data-experience-overlay-count', '1');
     expect(document.body.style.overflow).toBe('hidden');
-    expect(document.body.style.overscrollBehavior).toBe('none');
+    expect(document.body.style.overscrollBehavior).toBe('contain');
+    expect(document.documentElement.style.overscrollBehavior).toBe('contain');
 
     model.close('settings');
     runtime.apply(model.snapshot());
 
     expect(document.documentElement).not.toHaveAttribute('data-experience-modal-open');
-    expect(document.documentElement).toHaveAttribute('data-experience-overlay-count', '0');
+    expect(document.documentElement).not.toHaveAttribute('data-experience-overlay-count');
     expect(document.body.style.overflow).toBe('clip');
-    expect(document.body.style.overscrollBehavior).toBe('contain');
+    expect(document.body.style.overscrollBehavior).toBe('auto');
+    expect(document.documentElement.style.overscrollBehavior).toBe('auto');
     runtime.dispose();
   });
 
-  it('restores pre-existing document contract values when disposed mid-modal', () => {
+  it('composes with an existing overlay lease instead of replacing global overlay state', () => {
+    const existingRoot = mount();
+    const existing = acquireOverlayLease({
+      document,
+      id: 'existing-modal',
+      modal: true,
+      lockScroll: true,
+      root: existingRoot,
+    });
     const overlay = mount();
     addSurface(overlay, 'help');
-    document.documentElement.setAttribute('data-experience-modal-open', '');
-    document.documentElement.setAttribute('data-experience-overlay-count', '7');
-    document.body.style.overflow = 'scroll';
-    document.body.style.overscrollBehavior = 'auto';
     const model = new DialogStackModel();
     const runtime = createDialogFocusRuntime({ document, overlayRoot: overlay });
 
     model.open({ id: 'help', kind: 'modal', label: 'Yardım' });
     runtime.apply(model.snapshot());
-    runtime.dispose();
+    expect(document.documentElement).toHaveAttribute('data-experience-overlay-count', '2');
 
-    expect(document.documentElement).toHaveAttribute('data-experience-modal-open');
-    expect(document.documentElement).toHaveAttribute('data-experience-overlay-count', '7');
-    expect(document.body.style.overflow).toBe('scroll');
-    expect(document.body.style.overscrollBehavior).toBe('auto');
+    runtime.dispose();
+    expect(document.documentElement).toHaveAttribute('data-experience-overlay-count', '1');
+    expect(document.documentElement).toHaveAttribute('data-experience-modal-open', 'true');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    existing.release();
+    expect(document.documentElement).not.toHaveAttribute('data-experience-overlay-count');
+    expect(document.documentElement).not.toHaveAttribute('data-experience-modal-open');
   });
 
   it('preserves pre-existing inert and aria-hidden state after disposal', () => {
@@ -287,7 +300,7 @@ describe('dialogFocusRuntime', () => {
     runtime.dispose();
   });
 
-  it('removes document listeners and restores document state after disposal', () => {
+  it('removes document listeners and releases overlay lifecycle state after disposal', () => {
     const overlay = mount();
     addSurface(overlay, 'dialog');
     const request = vi.fn();
