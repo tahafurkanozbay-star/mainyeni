@@ -178,9 +178,7 @@ const normalizeResourceUrl = (value: unknown): string => {
     throw new ArcGisMetadataContractError('ArcGIS metadata requires a concrete resource URL.', 'MISSING_RESOURCE_URL');
   }
   const normalized = url.replace(/\/+$/, '');
-  const forbiddenOgcResource = /(?:\/|\b)(?:wms|wfs)(?:\/|\b|\?)/i.test(normalized)
-    || /[?&]service=(?:wms|wfs)(?:&|$)/i.test(normalized);
-  if (forbiddenOgcResource || !/\/(?:FeatureServer|MapServer)\/\d+$/i.test(normalized)) {
+  if (!/\/(?:FeatureServer|MapServer)\/\d+$/i.test(normalized)) {
     throw new ArcGisMetadataContractError(
       'ArcGIS metadata adapter accepts only concrete FeatureServer/MapServer layer resources.',
       'INVALID_RESOURCE_URL',
