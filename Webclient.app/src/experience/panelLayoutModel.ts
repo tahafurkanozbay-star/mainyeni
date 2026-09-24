@@ -93,6 +93,11 @@ export const createPanelLayoutModel = (options: PanelLayoutModelOptions = {}): P
     details: createPanel('details', 320, 220, 520, false),
   };
 
+  if (workspaceSizeFor(viewportWidth) === 'compact') {
+    panels.tools.open = false;
+    panels.details.open = false;
+  }
+
   const report = (error: unknown): void => {
     const reporter = options.onObserverError;
     if (!reporter) return;
