@@ -45,8 +45,8 @@ interface Subscriber<TResult> {
   readonly id: number;
   readonly resolve: (value: TResult) => void;
   readonly reject: (reason: unknown) => void;
-  readonly signal?: AbortSignal;
-  abortListener?: (() => void) | undefined;
+  readonly signal: AbortSignal | undefined;
+  abortListener: (() => void) | undefined;
   settled: boolean;
 }
 
@@ -238,6 +238,7 @@ export class SpatialOperationCoordinator<TInput, TResult> {
         resolve,
         reject,
         signal,
+        abortListener: undefined,
         settled: false,
       };
       item.subscribers.set(subscriber.id, subscriber);
