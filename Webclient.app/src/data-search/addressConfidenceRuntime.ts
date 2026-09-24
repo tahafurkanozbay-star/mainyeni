@@ -15,7 +15,7 @@ import {
 } from './normalization';
 import { haversineDistanceMeters } from './spatialIndex';
 
-export const ADDRESS_CONFIDENCE_VERSION = '2026-09-24.v2';
+export const ADDRESS_CONFIDENCE_VERSION = '2026-09-24.v3';
 
 export type AddressConfidenceStatus = 'trusted' | 'ambiguous' | 'rejected';
 
@@ -312,13 +312,16 @@ const weightedConfidence = (
 
 const confidenceStatus = (
   confidence: number,
+  providerScore: number,
   hierarchyMatch: AddressHierarchyMatch | null,
   coordinateConflict: boolean,
   mismatchedFields: number,
   policy: NormalizedConfidencePolicy,
 ): AddressConfidenceStatus => {
   const hierarchyAllowed = !policy.requireHierarchyForTrusted || hierarchyMatch !== null;
+  const providerEvidenceTrusted = providerScore >= policy.trustedThreshold;
   if (confidence >= policy.trustedThreshold
+    && providerEvidenceTrusted
     && hierarchyAllowed
     && !coordinateConflict
     && mismatchedFields === 0) return 'trusted';
@@ -379,6 +382,7 @@ export const evaluateAddressCandidateConfidence = (
   );
   const status = confidenceStatus(
     confidence,
+    providerScore,
     hierarchyMatch,
     coordinates.conflict,
     fields.mismatched,
@@ -439,13 +443,16 @@ const betterEvaluation = (
     ambiguous: 2,
     rejected: 1,
   });
-  return statusRank[right.status] > statusRank[left.status]
+  const rightIsBetter = statusRank[right.status] > statusRank[left.status]
     || (right.status === left.status && right.confidence > left.confidence)
     || (right.status === left.status
       && right.confidence === left.confidence
       && right.providerScore > left.providerScore)
-    ? right
-    : left;
+    || (right.status === left.status
+      && right.confidence === left.confidence
+      && right.providerScore === left.providerScore
+      && right.fingerprint.localeCompare(left.fingerprint, 'en') < 0);
+  return rightIsBetter ? right : left;
 };
 
 export const rankAddressCandidatesByConfidence = (
