@@ -147,7 +147,7 @@ describe('address resolution adversarial regression matrix', () => {
     };
     const result = await executeForwardGeocodingConsensus([
       noisy,
-      provider('peer'),
+      provider('peer', 'Atatürk Bulvarı 18'),
     ], { query: 'Atatürk Bulvarı 18' }, { minimumAgreementProviders: 2 });
 
     expect(result.candidates[0]?.providerCount).toBe(2);
