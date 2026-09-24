@@ -174,11 +174,20 @@ export class ArcGisLayerCapabilityPolicy {
     const objectIdField = normalizeField(input.objectIdField);
     const globalIdField = normalizeField(input.globalIdField);
     return Object.freeze({
-      ...input,
-      ...(maxRecordCount === undefined ? {} : { maxRecordCount }),
-      ...(maxRecordCountFactor === undefined ? {} : { maxRecordCountFactor }),
-      ...(objectIdField === undefined ? {} : { objectIdField }),
-      ...(globalIdField === undefined ? {} : { globalIdField }),
+      serviceKind: input.serviceKind,
+      supportsQuery: input.supportsQuery,
+      supportsPagination: input.supportsPagination,
+      supportsOrderBy: input.supportsOrderBy,
+      supportsStatistics: input.supportsStatistics,
+      supportsDistinct: input.supportsDistinct,
+      supportsReturningGeometry: input.supportsReturningGeometry,
+      supportsQuantization: input.supportsQuantization,
+      supportsClustering: input.supportsClustering,
+      supportsZ: input.supportsZ,
+      maxRecordCount,
+      maxRecordCountFactor,
+      objectIdField,
+      globalIdField,
     });
   }
 }
