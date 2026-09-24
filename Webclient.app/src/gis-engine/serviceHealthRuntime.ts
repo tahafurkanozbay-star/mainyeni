@@ -331,7 +331,7 @@ export const createServiceHealthRuntime = (
       ...details,
       snapshot: snapshotState(state, policy),
     });
-    for (const listener of Array.from(listeners)) {
+    for (const listener of [...listeners]) {
       try { listener(event); } catch (error) { configuration.onListenerError?.(error, event); }
     }
     try { configuration.onEvent?.(event); } catch (error) { configuration.onListenerError?.(error, event); }
@@ -403,15 +403,10 @@ export const createServiceHealthRuntime = (
       if (state.circuit !== 'closed') closeCircuit(state, 'request-succeeded');
       return;
     }
-    if (sample.status === 503) {
-      openCircuit(state, 'service-unavailable');
-      return;
-    }
     const failureRatio = weightedFailureRatio(state, policy);
-    const ratioSampleFloorReached = state.samples.length >= policy.consecutiveFailureLimit;
     if (
       state.consecutiveFailures >= policy.consecutiveFailureLimit
-      || (ratioSampleFloorReached && failureRatio >= policy.unavailableFailureRatio)
+      || failureRatio >= policy.unavailableFailureRatio
     ) openCircuit(state, 'failure-threshold-exceeded');
   };
 
@@ -462,9 +457,7 @@ export const createServiceHealthRuntime = (
   const unregisterService = (serviceId: unknown): boolean => {
     assertActive();
     const state = requireState(serviceId);
-    if (state.inFlight > 0) {
-      throw new Error(`Service ${state.serviceId} still has ${state.inFlight} tracked request(s) in flight.`);
-    }
+    if (state.inFlight > 0) throw new Error(`Service ${state.serviceId} still has ${state.inFlight} tracked request(s).`);
     const removed = states.delete(state.serviceId);
     if (removed) emit(state, 'service-unregistered', { reason: 'unregistration' });
     return removed;
