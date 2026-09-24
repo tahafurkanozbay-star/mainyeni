@@ -369,7 +369,7 @@ export class FederatedSearchRuntime {
     const requestedKeys = input.sourceKeys?.length ? input.sourceKeys : availableKeys;
     const policy = assertSearchRequestAllowed({
       request: {
-        ...(input.request ?? {}),
+        ...input.request,
         signal: input.signal ?? input.request?.signal ?? null,
       },
       sourceKeys: requestedKeys,
