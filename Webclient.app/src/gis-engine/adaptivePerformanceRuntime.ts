@@ -42,6 +42,7 @@ export interface GisPerformanceBudget {
   maxVisibleFeatures: number;
   sceneQuality: number;
   prefetch: boolean;
+  [key: string]: unknown;
 }
 
 export interface GisPerformanceSettings {
