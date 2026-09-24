@@ -104,12 +104,15 @@ const OPERATOR_LABELS: Readonly<Record<FilterOperator, string>> = Object.freeze(
   'is-not-empty': 'boş değil',
 });
 
+const operatorList = (...operators: FilterOperator[]): readonly FilterOperator[] =>
+  Object.freeze(operators);
+
 const DEFAULT_OPERATORS: Readonly<Record<FilterFieldType, readonly FilterOperator[]>> = Object.freeze({
-  text: Object.freeze(['contains', 'equals', 'not-equals', 'starts-with', 'is-empty', 'is-not-empty']),
-  number: Object.freeze(['equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty']),
-  select: Object.freeze(['equals', 'not-equals', 'in', 'is-empty', 'is-not-empty']),
-  boolean: Object.freeze(['equals', 'not-equals']),
-  date: Object.freeze(['equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty']),
+  text: operatorList('contains', 'equals', 'not-equals', 'starts-with', 'is-empty', 'is-not-empty'),
+  number: operatorList('equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty'),
+  select: operatorList('equals', 'not-equals', 'in', 'is-empty', 'is-not-empty'),
+  boolean: operatorList('equals', 'not-equals'),
+  date: operatorList('equals', 'not-equals', 'greater-than', 'greater-or-equal', 'less-than', 'less-or-equal', 'is-empty', 'is-not-empty'),
 });
 
 const cleanId = (value: string, kind: string): string => {
