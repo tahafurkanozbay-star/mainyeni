@@ -105,7 +105,9 @@ describe('searchReplicaReconciler production contract', () => {
       { key: 'c', records: [normalized('1')] },
     ], { includeMissingSourceConflicts: true, quorum: 1 });
 
-    const missing = reconciliation.conflicts.find(item => item.kind === 'missing-from-source' && item.recordKey === 'id:2');
+    const missing = reconciliation.conflicts.find(
+      item => item.kind === 'missing-from-source' && item.recordKey === 'id:2',
+    );
     expect(missing).toBeDefined();
     expect(missing?.detail).toContain('b');
     expect(missing?.detail).toContain('c');
@@ -154,7 +156,7 @@ describe('searchReplicaReconciler production contract', () => {
     expect(reconciliation.records[0]?.conflicts.length).toBeGreaterThan(2);
   });
 
-  it('preserves per-record conflicts even when global conflict history is truncated', () => {
+  it('preserves per-record conflicts when the global diagnostics list is truncated', () => {
     const reconciliation = reconcileSearchReplicas([
       { key: 'a', records: [normalized('1', { title: 'A', address: 'A' })] },
       { key: 'b', records: [normalized('1', { title: 'B', address: 'B' })] },
@@ -180,14 +182,35 @@ describe('searchReplicaReconciler production contract', () => {
     const first = reconcileSearchReplicas([a, b], { quorum: 2 });
     const second = reconcileSearchReplicas([b, a], { quorum: 2 });
     expect(first.fingerprint).toBe(second.fingerprint);
-    expect(first.records.map(item => item.canonicalSourceKey)).toEqual(second.records.map(item => item.canonicalSourceKey));
+    expect(first.records.map(item => item.canonicalSourceKey)).toEqual(
+      second.records.map(item => item.canonicalSourceKey),
+    );
   });
 
-  it('does not include raw source payloads in reconciliation diagnostics', () => {
+  it('keeps diagnostics free from raw record payload fields', () => {
     const reconciliation = reconcileSearchReplicas([
       { key: 'a', records: [normalized('1', { secret: 'never-log-this' })] },
     ], { quorum: 1 });
-    expect(JSON.stringify(reconciliation)).not.toContain('never-log-this');
+    const diagnostics = JSON.stringify({
+      version: reconciliation.version,
+      sourceCount: reconciliation.sourceCount,
+      recordCount: reconciliation.recordCount,
+      conflictCount: reconciliation.conflictCount,
+      conflicts: reconciliation.conflicts,
+      fingerprint: reconciliation.fingerprint,
+    });
+    expect(diagnostics).not.toContain('never-log-this');
+  });
+
+  it('keeps conflict diagnostics limited to normalized fields, source identities and summaries', () => {
+    const reconciliation = reconcileSearchReplicas([
+      { key: 'a', records: [normalized('1', { secret: 'alpha', title: 'A' })] },
+      { key: 'b', records: [normalized('1', { secret: 'beta', title: 'B' })] },
+    ], { quorum: 1 });
+    const serializedConflicts = JSON.stringify(reconciliation.conflicts);
+    expect(serializedConflicts).not.toContain('alpha');
+    expect(serializedConflicts).not.toContain('beta');
+    expect(serializedConflicts).toContain('title-mismatch');
   });
 
   it('produces an immutable conflict summary with every known conflict kind', () => {
