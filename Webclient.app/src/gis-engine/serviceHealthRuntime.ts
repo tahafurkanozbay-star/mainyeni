@@ -404,9 +404,10 @@ export const createServiceHealthRuntime = (
       return;
     }
     const failureRatio = weightedFailureRatio(state, policy);
+    const ratioSampleFloorReached = state.samples.length >= policy.consecutiveFailureLimit;
     if (
       state.consecutiveFailures >= policy.consecutiveFailureLimit
-      || failureRatio >= policy.unavailableFailureRatio
+      || (ratioSampleFloorReached && failureRatio >= policy.unavailableFailureRatio)
     ) openCircuit(state, 'failure-threshold-exceeded');
   };
 
@@ -457,7 +458,9 @@ export const createServiceHealthRuntime = (
   const unregisterService = (serviceId: unknown): boolean => {
     assertActive();
     const state = requireState(serviceId);
-    if (state.inFlight > 0) throw new Error(`Service ${state.serviceId} still has ${state.inFlight} tracked request(s).`);
+    if (state.inFlight > 0) {
+      throw new Error(`Service ${state.serviceId} still has ${state.inFlight} tracked request(s) in flight.`);
+    }
     const removed = states.delete(state.serviceId);
     if (removed) emit(state, 'service-unregistered', { reason: 'unregistration' });
     return removed;
