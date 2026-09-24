@@ -325,7 +325,7 @@ export class SearchWorkloadGovernor {
     this.#disposed = true;
     const error = createDisposedError();
     error.message = reason;
-    for (const item of [...this.#queue]) {
+    for (const item of this.#queue.slice()) {
       this.#settleQueuedItem(item, 'disposed', error);
     }
     for (const item of this.#inflight.values()) {
@@ -492,7 +492,7 @@ export class SearchWorkloadGovernor {
       subscriberCount: item.subscribers.size,
     }));
 
-    for (const subscriber of [...item.subscribers]) {
+    for (const subscriber of Array.from(item.subscribers)) {
       if (subscriber.signal && subscriber.abortListener) {
         subscriber.signal.removeEventListener('abort', subscriber.abortListener);
       }
