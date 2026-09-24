@@ -223,21 +223,21 @@ test('enabling strict TypeScript is not weakening', () => {
 test('noUncheckedIndexedAccess true removal is high severity', () => {
   const before = tsconfig({ strict: true, noUncheckedIndexedAccess: true });
   const after = tsconfig({ strict: true });
-  const finding = audit(before, after).findings.find(item => item.contract === 'compilerOptions.noUncheckedIndexedAccess');
+  const finding = audit(before, after).summary.deltas.find(item => item.contract === 'compilerOptions.noUncheckedIndexedAccess');
   assert.equal(finding?.severity, 'high');
 });
 
 test('exactOptionalPropertyTypes true to false is high severity', () => {
   const before = tsconfig({ strict: true, exactOptionalPropertyTypes: true });
   const after = tsconfig({ strict: true, exactOptionalPropertyTypes: false });
-  const finding = audit(before, after).findings.find(item => item.contract === 'compilerOptions.exactOptionalPropertyTypes');
+  const finding = audit(before, after).summary.deltas.find(item => item.contract === 'compilerOptions.exactOptionalPropertyTypes');
   assert.equal(finding?.severity, 'high');
 });
 
 test('useUnknownInCatchVariables true removal is high severity', () => {
   const before = tsconfig({ strict: true, useUnknownInCatchVariables: true });
   const after = tsconfig({ strict: true });
-  const finding = audit(before, after).findings.find(item => item.contract === 'compilerOptions.useUnknownInCatchVariables');
+  const finding = audit(before, after).summary.deltas.find(item => item.contract === 'compilerOptions.useUnknownInCatchVariables');
   assert.equal(finding?.severity, 'high');
 });
 
@@ -369,7 +369,8 @@ test('malformed changed package JSON is left to dedicated manifest integrity gat
 test('malformed changed tsconfig JSON does not throw', () => {
   const before = tsconfig({ strict: true });
   const after = { path: before.path, text: '{' };
-  assert.doesNotThrow(() => audit(before, after));
+  const section = audit(before, after);
+  assert.equal(section.findings.length, 0);
 });
 
 test('added project files are not treated as weakened old contracts', () => {
