@@ -18,6 +18,7 @@ import {
 import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { createShortcutRuntime } from '../../experience/shortcutRuntime';
 import './experience-ui.css';
+import './experience-ux-layer-modern.css';
 import { useExperienceTheme } from './ExperienceDesignSystem';
 import { ExperienceNotificationCenter } from './ExperienceNotificationCenter';
 import { ExperienceOverlayStack } from './ExperienceOverlayStack';
