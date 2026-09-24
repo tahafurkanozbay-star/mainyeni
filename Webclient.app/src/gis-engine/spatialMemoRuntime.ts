@@ -29,7 +29,7 @@ export interface SpatialMemoSettings {
 
 export interface SpatialMemoKeyOptions {
   namespace?: string | number;
-  version?: string | number;
+  version?: unknown;
 }
 
 export interface SpatialMemoExecutionContext {
