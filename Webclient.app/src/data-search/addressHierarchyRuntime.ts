@@ -14,7 +14,7 @@ import {
 } from './normalization';
 import { haversineDistanceMeters } from './spatialIndex';
 
-export const ADDRESS_HIERARCHY_VERSION = '2026-09-24.v2';
+export const ADDRESS_HIERARCHY_VERSION = '2026-09-24.v3';
 
 export type AddressHierarchyLevel = Exclude<AddressLevel, 'address'>;
 export type AddressHierarchyDiagnosticSeverity = 'info' | 'warning' | 'error';
@@ -338,9 +338,14 @@ const textScore = (
   const nodeTokens = new Set(node.searchTokens);
   const exactTokens = queryTokens.filter(token => nodeTokens.has(token)).length;
   const prefixTokens = queryTokens.filter(token =>
-    !nodeTokens.has(token) && token.length >= 2 && node.searchTokens.some(candidate => candidate.startsWith(token))).length;
+    !nodeTokens.has(token)
+    && token.length >= 2
+    && node.searchTokens.some(candidate => candidate.startsWith(token))).length;
   const fullCoverage = queryTokens.length > 0 && exactTokens + prefixTokens === queryTokens.length;
   const aliasExact = node.aliases.some(alias => canonicalizeAddressText(alias) === canonicalQuery);
+  if (baseScore === 0 && !fullCoverage && !aliasExact) {
+    return Object.freeze({ score: 0, exact, prefix, reasons: Object.freeze([]) });
+  }
   const reasons = Object.freeze([
     ...(baseReason ? [baseReason] : []),
     ...(exactTokens ? [`token:${exactTokens}`] : []),
@@ -349,7 +354,11 @@ const textScore = (
     ...(aliasExact ? ['exact-alias'] : []),
   ]);
   return Object.freeze({
-    score: baseScore + exactTokens * 120 + prefixTokens * 60 + (fullCoverage ? 140 : 0) + (aliasExact ? 220 : 0),
+    score: baseScore
+      + exactTokens * 120
+      + prefixTokens * 60
+      + (fullCoverage ? 140 : 0)
+      + (aliasExact ? 220 : 0),
     exact,
     prefix,
     reasons,
@@ -363,7 +372,10 @@ const addPosting = (index: Map<string, Set<string>>, token: string, nodeKey: str
 };
 
 const tokenPrefixes = (token: string): readonly string[] =>
-  Object.freeze(Array.from({ length: Math.max(0, token.length - 1) }, (_value, index) => token.slice(0, index + 2)));
+  Object.freeze(Array.from(
+    { length: Math.max(0, token.length - 1) },
+    (_value, index) => token.slice(0, index + 2),
+  ));
 
 const buildSearchIndexes = (
   nodes: readonly AddressHierarchyNode[],
@@ -411,23 +423,61 @@ const buildHierarchy = (
     let node = existingKey ? mutableNodes.get(existingKey) ?? null : null;
     if (!node) {
       if (mutableNodes.size >= options.maxNodes) {
-        addDiagnostic({ code: 'node-budget-exceeded', severity: 'error', recordKey: sourceRecordKey, nodeKey: null, detail: `Address hierarchy node budget ${options.maxNodes} exceeded.` });
+        addDiagnostic({
+          code: 'node-budget-exceeded',
+          severity: 'error',
+          recordKey: sourceRecordKey,
+          nodeKey: null,
+          detail: `Address hierarchy node budget ${options.maxNodes} exceeded.`,
+        });
         return null;
       }
       const key = createNodeKey(pathKey);
-      node = { key, level, name: displayName, canonicalName, pathKey, parentKey: parent?.key ?? null, childKeys: new Set<string>(), recordKeys: new Set<string>(), aliases: new Set<string>(), searchTokens: new Set<string>(segmentTokens(level, displayName)), depth: LEVEL_DEPTH[level], coordinateSamples: [], sourceCount: 0 };
+      node = {
+        key,
+        level,
+        name: displayName,
+        canonicalName,
+        pathKey,
+        parentKey: parent?.key ?? null,
+        childKeys: new Set<string>(),
+        recordKeys: new Set<string>(),
+        aliases: new Set<string>(),
+        searchTokens: new Set<string>(segmentTokens(level, displayName)),
+        depth: LEVEL_DEPTH[level],
+        coordinateSamples: [],
+        sourceCount: 0,
+      };
       mutableNodes.set(key, node);
       pathToKey.set(pathKey, key);
       if (parent && !parent.childKeys.has(key)) {
-        if (parent.childKeys.size < options.maxChildrenPerNode) parent.childKeys.add(key);
-        else addDiagnostic({ code: 'child-budget-exceeded', severity: 'error', recordKey: sourceRecordKey, nodeKey: parent.key, detail: `Address hierarchy child budget ${options.maxChildrenPerNode} exceeded.` });
+        if (parent.childKeys.size < options.maxChildrenPerNode) {
+          parent.childKeys.add(key);
+        } else {
+          addDiagnostic({
+            code: 'child-budget-exceeded',
+            severity: 'error',
+            recordKey: sourceRecordKey,
+            nodeKey: parent.key,
+            detail: `Address hierarchy child budget ${options.maxChildrenPerNode} exceeded.`,
+          });
+        }
       }
     }
     node.sourceCount += 1;
     node.recordKeys.add(sourceRecordKey);
     if (!node.aliases.has(displayName)) {
-      if (node.aliases.size < options.maxAliasesPerNode) node.aliases.add(displayName);
-      else addDiagnostic({ code: 'alias-budget-exceeded', severity: 'warning', recordKey: sourceRecordKey, nodeKey: node.key, detail: `Address hierarchy alias budget ${options.maxAliasesPerNode} exceeded.` });
+      if (node.aliases.size < options.maxAliasesPerNode) {
+        node.aliases.add(displayName);
+      } else {
+        addDiagnostic({
+          code: 'alias-budget-exceeded',
+          severity: 'warning',
+          recordKey: sourceRecordKey,
+          nodeKey: node.key,
+          detail: `Address hierarchy alias budget ${options.maxAliasesPerNode} exceeded.`,
+        });
+      }
     }
     segmentTokens(level, displayName).map(token => node?.searchTokens.add(token));
     if (coordinate) node.coordinateSamples.push(coordinate);
@@ -435,40 +485,138 @@ const buildHierarchy = (
   };
 
   const limited = records.slice(0, options.maxRecords);
-  if (records.length > limited.length) addDiagnostic({ code: 'record-budget-exceeded', severity: 'error', recordKey: null, nodeKey: null, detail: `Address hierarchy record budget ${options.maxRecords} exceeded.` });
+  if (records.length > limited.length) {
+    addDiagnostic({
+      code: 'record-budget-exceeded',
+      severity: 'error',
+      recordKey: null,
+      nodeKey: null,
+      detail: `Address hierarchy record budget ${options.maxRecords} exceeded.`,
+    });
+  }
 
   limited.map(record => {
     const key = recordKey(record);
     const segments = extractSegments(record, options);
     if (isEmpty(segments)) {
-      addDiagnostic({ code: 'empty-record', severity: 'info', recordKey: key, nodeKey: null, detail: 'Record contains no verified address hierarchy segment.' });
+      addDiagnostic({
+        code: 'empty-record',
+        severity: 'info',
+        recordKey: key,
+        nodeKey: null,
+        detail: 'Record contains no verified address hierarchy segment.',
+      });
       return null;
     }
     acceptedRecordCount += 1;
     const coordinate = normalizeCoordinates(record.coordinates);
-    const state = LEVEL_ORDER.reduce<{ parent: MutableNode | null; seenGap: boolean; keys: Partial<Record<AddressHierarchyLevel, string>>; pathKeys: string[] }>((current, level) => {
+    const state = LEVEL_ORDER.reduce<{
+      parent: MutableNode | null;
+      seenGap: boolean;
+      keys: Partial<Record<AddressHierarchyLevel, string>>;
+      pathKeys: string[];
+    }>((current, level) => {
       const value = segments[level];
-      if (!value) return { ...current, seenGap: current.parent !== null || current.seenGap };
-      if (current.seenGap) addDiagnostic({ code: 'missing-parent-level', severity: 'warning', recordKey: key, nodeKey: current.parent?.key ?? null, detail: `Address hierarchy has a gap before ${level}.` });
+      if (!value) return { ...current, seenGap: true };
+      if (current.seenGap) {
+        addDiagnostic({
+          code: 'missing-parent-level',
+          severity: 'warning',
+          recordKey: key,
+          nodeKey: current.parent?.key ?? null,
+          detail: `Address hierarchy has a gap before ${level}.`,
+        });
+      }
       const node = ensureNode(level, value, current.parent, key, coordinate);
-      if (!node) return { ...current, seenGap: false };
-      return { parent: node, seenGap: false, keys: { ...current.keys, [level]: node.key }, pathKeys: [...current.pathKeys, node.key] };
+      if (!node) return { ...current, seenGap: true };
+      return {
+        parent: node,
+        seenGap: false,
+        keys: { ...current.keys, [level]: node.key },
+        pathKeys: [...current.pathKeys, node.key],
+      };
     }, { parent: null, seenGap: false, keys: {}, pathKeys: [] });
-    const binding: AddressHierarchyRecordBinding = Object.freeze({ recordKey: key, districtKey: state.keys.district ?? null, neighborhoodKey: state.keys.neighborhood ?? null, streetKey: state.keys.street ?? null, buildingKey: state.keys.building ?? null, doorKey: state.keys.door ?? null, deepestKey: state.pathKeys.at(-1) ?? null, pathKeys: Object.freeze(state.pathKeys), fingerprint: hashFingerprint(stableSerialize({ key, pathKeys: state.pathKeys })) });
+    const binding: AddressHierarchyRecordBinding = Object.freeze({
+      recordKey: key,
+      districtKey: state.keys.district ?? null,
+      neighborhoodKey: state.keys.neighborhood ?? null,
+      streetKey: state.keys.street ?? null,
+      buildingKey: state.keys.building ?? null,
+      doorKey: state.keys.door ?? null,
+      deepestKey: state.pathKeys.at(-1) ?? null,
+      pathKeys: Object.freeze(state.pathKeys),
+      fingerprint: hashFingerprint(stableSerialize({ key, pathKeys: state.pathKeys })),
+    });
     bindings.set(key, binding);
     return binding;
   });
 
   const frozenNodes = [...mutableNodes.values()].map(freezeNode);
-  frozenNodes.filter(node => node.coordinateSpreadMeters > options.coordinateDivergenceMeters).map(node => addDiagnostic({ code: 'coordinate-divergence', severity: 'warning', recordKey: null, nodeKey: node.key, detail: `Address hierarchy coordinate spread ${node.coordinateSpreadMeters}m exceeds policy.` }));
+  frozenNodes
+    .filter(node => node.coordinateSpreadMeters > options.coordinateDivergenceMeters)
+    .map(node => addDiagnostic({
+      code: 'coordinate-divergence',
+      severity: 'warning',
+      recordKey: null,
+      nodeKey: node.key,
+      detail: `Address hierarchy coordinate spread ${node.coordinateSpreadMeters}m exceeds policy.`,
+    }));
   const nodeMap = new Map(frozenNodes.map(node => [node.key, node] as const));
   const indexes = buildSearchIndexes(frozenNodes);
-  const counts = (level: AddressHierarchyLevel): number => frozenNodes.filter(node => node.level === level).length;
-  const fingerprint = hashFingerprint(stableSerialize({ version: ADDRESS_HIERARCHY_VERSION, records: [...bindings.values()].map(binding => ({ recordKey: binding.recordKey, pathKeys: binding.pathKeys })).sort((left, right) => left.recordKey.localeCompare(right.recordKey, 'en')), nodes: frozenNodes.map(node => ({ key: node.key, level: node.level, canonicalName: node.canonicalName, parentKey: node.parentKey, coordinates: node.coordinates })).sort((left, right) => left.key.localeCompare(right.key, 'en')) }));
-  return Object.freeze({ nodes: nodeMap, pathToKey, recordBindings: bindings, tokenIndex: indexes.tokenIndex, prefixIndex: indexes.prefixIndex, snapshot: Object.freeze({ version: ADDRESS_HIERARCHY_VERSION, recordCount: acceptedRecordCount, nodeCount: frozenNodes.length, rootCount: frozenNodes.filter(node => node.parentKey === null).length, districtCount: counts('district'), neighborhoodCount: counts('neighborhood'), streetCount: counts('street'), buildingCount: counts('building'), doorCount: counts('door'), diagnostics: Object.freeze(diagnostics), diagnosticsTruncated, fingerprint }) });
+  const counts = (level: AddressHierarchyLevel): number =>
+    frozenNodes.filter(node => node.level === level).length;
+  const fingerprint = hashFingerprint(stableSerialize({
+    version: ADDRESS_HIERARCHY_VERSION,
+    records: [...bindings.values()]
+      .map(binding => ({ recordKey: binding.recordKey, pathKeys: binding.pathKeys }))
+      .sort((left, right) => left.recordKey.localeCompare(right.recordKey, 'en')),
+    nodes: frozenNodes
+      .map(node => ({
+        key: node.key,
+        level: node.level,
+        canonicalName: node.canonicalName,
+        parentKey: node.parentKey,
+        coordinates: node.coordinates,
+      }))
+      .sort((left, right) => left.key.localeCompare(right.key, 'en')),
+  }));
+  return Object.freeze({
+    nodes: nodeMap,
+    pathToKey,
+    recordBindings: bindings,
+    tokenIndex: indexes.tokenIndex,
+    prefixIndex: indexes.prefixIndex,
+    snapshot: Object.freeze({
+      version: ADDRESS_HIERARCHY_VERSION,
+      recordCount: acceptedRecordCount,
+      nodeCount: frozenNodes.length,
+      rootCount: frozenNodes.filter(node => node.parentKey === null).length,
+      districtCount: counts('district'),
+      neighborhoodCount: counts('neighborhood'),
+      streetCount: counts('street'),
+      buildingCount: counts('building'),
+      doorCount: counts('door'),
+      diagnostics: Object.freeze(diagnostics),
+      diagnosticsTruncated,
+      fingerprint,
+    }),
+  });
 };
 
-const emptySnapshot = (): AddressHierarchySnapshot => Object.freeze({ version: ADDRESS_HIERARCHY_VERSION, recordCount: 0, nodeCount: 0, rootCount: 0, districtCount: 0, neighborhoodCount: 0, streetCount: 0, buildingCount: 0, doorCount: 0, diagnostics: Object.freeze([]), diagnosticsTruncated: false, fingerprint: hashFingerprint('empty-address-hierarchy') });
+const emptySnapshot = (): AddressHierarchySnapshot => Object.freeze({
+  version: ADDRESS_HIERARCHY_VERSION,
+  recordCount: 0,
+  nodeCount: 0,
+  rootCount: 0,
+  districtCount: 0,
+  neighborhoodCount: 0,
+  streetCount: 0,
+  buildingCount: 0,
+  doorCount: 0,
+  diagnostics: Object.freeze([]),
+  diagnosticsTruncated: false,
+  fingerprint: hashFingerprint('empty-address-hierarchy'),
+});
 
 export class AddressHierarchyRuntime {
   private readonly options: NormalizedHierarchyOptions;
@@ -499,15 +647,32 @@ export class AddressHierarchyRuntime {
     }
   }
 
-  private bindingKey(value: string | NormalizedRecord): string { return typeof value === 'string' ? normalizeText(value) : recordKey(value); }
-
-  private candidateKeys(queryTokens: readonly string[], level: AddressHierarchyLevel | null): readonly string[] {
-    const keys = new Set(queryTokens.flatMap(token => [...this.tokenIndex.get(token) ?? [], ...this.prefixIndex.get(token) ?? []]));
-    const candidates = keys.size > 0 ? [...keys].map(key => this.nodes.get(key)).filter((node): node is AddressHierarchyNode => node !== undefined) : [...this.nodes.values()];
-    return Object.freeze(candidates.filter(node => !level || node.level === level).map(node => node.key));
+  private bindingKey(value: string | NormalizedRecord): string {
+    return typeof value === 'string' ? normalizeText(value) : recordKey(value);
   }
 
-  private collectPath(node: AddressHierarchyNode | null, seen: ReadonlySet<string>): readonly AddressHierarchyNode[] {
+  private candidateKeys(
+    queryTokens: readonly string[],
+    level: AddressHierarchyLevel | null,
+  ): readonly string[] {
+    const keys = new Set(queryTokens.flatMap(token => [
+      ...this.tokenIndex.get(token) ?? [],
+      ...this.prefixIndex.get(token) ?? [],
+    ]));
+    const candidates = keys.size > 0
+      ? [...keys]
+        .map(key => this.nodes.get(key))
+        .filter((node): node is AddressHierarchyNode => node !== undefined)
+      : [...this.nodes.values()];
+    return Object.freeze(
+      candidates.filter(node => !level || node.level === level).map(node => node.key),
+    );
+  }
+
+  private collectPath(
+    node: AddressHierarchyNode | null,
+    seen: ReadonlySet<string>,
+  ): readonly AddressHierarchyNode[] {
     if (!node || seen.has(node.key)) return Object.freeze([]);
     const nextSeen = new Set(seen);
     nextSeen.add(node.key);
@@ -515,7 +680,10 @@ export class AddressHierarchyRuntime {
     return Object.freeze([...this.collectPath(parent, nextSeen), node]);
   }
 
-  resolve(query: unknown, options: AddressHierarchyResolveOptions = {}): readonly AddressHierarchyMatch[] {
+  resolve(
+    query: unknown,
+    options: AddressHierarchyResolveOptions = {},
+  ): readonly AddressHierarchyMatch[] {
     const queryText = normalizeText(query);
     const canonicalQuery = canonicalizeAddressText(queryText);
     if (!canonicalQuery) return Object.freeze([]);
@@ -524,44 +692,113 @@ export class AddressHierarchyRuntime {
     const filter = normalizeFilter(options);
     const center = options.center ? normalizeCoordinates(options.center) : null;
     const radiusMeters = normalizeRadius(options.radiusMeters);
-    const minimumScore = Number.isFinite(Number(options.minimumScore)) ? Number(options.minimumScore) : 1;
+    const minimumScore = Number.isFinite(Number(options.minimumScore))
+      ? Number(options.minimumScore)
+      : 1;
     const limit = normalizeLimit(options.limit);
     const requireHierarchyMatch = options.requireHierarchyMatch !== false;
-    const checks = Object.freeze([['district', 'district'], ['neighborhood', 'neighborhood'], ['street', 'street']] as const);
-    const matches = this.candidateKeys(queryTokens, level).map(key => this.nodes.get(key)).filter((node): node is AddressHierarchyNode => node !== undefined).map(node => {
-      const text = textScore(node, canonicalQuery, queryTokens);
-      if (text.score <= 0) return null;
-      const path = this.getPath(node.key);
-      const hierarchy = checks.reduce((result, [field, filterLevel]) => {
-        const expected = filter[field];
-        if (!expected) return result;
-        const actual = path.find(item => item.level === filterLevel)?.canonicalName ?? '';
-        const matched = actual === expected;
-        return { score: result.score + (matched ? 120 : -300), mismatch: result.mismatch || !matched, reasons: [...result.reasons, `hierarchy-${matched ? 'match' : 'mismatch'}:${field}`] };
-      }, { score: 0, mismatch: false, reasons: [] as string[] });
-      if (hierarchy.mismatch && requireHierarchyMatch) return null;
-      const distanceMeters = center && node.coordinates ? haversineDistanceMeters(center, node.coordinates) : null;
-      if (distanceMeters !== null && radiusMeters > 0 && distanceMeters > radiusMeters) return null;
-      const reference = radiusMeters > 0 ? radiusMeters : 25_000;
-      const distanceScore = distanceMeters === null ? 0 : Math.round(Math.max(0, 1 - distanceMeters / Math.max(1, reference)) * 180);
-      const score = text.score + hierarchy.score + distanceScore;
-      if (score < minimumScore) return null;
-      return Object.freeze({ node, score, textScore: text.score, hierarchyScore: hierarchy.score, distanceScore, distanceMeters, exact: text.exact, prefix: text.prefix, reasons: Object.freeze([...text.reasons, ...hierarchy.reasons, ...(distanceMeters !== null ? ['distance-bias'] : [])]) });
-    }).filter((match): match is AddressHierarchyMatch => match !== null).sort((left, right) => right.score - left.score || right.hierarchyScore - left.hierarchyScore || (left.distanceMeters ?? Number.POSITIVE_INFINITY) - (right.distanceMeters ?? Number.POSITIVE_INFINITY) || left.node.canonicalName.localeCompare(right.node.canonicalName, 'tr-TR', { sensitivity: 'base', numeric: true }) || left.node.key.localeCompare(right.node.key, 'en'));
+    const checks = Object.freeze([
+      ['district', 'district'],
+      ['neighborhood', 'neighborhood'],
+      ['street', 'street'],
+    ] as const);
+    const matches = this.candidateKeys(queryTokens, level)
+      .map(key => this.nodes.get(key))
+      .filter((node): node is AddressHierarchyNode => node !== undefined)
+      .map(node => {
+        const text = textScore(node, canonicalQuery, queryTokens);
+        if (text.score <= 0) return null;
+        const path = this.getPath(node.key);
+        const hierarchy = checks.reduce((result, [field, filterLevel]) => {
+          const expected = filter[field];
+          if (!expected) return result;
+          const actual = path.find(item => item.level === filterLevel)?.canonicalName ?? '';
+          const matched = actual === expected;
+          return {
+            score: result.score + (matched ? 120 : -300),
+            mismatch: result.mismatch || !matched,
+            reasons: [...result.reasons, `hierarchy-${matched ? 'match' : 'mismatch'}:${field}`],
+          };
+        }, { score: 0, mismatch: false, reasons: [] as string[] });
+        if (hierarchy.mismatch && requireHierarchyMatch) return null;
+        const distanceMeters = center && node.coordinates
+          ? haversineDistanceMeters(center, node.coordinates)
+          : null;
+        if (distanceMeters !== null && radiusMeters > 0 && distanceMeters > radiusMeters) {
+          return null;
+        }
+        const reference = radiusMeters > 0 ? radiusMeters : 25_000;
+        const distanceScore = distanceMeters === null
+          ? 0
+          : Math.round(Math.max(0, 1 - distanceMeters / Math.max(1, reference)) * 180);
+        const score = text.score + hierarchy.score + distanceScore;
+        if (score < minimumScore) return null;
+        return Object.freeze({
+          node,
+          score,
+          textScore: text.score,
+          hierarchyScore: hierarchy.score,
+          distanceScore,
+          distanceMeters,
+          exact: text.exact,
+          prefix: text.prefix,
+          reasons: Object.freeze([
+            ...text.reasons,
+            ...hierarchy.reasons,
+            ...(distanceMeters !== null ? ['distance-bias'] : []),
+          ]),
+        });
+      })
+      .filter((match): match is AddressHierarchyMatch => match !== null)
+      .sort((left, right) => right.score - left.score
+        || right.hierarchyScore - left.hierarchyScore
+        || (left.distanceMeters ?? Number.POSITIVE_INFINITY)
+          - (right.distanceMeters ?? Number.POSITIVE_INFINITY)
+        || left.node.canonicalName.localeCompare(
+          right.node.canonicalName,
+          'tr-TR',
+          { sensitivity: 'base', numeric: true },
+        )
+        || left.node.key.localeCompare(right.node.key, 'en'));
     return Object.freeze(matches.slice(0, limit));
   }
 
-  suggest(query: unknown, options: AddressHierarchyResolveOptions = {}): readonly AddressHierarchyMatch[] { return this.resolve(query, options); }
-  getNode(key: string): AddressHierarchyNode | null { return this.nodes.get(normalizeText(key)) ?? null; }
-  getBinding(value: string | NormalizedRecord): AddressHierarchyRecordBinding | null { return this.recordBindings.get(this.bindingKey(value)) ?? null; }
-  getPath(key: string): readonly AddressHierarchyNode[] { return this.collectPath(this.getNode(key), new Set<string>()); }
+  suggest(
+    query: unknown,
+    options: AddressHierarchyResolveOptions = {},
+  ): readonly AddressHierarchyMatch[] {
+    return this.resolve(query, options);
+  }
+
+  getNode(key: string): AddressHierarchyNode | null {
+    return this.nodes.get(normalizeText(key)) ?? null;
+  }
+
+  getBinding(value: string | NormalizedRecord): AddressHierarchyRecordBinding | null {
+    return this.recordBindings.get(this.bindingKey(value)) ?? null;
+  }
+
+  getPath(key: string): readonly AddressHierarchyNode[] {
+    return this.collectPath(this.getNode(key), new Set<string>());
+  }
+
   getChildren(key: string): readonly AddressHierarchyNode[] {
     const node = this.getNode(key);
     if (!node) return Object.freeze([]);
-    return Object.freeze(node.childKeys.map(childKey => this.nodes.get(childKey)).filter((child): child is AddressHierarchyNode => child !== undefined).sort((left, right) => left.canonicalName.localeCompare(right.canonicalName, 'tr-TR')));
+    return Object.freeze(node.childKeys
+      .map(childKey => this.nodes.get(childKey))
+      .filter((child): child is AddressHierarchyNode => child !== undefined)
+      .sort((left, right) => left.canonicalName.localeCompare(right.canonicalName, 'tr-TR')));
   }
-  findByPath(pathInput: Readonly<Partial<Record<AddressHierarchyLevel, string>>>): AddressHierarchyNode | null {
-    const result = LEVEL_ORDER.reduce<{ path: string; node: AddressHierarchyNode | null; failed: boolean }>((current, level) => {
+
+  findByPath(
+    pathInput: Readonly<Partial<Record<AddressHierarchyLevel, string>>>,
+  ): AddressHierarchyNode | null {
+    const result = LEVEL_ORDER.reduce<{
+      path: string;
+      node: AddressHierarchyNode | null;
+      failed: boolean;
+    }>((current, level) => {
       if (current.failed) return current;
       const value = pathInput[level];
       if (!value) return current;
@@ -574,8 +811,17 @@ export class AddressHierarchyRuntime {
     }, { path: '', node: null, failed: false });
     return result.failed ? null : result.node;
   }
-  snapshot(): AddressHierarchySnapshot { return this.snapshotValue; }
-  toSerializableSnapshot(): AddressHierarchySnapshot { return this.snapshotValue; }
+
+  snapshot(): AddressHierarchySnapshot {
+    return this.snapshotValue;
+  }
+
+  toSerializableSnapshot(): AddressHierarchySnapshot {
+    return this.snapshotValue;
+  }
 }
 
-export const createAddressHierarchyRuntime = (records: readonly NormalizedRecord[] = [], options: AddressHierarchyBuildOptions = {}): AddressHierarchyRuntime => new AddressHierarchyRuntime(records, options);
+export const createAddressHierarchyRuntime = (
+  records: readonly NormalizedRecord[] = [],
+  options: AddressHierarchyBuildOptions = {},
+): AddressHierarchyRuntime => new AddressHierarchyRuntime(records, options);
