@@ -56,8 +56,9 @@ export const ExperienceOverlayStack = ({
   const runtimeRef = useRef<DialogFocusRuntime | null>(null);
   const resolvedPortal = useMemo<Element | DocumentFragment | null>(() => {
     if (portalTarget !== undefined) return portalTarget;
+    if (backgroundRoots.length === 0) return null;
     return typeof document === 'undefined' ? null : document.body;
-  }, [portalTarget]);
+  }, [backgroundRoots, portalTarget]);
 
   useEffect(() => model.subscribe(setSnapshot), [model]);
 
