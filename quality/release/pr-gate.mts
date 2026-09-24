@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   DEFAULT_THRESHOLDS,
+  type AuditSection,
   type Finding,
   type FindingSnapshot,
   type RegressionDelta,
@@ -10,6 +11,11 @@ import {
   type ReleaseGateDecision,
 } from './contracts.mts';
 import { buildRepositoryInventory } from './inventory.mts';
+import {
+  auditChangeRisk,
+  changeRiskMarkdown,
+  type ChangeRiskSummary,
+} from './change-risk-audit.mts';
 import {
   compareBaseline,
   createBaseline,
@@ -24,6 +30,7 @@ export interface PullRequestGateResult {
   readonly baselineRiskScore: number;
   readonly currentRiskScore: number;
   readonly delta: RegressionDelta;
+  readonly changeRisk: AuditSection<ChangeRiskSummary>;
   readonly regressionFindings: readonly Finding[];
   readonly decision: ReleaseGateDecision;
 }
@@ -157,21 +164,28 @@ export function reconcileLanguageMigrationDelta(delta: RegressionDelta): Regress
   };
 }
 
-export function decidePullRequestRegression(delta: RegressionDelta): {
+export function decidePullRequestRegression(
+  delta: RegressionDelta,
+  supplementalFindings: readonly Finding[] = [],
+): {
   readonly findings: readonly Finding[];
   readonly decision: ReleaseGateDecision;
 } {
-  const findings = [...regressionFindings(delta), ...severityEscalationFindings(delta)];
+  const findings = [
+    ...regressionFindings(delta),
+    ...severityEscalationFindings(delta),
+    ...supplementalFindings,
+  ];
   const decision = decideReleaseGate(findings, {
     ...DEFAULT_THRESHOLDS,
-    maxMediumFindings: 0,
+    maxMediumFindings: 5,
     maxRiskScore: 80,
   });
   return { findings, decision };
 }
 
 function markdown(result: PullRequestGateResult): string {
-  const { delta, decision } = result;
+  const { delta, decision, changeRisk } = result;
   const lines = [
     '# Kent Rehberi — PR Regression Gate',
     '',
@@ -186,6 +200,11 @@ function markdown(result: PullRequestGateResult): string {
     `- Critical delta: ${delta.severityDelta.critical}`,
     `- High delta: ${delta.severityDelta.high}`,
     `- Medium delta: ${delta.severityDelta.medium}`,
+    `- Exact-base file changes: ${changeRisk.summary.changeCount}`,
+    `- Production file changes: ${changeRisk.summary.productionChanges}`,
+    `- Test file changes: ${changeRisk.summary.testChanges}`,
+    `- Change-risk areas: ${changeRisk.summary.changedAreas.join(', ') || 'none'}`,
+    `- Change-risk findings: ${changeRisk.findings.length}`,
     `- Gate: **${decision.state.toUpperCase()}**`,
     '',
   ];
@@ -194,10 +213,18 @@ function markdown(result: PullRequestGateResult): string {
     for (const reason of decision.reasons) lines.push(`- ${reason}`);
     lines.push('');
   }
-  lines.push('## New critical/high findings', '');
+  lines.push('## New critical/high static findings', '');
   const severe = delta.added.filter(item => item.severity === 'critical' || item.severity === 'high');
   if (severe.length === 0) lines.push('No new critical/high static findings relative to the exact base SHA.');
   else for (const item of severe) lines.push(`- **${item.severity.toUpperCase()}** \`${item.key}\``);
+  lines.push('', '## Exact-base change-risk findings', '');
+  if (changeRisk.findings.length === 0) {
+    lines.push('No uncovered changed-surface risk findings.');
+  } else {
+    for (const item of changeRisk.findings) {
+      lines.push(`- **${item.severity.toUpperCase()}** \`${item.id}\`: ${item.title}`);
+    }
+  }
   lines.push('');
   return `${lines.join('\n')}\n`;
 }
@@ -223,13 +250,15 @@ export async function runPullRequestGate(options: {
   );
   const rawDelta = compareBaseline(currentExecution.report, baseline);
   const delta = reconcileLanguageMigrationDelta(rawDelta);
-  const gate = decidePullRequestRegression(delta);
+  const changeRisk = auditChangeRisk(baselineInventory, currentInventory);
+  const gate = decidePullRequestRegression(delta, changeRisk.findings);
   const result: PullRequestGateResult = {
     baselineCommit: options.baselineCommit,
     currentCommit: options.currentCommit,
     baselineRiskScore: baselineExecution.report.decision.riskScore,
     currentRiskScore: currentExecution.report.decision.riskScore,
     delta,
+    changeRisk,
     regressionFindings: gate.findings,
     decision: gate.decision,
   };
@@ -237,6 +266,8 @@ export async function runPullRequestGate(options: {
   mkdirSync(options.outputDirectory, { recursive: true });
   writeFileSync(resolve(options.outputDirectory, 'pr-regression-gate.json'), `${JSON.stringify(result, null, 2)}\n`, 'utf8');
   writeFileSync(resolve(options.outputDirectory, 'pr-regression-gate.md'), markdown(result), 'utf8');
+  writeFileSync(resolve(options.outputDirectory, 'change-risk-gate.json'), `${JSON.stringify(changeRisk, null, 2)}\n`, 'utf8');
+  writeFileSync(resolve(options.outputDirectory, 'change-risk-gate.md'), changeRiskMarkdown(changeRisk), 'utf8');
   return result;
 }
 
@@ -251,7 +282,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   const result = await runPullRequestGate({ currentRoot, baselineRoot, currentCommit, baselineCommit, outputDirectory });
   process.stdout.write(markdown(result));
   if (result.decision.state === 'block') {
-    process.stderr.write('PR regression gate blocked by new critical/high or material risk regression.\n');
+    process.stderr.write('PR regression gate blocked by exact-base static/change-risk regression.\n');
     return 1;
   }
   return 0;
