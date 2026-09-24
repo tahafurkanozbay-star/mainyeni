@@ -186,3 +186,13 @@ export * from './searchObservability';
 export * from './productionRuntime';
 
 export * from './runtimeReadiness';
+
+// Production v3 governance and federated-data layers. These remain transport
+// agnostic: callers inject source adapters, while this boundary owns request
+// complexity, workload admission, transactional data integrity and replica
+// reconciliation without introducing new network endpoints.
+export * from './searchRequestPolicy';
+export * from './searchWorkloadGovernor';
+export * from './federatedSearchRuntime';
+export * from './datasetDeltaRuntime';
+export * from './searchReplicaReconciler';
