@@ -214,6 +214,15 @@ export const RELEASE_EVIDENCE_REQUIREMENTS: readonly ReleaseEvidenceRequirement[
     purpose: 'Typed release findings are compared with the exact PR base.',
   }),
   Object.freeze({
+    id: 'release-webclient-dependency-contract',
+    domain: 'dependencies',
+    workflow: '.github/workflows/release-qa.yml',
+    job: 'webclient-release-validation',
+    step: 'Dependency and lockfile contract',
+    critical: true,
+    purpose: 'Independent Release QA Webclient lane proves dependency and lockfile policy separately from typed and backend validation.',
+  }),
+  Object.freeze({
     id: 'backend-tests',
     domain: 'backend',
     workflow: '.github/workflows/release-qa.yml',
@@ -483,13 +492,13 @@ function commandEvidenceFindings(observations: readonly ReleaseEvidenceObservati
 
   commandRequired('web-lockfile-install', /\bnpm\s+ci\b/u, 'lockfile-based dependency installation');
   commandRequired('web-production-audit', /\bnpm\s+audit\b[^\n]*--omit=dev[^\n]*--audit-level=high/u, 'production dependency vulnerability audit');
-  commandRequired('web-exact-base-typecheck', /pull_request\.base\.sha|BASE_SHA/u, 'exact-base TypeScript regression comparison');
-  commandRequired('web-exact-base-tests', /pull_request\.base\.sha|BASE_SHA/u, 'exact-base test regression comparison');
+  commandRequired('web-exact-base-typecheck', /github\.event\.pull_request\.base\.sha/u, 'exact-base TypeScript regression comparison');
+  commandRequired('web-exact-base-tests', /github\.event\.pull_request\.base\.sha/u, 'exact-base test regression comparison');
   commandRequired('web-production-build', /\bnpm\s+run\s+build\b/u, 'production build execution');
   commandRequired('web-build-integrity', /\bnpm\s+run\s+build:verify\b/u, 'bundle integrity verification');
   commandRequired('typed-release-tests', /node\s+--test\s+quality\/release/u, 'typed release test execution');
   commandRequired('typed-release-scorecard', /quality\/release\/cli\.mts/u, 'whole-repository typed release scorecard generation');
-  commandRequired('typed-release-exact-base', /pull_request\.base\.sha|BASE_SHA/u, 'exact-base typed release regression comparison');
+  commandRequired('typed-release-exact-base', /github\.event\.pull_request\.base\.sha/u, 'exact-base typed release regression comparison');
   commandRequired('backend-tests', /dotnet\s+run\b[^\n]*Platform\.Security\.Tests/u, '.NET security/regression test execution');
   commandRequired('backend-user-publish', /dotnet\s+publish\s+Api\.User/u, 'User API publishability');
   commandRequired('backend-admin-publish', /dotnet\s+publish\s+Api\.Admin/u, 'Admin API publishability');
