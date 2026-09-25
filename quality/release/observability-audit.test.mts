@@ -63,6 +63,20 @@ test('raises timer pressure severity for very dense scheduling', () => {
   assert.equal(section.findings.find(item => item.id === 'observability-timer-pressure')?.severity, 'high');
 });
 
+test('does not classify call-dense synchronous runtime code as detached Promise work', () => {
+  const calls = Array.from({ length: 20 }, (_, index) => `record${index}(state);`).join('\n');
+  const section = auditObservability(inventory([source('Webclient.app/src/controller.ts', calls)]));
+  assert.equal(section.summary.unhandledPromises, 0);
+  assert.ok(!ids(section).includes('observability-async-boundary-review'));
+});
+
+test('flags dense detached async work without a visible failure boundary', () => {
+  const calls = Array.from({ length: 12 }, () => 'refreshAsync();').join('\n');
+  const section = auditObservability(inventory([source('Webclient.app/src/async-runtime.ts', `async function refreshAsync() { return 1; }\n${calls}`)]));
+  assert.equal(section.summary.unhandledPromises, 12);
+  assert.ok(ids(section).includes('observability-async-boundary-review'));
+});
+
 test('flags repeated network work without cancellation signal', () => {
   const section = auditObservability(inventory([source('Webclient.app/src/data.ts', `fetch('/a'); fetch('/b'); fetch('/c');`)]));
   assert.ok(ids(section).includes('observability-cancellation-contract-review'));
