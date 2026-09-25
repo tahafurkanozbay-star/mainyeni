@@ -188,7 +188,7 @@ describe('ExperienceStartupBoundary', () => {
     expect(screen.getByText('Ağ bağlantısı bulunamadı.')).toBeInTheDocument();
   });
 
-  test('cleans the refresh timer on unmount', () => {
+  test('chains one-shot refresh timers and clears the pending timer on unmount', () => {
     vi.useFakeTimers();
     const model = createStartupExperienceModel();
     const refresh = vi.spyOn(model, 'refresh');
@@ -200,7 +200,10 @@ describe('ExperienceStartupBoundary', () => {
       </ExperienceStartupBoundary>,
     );
 
-    act(() => vi.advanceTimersByTime(2_100));
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    act(() => vi.advanceTimersByTime(1_000));
     expect(refresh).toHaveBeenCalledTimes(2);
 
     unmount();
