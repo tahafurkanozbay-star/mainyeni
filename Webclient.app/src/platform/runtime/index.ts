@@ -31,40 +31,13 @@ export * from './drainCoordinator';
 export * from './runtimeHealthPolicy';
 export * from './resourceLeaseRegistry';
 export { BoundedCircuitBreaker, CircuitOpenError as BoundedCircuitOpenError } from './circuitBreaker';
-export type {
-  CircuitBreakerOptions as BoundedCircuitBreakerOptions,
-  CircuitState as BoundedCircuitState,
-  CircuitOutcome as BoundedCircuitOutcome,
-  CircuitSnapshot as BoundedCircuitSnapshot,
-  CircuitEvent as BoundedCircuitEvent,
-} from './circuitBreaker';
+export type { CircuitBreakerOptions as BoundedCircuitBreakerOptions, CircuitState as BoundedCircuitState, CircuitOutcome as BoundedCircuitOutcome, CircuitSnapshot as BoundedCircuitSnapshot, CircuitEvent as BoundedCircuitEvent } from './circuitBreaker';
 export { BoundedBulkhead, BulkheadRejectedError } from './bulkhead';
-export type {
-  BulkheadOptions,
-  BulkheadRunOptions,
-  BulkheadSnapshot,
-  BulkheadEvent,
-  BulkheadRejectionReason,
-} from './bulkhead';
+export type { BulkheadOptions, BulkheadRunOptions, BulkheadSnapshot, BulkheadEvent, BulkheadRejectionReason } from './bulkhead';
 export { BoundedFailureBudget } from './failureBudget';
-export type {
-  FailureBudgetOptions,
-  FailureBudgetRecordOptions,
-  FailureBudgetSnapshot,
-  FailureBudgetEvent,
-  FailureBudgetOutcome,
-  FailureBudgetState,
-} from './failureBudget';
+export type { FailureBudgetOptions, FailureBudgetRecordOptions, FailureBudgetSnapshot, FailureBudgetEvent, FailureBudgetOutcome, FailureBudgetState } from './failureBudget';
 export { BoundedResilienceCoordinator, ResilienceCoordinatorError } from './resilienceCoordinator';
-export type {
-  ResilienceCoordinatorOptions,
-  ResilienceRequest,
-  ResiliencePriority,
-  ResilienceOutcome as CoordinatedResilienceOutcome,
-  ResilienceEvent,
-  ResilienceSnapshot,
-  ResilienceClock as ResilienceCoordinatorClock,
-} from './resilienceCoordinator';
+export type { ResilienceCoordinatorOptions, ResilienceRequest, ResiliencePriority, ResilienceOutcome as CoordinatedResilienceOutcome, ResilienceEvent, ResilienceSnapshot, ResilienceClock as ResilienceCoordinatorClock } from './resilienceCoordinator';
 export * from './structuredTaskScope';
 export * from './runtimePolicyProfile';
 export * from './resourceScope';
@@ -90,16 +63,6 @@ export * from './runtimeHealthEscalationMatrix';
 export * from './runtimeDependencyHealthRegistry';
 export * from './runtimeDependencyTopology';
 export * from './runtimeDependencyReadinessCoordinator';
+export * from './runtimeDependencyFailoverPlanner';
 export { RuntimePressureOrchestrator } from './runtimePressureOrchestrator';
-export type {
-  RuntimePressureMode as RuntimeOrchestrationPressureMode,
-  RuntimePressureDecision as RuntimeOrchestrationPressureDecision,
-  RuntimePressureReason as RuntimeOrchestrationPressureReason,
-  RuntimePressurePolicy as RuntimeOrchestrationPressurePolicy,
-  RuntimePressureSample as RuntimeOrchestrationPressureSample,
-  RuntimePressureRequest as RuntimeOrchestrationPressureRequest,
-  RuntimePressureResult as RuntimeOrchestrationPressureResult,
-  RuntimePressureTransition as RuntimeOrchestrationPressureTransition,
-  RuntimePressureLaneSnapshot as RuntimeOrchestrationPressureLaneSnapshot,
-  RuntimePressureSnapshot as RuntimeOrchestrationPressureSnapshot,
-} from './runtimePressureOrchestrator';
+export type { RuntimePressureMode as RuntimeOrchestrationPressureMode, RuntimePressureDecision as RuntimeOrchestrationPressureDecision, RuntimePressureReason as RuntimeOrchestrationPressureReason, RuntimePressurePolicy as RuntimeOrchestrationPressurePolicy, RuntimePressureSample as RuntimeOrchestrationPressureSample, RuntimePressureRequest as RuntimeOrchestrationPressureRequest, RuntimePressureResult as RuntimeOrchestrationPressureResult, RuntimePressureTransition as RuntimeOrchestrationPressureTransition, RuntimePressureLaneSnapshot as RuntimeOrchestrationPressureLaneSnapshot, RuntimePressureSnapshot as RuntimeOrchestrationPressureSnapshot } from './runtimePressureOrchestrator';
