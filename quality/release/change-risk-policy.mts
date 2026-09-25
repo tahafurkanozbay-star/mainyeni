@@ -154,12 +154,11 @@ export function policyForArea(area: ChangeRiskArea): ChangeRiskPolicy { const po
 
 export function classifyRiskAreas(input: string, text = ''): readonly ChangeRiskArea[] {
   const path = normalizeRepositoryPath(input);
-  if (isGeneratedPath(path) || isDocumentationPath(path)) return [];
-  const testPath = isTestPath(path);
+  if (isGeneratedPath(path) || isDocumentationPath(path) || isTestPath(path)) return [];
   const areas = new Set<ChangeRiskArea>();
   for (const policy of POLICIES) {
-    const pathMatch = testPath ? matchesAny(path, policy.testPatterns) : matchesAny(path, policy.pathPatterns);
-    const contentMatch = !testPath && policy.contentPatterns ? matchesAny(text, policy.contentPatterns) : false;
+    const pathMatch = matchesAny(path, policy.pathPatterns);
+    const contentMatch = policy.contentPatterns ? matchesAny(text, policy.contentPatterns) : false;
     if (pathMatch || contentMatch) areas.add(policy.area);
   }
   return [...areas].sort((left, right) => left.localeCompare(right, 'en'));
