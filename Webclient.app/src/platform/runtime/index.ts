@@ -63,5 +63,6 @@ export * from './runtimeDependencySloController';
 export * from './runtimeDependencyChangeGuard';
 export * from './runtimeDependencyDeploymentGate';
 export * from './runtimeDependencyIncidentCoordinator';
+export * from './runtimeDependencyMaintenanceRegistry';
 export { RuntimePressureOrchestrator } from './runtimePressureOrchestrator';
 export type { RuntimePressureMode as RuntimeOrchestrationPressureMode, RuntimePressureDecision as RuntimeOrchestrationPressureDecision, RuntimePressureReason as RuntimeOrchestrationPressureReason, RuntimePressurePolicy as RuntimeOrchestrationPressurePolicy, RuntimePressureSample as RuntimeOrchestrationPressureSample, RuntimePressureRequest as RuntimeOrchestrationPressureRequest, RuntimePressureResult as RuntimeOrchestrationPressureResult, RuntimePressureTransition as RuntimeOrchestrationPressureTransition, RuntimePressureLaneSnapshot as RuntimeOrchestrationPressureLaneSnapshot, RuntimePressureSnapshot as RuntimeOrchestrationPressureSnapshot } from './runtimePressureOrchestrator';
