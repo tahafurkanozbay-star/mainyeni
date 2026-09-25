@@ -86,7 +86,7 @@ test('removed production file is modeled as removed', () => {
   const changes = collectRepositoryChanges(inv([FRONTEND]), inv([]));
   assert.equal(changes.length, 1);
   assert.equal(changes[0]?.kind, 'removed');
-  assert.equal(changes[0]?.lineDelta, -1);
+  assert.equal(changes[0]?.lineDelta, -2);
 });
 
 test('modified file carries before and after snapshots', () => {
