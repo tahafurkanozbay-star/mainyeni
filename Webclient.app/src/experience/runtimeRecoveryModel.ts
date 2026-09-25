@@ -112,6 +112,7 @@ const componentHint = (stack: string | null | undefined): string | null => {
   return firstComponent
     .replace(/\([^)]*\)/g, '')
     .replace(/\s+at\s+/g, ' at ')
+    .trim()
     .slice(0, MAX_COMPONENT_HINT_LENGTH);
 };
 
