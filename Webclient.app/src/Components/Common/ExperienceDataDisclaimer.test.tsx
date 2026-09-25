@@ -9,8 +9,8 @@ describe('ExperienceDataDisclaimer', () => {
     const note = screen.getByRole('note', { name: 'Veri kullanım uyarısı' });
     expect(note).toBeInTheDocument();
     expect(note).toHaveAttribute('data-compact', 'false');
-    expect(note).toHaveTextContent('Sitede gösterilen veriler bilgi amaçlıdır.');
-    expect(note).toHaveTextContent('Resmî işlemlerde kullanılamaz.');
+    expect(note).toHaveTextContent('Sitede Gösterilen Veriler Bilgi Amaçlıdır.');
+    expect(note).toHaveTextContent('Resmî İşlemlerde KULLANILAMAZ!');
   });
 
   test('marks the decorative information glyph as hidden from assistive technology', () => {
@@ -26,7 +26,7 @@ describe('ExperienceDataDisclaimer', () => {
 
     const note = screen.getByRole('note', { name: 'Veri kullanım uyarısı' });
     expect(note).toHaveAttribute('data-compact', 'true');
-    expect(note).toHaveTextContent('Resmî işlemlerde kullanılamaz.');
+    expect(note).toHaveTextContent('Resmî İşlemlerde KULLANILAMAZ!');
   });
 
   test('keeps the legal restriction visually emphasized in semantic strong text', () => {
@@ -34,6 +34,6 @@ describe('ExperienceDataDisclaimer', () => {
     const strong = container.querySelector('.experience-data-disclaimer__copy strong');
 
     expect(strong?.tagName).toBe('STRONG');
-    expect(strong).toHaveTextContent('Resmî işlemlerde kullanılamaz.');
+    expect(strong).toHaveTextContent('Resmî İşlemlerde KULLANILAMAZ!');
   });
 });
