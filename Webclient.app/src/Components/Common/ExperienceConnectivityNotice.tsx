@@ -68,9 +68,9 @@ export const ExperienceConnectivityNotice = ({
 
   useEffect(() => {
     if (snapshot.phase !== 'offline' && snapshot.phase !== 'restored') return undefined;
-    const interval = window.setInterval(() => model.refresh(), 1_000);
-    return () => window.clearInterval(interval);
-  }, [model, snapshot.phase]);
+    const timer = window.setTimeout(() => model.refresh(), 1_000);
+    return () => window.clearTimeout(timer);
+  }, [model, snapshot.phase, snapshot.revision]);
 
   useEffect(() => {
     if (!snapshot.visible) return;
