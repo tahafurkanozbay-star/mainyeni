@@ -75,7 +75,8 @@ describe('App bootstrap lifecycle', () => {
   test('renders the enterprise loading experience before GIS configuration resolves', () => {
     render(<App />);
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.getByText(/lütfen bekleyin/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /kent rehberi hazırlanıyor/i })).toBeInTheDocument();
+    expect(screen.getByText(/harita motoru, çalışma alanı ve güvenli uygulama yapılandırması yükleniyor/i)).toBeInTheDocument();
     expect(screen.queryByTestId('map-shell')).not.toBeInTheDocument();
     expect(screen.queryByTestId('experience-layer')).not.toBeInTheDocument();
     expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
@@ -97,7 +98,7 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.getByRole('note', { name: /veri kullanım uyarısı/i })).toHaveTextContent(
       'Sitede Gösterilen Veriler Bilgi Amaçlıdır. Resmî İşlemlerde KULLANILAMAZ!'
     );
-    expect(screen.queryByText(/lütfen bekleyin/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /kent rehberi hazırlanıyor/i })).not.toBeInTheDocument();
     expect(document.getElementById('experience-global-live-region')).toHaveAttribute('role', 'status');
   });
 
@@ -111,7 +112,8 @@ describe('App bootstrap lifecycle', () => {
       await expect(operation.promise).rejects.toThrow('network details that must not reach UI');
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/harita yapılandırması yüklenemedi/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/harita çalışma alanı güvenli biçimde başlatılamadı/i);
+    expect(screen.getByRole('button', { name: /tekrar dene/i })).toBeInTheDocument();
     expect(screen.queryByText(/network details/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('map-shell')).not.toBeInTheDocument();
   });
@@ -127,7 +129,7 @@ describe('App bootstrap lifecycle', () => {
     });
 
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.queryByText(/harita yapılandırması yüklenemedi/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/harita çalışma alanı güvenli biçimde başlatılamadı/i)).not.toBeInTheDocument();
   });
 
   test('aborts the active bootstrap operation when the application unmounts', () => {
@@ -164,6 +166,6 @@ describe('App bootstrap lifecycle', () => {
       await expect(operation.promise).rejects.toThrow('late failure');
     });
 
-    expect(screen.queryByText(/harita yapılandırması yüklenemedi/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/harita çalışma alanı güvenli biçimde başlatılamadı/i)).not.toBeInTheDocument();
   });
 });
