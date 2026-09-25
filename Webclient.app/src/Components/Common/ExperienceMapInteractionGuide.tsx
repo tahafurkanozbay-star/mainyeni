@@ -93,8 +93,12 @@ export const ExperienceMapInteractionGuide = ({
       if (!NAVIGATION_KEYS.has(event.key) && !ownsMapFocus(event.target, mapTargetId)) return;
       model.recordKeyboard(event.key, event.shiftKey);
     };
-    const onPointerDown = (): void => model.recordPointer();
-    const onFocusIn = (event: FocusEvent): void => model.setMapFocused(ownsMapFocus(event.target, mapTargetId));
+    const onPointerDown = (): void => {
+      model.recordPointer();
+    };
+    const onFocusIn = (event: FocusEvent): void => {
+      model.setMapFocused(ownsMapFocus(event.target, mapTargetId));
+    };
     const onFocusOut = (event: FocusEvent): void => {
       if (!ownsMapFocus(event.relatedTarget, mapTargetId)) model.setMapFocused(false);
     };
