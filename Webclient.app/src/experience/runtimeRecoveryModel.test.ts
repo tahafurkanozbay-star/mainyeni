@@ -55,9 +55,9 @@ describe('runtimeRecoveryModel', () => {
   });
 
   test('sanitizes unsafe source names and failure codes', () => {
-    const error = Object.assign(new Error('failed'), { code: '<script>' });
+    const error = Object.assign(new Error('failed'), { code: 'not a safe code!' });
     const model = createRuntimeRecoveryModel();
-    model.capture({ error, source: '<img src=x onerror=1>' });
+    model.capture({ error, source: 'invalid source with spaces' });
 
     expect(model.snapshot().failure).toMatchObject({
       code: null,
