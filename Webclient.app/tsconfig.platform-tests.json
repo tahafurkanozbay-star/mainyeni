@@ -45,6 +45,7 @@
     "src/platform/runtime/runtimeConcurrencyGovernor.test.ts",
     "src/platform/runtime/runtimeDegradationController.test.ts",
     "src/platform/runtime/runtimeDependencyHealthRegistry.test.ts",
+    "src/platform/runtime/runtimeDependencyTopology.test.ts",
     "src/platform/runtime/runtimeFailureBudget.test.ts",
     "src/platform/runtime/runtimeFairShareAllocator.test.ts",
     "src/platform/runtime/runtimeHealthEscalationMatrix.test.ts",
