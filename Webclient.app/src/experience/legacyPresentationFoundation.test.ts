@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import foundationCss from './legacyPresentationFoundation.css?raw';
-import modernizationCss from './legacyPresentationModernization.css?raw';
+
+const readFixture = (relativePath: string): string =>
+  readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+
+const foundationCss = readFixture('./legacyPresentationFoundation.css');
+const modernizationCss = readFixture('./legacyPresentationModernization.css');
 
 const expectAll = (source: string, fragments: readonly string[]) => {
   for (const fragment of fragments) expect(source).toContain(fragment);
