@@ -183,6 +183,7 @@ export class SpatialTileCacheRuntime<T> {
       return false;
     }
 
+    const previous = existing ? { ...existing } : undefined;
     if (existing) this.#remove(id, 'replace');
     this.#entries.set(id, {
       key: normalized,
@@ -200,6 +201,7 @@ export class SpatialTileCacheRuntime<T> {
     this.pruneExpired(now);
     if (!this.#evictToBudget(id)) {
       this.#remove(id, 'reject');
+      if (previous && !this.#isExpired(previous, now)) this.#restore(id, previous);
       this.#rejected += 1;
       return false;
     }
@@ -275,6 +277,12 @@ export class SpatialTileCacheRuntime<T> {
 
   #isExpired(entry: MutableEntry<T>, now: number): boolean {
     return now >= entry.expiresAt;
+  }
+
+  #restore(id: string, entry: MutableEntry<T>): void {
+    this.#entries.set(id, entry);
+    this.#bytes += entry.byteSize;
+    if (entry.pinned) this.#pinnedEntries += 1;
   }
 
   #evictToBudget(protectedId: string): boolean {
