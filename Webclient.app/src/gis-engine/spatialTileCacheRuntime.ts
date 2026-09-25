@@ -214,7 +214,9 @@ export class SpatialTileCacheRuntime<T> {
   #restore(id: string, entry: MutableEntry<T>): void { this.#entries.set(id, entry); this.#bytes += entry.byteSize; if (entry.pinned) this.#pinnedEntries += 1; }
   #evictToBudget(protectedId: string): boolean {
     while (this.#entries.size > this.#limits.maxEntries || this.#bytes > this.#limits.maxBytes) {
-      const victim = [...this.#entries.entries()].filter(([id, entry]) => id !== protectedId && !entry.pinned).sort(([idA, a], [idB, b]) => a.lastAccessedAt - b.lastAccessedAt || a.insertedAt - b.insertedAt || idA.localeCompare(idB))[0];
+      const victim = [...this.#entries.entries()]
+        .filter(([id, entry]) => id !== protectedId && !entry.pinned)
+        .sort(([idA, a], [idB, b]) => a.lastAccessedAt - b.lastAccessedAt || a.insertedAt - b.insertedAt || idA.localeCompare(idB))[0];
       if (!victim) return false;
       this.#remove(victim[0], 'eviction');
     }
