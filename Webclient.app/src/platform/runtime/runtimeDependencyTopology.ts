@@ -80,11 +80,13 @@ function normalizeId(value: string, name = 'node'): string {
 }
 
 function impactSeverity(value: RuntimeDependencyImpact): number {
-  return value === 'none' ? 0 : value === 'degraded' ? 1 : 2;
+  if (value === 'none') return 0;
+  return value === 'degraded' ? 1 : 2;
 }
 
 function availabilityImpact(value: RuntimeDependencyAvailability): RuntimeDependencyImpact {
-  return value === 'healthy' ? 'none' : value === 'degraded' ? 'degraded' : 'blocked';
+  if (value === 'healthy') return 'none';
+  return value === 'degraded' ? 'degraded' : 'blocked';
 }
 
 export class RuntimeDependencyTopology {
@@ -129,8 +131,10 @@ export class RuntimeDependencyTopology {
     this.#assertTime(occurredAt);
     const id = normalizeId(node);
     if (!this.#nodes.has(id)) return false;
-    const related = new Set<string>([...(this.#dependencies.get(id) ?? []), ...(this.#consumers.get(id) ?? [])]);
-    for (const other of related) this.#removeEdgeInternal(id, other) || this.#removeEdgeInternal(other, id);
+    const dependencies = [...(this.#dependencies.get(id) ?? [])];
+    const consumers = [...(this.#consumers.get(id) ?? [])];
+    for (const dependency of dependencies) this.#removeEdgeInternal(id, dependency);
+    for (const consumer of consumers) this.#removeEdgeInternal(consumer, id);
     this.#nodes.delete(id);
     this.#dependencies.delete(id);
     this.#consumers.delete(id);
@@ -148,13 +152,13 @@ export class RuntimeDependencyTopology {
     const key = this.#edgeKey(consumer, dependency);
     if (this.#edges.has(key)) throw new Error(`dependency edge already exists: ${consumer} -> ${dependency}`);
     if (this.#edges.size >= this.#policy.maximumEdges) throw new RangeError('maximum dependency edge capacity reached');
-    const dependencies = this.#dependencies.get(consumer)!;
+    const dependencies = this.#requireAdjacency(this.#dependencies, consumer, 'dependency');
     if (dependencies.size >= this.#policy.maximumDependenciesPerNode) throw new RangeError('maximum dependencies per node reached');
     if (this.#reaches(dependency, consumer)) throw new Error(`dependency cycle rejected: ${consumer} -> ${dependency}`);
     const edge: MutableEdge = { consumer, dependency, required: definition.required };
     this.#edges.set(key, edge);
     dependencies.add(dependency);
-    this.#consumers.get(dependency)!.add(consumer);
+    this.#requireAdjacency(this.#consumers, dependency, 'consumer').add(consumer);
     this.#record('edge-added', consumer, occurredAt, dependency);
   }
 
@@ -184,12 +188,13 @@ export class RuntimeDependencyTopology {
     let effectiveImpact = availabilityImpact(target.availability);
     const queue: Array<{ readonly id: string; readonly requiredPath: boolean; readonly depth: number }> = [];
     for (const dependency of this.#dependencies.get(id) ?? []) {
-      const edge = this.#edges.get(this.#edgeKey(id, dependency))!;
+      const edge = this.#requireEdge(id, dependency);
       queue.push({ id: dependency, requiredPath: edge.required, depth: 1 });
     }
     const visited = new Map<string, number>();
     while (queue.length > 0) {
-      const current = queue.shift()!;
+      const current = queue.shift();
+      if (current === undefined) break;
       if (current.depth > this.#policy.maximumTraversalDepth) throw new RangeError('dependency traversal depth exceeded');
       const previousDepth = visited.get(current.id);
       if (previousDepth !== undefined && previousDepth <= current.depth) continue;
@@ -201,7 +206,7 @@ export class RuntimeDependencyTopology {
       else if (propagated === 'degraded') degradedBy.add(current.id);
       if (impactSeverity(propagated) > impactSeverity(effectiveImpact)) effectiveImpact = propagated;
       for (const nested of this.#dependencies.get(current.id) ?? []) {
-        const edge = this.#edges.get(this.#edgeKey(current.id, nested))!;
+        const edge = this.#requireEdge(current.id, nested);
         queue.push({ id: nested, requiredPath: current.requiredPath && edge.required, depth: current.depth + 1 });
       }
     }
@@ -223,7 +228,7 @@ export class RuntimeDependencyTopology {
     const id = normalizeId(node);
     this.#requireNode(id);
     return [...(this.#dependencies.get(id) ?? [])].sort().map((dependency) => {
-      const edge = this.#edges.get(this.#edgeKey(id, dependency))!;
+      const edge = this.#requireEdge(id, dependency);
       return { consumer: edge.consumer, dependency: edge.dependency, required: edge.required };
     });
   }
@@ -241,12 +246,16 @@ export class RuntimeDependencyTopology {
     const ready = [...indegree.entries()].filter(([, degree]) => degree === 0).map(([id]) => id).sort();
     const order: string[] = [];
     while (ready.length > 0) {
-      const dependency = ready.shift()!;
+      const dependency = ready.shift();
+      if (dependency === undefined) break;
       order.push(dependency);
       for (const consumer of this.#consumers.get(dependency) ?? []) {
         const next = (indegree.get(consumer) ?? 0) - 1;
         indegree.set(consumer, next);
-        if (next === 0) { ready.push(consumer); ready.sort(); }
+        if (next === 0) {
+          ready.push(consumer);
+          ready.sort();
+        }
       }
     }
     if (order.length !== this.#nodes.size) throw new Error('dependency topology contains a cycle');
@@ -269,7 +278,8 @@ export class RuntimeDependencyTopology {
     const stack: Array<{ readonly id: string; readonly depth: number }> = [{ id: start, depth: 0 }];
     const visited = new Set<string>();
     while (stack.length > 0) {
-      const current = stack.pop()!;
+      const current = stack.pop();
+      if (current === undefined) break;
       if (current.id === target) return true;
       if (visited.has(current.id)) continue;
       visited.add(current.id);
@@ -291,6 +301,18 @@ export class RuntimeDependencyTopology {
     const node = this.#nodes.get(id);
     if (node === undefined) throw new Error(`unknown dependency node: ${id}`);
     return node;
+  }
+
+  #requireEdge(consumer: string, dependency: string): MutableEdge {
+    const edge = this.#edges.get(this.#edgeKey(consumer, dependency));
+    if (edge === undefined) throw new Error(`dependency topology invariant violated: missing edge ${consumer} -> ${dependency}`);
+    return edge;
+  }
+
+  #requireAdjacency(index: Map<string, Set<string>>, id: string, kind: string): Set<string> {
+    const values = index.get(id);
+    if (values === undefined) throw new Error(`dependency topology invariant violated: missing ${kind} index for ${id}`);
+    return values;
   }
 
   #edgeKey(consumer: string, dependency: string): string { return `${consumer}\u0000${dependency}`; }
