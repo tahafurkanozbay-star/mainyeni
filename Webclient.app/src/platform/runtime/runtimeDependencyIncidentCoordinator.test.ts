@@ -154,7 +154,7 @@ describe('RuntimeDependencyIncidentCoordinator', () => {
   it('returns defensive history copies', () => {
     const coordinator = new RuntimeDependencyIncidentCoordinator();
     coordinator.evaluate(evidence({ dependencyReady: false }));
-    const history = coordinator.history() as Array<{ reasons: string[] }>;
+    const history = coordinator.history().map((entry) => ({ ...entry, reasons: [...entry.reasons] }));
     history[0]?.reasons.push('mutated');
     expect(coordinator.history()[0]?.reasons).not.toContain('mutated');
   });
