@@ -20,6 +20,7 @@ import {
   packageLockCandidates,
   pathNature,
   policyForArea,
+  testSupportsArea,
   type ChangeRiskArea,
 } from './change-risk-policy.mts';
 
@@ -321,9 +322,11 @@ function deletedTestFindings(changes: readonly RepositoryChange[]): Finding[] {
   const addedTests = changes.filter(change => change.kind === 'added' && change.test);
   const findings: Finding[] = [];
   for (const removed of removedTests) {
-    const beforeAreas = removed.before ? classifyRiskAreas(removed.path, removed.before.text) : [];
+    const beforeAreas = CHANGE_RISK_POLICIES
+      .filter(policy => testSupportsArea(removed.path, policy.area))
+      .map(policy => policy.area);
     const replacement = addedTests.some(added =>
-      beforeAreas.some(area => added.areas.includes(area)) ||
+      beforeAreas.some(area => testSupportsArea(added.path, area)) ||
       added.path.split('/').at(-1) === removed.path.split('/').at(-1));
     if (replacement) continue;
     findings.push(finding(
@@ -517,7 +520,6 @@ export function summarizeChangeRisk(changes: readonly RepositoryChange[]): Chang
     .filter(change => isPackageLockPath(change.path))
     .map(change => change.path)
     .sort((left, right) => left.localeCompare(right, 'en'));
-
   return {
     changeCount: changes.length,
     added: changes.filter(change => change.kind === 'added').length,
