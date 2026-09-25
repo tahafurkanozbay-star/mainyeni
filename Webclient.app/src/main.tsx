@@ -3,7 +3,7 @@ import App from './App';
 import '@arcgis/core/assets/esri/themes/light/main.css';
 import './styles.css';
 import './experience-premium.css';
-import { AppErrorBoundary } from './platform/runtime/AppErrorBoundary';
+import { ExperienceRuntimeRecoveryBoundary } from './Components/Common/ExperienceRuntimeRecoveryBoundary';
 import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
 import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery';
 import { performanceMonitor } from './platform/performance/performanceMonitor';
@@ -117,9 +117,9 @@ const root = createRoot(rootElement, {
 });
 
 root.render(
-  <AppErrorBoundary>
+  <ExperienceRuntimeRecoveryBoundary>
     <App />
-  </AppErrorBoundary>,
+  </ExperienceRuntimeRecoveryBoundary>,
 );
 
 const markInitialRenderComplete = (): void => {
