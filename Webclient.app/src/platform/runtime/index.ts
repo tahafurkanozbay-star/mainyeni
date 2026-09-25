@@ -89,6 +89,7 @@ export * from './runtimeCapacityReservationPool';
 export * from './runtimeHealthEscalationMatrix';
 export * from './runtimeDependencyHealthRegistry';
 export * from './runtimeDependencyTopology';
+export * from './runtimeDependencyReadinessCoordinator';
 export { RuntimePressureOrchestrator } from './runtimePressureOrchestrator';
 export type {
   RuntimePressureMode as RuntimeOrchestrationPressureMode,
