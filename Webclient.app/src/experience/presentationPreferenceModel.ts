@@ -194,10 +194,11 @@ export const createPresentationPreferenceModel = (
   let snapshot = deriveSnapshot(environment, 0, 0, null);
 
   const reportObserverError = (error: unknown): void => {
+    if (!options.onObserverError) return;
     try {
-      options.onObserverError?.(error);
-    } catch {
-      // Reporting must never destabilize presentation preference propagation.
+      options.onObserverError(error);
+    } catch (reportError) {
+      console.warn('[experience.presentation-preference] observer reporter failed', reportError);
     }
   };
 
