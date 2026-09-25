@@ -38,8 +38,9 @@ const isTextEntry = (target: EventTarget | null): boolean => {
 };
 
 const ownsMapFocus = (target: EventTarget | null, mapTargetId: string): boolean => {
-  if (!(target instanceof Element)) return false;
-  return target.id === mapTargetId || Boolean(target.closest(`#${CSS.escape(mapTargetId)}`));
+  if (!(target instanceof Node)) return false;
+  const mapTarget = document.getElementById(mapTargetId);
+  return mapTarget instanceof HTMLElement && (target === mapTarget || mapTarget.contains(target));
 };
 
 const mergeDescribedBy = (existing: string | null, id: string): string => {
@@ -95,8 +96,7 @@ export const ExperienceMapInteractionGuide = ({
     const onPointerDown = (): void => model.recordPointer();
     const onFocusIn = (event: FocusEvent): void => model.setMapFocused(ownsMapFocus(event.target, mapTargetId));
     const onFocusOut = (event: FocusEvent): void => {
-      const next = event.relatedTarget;
-      if (!ownsMapFocus(next, mapTargetId)) model.setMapFocused(false);
+      if (!ownsMapFocus(event.relatedTarget, mapTargetId)) model.setMapFocused(false);
     };
 
     document.addEventListener('keydown', onKeyDown, true);
