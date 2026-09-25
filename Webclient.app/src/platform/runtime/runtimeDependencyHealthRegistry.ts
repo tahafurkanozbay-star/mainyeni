@@ -62,25 +62,17 @@ const DEFAULT_POLICY: RuntimeDependencyHealthPolicy = Object.freeze({
 });
 
 function assertPositiveInteger(value: number, name: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new RangeError(`${name} must be a positive integer`);
-  }
+  if (!Number.isInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive integer`);
 }
 
 function assertRatio(value: number, name: string): void {
-  if (!Number.isFinite(value) || value < 0 || value > 1) {
-    throw new RangeError(`${name} must be between 0 and 1`);
-  }
+  if (!Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${name} must be between 0 and 1`);
 }
 
 function normalizeDependency(value: string): string {
   const normalized = value.trim();
-  if (normalized.length === 0) {
-    throw new TypeError('dependency must not be empty');
-  }
-  if (normalized.length > 160) {
-    throw new RangeError('dependency must not exceed 160 characters');
-  }
+  if (normalized.length === 0) throw new TypeError('dependency must not be empty');
+  if (normalized.length > 160) throw new RangeError('dependency must not exceed 160 characters');
   return normalized;
 }
 
@@ -92,6 +84,10 @@ function copyObservation(observation: RuntimeDependencyObservation): RuntimeDepe
   return observation.latencyMs === undefined
     ? { dependency: observation.dependency, outcome: observation.outcome, observedAt: observation.observedAt }
     : { dependency: observation.dependency, outcome: observation.outcome, observedAt: observation.observedAt, latencyMs: observation.latencyMs };
+}
+
+function severity(state: RuntimeDependencyHealthState): number {
+  return state === 'healthy' ? 0 : state === 'degraded' ? 1 : 2;
 }
 
 export class RuntimeDependencyHealthRegistry {
@@ -110,41 +106,24 @@ export class RuntimeDependencyHealthRegistry {
     assertPositiveInteger(merged.maximumHistory, 'maximumHistory');
     assertRatio(merged.degradedFailureRatio, 'degradedFailureRatio');
     assertRatio(merged.unavailableFailureRatio, 'unavailableFailureRatio');
-    if (merged.minimumSamples > merged.windowSize) {
-      throw new RangeError('minimumSamples must not exceed windowSize');
-    }
-    if (merged.degradedFailureRatio > merged.unavailableFailureRatio) {
-      throw new RangeError('degradedFailureRatio must not exceed unavailableFailureRatio');
-    }
+    if (merged.minimumSamples > merged.windowSize) throw new RangeError('minimumSamples must not exceed windowSize');
+    if (merged.degradedFailureRatio > merged.unavailableFailureRatio) throw new RangeError('degradedFailureRatio must not exceed unavailableFailureRatio');
     this.#policy = Object.freeze({ ...merged });
   }
 
-  public get policy(): RuntimeDependencyHealthPolicy {
-    return this.#policy;
-  }
+  public get policy(): RuntimeDependencyHealthPolicy { return this.#policy; }
 
   public observe(input: Omit<RuntimeDependencyObservation, 'dependency'> & { readonly dependency: string }): RuntimeDependencyHealthSnapshot {
     const dependency = normalizeDependency(input.dependency);
-    if (!Number.isFinite(input.observedAt) || input.observedAt < 0) {
-      throw new RangeError('observedAt must be a non-negative finite number');
-    }
-    if (input.latencyMs !== undefined && (!Number.isFinite(input.latencyMs) || input.latencyMs < 0)) {
-      throw new RangeError('latencyMs must be a non-negative finite number');
-    }
-
+    if (!Number.isFinite(input.observedAt) || input.observedAt < 0) throw new RangeError('observedAt must be a non-negative finite number');
+    if (input.latencyMs !== undefined && (!Number.isFinite(input.latencyMs) || input.latencyMs < 0)) throw new RangeError('latencyMs must be a non-negative finite number');
     const state = this.#getOrCreate(dependency);
-    if (state.lastObservedAt !== null && input.observedAt < state.lastObservedAt) {
-      throw new RangeError('observedAt must be monotonic per dependency');
-    }
-
+    if (state.lastObservedAt !== null && input.observedAt < state.lastObservedAt) throw new RangeError('observedAt must be monotonic per dependency');
     const observation: RuntimeDependencyObservation = input.latencyMs === undefined
       ? { dependency, outcome: input.outcome, observedAt: input.observedAt }
       : { dependency, outcome: input.outcome, observedAt: input.observedAt, latencyMs: input.latencyMs };
-
     state.observations.push(observation);
-    if (state.observations.length > this.#policy.windowSize) {
-      state.observations.splice(0, state.observations.length - this.#policy.windowSize);
-    }
+    if (state.observations.length > this.#policy.windowSize) state.observations.splice(0, state.observations.length - this.#policy.windowSize);
     state.lastObservedAt = input.observedAt;
     state.consecutiveSuccesses = input.outcome === 'success' ? state.consecutiveSuccesses + 1 : 0;
     state.revision = ++this.#revision;
@@ -170,9 +149,7 @@ export class RuntimeDependencyHealthRegistry {
     return result.sort((left, right) => left.dependency.localeCompare(right.dependency));
   }
 
-  public transitions(): readonly RuntimeDependencyHealthTransition[] {
-    return this.#history.map((transition) => ({ ...transition }));
-  }
+  public transitions(): readonly RuntimeDependencyHealthTransition[] { return this.#history.map((transition) => ({ ...transition })); }
 
   public observations(dependency: string): readonly RuntimeDependencyObservation[] {
     const state = this.#dependencies.get(normalizeDependency(dependency));
@@ -190,15 +167,11 @@ export class RuntimeDependencyHealthRegistry {
     state.consecutiveSuccesses = 0;
     state.lastObservedAt = null;
     state.revision = ++this.#revision;
-    if (previous !== 'healthy') {
-      this.#recordTransition(state, previous, 'healthy', 'reset', now);
-    }
+    if (previous !== 'healthy') this.#recordTransition(state, previous, 'healthy', 'reset', now);
     return true;
   }
 
-  public remove(dependency: string): boolean {
-    return this.#dependencies.delete(normalizeDependency(dependency));
-  }
+  public remove(dependency: string): boolean { return this.#dependencies.delete(normalizeDependency(dependency)); }
 
   public clear(): void {
     this.#dependencies.clear();
@@ -209,39 +182,37 @@ export class RuntimeDependencyHealthRegistry {
   #getOrCreate(dependency: string): MutableDependencyState {
     const existing = this.#dependencies.get(dependency);
     if (existing !== undefined) return existing;
-    if (this.#dependencies.size >= this.#policy.maximumDependencies) {
-      throw new RangeError('maximum dependency capacity reached');
-    }
-    const created: MutableDependencyState = {
-      dependency,
-      state: 'healthy',
-      observations: [],
-      consecutiveSuccesses: 0,
-      lastObservedAt: null,
-      revision: ++this.#revision,
-    };
+    if (this.#dependencies.size >= this.#policy.maximumDependencies) throw new RangeError('maximum dependency capacity reached');
+    const created: MutableDependencyState = { dependency, state: 'healthy', observations: [], consecutiveSuccesses: 0, lastObservedAt: null, revision: ++this.#revision };
     this.#dependencies.set(dependency, created);
     return created;
   }
 
   #reconcileState(state: MutableDependencyState, now: number): void {
     if (state.observations.length < this.#policy.minimumSamples) return;
-    const failures = state.observations.reduce((count, observation) => count + (isFailure(observation.outcome) ? 1 : 0), 0);
+    let failures = 0;
+    for (const observation of state.observations) if (isFailure(observation.outcome)) failures += 1;
     const ratio = failures / state.observations.length;
-    let desired: RuntimeDependencyHealthState = ratio >= this.#policy.unavailableFailureRatio
+    const evidenceState: RuntimeDependencyHealthState = ratio >= this.#policy.unavailableFailureRatio
       ? 'unavailable'
-      : ratio >= this.#policy.degradedFailureRatio
-        ? 'degraded'
-        : 'healthy';
+      : ratio >= this.#policy.degradedFailureRatio ? 'degraded' : 'healthy';
 
-    if (state.state !== 'healthy' && desired === 'healthy' && state.consecutiveSuccesses < this.#policy.recoverySuccesses) {
-      desired = state.state;
+    let desired = evidenceState;
+    const improving = severity(evidenceState) < severity(state.state);
+    if (improving) {
+      if (state.consecutiveSuccesses < this.#policy.recoverySuccesses) desired = state.state;
+      else if (state.state === 'unavailable') desired = 'degraded';
+    } else if (state.state === 'degraded' && state.consecutiveSuccesses > this.#policy.recoverySuccesses && evidenceState === 'degraded') {
+      // A full additional successful observation after the recovery threshold proves
+      // sustained recovery even while an older failure remains in the rolling window.
+      desired = 'healthy';
     }
+
     if (desired !== state.state) {
       const previous = state.state;
       state.state = desired;
       state.revision = ++this.#revision;
-      this.#recordTransition(state, previous, desired, desired === 'healthy' ? 'recovery' : 'failure-ratio', now);
+      this.#recordTransition(state, previous, desired, severity(desired) < severity(previous) ? 'recovery' : 'failure-ratio', now);
     }
   }
 
@@ -254,17 +225,9 @@ export class RuntimeDependencyHealthRegistry {
     this.#recordTransition(state, previous, 'unavailable', 'stale', now);
   }
 
-  #recordTransition(
-    state: MutableDependencyState,
-    from: RuntimeDependencyHealthState,
-    to: RuntimeDependencyHealthState,
-    reason: RuntimeDependencyHealthTransition['reason'],
-    occurredAt: number,
-  ): void {
+  #recordTransition(state: MutableDependencyState, from: RuntimeDependencyHealthState, to: RuntimeDependencyHealthState, reason: RuntimeDependencyHealthTransition['reason'], occurredAt: number): void {
     this.#history.push({ dependency: state.dependency, from, to, reason, occurredAt, revision: state.revision });
-    if (this.#history.length > this.#policy.maximumHistory) {
-      this.#history.splice(0, this.#history.length - this.#policy.maximumHistory);
-    }
+    if (this.#history.length > this.#policy.maximumHistory) this.#history.splice(0, this.#history.length - this.#policy.maximumHistory);
   }
 
   #snapshot(state: MutableDependencyState, now: number): RuntimeDependencyHealthSnapshot {
@@ -273,10 +236,7 @@ export class RuntimeDependencyHealthRegistry {
     let latencyCount = 0;
     for (const observation of state.observations) {
       if (isFailure(observation.outcome)) failures += 1;
-      if (observation.latencyMs !== undefined) {
-        latencyTotal += observation.latencyMs;
-        latencyCount += 1;
-      }
+      if (observation.latencyMs !== undefined) { latencyTotal += observation.latencyMs; latencyCount += 1; }
     }
     return {
       dependency: state.dependency,
