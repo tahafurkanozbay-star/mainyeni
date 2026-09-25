@@ -240,9 +240,9 @@ export const createPresentationPreferenceModel = (
   return Object.freeze({
     snapshot: () => snapshot,
     history: () => Object.freeze([...transitions]),
-    update: (next) => commit(normalizeEnvironment(next, environment)),
-    replace: (next) => commit(normalizeEnvironment(next)),
-    subscribe(observer) {
+    update: (next: Partial<PresentationEnvironmentInput>) => commit(normalizeEnvironment(next, environment)),
+    replace: (next: PresentationEnvironmentInput) => commit(normalizeEnvironment(next)),
+    subscribe(observer: (snapshot: PresentationPreferenceSnapshot) => void) {
       observers.add(observer);
       try {
         observer(snapshot);
