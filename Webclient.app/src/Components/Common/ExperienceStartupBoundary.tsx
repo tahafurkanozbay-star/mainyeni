@@ -22,38 +22,26 @@ export interface ExperienceStartupBoundaryProps {
 const formatElapsed = (elapsedMs: number): string => {
   const seconds = Math.max(0, Math.floor(elapsedMs / 1_000));
   if (seconds < 60) return `${seconds} sn`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${minutes} dk ${remainder} sn`;
+  return `${Math.floor(seconds / 60)} dk ${seconds % 60} sn`;
 };
 
 const progressValue = (snapshot: StartupExperienceSnapshot): number => {
-  if (snapshot.phase === 'ready') return 100;
-  if (snapshot.phase === 'failed' || snapshot.phase === 'offline') return 0;
   if (snapshot.phase === 'delayed') return 82;
-  if (snapshot.phase === 'starting') {
-    const ratio = snapshot.delayedAfterMs > 0
-      ? snapshot.elapsedMs / snapshot.delayedAfterMs
-      : 0;
-    return Math.max(12, Math.min(76, Math.round(ratio * 76)));
-  }
-  return 6;
+  if (snapshot.phase !== 'starting') return 0;
+  const ratio = snapshot.delayedAfterMs > 0
+    ? snapshot.elapsedMs / snapshot.delayedAfterMs
+    : 0;
+  return Math.max(12, Math.min(76, Math.round(ratio * 76)));
 };
 
 const phaseLabel = (snapshot: StartupExperienceSnapshot): string => {
   switch (snapshot.phase) {
-    case 'starting':
-      return 'Başlatılıyor';
-    case 'delayed':
-      return 'Yavaş yanıt';
-    case 'offline':
-      return 'Çevrimdışı';
-    case 'failed':
-      return snapshot.exhausted ? 'Yenileme gerekli' : 'Başlatma hatası';
-    case 'ready':
-      return 'Hazır';
-    default:
-      return 'Hazırlanıyor';
+    case 'starting': return 'Başlatılıyor';
+    case 'delayed': return 'Yavaş yanıt';
+    case 'offline': return 'Çevrimdışı';
+    case 'failed': return snapshot.exhausted ? 'Yenileme gerekli' : 'Başlatma hatası';
+    case 'ready': return 'Hazır';
+    default: return 'Hazırlanıyor';
   }
 };
 
@@ -75,7 +63,6 @@ export const ExperienceStartupBoundary = ({
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return undefined;
-
     const synchronize = (): void => model.setOnline(navigator.onLine !== false);
     synchronize();
     window.addEventListener('online', synchronize);
@@ -87,12 +74,7 @@ export const ExperienceStartupBoundary = ({
   }, [model]);
 
   useEffect(() => {
-    if (
-      snapshot.phase !== 'starting'
-      && snapshot.phase !== 'delayed'
-      && snapshot.phase !== 'offline'
-    ) return undefined;
-
+    if (!['starting', 'delayed', 'offline'].includes(snapshot.phase)) return undefined;
     const timer = window.setInterval(() => model.refresh(), 1_000);
     return () => window.clearInterval(timer);
   }, [model, snapshot.phase]);
@@ -105,8 +87,7 @@ export const ExperienceStartupBoundary = ({
   }, [snapshot.phase]);
 
   const retry = useCallback((): void => {
-    if (!model.snapshot().canRetry) return;
-    onRetry();
+    if (model.snapshot().canRetry) onRetry();
   }, [model, onRetry]);
 
   if (snapshot.ready) return children;
@@ -116,14 +97,12 @@ export const ExperienceStartupBoundary = ({
   const delayed = snapshot.phase === 'delayed';
   const showReload = failed && (!snapshot.failure?.retryable || snapshot.exhausted);
   const showRetry = failed && snapshot.failure?.retryable !== false && !snapshot.exhausted;
-  const progress = progressValue(snapshot);
-  const role = failed ? 'alert' : 'status';
   const title = `${AppConfig.App.Title1} | ${AppConfig.App.Title2}`;
 
   return (
     <main
       className={`experience-startup experience-startup--${snapshot.tone}`}
-      role={role}
+      role={failed ? 'alert' : 'status'}
       aria-live={failed ? 'assertive' : 'polite'}
       aria-atomic="true"
       aria-busy={snapshot.busy || undefined}
@@ -131,7 +110,6 @@ export const ExperienceStartupBoundary = ({
       data-startup-online={String(snapshot.online)}
     >
       <div className="experience-startup__ambient" aria-hidden="true" />
-
       <section
         className="experience-startup__card"
         aria-labelledby="experience-startup-title"
@@ -167,7 +145,7 @@ export const ExperienceStartupBoundary = ({
               <div className="experience-startup__progress-track">
                 <span
                   className="experience-startup__progress-value"
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${progressValue(snapshot)}%` }}
                 />
               </div>
               <span className="experience-startup__progress-glow" />
@@ -175,18 +153,9 @@ export const ExperienceStartupBoundary = ({
           ) : null}
 
           <dl className="experience-startup__facts" aria-label="Başlatma ayrıntıları">
-            <div>
-              <dt>Deneme</dt>
-              <dd>{Math.max(1, snapshot.attempt)} / {snapshot.maxAttempts}</dd>
-            </div>
-            <div>
-              <dt>Bağlantı</dt>
-              <dd>{snapshot.online ? 'Çevrimiçi' : 'Çevrimdışı'}</dd>
-            </div>
-            <div>
-              <dt>Süre</dt>
-              <dd>{formatElapsed(snapshot.elapsedMs)}</dd>
-            </div>
+            <div><dt>Deneme</dt><dd>{snapshot.attempt} / {snapshot.maxAttempts}</dd></div>
+            <div><dt>Bağlantı</dt><dd>{snapshot.online ? 'Çevrimiçi' : 'Çevrimdışı'}</dd></div>
+            <div><dt>Süre</dt><dd>{formatElapsed(snapshot.elapsedMs)}</dd></div>
           </dl>
 
           {delayed ? (
@@ -211,9 +180,7 @@ export const ExperienceStartupBoundary = ({
             <div className="experience-startup__diagnostic" role="note">
               <span className="experience-startup__diagnostic-label">Güvenli tanı</span>
               <strong>{snapshot.failure.code ?? 'Başlatma işlemi tamamlanamadı'}</strong>
-              <span>
-                Teknik ayrıntılar kullanıcı ekranına taşınmaz; yalnız güvenli hata kodu gösterilir.
-              </span>
+              <span>Teknik ayrıntılar kullanıcı ekranına taşınmaz; yalnız güvenli hata kodu gösterilir.</span>
             </div>
           ) : null}
 
@@ -252,17 +219,11 @@ export const ExperienceStartupBoundary = ({
         </div>
 
         <footer className="experience-startup__footer">
-          <span>Güvenli başlangıç</span>
-          <span aria-hidden="true">•</span>
-          <span>Erişilebilir çalışma alanı</span>
-          <span aria-hidden="true">•</span>
+          <span>Güvenli başlangıç</span><span aria-hidden="true">•</span>
+          <span>Erişilebilir çalışma alanı</span><span aria-hidden="true">•</span>
           <span>2B + 3B GIS</span>
         </footer>
       </section>
-
-      <span className="experience-sr-only" aria-live="polite" aria-atomic="true">
-        {snapshot.announcement}
-      </span>
     </main>
   );
 };
