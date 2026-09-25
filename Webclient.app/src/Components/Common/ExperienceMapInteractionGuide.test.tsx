@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createMapInteractionExperienceModel } from '../../experience/mapInteractionExperienceModel';
 import { ExperienceMapInteractionGuide } from './ExperienceMapInteractionGuide';
@@ -142,8 +142,10 @@ describe('ExperienceMapInteractionGuide', () => {
     const model = createMapInteractionExperienceModel();
     render(<ExperienceMapInteractionGuide model={model} />);
 
-    model.recordKeyboard('ArrowUp');
-    model.setMapFocused(true);
+    act(() => {
+      model.recordKeyboard('ArrowUp');
+      model.setMapFocused(true);
+    });
 
     const guide = screen.getByRole('note', { name: 'Harita klavye kullanım rehberi' });
     expect(guide).toHaveAttribute('data-visible', 'true');
