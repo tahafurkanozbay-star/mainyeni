@@ -91,12 +91,10 @@ export const ExperiencePresentationBridge = ({
   model: suppliedModel,
 }: ExperiencePresentationBridgeProps) => {
   const model = useMemo<PresentationPreferenceModel>(() => suppliedModel ?? createPresentationPreferenceModel({
-    initial: typeof window === 'undefined'
-      ? undefined
-      : {
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-        },
+    initial: {
+      viewportWidth: typeof window === 'undefined' ? 1280 : window.innerWidth,
+      viewportHeight: typeof window === 'undefined' ? 720 : window.innerHeight,
+    },
     onObserverError(error) {
       runtimeDiagnostics.captureError(error, {
         source: 'experience.presentation-preference.observer',
