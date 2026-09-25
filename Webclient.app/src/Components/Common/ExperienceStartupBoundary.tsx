@@ -75,9 +75,9 @@ export const ExperienceStartupBoundary = ({
 
   useEffect(() => {
     if (!['starting', 'delayed', 'offline'].includes(snapshot.phase)) return undefined;
-    const timer = window.setInterval(() => model.refresh(), 1_000);
-    return () => window.clearInterval(timer);
-  }, [model, snapshot.phase]);
+    const timer = window.setTimeout(() => model.refresh(), 1_000);
+    return () => window.clearTimeout(timer);
+  }, [model, snapshot.phase, snapshot.revision]);
 
   useEffect(() => {
     const previousPhase = previousPhaseRef.current;
