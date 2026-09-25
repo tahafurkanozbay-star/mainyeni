@@ -140,7 +140,7 @@ export const createMapInteractionExperienceModel = (
   };
 
   const notify = (): void => {
-    for (const observer of [...observers]) {
+    for (const observer of observers) {
       try {
         observer(snapshot);
       } catch (error) {
