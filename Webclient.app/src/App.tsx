@@ -6,6 +6,7 @@ import './Components/Common/experience-ui.css';
 import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
+import './experience/legacyPresentationModernization.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
