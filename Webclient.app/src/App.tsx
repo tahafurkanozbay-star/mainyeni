@@ -15,7 +15,6 @@ import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Comp
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { ExperienceRuntimeBridge } from './Components/Common/ExperienceRuntimeBridge';
-import { ExperienceRuntimeRecoveryBoundary } from './Components/Common/ExperienceRuntimeRecoveryBoundary';
 import { ExperienceStartupBoundary } from './Components/Common/ExperienceStartupBoundary';
 import { createStartupExperienceModel } from './experience/startupExperienceModel';
 import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
@@ -138,14 +137,12 @@ function App() {
           model={startupModel}
           onRetry={retryBootstrap}
         >
-          <ExperienceRuntimeRecoveryBoundary>
-            <MapComponent windowManager={windowManager} />
-            <ExperienceWorkspace />
-            <ExperienceUXLayer windowManager={windowManager} />
-            <ExperienceCommandCenter windowManager={windowManager} />
-            <ExperienceConnectivityNotice />
-            <SiteDataDisclaimer />
-          </ExperienceRuntimeRecoveryBoundary>
+          <MapComponent windowManager={windowManager} />
+          <ExperienceWorkspace />
+          <ExperienceUXLayer windowManager={windowManager} />
+          <ExperienceCommandCenter windowManager={windowManager} />
+          <ExperienceConnectivityNotice />
+          <SiteDataDisclaimer />
         </ExperienceStartupBoundary>
       </div>
     </ExperienceThemeProvider>
