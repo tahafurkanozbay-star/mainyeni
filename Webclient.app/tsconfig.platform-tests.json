@@ -45,6 +45,7 @@
     "src/platform/runtime/runtimeDependencyTopology.test.ts",
     "src/platform/runtime/runtimeDependencyReadinessCoordinator.test.ts",
     "src/platform/runtime/runtimeDependencyFailoverPlanner.test.ts",
+    "src/platform/runtime/runtimeDependencySloController.test.ts",
     "src/platform/runtime/runtimeFailureBudget.test.ts",
     "src/platform/runtime/runtimeFairShareAllocator.test.ts",
     "src/platform/runtime/runtimeHealthEscalationMatrix.test.ts",
