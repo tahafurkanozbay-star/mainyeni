@@ -1,12 +1,13 @@
 import {
   SpatialTileAdmissionRuntime,
-  type SpatialTileAdmissionJob,
   type SpatialTileAdmissionLimits,
+  type SpatialTileAdmissionRequest,
 } from './spatialTileAdmissionRuntime';
 import {
   SpatialTileCacheRuntime,
-  type SpatialTileCacheEntry,
+  type SpatialTileCacheKey,
   type SpatialTileCacheLimits,
+  type SpatialTileCachePutOptions,
 } from './spatialTileCacheRuntime';
 import {
   SpatialTilePrefetchPlanner,
@@ -21,14 +22,15 @@ import {
 } from './spatialTileRequestCoordinator';
 
 export type SpatialTilePipelinePriority = 'critical' | 'interactive' | 'prefetch';
-export type SpatialTilePipelineState = 'idle' | 'queued' | 'inflight' | 'cached' | 'rejected';
+export type SpatialTilePipelineState = 'idle' | 'queued' | 'inflight' | 'cached';
 
 export interface SpatialTilePipelineDescriptor {
   readonly key: string;
   readonly layerId: string;
-  readonly lod: number;
+  readonly level: number;
   readonly row: number;
   readonly column: number;
+  readonly variant?: string;
   readonly estimatedBytes: number;
   readonly priority: SpatialTilePipelinePriority;
 }
@@ -38,7 +40,7 @@ export interface SpatialTilePipelineLease {
   readonly subscriberId: string;
   readonly generation: number;
   readonly owner: boolean;
-  readonly state: Exclude<SpatialTilePipelineState, 'idle' | 'rejected'>;
+  readonly state: 'inflight' | 'cached';
 }
 
 export interface SpatialTilePipelineLimits {
@@ -75,11 +77,15 @@ export interface SpatialTilePipelineDiagnostic {
 
 export interface SpatialTilePipelineSnapshot {
   readonly knownTiles: number;
-  readonly byState: Readonly<Record<SpatialTilePipelineState, number>>;
+  readonly cachedTiles: number;
+  readonly inflightTiles: number;
   readonly byLayer: Readonly<Record<string, number>>;
   readonly cacheEntries: number;
+  readonly cacheBytes: number;
   readonly inflightRequests: number;
   readonly requestSubscribers: number;
+  readonly activeAdmissions: number;
+  readonly queuedAdmissions: number;
   readonly diagnostics: number;
   readonly rejected: number;
   readonly cacheHits: number;
@@ -88,7 +94,7 @@ export interface SpatialTilePipelineSnapshot {
 }
 
 interface TileRecord extends SpatialTilePipelineDescriptor {
-  state: SpatialTilePipelineState;
+  state: Exclude<SpatialTilePipelineState, 'idle'>;
   generation?: number;
   touchedAt: number;
 }
@@ -99,10 +105,8 @@ const DEFAULT_LIMITS: SpatialTilePipelineLimits = Object.freeze({
   maxDiagnostics: 256,
   maxSubscriberIdLength: 180,
 });
-
 const KEY_PATTERN = /^[\p{L}\p{N}_.:@/ -]+$/u;
 const PRIORITIES = new Set<SpatialTilePipelinePriority>(['critical', 'interactive', 'prefetch']);
-
 const positiveInteger = (value: number): boolean => Number.isInteger(value) && value > 0;
 const nonNegativeInteger = (value: number): boolean => Number.isInteger(value) && value >= 0;
 
@@ -125,33 +129,37 @@ const normalizeDescriptor = (input: SpatialTilePipelineDescriptor): SpatialTileP
   const key = normalizeText(input.key, 180);
   const layerId = normalizeText(input.layerId, 160);
   if (!key || !layerId) return undefined;
-  if (!nonNegativeInteger(input.lod) || input.lod > 30) return undefined;
-  if (!nonNegativeInteger(input.row) || !nonNegativeInteger(input.column)) return undefined;
+  if (!nonNegativeInteger(input.level) || input.level > 64) return undefined;
+  if (!nonNegativeInteger(input.row) || input.row > 0x7fffffff) return undefined;
+  if (!nonNegativeInteger(input.column) || input.column > 0x7fffffff) return undefined;
   if (!positiveInteger(input.estimatedBytes) || input.estimatedBytes > 2 * 1024 * 1024 * 1024) return undefined;
   if (!PRIORITIES.has(input.priority)) return undefined;
+  const variant = input.variant === undefined ? undefined : normalizeText(input.variant, 160);
+  if (input.variant !== undefined && variant === undefined) return undefined;
   return Object.freeze({
     key,
     layerId,
-    lod: input.lod,
+    level: input.level,
     row: input.row,
     column: input.column,
     estimatedBytes: input.estimatedBytes,
     priority: input.priority,
+    ...(variant === undefined ? {} : { variant }),
   });
 };
 
-/**
- * Bounded orchestration authority for the spatial tile lifecycle.
- *
- * This class intentionally does not perform network I/O. It composes cache,
- * admission, request-deduplication and prefetch authorities while preserving a
- * small deterministic state machine that UI and ArcGIS transport adapters can
- * observe. Transport owners receive an owner lease and remain responsible for
- * starting/aborting the actual verified ArcGIS request.
- */
+const cacheKey = (descriptor: SpatialTilePipelineDescriptor): SpatialTileCacheKey => ({
+  layerId: descriptor.layerId,
+  level: descriptor.level,
+  row: descriptor.row,
+  column: descriptor.column,
+  ...(descriptor.variant === undefined ? {} : { variant: descriptor.variant }),
+});
+
+/** Transport-neutral bounded authority composing tile cache, admission, prefetch and single-flight request state. */
 export class SpatialTilePipelineRuntime {
   readonly #limits: SpatialTilePipelineLimits;
-  readonly #cache: SpatialTileCacheRuntime;
+  readonly #cache: SpatialTileCacheRuntime<true>;
   readonly #admission: SpatialTileAdmissionRuntime;
   readonly #requests: SpatialTileRequestCoordinator;
   readonly #prefetch: SpatialTilePrefetchPlanner;
@@ -165,21 +173,17 @@ export class SpatialTilePipelineRuntime {
 
   constructor(options: SpatialTilePipelineOptions = {}) {
     this.#limits = validateLimits(options.pipeline ?? {});
-    this.#cache = new SpatialTileCacheRuntime(options.cache);
-    this.#admission = new SpatialTileAdmissionRuntime(options.admission);
-    this.#requests = new SpatialTileRequestCoordinator(options.request);
-    this.#prefetch = new SpatialTilePrefetchPlanner(options.prefetch);
+    this.#cache = new SpatialTileCacheRuntime<true>(options.cache ?? {});
+    this.#admission = new SpatialTileAdmissionRuntime(options.admission ?? {});
+    this.#requests = new SpatialTileRequestCoordinator(options.request ?? {});
+    this.#prefetch = new SpatialTilePrefetchPlanner(options.prefetch ?? {});
   }
 
   get limits(): SpatialTilePipelineLimits {
     return this.#limits;
   }
 
-  acquire(
-    descriptor: SpatialTilePipelineDescriptor,
-    subscriberId: string,
-    now = Date.now(),
-  ): SpatialTilePipelineLease | undefined {
+  acquire(descriptor: SpatialTilePipelineDescriptor, subscriberId: string, now = Date.now()): SpatialTilePipelineLease | undefined {
     const normalized = normalizeDescriptor(descriptor);
     if (!normalized || !Number.isFinite(now) || now < 0) {
       this.#reject('invalid-descriptor', normalized?.key, normalized?.layerId);
@@ -190,41 +194,30 @@ export class SpatialTilePipelineRuntime {
       this.#reject('invalid-subscriber', normalized.key, normalized.layerId);
       return undefined;
     }
-
-    const cached = this.#cache.get(normalized.key, now);
-    if (cached) {
+    if (this.#cache.get(cacheKey(normalized), now) === true) {
       this.#remember(normalized, 'cached', now);
       this.#cacheHits += 1;
       this.#record('cache-hit', normalized.key, normalized.layerId);
-      return Object.freeze({
-        key: normalized.key,
-        subscriberId: subscriber,
-        generation: 0,
-        owner: false,
-        state: 'cached',
-      });
+      return Object.freeze({ key: normalized.key, subscriberId: subscriber, generation: 0, owner: false, state: 'cached' });
     }
-
     if (!this.#canRemember(normalized)) {
       this.#reject('capacity-rejected', normalized.key, normalized.layerId);
       return undefined;
     }
-
-    const requestDescriptor: SpatialTileRequestDescriptor = {
+    const request: SpatialTileRequestDescriptor = {
       key: normalized.key,
       layerId: normalized.layerId,
       estimatedBytes: normalized.estimatedBytes,
       priority: normalized.priority,
     };
-    const lease = this.#requests.acquire(requestDescriptor, subscriber);
+    const lease = this.#requests.acquire(request, subscriber);
     if (!lease) {
       this.#reject('request-rejected', normalized.key, normalized.layerId);
       return undefined;
     }
-
     this.#remember(normalized, 'inflight', now, lease.generation);
     this.#record('request-acquired', normalized.key, normalized.layerId);
-    return this.#toPipelineLease(lease, 'inflight');
+    return Object.freeze({ ...lease, state: 'inflight' });
   }
 
   release(lease: SpatialTilePipelineLease): boolean {
@@ -240,27 +233,24 @@ export class SpatialTilePipelineRuntime {
     const record = this.#tiles.get(lease.key);
     if (record?.generation === lease.generation) {
       this.#tiles.delete(lease.key);
+      this.#admission.release(lease.key);
       this.#cancelled += 1;
       this.#record('request-released', record.key, record.layerId);
     }
     return true;
   }
 
-  complete(
-    key: string,
-    generation: number,
-    cacheEntry: SpatialTileCacheEntry,
-    now = Date.now(),
-  ): readonly string[] {
+  complete(key: string, generation: number, cacheOptions: SpatialTileCachePutOptions): readonly string[] {
     const record = this.#tiles.get(key);
     if (!record || record.generation !== generation) return Object.freeze([]);
     const subscribers = this.#requests.complete(key, generation);
     if (subscribers.length === 0) return subscribers;
-    const stored = this.#cache.set(cacheEntry, now);
+    const stored = this.#cache.put(cacheKey(record), true, cacheOptions);
+    this.#admission.release(key);
     if (stored) {
       record.state = 'cached';
       record.generation = undefined;
-      record.touchedAt = now;
+      record.touchedAt = cacheOptions.now ?? Date.now();
     } else {
       this.#tiles.delete(key);
     }
@@ -269,14 +259,20 @@ export class SpatialTilePipelineRuntime {
     return subscribers;
   }
 
+  admit(request: SpatialTileAdmissionRequest): ReturnType<SpatialTileAdmissionRuntime['admit']> {
+    return this.#admission.admit(request);
+  }
+
+  planPrefetch(candidates: readonly SpatialTilePrefetchCandidate[]): ReturnType<SpatialTilePrefetchPlanner['plan']> {
+    return this.#prefetch.plan(candidates);
+  }
+
   cancelLayer(layerId: string): readonly string[] {
     const normalized = normalizeText(layerId, 160);
     if (!normalized) return Object.freeze([]);
-    const cancelled = this.#requests.cancelLayer(normalized);
-    const removed = new Set(cancelled);
+    const removed = new Set([...this.#requests.cancelLayer(normalized), ...this.#admission.cancelLayer(normalized)]);
     for (const [key, record] of this.#tiles) {
-      if (record.layerId !== normalized) continue;
-      if (record.state === 'cached') continue;
+      if (record.layerId !== normalized || record.state === 'cached') continue;
       this.#tiles.delete(key);
       removed.add(key);
     }
@@ -287,57 +283,47 @@ export class SpatialTilePipelineRuntime {
   }
 
   clear(): readonly string[] {
-    const requestKeys = this.#requests.clear();
-    const knownKeys = [...this.#tiles.keys()];
-    const cancelled = [...new Set([...requestKeys, ...knownKeys])].sort((left, right) => left.localeCompare(right));
+    const removed = new Set([...this.#requests.clear(), ...this.#admission.clear(), ...this.#tiles.keys()]);
     this.#tiles.clear();
-    this.#cache.clear();
-    this.#admission.clear();
-    this.#cancelled += cancelled.length;
+    this.#cache.clear({ includePinned: true });
+    const result = [...removed].sort((left, right) => left.localeCompare(right));
+    this.#cancelled += result.length;
     this.#record('pipeline-cleared');
-    return Object.freeze(cancelled);
-  }
-
-  planPrefetch(candidates: readonly SpatialTilePrefetchCandidate[]): ReturnType<SpatialTilePrefetchPlanner['plan']> {
-    return this.#prefetch.plan(candidates);
-  }
-
-  admit(job: SpatialTileAdmissionJob): ReturnType<SpatialTileAdmissionRuntime['admit']> {
-    return this.#admission.admit(job);
+    return Object.freeze(result);
   }
 
   stateOf(key: string): SpatialTilePipelineState {
     const normalized = normalizeText(key, 180);
-    if (!normalized) return 'idle';
-    return this.#tiles.get(normalized)?.state ?? 'idle';
+    return normalized ? this.#tiles.get(normalized)?.state ?? 'idle' : 'idle';
   }
 
   diagnostics(): readonly SpatialTilePipelineDiagnostic[] {
     return Object.freeze(this.#diagnostics.map((diagnostic) => Object.freeze({ ...diagnostic })));
   }
 
-  snapshot(): SpatialTilePipelineSnapshot {
-    const byState: Record<SpatialTilePipelineState, number> = {
-      idle: 0,
-      queued: 0,
-      inflight: 0,
-      cached: 0,
-      rejected: 0,
-    };
+  snapshot(now = Date.now()): SpatialTilePipelineSnapshot {
+    let cachedTiles = 0;
+    let inflightTiles = 0;
     const byLayer: Record<string, number> = {};
     for (const record of this.#tiles.values()) {
-      byState[record.state] += 1;
+      if (record.state === 'cached') cachedTiles += 1;
+      if (record.state === 'inflight') inflightTiles += 1;
       byLayer[record.layerId] = (byLayer[record.layerId] ?? 0) + 1;
     }
-    const cache = this.#cache.snapshot();
+    const cache = this.#cache.snapshot(now);
     const requests = this.#requests.snapshot();
+    const admission = this.#admission.snapshot();
     return Object.freeze({
       knownTiles: this.#tiles.size,
-      byState: Object.freeze(byState),
+      cachedTiles,
+      inflightTiles,
       byLayer: Object.freeze(byLayer),
       cacheEntries: cache.entries,
+      cacheBytes: cache.bytes,
       inflightRequests: requests.inflight,
       requestSubscribers: requests.subscribers,
+      activeAdmissions: admission.activeCount,
+      queuedAdmissions: admission.queuedCount,
       diagnostics: this.#diagnostics.length,
       rejected: this.#rejected,
       cacheHits: this.#cacheHits,
@@ -351,20 +337,12 @@ export class SpatialTilePipelineRuntime {
     if (existing) return existing.layerId === candidate.layerId;
     if (this.#tiles.size >= this.#limits.maxKnownTiles) return false;
     let layerCount = 0;
-    for (const record of this.#tiles.values()) {
-      if (record.layerId === candidate.layerId) layerCount += 1;
-    }
+    for (const record of this.#tiles.values()) if (record.layerId === candidate.layerId) layerCount += 1;
     return layerCount < this.#limits.maxLayerTiles;
   }
 
-  #remember(
-    descriptor: SpatialTilePipelineDescriptor,
-    state: SpatialTilePipelineState,
-    now: number,
-    generation?: number,
-  ): void {
-    const record: TileRecord = { ...descriptor, state, touchedAt: now };
-    if (generation !== undefined) record.generation = generation;
+  #remember(descriptor: SpatialTilePipelineDescriptor, state: TileRecord['state'], now: number, generation?: number): void {
+    const record: TileRecord = { ...descriptor, state, touchedAt: now, ...(generation === undefined ? {} : { generation }) };
     this.#tiles.set(descriptor.key, record);
   }
 
@@ -374,23 +352,14 @@ export class SpatialTilePipelineRuntime {
   }
 
   #record(code: SpatialTilePipelineDiagnostic['code'], key?: string, layerId?: string): void {
-    const diagnostic: SpatialTilePipelineDiagnostic = { sequence: this.#sequence, code };
-    this.#sequence += 1;
-    const complete = { ...diagnostic, ...(key ? { key } : {}), ...(layerId ? { layerId } : {}) };
-    this.#diagnostics.push(Object.freeze(complete));
-    if (this.#diagnostics.length > this.#limits.maxDiagnostics) this.#diagnostics.shift();
-  }
-
-  #toPipelineLease(
-    lease: SpatialTileRequestLease,
-    state: 'queued' | 'inflight',
-  ): SpatialTilePipelineLease {
-    return Object.freeze({
-      key: lease.key,
-      subscriberId: lease.subscriberId,
-      generation: lease.generation,
-      owner: lease.owner,
-      state,
+    const diagnostic: SpatialTilePipelineDiagnostic = Object.freeze({
+      sequence: this.#sequence,
+      code,
+      ...(key === undefined ? {} : { key }),
+      ...(layerId === undefined ? {} : { layerId }),
     });
+    this.#sequence += 1;
+    this.#diagnostics.push(diagnostic);
+    if (this.#diagnostics.length > this.#limits.maxDiagnostics) this.#diagnostics.shift();
   }
 }
