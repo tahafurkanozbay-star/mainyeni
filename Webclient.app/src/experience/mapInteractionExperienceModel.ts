@@ -132,10 +132,11 @@ export const createMapInteractionExperienceModel = (
   let snapshot = makeSnapshot(0, 'unknown', false, 0, null, null);
 
   const reportObserverError = (error: unknown): void => {
+    if (!options.onObserverError) return;
     try {
-      options.onObserverError?.(error);
-    } catch {
-      // Diagnostics must not destabilize keyboard or pointer input handling.
+      options.onObserverError(error);
+    } catch (reportError) {
+      console.warn('[experience.map-interaction] observer reporter failed', reportError);
     }
   };
 
