@@ -12,6 +12,7 @@ import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
+import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
@@ -122,6 +123,7 @@ function App() {
         >
           <ExperienceSkipNavigation />
           <MapComponent windowManager={windowManager} />
+          <ExperienceMapInteractionGuide />
           <ExperienceWorkspace />
           <ExperienceUXLayer windowManager={windowManager} />
           <ExperienceCommandCenter windowManager={windowManager} />
