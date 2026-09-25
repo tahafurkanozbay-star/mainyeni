@@ -237,7 +237,7 @@ describe('RuntimeDependencyTopology', () => {
   it('does not expose mutable history storage', () => {
     const subject = topology();
     subject.addNode({ id: 'api', criticality: 'critical' }, 1);
-    const copy = subject.history() as Array<{ type: string }>;
+    const copy = [...subject.history()];
     copy.splice(0, copy.length);
     expect(subject.history()).toHaveLength(1);
   });
