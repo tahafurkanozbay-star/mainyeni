@@ -16,8 +16,8 @@ export const ExperienceDataDisclaimer = ({
   >
     <span className="experience-data-disclaimer__icon" aria-hidden="true">i</span>
     <span className="experience-data-disclaimer__copy">
-      <span>Sitede gösterilen veriler bilgi amaçlıdır.</span>
-      <strong>Resmî işlemlerde kullanılamaz.</strong>
+      <span>Sitede Gösterilen Veriler Bilgi Amaçlıdır.</span>
+      <strong>Resmî İşlemlerde KULLANILAMAZ!</strong>
     </span>
   </aside>
 );
