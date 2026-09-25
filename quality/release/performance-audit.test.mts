@@ -54,6 +54,45 @@ test('keeps nested-loop review for production runtime modules', () => {
   assert.ok(ids(section).includes('performance-nested-loop-review'));
 });
 
+test('does not report nearby sequential loops as structurally nested work', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/runtime.ts',
+      text: `
+        for (const item of primary) { consume(item); }
+        for (const item of secondary) { consume(item); }
+        while (queue.length > 0) { consume(queue.shift()); }
+      `,
+    },
+  ]));
+  assert.ok(!ids(section).includes('performance-nested-loop-review'));
+});
+
+test('detects nested forEach callbacks without proximity heuristics', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/runtime.ts',
+      text: `items.forEach(item => { values.forEach(value => consume(item, value)); });`,
+    },
+  ]));
+  assert.ok(ids(section).includes('performance-nested-loop-review'));
+});
+
+test('ignores loop-like text in comments and string literals', () => {
+  const section = auditPerformance(fixtureInventory([
+    {
+      path: 'Webclient.app/src/runtime.ts',
+      text: `
+        const example = "for (const a of x) { for (const b of y) {} }";
+        // for (const a of x) { for (const b of y) {} }
+        /* while (ready) { while (pending) {} } */
+        for (const item of items) { consume(item); }
+      `,
+    },
+  ]));
+  assert.ok(!ids(section).includes('performance-nested-loop-review'));
+});
+
 test('production source still contributes loop and maintainability signals', () => {
   const section = auditPerformance(fixtureInventory([
     {
