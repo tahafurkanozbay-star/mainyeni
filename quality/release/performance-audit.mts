@@ -23,8 +23,14 @@ export interface PerformanceAuditDetails extends PerformanceSummary {
   readonly legacyPerformanceJavascriptFiles: readonly string[];
 }
 
+interface LoopSpan {
+  readonly start: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+}
+
 const LOOP_PATTERN = /\b(?:for\s*\(|while\s*\(|forEach\s*\(|\.map\s*\(|\.reduce\s*\()/g;
-const NESTED_LOOP_PATTERN = /(?:for\s*\([^)]*\)|while\s*\([^)]*\)|\.forEach\s*\([^)]*=>)[\s\S]{0,900}(?:for\s*\([^)]*\)|while\s*\([^)]*\)|\.forEach\s*\()/g;
+const STRUCTURAL_LOOP_PATTERN = /\bfor\s*\(|\bwhile\s*\(|\.forEach\s*\(/g;
 const DYNAMIC_IMPORT_PATTERN = /\bimport\s*\(/g;
 const REACT_LAZY_PATTERN = /\bReact\.lazy\s*\(|\blazy\s*\(\s*\(\)\s*=>\s*import\s*\(/g;
 const MEMO_PATTERN = /\b(?:React\.memo|memo|useMemo|useCallback)\s*\(/g;
@@ -45,6 +51,130 @@ function isProductionWebSource(file: SourceFile): boolean {
 
 function countMatches(text: string, pattern: RegExp): number {
   return [...text.matchAll(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`))].length;
+}
+
+function maskCommentsAndStrings(text: string): string {
+  const output = [...text];
+  let index = 0;
+  while (index < output.length) {
+    const current = text[index];
+    const next = text[index + 1];
+    if (current === '/' && next === '/') {
+      output[index] = ' ';
+      output[index + 1] = ' ';
+      index += 2;
+      while (index < output.length && text[index] !== '\n') {
+        output[index] = ' ';
+        index += 1;
+      }
+      continue;
+    }
+    if (current === '/' && next === '*') {
+      output[index] = ' ';
+      output[index + 1] = ' ';
+      index += 2;
+      while (index < output.length) {
+        if (text[index] === '*' && text[index + 1] === '/') {
+          output[index] = ' ';
+          output[index + 1] = ' ';
+          index += 2;
+          break;
+        }
+        if (text[index] !== '\n') output[index] = ' ';
+        index += 1;
+      }
+      continue;
+    }
+    if (current === '\'' || current === '"' || current === '`') {
+      const quote = current;
+      output[index] = ' ';
+      index += 1;
+      while (index < output.length) {
+        const value = text[index];
+        if (value === '\\') {
+          output[index] = ' ';
+          if (index + 1 < output.length && text[index + 1] !== '\n') output[index + 1] = ' ';
+          index += 2;
+          continue;
+        }
+        if (value === quote) {
+          output[index] = ' ';
+          index += 1;
+          break;
+        }
+        if (value !== '\n') output[index] = ' ';
+        index += 1;
+      }
+      continue;
+    }
+    index += 1;
+  }
+  return output.join('');
+}
+
+function matchingDelimiter(text: string, start: number, open: string, close: string): number {
+  if (text[start] !== open) return -1;
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    if (text[index] === open) depth += 1;
+    else if (text[index] === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function skipWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index < text.length && /\s/.test(text[index] ?? '')) index += 1;
+  return index;
+}
+
+function singleStatementEnd(text: string, start: number): number {
+  for (let index = start; index < text.length; index += 1) {
+    if (text[index] === ';' || text[index] === '\n') return index + 1;
+  }
+  return text.length;
+}
+
+function structuralLoopSpans(text: string): readonly LoopSpan[] {
+  const source = maskCommentsAndStrings(text);
+  const spans: LoopSpan[] = [];
+  for (const match of source.matchAll(STRUCTURAL_LOOP_PATTERN)) {
+    const start = match.index ?? 0;
+    const openParen = source.indexOf('(', start);
+    if (openParen < 0) continue;
+    const closeParen = matchingDelimiter(source, openParen, '(', ')');
+    if (closeParen < 0) continue;
+
+    if (match[0].includes('forEach')) {
+      spans.push({ start, bodyStart: openParen + 1, bodyEnd: closeParen });
+      continue;
+    }
+
+    const statementStart = skipWhitespace(source, closeParen + 1);
+    if (source[statementStart] === '{') {
+      const closeBrace = matchingDelimiter(source, statementStart, '{', '}');
+      if (closeBrace >= 0) {
+        spans.push({ start, bodyStart: statementStart + 1, bodyEnd: closeBrace });
+        continue;
+      }
+    }
+    spans.push({ start, bodyStart: statementStart, bodyEnd: singleStatementEnd(source, statementStart) });
+  }
+  return spans;
+}
+
+function nestedLoopCount(text: string): number {
+  const spans = structuralLoopSpans(text);
+  let count = 0;
+  for (const outer of spans) {
+    for (const inner of spans) {
+      if (inner.start > outer.bodyStart && inner.start < outer.bodyEnd) count += 1;
+    }
+  }
+  return count;
 }
 
 function fileSizeSignals(files: readonly SourceFile[], budget: PerformanceBudget): PerformanceSignal[] {
@@ -91,14 +221,14 @@ function signalFindings(signals: readonly PerformanceSignal[]): Finding[] {
 function nestedLoopFindings(files: readonly SourceFile[]): Finding[] {
   const findings: Finding[] = [];
   for (const file of files) {
-    const count = countMatches(file.text, NESTED_LOOP_PATTERN);
+    const count = nestedLoopCount(file.text);
     if (count === 0) continue;
     findings.push({
       id: 'performance-nested-loop-review',
       domain: 'performance',
       severity: count >= 4 ? 'high' : 'medium',
       title: 'Nested synchronous iteration candidate',
-      message: 'Nested iteration in UI/data/GIS code can become quadratic on large result sets.',
+      message: 'Structurally nested iteration in UI/data/GIS code can become quadratic on large result sets.',
       location: { file: file.repositoryPath, line: 1 },
       evidence: { value: count },
       remediation: 'Profile representative large datasets; consider indexing/maps, spatial filtering, chunking or server-side work.',
@@ -174,7 +304,6 @@ function largeLiteralFindings(files: readonly SourceFile[]): Finding[] {
   }
   return findings;
 }
-
 
 function instrumentationLifecycleFindings(files: readonly SourceFile[]): {
   observerRisk: string[];

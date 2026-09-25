@@ -34,7 +34,9 @@ const GENERATED_PATH = /(^|\/)(dist|build|coverage|node_modules)(\/|$)/i;
 const RUNTIME_PATH = /^(?:Webclient\.app|Webclient\.Admin)\/src\//;
 const CONSOLE_PATTERN = /\bconsole\.(?:log|debug|info|warn|error|trace)\s*\(/g;
 const EMPTY_CATCH_PATTERN = /\bcatch\s*(?:\([^)]*\))?\s*\{\s*(?:\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\s*)?\}/g;
-const PROMISE_DISCARD_PATTERN = /(?:^|[;{}]\s*)(?:void\s+)?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([^;\n]*\)\s*;/gm;
+const CALL_STATEMENT_PATTERN = /(?:^|[;{}]\s*)(void\s+)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\([^;\n]*\)\s*;/gm;
+const ASYNC_FUNCTION_DECLARATION_PATTERN = /\basync\s+function\s+([A-Za-z_$][\w$]*)\s*\(|\basync\s+([A-Za-z_$][\w$]*)\s*\(|\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*async\b/g;
+const KNOWN_PROMISE_CALL_PATTERN = /^(?:fetch|queryFeatures|executeQueryJSON|axios(?:\.[A-Za-z_$][\w$]*)?|httpClient(?:\.[A-Za-z_$][\w$]*)?|transport(?:\.[A-Za-z_$][\w$]*)?)$/;
 const TIMER_PATTERN = /\bsetTimeout\s*\(/g;
 const INTERVAL_PATTERN = /\bsetInterval\s*\(/g;
 const LISTENER_PATTERN = /\.addEventListener\s*\(/g;
@@ -50,12 +52,41 @@ function count(text: string, pattern: RegExp): number {
   return [...text.matchAll(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`))].length;
 }
 
+function declaredAsyncNames(text: string): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const match of text.matchAll(ASYNC_FUNCTION_DECLARATION_PATTERN)) {
+    const name = match[1] ?? match[2] ?? match[3];
+    if (name) names.add(name);
+  }
+  return names;
+}
+
+function detachedPromiseCandidates(text: string): number {
+  const asyncNames = declaredAsyncNames(text);
+  let candidates = 0;
+  for (const match of text.matchAll(CALL_STATEMENT_PATTERN)) {
+    const explicitVoid = Boolean(match[1]);
+    const callee = match[2];
+    if (!callee) continue;
+    const leaf = callee.split('.').at(-1) ?? callee;
+    if (
+      explicitVoid
+      || asyncNames.has(leaf)
+      || /Async$/.test(leaf)
+      || KNOWN_PROMISE_CALL_PATTERN.test(callee)
+    ) {
+      candidates += 1;
+    }
+  }
+  return candidates;
+}
+
 function signal(file: SourceFile): ObservabilitySignal {
   return {
     file: file.repositoryPath,
     consoleCalls: count(file.text, CONSOLE_PATTERN),
     swallowedCatches: count(file.text, EMPTY_CATCH_PATTERN),
-    unhandledPromises: count(file.text, PROMISE_DISCARD_PATTERN),
+    unhandledPromises: detachedPromiseCandidates(file.text),
     timers: count(file.text, TIMER_PATTERN),
     intervals: count(file.text, INTERVAL_PATTERN),
     eventListeners: count(file.text, LISTENER_PATTERN),
@@ -171,7 +202,7 @@ function asyncBoundaryFinding(file: SourceFile, item: ObservabilitySignal): Find
     domain: 'observability',
     severity: 'medium',
     title: 'Async-heavy module lacks visible failure boundary',
-    message: 'Many call-expression statements were detected without obvious await/catch/try evidence; fire-and-forget work should be explicit.',
+    message: 'Many detached Promise-returning call statements were detected without obvious await/catch/try evidence.',
     location: { file: file.repositoryPath, line: 1 },
     evidence: { value: item.unhandledPromises },
     remediation: 'Use explicit void only for intentionally detached work and route failures to the bounded runtime error/diagnostic boundary.',

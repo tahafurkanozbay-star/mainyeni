@@ -74,3 +74,29 @@ export * from './resourceLifecycleHealth';
 export * from './serviceGraph';
 export * from './serviceContainer';
 export * from './serviceHealth';
+export * from './runtimeFailureBudget';
+export * from './runtimeAdmissionController';
+export * from './runtimeOverloadGuard';
+export * from './runtimeRecoveryPlanner';
+export * from './runtimeSaturationLedger';
+export * from './runtimeBackpressureCoordinator';
+export * from './runtimeQuarantineRegistry';
+export * from './runtimeConcurrencyGovernor';
+export * from './runtimeLoadWindow';
+export * from './runtimeDegradationController';
+export * from './runtimeFairShareAllocator';
+export * from './runtimeCapacityReservationPool';
+export * from './runtimeHealthEscalationMatrix';
+export { RuntimePressureOrchestrator } from './runtimePressureOrchestrator';
+export type {
+  RuntimePressureMode as RuntimeOrchestrationPressureMode,
+  RuntimePressureDecision as RuntimeOrchestrationPressureDecision,
+  RuntimePressureReason as RuntimeOrchestrationPressureReason,
+  RuntimePressurePolicy as RuntimeOrchestrationPressurePolicy,
+  RuntimePressureSample as RuntimeOrchestrationPressureSample,
+  RuntimePressureRequest as RuntimeOrchestrationPressureRequest,
+  RuntimePressureResult as RuntimeOrchestrationPressureResult,
+  RuntimePressureTransition as RuntimeOrchestrationPressureTransition,
+  RuntimePressureLaneSnapshot as RuntimeOrchestrationPressureLaneSnapshot,
+  RuntimePressureSnapshot as RuntimeOrchestrationPressureSnapshot,
+} from './runtimePressureOrchestrator';
