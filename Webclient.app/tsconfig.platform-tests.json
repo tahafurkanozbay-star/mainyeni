@@ -49,6 +49,7 @@
     "src/platform/runtime/runtimeDependencyChangeGuard.test.ts",
     "src/platform/runtime/runtimeDependencyDeploymentGate.test.ts",
     "src/platform/runtime/runtimeDependencyIncidentCoordinator.test.ts",
+    "src/platform/runtime/runtimeDependencyMaintenanceRegistry.test.ts",
     "src/platform/runtime/runtimeFailureBudget.test.ts",
     "src/platform/runtime/runtimeFairShareAllocator.test.ts",
     "src/platform/runtime/runtimeHealthEscalationMatrix.test.ts",
