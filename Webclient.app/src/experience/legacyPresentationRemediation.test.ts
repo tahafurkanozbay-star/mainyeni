@@ -146,6 +146,7 @@ describe('legacyPresentationRemediation', () => {
     const report = evaluateLegacyPresentationRemediation({ legacyCss: oversizedLegacy, effectiveLegacyCss: cleanEffectiveLegacy, foundationCss: minimalFoundation, modernizationCss: minimalModernization });
     expect(report.findingCount).toBe(0);
     expect(report.coveragePercent).toBe(100);
+    expect(report.passed).toBe(true);
   });
 
   test('returns a deterministic remediation checklist for release evidence', () => {
