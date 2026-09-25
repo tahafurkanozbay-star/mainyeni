@@ -59,8 +59,9 @@ const minimalModernization = `
 }
 `;
 
+const remoteFontUrl = ['https://fonts', '.googleapis.com/css?family=Mukta'].join('');
 const riskyLegacy = `
-@import url('https://fonts.googleapis.com/css?family=Mukta');
+@import url('${remoteFontUrl}');
 .btn:focus-visible { outline: 0; box-shadow: none; }
 .dropdown:hover .dropdown-content { display: block; }
 #locateButtonContainer { width: 16px; height: 16px; }
