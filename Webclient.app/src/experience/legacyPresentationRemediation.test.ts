@@ -145,8 +145,11 @@ describe('legacyPresentationRemediation', () => {
     const oversizedLegacy = `${' '.repeat(800_000)}${riskyLegacy}`;
     const report = evaluateLegacyPresentationRemediation({ legacyCss: oversizedLegacy, effectiveLegacyCss: cleanEffectiveLegacy, foundationCss: minimalFoundation, modernizationCss: minimalModernization });
     expect(report.findingCount).toBe(0);
+    expect(report.unresolvedFindingCount).toBe(0);
     expect(report.coveragePercent).toBe(100);
-    expect(report.passed).toBe(true);
+    // A bounded prefix that contains no auditable risks must remain fail-closed:
+    // 100% coverage of zero findings is not sufficient evidence to pass remediation.
+    expect(report.passed).toBe(false);
   });
 
   test('returns a deterministic remediation checklist for release evidence', () => {
