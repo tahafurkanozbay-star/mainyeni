@@ -189,17 +189,17 @@ export const createMapInteractionExperienceModel = (
   return Object.freeze({
     snapshot: () => snapshot,
     history: () => Object.freeze([...transitions]),
-    recordKeyboard(key, shiftKey = false) {
+    recordKeyboard(key: string, shiftKey = false) {
       return commit('keyboard', snapshot.mapFocused, normalizeIntent(key, shiftKey), 1);
     },
     recordPointer() {
       return commit('pointer', snapshot.mapFocused, null, 1);
     },
-    setMapFocused(focused) {
+    setMapFocused(focused: boolean) {
       if (snapshot.mapFocused === focused) return snapshot;
       return commit(snapshot.modality, focused, snapshot.lastIntent, 0);
     },
-    subscribe(observer) {
+    subscribe(observer: (snapshot: MapInteractionSnapshot) => void) {
       observers.add(observer);
       try {
         observer(snapshot);
