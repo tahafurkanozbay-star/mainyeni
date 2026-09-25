@@ -75,7 +75,7 @@ describe('ExperienceConnectivityNotice', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  test('updates elapsed offline time through the bounded local refresh interval', () => {
+  test('updates elapsed offline time through bounded one-shot refresh timers', () => {
     vi.useFakeTimers();
     let now = 0;
     online = false;
@@ -86,8 +86,12 @@ describe('ExperienceConnectivityNotice', () => {
     render(<ExperienceConnectivityNotice model={model} />);
 
     expect(screen.getByText('Kesinti: 0 sn')).toBeInTheDocument();
+    now = 1_050;
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText('Kesinti: 1 sn')).toBeInTheDocument();
+
     now = 2_100;
-    act(() => vi.advanceTimersByTime(2_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(screen.getByText('Kesinti: 2 sn')).toBeInTheDocument();
   });
 
@@ -107,24 +111,28 @@ describe('ExperienceConnectivityNotice', () => {
     act(() => window.dispatchEvent(new Event('online')));
     expect(screen.getByRole('status')).toBeInTheDocument();
 
+    now = 1_100;
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByRole('status')).toBeInTheDocument();
+
     now = 1_700;
-    act(() => vi.advanceTimersByTime(2_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  test('cleans its local refresh interval on unmount', () => {
+  test('cleans its pending one-shot refresh timer on unmount', () => {
     vi.useFakeTimers();
     online = false;
     const model = createConnectivityExperienceModel({ initialOnline: false });
     const refresh = vi.spyOn(model, 'refresh');
     const { unmount } = render(<ExperienceConnectivityNotice model={model} />);
 
-    act(() => vi.advanceTimersByTime(2_000));
-    expect(refresh).toHaveBeenCalledTimes(2);
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(refresh).toHaveBeenCalledTimes(1);
 
     unmount();
     act(() => vi.advanceTimersByTime(2_000));
-    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   test('reflects externally supplied connectivity model transitions', () => {
