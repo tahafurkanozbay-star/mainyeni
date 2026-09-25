@@ -6,6 +6,10 @@ const appendTarget = (id: string, options: { focusable?: boolean } = {}): HTMLEl
   const target = document.createElement(options.focusable ? 'button' : 'div');
   target.id = id;
   if (options.focusable) target.textContent = id;
+  Object.defineProperty(target, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  });
   document.body.appendChild(target);
   return target;
 };
@@ -37,18 +41,17 @@ describe('ExperienceSkipNavigation', () => {
 
   test('focuses an existing naturally focusable target', () => {
     const target = appendTarget('sidebar', { focusable: true });
-    vi.spyOn(target, 'scrollIntoView').mockImplementation(() => undefined);
     render(<ExperienceSkipNavigation />);
 
     fireEvent.click(screen.getByRole('link', { name: 'Katman ve gezinme menüsüne geç' }));
 
     expect(document.activeElement).toBe(target);
     expect(target).not.toHaveAttribute('data-exp-skip-temporary-tabindex');
+    expect(target.scrollIntoView).toHaveBeenCalled();
   });
 
   test('temporarily makes a non-focusable landmark programmatically focusable', () => {
     const target = appendTarget('toolbar-widget');
-    vi.spyOn(target, 'scrollIntoView').mockImplementation(() => undefined);
     render(<ExperienceSkipNavigation />);
 
     fireEvent.click(screen.getByRole('link', { name: 'Harita araçlarına geç' }));
@@ -65,7 +68,6 @@ describe('ExperienceSkipNavigation', () => {
   test('preserves an existing negative tabindex owned by the target', () => {
     const target = appendTarget('esri-map-container');
     target.setAttribute('tabindex', '-1');
-    vi.spyOn(target, 'scrollIntoView').mockImplementation(() => undefined);
     render(<ExperienceSkipNavigation />);
 
     fireEvent.click(screen.getByRole('link', { name: 'Harita çalışma alanına geç' }));
@@ -120,7 +122,6 @@ describe('ExperienceSkipNavigation', () => {
 
   test('keeps href semantics even when click handling manages focus', () => {
     const target = appendTarget('custom-target');
-    vi.spyOn(target, 'scrollIntoView').mockImplementation(() => undefined);
     render(
       <ExperienceSkipNavigation targets={[{ id: 'custom-target', label: 'Özel hedefe geç' }]} />,
     );
