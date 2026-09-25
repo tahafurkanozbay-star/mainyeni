@@ -5,57 +5,10 @@ import {
   type Severity,
 } from './contracts.mts';
 
-export type ChangeRiskArea =
-  | 'security'
-  | 'backend-api'
-  | 'gis'
-  | 'data'
-  | 'search'
-  | 'frontend-runtime'
-  | 'accessibility'
-  | 'responsive'
-  | 'dependencies'
-  | 'ci'
-  | 'release-tooling'
-  | 'database'
-  | 'observability'
-  | 'performance'
-  | 'configuration';
-
-export interface ChangeRiskPolicy {
-  readonly area: ChangeRiskArea;
-  readonly domain: AuditDomain;
-  readonly uncoveredSeverity: Severity;
-  readonly title: string;
-  readonly description: string;
-  readonly pathPatterns: readonly RegExp[];
-  readonly contentPatterns?: readonly RegExp[];
-  readonly testPatterns: readonly RegExp[];
-  readonly validationPatterns?: readonly RegExp[];
-  readonly requiresFocusedEvidence: boolean;
-  readonly blockingWhenUncovered?: boolean;
-}
-
-export interface DependencyChangeSummary {
-  readonly changed: boolean;
-  readonly added: readonly string[];
-  readonly removed: readonly string[];
-  readonly versionChanged: readonly string[];
-  readonly invalidBaseline: boolean;
-  readonly invalidCurrent: boolean;
-}
-
-export interface PathNature {
-  readonly path: string;
-  readonly test: boolean;
-  readonly documentation: boolean;
-  readonly generated: boolean;
-  readonly workflow: boolean;
-  readonly manifest: boolean;
-  readonly lockfile: boolean;
-  readonly releaseValidation: boolean;
-  readonly productionCandidate: boolean;
-}
+export type ChangeRiskArea = 'security' | 'backend-api' | 'gis' | 'data' | 'search' | 'frontend-runtime' | 'accessibility' | 'responsive' | 'dependencies' | 'ci' | 'release-tooling' | 'database' | 'observability' | 'performance' | 'configuration';
+export interface ChangeRiskPolicy { readonly area: ChangeRiskArea; readonly domain: AuditDomain; readonly uncoveredSeverity: Severity; readonly title: string; readonly description: string; readonly pathPatterns: readonly RegExp[]; readonly contentPatterns?: readonly RegExp[]; readonly testPatterns: readonly RegExp[]; readonly validationPatterns?: readonly RegExp[]; readonly requiresFocusedEvidence: boolean; readonly blockingWhenUncovered?: boolean; }
+export interface DependencyChangeSummary { readonly changed: boolean; readonly added: readonly string[]; readonly removed: readonly string[]; readonly versionChanged: readonly string[]; readonly invalidBaseline: boolean; readonly invalidCurrent: boolean; }
+export interface PathNature { readonly path: string; readonly test: boolean; readonly documentation: boolean; readonly generated: boolean; readonly workflow: boolean; readonly manifest: boolean; readonly lockfile: boolean; readonly releaseValidation: boolean; readonly productionCandidate: boolean; }
 
 const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|\.Tests?\//iu;
 const DOCUMENTATION_PATH = /(?:^|\/)(?:docs?|_docs|progress)(?:\/|$)|(?:^|\/)KENT_REHBERI_[^/]*\.md$|\.mdx?$/iu;
@@ -65,7 +18,6 @@ const PACKAGE_MANIFEST = /(?:^|\/)package\.json$/iu;
 const PACKAGE_LOCK = /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/iu;
 const RELEASE_VALIDATION_PATH = /^(?:quality\/release\/|Webclient\.app\/scripts\/(?:release-|workflow-|verify-chain|typecheck-regression|vitest-regression)|tools\/(?:platform-|package-lock-integrity|browser-runtime-boundary))/iu;
 const SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|cs|css|scss|sass|less|html?|json|ya?ml|sql|xml|csproj|props|targets)$/iu;
-
 const SECURITY_PATH = /(?:^|\/)(?:auth|authentication|authorization|security|identity|token|session|cookie|cors|crypto|permission|credential|secret|csrf|xss)(?:[._/-]|$)/iu;
 const SECURITY_CONTENT = /(?:\bAuthorize\b|\bAllowAnonymous\b|AddAuthentication\b|AddAuthorization\b|UseAuthentication\b|UseAuthorization\b|AddCors\b|UseCors\b|localStorage\b|sessionStorage\b|Authorization\b|Bearer\b|Set-Cookie\b|SameSite\b|HttpOnly\b|SecurePolicy\b|dangerouslySetInnerHTML\b|FromSqlRaw\b|ExecuteSqlRaw\b|RemoteCertificateValidationCallback\b)/u;
 const BACKEND_API_PATH = /^(?:Api\.(?:Admin|User|Core)|Business|Operations)\//u;
@@ -88,7 +40,6 @@ const OBSERVABILITY_CONTENT = /(?:ILogger\b|console\.(?:log|warn|error|info)\b|P
 const PERFORMANCE_PATH = /(?:^|\/)(?:performance|budget|cache|worker|virtual|scheduler|queue|throttle|debounce|memo)(?:[._/-]|$)/iu;
 const PERFORMANCE_CONTENT = /(?:requestAnimationFrame\b|setInterval\b|setTimeout\b|Promise\.all\b|Worker\b|OffscreenCanvas\b|memo\b|useMemo\b|useCallback\b)/u;
 const CONFIG_PATH = /(?:^|\/)(?:appsettings(?:\.[^/]+)?\.json|launchSettings\.json|vite\.config\.[cm]?[jt]s|tsconfig(?:\.[^/]+)?\.json|Directory\.Build\.props|global\.json|\.env(?:\.[^/]+)?|web\.config|nginx\.conf)$/iu;
-
 const SECURITY_TEST = /(?:^|\/)(?:tests?|__tests__)[^/]*\/.*(?:security|auth|authorization|token|session|cors)|(?:security|auth|authorization|token|session|cors).*\.(?:test|spec)\.[cm]?[jt]s|Platform\.Security\.Tests/iu;
 const BACKEND_TEST = /^(?:tests\/|.*\.Tests?\/).*\.cs$/iu;
 const GIS_TEST = /(?:gis|map|scene|spatial|arcgis|geometry|layer|feature|viewport|camera|cluster).*\.(?:test|spec)\.[cm]?[jt]s$/iu;
@@ -125,20 +76,8 @@ const POLICIES: readonly ChangeRiskPolicy[] = Object.freeze([
   { area: 'performance', domain: 'performance', uncoveredSeverity: 'medium', title: 'Performance-sensitive change lacks focused evidence', description: 'Scheduling, caching, queueing and hot-path changes should include focused performance/budget regression evidence.', pathPatterns: [PERFORMANCE_PATH], contentPatterns: [PERFORMANCE_CONTENT], testPatterns: [PERFORMANCE_TEST], validationPatterns: [WORKFLOW_VALIDATION, RELEASE_TEST], requiresFocusedEvidence: true },
   { area: 'configuration', domain: 'architecture', uncoveredSeverity: 'medium', title: 'Configuration/toolchain change lacks validation evidence', description: 'Runtime/build configuration changes should include validation or contract coverage.', pathPatterns: [CONFIG_PATH], testPatterns: [CONFIG_TEST, RELEASE_TEST], validationPatterns: [WORKFLOW_VALIDATION, PLATFORM_VALIDATION], requiresFocusedEvidence: true },
 ]);
-
 export const CHANGE_RISK_POLICIES: readonly ChangeRiskPolicy[] = POLICIES;
-export const RELEASE_CRITICAL_VALIDATION_PATHS: readonly RegExp[] = Object.freeze([
-  /^\.github\/workflows\/release-qa\.ya?ml$/u,
-  /^\.github\/workflows\/webclient-quality\.ya?ml$/u,
-  /^\.github\/workflows\/release-evidence-contract\.ya?ml$/u,
-  /^\.github\/workflows\/platform-architecture-audit\.ya?ml$/u,
-  /^quality\/release\/release-engine\.mts$/u,
-  /^quality\/release\/pr-gate\.mts$/u,
-  /^quality\/release\/workflow-evidence-audit\.mts$/u,
-  /^quality\/release\/release-evidence-matrix\.mts$/u,
-  /^Webclient\.app\/scripts\/release-evidence-audit\.mjs$/u,
-]);
-
+export const RELEASE_CRITICAL_VALIDATION_PATHS: readonly RegExp[] = Object.freeze([/^\.github\/workflows\/release-qa\.ya?ml$/u, /^\.github\/workflows\/webclient-quality\.ya?ml$/u, /^\.github\/workflows\/release-evidence-contract\.ya?ml$/u, /^\.github\/workflows\/platform-architecture-audit\.ya?ml$/u, /^quality\/release\/release-engine\.mts$/u, /^quality\/release\/pr-gate\.mts$/u, /^quality\/release\/workflow-evidence-audit\.mts$/u, /^quality\/release\/release-evidence-matrix\.mts$/u, /^Webclient\.app\/scripts\/release-evidence-audit\.mjs$/u]);
 function matchesAny(value: string, patterns: readonly RegExp[]): boolean { return patterns.some(pattern => pattern.test(value)); }
 export function isTestPath(input: string): boolean { return TEST_PATH.test(normalizeRepositoryPath(input)); }
 export function isDocumentationPath(input: string): boolean { return DOCUMENTATION_PATH.test(normalizeRepositoryPath(input)); }
@@ -155,15 +94,19 @@ export function policyForArea(area: ChangeRiskArea): ChangeRiskPolicy { const po
 export function classifyRiskAreas(input: string, text = ''): readonly ChangeRiskArea[] {
   const path = normalizeRepositoryPath(input);
   if (isGeneratedPath(path) || isDocumentationPath(path) || isTestPath(path)) return [];
+  const releaseValidation = isReleaseValidationPath(path);
   const areas = new Set<ChangeRiskArea>();
   for (const policy of POLICIES) {
     const pathMatch = matchesAny(path, policy.pathPatterns);
-    const contentMatch = policy.contentPatterns ? matchesAny(text, policy.contentPatterns) : false;
+    // Release-governance source defines the classifiers themselves. Treating those regex literals as
+    // application content creates circular ownership (for example BACKEND_API_CONTENT containing
+    // "HttpClient"). Path ownership still classifies these files as release-tooling; real application
+    // sources continue to receive content-based classification.
+    const contentMatch = !releaseValidation && policy.contentPatterns ? matchesAny(text, policy.contentPatterns) : false;
     if (pathMatch || contentMatch) areas.add(policy.area);
   }
   return [...areas].sort((left, right) => left.localeCompare(right, 'en'));
 }
-
 export function testSupportsArea(input: string, area: ChangeRiskArea): boolean { const path = normalizeRepositoryPath(input); if (!isTestPath(path)) return false; return matchesAny(path, policyForArea(area).testPatterns); }
 export function validationSupportsArea(input: string, area: ChangeRiskArea): boolean { const path = normalizeRepositoryPath(input); const patterns = policyForArea(area).validationPatterns ?? []; return matchesAny(path, patterns); }
 export function evidenceSupportsArea(input: string, area: ChangeRiskArea): boolean { return testSupportsArea(input, area) || validationSupportsArea(input, area); }
