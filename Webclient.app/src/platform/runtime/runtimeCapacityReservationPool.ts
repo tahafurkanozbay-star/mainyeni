@@ -29,9 +29,10 @@ const DEFAULT_POLICY: RuntimeCapacityReservationPolicy = Object.freeze({ capacit
 const emptyAccounting = (): LaneAccounting => ({ activeReservations: 0, activeUnits: 0, queuedReservations: 0, queuedUnits: 0 });
 const boundedInteger = (value: number, name: string, minimum: number, maximum: number): number => { if (!Number.isSafeInteger(value) || value < minimum || value > maximum) throw new RangeError(`${name} must be an integer between ${minimum} and ${maximum}`); return value; };
 const normalizePolicy = (input: Partial<RuntimeCapacityReservationPolicy>): RuntimeCapacityReservationPolicy => {
+  const capacity = boundedInteger(input.capacity ?? DEFAULT_POLICY.capacity, 'capacity', 1, 100_000);
   const policy = Object.freeze({
-    capacity: boundedInteger(input.capacity ?? DEFAULT_POLICY.capacity, 'capacity', 1, 100_000),
-    maximumReservationUnits: boundedInteger(input.maximumReservationUnits ?? DEFAULT_POLICY.maximumReservationUnits, 'maximumReservationUnits', 1, 100_000),
+    capacity,
+    maximumReservationUnits: boundedInteger(input.maximumReservationUnits ?? Math.min(DEFAULT_POLICY.maximumReservationUnits, capacity), 'maximumReservationUnits', 1, 100_000),
     maximumQueue: boundedInteger(input.maximumQueue ?? DEFAULT_POLICY.maximumQueue, 'maximumQueue', 0, 100_000),
     maximumPerLaneQueue: boundedInteger(input.maximumPerLaneQueue ?? DEFAULT_POLICY.maximumPerLaneQueue, 'maximumPerLaneQueue', 0, 100_000),
     maximumHistory: boundedInteger(input.maximumHistory ?? DEFAULT_POLICY.maximumHistory, 'maximumHistory', 0, 10_000),
