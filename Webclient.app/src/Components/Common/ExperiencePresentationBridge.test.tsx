@@ -30,7 +30,7 @@ const mediaQuery = (matches = false): MutableMediaQuery => {
       listeners.delete(listener);
     },
     emit() {
-      for (const listener of [...listeners]) listener();
+      for (const listener of listeners) listener();
     },
   };
 };
