@@ -9,6 +9,7 @@ import './Components/Common/experience-data-ux.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
+import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
@@ -142,6 +143,7 @@ function App() {
             <ExperienceWorkspace />
             <ExperienceUXLayer windowManager={windowManager} />
             <ExperienceCommandCenter windowManager={windowManager} />
+            <ExperienceConnectivityNotice />
             <SiteDataDisclaimer />
           </ExperienceRuntimeRecoveryBoundary>
         </ExperienceStartupBoundary>
