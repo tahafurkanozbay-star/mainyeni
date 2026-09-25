@@ -16,12 +16,7 @@ export * from './adaptiveRuntimeModule';
 export * from './capacityEnvelope';
 export * from './loadShedding';
 export { LoadSheddingPolicy as AdaptiveLoadSheddingPolicy } from './loadSheddingPolicy';
-export type {
-  LoadSheddingPriority as AdaptiveLoadSheddingPriority,
-  LoadSheddingSample as AdaptiveLoadSheddingSample,
-  LoadSheddingThresholds as AdaptiveLoadSheddingThresholds,
-  LoadSheddingDecision as AdaptiveLoadSheddingDecision,
-} from './loadSheddingPolicy';
+export type { LoadSheddingPriority as AdaptiveLoadSheddingPriority, LoadSheddingSample as AdaptiveLoadSheddingSample, LoadSheddingThresholds as AdaptiveLoadSheddingThresholds, LoadSheddingDecision as AdaptiveLoadSheddingDecision } from './loadSheddingPolicy';
 export * from './resilienceEnvelope';
 export * from './runtimeSignalWindow';
 export * from './runtimeDeadlineLedger';
@@ -66,5 +61,6 @@ export * from './runtimeDependencyReadinessCoordinator';
 export * from './runtimeDependencyFailoverPlanner';
 export * from './runtimeDependencySloController';
 export * from './runtimeDependencyChangeGuard';
+export * from './runtimeDependencyDeploymentGate';
 export { RuntimePressureOrchestrator } from './runtimePressureOrchestrator';
 export type { RuntimePressureMode as RuntimeOrchestrationPressureMode, RuntimePressureDecision as RuntimeOrchestrationPressureDecision, RuntimePressureReason as RuntimeOrchestrationPressureReason, RuntimePressurePolicy as RuntimeOrchestrationPressurePolicy, RuntimePressureSample as RuntimeOrchestrationPressureSample, RuntimePressureRequest as RuntimeOrchestrationPressureRequest, RuntimePressureResult as RuntimeOrchestrationPressureResult, RuntimePressureTransition as RuntimeOrchestrationPressureTransition, RuntimePressureLaneSnapshot as RuntimeOrchestrationPressureLaneSnapshot, RuntimePressureSnapshot as RuntimeOrchestrationPressureSnapshot } from './runtimePressureOrchestrator';
