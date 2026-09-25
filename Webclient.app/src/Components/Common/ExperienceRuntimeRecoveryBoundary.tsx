@@ -36,7 +36,7 @@ class RuntimeErrorCatcher extends Component<CatcherProps, CatcherState> {
     const input = {
       error,
       source: 'react.render',
-      componentStack: info.componentStack,
+      componentStack: info.componentStack ?? null,
     };
 
     if (snapshot.phase === 'recovering') {
