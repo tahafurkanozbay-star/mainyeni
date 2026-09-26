@@ -4,16 +4,14 @@ using RestSharp;
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Business.Extensions.Gis.Operations
 {
     /// <summary>
     /// Server-side adapter for the legacy TKGM parcel service.
-    ///
-    /// Keep the external transport behind this operation boundary. The endpoint is an existing
-    /// integration and is intentionally not exposed to browser code. Requests are bounded by a
-    /// finite timeout and cache publication is thread-safe so concurrent ASP.NET requests cannot
-    /// corrupt shared state or issue an unbounded number of identical district/ neighbourhood calls.
+    /// External requests stay behind this operation boundary, are time-bounded, and honor the
+    /// ASP.NET request cancellation token so disconnected clients do not leave orphaned I/O.
     /// </summary>
     public class GisTkgmOperations : _BaseOperations
     {
@@ -21,12 +19,8 @@ namespace Business.Extensions.Gis.Operations
         private const string Referrer = "http://parselsorgu.tkgm.gov.tr";
         private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
-        private static readonly object DistrictsCacheGate = new object();
-        private static readonly ConcurrentDictionary<int, Lazy<string>> NbhoodsCache =
-            new ConcurrentDictionary<int, Lazy<string>>();
-
-        private static string districtsCache;
-        private static int? districtsCacheCityId;
+        private static readonly ConcurrentDictionary<int, string> DistrictsCache = new ConcurrentDictionary<int, string>();
+        private static readonly ConcurrentDictionary<int, string> NbhoodsCache = new ConcurrentDictionary<int, string>();
 
         private readonly BusinessContext gisDb;
 
@@ -35,81 +29,66 @@ namespace Business.Extensions.Gis.Operations
             gisDb = gisContext ?? throw new ArgumentNullException(nameof(gisContext));
         }
 
-        /// <summary>
-        /// Gets districts for the requested city. The old implementation kept one process-wide
-        /// string without remembering which city produced it; a request for another city could
-        /// therefore receive stale data. The cache now binds the payload to its city identifier.
-        /// </summary>
-        public string Districts(int cityId)
+        public async Task<string> DistrictsAsync(int cityId, CancellationToken cancellationToken = default)
         {
             EnsurePositiveId(cityId, nameof(cityId));
-
-            lock (DistrictsCacheGate)
+            if (DistrictsCache.TryGetValue(cityId, out var cached))
             {
-                if (districtsCache != null && districtsCacheCityId == cityId)
-                {
-                    return districtsCache;
-                }
-
-                var content = ExecuteGet("/idariYapi/ilceListe/" + cityId);
-                districtsCache = content;
-                districtsCacheCityId = cityId;
-                return content;
+                return cached;
             }
+
+            var content = await ExecuteGetAsync("/idariYapi/ilceListe/" + cityId, cancellationToken).ConfigureAwait(false);
+            DistrictsCache.TryAdd(cityId, content);
+            return content;
         }
 
-        /// <summary>
-        /// Gets neighbourhoods for a district. Lazy publication provides single-flight semantics
-        /// for concurrent cache misses while ConcurrentDictionary makes reads/writes race-safe.
-        /// Failed requests are evicted so a transient upstream failure is never cached forever.
-        /// </summary>
-        public string Nbhoods(int districtId)
+        public async Task<string> NbhoodsAsync(int districtId, CancellationToken cancellationToken = default)
         {
             EnsurePositiveId(districtId, nameof(districtId));
-
-            var lazy = NbhoodsCache.GetOrAdd(
-                districtId,
-                id => new Lazy<string>(
-                    () => ExecuteGet("/idariYapi/mahalleListe/" + id),
-                    LazyThreadSafetyMode.ExecutionAndPublication));
-
-            try
+            if (NbhoodsCache.TryGetValue(districtId, out var cached))
             {
-                return lazy.Value;
+                return cached;
             }
-            catch
-            {
-                NbhoodsCache.TryRemove(districtId, out _);
-                throw;
-            }
+
+            var content = await ExecuteGetAsync("/idariYapi/mahalleListe/" + districtId, cancellationToken).ConfigureAwait(false);
+            NbhoodsCache.TryAdd(districtId, content);
+            return content;
         }
 
         /// <summary>
-        /// Gets one parcel. Parcel responses are intentionally not process-cached because parcel
-        /// data can change independently and this adapter has no authoritative invalidation signal.
+        /// Parcel responses remain uncached because this adapter has no authoritative invalidation signal.
         /// </summary>
-        public string Parcel(int districtId, int nbhoodId, int cityblock, int parcel)
+        public Task<string> ParcelAsync(
+            int districtId,
+            int nbhoodId,
+            int cityblock,
+            int parcel,
+            CancellationToken cancellationToken = default)
         {
             EnsurePositiveId(districtId, nameof(districtId));
             EnsurePositiveId(nbhoodId, nameof(nbhoodId));
             EnsurePositiveId(cityblock, nameof(cityblock));
             EnsurePositiveId(parcel, nameof(parcel));
 
-            return ExecuteGet("/parsel/" + nbhoodId + "/" + cityblock + "/" + parcel);
+            return ExecuteGetAsync("/parsel/" + nbhoodId + "/" + cityblock + "/" + parcel, cancellationToken);
         }
 
-        private static string ExecuteGet(string relativePath)
+        private static async Task<string> ExecuteGetAsync(string relativePath, CancellationToken cancellationToken)
         {
-            var options = new RestClientOptions
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var options = new RestClientOptions(TkgmBaseUrl)
             {
                 Timeout = RequestTimeout
             };
             using var client = new RestClient(options);
-            var request = new RestRequest(TkgmBaseUrl + relativePath, Method.Get);
+            var request = new RestRequest(relativePath, Method.Get);
             request.AddHeader("Referer", Referrer);
             request.AddHeader("Origin", Referrer);
 
-            var response = client.Execute(request);
+            var response = await client.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!response.IsSuccessful)
             {
                 throw new InvalidOperationException(
