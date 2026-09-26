@@ -16,23 +16,23 @@ This backlog converts repository-wide modernization into independently verifiabl
 
 ## Priority 0 — dependency/runtime compatibility
 
-### P0.1 Elasticsearch client migration
+### P0.1 Elasticsearch client retirement — completed in this PR
 
-The repository still centrally pins `NEST` 7.17.5. Treat replacement of the Elasticsearch 7-era client as a compatibility migration, not a package bump.
+The initial inventory found that `NEST` 7.17.5 was a dependency-graph artifact rather than an active Elasticsearch implementation: the central version and Toolbox package reference existed, but repository source contained no `NEST`, `Nest`, `ElasticClient`, or `IElasticClient` call sites. Therefore introducing an Elasticsearch 8 compatibility adapter would have created unused architecture rather than migrated behavior.
 
-Acceptance criteria:
+Completed evidence:
 
-1. Inventory every `NEST`, `Nest`, and Elasticsearch transport usage before changing packages.
-2. Record index mappings, query DSL features, serializers, connection settings, retry behavior, and exception semantics currently relied upon.
-3. Introduce the supported client behind the existing application boundary rather than leaking a second client API through Business or API layers.
-4. Preserve query/result semantics with characterization tests for representative search, filter, aggregation, pagination, sorting, and failure cases.
-5. Do not require a server-side Elasticsearch major upgrade as an implicit side effect; document the supported server/client compatibility window.
-6. Remove the old client only after all call sites and tests have migrated.
-7. Run restore/audit/build/test/publish and release QA on the exact PR head.
+1. Source inventory found no Elasticsearch transport implementation or query DSL call sites.
+2. `Toolbox.csproj` no longer references NEST.
+3. `Directory.Packages.props` no longer centrally pins NEST 7.17.5.
+4. No server endpoint, index mapping, query behavior, network path, or public contract changed.
+5. Exact-head Platform Backend Validation, Platform Architecture Audit, and Release QA all completed successfully after removal.
+
+Decision: keep Elasticsearch absent until a real product requirement and server contract exist. Do not add a replacement client speculatively.
 
 ### P0.2 Newtonsoft.Json containment
 
-`Newtonsoft.Json` remains centrally pinned. Do not mechanically replace it. First classify usages into framework integration, dynamic JSON/JToken behavior, custom converters, and simple DTO serialization.
+`Newtonsoft.Json` remains centrally pinned and is directly referenced by Toolbox. Do not mechanically replace it. First classify usages into framework integration, dynamic JSON/JToken behavior, custom converters, and simple DTO serialization.
 
 Acceptance criteria:
 
@@ -40,10 +40,20 @@ Acceptance criteria:
 2. Migrate simple DTO serialization only when wire output is characterized by tests.
 3. Retain Newtonsoft where behavior is materially different until a compatible converter exists.
 4. Prevent mixed serializer configuration from silently changing casing, enum, null, date, or reference-loop behavior.
+5. Inventory transitive exposure: public Toolbox APIs must not force Newtonsoft types into callers unless behavior genuinely requires them.
+6. Characterization tests must lock any observable JSON wire contract before serializer changes.
 
 ### P0.3 legacy compatibility package review
 
-Review `System.ServiceModel.*`, LDAP, PDF/OCR, image-processing, and UA parsing packages for runtime support and security posture. A package is not removed merely because it is old; replacement requires a proven maintained path and regression coverage.
+Review `System.ServiceModel.*`, LDAP, PDF/OCR, image-processing, UA parsing, RestSharp, and document packages for runtime support and security posture. A package is not removed merely because it is old; replacement requires a proven maintained path and regression coverage.
+
+Inventory rule:
+
+- Distinguish a centrally declared version from a project reference and from a real source call site. These are three different dependency states.
+- A central version with no project reference is a cleanup candidate, not evidence that the runtime uses the package.
+- A project reference with no source call site requires restore/build validation before removal because analyzers, build targets, generated code, reflection, or transitive behavior may still matter.
+- A source call site requires characterization before migration.
+- Never introduce a replacement package merely to preserve an unused dependency slot.
 
 ## Priority 0 — build and supply-chain guarantees
 
@@ -54,6 +64,7 @@ Review `System.ServiceModel.*`, LDAP, PDF/OCR, image-processing, and UA parsing 
 - Keep NuGet vulnerability auditing release-critical.
 - Ensure restore failures cannot be hidden by later successful steps.
 - Prefer locked/deterministic inputs where the repository's deployment model supports them.
+- Detect stale central package declarations independently from vulnerable package detection; unused dependency metadata is maintenance debt even when it does not enter the resolved graph.
 
 ### P0.5 exact-head release evidence
 
@@ -147,14 +158,15 @@ Fast changed-scope checks may supplement but never replace whole-repository rele
 
 1. Establish current-main SHA and ownership boundaries.
 2. Inventory call sites and observable contracts.
-3. Add or confirm characterization tests.
-4. Implement the smallest coherent migration slice.
-5. Run lint/typecheck/build/unit/integration checks appropriate to the slice.
-6. Fix failures without weakening gates or assertions.
-7. Re-run the failed check and the broader regression suite.
-8. Review security, performance, cancellation, resource bounds, and rollback behavior.
-9. Rebase/merge current main as required by repository policy.
-10. Require exact-head CI success before merge.
+3. Classify dependency evidence as central declaration, project reference, source call site, or transitive-only use.
+4. Add or confirm characterization tests before changing observable behavior.
+5. Implement the smallest coherent migration slice.
+6. Run lint/typecheck/build/unit/integration checks appropriate to the slice.
+7. Fix failures without weakening gates or assertions.
+8. Re-run the failed check and the broader regression suite.
+9. Review security, performance, cancellation, resource bounds, and rollback behavior.
+10. Rebase/merge current main as required by repository policy.
+11. Require exact-head CI success before merge.
 
 ## Explicit non-goals
 
@@ -167,4 +179,4 @@ Fast changed-scope checks may supplement but never replace whole-repository rele
 
 ## Next implementation slice
 
-Start with the Elasticsearch client inventory because `NEST` 7.17.5 is the clearest centrally visible legacy runtime dependency. The first code-bearing slice should locate every call site, establish characterization coverage around the current search abstraction, and define a compatibility adapter. Package replacement comes only after those tests prove the current behavior and the supported server compatibility window is known.
+The NEST cleanup is complete and validated. The next code-bearing slice is dependency-exposure inventory, starting with Newtonsoft.Json and then central declarations such as RestSharp/System.ServiceModel. For each candidate, distinguish central metadata from actual project/source usage before deciding whether to remove, contain, or characterize it. In parallel, inspect request-to-data asynchronous paths for missing cancellation propagation because that yields runtime reliability value without requiring a speculative technology migration.
