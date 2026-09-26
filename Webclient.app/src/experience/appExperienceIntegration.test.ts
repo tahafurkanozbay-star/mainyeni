@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 
-const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+// Resolve from Vitest's configured Webclient.app working directory instead of
+// import.meta.url. Vite transforms module URLs during collection, which can
+// make a source-inspection test depend on the transform/cache location rather
+// than the repository source tree and surface as a suite-level collection
+// failure under the full CI worker pool.
+const appSourcePath = resolve(process.cwd(), 'src', 'App.tsx');
+const appSource = readFileSync(appSourcePath, 'utf8');
 
 const expectImport = (modulePath: string): void => {
   expect(appSource).toContain(`from '${modulePath}'`);
