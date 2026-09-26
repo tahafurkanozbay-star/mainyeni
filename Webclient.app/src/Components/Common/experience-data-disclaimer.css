@@ -22,6 +22,7 @@
   pointer-events: none;
   backdrop-filter: blur(10px);
 }
+
 .experience-data-disclaimer__icon { display: inline-grid; flex: 0 0 auto; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: var(--exp-accent, #185f86); border: 2px solid currentColor; border-radius: 999px; font-size: 0.8rem; line-height: 1; }
 .experience-data-disclaimer__copy { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.45rem; min-inline-size: 0; }
 .experience-data-disclaimer__copy > span, .experience-data-disclaimer__copy > strong { overflow-wrap: anywhere; }
