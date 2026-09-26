@@ -64,5 +64,28 @@ jobs:
       - name: Strict Platform test TypeScript
         run: npm run typecheck:platform-tests -- --pretty false
 
+      # Preserve the canonical release-evidence step name while keeping the
+      # dependency-governance package isolated below for actionable CI failures.
       - name: Focused migrated Platform tests
-        run: npx --no-install vitest run src/platform/bootstrap src/platform/http src/platform/performance src/platform/runtime --reporter=verbose
+        run: npx --no-install vitest run src/platform/bootstrap src/platform/http src/platform/performance --reporter=verbose
+
+      - name: Dependency health and topology tests
+        run: npx --no-install vitest run src/platform/runtime/runtimeDependencyHealthRegistry.test.ts src/platform/runtime/runtimeDependencyTopology.test.ts --reporter=verbose
+
+      - name: Dependency readiness and failover tests
+        run: npx --no-install vitest run src/platform/runtime/runtimeDependencyReadinessCoordinator.test.ts src/platform/runtime/runtimeDependencyFailoverPlanner.test.ts --reporter=verbose
+
+      - name: Dependency SLO and change governance tests
+        run: npx --no-install vitest run src/platform/runtime/runtimeDependencySloController.test.ts src/platform/runtime/runtimeDependencyChangeGuard.test.ts --reporter=verbose
+
+      - name: Dependency deployment and incident tests
+        run: npx --no-install vitest run src/platform/runtime/runtimeDependencyDeploymentGate.test.ts src/platform/runtime/runtimeDependencyIncidentCoordinator.test.ts --reporter=verbose
+
+      - name: Dependency maintenance and evidence tests
+        run: npx --no-install vitest run src/platform/runtime/runtimeDependencyMaintenanceRegistry.test.ts src/platform/runtime/runtimeDependencyEvidenceLedger.test.ts --reporter=verbose
+
+      - name: Dependency operations integration tests
+        run: npx --no-install vitest run src/platform/runtime/runtimeDependencyOperations.integration.test.ts --reporter=verbose
+
+      - name: Remaining Platform runtime regression tests
+        run: npx --no-install vitest run src/platform/runtime --exclude='src/platform/runtime/runtimeDependency*.test.ts' --exclude='src/platform/runtime/runtimeDependency*.integration.test.ts' --reporter=verbose

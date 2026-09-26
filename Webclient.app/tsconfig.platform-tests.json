@@ -1,62 +1,14 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "allowJs": false,
-    "checkJs": false,
-    "strict": true,
-    "noEmit": true,
-    "types": [
-      "vitest/globals",
-      "vite/client"
-    ]
-  },
+  "compilerOptions": { "allowJs": false, "checkJs": false, "strict": true, "noEmit": true, "types": ["vitest/globals", "vite/client"] },
   "include": [
-    "src/platform/bootstrap/bootstrapCore.test.ts",
-    "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
-    "src/platform/config/runtimeConfig.test.ts",
-    "src/platform/config/runtimeConfigResolution.test.ts",
-    "src/platform/config/runtimeConfigGovernance.test.ts",
-    "src/platform/config/runtimeConfigTransition.test.ts",
-    "src/platform/http/fetchTransport.test.ts",
-    "src/platform/http/networkDiagnostics.test.ts",
-    "src/platform/http/requestScheduler.test.ts",
-    "src/platform/http/retryPolicy.test.ts",
-    "src/platform/http/runtimeCapabilities.test.ts",
-    "src/platform/http/typescriptRuntime.integration.test.ts",
+    "src/platform/bootstrap/bootstrapCore.test.ts", "src/platform/bootstrap/bootstrapDiagnostics.test.ts",
+    "src/platform/config/runtimeConfig.test.ts", "src/platform/config/runtimeConfigResolution.test.ts", "src/platform/config/runtimeConfigGovernance.test.ts", "src/platform/config/runtimeConfigTransition.test.ts",
+    "src/platform/http/fetchTransport.test.ts", "src/platform/http/networkDiagnostics.test.ts", "src/platform/http/requestScheduler.test.ts", "src/platform/http/retryPolicy.test.ts", "src/platform/http/runtimeCapabilities.test.ts", "src/platform/http/typescriptRuntime.integration.test.ts",
     "src/platform/performance/performanceMonitor.test.ts",
-    "src/platform/runtime/runtime.test.ts",
-    "src/platform/runtime/runtimeDiagnostics.test.ts",
-    "src/platform/runtime/loadSheddingPolicy.test.ts",
-    "src/platform/runtime/resilienceEnvelope.test.ts",
-    "src/platform/runtime/runtimeDeadlineLedger.test.ts",
-    "src/platform/runtime/runtimeResilienceHealth.test.ts",
-    "src/platform/runtime/runtimeResilienceSupervisor.test.ts",
-    "src/platform/runtime/runtimeSignalWindow.test.ts",
-    "src/platform/runtime/runtimeWorkloadGovernor.test.ts",
-    "src/platform/runtime/serviceGraph.test.ts",
-    "src/platform/runtime/serviceContainer.test.ts",
-    "src/platform/runtime/serviceHealth.test.ts",
-    "src/platform/runtime/serviceComposition.integration.test.ts",
-    "src/platform/runtime/runtimeAdmissionController.test.ts",
-    "src/platform/runtime/runtimeBackpressureCoordinator.test.ts",
-    "src/platform/runtime/runtimeCapacityHealth.integration.test.ts",
-    "src/platform/runtime/runtimeCapacityReservationPool.test.ts",
-    "src/platform/runtime/runtimeCapacityReservationPromotion.test.ts",
-    "src/platform/runtime/runtimeConcurrencyGovernor.test.ts",
-    "src/platform/runtime/runtimeDegradationController.test.ts",
-    "src/platform/runtime/runtimeFailureBudget.test.ts",
-    "src/platform/runtime/runtimeFairShareAllocator.test.ts",
-    "src/platform/runtime/runtimeHealthEscalationMatrix.test.ts",
-    "src/platform/runtime/runtimeLoadWindow.test.ts",
-    "src/platform/runtime/runtimeOverloadGuard.test.ts",
-    "src/platform/runtime/runtimePressureOrchestrator.test.ts",
-    "src/platform/runtime/runtimeQuarantineRegistry.test.ts",
-    "src/platform/runtime/runtimeRecoveryPlanner.test.ts",
-    "src/platform/runtime/runtimeSaturationLedger.test.ts"
+    "src/platform/runtime/runtime.test.ts", "src/platform/runtime/runtimeDiagnostics.test.ts", "src/platform/runtime/loadSheddingPolicy.test.ts", "src/platform/runtime/resilienceEnvelope.test.ts", "src/platform/runtime/runtimeDeadlineLedger.test.ts", "src/platform/runtime/runtimeResilienceHealth.test.ts", "src/platform/runtime/runtimeResilienceSupervisor.test.ts", "src/platform/runtime/runtimeSignalWindow.test.ts", "src/platform/runtime/runtimeWorkloadGovernor.test.ts", "src/platform/runtime/serviceGraph.test.ts", "src/platform/runtime/serviceContainer.test.ts", "src/platform/runtime/serviceHealth.test.ts", "src/platform/runtime/serviceComposition.integration.test.ts", "src/platform/runtime/runtimeAdmissionController.test.ts", "src/platform/runtime/runtimeBackpressureCoordinator.test.ts", "src/platform/runtime/runtimeCapacityHealth.integration.test.ts", "src/platform/runtime/runtimeCapacityReservationPool.test.ts", "src/platform/runtime/runtimeCapacityReservationPromotion.test.ts", "src/platform/runtime/runtimeConcurrencyGovernor.test.ts", "src/platform/runtime/runtimeDegradationController.test.ts",
+    "src/platform/runtime/runtimeDependencyHealthRegistry.test.ts", "src/platform/runtime/runtimeDependencyTopology.test.ts", "src/platform/runtime/runtimeDependencyReadinessCoordinator.test.ts", "src/platform/runtime/runtimeDependencyFailoverPlanner.test.ts", "src/platform/runtime/runtimeDependencySloController.test.ts", "src/platform/runtime/runtimeDependencyChangeGuard.test.ts", "src/platform/runtime/runtimeDependencyDeploymentGate.test.ts", "src/platform/runtime/runtimeDependencyIncidentCoordinator.test.ts", "src/platform/runtime/runtimeDependencyMaintenanceRegistry.test.ts", "src/platform/runtime/runtimeDependencyEvidenceLedger.test.ts", "src/platform/runtime/runtimeDependencyOperations.integration.test.ts",
+    "src/platform/runtime/runtimeFailureBudget.test.ts", "src/platform/runtime/runtimeFairShareAllocator.test.ts", "src/platform/runtime/runtimeHealthEscalationMatrix.test.ts", "src/platform/runtime/runtimeLoadWindow.test.ts", "src/platform/runtime/runtimeOverloadGuard.test.ts", "src/platform/runtime/runtimePressureOrchestrator.test.ts", "src/platform/runtime/runtimeQuarantineRegistry.test.ts", "src/platform/runtime/runtimeRecoveryPlanner.test.ts", "src/platform/runtime/runtimeSaturationLedger.test.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "build",
-    "dist"
-  ]
+  "exclude": ["node_modules", "build", "dist"]
 }
