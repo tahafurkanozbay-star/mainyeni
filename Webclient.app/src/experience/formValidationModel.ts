@@ -119,7 +119,12 @@ export const createFormValidationModel = (
   const report = (error: unknown): void => {
     const reporter = options.onObserverError;
     if (!reporter) return;
-    try { reporter(error); } catch { /* observer reporting must not break form state */ }
+    try {
+      reporter(error);
+    } catch (reportingError) {
+      // Diagnostics are best-effort: mark the secondary reporter failure as intentionally handled.
+      void reportingError;
+    }
   };
 
   const fieldSnapshot = (field: MutableField): FormFieldSnapshot => Object.freeze({
