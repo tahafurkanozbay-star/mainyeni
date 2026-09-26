@@ -1,0 +1,161 @@
+@import './legacyPresentationFoundation.css';
+
+/* Legacy presentation modernization layer.
+ * Loaded after historical component styles so active screens receive accessible,
+ * direction-neutral and viewport-safe behavior while legacy selectors are retired.
+ */
+
+:root {
+  --legacy-focus-ring: 2px solid currentColor;
+  --legacy-focus-offset: 3px;
+  --legacy-target-min: 44px;
+  --legacy-target-coarse: 48px;
+  --legacy-panel-gap: clamp(8px, 1.5vw, 16px);
+  --legacy-panel-max: min(40rem, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  --legacy-panel-shadow: 0 16px 42px rgb(15 23 42 / 18%);
+}
+
+:where(button, [role='button'], a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--legacy-focus-ring) !important;
+  outline-offset: var(--legacy-focus-offset) !important;
+}
+
+:where(.form-button, .results-container-back-button, .context-menu-item, .item-Tools_item-Button, #locateButtonContainer) {
+  min-inline-size: var(--legacy-target-min);
+  min-block-size: var(--legacy-target-min);
+}
+
+.form-button {
+  block-size: auto;
+  min-block-size: var(--legacy-target-min);
+  padding-inline: 15px;
+  float: inline-end;
+}
+
+.common-query-window {
+  min-inline-size: min(25rem, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  inline-size: min(34rem, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  max-inline-size: var(--legacy-panel-max);
+  max-block-size: calc(100dvh - var(--mainbar-height, 0px) - (2 * var(--legacy-panel-gap)));
+  inset-block-start: calc(var(--mainbar-height, 0px) + var(--legacy-panel-gap));
+  inset-inline-start: calc(var(--sidebar-width, 0px) + var(--legacy-panel-gap));
+  box-shadow: var(--legacy-panel-shadow);
+}
+
+.common-query-window-right {
+  inset-inline-start: auto;
+  inset-inline-end: calc(var(--toolbar-width, 0px) + var(--legacy-panel-gap));
+}
+
+.common-query-window-header > span { margin-inline-start: 5px; }
+.common-query-window-header-icon {
+  min-inline-size: var(--legacy-target-min);
+  min-block-size: var(--legacy-target-min);
+  margin-inline-start: -15px;
+}
+.results-container { max-block-size: calc(100dvh - 11rem); overscroll-behavior: contain; }
+.results-container-back-button { margin-inline-start: 0; }
+.result-item-info, .result-item-container, .Item { min-block-size: var(--legacy-target-min); }
+
+:where(.hoverableCardHeader, .form-checkbox, .results-container-back-button, .result-item-container, .context-menu-item, .Item, .item-Tools_item-Button):focus-within {
+  background-color: color-mix(in srgb, var(--primary-button-background-hover, #0d8fbc) 14%, transparent);
+}
+
+.dropdown:focus-within .dropdown-content { display: block; }
+.dropdown-content {
+  min-inline-size: min(210px, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  max-inline-size: calc(100dvw - (2 * var(--legacy-panel-gap)));
+}
+.dropdown-content-sidebar { inset-block-start: 0; inset-inline-start: var(--sidebar-width, 0px); }
+.dropdown-content a { min-block-size: var(--legacy-target-min); display: flex; align-items: center; }
+.dropdown-content a:focus-visible { background-color: #e0e0e0; color: #444; }
+
+.modal-content {
+  inset-block-start: min(40px, 4dvh);
+  inset-inline-start: 0;
+  max-inline-size: calc(100dvw - (2 * var(--legacy-panel-gap)));
+}
+.ZoningStatusDocument_ModalContainer .modal-dialog {
+  inline-size: min(750px, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  max-inline-size: calc(100dvw - (2 * var(--legacy-panel-gap)));
+  margin-inline: auto;
+}
+.context-menu {
+  inline-size: min(250px, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  max-block-size: calc(100dvh - (2 * var(--legacy-panel-gap)));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.context-menu-item { display: flex; align-items: center; }
+.context-menu-itemTitle { margin-inline-start: 5px; }
+.context-menu-planchangeresults {
+  inline-size: min(400px, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  max-inline-size: calc(100dvw - (2 * var(--legacy-panel-gap)));
+  max-block-size: min(400px, calc(100dvh - (2 * var(--legacy-panel-gap))));
+  inset-block-start: 86px;
+  inset-inline-start: min(250px, 30dvw);
+}
+.overviewMapDiv {
+  inset-block-end: calc(20px + env(safe-area-inset-bottom));
+  inset-inline-start: max(16px, calc(75px + env(safe-area-inset-left)));
+  inline-size: min(20em, calc(100dvw - 32px));
+  max-inline-size: calc(100dvw - 32px);
+}
+.appVersion { inset-inline-end: max(0px, env(safe-area-inset-right)); inset-block-end: calc(50px + env(safe-area-inset-bottom)); max-inline-size: calc(100dvw - 24px); }
+.companyLogo { inset-inline-end: max(0px, env(safe-area-inset-right)); inset-block-end: env(safe-area-inset-bottom); }
+#locateButtonContainer {
+  inline-size: var(--legacy-target-min);
+  block-size: var(--legacy-target-min);
+  display: inline-grid;
+  place-items: center;
+  touch-action: manipulation;
+}
+.btn:focus-visible {
+  outline: var(--legacy-focus-ring) !important;
+  outline-offset: var(--legacy-focus-offset) !important;
+  box-shadow: 0 0 0 4px rgb(13 143 188 / 24%) !important;
+}
+
+@media (max-width: 767.98px) {
+  .common-query-window, .common-query-window-right {
+    inset-inline: var(--legacy-panel-gap);
+    inset-block-start: calc(var(--mainbar-height, 0px) + var(--legacy-panel-gap));
+    inline-size: auto;
+    min-inline-size: 0;
+    max-inline-size: none;
+    max-block-size: calc(100dvh - var(--mainbar-height, 0px) - (2 * var(--legacy-panel-gap)) - env(safe-area-inset-bottom));
+    border-radius: 16px;
+  }
+  .context-menu-planchangeresults {
+    position: fixed;
+    inset-inline: var(--legacy-panel-gap);
+    inset-block: auto calc(var(--legacy-panel-gap) + env(safe-area-inset-bottom));
+    inline-size: auto;
+    max-block-size: min(60dvh, 400px);
+  }
+  .overviewMapDiv {
+    inset-inline-start: var(--legacy-panel-gap);
+    inset-block-end: calc(var(--legacy-panel-gap) + env(safe-area-inset-bottom));
+    inline-size: min(20em, calc(100dvw - (2 * var(--legacy-panel-gap))));
+  }
+  .ZoningStatusDocument_ModalContainer .modal-dialog { inline-size: auto; margin-inline: var(--legacy-panel-gap); }
+}
+
+@media (pointer: coarse) {
+  :where(.form-button, .results-container-back-button, .context-menu-item, .dropdown-content a, .item-Tools_item-Button, #locateButtonContainer) {
+    min-inline-size: var(--legacy-target-coarse);
+    min-block-size: var(--legacy-target-coarse);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.common-query-window, .dropdown-content, .context-menu, .modal-content) {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+@media (forced-colors: active) {
+  :where(.common-query-window, .dropdown-content, .context-menu, .modal-content) { border: 1px solid CanvasText; box-shadow: none; }
+  :where(button, [role='button'], a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid Highlight !important; }
+}

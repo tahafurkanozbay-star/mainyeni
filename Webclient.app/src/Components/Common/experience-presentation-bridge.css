@@ -1,0 +1,248 @@
+/*
+ * Adaptive presentation bridge.
+ *
+ * Browser preferences are mirrored into deterministic root data attributes by
+ * ExperiencePresentationBridge. These rules let modern and legacy surfaces share
+ * one accessibility vocabulary without requiring per-component matchMedia calls.
+ */
+
+:root {
+  --exp-adaptive-target: 44px;
+  --exp-adaptive-panel-gap: clamp(8px, 1.5vw, 16px);
+  --exp-adaptive-panel-inline-max: min(42rem, calc(100dvw - (2 * var(--exp-adaptive-panel-gap))));
+  --exp-adaptive-content-inline-max: 80rem;
+  --exp-adaptive-motion-duration: 160ms;
+  --exp-adaptive-motion-distance: 8px;
+  --exp-adaptive-overlay-opacity: 0.48;
+  --exp-adaptive-scrollbar-gutter: stable;
+}
+
+html[data-exp-pointer='coarse'] {
+  --exp-adaptive-target: 48px;
+}
+
+html[data-exp-density='comfortable'] {
+  --exp-adaptive-panel-gap: clamp(10px, 2vw, 20px);
+}
+
+html[data-exp-viewport='compact'] {
+  --exp-adaptive-panel-inline-max: calc(100dvw - (2 * var(--exp-adaptive-panel-gap)));
+}
+
+html[data-exp-motion='reduced'] {
+  --exp-adaptive-motion-duration: 0.01ms;
+  --exp-adaptive-motion-distance: 0px;
+}
+
+html[data-exp-contrast='more'],
+html[data-exp-color-mode='forced'] {
+  --exp-adaptive-overlay-opacity: 0.82;
+}
+
+html[data-exp-motion='reduced'] :where(*, *::before, *::after) {
+  scroll-behavior: auto !important;
+}
+
+html[data-exp-motion='reduced'] :where(
+  .experience-shell,
+  .experience-command-center,
+  .experience-startup__card,
+  .experience-runtime-recovery__card,
+  .experience-connectivity-notice,
+  .common-query-window,
+  .dropdown-content,
+  .context-menu,
+  .modal-content
+) {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+}
+
+html[data-exp-pointer='coarse'] :where(
+  button,
+  [role='button'],
+  summary,
+  input,
+  select,
+  textarea,
+  .form-button,
+  .results-container-back-button,
+  .context-menu-item,
+  .dropdown-content a,
+  .item-Tools_item-Button,
+  #locateButtonContainer
+) {
+  min-block-size: var(--exp-adaptive-target);
+}
+
+html[data-exp-pointer='coarse'] :where(
+  button,
+  [role='button'],
+  .form-button,
+  .results-container-back-button,
+  .context-menu-item,
+  .item-Tools_item-Button,
+  #locateButtonContainer
+) {
+  min-inline-size: var(--exp-adaptive-target);
+}
+
+html[data-exp-viewport='compact'] :where(
+  .common-query-window,
+  .common-query-window-right,
+  .context-menu,
+  .dropdown-content,
+  .modal-content
+) {
+  max-inline-size: var(--exp-adaptive-panel-inline-max);
+}
+
+html[data-exp-viewport='compact'] :where(
+  .horizontal-layout,
+  .results-container-toolbar,
+  .modal-footer
+) {
+  flex-wrap: wrap;
+}
+
+html[data-exp-viewport='compact'] :where(
+  .common-query-window,
+  .common-query-window-right
+) {
+  max-block-size: calc(
+    100dvh
+    - var(--mainbar-height, 0px)
+    - (2 * var(--exp-adaptive-panel-gap))
+    - env(safe-area-inset-bottom)
+  );
+}
+
+html[data-exp-viewport='compact'] :where(
+  .result-item-container,
+  .form-checkbox,
+  .context-menu-item
+) {
+  min-inline-size: 0;
+}
+
+html[data-exp-viewport='compact'] :where(
+  .result-item-info,
+  .form-checkbox > span,
+  .context-menu-itemTitle,
+  .modal-title
+) {
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+}
+
+html[data-exp-contrast='more'] :where(
+  .common-query-window,
+  .dropdown-content,
+  .context-menu,
+  .modal-content,
+  input,
+  select,
+  textarea
+) {
+  border-width: max(2px, 0.125rem);
+}
+
+html[data-exp-contrast='more'] :where(
+  button,
+  [role='button'],
+  a,
+  input,
+  select,
+  textarea,
+  summary,
+  [tabindex]
+):focus-visible {
+  outline-width: 3px !important;
+  outline-offset: 3px !important;
+}
+
+html[data-exp-contrast='more'] :where(
+  .experience-connectivity-notice,
+  .experience-startup__card,
+  .experience-runtime-recovery__card
+) {
+  backdrop-filter: none !important;
+}
+
+html[data-exp-color-mode='forced'] :where(
+  .experience-connectivity-notice,
+  .experience-startup__card,
+  .experience-runtime-recovery__card,
+  .common-query-window,
+  .dropdown-content,
+  .context-menu,
+  .modal-content
+) {
+  color: CanvasText;
+  background: Canvas;
+  border-color: CanvasText;
+  box-shadow: none !important;
+  forced-color-adjust: auto;
+}
+
+html[data-exp-color-mode='forced'] :where(
+  button,
+  [role='button'],
+  a,
+  input,
+  select,
+  textarea,
+  summary,
+  [tabindex]
+):focus-visible {
+  outline: 2px solid Highlight !important;
+  outline-offset: 3px !important;
+}
+
+html[data-exp-color-mode='forced'] :where(
+  [aria-current='page'],
+  [aria-current='location'],
+  [aria-selected='true']
+) {
+  outline: 1px solid Highlight;
+  outline-offset: 1px;
+}
+
+html[data-exp-density='comfortable'] :where(
+  .common-query-window-body,
+  .modal-body,
+  .context-menu-item,
+  .dropdown-content a
+) {
+  line-height: 1.5;
+}
+
+html[data-exp-density='comfortable'] :where(
+  .context-menu-item,
+  .dropdown-content a,
+  .results-container-back-button
+) {
+  padding-block: max(0.625rem, calc((var(--exp-adaptive-target) - 1.25rem) / 2));
+}
+
+html[data-exp-viewport='wide'][data-exp-density='compact'] :where(
+  .common-query-window,
+  .modal-dialog
+) {
+  max-inline-size: min(var(--exp-adaptive-content-inline-max), calc(100dvw - 2rem));
+}
+
+@media print {
+  html[data-exp-motion],
+  html[data-exp-contrast],
+  html[data-exp-color-mode],
+  html[data-exp-pointer],
+  html[data-exp-viewport],
+  html[data-exp-density] {
+    --exp-adaptive-motion-duration: 0ms;
+    --exp-adaptive-motion-distance: 0px;
+    --exp-adaptive-overlay-opacity: 1;
+  }
+}
