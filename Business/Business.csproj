@@ -10,8 +10,6 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="RestSharp" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
-    <PackageReference Include="System.ServiceModel.Http" />
-    <PackageReference Include="System.ServiceModel.Primitives" />
     <PackageReference Include="Tesseract" />
   </ItemGroup>
 </Project>
