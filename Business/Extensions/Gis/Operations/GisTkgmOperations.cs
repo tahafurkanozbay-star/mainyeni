@@ -70,31 +70,48 @@ namespace Business.Extensions.Gis.Operations
     /// <summary>
     /// Server-side adapter for the legacy TKGM parcel service.
     /// External requests stay behind an injectable transport boundary, honor ASP.NET request
-    /// cancellation and publish only successful administrative-list responses into bounded caches.
+    /// cancellation and publish only successful administrative-list responses into bounded,
+    /// freshness-limited caches. Parcel responses are deliberately never cached.
     /// </summary>
     public class GisTkgmOperations : _BaseOperations, IDisposable
     {
         private const int MaxAdministrativeCacheEntries = 512;
-        private static readonly ConcurrentDictionary<int, string> DistrictsCache = new ConcurrentDictionary<int, string>();
-        private static readonly ConcurrentDictionary<int, string> NbhoodsCache = new ConcurrentDictionary<int, string>();
+        private static readonly TimeSpan AdministrativeCacheTtl = TimeSpan.FromMinutes(15);
+        private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> DistrictsCache = new();
+        private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> NbhoodsCache = new();
 
         private readonly ITkgmTransport transport;
         private readonly bool ownsTransport;
+        private readonly TimeProvider timeProvider;
 
         public GisTkgmOperations(BusinessContext gisContext)
-            : this(gisContext, new RestSharpTkgmTransport(), true)
+            : this(gisContext, new RestSharpTkgmTransport(), true, TimeProvider.System)
         {
         }
 
         public GisTkgmOperations(BusinessContext gisContext, ITkgmTransport transport)
-            : this(gisContext, transport, false)
+            : this(gisContext, transport, false, TimeProvider.System)
         {
         }
 
-        private GisTkgmOperations(BusinessContext gisContext, ITkgmTransport transport, bool ownsTransport)
+        /// <summary>
+        /// Testable constructor for deterministic cache-freshness verification. The injected transport
+        /// and time provider are externally owned and are never disposed by this operation.
+        /// </summary>
+        public GisTkgmOperations(BusinessContext gisContext, ITkgmTransport transport, TimeProvider timeProvider)
+            : this(gisContext, transport, false, timeProvider)
+        {
+        }
+
+        private GisTkgmOperations(
+            BusinessContext gisContext,
+            ITkgmTransport transport,
+            bool ownsTransport,
+            TimeProvider timeProvider)
         {
             _ = gisContext ?? throw new ArgumentNullException(nameof(gisContext));
             this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
+            this.timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
             this.ownsTransport = ownsTransport;
         }
 
@@ -102,12 +119,13 @@ namespace Business.Extensions.Gis.Operations
         {
             EnsurePositiveId(cityId, nameof(cityId));
             cancellationToken.ThrowIfCancellationRequested();
-            if (DistrictsCache.TryGetValue(cityId, out var cached))
+            if (TryGetFresh(DistrictsCache, cityId, out var cached))
             {
                 return cached;
             }
 
             var content = await transport.GetAsync("/idariYapi/ilceListe/" + cityId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             PublishBounded(DistrictsCache, cityId, content);
             return content;
         }
@@ -116,12 +134,13 @@ namespace Business.Extensions.Gis.Operations
         {
             EnsurePositiveId(districtId, nameof(districtId));
             cancellationToken.ThrowIfCancellationRequested();
-            if (NbhoodsCache.TryGetValue(districtId, out var cached))
+            if (TryGetFresh(NbhoodsCache, districtId, out var cached))
             {
                 return cached;
             }
 
             var content = await transport.GetAsync("/idariYapi/mahalleListe/" + districtId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             PublishBounded(NbhoodsCache, districtId, content);
             return content;
         }
@@ -151,8 +170,37 @@ namespace Business.Extensions.Gis.Operations
             NbhoodsCache.Clear();
         }
 
-        private static void PublishBounded(ConcurrentDictionary<int, string> cache, int key, string content)
+        private bool TryGetFresh(
+            ConcurrentDictionary<int, AdministrativeCacheEntry> cache,
+            int key,
+            out string content)
         {
+            if (cache.TryGetValue(key, out var entry))
+            {
+                var age = timeProvider.GetUtcNow() - entry.CreatedAt;
+                if (age >= TimeSpan.Zero && age < AdministrativeCacheTtl)
+                {
+                    content = entry.Content;
+                    return true;
+                }
+
+                cache.TryRemove(new KeyValuePair<int, AdministrativeCacheEntry>(key, entry));
+            }
+
+            content = string.Empty;
+            return false;
+        }
+
+        private void PublishBounded(
+            ConcurrentDictionary<int, AdministrativeCacheEntry> cache,
+            int key,
+            string content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                throw new InvalidOperationException("TKGM administrative response cannot be cached when empty.");
+            }
+
             if (cache.Count >= MaxAdministrativeCacheEntries && !cache.ContainsKey(key))
             {
                 // Administrative lists are an optimization, not an authority. Clearing is deterministic,
@@ -160,7 +208,7 @@ namespace Business.Extensions.Gis.Operations
                 cache.Clear();
             }
 
-            cache.TryAdd(key, content);
+            cache[key] = new AdministrativeCacheEntry(content, timeProvider.GetUtcNow());
         }
 
         private static void EnsurePositiveId(int value, string parameterName)
@@ -178,5 +226,7 @@ namespace Business.Extensions.Gis.Operations
                 disposable.Dispose();
             }
         }
+
+        private sealed record AdministrativeCacheEntry(string Content, DateTimeOffset CreatedAt);
     }
 }
