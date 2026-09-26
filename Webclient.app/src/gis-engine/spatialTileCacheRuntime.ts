@@ -174,7 +174,7 @@ export class SpatialTileCacheRuntime<T> {
 
   clear(options: { readonly includePinned?: boolean } = {}): number {
     let removed = 0;
-    for (const [id, entry] of [...this.#entries]) {
+    for (const [id, entry] of this.#entries) {
       if (options.includePinned !== true && entry.pinned) continue;
       if (this.#remove(id, 'delete')) removed += 1;
     }
@@ -184,7 +184,7 @@ export class SpatialTileCacheRuntime<T> {
   pruneExpired(now = Date.now()): number {
     if (!finite(now) || now < 0) throw new RangeError('now');
     let removed = 0;
-    for (const [id, entry] of [...this.#entries]) if (this.#isExpired(entry, now)) { this.#remove(id, 'expiration'); removed += 1; }
+    for (const [id, entry] of this.#entries) if (this.#isExpired(entry, now)) { this.#remove(id, 'expiration'); removed += 1; }
     return removed;
   }
 
