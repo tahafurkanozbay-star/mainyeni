@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using Toolbox.Serialization;
 using Xunit;
