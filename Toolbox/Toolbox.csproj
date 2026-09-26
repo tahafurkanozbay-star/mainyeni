@@ -5,7 +5,6 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" />
-    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Novell.Directory.Ldap.NETStandard" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="PdfPig" />
