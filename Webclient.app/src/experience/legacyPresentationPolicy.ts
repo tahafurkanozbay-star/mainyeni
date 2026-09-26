@@ -52,13 +52,31 @@ const add = (
 
 const blocks = (css: string): readonly { selector: string; body: string }[] => {
   const result: { selector: string; body: string }[] = [];
-  const pattern = /([^{}]+)\{([^{}]*)\}/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(css)) !== null && result.length < 512) {
-    const selector = boundedEvidence(match[1] ?? '');
-    const body = match[2] ?? '';
+  let cursor = 0;
+
+  // Scan with bounded index lookups rather than a backtracking block regex.
+  // A long brace-free prefix is valid hostile input for this audit and must
+  // remain O(n) instead of repeatedly reconsidering the same characters.
+  while (cursor < css.length && result.length < 512) {
+    const open = css.indexOf('{', cursor);
+    if (open < 0) break;
+    const close = css.indexOf('}', open + 1);
+    if (close < 0) break;
+
+    const nestedOpen = css.indexOf('{', open + 1);
+    if (nestedOpen >= 0 && nestedOpen < close) {
+      cursor = nestedOpen;
+      continue;
+    }
+
+    const previousClose = css.lastIndexOf('}', open - 1);
+    const selectorStart = Math.max(cursor, previousClose + 1);
+    const selector = boundedEvidence(css.slice(selectorStart, open));
+    const body = css.slice(open + 1, close);
     if (selector && body) result.push({ selector, body });
+    cursor = close + 1;
   }
+
   return result;
 };
 
