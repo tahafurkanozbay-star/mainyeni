@@ -249,7 +249,7 @@ export class SpatialTilePipelineRuntime {
     this.#admission.release(key);
     if (stored) {
       record.state = 'cached';
-      record.generation = undefined;
+      delete record.generation;
       record.touchedAt = cacheOptions.now ?? Date.now();
     } else {
       this.#tiles.delete(key);
