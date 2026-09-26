@@ -223,9 +223,14 @@ export const evaluateLegacyPresentationRemediation = (
   const coveragePercent = findingCount === 0
     ? 100
     : Math.round((remediatedFindingCount / findingCount) * 100);
+  const hasAuditableFindings = findingCount > 0;
 
   return Object.freeze({
-    passed: unresolvedFindingCount === 0 && RULES.every((rule) => risks[rule.risk].status === 'remediated'),
+    // A clean/bounded prefix with zero findings is not affirmative remediation evidence.
+    // Require at least one audited legacy risk before declaring the remediation gate passed.
+    passed: hasAuditableFindings
+      && unresolvedFindingCount === 0
+      && RULES.every((rule) => risks[rule.risk].status === 'remediated'),
     findingCount,
     remediatedFindingCount,
     unresolvedFindingCount,
