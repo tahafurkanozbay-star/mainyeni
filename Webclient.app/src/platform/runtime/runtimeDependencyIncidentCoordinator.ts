@@ -143,6 +143,11 @@ export class RuntimeDependencyIncidentCoordinator {
         incident.state = 'open';
       }
       if (incident.consecutiveFailures >= this.#policy.criticalFailureCount || (evidence.required && !evidence.dependencyReady)) {
+        // A required-dependency outage opens an incident immediately even when the
+        // warning failure threshold has not yet been reached. Persisting openedAt
+        // here is essential: recovery hysteresis and escalation are keyed off an
+        // actually opened incident rather than the warning threshold alone.
+        incident.openedAt ??= evidence.evaluatedAt;
         incident.severity = 'critical';
         incident.state = 'mitigating';
         reasons.push('critical-dependency-impact');
