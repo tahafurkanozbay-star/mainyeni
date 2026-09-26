@@ -64,10 +64,9 @@ jobs:
       - name: Strict Platform test TypeScript
         run: npm run typecheck:platform-tests -- --pretty false
 
-      # Keep the established Platform suites separate from the dependency-governance
-      # package so a failing CI step identifies the owning slice without weakening
-      # coverage or relying on unavailable Actions log archives.
-      - name: Focused migrated Platform baseline tests
+      # Preserve the canonical release-evidence step name while keeping the
+      # dependency-governance package isolated below for actionable CI failures.
+      - name: Focused migrated Platform tests
         run: npx --no-install vitest run src/platform/bootstrap src/platform/http src/platform/performance --reporter=verbose
 
       - name: Dependency health and topology tests
