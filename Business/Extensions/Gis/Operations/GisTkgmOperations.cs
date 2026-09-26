@@ -19,7 +19,7 @@ namespace Business.Extensions.Gis.Operations
     {
         private const string TkgmBaseUrl = "http://cbsapi.tkgm.gov.tr/megsiswebapi.v3/api";
         private const string Referrer = "http://parselsorgu.tkgm.gov.tr";
-        private const int RequestTimeoutMilliseconds = 10_000;
+        private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
         private static readonly object DistrictsCacheGate = new object();
         private static readonly ConcurrentDictionary<int, Lazy<string>> NbhoodsCache =
@@ -102,7 +102,7 @@ namespace Business.Extensions.Gis.Operations
         {
             var options = new RestClientOptions
             {
-                MaxTimeout = RequestTimeoutMilliseconds
+                Timeout = RequestTimeout
             };
             using var client = new RestClient(options);
             var request = new RestRequest(TkgmBaseUrl + relativePath, Method.Get);
