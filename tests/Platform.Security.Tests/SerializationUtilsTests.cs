@@ -30,7 +30,7 @@ public sealed class SerializationUtilsTests
         var root = document.RootElement;
         Assert.Equal("parent", root.GetProperty("Name").GetString());
         Assert.Equal("child", root.GetProperty("Child").GetProperty("Name").GetString());
-        Assert.Null(root.GetProperty("Child").GetProperty("Parent").GetProperty("Child").GetString());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("Child").GetProperty("Parent").ValueKind);
     }
 
     [Fact]
