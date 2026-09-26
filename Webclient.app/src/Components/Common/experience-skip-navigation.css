@@ -1,0 +1,94 @@
+.experience-skip-navigation {
+  position: fixed;
+  inset-block-start: max(0.5rem, env(safe-area-inset-top));
+  inset-inline-start: max(0.5rem, env(safe-area-inset-left));
+  z-index: 20000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-inline-size: min(42rem, calc(100dvw - 1rem));
+  pointer-events: none;
+}
+
+.experience-skip-navigation__link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--exp-adaptive-target, 44px);
+  max-inline-size: min(32rem, calc(100dvw - 1rem));
+  padding-block: 0.625rem;
+  padding-inline: 0.875rem;
+  color: #ffffff;
+  background: #123b58;
+  border: 2px solid #ffffff;
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 28%);
+  font: 600 0.875rem/1.2 var(--legacy-font-sans, system-ui, sans-serif);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  transform: translateY(calc(-100% - 1rem));
+  transition:
+    transform var(--exp-adaptive-motion-duration, 160ms) ease,
+    opacity var(--exp-adaptive-motion-duration, 160ms) ease;
+  pointer-events: auto;
+}
+
+.experience-skip-navigation__link:focus,
+.experience-skip-navigation__link:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+  outline: 3px solid #facc15;
+  outline-offset: 3px;
+  text-decoration: none;
+}
+
+.experience-skip-navigation__link:hover {
+  color: #ffffff;
+  background: #0f3149;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+html[data-exp-contrast='more'] .experience-skip-navigation__link {
+  color: CanvasText;
+  background: Canvas;
+  border-color: CanvasText;
+  box-shadow: none;
+}
+
+html[data-exp-color-mode='forced'] .experience-skip-navigation__link {
+  color: LinkText;
+  background: Canvas;
+  border: 2px solid CanvasText;
+  box-shadow: none;
+  forced-color-adjust: auto;
+}
+
+html[data-exp-color-mode='forced'] .experience-skip-navigation__link:focus-visible {
+  outline: 3px solid Highlight;
+}
+
+html[data-exp-motion='reduced'] .experience-skip-navigation__link {
+  transition: none;
+}
+
+@media (max-width: 47.99rem) {
+  .experience-skip-navigation {
+    inset-inline: max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-right));
+    max-inline-size: none;
+  }
+
+  .experience-skip-navigation__link {
+    flex: 1 1 100%;
+    inline-size: 100%;
+    max-inline-size: none;
+  }
+}
+
+@media print {
+  .experience-skip-navigation {
+    display: none !important;
+  }
+}
