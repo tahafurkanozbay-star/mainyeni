@@ -16,6 +16,7 @@
     <PackageVersion Include="Novell.Directory.Ldap.NETStandard" Version="3.6.0" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="PdfPig" Version="0.1.6" />
+    <PackageVersion Include="RestSharp" Version="114.0.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
