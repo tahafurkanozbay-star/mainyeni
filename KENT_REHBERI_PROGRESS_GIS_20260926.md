@@ -1,0 +1,16 @@
+# Kent Rehberi — Deep GIS current checkpoint — 2026-09-26
+
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; ArcGIS REST query runtime hardening.
+- BRANCH / PR: `agent/gis-deep-20260926-1114-4417d0b`, PR #349 (draft/open).
+- BASE / MERGE-BASE: current `main` `2d5de88819c630e34feec9b1035eedc7686a15f7`; branch is 0 behind current main.
+- CURRENT PRODUCT HEAD: `9a7ba35403d73b8d3f67300ae4f8fa39e8071dbd` before this documentation-only checkpoint commit.
+- KAPSAM / GATE: 27 GIS runtime/test/checkpoint files, >4,000 meaningful additions / 0 deletions. Mandatory >=4,000 additions gate is now satisfied; merge remains blocked until exact-head CI is completed+success and final current-main refresh is clean.
+- TAMAMLANAN GIS DİLİMLERİ: bounded ArcGIS query page planning; fail-closed response integrity; bounded concurrent execution/retry/cancellation; single-flight request registry + TTL/LRU cache; workload/feature/byte budget governor; per-service circuit breaker; adaptive page sizing constrained by verified service maxRecordCount; bounded service-health registry; atomic cross-page feature accumulator; deterministic bounded result windows; verified query-capability normalization; integration/security/regression coverage.
+- PERFORMANS: concurrency, queue, feature/byte pressure, request dedupe, TTL cache, circuit state, adaptive query state, retained health state, accumulated feature bytes/pages and result-window size are explicitly bounded. Idle service state is TTL-pruned and capacity-evicted deterministically.
+- DATA INTEGRITY: OBJECTID uniqueness/page membership, spatial-reference consistency, geometry depth/coordinate budgets, finite-coordinate/value validation, atomic page accumulation, stable identity tie-breaking and capability fingerprints are fail-closed.
+- SECURITY / NETWORK: no new endpoint, WMS/WFS/WMTS, direct browser transport, telemetry, remote asset, secret, unsafe dynamic code or second icon authority. Query transports remain injected. Oversized/malformed service keys, identity fields, IDs, sort values and non-finite nested values are rejected.
+- TESTLER / BUILD: exact head `c624ff0c...` Platform Architecture Audit run 36254578803 and Release QA run 36254578796 completed+success. New product head `9a7ba354...` has no workflow runs visible yet, so no PASS is inferred for the newest health/accumulator/result-window/capability slices.
+- İKON EŞLEŞTİRME: unchanged; existing deterministic shared resolver remains authoritative.
+- MERGE DURUMU: PR #349 remains draft/open and mergeable. Do not merge until exact-head required CI is completed+success, review/regression refresh is clean and final main refresh still yields 0 behind with no conflict.
+- SONRAKİ GÖREV: first inspect exact-head Actions. Fix any lint/typecheck/Vitest/build failure on the same PR, rerun validation, perform final performance/data-integrity/security review, refresh main/merge-base, then mark ready and squash merge only if every gate remains satisfied.
+- PROGRESS CONSOLIDATION NOTE: canonical `KENT_REHBERI_PROGRESS.md` is not blindly overwritten because the connector returns its very large shared content truncated. This role-scoped checkpoint preserves concurrent teams' records and must be reconciled into canonical progress through a full-content-safe path.
