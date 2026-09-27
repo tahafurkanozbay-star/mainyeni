@@ -1,9 +1,9 @@
-import type { FormValidationModel } from './formValidationModel';
+import type { FormValidationModel, FormValidationSnapshot } from './formValidationModel';
 
 export type FormFieldElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
 export interface FormAccessibilityField {
-  readonly name: string;
+  readonly id: string;
   readonly element: FormFieldElement;
   readonly errorElement?: HTMLElement;
   readonly hintElement?: HTMLElement;
@@ -16,50 +16,42 @@ export interface FormAccessibilityControllerOptions {
   readonly summary?: HTMLElement;
   readonly status?: HTMLElement;
   readonly focusInvalidOnSubmit?: boolean;
-  readonly validateOnBlur?: boolean;
-  readonly validateOnChange?: boolean;
 }
 
 export interface FormAccessibilitySnapshot {
-  readonly invalidFields: readonly string[];
-  readonly pendingFields: readonly string[];
-  readonly touchedFields: readonly string[];
-  readonly dirtyFields: readonly string[];
-  readonly canSubmit: boolean;
+  readonly invalidFieldIds: readonly string[];
+  readonly validatingFieldIds: readonly string[];
+  readonly touchedFieldIds: readonly string[];
+  readonly dirtyFieldIds: readonly string[];
+  readonly valid: boolean;
+  readonly submitting: boolean;
   readonly announcement: string;
 }
 
 type Listener = (snapshot: FormAccessibilitySnapshot) => void;
 
-function tokens(value: string | null): string[] {
-  return value?.split(/\s+/u).map((token) => token.trim()).filter(Boolean) ?? [];
-}
+const attributeTokens = (value: string | null): string[] =>
+  value?.split(/\s+/u).map((token) => token.trim()).filter(Boolean) ?? [];
 
-function setToken(element: Element, attribute: string, token: string, enabled: boolean): void {
-  const next = new Set(tokens(element.getAttribute(attribute)));
+const setToken = (element: Element, attribute: string, token: string, enabled: boolean): void => {
+  const next = new Set(attributeTokens(element.getAttribute(attribute)));
   if (enabled) next.add(token);
   else next.delete(token);
   if (next.size === 0) element.removeAttribute(attribute);
   else element.setAttribute(attribute, [...next].join(' '));
-}
+};
 
-function safeFocus(element: HTMLElement): void {
-  try {
-    element.focus({ preventScroll: false });
-  } catch {
-    // Focus is progressive enhancement; validation state remains authoritative.
-  }
-}
+const focusSafely = (element: HTMLElement): void => {
+  try { element.focus({ preventScroll: false }); } catch (error) { void error; }
+};
 
 export class FormAccessibilityController {
   readonly #form: HTMLFormElement;
   readonly #model: FormValidationModel;
   readonly #fields: readonly FormAccessibilityField[];
-  readonly #summary?: HTMLElement;
-  readonly #status?: HTMLElement;
+  readonly #summary: HTMLElement | undefined;
+  readonly #status: HTMLElement | undefined;
   readonly #focusInvalidOnSubmit: boolean;
-  readonly #validateOnBlur: boolean;
-  readonly #validateOnChange: boolean;
   readonly #listeners = new Set<Listener>();
   readonly #cleanup: Array<() => void> = [];
   #disposed = false;
@@ -72,63 +64,49 @@ export class FormAccessibilityController {
     this.#summary = options.summary;
     this.#status = options.status;
     this.#focusInvalidOnSubmit = options.focusInvalidOnSubmit ?? true;
-    this.#validateOnBlur = options.validateOnBlur ?? true;
-    this.#validateOnChange = options.validateOnChange ?? false;
-
     this.#form.noValidate = true;
-    this.#form.setAttribute('aria-busy', 'false');
     this.#bindFields();
     this.#bindSubmit();
+    this.#cleanup.push(this.#model.subscribe(() => this.#render()));
     this.#render();
+  }
+
+  snapshot(): FormAccessibilitySnapshot {
+    const state = this.#model.snapshot();
+    const validatingFieldIds = this.#fields.filter(({ id }) => state.fields[id]?.status === 'validating').map(({ id }) => id);
+    const touchedFieldIds = this.#fields.filter(({ id }) => state.fields[id]?.touched === true).map(({ id }) => id);
+    const dirtyFieldIds = this.#fields.filter(({ id }) => state.fields[id]?.dirty === true).map(({ id }) => id);
+    return Object.freeze({
+      invalidFieldIds: Object.freeze([...state.invalidFieldIds]),
+      validatingFieldIds: Object.freeze(validatingFieldIds),
+      touchedFieldIds: Object.freeze(touchedFieldIds),
+      dirtyFieldIds: Object.freeze(dirtyFieldIds),
+      valid: state.valid,
+      submitting: state.submitting,
+      announcement: this.#announcement || state.announcement,
+    });
   }
 
   subscribe(listener: Listener): () => void {
     this.#assertActive();
     this.#listeners.add(listener);
-    listener(this.snapshot());
+    this.#notifyListener(listener);
     return () => this.#listeners.delete(listener);
-  }
-
-  snapshot(): FormAccessibilitySnapshot {
-    const state = this.#model.snapshot();
-    const invalidFields = this.#fields
-      .filter(({ name }) => (state.fields[name]?.errors.length ?? 0) > 0)
-      .map(({ name }) => name);
-    const pendingFields = this.#fields
-      .filter(({ name }) => state.fields[name]?.pending === true)
-      .map(({ name }) => name);
-    const touchedFields = this.#fields
-      .filter(({ name }) => state.fields[name]?.touched === true)
-      .map(({ name }) => name);
-    const dirtyFields = this.#fields
-      .filter(({ name }) => state.fields[name]?.dirty === true)
-      .map(({ name }) => name);
-    return Object.freeze({
-      invalidFields: Object.freeze(invalidFields),
-      pendingFields: Object.freeze(pendingFields),
-      touchedFields: Object.freeze(touchedFields),
-      dirtyFields: Object.freeze(dirtyFields),
-      canSubmit: state.canSubmit,
-      announcement: this.#announcement,
-    });
   }
 
   async validateAll(options: { focusFirstInvalid?: boolean } = {}): Promise<boolean> {
     this.#assertActive();
-    await this.#model.validateAll();
-    this.#render();
-    const snapshot = this.snapshot();
-    const valid = snapshot.invalidFields.length === 0 && snapshot.pendingFields.length === 0;
+    const valid = await this.#model.validateAll();
     if (!valid && (options.focusFirstInvalid ?? false)) this.focusFirstInvalid();
     return valid;
   }
 
   focusFirstInvalid(): boolean {
     this.#assertActive();
-    const invalid = new Set(this.snapshot().invalidFields);
-    const field = this.#fields.find(({ name }) => invalid.has(name));
+    const id = this.#model.snapshot().firstInvalidFieldId;
+    const field = id ? this.#fields.find((candidate) => candidate.id === id) : undefined;
     if (!field) return false;
-    safeFocus(field.element);
+    focusSafely(field.element);
     return true;
   }
 
@@ -146,9 +124,8 @@ export class FormAccessibilityController {
 
   reset(): void {
     this.#assertActive();
-    this.#model.reset();
     this.#announcement = '';
-    this.#render();
+    this.#model.reset();
   }
 
   dispose(): void {
@@ -168,16 +145,10 @@ export class FormAccessibilityController {
     for (const field of this.#fields) {
       if (field.hintElement?.id) setToken(field.element, 'aria-describedby', field.hintElement.id, true);
       const onInput = (): void => {
-        if (this.#disposed) return;
-        this.#model.setValue(field.name, field.element.value);
-        if (this.#validateOnChange) void this.#validateField(field.name);
-        else this.#render();
+        if (!this.#disposed) this.#model.setValue(field.id, field.element.value);
       };
       const onBlur = (): void => {
-        if (this.#disposed) return;
-        this.#model.touch(field.name);
-        if (this.#validateOnBlur) void this.#validateField(field.name);
-        else this.#render();
+        if (!this.#disposed) void this.#model.blur(field.id);
       };
       field.element.addEventListener('input', onInput);
       field.element.addEventListener('change', onInput);
@@ -201,68 +172,63 @@ export class FormAccessibilityController {
   }
 
   async #handleSubmit(): Promise<void> {
-    const valid = await this.validateAll({ focusFirstInvalid: this.#focusInvalidOnSubmit });
-    if (!valid) {
-      const count = this.snapshot().invalidFields.length;
+    const accepted = await this.#model.beginSubmit();
+    if (this.#disposed) return;
+    if (!accepted) {
+      if (this.#focusInvalidOnSubmit) this.focusFirstInvalid();
+      const count = this.#model.snapshot().invalidFieldIds.length;
       this.announce(count === 1 ? 'Formda düzeltilmesi gereken 1 alan var.' : `Formda düzeltilmesi gereken ${count} alan var.`);
       return;
     }
     this.announce('Form doğrulandı ve gönderime hazır.');
   }
 
-  async #validateField(name: string): Promise<void> {
-    try {
-      await this.#model.validateField(name);
-    } finally {
-      if (!this.#disposed) this.#render();
-    }
-  }
-
   #render(): void {
     if (this.#disposed) return;
     const state = this.#model.snapshot();
-    const pending = this.#fields.some(({ name }) => state.fields[name]?.pending === true);
-    this.#form.setAttribute('aria-busy', String(pending));
-
-    for (const field of this.#fields) {
-      const fieldState = state.fields[field.name];
-      const errors = fieldState?.errors ?? [];
-      const showError = fieldState?.touched === true && errors.length > 0;
-      field.element.setAttribute('aria-invalid', showError ? 'true' : 'false');
-      if (field.errorElement) {
-        field.errorElement.textContent = showError ? errors[0] ?? '' : '';
-        field.errorElement.hidden = !showError;
-        if (field.errorElement.id) setToken(field.element, 'aria-describedby', field.errorElement.id, showError);
-      }
-    }
-
-    if (this.#summary) {
-      const invalid = this.#fields.filter(({ name }) => (state.fields[name]?.errors.length ?? 0) > 0);
-      this.#summary.hidden = invalid.length === 0;
-      this.#summary.setAttribute('role', invalid.length > 0 ? 'alert' : 'status');
-      this.#summary.textContent = invalid.length === 0 ? '' : invalid.length === 1
-        ? '1 alanın düzeltilmesi gerekiyor.'
-        : `${invalid.length} alanın düzeltilmesi gerekiyor.`;
-    }
+    this.#form.setAttribute('aria-busy', String(state.submitting || this.#hasValidatingField(state)));
+    for (const field of this.#fields) this.#renderField(field, state);
+    this.#renderSummary(state);
     this.#emit();
   }
 
+  #renderField(field: FormAccessibilityField, state: FormValidationSnapshot): void {
+    const fieldState = state.fields[field.id];
+    const showError = fieldState?.touched === true && fieldState.issue !== null;
+    field.element.setAttribute('aria-invalid', showError ? 'true' : 'false');
+    if (!field.errorElement) return;
+    field.errorElement.textContent = showError ? fieldState?.issue?.message ?? '' : '';
+    field.errorElement.hidden = !showError;
+    if (field.errorElement.id) setToken(field.element, 'aria-describedby', field.errorElement.id, showError);
+  }
+
+  #renderSummary(state: FormValidationSnapshot): void {
+    if (!this.#summary) return;
+    const count = state.invalidFieldIds.length;
+    this.#summary.hidden = count === 0;
+    this.#summary.setAttribute('role', count > 0 ? 'alert' : 'status');
+    this.#summary.textContent = count === 0 ? '' : count === 1
+      ? '1 alanın düzeltilmesi gerekiyor.'
+      : `${count} alanın düzeltilmesi gerekiyor.`;
+  }
+
+  #hasValidatingField(state: FormValidationSnapshot): boolean {
+    return this.#fields.some(({ id }) => state.fields[id]?.status === 'validating');
+  }
+
   #emit(): void {
-    const snapshot = this.snapshot();
-    for (const listener of [...this.#listeners]) {
-      try {
-        listener(snapshot);
-      } catch {
-        // One observer must never break form interaction for other observers.
-      }
-    }
+    for (const listener of [...this.#listeners]) this.#notifyListener(listener);
+  }
+
+  #notifyListener(listener: Listener): void {
+    try { listener(this.snapshot()); } catch (error) { void error; }
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new Error('FormAccessibilityController has been disposed.');
+    if (this.#disposed) throw new Error('FormAccessibilityController dispose edildikten sonra kullanılamaz.');
   }
 }
 
-export function createFormAccessibilityController(options: FormAccessibilityControllerOptions): FormAccessibilityController {
-  return new FormAccessibilityController(options);
-}
+export const createFormAccessibilityController = (
+  options: FormAccessibilityControllerOptions,
+): FormAccessibilityController => new FormAccessibilityController(options);
