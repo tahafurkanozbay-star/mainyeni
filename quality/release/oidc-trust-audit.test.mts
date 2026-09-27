@@ -131,13 +131,13 @@ test('blocks event-derived dynamic environment', () => {
 });
 
 test('blocks PR-head checkout in OIDC privileged job', () => {
-  const steps = `      - uses: ${checkout}\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          persist-credentials: false\n      - uses: ${aws}\n        with:\n          role-to-assume: arn:aws:iam::123456789012:role/release\n`;
+  const steps = `      - uses: ${checkout}\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          persist-credentials: false\n      - uses: ${aws}\n        with:\n          role-to-assume: arn:aws:iam::123456789012:role/release\n`;
   const text = workflow({ trigger: 'pull_request_target:', environment: 'production', steps });
   assert.equal(has(text, 'ci-oidc-untrusted-checkout'), true);
 });
 
 test('blocks head_ref checkout in OIDC privileged job', () => {
-  const steps = `      - uses: ${checkout}\n        with:\n          ref: ${{ github.head_ref }}\n          persist-credentials: false\n      - uses: ${aws}\n        with:\n          role-to-assume: arn:aws:iam::123456789012:role/release\n`;
+  const steps = `      - uses: ${checkout}\n        with:\n          ref: \${{ github.head_ref }}\n          persist-credentials: false\n      - uses: ${aws}\n        with:\n          role-to-assume: arn:aws:iam::123456789012:role/release\n`;
   assert.equal(has(workflow({ trigger: 'pull_request_target:', environment: 'production', steps }), 'ci-oidc-untrusted-checkout'), true);
 });
 
@@ -196,7 +196,7 @@ test('accepts immutable build provenance attestation action', () => {
 });
 
 test('manual dispatch with OIDC and write permission receives review finding', () => {
-  const text = `name: deploy\non:\n  workflow_dispatch:\n    inputs:\n      tag:\n        required: true\npermissions:\n  contents: write\n  id-token: write\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo "${{ inputs.tag }}"\n`;
+  const text = `name: deploy\non:\n  workflow_dispatch:\n    inputs:\n      tag:\n        required: true\npermissions:\n  contents: write\n  id-token: write\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo "\${{ inputs.tag }}"\n`;
   const result = audit(text);
   const item = result.findings.find(finding => finding.id === 'ci-oidc-dispatch-input-privilege-review');
   assert.equal(item?.severity, 'medium');
@@ -204,7 +204,7 @@ test('manual dispatch with OIDC and write permission receives review finding', (
 });
 
 test('manual dispatch without repository/package/attestation write does not get review finding', () => {
-  const text = `name: inspect\non:\n  workflow_dispatch:\n    inputs:\n      tag:\n        required: true\npermissions:\n  contents: read\n  id-token: write\njobs:\n  inspect:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo "${{ inputs.tag }}"\n`;
+  const text = `name: inspect\non:\n  workflow_dispatch:\n    inputs:\n      tag:\n        required: true\npermissions:\n  contents: read\n  id-token: write\njobs:\n  inspect:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo "\${{ inputs.tag }}"\n`;
   assert.equal(has(text, 'ci-oidc-dispatch-input-privilege-review'), false);
 });
 
@@ -216,7 +216,7 @@ test('non-OIDC workflow is not treated as privileged federation', () => {
 });
 
 test('finding ordering is deterministic across multiple risky jobs', () => {
-  const text = `name: deploy\non:\n  pull_request_target:\npermissions:\n  contents: write\n  id-token: write\njobs:\n  first:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@v5\n        with:\n          role-to-assume: ${{ github.event.pull_request.title }}\n  second:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: azure/login@v2\n        with:\n          client-id: ${{ github.event.pull_request.body }}\n`;
+  const text = `name: deploy\non:\n  pull_request_target:\npermissions:\n  contents: write\n  id-token: write\njobs:\n  first:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@v5\n        with:\n          role-to-assume: \${{ github.event.pull_request.title }}\n  second:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: azure/login@v2\n        with:\n          client-id: \${{ github.event.pull_request.body }}\n`;
   const first = audit(text).findings.map(item => `${item.location?.line}:${item.id}`);
   const second = audit(text).findings.map(item => `${item.location?.line}:${item.id}`);
   assert.deepEqual(first, second);
