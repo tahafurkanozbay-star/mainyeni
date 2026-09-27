@@ -49,7 +49,7 @@ export interface DataTableAccessibilityOptions<Row> {
   readonly onObserverError?: (error: unknown) => void;
 }
 
-export interface DataTableAccessibilityController<Row> {
+export interface DataTableAccessibilityController {
   snapshot(): DataTableAccessibilityFacts;
   row(rowId: string): DataTableRowAccessibilityFacts | null;
   handleKey(event: DataTableKeyboardEventLike): DataTableKeyboardAction | null;
@@ -90,7 +90,7 @@ const keyboardAction = (event: DataTableKeyboardEventLike): DataTableKeyboardAct
 
 export const createDataTableAccessibilityController = <Row>(
   options: DataTableAccessibilityOptions<Row>,
-): DataTableAccessibilityController<Row> => {
+): DataTableAccessibilityController => {
   const tableId = normalizeToken(options.tableId);
   if (!tableId) throw new Error('Erişilebilir tablo kimliği boş olamaz.');
   const selectionMode = options.selectionMode ?? 'multiple';
