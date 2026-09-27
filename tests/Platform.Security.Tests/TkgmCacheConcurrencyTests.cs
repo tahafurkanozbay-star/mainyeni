@@ -24,13 +24,14 @@ public sealed class TkgmCacheConcurrencyTests
     {
         GisTkgmOperations.ClearAdministrativeCachesForTesting();
         using var context = CreateContext();
-        var transport = new BarrierEchoTransport();
+        var transport = new BarrierEchoTransport(768);
         using var operations = new GisTkgmOperations(context, transport);
 
         var tasks = Enumerable.Range(40_000_000, 768)
             .Select(id => operations.DistrictsAsync(id))
             .ToArray();
 
+        await transport.WaitUntilAllStartedAsync();
         transport.Release();
         await Task.WhenAll(tasks);
 
@@ -45,13 +46,14 @@ public sealed class TkgmCacheConcurrencyTests
     {
         GisTkgmOperations.ClearAdministrativeCachesForTesting();
         using var context = CreateContext();
-        var transport = new BarrierEchoTransport();
+        var transport = new BarrierEchoTransport(768);
         using var operations = new GisTkgmOperations(context, transport);
 
         var tasks = Enumerable.Range(41_000_000, 768)
             .Select(id => operations.NbhoodsAsync(id))
             .ToArray();
 
+        await transport.WaitUntilAllStartedAsync();
         transport.Release();
         await Task.WhenAll(tasks);
 
@@ -66,7 +68,7 @@ public sealed class TkgmCacheConcurrencyTests
     {
         GisTkgmOperations.ClearAdministrativeCachesForTesting();
         using var context = CreateContext();
-        var transport = new BarrierEchoTransport();
+        var transport = new BarrierEchoTransport(1_280);
         using var operations = new GisTkgmOperations(context, transport);
 
         var districtTasks = Enumerable.Range(42_000_000, 640)
@@ -75,6 +77,7 @@ public sealed class TkgmCacheConcurrencyTests
             .Select(id => operations.NbhoodsAsync(id));
         var tasks = districtTasks.Concat(neighbourhoodTasks).ToArray();
 
+        await transport.WaitUntilAllStartedAsync();
         transport.Release();
         await Task.WhenAll(tasks);
 
@@ -125,14 +128,33 @@ public sealed class TkgmCacheConcurrencyTests
 
     private sealed class BarrierEchoTransport : ITkgmTransport
     {
+        private readonly int expectedCalls;
+        private readonly TaskCompletionSource<bool> allStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<bool> release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int totalCalls;
 
+        public BarrierEchoTransport(int expectedCalls)
+        {
+            if (expectedCalls <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(expectedCalls));
+            }
+
+            this.expectedCalls = expectedCalls;
+        }
+
         public int TotalCalls => Volatile.Read(ref totalCalls);
+
+        public Task WaitUntilAllStartedAsync() => allStarted.Task;
 
         public async Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
-            Interlocked.Increment(ref totalCalls);
+            var calls = Interlocked.Increment(ref totalCalls);
+            if (calls == expectedCalls)
+            {
+                allStarted.TrySetResult(true);
+            }
+
             await release.Task.WaitAsync(cancellationToken);
             return relativePath;
         }
