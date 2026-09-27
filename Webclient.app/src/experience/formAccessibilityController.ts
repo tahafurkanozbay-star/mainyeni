@@ -43,6 +43,16 @@ const setToken = (element: Element, attribute: string, token: string, enabled: b
   else element.setAttribute(attribute, [...next].join(' '));
 };
 
+const renderField = (field: FormAccessibilityField, state: FormValidationSnapshot): void => {
+  const fieldState = state.fields[field.id];
+  const showError = fieldState?.touched === true && fieldState.issue !== null;
+  field.element.setAttribute('aria-invalid', showError ? 'true' : 'false');
+  if (!field.errorElement) return;
+  field.errorElement.textContent = showError ? fieldState?.issue?.message ?? '' : '';
+  field.errorElement.hidden = !showError;
+  if (field.errorElement.id) setToken(field.element, 'aria-describedby', field.errorElement.id, showError);
+};
+
 export class FormAccessibilityController {
   readonly #form: HTMLFormElement;
   readonly #model: FormValidationModel;
@@ -198,19 +208,9 @@ export class FormAccessibilityController {
     if (this.#disposed) return;
     const state = this.#model.snapshot();
     this.#form.setAttribute('aria-busy', String(state.submitting || this.#hasValidatingField(state)));
-    for (const field of this.#fields) this.#renderField(field, state);
+    for (const field of this.#fields) renderField(field, state);
     this.#renderSummary(state);
     this.#emit();
-  }
-
-  #renderField(field: FormAccessibilityField, state: FormValidationSnapshot): void {
-    const fieldState = state.fields[field.id];
-    const showError = fieldState?.touched === true && fieldState.issue !== null;
-    field.element.setAttribute('aria-invalid', showError ? 'true' : 'false');
-    if (!field.errorElement) return;
-    field.errorElement.textContent = showError ? fieldState?.issue?.message ?? '' : '';
-    field.errorElement.hidden = !showError;
-    if (field.errorElement.id) setToken(field.element, 'aria-describedby', field.errorElement.id, showError);
   }
 
   #renderSummary(state: FormValidationSnapshot): void {
