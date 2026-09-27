@@ -51,8 +51,7 @@ const createHarness = (): Harness => {
 };
 
 const tick = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 };
 
 afterEach(() => {
