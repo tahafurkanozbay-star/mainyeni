@@ -16,6 +16,8 @@ export interface FormAccessibilityControllerOptions {
   readonly summary?: HTMLElement;
   readonly status?: HTMLElement;
   readonly focusInvalidOnSubmit?: boolean;
+  readonly onSubmit?: () => void | Promise<void>;
+  readonly onObserverError?: (error: unknown) => void;
 }
 
 export interface FormAccessibilitySnapshot {
@@ -41,10 +43,6 @@ const setToken = (element: Element, attribute: string, token: string, enabled: b
   else element.setAttribute(attribute, [...next].join(' '));
 };
 
-const focusSafely = (element: HTMLElement): void => {
-  try { element.focus({ preventScroll: false }); } catch (error) { void error; }
-};
-
 export class FormAccessibilityController {
   readonly #form: HTMLFormElement;
   readonly #model: FormValidationModel;
@@ -52,6 +50,8 @@ export class FormAccessibilityController {
   readonly #summary: HTMLElement | undefined;
   readonly #status: HTMLElement | undefined;
   readonly #focusInvalidOnSubmit: boolean;
+  readonly #onSubmit: (() => void | Promise<void>) | undefined;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   readonly #listeners = new Set<Listener>();
   readonly #cleanup: Array<() => void> = [];
   #disposed = false;
@@ -64,6 +64,8 @@ export class FormAccessibilityController {
     this.#summary = options.summary;
     this.#status = options.status;
     this.#focusInvalidOnSubmit = options.focusInvalidOnSubmit ?? true;
+    this.#onSubmit = options.onSubmit;
+    this.#onObserverError = options.onObserverError;
     this.#form.noValidate = true;
     this.#bindFields();
     this.#bindSubmit();
@@ -106,7 +108,7 @@ export class FormAccessibilityController {
     const id = this.#model.snapshot().firstInvalidFieldId;
     const field = id ? this.#fields.find((candidate) => candidate.id === id) : undefined;
     if (!field) return false;
-    focusSafely(field.element);
+    field.element.focus({ preventScroll: false });
     return true;
   }
 
@@ -180,7 +182,16 @@ export class FormAccessibilityController {
       this.announce(count === 1 ? 'Formda düzeltilmesi gereken 1 alan var.' : `Formda düzeltilmesi gereken ${count} alan var.`);
       return;
     }
-    this.announce('Form doğrulandı ve gönderime hazır.');
+
+    try {
+      await this.#onSubmit?.();
+      if (!this.#disposed) this.announce('Form doğrulandı ve gönderim tamamlandı.');
+    } catch (error) {
+      this.#report(error);
+      if (!this.#disposed) this.announce('Form gönderilemedi. Lütfen tekrar deneyin.');
+    } finally {
+      if (!this.#disposed) this.#model.endSubmit();
+    }
   }
 
   #render(): void {
@@ -221,7 +232,21 @@ export class FormAccessibilityController {
   }
 
   #notifyListener(listener: Listener): void {
-    try { listener(this.snapshot()); } catch (error) { void error; }
+    try {
+      listener(this.snapshot());
+    } catch (error) {
+      this.#report(error);
+    }
+  }
+
+  #report(error: unknown): void {
+    if (!this.#onObserverError) return;
+    try {
+      this.#onObserverError(error);
+    } catch (reportingError) {
+      // Diagnostics are best-effort; the secondary reporter failure must not break form interaction.
+      void reportingError;
+    }
   }
 
   #assertActive(): void {
