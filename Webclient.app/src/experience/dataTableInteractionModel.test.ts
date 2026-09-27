@@ -88,7 +88,7 @@ describe('dataTableInteractionModel', () => {
     const table = model();
     table.setRows(rows);
     table.sortBy('name');
-    expect(table.snapshot().rows.map((row) => row.name)).toEqual(['Ankara', 'Bursa', 'Çorum', 'İzmir']);
+    expect(table.snapshot().rows.map((row) => row.value.name)).toEqual(['Ankara', 'Bursa', 'Çorum', 'İzmir']);
   });
 
   it('supports deterministic custom comparators', () => {
@@ -98,7 +98,7 @@ describe('dataTableInteractionModel', () => {
     });
     table.setRows(rows);
     table.sortBy('name-length');
-    expect(table.snapshot().rows[0]?.name).toBe('Bursa');
+    expect(table.snapshot().rows[0]?.value.name).toBe('İzmir');
   });
 
   it('moves active row using keyboard-like deltas', () => {
