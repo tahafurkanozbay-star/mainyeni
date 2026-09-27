@@ -23,4 +23,10 @@
     <ProjectReference Include="..\..\Business\Business.csproj" />
     <ProjectReference Include="..\..\Toolbox\Toolbox.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
