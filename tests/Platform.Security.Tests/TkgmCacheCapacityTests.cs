@@ -9,7 +9,6 @@ using Xunit;
 
 namespace Platform.Security.Tests;
 
-[Collection(TkgmAdministrativeCacheCollection.Name)]
 public sealed class TkgmCacheCapacityTests
 {
     private const int CacheCapacity = 512;
@@ -24,69 +23,101 @@ public sealed class TkgmCacheCapacityTests
     {
         using var context = CreateContext();
         var clock = new SteppingTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var transport = new CountingTransport();
+        var transport = new PathEchoTransport();
         using var operations = new GisTkgmOperations(context, transport, clock);
-        GisTkgmOperations.ClearAdministrativeCachesForTesting();
-        for (var id = 1; id <= CacheCapacity; id++) await operations.DistrictsAsync(id);
-        await operations.DistrictsAsync(CacheCapacity + 1);
-        var callsBeforeHotLookup = transport.TotalCalls;
-        await operations.DistrictsAsync(CacheCapacity);
-        Assert.Equal(callsBeforeHotLookup, transport.TotalCalls);
-        await operations.DistrictsAsync(1);
-        Assert.Equal(callsBeforeHotLookup + 1, transport.TotalCalls);
-        Assert.Equal(CacheCapacity, GisTkgmOperations.GetAdministrativeCacheCountsForTesting().Districts);
+        var firstId = 30_000_000;
+        for (var offset = 0; offset < CacheCapacity; offset++)
+        {
+            var id = firstId + offset;
+            Assert.Equal(ResponseForDistrict(id), await operations.DistrictsAsync(id));
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+        }
+        var retainedId = firstId + 1;
+        Assert.Equal(ResponseForDistrict(retainedId), await operations.DistrictsAsync(retainedId));
+        Assert.Equal(1, transport.CallsFor(DistrictPath(retainedId)));
+        var overflowId = firstId + CacheCapacity;
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.Equal(ResponseForDistrict(overflowId), await operations.DistrictsAsync(overflowId));
+        Assert.Equal(ResponseForDistrict(retainedId), await operations.DistrictsAsync(retainedId));
+        Assert.Equal(1, transport.CallsFor(DistrictPath(retainedId)));
+        Assert.Equal(ResponseForDistrict(firstId), await operations.DistrictsAsync(firstId));
+        Assert.Equal(2, transport.CallsFor(DistrictPath(firstId)));
     }
 
     [Fact]
-    public async Task NeighbourhoodCache_IsBoundedIndependently()
+    public async Task DistrictCache_PrunesExpiredEntriesBeforeCapacityEviction()
     {
         using var context = CreateContext();
-        var clock = new SteppingTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var transport = new CountingTransport();
+        var clock = new SteppingTimeProvider(new DateTimeOffset(2031, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var transport = new PathEchoTransport();
         using var operations = new GisTkgmOperations(context, transport, clock);
-        GisTkgmOperations.ClearAdministrativeCachesForTesting();
-        for (var id = 1; id <= CacheCapacity + 20; id++) await operations.NbhoodsAsync(id);
-        var counts = GisTkgmOperations.GetAdministrativeCacheCountsForTesting();
-        Assert.Equal(0, counts.Districts);
-        Assert.Equal(CacheCapacity, counts.Neighbourhoods);
+        var firstId = 31_000_000;
+        for (var offset = 0; offset < CacheCapacity; offset++) await operations.DistrictsAsync(firstId + offset);
+        clock.Advance(TimeSpan.FromMinutes(15));
+        var newId = firstId + CacheCapacity;
+        await operations.DistrictsAsync(newId);
+        await operations.DistrictsAsync(newId);
+        Assert.Equal(1, transport.CallsFor(DistrictPath(newId)));
+        await operations.DistrictsAsync(firstId);
+        Assert.Equal(2, transport.CallsFor(DistrictPath(firstId)));
+        Assert.Equal(1, transport.CallsFor(DistrictPath(newId)));
     }
 
     [Fact]
-    public async Task ExpiredEntries_ArePrunedBeforeCapacityEviction()
+    public async Task NeighbourhoodCache_UsesIndependentBoundedCapacity()
     {
         using var context = CreateContext();
-        var clock = new ManualTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var transport = new CountingTransport();
+        var clock = new SteppingTimeProvider(new DateTimeOffset(2032, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var transport = new PathEchoTransport();
         using var operations = new GisTkgmOperations(context, transport, clock);
-        GisTkgmOperations.ClearAdministrativeCachesForTesting();
-        for (var id = 1; id <= CacheCapacity; id++) await operations.DistrictsAsync(id);
-        clock.Advance(TimeSpan.FromMinutes(16));
-        await operations.DistrictsAsync(CacheCapacity + 1);
-        Assert.Equal(1, GisTkgmOperations.GetAdministrativeCacheCountsForTesting().Districts);
+        var firstId = 32_000_000;
+        for (var offset = 0; offset <= CacheCapacity; offset++)
+        {
+            await operations.NbhoodsAsync(firstId + offset);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+        }
+        var retainedId = firstId + 1;
+        await operations.NbhoodsAsync(retainedId);
+        Assert.Equal(1, transport.CallsFor(NeighbourhoodPath(retainedId)));
+        await operations.NbhoodsAsync(firstId);
+        Assert.Equal(2, transport.CallsFor(NeighbourhoodPath(firstId)));
     }
 
-    private sealed class CountingTransport : ITkgmTransport
+    [Fact]
+    public async Task CapacityAdmission_DoesNotAffectParcelNonCachingContract()
     {
-        private int totalCalls;
-        public int TotalCalls => Volatile.Read(ref totalCalls);
+        using var context = CreateContext();
+        var clock = new SteppingTimeProvider(new DateTimeOffset(2033, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var transport = new PathEchoTransport();
+        using var operations = new GisTkgmOperations(context, transport, clock);
+        for (var offset = 0; offset <= CacheCapacity; offset++) await operations.DistrictsAsync(33_000_000 + offset);
+        const string parcelPath = "/parsel/42/101/7";
+        Assert.Equal(parcelPath, await operations.ParcelAsync(6, 42, 101, 7));
+        Assert.Equal(parcelPath, await operations.ParcelAsync(6, 42, 101, 7));
+        Assert.Equal(2, transport.CallsFor(parcelPath));
+    }
+
+    private static string DistrictPath(int id) => "/idariYapi/ilceListe/" + id;
+    private static string NeighbourhoodPath(int id) => "/idariYapi/mahalleListe/" + id;
+    private static string ResponseForDistrict(int id) => DistrictPath(id);
+
+    private sealed class PathEchoTransport : ITkgmTransport
+    {
+        private readonly ConcurrentDictionary<string, int> calls = new(StringComparer.Ordinal);
         public Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Interlocked.Increment(ref totalCalls);
+            calls.AddOrUpdate(relativePath, 1, static (_, count) => checked(count + 1));
             return Task.FromResult(relativePath);
         }
+        public int CallsFor(string path) => calls.TryGetValue(path, out var count) ? count : 0;
     }
 
-    private sealed class SteppingTimeProvider(DateTimeOffset start) : TimeProvider
+    private sealed class SteppingTimeProvider : TimeProvider
     {
-        private long ticks = start.UtcTicks;
-        public override DateTimeOffset GetUtcNow() => new(Interlocked.Add(ref ticks, TimeSpan.TicksPerMillisecond), TimeSpan.Zero);
-    }
-
-    private sealed class ManualTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset current = now;
-        public override DateTimeOffset GetUtcNow() => current;
-        public void Advance(TimeSpan duration) => current = current.Add(duration);
+        private DateTimeOffset utcNow;
+        public SteppingTimeProvider(DateTimeOffset utcNow) => this.utcNow = utcNow;
+        public override DateTimeOffset GetUtcNow() => utcNow;
+        public void Advance(TimeSpan duration) => utcNow += duration;
     }
 }
