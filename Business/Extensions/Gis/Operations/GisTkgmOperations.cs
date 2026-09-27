@@ -4,6 +4,7 @@ using RestSharp;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -50,7 +51,7 @@ namespace Business.Extensions.Gis.Operations
 
     public class GisTkgmOperations : _BaseOperations, IDisposable
     {
-        private const int MaxAdministrativeCacheEntries = 512;
+        internal const int MaxAdministrativeCacheEntries = 512;
         private static readonly TimeSpan AdministrativeCacheTtl = TimeSpan.FromMinutes(15);
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> DistrictsCache = new();
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> NbhoodsCache = new();
@@ -133,8 +134,45 @@ namespace Business.Extensions.Gis.Operations
         {
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("TKGM administrative response cannot be cached when empty.");
-            if (cache.Count >= MaxAdministrativeCacheEntries && !cache.ContainsKey(key)) cache.Clear();
-            cache[key] = new AdministrativeCacheEntry(content, timeProvider.GetUtcNow());
+
+            var now = timeProvider.GetUtcNow();
+            PruneExpiredAndFutureEntries(cache, now);
+            EnsureCapacityForNewKey(cache, key);
+            cache[key] = new AdministrativeCacheEntry(content, now);
+        }
+
+        private static void PruneExpiredAndFutureEntries(
+            ConcurrentDictionary<int, AdministrativeCacheEntry> cache,
+            DateTimeOffset now)
+        {
+            foreach (var pair in cache)
+            {
+                var age = now - pair.Value.CreatedAt;
+                if (age < TimeSpan.Zero || age >= AdministrativeCacheTtl)
+                    cache.TryRemove(new KeyValuePair<int, AdministrativeCacheEntry>(pair.Key, pair.Value));
+            }
+        }
+
+        private static void EnsureCapacityForNewKey(
+            ConcurrentDictionary<int, AdministrativeCacheEntry> cache,
+            int key)
+        {
+            if (cache.ContainsKey(key)) return;
+
+            while (cache.Count >= MaxAdministrativeCacheEntries)
+            {
+                var oldest = cache
+                    .OrderBy(pair => pair.Value.CreatedAt)
+                    .ThenBy(pair => pair.Key)
+                    .FirstOrDefault();
+
+                if (oldest.Value is null) return;
+                if (cache.TryRemove(new KeyValuePair<int, AdministrativeCacheEntry>(oldest.Key, oldest.Value))) continue;
+
+                // A concurrent publisher changed the selected entry. Re-evaluate the bounded set
+                // instead of clearing unrelated hot entries or exceeding the capacity intentionally.
+                Thread.Yield();
+            }
         }
 
         private static void EnsurePositiveId(int value, string parameterName)
