@@ -1,0 +1,63 @@
+name: QA Typed Release Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - 'quality/release/**'
+      - '.github/workflows/release-qa.yml'
+      - '.github/workflows/qa-typecheck-diagnostics.yml'
+  push:
+    branches:
+      - 'agent/qa-*'
+    paths:
+      - 'quality/release/**'
+      - '.github/workflows/release-qa.yml'
+      - '.github/workflows/qa-typecheck-diagnostics.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-typed-diagnostics-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typed-release-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Install typed release toolchain from lockfile
+        working-directory: Webclient.app
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Capture TypeScript 7 strict diagnostics
+        id: typecheck
+        shell: bash
+        run: |
+          mkdir -p qa-artifacts/release-diagnostics
+          set +e
+          ./Webclient.app/node_modules/.bin/tsc -p quality/release/tsconfig.json --pretty false 2>&1 | tee qa-artifacts/release-diagnostics/typecheck.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > qa-artifacts/release-diagnostics/typecheck-exit-code.txt
+          exit "$status"
+
+      - name: Upload compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: typed-release-compiler-diagnostics
+          path: qa-artifacts/release-diagnostics
+          if-no-files-found: error
+          retention-days: 7
