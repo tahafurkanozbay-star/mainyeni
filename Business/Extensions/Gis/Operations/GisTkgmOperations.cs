@@ -55,6 +55,8 @@ namespace Business.Extensions.Gis.Operations
         private static readonly TimeSpan AdministrativeCacheTtl = TimeSpan.FromMinutes(15);
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> DistrictsCache = new();
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> NbhoodsCache = new();
+        private static readonly object DistrictsCacheAdmissionGate = new();
+        private static readonly object NbhoodsCacheAdmissionGate = new();
         private readonly ITkgmTransport transport;
         private readonly bool ownsTransport;
         private readonly TimeProvider timeProvider;
@@ -83,7 +85,7 @@ namespace Business.Extensions.Gis.Operations
             if (TryGetFresh(DistrictsCache, cityId, out var cached)) return cached;
             var content = await transport.GetAsync("/idariYapi/ilceListe/" + cityId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            PublishBounded(DistrictsCache, cityId, content);
+            PublishBounded(DistrictsCache, DistrictsCacheAdmissionGate, cityId, content);
             return content;
         }
 
@@ -94,7 +96,7 @@ namespace Business.Extensions.Gis.Operations
             if (TryGetFresh(NbhoodsCache, districtId, out var cached)) return cached;
             var content = await transport.GetAsync("/idariYapi/mahalleListe/" + districtId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            PublishBounded(NbhoodsCache, districtId, content);
+            PublishBounded(NbhoodsCache, NbhoodsCacheAdmissionGate, districtId, content);
             return content;
         }
 
@@ -110,8 +112,15 @@ namespace Business.Extensions.Gis.Operations
 
         internal static void ClearAdministrativeCachesForTesting()
         {
-            DistrictsCache.Clear();
-            NbhoodsCache.Clear();
+            lock (DistrictsCacheAdmissionGate) DistrictsCache.Clear();
+            lock (NbhoodsCacheAdmissionGate) NbhoodsCache.Clear();
+        }
+
+        internal static (int Districts, int Neighbourhoods) GetAdministrativeCacheCountsForTesting()
+        {
+            lock (DistrictsCacheAdmissionGate)
+            lock (NbhoodsCacheAdmissionGate)
+                return (DistrictsCache.Count, NbhoodsCache.Count);
         }
 
         private bool TryGetFresh(ConcurrentDictionary<int, AdministrativeCacheEntry> cache, int key, out string content)
@@ -130,15 +139,22 @@ namespace Business.Extensions.Gis.Operations
             return false;
         }
 
-        private void PublishBounded(ConcurrentDictionary<int, AdministrativeCacheEntry> cache, int key, string content)
+        private void PublishBounded(
+            ConcurrentDictionary<int, AdministrativeCacheEntry> cache,
+            object admissionGate,
+            int key,
+            string content)
         {
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("TKGM administrative response cannot be cached when empty.");
 
             var now = timeProvider.GetUtcNow();
-            PruneExpiredAndFutureEntries(cache, now);
-            EnsureCapacityForNewKey(cache, key);
-            cache[key] = new AdministrativeCacheEntry(content, now);
+            lock (admissionGate)
+            {
+                PruneExpiredAndFutureEntries(cache, now);
+                EnsureCapacityForNewKey(cache, key);
+                cache[key] = new AdministrativeCacheEntry(content, now);
+            }
         }
 
         private static void PruneExpiredAndFutureEntries(
@@ -169,8 +185,8 @@ namespace Business.Extensions.Gis.Operations
                 if (oldest.Value is null) return;
                 if (cache.TryRemove(new KeyValuePair<int, AdministrativeCacheEntry>(oldest.Key, oldest.Value))) continue;
 
-                // A concurrent publisher changed the selected entry. Re-evaluate the bounded set
-                // instead of clearing unrelated hot entries or exceeding the capacity intentionally.
+                // Reads can invalidate stale entries concurrently. Re-evaluate the bounded set;
+                // admission itself is serialized so two publishers cannot both observe spare capacity.
                 Thread.Yield();
             }
         }
