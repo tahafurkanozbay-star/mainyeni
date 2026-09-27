@@ -228,7 +228,7 @@ export class FormAccessibilityController {
   }
 
   #emit(): void {
-    for (const listener of [...this.#listeners]) this.#notifyListener(listener);
+    for (const listener of this.#listeners) this.#notifyListener(listener);
   }
 
   #notifyListener(listener: Listener): void {
