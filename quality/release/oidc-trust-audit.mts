@@ -65,7 +65,7 @@ function physicalLines(text: string): Array<{ text: string; offset: number }> {
 }
 
 function indentation(text: string): number {
-  return text.match(/^\s*/)?.[0].length ?? 0;
+  return text.match(/^\s*/)?.[0]?.length ?? 0;
 }
 
 function jobBlocks(file: SourceFile): LocatedBlock[] {
