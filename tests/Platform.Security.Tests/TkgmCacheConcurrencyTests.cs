@@ -2,7 +2,6 @@ using Business.Core.Context;
 using Business.Extensions.Gis.Operations;
 using Microsoft.EntityFrameworkCore;
 using System;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,7 +24,7 @@ public sealed class TkgmCacheConcurrencyTests
     {
         GisTkgmOperations.ClearAdministrativeCachesForTesting();
         using var context = CreateContext();
-        var transport = new BarrierEchoTransport(expectedCalls: 768);
+        var transport = new BarrierEchoTransport();
         using var operations = new GisTkgmOperations(context, transport);
 
         var tasks = Enumerable.Range(40_000_000, 768)
@@ -46,7 +45,7 @@ public sealed class TkgmCacheConcurrencyTests
     {
         GisTkgmOperations.ClearAdministrativeCachesForTesting();
         using var context = CreateContext();
-        var transport = new BarrierEchoTransport(expectedCalls: 768);
+        var transport = new BarrierEchoTransport();
         using var operations = new GisTkgmOperations(context, transport);
 
         var tasks = Enumerable.Range(41_000_000, 768)
@@ -67,7 +66,7 @@ public sealed class TkgmCacheConcurrencyTests
     {
         GisTkgmOperations.ClearAdministrativeCachesForTesting();
         using var context = CreateContext();
-        var transport = new BarrierEchoTransport(expectedCalls: 1_280);
+        var transport = new BarrierEchoTransport();
         using var operations = new GisTkgmOperations(context, transport);
 
         var districtTasks = Enumerable.Range(42_000_000, 640)
@@ -126,28 +125,19 @@ public sealed class TkgmCacheConcurrencyTests
 
     private sealed class BarrierEchoTransport : ITkgmTransport
     {
-        private readonly CountdownEvent started;
-        private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int totalCalls;
-
-        public BarrierEchoTransport(int expectedCalls) => started = new CountdownEvent(expectedCalls);
 
         public int TotalCalls => Volatile.Read(ref totalCalls);
 
         public async Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref totalCalls);
-            started.Signal();
             await release.Task.WaitAsync(cancellationToken);
             return relativePath;
         }
 
-        public void Release()
-        {
-            // Release immediately rather than synchronously waiting for every task to be scheduled.
-            // The admission race is after transport completion and remains highly concurrent.
-            release.TrySetResult();
-        }
+        public void Release() => release.TrySetResult(true);
     }
 
     private sealed class ImmediateEchoTransport : ITkgmTransport
@@ -161,12 +151,12 @@ public sealed class TkgmCacheConcurrencyTests
 
     private sealed class CancellationBlockingTransport : ITkgmTransport
     {
-        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task Started => started.Task;
 
         public async Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
-            started.TrySetResult();
+            started.TrySetResult(true);
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return relativePath;
         }
