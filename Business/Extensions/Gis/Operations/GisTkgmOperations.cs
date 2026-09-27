@@ -148,9 +148,13 @@ namespace Business.Extensions.Gis.Operations
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("TKGM administrative response cannot be cached when empty.");
 
-            var now = timeProvider.GetUtcNow();
             lock (admissionGate)
             {
+                // Read the clock only after entering the admission gate. Capturing it before the
+                // lock lets a delayed publisher carry an older timestamp behind a publisher that
+                // entered first; its prune pass would then misclassify those newer entries as
+                // future-dated and remove valid cache members during a concurrent burst.
+                var now = timeProvider.GetUtcNow();
                 PruneExpiredAndFutureEntries(cache, now);
                 EnsureCapacityForNewKey(cache, key);
                 cache[key] = new AdministrativeCacheEntry(content, now);
