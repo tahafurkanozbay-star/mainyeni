@@ -111,7 +111,7 @@ test('flags discussion trigger sharing OIDC privilege', () => {
 });
 
 test('requires fixed environment for externally triggerable cloud login', () => {
-  const text = workflow({ trigger: 'pull_request:', environment: undefined });
+  const text = workflow({ trigger: 'pull_request:' });
   assert.equal(has(text, 'ci-oidc-cloud-login-without-environment'), true);
 });
 
