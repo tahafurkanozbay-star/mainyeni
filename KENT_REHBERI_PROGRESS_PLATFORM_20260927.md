@@ -1,14 +1,13 @@
 # Kent Rehberi — Platform Recovery Progress — 2026-09-27
 
-## 18:00 current-main recovery continuation
+## 19:00 current-main recovery continuation
 - TUR / GÖREV: Deep Platform / Whole-Code Modernization recovery on the current-main canonical PR.
 - BRANCH / PR: `agent/platform-recovery-20260927-1601-4b928db`, PR #356, draft/open.
-- BASE: exact current-main/base `4b928db308a448e1e8ce3f05a5a9d6d2e208e80e`; branch remains based on the current main with no stale GIS tree transplant.
-- STARTING HEAD: `f22d79e91b3c464de09867dc7b7eace3bac3120e` had Platform Architecture Audit `36324282047`, Platform Backend Validation `36324282086`, and Release QA `36324282045` all completed+success.
-- RECOVERED PLATFORM SLICE: selectively recovered the previously validated shared serialization modernization from the safe pre-reconciliation Platform head. `SerializationUtils` now uses `System.Text.Json` with indented output and cycle ignoring; XML deserialization retains DTD prohibition/null resolver hardening. Removed direct `Newtonsoft.Json` and unused `NEST` references from Toolbox plus their central version entries.
-- TESTS: added `SerializationUtilsTests` covering indented JSON, cycle handling, DTO round-trip behavior, null/malformed JSON rejection, default case-sensitive matching, XML round-trip/blank input and DTD/XXE rejection.
-- CURRENT HEAD BEFORE THIS CHECKPOINT: `d1385489125e1f0a168de361793914bd2554eeb5`; PR stats 303 additions / 114 deletions / 6 files, so the mandatory >=4,000 meaningful-additions gate is NOT satisfied and merge is forbidden.
-- CI: the previous exact head was green. The new serialization head requires fresh exact-head Platform Architecture Audit, Platform Backend Validation and Release QA; do not infer PASS until those runs complete successfully.
-- SECURITY / NETWORK: no endpoint, WMS/WFS, browser transport, telemetry, remote asset, secret, auth weakening or GIS runtime path was introduced. XML DTD prohibition is preserved and JSON migration removes legacy serializer surface from Toolbox.
-- PERFORMANCE / MAINTAINABILITY: shared JSON options are static/reused rather than allocating serializer settings per call; obsolete direct package references are removed from Toolbox.
-- NEXT: first inspect exact-head CI for this recovery slice. If green, continue on the same PR with additional non-GIS Platform-owned validated tests/build/runtime modernization until >=4,000 meaningful additions; keep draft/open until all merge gates are satisfied.
+- BASE: exact current-main/base `4b928db308a448e1e8ce3f05a5a9d6d2e208e80e`; no stale GIS tree transplant.
+- PREVIOUS EXACT HEAD: `d39a28febf22bc4f10d6c7142617b042f3cdce36` passed Platform Architecture Audit `36328049058`, Platform Backend Validation `36328049034`, and Release QA `36328048991`, all completed+success.
+- RECOVERED PLATFORM SLICE: after the green serialization/TKGM product recovery, selectively recovered two previously validated Platform-owned characterization suites: `TkgmCacheFreshnessTests` and `TkgmCacheCapacityTests`. They cover the 15-minute TTL boundary, clock rollback invalidation, blank-response non-publication, deterministic oldest-only overflow eviction, expiry pruning before capacity pressure, independent neighbourhood capacity and parcel non-caching preservation.
+- SAFETY: tests are recovered as focused source files only; the superseded PR #346 tree and all GIS files remain excluded. No WMS/WFS, endpoint, browser transport, telemetry, remote asset, secret, retry or authentication behavior was introduced.
+- PERFORMANCE / DATA INTEGRITY: characterization locks in bounded 512-entry administrative caches without destructive whole-cache clearing and verifies stale/future data is not served. Parcel data remains uncached because there is no authoritative invalidation signal.
+- CURRENT PRODUCT HEAD BEFORE CHECKPOINT: `a32d0a18becbfaf60b9c89ac6f57bccf5665c255`. Fresh exact-head CI is required; no PASS is inferred for the newly recovered tests until Platform Architecture Audit, Platform Backend Validation and Release QA complete successfully.
+- MERGE GATE: PR remains far below the mandatory >=4,000 meaningful base...head additions threshold; keep draft/open and do not merge even if CI is green.
+- NEXT: inspect exact-head CI, fix any regression in the same turn when evidence is available, then continue selectively recovering or implementing real non-GIS Platform architecture/test/build/runtime work on this same canonical PR toward >=4,000 meaningful additions.
