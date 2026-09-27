@@ -14,4 +14,10 @@
     <PackageReference Include="System.ServiceModel.Primitives" />
     <PackageReference Include="Tesseract" />
   </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Platform.Security.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>
