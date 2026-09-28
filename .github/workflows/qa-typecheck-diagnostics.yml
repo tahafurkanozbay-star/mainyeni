@@ -53,7 +53,19 @@ jobs:
           printf '%s\n' "$status" > qa-artifacts/release-diagnostics/typecheck-exit-code.txt
           exit "$status"
 
-      - name: Upload compiler diagnostics
+      - name: Capture typed regression diagnostics
+        if: steps.typecheck.outcome == 'success'
+        id: regression
+        shell: bash
+        run: |
+          mkdir -p qa-artifacts/release-diagnostics
+          set +e
+          node --test quality/release/*.test.mts 2>&1 | tee qa-artifacts/release-diagnostics/typed-regression.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > qa-artifacts/release-diagnostics/typed-regression-exit-code.txt
+          exit "$status"
+
+      - name: Upload typed release diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
