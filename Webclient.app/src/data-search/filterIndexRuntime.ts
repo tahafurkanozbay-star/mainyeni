@@ -460,7 +460,7 @@ const candidatesForFilter = (
     const values = filter.values
       .map(value => normalizeString(value, field.config.caseSensitive))
       .filter(Boolean);
-    if (values.some(value => value.length > field.config.prefixLength)) return null;
+    if (values.some(value => value.length > field.config.prefixLength)) return Object.freeze([]);
     const groups: readonly (readonly number[])[] = values
       .map(value => field.prefixes.get(value) ?? Object.freeze([]));
     return union(groups, maximum);
@@ -620,9 +620,12 @@ export class FilterIndexRuntime {
         return;
       }
       if (candidates.length >= this.#options.maxCandidatePositions) {
-        residualFilterCount += 1;
+        indexedFilterCount += 1;
         truncated = true;
-        steps.push(freezeStep(index, filter, false, candidates.length, 'candidate-budget-fallback'));
+        steps.push(freezeStep(index, filter, true, candidates.length, 'candidate-budget-truncated'));
+        positions = positions === null
+          ? candidates
+          : intersect(positions, candidates);
         return;
       }
       indexedFilterCount += 1;
