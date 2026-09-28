@@ -335,6 +335,19 @@ const finalizeField = (
   });
 };
 
+const buildFieldIndex = (
+  records: readonly NormalizedRecord[],
+  config: NormalizedFieldConfig,
+  options: NormalizedFilterIndexOptions,
+): FieldIndex => {
+  const mutable = createMutableField(config);
+  for (let position = 0; position < records.length; position += 1) {
+    const record = records[position];
+    if (record) observeRecord(mutable, record, position, options);
+  }
+  return finalizeField(mutable, records.length);
+};
+
 const sortedUnique = (
   values: Iterable<number>,
   maximum: number,
@@ -361,17 +374,19 @@ const intersect = (
   return Object.freeze(output);
 };
 
+function* positionsAcross(groups: readonly (readonly number[])[]): Iterable<number> {
+  for (const group of groups) yield* group;
+}
+
 const union = (
   groups: readonly (readonly number[])[],
   maximum: number,
 ): readonly number[] => {
   const set = new Set<number>();
-  outer: for (const group of groups) {
-    for (const position of group) {
-      if (!Number.isSafeInteger(position) || position < 0) continue;
-      set.add(position);
-      if (set.size >= maximum) break outer;
-    }
+  for (const position of positionsAcross(groups)) {
+    if (!Number.isSafeInteger(position) || position < 0) continue;
+    set.add(position);
+    if (set.size >= maximum) break;
   }
   return Object.freeze([...set].sort((left, right) => left - right));
 };
@@ -484,6 +499,59 @@ const freezeStep = (
   reason,
 });
 
+const validateNumericPostings = (
+  fieldName: string,
+  field: FieldIndex,
+  recordCount: number,
+  issues: string[],
+): void => {
+  let previousNumeric = Number.NEGATIVE_INFINITY;
+  for (const posting of field.numeric) {
+    if (posting.value < previousNumeric) issues.push(`numeric-order:${fieldName}`);
+    previousNumeric = posting.value;
+    if (posting.position < 0 || posting.position >= recordCount) {
+      issues.push(`numeric-position:${fieldName}:${String(posting.position)}`);
+    }
+  }
+};
+
+const validatePostingPositions = (
+  fieldName: string,
+  key: string,
+  positions: readonly number[],
+  recordCount: number,
+  issues: string[],
+): void => {
+  let previous = -1;
+  for (const position of positions) {
+    if (position <= previous) issues.push(`equality-order:${fieldName}:${key}`);
+    if (position < 0 || position >= recordCount) {
+      issues.push(`equality-position:${fieldName}:${key}:${String(position)}`);
+    }
+    previous = position;
+  }
+};
+
+const validateEqualityPostings = (
+  fieldName: string,
+  field: FieldIndex,
+  recordCount: number,
+  issues: string[],
+): void => {
+  for (const [key, positions] of field.equality) {
+    validatePostingPositions(fieldName, key, positions, recordCount, issues);
+  }
+};
+
+const postingMapCount = (source: ReadonlyMap<string, readonly number[]>): number => {
+  let count = 0;
+  for (const positions of source.values()) count += positions.length;
+  return count;
+};
+
+const postingCountForField = (field: FieldIndex): number =>
+  postingMapCount(field.equality) + postingMapCount(field.prefixes) + field.numeric.length;
+
 export class FilterIndexRuntime {
   readonly #records: readonly NormalizedRecord[];
   readonly #options: NormalizedFilterIndexOptions;
@@ -506,12 +574,7 @@ export class FilterIndexRuntime {
     }
 
     for (const config of uniqueConfigs.values()) {
-      const mutable = createMutableField(config);
-      for (let position = 0; position < records.length; position += 1) {
-        const record = records[position];
-        if (record) observeRecord(mutable, record, position, this.#options);
-      }
-      this.#fields.set(config.field, finalizeField(mutable, records.length));
+      this.#fields.set(config.field, buildFieldIndex(records, config, this.#options));
     }
     this.#snapshot = this.#createSnapshot();
   }
@@ -599,24 +662,8 @@ export class FilterIndexRuntime {
   validate(): readonly string[] {
     const issues: string[] = [];
     for (const [fieldName, field] of this.#fields) {
-      let previousNumeric = Number.NEGATIVE_INFINITY;
-      for (const posting of field.numeric) {
-        if (posting.value < previousNumeric) issues.push(`numeric-order:${fieldName}`);
-        previousNumeric = posting.value;
-        if (posting.position < 0 || posting.position >= this.#records.length) {
-          issues.push(`numeric-position:${fieldName}:${String(posting.position)}`);
-        }
-      }
-      for (const [key, positions] of field.equality) {
-        let previous = -1;
-        for (const position of positions) {
-          if (position <= previous) issues.push(`equality-order:${fieldName}:${key}`);
-          if (position < 0 || position >= this.#records.length) {
-            issues.push(`equality-position:${fieldName}:${key}:${String(position)}`);
-          }
-          previous = position;
-        }
-      }
+      validateNumericPostings(fieldName, field, this.#records.length, issues);
+      validateEqualityPostings(fieldName, field, this.#records.length, issues);
     }
     return Object.freeze(issues);
   }
@@ -654,9 +701,7 @@ export class FilterIndexRuntime {
     let postingCount = 0;
     for (const [name, field] of this.#fields) {
       fields[name] = field.diagnostics;
-      for (const positions of field.equality.values()) postingCount += positions.length;
-      for (const positions of field.prefixes.values()) postingCount += positions.length;
-      postingCount += field.numeric.length;
+      postingCount += postingCountForField(field);
     }
     const fingerprint = hashFingerprint(stableSerialize({
       recordCount: this.#records.length,
