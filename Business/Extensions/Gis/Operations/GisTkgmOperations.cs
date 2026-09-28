@@ -184,13 +184,22 @@ namespace Business.Extensions.Gis.Operations
                 candidate.Dispose();
             }
 
+            var subscriberReleased = 0;
+            using var cancellationRegistration = cancellationToken.Register(
+                () =>
+                {
+                    if (Interlocked.Exchange(ref subscriberReleased, 1) == 0)
+                        flight.ReleaseSubscriber();
+                });
+
             try
             {
                 return await flight.Work.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             finally
             {
-                flight.ReleaseSubscriber();
+                if (Interlocked.Exchange(ref subscriberReleased, 1) == 0)
+                    flight.ReleaseSubscriber();
             }
         }
 
