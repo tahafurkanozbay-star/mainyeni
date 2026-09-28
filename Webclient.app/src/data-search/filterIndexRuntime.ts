@@ -315,8 +315,6 @@ const finalizeField = (
   recordCount: number,
 ): FieldIndex => {
   mutable.numeric.sort((left, right) => left.value - right.value || left.position - right.position);
-  const postingCount = [...mutable.equality.values()]
-    .reduce((total, positions) => total + positions.length, 0);
   const diagnostics: FilterFieldDiagnostics = Object.freeze({
     field: mutable.config.field,
     kind: mutable.config.kind,
@@ -327,7 +325,6 @@ const finalizeField = (
     prefixCount: mutable.prefixes.size,
     truncatedValueCount: mutable.truncatedValueCount,
   });
-  void postingCount;
   return Object.freeze({
     config: mutable.config,
     equality: freezePostingMap(mutable.equality),
@@ -354,15 +351,12 @@ const sortedUnique = (
 const intersect = (
   left: readonly number[],
   right: readonly number[],
-  maximum: number,
 ): readonly number[] => {
   if (!left.length || !right.length) return Object.freeze([]);
   const rightSet = new Set(right);
   const output: number[] = [];
   for (const position of left) {
-    if (!rightSet.has(position)) continue;
-    output.push(position);
-    if (output.length >= maximum) break;
+    if (rightSet.has(position)) output.push(position);
   }
   return Object.freeze(output);
 };
@@ -370,7 +364,17 @@ const intersect = (
 const union = (
   groups: readonly (readonly number[])[],
   maximum: number,
-): readonly number[] => sortedUnique(groups.flat(), maximum);
+): readonly number[] => {
+  const set = new Set<number>();
+  outer: for (const group of groups) {
+    for (const position of group) {
+      if (!Number.isSafeInteger(position) || position < 0) continue;
+      set.add(position);
+      if (set.size >= maximum) break outer;
+    }
+  }
+  return Object.freeze([...set].sort((left, right) => left - right));
+};
 
 const lowerBound = (values: readonly NumericPosting[], target: number): number => {
   let low = 0;
@@ -425,7 +429,8 @@ const candidatesForFilter = (
   maximum: number,
 ): readonly number[] | null => {
   if (!SUPPORTED_OPERATORS.has(filter.operator)) return null;
-  if (filter.operator === 'exists') return field.exists.slice(0, maximum);
+  if (field.diagnostics.truncatedValueCount > 0) return null;
+  if (filter.operator === 'exists') return field.exists;
 
   if (filter.operator === 'eq' || filter.operator === 'in') {
     const groups: readonly (readonly number[])[] = filter.values
@@ -437,12 +442,12 @@ const candidatesForFilter = (
 
   if (filter.operator === 'prefix') {
     if (field.config.kind !== 'string') return null;
-    const groups: readonly (readonly number[])[] = filter.values
+    const values = filter.values
       .map(value => normalizeString(value, field.config.caseSensitive))
-      .filter(Boolean)
-      .map(value => value.length <= field.config.prefixLength
-        ? field.prefixes.get(value) ?? Object.freeze([])
-        : Object.freeze([]));
+      .filter(Boolean);
+    if (values.some(value => value.length > field.config.prefixLength)) return null;
+    const groups: readonly (readonly number[])[] = values
+      .map(value => field.prefixes.get(value) ?? Object.freeze([]));
     return union(groups, maximum);
   }
 
@@ -522,10 +527,8 @@ export class FilterIndexRuntime {
 
   plan(filters: readonly SearchFilter[]): FilterExecutionPlan {
     if (!filters.length) {
-      const positions = Object.freeze(this.#records.map((_, index) => index)
-        .slice(0, this.#options.maxCandidatePositions));
-      return this.#finalizePlan('all-records', positions, 0, 0, [
-      ], this.#records.length > positions.length);
+      const positions = Object.freeze(this.#records.map((_, index) => index));
+      return this.#finalizePlan('all-records', positions, 0, 0, [], false);
     }
 
     let positions: readonly number[] | null = null;
@@ -541,24 +544,32 @@ export class FilterIndexRuntime {
         steps.push(freezeStep(index, filter, false, this.#records.length, 'field-not-indexed'));
         return;
       }
+      if (field.diagnostics.truncatedValueCount > 0) {
+        residualFilterCount += 1;
+        truncated = true;
+        steps.push(freezeStep(index, filter, false, this.#records.length, 'index-truncated-fallback'));
+        return;
+      }
       const candidates = candidatesForFilter(field, filter, this.#options.maxCandidatePositions);
       if (candidates === null) {
         residualFilterCount += 1;
         steps.push(freezeStep(index, filter, false, this.#records.length, 'operator-not-indexed'));
         return;
       }
+      if (candidates.length >= this.#options.maxCandidatePositions) {
+        residualFilterCount += 1;
+        truncated = true;
+        steps.push(freezeStep(index, filter, false, candidates.length, 'candidate-budget-fallback'));
+        return;
+      }
       indexedFilterCount += 1;
       steps.push(freezeStep(index, filter, true, candidates.length, 'indexed'));
       positions = positions === null
         ? candidates
-        : intersect(positions, candidates, this.#options.maxCandidatePositions);
-      if (candidates.length >= this.#options.maxCandidatePositions) truncated = true;
+        : intersect(positions, candidates);
     });
 
-    const resolved = positions ?? Object.freeze(this.#records.map((_, index) => index)
-      .slice(0, this.#options.maxCandidatePositions));
-    if (resolved.length >= this.#options.maxCandidatePositions
-      && this.#records.length > resolved.length) truncated = true;
+    const resolved = positions ?? Object.freeze(this.#records.map((_, index) => index));
     const strategy: FilterPlanStrategy = resolved.length === 0
       ? 'empty'
       : indexedFilterCount === 0
