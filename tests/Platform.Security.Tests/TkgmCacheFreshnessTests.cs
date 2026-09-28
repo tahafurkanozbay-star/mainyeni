@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Platform.Security.Tests;
 
+[Collection(TkgmAdministrativeCacheCollection.Name)]
 public sealed class TkgmCacheFreshnessTests
 {
     private static BusinessContext CreateContext()
