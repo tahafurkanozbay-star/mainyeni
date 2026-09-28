@@ -82,6 +82,10 @@ namespace Business.Extensions.Integrations.Operations
                     throw new ArgumentException("EGO line number contains an unsupported character.", nameof(lineNumber));
             }
 
+            var segments = value.Split('/');
+            if (segments.Any(static segment => segment.Length == 0 || segment is "." or ".."))
+                throw new ArgumentException("EGO line number contains a non-canonical path segment.", nameof(lineNumber));
+
             return value;
         }
     }
