@@ -137,9 +137,9 @@ const normalizeOptions = (
     max: 1_024,
     fallback: DEFAULT_MAX_DATASETS,
   }),
-  normalization: Object.freeze({ ...(options.normalization ?? {}) }),
+  normalization: Object.freeze({ ...options.normalization }),
   filterFields: Object.freeze([...(options.filterFields ?? defaultSearchFilterFields())]),
-  filterIndex: Object.freeze({ ...(options.filterIndex ?? {}) }),
+  filterIndex: Object.freeze({ ...options.filterIndex }),
 });
 
 const createDatasetFingerprint = (records: readonly NormalizedRecord[]): string =>
