@@ -4,8 +4,27 @@ import type { RepositoryInventory, SourceFile } from './contracts.mts';
 import { auditOidcAuthority } from './oidc-authority-audit.mts';
 
 function inventory(text: string, path = '.github/workflows/release.yml'): RepositoryInventory {
-  const file: SourceFile = { repositoryPath: path, absolutePath: `/repo/${path}`, text, bytes: Buffer.byteLength(text) };
-  return { root: '/repo', files: [file], allFiles: [path], directories: ['.github', '.github/workflows'], scannedFiles: 1, scannedBytes: file.bytes };
+  const lineCount = text.split('\n').length;
+  const bytes = Buffer.byteLength(text);
+  const file: SourceFile = {
+    repositoryPath: path,
+    absolutePath: `/repo/${path}`,
+    extension: '.yml',
+    kind: 'yaml',
+    bytes,
+    lines: lineCount,
+    text,
+  };
+  return {
+    root: '/repo',
+    files: [file],
+    ignoredDirectories: [],
+    languageStats: [{ kind: 'yaml', files: 1, lines: lineCount, bytes }],
+    totalFiles: 1,
+    totalLines: lineCount,
+    totalBytes: bytes,
+    generatedAt: '2026-09-28T00:00:00.000Z',
+  };
 }
 
 function ids(text: string): string[] {
