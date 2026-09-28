@@ -66,7 +66,7 @@ const WORKSPACE = /^\$\{\{\s*github\.workspace\s*\}\}(?:[\/\\].*)?$/i;
 interface DirectoryDefault {
   readonly value: string;
   readonly line: number;
-  readonly source: Exclude<WorkingDirectorySource, 'step'>;
+  readonly source: WorkingDirectorySource;
 }
 
 function directChildIndent(lines: readonly WorkflowLine[], parentIndent: number): number | undefined {
