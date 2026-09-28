@@ -67,7 +67,7 @@ namespace Business.Extensions.Integrations.Operations
             return new ServiceResult<HatGuzergahDuraklar>(ServiceResultType.Success, result);
         }
 
-        internal static string ValidateLineNumber(string lineNumber)
+        public static string ValidateLineNumber(string lineNumber)
         {
             if (string.IsNullOrWhiteSpace(lineNumber))
                 throw new ArgumentException("EGO line number must not be empty.", nameof(lineNumber));
