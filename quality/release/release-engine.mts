@@ -22,23 +22,33 @@ import {
   type SeverityCounts,
 } from './contracts.mts';
 import { auditAccessibility } from './accessibility-audit.mts';
+import { auditArtifactProvenance } from './artifact-provenance-audit.mts';
 import { auditBackendSecurity } from './backend-security-audit.mts';
+import { auditCacheBoundaries } from './cache-boundary-audit.mts';
 import { auditCiIntegrity } from './ci-integrity-audit.mts';
+import { auditCompositeActions } from './composite-action-audit.mts';
+import { auditContainerBoundaries } from './container-boundary-audit.mts';
 import { auditDataIntegrity } from './data-integrity-audit.mts';
 import { auditDependencies } from './dependency-audit.mts';
+import { auditDeploymentBoundaries } from './deployment-boundary-audit.mts';
 import { auditGisReleaseContracts } from './gis-release-contract-audit.mts';
 import { auditLanguageModernization } from './language-modernization-audit.mts';
 import { auditGis } from './gis-audit.mts';
+import { auditMatrixTrust } from './matrix-trust-audit.mts';
 import { auditModernization } from './modernization-audit.mts';
 import { auditNetwork } from './network-audit.mts';
-import { auditPerformance } from './performance-audit.mts';
 import { auditObservability } from './observability-audit.mts';
+import { auditOidcTrust } from './oidc-trust-audit.mts';
+import { auditPerformance } from './performance-audit.mts';
 import { auditReleaseEvidenceMatrix } from './release-evidence-matrix.mts';
 import { auditResponsive } from './responsive-audit.mts';
+import { auditReusableWorkflows } from './reusable-workflow-audit.mts';
+import { auditRunnerBoundaries } from './runner-boundary-audit.mts';
 import { auditRuntimeResilience } from './runtime-resilience-audit.mts';
 import { auditSecurity } from './security-audit.mts';
 import { auditValidationIntegrity } from './validation-integrity-audit.mts';
 import { auditWorkflowEvidence } from './workflow-evidence-audit.mts';
+import { auditWorkflowExpressions } from './workflow-expression-audit.mts';
 import { scanSource } from './source-audit.mts';
 import { auditTestContracts } from './test-contracts.mts';
 import { auditUx } from './ux-audit.mts';
@@ -241,6 +251,16 @@ export async function runReleaseEngine(
     auditBackendSecurity(inventory),
     auditDependencies(inventory),
     auditCiIntegrity(inventory),
+    auditWorkflowExpressions(inventory),
+    auditCompositeActions(inventory),
+    auditReusableWorkflows(inventory),
+    auditArtifactProvenance(inventory),
+    auditOidcTrust(inventory),
+    auditDeploymentBoundaries(inventory),
+    auditCacheBoundaries(inventory),
+    auditRunnerBoundaries(inventory),
+    auditMatrixTrust(inventory),
+    auditContainerBoundaries(inventory),
     auditWorkflowEvidence(inventory),
     auditReleaseEvidenceMatrix(inventory),
     auditValidationIntegrity(inventory),

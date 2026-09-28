@@ -12,8 +12,10 @@ import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
+import { FastAccessResultAccessibilityBridge } from './Components/Common/FastAccessResultAccessibilityBridge';
 import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
+import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
@@ -116,6 +118,8 @@ function App() {
     <ExperienceThemeProvider>
       <ExperiencePresentationBridge />
       <ExperienceRuntimeBridge />
+      <ExperienceSettingsValidationBridge />
+      <FastAccessResultAccessibilityBridge />
       <div id="app-shell">
         <ExperienceStartupBoundary
           model={startupModel}
