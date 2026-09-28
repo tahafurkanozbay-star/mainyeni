@@ -15,6 +15,38 @@ namespace Business.Extensions.Gis.Operations
         Task<string> GetAsync(string relativePath, CancellationToken cancellationToken);
     }
 
+    internal sealed class TkgmUpstreamConcurrencyGate
+    {
+        private readonly SemaphoreSlim gate;
+
+        public TkgmUpstreamConcurrencyGate(int maxConcurrency)
+        {
+            if (maxConcurrency <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxConcurrency), maxConcurrency, "TKGM upstream concurrency must be positive.");
+
+            gate = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+        }
+
+        public async Task<T> ExecuteAsync<T>(
+            Func<CancellationToken, Task<T>> operation,
+            CancellationToken cancellationToken)
+        {
+            if (operation == null) throw new ArgumentNullException(nameof(operation));
+
+            cancellationToken.ThrowIfCancellationRequested();
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return await operation(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+    }
+
     public sealed class RestSharpTkgmTransport : ITkgmTransport, IDisposable
     {
         private const string TkgmBaseUrl = "http://cbsapi.tkgm.gov.tr/megsiswebapi.v3/api";
@@ -52,9 +84,12 @@ namespace Business.Extensions.Gis.Operations
     public class GisTkgmOperations : _BaseOperations, IDisposable
     {
         internal const int MaxAdministrativeCacheEntries = 512;
+        internal const int MaxConcurrentUpstreamRequests = 16;
         private static readonly TimeSpan AdministrativeCacheTtl = TimeSpan.FromMinutes(15);
 
         private static readonly ITkgmTransport SharedTransport = new RestSharpTkgmTransport();
+        private static readonly TkgmUpstreamConcurrencyGate UpstreamConcurrencyGate =
+            new(MaxConcurrentUpstreamRequests);
 
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> DistrictsCache = new();
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> NbhoodsCache = new();
@@ -110,7 +145,7 @@ namespace Business.Extensions.Gis.Operations
             EnsurePositiveId(cityblock, nameof(cityblock));
             EnsurePositiveId(parcel, nameof(parcel));
             cancellationToken.ThrowIfCancellationRequested();
-            return transport.GetAsync("/parsel/" + nbhoodId + "/" + cityblock + "/" + parcel, cancellationToken);
+            return ExecuteTransportAsync("/parsel/" + nbhoodId + "/" + cityblock + "/" + parcel, cancellationToken);
         }
 
         internal static void ClearAdministrativeCachesForTesting()
@@ -214,10 +249,17 @@ namespace Business.Extensions.Gis.Operations
 
             if (TryGetFresh(cache, key, out var cached)) return cached;
 
-            var content = await transport.GetAsync(relativePath, sharedCancellation).ConfigureAwait(false);
+            var content = await ExecuteTransportAsync(relativePath, sharedCancellation).ConfigureAwait(false);
             sharedCancellation.ThrowIfCancellationRequested();
             PublishBounded(cache, admissionGate, key, content);
             return content;
+        }
+
+        private Task<string> ExecuteTransportAsync(string relativePath, CancellationToken cancellationToken)
+        {
+            return UpstreamConcurrencyGate.ExecuteAsync(
+                token => transport.GetAsync(relativePath, token),
+                cancellationToken);
         }
 
         private bool TryGetFresh(ConcurrentDictionary<int, AdministrativeCacheEntry> cache, int key, out string content)
