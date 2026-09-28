@@ -385,7 +385,7 @@ export class SchemaRegistryRuntime {
           violations: Object.freeze([...evaluation.violations, 'dataset-capacity-exceeded']),
         });
         this.#rejectedCount += 1;
-        this.#appendHistory(rejected, previous?.fingerprint ?? null, observedAt);
+        this.#appendHistory(rejected, null, observedAt);
         return rejected;
       }
       this.#contracts.set(evaluation.datasetKey, freezeContract(
