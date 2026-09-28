@@ -31,6 +31,49 @@ describe('NavigationBar', () => {
     expect(search).not.toHaveFocus();
   });
 
+  it('focuses and selects global search with Control+K from the shell', async () => {
+    const user = userEvent.setup();
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    await user.click(search);
+    await user.type(search, 'Çankaya');
+    await user.click(document.body);
+    expect(search).not.toHaveFocus();
+
+    await user.keyboard('{Control>}k{/Control}');
+
+    expect(search).toHaveFocus();
+    expect(search.selectionStart).toBe(0);
+    expect(search.selectionEnd).toBe(search.value.length);
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
+  });
+
+  it('does not steal Control+K while another text field is being edited', async () => {
+    const user = userEvent.setup();
+    const auxiliary = document.createElement('input');
+    auxiliary.setAttribute('aria-label', 'Yardımcı alan');
+    document.body.append(auxiliary);
+    try {
+      render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+      const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+      auxiliary.focus();
+      await user.keyboard('{Control>}k{/Control}');
+      expect(auxiliary).toHaveFocus();
+      expect(search).not.toHaveFocus();
+    } finally {
+      auxiliary.remove();
+    }
+  });
+
+  it('removes the global shortcut listener when the shell unmounts', async () => {
+    const user = userEvent.setup();
+    const view = render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    view.unmount();
+    await user.keyboard('{Control>}k{/Control}');
+    expect(search).not.toHaveFocus();
+  });
+
   it('exposes CBS Başkent as a safe external link', () => {
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
 
