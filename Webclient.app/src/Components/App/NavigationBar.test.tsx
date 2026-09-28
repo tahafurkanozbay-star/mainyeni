@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { NavigationBar } from './NavigationBar';
@@ -31,13 +31,25 @@ describe('NavigationBar', () => {
     expect(search).not.toHaveFocus();
   });
 
+  it('preserves search text and focus when Escape belongs to an active IME composition', () => {
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    search.focus();
+    fireEvent.change(search, { target: { value: 'Ankara' } });
+    fireEvent.compositionStart(search);
+    fireEvent.keyDown(search, { key: 'Escape', isComposing: true });
+    expect(search).toHaveValue('Ankara');
+    expect(search).toHaveFocus();
+    expect(screen.getByText('Metin girişi sürüyor.')).toBeInTheDocument();
+  });
+
   it('focuses and selects global search with Control+K from the shell', async () => {
     const user = userEvent.setup();
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
     const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
     await user.click(search);
     await user.type(search, 'Çankaya');
-    await user.click(document.body);
+    search.blur();
     expect(search).not.toHaveFocus();
 
     await user.keyboard('{Control>}k{/Control}');
