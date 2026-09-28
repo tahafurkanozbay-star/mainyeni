@@ -64,7 +64,7 @@ const ABSOLUTE_EXECUTABLE = /^(?:\/[A-Za-z0-9._/-]+|[A-Za-z]:[\\/][^\s]+)(?:\s|$
 interface ShellDefault {
   readonly value: string;
   readonly line: number;
-  readonly source: Exclude<ShellSource, 'step'>;
+  readonly source: ShellSource;
 }
 
 function directChildIndent(lines: readonly WorkflowLine[], parentIndent: number): number | undefined {
