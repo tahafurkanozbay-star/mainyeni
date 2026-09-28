@@ -184,7 +184,7 @@ export class ArcGisServiceCapabilityRegistry {
     }
 
     if (previous && this.sameMetadata(previous.metadata, metadata)) {
-      const touched = freezeEntry({ sequence: previous.sequence, lastAccessedAtMs: now, metadata: previous.metadata });
+      const touched = freezeEntry({ sequence: previous.sequence, lastAccessedAtMs: now, metadata });
       this.entries.set(metadata.serviceKey, touched);
       return Object.freeze({
         status: 'unchanged',
