@@ -141,6 +141,12 @@ export const createDataTableAccessibilityController = <Row>(
     notify();
   });
 
+  const activateFirstVisible = (): void => {
+    const first = latest.rows[0]?.id ?? null;
+    options.model.setActive(first);
+    focusActive();
+  };
+
   const perform = (action: DataTableKeyboardAction): void => {
     switch (action) {
       case 'activate-first':
@@ -163,10 +169,16 @@ export const createDataTableAccessibilityController = <Row>(
         options.model.clearSelection();
         break;
       case 'next-page':
-        if (latest.canNextPage) options.model.nextPage();
+        if (latest.canNextPage) {
+          options.model.nextPage();
+          activateFirstVisible();
+        }
         break;
       case 'previous-page':
-        if (latest.canPreviousPage) options.model.previousPage();
+        if (latest.canPreviousPage) {
+          options.model.previousPage();
+          activateFirstVisible();
+        }
         break;
       case 'select-active':
         if (latest.activeRowId && selectionMode !== 'none') options.model.toggleSelection(latest.activeRowId);
