@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.HttpOverrides;
 using System;
 using System.Net;
+using ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders;
 
 namespace Api.Core.Platform
 {
