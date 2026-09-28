@@ -34,7 +34,12 @@ export function NavigationBar({ windowManager }: NavigationBarProps) {
           <span id="kentrehberi-global-search-status" className="experience-sr-only" aria-live="polite" aria-atomic="true">{search.isComposing ? 'Metin girişi sürüyor.' : search.canSubmit ? 'Arama hazır.' : 'Arama için bir ifade yazın.'}</span>
           <span className="kr-search-hint" aria-hidden="true"><kbd>Ctrl</kbd><span>+</span><kbd>K</kbd></span>
         </form>
-        <div className="mainbar-right" aria-label="Üst menü"><CompanyLogo /></div>
+        <nav className="mainbar-right" aria-label="Üst menü">
+          <a className="kr-header-shortcut kr-header-portal" href="https://cbsbaskent.ankara.bel.tr" target="_blank" rel="noopener noreferrer" aria-label="CBS Başkent portalını yeni sekmede aç">
+            <span aria-hidden="true">CBS Başkent</span>
+          </a>
+          <CompanyLogo />
+        </nav>
       </div></div></div>
     </header>
   );
