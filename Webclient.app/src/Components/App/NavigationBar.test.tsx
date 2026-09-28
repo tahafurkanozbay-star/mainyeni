@@ -90,7 +90,7 @@ describe('NavigationBar', () => {
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
 
     const cbsLink = screen.getByRole('link', { name: 'CBS Başkent portalını yeni sekmede aç' });
-    expect(cbsLink).toHaveAttribute('href', 'https://cbsbaskent.ankara.bel.tr');
+    expect(cbsLink).toHaveAttribute('href', 'https://cbsbaskent.ankara.bel.tr/');
     expect(cbsLink).toHaveAttribute('target', '_blank');
     expect(cbsLink).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
