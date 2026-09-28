@@ -48,12 +48,39 @@ namespace Api.Core.Platform.Middleware
             }
 
             var bodySizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
-            if (bodySizeFeature != null && !bodySizeFeature.IsReadOnly)
+            if (bodySizeFeature != null)
             {
                 var existingLimit = bodySizeFeature.MaxRequestBodySize;
-                if (!existingLimit.HasValue || existingLimit.Value > _options.MaxRequestBodyBytes)
+                var exceedsPlatformCeiling =
+                    !existingLimit.HasValue || existingLimit.Value > _options.MaxRequestBodyBytes;
+
+                if (bodySizeFeature.IsReadOnly)
                 {
-                    bodySizeFeature.MaxRequestBodySize = _options.MaxRequestBodyBytes;
+                    if (exceedsPlatformCeiling)
+                    {
+                        _logger.LogWarning(
+                            "Rejected request because body-size enforcement became read-only above the platform limit {Limit}. Path: {Path}",
+                            _options.MaxRequestBodyBytes,
+                            context.Request.Path);
+                        await WriteTooLarge(context);
+                        return;
+                    }
+                }
+                else
+                {
+                    if (exceedsPlatformCeiling)
+                    {
+                        bodySizeFeature.MaxRequestBodySize = _options.MaxRequestBodyBytes;
+                    }
+
+                    // Downstream MVC filters and endpoint metadata can legitimately make the limit
+                    // stricter, but they must not raise or disable the platform ceiling after this
+                    // middleware has established it. The wrapper delegates every accepted change to
+                    // the original server feature so Kestrel remains the actual enforcing authority.
+                    context.Features.Set<IHttpMaxRequestBodySizeFeature>(
+                        new CappedMaxRequestBodySizeFeature(
+                            bodySizeFeature,
+                            _options.MaxRequestBodyBytes));
                 }
             }
 
@@ -84,6 +111,49 @@ namespace Api.Core.Platform.Middleware
             };
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+        }
+
+        internal sealed class CappedMaxRequestBodySizeFeature : IHttpMaxRequestBodySizeFeature
+        {
+            private readonly IHttpMaxRequestBodySizeFeature inner;
+            private readonly long ceiling;
+
+            public CappedMaxRequestBodySizeFeature(
+                IHttpMaxRequestBodySizeFeature inner,
+                long ceiling)
+            {
+                this.inner = inner ?? throw new ArgumentNullException(nameof(inner));
+                if (ceiling < 0)
+                    throw new ArgumentOutOfRangeException(nameof(ceiling), ceiling, "Request body ceiling cannot be negative.");
+                this.ceiling = ceiling;
+            }
+
+            public bool IsReadOnly => inner.IsReadOnly;
+
+            public long? MaxRequestBodySize
+            {
+                get
+                {
+                    var current = inner.MaxRequestBodySize;
+                    return !current.HasValue || current.Value > ceiling
+                        ? ceiling
+                        : current;
+                }
+                set
+                {
+                    if (value.HasValue && value.Value < 0)
+                    {
+                        // Preserve the server feature's native validation/exception behavior for
+                        // invalid negative values rather than silently rewriting caller mistakes.
+                        inner.MaxRequestBodySize = value;
+                        return;
+                    }
+
+                    inner.MaxRequestBodySize = !value.HasValue || value.Value > ceiling
+                        ? ceiling
+                        : value;
+                }
+            }
         }
     }
 }
