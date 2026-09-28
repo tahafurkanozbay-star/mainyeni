@@ -1,3 +1,4 @@
+using Api.Core.Platform.Governance;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -357,7 +358,7 @@ namespace Api.Core.Platform
                         mediaType.Length > 128 ||
                         mediaType.Contains("\r", StringComparison.Ordinal) ||
                         mediaType.Contains("\n", StringComparison.Ordinal) ||
-                        !mediaType.Contains("/", StringComparison.Ordinal))
+                        !RequestContentPolicy.IsValidAllowedMediaTypePattern(mediaType))
                     {
                         failures.Add($"Invalid request media type '{mediaType ?? "<null>"}'.");
                     }
@@ -428,28 +429,32 @@ namespace Api.Core.Platform
             var governance = options.Governance;
             var transport = options.Transport;
 
-            if (requests != null && transport != null &&
-                transport.MaxRequestBodyBytes < requests.MaxRequestBodyBytes)
-            {
-                failures.Add(
-                    "Platform:Transport:MaxRequestBodyBytes cannot be lower than Platform:Requests:MaxRequestBodyBytes.");
-            }
-
-            if (governance == null || !governance.Enabled || transport == null)
+            if (requests == null || governance == null || transport == null)
             {
                 return;
             }
 
-            if (transport.MaxRequestHeaderCount < governance.MaxHeaderCount)
+            if (governance.Enabled)
             {
-                failures.Add(
-                    "Platform:Transport:MaxRequestHeaderCount cannot be lower than Platform:Governance:MaxHeaderCount.");
+                if (governance.MaxRawTargetChars > transport.MaxRequestLineSizeBytes)
+                {
+                    failures.Add("Platform:Governance:MaxRawTargetChars cannot exceed Platform:Transport:MaxRequestLineSizeBytes.");
+                }
+
+                if (governance.MaxHeaderBytes > transport.MaxRequestHeadersTotalSizeBytes)
+                {
+                    failures.Add("Platform:Governance:MaxHeaderBytes cannot exceed Platform:Transport:MaxRequestHeadersTotalSizeBytes.");
+                }
+
+                if (governance.MaxHeaderCount > transport.MaxRequestHeaderCount)
+                {
+                    failures.Add("Platform:Governance:MaxHeaderCount cannot exceed Platform:Transport:MaxRequestHeaderCount.");
+                }
             }
 
-            if (transport.MaxRequestHeadersTotalSizeBytes < governance.MaxHeaderBytes)
+            if (requests.MaxRequestBodyBytes > transport.MaxRequestBodyBytes)
             {
-                failures.Add(
-                    "Platform:Transport:MaxRequestHeadersTotalSizeBytes cannot be lower than Platform:Governance:MaxHeaderBytes.");
+                failures.Add("Platform:Requests:MaxRequestBodyBytes cannot exceed Platform:Transport:MaxRequestBodyBytes.");
             }
         }
 
@@ -466,6 +471,21 @@ namespace Api.Core.Platform
             }
         }
 
+        private static bool IsValidHeaderName(string value)
+        {
+            foreach (var character in value)
+            {
+                if (char.IsLetterOrDigit(character) || character == '-')
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
         private static bool IsSafeEndpointPath(string value)
         {
             if (string.IsNullOrWhiteSpace(value) || !value.StartsWith("/", StringComparison.Ordinal))
@@ -473,40 +493,15 @@ namespace Api.Core.Platform
                 return false;
             }
 
-            if (value.Contains("?", StringComparison.Ordinal) ||
-                value.Contains("#", StringComparison.Ordinal) ||
-                value.Contains("\\", StringComparison.Ordinal) ||
-                value.Contains("..", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            return Uri.TryCreate("https://localhost" + value, UriKind.Absolute, out _);
-        }
-
-        private static bool IsValidHeaderName(string value)
-        {
-            var trimmed = value.Trim();
-            if (trimmed.Length == 0 || trimmed.Length > 64)
-            {
-                return false;
-            }
-
-            foreach (var character in trimmed)
-            {
-                var valid = char.IsLetterOrDigit(character) || character == '-';
-                if (!valid)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return !value.Contains("?", StringComparison.Ordinal) &&
+                   !value.Contains("#", StringComparison.Ordinal) &&
+                   !value.Contains("\\", StringComparison.Ordinal) &&
+                   !value.Contains("..", StringComparison.Ordinal);
         }
 
         private static void ValidateSingleLineHeader(
             string value,
-            string settingName,
+            string name,
             ICollection<string> failures,
             bool allowEmpty = false)
         {
@@ -514,19 +509,14 @@ namespace Api.Core.Platform
             {
                 if (!allowEmpty)
                 {
-                    failures.Add($"Platform:SecurityHeaders:{settingName} is required when security headers are enabled.");
+                    failures.Add($"Platform:SecurityHeaders:{name} is required.");
                 }
                 return;
             }
 
-            if (value.Contains("\r", StringComparison.Ordinal) || value.Contains("\n", StringComparison.Ordinal))
+            if (value.Length > 2048 || value.Contains("\r", StringComparison.Ordinal) || value.Contains("\n", StringComparison.Ordinal))
             {
-                failures.Add($"Platform:SecurityHeaders:{settingName} must not contain newline characters.");
-            }
-
-            if (value.Length > 4096)
-            {
-                failures.Add($"Platform:SecurityHeaders:{settingName} is unreasonably large.");
+                failures.Add($"Platform:SecurityHeaders:{name} contains invalid characters or exceeds 2048 characters.");
             }
         }
     }
