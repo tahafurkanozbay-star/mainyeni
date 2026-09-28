@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 
 namespace Api.Core.Platform
 {
@@ -243,9 +244,67 @@ namespace Api.Core.Platform
                 return;
             }
 
-            if (options.Enabled && (options.ForwardLimit < 1 || options.ForwardLimit > 5))
+            if (!options.Enabled)
+            {
+                return;
+            }
+
+            if (options.ForwardLimit < 1 || options.ForwardLimit > 5)
             {
                 failures.Add("Platform:ForwardedHeaders:ForwardLimit must be between 1 and 5.");
+            }
+
+            if (options.KnownProxies == null)
+            {
+                failures.Add("Platform:ForwardedHeaders:KnownProxies configuration is required.");
+            }
+
+            if (options.KnownIPNetworks == null)
+            {
+                failures.Add("Platform:ForwardedHeaders:KnownIPNetworks configuration is required.");
+            }
+
+            var proxyCount = options.KnownProxies?.Count ?? 0;
+            var networkCount = options.KnownIPNetworks?.Count ?? 0;
+            if (proxyCount + networkCount > ApiForwardedHeadersPolicy.MaxTrustedForwarderEntries)
+            {
+                failures.Add(
+                    $"Platform:ForwardedHeaders trusted proxy/network entries cannot exceed {ApiForwardedHeadersPolicy.MaxTrustedForwarderEntries}.");
+            }
+
+            if (options.KnownProxies != null)
+            {
+                foreach (var rawProxy in options.KnownProxies)
+                {
+                    if (string.IsNullOrWhiteSpace(rawProxy) ||
+                        !IPAddress.TryParse(rawProxy.Trim(), out var proxy) ||
+                        IPAddress.Any.Equals(proxy) ||
+                        IPAddress.IPv6Any.Equals(proxy))
+                    {
+                        failures.Add(
+                            $"Platform:ForwardedHeaders:KnownProxies contains invalid address '{rawProxy ?? "<null>"}'.");
+                    }
+                }
+            }
+
+            if (options.KnownIPNetworks != null)
+            {
+                foreach (var rawNetwork in options.KnownIPNetworks)
+                {
+                    if (string.IsNullOrWhiteSpace(rawNetwork) ||
+                        !IPNetwork.TryParse(rawNetwork.Trim(), out var network))
+                    {
+                        failures.Add(
+                            $"Platform:ForwardedHeaders:KnownIPNetworks contains invalid CIDR '{rawNetwork ?? "<null>"}'.");
+                        continue;
+                    }
+
+                    if (network.PrefixLength == 0)
+                    {
+                        failures.Add(
+                            "Platform:ForwardedHeaders:KnownIPNetworks cannot contain a universal /0 trust network.");
+                    }
+                }
             }
         }
 
@@ -473,7 +532,13 @@ namespace Api.Core.Platform
 
         private static bool IsValidHeaderName(string value)
         {
-            foreach (var character in value)
+            var trimmed = value?.Trim();
+            if (string.IsNullOrEmpty(trimmed) || trimmed.Length > 64)
+            {
+                return false;
+            }
+
+            foreach (var character in trimmed)
             {
                 if (char.IsLetterOrDigit(character) || character == '-')
                 {
@@ -493,10 +558,15 @@ namespace Api.Core.Platform
                 return false;
             }
 
-            return !value.Contains("?", StringComparison.Ordinal) &&
-                   !value.Contains("#", StringComparison.Ordinal) &&
-                   !value.Contains("\\", StringComparison.Ordinal) &&
-                   !value.Contains("..", StringComparison.Ordinal);
+            if (value.Contains("?", StringComparison.Ordinal) ||
+                value.Contains("#", StringComparison.Ordinal) ||
+                value.Contains("\\", StringComparison.Ordinal) ||
+                value.Contains("..", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return Uri.TryCreate("https://localhost" + value, UriKind.Absolute, out _);
         }
 
         private static void ValidateSingleLineHeader(
