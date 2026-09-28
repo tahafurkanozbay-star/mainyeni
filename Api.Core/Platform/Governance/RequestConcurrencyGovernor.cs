@@ -77,23 +77,46 @@ namespace Api.Core.Platform.Governance
                     RequestConcurrencyRejection.GlobalLimit);
             }
 
-            var state = ResolveClientState(normalizedKey, now);
-            var clientActive = Interlocked.Increment(ref state.Active);
-            Volatile.Write(ref state.LastSeenTicks, now);
-
-            if (clientActive > maxConcurrentPerClient)
+            while (true)
             {
-                Interlocked.Decrement(ref state.Active);
-                Interlocked.Decrement(ref activeRequests);
-                MaybeCleanup(now);
-                return RequestConcurrencyLease.Rejected(
-                    this,
-                    normalizedKey,
-                    RequestConcurrencyRejection.ClientLimit);
-            }
+                var state = ResolveClientState(normalizedKey, now);
+                var clientLimitExceeded = false;
 
-            MaybeCleanup(now);
-            return RequestConcurrencyLease.Acquired(this, normalizedKey, state);
+                // Cleanup and acquisition coordinate only within one client state. This prevents
+                // cleanup from detaching an idle state between lookup and Active increment while
+                // preserving parallelism across unrelated clients.
+                lock (state.Gate)
+                {
+                    if (!IsRegisteredState(normalizedKey, state))
+                    {
+                        // Cleanup removed this state after ResolveClientState returned it. Retry
+                        // against the dictionary without consuming another global slot.
+                        continue;
+                    }
+
+                    state.Active++;
+                    state.LastSeenTicks = now;
+
+                    if (state.Active > maxConcurrentPerClient)
+                    {
+                        state.Active--;
+                        clientLimitExceeded = true;
+                    }
+                }
+
+                if (clientLimitExceeded)
+                {
+                    Interlocked.Decrement(ref activeRequests);
+                    MaybeCleanup(now);
+                    return RequestConcurrencyLease.Rejected(
+                        this,
+                        normalizedKey,
+                        RequestConcurrencyRejection.ClientLimit);
+                }
+
+                MaybeCleanup(now);
+                return RequestConcurrencyLease.Acquired(this, normalizedKey, state);
+            }
         }
 
         public RequestConcurrencySnapshot GetSnapshot()
@@ -110,13 +133,15 @@ namespace Api.Core.Platform.Governance
         {
             if (stateObject is ClientState state)
             {
-                var remaining = Interlocked.Decrement(ref state.Active);
-                if (remaining < 0)
+                lock (state.Gate)
                 {
-                    Interlocked.Exchange(ref state.Active, 0);
-                }
+                    if (state.Active > 0)
+                    {
+                        state.Active--;
+                    }
 
-                Volatile.Write(ref state.LastSeenTicks, DateTime.UtcNow.Ticks);
+                    state.LastSeenTicks = DateTime.UtcNow.Ticks;
+                }
             }
 
             var global = Interlocked.Decrement(ref activeRequests);
@@ -156,6 +181,20 @@ namespace Api.Core.Platform.Governance
             }
         }
 
+        private bool IsRegisteredState(string partitionKey, ClientState state)
+        {
+            if (clients.TryGetValue(partitionKey, out var registered) &&
+                ReferenceEquals(registered, state))
+            {
+                return true;
+            }
+
+            // Once cardinality reaches the configured bound, unrelated client keys intentionally
+            // share the non-removable overflow state.
+            return clients.TryGetValue(OverflowPartition, out registered) &&
+                   ReferenceEquals(registered, state);
+        }
+
         private void MaybeCleanup(long now)
         {
             var attempt = Interlocked.Increment(ref acquisitionAttempts);
@@ -181,20 +220,23 @@ namespace Api.Core.Platform.Governance
                 }
 
                 var state = pair.Value;
-                if (Volatile.Read(ref state.Active) != 0)
+                lock (state.Gate)
                 {
-                    continue;
-                }
+                    if (state.Active != 0)
+                    {
+                        continue;
+                    }
 
-                if (Volatile.Read(ref state.LastSeenTicks) >= cutoff)
-                {
-                    continue;
-                }
+                    if (state.LastSeenTicks >= cutoff)
+                    {
+                        continue;
+                    }
 
-                clients.TryRemove(
-                    new System.Collections.Generic.KeyValuePair<string, ClientState>(
-                        pair.Key,
-                        state));
+                    clients.TryRemove(
+                        new System.Collections.Generic.KeyValuePair<string, ClientState>(
+                            pair.Key,
+                            state));
+                }
             }
         }
 
@@ -220,6 +262,8 @@ namespace Api.Core.Platform.Governance
             {
                 LastSeenTicks = now;
             }
+
+            public object Gate { get; } = new object();
 
             public int Active;
 
