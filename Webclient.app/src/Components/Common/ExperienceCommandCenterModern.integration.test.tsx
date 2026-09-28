@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   COMMAND_CENTER_CATALOG_REPORT,
@@ -9,9 +9,11 @@ import {
 } from './ExperienceCommandCenterModern';
 
 const openCommandCenter = (): void => {
-  window.dispatchEvent(new CustomEvent('kentrehberi:command', {
-    detail: { name: 'command-palette' },
-  }));
+  act(() => {
+    window.dispatchEvent(new CustomEvent('kentrehberi:command', {
+      detail: { name: 'command-palette' },
+    }));
+  });
 };
 
 const renderCenter = () => {
@@ -60,7 +62,9 @@ describe('ExperienceCommandCenterModern governed integration', () => {
 
   test('does not open for unrelated experience commands', () => {
     renderCenter();
-    window.dispatchEvent(new CustomEvent('kentrehberi:command', { detail: { name: 'layers' } }));
+    act(() => {
+      window.dispatchEvent(new CustomEvent('kentrehberi:command', { detail: { name: 'layers' } }));
+    });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
