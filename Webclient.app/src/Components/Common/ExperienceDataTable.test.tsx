@@ -231,18 +231,19 @@ describe('ExperienceDataTable', () => {
 
   test('paginates without dropping total row semantics', () => {
     const { container } = renderTable({ pageSize: 2, onRowActivate: vi.fn() });
+    const pager = screen.getByRole('navigation', { name: 'Park sonuçları sayfalama' });
 
     expect(bodyRows(container)).toHaveLength(2);
-    expect(screen.getByText('Sayfa', { exact: false })).toHaveTextContent('Sayfa 1 / 2');
+    expect(within(pager).getByText('Sayfa', { exact: false })).toHaveTextContent('Sayfa 1 / 2');
     expect(screen.getByRole('table')).toHaveAttribute('aria-rowcount', '5');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sonraki' }));
+    fireEvent.click(within(pager).getByRole('button', { name: 'Sonraki' }));
 
     expect(bodyRows(container)).toHaveLength(2);
     expect(bodyRows(container)[0]).toHaveTextContent('Göksu Parkı');
-    expect(screen.getByText('Sayfa', { exact: false })).toHaveTextContent('Sayfa 2 / 2');
-    expect(screen.getByRole('button', { name: 'Sonraki' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Önceki' })).not.toBeDisabled();
+    expect(within(pager).getByText('Sayfa', { exact: false })).toHaveTextContent('Sayfa 2 / 2');
+    expect(within(pager).getByRole('button', { name: 'Sonraki' })).toBeDisabled();
+    expect(within(pager).getByRole('button', { name: 'Önceki' })).not.toBeDisabled();
     expect(activeRows(container)).toHaveLength(1);
     expect(activeRows(container)[0]).toHaveTextContent('Göksu Parkı');
   });
