@@ -113,6 +113,93 @@ public sealed class SecurityHeadersMiddlewareTests
     }
 
     [Fact]
+    public async Task Invoke_RemovesApiBaselineWhenResponseBecomesHtmlWithoutHtmlOwnedPolicy()
+    {
+        var options = new ApiPlatformOptions();
+        var context = CreateContext(isHttps: true);
+        var middleware = CreateMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.ContentType = "text/html; charset=utf-8";
+                return Task.CompletedTask;
+            },
+            options);
+
+        await middleware.Invoke(context);
+        await EnsureResponseStarted(context);
+
+        Assert.False(context.Response.Headers.ContainsKey("Content-Security-Policy"));
+        Assert.Equal("nosniff", context.Response.Headers["X-Content-Type-Options"].ToString());
+    }
+
+    [Theory]
+    [InlineData("text/html")]
+    [InlineData("text/html; charset=utf-8")]
+    [InlineData("application/xhtml+xml")]
+    public async Task Invoke_PreservesDownstreamOwnedHtmlContentSecurityPolicy(string contentType)
+    {
+        const string htmlPolicy = "default-src 'self'; script-src 'self'; object-src 'none'";
+        var options = new ApiPlatformOptions();
+        var context = CreateContext(isHttps: true);
+        var middleware = CreateMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.ContentType = contentType;
+                httpContext.Response.Headers["Content-Security-Policy"] = htmlPolicy;
+                return Task.CompletedTask;
+            },
+            options);
+
+        await middleware.Invoke(context);
+        await EnsureResponseStarted(context);
+
+        Assert.Equal(htmlPolicy, context.Response.Headers["Content-Security-Policy"].ToString());
+    }
+
+    [Fact]
+    public async Task Invoke_ReappliesApiPolicyWhenNonHtmlDownstreamAttemptsToWeakenIt()
+    {
+        var options = new ApiPlatformOptions();
+        var configuredPolicy = options.SecurityHeaders.ContentSecurityPolicy;
+        var context = CreateContext(isHttps: true);
+        var middleware = CreateMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.ContentType = "application/json";
+                httpContext.Response.Headers["Content-Security-Policy"] = "default-src *";
+                return Task.CompletedTask;
+            },
+            options);
+
+        await middleware.Invoke(context);
+        await EnsureResponseStarted(context);
+
+        Assert.Equal(configuredPolicy, context.Response.Headers["Content-Security-Policy"].ToString());
+    }
+
+    [Fact]
+    public async Task Invoke_BlankApiPolicyDoesNotEraseDownstreamHtmlPolicy()
+    {
+        const string htmlPolicy = "default-src 'self'; frame-ancestors 'none'";
+        var options = new ApiPlatformOptions();
+        options.SecurityHeaders.ContentSecurityPolicy = string.Empty;
+        var context = CreateContext(isHttps: true);
+        var middleware = CreateMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.ContentType = "text/html";
+                httpContext.Response.Headers["Content-Security-Policy"] = htmlPolicy;
+                return Task.CompletedTask;
+            },
+            options);
+
+        await middleware.Invoke(context);
+        await EnsureResponseStarted(context);
+
+        Assert.Equal(htmlPolicy, context.Response.Headers["Content-Security-Policy"].ToString());
+    }
+
+    [Fact]
     public async Task Invoke_OmitsOptionalHeadersWhenConfiguredBlank()
     {
         var options = new ApiPlatformOptions();
