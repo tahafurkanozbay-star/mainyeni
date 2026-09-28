@@ -18,7 +18,7 @@ import { ExperiencePresentationBridge } from './Components/Common/ExperiencePres
 import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
-import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
+import { ExperienceCommandCenterGoverned as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterGoverned';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { ExperienceRuntimeBridge } from './Components/Common/ExperienceRuntimeBridge';
