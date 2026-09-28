@@ -22,7 +22,7 @@ const UNTRUSTED_TRIGGER = /\b(?:pull_request_target|issues|issue_comment|pull_re
 const UNTRUSTED_EXPR = /\$\{\{\s*(?:github\.head_ref|github\.event\.pull_request\.head\.(?:ref|sha)|github\.event\.(?:issue|comment|review|discussion)\.|inputs\.|github\.event\.inputs\.)/i;
 const PRIVILEGE = /\b(?:contents|packages|actions|deployments|pages|id-token|security-events)\s*:\s*write\b/i;
 const EXECUTABLE_PATH = /(?:^|[\/\\])(?:node_modules\/\.bin|\.bin|bin|scripts?|tools?|vendor|plugins?|\.cargo\/bin|\.local\/bin)(?:[\/\\]|$)/i;
-const BROAD_PATH = /(?:^|\n)\s*path\s*:\s*(?:["']?\.?["']?|["']?\$\{\{\s*github\.workspace\s*\}\}["']?|["']?~["']?)\s*(?:#.*)?$/im;
+const BROAD_PATH = /(?:^|\n)\s*path\s*:\s*["']?(?:\.|\.\/|\$\{\{\s*github\.workspace\s*\}\}|~)["']?\s*(?:#.*)?$/im;
 const RESTORE_KEYS = /(?:^|\n)\s*restore-keys\s*:/im;
 const LOOKUP_ONLY_FALSE = /(?:^|\n)\s*lookup-only\s*:\s*(?:false|['"]false['"])/im;
 
