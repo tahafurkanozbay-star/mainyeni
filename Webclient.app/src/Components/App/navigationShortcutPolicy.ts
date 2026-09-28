@@ -38,9 +38,18 @@ function isElement(value: EventTarget | null | undefined): value is Element {
   return typeof Element !== 'undefined' && value instanceof Element;
 }
 
+function isContentEditable(element: Element): boolean {
+  for (let current: Element | null = element; current; current = current.parentElement) {
+    const attribute = current.getAttribute('contenteditable');
+    if (attribute === '' || attribute === 'true' || attribute === 'plaintext-only') return true;
+    if (attribute === 'false') return false;
+  }
+  return false;
+}
+
 function isEditableTarget(target: EventTarget | null | undefined): boolean {
   if (!isElement(target)) return false;
-  if (target.closest('[contenteditable="true"], [contenteditable="plaintext-only"]')) return true;
+  if (isContentEditable(target)) return true;
   const control = target.closest('input, textarea, select');
   if (!control) return false;
   if (control instanceof HTMLInputElement) {
