@@ -204,3 +204,15 @@ export * from './addressHierarchyRuntime';
 export * from './addressConfidenceRuntime';
 export * from './geocodingConsensusRuntime';
 export * from './addressResolutionSession';
+
+// Production v5 data-governance layers. These extend the existing strict
+// TypeScript authority with canonical category semantics, indexed filter
+// planning, versioned schema admission, revision-safe caching and deterministic
+// spatial keyset pagination. They remain endpoint-free and preserve the shared
+// GIS icon resolver as the single presentation authority.
+export * from './categoryOntologyRuntime';
+export * from './filterIndexRuntime';
+export * from './schemaRegistryRuntime';
+export * from './revisionedSearchCache';
+export * from './spatialCursorRuntime';
+export * from './dataSearchGovernanceRuntime';
