@@ -254,10 +254,17 @@ public sealed class TkgmSingleFlightTests
         {
             var current = Interlocked.Increment(ref callCount);
             if (current >= expectedCalls) allStarted.TrySetResult(true);
-            using var registration = cancellationToken.Register(
-                () => cancellationObserved.TrySetResult(true));
-            await release.Task.WaitAsync(cancellationToken);
-            return response;
+
+            try
+            {
+                await release.Task.WaitAsync(cancellationToken);
+                return response;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancellationObserved.TrySetResult(true);
+                throw;
+            }
         }
 
         public void Release() => release.TrySetResult(true);
