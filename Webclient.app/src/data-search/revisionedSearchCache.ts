@@ -401,7 +401,7 @@ export class RevisionedSearchCache<T> {
   sweep(): number {
     const now = safeNow(this.#options.clock);
     let removed = 0;
-    for (const entry of [...this.#entries.values()]) {
+    for (const entry of this.#entries.values()) {
       if (entry.expiresAt <= 0 || now < entry.expiresAt) continue;
       this.#removeEntry(entry, 'expired');
       removed += 1;
