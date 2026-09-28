@@ -216,3 +216,15 @@ export * from './schemaRegistryRuntime';
 export * from './revisionedSearchCache';
 export * from './spatialCursorRuntime';
 export * from './dataSearchGovernanceRuntime';
+
+// Production v6 text-search execution. Existing normalization/filter/schema
+// authorities remain canonical; this layer adds bounded query semantics,
+// deterministic relevance scoring, faceting/autocomplete, revision-bound
+// keyset cursors and atomic corpus refresh without adding a network transport.
+export * from './textQueryAnalysisRuntime';
+export * from './relevanceIndexRuntime';
+export * from './facetAggregationRuntime';
+export * from './searchSuggestionRuntime';
+export * from './relevanceCursorRuntime';
+export * from './dataSearchQueryEngineV6';
+export * from './searchCorpusRuntimeV6';
