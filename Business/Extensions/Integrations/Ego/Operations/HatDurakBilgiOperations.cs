@@ -1,58 +1,88 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Business._Base;
-using Business.Core.Context;
-using Business.Core.Common;
-using Business.Extensions.Gis.Model;
-using Business.Extensions.Integrations.ViewModel;
-using Business.Core.Resources;
+using System.Threading;
 using System.Threading.Tasks;
-using System.ServiceModel;
+using Business._Base;
+using Business.Core.Common;
+using Business.Core.Context;
+using Business.Core.Resources;
+using Business.Extensions.Gis.Model;
 using Business.Extensions.Integrations.Pod.AEOServiceReference;
+using Business.Extensions.Integrations.ViewModel;
 
 namespace Business.Extensions.Integrations.Operations
 {
     public class HatDurakBilgiOperations : _BaseOperations
     {
-
-        private BusinessContext db;
-        private HatDurakBilgiServisSoap client;
-        private string token=Configuration.EGO_SERVICE_TOKEN;
+        private const int MaxLineNumberLength = 32;
+        private readonly BusinessContext db;
+        private readonly HatDurakBilgiServisSoap client;
+        private readonly string token = Configuration.EGO_SERVICE_TOKEN;
 
         public HatDurakBilgiOperations(BusinessContext context)
         {
-            this.db = context;
-            client= new HatDurakBilgiServisSoapClient(HatDurakBilgiServisSoapClient.EndpointConfiguration.HatDurakBilgiServisSoap);
+            db = context ?? throw new ArgumentNullException(nameof(context));
+            client = new HatDurakBilgiServisSoapClient(HatDurakBilgiServisSoapClient.EndpointConfiguration.HatDurakBilgiServisSoap);
         }
 
-        public async Task<ServiceResult<List<Hat>>> ActiveLines()
+        public async Task<ServiceResult<List<Hat>>> ActiveLines(CancellationToken cancellationToken = default)
         {
-            var results=await client.AktifHatlarAsync(token);
-            return new ServiceResult<List<Hat>>(ServiceResultType.Success,results.ToList());
+            cancellationToken.ThrowIfCancellationRequested();
+            var results = await client.AktifHatlarAsync(token).WaitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new ServiceResult<List<Hat>>(ServiceResultType.Success, results.ToList());
         }
 
-        public async Task<ServiceResult<List<HatGuzergahDuraklar>>> ActiveLineInfos()
+        public async Task<ServiceResult<List<HatGuzergahDuraklar>>> ActiveLineInfos(CancellationToken cancellationToken = default)
         {
-            var results=await client.AktifHatlarBilgisiAsync(token);
-            return new ServiceResult<List<HatGuzergahDuraklar>>(ServiceResultType.Success,results.ToList());
+            cancellationToken.ThrowIfCancellationRequested();
+            var results = await client.AktifHatlarBilgisiAsync(token).WaitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new ServiceResult<List<HatGuzergahDuraklar>>(ServiceResultType.Success, results.ToList());
         }
 
-        public async Task<ServiceResult<List<MasterDurak>>> ActiveStops()
+        public async Task<ServiceResult<List<MasterDurak>>> ActiveStops(CancellationToken cancellationToken = default)
         {
-            var results=await client.AktifDuraklarAsync(token);
-            return new ServiceResult<List<MasterDurak>>(ServiceResultType.Success,results.ToList());
+            cancellationToken.ThrowIfCancellationRequested();
+            var results = await client.AktifDuraklarAsync(token).WaitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new ServiceResult<List<MasterDurak>>(ServiceResultType.Success, results.ToList());
         }
 
-        public async Task<ServiceResult<List<DuraktanGecenHatlar>>> LinesOfStop()
+        public async Task<ServiceResult<List<DuraktanGecenHatlar>>> LinesOfStop(CancellationToken cancellationToken = default)
         {
-            var results=await client.DuraktanGecenHatlarAsync(token);
-            return new ServiceResult<List<DuraktanGecenHatlar>>(ServiceResultType.Success,results.ToList());
+            cancellationToken.ThrowIfCancellationRequested();
+            var results = await client.DuraktanGecenHatlarAsync(token).WaitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new ServiceResult<List<DuraktanGecenHatlar>>(ServiceResultType.Success, results.ToList());
         }
 
-        public async Task<ServiceResult<HatGuzergahDuraklar>> LineInfo(string lineNumber)
+        public async Task<ServiceResult<HatGuzergahDuraklar>> LineInfo(string lineNumber, CancellationToken cancellationToken = default)
         {
-            var result=await client.HatBilgisiAsync(token, lineNumber);
-            return new ServiceResult<HatGuzergahDuraklar>(ServiceResultType.Success,result);
+            var canonicalLineNumber = ValidateLineNumber(lineNumber);
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await client.HatBilgisiAsync(token, canonicalLineNumber).WaitAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new ServiceResult<HatGuzergahDuraklar>(ServiceResultType.Success, result);
+        }
+
+        internal static string ValidateLineNumber(string lineNumber)
+        {
+            if (string.IsNullOrWhiteSpace(lineNumber))
+                throw new ArgumentException("EGO line number must not be empty.", nameof(lineNumber));
+
+            var value = lineNumber.Trim();
+            if (value.Length > MaxLineNumberLength)
+                throw new ArgumentException("EGO line number exceeds the supported length.", nameof(lineNumber));
+
+            foreach (var character in value)
+            {
+                if (!(char.IsAsciiLetterOrDigit(character) || character is '-' or '/' or '.'))
+                    throw new ArgumentException("EGO line number contains an unsupported character.", nameof(lineNumber));
+            }
+
+            return value;
         }
     }
 }
