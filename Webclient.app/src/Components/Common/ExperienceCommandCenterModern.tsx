@@ -13,7 +13,6 @@ import { SIDEBAR_GROUPS, SIDEBAR_ITEMS } from '../App/SidebarCatalog';
 import {
   createCommandCenterInteractionModel,
   type CommandCenterItem,
-  type CommandCenterState,
 } from '../../experience/commandCenterInteractionModel';
 import { createCommandCenterAccessibilityController } from '../../experience/commandCenterAccessibilityController';
 import { createCommandCenterUsageModel } from '../../experience/commandCenterUsageModel';
