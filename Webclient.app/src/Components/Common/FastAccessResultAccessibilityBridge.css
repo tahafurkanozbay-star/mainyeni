@@ -28,11 +28,6 @@
 }
 
 .kr-fast-query__results[data-experience-results-a11y='true']
-  > .kr-fast-query__item:focus {
-  outline: none;
-}
-
-.kr-fast-query__results[data-experience-results-a11y='true']
   > .kr-fast-query__item:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--experience-accent, #0e7490) 58%, transparent);
   outline-offset: -1px;
