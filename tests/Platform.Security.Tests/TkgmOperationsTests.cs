@@ -236,7 +236,7 @@ public sealed class TkgmOperationsTests
     {
         private readonly ConcurrentQueue<string> responses;
         public int CallCount { get; private set; }
-        public SequenceTransport(params string[] responses) => responses = new ConcurrentQueue<string>(responses);
+        public SequenceTransport(params string[] responses) => this.responses = new ConcurrentQueue<string>(responses);
         public Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
             CallCount++;
