@@ -125,6 +125,53 @@ public sealed class RequestGovernanceEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_TraversalPolicyRejectsPlainDotDotDelimitedByNestedEncodedSeparators()
+    {
+        var options = new ApiPlatformOptions();
+        options.Governance.RejectPathTraversal = true;
+        options.Governance.RejectEncodedPathSeparators = false;
+        var evaluator = new RequestGovernanceEvaluator(options);
+        var context = CreateContext("GET", "/api%25252f..%25252fsecret");
+
+        var decision = evaluator.Evaluate(context);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(StatusCodes.Status400BadRequest, decision.StatusCode);
+        Assert.Equal("path-traversal", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_TraversalPolicyRejectsMixedDepthEncodedDotsWhenSeparatorPolicyDisabled()
+    {
+        var options = new ApiPlatformOptions();
+        options.Governance.RejectPathTraversal = true;
+        options.Governance.RejectEncodedPathSeparators = false;
+        var evaluator = new RequestGovernanceEvaluator(options);
+        var context = CreateContext("GET", "/api/%25252e%2e/secret");
+
+        var decision = evaluator.Evaluate(context);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal("path-traversal", decision.Code);
+    }
+
+    [Fact]
+    public void Evaluate_EncodedSeparatorPolicyRejectsDeepNestingWhenTraversalPolicyDisabled()
+    {
+        var options = new ApiPlatformOptions();
+        options.Governance.RejectPathTraversal = false;
+        options.Governance.RejectEncodedPathSeparators = true;
+        var evaluator = new RequestGovernanceEvaluator(options);
+        var context = CreateContext("GET", "/api/%2525252fsecret");
+
+        var decision = evaluator.Evaluate(context);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(StatusCodes.Status400BadRequest, decision.StatusCode);
+        Assert.Equal("encoded-path-separator", decision.Code);
+    }
+
+    [Fact]
     public void Evaluate_DoesNotRejectEncodedSeparatorsInsideQuery()
     {
         var evaluator = CreateEvaluator();
