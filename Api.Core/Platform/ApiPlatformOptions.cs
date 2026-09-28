@@ -129,7 +129,27 @@ namespace Api.Core.Platform
         public sealed class ForwardedHeaderOptions
         {
             public bool Enabled { get; set; } = true;
+
             public int ForwardLimit { get; set; } = 1;
+
+            /// <summary>
+            /// Requires X-Forwarded-For and X-Forwarded-Proto value counts to stay aligned when
+            /// enabled. False preserves the ASP.NET Core compatibility default; deployments may
+            /// opt into stricter symmetry when their proxy chain emits both headers consistently.
+            /// </summary>
+            public bool RequireHeaderSymmetry { get; set; }
+
+            /// <summary>
+            /// Exact proxy addresses that are allowed to supply forwarded headers. These entries
+            /// augment ASP.NET Core's loopback-only defaults; an empty list never means trust all.
+            /// </summary>
+            public IList<string> KnownProxies { get; set; } = new List<string>();
+
+            /// <summary>
+            /// Trusted proxy networks in CIDR notation. .NET 10 System.Net.IPNetwork semantics are
+            /// used at startup; universal /0 networks are rejected by platform validation.
+            /// </summary>
+            public IList<string> KnownIPNetworks { get; set; } = new List<string>();
         }
 
         /// <summary>
