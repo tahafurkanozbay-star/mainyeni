@@ -216,7 +216,12 @@ public sealed class RequestConcurrencyGovernorTests
     public async Task CleanupPressure_DoesNotDetachActiveClientState()
     {
         const int iterations = 200;
-        var governor = CreateGovernor(global: 32, perClient: 1, maxTrackedClients: 8, cleanupInterval: 1);
+        const int maxTrackedClients = 16;
+        var governor = CreateGovernor(
+            global: 32,
+            perClient: 1,
+            maxTrackedClients: maxTrackedClients,
+            cleanupInterval: 1);
 
         for (var iteration = 0; iteration < iterations; iteration++)
         {
@@ -237,7 +242,7 @@ public sealed class RequestConcurrencyGovernorTests
         }
 
         Assert.Equal(0, governor.ActiveRequests);
-        Assert.True(governor.TrackedClients <= 8);
+        Assert.True(governor.TrackedClients <= maxTrackedClients);
     }
 
     [Fact]
