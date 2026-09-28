@@ -62,6 +62,8 @@ namespace Api.Core.Platform.Transport
                     validation.Failures);
             }
 
+            ApiRequestBudgetCoherence.EnsureValid(platformOptions);
+
             return webHost.ConfigureKestrel(
                 serverOptions => Apply(serverOptions, platformOptions.Transport));
         }
