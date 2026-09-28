@@ -14,9 +14,20 @@ type Listener = () => void;
 const MAX_LISTENERS = 64;
 const MAX_ERROR_LENGTH = 180;
 
+const isControlCode = (codePoint: number): boolean => codePoint < 32 || codePoint === 127;
+
+const stripControlCharacters = (value: string): string => {
+  let sanitized = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    sanitized += codePoint !== undefined && isControlCode(codePoint) ? ' ' : character;
+  }
+  return sanitized;
+};
+
 const sanitizeMessage = (value: unknown): string => {
   if (typeof value !== 'string') return '';
-  return value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_ERROR_LENGTH);
+  return stripControlCharacters(value).replace(/\s+/g, ' ').trim().slice(0, MAX_ERROR_LENGTH);
 };
 
 const announcementFor = (phase: MapWorkspacePhase, errorMessage: string | null): string => {
@@ -88,7 +99,7 @@ export class MapWorkspaceAccessibilityModel {
     if (this.disposed) return;
     if (this.snapshot.phase === phase && this.snapshot.errorMessage === errorMessage) return;
     this.snapshot = createSnapshot(this.snapshot.revision + 1, phase, errorMessage);
-    for (const listener of [...this.listeners]) {
+    for (const listener of this.listeners) {
       try { listener(); } catch { /* observer failures must not break map lifecycle */ }
     }
   }
