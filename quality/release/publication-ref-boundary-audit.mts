@@ -225,7 +225,7 @@ function finding(
 function targetFindings(item: PublicationSignal): Finding[] {
   if (!item.target) return [];
   const privileged = item.writeAuthority || item.secrets || item.protectedEnvironment;
-  if (EVENT_TARGET.test(item.target) || hasUntrustedExpression(item.target)) {
+  if (EVENT_TARGET.test(item.target)) {
     return [finding(
       item,
       'ci-publication-target-event-controlled',
@@ -254,6 +254,17 @@ function targetFindings(item: PublicationSignal): Finding[] {
       'Release publication identity depends on indirect workflow output',
       `Publication target ${item.target} comes from needs/steps/matrix/vars provenance rather than an explicit trusted ref.`,
       'Validate the producer and map its output to a closed release/tag format before privileged publication.',
+    )];
+  }
+  if (hasUntrustedExpression(item.target)) {
+    return [finding(
+      item,
+      'ci-publication-target-untrusted-expression',
+      'critical',
+      'Release publication identity uses an unclassified untrusted expression',
+      `Publication target ${item.target} contains a dynamic source outside the explicit trusted ref/identity model.`,
+      'Reduce publication identity to a trusted repository tag/ref or validate the dynamic source against a strict release identifier allowlist before publication.',
+      true,
     )];
   }
   return [];
