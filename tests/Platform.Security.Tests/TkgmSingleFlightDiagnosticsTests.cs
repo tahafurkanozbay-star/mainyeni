@@ -125,10 +125,17 @@ public sealed class TkgmSingleFlightDiagnosticsTests
         public async Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
             started.TrySetResult(true);
-            using var registration = cancellationToken.Register(
-                () => cancellationObserved.TrySetResult(true));
-            await release.Task.WaitAsync(cancellationToken);
-            return "unused";
+
+            try
+            {
+                await release.Task.WaitAsync(cancellationToken);
+                return "unused";
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancellationObserved.TrySetResult(true);
+                throw;
+            }
         }
     }
 }
