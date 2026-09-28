@@ -10,24 +10,6 @@ namespace Api.Core.Platform.Governance
     /// </summary>
     public static class RequestTargetInspector
     {
-        private static readonly string[] EncodedSeparatorTokens =
-        {
-            "%2f",
-            "%5c",
-            "%252f",
-            "%255c"
-        };
-
-        private static readonly string[] EncodedTraversalTokens =
-        {
-            "%2e%2e",
-            "%2e.",
-            ".%2e",
-            "%252e%252e",
-            "%252e.",
-            ".%252e"
-        };
-
         public static RequestTargetSnapshot Inspect(string rawTarget)
         {
             var value = rawTarget ?? string.Empty;
@@ -45,8 +27,8 @@ namespace Api.Core.Platform.Governance
                 containsControlCharacters: ContainsControlCharacters(value),
                 containsBackslash: path.IndexOf('\\') >= 0,
                 containsPlainTraversal: ContainsPlainTraversal(path),
-                containsEncodedSeparator: ContainsAny(path, EncodedSeparatorTokens),
-                containsEncodedTraversal: ContainsAny(path, EncodedTraversalTokens));
+                containsEncodedSeparator: ContainsEncodedSeparator(path),
+                containsEncodedTraversal: ContainsEncodedTraversal(path));
         }
 
         public static int CountQueryParameters(string query)
@@ -140,6 +122,92 @@ namespace Api.Core.Platform.Governance
             return false;
         }
 
+        /// <summary>
+        /// Detects slash and backslash separators encoded through one or more layers of percent
+        /// escaping. A fixed token list is intentionally avoided: an attacker can add another
+        /// encoded-percent layer (for example %25252f) without changing the eventual separator.
+        /// </summary>
+        internal static bool ContainsEncodedSeparator(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            for (var index = 0; index < path.Length; index++)
+            {
+                if (!TryReadSeparator(path, index, out var consumed, out var encoded) || !encoded)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Detects a traversal segment that becomes exactly ".." when percent-encoded dots and
+        /// separators are recursively resolved. Only dot/separator tokens are interpreted; other
+        /// percent escapes remain opaque, which keeps the scanner allocation-free and prevents
+        /// query or unrelated path data from being normalized unexpectedly.
+        /// </summary>
+        internal static bool ContainsEncodedTraversal(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            var index = 0;
+            while (index < path.Length)
+            {
+                var encodedBoundary = false;
+                while (TryReadSeparator(path, index, out var boundaryLength, out var boundaryEncoded))
+                {
+                    encodedBoundary |= boundaryEncoded;
+                    index += boundaryLength;
+                }
+
+                if (index >= path.Length)
+                {
+                    break;
+                }
+
+                var dots = 0;
+                var segmentContainsOnlyDots = true;
+                var encodedComponent = encodedBoundary;
+
+                while (index < path.Length)
+                {
+                    if (TryReadSeparator(path, index, out _, out var separatorEncoded))
+                    {
+                        encodedComponent |= separatorEncoded;
+                        break;
+                    }
+
+                    if (TryReadDot(path, index, out var dotLength, out var dotEncoded))
+                    {
+                        dots++;
+                        encodedComponent |= dotEncoded;
+                        index += dotLength;
+                        continue;
+                    }
+
+                    segmentContainsOnlyDots = false;
+                    index++;
+                }
+
+                if (segmentContainsOnlyDots && dots == 2 && encodedComponent)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static bool ContainsAny(string value, IReadOnlyList<string> needles)
         {
             if (string.IsNullOrEmpty(value) || needles == null)
@@ -159,6 +227,115 @@ namespace Api.Core.Platform.Governance
                 {
                     return true;
                 }
+            }
+
+            return false;
+        }
+
+        private static bool TryReadSeparator(
+            string value,
+            int index,
+            out int consumed,
+            out bool encoded)
+        {
+            consumed = 0;
+            encoded = false;
+
+            if (index < 0 || index >= value.Length)
+            {
+                return false;
+            }
+
+            var character = value[index];
+            if (character == '/' || character == '\\')
+            {
+                consumed = 1;
+                return true;
+            }
+
+            if (TryReadNestedPercentByte(value, index, '2', 'f', out consumed) ||
+                TryReadNestedPercentByte(value, index, '5', 'c', out consumed))
+            {
+                encoded = true;
+                return true;
+            }
+
+            consumed = 0;
+            return false;
+        }
+
+        private static bool TryReadDot(
+            string value,
+            int index,
+            out int consumed,
+            out bool encoded)
+        {
+            consumed = 0;
+            encoded = false;
+
+            if (index < 0 || index >= value.Length)
+            {
+                return false;
+            }
+
+            if (value[index] == '.')
+            {
+                consumed = 1;
+                return true;
+            }
+
+            if (TryReadNestedPercentByte(value, index, '2', 'e', out consumed))
+            {
+                encoded = true;
+                return true;
+            }
+
+            consumed = 0;
+            return false;
+        }
+
+        private static bool TryReadNestedPercentByte(
+            string value,
+            int index,
+            char firstHex,
+            char secondHex,
+            out int consumed)
+        {
+            consumed = 0;
+            if (index < 0 || index >= value.Length || value[index] != '%')
+            {
+                return false;
+            }
+
+            var cursor = index + 1;
+            while (cursor + 1 < value.Length &&
+                   value[cursor] == '2' &&
+                   value[cursor + 1] == '5')
+            {
+                cursor += 2;
+            }
+
+            if (cursor + 1 >= value.Length ||
+                !HexEquals(value[cursor], firstHex) ||
+                !HexEquals(value[cursor + 1], secondHex))
+            {
+                return false;
+            }
+
+            consumed = cursor + 2 - index;
+            return true;
+        }
+
+        private static bool HexEquals(char actual, char expected)
+        {
+            if (actual == expected)
+            {
+                return true;
+            }
+
+            if (expected >= 'a' && expected <= 'f')
+            {
+                return actual == char.ToUpperInvariant(expected);
             }
 
             return false;
