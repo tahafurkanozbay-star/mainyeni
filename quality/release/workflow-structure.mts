@@ -198,7 +198,13 @@ export function firstWorkflowField(block: WorkflowJobBlock, key: string): Workfl
 }
 
 export function blockScalarLines(block: WorkflowJobBlock, field: WorkflowField): WorkflowLine[] {
-  return block.lines.filter(line => line.line > field.line && line.indent > field.indent && line.trimmed.length > 0);
+  const nested: WorkflowLine[] = [];
+  for (const line of block.lines) {
+    if (line.line <= field.line) continue;
+    if (line.trimmed && line.indent <= field.indent) break;
+    if (line.trimmed) nested.push(line);
+  }
+  return nested;
 }
 
 export function fieldWithContinuation(block: WorkflowJobBlock, key: string): string {
