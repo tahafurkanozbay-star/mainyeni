@@ -104,13 +104,13 @@ describe('ArcGisLayerWorksetPlanner', () => {
     expect(plan.admittedLayerKeys).toEqual(['small']);
   });
 
-  it('enforces CPU budget deterministically', () => {
+  it('admits candidates up to the exact CPU budget boundary', () => {
     const plan = planner().plan('2d', 50_000, [
-      candidate('a', { cpuMsEstimate: 8 }),
+      candidate('a', { cpuMsEstimate: 7 }),
       candidate('b', { cpuMsEstimate: 5 }),
     ]);
     expect(plan.admittedLayerKeys).toEqual(['b', 'a']);
-    expect(plan.cpuMsEstimate).toBe(13);
+    expect(plan.cpuMsEstimate).toBe(12);
   });
 
   it('sorts lower CPU candidates first before enforcing CPU budget', () => {
