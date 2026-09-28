@@ -2,6 +2,9 @@ using Api.Core.Platform;
 using Api.Core.Platform.Governance;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Platform.Security.Tests;
@@ -157,6 +160,86 @@ public sealed class RequestConcurrencyGovernorTests
                 lease.Dispose();
             }
         }
+    }
+
+    [Fact]
+    public void ConcurrentUniquePartitions_CannotRacePastTrackedClientBound()
+    {
+        var options = new ApiPlatformOptions();
+        options.Governance.Concurrency.MaxConcurrentRequests = 512;
+        options.Governance.Concurrency.MaxConcurrentPerClient = 512;
+        options.Governance.Concurrency.MaxTrackedClients = 16;
+        options.Governance.Concurrency.CleanupInterval = 100000;
+        var governor = new RequestConcurrencyGovernor(options);
+
+        using var start = new ManualResetEventSlim(initialState: false);
+        var tasks = Enumerable
+            .Range(0, 256)
+            .Select(index => Task.Run(() =>
+            {
+                start.Wait();
+                return governor.TryAcquire("client:parallel:" + index);
+            }))
+            .ToArray();
+
+        start.Set();
+        Task.WaitAll(tasks);
+
+        try
+        {
+            var acquired = tasks.Count(task => task.Result.IsAcquired);
+
+            Assert.Equal(256, acquired);
+            Assert.Equal(acquired, governor.ActiveRequests);
+            Assert.True(
+                governor.TrackedClients <= 17,
+                $"Tracked client cardinality exceeded the configured bound: {governor.TrackedClients}");
+        }
+        finally
+        {
+            foreach (var task in tasks)
+            {
+                task.Result.Dispose();
+            }
+        }
+
+        Assert.Equal(0, governor.ActiveRequests);
+    }
+
+    [Fact]
+    public void ConcurrentKnownPartition_ReusesExistingStateWithoutRegistrationGrowth()
+    {
+        var governor = CreateGovernor(global: 256, perClient: 256);
+
+        using var start = new ManualResetEventSlim(initialState: false);
+        var tasks = Enumerable
+            .Range(0, 128)
+            .Select(_ => Task.Run(() =>
+            {
+                start.Wait();
+                return governor.TryAcquire("client:shared");
+            }))
+            .ToArray();
+
+        start.Set();
+        Task.WaitAll(tasks);
+
+        try
+        {
+            Assert.All(tasks, task => Assert.True(task.Result.IsAcquired));
+            Assert.Equal(128, governor.ActiveRequests);
+            Assert.Equal(1, governor.TrackedClients);
+        }
+        finally
+        {
+            foreach (var task in tasks)
+            {
+                task.Result.Dispose();
+            }
+        }
+
+        Assert.Equal(0, governor.ActiveRequests);
+        Assert.Equal(1, governor.TrackedClients);
     }
 
     [Fact]
