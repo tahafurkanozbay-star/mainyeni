@@ -258,11 +258,25 @@ const emptyKindCounts = (): Record<CategoryResolutionKind, number> => ({
   unknown: 0,
 });
 
+const takeUnvisitedChildren = (
+  children: readonly string[],
+  visited: Set<string>,
+): readonly string[] => {
+  const output: string[] = [];
+  for (const child of children) {
+    if (visited.has(child)) continue;
+    visited.add(child);
+    output.push(child);
+  }
+  return output;
+};
+
 export class CategoryOntologyRuntime {
   readonly #options: NormalizedCategoryOntologyOptions;
   readonly #entries = new Map<string, NormalizedCategoryOntologyEntry>();
   readonly #aliases = new Map<string, string>();
   readonly #typeAliases = new Map<string, string>();
+  readonly #children = new Map<string, string[]>();
   readonly #conflicts: CategoryOntologyConflict[] = [];
   #fingerprint = hashFingerprint('empty-category-ontology');
 
@@ -278,6 +292,7 @@ export class CategoryOntologyRuntime {
     this.#entries.clear();
     this.#aliases.clear();
     this.#typeAliases.clear();
+    this.#children.clear();
     this.#conflicts.length = 0;
 
     const bounded = entries.slice(0, this.#options.maxEntries);
@@ -295,6 +310,8 @@ export class CategoryOntologyRuntime {
       this.#registerAliasMap(entry, entry.typeAliases, this.#typeAliases, 'type-alias-collision');
       if (entry.parentKey && !this.#entries.has(entry.parentKey)) {
         this.#conflicts.push(freezeConflict('missing-parent', entry.key, entry.parentKey));
+      } else if (entry.parentKey) {
+        this.#registerChild(entry.parentKey, entry.key);
       }
     }
 
@@ -460,15 +477,14 @@ export class CategoryOntologyRuntime {
     const output: string[] = [];
     const queue: string[] = [key];
     const visited = new Set<string>([key]);
-    while (queue.length) {
-      const parent = queue.shift();
+    let cursor = 0;
+    while (cursor < queue.length) {
+      const parent = queue[cursor];
+      cursor += 1;
       if (!parent) continue;
-      for (const entry of this.#entries.values()) {
-        if (entry.parentKey !== parent || visited.has(entry.key)) continue;
-        visited.add(entry.key);
-        output.push(entry.key);
-        queue.push(entry.key);
-      }
+      const children = takeUnvisitedChildren(this.#children.get(parent) ?? [], visited);
+      output.push(...children);
+      queue.push(...children);
     }
     return Object.freeze(output);
   }
@@ -537,25 +553,36 @@ export class CategoryOntologyRuntime {
     }
   }
 
-  #validateHierarchy(): void {
-    for (const entry of this.#entries.values()) {
-      const visited = new Set<string>();
-      let current: string | null = entry.key;
-      let depth = 0;
-      while (current) {
-        if (visited.has(current)) {
-          this.#conflicts.push(freezeConflict('hierarchy-cycle', entry.key, current, current));
-          break;
-        }
-        visited.add(current);
-        depth += 1;
-        if (depth > this.#options.maxHierarchyDepth) {
-          this.#conflicts.push(freezeConflict('depth-exceeded', entry.key, current));
-          break;
-        }
-        current = this.#entries.get(current)?.parentKey ?? null;
-      }
+  #registerChild(parentKey: string, childKey: string): void {
+    const children = this.#children.get(parentKey);
+    if (children) {
+      children.push(childKey);
+      return;
     }
+    this.#children.set(parentKey, [childKey]);
+  }
+
+  #validateHierarchyEntry(entry: NormalizedCategoryOntologyEntry): void {
+    const visited = new Set<string>();
+    let current: string | null = entry.key;
+    let depth = 0;
+    while (current) {
+      if (visited.has(current)) {
+        this.#conflicts.push(freezeConflict('hierarchy-cycle', entry.key, current, current));
+        break;
+      }
+      visited.add(current);
+      depth += 1;
+      if (depth > this.#options.maxHierarchyDepth) {
+        this.#conflicts.push(freezeConflict('depth-exceeded', entry.key, current));
+        break;
+      }
+      current = this.#entries.get(current)?.parentKey ?? null;
+    }
+  }
+
+  #validateHierarchy(): void {
+    for (const entry of this.#entries.values()) this.#validateHierarchyEntry(entry);
   }
 
   #createFingerprint(): string {
