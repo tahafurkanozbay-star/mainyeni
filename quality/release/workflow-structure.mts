@@ -28,12 +28,23 @@ export interface WorkflowField {
   readonly raw: string;
 }
 
+export interface WorkflowTopLevelBlock {
+  readonly key: string;
+  readonly value: string;
+  readonly line: WorkflowLine;
+  readonly lines: readonly WorkflowLine[];
+  readonly text: string;
+}
+
 export interface WorkflowTriggerProfile {
   readonly push: boolean;
   readonly pullRequest: boolean;
   readonly pullRequestTarget: boolean;
   readonly workflowDispatch: boolean;
   readonly workflowCall: boolean;
+  readonly workflowRun: boolean;
+  readonly repositoryDispatch: boolean;
+  readonly mergeGroup: boolean;
   readonly issueComment: boolean;
   readonly issues: boolean;
   readonly pullRequestReview: boolean;
@@ -45,11 +56,17 @@ export interface WorkflowTriggerProfile {
 const WORKFLOW_PATH = /^\.github\/workflows\/[^/]+\.ya?ml$/i;
 const JOBS_KEY = /^\s*jobs\s*:\s*(?:#.*)?$/i;
 const MAPPING_KEY = /^\s*([A-Za-z0-9_.-]+)\s*:\s*(?:#.*)?$/;
+const MAPPING_FIELD = /^\s*([A-Za-z0-9_.-]+)\s*:\s*(.*)$/;
 const WRITE_PERMISSION = /^\s*(?:contents|actions|checks|deployments|issues|packages|pages|pull-requests|security-events|statuses|id-token)\s*:\s*write\s*(?:#.*)?$/im;
 const WRITE_ALL = /^\s*permissions\s*:\s*write-all\s*(?:#.*)?$/im;
 const SECRET_REFERENCE = /\$\{\{\s*secrets\./i;
+const SECRETS_INHERIT = /^\s*secrets\s*:\s*inherit\s*(?:#.*)?$/im;
 const EXPRESSION = /\$\{\{[\s\S]*?\}\}/;
 const UNTRUSTED_EXPRESSION = /\$\{\{[\s\S]*?(?:github\.event\.|github\.head_ref\b|github\.event_name\b|inputs\.|fromJSON\s*\(\s*(?:github\.event\.|inputs\.))/i;
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export function workflowFiles(inventory: RepositoryInventory): SourceFile[] {
   return inventory.files.filter(file => WORKFLOW_PATH.test(file.repositoryPath));
@@ -126,6 +143,37 @@ export function unquoteYamlScalar(value: string): string {
   return clean;
 }
 
+function directMappingIndent(lines: readonly WorkflowLine[], parentIndent: number): number | undefined {
+  let minimum: number | undefined;
+  for (const line of lines) {
+    if (!line.trimmed || line.trimmed.startsWith('#') || line.indent <= parentIndent) continue;
+    if (!MAPPING_FIELD.test(line.text)) continue;
+    if (minimum === undefined || line.indent < minimum) minimum = line.indent;
+  }
+  return minimum;
+}
+
+export function workflowTopLevelBlock(file: SourceFile, key: string): WorkflowTopLevelBlock | undefined {
+  const lines = physicalLines(file.text);
+  const matcher = new RegExp(`^${escapeRegex(key)}\\s*:\\s*(.*)$`, 'i');
+  const start = lines.find(line => line.indent === 0 && matcher.test(line.text));
+  if (!start) return undefined;
+  const value = unquoteYamlScalar(start.text.match(matcher)?.[1] ?? '');
+  const nested: WorkflowLine[] = [];
+  for (const line of lines) {
+    if (line.line <= start.line) continue;
+    if (line.trimmed && line.indent <= start.indent) break;
+    if (line.trimmed) nested.push(line);
+  }
+  return {
+    key,
+    value,
+    line: start,
+    lines: nested,
+    text: [start.text, ...nested.map(line => line.text)].join('\n'),
+  };
+}
+
 function jobsLine(lines: readonly WorkflowLine[]): WorkflowLine | undefined {
   return lines.find(line => JOBS_KEY.test(line.text));
 }
@@ -173,9 +221,12 @@ export function workflowJobBlocks(file: SourceFile): WorkflowJobBlock[] {
 }
 
 export function workflowFields(block: WorkflowJobBlock, key: string): WorkflowField[] {
-  const matcher = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*:\\s*(.*)$`, 'i');
+  const matcher = new RegExp(`^\\s*${escapeRegex(key)}\\s*:\\s*(.*)$`, 'i');
+  const fieldIndent = directMappingIndent(block.lines.filter(line => line.line > block.startLine), block.indent);
+  if (fieldIndent === undefined) return [];
   const fields: WorkflowField[] = [];
   for (const line of block.lines) {
+    if (line.indent !== fieldIndent) continue;
     const match = line.text.match(matcher);
     if (!match) continue;
     const rawValue = match[1] ?? '';
@@ -216,33 +267,68 @@ export function fieldWithContinuation(block: WorkflowJobBlock, key: string): str
   return [field.value, ...continuation].filter(Boolean).join(' ');
 }
 
-function topLevelTrigger(text: string, name: string): boolean {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const mapping = new RegExp(`^\\s{0,4}${escaped}\\s*:`, 'm');
-  const inline = new RegExp(`^\\s*on\\s*:\\s*\\[[^\\]]*\\b${escaped}\\b`, 'mi');
-  const scalar = new RegExp(`^\\s*on\\s*:\\s*${escaped}\\s*$`, 'mi');
-  return mapping.test(text) || inline.test(text) || scalar.test(text);
+export function workflowFieldBlockText(block: WorkflowJobBlock, key: string): string {
+  const field = firstWorkflowField(block, key);
+  if (!field) return '';
+  return [field.raw, ...blockScalarLines(block, field).map(line => line.text)].join('\n');
+}
+
+function triggerNames(file: SourceFile): Set<string> {
+  const on = workflowTopLevelBlock(file, 'on');
+  if (!on) return new Set<string>();
+  const names = new Set<string>();
+  const scalar = on.value.trim();
+  if (scalar) {
+    if (scalar.startsWith('[') && scalar.endsWith(']')) {
+      for (const item of scalar.slice(1, -1).split(',')) {
+        const value = unquoteYamlScalar(item).trim().toLowerCase();
+        if (value) names.add(value);
+      }
+      return names;
+    }
+    if (scalar.startsWith('{') && scalar.endsWith('}')) {
+      for (const item of scalar.slice(1, -1).split(',')) {
+        const key = unquoteYamlScalar(item.split(':', 1)[0] ?? '').trim().toLowerCase();
+        if (key) names.add(key);
+      }
+      return names;
+    }
+    names.add(unquoteYamlScalar(scalar).toLowerCase());
+    return names;
+  }
+  const childIndent = directMappingIndent(on.lines, on.line.indent);
+  if (childIndent === undefined) return names;
+  for (const line of on.lines) {
+    if (line.indent !== childIndent) continue;
+    const match = line.text.match(MAPPING_FIELD);
+    const key = match?.[1]?.toLowerCase();
+    if (key) names.add(key);
+  }
+  return names;
 }
 
 export function workflowTriggerProfile(file: SourceFile): WorkflowTriggerProfile {
-  const text = file.text;
-  const pullRequest = topLevelTrigger(text, 'pull_request');
-  const pullRequestTarget = topLevelTrigger(text, 'pull_request_target');
-  const issueComment = topLevelTrigger(text, 'issue_comment');
-  const issues = topLevelTrigger(text, 'issues');
-  const pullRequestReview = topLevelTrigger(text, 'pull_request_review');
-  const discussion = topLevelTrigger(text, 'discussion') || topLevelTrigger(text, 'discussion_comment');
+  const triggers = triggerNames(file);
+  const pullRequest = triggers.has('pull_request');
+  const pullRequestTarget = triggers.has('pull_request_target');
+  const issueComment = triggers.has('issue_comment');
+  const issues = triggers.has('issues');
+  const pullRequestReview = triggers.has('pull_request_review');
+  const discussion = triggers.has('discussion') || triggers.has('discussion_comment');
   return {
-    push: topLevelTrigger(text, 'push'),
+    push: triggers.has('push'),
     pullRequest,
     pullRequestTarget,
-    workflowDispatch: topLevelTrigger(text, 'workflow_dispatch'),
-    workflowCall: topLevelTrigger(text, 'workflow_call'),
+    workflowDispatch: triggers.has('workflow_dispatch'),
+    workflowCall: triggers.has('workflow_call'),
+    workflowRun: triggers.has('workflow_run'),
+    repositoryDispatch: triggers.has('repository_dispatch'),
+    mergeGroup: triggers.has('merge_group'),
     issueComment,
     issues,
     pullRequestReview,
     discussion,
-    schedule: topLevelTrigger(text, 'schedule'),
+    schedule: triggers.has('schedule'),
     externalContribution: pullRequest || pullRequestTarget || issueComment || issues || pullRequestReview || discussion,
   };
 }
@@ -288,9 +374,13 @@ export function jobUsesProtectedEnvironment(block: WorkflowJobBlock): boolean {
 }
 
 export function jobHasWriteAuthority(block: WorkflowJobBlock): boolean {
-  return hasWritePermission(block.text);
+  const ownPermissions = firstWorkflowField(block, 'permissions');
+  if (ownPermissions) return hasWritePermission(workflowFieldBlockText(block, 'permissions'));
+  return hasWritePermission(workflowTopLevelBlock(block.file, 'permissions')?.text ?? '');
 }
 
 export function jobHasSecrets(block: WorkflowJobBlock): boolean {
-  return hasSecretReference(block.text);
+  if (hasSecretReference(block.text) || SECRETS_INHERIT.test(block.text)) return true;
+  const workflowEnv = workflowTopLevelBlock(block.file, 'env')?.text ?? '';
+  return hasSecretReference(workflowEnv);
 }
