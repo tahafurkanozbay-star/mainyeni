@@ -10,11 +10,16 @@ describe('navigationSearchModel', () => {
     expect(model.getSubmissionQuery()).toBe('Kızılay Meydanı');
   });
 
-  it('removes control characters and enforces a hard query budget', () => {
+  it('removes control characters and enforces a hard query budget without regex control ranges', () => {
     const source = `A\u0000B${'x'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT + 50)}`;
     const result = sanitizeNavigationSearchQuery(source);
     expect(result).not.toContain('\u0000');
     expect(result.length).toBe(NAVIGATION_SEARCH_QUERY_LIMIT);
+  });
+
+  it('does not split a multi-code-unit character at the hard query boundary', () => {
+    const prefix = 'a'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT - 1);
+    expect(sanitizeNavigationSearchQuery(`${prefix}🗺️`)).toBe(prefix);
   });
 
   it('does not submit blank normalized queries', () => {
@@ -53,13 +58,35 @@ describe('navigationSearchModel', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('isolates observer failures from healthy observers', () => {
+  it('isolates observer failures and records bounded sanitized diagnostics', () => {
     const model = new NavigationSearchModel();
     const healthy = vi.fn();
-    model.subscribe(() => { throw new Error('observer failure'); });
+    model.subscribe(() => { throw new TypeError('sensitive observer message'); });
     model.subscribe(healthy);
     expect(() => model.setQuery('Ankara')).not.toThrow();
     expect(healthy).toHaveBeenCalledTimes(1);
+    expect(model.getObserverDiagnostics()).toEqual({
+      failureCount: 1,
+      lastFailureRevision: 1,
+      lastFailureKind: 'TypeError',
+    });
+    expect(JSON.stringify(model.getObserverDiagnostics())).not.toContain('sensitive observer message');
+    expect(Object.isFrozen(model.getObserverDiagnostics())).toBe(true);
+  });
+
+  it('continues notifying later observers after multiple independent failures', () => {
+    const model = new NavigationSearchModel();
+    const healthy = vi.fn();
+    model.subscribe(() => { throw 'first'; });
+    model.subscribe(() => { throw new RangeError('second'); });
+    model.subscribe(healthy);
+    model.setQuery('Ankara');
+    expect(healthy).toHaveBeenCalledTimes(1);
+    expect(model.getObserverDiagnostics()).toEqual({
+      failureCount: 2,
+      lastFailureRevision: 1,
+      lastFailureKind: 'RangeError',
+    });
   });
 
   it('clears composition and query atomically', () => {
@@ -71,7 +98,7 @@ describe('navigationSearchModel', () => {
   });
 
   it.each([
-    ['tabs', 'Ankara\tÇankaya', 'Ankara Çankaya'],
+    ['tabs', 'Ankara\tÇankaya', 'AnkaraÇankaya'],
     ['newlines', 'Ankara\nÇankaya', 'AnkaraÇankaya'],
     ['spaces', ' Ankara   Çankaya ', 'Ankara Çankaya'],
     ['turkish', 'İncek Şehit Savcı Mehmet Selim Kiraz Bulvarı', 'İncek Şehit Savcı Mehmet Selim Kiraz Bulvarı'],
