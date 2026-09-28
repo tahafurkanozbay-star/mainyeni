@@ -156,6 +156,55 @@ public sealed class SecurityHeadersMiddlewareTests
         Assert.Equal(htmlPolicy, context.Response.Headers["Content-Security-Policy"].ToString());
     }
 
+    [Theory]
+    [InlineData("TEXT/HTML; CHARSET=UTF-8")]
+    [InlineData("text/html ; charset=utf-8")]
+    [InlineData(" APPLICATION/XHTML+XML; charset=utf-8")]
+    public async Task Invoke_RecognizesHtmlMediaTypeCaseAndParameterBoundary(string contentType)
+    {
+        const string htmlPolicy = "default-src 'self'; object-src 'none'";
+        var options = new ApiPlatformOptions();
+        var context = CreateContext(isHttps: true);
+        var middleware = CreateMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.ContentType = contentType;
+                httpContext.Response.Headers["Content-Security-Policy"] = htmlPolicy;
+                return Task.CompletedTask;
+            },
+            options);
+
+        await middleware.Invoke(context);
+        await EnsureResponseStarted(context);
+
+        Assert.Equal(htmlPolicy, context.Response.Headers["Content-Security-Policy"].ToString());
+    }
+
+    [Theory]
+    [InlineData("text/htmlx")]
+    [InlineData("text/html5")]
+    [InlineData("application/xhtml+xmlfoo")]
+    [InlineData("application/xhtml+xml2; charset=utf-8")]
+    public async Task Invoke_DoesNotTreatHtmlPrefixLookalikesAsHtml(string contentType)
+    {
+        var options = new ApiPlatformOptions();
+        var configuredPolicy = options.SecurityHeaders.ContentSecurityPolicy;
+        var context = CreateContext(isHttps: true);
+        var middleware = CreateMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.ContentType = contentType;
+                httpContext.Response.Headers["Content-Security-Policy"] = "default-src *";
+                return Task.CompletedTask;
+            },
+            options);
+
+        await middleware.Invoke(context);
+        await EnsureResponseStarted(context);
+
+        Assert.Equal(configuredPolicy, context.Response.Headers["Content-Security-Policy"].ToString());
+    }
+
     [Fact]
     public async Task Invoke_ReappliesApiPolicyWhenNonHtmlDownstreamAttemptsToWeakenIt()
     {
