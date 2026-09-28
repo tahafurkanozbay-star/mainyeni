@@ -28,7 +28,7 @@ test('block scalar continuation stops at the first sibling key', () => {
   assert.ok(field);
   assert.deepEqual(blockScalarLines(block, field).map(line => line.trimmed), ['- self-hosted', '- linux']);
   assert.equal(fieldWithContinuation(block, 'runs-on'), '- self-hosted - linux');
-  assert.doesNotMatch(fieldWithContinuation(block, 'runs-on'), /inputs\.untrusted/);
+  assert.equal(/inputs\.untrusted/.test(fieldWithContinuation(block, 'runs-on')), false);
 });
 
 test('block scalar continuation ignores blank lines but retains nested values', () => {
