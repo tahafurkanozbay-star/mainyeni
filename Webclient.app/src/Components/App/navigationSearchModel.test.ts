@@ -1,13 +1,142 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NAVIGATION_SEARCH_QUERY_LIMIT, NavigationSearchModel, normalizeNavigationSearchQuery, sanitizeNavigationSearchQuery } from './navigationSearchModel';
+import {
+  NAVIGATION_SEARCH_OBSERVER_LIMIT,
+  NAVIGATION_SEARCH_QUERY_LIMIT,
+  NavigationSearchModel,
+  normalizeNavigationSearchQuery,
+  sanitizeNavigationSearchQuery,
+} from './navigationSearchModel';
+
 describe('navigationSearchModel', () => {
-  it('normalizes submission while preserving editable input', () => { const model = new NavigationSearchModel(); model.setQuery('  Kızılay   Meydanı  '); expect(model.getSnapshot().query).toBe('  Kızılay   Meydanı  '); expect(model.getSubmissionQuery()).toBe('Kızılay Meydanı'); });
-  it('removes control characters and enforces query budget', () => { const result = sanitizeNavigationSearchQuery(`A\u0000B${'x'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT + 50)}`); expect(result).not.toContain('\u0000'); expect(result.length).toBe(NAVIGATION_SEARCH_QUERY_LIMIT); });
-  it('does not split multi-code-unit characters at boundary', () => { const prefix = 'a'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT - 1); expect(sanitizeNavigationSearchQuery(`${prefix}🗺️`)).toBe(prefix); });
-  it('rejects blank normalized submissions', () => { const model = new NavigationSearchModel(); model.setQuery('     '); expect(model.getSnapshot().canSubmit).toBe(false); expect(model.getSubmissionQuery()).toBeNull(); });
-  it('suppresses submission during IME composition', () => { const model = new NavigationSearchModel(); model.setQuery('Ankara'); model.beginComposition(); expect(model.getSubmissionQuery()).toBeNull(); model.endComposition('Ankara Çankaya'); expect(model.getSubmissionQuery()).toBe('Ankara Çankaya'); });
-  it('publishes immutable revisioned snapshots only for transitions', () => { const model = new NavigationSearchModel(); const listener = vi.fn(); const unsubscribe = model.subscribe(listener); const initial = model.getSnapshot(); model.setQuery('Ankara'); const changed = model.getSnapshot(); model.setQuery('Ankara'); expect(listener).toHaveBeenCalledTimes(1); expect(changed.revision).toBe(initial.revision + 1); expect(Object.isFrozen(changed)).toBe(true); unsubscribe(); model.clear(); expect(listener).toHaveBeenCalledTimes(1); });
-  it('isolates observer failures with sanitized diagnostics', () => { const model = new NavigationSearchModel(); const healthy = vi.fn(); model.subscribe(() => { throw new TypeError('sensitive observer message'); }); model.subscribe(healthy); expect(() => model.setQuery('Ankara')).not.toThrow(); expect(healthy).toHaveBeenCalledTimes(1); expect(model.getObserverDiagnostics()).toEqual({ failureCount: 1, lastFailureRevision: 1, lastFailureKind: 'TypeError' }); expect(JSON.stringify(model.getObserverDiagnostics())).not.toContain('sensitive observer message'); });
-  it('clears composition and query atomically', () => { const model = new NavigationSearchModel(); model.setQuery('Ankara'); model.beginComposition(); model.clear(); expect(model.getSnapshot()).toMatchObject({ query: '', normalizedQuery: '', canSubmit: false, isComposing: false }); });
-  it.each([['tabs', 'Ankara\tÇankaya', 'AnkaraÇankaya'], ['newlines', 'Ankara\nÇankaya', 'AnkaraÇankaya'], ['spaces', ' Ankara   Çankaya ', 'Ankara Çankaya'], ['turkish', 'İncek Şehit Savcı Mehmet Selim Kiraz Bulvarı', 'İncek Şehit Savcı Mehmet Selim Kiraz Bulvarı']])('normalizes %s safely', (_name, source, expected) => { expect(normalizeNavigationSearchQuery(source)).toBe(expected); });
+  it('normalizes submission while preserving editable input', () => {
+    const model = new NavigationSearchModel();
+    model.setQuery('  Kızılay   Meydanı  ');
+    expect(model.getSnapshot().query).toBe('  Kızılay   Meydanı  ');
+    expect(model.getSubmissionQuery()).toBe('Kızılay Meydanı');
+  });
+
+  it('removes control characters and enforces query budget', () => {
+    const result = sanitizeNavigationSearchQuery(`A\u0000B${'x'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT + 50)}`);
+    expect(result).not.toContain('\u0000');
+    expect(result.length).toBe(NAVIGATION_SEARCH_QUERY_LIMIT);
+  });
+
+  it('does not split multi-code-unit characters at boundary', () => {
+    const prefix = 'a'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT - 1);
+    expect(sanitizeNavigationSearchQuery(`${prefix}🗺️`)).toBe(prefix);
+  });
+
+  it('rejects blank normalized submissions', () => {
+    const model = new NavigationSearchModel();
+    model.setQuery('     ');
+    expect(model.getSnapshot().canSubmit).toBe(false);
+    expect(model.getSnapshot().isEmpty).toBe(true);
+    expect(model.getSubmissionQuery()).toBeNull();
+  });
+
+  it('suppresses submission during IME composition', () => {
+    const model = new NavigationSearchModel();
+    model.setQuery('Ankara');
+    model.beginComposition();
+    expect(model.getSubmissionQuery()).toBeNull();
+    model.endComposition('Ankara Çankaya');
+    expect(model.getSubmissionQuery()).toBe('Ankara Çankaya');
+  });
+
+  it('publishes immutable revisioned snapshots only for transitions', () => {
+    const model = new NavigationSearchModel();
+    const listener = vi.fn();
+    const unsubscribe = model.subscribe(listener);
+    const initial = model.getSnapshot();
+    model.setQuery('Ankara');
+    const changed = model.getSnapshot();
+    model.setQuery('Ankara');
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(changed.revision).toBe(initial.revision + 1);
+    expect(Object.isFrozen(changed)).toBe(true);
+    unsubscribe();
+    model.clear();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('isolates observer failures with sanitized diagnostics', () => {
+    const model = new NavigationSearchModel();
+    const healthy = vi.fn();
+    model.subscribe(() => { throw new TypeError('sensitive observer message'); });
+    model.subscribe(healthy);
+    expect(() => model.setQuery('Ankara')).not.toThrow();
+    expect(healthy).toHaveBeenCalledTimes(1);
+    expect(model.getObserverDiagnostics()).toMatchObject({
+      failureCount: 1,
+      activeObserverCount: 2,
+      rejectedObserverCount: 0,
+      lastFailureRevision: 1,
+      lastFailureKind: 'TypeError',
+    });
+    expect(JSON.stringify(model.getObserverDiagnostics())).not.toContain('sensitive observer message');
+  });
+
+  it('bounds observer cardinality without breaking accepted observers', () => {
+    const model = new NavigationSearchModel();
+    const accepted = Array.from({ length: NAVIGATION_SEARCH_OBSERVER_LIMIT }, () => vi.fn());
+    for (const listener of accepted) model.subscribe(listener);
+    const rejected = vi.fn();
+    const rejectedDisposer = model.subscribe(rejected);
+
+    expect(model.getObserverDiagnostics()).toMatchObject({
+      activeObserverCount: NAVIGATION_SEARCH_OBSERVER_LIMIT,
+      rejectedObserverCount: 1,
+    });
+
+    model.setQuery('Ankara');
+    expect(accepted.every((listener) => listener.mock.calls.length === 1)).toBe(true);
+    expect(rejected).not.toHaveBeenCalled();
+    expect(() => rejectedDisposer()).not.toThrow();
+  });
+
+  it('does not double-register the same observer identity', () => {
+    const model = new NavigationSearchModel();
+    const listener = vi.fn();
+    const firstDispose = model.subscribe(listener);
+    const secondDispose = model.subscribe(listener);
+    expect(model.getObserverDiagnostics().activeObserverCount).toBe(1);
+    model.setQuery('Ankara');
+    expect(listener).toHaveBeenCalledTimes(1);
+    secondDispose();
+    expect(model.getObserverDiagnostics().activeObserverCount).toBe(0);
+    expect(() => firstDispose()).not.toThrow();
+  });
+
+  it('reports remaining character budget from the admitted query', () => {
+    const model = new NavigationSearchModel();
+    expect(model.getSnapshot().remainingCharacters).toBe(NAVIGATION_SEARCH_QUERY_LIMIT);
+    model.setQuery('Ankara');
+    expect(model.getSnapshot().remainingCharacters).toBe(NAVIGATION_SEARCH_QUERY_LIMIT - 6);
+    model.setQuery('x'.repeat(NAVIGATION_SEARCH_QUERY_LIMIT + 100));
+    expect(model.getSnapshot().remainingCharacters).toBe(0);
+    expect(model.getSnapshot().query).toHaveLength(NAVIGATION_SEARCH_QUERY_LIMIT);
+  });
+
+  it('clears composition and query atomically', () => {
+    const model = new NavigationSearchModel();
+    model.setQuery('Ankara');
+    model.beginComposition();
+    model.clear();
+    expect(model.getSnapshot()).toMatchObject({
+      query: '',
+      normalizedQuery: '',
+      canSubmit: false,
+      isComposing: false,
+      isEmpty: true,
+    });
+  });
+
+  it.each([
+    ['tabs', 'Ankara\tÇankaya', 'AnkaraÇankaya'],
+    ['newlines', 'Ankara\nÇankaya', 'AnkaraÇankaya'],
+    ['spaces', ' Ankara   Çankaya ', 'Ankara Çankaya'],
+    ['turkish', 'İncek Şehit Savcı Mehmet Selim Kiraz Bulvarı', 'İncek Şehit Savcı Mehmet Selim Kiraz Bulvarı'],
+  ])('normalizes %s safely', (_name, source, expected) => {
+    expect(normalizeNavigationSearchQuery(source)).toBe(expected);
+  });
 });
