@@ -6,126 +6,38 @@ import { auditOidcAuthority } from './oidc-authority-audit.mts';
 function inventory(text: string, path = '.github/workflows/release.yml'): RepositoryInventory {
   const lineCount = text.split('\n').length;
   const bytes = Buffer.byteLength(text);
-  const file: SourceFile = {
-    repositoryPath: path,
-    absolutePath: `/repo/${path}`,
-    extension: '.yml',
-    kind: 'yaml',
-    bytes,
-    lines: lineCount,
-    text,
-  };
-  return {
-    root: '/repo',
-    files: [file],
-    ignoredDirectories: [],
-    languageStats: [{ kind: 'yaml', files: 1, lines: lineCount, bytes }],
-    totalFiles: 1,
-    totalLines: lineCount,
-    totalBytes: bytes,
-    generatedAt: '2026-09-28T00:00:00.000Z',
-  };
+  const file: SourceFile = { repositoryPath: path, absolutePath: `/repo/${path}`, extension: '.yml', kind: 'yaml', bytes, lines: lineCount, text };
+  return { root: '/repo', files: [file], ignoredDirectories: [], languageStats: [{ kind: 'yaml', files: 1, lines: lineCount, bytes }], totalFiles: 1, totalLines: lineCount, totalBytes: bytes, generatedAt: '2026-09-28T00:00:00.000Z' };
 }
-
-function ids(text: string): string[] {
-  return auditOidcAuthority(inventory(text)).findings.map(finding => finding.id);
-}
-
+function ids(text: string): string[] { return auditOidcAuthority(inventory(text)).findings.map(finding => finding.id); }
 const PIN = '0123456789012345678901234567890123456789';
 
 test('blocks id-token authority on pull_request contribution jobs', () => {
   const findings = auditOidcAuthority(inventory(`name: pr\non: pull_request\npermissions:\n  contents: read\n  id-token: write\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n`)).findings;
-  const finding = findings.find(item => item.id === 'ci-oidc-external-contribution-authority');
-  assert.ok(finding);
-  assert.equal(finding.blocking, true);
-  assert.equal(finding.severity, 'critical');
+  const finding = findings.find(item => item.id === 'ci-oidc-external-contribution-authority'); assert.ok(finding); assert.equal(finding.blocking, true); assert.equal(finding.severity, 'critical');
 });
-
-test('blocks pull_request_target OIDC even when job does not checkout', () => {
-  assert.ok(ids(`on: pull_request_target\njobs:\n  label:\n    permissions:\n      id-token: write\n      issues: write\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo metadata\n`).includes('ci-oidc-external-contribution-authority'));
-});
-
-test('does not flag ordinary read-only pull request validation as OIDC', () => {
-  assert.deepEqual(ids(`on: pull_request\npermissions:\n  contents: read\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n`).filter(id => id.startsWith('ci-oidc-')), []);
-});
-
+test('blocks pull_request_target OIDC even when job does not checkout', () => { assert.ok(ids(`on: pull_request_target\njobs:\n  label:\n    permissions:\n      id-token: write\n      issues: write\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo metadata\n`).includes('ci-oidc-external-contribution-authority')); });
+test('does not flag ordinary read-only pull request validation as OIDC', () => { assert.deepEqual(ids(`on: pull_request\npermissions:\n  contents: read\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n`).filter(id => id.startsWith('ci-oidc-')), []); });
 test('accepts protected push deployment with literal cloud identity', () => {
-  const result = auditOidcAuthority(inventory(`on:\n  push:\n    branches: [main]\npermissions:\n  contents: read\njobs:\n  deploy:\n    permissions:\n      contents: read\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: arn:aws:iam::123456789012:role/release\n          aws-region: eu-central-1\n`));
-  assert.equal(result.summary.oidcJobs, 1);
-  assert.equal(result.summary.unprotectedOidcJobs, 0);
-  assert.deepEqual(result.findings, []);
+  const result = auditOidcAuthority(inventory(`on:\n  push:\n    branches: [main]\npermissions:\n  contents: read\njobs:\n  deploy:\n    permissions:\n      contents: read\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: arn:aws:iam::123456789012:role/release\n          aws-region: eu-central-1\n`)); assert.equal(result.summary.oidcJobs, 1); assert.equal(result.summary.unprotectedOidcJobs, 0); assert.deepEqual(result.findings, []);
 });
-
-test('reports unprotected cloud login', () => {
-  assert.ok(ids(`on: push\njobs:\n  deploy:\n    permissions:\n      contents: read\n      id-token: write\n    runs-on: ubuntu-latest\n    steps:\n      - uses: azure/login@${PIN}\n        with:\n          client-id: fixed-client\n          tenant-id: fixed-tenant\n`).includes('ci-oidc-unprotected-privileged-job'));
-});
-
-test('reports unprotected repository-write job with OIDC authority', () => {
-  assert.ok(ids(`on: push\njobs:\n  release:\n    permissions:\n      contents: write\n      id-token: write\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh release create v1\n`).includes('ci-oidc-unprotected-privileged-job'));
-});
-
-test('reports dynamic environment on OIDC job', () => {
-  const findings = auditOidcAuthority(inventory(`on: workflow_dispatch\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: \${{ inputs.environment }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: google-github-actions/auth@${PIN}\n`)).findings;
-  const finding = findings.find(item => item.id === 'ci-oidc-dynamic-environment');
-  assert.ok(finding);
-  assert.equal(finding.blocking, true);
-});
-
-test('reports expression-derived OIDC audience', () => {
-  assert.ok(ids(`on: workflow_dispatch\njobs:\n  token:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: google-github-actions/auth@${PIN}\n        with:\n          audience: \${{ inputs.audience }}\n`).includes('ci-oidc-dynamic-audience'));
-});
-
-test('blocks input-derived AWS role selector', () => {
-  const findings = auditOidcAuthority(inventory(`on: workflow_dispatch\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: \${{ inputs.role }}\n`)).findings;
-  const finding = findings.find(item => item.id === 'ci-oidc-untrusted-cloud-identity-selector');
-  assert.ok(finding);
-  assert.equal(finding.blocking, true);
-});
-
-test('blocks event-derived Azure client selector', () => {
-  assert.ok(ids(`on: repository_dispatch\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: azure/login@${PIN}\n        with:\n          client-id: \${{ github.event.client_payload.client }}\n`).includes('ci-oidc-untrusted-cloud-identity-selector'));
-});
-
-test('blocks needs-derived workload identity provider selector', () => {
-  assert.ok(ids(`on: push\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: google-github-actions/auth@${PIN}\n        with:\n          workload_identity_provider: \${{ needs.plan.outputs.provider }}\n`).includes('ci-oidc-untrusted-cloud-identity-selector'));
-});
-
-test('reports privileged workflow_run OIDC without repository and branch guards', () => {
-  assert.ok(ids(`on:\n  workflow_run:\n    workflows: [Build]\n    types: [completed]\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: arn:aws:iam::123:role/release\n`).includes('ci-oidc-workflow-run-trust-guard-missing'));
-});
-
-test('accepts workflow_run OIDC with explicit repository and branch guards', () => {
-  const findings = ids(`on:\n  workflow_run:\n    workflows: [Build]\n    types: [completed]\njobs:\n  deploy:\n    if: github.repository == 'acme/maps' && github.ref == 'refs/heads/main'\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: arn:aws:iam::123:role/release\n`);
-  assert.equal(findings.includes('ci-oidc-workflow-run-trust-guard-missing'), false);
-});
-
-test('reports unused id-token authority', () => {
-  assert.ok(ids(`on: push\njobs:\n  test:\n    permissions:\n      contents: read\n      id-token: write\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n`).includes('ci-oidc-unused-authority'));
-});
-
-test('write-all implies id-token authority and is audited', () => {
-  const result = auditOidcAuthority(inventory(`on: pull_request\njobs:\n  unsafe:\n    permissions: write-all\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo unsafe\n`));
-  assert.equal(result.summary.oidcJobs, 1);
-  assert.ok(result.findings.some(item => item.id === 'ci-oidc-external-contribution-authority'));
-});
-
-test('top-level id-token permission is inherited by jobs', () => {
-  const result = auditOidcAuthority(inventory(`on: push\npermissions:\n  contents: read\n  id-token: write\njobs:\n  one:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo one\n  two:\n    permissions:\n      contents: read\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo two\n`));
-  assert.equal(result.summary.oidcJobs, 1);
-  assert.equal(result.summary.signals.find(item => item.job === 'one')?.idTokenWrite, true);
-  assert.equal(result.summary.signals.find(item => item.job === 'two')?.idTokenWrite, false);
-});
-
-test('summary counts external and unprotected OIDC jobs deterministically', () => {
-  const result = auditOidcAuthority(inventory(`on: pull_request\npermissions:\n  id-token: write\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo a\n  b:\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo b\n`));
-  assert.equal(result.summary.jobs, 2);
-  assert.equal(result.summary.oidcJobs, 2);
-  assert.equal(result.summary.externalOidcJobs, 2);
-  assert.equal(result.summary.unprotectedOidcJobs, 1);
-});
-
-test('finding ordering is stable', () => {
-  const result = auditOidcAuthority(inventory(`on: pull_request\npermissions: write-all\njobs:\n  unsafe:\n    environment: \${{ inputs.env }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: \${{ inputs.role }}\n          audience: \${{ inputs.audience }}\n`));
-  const sorted = [...result.findings].map(item => item.id);
-  assert.deepEqual(sorted, [...sorted].sort((left, right) => left.localeCompare(right, 'en')));
+test('reports unprotected cloud login', () => { assert.ok(ids(`on: push\njobs:\n  deploy:\n    permissions:\n      contents: read\n      id-token: write\n    runs-on: ubuntu-latest\n    steps:\n      - uses: azure/login@${PIN}\n        with:\n          client-id: fixed-client\n          tenant-id: fixed-tenant\n`).includes('ci-oidc-unprotected-privileged-job')); });
+test('reports unprotected repository-write job with OIDC authority', () => { assert.ok(ids(`on: push\njobs:\n  release:\n    permissions:\n      contents: write\n      id-token: write\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh release create v1\n`).includes('ci-oidc-unprotected-privileged-job')); });
+test('reports dynamic environment on OIDC job', () => { const finding = auditOidcAuthority(inventory(`on: workflow_dispatch\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: \${{ inputs.environment }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: google-github-actions/auth@${PIN}\n`)).findings.find(item => item.id === 'ci-oidc-dynamic-environment'); assert.ok(finding); assert.equal(finding.blocking, true); });
+test('reports expression-derived OIDC audience', () => { assert.ok(ids(`on: workflow_dispatch\njobs:\n  token:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: google-github-actions/auth@${PIN}\n        with:\n          audience: \${{ inputs.audience }}\n`).includes('ci-oidc-dynamic-audience')); });
+test('blocks input-derived AWS role selector', () => { const finding = auditOidcAuthority(inventory(`on: workflow_dispatch\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: \${{ inputs.role }}\n`)).findings.find(item => item.id === 'ci-oidc-untrusted-cloud-identity-selector'); assert.ok(finding); assert.equal(finding.blocking, true); });
+test('blocks event-derived Azure client selector', () => { assert.ok(ids(`on: repository_dispatch\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: azure/login@${PIN}\n        with:\n          client-id: \${{ github.event.client_payload.client }}\n`).includes('ci-oidc-untrusted-cloud-identity-selector')); });
+test('blocks needs-derived workload identity provider selector', () => { assert.ok(ids(`on: push\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: google-github-actions/auth@${PIN}\n        with:\n          workload_identity_provider: \${{ needs.plan.outputs.provider }}\n`).includes('ci-oidc-untrusted-cloud-identity-selector')); });
+test('reports privileged workflow_run OIDC without repository and branch guards', () => { assert.ok(ids(`on:\n  workflow_run:\n    workflows: [Build]\n    types: [completed]\njobs:\n  deploy:\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: arn:aws:iam::123:role/release\n`).includes('ci-oidc-workflow-run-trust-guard-missing')); });
+test('accepts workflow_run OIDC with explicit repository and branch guards', () => { const findings = ids(`on:\n  workflow_run:\n    workflows: [Build]\n    types: [completed]\njobs:\n  deploy:\n    if: github.repository == 'acme/maps' && github.ref == 'refs/heads/main'\n    permissions:\n      id-token: write\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: arn:aws:iam::123:role/release\n`); assert.equal(findings.includes('ci-oidc-workflow-run-trust-guard-missing'), false); });
+test('reports unused id-token authority', () => { assert.ok(ids(`on: push\njobs:\n  test:\n    permissions:\n      contents: read\n      id-token: write\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n`).includes('ci-oidc-unused-authority')); });
+test('write-all implies id-token authority and is audited', () => { const result = auditOidcAuthority(inventory(`on: pull_request\njobs:\n  unsafe:\n    permissions: write-all\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo unsafe\n`)); assert.equal(result.summary.oidcJobs, 1); assert.ok(result.findings.some(item => item.id === 'ci-oidc-external-contribution-authority')); });
+test('top-level id-token permission is inherited by jobs', () => { const result = auditOidcAuthority(inventory(`on: push\npermissions:\n  contents: read\n  id-token: write\njobs:\n  one:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo one\n  two:\n    permissions:\n      contents: read\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo two\n`)); assert.equal(result.summary.oidcJobs, 1); assert.equal(result.summary.signals.find(item => item.job === 'one')?.idTokenWrite, true); assert.equal(result.summary.signals.find(item => item.job === 'two')?.idTokenWrite, false); });
+test('summary counts external and unprotected OIDC jobs deterministically', () => { const result = auditOidcAuthority(inventory(`on: pull_request\npermissions:\n  id-token: write\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo a\n  b:\n    environment: production\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo b\n`)); assert.equal(result.summary.jobs, 2); assert.equal(result.summary.oidcJobs, 2); assert.equal(result.summary.externalOidcJobs, 2); assert.equal(result.summary.unprotectedOidcJobs, 1); });
+test('finding ordering is stable across repeated audits', () => {
+  const workflow = `on: pull_request\npermissions: write-all\njobs:\n  unsafe:\n    environment: \${{ inputs.env }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: aws-actions/configure-aws-credentials@${PIN}\n        with:\n          role-to-assume: \${{ inputs.role }}\n          audience: \${{ inputs.audience }}\n`;
+  const first = auditOidcAuthority(inventory(workflow)).findings.map(item => item.id);
+  const second = auditOidcAuthority(inventory(workflow)).findings.map(item => item.id);
+  assert.deepEqual(first, second);
+  assert.ok(first.includes('ci-oidc-untrusted-cloud-identity-selector'));
 });
