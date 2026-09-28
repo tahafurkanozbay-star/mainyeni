@@ -56,7 +56,6 @@ const CHMOD_EXEC = /\bchmod\s+(?:[^\n]*\+x|[0-7]*[1357][0-7]{2})\b/i;
 const GITHUB_PATH = /(?:>>?|Out-File[^\n]*)\s*['"]?\$?(?:GITHUB_PATH|env:GITHUB_PATH)\b/i;
 const PATH_EXPORT = /\b(?:export\s+PATH\s*=|PATH\s*=)[^\n]*(?:\$PATH|%PATH%)/i;
 const EXTRACT = /\b(?:tar\s+(?:-[^\s]*x|--extract)|unzip\b|Expand-Archive\b|7z\s+x\b)/i;
-const ARTIFACT_EXECUTABLE_EXT = /\.(?:sh|bash|zsh|js|mjs|cjs|py|ps1|cmd|bat|exe|dll|jar|run|bin)(?:\s|$|["'])/i;
 
 interface DownloadRecord {
   readonly step: WorkflowStepBlock;
@@ -102,7 +101,7 @@ function pathReferenced(run: string, path: string): boolean {
 
 function executionEvidence(run: string, path: string): boolean {
   if (!pathReferenced(run, path)) return false;
-  return EXECUTE.test(run) || CHMOD_EXEC.test(run) || ARTIFACT_EXECUTABLE_EXT.test(run);
+  return EXECUTE.test(run) || CHMOD_EXEC.test(run);
 }
 
 function verificationEvidence(run: string, path: string): boolean {
