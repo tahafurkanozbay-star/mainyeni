@@ -14,7 +14,7 @@ test('accepts trusted immutable pull request head sha in run', () => { assert.eq
 test('accepts github sha in run', () => { assert.deepEqual(audit(`${header}      - run: echo \${{ github.sha }}\n`).findings, []); });
 test('blocks dynamic action identity even for trusted sha expression', () => { assert.equal(finding(`${header}      - uses: vendor/action@\${{ github.sha }}\n`, 'ci-workflow-dynamic-action')?.blocking, true); });
 test('blocks dynamic action identity from workflow input', () => { assert.ok(finding(`${header}      - uses: \${{ inputs.action }}\n`, 'ci-workflow-dynamic-action')); });
-test('accepts literal SHA pinned action identity', () => { assert.deepEqual(audit(`${header}      - uses: actions/checkout@${sha}\n`).findings, []); });
+test('accepts literal SHA pinned action identity with safe checkout credentials', () => { assert.deepEqual(audit(`${header}      - uses: actions/checkout@${sha}\n        with:\n          persist-credentials: false\n`).findings, []); });
 test('blocks dynamic shell selection', () => { assert.ok(finding(`${header}      - shell: \${{ inputs.shell }}\n        run: echo ok\n`, 'ci-workflow-dynamic-shell')); });
 test('blocks dynamic container image selection', () => { assert.ok(finding(`name: Container\non: [push]\njobs:\n  qa:\n    runs-on: ubuntu-latest\n    container:\n      image: \${{ inputs.image }}\n    steps:\n      - run: echo ok\n`, 'ci-workflow-dynamic-container')); });
 test('blocks pull request title spliced into github-script source', () => { assert.equal(finding(`${header}      - uses: actions/github-script@${sha}\n        with:\n          script: |\n            const title = "\${{ github.event.pull_request.title }}";\n`, 'ci-workflow-github-script-injection')?.blocking, true); });
