@@ -131,13 +131,34 @@ namespace Api.Core.Platform.Middleware
         private static bool IsHtmlResponse(HttpContext context)
         {
             var contentType = context.Response.ContentType;
-            if (string.IsNullOrWhiteSpace(contentType))
+            return HasMediaType(contentType, "text/html") ||
+                   HasMediaType(contentType, "application/xhtml+xml");
+        }
+
+        private static bool HasMediaType(string contentType, string expectedMediaType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType) ||
+                string.IsNullOrWhiteSpace(expectedMediaType))
             {
                 return false;
             }
 
-            return contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.StartsWith("application/xhtml+xml", StringComparison.OrdinalIgnoreCase);
+            var value = contentType.TrimStart();
+            if (!value.StartsWith(expectedMediaType, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (value.Length == expectedMediaType.Length)
+            {
+                return true;
+            }
+
+            // A media type match must end at the token boundary. Prefix matching would classify
+            // values such as "text/htmlx" as HTML and could cause the API-owned CSP to be removed
+            // from a non-HTML response. Parameters may follow after optional whitespace or ';'.
+            var boundary = value[expectedMediaType.Length];
+            return boundary == ';' || char.IsWhiteSpace(boundary);
         }
     }
 }
