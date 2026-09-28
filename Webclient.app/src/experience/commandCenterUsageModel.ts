@@ -144,19 +144,19 @@ const createSnapshot = (
   limits: CommandCenterUsageLimits,
 ): CommandCenterUsageSnapshot => {
   const frozenRecords = Object.freeze(
-    [...records.values()]
+    Array.from(records.values())
       .sort((left, right) => left.firstSequence - right.firstSequence
         || left.commandId.localeCompare(right.commandId, 'tr-TR'))
       .map(freezeRecord),
   );
   const recentIds = Object.freeze(
-    [...records.values()]
+    Array.from(records.values())
       .sort(recentComparator)
       .slice(0, limits.recentLimit)
       .map(record => record.commandId),
   );
   const frequentIds = Object.freeze(
-    [...records.values()]
+    Array.from(records.values())
       .sort(frequentComparator)
       .slice(0, limits.frequentLimit)
       .map(record => record.commandId),
@@ -206,7 +206,8 @@ export const createCommandCenterUsageModel = (
   );
 
   const notify = (previous: CommandCenterUsageSnapshot): void => {
-    for (const observer of [...observers]) {
+    const observerSnapshot = Array.from(observers);
+    for (const observer of observerSnapshot) {
       try {
         observer(current, previous);
       } catch (error) {
@@ -233,7 +234,7 @@ export const createCommandCenterUsageModel = (
 
   const evictOne = (): void => {
     if (records.size < limits.maxTracked) return;
-    const victim = [...records.values()].sort(evictionComparator)[0];
+    const victim = Array.from(records.values()).sort(evictionComparator)[0];
     if (victim) records.delete(victim.commandId);
   };
 
@@ -271,7 +272,7 @@ export const createCommandCenterUsageModel = (
       if (disposed) return current;
       const valid = dedupeValidIds(validCommandIds);
       let changed = false;
-      for (const id of [...records.keys()]) {
+      for (const id of records.keys()) {
         if (!valid.has(id)) {
           records.delete(id);
           changed = true;
