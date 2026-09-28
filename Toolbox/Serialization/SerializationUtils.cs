@@ -1,7 +1,8 @@
-using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -9,6 +10,12 @@ namespace Toolbox.Serialization
 {
     public static class SerializationUtils
     {
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            WriteIndented = true,
+            ReferenceHandler = ReferenceHandler.IgnoreCycles
+        };
+
         public static string SerializeToXml<T>(T @object)
         {
             if (@object == null)
@@ -55,23 +62,13 @@ namespace Toolbox.Serialization
 
         public static string ObjectToJson<T>(T model)
         {
-            return JsonConvert.SerializeObject(
-                model,
-                Newtonsoft.Json.Formatting.Indented,
-                new JsonSerializerSettings
-                {
-                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore
-                });
+            return JsonSerializer.Serialize(model, JsonOptions);
         }
 
         public static T JsonToObject<T>(string json)
         {
-            if (json == null)
-            {
-                throw new ArgumentNullException(nameof(json));
-            }
-
-            return JsonConvert.DeserializeObject<T>(json);
+            ArgumentNullException.ThrowIfNull(json);
+            return JsonSerializer.Deserialize<T>(json, JsonOptions);
         }
     }
 }
