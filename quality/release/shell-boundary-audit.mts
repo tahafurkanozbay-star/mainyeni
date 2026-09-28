@@ -176,7 +176,7 @@ function finding(
 }
 
 function findingsFor(item: ShellBoundarySignal): Finding[] {
-  if (item.dynamic) return [];
+  if (item.dynamic && !item.repositoryControlled) return [];
   const findings: Finding[] = [];
   const privileged = item.writeAuthority || item.secrets;
 
