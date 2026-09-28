@@ -54,15 +54,12 @@ namespace Business.Extensions.Gis.Operations
         internal const int MaxAdministrativeCacheEntries = 512;
         private static readonly TimeSpan AdministrativeCacheTtl = TimeSpan.FromMinutes(15);
 
-        // The default TKGM transport is intentionally process-lived. RestClient owns reusable HTTP
-        // connection state and should not be recreated for every controller/request. Test and custom
-        // transports remain injectable and are never disposed by this operations facade.
         private static readonly ITkgmTransport SharedTransport = new RestSharpTkgmTransport();
 
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> DistrictsCache = new();
         private static readonly ConcurrentDictionary<int, AdministrativeCacheEntry> NbhoodsCache = new();
-        private static readonly ConcurrentDictionary<int, Lazy<AdministrativeFetch>> DistrictsInFlight = new();
-        private static readonly ConcurrentDictionary<int, Lazy<AdministrativeFetch>> NbhoodsInFlight = new();
+        private static readonly ConcurrentDictionary<int, AdministrativeFetch> DistrictsInFlight = new();
+        private static readonly ConcurrentDictionary<int, AdministrativeFetch> NbhoodsInFlight = new();
         private static readonly object DistrictsCacheAdmissionGate = new();
         private static readonly object NbhoodsCacheAdmissionGate = new();
 
@@ -134,7 +131,7 @@ namespace Business.Extensions.Gis.Operations
         private async Task<string> GetAdministrativeAsync(
             ConcurrentDictionary<int, AdministrativeCacheEntry> cache,
             object admissionGate,
-            ConcurrentDictionary<int, Lazy<AdministrativeFetch>> inFlight,
+            ConcurrentDictionary<int, AdministrativeFetch> inFlight,
             int key,
             string relativePath,
             CancellationToken cancellationToken)
@@ -142,42 +139,58 @@ namespace Business.Extensions.Gis.Operations
             cancellationToken.ThrowIfCancellationRequested();
             if (TryGetFresh(cache, key, out var cached)) return cached;
 
+            AdministrativeFetch flight;
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (TryGetFresh(cache, key, out cached)) return cached;
 
-                var lazy = inFlight.GetOrAdd(
-                    key,
-                    _ => new Lazy<AdministrativeFetch>(
-                        () => new AdministrativeFetch(
-                            sharedCancellation => FetchAndPublishAdministrativeAsync(
-                                cache,
-                                admissionGate,
-                                key,
-                                relativePath,
-                                sharedCancellation)),
-                        LazyThreadSafetyMode.ExecutionAndPublication));
-
-                var flight = lazy.Value;
-                if (!flight.TryAttach())
+                if (inFlight.TryGetValue(key, out var existing))
                 {
-                    inFlight.TryRemove(new KeyValuePair<int, Lazy<AdministrativeFetch>>(key, lazy));
+                    if (existing.TryAddSubscriber())
+                    {
+                        flight = existing;
+                        break;
+                    }
+
+                    inFlight.TryRemove(new KeyValuePair<int, AdministrativeFetch>(key, existing));
                     continue;
                 }
 
-                try
+                AdministrativeFetch? candidate = null;
+                candidate = new AdministrativeFetch(
+                    sharedCancellation => FetchAndPublishAdministrativeAsync(
+                        cache,
+                        admissionGate,
+                        key,
+                        relativePath,
+                        sharedCancellation),
+                    completed => inFlight.TryRemove(
+                        new KeyValuePair<int, AdministrativeFetch>(key, completed)));
+
+                if (inFlight.TryAdd(key, candidate))
                 {
-                    return await flight.Work.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    if (!candidate.TryAddSubscriber())
+                    {
+                        inFlight.TryRemove(new KeyValuePair<int, AdministrativeFetch>(key, candidate));
+                        candidate.Dispose();
+                        continue;
+                    }
+
+                    flight = candidate;
+                    break;
                 }
-                finally
-                {
-                    var shouldCancel = flight.Detach(out var shouldRemove);
-                    if (shouldRemove)
-                        inFlight.TryRemove(new KeyValuePair<int, Lazy<AdministrativeFetch>>(key, lazy));
-                    if (shouldCancel)
-                        flight.Cancel();
-                }
+
+                candidate.Dispose();
+            }
+
+            try
+            {
+                return await flight.Work.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                flight.ReleaseSubscriber();
             }
         }
 
@@ -190,8 +203,6 @@ namespace Business.Extensions.Gis.Operations
         {
             sharedCancellation.ThrowIfCancellationRequested();
 
-            // A previous flight may have populated the cache after a caller's initial miss but
-            // before this flight was materialized. Re-check before issuing network I/O.
             if (TryGetFresh(cache, key, out var cached)) return cached;
 
             var content = await transport.GetAsync(relativePath, sharedCancellation).ConfigureAwait(false);
@@ -252,15 +263,13 @@ namespace Business.Extensions.Gis.Operations
             }
         }
 
-        private static void CancelAndClearFlights(ConcurrentDictionary<int, Lazy<AdministrativeFetch>> inFlight)
+        private static void CancelAndClearFlights(ConcurrentDictionary<int, AdministrativeFetch> inFlight)
         {
             foreach (var pair in inFlight)
             {
-                if (!inFlight.TryRemove(new KeyValuePair<int, Lazy<AdministrativeFetch>>(pair.Key, pair.Value)))
+                if (!inFlight.TryRemove(new KeyValuePair<int, AdministrativeFetch>(pair.Key, pair.Value)))
                     continue;
-
-                if (pair.Value.IsValueCreated)
-                    pair.Value.Value.StopAcceptingAndCancel();
+                pair.Value.StopAcceptingAndCancel();
             }
         }
 
@@ -269,83 +278,128 @@ namespace Business.Extensions.Gis.Operations
             if (value <= 0) throw new ArgumentOutOfRangeException(parameterName, value, "TKGM identifiers must be positive.");
         }
 
-        // The operations facade no longer owns a per-request transport. Kept for source compatibility
-        // with existing using/disposal call sites and injected test transports.
         public void Dispose() { }
 
         private sealed record AdministrativeCacheEntry(string Content, DateTimeOffset CreatedAt);
 
-        /// <summary>
-        /// One shared administrative upstream fetch. Individual callers may cancel their own wait;
-        /// the upstream request is cancelled only when the last attached waiter leaves. This keeps a
-        /// disconnected client from aborting useful work for other callers while still propagating
-        /// cancellation to network I/O when nobody remains interested.
-        /// </summary>
-        private sealed class AdministrativeFetch
+        private sealed class AdministrativeFetch : IDisposable
         {
             private readonly object gate = new();
             private readonly CancellationTokenSource cancellationSource = new();
+            private readonly Lazy<Task<string>> workFactory;
+            private readonly Action<AdministrativeFetch> completedCallback;
             private bool accepting = true;
-            private int waiters;
+            private bool completed;
+            private bool disposed;
+            private int subscribers;
 
-            public AdministrativeFetch(Func<CancellationToken, Task<string>> factory)
+            public AdministrativeFetch(
+                Func<CancellationToken, Task<string>> factory,
+                Action<AdministrativeFetch> completedCallback)
             {
                 if (factory == null) throw new ArgumentNullException(nameof(factory));
-                Work = Run(factory);
-                _ = Work.ContinueWith(
-                    _ => cancellationSource.Dispose(),
-                    CancellationToken.None,
-                    TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default);
+                this.completedCallback = completedCallback ?? throw new ArgumentNullException(nameof(completedCallback));
+                workFactory = new Lazy<Task<string>>(
+                    () => ExecuteAsync(factory),
+                    LazyThreadSafetyMode.ExecutionAndPublication);
             }
 
-            public Task<string> Work { get; }
+            public Task<string> Work => workFactory.Value;
 
-            public bool TryAttach()
+            public bool TryAddSubscriber()
             {
                 lock (gate)
                 {
-                    if (!accepting) return false;
-                    waiters++;
+                    if (!accepting || disposed) return false;
+                    subscribers++;
                     return true;
                 }
             }
 
-            public bool Detach(out bool shouldRemove)
+            public void ReleaseSubscriber()
             {
+                bool cancelWork = false;
+                bool disposeSource = false;
+
                 lock (gate)
                 {
-                    if (waiters <= 0)
-                        throw new InvalidOperationException("TKGM single-flight waiter accounting underflow.");
+                    if (subscribers <= 0)
+                        throw new InvalidOperationException("TKGM single-flight subscriber accounting underflow.");
 
-                    waiters--;
-                    if (waiters != 0)
+                    subscribers--;
+                    if (subscribers == 0)
                     {
-                        shouldRemove = false;
-                        return false;
+                        accepting = false;
+                        cancelWork = !completed;
+                        disposeSource = completed;
+                    }
+                }
+
+                if (cancelWork) Cancel();
+                if (disposeSource) DisposeCancellationSource();
+            }
+
+            public void StopAcceptingAndCancel()
+            {
+                bool cancelWork;
+                lock (gate)
+                {
+                    accepting = false;
+                    cancelWork = !completed;
+                }
+
+                if (cancelWork) Cancel();
+            }
+
+            public void Dispose()
+            {
+                bool cancelWork;
+                lock (gate)
+                {
+                    if (disposed) return;
+                    accepting = false;
+                    cancelWork = !completed;
+                }
+
+                if (cancelWork) Cancel();
+                DisposeCancellationSource();
+            }
+
+            private async Task<string> ExecuteAsync(Func<CancellationToken, Task<string>> factory)
+            {
+                try
+                {
+                    return await factory(cancellationSource.Token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    bool disposeSource;
+                    lock (gate)
+                    {
+                        completed = true;
+                        accepting = false;
+                        disposeSource = subscribers == 0;
                     }
 
-                    accepting = false;
-                    shouldRemove = true;
-                    return !Work.IsCompleted;
+                    completedCallback(this);
+                    if (disposeSource) DisposeCancellationSource();
                 }
             }
 
-            public void Cancel()
+            private void Cancel()
             {
                 try { cancellationSource.Cancel(); }
                 catch (ObjectDisposedException) { }
             }
 
-            public void StopAcceptingAndCancel()
+            private void DisposeCancellationSource()
             {
-                lock (gate) accepting = false;
-                if (!Work.IsCompleted) Cancel();
-            }
-
-            private async Task<string> Run(Func<CancellationToken, Task<string>> factory)
-            {
-                return await factory(cancellationSource.Token).ConfigureAwait(false);
+                lock (gate)
+                {
+                    if (disposed) return;
+                    disposed = true;
+                }
+                cancellationSource.Dispose();
             }
         }
     }
