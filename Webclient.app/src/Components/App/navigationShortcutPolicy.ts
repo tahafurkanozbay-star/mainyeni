@@ -70,9 +70,7 @@ export function resolveNavigationShortcut(event: NavigationShortcutEvent): Navig
   }
 
   const key = event.key.toLocaleLowerCase('tr-TR');
-  const primaryModifier = Boolean(event.ctrlKey) !== Boolean(event.metaKey)
-    ? Boolean(event.ctrlKey || event.metaKey)
-    : Boolean(event.ctrlKey || event.metaKey);
+  const primaryModifier = Boolean(event.ctrlKey || event.metaKey);
 
   if (key === 'k') {
     if (!primaryModifier || event.altKey || event.shiftKey || (event.ctrlKey && event.metaKey)) {
