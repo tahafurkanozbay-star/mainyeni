@@ -17,6 +17,12 @@ namespace Api.Core.Platform.Governance
         private readonly ConcurrentDictionary<string, ClientState> clients =
             new ConcurrentDictionary<string, ClientState>(StringComparer.Ordinal);
 
+        // ConcurrentDictionary makes individual mutations safe, but Count + GetOrAdd is not an
+        // atomic admission decision. Serialize only previously unseen partition registration so a
+        // burst of unique client keys cannot race past maxTrackedClients. Existing-client lookups
+        // remain lock-free, which keeps the normal request path cheap.
+        private readonly object clientRegistrationGate = new object();
+
         private readonly int maxConcurrentRequests;
         private readonly int maxConcurrentPerClient;
         private readonly int maxTrackedClients;
@@ -127,16 +133,27 @@ namespace Api.Core.Platform.Governance
                 return existing;
             }
 
-            if (clients.Count >= maxTrackedClients)
+            lock (clientRegistrationGate)
             {
+                // A partition can be registered while this caller is waiting for the gate.
+                // Re-check before applying the cardinality decision so all unseen-key admissions
+                // observe one ordered Count/GetOrAdd boundary.
+                if (clients.TryGetValue(partitionKey, out existing))
+                {
+                    return existing;
+                }
+
+                if (clients.Count >= maxTrackedClients)
+                {
+                    return clients.GetOrAdd(
+                        OverflowPartition,
+                        _ => new ClientState(now));
+                }
+
                 return clients.GetOrAdd(
-                    OverflowPartition,
+                    partitionKey,
                     _ => new ClientState(now));
             }
-
-            return clients.GetOrAdd(
-                partitionKey,
-                _ => new ClientState(now));
         }
 
         private void MaybeCleanup(long now)
