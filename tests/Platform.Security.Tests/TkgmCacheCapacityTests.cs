@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Platform.Security.Tests;
 
+[Collection(TkgmAdministrativeCacheCollection.Name)]
 public sealed class TkgmCacheCapacityTests
 {
     private const int CacheCapacity = 512;
