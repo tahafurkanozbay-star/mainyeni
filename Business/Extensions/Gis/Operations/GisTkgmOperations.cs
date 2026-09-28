@@ -51,8 +51,8 @@ namespace Business.Extensions.Gis.Operations
 
         public async Task<string> GetAsync(string relativePath, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(relativePath) || relativePath[0] != '/')
-                throw new ArgumentException("TKGM request path must be a non-empty relative API path.", nameof(relativePath));
+            ValidateRelativePath(relativePath);
+            cancellationToken.ThrowIfCancellationRequested();
             var request = new RestRequest(relativePath, Method.Get);
             request.AddHeader("Referer", Referrer);
             request.AddHeader("Origin", Referrer);
@@ -63,6 +63,30 @@ namespace Business.Extensions.Gis.Operations
             if (string.IsNullOrWhiteSpace(response.Content))
                 throw new InvalidOperationException("TKGM request returned an empty response body.");
             return response.Content;
+        }
+
+        internal static void ValidateRelativePath(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+                throw new ArgumentException("TKGM request path must be a non-empty relative API path.", nameof(relativePath));
+            if (relativePath[0] != '/' || relativePath.Length == 1)
+                throw new ArgumentException("TKGM request path must start with one slash and contain an API route.", nameof(relativePath));
+            if (relativePath.Length > 512)
+                throw new ArgumentException("TKGM request path exceeds the supported length.", nameof(relativePath));
+            if (relativePath.StartsWith("//", StringComparison.Ordinal) || relativePath.Contains('\\'))
+                throw new ArgumentException("TKGM request path must not contain an authority or backslash separator.", nameof(relativePath));
+            if (relativePath.Contains('?') || relativePath.Contains('#'))
+                throw new ArgumentException("TKGM request path must not contain query or fragment components.", nameof(relativePath));
+            if (relativePath.Contains("..", StringComparison.Ordinal))
+                throw new ArgumentException("TKGM request path must not contain traversal segments.", nameof(relativePath));
+
+            foreach (var character in relativePath)
+            {
+                if (char.IsControl(character) || char.IsWhiteSpace(character))
+                    throw new ArgumentException("TKGM request path must not contain control or whitespace characters.", nameof(relativePath));
+                if (!(char.IsAsciiLetterOrDigit(character) || character is '/' or '-' or '_' or '.'))
+                    throw new ArgumentException("TKGM request path contains an unsupported character.", nameof(relativePath));
+            }
         }
 
         public void Dispose() => client.Dispose();
