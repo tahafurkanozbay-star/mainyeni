@@ -80,10 +80,15 @@ function matrixBlock(job: WorkflowJobBlock): MatrixBlock | undefined {
 }
 
 function staticMatrixStats(matrix: MatrixBlock): { dimensions: number; staticValues: number } {
+  const directIndent = matrix.lines
+    .filter(line => DIMENSION.test(line.text))
+    .reduce<number | undefined>((minimum, line) => minimum === undefined ? line.indent : Math.min(minimum, line.indent), undefined);
+  if (directIndent === undefined) return { dimensions: 0, staticValues: 0 };
+
   let dimensions = 0;
   let staticValues = 0;
   for (const line of matrix.lines) {
-    if (line.indent <= matrix.line.indent) continue;
+    if (line.indent !== directIndent) continue;
     const match = line.text.match(DIMENSION);
     if (!match) continue;
     const key = (match[1] ?? '').toLowerCase();
@@ -219,7 +224,7 @@ function findings(job: WorkflowJobBlock): Finding[] {
       id: 'ci-matrix-unbounded-external-fanout',
       domain: 'performance',
       severity: current.untrustedMatrix ? 'critical' : 'high',
-      blocking: current.untrustedMatrix || undefined,
+      ...(current.untrustedMatrix ? { blocking: true } : {}),
       title: 'Externally influenced matrix has no literal max-parallel ceiling',
       message: `Job ${job.name} can create concurrent work without an explicit repository-controlled fan-out bound.`,
       location: where,
