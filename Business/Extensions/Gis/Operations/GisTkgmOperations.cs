@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -84,6 +85,8 @@ namespace Business.Extensions.Gis.Operations
     public class GisTkgmOperations : _BaseOperations, IDisposable
     {
         internal const int MaxAdministrativeCacheEntries = 512;
+        internal const int MaxAdministrativeCacheEntryBytes = 1 * 1024 * 1024;
+        internal const int MaxAdministrativeCacheBytes = 8 * 1024 * 1024;
         internal const int MaxConcurrentUpstreamRequests = 16;
         private static readonly TimeSpan AdministrativeCacheTtl = TimeSpan.FromMinutes(15);
 
@@ -161,6 +164,13 @@ namespace Business.Extensions.Gis.Operations
             lock (DistrictsCacheAdmissionGate)
             lock (NbhoodsCacheAdmissionGate)
                 return (DistrictsCache.Count, NbhoodsCache.Count);
+        }
+
+        internal static (long Districts, long Neighbourhoods) GetAdministrativeCacheByteCountsForTesting()
+        {
+            lock (DistrictsCacheAdmissionGate)
+            lock (NbhoodsCacheAdmissionGate)
+                return (CalculateCacheBytes(DistrictsCache), CalculateCacheBytes(NbhoodsCache));
         }
 
         private async Task<string> GetAdministrativeAsync(
@@ -283,12 +293,17 @@ namespace Business.Extensions.Gis.Operations
             if (string.IsNullOrWhiteSpace(content))
                 throw new InvalidOperationException("TKGM administrative response cannot be cached when empty.");
 
+            var byteCount = Encoding.UTF8.GetByteCount(content);
+            if (byteCount > MaxAdministrativeCacheEntryBytes)
+                return;
+
             lock (admissionGate)
             {
                 var now = timeProvider.GetUtcNow();
                 PruneExpiredAndFutureEntries(cache, now);
-                EnsureCapacityForNewKey(cache, key);
-                cache[key] = new AdministrativeCacheEntry(content, now);
+                cache.TryRemove(key, out _);
+                EnsureAdmissionCapacity(cache, byteCount);
+                cache[key] = new AdministrativeCacheEntry(content, now, byteCount);
             }
         }
 
@@ -302,16 +317,31 @@ namespace Business.Extensions.Gis.Operations
             }
         }
 
-        private static void EnsureCapacityForNewKey(ConcurrentDictionary<int, AdministrativeCacheEntry> cache, int key)
+        private static void EnsureAdmissionCapacity(ConcurrentDictionary<int, AdministrativeCacheEntry> cache, int incomingBytes)
         {
-            if (cache.ContainsKey(key)) return;
-            while (cache.Count >= MaxAdministrativeCacheEntries)
+            var cachedBytes = CalculateCacheBytes(cache);
+            while (cache.Count >= MaxAdministrativeCacheEntries || cachedBytes + incomingBytes > MaxAdministrativeCacheBytes)
             {
                 var oldest = cache.OrderBy(pair => pair.Value.CreatedAt).ThenBy(pair => pair.Key).FirstOrDefault();
-                if (oldest.Value is null) return;
-                if (cache.TryRemove(new KeyValuePair<int, AdministrativeCacheEntry>(oldest.Key, oldest.Value))) continue;
-                Thread.Yield();
+                if (oldest.Value is null)
+                    throw new InvalidOperationException("TKGM administrative cache cannot satisfy configured admission budgets.");
+
+                if (!cache.TryRemove(new KeyValuePair<int, AdministrativeCacheEntry>(oldest.Key, oldest.Value)))
+                {
+                    Thread.Yield();
+                    continue;
+                }
+
+                cachedBytes -= oldest.Value.ByteCount;
             }
+        }
+
+        private static long CalculateCacheBytes(ConcurrentDictionary<int, AdministrativeCacheEntry> cache)
+        {
+            long total = 0;
+            foreach (var entry in cache.Values)
+                total = checked(total + entry.ByteCount);
+            return total;
         }
 
         private static void CancelAndClearFlights(ConcurrentDictionary<int, AdministrativeFetch> inFlight)
@@ -331,7 +361,7 @@ namespace Business.Extensions.Gis.Operations
 
         public void Dispose() { }
 
-        private sealed record AdministrativeCacheEntry(string Content, DateTimeOffset CreatedAt);
+        private sealed record AdministrativeCacheEntry(string Content, DateTimeOffset CreatedAt, int ByteCount);
 
         private sealed class AdministrativeFetch : IDisposable
         {
