@@ -10,6 +10,7 @@ using Xunit;
 
 namespace Platform.Security.Tests;
 
+[Collection(TkgmAdministrativeCacheCollection.Name)]
 public sealed class TkgmOperationsTests
 {
     private static BusinessContext CreateContext()
