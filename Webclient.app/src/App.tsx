@@ -14,6 +14,7 @@ import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConn
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
 import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
+import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
 import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
@@ -116,6 +117,7 @@ function App() {
     <ExperienceThemeProvider>
       <ExperiencePresentationBridge />
       <ExperienceRuntimeBridge />
+      <ExperienceSettingsValidationBridge />
       <div id="app-shell">
         <ExperienceStartupBoundary
           model={startupModel}
