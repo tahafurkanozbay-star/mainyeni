@@ -48,17 +48,17 @@ export interface WorkflowAuthoritySummary {
   readonly findings: readonly Finding[];
 }
 
-const CHECKOUT = /^\s*-?\s*uses\s*:\s*actions\/checkout@[0-9a-f]{40}\b/im;
-const RUN_STEP = /^\s*run\s*:/im;
+const CHECKOUT = /^\s*-?\s*uses\s*:\s*actions\/checkout@[^\s#]+/im;
+const RUN_STEP = /^\s*-?\s*run\s*:/im;
 const WORKFLOW_RUN_HEAD_CHECKOUT = /^\s*ref\s*:\s*\$\{\{\s*github\.event\.workflow_run\.(?:head_sha|head_branch)\s*\}\}/im;
-const DOWNLOAD_ARTIFACT = /^\s*-?\s*uses\s*:\s*actions\/download-artifact@[0-9a-f]{40}\b/im;
+const DOWNLOAD_ARTIFACT = /^\s*-?\s*uses\s*:\s*actions\/download-artifact@[^\s#]+/im;
 const WORKFLOW_RUN_ID = /\$\{\{\s*github\.event\.workflow_run\.id\s*\}\}/i;
 const GH_RUN_DOWNLOAD = /\bgh\s+run\s+download\b/i;
 const WORKFLOW_RUN_REPOSITORY_GUARD = /github\.event\.workflow_run\.head_repository\.(?:full_name|html_url)\s*==\s*github\.repository/i;
 const WORKFLOW_RUN_FORK_GUARD = /github\.event\.workflow_run\.head_repository\.fork\s*==\s*false/i;
 const WORKFLOW_RUN_BRANCH_GUARD = /github\.event\.workflow_run\.head_branch\s*==\s*['"][A-Za-z0-9._\/-]+['"]/i;
 const DISPATCH_PAYLOAD = /github\.event\.client_payload\b/i;
-const DISPATCH_EXECUTABLE_FIELD = /^\s*(?:run|shell|uses|working-directory|runs-on|environment|ref|path)\s*:[^\n]*github\.event\.client_payload/im;
+const DISPATCH_EXECUTABLE_FIELD = /^\s*(?:-\s+)?(?:run|shell|uses|working-directory|runs-on|environment|ref|path)\s*:[^\n]*github\.event\.client_payload/im;
 
 function signal(block: WorkflowJobBlock): WorkflowAuthoritySignal {
   const trigger = workflowTriggerProfile(block.file);
@@ -208,7 +208,7 @@ function repositoryDispatchFindings(block: WorkflowJobBlock, current: WorkflowAu
   const findings: Finding[] = [];
   const where = location(block);
   const isPrivileged = privileged(current);
-  const executablePayload = DISPATCH_EXECUTABLE_FIELD.test(block.text) || current.untrustedExpression;
+  const executablePayload = DISPATCH_EXECUTABLE_FIELD.test(block.text);
 
   if (isPrivileged && executablePayload) {
     findings.push({
