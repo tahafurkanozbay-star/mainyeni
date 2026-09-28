@@ -5,7 +5,6 @@ import {
   type RepositoryInventory,
 } from './contracts.mts';
 import {
-  expressionSources,
   firstWorkflowField,
   hasExpression,
   hasUntrustedExpression,
@@ -75,6 +74,7 @@ const TRUSTED_BRANCH_GUARD = /(?:github\.ref\s*==\s*['"]refs\/heads\/(?:main|mas
 const INPUT_TARGET = /\$\{\{[\s\S]*?(?:inputs\.|github\.event\.inputs\.)/i;
 const EVENT_TARGET = /\$\{\{[\s\S]*?(?:github\.head_ref\b|github\.event\.(?:pull_request|issue|comment|review|discussion)\.)/i;
 const INDIRECT_TARGET = /\$\{\{[\s\S]*?(?:needs\.|steps\.|matrix\.|vars\.)/i;
+const EXPRESSION_VALUE = /\$\{\{[\s\S]*?\}\}/;
 
 interface PushScope {
   readonly enabled: boolean;
@@ -121,20 +121,41 @@ function publicationKind(step: WorkflowStepBlock): PublicationKind | undefined {
   return undefined;
 }
 
+function expressionOrToken(value: string): string {
+  const trimmed = value.trim();
+  const expression = trimmed.match(EXPRESSION_VALUE)?.[0];
+  if (expression) return expression;
+  const quoted = trimmed.match(/^(?:"[^"]*"|'[^']*'|[^\s\\]+)/)?.[0];
+  return quoted ?? '';
+}
+
+function targetFieldFallback(step: WorkflowStepBlock): string {
+  for (const key of ['tag_name', 'tag', 'version', 'tags']) {
+    const matcher = new RegExp(`^\\s*${key}\\s*:\\s*(.+)$`, 'im');
+    const value = step.text.match(matcher)?.[1]?.trim() ?? '';
+    if (value && hasExpression(value)) return expressionOrToken(value);
+  }
+  return '';
+}
+
 function targetFor(step: WorkflowStepBlock, kind: PublicationKind): string {
   const withMap = stepNestedMapping(step, 'with');
   for (const key of ['tag_name', 'tag', 'version', 'tags', 'name']) {
     const value = withMap.get(key);
-    if (value && hasExpression(value)) return value;
+    if (value && hasExpression(value)) return expressionOrToken(value);
   }
+  const nestedFallback = targetFieldFallback(step);
+  if (nestedFallback) return nestedFallback;
   const run = stepRunText(step);
   if (kind === 'github-release') {
-    const match = run.match(/\bgh\s+release\s+(?:create|upload|edit)\s+([^\s\\]+)/i);
-    if (match?.[1]) return match[1];
+    const tail = run.match(/\bgh\s+release\s+(?:create|upload|edit)\s+([^\n]+)/i)?.[1] ?? '';
+    const target = expressionOrToken(tail);
+    if (target) return target;
   }
   if (kind === 'container') {
-    const match = run.match(/\b(?:docker|podman|buildah)\s+push\s+([^\s\\]+)/i);
-    if (match?.[1]) return match[1];
+    const tail = run.match(/\b(?:docker|podman|buildah)\s+push\s+([^\n]+)/i)?.[1] ?? '';
+    const target = expressionOrToken(tail);
+    if (target) return target;
   }
   return '';
 }
