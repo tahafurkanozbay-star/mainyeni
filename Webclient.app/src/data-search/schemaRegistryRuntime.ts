@@ -174,7 +174,7 @@ const normalizeOptions = (
     fallback: DEFAULT_MAX_BREAKING,
   }),
   requireAliasCoverage: normalizeRequiredAliasFields(options.requireAliasCoverage),
-  profile: Object.freeze({ ...(options.profile ?? {}) }),
+  profile: Object.freeze({ ...options.profile }),
 });
 
 const compatibilityRank = (value: SchemaCompatibility): number =>
