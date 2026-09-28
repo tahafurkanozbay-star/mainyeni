@@ -1,0 +1,189 @@
+.kr-command__scope--interactive {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--exp-border-strong) transparent;
+  border-bottom: 1px solid var(--exp-border);
+}
+
+.kr-command__scope--interactive > button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  color: var(--exp-text-soft);
+  background: var(--exp-surface-2);
+  border: 1px solid var(--exp-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background var(--exp-transition-fast),
+    border-color var(--exp-transition-fast),
+    color var(--exp-transition-fast),
+    transform var(--exp-transition-fast);
+}
+
+.kr-command__scope--interactive > button:hover {
+  color: var(--exp-text);
+  background: var(--exp-surface-3);
+  border-color: var(--exp-border-strong);
+}
+
+.kr-command__scope--interactive > button:active {
+  transform: translateY(1px);
+}
+
+.kr-command__scope--interactive > button.is-active,
+.kr-command__scope--interactive > button[aria-pressed='true'] {
+  color: var(--exp-accent);
+  background: var(--exp-accent-soft);
+  border-color: color-mix(in srgb, var(--exp-accent) 38%, var(--exp-border));
+}
+
+.kr-command__scope--interactive > button strong {
+  min-width: 20px;
+  min-height: 20px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kr-command__window-hint {
+  min-height: 26px;
+  display: grid;
+  place-items: center;
+  margin: 2px 4px;
+  color: var(--exp-text-muted);
+  border: 1px dashed var(--exp-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--exp-surface-2) 82%, transparent);
+  font-size: 10px;
+  user-select: none;
+}
+
+.kr-command__footer {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  color: var(--exp-text-muted);
+  border-top: 1px solid var(--exp-border);
+  background: var(--exp-surface-2);
+  font-size: 10px;
+}
+
+.kr-command__footer > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kr-command__footer strong {
+  color: var(--exp-text-soft);
+  font-weight: 700;
+}
+
+.kr-command__usage {
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--exp-text-soft);
+}
+
+.kr-command__item[aria-selected='true'] {
+  position: relative;
+}
+
+.kr-command__item[aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--exp-accent);
+}
+
+@media (pointer: coarse) {
+  .kr-command__scope--interactive > button {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  .kr-command__item {
+    min-height: 58px;
+  }
+}
+
+@media (max-width: 680px) {
+  .kr-command__scope--interactive {
+    min-height: 54px;
+    padding-inline: 8px;
+  }
+
+  .kr-command__footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .kr-command__footer > span:first-child {
+    display: none;
+  }
+
+  .kr-command__usage {
+    max-width: min(62vw, 230px);
+  }
+}
+
+@media (max-width: 420px) {
+  .kr-command__scope--interactive > button {
+    min-height: 48px;
+  }
+
+  .kr-command__scope--interactive > button strong {
+    min-width: 22px;
+    min-height: 22px;
+  }
+
+  .kr-command__footer {
+    padding-inline: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kr-command__scope--interactive > button {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .kr-command__scope--interactive > button,
+  .kr-command__window-hint {
+    border-color: CanvasText;
+  }
+
+  .kr-command__scope--interactive > button[aria-pressed='true'],
+  .kr-command__item[aria-selected='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .kr-command__item[aria-selected='true']::before {
+    background: Highlight;
+  }
+}

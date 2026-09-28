@@ -3,18 +3,36 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
+  useSyncExternalStore,
+  type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { SIDEBAR_GROUPS, SIDEBAR_ITEMS } from '../App/SidebarCatalog';
+import {
+  createCommandCenterInteractionModel,
+  type CommandCenterItem,
+  type CommandCenterState,
+} from '../../experience/commandCenterInteractionModel';
+import { createCommandCenterAccessibilityController } from '../../experience/commandCenterAccessibilityController';
+import { createCommandCenterUsageModel } from '../../experience/commandCenterUsageModel';
+import {
+  createCommandCenterScopeModel,
+  type CommandCenterConcreteScope,
+  type CommandCenterScopeId,
+} from '../../experience/commandCenterScopeModel';
+import { createCommandCenterRenderWindow } from '../../experience/commandCenterRenderWindow';
+import {
+  assertCommandCenterCatalog,
+  type CommandCenterCatalogReport,
+} from '../../experience/commandCenterCatalogAudit';
 import { createFocusScope } from '../../experience/focusScopeRuntime';
 import { acquireOverlayLease } from '../../experience/overlayLifecycleRuntime';
 import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
 import { EmptyState } from './ExperienceDesignSystem';
 import { normalizeCommandQuery } from './experience-quality-utils';
+import './experience-command-center.css';
 
 type CommandGlyphName = 'search' | 'layers' | 'legend' | 'basemap' | 'identify' | 'measure' | 'sketch' | 'bookmark' | 'help' | 'service';
 
@@ -28,6 +46,8 @@ export interface ExperienceCommand {
   readonly glyph: CommandGlyphName;
   readonly target?: string;
   readonly event?: string;
+  readonly disabled?: boolean;
+  readonly scopes?: readonly CommandCenterConcreteScope[];
 }
 
 interface ExperienceCommandCenterProps {
@@ -39,15 +59,15 @@ interface ExperienceCommandEventDetail {
 }
 
 const CORE_COMMANDS: readonly ExperienceCommand[] = Object.freeze([
-  { id: 'search', label: 'Genel arama', group: 'Arama', description: 'Adres, yer ve katmanlarda arayın', shortcut: 'Ctrl K', glyph: 'search', target: 'genelarama-query-window' },
-  { id: 'layers', label: 'Katman yönetimini aç', group: 'Harita', description: 'Harita katmanlarını yönetin', shortcut: 'L', glyph: 'layers', event: 'layers' },
-  { id: 'legend', label: 'Lejandı aç', group: 'Harita', description: 'Harita sembollerini inceleyin', shortcut: 'G', glyph: 'legend', event: 'legend' },
-  { id: 'basemap', label: 'Altlık haritayı değiştir', group: 'Harita', description: 'Alternatif harita görünümü seçin', glyph: 'basemap', target: 'basemap-widget' },
-  { id: 'identify', label: 'Haritada bilgi al', group: 'Analiz', description: 'Harita üzerindeki nesneleri sorgulayın', glyph: 'identify', target: 'global-identify-widget' },
-  { id: 'measure', label: 'Ölçüm aracını aç', group: 'Analiz', description: 'Mesafe ve alan ölçün', glyph: 'measure', target: 'measurement-widget' },
-  { id: 'sketch', label: 'Çizim aracını aç', group: 'Analiz', description: 'Harita üzerine çizim ekleyin', glyph: 'sketch', target: 'sketch-widget' },
-  { id: 'bookmark', label: 'Yer imlerini aç', group: 'Harita', description: 'Kayıtlı konumlara hızlı gidin', glyph: 'bookmark', target: 'bookmark-widget' },
-  { id: 'help', label: 'Klavye kısayollarını göster', group: 'Yardım', description: 'Hızlı kullanım rehberini açın', shortcut: '?', glyph: 'help', event: 'help' },
+  { id: 'search', label: 'Genel arama', group: 'Arama', description: 'Adres, yer ve katmanlarda arayın', shortcut: 'Ctrl K', glyph: 'search', target: 'genelarama-query-window', scopes: ['map'] },
+  { id: 'layers', label: 'Katman yönetimini aç', group: 'Harita', description: 'Harita katmanlarını yönetin', shortcut: 'L', glyph: 'layers', event: 'layers', scopes: ['map'] },
+  { id: 'legend', label: 'Lejandı aç', group: 'Harita', description: 'Harita sembollerini inceleyin', shortcut: 'G', glyph: 'legend', event: 'legend', scopes: ['map'] },
+  { id: 'basemap', label: 'Altlık haritayı değiştir', group: 'Harita', description: 'Alternatif harita görünümü seçin', glyph: 'basemap', target: 'basemap-widget', scopes: ['map'] },
+  { id: 'identify', label: 'Haritada bilgi al', group: 'Analiz', description: 'Harita üzerindeki nesneleri sorgulayın', glyph: 'identify', target: 'global-identify-widget', scopes: ['analysis', 'map'] },
+  { id: 'measure', label: 'Ölçüm aracını aç', group: 'Analiz', description: 'Mesafe ve alan ölçün', glyph: 'measure', target: 'measurement-widget', scopes: ['analysis', 'map'] },
+  { id: 'sketch', label: 'Çizim aracını aç', group: 'Analiz', description: 'Harita üzerine çizim ekleyin', glyph: 'sketch', target: 'sketch-widget', scopes: ['analysis', 'map'] },
+  { id: 'bookmark', label: 'Yer imlerini aç', group: 'Harita', description: 'Kayıtlı konumlara hızlı gidin', glyph: 'bookmark', target: 'bookmark-widget', scopes: ['map'] },
+  { id: 'help', label: 'Klavye kısayollarını göster', group: 'Yardım', description: 'Hızlı kullanım rehberini açın', shortcut: '?', glyph: 'help', event: 'help', scopes: ['help'] },
 ]);
 
 const GROUP_LABELS = new Map<string, string>(
@@ -69,6 +89,7 @@ const SERVICE_COMMANDS: readonly ExperienceCommand[] = Object.freeze(
     keywords: `${item.iconType} ${item.group} hizmet servis`,
     glyph: 'service' as const,
     target: item.windowId,
+    scopes: Object.freeze(['services'] as const),
   })),
 );
 
@@ -76,6 +97,27 @@ export const EXPERIENCE_COMMANDS: readonly ExperienceCommand[] = Object.freeze([
   ...CORE_COMMANDS,
   ...SERVICE_COMMANDS,
 ]);
+
+export const COMMAND_CENTER_CATALOG_REPORT: CommandCenterCatalogReport = assertCommandCenterCatalog(
+  EXPERIENCE_COMMANDS,
+);
+
+const commandById = new Map(EXPERIENCE_COMMANDS.map(command => [command.id, command]));
+
+export const toCommandCenterItem = (command: ExperienceCommand): CommandCenterItem => Object.freeze({
+  id: command.id,
+  group: command.group,
+  label: command.label,
+  description: command.description,
+  searchText: `${command.label} ${command.group} ${command.description} ${command.keywords ?? ''} ${command.id}`,
+  ...(command.disabled === true ? { disabled: true } : {}),
+});
+
+const MODEL_ITEMS = Object.freeze(EXPERIENCE_COMMANDS.map(toCommandCenterItem));
+const SCOPE_ITEMS = Object.freeze(EXPERIENCE_COMMANDS.map(command => Object.freeze({
+  id: command.id,
+  scopes: command.scopes ?? Object.freeze(['map'] as const),
+})));
 
 const dispatchExperienceCommand = (name: string): void => {
   window.dispatchEvent(new CustomEvent('kentrehberi:command', { detail: { name } }));
@@ -96,6 +138,10 @@ export const filterExperienceCommands = (
     const searchable = commandSearchText(command);
     return tokens.every(token => searchable.includes(token));
   });
+};
+
+const reportCommandCenterError = (error: unknown, source: string): void => {
+  runtimeDiagnostics.captureError(error, { source }, 'warn');
 };
 
 const CommandGlyph = ({ name, size = 18 }: { readonly name: CommandGlyphName; readonly size?: number }): ReactNode => {
@@ -126,55 +172,103 @@ const CommandGlyph = ({ name, size = 18 }: { readonly name: CommandGlyphName; re
   }
 };
 
+const scopeLabels: Readonly<Record<CommandCenterScopeId, string>> = Object.freeze({
+  all: 'Tümü',
+  map: 'Harita',
+  analysis: 'Analiz',
+  services: 'Hizmetler',
+  help: 'Yardım',
+});
+
 export function ExperienceCommandCenterModern({ windowManager }: ExperienceCommandCenterProps): ReactNode {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
+  const model = useMemo(() => createCommandCenterInteractionModel(MODEL_ITEMS, {
+    pageStep: 6,
+    onObserverError: error => reportCommandCenterError(error, 'experience.command-center.model-observer'),
+  }), []);
+  const controller = useMemo(
+    () => createCommandCenterAccessibilityController(model, 'kr-command'),
+    [model],
+  );
+  const usage = useMemo(() => createCommandCenterUsageModel({
+    maxTracked: 64,
+    recentLimit: 6,
+    frequentLimit: 6,
+    onObserverError: error => reportCommandCenterError(error, 'experience.command-center.usage-observer'),
+  }), []);
+  const scopes = useMemo(() => createCommandCenterScopeModel(SCOPE_ITEMS, {
+    maxItems: 512,
+    onObserverError: error => reportCommandCenterError(error, 'experience.command-center.scope-observer'),
+  }), []);
+
+  const subscribeModel = useCallback((notify: () => void) => model.subscribe(() => notify()), [model]);
+  const subscribeUsage = useCallback((notify: () => void) => usage.subscribe(() => notify()), [usage]);
+  const subscribeScope = useCallback((notify: () => void) => scopes.subscribe(() => notify()), [scopes]);
+  const state = useSyncExternalStore(subscribeModel, model.getState, model.getState);
+  const usageSnapshot = useSyncExternalStore(subscribeUsage, usage.snapshot, usage.snapshot);
+  const scopeSnapshot = useSyncExternalStore(subscribeScope, scopes.snapshot, scopes.snapshot);
+
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
-
-  const filtered = useMemo(
-    () => filterExperienceCommands(EXPERIENCE_COMMANDS, query),
-    [query],
+  const accessibility = useMemo(() => controller.snapshot(), [controller, state]);
+  const renderWindow = useMemo(
+    () => createCommandCenterRenderWindow(state, { maxRendered: 18, overscan: 2 }),
+    [state],
   );
-  const activeCommand = filtered[activeIndex];
 
-  const close = useCallback((): void => {
-    setOpen(false);
-  }, []);
+  const scopedInventory = useCallback((scope: CommandCenterScopeId): readonly CommandCenterItem[] => {
+    const visible = new Set(scopes.setScope(scope).visibleIds);
+    const source = MODEL_ITEMS.filter(item => visible.has(item.id));
+    return usage.prioritize(source, item => item.id);
+  }, [scopes, usage]);
 
-  const execute = useCallback((command: ExperienceCommand | undefined): void => {
-    if (!command) return;
-    close();
+  const applyScope = useCallback((scope: CommandCenterScopeId): void => {
+    const prioritized = scopedInventory(scope);
+    model.dispatch({ type: 'items-changed', items: prioritized });
+  }, [model, scopedInventory]);
+
+  const close = useCallback((modality: 'keyboard' | 'pointer' | 'programmatic' = 'programmatic'): void => {
+    controller.close(modality);
+  }, [controller]);
+
+  const executeById = useCallback((id: string | null): void => {
+    if (!id) return;
+    const command = commandById.get(id);
+    if (!command || command.disabled) return;
+
+    usage.record(command.id);
+    const activeScope = scopes.snapshot().activeScope;
+    applyScope(activeScope);
+    controller.close('programmatic');
 
     if (command.target) windowManager.ShowWindow(command.target);
     if (command.event) dispatchExperienceCommand(command.event);
-
     window.dispatchEvent(new CustomEvent('kentrehberi:command-executed', {
       detail: { name: command.id },
     }));
-  }, [close, windowManager]);
+  }, [applyScope, controller, scopes, usage, windowManager]);
+
+  useEffect(() => () => {
+    model.dispose();
+    usage.dispose();
+    scopes.dispose();
+  }, [model, scopes, usage]);
 
   useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<ExperienceCommandEventDetail>).detail;
       if (detail?.name !== 'command-palette') return;
-      setOpen(true);
+      scopes.setScope('all');
+      const prioritized = usage.prioritize(MODEL_ITEMS, item => item.id);
+      model.dispatch({ type: 'items-changed', items: prioritized });
+      controller.open('programmatic');
     };
     window.addEventListener('kentrehberi:command', handler);
     return () => window.removeEventListener('kentrehberi:command', handler);
-  }, []);
+  }, [controller, model, scopes, usage]);
 
   useEffect(() => {
-    if (!open) return;
-    setQuery('');
-    setActiveIndex(0);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !dialogRef.current) return undefined;
-
+    if (!state.open || !dialogRef.current) return undefined;
     const overlay = acquireOverlayLease({
       document,
       id: 'experience-command-center',
@@ -186,68 +280,54 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
       document,
       container: dialogRef.current,
       initialFocus: inputRef.current,
-      onEscape: close,
-      onFocusError(error) {
-        runtimeDiagnostics.captureError(
-          error,
-          { source: 'experience.command-center.focus' },
-          'warn',
-        );
-      },
+      onEscape: () => close('keyboard'),
+      onFocusError: error => reportCommandCenterError(error, 'experience.command-center.focus'),
     });
-
     focusScope.activate();
-
     return () => {
       focusScope.dispose();
       overlay.release();
     };
-  }, [close, open]);
+  }, [close, state.open]);
 
   useEffect(() => {
-    if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
-    const activeId = filtered[activeIndex]?.id;
-    if (open && activeId) {
-      document.getElementById(`kr-command-item-${activeId}`)?.scrollIntoView({ block: 'nearest' });
+    if (!state.open || !state.activeId) return;
+    const active = document.getElementById(`kr-command-item-${state.activeId}`);
+    if (active && typeof active.scrollIntoView === 'function') {
+      active.scrollIntoView({ block: 'nearest' });
     }
-  }, [activeIndex, filtered, open]);
+  }, [state.activeId, state.open]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!state.open) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || event.isComposing) return;
-
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setActiveIndex(index => filtered.length ? (index + 1) % filtered.length : 0);
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setActiveIndex(index => filtered.length ? (index - 1 + filtered.length) % filtered.length : 0);
-      } else if (event.key === 'Home') {
-        event.preventDefault();
-        setActiveIndex(0);
-      } else if (event.key === 'End') {
-        event.preventDefault();
-        setActiveIndex(Math.max(0, filtered.length - 1));
-      } else if (event.key === 'Enter' && document.activeElement === inputRef.current) {
-        event.preventDefault();
-        execute(activeCommand);
-      }
+      const result = controller.handleKey(event);
+      if (result.intent.type === 'execute') executeById(result.intent.commandId);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeCommand, execute, filtered.length, open]);
+  }, [controller, executeById, state.open]);
 
-  if (!open) return null;
+  const onQueryChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    controller.query(event.target.value, 'keyboard');
+  };
 
   const onBackdropMouseDown = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (event.target === event.currentTarget) close();
+    if (event.target === event.currentTarget) close('pointer');
   };
 
-  const onInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'PageDown') setActiveIndex(index => Math.min(filtered.length - 1, index + 6));
-    if (event.key === 'PageUp') setActiveIndex(index => Math.max(0, index - 6));
+  const onScope = (scope: CommandCenterScopeId): void => {
+    if (scope === scopeSnapshot.activeScope) return;
+    applyScope(scope);
+    inputRef.current?.focus();
   };
+
+  if (!state.open) return null;
+
+  const activeCommand = state.activeId ? commandById.get(state.activeId) : undefined;
+  const renderedMatches = renderWindow.options
+    .map(option => state.matches[option.absoluteIndex])
+    .filter((match): match is NonNullable<typeof match> => Boolean(match));
 
   return (
     <div ref={backdropRef} className="kr-command-backdrop" role="presentation" onMouseDown={onBackdropMouseDown}>
@@ -265,62 +345,100 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
             <h2 id="kr-command-title">Kent Rehberi Komut Merkezi</h2>
             <span id="kr-command-description" className="experience-sr-only">Harita araçları ve tüm kent servislerinde arama yapın.</span>
           </div>
-          <button type="button" className="experience-close" onClick={close} aria-label="Komut merkezini kapat">×</button>
+          <button type="button" className="experience-close" onClick={() => close('pointer')} aria-label="Komut merkezini kapat">×</button>
         </header>
 
         <div className="kr-command__search">
           <span aria-hidden="true"><CommandGlyph name="search" size={20} /></span>
           <input
             ref={inputRef}
-            value={query}
-            onChange={event => {
-              setQuery(event.target.value);
-              setActiveIndex(0);
-            }}
-            onKeyDown={onInputKeyDown}
+            id={accessibility.inputId}
+            role="combobox"
+            value={state.query}
+            onChange={onQueryChange}
             aria-label="Komut veya kent hizmeti ara"
-            aria-controls="kr-command-results"
-            aria-activedescendant={activeCommand ? `kr-command-item-${activeCommand.id}` : undefined}
+            aria-controls={accessibility.listboxId}
+            aria-expanded="true"
+            aria-haspopup="listbox"
+            aria-activedescendant={accessibility.activeDescendant ?? undefined}
+            aria-autocomplete="list"
             placeholder="Araç, işlem veya kent hizmeti ara…"
             autoComplete="off"
           />
           <kbd>Ctrl K</kbd>
         </div>
 
-        <div className="kr-command__scope" aria-hidden="true">
-          <span><strong>{CORE_COMMANDS.length}</strong> harita aracı</span>
-          <span><strong>{SERVICE_COMMANDS.length}</strong> kent hizmeti</span>
-          <span>Tek arama alanı</span>
-        </div>
-
-        <div id="kr-command-results" className="kr-command__body" role="listbox" aria-label="Komut sonuçları">
-          {filtered.length ? filtered.map((command, index) => (
+        <nav className="kr-command__scope kr-command__scope--interactive" aria-label="Komut kapsamı">
+          {(Object.keys(scopeLabels) as CommandCenterScopeId[]).map(scope => (
             <button
-              key={command.id}
-              id={`kr-command-item-${command.id}`}
+              key={scope}
               type="button"
-              className={`kr-command__item ${index === activeIndex ? 'is-active' : ''}`}
-              onMouseEnter={() => setActiveIndex(index)}
-              onFocus={() => setActiveIndex(index)}
-              onClick={() => execute(command)}
-              role="option"
-              aria-selected={index === activeIndex}
+              className={scope === scopeSnapshot.activeScope ? 'is-active' : ''}
+              aria-pressed={scope === scopeSnapshot.activeScope}
+              onClick={() => onScope(scope)}
             >
-              <span className="kr-command__icon" aria-hidden="true"><CommandGlyph name={command.glyph} /></span>
-              <span className="kr-command__copy">
-                <strong>{command.label}</strong>
-                <small>{command.group} · {command.description}</small>
-              </span>
-              {command.shortcut ? <kbd>{command.shortcut}</kbd> : <span className="kr-command__enter" aria-hidden="true">↵</span>}
+              <span>{scopeLabels[scope]}</span>
+              <strong>{scopeSnapshot.counts[scope]}</strong>
             </button>
-          )) : (
-            <EmptyState title="Sonuç bulunamadı" description="Farklı bir araç, kurum veya hizmet adı deneyin." />
-          )}
+          ))}
+        </nav>
+
+        <div id={accessibility.statusId} className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {state.announcement}
         </div>
 
-        <footer className="kr-command__foot" aria-live="polite">
-          <span>{filtered.length} sonuç</span>
-          <span><kbd>↑</kbd><kbd>↓</kbd> gezin · <kbd>Enter</kbd> aç · <kbd>Esc</kbd> kapat</span>
+        <div
+          id={accessibility.listboxId}
+          className="kr-command__body"
+          role="listbox"
+          aria-label="Komut sonuçları"
+          aria-describedby={accessibility.statusId}
+        >
+          {renderWindow.hiddenBefore > 0 ? (
+            <div className="kr-command__window-hint" aria-hidden="true">↑ {renderWindow.hiddenBefore} önceki sonuç</div>
+          ) : null}
+          {renderedMatches.length ? renderedMatches.map(match => {
+            const command = commandById.get(match.item.id);
+            const option = renderWindow.options.find(entry => entry.commandId === match.item.id);
+            if (!command || !option) return null;
+            const selected = state.activeId === command.id;
+            return (
+              <button
+                key={command.id}
+                id={`kr-command-item-${command.id}`}
+                type="button"
+                className={`kr-command__item ${selected ? 'is-active' : ''}`}
+                onMouseEnter={() => controller.activate(command.id, 'pointer')}
+                onFocus={() => controller.activate(command.id, 'pointer')}
+                onClick={() => executeById(command.id)}
+                role="option"
+                tabIndex={-1}
+                aria-selected={selected}
+                aria-posinset={option.position}
+                aria-setsize={option.setSize}
+              >
+                <span className="kr-command__icon" aria-hidden="true"><CommandGlyph name={command.glyph} /></span>
+                <span className="kr-command__copy">
+                  <strong>{command.label}</strong>
+                  <small>{command.group} · {command.description}</small>
+                </span>
+                {command.shortcut ? <kbd>{command.shortcut}</kbd> : <span className="kr-command__enter" aria-hidden="true">↵</span>}
+              </button>
+            );
+          }) : (
+            <EmptyState title="Eşleşen komut bulunamadı" description="Daha kısa bir ifade deneyin veya farklı bir araç adı yazın." />
+          )}
+          {renderWindow.hiddenAfter > 0 ? (
+            <div className="kr-command__window-hint" aria-hidden="true">↓ {renderWindow.hiddenAfter} sonraki sonuç</div>
+          ) : null}
+        </div>
+
+        <footer className="kr-command__footer">
+          <span aria-hidden="true">↑↓ gezin · PgUp/PgDn hızlı gezin · Enter aç · Esc kapat</span>
+          <span className="kr-command__usage" aria-label={`${usageSnapshot.trackedCount} komut bu oturumda kullanıldı`}>
+            {usageSnapshot.lastExecutedId ? `Son: ${commandById.get(usageSnapshot.lastExecutedId)?.label ?? usageSnapshot.lastExecutedId}` : 'Oturum geçmişi boş'}
+          </span>
+          <strong>{activeCommand?.group ?? `${state.matches.length} sonuç`}</strong>
         </footer>
       </section>
     </div>
@@ -328,4 +446,3 @@ export function ExperienceCommandCenterModern({ windowManager }: ExperienceComma
 }
 
 export default ExperienceCommandCenterModern;
-
