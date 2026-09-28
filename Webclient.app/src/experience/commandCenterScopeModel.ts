@@ -68,7 +68,7 @@ const sanitizeScopes = (
   for (const scope of scopes) {
     if (scopeIds.includes(scope)) unique.add(scope);
   }
-  return Object.freeze([...unique]);
+  return Object.freeze(Array.from(unique));
 };
 
 interface NormalizedScopeItem {
@@ -162,7 +162,8 @@ export const createCommandCenterScopeModel = (
     if (disposed) return current;
     const previous = current;
     current = createSnapshot(items, activeScope, previous.revision + 1);
-    for (const observer of [...observers]) {
+    const observerSnapshot = Array.from(observers);
+    for (const observer of observerSnapshot) {
       try {
         observer(current, previous);
       } catch (error) {
