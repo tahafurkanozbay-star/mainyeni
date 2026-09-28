@@ -346,10 +346,11 @@ export class SchemaRegistryRuntime {
       && previous.profile.fingerprint === profile.fingerprint
       && createSchemaEvolutionFingerprint(previous.profile, previous.aliases)
         === createSchemaEvolutionFingerprint(profile, aliasCoverage));
-    const decision: SchemaRegistryDecision = unchanged
-      ? 'unchanged'
-      : violations.length && this.#options.mode !== 'observe'
-        ? 'rejected'
+    const blocked = violations.length > 0 && this.#options.mode !== 'observe';
+    const decision: SchemaRegistryDecision = blocked
+      ? 'rejected'
+      : unchanged
+        ? 'unchanged'
         : 'accepted';
     const previousRevision = previous?.revision ?? 0;
     const nextRevision = decision === 'accepted' ? previousRevision + 1 : previousRevision;
