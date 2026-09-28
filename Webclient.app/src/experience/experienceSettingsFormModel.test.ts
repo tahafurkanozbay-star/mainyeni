@@ -13,6 +13,7 @@ const preferences = (overrides: Partial<ExperiencePreferences> = {}): Experience
   highContrastMapControls: false,
   showCoordinateReadout: true,
   lastMapMode: '2d',
+  utilityCollapsed: false,
   ...overrides,
 });
 
@@ -167,9 +168,10 @@ describe('experienceSettingsFormModel', () => {
     model.dispose();
   });
 
-  it('preserves lastMapMode outside the settings-form draft boundary', () => {
-    const model = createExperienceSettingsFormModel(preferences({ lastMapMode: '3d' }));
+  it('preserves non-form workspace preferences outside the settings-form draft boundary', () => {
+    const model = createExperienceSettingsFormModel(preferences({ lastMapMode: '3d', utilityCollapsed: true }));
     expect(model.snapshot()).not.toHaveProperty('lastMapMode');
+    expect(model.snapshot()).not.toHaveProperty('utilityCollapsed');
     model.dispose();
   });
 
