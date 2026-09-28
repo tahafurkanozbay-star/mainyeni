@@ -56,7 +56,7 @@ namespace Api.Core.Platform.Middleware
             }
 
             var correlationId = string.IsNullOrEmpty(inbound)
-                ? CreateCorrelationId(context)
+                ? CreateCorrelationId(context, requestOptions.MaxCorrelationIdLength)
                 : inbound;
 
             context.Items[ApiPlatformDefaults.TraceIdItemKey] = correlationId;
@@ -80,15 +80,20 @@ namespace Api.Core.Platform.Middleware
             }
         }
 
-        private static string CreateCorrelationId(HttpContext context)
+        private static string CreateCorrelationId(HttpContext context, int maxLength)
         {
             var traceIdentifier = context.TraceIdentifier?.Trim();
-            if (ApiPlatformDefaults.IsValidCorrelationId(traceIdentifier, 96))
+            if (ApiPlatformDefaults.IsValidCorrelationId(traceIdentifier, maxLength))
             {
                 return traceIdentifier;
             }
 
-            return Guid.NewGuid().ToString("N");
+            // Startup validation guarantees a minimum configured length of 16. Keep this fallback
+            // defensive for hostless/unit pipelines while ensuring server-generated identifiers
+            // never violate the same configured maximum enforced for inbound identifiers.
+            var generated = Guid.NewGuid().ToString("N");
+            var boundedLength = Math.Clamp(maxLength, 1, generated.Length);
+            return generated.Substring(0, boundedLength);
         }
 
         private static async Task WriteInvalidCorrelationResponse(HttpContext context)
