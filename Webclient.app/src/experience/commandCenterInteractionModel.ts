@@ -369,7 +369,8 @@ export const createCommandCenterInteractionModel = (
   let disposed = false;
 
   const notify = (previous: CommandCenterState): void => {
-    for (const observer of [...observers]) {
+    const observerSnapshot = Array.from(observers);
+    for (const observer of observerSnapshot) {
       try {
         observer(state, previous);
       } catch (error) {
