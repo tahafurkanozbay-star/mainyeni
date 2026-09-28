@@ -168,7 +168,10 @@ namespace Api.Core.Platform.Governance
                     return existing;
                 }
 
-                if (clients.Count >= maxTrackedClients)
+                // Reserve the final configured slot for the overflow partition. Without this
+                // reservation, admitting maxTrackedClients unique keys and then creating overflow
+                // would make the observable dictionary cardinality maxTrackedClients + 1.
+                if (clients.Count >= maxTrackedClients - 1)
                 {
                     return clients.GetOrAdd(
                         OverflowPartition,
