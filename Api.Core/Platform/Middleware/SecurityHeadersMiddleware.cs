@@ -13,6 +13,8 @@ namespace Api.Core.Platform.Middleware
     /// </summary>
     public sealed class SecurityHeadersMiddleware
     {
+        private const string ContentSecurityPolicyHeader = "Content-Security-Policy";
+
         private readonly RequestDelegate _next;
         private readonly ApiPlatformOptions.SecurityHeaderOptions _options;
 
@@ -74,17 +76,7 @@ namespace Api.Core.Platform.Middleware
                 headers.Remove("Cross-Origin-Embedder-Policy");
             }
 
-            // The default CSP is intentionally API-oriented. Do not apply it to an explicitly HTML
-            // response such as opt-in Swagger UI because default-src 'none' would break the page.
-            // Product HTML surfaces should own their own CSP rather than weakening the API baseline.
-            if (!string.IsNullOrWhiteSpace(_options.ContentSecurityPolicy) && !IsHtmlResponse(context))
-            {
-                headers["Content-Security-Policy"] = _options.ContentSecurityPolicy;
-            }
-            else
-            {
-                headers.Remove("Content-Security-Policy");
-            }
+            ApplyContentSecurityPolicy(context, headers);
 
             if (_options.EnableHsts && context.Request.IsHttps)
             {
@@ -102,6 +94,38 @@ namespace Api.Core.Platform.Middleware
 
             headers.Remove("X-Powered-By");
             headers.Remove("X-AspNet-Version");
+        }
+
+        private void ApplyContentSecurityPolicy(HttpContext context, IHeaderDictionary headers)
+        {
+            var configuredPolicy = _options.ContentSecurityPolicy;
+            if (string.IsNullOrWhiteSpace(configuredPolicy))
+            {
+                // A blank API baseline means this middleware does not own CSP for the response.
+                // In particular, do not erase a policy supplied by an opt-in HTML surface.
+                return;
+            }
+
+            if (!IsHtmlResponse(context))
+            {
+                // API/non-HTML responses are server-owned: re-apply the configured baseline so a
+                // downstream component cannot silently weaken the shared API policy.
+                headers[ContentSecurityPolicyHeader] = configuredPolicy;
+                return;
+            }
+
+            // ApplyHeaders runs once before downstream code, when ContentType is commonly still
+            // unset. That initial pass can place the API CSP on a response that later becomes HTML.
+            // Remove only that exact middleware-owned value. If the HTML surface replaced it with
+            // its own CSP, preserve the downstream policy instead of deleting it on response start.
+            if (headers.TryGetValue(ContentSecurityPolicyHeader, out var currentPolicy) &&
+                string.Equals(
+                    currentPolicy.ToString(),
+                    configuredPolicy,
+                    StringComparison.Ordinal))
+            {
+                headers.Remove(ContentSecurityPolicyHeader);
+            }
         }
 
         private static bool IsHtmlResponse(HttpContext context)
