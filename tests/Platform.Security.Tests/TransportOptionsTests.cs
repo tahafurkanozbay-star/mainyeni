@@ -131,6 +131,7 @@ public sealed class TransportOptionsTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Platform:Requests:MaxRequestBodyBytes"] = "5242880",
                 ["Platform:Transport:KeepAliveTimeoutSeconds"] = "120",
                 ["Platform:Transport:RequestHeadersTimeoutSeconds"] = "20",
                 ["Platform:Transport:MaxRequestLineSizeBytes"] = "20000",
@@ -142,6 +143,7 @@ public sealed class TransportOptionsTests
 
         var options = ApiPlatformConfigurationResolver.ResolveOptions(configuration);
 
+        Assert.Equal(5242880, options.Requests.MaxRequestBodyBytes);
         Assert.Equal(120, options.Transport.KeepAliveTimeoutSeconds);
         Assert.Equal(20, options.Transport.RequestHeadersTimeoutSeconds);
         Assert.Equal(20000, options.Transport.MaxRequestLineSizeBytes);
@@ -155,6 +157,8 @@ public sealed class TransportOptionsTests
     public void LowerSafeBounds_AreAccepted()
     {
         var options = new ApiPlatformOptions();
+        options.Governance.Enabled = false;
+        options.Requests.MaxRequestBodyBytes = 1024;
         options.Transport.KeepAliveTimeoutSeconds = 5;
         options.Transport.RequestHeadersTimeoutSeconds = 2;
         options.Transport.MaxRequestLineSizeBytes = 4096;
