@@ -47,6 +47,64 @@ namespace Platform.Security.Tests
         }
 
         [Fact]
+        public void ActiveRequestCounter_UsesIdenticalTagsForIncrementAndDecrement()
+        {
+            var measurements = new List<MeasurementRecord>();
+            using var listener = CreateListener(measurements);
+            using var metrics = new ApiRuntimeMetrics();
+
+            metrics.RequestStarted("get", "/api/items/{id}");
+            metrics.RequestCompleted("get", "/api/items/{id}", 204, 1, null, null);
+
+            var active = measurements
+                .Where(item => item.Name == "http.server.active_requests")
+                .ToArray();
+            Assert.Equal(2, active.Length);
+
+            var increment = Assert.Single(active, item => item.LongValue == 1);
+            var decrement = Assert.Single(active, item => item.LongValue == -1);
+
+            Assert.Equal(increment.Tags.Count, decrement.Tags.Count);
+            foreach (var pair in increment.Tags)
+            {
+                Assert.True(decrement.Tags.TryGetValue(pair.Key, out var completedValue));
+                Assert.Equal(pair.Value, completedValue);
+            }
+
+            Assert.Equal("GET", increment.Tags["http.request.method"]);
+            Assert.Equal("/api/items/{id}", increment.Tags["http.route"]);
+            Assert.DoesNotContain("http.response.status_code", increment.Tags.Keys);
+            Assert.DoesNotContain("http.response.status_class", increment.Tags.Keys);
+        }
+
+        [Fact]
+        public void ActiveRequestCounter_DifferentCompletionStatusesDoNotSplitSeries()
+        {
+            var measurements = new List<MeasurementRecord>();
+            using var listener = CreateListener(measurements);
+            using var metrics = new ApiRuntimeMetrics();
+
+            metrics.RequestStarted("GET", "/health");
+            metrics.RequestCompleted("GET", "/health", 200, 1, null, null);
+            metrics.RequestStarted("GET", "/health");
+            metrics.RequestCompleted("GET", "/health", 503, 1, null, null);
+
+            var active = measurements
+                .Where(item => item.Name == "http.server.active_requests")
+                .ToArray();
+            Assert.Equal(4, active.Length);
+            Assert.Equal(0, active.Sum(item => item.LongValue ?? 0));
+            Assert.All(active, item =>
+            {
+                Assert.Equal(2, item.Tags.Count);
+                Assert.Equal("GET", item.Tags["http.request.method"]);
+                Assert.Equal("/health", item.Tags["http.route"]);
+                Assert.DoesNotContain("http.response.status_code", item.Tags.Keys);
+                Assert.DoesNotContain("http.response.status_class", item.Tags.Keys);
+            });
+        }
+
+        [Fact]
         public void RequestLifecycle_MapsUnknownMethodsToOther()
         {
             var measurements = new List<MeasurementRecord>();
