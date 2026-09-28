@@ -33,3 +33,12 @@
 - MERGE: PR #359 was marked ready only after the final current-main refresh and all required exact-head workflows were green. Expected-head squash merge returned `merged=true`; squash merge SHA `a662fc5bb5635568821af0ad1ee88cbc59340006`. GitHub verified PR #359 `closed+merged`, and later current `main=9f06239bedf70f14b2ca01f244316889ca492e41` retains `a662fc5b...` as an ancestor (ahead by 5 / behind by 0).
 - SONRAKİ GÖREV: merged #359 branch must not be reused. The next Data/Search turn must start from then-current `main`, re-read canonical rules/progress and concurrent ownership, then continue only still-missing high-impact search/address/data-integrity modernization with the same exact-main, >=4,000 meaningful-additions, exact-head CI, security/performance/regression and final merge-refresh gates.
 - POST-MERGE NOTE: this progress update is documentation-only and follows the fully tested/merged Data/Search code head; it does not create a new product-runtime PASS claim.
+
+## Deep Platform / current-main continuation — 2026-09-28 13:00 TRT
+- TUR / GÖREV: Deep Platform / Whole-Code Modernization; current-main branch lifecycle recovery plus bounded request-concurrency hardening.
+- BRANCH LIFECYCLE: prior Platform PR #369 became diverged after main advanced and was closed unmerged before new work. Its stale tree/commit chain was not reused.
+- CURRENT MAIN / PR: exact base `ba9bc3e73878e59a51d5ae18a18966654198fa68`; fresh branch `agent/platform-deep-20260928-1304-ba9bc3e`; canonical draft PR #373.
+- PRODUCT CHANGE: selectively reapplied only the independently useful `RequestConcurrencyGovernor` hardening: atomic unseen-partition registration, strict `MaxTrackedClients` cardinality including overflow, and per-state cleanup/acquisition coordination while preserving lock-free existing-client dictionary lookup.
+- HEAD / GATE: initial product head `db02bd7c86652593cfe83c73d4585366e3d5afe1`; initial PR scope 100 additions / 36 deletions / 1 product file before this checkpoint. Mandatory >=4,000 meaningful-additions gate remains open; no merge attempted.
+- VALIDATION: fresh exact-head CI must be consumed after this checkpoint; no PASS is claimed for the new head until required workflows complete successfully.
+- NEXT: continue on PR #373 only while it remains current-main aligned; add real high-priority Platform/Architecture work, not filler, and keep fail-closed merge/security/performance/regression gates.
