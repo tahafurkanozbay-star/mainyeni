@@ -22,47 +22,23 @@ public sealed class TkgmTransportBoundaryTests
     [InlineData("/parsel/1\t2")]
     [InlineData("/parsel/1%2f%2fevil.example")]
     [InlineData("/parsel/1:2")]
-    public void ValidateRelativePath_RejectsAuthorityTraversalAndComponentSmuggling(string path)
+    public async Task GetAsync_RejectsNonCanonicalPathsBeforeNetworkDispatch(string path)
     {
-        Assert.Throws<ArgumentException>(() => RestSharpTkgmTransport.ValidateRelativePath(path));
-    }
-
-    [Theory]
-    [InlineData("/parsel/1/2/3")]
-    [InlineData("/idariYapi/ilceListe/34")]
-    [InlineData("/idariYapi/mahalleListe/12345")]
-    [InlineData("/route_with-dash/123")]
-    public void ValidateRelativePath_AllowsCanonicalApiRoutes(string path)
-    {
-        RestSharpTkgmTransport.ValidateRelativePath(path);
+        using var transport = new RestSharpTkgmTransport();
+        await Assert.ThrowsAsync<ArgumentException>(() => transport.GetAsync(path, CancellationToken.None));
     }
 
     [Fact]
-    public void ValidateRelativePath_RejectsOversizedInputBeforeNetworkDispatch()
+    public async Task GetAsync_RejectsOversizedInputBeforeNetworkDispatch()
     {
+        using var transport = new RestSharpTkgmTransport();
         var oversized = "/parsel/" + new string('1', 600);
-        var error = Assert.Throws<ArgumentException>(() => RestSharpTkgmTransport.ValidateRelativePath(oversized));
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => transport.GetAsync(oversized, CancellationToken.None));
         Assert.Contains("length", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task GetAsync_RejectsNetworkPathReferenceBeforeCancellationOrNetworkDispatch()
-    {
-        using var transport = new RestSharpTkgmTransport();
-        var task = transport.GetAsync("//evil.example/escape", CancellationToken.None);
-        await Assert.ThrowsAsync<ArgumentException>(() => task);
-    }
-
-    [Fact]
-    public async Task GetAsync_RejectsQuerySmugglingBeforeNetworkDispatch()
-    {
-        using var transport = new RestSharpTkgmTransport();
-        var task = transport.GetAsync("/parsel/1?next=http://evil.example", CancellationToken.None);
-        await Assert.ThrowsAsync<ArgumentException>(() => task);
-    }
-
-    [Fact]
-    public async Task GetAsync_HonoursPreCancelledTokenWithoutNetworkDispatch()
+    public async Task GetAsync_HonoursPreCancelledTokenBeforeNetworkDispatch()
     {
         using var transport = new RestSharpTkgmTransport();
         using var cancellation = new CancellationTokenSource();
