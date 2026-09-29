@@ -2,15 +2,6 @@
 
 > Full historical progress through the state immediately before the PR #367 Experience closure is preserved verbatim in [`KENT_REHBERI_PROGRESS_ARCHIVE_THROUGH_20260928_PRE_PR367.md`](./KENT_REHBERI_PROGRESS_ARCHIVE_THROUGH_20260928_PRE_PR367.md). Earlier historical material referenced by that archive remains preserved in its existing archive files and Git history. This compact continuation keeps the canonical progress entrypoint bounded without deleting prior team records.
 
-## Deep Platform / current-main refresh gate — 2026-09-29
-- KANONİK PR / BRANCH: PR #379 `feat(platform): continue runtime governance on current main`; branch `agent/platform-deep-20260928-1508-87d995d`.
-- CURRENT MAIN / HEAD: current main is `46522905e12b095961bcc526b00e44f1f440157e`; pre-note Platform code head is `4612fc92c5178772f40ce5b4ce15810b6100aedb`.
-- DIVERGENCE: compare reports Platform work 28 commits ahead / 1 behind with merge-base `87d995d83431a9d630e5a7dcca44e9f7914b2dfc`. The single newer main commit is the GIS/ArcGIS lifecycle package and must be preserved during refresh.
-- SAFETY: a previous low-level tree attempt proved unsafe because it would have omitted current-main GIS files; that destructive tree was not retained. This turn revalidated that no force/rewrite should be used unless the resulting tree demonstrably contains both current-main and Platform changes.
-- CURRENT PLATFORM SCOPE: 19 changed Platform files, 1,670 additions / 536 deletions before this documentation note; runtime governance includes bounded concurrency, TKGM/EGO/POD integration boundaries, GIS proxy request-body admission and feedback persistence lifecycle modernization with regression tests.
-- MERGE GATE: mandatory >=4,000 meaningful additions is not met. PR stays draft/open; no merge or auto-merge is allowed. Before eventual merge require current-main incorporated without loss, mergeable=true, exact-head required CI completed+success and final security/performance/regression review.
-- NEXT: perform a true three-way current-main refresh using a GitHub operation that preserves both trees; then continue high-priority Platform/Architecture backlog on the same PR until >=4,000 meaningful additions. Do not manufacture scope merely to satisfy the threshold.
-
 ## Deep Experience / governed command center modernization merge closure — 2026-09-28
 - TUR / GÖREV: Deep Experience / Whole-Code Modernization; command-center interaction governance, accessible keyboard/ARIA behavior, bounded rendering, scoped discovery, session-local prioritization and production integration.
 - KANONİK PR / BRANCH: PR #367 `feat(experience): modernize governed command center`; branch `agent/experience-command-20260928-1015-e6741ec`. Stale/diverged PR #363 was closed superseded and its commit chain was not reused; only still-needed Experience work was selectively reapplied on a fresh current-main branch.
@@ -41,7 +32,7 @@
 - PERFORMANCE / DATA INTEGRITY: ontology entries/aliases/hierarchy, filter postings/candidates, schema history, cache entries/bytes/TTL and cursor/result windows are explicitly bounded. Adjacency-indexed descendant traversal and bounded filter candidates avoid repeated broad scans; revision/fingerprint checks fail closed across stale datasets and schema conflicts.
 - MERGE: PR #359 was marked ready only after the final current-main refresh and all required exact-head workflows were green. Expected-head squash merge returned `merged=true`; squash merge SHA `a662fc5bb5635568821af0ad1ee88cbc59340006`. GitHub verified PR #359 `closed+merged`, and later current `main=9f06239bedf70f14b2ca01f244316889ca492e41` retains `a662fc5b...` as an ancestor (ahead by 5 / behind by 0).
 - SONRAKİ GÖREV: merged #359 branch must not be reused. The next Data/Search turn must start from then-current `main`, re-read canonical rules/progress and concurrent ownership, then continue only still-missing high-impact search/address/data-integrity modernization with the same exact-main, >=4,000 meaningful-additions, exact-head CI, security/performance/regression and final merge-refresh gates.
-- POST-MERGE NOTE: this progress update is documentation-only and follows the fully tested/merged Data/Search code head; it does not create a new code-behavior PASS claim by itself.
+- POST-MERGE NOTE: this progress update is documentation-only and follows the fully tested/merged Data/Search code head; it does not create a new product-runtime PASS claim.
 
 ## Deep QA / release execution trust-boundary modernization merge closure — 2026-09-28
 - TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization; GitHub Actions execution, cache, process environment, filesystem, condition, dependency lifecycle, publication, shell and reusable-workflow trust-boundary hardening.
