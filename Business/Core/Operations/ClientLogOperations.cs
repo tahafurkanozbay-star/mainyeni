@@ -139,7 +139,7 @@ LIMIT {StatisticsLimit}";
                     await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
                 }
 
-                await using var command = connection.CreateCommand();
+                using var command = connection.CreateCommand();
                 command.CommandText = sql;
 
                 var parameter = command.CreateParameter();
@@ -147,7 +147,7 @@ LIMIT {StatisticsLimit}";
                 parameter.Value = logType;
                 command.Parameters.Add(parameter);
 
-                await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 var list = new List<ClientLogStatViewModel>(StatisticsLimit);
 
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
