@@ -47,7 +47,8 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
         return;
       }
       const first = currentFocusable[0];
-      const last = currentFocusable[currentFocusable.length - 1];
+      const last = currentFocusable.at(-1);
+      if (!first || !last) return;
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus({ preventScroll: true });
