@@ -33,6 +33,7 @@ import { auditWorkflowFailureIntegrity } from './workflow-failure-integrity-audi
 import { auditWorkflowManualInputBoundaries } from './workflow-manual-input-boundary-audit.mts';
 import { auditWorkflowNetworkProvenance } from './workflow-network-provenance-audit.mts';
 import { auditWorkflowOutputProvenance } from './workflow-output-provenance-audit.mts';
+import { auditWorkflowPromotionIntegrity } from './workflow-promotion-integrity-audit.mts';
 import { auditWorkflowSecretExposure } from './workflow-secret-exposure-audit.mts';
 
 export interface WorkflowExpressionSignal {
@@ -295,6 +296,7 @@ export function auditWorkflowExpressions(
     ...auditWorkflowOutputProvenance(inventory).findings,
     ...auditWorkflowManualInputBoundaries(inventory).findings,
     ...auditWorkflowFailureIntegrity(inventory).findings,
+    ...auditWorkflowPromotionIntegrity(inventory).findings,
     ...reusableWorkflowContractFindings(inventory).findings,
   ]);
 
