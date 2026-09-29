@@ -38,11 +38,21 @@ function isElement(value: EventTarget | null | undefined): value is Element {
   return typeof Element !== 'undefined' && value instanceof Element;
 }
 
+function getContentEditableState(element: Element): string | null {
+  const attribute = element.getAttribute('contenteditable');
+  if (attribute !== null) return attribute.toLowerCase();
+  if (typeof HTMLElement !== 'undefined' && element instanceof HTMLElement) {
+    const property = element.contentEditable;
+    if (property && property !== 'inherit') return property.toLowerCase();
+  }
+  return null;
+}
+
 function isContentEditable(element: Element): boolean {
   for (let current: Element | null = element; current; current = current.parentElement) {
-    const attribute = current.getAttribute('contenteditable');
-    if (attribute === '' || attribute === 'true' || attribute === 'plaintext-only') return true;
-    if (attribute === 'false') return false;
+    const state = getContentEditableState(current);
+    if (state === '' || state === 'true' || state === 'plaintext-only') return true;
+    if (state === 'false') return false;
   }
   return false;
 }
