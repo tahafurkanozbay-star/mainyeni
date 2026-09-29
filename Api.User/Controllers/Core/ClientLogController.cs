@@ -1,34 +1,32 @@
 using Api.Core.Base;
 using Api.User.Filters;
 using Business.Core.Context;
-using Business.Core.Model;
 using Business.Core.Operations;
 using Business.Core.ViewModel;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Primitives;
 using System;
-using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using UAParser;
-using Microsoft.AspNetCore.HttpOverrides;
 
 namespace Api.User.Core.Controllers
 {
     public class ClientLogController : _BaseUserApiController
     {
-        private ClientLogOperations ops;
+        private readonly ClientLogOperations ops;
 
         public ClientLogController(BusinessContext context)
         {
-            this.dbContext = context;
+            dbContext = context;
             ops = new ClientLogOperations(context);
         }
 
-
         [HttpPost]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
-        //[Route("[controller]/Create")]
         [Route("cl/c")]
-        public IActionResult Create([FromForm] ClientLogUserCreateViewModel viewModel)
+        public async Task<IActionResult> Create(
+            [FromForm] ClientLogUserCreateViewModel viewModel,
+            CancellationToken cancellationToken)
         {
             try
             {
@@ -37,31 +35,30 @@ namespace Api.User.Core.Controllers
                     return UnAuthorizedResult();
                 }
 
-
-                var ops = new ClientLogOperations(dbContext);
-
-                var uaParser = Parser.GetDefault();
+                if (viewModel == null)
+                {
+                    return BadRequest();
+                }
 
                 var request = HttpContext.Request;
+                var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
+                var userAgent = request.Headers.UserAgent.ToString();
+                var clientInfo = Parser.GetDefault().Parse(userAgent);
 
-                //var ip = request.HttpContext.Connection.RemoteIpAddress;
-                StringValues ipVals = StringValues.Empty;
-                request.Headers.TryGetValue("X-Forwarded-For", out ipVals);
-
-                string ip = HttpContext.Connection.RemoteIpAddress.ToString();
-            
-                var iplocal = request.HttpContext.Connection.LocalIpAddress?.ToString();
-
-                string ua = request.Headers["User-Agent"].ToString();
-                var clientInfo = uaParser.Parse(ua);
-
-                var os = clientInfo.OS.ToString();
-                var device = clientInfo.Device.ToString();
-                var browser = clientInfo.UA.ToString();
-
-                var result= ops.Create(viewModel.logType,browser,os ,device,ip,viewModel.description);
+                var result = await ops.CreateAsync(
+                    viewModel.logType,
+                    clientInfo.UA.ToString(),
+                    clientInfo.OS.ToString(),
+                    clientInfo.Device.ToString(),
+                    ip,
+                    viewModel.description,
+                    cancellationToken).ConfigureAwait(false);
 
                 return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
