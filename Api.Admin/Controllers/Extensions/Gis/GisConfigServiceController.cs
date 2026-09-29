@@ -1,5 +1,6 @@
 using System;
-using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Core.Base;
 using Api.Admin.Filters;
 using Business.Core.Common;
@@ -12,36 +13,29 @@ namespace CityWorks.AdminApi.Gis
 {
     public class GisConfigServiceController : _BaseController
     {
-        private GisConfigServiceOperations GisConfigOperations;
+        private readonly GisConfigServiceOperations gisConfigOperations;
 
         public GisConfigServiceController(BusinessContext context)
         {
-            this.dbContext = context;
-            GisConfigOperations = new GisConfigServiceOperations(context);
+            dbContext = context;
+            gisConfigOperations = new GisConfigServiceOperations(context);
         }
 
-        /// <summary>
-        /// Deletes a configuration service
-        /// </summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/ConfigService/Delete")]
-        public IActionResult Delete(GisConfigService viewModel)
+        public async Task<IActionResult> Delete(GisConfigService viewModel, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = GisConfigOperations.Delete(viewModel, session);
-                    return new JsonResult(result);
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                var result = await gisConfigOperations.DeleteAsync(viewModel, sessionResult.Data, cancellationToken);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -50,28 +44,21 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-        /// <summary>
-        /// Gets the list for configuration services
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/ConfigService/List")]
-        public IActionResult List()
+        public async Task<IActionResult> List(CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = GisConfigOperations.GetAllGrouped();
-                    return new JsonResult(result);
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                var result = await gisConfigOperations.GetAllGroupedAsync(cancellationToken);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -80,38 +67,24 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-        /// <summary>
-        /// Creates or update a configuration service
-        /// </summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/ConfigService/Save")]
-        public IActionResult Save([FromBody] GisConfigService viewModel)
+        public async Task<IActionResult> Save([FromBody] GisConfigService viewModel, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
 
-                    ServiceResult result = null;
-                    if (viewModel.Id > 0)
-                    {
-                        result = GisConfigOperations.Update(viewModel, session);
-                    }
-                    else
-                    {
-                        result = GisConfigOperations.Create(viewModel, session);
-                    }
-                    return new JsonResult(result);
-
-
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
+                ServiceResult result = viewModel != null && viewModel.Id > 0
+                    ? await gisConfigOperations.UpdateAsync(viewModel, sessionResult.Data, cancellationToken)
+                    : await gisConfigOperations.CreateAsync(viewModel, sessionResult.Data, cancellationToken);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -120,36 +93,26 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-
-         /// <summary>
-        /// Creates or update a configuration service
-        /// </summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/ConfigService/Import")]
-        public IActionResult Import()
+        public async Task<IActionResult> Import(CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                if (!Request.HasFormContentType || Request.Form.Files.Count != 1)
+                    return new JsonResult(new ServiceResult(ServiceResultType.Error, "Tek bir konfigürasyon dosyası gerekiyor"));
 
-                     var uploadedFile = Request.Form.Files[0];
-                     var fileName = uploadedFile.FileName;
-                     var fileStream=uploadedFile.OpenReadStream();
-                    
-                    ServiceResult result = GisConfigOperations.Import(fileName, fileStream, session);
-                  
-                    return new JsonResult(result);
-
-
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
+                var uploadedFile = Request.Form.Files[0];
+                await using var fileStream = uploadedFile.OpenReadStream();
+                var result = await gisConfigOperations.ImportAsync(uploadedFile.FileName, fileStream, sessionResult.Data, cancellationToken);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -158,29 +121,21 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-        
-         /// <summary>
-        /// Gets the list for configuration services
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/ConfigService/Export")]
-        public IActionResult Export(string format)
+        public async Task<IActionResult> Export(string format, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = GisConfigOperations.GetAll();
-                    return new JsonResult(result);
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                var result = await gisConfigOperations.GetAllAsync(cancellationToken);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
