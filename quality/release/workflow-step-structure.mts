@@ -31,7 +31,7 @@ export interface WorkflowUsesIdentity {
 }
 
 const STEPS_KEY = /^\s*steps\s*:\s*(?:#.*)?$/i;
-const STEP_START = /^\s*-\s+(?:name\s*:|id\s*:|uses\s*:|run\s*:|shell\s*:|if\s*:|env\s*:|with\s*:|continue-on-error\s*:|timeout-minutes\s*:)/i;
+const STEP_START = /^\s*-\s+(?:name\s*:|id\s*:|uses\s*:|run\s*:|shell\s*:|working-directory\s*:|if\s*:|env\s*:|with\s*:|continue-on-error\s*:|timeout-minutes\s*:)/i;
 const FIELD = /^\s*([A-Za-z0-9_.-]+)\s*:\s*(.*)$/;
 const SHA40 = /^[0-9a-f]{40}$/i;
 
