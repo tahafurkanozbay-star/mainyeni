@@ -17,6 +17,7 @@ export interface NavigationSearchObserverDiagnostics {
   readonly activeObserverCount: number;
   readonly lastFailureRevision: number | null;
   readonly lastFailureKind: string | null;
+  readonly disposed: boolean;
 }
 
 export type NavigationSearchListener = () => void;
@@ -67,6 +68,7 @@ export class NavigationSearchModel {
   private query = '';
   private isComposing = false;
   private revision = 0;
+  private disposed = false;
   private readonly listeners = new Set<NavigationSearchListener>();
   private snapshot: NavigationSearchSnapshot = this.buildSnapshot();
   private observerDiagnostics: NavigationSearchObserverDiagnostics = Object.freeze({
@@ -75,6 +77,7 @@ export class NavigationSearchModel {
     activeObserverCount: 0,
     lastFailureRevision: null,
     lastFailureKind: null,
+    disposed: false,
   });
 
   getSnapshot = (): NavigationSearchSnapshot => this.snapshot;
@@ -82,24 +85,24 @@ export class NavigationSearchModel {
   getObserverDiagnostics = (): NavigationSearchObserverDiagnostics => this.observerDiagnostics;
 
   subscribe = (listener: NavigationSearchListener): (() => void) => {
+    if (this.disposed) {
+      this.recordRejectedObserver();
+      return () => undefined;
+    }
     if (this.listeners.has(listener)) {
       return () => this.unsubscribe(listener);
     }
-
     if (this.listeners.size >= NAVIGATION_SEARCH_OBSERVER_LIMIT) {
-      this.observerDiagnostics = Object.freeze({
-        ...this.observerDiagnostics,
-        rejectedObserverCount: this.observerDiagnostics.rejectedObserverCount + 1,
-      });
+      this.recordRejectedObserver();
       return () => undefined;
     }
-
     this.listeners.add(listener);
     this.refreshObserverCount();
     return () => this.unsubscribe(listener);
   };
 
   setQuery(value: string): void {
+    if (this.disposed) return;
     const nextQuery = sanitizeNavigationSearchQuery(value);
     if (nextQuery === this.query) return;
     this.query = nextQuery;
@@ -107,19 +110,20 @@ export class NavigationSearchModel {
   }
 
   clear(): void {
-    if (this.query.length === 0 && !this.isComposing) return;
+    if (this.disposed || (this.query.length === 0 && !this.isComposing)) return;
     this.query = '';
     this.isComposing = false;
     this.publish();
   }
 
   beginComposition(): void {
-    if (this.isComposing) return;
+    if (this.disposed || this.isComposing) return;
     this.isComposing = true;
     this.publish();
   }
 
   endComposition(value?: string): void {
+    if (this.disposed) return;
     const nextQuery = value === undefined ? this.query : sanitizeNavigationSearchQuery(value);
     if (!this.isComposing && nextQuery === this.query) return;
     this.query = nextQuery;
@@ -128,9 +132,27 @@ export class NavigationSearchModel {
   }
 
   getSubmissionQuery(): string | null {
-    if (this.isComposing) return null;
+    if (this.disposed || this.isComposing) return null;
     const normalizedQuery = normalizeNavigationSearchQuery(this.query);
     return normalizedQuery.length > 0 ? normalizedQuery : null;
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.listeners.clear();
+    this.observerDiagnostics = Object.freeze({
+      ...this.observerDiagnostics,
+      activeObserverCount: 0,
+      disposed: true,
+    });
+  }
+
+  private recordRejectedObserver(): void {
+    this.observerDiagnostics = Object.freeze({
+      ...this.observerDiagnostics,
+      rejectedObserverCount: this.observerDiagnostics.rejectedObserverCount + 1,
+    });
   }
 
   private unsubscribe(listener: NavigationSearchListener): void {
@@ -150,7 +172,7 @@ export class NavigationSearchModel {
     return Object.freeze({
       query: this.query,
       normalizedQuery,
-      canSubmit: !this.isComposing && normalizedQuery.length > 0,
+      canSubmit: !this.disposed && !this.isComposing && normalizedQuery.length > 0,
       isComposing: this.isComposing,
       isEmpty: normalizedQuery.length === 0,
       remainingCharacters: Math.max(0, NAVIGATION_SEARCH_QUERY_LIMIT - this.query.length),
@@ -168,10 +190,9 @@ export class NavigationSearchModel {
   }
 
   private publish(): void {
+    if (this.disposed) return;
     this.revision += 1;
     this.snapshot = this.buildSnapshot();
-    // Set iteration is mutation-safe: an observer may unsubscribe itself
-    // without invalidating the remaining notification pass.
     for (const listener of this.listeners) {
       try {
         listener();
