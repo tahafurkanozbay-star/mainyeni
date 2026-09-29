@@ -1,3 +1,10 @@
+import {
+  auditShortcutDefinitions,
+  chordMatches,
+  createShortcutChord,
+  evaluateShortcutPolicy,
+} from './mapWorkspaceShortcutPolicy';
+
 export type MapWorkspaceShortcutAction =
   | 'focus-map'
   | 'focus-navigation'
@@ -30,23 +37,13 @@ export const MAP_WORKSPACE_SHORTCUTS: readonly MapWorkspaceShortcutDefinition[] 
   { id: 'feedback', action: 'open-feedback', key: 'f', alt: true, label: 'Alt+F', description: 'Geri bildirim penceresini aç' },
 ]);
 
-const isEditableTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select';
-};
+const registryIssues = auditShortcutDefinitions(MAP_WORKSPACE_SHORTCUTS);
+if (registryIssues.length > 0) throw new Error(`Map workspace shortcut registry is invalid: ${registryIssues.join('; ')}`);
 
 export const resolveMapWorkspaceShortcut = (event: KeyboardEvent): MapWorkspaceShortcutDefinition | null => {
-  if (event.defaultPrevented || event.repeat || isEditableTarget(event.target)) return null;
-  const key = event.key.toLocaleLowerCase('tr-TR');
-  return MAP_WORKSPACE_SHORTCUTS.find((shortcut) =>
-    shortcut.key === key
-    && Boolean(shortcut.alt) === event.altKey
-    && Boolean(shortcut.ctrl) === event.ctrlKey
-    && Boolean(shortcut.meta) === event.metaKey
-    && Boolean(shortcut.shift) === event.shiftKey
-  ) ?? null;
+  if (!evaluateShortcutPolicy(event).allowed) return null;
+  const chord = createShortcutChord(event);
+  return MAP_WORKSPACE_SHORTCUTS.find((shortcut) => chordMatches(chord, shortcut)) ?? null;
 };
 
 export const shortcutHelpText = (): string => MAP_WORKSPACE_SHORTCUTS
