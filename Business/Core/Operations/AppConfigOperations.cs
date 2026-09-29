@@ -1,111 +1,207 @@
-using System.Linq;
 using Business._Base;
 using Business.Core.Common;
 using Business.Core.Context;
 using Business.Core.Model;
+using Business.Core.Resources;
 using Business.Core.ViewModel;
 using Microsoft.EntityFrameworkCore;
-using Business.Core.Resources;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Business.Core.Operations
 {
     public class AppConfigOperations : _BaseOperations
     {
-        private BusinessContext db;
+        private readonly BusinessContext db;
 
         public AppConfigOperations(BusinessContext context)
         {
-            this.db = context;
+            db = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        public ServiceResult<AppConfig> GetConfig(string key)
+        public ServiceResult<AppConfig> GetConfig(string key) =>
+            GetConfigAsync(key).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<AppConfig>> GetConfigAsync(
+            string key,
+            CancellationToken cancellationToken = default)
         {
-           
-                using(db)
-                {
+            var normalizedKey = NormalizeKey(key);
+            if (normalizedKey == null)
+            {
+                return Error("Konfigürasyon anahtarı geçersiz", key);
+            }
 
-                    var configList = GetItemList<AppConfig>(db, x => !x.IsDeleted && x.ConfigKey==key);
+            cancellationToken.ThrowIfCancellationRequested();
 
-                    AppConfig config = null;
-                    if (configList!=null && configList.Count>0) {
-                        config = configList.FirstOrDefault();
-                    }
-                    else
-                    {
-                        config = new AppConfig() {
-                            ConfigKey=key,
-                            ConfigValue="{}"
-                        };
-                    }
+            var config = await db.AppConfigs
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.ConfigKey == normalizedKey)
+                .OrderBy(x => x.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-                    return new ServiceResult<AppConfig>(ServiceResultType.Success, "", config);
-                }
-          
+            config ??= new AppConfig
+            {
+                ConfigKey = normalizedKey,
+                ConfigValue = "{}"
+            };
+
+            return new ServiceResult<AppConfig>(ServiceResultType.Success, string.Empty, config);
         }
 
-        public ServiceResult<AppConfig> Create(AppConfig viewModel, UserSessionViewModel session)
+        public ServiceResult<AppConfig> Create(AppConfig viewModel, UserSessionViewModel session) =>
+            CreateAsync(viewModel, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<AppConfig>> CreateAsync(
+            AppConfig viewModel,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-                using(db)
-                {
-                    var model = new AppConfig();
+            if (!TryValidateMutation(viewModel, session, out var normalizedKey, out var validationError))
+            {
+                return validationError!;
+            }
 
-                    if (model!=null)
-                    {
-                        model.SetCreate(session.UserId);
-                        model.ConfigKey = viewModel.ConfigKey;
-                        model.ConfigValue = viewModel.ConfigValue;
-                        
-                        db.AppConfigs.Add(model);
+            cancellationToken.ThrowIfCancellationRequested();
 
-                        db.SaveChanges();
+            var exists = await db.AppConfigs
+                .AsNoTracking()
+                .AnyAsync(x => !x.IsDeleted && x.ConfigKey == normalizedKey, cancellationToken)
+                .ConfigureAwait(false);
 
-                        return new ServiceResult<AppConfig>(ServiceResultType.Success,BusinessMessages.Get("UPDATED"), viewModel);
-                    }
-                    else
-                    {
-                        return new ServiceResult<AppConfig>(ServiceResultType.Error, "Konfigürasyon bulunamadı", viewModel);
-                    }
+            if (exists)
+            {
+                return Error("Konfigürasyon anahtarı zaten mevcut", normalizedKey);
+            }
 
-                }
+            var model = new AppConfig
+            {
+                ConfigKey = normalizedKey!,
+                ConfigValue = viewModel.ConfigValue
+            };
+            model.SetCreate(session.UserId);
 
+            await db.AppConfigs.AddAsync(model, cancellationToken).ConfigureAwait(false);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            return new ServiceResult<AppConfig>(ServiceResultType.Success, BusinessMessages.Get("UPDATED"), model);
         }
 
-        public ServiceResult<AppConfig> Update(AppConfig viewModel, UserSessionViewModel session)
+        public ServiceResult<AppConfig> Update(AppConfig viewModel, UserSessionViewModel session) =>
+            UpdateAsync(viewModel, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<AppConfig>> UpdateAsync(
+            AppConfig viewModel,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-                using(db)
-                {
-                    var model = GetByKey(viewModel.ConfigKey);
+            if (!TryValidateMutation(viewModel, session, out var normalizedKey, out var validationError))
+            {
+                return validationError!;
+            }
 
-                    if (model != null)
-                    {
-                        model.ConfigKey = viewModel.ConfigKey;
-                        model.ConfigValue = viewModel.ConfigValue;
+            cancellationToken.ThrowIfCancellationRequested();
 
-                        model.SetUpdate(session.UserId);
+            var model = await db.AppConfigs
+                .Where(x => !x.IsDeleted && x.ConfigKey == normalizedKey)
+                .OrderBy(x => x.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-                        db.Entry(model).State = EntityState.Modified;
+            if (model == null)
+            {
+                return await CreateAsync(viewModel, session, cancellationToken).ConfigureAwait(false);
+            }
 
-                        db.SaveChanges();
+            model.ConfigKey = normalizedKey!;
+            model.ConfigValue = viewModel.ConfigValue;
+            model.SetUpdate(session.UserId);
 
-                        return new ServiceResult<AppConfig>(ServiceResultType.Success, BusinessMessages.Get("UPDATED"), viewModel);
-                    }
-                    else
-                    {
-                        return Create(viewModel, session);
-                    }
-                }
-            
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            return new ServiceResult<AppConfig>(ServiceResultType.Success, BusinessMessages.Get("UPDATED"), model);
         }
 
-        public AppConfig GetByKey(string key)
+        public AppConfig GetByKey(string key) =>
+            GetByKeyAsync(key).GetAwaiter().GetResult();
+
+        public async Task<AppConfig?> GetByKeyAsync(
+            string key,
+            CancellationToken cancellationToken = default)
         {
-            AppConfig item = null;
-                using(db)
-                {
-                    item = GetSingleItem<AppConfig>(db, x => x.ConfigKey == key && !x.IsDeleted && !x.IsDeleted);
-                }
-            return item;
+            var normalizedKey = NormalizeKey(key);
+            if (normalizedKey == null)
+            {
+                return null;
+            }
+
+            return await db.AppConfigs
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.ConfigKey == normalizedKey)
+                .OrderBy(x => x.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
-        
+
+        private static bool TryValidateMutation(
+            AppConfig? viewModel,
+            UserSessionViewModel? session,
+            out string? normalizedKey,
+            out ServiceResult<AppConfig>? error)
+        {
+            normalizedKey = null;
+            error = null;
+
+            if (viewModel == null)
+            {
+                error = Error("Konfigürasyon gövdesi geçersiz", null);
+                return false;
+            }
+
+            if (session == null)
+            {
+                error = Error("Kullanıcı oturumu geçersiz", viewModel.ConfigKey);
+                return false;
+            }
+
+            normalizedKey = NormalizeKey(viewModel.ConfigKey);
+            if (normalizedKey == null)
+            {
+                error = Error("Konfigürasyon anahtarı geçersiz", viewModel.ConfigKey);
+                return false;
+            }
+
+            if (viewModel.ConfigValue == null)
+            {
+                error = Error("Konfigürasyon değeri geçersiz", normalizedKey);
+                return false;
+            }
+
+            return true;
+        }
+
+        private static string? NormalizeKey(string? key)
+        {
+            if (String.IsNullOrWhiteSpace(key))
+            {
+                return null;
+            }
+
+            var normalized = key.Trim();
+            return normalized.Length <= 256 ? normalized : null;
+        }
+
+        private static ServiceResult<AppConfig> Error(string message, string? key) =>
+            new ServiceResult<AppConfig>(
+                ServiceResultType.Error,
+                message,
+                new AppConfig
+                {
+                    ConfigKey = key ?? String.Empty,
+                    ConfigValue = "{}"
+                });
     }
 }
