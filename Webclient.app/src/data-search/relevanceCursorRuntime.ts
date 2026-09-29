@@ -118,7 +118,7 @@ const decodePayload = (cursor: string, maximumLength: number): RelevanceCursorPa
     });
     if (cursorChecksum(corePayload) !== checksum) return null;
     return Object.freeze({ ...corePayload, checksum });
-  } catch (_error) {
+  } catch {
     return null;
   }
 };
