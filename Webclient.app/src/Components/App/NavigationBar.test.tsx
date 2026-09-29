@@ -94,11 +94,13 @@ describe('NavigationBar', () => {
   });
 
   it('exposes CBS Başkent as a safe external link', () => {
-    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const { container } = render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const cbsLink = container.querySelector<HTMLAnchorElement>('a.kr-header-portal');
 
-    const cbsLink = screen.getByRole<HTMLAnchorElement>('link', { name: 'CBS Başkent portalını yeni sekmede aç' });
-    expect(cbsLink.getAttribute('href')).toBe('https://cbsbaskent.ankara.bel.tr/');
-    expect(cbsLink.target).toBe('_blank');
-    expect(cbsLink.rel.split(/\s+/)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+    expect(cbsLink).not.toBeNull();
+    expect(cbsLink?.getAttribute('aria-label')).toBe('CBS Başkent portalını yeni sekmede aç');
+    expect(cbsLink?.getAttribute('href')).toBe('https://cbsbaskent.ankara.bel.tr/');
+    expect(cbsLink?.getAttribute('target')).toBe('_blank');
+    expect(new Set(cbsLink?.getAttribute('rel')?.trim().split(/\s+/))).toEqual(new Set(['noopener', 'noreferrer']));
   });
 });
