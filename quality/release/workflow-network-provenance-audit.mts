@@ -46,9 +46,6 @@ export interface WorkflowNetworkProvenanceSummary {
 
 interface DownloadTarget {
   readonly name: string;
-  readonly command: string;
-  readonly insecure: boolean;
-  readonly dynamic: boolean;
   readonly latestAlias: boolean;
 }
 
@@ -69,21 +66,14 @@ function escapeRegex(value: string): string {
 
 function downloadTargets(run: string): DownloadTarget[] {
   const targets: DownloadTarget[] = [];
-  const lines = run.split('\n');
-  for (const line of lines) {
+  for (const line of run.split('\n')) {
     if (!REMOTE_COMMAND.test(line)) continue;
     const curl = line.match(/\bcurl\b[^\n]*(?:-o|--output(?:=|\s+))\s*['"]?([^'"\s]+)/i);
     const wget = line.match(/\bwget\b[^\n]*(?:-O\s+|--output-document(?:=|\s+))['"]?([^'"\s]+)/i);
     const powershell = line.match(/\b(?:Invoke-WebRequest|Invoke-RestMethod|iwr|irm|Start-BitsTransfer)\b[^\n]*-(?:OutFile|Destination)\s+['"]?([^'"\s]+)/i);
     const name = curl?.[1] ?? wget?.[1] ?? powershell?.[1];
     if (!name) continue;
-    targets.push({
-      name,
-      command: line.trim(),
-      insecure: /http:\/\//i.test(line),
-      dynamic: DYNAMIC_SOURCE.test(line) || URL_EXPRESSION.test(line),
-      latestAlias: LATEST_ALIAS.test(line),
-    });
+    targets.push({ name, latestAlias: LATEST_ALIAS.test(line) });
   }
   return targets;
 }
@@ -92,7 +82,7 @@ function targetExecuted(run: string, target: string): boolean {
   const escaped = escapeRegex(target.replace(/^\.\//, ''));
   const patterns = [
     new RegExp(`(?:^|\\s)(?:bash|sh|zsh|pwsh|powershell|python(?:3)?|node)\\s+['"]?(?:\\./)?${escaped}(?:['"\\s]|$)`, 'im'),
-    new RegExp(`(?:^|\\s)(?:\\./)?${escaped}(?:['"\\s]|$)`, 'im'),
+    new RegExp(`^\\s*(?:\\./)?${escaped}(?:['"\\s]|$)`, 'im'),
     new RegExp(`chmod\\s+[^\\n]*\\+x[^\\n]*${escaped}`, 'im'),
   ];
   return patterns.some(pattern => pattern.test(run));
@@ -102,7 +92,7 @@ function targetVerifiedBeforeExecution(run: string, target: string): boolean {
   if (!VERIFY.test(run)) return false;
   const verifyIndex = run.search(VERIFY);
   const escaped = escapeRegex(target.replace(/^\.\//, ''));
-  const execute = new RegExp(`(?:bash|sh|zsh|pwsh|powershell|python(?:3)?|node)\\s+['"]?(?:\\./)?${escaped}|(?:^|\\s)\\./${escaped}|chmod\\s+[^\\n]*${escaped}`, 'im');
+  const execute = new RegExp(`(?:bash|sh|zsh|pwsh|powershell|python(?:3)?|node)\\s+['"]?(?:\\./)?${escaped}|^\\s*(?:\\./)?${escaped}(?:['"\\s]|$)|chmod\\s+[^\\n]*${escaped}`, 'im');
   const executeIndex = run.search(execute);
   return verifyIndex >= 0 && executeIndex >= 0 && verifyIndex < executeIndex;
 }
