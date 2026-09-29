@@ -121,7 +121,7 @@ function findingFor(signal: UntrustedEnvSignal): Finding {
     title: critical ? 'Untrusted environment data is converted back into executable source' : 'Untrusted environment data controls a sensitive command selector',
     message: `Step ${signal.step} correctly receives external data through env variable ${signal.variable}, but later uses that variable in ${signal.evaluatorUse ? 'eval/Invoke-Expression' : signal.interpreterCommandUse ? 'interpreter command source' : signal.commandExecution ? 'command position' : 'a sensitive git/network/filesystem/deployment selector'}. Moving data to env is safe only while it remains data.`,
     location: { file: signal.file, line: signal.line },
-    evidence: { excerpt: signal.variable, metadata: { variable: signal.variable, sources: signal.sources } },
+    evidence: { excerpt: signal.variable, metadata: { variable: signal.variable, sources: signal.sources.join(',') } },
     remediation: signal.dangerousSelectorUse && !critical
       ? 'Validate the variable against a closed allowlist and map it to a reviewed literal selector. Quote it as data and never allow arbitrary refs, URLs, paths, repositories, or deployment targets.'
       : 'Do not eval, source, -c/-Command/-e, or execute untrusted environment data. Keep a literal reviewed command and pass the variable only as a quoted argument/data value.',
