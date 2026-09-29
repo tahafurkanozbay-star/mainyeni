@@ -99,7 +99,7 @@ const normalizePolicy = (input: Partial<SearchCorpusRuntimePolicyV6>): SearchCor
   maximumMutationsPerCommit: normalizeInteger(input.maximumMutationsPerCommit, DEFAULT_POLICY.maximumMutationsPerCommit, 1, 250_000),
   maximumHistory: normalizeInteger(input.maximumHistory, DEFAULT_POLICY.maximumHistory, 0, 10_000),
   requireExpectedRevision: input.requireExpectedRevision ?? DEFAULT_POLICY.requireExpectedRevision,
-  queryEngine: Object.freeze({ ...(input.queryEngine ?? {}) }),
+  queryEngine: Object.freeze({ ...input.queryEngine }),
 });
 
 const normalizeRevision = (value: unknown): string => String(value ?? '').trim().slice(0, 256);
