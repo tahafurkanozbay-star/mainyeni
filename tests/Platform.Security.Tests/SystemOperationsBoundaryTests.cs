@@ -94,7 +94,12 @@ public sealed class SystemOperationsBoundaryTests
             Category = "existing",
             Title = "existing",
             Url = "https://example.test/existing",
-            Description = string.Empty
+            Description = string.Empty,
+            SCUserName = string.Empty,
+            SCPassword = string.Empty,
+            AdditionalInfo = string.Empty,
+            SearchCategoryTitle = string.Empty,
+            IdentifyLayers = string.Empty
         });
         await context.SaveChangesAsync();
         var path = await WriteTempAsync("category,\"unclosed,https://example.test/service,description");
