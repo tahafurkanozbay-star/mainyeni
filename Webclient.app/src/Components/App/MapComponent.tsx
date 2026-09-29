@@ -19,6 +19,7 @@ import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
+import { MapWorkspaceShortcutHelpLauncher } from './MapWorkspaceShortcutHelp';
 import { handleMapWorkspaceKeyDown } from './mapWorkspaceShortcuts';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
@@ -183,6 +184,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && <>
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
+        <MapWorkspaceShortcutHelpLauncher />
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
         <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} />
         <BasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
