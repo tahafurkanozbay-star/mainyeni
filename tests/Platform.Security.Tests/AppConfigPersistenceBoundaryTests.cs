@@ -76,11 +76,7 @@ public sealed class AppConfigPersistenceBoundaryTests
     public async Task UpdateAsync_ExistingKey_UpdatesWithoutDuplicate()
     {
         await using var context = CreateContext();
-        context.AppConfigs.Add(new AppConfig
-        {
-            ConfigKey = "map.settings",
-            ConfigValue = "{\"enabled\":false}"
-        });
+        context.AppConfigs.Add(ExistingConfig("map.settings", "{\"enabled\":false}"));
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
@@ -98,11 +94,7 @@ public sealed class AppConfigPersistenceBoundaryTests
     public async Task CreateAsync_DuplicateActiveKey_IsRejectedWithoutSecondRecord()
     {
         await using var context = CreateContext();
-        context.AppConfigs.Add(new AppConfig
-        {
-            ConfigKey = "map.settings",
-            ConfigValue = "{}"
-        });
+        context.AppConfigs.Add(ExistingConfig("map.settings", "{}"));
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
@@ -133,11 +125,7 @@ public sealed class AppConfigPersistenceBoundaryTests
     public async Task GetByKeyAsync_DoesNotTrackReadOnlyEntity()
     {
         await using var context = CreateContext();
-        context.AppConfigs.Add(new AppConfig
-        {
-            ConfigKey = "map.settings",
-            ConfigValue = "{}"
-        });
+        context.AppConfigs.Add(ExistingConfig("map.settings", "{}"));
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
@@ -146,6 +134,17 @@ public sealed class AppConfigPersistenceBoundaryTests
 
         Assert.NotNull(result);
         Assert.Empty(context.ChangeTracker.Entries());
+    }
+
+    private static AppConfig ExistingConfig(string key, string value)
+    {
+        var config = new AppConfig
+        {
+            ConfigKey = key,
+            ConfigValue = value
+        };
+        config.SetCreate(1);
+        return config;
     }
 
     private static BusinessContext CreateContext()
