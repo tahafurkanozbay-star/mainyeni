@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 namespace Api.Core.Platform.Governance
@@ -10,23 +11,7 @@ namespace Api.Core.Platform.Governance
     /// </summary>
     public static class RequestTargetInspector
     {
-        private static readonly string[] EncodedSeparatorTokens =
-        {
-            "%2f",
-            "%5c",
-            "%252f",
-            "%255c"
-        };
-
-        private static readonly string[] EncodedTraversalTokens =
-        {
-            "%2e%2e",
-            "%2e.",
-            ".%2e",
-            "%252e%252e",
-            "%252e.",
-            ".%252e"
-        };
+        private const int MaxPercentDecodePasses = 8;
 
         public static RequestTargetSnapshot Inspect(string rawTarget)
         {
@@ -36,6 +21,8 @@ namespace Api.Core.Platform.Governance
             var query = queryIndex < 0 || queryIndex == value.Length - 1
                 ? string.Empty
                 : value.Substring(queryIndex + 1);
+            var containsPlainTraversal = ContainsPlainTraversal(path);
+            var encodedPath = InspectEncodedPath(path, containsPlainTraversal);
 
             return new RequestTargetSnapshot(
                 rawTargetLength: value.Length,
@@ -44,9 +31,10 @@ namespace Api.Core.Platform.Governance
                 queryParameterCount: CountQueryParameters(query),
                 containsControlCharacters: ContainsControlCharacters(value),
                 containsBackslash: path.IndexOf('\\') >= 0,
-                containsPlainTraversal: ContainsPlainTraversal(path),
-                containsEncodedSeparator: ContainsAny(path, EncodedSeparatorTokens),
-                containsEncodedTraversal: ContainsAny(path, EncodedTraversalTokens));
+                containsPlainTraversal: containsPlainTraversal,
+                containsEncodedSeparator: encodedPath.ContainsSeparator,
+                containsEncodedTraversal: encodedPath.ContainsTraversal,
+                percentDecodingDepthExceeded: encodedPath.DepthExceeded);
         }
 
         public static int CountQueryParameters(string query)
@@ -111,33 +99,7 @@ namespace Api.Core.Platform.Governance
 
         public static bool ContainsPlainTraversal(string path)
         {
-            if (string.IsNullOrEmpty(path))
-            {
-                return false;
-            }
-
-            var start = 0;
-            for (var index = 0; index <= path.Length; index++)
-            {
-                var atEnd = index == path.Length;
-                var separator = !atEnd && path[index] == '/';
-                if (!atEnd && !separator)
-                {
-                    continue;
-                }
-
-                var length = index - start;
-                if (length == 2 &&
-                    path[start] == '.' &&
-                    path[start + 1] == '.')
-                {
-                    return true;
-                }
-
-                start = index + 1;
-            }
-
-            return false;
+            return ContainsPlainTraversal(path.AsSpan());
         }
 
         public static bool ContainsAny(string value, IReadOnlyList<string> needles)
@@ -163,6 +125,193 @@ namespace Api.Core.Platform.Governance
 
             return false;
         }
+
+        private static EncodedPathInspection InspectEncodedPath(
+            string path,
+            bool containsPlainTraversal)
+        {
+            if (string.IsNullOrEmpty(path) || path.IndexOf('%') < 0)
+            {
+                return default;
+            }
+
+            var first = ArrayPool<char>.Shared.Rent(path.Length);
+            var second = ArrayPool<char>.Shared.Rent(path.Length);
+
+            try
+            {
+                ReadOnlySpan<char> source = path.AsSpan();
+                var destination = first;
+                var containsSeparator = false;
+                var containsTraversal = false;
+
+                for (var pass = 0; pass < MaxPercentDecodePasses; pass++)
+                {
+                    var written = DecodePercentTriplets(
+                        source,
+                        destination.AsSpan(0, path.Length),
+                        out var decodedAny,
+                        out var decodedSeparator);
+
+                    if (!decodedAny)
+                    {
+                        return new EncodedPathInspection(
+                            containsSeparator,
+                            containsTraversal,
+                            depthExceeded: false);
+                    }
+
+                    containsSeparator |= decodedSeparator;
+                    var decoded = destination.AsSpan(0, written);
+                    if (!containsPlainTraversal && ContainsPlainTraversal(decoded))
+                    {
+                        containsTraversal = true;
+                    }
+
+                    if (pass == MaxPercentDecodePasses - 1)
+                    {
+                        return new EncodedPathInspection(
+                            containsSeparator,
+                            containsTraversal,
+                            ContainsDecodablePercentTriplet(decoded));
+                    }
+
+                    source = decoded;
+                    destination = ReferenceEquals(destination, first) ? second : first;
+                }
+
+                return new EncodedPathInspection(
+                    containsSeparator,
+                    containsTraversal,
+                    depthExceeded: false);
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(first);
+                ArrayPool<char>.Shared.Return(second);
+            }
+        }
+
+        private static int DecodePercentTriplets(
+            ReadOnlySpan<char> source,
+            Span<char> destination,
+            out bool decodedAny,
+            out bool decodedSeparator)
+        {
+            decodedAny = false;
+            decodedSeparator = false;
+            var read = 0;
+            var written = 0;
+
+            while (read < source.Length)
+            {
+                if (source[read] == '%' &&
+                    read + 2 < source.Length &&
+                    TryHexNibble(source[read + 1], out var high) &&
+                    TryHexNibble(source[read + 2], out var low))
+                {
+                    var decoded = (char)((high << 4) | low);
+                    destination[written++] = decoded;
+                    decodedAny = true;
+                    decodedSeparator |= decoded == '/' || decoded == '\\';
+                    read += 3;
+                    continue;
+                }
+
+                destination[written++] = source[read++];
+            }
+
+            return written;
+        }
+
+        private static bool ContainsPlainTraversal(ReadOnlySpan<char> path)
+        {
+            if (path.IsEmpty)
+            {
+                return false;
+            }
+
+            var start = 0;
+            for (var index = 0; index <= path.Length; index++)
+            {
+                var atEnd = index == path.Length;
+                var separator = !atEnd && (path[index] == '/' || path[index] == '\\');
+                if (!atEnd && !separator)
+                {
+                    continue;
+                }
+
+                var length = index - start;
+                if (length == 2 &&
+                    path[start] == '.' &&
+                    path[start + 1] == '.')
+                {
+                    return true;
+                }
+
+                start = index + 1;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsDecodablePercentTriplet(ReadOnlySpan<char> value)
+        {
+            for (var index = 0; index + 2 < value.Length; index++)
+            {
+                if (value[index] == '%' &&
+                    TryHexNibble(value[index + 1], out _) &&
+                    TryHexNibble(value[index + 2], out _))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryHexNibble(char value, out int nibble)
+        {
+            if (value >= '0' && value <= '9')
+            {
+                nibble = value - '0';
+                return true;
+            }
+
+            if (value >= 'a' && value <= 'f')
+            {
+                nibble = value - 'a' + 10;
+                return true;
+            }
+
+            if (value >= 'A' && value <= 'F')
+            {
+                nibble = value - 'A' + 10;
+                return true;
+            }
+
+            nibble = 0;
+            return false;
+        }
+
+        private readonly struct EncodedPathInspection
+        {
+            public EncodedPathInspection(
+                bool containsSeparator,
+                bool containsTraversal,
+                bool depthExceeded)
+            {
+                ContainsSeparator = containsSeparator;
+                ContainsTraversal = containsTraversal;
+                DepthExceeded = depthExceeded;
+            }
+
+            public bool ContainsSeparator { get; }
+
+            public bool ContainsTraversal { get; }
+
+            public bool DepthExceeded { get; }
+        }
     }
 
     public readonly struct RequestTargetSnapshot
@@ -176,7 +325,8 @@ namespace Api.Core.Platform.Governance
             bool containsBackslash,
             bool containsPlainTraversal,
             bool containsEncodedSeparator,
-            bool containsEncodedTraversal)
+            bool containsEncodedTraversal,
+            bool percentDecodingDepthExceeded)
         {
             RawTargetLength = rawTargetLength;
             PathLength = pathLength;
@@ -187,6 +337,7 @@ namespace Api.Core.Platform.Governance
             ContainsPlainTraversal = containsPlainTraversal;
             ContainsEncodedSeparator = containsEncodedSeparator;
             ContainsEncodedTraversal = containsEncodedTraversal;
+            PercentDecodingDepthExceeded = percentDecodingDepthExceeded;
         }
 
         public int RawTargetLength { get; }
@@ -206,5 +357,7 @@ namespace Api.Core.Platform.Governance
         public bool ContainsEncodedSeparator { get; }
 
         public bool ContainsEncodedTraversal { get; }
+
+        public bool PercentDecodingDepthExceeded { get; }
     }
 }
