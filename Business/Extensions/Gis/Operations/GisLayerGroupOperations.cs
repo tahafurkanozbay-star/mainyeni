@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +23,7 @@ namespace Business.Extensions.Gis.Operations
         private const int MaxTitleLength = 256;
         private const int MaxReorderItems = 2000;
         private const int MaxReorderPayloadLength = 512_000;
+        private static readonly CultureInfo TurkishCulture = CultureInfo.GetCultureInfo("tr-TR");
         private readonly BusinessContext db;
 
         public GisLayerGroupOperations(BusinessContext context)
@@ -222,11 +224,14 @@ namespace Business.Extensions.Gis.Operations
 
         private async Task<bool> HasDuplicateTitleAsync(string title, int? excludedId, CancellationToken cancellationToken)
         {
-            var normalized = title.Trim().ToUpperInvariant();
+            var normalized = NormalizeTitleIdentity(title);
             var titles = await db.GisLayerGroups.AsNoTracking().Where(x => !x.IsDeleted && (!excludedId.HasValue || x.Id != excludedId.Value))
                 .Select(x => x.Title).ToListAsync(cancellationToken);
-            return titles.Any(x => string.Equals(x?.Trim().ToUpperInvariant(), normalized, StringComparison.Ordinal));
+            return titles.Any(x => string.Equals(NormalizeTitleIdentity(x), normalized, StringComparison.Ordinal));
         }
+
+        private static string NormalizeTitleIdentity(string title) =>
+            (title ?? string.Empty).Trim().ToUpper(TurkishCulture);
 
         private static ServiceResult ValidateAndNormalize(GisLayerGroup viewModel)
         {
