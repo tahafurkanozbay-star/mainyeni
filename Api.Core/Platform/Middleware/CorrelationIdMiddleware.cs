@@ -76,12 +76,25 @@ namespace Api.Core.Platform.Middleware
                 return Task.CompletedTask;
             });
 
-            using (_logger.BeginScope(new System.Collections.Generic.Dictionary<string, object>
+            try
             {
-                ["CorrelationId"] = correlationId
-            }))
+                using (_logger.BeginScope(new System.Collections.Generic.Dictionary<string, object>
+                {
+                    ["CorrelationId"] = correlationId
+                }))
+                {
+                    await _next(context);
+                }
+            }
+            finally
             {
-                await _next(context);
+                // Some in-memory/test response features do not execute OnStarting from StartAsync.
+                // Reassert ownership after downstream returns whenever headers are still mutable.
+                // On real servers, the OnStarting callback remains the last-write guard at commit.
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.Headers[headerName] = correlationId;
+                }
             }
         }
 
