@@ -59,6 +59,21 @@
   isolation: isolate;
 }
 
+/* Assistive lifecycle status remains in the accessibility tree without
+ * becoming a visual overlay that competes with map tools or managed windows. */
+.map-workspace-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* SceneView stays laid out while inactive so WebGL can measure a stable host.
  * It shares the 2D Map and remains mounted to avoid context churn.
  * Opacity and pointer-events hide the scene without collapsing its geometry
