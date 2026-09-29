@@ -1,7 +1,9 @@
+using Api.Core.Platform.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -14,6 +16,8 @@ namespace Api.Core.Platform.Middleware
     /// </summary>
     public sealed class CorrelationIdMiddleware
     {
+        private const int GeneratedEntropyBytes = 16;
+
         private readonly RequestDelegate _next;
         private readonly ILogger<CorrelationIdMiddleware> _logger;
         private readonly ApiPlatformOptions _options;
@@ -44,10 +48,11 @@ namespace Api.Core.Platform.Middleware
             {
                 if (requestOptions.RejectTraceHeaderWithInvalidCharacters)
                 {
+                    // This middleware runs before routing. Do not log Request.Path here: raw path
+                    // segments may contain account ids, search text or other unbounded user input.
                     _logger.LogWarning(
-                        "Rejected malformed correlation id on {Method} {Path}.",
-                        context.Request.Method,
-                        context.Request.Path);
+                        "Rejected malformed correlation id on {Method}.",
+                        ApiRuntimeMetrics.NormalizeMethod(context.Request.Method));
                     await WriteInvalidCorrelationResponse(context);
                     return;
                 }
@@ -56,7 +61,7 @@ namespace Api.Core.Platform.Middleware
             }
 
             var correlationId = string.IsNullOrEmpty(inbound)
-                ? CreateCorrelationId(context)
+                ? CreateCorrelationId(context, requestOptions.MaxCorrelationIdLength)
                 : inbound;
 
             context.Items[ApiPlatformDefaults.TraceIdItemKey] = correlationId;
@@ -80,15 +85,26 @@ namespace Api.Core.Platform.Middleware
             }
         }
 
-        private static string CreateCorrelationId(HttpContext context)
+        private static string CreateCorrelationId(
+            HttpContext context,
+            int maxLength)
         {
             var traceIdentifier = context.TraceIdentifier?.Trim();
-            if (ApiPlatformDefaults.IsValidCorrelationId(traceIdentifier, 96))
+            if (ApiPlatformDefaults.IsValidCorrelationId(traceIdentifier, maxLength))
             {
                 return traceIdentifier;
             }
 
-            return Guid.NewGuid().ToString("N");
+            Span<byte> entropy = stackalloc byte[GeneratedEntropyBytes];
+            RandomNumberGenerator.Fill(entropy);
+            var generated = Convert.ToHexString(entropy).ToLowerInvariant();
+
+            // ApiPlatformOptionsValidator constrains this value to [16, 256]. The generated token
+            // is 32 hex characters (128 bits) at the default and retains at least 64 bits of entropy
+            // at the smallest supported configured ceiling.
+            return generated.Length <= maxLength
+                ? generated
+                : generated.Substring(0, maxLength);
         }
 
         private static async Task WriteInvalidCorrelationResponse(HttpContext context)
