@@ -51,7 +51,7 @@ describe('createSidebarKeyboardController', () => {
   });
 
   it('moves to the last service with End', () => {
-    const { model, controller } = setup();
+    const { controller } = setup();
     const result = controller.handleServiceKey({ key: 'End' });
     expect(result.focus).toEqual({ kind: 'active-item', windowId: 'market' });
   });
