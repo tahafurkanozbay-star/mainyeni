@@ -6,6 +6,7 @@ import { fixtureInventory } from './test-helpers.mts';
 const sha = '0123456789abcdef0123456789abcdef01234567';
 
 function audit(after: string, event = 'push') {
+  const crossRun = event === 'workflow_run' ? '          run-id: ${{ github.event.workflow_run.id }}\n          github-token: ${{ github.token }}\n' : '';
   const source = `name: Artifact ordering regression
 on: [${event}]
 jobs:
@@ -16,14 +17,12 @@ jobs:
         with:
           name: package
           path: dist/package
-${after}
+${crossRun}${after}
 `;
   return auditArtifactExecutionBoundaries(fixtureInventory([{ path: '.github/workflows/ordering.yml', text: source }]));
 }
 
-function ids(after: string, event = 'push') {
-  return audit(after, event).findings.map(item => item.id);
-}
+function ids(after: string, event = 'push') { return audit(after, event).findings.map(item => item.id); }
 
 test('execute then verify remains unverified and reports late verification', () => {
   const result = audit('      - run: ./dist/package/tool\n      - run: sha256sum -c dist/package/SHA256SUMS');
