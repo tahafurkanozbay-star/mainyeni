@@ -32,10 +32,12 @@ export interface ArtifactExecutionSignal {
   readonly crossRun: boolean;
   readonly externalContribution: boolean;
   readonly privileged: boolean;
+  /** True only when matching integrity evidence is observed before the first dangerous use. */
   readonly verificationObserved: boolean;
   readonly executionObserved: boolean;
   readonly pathMutationObserved: boolean;
   readonly extractionObserved: boolean;
+  readonly verificationAfterDangerousUse: boolean;
 }
 
 export interface ArtifactExecutionBoundarySummary {
@@ -78,17 +80,8 @@ function downloadRecord(step: WorkflowStepBlock): DownloadRecord | undefined {
   const withMap = stepNestedMapping(step, 'with');
   const artifactName = withMap.get('name') ?? withMap.get('pattern') ?? '';
   const path = normalizePath(withMap.get('path') ?? '.');
-  const selectors = [
-    withMap.get('run-id') ?? '',
-    withMap.get('repository') ?? '',
-    withMap.get('github-token') ?? '',
-  ].join('\n');
-  return {
-    step,
-    artifactName,
-    path,
-    crossRun: CROSS_RUN_EXPRESSION.test(selectors) || withMap.has('run-id'),
-  };
+  const selectors = [withMap.get('run-id') ?? '', withMap.get('repository') ?? '', withMap.get('github-token') ?? ''].join('\n');
+  return { step, artifactName, path, crossRun: CROSS_RUN_EXPRESSION.test(selectors) || withMap.has('run-id') };
 }
 
 function pathReferenced(run: string, path: string): boolean {
@@ -100,8 +93,7 @@ function pathReferenced(run: string, path: string): boolean {
 }
 
 function executionEvidence(run: string, path: string): boolean {
-  if (!pathReferenced(run, path)) return false;
-  return EXECUTE.test(run) || CHMOD_EXEC.test(run);
+  return pathReferenced(run, path) && (EXECUTE.test(run) || CHMOD_EXEC.test(run));
 }
 
 function verificationEvidence(run: string, path: string): boolean {
@@ -110,8 +102,7 @@ function verificationEvidence(run: string, path: string): boolean {
 }
 
 function pathMutationEvidence(run: string, path: string): boolean {
-  if (!pathReferenced(run, path)) return false;
-  return GITHUB_PATH.test(run) || PATH_EXPORT.test(run);
+  return pathReferenced(run, path) && (GITHUB_PATH.test(run) || PATH_EXPORT.test(run));
 }
 
 function extractionEvidence(run: string, path: string): boolean {
@@ -127,14 +118,28 @@ function signalFor(block: WorkflowJobBlock, steps: readonly WorkflowStepBlock[],
   let executionObserved = false;
   let pathMutationObserved = false;
   let extractionObserved = false;
+  let dangerousUseObserved = false;
+  let verificationAfterDangerousUse = false;
+
+  // Ordering is security-significant. Integrity evidence can authorize only later dangerous use;
+  // a checksum or attestation observed after execution/PATH promotion cannot retroactively make
+  // that earlier use safe. We therefore stop granting verification credit after first dangerous use.
   for (const step of subsequentSteps(steps, record.step)) {
     const run = stepRunText(step);
     if (!run) continue;
-    if (verificationEvidence(run, record.path)) verificationObserved = true;
-    if (executionEvidence(run, record.path)) executionObserved = true;
-    if (pathMutationEvidence(run, record.path)) pathMutationObserved = true;
+    const executes = executionEvidence(run, record.path);
+    const mutatesPath = pathMutationEvidence(run, record.path);
+    const verifies = verificationEvidence(run, record.path);
+    if (verifies) {
+      if (dangerousUseObserved || executes || mutatesPath) verificationAfterDangerousUse = true;
+      else verificationObserved = true;
+    }
     if (extractionEvidence(run, record.path)) extractionObserved = true;
+    if (executes) executionObserved = true;
+    if (mutatesPath) pathMutationObserved = true;
+    if (executes || mutatesPath) dangerousUseObserved = true;
   }
+
   const trigger = workflowTriggerProfile(block.file);
   return {
     file: block.file.repositoryPath,
@@ -149,6 +154,7 @@ function signalFor(block: WorkflowJobBlock, steps: readonly WorkflowStepBlock[],
     executionObserved,
     pathMutationObserved,
     extractionObserved,
+    verificationAfterDangerousUse,
   };
 }
 
@@ -164,39 +170,44 @@ function findingsFor(current: ArtifactExecutionSignal, record: DownloadRecord): 
   if (dangerousUse && !current.verificationObserved) {
     const block = current.crossRun || current.privileged || current.externalContribution;
     findings.push({
-      id: 'ci-artifact-execution-unverified',
-      domain: 'security',
-      severity: block ? 'critical' : 'high',
+      id: 'ci-artifact-execution-unverified', domain: 'security', severity: block ? 'critical' : 'high',
       ...(block ? { blocking: true } : {}),
-      title: 'Downloaded CI artifact reaches executable context without verification',
-      message: `Job ${current.job} downloads ${current.artifactName || 'an artifact'} to ${current.downloadPath || '.'} and later executes it or adds its content to executable search paths without visible digest/attestation verification.`,
+      title: 'Downloaded CI artifact reaches executable context without prior verification',
+      message: `Job ${current.job} downloads ${current.artifactName || 'an artifact'} to ${current.downloadPath || '.'} and executes it or promotes it into executable search paths before matching digest/attestation verification.`,
       location: where,
-      remediation: 'Verify artifact provenance and digest before any execution. Treat artifact files as untrusted data, keep executable promotion in a trusted job, and pin the expected producer/run identity.',
-      tags: ['ci', 'artifact', 'supply-chain', 'execution', 'provenance'],
+      remediation: 'Verify artifact provenance and digest before any execution or PATH promotion. Treat artifact files as untrusted data, keep executable promotion in a trusted job, and pin the expected producer/run identity.',
+      tags: ['ci', 'artifact', 'supply-chain', 'execution', 'provenance', 'ordering'],
+    });
+  }
+
+  if (dangerousUse && current.verificationAfterDangerousUse && !current.verificationObserved) {
+    findings.push({
+      id: 'ci-artifact-verification-too-late', domain: 'security', severity: 'critical', blocking: true,
+      title: 'Artifact integrity verification occurs after executable use',
+      message: `Job ${current.job} verifies downloaded artifact content only after it has already reached an executable context. Later integrity evidence cannot retroactively authorize earlier execution or PATH promotion.`,
+      location: where,
+      remediation: 'Move digest or attestation verification immediately after download and before extraction, execution, chmod, PATH/GITHUB_PATH mutation, or any consumer that can load artifact-controlled code.',
+      tags: ['ci', 'artifact', 'supply-chain', 'execution', 'ordering', 'fail-closed'],
     });
   }
 
   if (current.crossRun && current.executionObserved && !current.verificationObserved) {
     findings.push({
-      id: 'ci-artifact-cross-run-execution',
-      domain: 'security',
-      severity: 'critical',
-      blocking: true,
-      title: 'Cross-run artifact is executed without independent integrity verification',
-      message: `Job ${current.job} consumes an artifact from another workflow run and executes downloaded content. Run selection alone is not content integrity evidence.`,
+      id: 'ci-artifact-cross-run-execution', domain: 'security', severity: 'critical', blocking: true,
+      title: 'Cross-run artifact is executed without independent prior integrity verification',
+      message: `Job ${current.job} consumes an artifact from another workflow run and executes downloaded content before independent integrity verification. Run selection alone is not content integrity evidence.`,
       location: where,
-      remediation: 'Bind the producer repository/ref/commit, verify an independently trusted digest or GitHub attestation, and never execute pull-request-produced artifacts in a privileged follow-up workflow.',
+      remediation: 'Bind the producer repository/ref/commit, verify an independently trusted digest or GitHub attestation before execution, and never execute pull-request-produced artifacts in a privileged follow-up workflow.',
       tags: ['ci', 'artifact', 'workflow-run', 'execution', 'provenance'],
     });
   }
 
   if (current.pathMutationObserved && !current.verificationObserved) {
     findings.push({
-      id: 'ci-artifact-path-injection',
-      domain: 'security',
+      id: 'ci-artifact-path-injection', domain: 'security',
       severity: current.crossRun || current.externalContribution ? 'critical' : 'high',
       ...(current.crossRun || current.externalContribution ? { blocking: true } : {}),
-      title: 'Downloaded artifact directory is promoted into command search path',
+      title: 'Downloaded artifact directory is promoted into command search path before verification',
       message: `Job ${current.job} adds downloaded artifact content to PATH/GITHUB_PATH before integrity verification. Subsequent ordinary commands can resolve attacker-supplied executables implicitly.`,
       location: where,
       remediation: 'Never add unverified artifact directories to PATH. Verify content first, invoke expected binaries by exact path, and keep executable directories repository-owned.',
@@ -206,12 +217,10 @@ function findingsFor(current: ArtifactExecutionSignal, record: DownloadRecord): 
 
   if (current.extractionObserved && current.executionObserved && !current.verificationObserved) {
     findings.push({
-      id: 'ci-artifact-extract-execute-chain',
-      domain: 'security',
-      severity: current.privileged ? 'critical' : 'high',
+      id: 'ci-artifact-extract-execute-chain', domain: 'security', severity: current.privileged ? 'critical' : 'high',
       ...(current.privileged ? { blocking: true } : {}),
-      title: 'Artifact archive is extracted and executed without an integrity boundary',
-      message: `Job ${current.job} extracts downloaded artifact content and later executes from the artifact path. Archive extraction expands the attacker-controlled filesystem surface before execution.`,
+      title: 'Artifact archive is extracted and executed without a prior integrity boundary',
+      message: `Job ${current.job} extracts downloaded artifact content and later executes from the artifact path without prior integrity verification.`,
       location: where,
       remediation: 'Verify archive digest/attestation before extraction, extract into an isolated directory with path traversal protections, and execute only an allowlisted expected file.',
       tags: ['ci', 'artifact', 'archive', 'execution', 'supply-chain'],
@@ -220,9 +229,7 @@ function findingsFor(current: ArtifactExecutionSignal, record: DownloadRecord): 
 
   if (dangerousUse && current.verificationObserved && current.crossRun) {
     findings.push({
-      id: 'ci-artifact-cross-run-verified-execution-review',
-      domain: 'security',
-      severity: 'medium',
+      id: 'ci-artifact-cross-run-verified-execution-review', domain: 'security', severity: 'medium',
       title: 'Verified cross-run artifact still crosses an executable trust boundary',
       message: `Job ${current.job} verifies then executes a cross-run artifact. Integrity evidence reduces tampering risk but producer authorization and semantic safety still require review.`,
       location: where,
@@ -230,7 +237,6 @@ function findingsFor(current: ArtifactExecutionSignal, record: DownloadRecord): 
       tags: ['ci', 'artifact', 'workflow-run', 'execution', 'review'],
     });
   }
-
   return findings;
 }
 
@@ -239,7 +245,6 @@ export function auditArtifactExecutionBoundaries(inventory: RepositoryInventory)
   const files = workflowFiles(inventory);
   const signals: ArtifactExecutionSignal[] = [];
   const findings: Finding[] = [];
-
   for (const file of files) {
     for (const block of workflowJobBlocks(file)) {
       const steps = workflowStepBlocks(block);
@@ -252,19 +257,16 @@ export function auditArtifactExecutionBoundaries(inventory: RepositoryInventory)
       }
     }
   }
-
   const canonical = stableSortFindings(findings);
   return {
-    domain: 'security',
-    title: 'CI artifact execution and executable-promotion boundary audit',
+    domain: 'security', title: 'CI artifact execution and executable-promotion boundary audit',
     summary: {
       workflowFiles: files.length,
       artifactDownloads: signals.length,
       crossRunDownloads: signals.filter(item => item.crossRun).length,
       executedDownloads: signals.filter(item => item.executionObserved || item.pathMutationObserved).length,
       verifiedBeforeExecution: signals.filter(item => item.verificationObserved && (item.executionObserved || item.pathMutationObserved)).length,
-      signals,
-      findings: canonical,
+      signals, findings: canonical,
     },
     findings: canonical,
     elapsedMs: Math.max(0, performance.now() - started),
