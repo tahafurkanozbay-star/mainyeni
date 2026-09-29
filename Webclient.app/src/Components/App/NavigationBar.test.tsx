@@ -97,8 +97,9 @@ describe('NavigationBar', () => {
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
 
     const cbsLink = screen.getByRole<HTMLAnchorElement>('link', { name: 'CBS Başkent portalını yeni sekmede aç' });
-    expect(new URL(cbsLink.href).origin).toBe('https://cbsbaskent.ankara.bel.tr');
-    expect(cbsLink.target).toBe('_blank');
-    expect(cbsLink.rel.split(/\s+/)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+    expect(cbsLink).toHaveAttribute('href', 'https://cbsbaskent.ankara.bel.tr/');
+    expect(cbsLink).toHaveAttribute('target', '_blank');
+    expect(cbsLink).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    expect(cbsLink).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
   });
 });
