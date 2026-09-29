@@ -60,8 +60,8 @@ interface ParsedPermissions {
 
 function parsePermissionText(text: string, source: TokenPermissionSignal['source'], line: number): ParsedPermissions {
   const trimmed = text.trim();
-  const writeAll = /^permissions\s*:\s*write-all\s*(?:#.*)?$/im.test(text);
-  const readAll = /^permissions\s*:\s*read-all\s*(?:#.*)?$/im.test(text);
+  const writeAll = /^\s*permissions\s*:\s*write-all\s*(?:#.*)?$/im.test(text);
+  const readAll = /^\s*permissions\s*:\s*read-all\s*(?:#.*)?$/im.test(text);
   const dynamic = EXPRESSION.test(text);
   const scopes = new Map<string, PermissionLevel>();
   for (const raw of text.split('\n')) {
@@ -71,7 +71,7 @@ function parsePermissionText(text: string, source: TokenPermissionSignal['source
     if (!scope || !level || scope === 'permissions') continue;
     scopes.set(scope, level);
   }
-  if (/^permissions\s*:\s*\{\s*\}\s*(?:#.*)?$/im.test(text)) scopes.clear();
+  if (/^\s*permissions\s*:\s*\{\s*\}\s*(?:#.*)?$/im.test(text)) scopes.clear();
   return { source, writeAll, readAll, dynamic, scopes, text: trimmed, line };
 }
 
