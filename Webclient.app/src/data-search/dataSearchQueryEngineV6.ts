@@ -135,11 +135,11 @@ const normalizePolicy = (input: Partial<DataSearchQueryEnginePolicy>): DataSearc
   defaultLimit: normalizePositiveInteger(input.defaultLimit, DEFAULT_POLICY.defaultLimit, 10_000),
   maximumLimit: normalizePositiveInteger(input.maximumLimit, DEFAULT_POLICY.maximumLimit, 10_000),
   maximumOffset: normalizeInteger(input.maximumOffset, { min: 0, max: 10_000_000, fallback: DEFAULT_POLICY.maximumOffset }),
-  analyzer: Object.freeze({ ...(input.analyzer ?? {}) }),
-  relevance: Object.freeze({ ...(input.relevance ?? {}) }),
-  facets: Object.freeze({ ...(input.facets ?? {}) }),
-  suggestions: Object.freeze({ ...(input.suggestions ?? {}) }),
-  filterIndex: Object.freeze({ ...(input.filterIndex ?? {}) }),
+  analyzer: Object.freeze({ ...input.analyzer }),
+  relevance: Object.freeze({ ...input.relevance }),
+  facets: Object.freeze({ ...input.facets }),
+  suggestions: Object.freeze({ ...input.suggestions }),
+  filterIndex: Object.freeze({ ...input.filterIndex }),
 });
 
 const normalizeRequest = (
