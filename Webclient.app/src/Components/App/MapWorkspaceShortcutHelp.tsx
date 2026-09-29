@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { MAP_WORKSPACE_SHORTCUTS } from './mapWorkspaceShortcuts';
 import './MapWorkspaceShortcutHelp.css';
 
@@ -109,5 +109,44 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
         </footer>
       </div>
     </div>
+  );
+};
+
+export const MapWorkspaceShortcutHelpLauncher = () => {
+  const [open, setOpen] = useState(false);
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const onHelpShortcut = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.repeat || event.isComposing) return;
+      if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (
+        target.isContentEditable ||
+        /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
+        ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(target.getAttribute('role') ?? '')
+      )) return;
+      event.preventDefault();
+      setOpen(true);
+    };
+    window.addEventListener('keydown', onHelpShortcut);
+    return () => window.removeEventListener('keydown', onHelpShortcut);
+  }, []);
+
+  return (
+    <>
+      <button
+        ref={launcherRef}
+        type="button"
+        className="map-shortcut-help__launcher"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true">?</span>
+        <span className="map-shortcut-help__launcher-label">Kısayollar</span>
+      </button>
+      <MapWorkspaceShortcutHelp open={open} onClose={() => setOpen(false)} />
+    </>
   );
 };
