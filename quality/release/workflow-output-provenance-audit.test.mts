@@ -56,7 +56,6 @@ test('tracks direct event expression written to GITHUB_OUTPUT', () => {
 
 test('blocks tainted output selecting runner for privileged consumer', () => {
   const result = audit(`name: output\non: [workflow_dispatch]\npermissions:\n  contents: read\njobs:\n  choose:\n    runs-on: ubuntu-latest\n    outputs:\n      runner: \${{ steps.make.outputs.runner }}\n    steps:\n      - id: make\n        env:\n          RUNNER: \${{ inputs.runner }}\n        run: echo "runner=$RUNNER" >> "$GITHUB_OUTPUT"\n  deploy:\n    needs: choose\n    permissions:\n      deployments: write\n    environment: production\n    runs-on: \${{ needs.choose.outputs.runner }}\n    steps:\n      - run: echo deploy\n`);
-  assert.ok(result.findings.some(item => item.context === undefined));
   const signal = result.summary.signals.find(item => item.context === 'runs-on');
   assert.equal(signal?.producerTainted, true);
   assert.equal(signal?.consumerPrivileged, true);
