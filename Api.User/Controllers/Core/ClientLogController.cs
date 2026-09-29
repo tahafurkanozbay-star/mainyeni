@@ -42,7 +42,7 @@ namespace Api.User.Core.Controllers
 
                 var request = HttpContext.Request;
                 var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
-                var userAgent = request.Headers.UserAgent.ToString();
+                var userAgent = request.Headers["User-Agent"].ToString();
                 var clientInfo = Parser.GetDefault().Parse(userAgent);
 
                 var result = await ops.CreateAsync(
