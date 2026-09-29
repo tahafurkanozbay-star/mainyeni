@@ -39,7 +39,9 @@ test('flags input selecting checkout ref', () => {
 
 test('flags input selecting action identity', () => {
   const result = audit(`name: action\non:\n  workflow_dispatch:\n    inputs:\n      action:\n        type: string\npermissions:\n  contents: read\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: \${{ inputs.action }}\n`);
-  assert.ok(result.findings.some(item => item.context === undefined || item.id === 'ci-manual-input-identity-selector'));
+  const finding = result.findings.find(item => item.id === 'ci-manual-input-identity-selector');
+  assert.ok(finding);
+  assert.equal(finding.evidence?.metadata?.context, 'uses');
 });
 
 test('parses choice input options', () => {
