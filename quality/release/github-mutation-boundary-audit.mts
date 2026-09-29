@@ -49,8 +49,8 @@ const GH_COMMAND_MUTATION = /\bgh\s+(?:pr\s+(?:merge|edit|comment|close|reopen|r
 const CURL_GITHUB_MUTATION = /\bcurl\b[^\n]*(?:-X|--request)\s+(?:POST|PUT|PATCH|DELETE)\b[^\n]*(?:api\.github\.com|github\.com\/api)[^\n]*/gi;
 const UNTRUSTED = /\$\{\{[\s\S]*?(?:github\.event\.|github\.head_ref\b|inputs\.|github\.event\.inputs\.|needs\.[A-Za-z0-9_-]+\.outputs\.|steps\.[A-Za-z0-9_-]+\.outputs\.|matrix\.)[\s\S]*?\}\}/i;
 const EVENT_TEXT = /\$\{\{[\s\S]*?github\.event\.(?:pull_request\.(?:title|body)|issue\.(?:title|body)|comment\.body|review(?:_comment)?\.body|discussion\.(?:title|body))[\s\S]*?\}\}/i;
-const TARGET_FLAG = /(?:^|\s)(?:--repo|-R|--hostname|--head|--base|--branch|--ref|--repo-id)\s+(?:['"])?([^\s'"`]+)/i;
-const API_PATH = /\bgh\s+api\s+(?:--[^\s]+\s+[^\s]+\s+)*(['"]?[^\s'"`]+['"]?)/i;
+const TARGET_FLAG = /(?:^|\s)(?:--repo|-R|--hostname|--head|--base|--branch|--ref|--repo-id)\s+(?:"([^"]+)"|'([^']+)'|([^\s'"`]+))/i;
+const API_PATH = /\bgh\s+api\b(?:\s+(?:-X|--method)\s+\S+)*\s+(?:"([^"]+)"|'([^']+)'|([^\s'"`]+))/i;
 const PAYLOAD_FLAG = /(?:^|\s)(?:-f|--raw-field|-F|--field|--input)\s+[^\n]*/i;
 const BODY_FLAG = /(?:^|\s)(?:--body|-b|--title|-t|--notes|--notes-file|--comment)\s+[^\n]*/i;
 const SAFE_LITERAL_REPOSITORY = /^(?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+|\$\{\{\s*github\.repository\s*\}\})$/;
@@ -64,6 +64,10 @@ function allMatches(text: string): string[] {
     while ((match = matcher.exec(text)) !== null) values.push(match[0]);
   }
   return values;
+}
+
+function capturedScalar(match: RegExpMatchArray | null): string {
+  return (match?.[1] ?? match?.[2] ?? match?.[3] ?? '').trim();
 }
 
 function secretEnvNames(step: WorkflowStepBlock): string[] {
@@ -84,11 +88,12 @@ function referencesVariable(text: string, name: string): boolean {
 }
 
 function dynamicTarget(command: string, untrustedEnv: readonly string[]): boolean {
-  if (UNTRUSTED.test(command)) return true;
-  if (untrustedEnv.some(name => referencesVariable(command, name))) return true;
-  const target = command.match(TARGET_FLAG)?.[1]?.replace(/^['"]|['"]$/g, '') ?? '';
-  if (target && !SAFE_LITERAL_REPOSITORY.test(target) && /\$|%/.test(target)) return true;
-  const apiPath = command.match(API_PATH)?.[1]?.replace(/^['"]|['"]$/g, '') ?? '';
+  const target = capturedScalar(command.match(TARGET_FLAG));
+  if (target) {
+    if (UNTRUSTED.test(target) || untrustedEnv.some(name => referencesVariable(target, name))) return true;
+    if (!SAFE_LITERAL_REPOSITORY.test(target) && /\$|%/.test(target)) return true;
+  }
+  const apiPath = capturedScalar(command.match(API_PATH));
   return Boolean(apiPath && (UNTRUSTED.test(apiPath) || untrustedEnv.some(name => referencesVariable(apiPath, name))));
 }
 
