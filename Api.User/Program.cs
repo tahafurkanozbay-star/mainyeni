@@ -2,6 +2,7 @@ using Api.Core.Platform;
 using Api.Core.Platform.Transport;
 using Api.User.Filters;
 using Api.User.KentRehberi;
+using Api.User.Platform;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -48,6 +49,9 @@ public static class Program
         var app = builder.Build();
 
         app.UseKentRehberiPlatformBeforeRouting();
+        // Enforce the GIS proxy's 5 MiB request budget at the server feature boundary so
+        // chunked requests cannot force the controller to buffer an unbounded body first.
+        app.UseMiddleware<GisProxyRequestBodyLimitMiddleware>();
         app.UseRouting();
         app.UseKentRehberiPlatformAfterRouting();
         app.UseAuthorization();

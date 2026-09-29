@@ -1,64 +1,40 @@
-using Api.Core.Base;
 using Api.Admin.Filters;
-using Business.Core.Common;
+using Api.Core.Base;
 using Business.Core.Context;
 using Business.Extensions.Gis.Model;
 using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CityWorks.AdminApi.Gis
 {
-    // NOTE: You can use the "Rename" command on the "Refactor" menu to change the class name "LayerGroups" in code, svc and config file together.
-    // NOTE: In order to launch WCF Test Client for testing this service, please select LayerGroups.svc or LayerGroups.svc.cs at the Solution Explorer and start debugging.
     public class LayerGroupController : _BaseController
     {
-        private GisLayerGroupOperations ops;
+        private readonly GisLayerGroupOperations ops;
 
         public LayerGroupController(BusinessContext context)
         {
+            dbContext = context ?? throw new ArgumentNullException(nameof(context));
             ops = new GisLayerGroupOperations(context);
-            this.dbContext = context;
         }
 
-
-        /// <summary>
-        /// Creates/updates layer
-        /// </summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/Save")]
-
-        public IActionResult Save(GisLayerGroup viewModel)
+        public async Task<IActionResult> Save(GisLayerGroup viewModel, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-
-                if (sessionResult.IsSuccess)
-                {
-                    ServiceResult result = null;
-
-                    var session = sessionResult.Data;
-
-                    if (viewModel.Id > 0)
-                    {
-                        result = ops.Update(viewModel, session);
-                    }
-                    else
-                    {
-                        result = ops.Create(viewModel, session);
-                    }
-
-                    return new JsonResult(result);
-
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
-
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                var result = viewModel != null && viewModel.Id > 0
+                    ? await ops.UpdateAsync(viewModel, sessionResult.Data, cancellationToken).ConfigureAwait(false)
+                    : await ops.CreateAsync(viewModel, sessionResult.Data, cancellationToken).ConfigureAwait(false);
+                return new JsonResult(result);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
@@ -66,33 +42,19 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-        /// <summary>
-        /// Deletes layer
-        /// </summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/Delete")]
-
-        public IActionResult Delete(GisLayerGroup viewModel)
+        public async Task<IActionResult> Delete(GisLayerGroup viewModel, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = ops.Delete(viewModel, session);
-                    return new JsonResult(result);
-
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
-
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                var result = await ops.DeleteAsync(viewModel, sessionResult.Data, cancellationToken).ConfigureAwait(false);
+                return new JsonResult(result);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
@@ -100,32 +62,18 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-        /// <summary>
-        /// Search the layers
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/List")]
-        public IActionResult List()
+        public async Task<IActionResult> List(CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = ops.GetAll();
-                    return new JsonResult(result);
-
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
-
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                return new JsonResult(await ops.GetAllAsync(cancellationToken).ConfigureAwait(false));
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
@@ -133,34 +81,18 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-
-        /// <summary>
-        /// Search the layers
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/ListWithLayers")]
-        public IActionResult ListWithLayers()
+        public async Task<IActionResult> ListWithLayers(CancellationToken cancellationToken)
         {
-
             try
             {
                 var sessionResult = GetSession(HttpContext);
-
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = ops.GetAllWithLayersForAdmin();
-                    return new JsonResult(result);
-
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
-
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
+                return new JsonResult(await ops.GetAllWithLayersForAdminAsync(cancellationToken).ConfigureAwait(false));
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
