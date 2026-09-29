@@ -158,10 +158,15 @@ namespace Business.Core.Operations
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
             using var reader = new StreamReader(stream);
 
-            while (!reader.EndOfStream)
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var line = await reader.ReadLineAsync(cancellationToken);
+                if (line is null)
+                {
+                    break;
+                }
+
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     continue;
@@ -195,7 +200,12 @@ namespace Business.Core.Operations
                     Title = title,
                     Url = uri.AbsoluteUri,
                     Description = description,
-                    RequiresSC = false
+                    RequiresSC = false,
+                    SCUserName = string.Empty,
+                    SCPassword = string.Empty,
+                    AdditionalInfo = string.Empty,
+                    SearchCategoryTitle = string.Empty,
+                    IdentifyLayers = string.Empty
                 });
             }
 
