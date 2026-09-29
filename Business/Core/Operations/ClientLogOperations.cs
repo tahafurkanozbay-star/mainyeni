@@ -10,6 +10,7 @@ using Business.Core.Context;
 using Business.Core.Model;
 using Business.Core.ViewModel;
 using Microsoft.EntityFrameworkCore;
+using Toolbox.Date;
 
 namespace Business.Core.Operations
 {
@@ -28,13 +29,7 @@ namespace Business.Core.Operations
             db = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        public ServiceResult Create(
-            string logType,
-            string browser,
-            string os,
-            string device,
-            string ip,
-            string description) =>
+        public ServiceResult Create(string logType, string browser, string os, string device, string ip, string description) =>
             CreateAsync(logType, browser, os, device, ip, description).GetAwaiter().GetResult();
 
         public async Task<ServiceResult> CreateAsync(
@@ -60,6 +55,8 @@ namespace Business.Core.Operations
 
             var clientLog = new ClientLog
             {
+                Guid = System.Guid.NewGuid().ToString(),
+                CreateDate = DateTimeUtils.ToTimeStamp(DateTime.Now),
                 Ip = normalizedIp,
                 Browser = normalizedBrowser,
                 Os = normalizedOs,
@@ -84,22 +81,16 @@ namespace Business.Core.Operations
             throw new NotImplementedException();
         }
 
-        public List<ClientLogStatViewModel> GetStatistics() =>
-            GetStatisticsAsync().GetAwaiter().GetResult();
+        public List<ClientLogStatViewModel> GetStatistics() => GetStatisticsAsync().GetAwaiter().GetResult();
 
-        public async Task<List<ClientLogStatViewModel>> GetStatisticsAsync(
-            CancellationToken cancellationToken = default)
+        public async Task<List<ClientLogStatViewModel>> GetStatisticsAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             return await db.ClientLogs
                 .AsNoTracking()
                 .GroupBy(x => x.LogType)
-                .Select(log => new ClientLogStatViewModel
-                {
-                    name = log.Key,
-                    value = log.Count()
-                })
+                .Select(log => new ClientLogStatViewModel { name = log.Key, value = log.Count() })
                 .OrderByDescending(x => x.value)
                 .ThenBy(x => x.name)
                 .Take(StatisticsLimit)
@@ -107,27 +98,15 @@ namespace Business.Core.Operations
                 .ConfigureAwait(false);
         }
 
-        public List<ClientLogStatViewModel> GetSearchStatistics() =>
-            GetSearchStatisticsAsync().GetAwaiter().GetResult();
+        public List<ClientLogStatViewModel> GetSearchStatistics() => GetSearchStatisticsAsync().GetAwaiter().GetResult();
 
-        public Task<List<ClientLogStatViewModel>> GetSearchStatisticsAsync(
-            CancellationToken cancellationToken = default) =>
-            ReadJsonStatisticsAsync(
-                "İçerik arama",
-                "searchText",
-                includeId: false,
-                cancellationToken);
+        public Task<List<ClientLogStatViewModel>> GetSearchStatisticsAsync(CancellationToken cancellationToken = default) =>
+            ReadJsonStatisticsAsync("İçerik arama", "searchText", includeId: false, cancellationToken);
 
-        public List<ClientLogStatViewModel> GetViewStatistics() =>
-            GetViewStatisticsAsync().GetAwaiter().GetResult();
+        public List<ClientLogStatViewModel> GetViewStatistics() => GetViewStatisticsAsync().GetAwaiter().GetResult();
 
-        public Task<List<ClientLogStatViewModel>> GetViewStatisticsAsync(
-            CancellationToken cancellationToken = default) =>
-            ReadJsonStatisticsAsync(
-                "İçerik görüntüleme",
-                "title",
-                includeId: true,
-                cancellationToken);
+        public Task<List<ClientLogStatViewModel>> GetViewStatisticsAsync(CancellationToken cancellationToken = default) =>
+            ReadJsonStatisticsAsync("İçerik görüntüleme", "title", includeId: true, cancellationToken);
 
         private async Task<List<ClientLogStatViewModel>> ReadJsonStatisticsAsync(
             string logType,
@@ -137,12 +116,8 @@ namespace Business.Core.Operations
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Schema and JSON property identifiers are application constants, never request input.
-            // jsonb extraction is guarded with jsonb_typeof so non-object JSON does not become a result row.
             var schema = QuoteIdentifier(Configuration.SCHEMA_NAME);
-            var idProjection = includeId
-                ? ", (T.\"Details\"::jsonb)->>'eid' AS id"
-                : string.Empty;
+            var idProjection = includeId ? ", (T.\"Details\"::jsonb)->>'eid' AS id" : string.Empty;
             var idGroup = includeId ? ", id" : string.Empty;
             var sql = $@"
 SELECT (T.\"Details\"::jsonb)->>'{nameProperty}' AS name{idProjection}, COUNT(*) AS count
@@ -182,14 +157,12 @@ LIMIT {StatisticsLimit}";
                         continue;
                     }
 
-                    var name = reader.GetString(0);
                     var idOrdinal = includeId ? 1 : -1;
                     var countOrdinal = includeId ? 2 : 1;
-
                     list.Add(new ClientLogStatViewModel
                     {
-                        id = includeId && !reader.IsDBNull(idOrdinal) ? reader.GetString(idOrdinal) : null,
-                        name = name,
+                        id = includeId && !reader.IsDBNull(idOrdinal) ? reader.GetString(idOrdinal) : string.Empty,
+                        name = reader.GetString(0),
                         value = Convert.ToInt32(reader.GetValue(countOrdinal))
                     });
                 }
@@ -227,7 +200,6 @@ LIMIT {StatisticsLimit}";
             return normalized.Length <= maxLength;
         }
 
-        private static ServiceResult Error(string message) =>
-            new ServiceResult(ServiceResultType.Error, message);
+        private static ServiceResult Error(string message) => new ServiceResult(ServiceResultType.Error, message);
     }
 }
