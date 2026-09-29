@@ -284,6 +284,7 @@ public sealed class ApiPlatformOptionsValidatorTests
     {
         var options = new ApiPlatformOptions();
         options.Requests.MaxRequestBodyBytes = bytes;
+        options.Transport.MaxRequestBodyBytes = bytes;
 
         Assert.True(Validate(options).Succeeded);
     }

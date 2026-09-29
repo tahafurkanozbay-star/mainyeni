@@ -89,8 +89,14 @@ namespace Api.Core.Platform.Diagnostics
             long? responseContentLength)
         {
             ThrowIfDisposed();
+
+            // Active-request measurements must use the exact same tag set for increment and
+            // decrement. Adding response status only on completion creates a different metrics
+            // time series, leaving the method+route series permanently positive while emitting a
+            // separate negative method+route+status series.
+            activeRequestCounter.Add(-1, BuildTags(method, route, statusCode: null));
+
             var tags = BuildTags(method, route, statusCode);
-            activeRequestCounter.Add(-1, tags);
             requestCounter.Add(1, tags);
             requestDuration.Record(Math.Max(0d, durationMs), tags);
 

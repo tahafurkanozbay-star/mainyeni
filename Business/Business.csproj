@@ -14,4 +14,8 @@
     <PackageReference Include="System.ServiceModel.Primitives" />
     <PackageReference Include="Tesseract" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Platform.Security.Tests" />
+  </ItemGroup>
 </Project>

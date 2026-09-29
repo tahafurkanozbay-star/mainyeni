@@ -34,6 +34,7 @@ namespace Api.Core.Platform
             ValidateDiagnostics(options.Diagnostics, failures);
             ValidateGovernance(options.Governance, failures);
             ValidateTransport(options.Transport, failures);
+            ValidateCrossLayerBudgets(options, failures);
 
             return failures.Count == 0
                 ? ValidateOptionsResult.Success
@@ -416,6 +417,39 @@ namespace Api.Core.Platform
             if (options.RequestHeadersTimeoutSeconds >= options.KeepAliveTimeoutSeconds)
             {
                 failures.Add("Platform:Transport:RequestHeadersTimeoutSeconds must be lower than KeepAliveTimeoutSeconds.");
+            }
+        }
+
+        private static void ValidateCrossLayerBudgets(
+            ApiPlatformOptions options,
+            ICollection<string> failures)
+        {
+            var requests = options.Requests;
+            var governance = options.Governance;
+            var transport = options.Transport;
+
+            if (requests != null && transport != null &&
+                transport.MaxRequestBodyBytes < requests.MaxRequestBodyBytes)
+            {
+                failures.Add(
+                    "Platform:Transport:MaxRequestBodyBytes cannot be lower than Platform:Requests:MaxRequestBodyBytes.");
+            }
+
+            if (governance == null || !governance.Enabled || transport == null)
+            {
+                return;
+            }
+
+            if (transport.MaxRequestHeaderCount < governance.MaxHeaderCount)
+            {
+                failures.Add(
+                    "Platform:Transport:MaxRequestHeaderCount cannot be lower than Platform:Governance:MaxHeaderCount.");
+            }
+
+            if (transport.MaxRequestHeadersTotalSizeBytes < governance.MaxHeaderBytes)
+            {
+                failures.Add(
+                    "Platform:Transport:MaxRequestHeadersTotalSizeBytes cannot be lower than Platform:Governance:MaxHeaderBytes.");
             }
         }
 

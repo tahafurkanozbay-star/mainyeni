@@ -91,6 +91,7 @@ public sealed class RequestGuardMiddlewareTests
         await middleware.Invoke(context);
 
         Assert.Equal(2048, feature.MaxRequestBodySize);
+        Assert.Equal(2048, context.Features.Get<IHttpMaxRequestBodySizeFeature>()?.MaxRequestBodySize);
     }
 
     [Fact]
@@ -109,6 +110,7 @@ public sealed class RequestGuardMiddlewareTests
         await middleware.Invoke(context);
 
         Assert.Equal(4096, feature.MaxRequestBodySize);
+        Assert.Equal(4096, context.Features.Get<IHttpMaxRequestBodySizeFeature>()?.MaxRequestBodySize);
     }
 
     [Fact]
@@ -127,24 +129,190 @@ public sealed class RequestGuardMiddlewareTests
         await middleware.Invoke(context);
 
         Assert.Equal(1024, feature.MaxRequestBodySize);
+        Assert.Equal(1024, context.Features.Get<IHttpMaxRequestBodySizeFeature>()?.MaxRequestBodySize);
     }
 
     [Fact]
-    public async Task Invoke_DoesNotMutateReadOnlyServerBodyFeature()
+    public async Task Invoke_DownstreamCannotRaiseServerBodyFeatureAbovePlatformCeiling()
+    {
+        var options = CreateOptions(maxBytes: 2048);
+        var context = CreateContext();
+        var feature = new MutableBodySizeFeature
+        {
+            MaxRequestBodySize = 10_000,
+            IsReadOnlyValue = false
+        };
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var middleware = CreateMiddleware(httpContext =>
+        {
+            var guarded = httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            Assert.NotNull(guarded);
+            guarded.MaxRequestBodySize = 50_000;
+            Assert.Equal(2048, guarded.MaxRequestBodySize);
+            Assert.Equal(2048, feature.MaxRequestBodySize);
+            return Task.CompletedTask;
+        }, options);
+
+        await middleware.Invoke(context);
+
+        Assert.Equal(2048, feature.MaxRequestBodySize);
+    }
+
+    [Fact]
+    public async Task Invoke_DownstreamCannotDisablePlatformBodyCeilingWithUnlimitedValue()
+    {
+        var options = CreateOptions(maxBytes: 2048);
+        var context = CreateContext();
+        var feature = new MutableBodySizeFeature
+        {
+            MaxRequestBodySize = 2048,
+            IsReadOnlyValue = false
+        };
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var middleware = CreateMiddleware(httpContext =>
+        {
+            var guarded = httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            Assert.NotNull(guarded);
+            guarded.MaxRequestBodySize = null;
+            Assert.Equal(2048, guarded.MaxRequestBodySize);
+            Assert.Equal(2048, feature.MaxRequestBodySize);
+            return Task.CompletedTask;
+        }, options);
+
+        await middleware.Invoke(context);
+
+        Assert.Equal(2048, feature.MaxRequestBodySize);
+    }
+
+    [Fact]
+    public async Task Invoke_DownstreamCanTightenPlatformBodyCeiling()
+    {
+        var options = CreateOptions(maxBytes: 2048);
+        var context = CreateContext();
+        var feature = new MutableBodySizeFeature
+        {
+            MaxRequestBodySize = 10_000,
+            IsReadOnlyValue = false
+        };
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var middleware = CreateMiddleware(httpContext =>
+        {
+            var guarded = httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            Assert.NotNull(guarded);
+            guarded.MaxRequestBodySize = 512;
+            Assert.Equal(512, guarded.MaxRequestBodySize);
+            Assert.Equal(512, feature.MaxRequestBodySize);
+            return Task.CompletedTask;
+        }, options);
+
+        await middleware.Invoke(context);
+
+        Assert.Equal(512, feature.MaxRequestBodySize);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(1025L)]
+    [InlineData(10_000L)]
+    public async Task Invoke_RejectsReadOnlyServerBodyFeatureAbovePlatformCeiling(long? existingLimit)
     {
         var options = CreateOptions(maxBytes: 1024);
         var context = CreateContext();
         var feature = new MutableBodySizeFeature
         {
-            MaxRequestBodySize = 10_000,
+            MaxRequestBodySize = existingLimit,
             IsReadOnlyValue = true
         };
         context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
-        var middleware = CreateMiddleware(_ => Task.CompletedTask, options);
+        var nextCalled = false;
+        var middleware = CreateMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        }, options);
 
         await middleware.Invoke(context);
 
-        Assert.Equal(10_000, feature.MaxRequestBodySize);
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+        Assert.Equal(existingLimit, feature.MaxRequestBodySize);
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(512L)]
+    [InlineData(1024L)]
+    public async Task Invoke_AllowsReadOnlyServerBodyFeatureAtOrBelowPlatformCeiling(long existingLimit)
+    {
+        var options = CreateOptions(maxBytes: 1024);
+        var context = CreateContext();
+        var feature = new MutableBodySizeFeature
+        {
+            MaxRequestBodySize = existingLimit,
+            IsReadOnlyValue = true
+        };
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var nextCalled = false;
+        var middleware = CreateMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        }, options);
+
+        await middleware.Invoke(context);
+
+        Assert.True(nextCalled);
+        Assert.Equal(existingLimit, feature.MaxRequestBodySize);
+        Assert.NotEqual(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Invoke_PreservesServerValidationForNegativeDownstreamLimit()
+    {
+        var options = CreateOptions(maxBytes: 1024);
+        var context = CreateContext();
+        var feature = new MutableBodySizeFeature
+        {
+            MaxRequestBodySize = 1024,
+            IsReadOnlyValue = false
+        };
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var middleware = CreateMiddleware(httpContext =>
+        {
+            var guarded = httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            Assert.NotNull(guarded);
+            guarded.MaxRequestBodySize = -1;
+            return Task.CompletedTask;
+        }, options);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => middleware.Invoke(context));
+        Assert.Equal(1024, feature.MaxRequestBodySize);
+    }
+
+    [Fact]
+    public async Task Invoke_ReflectsFeatureBecomingReadOnlyDownstream()
+    {
+        var options = CreateOptions(maxBytes: 1024);
+        var context = CreateContext();
+        var feature = new MutableBodySizeFeature
+        {
+            MaxRequestBodySize = 1024,
+            IsReadOnlyValue = false
+        };
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+        var middleware = CreateMiddleware(httpContext =>
+        {
+            var guarded = httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            Assert.NotNull(guarded);
+            feature.IsReadOnlyValue = true;
+            Assert.True(guarded.IsReadOnly);
+            Assert.Throws<InvalidOperationException>(() => guarded.MaxRequestBodySize = 512);
+            return Task.CompletedTask;
+        }, options);
+
+        await middleware.Invoke(context);
+
+        Assert.Equal(1024, feature.MaxRequestBodySize);
     }
 
     [Fact]
@@ -224,10 +392,23 @@ public sealed class RequestGuardMiddlewareTests
 
     private sealed class MutableBodySizeFeature : IHttpMaxRequestBodySizeFeature
     {
+        private long? maxRequestBodySize;
+
         public bool IsReadOnly => IsReadOnlyValue;
 
         public bool IsReadOnlyValue { get; set; }
 
-        public long? MaxRequestBodySize { get; set; }
+        public long? MaxRequestBodySize
+        {
+            get => maxRequestBodySize;
+            set
+            {
+                if (IsReadOnlyValue)
+                    throw new InvalidOperationException("The request body size feature is read-only.");
+                if (value.HasValue && value.Value < 0)
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                maxRequestBodySize = value;
+            }
+        }
     }
 }
