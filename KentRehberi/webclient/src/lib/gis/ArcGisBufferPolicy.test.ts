@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest'
+import { ArcGisBufferPolicy, type ArcGisBufferInput } from './ArcGisBufferPolicy'
+
+const policy = () => new ArcGisBufferPolicy({ maxDistanceMeters: 5_000, maxVertices: 12, maxParts: 3, maxTargetLayers: 3, maxAbsoluteCoordinate: 100_000 })
+const point = (patch: Partial<ArcGisBufferInput> = {}): ArcGisBufferInput => ({ id: 'nearby', wkid: 102100, geometry: { kind: 'point', x: 10, y: 20 }, distance: 250, unit: 'meters', targetLayerIds: ['parks', 'schools'], revision: 4, ...patch })
+
+describe('ArcGisBufferPolicy', () => {
+  it('canonicalizes Web Mercator and freezes point plans', () => {
+    const plan = policy().plan(point())
+    expect(plan.wkid).toBe(3857)
+    expect(plan.distanceMeters).toBe(250)
+    expect(plan.vertexCount).toBe(1)
+    expect(Object.isFrozen(plan)).toBe(true)
+    expect(Object.isFrozen(plan.geometry)).toBe(true)
+    expect(Object.isFrozen(plan.targetLayerIds)).toBe(true)
+  })
+
+  it('canonicalizes kilometer distances', () => expect(policy().plan(point({ distance: 1.5, unit: 'kilometers' })).distanceMeters).toBe(1500))
+  it('sorts layers before fingerprinting', () => {
+    const a = policy().plan(point({ targetLayerIds: ['schools', 'parks'] }))
+    const b = policy().plan(point({ targetLayerIds: ['parks', 'schools'] }))
+    expect(a.targetLayerIds).toEqual(['parks', 'schools'])
+    expect(a.fingerprint).toBe(b.fingerprint)
+  })
+  it('pins revision in fingerprint', () => expect(policy().plan(point()).fingerprint).not.toBe(policy().plan(point({ revision: 5 })).fingerprint))
+  it('pins distance in fingerprint', () => expect(policy().plan(point()).fingerprint).not.toBe(policy().plan(point({ distance: 251 })).fingerprint))
+  it('accepts and freezes bounded polylines', () => {
+    const plan = policy().plan(point({ geometry: { kind: 'polyline', paths: [[{ x: 0, y: 0 }, { x: 10, y: 10 }], [{ x: 20, y: 20 }, { x: 30, y: 30 }]] } }))
+    expect(plan.vertexCount).toBe(4)
+    expect(plan.geometry.kind).toBe('polyline')
+    if (plan.geometry.kind === 'polyline') expect(Object.isFrozen(plan.geometry.paths[0])).toBe(true)
+  })
+  it('accepts and freezes bounded polygons', () => {
+    const plan = policy().plan(point({ geometry: { kind: 'polygon', rings: [[{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 0 }]] } }))
+    expect(plan.vertexCount).toBe(4)
+    expect(plan.geometry.kind).toBe('polygon')
+  })
+  it('rejects zero distance', () => expect(() => policy().plan(point({ distance: 0 }))).toThrow(/positive/))
+  it('rejects distance above budget', () => expect(() => policy().plan(point({ distance: 6, unit: 'kilometers' }))).toThrow(/distance budget/))
+  it('rejects non-finite distance', () => expect(() => policy().plan(point({ distance: Number.NaN }))).toThrow(/finite/))
+  it('rejects coordinates above budget', () => expect(() => policy().plan(point({ geometry: { kind: 'point', x: 200_000, y: 0 } }))).toThrow(/coordinate budget/))
+  it('rejects non-finite coordinates', () => expect(() => policy().plan(point({ geometry: { kind: 'point', x: Number.NaN, y: 0 } }))).toThrow(/finite/))
+  it('rejects empty polyline paths', () => expect(() => policy().plan(point({ geometry: { kind: 'polyline', paths: [] } }))).toThrow(/path budget/))
+  it('rejects one-vertex polyline paths', () => expect(() => policy().plan(point({ geometry: { kind: 'polyline', paths: [[{ x: 0, y: 0 }]] } }))).toThrow(/two vertices/))
+  it('rejects too many geometry parts', () => expect(() => policy().plan(point({ geometry: { kind: 'polyline', paths: Array.from({ length: 4 }, (_, i) => [{ x: i, y: 0 }, { x: i, y: 1 }]) } }))).toThrow(/path budget/))
+  it('rejects vertex budget overflow', () => expect(() => policy().plan(point({ geometry: { kind: 'polyline', paths: [Array.from({ length: 13 }, (_, i) => ({ x: i, y: i }))] } }))).toThrow(/vertex budget/))
+  it('rejects unclosed polygon rings', () => expect(() => policy().plan(point({ geometry: { kind: 'polygon', rings: [[{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 1, y: 1 }]] } }))).toThrow(/closed/))
+  it('rejects degenerate polygon rings', () => expect(() => policy().plan(point({ geometry: { kind: 'polygon', rings: [[{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 0 }]] } }))).toThrow(/non-zero area/))
+  it('rejects duplicate target layers', () => expect(() => policy().plan(point({ targetLayerIds: ['parks', 'parks'] }))).toThrow(/duplicate/))
+  it('rejects malformed target layer ids', () => expect(() => policy().plan(point({ targetLayerIds: [' parks'] }))).toThrow(/invalid/))
+  it('rejects target-layer budget overflow', () => expect(() => policy().plan(point({ targetLayerIds: ['a', 'b', 'c', 'd'] }))).toThrow(/target-layer budget/))
+  it('rejects missing target layers', () => expect(() => policy().plan(point({ targetLayerIds: [] }))).toThrow(/at least one/))
+  it('rejects malformed ids', () => expect(() => policy().plan(point({ id: 'bad id' }))).toThrow(/invalid buffer id/))
+  it('rejects negative revisions', () => expect(() => policy().plan(point({ revision: -1 }))).toThrow(/revision/))
+  it('guards stale revisions', () => {
+    const plan = policy().plan(point())
+    expect(() => policy().assertCurrent(plan, 5)).toThrow(/stale/)
+    expect(() => policy().assertCurrent(plan, 4)).not.toThrow()
+  })
+  it('rejects invalid constructor budgets', () => expect(() => new ArcGisBufferPolicy({ maxDistanceMeters: 0, maxVertices: 1, maxParts: 1, maxTargetLayers: 1, maxAbsoluteCoordinate: 1 })).toThrow(/positive/))
+})
