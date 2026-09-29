@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Api.Core.Base;
 using Api.User.Filters;
@@ -10,31 +11,37 @@ namespace Api.User.Extensions.Controllers
 {
     public class PodController : _BaseUserApiController
     {
-        private PodOperations podOperations;
+        private readonly PodOperations podOperations;
 
         public PodController(BusinessContext context)
         {
-            this.dbContext = context;
+            dbContext = context ?? throw new ArgumentNullException(nameof(context));
             podOperations = new PodOperations(context);
         }
 
         /// <summary>
-        /// Gets the list for tkgm districts with the given city id
+        /// Gets the current duty-pharmacy list through the server-side provider boundary.
         /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("[controller]/List")]
-        public async Task<IActionResult> List()
+        public async Task<IActionResult> List(CancellationToken cancellationToken)
         {
             try
             {
                 if (!ValidateAuthToken())
                 {
-                  return UnAuthorizedResult();
+                    return UnAuthorizedResult();
                 }
 
-                var result = await podOperations.GetTodaysPods();
+                var result = await podOperations
+                    .GetTodaysPods(cancellationToken)
+                    .ConfigureAwait(false);
                 return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -42,6 +49,5 @@ namespace Api.User.Extensions.Controllers
                 return new JsonResult(exceptionResult(ex));
             }
         }
-
     }
 }

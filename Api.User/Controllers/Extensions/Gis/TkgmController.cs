@@ -1,101 +1,63 @@
 using System;
+using System.Threading.Tasks;
 using Api.Core.Base;
 using Api.User.Filters;
 using Business.Core.Context;
 using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Mvc;
-using RestSharp;
 
 namespace Api.User.Extensions.Controllers
 {
     public class TkgmController : _BaseUserApiController
     {
-        private GisTkgmOperations gisTkgmOperations;
+        private readonly GisTkgmOperations gisTkgmOperations;
 
         public TkgmController(BusinessContext context)
         {
-            this.dbContext = context;
+            dbContext = context;
             gisTkgmOperations = new GisTkgmOperations(context);
         }
 
-
-        /// <summary>
-        /// Gets the list for tkgm districts with the given city id
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/[controller]/Districts/{cityId}")]
-        public string Districts(int cityId)
+        public async Task<string> Districts(int cityId)
         {
             try
             {
-                if (!ValidateAuthToken())
-                {
-                    return null;
-                }
-
-                return gisTkgmOperations.Districts(cityId);
+                if (!ValidateAuthToken()) return null;
+                return await gisTkgmOperations.DistrictsAsync(cityId, HttpContext.RequestAborted);
             }
-            catch (Exception ex)
-            {
-                handleExceptionResult(ex);
-                return ex.Message;
-            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested) { throw; }
+            catch (Exception ex) { handleExceptionResult(ex); return ex.Message; }
         }
 
-
-
-        /// <summary>
-        /// Gets the list for tkgm nbhoods with the given district id
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/[controller]/Nbhoods/{districtId}")]
-        public string Nbhoods(int districtId)
+        public async Task<string> Nbhoods(int districtId)
         {
             try
             {
-                if (!ValidateAuthToken())
-                {
-                    return null;
-                }
-
-
-                return gisTkgmOperations.Nbhoods(districtId);
+                if (!ValidateAuthToken()) return null;
+                return await gisTkgmOperations.NbhoodsAsync(districtId, HttpContext.RequestAborted);
             }
-            catch (Exception ex)
-            {
-                handleExceptionResult(ex);
-                return ex.Message;
-            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested) { throw; }
+            catch (Exception ex) { handleExceptionResult(ex); return ex.Message; }
         }
 
-
-        /// <summary>
-        /// Gets the list for tkgm nbhoods with the given district id
-        /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/[controller]/Parcel/{districtId}/{nbhoodId}/{cityblock}/{parcel}")]
-        public string Parcel(int districtId, int nbhoodId, int cityblock, int parcel)
+        public async Task<string> Parcel(int districtId, int nbhoodId, int cityblock, int parcel)
         {
             try
             {
-
-                if (!ValidateAuthToken())
-                {
-                    return null;
-                }
-
-
-                return gisTkgmOperations.Parcel(districtId, nbhoodId, cityblock, parcel);
+                if (!ValidateAuthToken()) return null;
+                return await gisTkgmOperations.ParcelAsync(districtId, nbhoodId, cityblock, parcel, HttpContext.RequestAborted);
             }
-            catch (Exception ex)
-            {
-                handleExceptionResult(ex);
-                return ex.Message;
-            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested) { throw; }
+            catch (Exception ex) { handleExceptionResult(ex); return ex.Message; }
         }
-
     }
 }

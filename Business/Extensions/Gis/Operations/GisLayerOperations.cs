@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Toolbox.Validation;
+using System.Threading;
+using System.Threading.Tasks;
 using Toolbox.Security.Url;
 using Toolbox.Serialization;
 using Toolbox.Text;
+using Toolbox.Validation;
 using Business._Base;
 using Business.Core.Context;
 using Business.Core.Common;
@@ -18,336 +20,234 @@ namespace Business.Extensions.Gis.Operations
 {
     public class GisLayerOperations : _BaseOperations
     {
+        private const int MaxTitleLength = 256;
+        private const int MaxUrlLength = 4096;
+        private const int MaxDescriptionLength = 4096;
+        private const int MaxAdditionalInfoLength = 16384;
+        private const int MaxCredentialLength = 1024;
+        private const int MaxReorderItems = 5000;
 
-        private BusinessContext db;
+        private readonly BusinessContext db;
 
         public GisLayerOperations(BusinessContext context)
         {
-            this.db = context;
+            db = context ?? throw new ArgumentNullException(nameof(context));
         }
 
+        public ServiceResult Create(GisLayerAdminViewModel viewModel, UserSessionViewModel session) =>
+            CreateAsync(viewModel, session).GetAwaiter().GetResult();
 
-        public ServiceResult Create(GisLayerAdminViewModel viewModel, UserSessionViewModel session)
+        public async Task<ServiceResult> CreateAsync(
+            GisLayerAdminViewModel viewModel,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-                var validateResult = ValidateCreate(viewModel);
-                if (validateResult.IsSuccess)
-                {
+            cancellationToken.ThrowIfCancellationRequested();
+            var validation = ValidateAndNormalize(viewModel);
+            if (!validation.IsSuccess) return validation;
+            if (session == null) return Error("Geçerli kullanıcı oturumu gerekiyor");
+            if (await HasDuplicateUrlAsync(viewModel.Url, null, cancellationToken))
+                return Error("Aynı bağlantı adresine sahip aktif bir katman zaten var");
 
-                    using (db)
-                    {
-                        if (!viewModel.RequiresSC)
-                        {
-                            viewModel.RequiresSC = false;
-                            viewModel.SCUserName = "";
-                            viewModel.SCPassword = "";
-                        }
-
-                        GisLayer model = new GisLayer();
-                    
-
-                        if (viewModel.RequiresSC)
-                        {
-                            model.RequiresSC = true;
-                            model.SCUserName = viewModel.SCUserName;
-                            model.SCPassword = viewModel.SCPassword;
-                        }
-                        else
-                        {
-                            model.RequiresSC = false;
-                            model.SCUserName = "";
-                            model.SCPassword = "";
-                        }
-
-                    
-                        bool urlIsValid = ValidationUtils.ValidateUrl(viewModel.Url);
-                        if (!urlIsValid)
-                        {
-                            return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("INVALID_URL"));
-                        }
-                        model.Url = viewModel.Url.Trim();
-
-                        model.AdditionalInfo = viewModel.AdditionalInfo;
-                        model.LayerType = viewModel.LayerType;
-                        model.GisLayerGroupId = viewModel.GisLayerGroupId;
-                        model.Title = TextUtils.Capitalize(viewModel.Title.Trim());
-                        model.OrderPriority=viewModel.OrderPriority;
-                        model.StartupOpacity = viewModel.StartupOpacity;
-                        model.VisibleAtStartup = viewModel.VisibleAtStartup;
-                        model.IsSwipeLayer = viewModel.IsSwipeLayer;
-                        model.IsTimelineLayer = viewModel.IsTimelineLayer;
-                        model.Description = viewModel.Description;
-
-                        model.SetCreate(session.UserId);
-                        db.GisLayers.Add(model);
-                        db.SaveChanges();
-
-                        return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("SAVED"));
-                    }
-
-                }
-                else
-                {
-                    return validateResult;
-                }
-
-          
+            var model = new GisLayer();
+            ApplyMutableFields(model, viewModel);
+            model.SetCreate(session.UserId);
+            await db.GisLayers.AddAsync(model, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            return Success(BusinessMessages.Get("SAVED"));
         }
 
-        public ServiceResult<GisLayer> GetByEncryptedGuid(string eg)
+        public ServiceResult Update(GisLayerAdminViewModel viewModel, UserSessionViewModel session) =>
+            UpdateAsync(viewModel, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult> UpdateAsync(GisLayerAdminViewModel viewModel, UserSessionViewModel session, CancellationToken cancellationToken = default)
         {
-                string guid = ParameterEncryptionUtils.DecryptGuid(eg).ToString();
-                GisLayer layer = GetLayerByGuid(guid);
-                return new ServiceResult<GisLayer>(ServiceResultType.Success, "", layer);
-            
+            cancellationToken.ThrowIfCancellationRequested();
+            if (viewModel == null || viewModel.Id <= 0) return Error(BusinessMessages.Get("NOT_FOUND"));
+            var validation = ValidateAndNormalize(viewModel);
+            if (!validation.IsSuccess) return validation;
+            if (session == null) return Error("Geçerli kullanıcı oturumu gerekiyor");
+
+            var model = await db.GisLayers.FirstOrDefaultAsync(x => x.Id == viewModel.Id && !x.IsDeleted, cancellationToken);
+            if (model == null) return Error(BusinessMessages.Get("NOT_FOUND"));
+            if (await HasDuplicateUrlAsync(viewModel.Url, model.Id, cancellationToken))
+                return Error("Aynı bağlantı adresine sahip aktif bir katman zaten var");
+
+            ApplyMutableFields(model, viewModel);
+            model.SetUpdate(session.UserId);
+            await db.SaveChangesAsync(cancellationToken);
+            return Success(BusinessMessages.Get("UPDATED"));
         }
 
-        public ServiceResult Update(GisLayerAdminViewModel viewModel, UserSessionViewModel session)
+        public ServiceResult Delete(int id, UserSessionViewModel session) => DeleteAsync(id, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult> DeleteAsync(int id, UserSessionViewModel session, CancellationToken cancellationToken = default)
         {
-                var validateResult = ValidateUpdate(viewModel);
-                if (validateResult.IsSuccess)
-                {
-                    using (db)
-                    {
-                        GisLayer model = db.GisLayers.Where(x=>x.Id==viewModel.Id && !x.IsDeleted).FirstOrDefault();
-
-                        if (viewModel.RequiresSC)
-                        {
-                            model.RequiresSC = true;
-                            model.SCUserName = viewModel.SCUserName;
-                            model.SCPassword = viewModel.SCPassword;
-                        }
-                        else
-                        {
-                            model.RequiresSC = false;
-                            model.SCUserName = "";
-                            model.SCPassword = "";
-                        }
-
-                        
-                        bool urlIsValid = ValidationUtils.ValidateUrl(viewModel.Url);
-                        if (!urlIsValid)
-                        {
-                            return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("INVALID_URL"));
-                        }
-                        model.Url = viewModel.Url.Trim();
-
-
-                        model.AdditionalInfo = viewModel.AdditionalInfo;
-                        model.Description = viewModel.Description;
-                        model.GisLayerGroupId = viewModel.GisLayerGroupId;
-                        model.IsSwipeLayer = viewModel.IsSwipeLayer;
-                        model.IsTimelineLayer = viewModel.IsTimelineLayer;
-                        model.LayerType = viewModel.LayerType;
-                        model.OrderPriority = viewModel.OrderPriority;
-                        model.StartupOpacity = viewModel.StartupOpacity;
-                        model.Title = TextUtils.Capitalize(viewModel.Title.Trim());
-                        model.VisibleAtStartup = viewModel.VisibleAtStartup;
-                        model.SetUpdate(session.UserId);
-                        
-                        db.Entry(model).State = EntityState.Modified;
-                        db.SaveChanges();
-
-                        return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("UPDATED"));
-                    }
-
-                }
-                else
-                {
-                    return validateResult;
-                }
-           
-
+            cancellationToken.ThrowIfCancellationRequested();
+            if (id <= 0 || session == null) return Error(BusinessMessages.Get("NOT_FOUND"));
+            var layer = await db.GisLayers.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+            if (layer == null) return Error(BusinessMessages.Get("NOT_FOUND"));
+            layer.SetDelete(session.UserId);
+            await db.SaveChangesAsync(cancellationToken);
+            return Success(BusinessMessages.Get("DELETED"));
         }
 
-        private ServiceResult ValidateCreate(GisLayerAdminViewModel viewModel)
+        public ServiceResult<List<GisLayer>> GetAll() => GetAllAsync().GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<List<GisLayer>>> GetAllAsync(CancellationToken cancellationToken = default)
         {
-            if (TextUtils.IsNullOrEmpty(viewModel.Title))
+            // Do not Include the required LayerGroup navigation here. Legacy data uses -1 for
+            // ungrouped layers; an Include over a required navigation can suppress those rows.
+            // Load active groups separately and attach them to the no-tracking layer snapshots.
+            var list = await db.GisLayers.AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.OrderPriority).ThenBy(x => x.Title).ThenBy(x => x.Id)
+                .ToListAsync(cancellationToken);
+
+            var groupIds = list.Select(x => x.GisLayerGroupId).Where(x => x > 0).Distinct().ToArray();
+            if (groupIds.Length > 0)
             {
-                return new ServiceResult(ServiceResultType.Error, "Katman adı boş olamaz");
-            }
-            
-            if (TextUtils.IsNullOrEmpty(viewModel.Url))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Katman adresi boş olamaz");
-            }
-            else{
-                bool urlIsValid = ValidationUtils.ValidateUrl(viewModel.Url);
-                if (!urlIsValid)
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Lütfen geçerli br bağlantı adresi giriniz");
-                }
+                var groups = await db.GisLayerGroups.AsNoTracking()
+                    .Where(x => !x.IsDeleted && groupIds.Contains(x.Id))
+                    .ToDictionaryAsync(x => x.Id, cancellationToken);
+                foreach (var layer in list)
+                    if (groups.TryGetValue(layer.GisLayerGroupId, out var group)) layer.LayerGroup = group;
             }
 
+            return new ServiceResult<List<GisLayer>>(ServiceResultType.Success, string.Empty, list);
+        }
+
+        public ServiceResult<List<GisLayer>> GetUngroupedLayers() => GetUngroupedLayersAsync().GetAwaiter().GetResult();
+        public async Task<ServiceResult<List<GisLayer>>> GetUngroupedLayersAsync(CancellationToken cancellationToken = default)
+        {
+            var list = await db.GisLayers.AsNoTracking().Where(x => !x.IsDeleted && x.GisLayerGroupId == -1)
+                .OrderBy(x => x.OrderPriority).ThenBy(x => x.Title).ThenBy(x => x.Id).ToListAsync(cancellationToken);
+            return new ServiceResult<List<GisLayer>>(ServiceResultType.Success, string.Empty, list);
+        }
+
+        public ServiceResult<List<GisLayerGroup>> GetLayerGroups() => GetLayerGroupsAsync().GetAwaiter().GetResult();
+        public async Task<ServiceResult<List<GisLayerGroup>>> GetLayerGroupsAsync(CancellationToken cancellationToken = default)
+        {
+            var list = await db.GisLayerGroups.AsNoTracking().Where(x => !x.IsDeleted).Include(x => x.Layers)
+                .OrderBy(x => x.OrderPriority).ThenBy(x => x.Title).ThenBy(x => x.Id).ToListAsync(cancellationToken);
+            return new ServiceResult<List<GisLayerGroup>>(ServiceResultType.Success, string.Empty, list);
+        }
+
+        public GisLayer GetLayerByGuid(string guid) => GetLayerByGuidAsync(guid).GetAwaiter().GetResult();
+        public async Task<GisLayer> GetLayerByGuidAsync(string guid, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(guid)) return null;
+            var normalized = guid.Trim();
+            return await db.GisLayers.AsNoTracking().FirstOrDefaultAsync(x => x.Guid == normalized && !x.IsDeleted, cancellationToken);
+        }
+
+        public ServiceResult<GisLayer> GetByEncryptedGuid(string encryptedGuid) => GetByEncryptedGuidAsync(encryptedGuid).GetAwaiter().GetResult();
+        public async Task<ServiceResult<GisLayer>> GetByEncryptedGuidAsync(string encryptedGuid, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(encryptedGuid) || encryptedGuid.Length > 4096)
+                return new ServiceResult<GisLayer>(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"), null);
+            try
+            {
+                var guid = ParameterEncryptionUtils.DecryptGuid(encryptedGuid).ToString();
+                var layer = await GetLayerByGuidAsync(guid, cancellationToken);
+                return layer == null ? new ServiceResult<GisLayer>(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"), null) : new ServiceResult<GisLayer>(ServiceResultType.Success, string.Empty, layer);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return new ServiceResult<GisLayer>(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"), null); }
+        }
+
+        public GisLayer GetLayerByUrl(string url) => GetLayerByUrlAsync(url).GetAwaiter().GetResult();
+        public async Task<GisLayer> GetLayerByUrlAsync(string url, CancellationToken cancellationToken = default)
+        {
+            var normalized = NormalizeUrl(url);
+            if (normalized == null) return null;
+            var candidates = await db.GisLayers.AsNoTracking().Where(x => !x.IsDeleted && x.Url != null).ToListAsync(cancellationToken);
+            return candidates.FirstOrDefault(x => string.Equals(NormalizeUrl(x.Url), normalized, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public ServiceResult ReOrderGisLayers(string encryptedGuids) => ReOrderGisLayersAsync(encryptedGuids).GetAwaiter().GetResult();
+        public async Task<ServiceResult> ReOrderGisLayersAsync(string encryptedGuids, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(encryptedGuids) || encryptedGuids.Length > 1_000_000) return Error("Geçersiz katman sıralaması");
+            List<string> encryptedGuidList;
+            try { encryptedGuidList = SerializationUtils.JsonToObject<List<string>>(encryptedGuids); }
+            catch { return Error("Geçersiz katman sıralaması"); }
+            if (encryptedGuidList == null || encryptedGuidList.Count == 0 || encryptedGuidList.Count > MaxReorderItems) return Error("Geçersiz katman sıralaması");
+
+            var seen = new HashSet<int>();
+            var layers = new List<GisLayer>(encryptedGuidList.Count);
+            foreach (var encryptedGuid in encryptedGuidList)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = await GetByEncryptedGuidAsync(encryptedGuid, cancellationToken);
+                if (!result.IsSuccess || result.Data == null || !seen.Add(result.Data.Id)) return Error("Geçersiz veya yinelenen katman sıralaması");
+                var tracked = await db.GisLayers.FirstOrDefaultAsync(x => x.Id == result.Data.Id && !x.IsDeleted, cancellationToken);
+                if (tracked == null) return Error(BusinessMessages.Get("NOT_FOUND"));
+                layers.Add(tracked);
+            }
+            for (var index = 0; index < layers.Count; index++) layers[index].OrderPriority = index + 1;
+            await db.SaveChangesAsync(cancellationToken);
+            return Success("Katmanlar yeniden sıralandı");
+        }
+
+        private async Task<bool> HasDuplicateUrlAsync(string normalizedUrl, int? excludedId, CancellationToken cancellationToken)
+        {
+            var candidates = await db.GisLayers.AsNoTracking().Where(x => !x.IsDeleted && x.Url != null && (!excludedId.HasValue || x.Id != excludedId.Value)).Select(x => x.Url).ToListAsync(cancellationToken);
+            return candidates.Any(x => string.Equals(NormalizeUrl(x), normalizedUrl, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static ServiceResult ValidateAndNormalize(GisLayerAdminViewModel viewModel)
+        {
+            if (viewModel == null) return Error("Katman bilgisi boş olamaz");
+            viewModel.Title = NormalizeBounded(viewModel.Title, MaxTitleLength);
+            if (viewModel.Title == null) return Error("Katman adı boş olamaz veya çok uzun");
+            viewModel.Url = NormalizeUrl(viewModel.Url);
+            if (viewModel.Url == null) return Error(BusinessMessages.Get("INVALID_URL"));
+            viewModel.Description = NormalizeOptional(viewModel.Description, MaxDescriptionLength);
+            viewModel.AdditionalInfo = NormalizeOptional(viewModel.AdditionalInfo, MaxAdditionalInfoLength);
+            if (viewModel.Description == null || viewModel.AdditionalInfo == null) return Error("Katman açıklaması veya ek bilgisi çok uzun");
+            if (viewModel.StartupOpacity < 0 || viewModel.StartupOpacity > 100) return Error("Başlangıç saydamlığı 0 ile 100 arasında olmalıdır");
+            if (viewModel.OrderPriority < 0) return Error("Katman sırası negatif olamaz");
             if (viewModel.RequiresSC)
             {
-                if (TextUtils.IsNullOrEmpty(viewModel.SCUserName))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir kullanıcı adı gerekiyor");
-                }
-                if (TextUtils.IsNullOrEmpty(viewModel.SCPassword))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir şifre gerekiyor");
-                }
+                viewModel.SCUserName = NormalizeBounded(viewModel.SCUserName, MaxCredentialLength);
+                viewModel.SCPassword = NormalizeBounded(viewModel.SCPassword, MaxCredentialLength);
+                if (viewModel.SCUserName == null || viewModel.SCPassword == null) return Error("Güvenli bağlantı için geçerli kullanıcı adı ve şifre gerekiyor");
             }
-
-            return new ServiceResult(ServiceResultType.Success);
+            else { viewModel.SCUserName = string.Empty; viewModel.SCPassword = string.Empty; }
+            return Success();
         }
 
-        private ServiceResult ValidateUpdate(GisLayerAdminViewModel viewModel)
+        private static void ApplyMutableFields(GisLayer model, GisLayerAdminViewModel viewModel)
         {
-            if (TextUtils.IsNullOrEmpty(viewModel.Title))
-            {
-
-                return new ServiceResult(ServiceResultType.Error, "Katman adı boş olamaz");
-            }
-            if (TextUtils.IsNullOrEmpty(viewModel.Url))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Katman adresi boş olamaz");
-            }
-            else{
-                bool urlIsValid = ValidationUtils.ValidateUrl(viewModel.Url);
-                if (!urlIsValid)
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Lütfen geçerli br bağlantı adresi giriniz");
-                }
-            }
-
-            if (viewModel.RequiresSC)
-            {
-                if (TextUtils.IsNullOrEmpty(viewModel.SCUserName))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir kullanıcı adı gerekiyor");
-                }
-                if (TextUtils.IsNullOrEmpty(viewModel.SCPassword))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir şifre gerekiyor");
-                }
-            }
-
-            return new ServiceResult(ServiceResultType.Success);
+            model.RequiresSC = viewModel.RequiresSC; model.SCUserName = viewModel.SCUserName; model.SCPassword = viewModel.SCPassword;
+            model.Url = viewModel.Url; model.AdditionalInfo = viewModel.AdditionalInfo; model.LayerType = viewModel.LayerType;
+            model.GisLayerGroupId = viewModel.GisLayerGroupId; model.Title = TextUtils.Capitalize(viewModel.Title); model.OrderPriority = viewModel.OrderPriority;
+            model.StartupOpacity = viewModel.StartupOpacity; model.VisibleAtStartup = viewModel.VisibleAtStartup; model.IsSwipeLayer = viewModel.IsSwipeLayer;
+            model.IsTimelineLayer = viewModel.IsTimelineLayer; model.Description = viewModel.Description;
         }
 
-        public GisLayer GetLayerByGuid(string guid)
+        private static string NormalizeUrl(string value)
         {
-            GisLayer layer = null;
-            using (db)
-            {
-                layer = GetSingleItem<GisLayer>(db, x => x.Guid == guid && !x.IsDeleted && !x.IsDeleted);
-            }
-        
-            return layer;
+            var normalized = NormalizeBounded(value, MaxUrlLength);
+            if (normalized == null || !ValidationUtils.ValidateUrl(normalized) || !Uri.TryCreate(normalized, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return null;
+            var builder = new UriBuilder(uri) { Fragment = string.Empty };
+            var canonical = builder.Uri.AbsoluteUri;
+            return canonical.EndsWith("/", StringComparison.Ordinal) && builder.Path.Length > 1 ? canonical.TrimEnd('/') : canonical;
         }
 
-
-        public GisLayer GetLayerByUrl(string url)
+        private static string NormalizeBounded(string value, int maxLength)
         {
-            GisLayer layer = null;
-            using (db)
-            {
-                layer = GetSingleItem<GisLayer>(db, x => (x.Url.Contains(url) || url.Contains(x.Url)) && !x.IsDeleted);
-            }
-        
-            return layer;
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var normalized = value.Trim(); return normalized.Length <= maxLength ? normalized : null;
         }
-
-        
-
-        public ServiceResult<List<GisLayer>> GetUngroupedLayers()
+        private static string NormalizeOptional(string value, int maxLength)
         {
-            using (db)
-            {
-                var list = GetItemList<GisLayer>(db, x => !x.IsDeleted && x.GisLayerGroupId == -1).OrderBy(x => x.OrderPriority).ToList();
-                return new ServiceResult<List<GisLayer>>(ServiceResultType.Success, "", list);
-            }
-        
-
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var normalized = value.Trim(); return normalized.Length <= maxLength ? normalized : null;
         }
-
-        public ServiceResult<List<GisLayerGroup>> GetLayerGroups()
-        {
-            using (db)
-            {
-                var list = GetItemList<GisLayerGroup>(db, x => !x.IsDeleted, y => y.Layers).OrderBy(x => x.OrderPriority).ToList();
-                return new ServiceResult<List<GisLayerGroup>>(ServiceResultType.Success, "", list);
-            }
-        
-        }
-
-        public ServiceResult<List<GisLayer>> GetAll()
-        {
-            using (db)
-            {
-
-                var list = GetItemList<GisLayer>(db, x => !x.IsDeleted, y => y.LayerGroup).OrderBy(x => x.OrderPriority).ToList();
-
-                //TODO: Grubu silinmiş katmanlar da gösterilmelidir
-                //list.AddRange(ungroupedList);
-
-                return new ServiceResult<List<GisLayer>>(ServiceResultType.Success, "", list);
-            }
-        
-        }
-
-     
-        /// <summary>
-        /// Reorder service order
-        /// </summary>
-        /// <param name="encryptedGuids"></param>
-        public ServiceResult ReOrderGisLayers(string encryptedGuids)
-        {
-                //Change order priority
-                List<String> encryptedGuidList = SerializationUtils.JsonToObject<List<String>>(encryptedGuids);
-
-                using (db)
-                {
-                    int priority = 1;
-                    foreach (String encryptedGuid in encryptedGuidList)
-                    {
-                        var getLayerResult = GetByEncryptedGuid(encryptedGuid);
-                        if (getLayerResult.IsSuccess)
-                        {
-                            GisLayer layer = getLayerResult.Data;
-                            layer.OrderPriority = priority;
-                            priority++;
-                            db.Entry(layer).State = EntityState.Modified;
-
-                        }
-                        else
-                        {
-                            return getLayerResult;
-                        }
-                    }
-
-                    db.SaveChanges();
-
-                    return new ServiceResult(ServiceResultType.Success, "Katmanlar yeniden sıralandı");
-                }
-            
-
-
-        }
-
-        public ServiceResult Delete(int id, UserSessionViewModel userSession)
-        {
-            using (db)
-            {
-                
-                GisLayer layer = GetSingleItem<GisLayer>(db, x => x.Id == id && !x.IsDeleted);
-                if(layer!=null){
-                    
-                    layer.SetDelete(userSession.UserId);
-                    db.Entry(layer).State=EntityState.Modified;
-                    db.SaveChanges();
-                    
-                    return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("DELETED"));
-                }
-                else{
-                    return new ServiceResult(ServiceResultType.Success,BusinessMessages.Get("NOT_FOUND"));
-                }
-                
-            }
-           
-
-        }
+        private static ServiceResult Success(string message = "") => new ServiceResult(ServiceResultType.Success, message);
+        private static ServiceResult Error(string message) => new ServiceResult(ServiceResultType.Error, message);
     }
 }
