@@ -44,16 +44,28 @@ const hasEditableRole = (element: Element): boolean => {
   return role ? EDITABLE_ROLES.has(role) : false;
 };
 
+const contentEditableState = (element: Element): 'editable' | 'not-editable' | 'inherit' => {
+  if (!element.hasAttribute('contenteditable')) return 'inherit';
+  const value = element.getAttribute('contenteditable')?.trim().toLocaleLowerCase('en-US') ?? '';
+  if (value === 'false') return 'not-editable';
+  if (value === '' || value === 'true' || value === 'plaintext-only') return 'editable';
+  return 'inherit';
+};
+
 export const isShortcutEditableTarget = (target: EventTarget | null): boolean => {
   const element = asElement(target);
   if (!element) return false;
 
   for (let current: Element | null = element; current; current = current.parentElement) {
+    if (current.getAttribute('data-shortcut-scope') === 'global') return false;
+    if (current.getAttribute('data-shortcut-scope') === 'editable') return true;
+
+    const editableState = contentEditableState(current);
+    if (editableState === 'editable') return true;
+    if (editableState === 'not-editable') return false;
     if (current instanceof HTMLElement && current.isContentEditable) return true;
     if (EDITABLE_TAGS.has(current.tagName.toLocaleLowerCase('en-US'))) return true;
     if (hasEditableRole(current)) return true;
-    if (current.getAttribute('data-shortcut-scope') === 'editable') return true;
-    if (current.getAttribute('data-shortcut-scope') === 'global') return false;
   }
   return false;
 };
