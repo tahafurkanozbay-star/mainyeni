@@ -1,0 +1,11 @@
+# Platform / Architecture continuation — 2026-09-29
+
+- TUR / GÖREV: Whole-Code Modernization / Platform request trust-boundary continuation.
+- BRANCH: `agent/platform-deep-20260929-2059-41a2510`, created from exact then-current `main=41a2510468f739450bfdb0a51a9610a8c2f6a023` after confirming prior Platform PR #384 was closed superseded and merged canonical Platform PR #379 must not be reused.
+- UYGULAMA: added a fail-closed `RequestFramingPolicy` and integrated it into request governance. Content-Length must now be a single non-negative decimal field value; comma-joined, signed, nonnumeric, overflow and duplicate forms are rejected. Transfer-Encoding is constrained to one `chunked` coding; chained, duplicate or unsupported codings are rejected. Existing Content-Length + Transfer-Encoding ambiguity retains highest rejection priority.
+- TESTLER: added focused pure-policy and evaluator regression coverage for accepted canonical framing and rejected ambiguous/unsupported forms. GitHub Actions exact-head validation is pending after PR creation; no local-shell PASS is claimed.
+- SECURITY: narrows HTTP request-smuggling/parser-differential surface without reading request bodies, adding endpoints, changing authorization, or exposing header values in diagnostics.
+- PERFORMANCE: O(1) bounded parsing of two framing headers only; no body buffering, allocation-heavy parsing, polling, cache, network call or new runtime dependency.
+- NETWORK / GIS / İKON: no WMS/WFS, endpoint, browser transport, telemetry, remote asset, GIS runtime or icon-authority change.
+- KAPSAM: this is the first slice of a fresh Platform PR and is intentionally below the mandatory 4,000-additions merge gate. It MUST remain open and unmerged while additional real high-priority Platform work is accumulated and exact-head CI is validated.
+- SONRAKİ GÖREV: continue on this branch only if it remains based on current main per branch-lifecycle rules; otherwise reconcile safely before adding work. Next high-impact slices: strict RFC Content-Type parsing/config validation, Host/forwarded metadata canonicalization, bounded request-body metadata, and transport/governance cross-layer invariants. Preserve the >=4,000 meaningful-additions gate and exact-head Backend Validation + Release QA + Architecture Audit requirements.
