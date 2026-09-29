@@ -54,13 +54,25 @@ describe('mapWorkspaceShortcutPolicy', () => {
     expect(isShortcutEditableTarget(target)).toBe(true);
   });
 
-  it('recognizes contenteditable ancestors', () => {
+  it.each(['', 'true', 'plaintext-only'])('recognizes contenteditable="%s" ancestors without DOM implementation assumptions', (value) => {
     const editor = document.createElement('div');
-    editor.contentEditable = 'true';
+    editor.setAttribute('contenteditable', value);
     const child = document.createElement('span');
     editor.appendChild(child);
     document.body.appendChild(editor);
     expect(isShortcutEditableTarget(child)).toBe(true);
+  });
+
+  it('honors contenteditable=false as an explicit non-editable boundary', () => {
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    const island = document.createElement('div');
+    island.setAttribute('contenteditable', 'false');
+    const button = document.createElement('button');
+    island.appendChild(button);
+    editor.appendChild(island);
+    document.body.appendChild(editor);
+    expect(isShortcutEditableTarget(button)).toBe(false);
   });
 
   it('allows an explicit global scope to terminate editable ancestor traversal', () => {
