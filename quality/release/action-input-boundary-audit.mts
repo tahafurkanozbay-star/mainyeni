@@ -129,7 +129,7 @@ function findingFor(signal: ActionInputSignal): Finding {
         : 'Untrusted expression controls action identity, filesystem, or publication input',
     message: `Step ${signal.step} passes ${sources} into ${signal.action} input ${signal.input} (${signal.riskClass}). Pinning action code does not make its behavior safe when executable/trust-selecting inputs remain runtime-controlled.`,
     location: { file: signal.file, line: signal.line },
-    evidence: { excerpt: `${signal.action} with.${signal.input}`, metadata: { action: signal.action, input: signal.input, riskClass: signal.riskClass, sources: signal.sourceKinds } },
+    evidence: { excerpt: `${signal.action} with.${signal.input}`, metadata: { action: signal.action, input: signal.input, riskClass: signal.riskClass, sources } },
     remediation: executable
       ? 'Do not pass event/input/output data as script/command/args. Use a reviewed literal action program and pass validated values through dedicated data inputs or environment variables.'
       : 'Validate the value against a closed allowlist and map it to reviewed literal ref/repository/path/context/publication identifiers before invoking the action.',
