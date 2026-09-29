@@ -52,3 +52,74 @@ export const resolveMapWorkspaceShortcut = (event: KeyboardEvent): MapWorkspaceS
 export const shortcutHelpText = (): string => MAP_WORKSPACE_SHORTCUTS
   .map((shortcut) => `${shortcut.label}: ${shortcut.description}`)
   .join('. ');
+
+export interface MapWorkspaceShortcutEnvironment {
+  readonly mapElement: HTMLElement | null;
+  readonly navigationElement: HTMLElement | null;
+  readonly windowManager: {
+    readonly ToggleWindow: (windowId: string) => boolean;
+    readonly ShowWindow: (windowId: string) => boolean;
+  };
+  readonly announce?: (message: string) => void;
+}
+
+export interface MapWorkspaceShortcutExecution {
+  readonly handled: boolean;
+  readonly action: MapWorkspaceShortcutAction | null;
+  readonly announcement: string | null;
+}
+
+const ACTION_WINDOW_IDS: Partial<Record<MapWorkspaceShortcutAction, string>> = Object.freeze({
+  'toggle-sidebar': 'sidebar',
+  'open-command-center': 'experience-command-center',
+  'open-basemap': 'basemap-widget',
+  'open-measurement': 'measurement-widget',
+  'open-feedback': 'feedback-widget',
+});
+
+const focusElement = (element: HTMLElement | null): boolean => {
+  if (!element || !element.isConnected) return false;
+  element.focus({ preventScroll: true });
+  return document.activeElement === element || element.contains(document.activeElement);
+};
+
+export const executeMapWorkspaceShortcut = (
+  shortcut: MapWorkspaceShortcutDefinition,
+  environment: MapWorkspaceShortcutEnvironment,
+): MapWorkspaceShortcutExecution => {
+  let handled = false;
+
+  switch (shortcut.action) {
+    case 'focus-map':
+      handled = focusElement(environment.mapElement);
+      break;
+    case 'focus-navigation':
+      handled = focusElement(environment.navigationElement);
+      break;
+    case 'toggle-sidebar': {
+      const windowId = ACTION_WINDOW_IDS[shortcut.action];
+      handled = windowId ? environment.windowManager.ToggleWindow(windowId) : false;
+      break;
+    }
+    default: {
+      const windowId = ACTION_WINDOW_IDS[shortcut.action];
+      handled = windowId ? environment.windowManager.ShowWindow(windowId) : false;
+      break;
+    }
+  }
+
+  const announcement = handled ? `${shortcut.description}. Kısayol: ${shortcut.label}.` : null;
+  if (announcement) environment.announce?.(announcement);
+  return { handled, action: handled ? shortcut.action : null, announcement };
+};
+
+export const handleMapWorkspaceKeyDown = (
+  event: KeyboardEvent,
+  environment: MapWorkspaceShortcutEnvironment,
+): MapWorkspaceShortcutExecution => {
+  const shortcut = resolveMapWorkspaceShortcut(event);
+  if (!shortcut) return { handled: false, action: null, announcement: null };
+  const result = executeMapWorkspaceShortcut(shortcut, environment);
+  if (result.handled) event.preventDefault();
+  return result;
+};
