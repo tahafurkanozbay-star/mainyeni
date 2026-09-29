@@ -71,7 +71,11 @@ namespace Business.Extensions.Gis.Operations
             model.Title = viewModel.Title;
             model.Url = viewModel.Url;
             model.Description = viewModel.Description;
-            model.ImageUrl = NormalizeOptional(viewModel.ImageUrl);
+            model.ImageUrl = viewModel.ImageUrl;
+            // AdditionalInfo is not a mutable basemap field here, but the EF model requires a
+            // non-null value. Heal a legacy/null row without copying caller-controlled state into
+            // a field that this operation historically does not update.
+            model.AdditionalInfo = NormalizeRequiredOptional(model.AdditionalInfo);
             model.RequiresSC = viewModel.RequiresSC;
             model.SCUserName = viewModel.RequiresSC ? viewModel.SCUserName : string.Empty;
             model.SCPassword = viewModel.RequiresSC ? viewModel.SCPassword : string.Empty;
@@ -200,8 +204,11 @@ namespace Business.Extensions.Gis.Operations
 
             layer.Title = NormalizeOptional(layer.Title);
             layer.Url = NormalizeOptional(layer.Url);
-            layer.Description = NormalizeOptional(layer.Description);
-            layer.ImageUrl = NormalizeOptional(layer.ImageUrl);
+            // These fields are optional at the API boundary but required/non-null in the EF model.
+            // Canonicalize them before persistence instead of allowing provider-specific failures.
+            layer.Description = NormalizeRequiredOptional(layer.Description);
+            layer.ImageUrl = NormalizeRequiredOptional(layer.ImageUrl);
+            layer.AdditionalInfo = NormalizeRequiredOptional(layer.AdditionalInfo);
 
             if (string.IsNullOrWhiteSpace(layer.Title)) return Error("Katman adı boş olamaz");
             if (layer.Title.Length > MaxTitleLength) return Error("Katman adı çok uzun");
@@ -210,7 +217,7 @@ namespace Business.Extensions.Gis.Operations
                 return Error(BusinessMessages.Get("INVALID_URL"), translate: false);
 
             layer.Title = TextUtils.Capitalize(layer.Title);
-            if (layer.Description?.Length > MaxDescriptionLength) return Error("Katman açıklaması çok uzun");
+            if (layer.Description.Length > MaxDescriptionLength) return Error("Katman açıklaması çok uzun");
 
             if (!layer.RequiresSC)
             {
@@ -232,6 +239,8 @@ namespace Business.Extensions.Gis.Operations
         }
 
         private static string NormalizeOptional(string value) => value?.Trim();
+
+        private static string NormalizeRequiredOptional(string value) => value?.Trim() ?? string.Empty;
 
         private static ServiceResult Success(string messageKey) =>
             new ServiceResult(ServiceResultType.Success, BusinessMessages.Get(messageKey));
