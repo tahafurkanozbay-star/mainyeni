@@ -117,7 +117,7 @@ namespace Business.Core.Operations
             cancellationToken.ThrowIfCancellationRequested();
 
             var schema = QuoteIdentifier(Configuration.SCHEMA_NAME);
-            var idProjection = includeId ? ", (T.""Details""::jsonb)->>'eid' AS id" : string.Empty;
+            var idProjection = includeId ? ", (T.\"Details\"::jsonb)->>'eid' AS id" : string.Empty;
             var idGroup = includeId ? ", id" : string.Empty;
             var sql = $@"
 SELECT (T.""Details""::jsonb)->>'{nameProperty}' AS name{idProjection}, COUNT(*) AS count
