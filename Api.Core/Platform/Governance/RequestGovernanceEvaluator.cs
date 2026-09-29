@@ -145,6 +145,14 @@ namespace Api.Core.Platform.Governance
                     "Backslashes are not accepted in API paths.");
             }
 
+            if ((governance.RejectPathTraversal || governance.RejectEncodedPathSeparators) &&
+                target.PercentDecodingDepthExceeded)
+            {
+                return RejectBadRequest(
+                    "path-encoding-depth-exceeded",
+                    "The request path contains excessive nested percent encoding.");
+            }
+
             if (governance.RejectPathTraversal &&
                 (target.ContainsPlainTraversal || target.ContainsEncodedTraversal))
             {
