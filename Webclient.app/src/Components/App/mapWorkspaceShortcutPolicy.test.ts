@@ -11,10 +11,11 @@ import {
 
 afterEach(() => { document.body.innerHTML = ''; });
 
-const keyboardShape = (overrides: Partial<KeyboardEvent> = {}): KeyboardEvent => new KeyboardEvent('keydown', {
+const keyboardShape = (overrides: Partial<KeyboardEventInit> = {}): KeyboardEvent => new KeyboardEvent('keydown', {
   key: 'm',
   altKey: true,
   bubbles: true,
+  cancelable: true,
   ...overrides,
 });
 
@@ -90,6 +91,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
   it('rejects already-consumed keyboard events', () => {
     const event = keyboardShape();
     event.preventDefault();
+    expect(event.defaultPrevented).toBe(true);
     expect(evaluateShortcutPolicy(event)).toEqual({ allowed: false, reason: 'default-prevented' });
   });
 
