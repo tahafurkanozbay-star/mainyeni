@@ -31,7 +31,7 @@ public sealed class GisBasemapPersistenceBoundaryTests
 
         Assert.True(result.IsSuccess);
         var stored = await context.GisBasemapLayers.SingleAsync();
-        Assert.Equal("Şehir haritası", stored.Title);
+        Assert.Equal("Şehir Haritası", stored.Title);
         Assert.Equal("https://example.test/arcgis/rest/services/base/MapServer", stored.Url);
         Assert.Equal("açıklama", stored.Description);
         Assert.Equal(string.Empty, stored.ImageUrl);
