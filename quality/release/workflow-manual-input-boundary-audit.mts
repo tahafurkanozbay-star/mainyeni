@@ -66,10 +66,6 @@ const INPUTS = /^\s*inputs\s*:\s*(?:#.*)?$/;
 const MAPPING = /^\s*([A-Za-z0-9_-]+)\s*:\s*(.*)$/;
 const SENSITIVE_WITH_KEYS = new Set(['ref', 'repository', 'path', 'script', 'command', 'args', 'entrypoint', 'image', 'working-directory']);
 
-function indent(line: string): number {
-  return line.match(/^\s*/)?.[0]?.length ?? 0;
-}
-
 function directChildren(lines: readonly WorkflowLine[], parentLine: number, parentIndent: number): WorkflowLine[] {
   const after = lines.filter(line => line.line > parentLine);
   let childIndent: number | undefined;
