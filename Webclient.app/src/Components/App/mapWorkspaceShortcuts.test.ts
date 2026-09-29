@@ -57,6 +57,7 @@ describe('mapWorkspaceShortcuts', () => {
 
     expect(executeMapWorkspaceShortcut(shortcut('toggle-sidebar'), environment).handled).toBe(true);
     expect(ToggleWindow).toHaveBeenCalledWith('sidebar');
+
     expect(executeMapWorkspaceShortcut(shortcut('basemap'), environment).handled).toBe(true);
     expect(ShowWindow).toHaveBeenCalledWith('basemap-widget');
     expect(executeMapWorkspaceShortcut(shortcut('measurement'), environment).handled).toBe(true);
@@ -79,11 +80,13 @@ describe('mapWorkspaceShortcuts', () => {
       windowManager: { ToggleWindow: vi.fn(() => false), ShowWindow: vi.fn(() => false) },
       announce,
     };
+
     expect(executeMapWorkspaceShortcut(shortcut('focus-map'), environment).handled).toBe(true);
     expect(document.activeElement).toBe(map);
     expect(executeMapWorkspaceShortcut(shortcut('focus-navigation'), environment).handled).toBe(true);
     expect(document.activeElement).toBe(navigation);
     expect(announce).toHaveBeenCalledTimes(2);
+
     map.remove();
     navigation.remove();
     expect(executeMapWorkspaceShortcut(shortcut('focus-map'), environment).handled).toBe(false);
