@@ -101,18 +101,15 @@ describe('createSidebarLayerLoadController', () => {
       loadLayer,
     });
     const run = controller.start();
-    await flush();
-    expect(loadLayer).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(loadLayer).toHaveBeenCalledTimes(2));
     expect(peak).toBe(2);
     gates.get('a')!.resolve({ key: 'a' });
-    await flush();
-    expect(loadLayer).toHaveBeenCalledTimes(3);
+    await vi.waitFor(() => expect(loadLayer).toHaveBeenCalledTimes(3));
     gates.get('b')!.resolve({ key: 'b' });
-    await flush();
-    expect(loadLayer).toHaveBeenCalledTimes(4);
+    await vi.waitFor(() => expect(loadLayer).toHaveBeenCalledTimes(4));
     gates.get('c')!.resolve({ key: 'c' });
     gates.get('d')!.resolve({ key: 'd' });
-    await flush();
+    await vi.waitFor(() => expect(loadLayer).toHaveBeenCalledTimes(5));
     gates.get('e')!.resolve({ key: 'e' });
     await run;
     expect(peak).toBe(2);

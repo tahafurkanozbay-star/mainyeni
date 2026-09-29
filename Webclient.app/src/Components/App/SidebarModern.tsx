@@ -55,6 +55,7 @@ const ITEMS = SIDEBAR_ITEMS as readonly SidebarItem[];
 const SERVICE_KEYS = INITIAL_CITY_LAYER_SERVICE_KEYS as readonly string[];
 const MAX_RECENT_SERVICES = 6;
 const LAYER_LOAD_CONCURRENCY = 4;
+const LAYER_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
 const GROUP_IDS = Object.freeze(GROUPS.map((group) => group.id));
 const ITEM_IDS = Object.freeze(ITEMS.map((item) => item.windowId));
 
@@ -158,6 +159,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
 
   const mapViewRef = useRef<MapViewLike | null>(null);
   const mountedOperationalLayers = useRef<unknown[]>([]);
+  const layerRetryAttemptsRef = useRef(0);
   const layerLoadController = useMemo(() => createSidebarLayerLoadController<unknown>({
     serviceKeys: SERVICE_KEYS,
     concurrency: LAYER_LOAD_CONCURRENCY,
@@ -275,6 +277,12 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     focusKeyboardTarget(result.focus);
   };
 
+  const retryFailedLayers = (): void => {
+    if (!layerLoad.canRetry || layerRetryAttemptsRef.current >= LAYER_RETRY_POLICY.maxAttempts) return;
+    layerRetryAttemptsRef.current += 1;
+    void layerLoadController.retryFailed();
+  };
+
   if (!navigation.visible) return null;
 
   const panelTitle = navigation.view === 'favorites'
@@ -298,6 +306,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   const layerProgressValue = layerLoad.totalCount === 0
     ? 100
     : Math.round((layerLoad.completedCount / layerLoad.totalCount) * 100);
+  const canRetryLayers = layerLoad.canRetry && layerRetryAttemptsRef.current < LAYER_RETRY_POLICY.maxAttempts;
   const layerTitle = layerLoad.phase === 'loading'
     ? 'Harita katmanları hazırlanıyor'
     : layerLoad.phase === 'degraded'
@@ -306,7 +315,9 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   const layerDetail = layerLoad.phase === 'loading'
     ? `${layerLoad.completedCount}/${layerLoad.totalCount} tamamlandı`
     : layerLoad.phase === 'degraded'
-      ? `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} yeniden denenebilir`
+      ? canRetryLayers
+        ? `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} yeniden denenebilir`
+        : `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} katman için yeniden deneme sınırına ulaşıldı`
       : `${layerLoad.loadedCount} katman kullanıma hazır`;
   const showLayerStatus = layerLoad.phase !== 'idle' && layerLoad.phase !== 'cancelled';
 
@@ -374,6 +385,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
               placeholder="Hizmet ara…"
               autoComplete="off"
               enterKeyHint="search"
+              aria-label="Kent servislerinde ara"
               aria-controls="kr-sidebar-service-list"
               aria-describedby="kr-sidebar-live-status kr-sidebar-keyboard-help"
             />
@@ -389,6 +401,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
                 className={navigation.view === value ? 'is-active' : ''}
                 onClick={() => navigationModel.setView(value)}
                 aria-pressed={navigation.view === value}
+                aria-label={`${viewLabel(value)} ${navigation.counts[value]}`}
               >
                 <span>{viewLabel(value)}</span><small>{navigation.counts[value]}</small>
               </button>
@@ -423,11 +436,12 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
                 %{layerProgressValue}
               </progress>
             ) : null}
-            {layerLoad.canRetry ? (
+            {canRetryLayers ? (
               <button
                 type="button"
                 className="kr-sidebar__layer-retry"
-                onClick={() => { void layerLoadController.retryFailed(); }}
+                onClick={retryFailedLayers}
+                aria-label={`Başarısız harita katmanlarını yeniden dene, en fazla ${LAYER_RETRY_POLICY.maxAttempts} deneme`}
               >
                 Yeniden dene
               </button>

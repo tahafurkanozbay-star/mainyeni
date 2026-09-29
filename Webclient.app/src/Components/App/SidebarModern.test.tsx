@@ -329,7 +329,7 @@ describe('SidebarModern governed interaction integration', () => {
     const status = screen.getByRole('status', { hidden: true });
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status).toHaveAttribute('aria-atomic', 'true');
-    await user.type(screen.getByRole('searchbox', { name: 'Kent servislerinde ara' }), 'park');
+    await user.type(screen.getByRole('searchbox', { name: 'Kent servislerinde ara' }), 'kutuphane');
     expect(status).toHaveTextContent('1 hizmet gösteriliyor.');
   });
 
