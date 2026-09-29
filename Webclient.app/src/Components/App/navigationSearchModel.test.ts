@@ -107,6 +107,31 @@ describe('navigationSearchModel', () => {
     expect(() => firstDispose()).not.toThrow();
   });
 
+  it('disposes observers and rejects post-unmount mutations deterministically', () => {
+    const model = new NavigationSearchModel();
+    const listener = vi.fn();
+    model.setQuery('Ankara');
+    const beforeDispose = model.getSnapshot();
+    model.subscribe(listener);
+
+    model.dispose();
+    model.setQuery('Çankaya');
+    model.beginComposition();
+    model.endComposition('Keçiören');
+    model.clear();
+
+    expect(model.getSnapshot()).toBe(beforeDispose);
+    expect(model.getSubmissionQuery()).toBeNull();
+    expect(listener).not.toHaveBeenCalled();
+    expect(model.getObserverDiagnostics()).toMatchObject({ activeObserverCount: 0, disposed: true });
+
+    const lateListener = vi.fn();
+    const lateDispose = model.subscribe(lateListener);
+    expect(model.getObserverDiagnostics().rejectedObserverCount).toBe(1);
+    expect(() => lateDispose()).not.toThrow();
+    expect(lateListener).not.toHaveBeenCalled();
+  });
+
   it('reports remaining character budget from the admitted query', () => {
     const model = new NavigationSearchModel();
     expect(model.getSnapshot().remainingCharacters).toBe(NAVIGATION_SEARCH_QUERY_LIMIT);
