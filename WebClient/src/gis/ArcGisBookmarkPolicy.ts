@@ -1,0 +1,152 @@
+export type ArcGisBookmarkDimension = '2d' | '3d';
+
+export interface ArcGisBookmarkPose {
+  readonly x: number;
+  readonly y: number;
+  readonly wkid: number;
+  readonly scale: number;
+  readonly heading?: number;
+  readonly altitude?: number;
+  readonly tilt?: number;
+}
+
+export interface ArcGisBookmarkInput {
+  readonly id: string;
+  readonly title: string;
+  readonly dimension: ArcGisBookmarkDimension;
+  readonly pose: ArcGisBookmarkPose;
+  readonly visibleLayerIds: readonly string[];
+  readonly revision: number;
+}
+
+export interface ArcGisBookmarkBudgets {
+  readonly maxBookmarks: number;
+  readonly maxTitleLength: number;
+  readonly maxVisibleLayers: number;
+  readonly minScale: number;
+  readonly maxScale: number;
+  readonly minAltitude: number;
+  readonly maxAltitude: number;
+}
+
+export interface ArcGisBookmarkPlan {
+  readonly id: string;
+  readonly title: string;
+  readonly dimension: ArcGisBookmarkDimension;
+  readonly pose: Readonly<ArcGisBookmarkPose>;
+  readonly visibleLayerIds: readonly string[];
+  readonly revision: number;
+  readonly fingerprint: string;
+}
+
+const WEB_MERCATOR_ALIASES = new Set([3857, 102100, 102113, 900913]);
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+function finite(value: number, label: string): number {
+  if (!Number.isFinite(value)) throw new Error(`${label} must be finite`);
+  return value;
+}
+
+function integer(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a non-negative safe integer`);
+  return value;
+}
+
+function normalizeWkid(wkid: number): number {
+  const value = integer(wkid, 'wkid');
+  return WEB_MERCATOR_ALIASES.has(value) ? 3857 : value;
+}
+
+function normalizeHeading(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const heading = finite(value, 'heading');
+  return ((heading % 360) + 360) % 360;
+}
+
+function freezeStrings(values: readonly string[]): readonly string[] {
+  return Object.freeze([...values]);
+}
+
+function hash(text: string): string {
+  let value = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    value ^= text.charCodeAt(index);
+    value = Math.imul(value, 16777619);
+  }
+  return (value >>> 0).toString(16).padStart(8, '0');
+}
+
+export class ArcGisBookmarkPolicy {
+  readonly #budgets: Readonly<ArcGisBookmarkBudgets>;
+
+  constructor(budgets: ArcGisBookmarkBudgets) {
+    const normalized = {
+      maxBookmarks: integer(budgets.maxBookmarks, 'maxBookmarks'),
+      maxTitleLength: integer(budgets.maxTitleLength, 'maxTitleLength'),
+      maxVisibleLayers: integer(budgets.maxVisibleLayers, 'maxVisibleLayers'),
+      minScale: finite(budgets.minScale, 'minScale'),
+      maxScale: finite(budgets.maxScale, 'maxScale'),
+      minAltitude: finite(budgets.minAltitude, 'minAltitude'),
+      maxAltitude: finite(budgets.maxAltitude, 'maxAltitude'),
+    };
+    if (normalized.maxBookmarks < 1 || normalized.maxTitleLength < 1 || normalized.maxVisibleLayers < 1) {
+      throw new Error('bookmark cardinality budgets must be positive');
+    }
+    if (normalized.minScale <= 0 || normalized.maxScale < normalized.minScale) throw new Error('invalid scale budget');
+    if (normalized.maxAltitude < normalized.minAltitude) throw new Error('invalid altitude budget');
+    this.#budgets = Object.freeze(normalized);
+  }
+
+  plan(input: ArcGisBookmarkInput): ArcGisBookmarkPlan {
+    const id = input.id.trim();
+    const title = input.title.trim();
+    if (!ID_PATTERN.test(id)) throw new Error('invalid bookmark id');
+    if (!title || title.length > this.#budgets.maxTitleLength) throw new Error('invalid bookmark title');
+    const revision = integer(input.revision, 'revision');
+    const scale = finite(input.pose.scale, 'scale');
+    if (scale < this.#budgets.minScale || scale > this.#budgets.maxScale) throw new Error('scale exceeds bookmark budget');
+    const wkid = normalizeWkid(input.pose.wkid);
+    const x = finite(input.pose.x, 'x');
+    const y = finite(input.pose.y, 'y');
+    const heading = normalizeHeading(input.pose.heading);
+    const visible = [...input.visibleLayerIds];
+    if (visible.length > this.#budgets.maxVisibleLayers) throw new Error('visible layer budget exceeded');
+    const seen = new Set<string>();
+    for (const rawId of visible) {
+      const layerId = rawId.trim();
+      if (!ID_PATTERN.test(layerId) || layerId !== rawId) throw new Error('invalid visible layer id');
+      if (seen.has(layerId)) throw new Error('duplicate visible layer id');
+      seen.add(layerId);
+    }
+    visible.sort();
+
+    let altitude: number | undefined;
+    let tilt: number | undefined;
+    if (input.dimension === '2d') {
+      if (input.pose.altitude !== undefined || input.pose.tilt !== undefined) throw new Error('2d bookmark cannot retain 3d pose');
+    } else {
+      if (input.pose.altitude === undefined || input.pose.tilt === undefined) throw new Error('3d bookmark requires altitude and tilt');
+      altitude = finite(input.pose.altitude, 'altitude');
+      tilt = finite(input.pose.tilt, 'tilt');
+      if (altitude < this.#budgets.minAltitude || altitude > this.#budgets.maxAltitude) throw new Error('altitude exceeds bookmark budget');
+      if (tilt < 0 || tilt > 180) throw new Error('tilt must be between 0 and 180');
+    }
+
+    const pose = Object.freeze({ x, y, wkid, scale, ...(heading === undefined ? {} : { heading }), ...(altitude === undefined ? {} : { altitude }), ...(tilt === undefined ? {} : { tilt }) });
+    const canonical = JSON.stringify([id, title, input.dimension, pose, visible, revision]);
+    return Object.freeze({ id, title, dimension: input.dimension, pose, visibleLayerIds: freezeStrings(visible), revision, fingerprint: hash(canonical) });
+  }
+
+  planCollection(inputs: readonly ArcGisBookmarkInput[]): readonly ArcGisBookmarkPlan[] {
+    if (inputs.length > this.#budgets.maxBookmarks) throw new Error('bookmark budget exceeded');
+    const ids = new Set<string>();
+    const plans = inputs.map((input) => {
+      const plan = this.plan(input);
+      if (ids.has(plan.id)) throw new Error('duplicate bookmark id');
+      ids.add(plan.id);
+      return plan;
+    });
+    plans.sort((left, right) => left.id.localeCompare(right.id));
+    return Object.freeze(plans);
+  }
+}
