@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest'
+import { ArcGisRequestBudgetPolicy, type ArcGisRequestDescriptor } from './ArcGisRequestBudgetPolicy'
+
+const policy = () => new ArcGisRequestBudgetPolicy({ maxConcurrent: 2, maxQueued: 2, maxEstimatedBytes: 1000, maxDeadlineMs: 10_000, maxLayerCount: 4, maxRevisionLength: 32 })
+const request = (patch: Partial<ArcGisRequestDescriptor> = {}): ArcGisRequestDescriptor => ({ id: 'r1', requestClass: 'query', revision: 'rev1', priority: 50, estimatedBytes: 100, deadlineMs: 5000, layerIds: ['roads', 'parks'], ...patch })
+
+describe('ArcGisRequestBudgetPolicy', () => {
+  it('admits and freezes a bounded request', () => { const plan = policy().plan(request()); expect(Object.isFrozen(plan)).toBe(true); expect(Object.isFrozen(plan.layerIds)).toBe(true) })
+  it('sorts layers before deriving dedupe identity', () => expect(policy().plan(request()).dedupeKey).toBe(policy().plan(request({ layerIds: ['parks', 'roads'] })).dedupeKey))
+  it('keeps caller identity outside dedupe identity', () => expect(policy().plan(request()).dedupeKey).toBe(policy().plan(request({ id: 'r2' })).dedupeKey))
+  it('pins revision into dedupe identity', () => expect(policy().plan(request()).dedupeKey).not.toBe(policy().plan(request({ revision: 'rev2' })).dedupeKey))
+  it('rejects malformed request ids', () => expect(() => policy().plan(request({ id: ' bad ' }))).toThrow('request-id-invalid'))
+  it('rejects malformed revisions', () => expect(() => policy().plan(request({ revision: '' }))).toThrow('revision-invalid'))
+  it('rejects unsafe priority', () => expect(() => policy().plan(request({ priority: 101 }))).toThrow('priority-out-of-range'))
+  it('rejects oversized estimates', () => expect(() => policy().plan(request({ estimatedBytes: 1001 }))).toThrow('estimatedBytes-out-of-range'))
+  it('rejects deadlines beyond budget', () => expect(() => policy().plan(request({ deadlineMs: 10_001 }))).toThrow('deadlineMs-out-of-range'))
+  it('rejects duplicate layers', () => expect(() => policy().plan(request({ layerIds: ['roads', 'roads'] }))).toThrow('duplicate-layer-id'))
+  it('rejects excessive layer cardinality', () => expect(() => policy().plan(request({ layerIds: ['a', 'b', 'c', 'd', 'e'] }))).toThrow('layer-count-budget-exceeded'))
+  it('prioritizes higher-priority requests', () => { const result = policy().schedule([request({ id: 'low', priority: 1 }), request({ id: 'high', priority: 99, revision: 'rev2' })]); expect(result.running.map(x => x.id)).toEqual(['high', 'low']) })
+  it('uses deadline as deterministic priority tie-breaker', () => { const result = policy().schedule([request({ id: 'late', deadlineMs: 9000 }), request({ id: 'early', deadlineMs: 1000, revision: 'rev2' })]); expect(result.running.map(x => x.id)).toEqual(['early', 'late']) })
+  it('uses id as final deterministic tie-breaker', () => { const result = policy().schedule([request({ id: 'z', revision: 'z' }), request({ id: 'a', revision: 'a' })]); expect(result.running.map(x => x.id)).toEqual(['a', 'z']) })
+  it('dedupes equivalent transport work', () => { const result = policy().schedule([request(), request({ id: 'r2' })]); expect(result.running).toHaveLength(1); expect(result.rejectedIds).toEqual(['r2']) })
+  it('rejects duplicate caller ids', () => expect(() => policy().schedule([request(), request({ revision: 'rev2' })])).toThrow('duplicate-request-id'))
+  it('bounds aggregate estimated bytes', () => { const result = policy().schedule([request({ id: 'a', estimatedBytes: 600 }), request({ id: 'b', revision: 'b', estimatedBytes: 500 })]); expect(result.running.map(x => x.id)).toEqual(['a']); expect(result.rejectedIds).toEqual(['b']) })
+  it('splits admitted work into running and queued sets', () => { const result = policy().schedule([request({ id: 'a', revision: 'a' }), request({ id: 'b', revision: 'b' }), request({ id: 'c', revision: 'c' })]); expect(result.running).toHaveLength(2); expect(result.queued).toHaveLength(1) })
+  it('rejects queue overflow deterministically', () => { const result = policy().schedule(['a','b','c','d','e'].map((id, i) => request({ id, revision: id, priority: 50 - i }))); expect(result.running).toHaveLength(2); expect(result.queued).toHaveLength(2); expect(result.rejectedIds).toEqual(['e']) })
+  it('freezes queue graph', () => { const result = policy().schedule([request()]); expect(Object.isFrozen(result)).toBe(true); expect(Object.isFrozen(result.running)).toBe(true); expect(Object.isFrozen(result.queued)).toBe(true); expect(Object.isFrozen(result.rejectedIds)).toBe(true) })
+  it('reports bytes for retained work only', () => { const result = policy().schedule([request({ id: 'a', estimatedBytes: 400 }), request({ id: 'b', revision: 'b', estimatedBytes: 400 })]); expect(result.totalEstimatedBytes).toBe(800) })
+  it('supports every governed request class', () => { for (const requestClass of ['identify','query','export','proximity','geometry'] as const) expect(policy().plan(request({ requestClass })).requestClass).toBe(requestClass) })
+})
