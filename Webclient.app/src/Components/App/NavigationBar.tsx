@@ -28,6 +28,8 @@ export function NavigationBar({ windowManager }: NavigationBarProps) {
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
   }, []);
 
+  useEffect(() => () => searchModel.dispose(), [searchModel]);
+
   const openGlobalSearch = (): void => {
     const name = searchModel.getSubmissionQuery();
     if (name === null) return;
