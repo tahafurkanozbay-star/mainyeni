@@ -1,88 +1,138 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using Business._Base;
-using Business.Core.Context;
-using Business.Core.Common;
-using Business.Extensions.Gis.Model;
-using Business.Extensions.Integrations.ViewModel;
-using Business.Core.Resources;
-using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
 using System.ServiceModel;
+using System.Threading;
+using System.Threading.Tasks;
+using Business._Base;
+using Business.Core.Common;
+using Business.Core.Context;
+using Business.Core.Resources;
 using Business.Extensions.Integrations.Pod.AEOServiceReference;
+using Business.Extensions.Integrations.ViewModel;
 
 namespace Business.Extensions.Integrations.Operations
 {
+    /// <summary>
+    /// Owns the server-side boundary to the Ankara Chamber of Pharmacists SOAP service.
+    /// Browser callers never receive the upstream endpoint and cancellation is propagated from
+    /// ASP.NET so abandoned requests do not retain an application request indefinitely.
+    /// </summary>
     public class PodOperations : _BaseOperations
     {
+        public const string ServiceEndpoint = "https://mvc.aeo.org.tr/PublicSayfalar/WebServices/ws_AEO_Nobet.asmx";
 
-        private BusinessContext db;
+        private static readonly TimeSpan PreviousDayCutoff = new TimeSpan(9, 30, 0);
+        private readonly BusinessContext db;
 
         public PodOperations(BusinessContext context)
         {
-            this.db = context;
+            db = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-
-        public async Task<ServiceResult<List<PodViewModel>>> GetTodaysPods()
+        public Task<ServiceResult<List<PodViewModel>>> GetTodaysPods()
         {
-            List<PodViewModel> pods = new List<PodViewModel>();
+            return GetTodaysPods(CancellationToken.None);
+        }
 
-            var url="https://mvc.aeo.org.tr/PublicSayfalar/WebServices/ws_AEO_Nobet.asmx";
-            
-            var endpointAddress=new EndpointAddress(url);
-            using(var client = new ws_AEO_NobetSoapClient(ws_AEO_NobetSoapClient.EndpointConfiguration.ws_AEO_NobetSoap, 
-            endpointAddress)){
+        public async Task<ServiceResult<List<PodViewModel>>> GetTodaysPods(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
-            var date = System.DateTime.Today;
+            var endpointAddress = new EndpointAddress(ServiceEndpoint);
+            using var client = new ws_AEO_NobetSoapClient(
+                ws_AEO_NobetSoapClient.EndpointConfiguration.ws_AEO_NobetSoap,
+                endpointAddress);
 
-            var hour = System.DateTime.Now.Hour;
-            var minutes = System.DateTime.Now.Minute;
-            if (hour < 9 && minutes <= 30)
+            var requestDate = ResolveServiceDate(DateTime.Now);
+            try
             {
-                date = date.AddDays(-1); //yesterday
+                // The generated SOAP proxy does not expose a CancellationToken overload. WaitAsync
+                // still releases this request as soon as the caller disconnects instead of holding
+                // the ASP.NET request open until the remote service eventually completes.
+                var result = await client
+                    .NobetciEczaneGetirTarihAsync(requestDate)
+                    .WaitAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return MapResponse(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                AbortSafely(client);
+                throw;
+            }
+            catch (TimeoutException)
+            {
+                AbortSafely(client);
+                throw;
+            }
+            catch (CommunicationException)
+            {
+                AbortSafely(client);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// The provider publishes the new duty roster at 09:30 local server time. Before that
+        /// boundary the previous calendar day is authoritative. Keeping this calculation pure
+        /// makes the rollover contract deterministic and regression-testable.
+        /// </summary>
+        public static DateTime ResolveServiceDate(DateTime localNow)
+        {
+            var date = localNow.Date;
+            return localNow.TimeOfDay < PreviousDayCutoff ? date.AddDays(-1) : date;
+        }
+
+        private static ServiceResult<List<PodViewModel>> MapResponse(NobetciEczaneGetirTarihResponse result)
+        {
+            var payload = result?.Body?.NobetciEczaneGetirTarihResult;
+            if (payload == null || !payload.isSuccess || payload.NobetciEczaneBilgisiListesi == null)
+            {
+                return new ServiceResult<List<PodViewModel>>(
+                    ServiceResultType.Error,
+                    BusinessMessages.Get("NOT_FOUND"),
+                    null);
             }
 
-            //var result = await client.NobetciEczaneGetirTarihAsync(date);
-            var result = await client.NobetciEczaneGetirTarihAsync(System.DateTime.Today);
-
-            System.Console.WriteLine("---------------------------");
-            System.Console.WriteLine(Toolbox.Serialization.SerializationUtils.ObjectToJson(result));
-            System.Console.WriteLine("---------------------------");
-
-            if (result.Body.NobetciEczaneGetirTarihResult.isSuccess)
+            var source = payload.NobetciEczaneBilgisiListesi;
+            var pods = new List<PodViewModel>(source.Length);
+            for (var index = 0; index < source.Length; index++)
             {
-                int count = 0;
-
-                foreach (var item in result.Body.NobetciEczaneGetirTarihResult.NobetciEczaneBilgisiListesi)
+                var item = source[index];
+                if (item == null)
                 {
-                    var pod = new PodViewModel();
-                    pod.Id = count;
-                    pod.Distance = item.Distance;
-                    pod.DistrictName = item.BolgeAdi;
-                    pod.Address = item.EczaneAdresi;
-                    pod.AddressDescription = item.AdresAciklamasi;
-                    pod.Lat = item.KoordinatLat;
-                    pod.Lng = item.KoordinatLng;
-                    pod.Phone = item.Telefon;
-                    pod.Title = Toolbox.Text.TextUtils.Capitalize(item.EczaneAdi) + " Eczanesi";
-                    pods.Add(pod);
-                    count++;
+                    continue;
                 }
-            }
-            else
-            {
 
-                return new ServiceResult<List<PodViewModel>>(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"), null);
+                pods.Add(new PodViewModel
+                {
+                    Id = index,
+                    Distance = item.Distance,
+                    DistrictName = item.BolgeAdi,
+                    Address = item.EczaneAdresi,
+                    AddressDescription = item.AdresAciklamasi,
+                    Lat = item.KoordinatLat,
+                    Lng = item.KoordinatLng,
+                    Phone = item.Telefon,
+                    Title = Toolbox.Text.TextUtils.Capitalize(item.EczaneAdi) + " Eczanesi"
+                });
             }
-            }
-            
-
-            
-
 
             return new ServiceResult<List<PodViewModel>>(ServiceResultType.Success, pods);
-
         }
 
+        private static void AbortSafely(ws_AEO_NobetSoapClient client)
+        {
+            try
+            {
+                client.Abort();
+            }
+            catch
+            {
+                // Preserve the original cancellation/transport failure. Abort is best-effort only.
+            }
+        }
     }
 }

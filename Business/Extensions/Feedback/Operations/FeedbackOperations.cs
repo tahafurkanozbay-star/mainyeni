@@ -6,236 +6,181 @@ using Business.Extensions.FeedbackService.Model;
 using Business.Extensions.FeedbackService.ViewModel;
 using Microsoft.EntityFrameworkCore;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Business.Extensions.FeedbackService.Operations
 {
     public class FeedbackOperations : _BaseOperations
     {
+        private const int DefaultPageSize = 25;
+        private readonly BusinessContext db;
 
-        private BusinessContext db;
-
-        public FeedbackOperations(BusinessContext _context)
+        public FeedbackOperations(BusinessContext context)
         {
-            this.db = _context;
+            db = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        private ServiceResult validateCreate(FeedbackViewModel viewModel)
+        private static ServiceResult ValidateCreate(FeedbackViewModel viewModel)
         {
-
-            if (String.IsNullOrEmpty(viewModel.City))
+            if (viewModel == null)
             {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen şehir giriniz.");
+                return new ServiceResult(ServiceResultType.Error, "Bildirim bilgileri gereklidir.");
             }
 
-            if (String.IsNullOrEmpty(viewModel.Country))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen ülke giriniz.");
-            }
-
-            if (String.IsNullOrEmpty(viewModel.Description))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen açıklama giriniz.");
-
-            }
-
-            if (String.IsNullOrEmpty(viewModel.Email))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen eposta giriniz.");
-            }
-
-            /*
-            if (viewModel.FeedbackType == FeedbackType.NAVIGATION_IS_WRONG)
-            {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen bildirim türü giriniz.");
-            }
-            */
-
-            if (String.IsNullOrEmpty(viewModel.FullName))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen adınızı giriniz.");
-            }
-
-            if (String.IsNullOrEmpty(viewModel.Address))
-            {
-                return new ServiceResult(ServiceResultType.Error, "Lütfen adres giriniz.");
-            }
+            if (String.IsNullOrWhiteSpace(viewModel.City)) return new ServiceResult(ServiceResultType.Error, "Lütfen şehir giriniz.");
+            if (String.IsNullOrWhiteSpace(viewModel.Country)) return new ServiceResult(ServiceResultType.Error, "Lütfen ülke giriniz.");
+            if (String.IsNullOrWhiteSpace(viewModel.Description)) return new ServiceResult(ServiceResultType.Error, "Lütfen açıklama giriniz.");
+            if (String.IsNullOrWhiteSpace(viewModel.Email)) return new ServiceResult(ServiceResultType.Error, "Lütfen eposta giriniz.");
+            if (String.IsNullOrWhiteSpace(viewModel.FullName)) return new ServiceResult(ServiceResultType.Error, "Lütfen adınızı giriniz.");
+            if (String.IsNullOrWhiteSpace(viewModel.Address)) return new ServiceResult(ServiceResultType.Error, "Lütfen adres giriniz.");
+            if (!FeedbackTypes.List.Any(x => x.Id == viewModel.FeedbackType)) return new ServiceResult(ServiceResultType.Error, "Lütfen geçerli bir bildirim türü giriniz.");
 
             return new ServiceResult(ServiceResultType.Success);
-
         }
 
         public ServiceResult Update(int id, int status, int actionTaken, UserSessionViewModel session)
         {
+            return UpdateAsync(id, status, actionTaken, session, CancellationToken.None).GetAwaiter().GetResult();
+        }
 
-            using (db)
+        public async Task<ServiceResult> UpdateAsync(int id, int status, int actionTaken, UserSessionViewModel session, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (session == null) throw new ArgumentNullException(nameof(session));
+
+            var feedback = await db.Feedbacks.FirstOrDefaultAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false);
+            if (feedback == null)
             {
-                var feedback = db.Feedbacks.Where(x => x.Id == id).FirstOrDefault();
-
-                feedback.UpdatedBy = session.UserId;
-                feedback.UpdateDate = DateTime.Now;
-                feedback.Status = status;
-                feedback.ActionTaken = actionTaken;
-
-                db.Entry(feedback).State = EntityState.Modified;
-                db.SaveChanges();
-                return new ServiceResult(ServiceResultType.Success);
+                return new ServiceResult(ServiceResultType.Error, "Kayıt bulunamadı");
             }
 
+            feedback.UpdatedBy = session.UserId;
+            feedback.UpdateDate = DateTime.Now;
+            feedback.Status = status;
+            feedback.ActionTaken = actionTaken;
 
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return new ServiceResult(ServiceResultType.Success);
         }
 
         public ServiceResult Create(FeedbackViewModel viewModel)
         {
-
-
-            var validateResult = validateCreate(viewModel);
-
-            if (!validateResult.IsSuccess)
-            {
-                return validateResult;
-            }
-
-
-            var feedback = new Feedback();
-            feedback.City = viewModel.City?.Trim();
-            feedback.Country = viewModel.Country?.Trim();
-            feedback.Description = viewModel.Description?.Trim();
-            feedback.Email = viewModel.Email?.Trim();
-
-            var _feedBackType = FeedbackTypes.List.Where(x => x.Id == viewModel.FeedbackType).FirstOrDefault();
-
-            feedback.FeedbackType = _feedBackType.Id;
-            feedback.FullName = viewModel.FullName?.Trim();
-            feedback.Address = viewModel.Address?.Trim();
-
-            feedback.Status = FeedbackStatus.List[0].Id;//Açık
-            feedback.ActionTaken = FeedbackActions.List[0].Id;//Açık
-
-            feedback.Browser = viewModel.Browser?.Trim();
-            feedback.Os = viewModel.Os?.Trim();
-            feedback.Ip = viewModel.Ip?.Trim();
-            feedback.Device = viewModel.Device?.Trim();
-
-            feedback.CreateDate = DateTime.Now;
-            feedback.UpdateDate = feedback.CreateDate;
-            feedback.UpdatedBy = -1;
-
-
-            using (db)
-            {
-                db.Feedbacks.Add(feedback);
-                db.SaveChanges();
-                return new ServiceResult(ServiceResultType.Success, "Başarıyla kaydedildi");
-
-            }
-
+            return CreateAsync(viewModel, CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        public async Task<ServiceResult> CreateAsync(FeedbackViewModel viewModel, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
+            var validateResult = ValidateCreate(viewModel);
+            if (!validateResult.IsSuccess) return validateResult;
+
+            var feedbackType = FeedbackTypes.List.First(x => x.Id == viewModel.FeedbackType);
+            var feedback = new Feedback
+            {
+                City = viewModel.City?.Trim(),
+                Country = viewModel.Country?.Trim(),
+                Description = viewModel.Description?.Trim(),
+                Email = viewModel.Email?.Trim(),
+                FeedbackType = feedbackType.Id,
+                FullName = viewModel.FullName?.Trim(),
+                Address = viewModel.Address?.Trim(),
+                Status = FeedbackStatus.List[0].Id,
+                ActionTaken = FeedbackActions.List[0].Id,
+                Browser = viewModel.Browser?.Trim(),
+                Os = viewModel.Os?.Trim(),
+                Ip = viewModel.Ip?.Trim(),
+                Device = viewModel.Device?.Trim(),
+                CreateDate = DateTime.Now,
+                UpdatedBy = -1
+            };
+            feedback.UpdateDate = feedback.CreateDate;
+
+            await db.Feedbacks.AddAsync(feedback, cancellationToken).ConfigureAwait(false);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return new ServiceResult(ServiceResultType.Success, "Başarıyla kaydedildi");
+        }
 
         public ServiceResult<DataList<FeedbackViewModel>> List(_BaseSearchViewModel viewModel, UserSessionViewModel session)
         {
-            using (db)
-            {
-                int pageSize = 25;
-                if (viewModel.PageSize > pageSize || viewModel.PageSize <= 0)
-                {
-                    viewModel.PageSize = pageSize;
-                }
-
-                if (viewModel.PageNumber == 0)
-                {
-                    viewModel.PageNumber = 1;
-                }
-                int skipRows = (viewModel.PageNumber- 1) * viewModel.PageSize;
-
-                var list = db.Feedbacks.OrderByDescending(x => x.CreateDate);
-
-                var count = list.Count();
-                
-                var resultList = list.Skip(skipRows).Take(viewModel.PageSize).Select(y => new FeedbackViewModel()
-                {
-                    ActionTaken= y.ActionTaken,
-                    Address=y.Address,
-                    Browser=y.Browser,
-                    City=y.City,
-                    Country=y.Country,
-                    CreateDate=y.CreateDate,
-                    Description=y.Description,
-                    Device=y.Device,
-                    Email=y.Email,
-                    FeedbackType=y.FeedbackType,
-                    FullName=y.FullName,
-                    Id=y.Id,
-                    Ip=y.Ip,
-                    Os=y.Os,
-                    Status=y.Status,
-                    UpdateDate=y.UpdateDate,
-                    UpdatedBy=y.UpdatedBy
-                }).ToList();
-
-                var dataList = new DataList<FeedbackViewModel>()
-                {
-                    TotalRowCount = count,
-                    CurrentPage = viewModel.PageNumber,
-                    PageSize = viewModel.PageSize,
-                    Data = resultList
-                };
-
-                return new ServiceResult<DataList<FeedbackViewModel>>(ServiceResultType.Success, dataList);
-            }
-
+            return ListAsync(viewModel, session, CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        public ServiceResult<FeedbackViewModel> GetById(int Id)
+        public async Task<ServiceResult<DataList<FeedbackViewModel>>> ListAsync(_BaseSearchViewModel viewModel, UserSessionViewModel session, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (viewModel == null) throw new ArgumentNullException(nameof(viewModel));
+            if (session == null) throw new ArgumentNullException(nameof(session));
 
-            using (db)
+            var pageSize = viewModel.PageSize > 0 && viewModel.PageSize <= DefaultPageSize ? viewModel.PageSize : DefaultPageSize;
+            var pageNumber = viewModel.PageNumber > 0 ? viewModel.PageNumber : 1;
+            var skipRows = checked((pageNumber - 1) * pageSize);
+
+            var query = db.Feedbacks.AsNoTracking().OrderByDescending(x => x.CreateDate);
+            var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+            var resultList = await query.Skip(skipRows).Take(pageSize).Select(y => new FeedbackViewModel
             {
-                var model = db.Feedbacks.Where(x => x.Id == Id).FirstOrDefault();
-                if (model != null)
-                {
-                    var viewModel = new FeedbackViewModel()
-                    {
-                        Id = model.Id,
-                        CreateDate = model.CreateDate,
-                        Browser = model.Browser,
-                        Device = model.Device,
-                        Ip = model.Ip,
-                        Os = model.Os,
-                        FullName = model.FullName,
-                        City = model.City,
-                        Country = model.Country,
-                        Description = model.Description,
-                        Email = model.Email,
-                        Address = model.Address,
+                ActionTaken = y.ActionTaken,
+                Address = y.Address,
+                Browser = y.Browser,
+                City = y.City,
+                Country = y.Country,
+                CreateDate = y.CreateDate,
+                Description = y.Description,
+                Device = y.Device,
+                Email = y.Email,
+                FeedbackType = y.FeedbackType,
+                FullName = y.FullName,
+                Id = y.Id,
+                Ip = y.Ip,
+                Os = y.Os,
+                Status = y.Status,
+                UpdateDate = y.UpdateDate,
+                UpdatedBy = y.UpdatedBy
+            }).ToListAsync(cancellationToken).ConfigureAwait(false);
 
-                        FeedbackType = model.FeedbackType,
-
-                        Status = model.Status,
-
-
-                        ActionTaken = model.ActionTaken,
-
-                        UpdateDate = model.UpdateDate,
-                        UpdatedBy = model.UpdatedBy
-
-
-
-                    };
-
-                    return new ServiceResult<FeedbackViewModel>(ServiceResultType.Success, "", viewModel);
-                }
-                else
-                {
-                    return new ServiceResult<FeedbackViewModel>(ServiceResultType.Error, "Kayıt bulunamadı", null);
-                }
-            }
-
+            return new ServiceResult<DataList<FeedbackViewModel>>(ServiceResultType.Success, new DataList<FeedbackViewModel>
+            {
+                TotalRowCount = count,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                Data = resultList
+            });
         }
 
+        public ServiceResult<FeedbackViewModel> GetById(int id)
+        {
+            return GetByIdAsync(id, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        public async Task<ServiceResult<FeedbackViewModel>> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var model = await db.Feedbacks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken).ConfigureAwait(false);
+            if (model == null) return new ServiceResult<FeedbackViewModel>(ServiceResultType.Error, "Kayıt bulunamadı", null);
+
+            return new ServiceResult<FeedbackViewModel>(ServiceResultType.Success, "", new FeedbackViewModel
+            {
+                Id = model.Id,
+                CreateDate = model.CreateDate,
+                Browser = model.Browser,
+                Device = model.Device,
+                Ip = model.Ip,
+                Os = model.Os,
+                FullName = model.FullName,
+                City = model.City,
+                Country = model.Country,
+                Description = model.Description,
+                Email = model.Email,
+                Address = model.Address,
+                FeedbackType = model.FeedbackType,
+                Status = model.Status,
+                ActionTaken = model.ActionTaken,
+                UpdateDate = model.UpdateDate,
+                UpdatedBy = model.UpdatedBy
+            });
+        }
     }
 }

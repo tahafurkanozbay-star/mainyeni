@@ -1,50 +1,43 @@
-using Api.Core.Base;
-using Business.Core.Common;
-using Business.Core.Context;
-using Business.Extensions.Gis.Operations;
-using System;
-using Microsoft.AspNetCore.Mvc;
 using Api.Admin.Filters;
-using Business._Base;
+using Api.Core.Base;
+using Business.Core.Context;
 using Business.Extensions.Gis.Model;
+using Business.Extensions.Gis.Operations;
+using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CityWorks.AdminApi.Gis
 {
-
     [ApiController]
     public class BasemapLayerController : _BaseController
     {
-        private GisBasemapLayerOperations ops;
+        private readonly GisBasemapLayerOperations ops;
+
         public BasemapLayerController(BusinessContext context)
         {
-            this.dbContext = context;
+            dbContext = context ?? throw new ArgumentNullException(nameof(context));
             ops = new GisBasemapLayerOperations(context);
         }
 
-
-        /// <summary>
-        /// Search the BasemapLayers
-        /// </summary>
+        /// <summary>Returns active basemap layers using a no-tracking persistence read.</summary>
         [HttpGet]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/List")]
-        public IActionResult List([FromQuery] _BaseSearchViewModel viewModel)
+        public async Task<IActionResult> List(CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
 
-                    var result = ops.GetAll();
-
-                    return new JsonResult(result);
-                }
-                else
-                {
-                    return new JsonResult(sessionResult);
-                }
+                var result = await ops.GetAllAsync(cancellationToken).ConfigureAwait(false);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -53,38 +46,26 @@ namespace CityWorks.AdminApi.Gis
             }
         }
 
-        /// <summary>
-        /// Creates/updates BasemapLayer
-        /// </summary>
+        /// <summary>Creates or updates a basemap layer while honoring request cancellation.</summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/Save")]
-        
-        public IActionResult Save(GisBasemapLayer viewModel)
+        public async Task<IActionResult> Save(GisBasemapLayer viewModel, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
 
-                if (!sessionResult.IsSuccess)
-                {
-                     return new JsonResult(sessionResult);
-                }
-
-                var session = sessionResult.Data;
-                
-                ServiceResult result = null;
-                
-                if (viewModel.Id>0)
-                {
-                    result = ops.Update(viewModel,session);
-                }
-                else
-                {
-                    result = ops.Create(viewModel,session);
-                }
+                var result = viewModel != null && viewModel.Id > 0
+                    ? await ops.UpdateAsync(viewModel, sessionResult.Data, cancellationToken).ConfigureAwait(false)
+                    : await ops.CreateAsync(viewModel, sessionResult.Data, cancellationToken).ConfigureAwait(false);
 
                 return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -92,29 +73,25 @@ namespace CityWorks.AdminApi.Gis
                 return new JsonResult(exceptionResult(ex));
             }
         }
-        
-        /// <summary>
-        /// Deletes BasemapLayer
-        /// </summary>
+
+        /// <summary>Soft-deletes a basemap layer while honoring request cancellation.</summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("Gis/[controller]/Delete")]
-        public IActionResult Delete(GisBasemapLayer viewModel)
+        public async Task<IActionResult> Delete(GisBasemapLayer viewModel, CancellationToken cancellationToken)
         {
-             try
+            try
             {
                 var sessionResult = GetSession(HttpContext);
+                if (!sessionResult.IsSuccess) return new JsonResult(sessionResult);
 
-                if (!sessionResult.IsSuccess)
-                {
-                     return new JsonResult(sessionResult);
-                }
-
-                var session = sessionResult.Data;
-                
-                ServiceResult result = ops.Delete(viewModel.Id, session);
-                
+                var id = viewModel?.Id ?? 0;
+                var result = await ops.DeleteAsync(id, sessionResult.Data, cancellationToken).ConfigureAwait(false);
                 return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

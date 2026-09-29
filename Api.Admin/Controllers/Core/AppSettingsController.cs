@@ -1,47 +1,47 @@
-using Api.Core.Base;
 using Api.Admin.Filters;
-using Business.Core.Common;
+using Api.Core.Base;
 using Business.Core.Context;
 using Business.Core.Model;
 using Business.Core.Operations;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CityWorks.AdminApi.Config
 {
     public class AppSettingsController : _BaseController
     {
-        private AppConfigOperations ops;
+        private readonly AppConfigOperations ops;
 
         public AppSettingsController(BusinessContext context)
         {
-            this.dbContext = context;
+            dbContext = context ?? throw new ArgumentNullException(nameof(context));
             ops = new AppConfigOperations(context);
         }
 
-
         /// <summary>
-        /// Returns Application Settings with Key 
+        /// Returns application settings for a key without tracking read-only state.
         /// </summary>
         [HttpGet]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("[controller]/List")]
-        public IActionResult List(string key)
+        public async Task<IActionResult> List(string key, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    var result = ops.GetConfig(key);
-                    return new JsonResult(result);
-                }
-                else
+                if (!sessionResult.IsSuccess)
                 {
                     return new JsonResult(sessionResult);
                 }
+
+                var result = await ops.GetConfigAsync(key, cancellationToken).ConfigureAwait(false);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -51,40 +51,33 @@ namespace CityWorks.AdminApi.Config
         }
 
         /// <summary>
-        /// Save Application config with Key 
+        /// Saves application configuration while honoring request cancellation.
         /// </summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("[controller]/Save")]
-        public IActionResult Save(AppConfig viewModel)
+        public async Task<IActionResult> Save(AppConfig viewModel, CancellationToken cancellationToken)
         {
             try
             {
                 var sessionResult = GetSession(HttpContext);
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    ServiceResult<AppConfig> result = null;
-
-                    result = ops.Update(viewModel, session);
-
-
-                    return new JsonResult(result);
-                }
-                else
+                if (!sessionResult.IsSuccess)
                 {
                     return new JsonResult(sessionResult);
                 }
+
+                var result = await ops.UpdateAsync(viewModel, sessionResult.Data, cancellationToken).ConfigureAwait(false);
+                return new JsonResult(result);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
                 return new JsonResult(exceptionResult(ex));
             }
-
         }
-
-
     }
 }

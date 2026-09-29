@@ -1,10 +1,9 @@
-﻿using System.Data;
-using Toolbox.Text;
-using Toolbox.Security.Url;
-using Toolbox.Validation;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Business._Base;
 using Business.Core.Common;
 using Business.Core.Context;
@@ -13,446 +12,498 @@ using Business.Core.ViewModel;
 using Business.Extensions.Gis.Model;
 using Business.Extensions.Gis.ViewModel;
 using Microsoft.EntityFrameworkCore;
-using System.IO;
+using Toolbox.Security.Url;
+using Toolbox.Validation;
 
 namespace Business.Extensions.Gis.Operations
 {
     public class GisConfigServiceOperations : _BaseOperations
     {
-        private BusinessContext db;
+        private const int MaxTitleLength = 256;
+        private const int MaxCategoryLength = 256;
+        private const int MaxUrlLength = 2048;
+        private const int MaxDescriptionLength = 4096;
+        private const int MaxCredentialLength = 1024;
+        private const int MaxIdentifyLayersLength = 2048;
+        private const int MaxSearchCategoryLength = 256;
+        private const int MaxImportRows = 2000;
+        private const int MaxImportLineLength = 16384;
+
+        private readonly BusinessContext db;
 
         public GisConfigServiceOperations(BusinessContext context)
         {
-            this.db = context;
+            db = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        public ServiceResult<List<GisServiceViewModel>> GetConfigurationServices()
-        {
-            using (db)
-            {
-                List<GisConfigService> serviceList = GetItemList<GisConfigService>(db, x => !x.IsDeleted);
+        public ServiceResult<List<GisServiceViewModel>> GetConfigurationServices() =>
+            GetConfigurationServicesAsync().GetAwaiter().GetResult();
 
-                var list = serviceList.Select(x => new GisServiceViewModel()
+        public async Task<ServiceResult<List<GisServiceViewModel>>> GetConfigurationServicesAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var list = await db.GisConfigServices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.Title)
+                .ThenBy(x => x.Id)
+                .Select(x => new GisServiceViewModel { Title = x.Title, Url = x.Url })
+                .ToListAsync(cancellationToken);
+
+            return new ServiceResult<List<GisServiceViewModel>>(ServiceResultType.Success, string.Empty, list);
+        }
+
+        public ServiceResult<List<GisConfigService>> GetAll() => GetAllAsync().GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<List<GisConfigService>>> GetAllAsync(CancellationToken cancellationToken = default)
+        {
+            var list = await db.GisConfigServices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.Category)
+                .ThenBy(x => x.Title)
+                .ThenBy(x => x.Id)
+                .ToListAsync(cancellationToken);
+
+            return new ServiceResult<List<GisConfigService>>(ServiceResultType.Success, string.Empty, list);
+        }
+
+        public ServiceResult<List<GisConfigurationServiceUserViewModel>> GetAllForPublic() =>
+            GetAllForPublicAsync().GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<List<GisConfigurationServiceUserViewModel>>> GetAllForPublicAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var rows = await db.GisConfigServices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.Category)
+                .ThenBy(x => x.Title)
+                .ThenBy(x => x.Id)
+                .Select(x => new
                 {
-                    Title = x.Title,
-                    Url = x.Url
-                }).ToList();
+                    x.Title,
+                    x.IsIdentifiable,
+                    x.IdentifyLayers,
+                    x.ShowInSearch,
+                    x.SearchCategoryTitle,
+                    x.Guid
+                })
+                .ToListAsync(cancellationToken);
 
-                return new ServiceResult<List<GisServiceViewModel>>(ServiceResultType.Success, "", list);
-            }
+            var list = rows.Select(x => new GisConfigurationServiceUserViewModel
+            {
+                Title = x.Title,
+                IsIdentifiable = x.IsIdentifiable,
+                IdentifyLayers = x.IdentifyLayers,
+                ShowInSearch = x.ShowInSearch,
+                SearchCategoryTitle = x.SearchCategoryTitle,
+                Eg = "https://" + ParameterEncryptionUtils.EncryptGuid(x.Guid) + ".gissrv.org"
+            }).ToList();
+
+            return new ServiceResult<List<GisConfigurationServiceUserViewModel>>(ServiceResultType.Success, string.Empty, list);
         }
 
+        public ServiceResult<List<GisConfigServiceGroup>> GetAllGrouped() =>
+            GetAllGroupedAsync().GetAwaiter().GetResult();
 
-        public ServiceResult<List<GisConfigService>> GetAll()
+        public async Task<ServiceResult<List<GisConfigServiceGroup>>> GetAllGroupedAsync(
+            CancellationToken cancellationToken = default)
         {
-            using (db)
-            {
-                var list = GetItemList<GisConfigService>(db, x => !x.IsDeleted).ToList();
-                return new ServiceResult<List<GisConfigService>>(ServiceResultType.Success, "", list);
-            }
-        }
+            var list = await db.GisConfigServices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.Category)
+                .ThenBy(x => x.Title)
+                .ThenBy(x => x.Id)
+                .ToListAsync(cancellationToken);
 
-        public ServiceResult<List<GisConfigurationServiceUserViewModel>> GetAllForPublic()
-        {
-            using (db)
-            {
-                var list = GetItemList<GisConfigService>(db, x => !x.IsDeleted).Select(x => new GisConfigurationServiceUserViewModel()
-                {
-                    Title = x.Title,
-                    //Url = x.Url,
-                    IsIdentifiable = x.IsIdentifiable,
-                    IdentifyLayers = x.IdentifyLayers,
-                    ShowInSearch = x.ShowInSearch,
-                    SearchCategoryTitle = x.SearchCategoryTitle,
-                    Eg= "https://"+ Toolbox.Security.Url.ParameterEncryptionUtils.EncryptGuid(x.Guid)+".gissrv.org"
-                }).ToList();
-                return new ServiceResult<List<GisConfigurationServiceUserViewModel>>(ServiceResultType.Success, "", list);
-            }
-        }
-
-        public ServiceResult<List<GisConfigServiceGroup>> GetAllGrouped()
-        {
-            using (db)
-            {
-                var list = GetItemList<GisConfigService>(db, x => !x.IsDeleted).OrderBy(x => x.Title).ToList();
-
-                var subList = list.OrderBy(x => x.Category).GroupBy(x => x.Category).Select(group => new GisConfigServiceGroup
+            var grouped = list
+                .GroupBy(x => x.Category)
+                .Select(group => new GisConfigServiceGroup
                 {
                     GroupTitle = group.Key,
                     Services = group.ToList()
-                }).ToList();
+                })
+                .ToList();
 
-                return new ServiceResult<List<GisConfigServiceGroup>>(ServiceResultType.Success, "", subList);
-            }
-
+            return new ServiceResult<List<GisConfigServiceGroup>>(ServiceResultType.Success, string.Empty, grouped);
         }
 
-        public ServiceResult<GisConfigService> GetByEncryptedGuid(string eg)
+        public ServiceResult<GisConfigService> GetByEncryptedGuid(string eg) =>
+            GetByEncryptedGuidAsync(eg).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult<GisConfigService>> GetByEncryptedGuidAsync(
+            string eg,
+            CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(eg))
+            {
+                return new ServiceResult<GisConfigService>(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"), null);
+            }
 
-            Guid guid = ParameterEncryptionUtils.DecryptGuid(eg);
-            
-            GisConfigService model = GetServiceByGuid(guid);
+            Guid guid;
+            try
+            {
+                guid = ParameterEncryptionUtils.DecryptGuid(eg.Trim());
+            }
+            catch
+            {
+                return new ServiceResult<GisConfigService>(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"), null);
+            }
 
-            return new ServiceResult<GisConfigService>(ServiceResultType.Success, "", model);
-
+            var model = await GetServiceByGuidAsync(guid, cancellationToken);
+            return new ServiceResult<GisConfigService>(ServiceResultType.Success, string.Empty, model);
         }
 
-        private GisConfigService GetServiceByGuid(Guid guid)
+        private Task<GisConfigService> GetServiceByGuidAsync(Guid guid, CancellationToken cancellationToken) =>
+            db.GisConfigServices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Guid == guid.ToString() && !x.IsDeleted, cancellationToken);
+
+        public GisConfigService GetServiceByUrl(string url) =>
+            GetServiceByUrlAsync(url).GetAwaiter().GetResult();
+
+        public async Task<GisConfigService> GetServiceByUrlAsync(
+            string url,
+            CancellationToken cancellationToken = default)
         {
-            GisConfigService service = null;
-            using (db)
+            var normalizedUrl = NormalizeUrl(url);
+            if (normalizedUrl == null)
             {
-                service = GetSingleItem<GisConfigService>(db, x => x.Guid == guid.ToString() && !x.IsDeleted);
+                return null;
             }
-            return service;
+
+            var candidates = await db.GisConfigServices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.Url != null)
+                .ToListAsync(cancellationToken);
+
+            return candidates.FirstOrDefault(x =>
+                string.Equals(NormalizeUrl(x.Url), normalizedUrl, StringComparison.OrdinalIgnoreCase));
         }
 
-        public GisConfigService GetServiceByUrl(string url)
+        public ServiceResult Update(GisConfigService viewModel, UserSessionViewModel session) =>
+            UpdateAsync(viewModel, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult> UpdateAsync(
+            GisConfigService viewModel,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-            GisConfigService service = null;
-            using (db)
+            var normalized = NormalizeAndValidate(viewModel);
+            if (!normalized.IsSuccess)
             {
-                service = GetSingleItem<GisConfigService>(db, x => (x.Url.Contains(url) || url.Contains(x.Url)) && !x.IsDeleted);
-            }
-        
-            return service;
-        }
-
-
-        public ServiceResult Update(GisConfigService viewModel, UserSessionViewModel session)
-        {
-            ServiceResult validateResult = ValidateUpdate(viewModel);
-            if (!validateResult.IsSuccess)
-            {
-
-                return new ServiceResult(ServiceResultType.Error, validateResult.Message);
+                return normalized.Result;
             }
 
-            var model = db.GisConfigServices.Where(x => x.Id == viewModel.Id).FirstOrDefault();
-
-            if (model != null)
-            {
-                using (db)
-                {
-
-                    //!Variable name not being allowed for change
-                    //model.Title = updateModel.Title.Trim();
-                    if (!viewModel.RequiresSC)
-                    {
-                        model.RequiresSC = false;
-                        model.SCUserName = "";
-                        model.SCPassword = "";
-                    }
-                    else
-                    {
-                        model.RequiresSC = true;
-                        model.SCUserName = viewModel.SCUserName?.Trim();
-                        model.SCPassword = viewModel.SCPassword;
-                    }
-
-                    if (!viewModel.IsIdentifiable)
-                    {
-                        model.IsIdentifiable = false;
-                        model.IdentifyLayers = "";
-                    }
-                    else
-                    {
-                        model.IsIdentifiable = true;
-                        model.IdentifyLayers = viewModel.IdentifyLayers?.Trim();
-                    }
-
-                    if (!viewModel.ShowInSearch)
-                    {
-                        model.ShowInSearch = false;
-                        model.SearchCategoryTitle = "";
-                    }
-                    else
-                    {
-                        model.ShowInSearch = true;
-                        model.SearchCategoryTitle = viewModel.SearchCategoryTitle?.Trim();
-                    }
-
-                    bool urlIsValid = ValidationUtils.ValidateUrl(viewModel.Url);
-                    if (!urlIsValid)
-                    {
-                        return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("INVALID_URL"));
-                    }
-                    
-                    model.Url = viewModel.Url.Trim();
-                    
-
-                    model.Title = viewModel.Title.Trim();
-                    model.Category = viewModel.Category.Trim();
-                    model.Url = viewModel.Url;
-                    model.Description = viewModel.Description.Trim();
-
-                    db.Entry(model).State = EntityState.Modified;
-                    db.SaveChanges();
-
-                    return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("UPDATED"));
-
-
-                }
-            }
-            else
+            cancellationToken.ThrowIfCancellationRequested();
+            var model = await db.GisConfigServices
+                .FirstOrDefaultAsync(x => x.Id == viewModel.Id && !x.IsDeleted, cancellationToken);
+            if (model == null)
             {
                 return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"));
             }
 
+            if (await HasDuplicateUrlAsync(normalized.Url, model.Id, cancellationToken))
+            {
+                return new ServiceResult(ServiceResultType.Error, "Aynı servis adresi zaten kayıtlı");
+            }
 
+            ApplyNormalized(model, viewModel, normalized);
+            await db.SaveChangesAsync(cancellationToken);
+            return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("UPDATED"));
         }
 
-        private ServiceResult ValidateUpdate(GisConfigService viewModel)
+        public ServiceResult Create(GisConfigService viewModel, UserSessionViewModel session) =>
+            CreateAsync(viewModel, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult> CreateAsync(
+            GisConfigService viewModel,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-            if (TextUtils.IsNullOrEmpty(viewModel.Url))
+            var normalized = NormalizeAndValidate(viewModel);
+            if (!normalized.IsSuccess)
             {
-                return new ServiceResult(ServiceResultType.Error, "Servis adresi boş olamaz");
-            }
-            else
-            {
-                if (!ValidationUtils.ValidateUrl(viewModel.Url))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Servis adresi geçerli olmalıdır");
-                }
+                return normalized.Result;
             }
 
-            if (viewModel.RequiresSC)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await HasDuplicateUrlAsync(normalized.Url, null, cancellationToken))
             {
-                if (TextUtils.IsNullOrEmpty(viewModel.SCUserName))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir kullanıcı adı gerekiyor");
-                }
-                if (TextUtils.IsNullOrEmpty(viewModel.SCPassword))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir şifre gerekiyor");
-                }
+                return new ServiceResult(ServiceResultType.Error, "Aynı servis adresi zaten kayıtlı");
             }
 
-
-            if (viewModel.ShowInSearch)
-            {
-                if (TextUtils.IsNullOrEmpty(viewModel.SearchCategoryTitle))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Arama kategorisi bir başlık gerekiyor");
-                }
-            }
-
-            if (viewModel.IsIdentifiable)
-            {
-                if (TextUtils.IsNullOrEmpty(viewModel.IdentifyLayers))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Bilgi alınabilir katman numaraları gerekiyor");
-                }
-            }
-
-            return new ServiceResult(ServiceResultType.Success);
+            ApplyNormalized(viewModel, viewModel, normalized);
+            viewModel.SetCreate(session.UserId);
+            await db.GisConfigServices.AddAsync(viewModel, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("SAVED"));
         }
 
-        public ServiceResult Create(GisConfigService viewModel, UserSessionViewModel session)
+        public ServiceResult Delete(GisConfigService service, UserSessionViewModel session) =>
+            DeleteAsync(service, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult> DeleteAsync(
+            GisConfigService service,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-            var validateResult = ValidateCreate(viewModel);
-            if (validateResult.IsSuccess)
+            if (service == null || service.Id <= 0)
             {
-
-                using (db)
-                {
-                    if (!viewModel.RequiresSC)
-                    {
-                        viewModel.SCUserName = "";
-                        viewModel.SCPassword = "";
-                    }
-                    else
-                    {
-                        viewModel.SCUserName = viewModel.SCUserName?.Trim();
-                    }
-
-                    if (!viewModel.IsIdentifiable)
-                    {
-                        viewModel.IdentifyLayers = "";
-                    }
-                    else
-                    {
-                        viewModel.IdentifyLayers = viewModel.IdentifyLayers?.Trim();
-                    }
-
-                    if (!viewModel.ShowInSearch)
-                    {
-                        viewModel.SearchCategoryTitle = "";
-                    }
-                    else
-                    {
-                        viewModel.SearchCategoryTitle = viewModel.SearchCategoryTitle?.Trim();
-                    }
-
-                    bool urlIsValid = ValidationUtils.ValidateUrl(viewModel.Url);
-                    if (!urlIsValid)
-                    {
-                        return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("INVALID_URL"));
-                    }
-                    viewModel.Url = viewModel.Url.Trim();
-
-                    viewModel.Title = viewModel.Title.Trim();
-                    viewModel.Category = viewModel.Category.Trim();
-
-                    viewModel.SetCreate(session.UserId);
-
-                    db.GisConfigServices.Add(viewModel);
-                    db.SaveChanges();
-
-                    return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("SAVED"));
-
-                }
-            }
-            else
-            {
-                return validateResult;
+                return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"));
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+            var model = await db.GisConfigServices
+                .FirstOrDefaultAsync(x => x.Id == service.Id && !x.IsDeleted, cancellationToken);
+            if (model == null)
+            {
+                return new ServiceResult(ServiceResultType.Error, BusinessMessages.Get("NOT_FOUND"));
+            }
 
+            model.SetDelete(session.UserId);
+            await db.SaveChangesAsync(cancellationToken);
+            return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("DELETED"));
         }
 
-        private ServiceResult ValidateCreate(GisConfigService viewModel)
+        public ServiceResult Import(string fileName, Stream stream, UserSessionViewModel session) =>
+            ImportAsync(fileName, stream, session).GetAwaiter().GetResult();
+
+        public async Task<ServiceResult> ImportAsync(
+            string fileName,
+            Stream stream,
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
-            if (TextUtils.IsNullOrEmpty(viewModel.Title))
+            if (stream == null || !stream.CanRead)
             {
-                return new ServiceResult(ServiceResultType.Error, "Servis adı boş olamaz");
+                return new ServiceResult(ServiceResultType.Error, "Geçerli bir konfigürasyon dosyası gerekiyor");
             }
 
-            if (TextUtils.IsNullOrEmpty(viewModel.Url))
+            var services = new List<GisConfigService>();
+            var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using var reader = new StreamReader(stream, leaveOpen: true);
+
+            string line;
+            var rowNumber = 0;
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
-                return new ServiceResult(ServiceResultType.Error, "Servis adresi boş olamaz");
-            }
-            else
-            {
-                if (!ValidationUtils.ValidateUrl(viewModel.Url))
+                cancellationToken.ThrowIfCancellationRequested();
+                rowNumber++;
+                if (rowNumber > MaxImportRows)
                 {
-                    return new ServiceResult(ServiceResultType.Error, "Servis adresi geçerli olmalıdır");
+                    return new ServiceResult(ServiceResultType.Error, $"En fazla {MaxImportRows} servis içe aktarılabilir");
                 }
-            }
-
-            if (viewModel.RequiresSC)
-            {
-                if (TextUtils.IsNullOrEmpty(viewModel.SCUserName))
+                if (line.Length > MaxImportLineLength)
                 {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir kullanıcı adı gerekiyor");
+                    return new ServiceResult(ServiceResultType.Error, $"{rowNumber}. satır izin verilen boyutu aşıyor");
                 }
-                if (TextUtils.IsNullOrEmpty(viewModel.SCPassword))
+                if (string.IsNullOrWhiteSpace(line))
                 {
-                    return new ServiceResult(ServiceResultType.Error, "Güvenli Bağlantı için bir şifre gerekiyor");
-                }
-            }
-
-
-            if (viewModel.ShowInSearch)
-            {
-                if (TextUtils.IsNullOrEmpty(viewModel.SearchCategoryTitle))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Arama kategorisi bir başlık gerekiyor");
-                }
-            }
-
-            if (viewModel.IsIdentifiable)
-            {
-                if (TextUtils.IsNullOrEmpty(viewModel.IdentifyLayers))
-                {
-                    return new ServiceResult(ServiceResultType.Error, "Bilgi alınabilir katman numaraları gerekiyor");
-                }
-            }
-
-            return new ServiceResult(ServiceResultType.Success);
-        }
-
-
-
-
-        public ServiceResult Delete(GisConfigService service, UserSessionViewModel session)
-        {
-            using (db)
-            {
-
-                var model = db.GisConfigServices.Where(x => x.Id == service.Id).FirstOrDefault();
-
-                model.SetDelete(session.UserId);
-                db.Entry(model).State = EntityState.Modified;
-                db.SaveChanges();
-
-                return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("DELETED"));
-            }
-
-
-        }
-
-
-
-
-        public ServiceResult Import(string fileName, Stream stream, UserSessionViewModel session)
-        {
-            try
-            {
-                List<GisConfigService> services = new List<GisConfigService>();
-
-                using (var reader = new StreamReader(stream))
-                {
-
-                    while (!reader.EndOfStream)
-                    {
-                        var line = reader.ReadLine();
-
-                        var values = line.Split(',');
-
-                        var category = values[0].Replace("\"", "");
-                        var title = values[1].Replace("\"", "");
-                        var url = values[2].Replace("\"", "");
-                        var description = values[3].Replace("\"", "");
-
-                        var requiresSC = values[4].Replace("\"", "");
-                        var scUserName = values[5].Replace("\"", "");
-                        var scPassword = values[6].Replace("\"", "");
-
-                        var IsIdentifiable = values[7].Replace("\"", "");
-                        var IdentifyLayers = values[8].Replace("\"", "");
-
-                        var ShowInSearch = values[9].Replace("\"", "");
-                        var SearchCategoryTitle = values[10].Replace("\"", "");
-
-
-                        services.Add(new GisConfigService()
-                        {
-                            Category = category,
-                            Title = title,
-                            Url = url,
-                            Description = description,
-
-                            RequiresSC = (requiresSC == "true") ? true : false,
-                            SCUserName = (requiresSC == "true") ? scUserName : null,
-                            SCPassword = (requiresSC == "true") ? scPassword : null,
-
-                            IsIdentifiable = (IsIdentifiable == "true") ? true : false,
-                            IdentifyLayers = (IsIdentifiable == "true") ? IdentifyLayers : null,
-
-                            ShowInSearch = (ShowInSearch == "true") ? true : false,
-                            SearchCategoryTitle = (ShowInSearch == "true") ? SearchCategoryTitle : null
-                        });
-                    }
+                    continue;
                 }
 
-
-                services.ForEach(x => x.SetCreate(session.UserId));
-
-                using (db)
+                if (!TryParseCsvLine(line, out var values) || values.Count != 11)
                 {
-                    db.GisConfigServices.RemoveRange(db.GisConfigServices);
-                    db.GisConfigServices.AddRange(services);
-                    db.SaveChanges();
+                    return new ServiceResult(ServiceResultType.Error, $"{rowNumber}. satır geçerli 11 alanlı CSV biçiminde değil");
                 }
 
+                var candidate = new GisConfigService
+                {
+                    Category = values[0],
+                    Title = values[1],
+                    Url = values[2],
+                    Description = values[3],
+                    RequiresSC = IsTrue(values[4]),
+                    SCUserName = values[5],
+                    SCPassword = values[6],
+                    IsIdentifiable = IsTrue(values[7]),
+                    IdentifyLayers = values[8],
+                    ShowInSearch = IsTrue(values[9]),
+                    SearchCategoryTitle = values[10]
+                };
+
+                var normalized = NormalizeAndValidate(candidate);
+                if (!normalized.IsSuccess)
+                {
+                    return new ServiceResult(ServiceResultType.Error, $"{rowNumber}. satır: {normalized.Result.Message}");
+                }
+                if (!seenUrls.Add(normalized.Url))
+                {
+                    return new ServiceResult(ServiceResultType.Error, $"{rowNumber}. satır: yinelenen servis adresi");
+                }
+
+                ApplyNormalized(candidate, candidate, normalized);
+                candidate.SetCreate(session.UserId);
+                services.Add(candidate);
             }
-            catch (Exception ex)
-            {
-                return new ServiceResult(ServiceResultType.Error, "Konfigürasyon oluşturulurken hata oluştu: " + ex.Message);
-            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var existing = await db.GisConfigServices.ToListAsync(cancellationToken);
+            db.GisConfigServices.RemoveRange(existing);
+            await db.GisConfigServices.AddRangeAsync(services, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
             return new ServiceResult(ServiceResultType.Success, BusinessMessages.Get("UPLOADED"));
+        }
+
+        private async Task<bool> HasDuplicateUrlAsync(string normalizedUrl, int? excludedId, CancellationToken cancellationToken)
+        {
+            var candidates = await db.GisConfigServices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted && x.Url != null && (!excludedId.HasValue || x.Id != excludedId.Value))
+                .Select(x => x.Url)
+                .ToListAsync(cancellationToken);
+
+            return candidates.Any(x => string.Equals(NormalizeUrl(x), normalizedUrl, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static ValidationOutcome NormalizeAndValidate(GisConfigService viewModel)
+        {
+            if (viewModel == null)
+            {
+                return ValidationOutcome.Error("Servis bilgisi gerekiyor");
+            }
+
+            var title = NormalizeRequired(viewModel.Title, MaxTitleLength);
+            if (title == null) return ValidationOutcome.Error("Servis adı boş olamaz veya çok uzun");
+            var category = NormalizeRequired(viewModel.Category, MaxCategoryLength);
+            if (category == null) return ValidationOutcome.Error("Kategori boş olamaz veya çok uzun");
+            var url = NormalizeUrl(viewModel.Url);
+            if (url == null) return ValidationOutcome.Error("Servis adresi geçerli bir HTTP/HTTPS adresi olmalıdır");
+            var description = NormalizeOptional(viewModel.Description, MaxDescriptionLength);
+            if (description == null && !string.IsNullOrWhiteSpace(viewModel.Description)) return ValidationOutcome.Error("Açıklama çok uzun");
+
+            var userName = NormalizeOptional(viewModel.SCUserName, MaxCredentialLength);
+            var password = NormalizeOptional(viewModel.SCPassword, MaxCredentialLength);
+            if (viewModel.RequiresSC && (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password)))
+                return ValidationOutcome.Error("Güvenli bağlantı için kullanıcı adı ve şifre gerekiyor");
+
+            var identifyLayers = NormalizeOptional(viewModel.IdentifyLayers, MaxIdentifyLayersLength);
+            if (viewModel.IsIdentifiable && string.IsNullOrWhiteSpace(identifyLayers))
+                return ValidationOutcome.Error("Bilgi alınabilir katman numaraları gerekiyor");
+
+            var searchCategory = NormalizeOptional(viewModel.SearchCategoryTitle, MaxSearchCategoryLength);
+            if (viewModel.ShowInSearch && string.IsNullOrWhiteSpace(searchCategory))
+                return ValidationOutcome.Error("Arama kategorisi için başlık gerekiyor");
+
+            return ValidationOutcome.Success(title, category, url, description, userName, password, identifyLayers, searchCategory);
+        }
+
+        private static void ApplyNormalized(GisConfigService target, GisConfigService source, ValidationOutcome normalized)
+        {
+            target.Title = normalized.Title;
+            target.Category = normalized.Category;
+            target.Url = normalized.Url;
+            target.Description = normalized.Description ?? string.Empty;
+            target.RequiresSC = source.RequiresSC;
+            target.SCUserName = source.RequiresSC ? normalized.UserName : string.Empty;
+            target.SCPassword = source.RequiresSC ? normalized.Password : string.Empty;
+            target.IsIdentifiable = source.IsIdentifiable;
+            target.IdentifyLayers = source.IsIdentifiable ? normalized.IdentifyLayers : string.Empty;
+            target.ShowInSearch = source.ShowInSearch;
+            target.SearchCategoryTitle = source.ShowInSearch ? normalized.SearchCategory : string.Empty;
+        }
+
+        private static string NormalizeUrl(string value)
+        {
+            var trimmed = value?.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.Length > MaxUrlLength || !ValidationUtils.ValidateUrl(trimmed))
+                return null;
+            if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+                string.IsNullOrWhiteSpace(uri.Host) || !string.IsNullOrEmpty(uri.UserInfo))
+                return null;
+
+            var builder = new UriBuilder(uri) { Fragment = string.Empty };
+            var normalized = builder.Uri.AbsoluteUri.TrimEnd('/');
+            return normalized.Length <= MaxUrlLength ? normalized : null;
+        }
+
+        private static string NormalizeRequired(string value, int maxLength)
+        {
+            var normalized = value?.Trim();
+            return string.IsNullOrWhiteSpace(normalized) || normalized.Length > maxLength ? null : normalized;
+        }
+
+        private static string NormalizeOptional(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var normalized = value.Trim();
+            return normalized.Length > maxLength ? null : normalized;
+        }
+
+        private static bool IsTrue(string value) => string.Equals(value?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+
+        private static bool TryParseCsvLine(string line, out List<string> values)
+        {
+            values = new List<string>();
+            var current = new System.Text.StringBuilder();
+            var quoted = false;
+            for (var i = 0; i < line.Length; i++)
+            {
+                var c = line[i];
+                if (c == '"')
+                {
+                    if (quoted && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        quoted = !quoted;
+                    }
+                }
+                else if (c == ',' && !quoted)
+                {
+                    values.Add(current.ToString());
+                    current.Clear();
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            if (quoted) return false;
+            values.Add(current.ToString());
+            return true;
+        }
+
+        private sealed class ValidationOutcome
+        {
+            public bool IsSuccess { get; private set; }
+            public ServiceResult Result { get; private set; }
+            public string Title { get; private set; }
+            public string Category { get; private set; }
+            public string Url { get; private set; }
+            public string Description { get; private set; }
+            public string UserName { get; private set; }
+            public string Password { get; private set; }
+            public string IdentifyLayers { get; private set; }
+            public string SearchCategory { get; private set; }
+
+            public static ValidationOutcome Error(string message) => new ValidationOutcome
+            {
+                IsSuccess = false,
+                Result = new ServiceResult(ServiceResultType.Error, message)
+            };
+
+            public static ValidationOutcome Success(string title, string category, string url, string description,
+                string userName, string password, string identifyLayers, string searchCategory) => new ValidationOutcome
+            {
+                IsSuccess = true,
+                Result = new ServiceResult(ServiceResultType.Success),
+                Title = title,
+                Category = category,
+                Url = url,
+                Description = description,
+                UserName = userName,
+                Password = password,
+                IdentifyLayers = identifyLayers,
+                SearchCategory = searchCategory
+            };
         }
     }
 }
