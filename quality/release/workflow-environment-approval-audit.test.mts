@@ -4,8 +4,27 @@ import { auditWorkflowEnvironmentApprovals } from './workflow-environment-approv
 import type { RepositoryInventory, SourceFile } from './contracts.mts';
 
 function inventory(text: string): RepositoryInventory {
-  const file: SourceFile = { repositoryPath: '.github/workflows/release.yml', text, bytes: Buffer.byteLength(text), extension: '.yml' };
-  return { root: '/repo', files: [file], directories: ['.github', '.github/workflows'], ignoredDirectories: [], totalBytes: file.bytes } as RepositoryInventory;
+  const repositoryPath = '.github/workflows/release.yml';
+  const lines = text.split(/\r?\n/).length;
+  const file: SourceFile = {
+    absolutePath: `/repo/${repositoryPath}`,
+    repositoryPath,
+    text,
+    bytes: Buffer.byteLength(text),
+    extension: '.yml',
+    kind: 'yaml',
+    lines,
+  };
+  return {
+    root: '/repo',
+    files: [file],
+    ignoredDirectories: [],
+    languageStats: [{ kind: 'yaml', files: 1, lines, bytes: file.bytes }],
+    totalFiles: 1,
+    totalLines: lines,
+    totalBytes: file.bytes,
+    generatedAt: '2026-09-29T00:00:00.000Z',
+  };
 }
 function ids(text: string) { return auditWorkflowEnvironmentApprovals(inventory(text)).findings.map(finding => finding.id); }
 
