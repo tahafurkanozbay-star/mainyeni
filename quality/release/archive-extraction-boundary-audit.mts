@@ -50,7 +50,7 @@ const REMOTE_DOWNLOAD = /\b(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|
 const VERIFY = /\b(?:sha256sum\s+-c|shasum\s+-a\s+256\s+-c|cosign\s+verify(?:-blob)?|gh\s+attestation\s+verify|Get-FileHash\b)/i;
 const ROOT_DESTINATION = /(?:\s-C\s+['"]?\/['"]?(?:\s|$)|\s-d\s+['"]?\/['"]?(?:\s|$)|-DestinationPath\s+['"]?(?:\/|[A-Za-z]:\\)['"]?(?:\s|$)|\b(?:usr\/local|etc|opt|Program Files|Windows\\System32)\b)/i;
 const OVERWRITE = /(?:\bunzip\s+-[^\n]*o\b|\btar\b[^\n]*--overwrite\b|\b7z\s+x\b[^\n]*-aoa\b|\bExpand-Archive\b[^\n]*-Force\b)/i;
-const DANGEROUS_TAR = /\btar\b[^\n]*(?:--absolute-names|-P\b|--overwrite-dir\b)/i;
+const DANGEROUS_TAR = /\btar\b[^\n]*(?:--absolute-names|-[A-Za-z]*P[A-Za-z]*\b|--overwrite-dir\b)/i;
 const PRIVILEGED_DESTINATION = /(?:\/usr\/|\/etc\/|\/opt\/|\/var\/|[A-Za-z]:\\(?:Program Files|Windows))/i;
 
 function privileged(block: WorkflowJobBlock): boolean {
