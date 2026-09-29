@@ -144,15 +144,18 @@ export const createSidebarLayerLoadController = <TLayer>(
   };
 
   const buildSnapshot = (): SidebarLayerLoadSnapshot<TLayer> => {
-    const loadedLayers = freezeArray(serviceKeys
-      .map((serviceKey) => {
-        const layer = loaded.get(serviceKey);
-        return layer === undefined ? null : Object.freeze({ serviceKey, layer });
-      })
-      .filter((entry): entry is SidebarLoadedLayer<TLayer> => entry !== null));
-    const failureList = freezeArray(serviceKeys
-      .map((serviceKey) => failures.get(serviceKey) ?? null)
-      .filter((failure): failure is SidebarLayerLoadFailure => failure !== null));
+    const loadedLayerEntries: SidebarLoadedLayer<TLayer>[] = [];
+    const failureEntries: SidebarLayerLoadFailure[] = [];
+    for (const serviceKey of serviceKeys) {
+      if (loaded.has(serviceKey)) {
+        const layer = loaded.get(serviceKey) as TLayer;
+        loadedLayerEntries.push(Object.freeze({ serviceKey, layer }));
+      }
+      const failure = failures.get(serviceKey);
+      if (failure !== undefined) failureEntries.push(failure);
+    }
+    const loadedLayers = freezeArray(loadedLayerEntries);
+    const failureList = freezeArray(failureEntries);
     const completedCount = loaded.size + failures.size;
     const pendingCount = Math.max(0, serviceKeys.length - completedCount - activeCount);
     return Object.freeze({
