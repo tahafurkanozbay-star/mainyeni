@@ -96,16 +96,17 @@
 }
 
 .kr-sidebar__layer-retry {
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, #b45309 32%, var(--exp-border, #dbe2ea));
   border-radius: 9px;
   background: var(--exp-surface, #fff);
   color: #92400e;
   font: inherit;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .kr-sidebar__layer-retry:hover {
