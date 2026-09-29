@@ -14,6 +14,7 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { createPictureMarkerSymbol } from '../../gis-engine/iconPresentation';
 import { createSidebarKeyboardController, type SidebarKeyboardFocusTarget } from '../../shell/sidebarKeyboardController';
+import { createSidebarLayerLoadController } from '../../shell/sidebarLayerLoadController';
 import { createSidebarNavigationModel, type SidebarNavigationView } from '../../shell/sidebarNavigationModel';
 import { createSidebarPreferenceStore } from '../../shell/sidebarPreferenceStore';
 import { SharedGISIcon } from '../Common/SharedGISIcon';
@@ -27,6 +28,7 @@ import {
 import './Sidebar.css';
 import './SidebarModern.css';
 import './SidebarInteraction.css';
+import './SidebarLayerStatus.css';
 
 interface SidebarProps {
   readonly id: string;
@@ -52,6 +54,7 @@ const GROUPS = SIDEBAR_GROUPS as readonly SidebarGroup[];
 const ITEMS = SIDEBAR_ITEMS as readonly SidebarItem[];
 const SERVICE_KEYS = INITIAL_CITY_LAYER_SERVICE_KEYS as readonly string[];
 const MAX_RECENT_SERVICES = 6;
+const LAYER_LOAD_CONCURRENCY = 4;
 const GROUP_IDS = Object.freeze(GROUPS.map((group) => group.id));
 const ITEM_IDS = Object.freeze(ITEMS.map((item) => item.windowId));
 
@@ -71,6 +74,25 @@ const createInitialOperationalLayer = async (
     symbol,
   );
   return result?.layerObj ?? null;
+};
+
+const addLayerSafely = (map: MapLike, layer: unknown): boolean => {
+  try {
+    if (map.layers?.includes?.(layer)) return true;
+    map.add(layer);
+    return true;
+  } catch (error) {
+    DebugHelper.Log(error);
+    return false;
+  }
+};
+
+const removeLayerSafely = (map: MapLike, layer: unknown): void => {
+  try {
+    if (!map.layers?.includes || map.layers.includes(layer)) map.remove(layer);
+  } catch (error) {
+    DebugHelper.Log(error);
+  }
 };
 
 const ServiceSearchGlyph = (): ReactNode => (
@@ -134,8 +156,24 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     pageSize: 6,
   }), [navigationModel]);
 
-  const registrationRef = useRef<ManagedWindowHandle | null>(null);
+  const mapViewRef = useRef<MapViewLike | null>(null);
   const mountedOperationalLayers = useRef<unknown[]>([]);
+  const layerLoadController = useMemo(() => createSidebarLayerLoadController<unknown>({
+    serviceKeys: SERVICE_KEYS,
+    concurrency: LAYER_LOAD_CONCURRENCY,
+    loadLayer: async (serviceKey) => {
+      const mapView = mapViewRef.current;
+      if (!mapView?.map) return null;
+      return createInitialOperationalLayer(mapView, serviceKey);
+    },
+  }), []);
+  const layerLoad = useSyncExternalStore(
+    layerLoadController.subscribe,
+    layerLoadController.getSnapshot,
+    layerLoadController.getSnapshot,
+  );
+
+  const registrationRef = useRef<ManagedWindowHandle | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const groupButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const serviceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -162,45 +200,34 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     return () => windowManager.UnregisterWindow?.(id, registrationRef);
   }, [id, windowManager]);
 
-  useEffect(() => () => navigationModel.dispose(), [navigationModel]);
-
   useEffect(() => {
     const mapView = MapManager.GetMapView() as MapViewLike | null;
-    if (!mapView?.map) return undefined;
+    mapViewRef.current = mapView;
+    const map = mapView?.map;
+    if (!map) {
+      return () => {
+        mapViewRef.current = null;
+      };
+    }
 
-    let cancelled = false;
-    const loadOperationalLayers = async (): Promise<void> => {
-      const layers = await Promise.all(SERVICE_KEYS.map(async serviceKey => {
-        try {
-          return await createInitialOperationalLayer(mapView, serviceKey);
-        } catch (error: unknown) {
-          DebugHelper.Log(error);
-          return null;
-        }
-      }));
-
-      if (cancelled) return;
-      const validLayers = layers.filter((layer): layer is unknown => layer !== null);
-      validLayers.forEach(layer => {
-        if (!mapView.map?.layers?.includes?.(layer)) mapView.map?.add(layer);
-      });
-      mountedOperationalLayers.current = validLayers;
-    };
-
-    void loadOperationalLayers();
+    void layerLoadController.start();
 
     return () => {
-      cancelled = true;
-      mountedOperationalLayers.current.forEach(layer => {
-        try {
-          if (mapView.map?.layers?.includes?.(layer)) mapView.map.remove(layer);
-        } catch (error: unknown) {
-          DebugHelper.Log(error);
-        }
-      });
+      layerLoadController.cancel();
+      for (const layer of mountedOperationalLayers.current) removeLayerSafely(map, layer);
       mountedOperationalLayers.current = [];
+      mapViewRef.current = null;
     };
-  }, []);
+  }, [layerLoadController]);
+
+  useEffect(() => {
+    const map = mapViewRef.current?.map;
+    if (!map) return;
+    for (const entry of layerLoad.loadedLayers) {
+      if (mountedOperationalLayers.current.includes(entry.layer)) continue;
+      if (addLayerSafely(map, entry.layer)) mountedOperationalLayers.current.push(entry.layer);
+    }
+  }, [layerLoad.loadedLayers]);
 
   const focusKeyboardTarget = (target: SidebarKeyboardFocusTarget): void => {
     if (target === null) return;
@@ -268,6 +295,20 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
         ? 'Açtığınız hizmetler burada en yeniden eskiye görünür.'
         : 'Başka bir kurum veya görünüm seçin.';
   const rovingGroupId = navigation.activeGroupId ?? GROUPS[0]?.id ?? null;
+  const layerProgressValue = layerLoad.totalCount === 0
+    ? 100
+    : Math.round((layerLoad.completedCount / layerLoad.totalCount) * 100);
+  const layerTitle = layerLoad.phase === 'loading'
+    ? 'Harita katmanları hazırlanıyor'
+    : layerLoad.phase === 'degraded'
+      ? 'Bazı harita katmanları hazırlanamadı'
+      : 'Harita katmanları hazır';
+  const layerDetail = layerLoad.phase === 'loading'
+    ? `${layerLoad.completedCount}/${layerLoad.totalCount} tamamlandı`
+    : layerLoad.phase === 'degraded'
+      ? `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} yeniden denenebilir`
+      : `${layerLoad.loadedCount} katman kullanıma hazır`;
+  const showLayerStatus = layerLoad.phase !== 'idle' && layerLoad.phase !== 'cancelled';
 
   return (
     <aside
@@ -362,6 +403,40 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           </div>
           <span aria-hidden="true">{navigation.resultCount} hizmet</span>
         </header>
+
+        {showLayerStatus ? (
+          <div className="kr-sidebar__layer-load" data-phase={layerLoad.phase}>
+            <div className="kr-sidebar__layer-load-copy">
+              <span className="kr-sidebar__layer-load-dot" aria-hidden="true" />
+              <span>
+                <strong>{layerTitle}</strong>
+                <small>{layerDetail}</small>
+              </span>
+            </div>
+            {layerLoad.phase === 'loading' ? (
+              <progress
+                className="kr-sidebar__layer-progress"
+                max={100}
+                value={layerProgressValue}
+                aria-label="Harita katmanları hazırlama ilerlemesi"
+              >
+                %{layerProgressValue}
+              </progress>
+            ) : null}
+            {layerLoad.canRetry ? (
+              <button
+                type="button"
+                className="kr-sidebar__layer-retry"
+                onClick={() => { void layerLoadController.retryFailed(); }}
+              >
+                Yeniden dene
+              </button>
+            ) : null}
+            <span className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {layerLoad.announcement}
+            </span>
+          </div>
+        ) : null}
 
         <span id="kr-sidebar-keyboard-help" className="experience-sr-only">
           Hizmetler arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter hizmeti açar.
