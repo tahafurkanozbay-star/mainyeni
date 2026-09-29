@@ -34,9 +34,39 @@ public sealed class GisBasemapPersistenceBoundaryTests
         Assert.Equal("Şehir haritası", stored.Title);
         Assert.Equal("https://example.test/arcgis/rest/services/base/MapServer", stored.Url);
         Assert.Equal("açıklama", stored.Description);
+        Assert.Equal(string.Empty, stored.ImageUrl);
+        Assert.Equal(string.Empty, stored.AdditionalInfo);
         Assert.Equal(string.Empty, stored.SCUserName);
         Assert.Equal(string.Empty, stored.SCPassword);
         Assert.False(string.IsNullOrWhiteSpace(stored.Guid));
+    }
+
+    [Fact]
+    public async Task CreateAsync_NullPersistenceOptionals_AreCanonicalizedToEmptyStrings()
+    {
+        await using var context = CreateContext();
+        var operations = new GisBasemapLayerOperations(context);
+        var layer = new GisBasemapLayer
+        {
+            Title = "Basemap",
+            Url = "https://example.test/base",
+            Description = null,
+            ImageUrl = null,
+            AdditionalInfo = null,
+            RequiresSC = false,
+            SCUserName = null,
+            SCPassword = null
+        };
+
+        var result = await operations.CreateAsync(layer, Session());
+
+        Assert.True(result.IsSuccess);
+        var stored = await context.GisBasemapLayers.AsNoTracking().SingleAsync();
+        Assert.Equal(string.Empty, stored.Description);
+        Assert.Equal(string.Empty, stored.ImageUrl);
+        Assert.Equal(string.Empty, stored.AdditionalInfo);
+        Assert.Equal(string.Empty, stored.SCUserName);
+        Assert.Equal(string.Empty, stored.SCPassword);
     }
 
     [Fact]
@@ -106,6 +136,7 @@ public sealed class GisBasemapPersistenceBoundaryTests
     {
         await using var context = CreateContext();
         var existing = ExistingLayer("Original", "https://example.test/original");
+        existing.AdditionalInfo = "server-owned";
         context.GisBasemapLayers.Add(existing);
         await context.SaveChangesAsync();
         var originalGuid = existing.Guid;
@@ -116,6 +147,7 @@ public sealed class GisBasemapPersistenceBoundaryTests
         update.Id = existing.Id;
         update.Title = "  Updated  ";
         update.Url = " https://example.test/updated ";
+        update.AdditionalInfo = "must-not-overwrite";
         update.RequiresSC = true;
         update.SCUserName = "  service-user  ";
         update.SCPassword = "  service-password  ";
@@ -127,6 +159,7 @@ public sealed class GisBasemapPersistenceBoundaryTests
         Assert.Equal(originalGuid, stored.Guid);
         Assert.Equal("Updated", stored.Title);
         Assert.Equal("https://example.test/updated", stored.Url);
+        Assert.Equal("server-owned", stored.AdditionalInfo);
         Assert.Equal("service-user", stored.SCUserName);
         Assert.Equal("service-password", stored.SCPassword);
     }
@@ -253,7 +286,11 @@ public sealed class GisBasemapPersistenceBoundaryTests
         {
             Title = title,
             Url = url,
-            Description = title
+            Description = title,
+            AdditionalInfo = string.Empty,
+            ImageUrl = string.Empty,
+            SCUserName = string.Empty,
+            SCPassword = string.Empty
         };
         layer.SetCreate(1);
         return layer;
