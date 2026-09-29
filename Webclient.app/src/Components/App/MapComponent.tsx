@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Store from '../../Store/Store';
 import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
@@ -18,6 +18,7 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
+import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { createViewStateBridge } from '../../gis-engine/viewState';
@@ -104,6 +105,14 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const accessorWatchRef = useRef<ArcgisAccessorWatch | null>(null);
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
+  const accessibilityModelRef = useRef<MapWorkspaceAccessibilityModel | null>(null);
+  if (!accessibilityModelRef.current) accessibilityModelRef.current = new MapWorkspaceAccessibilityModel();
+  const accessibilityModel = accessibilityModelRef.current;
+  const accessibilitySnapshot = useSyncExternalStore(
+    accessibilityModel.subscribe,
+    accessibilityModel.getSnapshot,
+    accessibilityModel.getSnapshot,
+  );
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const sidebarRef = useRef<unknown>(null);
 
@@ -125,6 +134,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     let kentRehberiLayerHandle: KentRehberiLayerHandle | null = null;
     const kentRehberiAbortController = new AbortController();
     const handles: RemovableHandle[] = [];
+    accessibilityModel.reset();
 
     const initializeMap = async (): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
@@ -170,8 +180,14 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       MapManager.SetViewPerformanceMonitor?.(performanceMonitor);
 
       handles.push(
-        watchUtils.whenTrue(view, 'updating', () => windowManager.SetMapUpdating(true)),
-        watchUtils.whenFalse(view, 'updating', () => windowManager.SetMapUpdating(false)),
+        watchUtils.whenTrue(view, 'updating', () => {
+          windowManager.SetMapUpdating(true);
+          accessibilityModel.markUpdating(true);
+        }),
+        watchUtils.whenFalse(view, 'updating', () => {
+          windowManager.SetMapUpdating(false);
+          accessibilityModel.markUpdating(false);
+        }),
       );
 
       const popupHandle = view.popup.on?.('trigger-action', (event) => {
@@ -211,6 +227,8 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         payload: view,
       });
       setMapView(view);
+      accessibilityModel.markReady();
+      if (view.updating) accessibilityModel.markUpdating(true);
 
       void attachKentRehberiGeoJsonLayer({
         map: map as KentRehberiMapLike,
@@ -228,7 +246,11 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         });
     };
 
-    void initializeMap().catch((error: unknown) => DebugHelper.Log(error));
+    void initializeMap().catch((error: unknown) => {
+      if (disposed) return;
+      accessibilityModel.markError(error);
+      DebugHelper.Log(error);
+    });
 
     return () => {
       disposed = true;
@@ -259,7 +281,9 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         }
       }
     };
-  }, [windowManager]);
+  }, [accessibilityModel, windowManager]);
+
+  useEffect(() => () => accessibilityModel.dispose(), [accessibilityModel]);
 
   return (
     <div
@@ -268,7 +292,17 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       ref={mapDiv}
       tabIndex={-1}
       aria-label="Kent Rehberi ana harita çalışma alanı"
+      aria-busy={accessibilitySnapshot.isBusy}
+      data-workspace-phase={accessibilitySnapshot.phase}
     >
+      <div
+        className="map-workspace-status"
+        role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'}
+        aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'}
+        aria-atomic="true"
+      >
+        {accessibilitySnapshot.announcement}
+      </div>
       {mapView && (
         <>
           <ExperienceMapModeBridge
