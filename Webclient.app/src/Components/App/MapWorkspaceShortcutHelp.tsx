@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { MAP_WORKSPACE_SHORTCUTS } from './mapWorkspaceShortcuts';
 import './MapWorkspaceShortcutHelp.css';
+import './MapWorkspaceShortcutHelpLauncher.css';
 
 export interface MapWorkspaceShortcutHelpProps {
   readonly open: boolean;
@@ -8,12 +9,8 @@ export interface MapWorkspaceShortcutHelpProps {
 }
 
 const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])',
-  '[href]',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
+  'button:not([disabled])', '[href]', 'input:not([disabled])', 'select:not([disabled])',
+  'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
 const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
@@ -34,11 +31,7 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
     (focusables[0] ?? dialog)?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
       if (event.key !== 'Tab' || !dialogRef.current) return;
       const currentFocusable = getFocusableElements(dialogRef.current);
       if (currentFocusable.length === 0) {
@@ -50,11 +43,9 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
       const last = currentFocusable.at(-1);
       if (!first || !last) return;
       if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus({ preventScroll: true });
+        event.preventDefault(); last.focus({ preventScroll: true });
       } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus({ preventScroll: true });
+        event.preventDefault(); first.focus({ preventScroll: true });
       }
     };
 
@@ -73,24 +64,14 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
     <div className="map-shortcut-help-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <div
-        ref={dialogRef}
-        className="map-shortcut-help"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-      >
+      <div ref={dialogRef} className="map-shortcut-help" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1}>
         <header className="map-shortcut-help__header">
           <div>
             <p className="map-shortcut-help__eyebrow">Klavye erişimi</p>
             <h2 id={titleId}>Harita kısayolları</h2>
             <p id={descriptionId}>Sık kullanılan harita araçlarına fare kullanmadan ulaşın.</p>
           </div>
-          <button type="button" className="map-shortcut-help__close" onClick={onClose} aria-label="Kısayol yardımını kapat">
-            <span aria-hidden="true">×</span>
-          </button>
+          <button type="button" className="map-shortcut-help__close" onClick={onClose} aria-label="Kısayol yardımını kapat"><span aria-hidden="true">×</span></button>
         </header>
         <div className="map-shortcut-help__body">
           <ul className="map-shortcut-help__list" aria-label="Kullanılabilir klavye kısayolları">
@@ -114,7 +95,6 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
 
 export const MapWorkspaceShortcutHelpLauncher = () => {
   const [open, setOpen] = useState(false);
-  const launcherRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const onHelpShortcut = (event: KeyboardEvent): void => {
@@ -122,8 +102,7 @@ export const MapWorkspaceShortcutHelpLauncher = () => {
       if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
       if (target instanceof HTMLElement && (
-        target.isContentEditable ||
-        /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
+        target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
         ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(target.getAttribute('role') ?? '')
       )) return;
       event.preventDefault();
@@ -135,14 +114,7 @@ export const MapWorkspaceShortcutHelpLauncher = () => {
 
   return (
     <>
-      <button
-        ref={launcherRef}
-        type="button"
-        className="map-shortcut-help__launcher"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-      >
+      <button type="button" className="map-shortcut-help__launcher" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
         <span aria-hidden="true">?</span>
         <span className="map-shortcut-help__launcher-label">Kısayollar</span>
       </button>
