@@ -59,8 +59,8 @@ const PYTHON_PUBLISH = /\b(?:twine\s+upload|python\s+-m\s+twine\s+upload)\b/i;
 const CARGO = /\bcargo\s+(?:publish|login)\b/i;
 const CARGO_PUBLISH = /\bcargo\s+publish\b/i;
 const MAVEN = /\b(?:mvn|mvnw|gradle|gradlew)\b[^\n]*(?:deploy|publish)\b/i;
-const REGISTRY_FLAG = /(?:--registry|--source|-s|--repository-url|--repository|--index-url)\s+(?:['"])?([^\s'"`]+)/gi;
-const REGISTRY_ASSIGN = /(?:registry|repository-url|index-url)\s*=\s*([^\s'"`]+)/gi;
+const REGISTRY_FLAG = /(?:--registry|--source|-s|--repository-url|--repository|--index-url)\s+(?:"([^"]+)"|'([^']+)'|([^\s'"`]+))/gi;
+const REGISTRY_ASSIGN = /(?:registry|repository-url|index-url)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s'"`]+))/gi;
 const UNTRUSTED = /\$\{\{[\s\S]*?(?:github\.event\.|github\.head_ref\b|inputs\.|github\.event\.inputs\.|needs\.[A-Za-z0-9_-]+\.outputs\.|steps\.[A-Za-z0-9_-]+\.outputs\.|matrix\.)[\s\S]*?\}\}/i;
 const HTTP_REGISTRY = /http:\/\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]+/i;
 const SECRET_EXPR = /\$\{\{\s*secrets\.[A-Za-z0-9_]+\s*\}\}/i;
@@ -104,7 +104,7 @@ function registryTargets(run: string): string[] {
     const matcher = new RegExp(pattern.source, pattern.flags);
     let match: RegExpExecArray | null;
     while ((match = matcher.exec(run)) !== null) {
-      const target = match[1];
+      const target = match[1] ?? match[2] ?? match[3];
       if (target) targets.push(target);
     }
   }
