@@ -42,7 +42,6 @@ const SHELL_TRACE = /(?:^|[;&|]\s*)set\s+-[^\n]*x\b|\bSet-PSDebug\s+-Trace\s+[1-
 const ENV_DUMP = /(?:^|[;&|]\s*)(?:env|printenv)\s*(?:$|[;&|])|\bGet-ChildItem\s+Env:|\bdir\s+env:|(?:^|\n)\s*set\s*$/im;
 const COMMAND_FILE = /(?:GITHUB_ENV|GITHUB_OUTPUT|GITHUB_STEP_SUMMARY|GITHUB_PATH)/i;
 const SUMMARY = /GITHUB_STEP_SUMMARY/i;
-const OUTPUT = /GITHUB_OUTPUT/i;
 const PATH_FILE = /GITHUB_PATH/i;
 const URL_WITH_SECRET = /https?:\/\/[^\s'"`]*\$\{\{\s*secrets\./i;
 const HEADER_WITH_SECRET = /(?:authorization|x-api-key|api-key|private-token|token)\s*:[^\n]*\$\{\{\s*secrets\./i;
