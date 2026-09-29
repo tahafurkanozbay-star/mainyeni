@@ -1,0 +1,24 @@
+import{describe,expect,it,vi}from'vitest'
+import{ArcGisLayerLifecycle,type ArcGisLayerDescriptor}from'./ArcGisLayerLifecycle'
+const budget={maxLayers:4,maxActiveLayers:2,maxGpuBytes:100,maxCpuBytes:100,maxObservers:2,maxFailureMessageLength:40}
+const layer=(id:string,extra:Partial<ArcGisLayerDescriptor>={}):ArcGisLayerDescriptor=>({id,kind:'feature',serviceId:'svc',layerId:0,visible:true,opacity:1,order:0,estimatedGpuBytes:10,estimatedCpuBytes:10,...extra})
+describe('ArcGisLayerLifecycle',()=>{
+it('declares deterministic immutable snapshots',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('b',{order:2}));x.declare(layer('a',{order:1}));const s=x.snapshot();expect(s.layers.map(v=>v.id)).toEqual(['a','b']);expect(Object.isFrozen(s.layers)).toBe(true)})
+it('uses generations to reject stale async completions',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a'));const first=x.beginLoad('a');x.suspend('a');const second=x.resume('a');expect(()=>x.resolve(first)).toThrow('stale layer load token');expect(x.resolve(second)).toBe(true)})
+it('enforces active layer cardinality',()=>{const x=new ArcGisLayerLifecycle(budget);for(const id of['a','b','c'])x.declare(layer(id));x.beginLoad('a');x.beginLoad('b');expect(()=>x.beginLoad('c')).toThrow('active layer budget exceeded')})
+it('enforces gpu and cpu budgets before mutation',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a',{estimatedGpuBytes:90}));x.beginLoad('a');x.declare(layer('b',{estimatedGpuBytes:20}));expect(()=>x.beginLoad('b')).toThrow('GPU layer budget exceeded');expect(x.snapshot().layers.find(v=>v.id==='b')?.phase).toBe('declared')})
+it('bounds resource estimate replacement',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a'));x.beginLoad('a');expect(()=>x.replaceResourceEstimate('a',101,10)).toThrow('GPU layer budget exceeded');expect(x.snapshot().gpuBytes).toBe(10)})
+it('normalizes failures without exposing control characters',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a'));const token=x.beginLoad('a');x.fail(token,'bad\nservice\u0000detail');const state=x.snapshot().layers[0];expect(state.phase).toBe('failed');expect(state.failure).not.toMatch(/[\u0000-\u001f]/)})
+it('keeps observer failures isolated',()=>{const x=new ArcGisLayerLifecycle(budget);const good=vi.fn();x.subscribe(()=>{throw new Error('observer')});x.subscribe(good);x.declare(layer('a'));expect(good).toHaveBeenCalledTimes(1)})
+it('enforces observer budgets',()=>{const x=new ArcGisLayerLifecycle(budget);x.subscribe(()=>{});x.subscribe(()=>{});expect(()=>x.subscribe(()=>{})).toThrow('observer budget exceeded')})
+it('supports visibility opacity and order without load generation changes',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a'));const before=x.snapshot().layers[0].generation;x.setVisibility('a',false);x.setOpacity('a',.5);x.reorder('a',3);const after=x.snapshot().layers[0];expect(after).toMatchObject({visible:false,opacity:.5,order:3,generation:before})})
+it('requires service identity for service-backed layers',()=>{const x=new ArcGisLayerLifecycle(budget);expect(()=>x.declare(layer('a',{serviceId:undefined}))).toThrow('feature layer requires serviceId')})
+it('allows graphics without a service',()=>{const x=new ArcGisLayerLifecycle(budget);expect(()=>x.declare(layer('a',{kind:'graphics',serviceId:undefined,layerId:undefined}))).not.toThrow()})
+it('rejects duplicate ids',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a'));expect(()=>x.declare(layer(' a '))).toThrow('duplicate layer id:a')})
+it('rejects invalid ArcGIS scale ranges',()=>{const x=new ArcGisLayerLifecycle(budget);expect(()=>x.declare(layer('a',{minScale:1000,maxScale:5000}))).toThrow('minScale must be >= maxScale')})
+it('removes layers and releases resource accounting',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a',{estimatedGpuBytes:90}));x.beginLoad('a');expect(x.remove('a')).toBe(true);x.declare(layer('b',{estimatedGpuBytes:90}));expect(()=>x.beginLoad('b')).not.toThrow()})
+it('dispose is idempotent and rejects future mutation',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a'));x.dispose();x.dispose();expect(()=>x.declare(layer('b'))).toThrow('layer lifecycle disposed')})
+it('unsubscribe is idempotent',()=>{const x=new ArcGisLayerLifecycle(budget);const fn=vi.fn();const off=x.subscribe(fn);off();off();x.declare(layer('a'));expect(fn).not.toHaveBeenCalled()})
+it('returns false when removing an unknown layer',()=>{const x=new ArcGisLayerLifecycle(budget);expect(x.remove('missing')).toBe(false)})
+it('ready layers retain bounded accounting',()=>{const x=new ArcGisLayerLifecycle(budget);x.declare(layer('a',{estimatedGpuBytes:20,estimatedCpuBytes:30}));const token=x.beginLoad('a');x.resolve(token);expect(x.snapshot()).toMatchObject({activeCount:1,gpuBytes:20,cpuBytes:30})})
+})
