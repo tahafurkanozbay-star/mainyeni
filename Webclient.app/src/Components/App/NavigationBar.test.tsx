@@ -31,6 +31,57 @@ describe('NavigationBar', () => {
     expect(search).not.toHaveFocus();
   });
 
+  it('focuses global search from Ctrl+K and selects existing text', async () => {
+    const user = userEvent.setup();
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    await user.type(search, 'Ulus');
+    search.blur();
+    expect(search).not.toHaveFocus();
+
+    await user.keyboard('{Control>}k{/Control}');
+
+    expect(search).toHaveFocus();
+    expect(search.selectionStart).toBe(0);
+    expect(search.selectionEnd).toBe(search.value.length);
+  });
+
+  it('focuses global search from Meta+K', async () => {
+    const user = userEvent.setup();
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    await user.keyboard('{Meta>}k{/Meta}');
+    expect(search).toHaveFocus();
+  });
+
+  it('does not hijack plain K as a global shortcut', async () => {
+    const user = userEvent.setup();
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    document.body.focus();
+    await user.keyboard('k');
+    expect(search).not.toHaveFocus();
+  });
+
+  it('exposes keyboard shortcut semantics on the search field', () => {
+    render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
+    const search = screen.getByLabelText('Adres, yer veya katman ara');
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
+    expect(search).toHaveAttribute('aria-describedby', expect.stringContaining('kentrehberi-global-search-shortcut'));
+  });
+
+  it('disables submission for blank normalized content', async () => {
+    const user = userEvent.setup();
+    const ShowWindow = vi.fn();
+    render(<NavigationBar windowManager={{ ShowWindow }} />);
+    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
+    await user.type(search, '    ');
+    expect(screen.getByRole('button', { name: 'Aramayı başlat' })).toBeDisabled();
+    await user.keyboard('{Enter}');
+    expect(ShowWindow).not.toHaveBeenCalled();
+  });
+
   it('exposes CBS Başkent as a safe external link', () => {
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
 

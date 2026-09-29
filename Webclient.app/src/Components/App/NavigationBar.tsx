@@ -1,7 +1,8 @@
-import { useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { AppConfig } from '../../Core/AppConfig';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { CompanyLogo } from './CompanyLogo';
+import { createNavigationSearchShortcutController } from './navigationSearchShortcutController';
 import { NAVIGATION_SEARCH_QUERY_LIMIT, NavigationSearchModel } from './navigationSearchModel';
 import './NavigationBar.css';
 
@@ -13,6 +14,16 @@ export interface NavigationBarProps {
 export function NavigationBar({ windowManager }: NavigationBarProps) {
   const searchModel = useMemo(() => new NavigationSearchModel(), []);
   const search = useSyncExternalStore(searchModel.subscribe, searchModel.getSnapshot, searchModel.getSnapshot);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const shortcutController = createNavigationSearchShortcutController({
+      target: window,
+      getSearchInput: () => searchInputRef.current,
+    });
+    shortcutController.start();
+    return () => shortcutController.stop();
+  }, []);
 
   const openGlobalSearch = (): void => {
     const name = searchModel.getSubmissionQuery();
@@ -37,12 +48,14 @@ export function NavigationBar({ windowManager }: NavigationBarProps) {
               <label className="experience-sr-only" htmlFor="kentrehberi-global-search">Adres, yer veya katman ara</label>
               <div className="ns-input-group">
                 <input
+                  ref={searchInputRef}
                   id="kentrehberi-global-search"
                   type="search"
                   placeholder="Adres, yer veya katman ara…"
                   value={search.query}
                   maxLength={NAVIGATION_SEARCH_QUERY_LIMIT}
-                  aria-describedby="kentrehberi-global-search-status"
+                  aria-describedby="kentrehberi-global-search-status kentrehberi-global-search-shortcut"
+                  aria-keyshortcuts="Control+K Meta+K"
                   onChange={(event) => searchModel.setQuery(event.target.value)}
                   onCompositionStart={() => searchModel.beginComposition()}
                   onCompositionEnd={(event) => searchModel.endComposition(event.currentTarget.value)}
@@ -65,6 +78,7 @@ export function NavigationBar({ windowManager }: NavigationBarProps) {
               <span id="kentrehberi-global-search-status" className="experience-sr-only" aria-live="polite" aria-atomic="true">
                 {search.isComposing ? 'Metin girişi sürüyor.' : search.canSubmit ? 'Arama hazır.' : 'Arama için bir ifade yazın.'}
               </span>
+              <span id="kentrehberi-global-search-shortcut" className="experience-sr-only">Arama alanına gitmek için Control K veya Command K kısayolunu kullanabilirsiniz.</span>
               <span className="kr-search-hint" aria-hidden="true"><kbd>Ctrl</kbd><span>+</span><kbd>K</kbd></span>
             </form>
             <div className="mainbar-right" aria-label="Üst menü"><CompanyLogo /></div>

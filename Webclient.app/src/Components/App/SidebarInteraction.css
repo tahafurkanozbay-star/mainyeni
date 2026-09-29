@@ -1,0 +1,288 @@
+.kr-sidebar--governed {
+  --kr-sidebar-target: 44px;
+  --kr-sidebar-focus: 0 0 0 3px color-mix(in srgb, var(--exp-accent, #0e7490) 22%, transparent);
+}
+
+.kr-sidebar--governed .kr-sidebar__toggle,
+.kr-sidebar--governed .kr-sidebar__group,
+.kr-sidebar--governed .kr-sidebar__views button,
+.kr-sidebar--governed .kr-sidebar__favorite,
+.kr-sidebar--governed .kr-sidebar__search button {
+  min-width: var(--kr-sidebar-target);
+  min-height: var(--kr-sidebar-target);
+}
+
+.kr-sidebar--governed .kr-sidebar__toggle:focus-visible,
+.kr-sidebar--governed .kr-sidebar__group:focus-visible,
+.kr-sidebar--governed .kr-sidebar__views button:focus-visible,
+.kr-sidebar--governed .kr-sidebar__favorite:focus-visible,
+.kr-sidebar--governed .kr-sidebar__search button:focus-visible,
+.kr-sidebar--governed .kr-sidebar__search input:focus-visible,
+.kr-sidebar--governed .kr-sidebar__item:focus-visible {
+  outline: 2px solid var(--exp-accent, #0e7490);
+  outline-offset: 2px;
+  box-shadow: var(--kr-sidebar-focus);
+}
+
+.kr-sidebar--governed .kr-sidebar__search input:focus-visible {
+  border-radius: 8px;
+}
+
+.kr-sidebar--governed .kr-sidebar__groups {
+  isolation: isolate;
+}
+
+.kr-sidebar--governed .kr-sidebar__group {
+  position: relative;
+}
+
+.kr-sidebar--governed .kr-sidebar__group[aria-pressed="true"]::after {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
+}
+
+.kr-sidebar--governed .kr-sidebar__panel {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.kr-sidebar--governed .kr-sidebar__search {
+  min-height: 46px;
+}
+
+.kr-sidebar--governed .kr-sidebar__search input {
+  min-height: 44px;
+}
+
+.kr-sidebar--governed .kr-sidebar__search button {
+  width: var(--kr-sidebar-target);
+  height: var(--kr-sidebar-target);
+  margin-right: -6px;
+}
+
+.kr-sidebar--governed .kr-sidebar__views button {
+  min-height: var(--kr-sidebar-target);
+}
+
+.kr-sidebar--governed .kr-sidebar__views button[aria-pressed="true"] {
+  font-weight: 800;
+}
+
+.kr-sidebar--governed .kr-sidebar__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kr-sidebar--governed .kr-sidebar__service {
+  border-radius: 14px;
+}
+
+.kr-sidebar--governed .kr-sidebar__service[data-active="true"] .kr-sidebar__item.ns-card {
+  border-color: color-mix(in srgb, var(--exp-accent, #0e7490) 50%, var(--exp-border, #dbe2ea));
+  background: color-mix(in srgb, var(--exp-accent, #0e7490) 7%, var(--exp-surface, #fff));
+  box-shadow: 0 7px 18px rgb(15 23 42 / 9%);
+}
+
+.kr-sidebar--governed .kr-sidebar__service[data-active="true"] .kr-sidebar__item-copy strong {
+  color: var(--exp-text, #172033);
+}
+
+.kr-sidebar--governed .kr-sidebar__item.ns-card {
+  min-height: 60px;
+}
+
+.kr-sidebar--governed .kr-sidebar__favorite {
+  width: var(--kr-sidebar-target);
+  height: var(--kr-sidebar-target);
+  right: 7px;
+}
+
+.kr-sidebar--governed .kr-sidebar__favorite[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--kr-premium-gold, #c18b2d) 42%, transparent);
+}
+
+.kr-sidebar--governed .kr-sidebar__panel-head > span[aria-hidden="true"] {
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #dbe2ea) 76%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exp-surface-2, #f7f9fb) 88%, transparent);
+  font-family: var(--exp-font-mono, monospace);
+  font-size: 9px;
+  font-weight: 760;
+}
+
+.kr-sidebar--governed .kr-sidebar__empty--search {
+  border: 1px dashed color-mix(in srgb, var(--exp-border-strong, #94a3b8) 65%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--exp-surface-2, #f7f9fb) 70%, transparent);
+}
+
+.kr-sidebar--governed.is-collapsed .kr-sidebar__panel,
+.kr-sidebar--governed.is-collapsed .kr-sidebar__groups {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.kr-sidebar--governed.is-collapsed .kr-sidebar__topline {
+  min-height: var(--kr-sidebar-target);
+}
+
+[data-experience-theme="dark"] .kr-sidebar--governed .kr-sidebar__service[data-active="true"] .kr-sidebar__item.ns-card {
+  border-color: color-mix(in srgb, #7dd3fc 48%, #334155);
+  background: color-mix(in srgb, #0e7490 18%, #172033);
+  box-shadow: 0 7px 18px rgb(0 0 0 / 24%);
+}
+
+[data-experience-theme="dark"] .kr-sidebar--governed .kr-sidebar__service[data-active="true"] .kr-sidebar__item-copy strong {
+  color: #f8fafc;
+}
+
+[data-experience-theme="dark"] .kr-sidebar--governed .kr-sidebar__panel-head > span[aria-hidden="true"],
+[data-experience-theme="dark"] .kr-sidebar--governed .kr-sidebar__empty--search {
+  background: color-mix(in srgb, #172033 90%, #fff 3%);
+}
+
+@media (max-width: 760px) {
+  .kr-sidebar--governed {
+    --kr-sidebar-target: 46px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__groups {
+    gap: 8px;
+    padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+  }
+
+  .kr-sidebar--governed .kr-sidebar__panel {
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: max(8px, env(safe-area-inset-left));
+  }
+
+  .kr-sidebar--governed .kr-sidebar__item.ns-card {
+    min-height: 64px;
+    padding-block: 10px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__panel-head {
+    align-items: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .kr-sidebar--governed .kr-sidebar__groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kr-sidebar--governed .kr-sidebar__group {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    text-align: left;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__group img {
+    width: 36px;
+    height: 30px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__group-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__views {
+    gap: 4px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__views button {
+    padding-inline: 5px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__views button small {
+    min-width: 20px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__panel-head h2 {
+    max-width: 210px;
+  }
+}
+
+@media (pointer: coarse) {
+  .kr-sidebar--governed {
+    --kr-sidebar-target: 48px;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__group,
+  .kr-sidebar--governed .kr-sidebar__views button,
+  .kr-sidebar--governed .kr-sidebar__favorite,
+  .kr-sidebar--governed .kr-sidebar__search button,
+  .kr-sidebar--governed .kr-sidebar__toggle {
+    touch-action: manipulation;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__item.ns-card {
+    min-height: 68px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kr-sidebar--governed *,
+  .kr-sidebar--governed *::before,
+  .kr-sidebar--governed *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__service .kr-sidebar__item.ns-card:hover {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .kr-sidebar--governed,
+  .kr-sidebar--governed .kr-sidebar__panel,
+  .kr-sidebar--governed .kr-sidebar__search,
+  .kr-sidebar--governed .kr-sidebar__views,
+  .kr-sidebar--governed .kr-sidebar__empty--search {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__search,
+  .kr-sidebar--governed .kr-sidebar__views,
+  .kr-sidebar--governed .kr-sidebar__service[data-active="true"] .kr-sidebar__item.ns-card,
+  .kr-sidebar--governed .kr-sidebar__empty--search {
+    border: 1px solid CanvasText;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__group[aria-pressed="true"],
+  .kr-sidebar--governed .kr-sidebar__views button[aria-pressed="true"],
+  .kr-sidebar--governed .kr-sidebar__favorite[aria-pressed="true"] {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  .kr-sidebar--governed .kr-sidebar__toggle:focus-visible,
+  .kr-sidebar--governed .kr-sidebar__group:focus-visible,
+  .kr-sidebar--governed .kr-sidebar__views button:focus-visible,
+  .kr-sidebar--governed .kr-sidebar__favorite:focus-visible,
+  .kr-sidebar--governed .kr-sidebar__search button:focus-visible,
+  .kr-sidebar--governed .kr-sidebar__search input:focus-visible,
+  .kr-sidebar--governed .kr-sidebar__item:focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
