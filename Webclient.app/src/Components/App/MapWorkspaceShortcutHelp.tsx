@@ -22,6 +22,8 @@ export interface MapWorkspaceShortcutHelpProps {
   readonly onClose: () => void;
 }
 
+export const MAP_WORKSPACE_HELP_OPEN_EVENT = 'kentrehberi:map-workspace-help-open';
+
 const HELP_SHORTCUT = Object.freeze({ key: '?', shift: true });
 const ACTIVE_DESCENDANT_KEYS: Readonly<Partial<Record<string, MapShortcutHelpMove>>> = Object.freeze({
   ArrowDown: 'next',
@@ -31,6 +33,10 @@ const ACTIVE_DESCENDANT_KEYS: Readonly<Partial<Record<string, MapShortcutHelpMov
   PageDown: 'page-next',
   PageUp: 'page-previous',
 });
+
+export const requestMapWorkspaceHelp = (): void => {
+  window.dispatchEvent(new Event(MAP_WORKSPACE_HELP_OPEN_EVENT));
+};
 
 export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcutHelpProps) => {
   const titleId = useId();
@@ -284,8 +290,15 @@ export const MapWorkspaceShortcutHelpLauncher = () => {
       event.preventDefault();
       setOpen(true);
     };
+    const onOpenRequest = (): void => {
+      setOpen(true);
+    };
     window.addEventListener('keydown', onHelpShortcut);
-    return () => window.removeEventListener('keydown', onHelpShortcut);
+    window.addEventListener(MAP_WORKSPACE_HELP_OPEN_EVENT, onOpenRequest);
+    return () => {
+      window.removeEventListener('keydown', onHelpShortcut);
+      window.removeEventListener(MAP_WORKSPACE_HELP_OPEN_EVENT, onOpenRequest);
+    };
   }, []);
 
   return (
