@@ -228,3 +228,14 @@ export * from './searchSuggestionRuntime';
 export * from './relevanceCursorRuntime';
 export * from './dataSearchQueryEngineV6';
 export * from './searchCorpusRuntimeV6';
+
+// Production v7 unified local execution. This compatibility layer does not
+// replace the existing authorities: it recognizes safe coordinate literals,
+// classifies text/address/spatial intent, composes the v1 candidate/spatial
+// indexes + v4 address semantics + v6 relevance engine, and reuses the v5
+// revision-bound cache plus the existing SearchSession cancellation/debounce
+// authority. No network or alternate presentation/icon path is introduced.
+export * from './coordinateQueryRuntimeV7';
+export * from './searchIntentRuntimeV7';
+export * from './dataSearchExecutionRuntimeV7';
+export * from './dataSearchExecutionRegistryV7';
