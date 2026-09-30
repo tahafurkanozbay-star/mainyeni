@@ -41,14 +41,14 @@ describe('mapWorkspaceShortcutPolicy', () => {
   });
 
   it.each([
-    ['input', '<input />'],
-    ['textarea', '<textarea></textarea>'],
-    ['select', '<select><option>Bir</option></select>'],
-    ['textbox role', '<div role="textbox" tabindex="0"></div>'],
-    ['searchbox role', '<div role="searchbox" tabindex="0"></div>'],
-    ['combobox role', '<div role="combobox" tabindex="0"></div>'],
-    ['spinbutton role', '<div role="spinbutton" tabindex="0"></div>'],
-    ['explicit editable scope', '<div data-shortcut-scope="editable"><button>İçerik</button></div>'],
+    ['input', '<input aria-label="Test girişi" />'],
+    ['textarea', '<textarea aria-label="Test metni"></textarea>'],
+    ['select', '<select aria-label="Test seçimi"><option>Bir</option></select>'],
+    ['textbox role', '<div role="textbox" aria-label="Test metin kutusu" tabindex="0"></div>'],
+    ['searchbox role', '<div role="searchbox" aria-label="Test araması" tabindex="0"></div>'],
+    ['combobox role', '<div role="combobox" aria-label="Test seçicisi" tabindex="0"></div>'],
+    ['spinbutton role', '<div role="spinbutton" aria-label="Test sayısı" tabindex="0"></div>'],
+    ['explicit editable scope', '<div data-shortcut-scope="editable"><button type="button">İçerik</button></div>'],
   ])('recognizes %s as an editable shortcut target', (_name, markup) => {
     document.body.innerHTML = markup;
     const target = document.body.querySelector('*')?.lastElementChild ?? document.body.querySelector('*');
@@ -70,6 +70,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
     const island = document.createElement('div');
     island.setAttribute('contenteditable', 'false');
     const button = document.createElement('button');
+    button.type = 'button';
     island.appendChild(button);
     editor.appendChild(island);
     document.body.appendChild(editor);
@@ -82,6 +83,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
     const global = document.createElement('div');
     global.setAttribute('data-shortcut-scope', 'global');
     const button = document.createElement('button');
+    button.type = 'button';
     global.appendChild(button);
     editor.appendChild(global);
     document.body.appendChild(editor);
@@ -105,6 +107,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
 
   it('rejects events originating in editable controls', () => {
     const input = document.createElement('input');
+    input.setAttribute('aria-label', 'Test girişi');
     document.body.appendChild(input);
     const event = keyboardShape();
     Object.defineProperty(event, 'target', { value: input });
@@ -116,6 +119,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     const button = document.createElement('button');
+    button.type = 'button';
     dialog.appendChild(button);
     document.body.appendChild(dialog);
     const event = keyboardShape();
@@ -127,6 +131,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
     const dialog = document.createElement('dialog');
     dialog.setAttribute('open', '');
     const button = document.createElement('button');
+    button.type = 'button';
     dialog.appendChild(button);
     document.body.appendChild(dialog);
     const event = keyboardShape();
@@ -136,6 +141,7 @@ describe('mapWorkspaceShortcutPolicy', () => {
 
   it('allows a clean non-editable workspace event', () => {
     const button = document.createElement('button');
+    button.type = 'button';
     document.body.appendChild(button);
     const event = keyboardShape();
     Object.defineProperty(event, 'target', { value: button });
