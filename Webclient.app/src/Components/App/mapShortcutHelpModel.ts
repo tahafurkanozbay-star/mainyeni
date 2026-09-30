@@ -33,6 +33,16 @@ export interface MapShortcutHelpCategoryOption {
   readonly label: string;
 }
 
+export interface MapShortcutHelpObserverDiagnostics {
+  readonly failureCount: number;
+  readonly reporterFailureCount: number;
+  readonly activeObserverCount: number;
+  readonly rejectedObserverCount: number;
+  readonly lastFailureRevision: number | null;
+  readonly lastFailureKind: string | null;
+  readonly disposed: boolean;
+}
+
 export interface MapShortcutHelpModelOptions {
   readonly maxQueryLength?: number;
   readonly maxListeners?: number;
@@ -97,8 +107,14 @@ const clampInteger = (value: number | undefined, fallback: number, min: number, 
   return Math.max(min, Math.min(max, Math.trunc(value ?? fallback)));
 };
 
+const classifyFailure = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  return typeof error;
+};
+
 export const normalizeMapShortcutHelpText = (value: string): string => {
-  const replaced = [...value].map((character) => TURKISH_ASCII_REPLACEMENTS[character] ?? character).join('');
+  const replaced = Array.from(value, (character) => TURKISH_ASCII_REPLACEMENTS[character] ?? character).join('');
   return replaced
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/gu, '')
@@ -239,6 +255,16 @@ const createSnapshot = (
   });
 };
 
+const createObserverDiagnostics = (): MapShortcutHelpObserverDiagnostics => Object.freeze({
+  failureCount: 0,
+  reporterFailureCount: 0,
+  activeObserverCount: 0,
+  rejectedObserverCount: 0,
+  lastFailureRevision: null,
+  lastFailureKind: null,
+  disposed: false,
+});
+
 export class MapShortcutHelpModel {
   readonly #indexed: readonly IndexedShortcut[];
   readonly #listeners = new Set<() => void>();
@@ -247,6 +273,7 @@ export class MapShortcutHelpModel {
   readonly #pageSize: number;
   readonly #onListenerError?: (error: unknown) => void;
   #snapshot: MapShortcutHelpSnapshot;
+  #diagnostics: MapShortcutHelpObserverDiagnostics = createObserverDiagnostics();
   #disposed = false;
 
   constructor(shortcuts: readonly MapWorkspaceShortcutDefinition[], options: MapShortcutHelpModelOptions = {}) {
@@ -263,28 +290,70 @@ export class MapShortcutHelpModel {
   }
 
   readonly getSnapshot = (): MapShortcutHelpSnapshot => this.#snapshot;
+  readonly getObserverDiagnostics = (): MapShortcutHelpObserverDiagnostics => this.#diagnostics;
 
   readonly subscribe = (listener: () => void): (() => void) => {
-    if (this.#disposed) return () => undefined;
-    if (this.#listeners.size >= this.#maxListeners && !this.#listeners.has(listener)) {
+    if (this.#disposed) {
+      this.#recordRejectedObserver();
+      return () => undefined;
+    }
+    if (this.#listeners.has(listener)) return () => this.#unsubscribe(listener);
+    if (this.#listeners.size >= this.#maxListeners) {
+      this.#recordRejectedObserver();
       throw new Error(`MapShortcutHelpModel listener limit exceeded (${this.#maxListeners}).`);
     }
     this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
+    this.#refreshObserverCount();
+    return () => this.#unsubscribe(listener);
   };
+
+  #recordRejectedObserver(): void {
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      rejectedObserverCount: this.#diagnostics.rejectedObserverCount + 1,
+    });
+  }
+
+  #refreshObserverCount(): void {
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      activeObserverCount: this.#listeners.size,
+    });
+  }
+
+  #unsubscribe(listener: () => void): void {
+    if (!this.#listeners.delete(listener)) return;
+    this.#refreshObserverCount();
+  }
+
+  #recordObserverFailure(error: unknown, reporterFailure = false): void {
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      failureCount: this.#diagnostics.failureCount + 1,
+      reporterFailureCount: this.#diagnostics.reporterFailureCount + (reporterFailure ? 1 : 0),
+      lastFailureRevision: this.#snapshot.revision,
+      lastFailureKind: classifyFailure(error),
+    });
+  }
+
+  #reportObserverFailure(error: unknown): void {
+    this.#recordObserverFailure(error);
+    if (!this.#onListenerError) return;
+    try {
+      this.#onListenerError(error);
+    } catch (reporterError) {
+      this.#recordObserverFailure(reporterError, true);
+    }
+  }
 
   #emit(next: MapShortcutHelpSnapshot): void {
     if (this.#disposed || next === this.#snapshot) return;
     this.#snapshot = next;
-    for (const listener of [...this.#listeners]) {
+    for (const listener of this.#listeners) {
       try {
         listener();
       } catch (error) {
-        try {
-          this.#onListenerError?.(error);
-        } catch {
-          // Diagnostic observers cannot break keyboard/search state propagation.
-        }
+        this.#reportObserverFailure(error);
       }
     }
   }
@@ -325,7 +394,8 @@ export class MapShortcutHelpModel {
       case 'page-next': nextIndex = Math.min(entries.length - 1, currentIndex + this.#pageSize); break;
       case 'page-previous': nextIndex = Math.max(0, currentIndex - this.#pageSize); break;
     }
-    this.setActive(entries[nextIndex]?.sourceId ?? entries[0].sourceId);
+    const target = entries[nextIndex] ?? entries[0];
+    if (target) this.setActive(target.sourceId);
   }
 
   reset(): void {
@@ -341,6 +411,11 @@ export class MapShortcutHelpModel {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#listeners.clear();
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      activeObserverCount: 0,
+      disposed: true,
+    });
   }
 
   disposed(): boolean {
