@@ -6,6 +6,8 @@ using Business.Core.ViewModel;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Toolbox.Generic;
 using Toolbox.Security.Jwt;
 using Toolbox.Security.Url;
@@ -15,6 +17,7 @@ namespace Business.Core.Operations
 {
     public class AuthOperations : _BaseOperations
     {
+        private const int MaxUserNameLength = 320;
         private readonly BusinessContext db;
         private readonly AuthPasswordOperations authPasswordOperations;
 
@@ -24,20 +27,47 @@ namespace Business.Core.Operations
             authPasswordOperations = new AuthPasswordOperations(context);
         }
 
-        /// <summary>User Login - Kullanıcı Girişi</summary>
-        public ServiceResult<SessionInfo> LoginUser(UserAccountLoginViewModel viewModel)
+        /// <summary>
+        /// Authenticates a user while keeping database work asynchronous and request-cancellable.
+        /// LDAP authentication remains delegated to the existing directory adapter, but database
+        /// admission, account discovery, bootstrap persistence and password-rehash persistence all
+        /// honor the request cancellation token.
+        /// </summary>
+        public async Task<ServiceResult<SessionInfo>> LoginUserAsync(
+            UserAccountLoginViewModel viewModel,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var validationResult = validateLoginViewModel(viewModel);
             if (!validationResult.IsSuccess)
             {
                 return new ServiceResult<SessionInfo>(ServiceResultType.Error, validationResult.Message, null);
             }
 
-            var username = TextUtils.CleanString(viewModel.UserName.Trim().ToLowerInvariant());
-            var accounts = db.UserAccounts
-                .Where(x => x.UserName.ToLower().Trim() == username && !x.IsDeleted && x.IsActive)
-                .ToList();
+            var username = NormalizeUserName(viewModel.UserName);
+            if (username.Length == 0 || username.Length > MaxUserNameLength)
+            {
+                return InvalidCredentials();
+            }
 
+            // Materialize only the small set of fields required by authentication. A bounded take
+            // prevents corrupt duplicate rows from turning one login into an unbounded materialization.
+            var accounts = await db.UserAccounts
+                .Where(x => x.UserName.ToLower().Trim() == username && !x.IsDeleted && x.IsActive)
+                .OrderBy(x => x.Id)
+                .Take(2)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            // UserName is an authentication identity. Ambiguous active identities fail closed rather
+            // than selecting an arbitrary row and potentially issuing a token for the wrong account.
+            if (accounts.Count > 1)
+            {
+                return InvalidCredentials();
+            }
+
+            var account = accounts.Count == 1 ? accounts[0] : null;
             var atIndex = username.LastIndexOf('@');
             var ldapUsername = atIndex > 0 ? username.Substring(0, atIndex) : username;
             var domainName = atIndex > 0 && atIndex < username.Length - 1
@@ -45,10 +75,9 @@ namespace Business.Core.Operations
                 : string.Empty;
 
             var ldapDomain = Configuration.LDAP_DOMAIN?.Trim();
-            if (!string.IsNullOrWhiteSpace(ldapDomain) &&
-                !string.IsNullOrWhiteSpace(Configuration.LDAP_SERVER) &&
-                string.Equals(domainName, ldapDomain, StringComparison.OrdinalIgnoreCase))
+            if (ShouldAttemptLdap(domainName, ldapDomain))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var ldapUtility = new LdapUtility(new LdapConfig
                 {
                     UserDomainName = ldapDomain,
@@ -60,7 +89,8 @@ namespace Business.Core.Operations
 
                 if (ldapUtility.Login(ldapUsername, viewModel.Password))
                 {
-                    var userAccount = accounts.FirstOrDefault();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var userAccount = account;
                     if (userAccount == null)
                     {
                         userAccount = new UserAccount
@@ -76,8 +106,13 @@ namespace Business.Core.Operations
                             Password = "-"
                         };
                         userAccount.SetCreate(-2);
-                        db.UserAccounts.Add(userAccount);
-                        db.SaveChanges();
+                        await db.UserAccounts.AddAsync(userAccount, cancellationToken).ConfigureAwait(false);
+                        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    else if (userAccount.AccountType != UserAccountType.LDAP)
+                    {
+                        // An external account must never be silently promoted into a directory account.
+                        return InvalidCredentials();
                     }
 
                     return new ServiceResult<SessionInfo>(
@@ -86,16 +121,15 @@ namespace Business.Core.Operations
                 }
             }
 
-            var externalAccount = accounts.FirstOrDefault(x => x.AccountType == UserAccountType.EXTERNAL);
-            if (externalAccount == null)
+            if (account == null || account.AccountType != UserAccountType.EXTERNAL)
             {
                 return InvalidCredentials();
             }
 
             if (!authPasswordOperations.VerifyPassword(
                     viewModel.Password,
-                    externalAccount.Password,
-                    externalAccount.Salt,
+                    account.Password,
+                    account.Salt,
                     out var needsRehash))
             {
                 return InvalidCredentials();
@@ -103,16 +137,26 @@ namespace Business.Core.Operations
 
             if (needsRehash)
             {
-                externalAccount.Password = authPasswordOperations.HashPassword(viewModel.Password);
-                externalAccount.Salt = string.Empty;
-                db.Entry(externalAccount).Property(x => x.Password).IsModified = true;
-                db.Entry(externalAccount).Property(x => x.Salt).IsModified = true;
-                db.SaveChanges();
+                cancellationToken.ThrowIfCancellationRequested();
+                account.Password = authPasswordOperations.HashPassword(viewModel.Password);
+                account.Salt = string.Empty;
+                db.Entry(account).Property(x => x.Password).IsModified = true;
+                db.Entry(account).Property(x => x.Salt).IsModified = true;
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
 
             return new ServiceResult<SessionInfo>(
                 ServiceResultType.Success,
-                createSession(externalAccount));
+                createSession(account));
+        }
+
+        /// <summary>
+        /// Source-compatible synchronous entry point for legacy callers. HTTP controllers should use
+        /// <see cref="LoginUserAsync"/> so request cancellation can flow to EF Core.
+        /// </summary>
+        public ServiceResult<SessionInfo> LoginUser(UserAccountLoginViewModel viewModel)
+        {
+            return LoginUserAsync(viewModel, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         public ServiceResult LogoutUser(UserSessionViewModel session)
@@ -122,11 +166,13 @@ namespace Business.Core.Operations
             return new ServiceResult(ServiceResultType.Success);
         }
 
-        public ServiceResult ChangePasswordFromProfile(
+        public async Task<ServiceResult> ChangePasswordFromProfileAsync(
             UserAccountChangePasswordViewModel viewModel,
             ClientRequestInfo info,
-            UserSessionViewModel session)
+            UserSessionViewModel session,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (viewModel == null || session == null)
             {
                 return new ServiceResult(ServiceResultType.Error, "Geçersiz istek");
@@ -143,11 +189,19 @@ namespace Business.Core.Operations
                 return new ServiceResult(ServiceResultType.Error, "Şifre ve tekrarı birbiriyle uyuşmuyor");
             }
 
-            var userAccount = db.UserAccounts
-                .FirstOrDefault(x => x.Id == session.UserId && !x.IsDeleted && x.IsActive);
+            var userAccount = await db.UserAccounts
+                .FirstOrDefaultAsync(
+                    x => x.Id == session.UserId && !x.IsDeleted && x.IsActive,
+                    cancellationToken)
+                .ConfigureAwait(false);
             if (userAccount == null)
             {
                 return new ServiceResult(ServiceResultType.Error, "Kullanıcı bulunamadı");
+            }
+
+            if (userAccount.AccountType != UserAccountType.EXTERNAL)
+            {
+                return new ServiceResult(ServiceResultType.Error, "Bu hesap türünün parolası uygulama üzerinden değiştirilemez");
             }
 
             if (!authPasswordOperations.VerifyPassword(
@@ -159,12 +213,24 @@ namespace Business.Core.Operations
                 return new ServiceResult(ServiceResultType.Error, "Wrong username or password");
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             userAccount.Password = authPasswordOperations.HashPassword(viewModel.NewPassword);
             userAccount.Salt = string.Empty;
+            userAccount.SetUpdate(session.UserId);
             db.Entry(userAccount).State = EntityState.Modified;
-            db.SaveChanges();
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
             return new ServiceResult(ServiceResultType.Success, "");
+        }
+
+        public ServiceResult ChangePasswordFromProfile(
+            UserAccountChangePasswordViewModel viewModel,
+            ClientRequestInfo info,
+            UserSessionViewModel session)
+        {
+            return ChangePasswordFromProfileAsync(viewModel, info, session, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
         }
 
         private ServiceResult validateLoginViewModel(UserAccountLoginViewModel viewModel)
@@ -172,6 +238,11 @@ namespace Business.Core.Operations
             if (viewModel == null || string.IsNullOrWhiteSpace(viewModel.UserName))
             {
                 return new ServiceResult(ServiceResultType.Error, "Kullanıcı adı boş olamaz");
+            }
+
+            if (viewModel.UserName.Trim().Length > MaxUserNameLength)
+            {
+                return new ServiceResult(ServiceResultType.Error, "Wrong username or password");
             }
 
             // Login accepts legacy password lengths so an existing account can authenticate once
@@ -182,6 +253,19 @@ namespace Business.Core.Operations
             }
 
             return new ServiceResult(ServiceResultType.Success);
+        }
+
+        private static string NormalizeUserName(string userName)
+        {
+            if (string.IsNullOrWhiteSpace(userName)) return string.Empty;
+            return TextUtils.CleanString(userName.Trim().ToLowerInvariant());
+        }
+
+        private static bool ShouldAttemptLdap(string domainName, string ldapDomain)
+        {
+            return !string.IsNullOrWhiteSpace(ldapDomain) &&
+                   !string.IsNullOrWhiteSpace(Configuration.LDAP_SERVER) &&
+                   string.Equals(domainName, ldapDomain, StringComparison.OrdinalIgnoreCase);
         }
 
         private static ServiceResult<SessionInfo> InvalidCredentials()
