@@ -125,6 +125,9 @@ namespace Api.Core.Platform
             var options = new ApiPlatformOptions();
             configuration.GetSection(ApiPlatformOptions.SectionName).Bind(options);
 
+            options.ClientPartitioning ??= new ApiPlatformOptions.ClientPartitionOptions();
+            ApplyClientPartitioningCompatibilityBridge(configuration, options);
+
             options.Database.Provider = ApiPlatformDefaults.NormalizeProvider(options.Database.Provider);
             options.Cors.AllowedOrigins = ResolveAllowedOrigins(configuration).ToList();
             options.Health.LivenessPath = ApiPlatformDefaults.NormalizePath(
@@ -144,6 +147,29 @@ namespace Api.Core.Platform
             }
 
             return options;
+        }
+
+        private static void ApplyClientPartitioningCompatibilityBridge(
+            IConfiguration configuration,
+            ApiPlatformOptions options)
+        {
+            var modernValue = configuration[
+                "Platform:ClientPartitioning:PartitionAuthenticatedUsers"];
+            if (!string.IsNullOrWhiteSpace(modernValue))
+            {
+                // Modern binding already applied the value. Presence, rather than successful parse,
+                // is used here so malformed modern configuration cannot silently fall back to a
+                // legacy setting and hide an operator error.
+                return;
+            }
+
+            var legacyValue = configuration[
+                "Platform:RateLimiting:PartitionAuthenticatedUsers"];
+            if (bool.TryParse(legacyValue, out var partitionAuthenticatedUsers))
+            {
+                options.ClientPartitioning.PartitionAuthenticatedUsers =
+                    partitionAuthenticatedUsers;
+            }
         }
 
         private static int ReadBoundedInt(
