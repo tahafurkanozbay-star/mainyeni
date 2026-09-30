@@ -142,7 +142,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
     ], [showIdentify, showRoute, showStreetView, showVicinityQuery]);
 
     const positionMenuAt = useCallback((requested: ContextMenuPosition): void => {
-      const menu = document.getElementById(id);
+      const menu = document.getElementById(id) as HTMLDivElement | null;
       const next = clampContextMenuPosition(
         requested,
         {
