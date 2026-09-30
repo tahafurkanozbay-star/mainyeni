@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DatasetSnapshot } from './contracts';
 import { createDataSearchRuntime } from './searchRuntime';
-import {
-  SearchRecoveryRuntimeV8,
-  createSearchRecoveryRuntimeV8,
-} from './searchRecoveryRuntimeV8';
+import { createSearchRecoveryRuntimeV8 } from './searchRecoveryRuntimeV8';
 
 const rows = (suffix = '') => [
   {
