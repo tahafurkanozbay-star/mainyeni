@@ -26,6 +26,7 @@ import { auditProcessEnvironmentBoundaries } from './process-env-boundary-audit.
 import { auditPublicationRefBoundaries } from './publication-ref-boundary-audit.mts';
 import { auditReleaseAssetMutations } from './release-asset-mutation-audit.mts';
 import { auditReleaseAssetSubjects } from './release-asset-subject-audit.mts';
+import { auditReleaseMetadataProvenance } from './release-metadata-provenance-audit.mts';
 import { auditReleaseTargetCommits } from './release-target-commit-audit.mts';
 import { reusableWorkflowContractFindings } from './reusable-workflow-contracts.mts';
 import { auditRunnerTrustBoundaries } from './runner-trust-boundary-audit.mts';
@@ -296,6 +297,7 @@ export function auditWorkflowExpressions(
     ...auditPublicationRefBoundaries(inventory).findings,
     ...auditReleaseAssetSubjects(inventory).findings,
     ...auditReleaseAssetMutations(inventory).findings,
+    ...auditReleaseMetadataProvenance(inventory).findings,
     ...auditReleaseTargetCommits(inventory).findings,
     ...auditGitOperationBoundaries(inventory).findings,
     ...auditGitHubMutationBoundaries(inventory).findings,
