@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { chordMatches, createShortcutChord, evaluateShortcutPolicy } from './mapWorkspaceShortcutPolicy';
 import { MAP_WORKSPACE_SHORTCUTS } from './mapWorkspaceShortcuts';
+import { createMapWorkspaceDialogSession } from './mapWorkspaceDialogRuntime';
 import './MapWorkspaceShortcutHelp.css';
 import './MapWorkspaceShortcutHelpLauncher.css';
 
@@ -9,55 +10,22 @@ export interface MapWorkspaceShortcutHelpProps {
   readonly onClose: () => void;
 }
 
-const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])', '[href]', 'input:not([disabled])', 'select:not([disabled])',
-  'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
-].join(',');
-
 const HELP_SHORTCUT = Object.freeze({ key: '?', shift: true });
-
-const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
-  Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter((element) => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true');
 
 export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcutHelpProps) => {
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = dialogRef.current;
-    const focusables = dialog ? getFocusableElements(dialog) : [];
-    (focusables[0] ?? dialog)?.focus({ preventScroll: true });
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
-      if (event.key !== 'Tab' || !dialogRef.current) return;
-      const currentFocusable = getFocusableElements(dialogRef.current);
-      if (currentFocusable.length === 0) {
-        event.preventDefault();
-        dialogRef.current.focus({ preventScroll: true });
-        return;
-      }
-      const first = currentFocusable[0];
-      const last = currentFocusable.at(-1);
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault(); last.focus({ preventScroll: true });
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault(); first.focus({ preventScroll: true });
-      }
-    };
-
+    if (!open || !dialogRef.current) return;
+    const session = createMapWorkspaceDialogSession(dialogRef.current, onClose);
+    session.focusInitial();
+    const onKeyDown = (event: KeyboardEvent): void => { session.handleKeyDown(event); };
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
-      const restoreTarget = restoreFocusRef.current;
-      if (restoreTarget?.isConnected) restoreTarget.focus({ preventScroll: true });
-      restoreFocusRef.current = null;
+      session.dispose();
     };
   }, [open, onClose]);
 
