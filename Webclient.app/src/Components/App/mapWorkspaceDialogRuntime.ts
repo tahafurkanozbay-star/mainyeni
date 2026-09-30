@@ -18,6 +18,19 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+interface InertLease {
+  count: number;
+  readonly initiallyInert: boolean;
+}
+
+interface ScrollLease {
+  count: number;
+  readonly initialOverflow: string;
+}
+
+const inertLeases = new WeakMap<HTMLElement, InertLease>();
+const scrollLeases = new WeakMap<HTMLElement, ScrollLease>();
+
 const isFocusable = (element: HTMLElement): boolean => {
   if (element.hasAttribute('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
   if (element.closest('[inert]')) return false;
@@ -32,18 +45,52 @@ const focusWithoutScroll = (element: HTMLElement | null | undefined): void => {
   element.focus({ preventScroll: true });
 };
 
-const setBackgroundInert = (dialog: HTMLElement, inert: boolean): readonly HTMLElement[] => {
+const acquireInert = (element: HTMLElement): void => {
+  const activeLease = inertLeases.get(element);
+  if (activeLease) {
+    activeLease.count += 1;
+    return;
+  }
+  inertLeases.set(element, { count: 1, initiallyInert: element.hasAttribute('inert') });
+  element.setAttribute('inert', '');
+};
+
+const releaseInert = (element: HTMLElement): void => {
+  const activeLease = inertLeases.get(element);
+  if (!activeLease) return;
+  activeLease.count -= 1;
+  if (activeLease.count > 0) return;
+  inertLeases.delete(element);
+  if (!activeLease.initiallyInert) element.removeAttribute('inert');
+};
+
+const acquireBackgroundInert = (dialog: HTMLElement): readonly HTMLElement[] => {
   const root = dialog.parentElement;
   if (!root) return [];
   const siblings = Array.from(root.parentElement?.children ?? []).filter(
     (element): element is HTMLElement => element instanceof HTMLElement && element !== root,
   );
-  if (inert) {
-    siblings.forEach((element) => element.setAttribute('inert', ''));
-  } else {
-    siblings.forEach((element) => element.removeAttribute('inert'));
-  }
+  siblings.forEach(acquireInert);
   return siblings;
+};
+
+const acquireScrollLock = (body: HTMLElement): void => {
+  const activeLease = scrollLeases.get(body);
+  if (activeLease) {
+    activeLease.count += 1;
+    return;
+  }
+  scrollLeases.set(body, { count: 1, initialOverflow: body.style.overflow });
+  body.style.overflow = 'hidden';
+};
+
+const releaseScrollLock = (body: HTMLElement): void => {
+  const activeLease = scrollLeases.get(body);
+  if (!activeLease) return;
+  activeLease.count -= 1;
+  if (activeLease.count > 0) return;
+  scrollLeases.delete(body);
+  body.style.overflow = activeLease.initialOverflow;
 };
 
 export const createMapWorkspaceDialogSession = (
@@ -53,11 +100,10 @@ export const createMapWorkspaceDialogSession = (
 ): MapWorkspaceDialogSession => {
   const { document: ownerDocument, body } = environment;
   const restoreTarget = ownerDocument.activeElement instanceof HTMLElement ? ownerDocument.activeElement : null;
-  const previousOverflow = body.style.overflow;
-  const inertSiblings = setBackgroundInert(dialog, true);
+  const inertSiblings = acquireBackgroundInert(dialog);
   let disposed = false;
 
-  body.style.overflow = 'hidden';
+  acquireScrollLock(body);
 
   const focusInitial = (): void => {
     if (disposed) return;
@@ -108,8 +154,8 @@ export const createMapWorkspaceDialogSession = (
   const dispose = (): void => {
     if (disposed) return;
     disposed = true;
-    body.style.overflow = previousOverflow;
-    inertSiblings.forEach((element) => element.removeAttribute('inert'));
+    releaseScrollLock(body);
+    inertSiblings.forEach(releaseInert);
     focusWithoutScroll(restoreTarget);
   };
 
