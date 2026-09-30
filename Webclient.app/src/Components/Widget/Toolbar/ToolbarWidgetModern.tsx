@@ -1,22 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import type { WindowManagerLike } from '../../../experience/contracts';
+import {
+  ExperienceToolbar,
+  type ExperienceToolbarItem,
+} from '../../Common/ExperienceToolbar';
+import { openExternalUrl } from '../_shared/MapWidgetRuntime';
+import {
+  MAP_TOOLBAR_GROUP_LABELS,
+  MapToolbarModel,
+  findMapToolbarAction,
+  type MapToolbarActionId,
+  type MapToolbarPoint,
+} from './mapToolbarModel';
 import './ToolbarWidget.css';
-
-const FALLBACK_LOCATION = Object.freeze({ x: 32.80409955978453, y: 39.94494728389463 });
-
-type ToolbarIcon =
-  | 'feedback'
-  | 'basemap'
-  | 'address'
-  | 'location'
-  | 'parcel'
-  | 'measure'
-  | 'streetview'
-  | 'home';
-
-type LocationState = 'idle' | 'locating' | 'success' | 'fallback';
 
 interface ToolbarWidgetModernProps {
   readonly id?: string;
@@ -38,19 +41,7 @@ interface MapViewLike {
   readonly goTo?: (target: unknown) => Promise<unknown> | unknown;
 }
 
-interface PointLocation {
-  readonly x: number;
-  readonly y: number;
-}
-
-interface ToolbarControlProps {
-  readonly icon: ToolbarIcon;
-  readonly label: string;
-  readonly onClick: () => void;
-  readonly busy?: boolean;
-}
-
-const ToolbarGlyph = ({ name }: { readonly name: ToolbarIcon }) => {
+const ToolbarGlyph = ({ name }: { readonly name: MapToolbarActionId }) => {
   const common = {
     width: 22,
     height: 22,
@@ -60,6 +51,7 @@ const ToolbarGlyph = ({ name }: { readonly name: ToolbarIcon }) => {
     strokeWidth: 1.8,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
+    focusable: false,
     'aria-hidden': true,
   };
 
@@ -83,40 +75,34 @@ const ToolbarGlyph = ({ name }: { readonly name: ToolbarIcon }) => {
   }
 };
 
-const ToolbarControl = ({ icon, label, onClick, busy = false }: ToolbarControlProps) => (
-  <button
-    type="button"
-    className="toolbarwidget-button"
-    onClick={onClick}
-    aria-label={label}
-    aria-busy={busy || undefined}
-    data-tooltip={label}
-    disabled={busy}
-  >
-    <span className="toolbarwidget-button-glyph" aria-hidden="true">
-      <ToolbarGlyph name={icon} />
-    </span>
-  </button>
-);
-
-const requestCurrentPosition = (): Promise<GeolocationPosition> => new Promise((resolve, reject) => {
-  navigator.geolocation.getCurrentPosition(resolve, reject, {
-    enableHighAccuracy: false,
-    timeout: 10000,
-    maximumAge: 60000,
-  });
+const requestCurrentPosition = (): Promise<MapToolbarPoint> => new Promise((resolve, reject) => {
+  if (!navigator.geolocation) {
+    reject(new Error('Geolocation is unavailable.'));
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => resolve(Object.freeze({
+      x: position.coords.longitude,
+      y: position.coords.latitude,
+    })),
+    reject,
+    {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 60000,
+    },
+  );
 });
-
-const locationMessage: Record<LocationState, string> = {
-  idle: '',
-  locating: 'Konumunuz bulunuyor.',
-  success: 'Konumunuz haritada gösterildi.',
-  fallback: 'Konum alınamadı. Ankara merkez konumu gösterildi.',
-};
 
 export const ToolbarWidgetModern = ({ id, windowManager }: ToolbarWidgetModernProps) => {
   const initialExtentRef = useRef<ExtentLike | null>(null);
-  const [locationState, setLocationState] = useState<LocationState>('idle');
+  const generatedId = useId();
+  const modelRef = useRef<MapToolbarModel | null>(null);
+  if (!modelRef.current) modelRef.current = new MapToolbarModel();
+  const model = modelRef.current;
+  const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const toolbarId = id ?? `map-toolbar-${generatedId.replace(/:/gu, '')}`;
+  const helpId = `${toolbarId}-instructions`;
 
   useEffect(() => {
     const mapView = MapManager.GetMapView() as MapViewLike | null;
@@ -136,35 +122,26 @@ export const ToolbarWidgetModern = ({ id, windowManager }: ToolbarWidgetModernPr
     return () => readyHandle?.remove?.();
   }, []);
 
+  useEffect(() => () => model.dispose(), [model]);
+
   const showWindow = (windowId: string): void => windowManager.ShowWindow(windowId);
 
-  const createLocation = async (location: PointLocation): Promise<void> => {
+  const createLocation = async (location: MapToolbarPoint): Promise<void> => {
     const point = await GisGraphicsHelper.CreatePoint(location);
     const mapView = MapManager.GetMapView();
-    if (!mapView) return;
+    if (!mapView) throw new Error('Map view is unavailable.');
 
     const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(point, null);
     MapManager.AddGraphics(graphic, true);
     GisGraphicsHelper.ZoomToGeometry(mapView, point, 15);
   };
 
-  const getUserLocation = async (): Promise<void> => {
-    if (locationState === 'locating') return;
-    setLocationState('locating');
-
-    try {
-      if (!navigator.geolocation) throw new Error('Geolocation is unavailable');
-      const position = await requestCurrentPosition();
-      await createLocation({
-        x: position.coords.longitude,
-        y: position.coords.latitude,
-      });
-      setLocationState('success');
-    } catch {
-      await createLocation(FALLBACK_LOCATION);
-      windowManager.ShowWindow('sidebar');
-      setLocationState('fallback');
-    }
+  const locateUser = (): void => {
+    void model.locate({
+      requestPosition: requestCurrentPosition,
+      showLocation: createLocation,
+      showSidebar: () => showWindow('sidebar'),
+    });
   };
 
   const gotoInitialView = (): void => {
@@ -173,49 +150,64 @@ export const ToolbarWidgetModern = ({ id, windowManager }: ToolbarWidgetModernPr
     if (mapView && initialExtent) {
       void Promise.resolve(mapView.goTo?.(initialExtent)).catch(() => undefined);
     }
-    windowManager.ShowWindow('sidebar');
+    showWindow('sidebar');
   };
 
-  const openFeedbackPortal = (): void => {
-    const opened = window.open(
-      'https://ulakbell.ankara.bel.tr/WebForm/basket153basvuru#/',
-      '_blank',
-      'noopener,noreferrer',
-    );
-    if (opened) opened.opener = null;
+  const activateToolbarAction = (actionId: MapToolbarActionId): void => {
+    const action = findMapToolbarAction(actionId);
+    if (!action) return;
+
+    switch (action.kind) {
+      case 'external':
+        if (action.target) openExternalUrl(action.target);
+        return;
+      case 'window':
+        if (action.target) showWindow(action.target);
+        return;
+      case 'location':
+        locateUser();
+        return;
+      case 'home':
+        gotoInitialView();
+        return;
+    }
   };
+
+  const toolbarItems: readonly ExperienceToolbarItem[] = snapshot.actions.map((action, index) => ({
+    id: action.id,
+    label: action.label,
+    icon: <ToolbarGlyph name={action.id} />,
+    busy: action.busy,
+    disabled: action.disabled,
+    tooltip: action.tooltip,
+    group: action.group,
+    groupLabel: index === 0 || snapshot.actions[index - 1]?.group !== action.group
+      ? MAP_TOOLBAR_GROUP_LABELS[action.group]
+      : undefined,
+    onActivate: () => activateToolbarAction(action.id),
+  }));
 
   return (
-    <div id={id} className="toolbarwidget toolbarwidget--modern" aria-label="Harita araçları">
-      <div className="toolbarwidget-group" role="group" aria-label="Belediye ve harita görünümü">
-        <ToolbarControl icon="feedback" label="Geri Bildirim (Başkent 153)" onClick={openFeedbackPortal} />
-        <ToolbarControl icon="basemap" label="Altlık Haritalar" onClick={() => showWindow('basemap-widget')} />
-      </div>
-
-      <span className="toolbarwidget-separator" aria-hidden="true" />
-
-      <div className="toolbarwidget-group" role="group" aria-label="Arama ve analiz araçları">
-        <ToolbarControl icon="address" label="Adres Arama" onClick={() => showWindow('numbering-query-window')} />
-        <ToolbarControl
-          icon="location"
-          label={locationState === 'locating' ? 'Konum bulunuyor' : 'Konum Bul'}
-          onClick={() => void getUserLocation()}
-          busy={locationState === 'locating'}
-        />
-        <ToolbarControl icon="parcel" label="Ada-Parsel Arama" onClick={() => showWindow('cityblockparcel-query-window')} />
-        <ToolbarControl icon="measure" label="Ölçüm Aracı" onClick={() => showWindow('measurement-widget')} />
-        <ToolbarControl icon="streetview" label="Sokak Görüntüsü" onClick={() => showWindow('streetview-widget')} />
-      </div>
-
-      <span className="toolbarwidget-separator" aria-hidden="true" />
-
-      <div className="toolbarwidget-group" role="group" aria-label="Harita görünümünü sıfırla">
-        <ToolbarControl icon="home" label="Başlangıç görünümüne dön" onClick={gotoInitialView} />
-      </div>
-
-      <span className="toolbarwidget-status" role="status" aria-live="polite">
-        {locationMessage[locationState]}
+    <>
+      <p id={helpId} className="toolbarwidget-instructions">
+        Harita araçları arasında yukarı ve aşağı ok tuşlarıyla ilerleyin. İlk veya son araca gitmek için Home ve End tuşlarını kullanın.
+      </p>
+      <ExperienceToolbar
+        id={toolbarId}
+        className="toolbarwidget toolbarwidget--modern"
+        label="Harita araçları"
+        describedBy={helpId}
+        orientation="vertical"
+        items={toolbarItems}
+      />
+      <span
+        className="toolbarwidget-status"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {snapshot.announcement}
       </span>
-    </div>
+    </>
   );
 };
