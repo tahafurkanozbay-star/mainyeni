@@ -156,6 +156,8 @@ const QUERY_FIELDS: readonly TextQueryField[] = Object.freeze([
   'any',
 ]);
 
+const SCORE_TIE_TOLERANCE = 0.01;
+
 const normalizeInteger = (value: number | undefined, fallback: number, minimum: number, maximum: number): number => {
   if (value === undefined) return fallback;
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
@@ -773,11 +775,11 @@ const evaluateCandidate = (
 
 const compareHits = (left: RelevanceHit, right: RelevanceHit): number => {
   const scoreDifference = right.score - left.score;
-  if (Math.abs(scoreDifference) > Number.EPSILON) return scoreDifference;
-  const title = left.record.title.localeCompare(right.record.title, 'tr-TR', { sensitivity: 'base' });
-  if (title !== 0) return title;
+  if (Math.abs(scoreDifference) > SCORE_TIE_TOLERANCE) return scoreDifference;
   const source = left.record.sourceIndex - right.record.sourceIndex;
   if (source !== 0) return source;
+  const title = left.record.title.localeCompare(right.record.title, 'tr-TR', { sensitivity: 'base' });
+  if (title !== 0) return title;
   return left.record.fingerprint.localeCompare(right.record.fingerprint);
 };
 
