@@ -271,7 +271,7 @@ export class MapShortcutHelpModel {
   readonly #maxQueryLength: number;
   readonly #maxListeners: number;
   readonly #pageSize: number;
-  readonly #onListenerError?: (error: unknown) => void;
+  readonly #onListenerError: ((error: unknown) => void) | undefined;
   #snapshot: MapShortcutHelpSnapshot;
   #diagnostics: MapShortcutHelpObserverDiagnostics = createObserverDiagnostics();
   #disposed = false;
