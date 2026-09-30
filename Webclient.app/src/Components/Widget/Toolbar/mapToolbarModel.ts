@@ -152,6 +152,19 @@ const isFiniteCoordinate = (value: unknown): value is number => (
   typeof value === 'number' && Number.isFinite(value)
 );
 
+const invokeErrorReporter = (
+  reporter: ((error: unknown) => void) | undefined,
+  error: unknown,
+): unknown | null => {
+  if (!reporter) return null;
+  try {
+    reporter(error);
+    return null;
+  } catch (reporterError) {
+    return reporterError;
+  }
+};
+
 export const normalizeMapToolbarPoint = (value: unknown): MapToolbarPoint | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const candidate = value as Partial<MapToolbarPoint>;
@@ -291,11 +304,7 @@ export class MapToolbarModel {
       try {
         listener();
       } catch (error) {
-        try {
-          this.#onListenerError?.(error);
-        } catch {
-          // Reporter failures must not prevent remaining observers from receiving state.
-        }
+        void invokeErrorReporter(this.#onListenerError, error);
       }
     }
   }
@@ -317,11 +326,7 @@ export class MapToolbarModel {
       return 'success';
     } catch (primaryError) {
       if (this.#disposed || generation !== this.#generation) return this.#snapshot.locationPhase;
-      try {
-        dependencies.onError?.(primaryError);
-      } catch {
-        // Diagnostics are deliberately isolated from the user recovery path.
-      }
+      void invokeErrorReporter(dependencies.onError, primaryError);
 
       try {
         await dependencies.showLocation(MAP_TOOLBAR_FALLBACK_LOCATION);
@@ -329,21 +334,13 @@ export class MapToolbarModel {
         try {
           dependencies.showSidebar();
         } catch (sidebarError) {
-          try {
-            dependencies.onError?.(sidebarError);
-          } catch {
-            // Reporter failures must not turn a rendered fallback into an error.
-          }
+          void invokeErrorReporter(dependencies.onError, sidebarError);
         }
         this.#publish('fallback');
         return 'fallback';
       } catch (fallbackError) {
         if (this.#disposed || generation !== this.#generation) return this.#snapshot.locationPhase;
-        try {
-          dependencies.onError?.(fallbackError);
-        } catch {
-          // Diagnostics are isolated from the final user-visible state.
-        }
+        void invokeErrorReporter(dependencies.onError, fallbackError);
         this.#publish('error');
         return 'error';
       }
