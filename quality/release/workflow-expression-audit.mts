@@ -10,6 +10,7 @@ import { auditActionCredentialBoundaries } from './action-credential-boundary-au
 import { auditActionInputBoundaries } from './action-input-boundary-audit.mts';
 import { auditArchiveExtractionBoundaries } from './archive-extraction-boundary-audit.mts';
 import { auditArtifactExecutionBoundaries } from './artifact-execution-boundary-audit.mts';
+import { auditArtifactJobLineage } from './artifact-job-lineage-audit.mts';
 import { auditArtifactProducerProvenance } from './artifact-producer-provenance-audit.mts';
 import { auditCheckoutBoundaries } from './checkout-boundary-audit.mts';
 import { auditConcurrencyBoundaries } from './concurrency-boundary-audit.mts';
@@ -283,6 +284,7 @@ export function auditWorkflowExpressions(
     ...auditActionInputBoundaries(inventory).findings,
     ...auditArchiveExtractionBoundaries(inventory).findings,
     ...auditArtifactExecutionBoundaries(inventory).findings,
+    ...auditArtifactJobLineage(inventory).findings,
     ...auditArtifactProducerProvenance(inventory).findings,
     ...auditProcessEnvironmentBoundaries(inventory).findings,
     ...auditWorkingDirectoryBoundaries(inventory).findings,
