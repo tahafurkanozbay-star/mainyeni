@@ -37,6 +37,7 @@ import { auditUntrustedEnvExecution } from './untrusted-env-execution-audit.mts'
 import { auditWorkingDirectoryBoundaries } from './working-directory-boundary-audit.mts';
 import { auditWorkflowAuthority } from './workflow-authority-audit.mts';
 import { auditWorkflowCommandFiles } from './workflow-command-file-audit.mts';
+import { auditWorkflowControlMutations } from './workflow-control-mutation-audit.mts';
 import { auditWorkflowEnvironmentApprovals } from './workflow-environment-approval-audit.mts';
 import { auditWorkflowFailureIntegrity } from './workflow-failure-integrity-audit.mts';
 import { auditWorkflowManualInputBoundaries } from './workflow-manual-input-boundary-audit.mts';
@@ -282,6 +283,7 @@ export function auditWorkflowExpressions(
     ...expressionFindings,
     ...auditWorkflowAuthority(inventory).findings,
     ...auditWorkflowCommandFiles(inventory).findings,
+    ...auditWorkflowControlMutations(inventory).findings,
     ...auditCheckoutBoundaries(inventory).findings,
     ...auditConcurrencyBoundaries(inventory).findings,
     ...auditActionCredentialBoundaries(inventory).findings,
