@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using AspNetCoreIPNetwork = Microsoft.AspNetCore.HttpOverrides.IPNetwork;
+using SystemNetIPNetwork = System.Net.IPNetwork;
 using Xunit;
 
 namespace Platform.Security.Tests;
@@ -45,7 +45,15 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     public void Build_AllowsExplicitBoundedNetworks(string network)
     {
         var result = Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = network });
-        Assert.Contains(AspNetCoreIPNetwork.Parse(network), result.KnownIPNetworks);
+        Assert.Contains(SystemNetIPNetwork.Parse(network), result.KnownIPNetworks);
+    }
+
+    [Theory]
+    [InlineData("0.0.0.0/0")]
+    [InlineData("::/0")]
+    public void Build_RejectsAllAddressNetworks(string network)
+    {
+        Assert.Throws<OptionsValidationException>(() => Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = network }));
     }
 
     [Theory]
@@ -90,7 +98,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
             ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = "2001:db8::/32",
             ["Platform:ForwardedHeaders:KnownIPNetworks:1"] = "2001:0db8:0000:0000::/32"
         });
-        Assert.Single(result.KnownIPNetworks.Where(network => network.Equals(AspNetCoreIPNetwork.Parse("2001:db8::/32"))));
+        Assert.Single(result.KnownIPNetworks.Where(network => network.Equals(SystemNetIPNetwork.Parse("2001:db8::/32"))));
     }
 
     [Fact]
@@ -108,7 +116,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
         var values = new Dictionary<string, string?>();
         for (var index = 0; index < ForwardedHeaderTrustPolicy.MaxTrustedNetworkEntries; index++) values[$"Platform:ForwardedHeaders:KnownIPNetworks:{index}"] = $"10.{index}.0.0/16";
         var result = Build(values);
-        foreach (var value in values.Values) Assert.Contains(AspNetCoreIPNetwork.Parse(value!), result.KnownIPNetworks);
+        foreach (var value in values.Values) Assert.Contains(SystemNetIPNetwork.Parse(value!), result.KnownIPNetworks);
     }
 
     [Fact]
