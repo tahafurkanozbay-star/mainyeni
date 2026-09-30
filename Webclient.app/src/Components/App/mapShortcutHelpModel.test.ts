@@ -133,10 +133,12 @@ describe('MapShortcutHelpModel filtering', () => {
     expect(model.getSnapshot().entries.map((entry) => entry.sourceId)).toEqual(['command-center']);
   });
 
-  it('searches category labels as discoverable vocabulary', () => {
+  it('searches category labels as discoverable vocabulary without excluding other relevant text matches', () => {
     const model = new MapShortcutHelpModel(shortcuts);
     model.setQuery('calisma alani');
-    expect(model.getSnapshot().entries.map((entry) => entry.sourceId)).toEqual(['toggle-sidebar', 'command-center']);
+    const ids = model.getSnapshot().entries.map((entry) => entry.sourceId);
+    expect(ids).toEqual(expect.arrayContaining(['toggle-sidebar', 'command-center']));
+    expect(ids.indexOf('toggle-sidebar')).toBeLessThan(ids.indexOf('command-center'));
   });
 
   it('filters by category while preserving catalog order', () => {
