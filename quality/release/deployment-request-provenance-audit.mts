@@ -52,6 +52,7 @@ export interface DeploymentRequestProvenanceSummary {
 }
 
 type FieldKind = 'ref' | 'environment' | 'payload' | 'guard' | 'display';
+type RequestChannel = DeploymentRequestSignal['channel'];
 
 interface ParsedField {
   readonly name: string;
@@ -62,12 +63,16 @@ interface ParsedField {
   readonly indirect: boolean;
 }
 
+interface ObjectEntry {
+  readonly name: string;
+  readonly value: string;
+}
+
 const CREATE_DEPLOYMENT = /\b(?:github\.)?rest\.repos\.createDeployment\s*\(|\bcreateDeployment\s*\(/i;
 const GH_API = /\bgh\s+api\b/i;
 const GH_API_DEPLOYMENT = /(?:^|[\s'"`])(?:https:\/\/api\.github\.com\/repos\/[^\s'"`]+\/deployments|repos\/[^\s'"`]+\/deployments|\/repos\/[^\s'"`]+\/deployments)(?:[\s'"`]|$)/i;
 const POST_METHOD = /(?:--method|-X)\s+POST\b/i;
-const FIELD = /\b(ref|task|environment|description|payload|auto_merge|autoMerge|required_contexts|requiredContexts|transient_environment|transientEnvironment|production_environment|productionEnvironment)\b\s*:\s*([^,}\n]+)/gi;
-const CLI_FIELD = /(?:^|\s)(?:-f|--field|-F|--raw-field)\s+([A-Za-z_][A-Za-z0-9_-]*)=([^\s\\]+)/g;
+const CLI_FIELD = /(?:^|\s)(?:-f|--field|-F|--raw-field)\s+([A-Za-z_][A-Za-z0-9_-]*)=(('[^']*')|("[^"]*")|([^\s\\]+))/g;
 const SECRET_EXPRESSION = /\$\{\{[\s\S]*?secrets\./i;
 const ATTACKER_EXPRESSION = /\$\{\{[\s\S]*?(?:github\.event\.|github\.head_ref\b|inputs\.)/i;
 const INDIRECT_EXPRESSION = /\$\{\{[\s\S]*?(?:steps\.|needs\.|matrix\.)/i;
@@ -77,8 +82,23 @@ const SHELL_ENV = /\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*)(?:\})?/g;
 const SAFE_REF = /^['"](?:[A-Za-z0-9._\/-]+)['"]$|^['"]?\$\{\{\s*github\.(?:sha|ref|ref_name)\s*\}\}['"]?$/i;
 const EMPTY_CONTEXTS = /^\s*(?:\[\s*\]|['"]\[\]['"]|['"]?['"]?)\s*$/;
 const BOOLEAN_LITERAL = /^(?:true|false|'true'|'false'|"true"|"false")$/i;
-const SAFE_TASK = /^['"][A-Za-z0-9._-]+['"]$/;
-const SAFE_ENVIRONMENT = /^['"][A-Za-z0-9._ /-]+['"]$/;
+const JS_LITERAL_IDENTITY = /^(['"])[A-Za-z0-9._ /-]+\1$/;
+const CLI_LITERAL_IDENTITY = /^(?:['"])?[A-Za-z0-9._\/-]+(?:['"])?$/;
+const AUDITED_FIELDS = new Set([
+  'ref',
+  'task',
+  'environment',
+  'description',
+  'payload',
+  'auto_merge',
+  'autoMerge',
+  'required_contexts',
+  'requiredContexts',
+  'transient_environment',
+  'transientEnvironment',
+  'production_environment',
+  'productionEnvironment',
+]);
 
 function githubScript(step: WorkflowStepBlock): boolean {
   const identity = stepUsesIdentity(step);
@@ -139,15 +159,149 @@ function risk(name: string, value: string, step: WorkflowStepBlock, shell = fals
   };
 }
 
-function scriptFields(step: WorkflowStepBlock): ParsedField[] {
-  const result: ParsedField[] = [];
-  const matcher = new RegExp(FIELD.source, FIELD.flags);
-  let match: RegExpExecArray | null;
-  while ((match = matcher.exec(step.text)) !== null) {
-    const name = match[1] ?? 'unknown';
-    result.push(risk(name, (match[2] ?? '').trim(), step));
+function callObjectBody(text: string): string | undefined {
+  const call = text.match(CREATE_DEPLOYMENT);
+  if (!call || call.index === undefined) return undefined;
+  const searchStart = call.index + call[0].length;
+  const opening = text.indexOf('{', searchStart);
+  if (opening < 0) return undefined;
+
+  let quote: "'" | '"' | '`' | undefined;
+  let escaped = false;
+  let depth = 0;
+  for (let index = opening; index < text.length; index += 1) {
+    const char = text[index] ?? '';
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(opening + 1, index);
+    }
+  }
+  return undefined;
+}
+
+function splitTopLevelEntries(body: string): string[] {
+  const entries: string[] = [];
+  let start = 0;
+  let quote: "'" | '"' | '`' | undefined;
+  let escaped = false;
+  let braces = 0;
+  let brackets = 0;
+  let parens = 0;
+
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index] ?? '';
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') braces += 1;
+    else if (char === '}') braces = Math.max(0, braces - 1);
+    else if (char === '[') brackets += 1;
+    else if (char === ']') brackets = Math.max(0, brackets - 1);
+    else if (char === '(') parens += 1;
+    else if (char === ')') parens = Math.max(0, parens - 1);
+    else if (char === ',' && braces === 0 && brackets === 0 && parens === 0) {
+      const entry = body.slice(start, index).trim();
+      if (entry) entries.push(entry);
+      start = index + 1;
+    }
+  }
+
+  const tail = body.slice(start).trim();
+  if (tail) entries.push(tail);
+  return entries;
+}
+
+function topLevelColon(entry: string): number {
+  let quote: "'" | '"' | '`' | undefined;
+  let escaped = false;
+  let braces = 0;
+  let brackets = 0;
+  let parens = 0;
+  for (let index = 0; index < entry.length; index += 1) {
+    const char = entry[index] ?? '';
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') braces += 1;
+    else if (char === '}') braces = Math.max(0, braces - 1);
+    else if (char === '[') brackets += 1;
+    else if (char === ']') brackets = Math.max(0, brackets - 1);
+    else if (char === '(') parens += 1;
+    else if (char === ')') parens = Math.max(0, parens - 1);
+    else if (char === ':' && braces === 0 && brackets === 0 && parens === 0) return index;
+  }
+  return -1;
+}
+
+function objectEntries(step: WorkflowStepBlock): ObjectEntry[] {
+  const body = callObjectBody(step.text);
+  if (!body) return [];
+  const result: ObjectEntry[] = [];
+  for (const entry of splitTopLevelEntries(body)) {
+    const colon = topLevelColon(entry);
+    if (colon >= 0) {
+      const rawName = entry.slice(0, colon).trim();
+      const name = rawName.replace(/^['"]|['"]$/g, '');
+      if (!AUDITED_FIELDS.has(name)) continue;
+      result.push({ name, value: entry.slice(colon + 1).trim() });
+      continue;
+    }
+    const shorthand = entry.trim();
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(shorthand) && AUDITED_FIELDS.has(shorthand)) {
+      result.push({ name: shorthand, value: shorthand });
+    }
   }
   return result;
+}
+
+function scriptFields(step: WorkflowStepBlock): ParsedField[] {
+  return objectEntries(step).map(item => risk(item.name, item.value, step));
 }
 
 function cliFields(step: WorkflowStepBlock): ParsedField[] {
@@ -157,20 +311,20 @@ function cliFields(step: WorkflowStepBlock): ParsedField[] {
   let match: RegExpExecArray | null;
   while ((match = matcher.exec(run)) !== null) {
     const name = match[1] ?? 'unknown';
-    if (!['ref', 'task', 'environment', 'description', 'payload', 'auto_merge', 'required_contexts', 'transient_environment', 'production_environment'].includes(name)) continue;
+    if (!AUDITED_FIELDS.has(name)) continue;
     result.push(risk(name, (match[2] ?? '').trim(), step, true));
   }
   return result;
 }
 
-function requestChannel(step: WorkflowStepBlock): 'github-script' | 'gh-api' | undefined {
+function requestChannel(step: WorkflowStepBlock): RequestChannel | undefined {
   if (githubScript(step) && CREATE_DEPLOYMENT.test(step.text)) return 'github-script';
   const run = stepRunText(step);
   if (run && GH_API.test(run) && GH_API_DEPLOYMENT.test(run) && POST_METHOD.test(run)) return 'gh-api';
   return undefined;
 }
 
-function fieldsFor(step: WorkflowStepBlock, channel: 'github-script' | 'gh-api'): ParsedField[] {
+function fieldsFor(step: WorkflowStepBlock, channel: RequestChannel): ParsedField[] {
   return channel === 'github-script' ? scriptFields(step) : cliFields(step);
 }
 
@@ -231,6 +385,23 @@ function finding(
   };
 }
 
+function trustedShaShellReference(step: WorkflowStepBlock, value: string): boolean {
+  const match = value.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/);
+  const name = match?.[1];
+  if (!name) return false;
+  const mapped = stepNestedMapping(step, 'env').get(name);
+  return Boolean(mapped && /^\$\{\{\s*github\.sha\s*\}\}$/i.test(mapped));
+}
+
+function safeRef(step: WorkflowStepBlock, field: ParsedField, channel: RequestChannel): boolean {
+  if (SAFE_REF.test(field.value)) return true;
+  return channel === 'gh-api' && trustedShaShellReference(step, field.value);
+}
+
+function safeIdentity(value: string, channel: RequestChannel): boolean {
+  return channel === 'github-script' ? JS_LITERAL_IDENTITY.test(value) : CLI_LITERAL_IDENTITY.test(value);
+}
+
 function refFindings(step: WorkflowStepBlock, signal: DeploymentRequestSignal): Finding[] {
   const fields = fieldsFor(step, signal.channel);
   const ref = fields.find(item => item.name === 'ref');
@@ -246,6 +417,7 @@ function refFindings(step: WorkflowStepBlock, signal: DeploymentRequestSignal): 
       true,
     )];
   }
+
   const results: Finding[] = [];
   if (ref.untrusted) {
     results.push(finding(
@@ -269,7 +441,7 @@ function refFindings(step: WorkflowStepBlock, signal: DeploymentRequestSignal): 
       ['ci', 'deployment', 'request', 'ref', 'review'],
       false,
     ));
-  } else if (!SAFE_REF.test(ref.value)) {
+  } else if (!safeRef(step, ref, signal.channel)) {
     results.push(finding(
       signal,
       'ci-deployment-request-opaque-ref',
@@ -316,7 +488,7 @@ function metadataFindings(step: WorkflowStepBlock, signal: DeploymentRequestSign
   }
 
   for (const item of fields.filter(value => value.name === 'environment' && !value.untrusted && !value.secret && !value.indirect)) {
-    if (!SAFE_ENVIRONMENT.test(item.value)) {
+    if (!safeIdentity(item.value, signal.channel)) {
       results.push(finding(
         signal,
         'ci-deployment-request-opaque-environment',
@@ -331,7 +503,7 @@ function metadataFindings(step: WorkflowStepBlock, signal: DeploymentRequestSign
   }
 
   for (const item of fields.filter(value => value.name === 'task' && !value.untrusted && !value.secret && !value.indirect)) {
-    if (!SAFE_TASK.test(item.value)) {
+    if (!safeIdentity(item.value, signal.channel)) {
       results.push(finding(
         signal,
         'ci-deployment-request-opaque-task',
