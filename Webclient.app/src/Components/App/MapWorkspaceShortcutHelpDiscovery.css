@@ -1,0 +1,262 @@
+.map-shortcut-help__discovery {
+  display: grid;
+  gap: 10px;
+  margin-block-end: 12px;
+}
+
+.map-shortcut-help__search-label {
+  color: var(--exp-text, #172033);
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.map-shortcut-help__search-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-block-size: 46px;
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 12px;
+  background: var(--exp-surface, #fff);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.map-shortcut-help__search-shell:focus-within {
+  border-color: color-mix(in srgb, var(--exp-accent, #0b6fcb) 62%, var(--exp-border, #d7dde6));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exp-accent, #0b6fcb) 13%, transparent);
+}
+
+.map-shortcut-help__search-glyph {
+  display: grid;
+  inline-size: 42px;
+  block-size: 42px;
+  place-items: center;
+  color: var(--exp-text-muted, #667085);
+  font-size: 1.15rem;
+  font-weight: 780;
+}
+
+.map-shortcut-help__search {
+  min-inline-size: 0;
+  min-block-size: 44px;
+  padding: 0 6px;
+  border: 0;
+  outline: 0;
+  color: var(--exp-text, #172033);
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.map-shortcut-help__search::placeholder {
+  color: color-mix(in srgb, var(--exp-text-muted, #667085) 78%, transparent);
+}
+
+.map-shortcut-help__search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.map-shortcut-help__clear {
+  min-block-size: 36px;
+  margin-inline-end: 5px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--exp-accent, #0b6fcb);
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.map-shortcut-help__clear:hover {
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 8%, transparent);
+}
+
+.map-shortcut-help__clear:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 72%, white);
+  outline-offset: 1px;
+}
+
+.map-shortcut-help__filters {
+  display: flex;
+  gap: 6px;
+  max-inline-size: 100%;
+  padding-block: 1px 3px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.map-shortcut-help__filter {
+  min-block-size: 38px;
+  flex: 0 0 auto;
+  padding-inline: 12px;
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 999px;
+  color: var(--exp-text-muted, #667085);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 96%, var(--exp-text, #172033));
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.map-shortcut-help__filter:hover {
+  border-color: color-mix(in srgb, var(--exp-accent, #0b6fcb) 38%, var(--exp-border, #d7dde6));
+  color: var(--exp-text, #172033);
+}
+
+.map-shortcut-help__filter[aria-pressed='true'] {
+  border-color: var(--exp-accent, #0b6fcb);
+  color: #fff;
+  background: var(--exp-accent, #0b6fcb);
+}
+
+.map-shortcut-help__filter:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 72%, white);
+  outline-offset: 2px;
+}
+
+.map-shortcut-help__result-status {
+  margin: 0 0 9px;
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.72rem;
+  font-weight: 670;
+}
+
+.map-shortcut-help__item {
+  cursor: default;
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.map-shortcut-help__item[data-active='true'] {
+  border-color: color-mix(in srgb, var(--exp-accent, #0b6fcb) 48%, var(--exp-border, #d7dde6));
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 7%, var(--exp-surface, #fff));
+  box-shadow: inset 3px 0 0 var(--exp-accent, #0b6fcb);
+}
+
+.map-shortcut-help__item-copy {
+  display: grid;
+  min-inline-size: 0;
+  gap: 3px;
+}
+
+.map-shortcut-help__category {
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.map-shortcut-help__empty {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-block-size: 152px;
+  align-content: center;
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, var(--exp-border, #d7dde6) 86%, var(--exp-text-muted, #667085));
+  border-radius: 14px;
+  color: var(--exp-text-muted, #667085);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 96%, var(--exp-text, #172033));
+}
+
+.map-shortcut-help__empty strong {
+  color: var(--exp-text, #172033);
+  font-size: 0.9rem;
+}
+
+.map-shortcut-help__empty span {
+  max-inline-size: 44ch;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.map-shortcut-help__empty button {
+  min-block-size: 42px;
+  margin-block-start: 4px;
+  padding-inline: 13px;
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 9px;
+  color: var(--exp-accent, #0b6fcb);
+  background: var(--exp-surface, #fff);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.map-shortcut-help__empty button:hover {
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 7%, var(--exp-surface, #fff));
+}
+
+.map-shortcut-help__empty button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 72%, white);
+  outline-offset: 2px;
+}
+
+.map-shortcut-help__footer-count {
+  margin-inline-start: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 999px;
+  color: var(--exp-text-muted, #667085);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, var(--exp-text, #172033));
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.69rem;
+  font-weight: 760;
+}
+
+@media (max-width: 520px) {
+  .map-shortcut-help__search-shell { min-block-size: 48px; }
+  .map-shortcut-help__search { min-block-size: 46px; }
+  .map-shortcut-help__filters { margin-inline: -2px; padding-inline: 2px; }
+  .map-shortcut-help__filter { min-block-size: 42px; }
+  .map-shortcut-help__item[data-active='true'] { box-shadow: inset 0 3px 0 var(--exp-accent, #0b6fcb); }
+  .map-shortcut-help__footer-count { margin-inline-start: 0; }
+}
+
+@media (pointer: coarse) {
+  .map-shortcut-help__clear,
+  .map-shortcut-help__filter,
+  .map-shortcut-help__empty button {
+    min-block-size: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-shortcut-help__search-shell,
+  .map-shortcut-help__item,
+  .map-shortcut-help__filter {
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-shortcut-help__search-shell,
+  .map-shortcut-help__filter,
+  .map-shortcut-help__empty,
+  .map-shortcut-help__empty button,
+  .map-shortcut-help__footer-count {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .map-shortcut-help__filter[aria-pressed='true'],
+  .map-shortcut-help__item[data-active='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: none;
+  }
+
+  .map-shortcut-help__clear:focus-visible,
+  .map-shortcut-help__filter:focus-visible,
+  .map-shortcut-help__empty button:focus-visible {
+    outline-color: Highlight;
+  }
+}
