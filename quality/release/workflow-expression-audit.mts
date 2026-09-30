@@ -12,6 +12,7 @@ import { auditArchiveExtractionBoundaries } from './archive-extraction-boundary-
 import { auditArtifactExecutionBoundaries } from './artifact-execution-boundary-audit.mts';
 import { auditArtifactJobLineage } from './artifact-job-lineage-audit.mts';
 import { auditArtifactProducerProvenance } from './artifact-producer-provenance-audit.mts';
+import { auditCheckStatusProvenance } from './check-status-provenance-audit.mts';
 import { auditCheckoutBoundaries } from './checkout-boundary-audit.mts';
 import { auditConcurrencyBoundaries } from './concurrency-boundary-audit.mts';
 import { auditDeploymentMetadataProvenance } from './deployment-metadata-provenance-audit.mts';
@@ -289,6 +290,7 @@ export function auditWorkflowExpressions(
     ...auditArtifactExecutionBoundaries(inventory).findings,
     ...auditArtifactJobLineage(inventory).findings,
     ...auditArtifactProducerProvenance(inventory).findings,
+    ...auditCheckStatusProvenance(inventory).findings,
     ...auditDeploymentMetadataProvenance(inventory).findings,
     ...auditProcessEnvironmentBoundaries(inventory).findings,
     ...auditWorkingDirectoryBoundaries(inventory).findings,
