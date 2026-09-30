@@ -67,7 +67,10 @@ describe('MapModeTransitionControl', () => {
 
   it('announces queued and transitioning states through the live region', () => {
     const { model } = renderControl();
-    let request = model.request('3d', 'control');
+    let request: ReturnType<typeof model.request> = null;
+    act(() => {
+      request = model.request('3d', 'control');
+    });
     expect(request).not.toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('sıraya alındı');
     act(() => { model.begin(request!); });
