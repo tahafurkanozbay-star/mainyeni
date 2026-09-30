@@ -82,6 +82,11 @@ interface NormalizedIntentPolicyV7 {
 
 const VERSION = 'search-intent-v7' as const;
 const DEFAULT_MINIMUM_ADDRESS_EVIDENCE = 3;
+const MAXIMUM_DOMAIN_ALIAS_EXPANSIONS = 4;
+const CIVIC_DOMAIN_ALIASES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  hastane: Object.freeze(['saglik']),
+  hastanesi: Object.freeze(['saglik']),
+});
 
 const normalizePolicy = (
   policy: SearchIntentPolicyV7 = {},
@@ -99,6 +104,23 @@ const normalizePolicy = (
     fallback: 4,
   }),
 });
+
+export const expandCivicSearchQueryV7 = (input: unknown): string => {
+  const raw = normalizeText(input);
+  const canonical = normalizeSearchText(raw).replace(/\s+/g, ' ').trim();
+  if (!canonical) return raw;
+  const aliases: string[] = [];
+  const seen = new Set(canonical.split(' ').filter(Boolean));
+  for (const term of seen) {
+    for (const alias of CIVIC_DOMAIN_ALIASES[term] ?? []) {
+      if (seen.has(alias) || aliases.includes(alias)) continue;
+      aliases.push(alias);
+      if (aliases.length >= MAXIMUM_DOMAIN_ALIAS_EXPANSIONS) break;
+    }
+    if (aliases.length >= MAXIMUM_DOMAIN_ALIAS_EXPANSIONS) break;
+  }
+  return aliases.length ? `${raw} ${aliases.join(' ')}` : raw;
+};
 
 const suppliedCenter = (request: SearchRequest): {
   readonly supplied: boolean;
@@ -216,9 +238,10 @@ export const analyzeSearchIntentV7 = (
     : coordinate.coordinates
       ? 'query'
       : 'none';
-  const residualQuery = coordinate.coordinates
+  const coordinateResidual = coordinate.coordinates
     ? coordinate.residualQuery
     : rawQuery;
+  const residualQuery = expandCivicSearchQueryV7(coordinateResidual);
   const text = analyzeTextQuery(residualQuery, policy.text);
   const address = addressAnalysis(residualQuery, request, center);
   const hierarchyHints = countHierarchyHints(request, policy.maximumHierarchyHints);
