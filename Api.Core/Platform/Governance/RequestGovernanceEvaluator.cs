@@ -131,11 +131,25 @@ namespace Api.Core.Platform.Governance
                     "The request contains too many query parameters.");
             }
 
-            if (target.ContainsControlCharacters)
+            if (target.ContainsControlCharacters || target.ContainsEncodedControlCharacter)
             {
                 return RejectBadRequest(
                     "request-target-control-character",
                     "The request target contains invalid control characters.");
+            }
+
+            if (target.ContainsMalformedPercentEncoding)
+            {
+                return RejectBadRequest(
+                    "invalid-path-encoding",
+                    "The request path contains malformed percent encoding.");
+            }
+
+            if (target.ContainsOverEncodedReservedSequence)
+            {
+                return RejectBadRequest(
+                    "excessive-path-encoding",
+                    "The request path exceeds the supported canonicalization depth.");
             }
 
             if (governance.RejectBackslashInPath && target.ContainsBackslash)
@@ -167,19 +181,54 @@ namespace Api.Core.Platform.Governance
             RequestHeaderSnapshot headers,
             IHeaderDictionary values)
         {
-            if (headers.ContentLengthValueCount > 0 &&
-                headers.TransferEncodingValueCount > 0)
+            var framing = RequestFramingInspector.Inspect(values);
+            if (framing.HasContentLength && framing.HasTransferEncoding)
             {
                 return RejectBadRequest(
                     "ambiguous-body-framing",
                     "Content-Length and Transfer-Encoding cannot be combined.");
             }
 
-            if (headers.ContentLengthValueCount > 1)
+            if (framing.ContentLengthState == RequestContentLengthState.Multiple)
             {
                 return RejectBadRequest(
                     "multiple-content-length",
                     "Multiple Content-Length header values are not accepted.");
+            }
+
+            if (framing.ContentLengthState == RequestContentLengthState.Invalid)
+            {
+                return RejectBadRequest(
+                    "invalid-content-length",
+                    "Content-Length must be a single non-negative decimal integer.");
+            }
+
+            if (framing.TransferEncodingState == RequestTransferEncodingState.Multiple)
+            {
+                return RejectBadRequest(
+                    "multiple-transfer-codings",
+                    "Multiple Transfer-Encoding codings are not accepted.");
+            }
+
+            if (framing.TransferEncodingState == RequestTransferEncodingState.Unsupported)
+            {
+                return RejectBadRequest(
+                    "unsupported-transfer-coding",
+                    "Only a single chunked Transfer-Encoding is accepted.");
+            }
+
+            if (framing.TransferEncodingState == RequestTransferEncodingState.Invalid)
+            {
+                return RejectBadRequest(
+                    "invalid-transfer-encoding",
+                    "Transfer-Encoding contains invalid framing metadata.");
+            }
+
+            if (framing.ContentTypeValueCount > 1)
+            {
+                return RejectBadRequest(
+                    "multiple-content-type-values",
+                    "Multiple Content-Type header values are not accepted.");
             }
 
             if (headers.AuthorizationValueCount > 1)
@@ -271,6 +320,15 @@ namespace Api.Core.Platform.Governance
                     "content-type-required",
                     "Content type required",
                     "Requests with a body must declare a supported Content-Type.");
+            }
+
+            if (!RequestContentPolicy.TryNormalizeMediaType(contentType, out _))
+            {
+                return RequestGovernanceDecision.Reject(
+                    StatusCodes.Status415UnsupportedMediaType,
+                    "malformed-content-type",
+                    "Malformed media type",
+                    "The request Content-Type is not a valid media type declaration.");
             }
 
             if (!RequestContentPolicy.IsAllowed(
