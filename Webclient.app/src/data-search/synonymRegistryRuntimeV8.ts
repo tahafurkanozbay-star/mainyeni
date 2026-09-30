@@ -152,7 +152,7 @@ const boundedInteger = (
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw new RangeError(`${name} must be an integer between ${minimum} and ${maximum}`);
   }
-  return value;
+  return normalizeInteger(value, { min: minimum, max: maximum, fallback });
 };
 
 const boundedWeight = (value: number | undefined, fallback = 1): number => {
@@ -342,6 +342,21 @@ const appendBinding = (
   return false;
 };
 
+const indexAliasesForScope = (
+  index: Map<string, PhraseBindingV8[]>,
+  group: SynonymGroupV8,
+  scope: SynonymScopeV8,
+  collisions: { value: number },
+): void => {
+  for (const alias of group.aliases) {
+    if (appendBinding(index, scope, alias.value, Object.freeze({
+      groupOrdinal: group.ordinal,
+      alias,
+      canonical: false,
+    }))) collisions.value += 1;
+  }
+};
+
 const indexGroup = (
   index: Map<string, PhraseBindingV8[]>,
   group: SynonymGroupV8,
@@ -358,13 +373,7 @@ const indexGroup = (
       alias: canonicalAlias,
       canonical: true,
     }))) collisions.value += 1;
-    for (const alias of group.aliases) {
-      if (appendBinding(index, scope, alias.value, Object.freeze({
-        groupOrdinal: group.ordinal,
-        alias,
-        canonical: false,
-      }))) collisions.value += 1;
-    }
+    indexAliasesForScope(index, group, scope, collisions);
   }
 };
 
@@ -400,6 +409,20 @@ const expansionFor = (
   canonical,
 });
 
+const aliasExpansions = (
+  input: string,
+  group: SynonymGroupV8,
+  scope: SynonymScopeV8,
+  policy: NormalizedSynonymPolicyV8,
+): readonly SynonymExpansionV8[] => {
+  const result: SynonymExpansionV8[] = [];
+  for (const alias of group.aliases) {
+    if (alias.value === input) continue;
+    result.push(expansionFor(input, alias.value, group, scope, alias.weight, false, policy));
+  }
+  return Object.freeze(result);
+};
+
 const expansionCandidates = (
   input: string,
   binding: PhraseBindingV8,
@@ -413,12 +436,7 @@ const expansionCandidates = (
   if (!binding.canonical) {
     result.push(expansionFor(input, group.canonical, group, scope, binding.alias.weight, true, policy));
   }
-  if (group.bidirectional || binding.canonical) {
-    for (const alias of group.aliases) {
-      if (alias.value === input) continue;
-      result.push(expansionFor(input, alias.value, group, scope, alias.weight, false, policy));
-    }
-  }
+  if (group.bidirectional || binding.canonical) result.push(...aliasExpansions(input, group, scope, policy));
   return Object.freeze(result);
 };
 
@@ -441,6 +459,29 @@ const dedupeExpansions = (
     if (byValue.size >= maximum) break;
   }
   return Object.freeze(Array.from(byValue.values()).sort(compareExpansions));
+};
+
+const appendExpansionTokens = (
+  result: Set<string>,
+  expansion: SynonymExpansionV8,
+  maximum: number,
+): boolean => {
+  for (const token of expansion.tokens) {
+    result.add(token);
+    if (result.size >= maximum) return true;
+  }
+  return false;
+};
+
+const appendExpansionList = (
+  result: Set<string>,
+  expansions: readonly SynonymExpansionV8[],
+  maximum: number,
+): boolean => {
+  for (const expansion of expansions) {
+    if (appendExpansionTokens(result, expansion, maximum)) return true;
+  }
+  return false;
 };
 
 export class SynonymRegistryRuntimeV8 {
@@ -557,16 +598,10 @@ export class SynonymRegistryRuntimeV8 {
       if (!token) continue;
       result.add(token);
       const expanded = this.expand(token, scope);
-      for (const item of expanded.expansions) {
-        for (const expansionToken of item.tokens) {
-          result.add(expansionToken);
-          if (result.size >= this.#policy.maximumExpansionTokens) break;
-        }
-        if (result.size >= this.#policy.maximumExpansionTokens) break;
-      }
+      if (appendExpansionList(result, expanded.expansions, this.#policy.maximumExpansionTokens)) break;
       if (result.size >= this.#policy.maximumExpansionTokens) break;
     }
-    return Object.freeze(Array.from(result));
+    return Object.freeze(Array.from(result).slice(0, this.#policy.maximumExpansionTokens));
   }
 
   snapshot(): SynonymRegistrySnapshotV8 {
