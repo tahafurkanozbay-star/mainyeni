@@ -1,6 +1,5 @@
 import {
   hashFingerprint,
-  normalizeInteger,
   normalizeSearchText,
   stableSerialize,
 } from './normalization';
@@ -428,6 +427,29 @@ const rebuildQuery = (
   return values.join(' ').trim();
 };
 
+const appendExpansionTokens = (
+  values: Set<string>,
+  expansion: SynonymExpansionV8,
+  maximum: number,
+): boolean => {
+  for (const token of expansion.tokens) {
+    if (values.size >= maximum) return true;
+    values.add(token);
+  }
+  return values.size >= maximum;
+};
+
+const appendSynonymExpansionTokens = (
+  values: Set<string>,
+  expansions: readonly SynonymExpansionV8[],
+  maximum: number,
+): boolean => {
+  for (const expansion of expansions) {
+    if (appendExpansionTokens(values, expansion, maximum)) return true;
+  }
+  return false;
+};
+
 const collectExpandedTerms = (
   corrections: readonly QueryCorrectionTermV8[],
   maximum: number,
@@ -437,19 +459,12 @@ const collectExpandedTerms = (
   for (const correction of corrections) {
     if (correction.kind === 'excluded' || correction.kind === 'phrase') continue;
     values.add(correction.output);
-    for (const expansion of correction.synonymExpansions) {
-      for (const token of expansion.tokens) {
-        if (values.size >= maximum) {
-          truncated = true;
-          break;
-        }
-        values.add(token);
-      }
-      if (truncated) break;
+    if (appendSynonymExpansionTokens(values, correction.synonymExpansions, maximum)) {
+      truncated = true;
+      break;
     }
-    if (truncated) break;
   }
-  return Object.freeze({ values: Object.freeze(Array.from(values)), truncated });
+  return Object.freeze({ values: Object.freeze(Array.from(values).slice(0, maximum)), truncated });
 };
 
 const diagnosticCounts = (
