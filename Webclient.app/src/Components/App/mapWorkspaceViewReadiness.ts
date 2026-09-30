@@ -4,6 +4,7 @@ export interface MapWorkspaceViewReadinessOutcome {
   readonly status: MapWorkspaceViewReadinessStatus;
   readonly ready: boolean;
   readonly code: string | null;
+  readonly failureKind: string | null;
 }
 
 export interface MapWorkspaceReadyViewLike {
@@ -27,32 +28,47 @@ const clampTimeout = (value: number | undefined): number => {
   return Math.max(MIN_TIMEOUT_MS, Math.min(MAX_TIMEOUT_MS, Math.trunc(value ?? MAP_WORKSPACE_VIEW_READY_TIMEOUT_MS)));
 };
 
+const classifyFailure = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  const type = typeof error;
+  return type.length <= 24 ? type : 'unknown';
+};
+
 const outcome = (
   status: MapWorkspaceViewReadinessStatus,
   code: string | null,
+  failureKind: string | null = null,
 ): MapWorkspaceViewReadinessOutcome => Object.freeze({
   status,
   ready: status === 'ready' || status === 'legacy-ready',
   code,
+  failureKind,
 });
 
 const READY = outcome('ready', null);
 const LEGACY_READY = outcome('legacy-ready', null);
 const ABORTED = outcome('aborted', 'MAP_VIEW_ABORTED');
-const TIMED_OUT = outcome('timeout', 'MAP_VIEW_TIMEOUT');
-const FAILED = outcome('failed', 'MAP_VIEW_FAILED');
+const TIMED_OUT = outcome('timeout', 'MAP_VIEW_TIMEOUT', 'TimeoutError');
+const failedOutcome = (error: unknown): MapWorkspaceViewReadinessOutcome => outcome(
+  'failed',
+  'MAP_VIEW_FAILED',
+  classifyFailure(error),
+);
+const DESTROYED = outcome('failed', 'MAP_VIEW_FAILED', 'DestroyedView');
 
 /**
  * Wait for the ArcGIS view readiness promise without retaining late completions.
- * Older/mocked view contracts that do not expose `when()` preserve legacy-ready
- * behavior so this boundary can be adopted incrementally.
+ * Raw failures never escape this boundary; only bounded failure-kind metadata is
+ * retained for diagnostics. Older/mocked view contracts without `when()` keep
+ * legacy-ready behavior so this boundary can be adopted incrementally.
  */
 export const waitForMapWorkspaceViewReady = async (
   view: MapWorkspaceReadyViewLike,
   options: MapWorkspaceViewReadinessOptions = {},
 ): Promise<MapWorkspaceViewReadinessOutcome> => {
   if (options.signal?.aborted) return ABORTED;
-  if (view.destroyed) return FAILED;
+  if (view.destroyed) return DESTROYED;
   if (typeof view.when !== 'function') return LEGACY_READY;
 
   const timeoutMs = clampTimeout(options.timeoutMs);
@@ -86,14 +102,14 @@ export const waitForMapWorkspaceViewReady = async (
     let readiness: Promise<unknown>;
     try {
       readiness = view.when();
-    } catch {
-      settle(FAILED);
+    } catch (error) {
+      settle(failedOutcome(error));
       return;
     }
 
     void Promise.resolve(readiness).then(
-      () => settle(view.destroyed ? FAILED : READY),
-      () => settle(options.signal?.aborted ? ABORTED : FAILED),
+      () => settle(view.destroyed ? DESTROYED : READY),
+      (error: unknown) => settle(options.signal?.aborted ? ABORTED : failedOutcome(error)),
     );
   });
 };
