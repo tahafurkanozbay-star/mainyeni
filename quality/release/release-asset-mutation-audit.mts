@@ -247,7 +247,7 @@ function mutationPatterns(asset: string): readonly RegExp[] {
     new RegExp(`(?:^|[;&|]\\s*)mv\\s+[^\\n]*\\s${boundary}(?:\\s|$)`, 'i'),
     new RegExp(`(?:^|[;&|]\\s*)zip\\s+[^\\n]*${boundary}(?:\\s|$)`, 'i'),
     new RegExp(`(?:^|[;&|]\\s*)7z\\s+a\\s+[^\\n]*${boundary}(?:\\s|$)`, 'i'),
-    new RegExp(`(?:^|[;&|]\\s*)tar\\s+[^\\n]*(?:-f\\s*|--file(?:=|\\s+))${boundary}(?:\\s|$)`, 'i'),
+    new RegExp(`(?:^|[;&|]\\s*)tar\\s+[^\\n]*(?:(?:-[A-Za-z0-9]*f[A-Za-z0-9]*\\s+)|(?:--file(?:=|\\s+)))${boundary}(?:\\s|$)`, 'i'),
     new RegExp(`(?:^|[;&|]\\s*)(?:sed\\s+-i|perl\\s+-pi)\\b[^\\n]*${boundary}(?:\\s|$)`, 'i'),
     new RegExp(`(?:>|>>)\\s*${boundary}(?:\\s|$)`, 'i'),
   ];
