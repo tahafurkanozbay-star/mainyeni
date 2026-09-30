@@ -20,7 +20,6 @@ const renderOpenHelp = (onClose = vi.fn()) => {
 };
 
 const getShortcutSearch = (): HTMLInputElement => screen.getByRole('combobox', { name: /kısayol ara/i });
-const getShortcutOptions = (): HTMLElement[] => screen.queryAllByRole('option', { name: /harita|navigasyon|kenar|komut|altlık|ölçüm|geri bildirim/i });
 const getShortcutTab = (): HTMLButtonElement => screen.getByRole('tab', { name: /Kısayollar/i });
 const getGuideTab = (): HTMLButtonElement => screen.getByRole('tab', { name: /Çalışma rehberi/i });
 
