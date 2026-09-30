@@ -27,7 +27,7 @@ describe('waitForMapWorkspaceViewReady', () => {
 
   it('preserves legacy-ready behavior when a view does not expose when()', async () => {
     const outcome = await waitForMapWorkspaceViewReady({ destroyed: false });
-    expect(outcome).toEqual({ status: 'legacy-ready', ready: true, code: null });
+    expect(outcome).toEqual({ status: 'legacy-ready', ready: true, code: null, failureKind: null });
   });
 
   it('resolves ready only after the ArcGIS readiness promise resolves', async () => {
@@ -38,32 +38,59 @@ describe('waitForMapWorkspaceViewReady', () => {
     await Promise.resolve();
     expect(settled).toBe(false);
     ready.resolve();
-    await expect(promise).resolves.toEqual({ status: 'ready', ready: true, code: null });
+    await expect(promise).resolves.toEqual({ status: 'ready', ready: true, code: null, failureKind: null });
   });
 
-  it('returns failed if the view is already destroyed', async () => {
+  it('returns observable failed state if the view is already destroyed', async () => {
     const when = vi.fn(async () => undefined);
     const outcome = await waitForMapWorkspaceViewReady({ destroyed: true, when });
-    expect(outcome).toEqual({ status: 'failed', ready: false, code: 'MAP_VIEW_FAILED' });
+    expect(outcome).toEqual({
+      status: 'failed',
+      ready: false,
+      code: 'MAP_VIEW_FAILED',
+      failureKind: 'DestroyedView',
+    });
     expect(when).not.toHaveBeenCalled();
   });
 
-  it('returns failed if when() throws synchronously', async () => {
+  it('classifies synchronous when() failures without retaining raw detail', async () => {
     const outcomePromise = waitForMapWorkspaceViewReady({
-      when() { throw new Error('private ArcGIS detail'); },
+      when() { throw new TypeError('private ArcGIS detail'); },
     });
-    await expect(outcomePromise).resolves.toEqual({ status: 'failed', ready: false, code: 'MAP_VIEW_FAILED' });
+    await expect(outcomePromise).resolves.toEqual({
+      status: 'failed',
+      ready: false,
+      code: 'MAP_VIEW_FAILED',
+      failureKind: 'TypeError',
+    });
   });
 
-  it('returns failed without leaking a rejected readiness reason', async () => {
+  it('classifies rejected readiness without leaking the rejection reason', async () => {
     const outcome = await waitForMapWorkspaceViewReady({
-      when: async () => { throw new Error('token=secret-value'); },
+      when: async () => { throw new RangeError('token=secret-value'); },
     });
-    expect(outcome).toEqual({ status: 'failed', ready: false, code: 'MAP_VIEW_FAILED' });
+    expect(outcome).toEqual({
+      status: 'failed',
+      ready: false,
+      code: 'MAP_VIEW_FAILED',
+      failureKind: 'RangeError',
+    });
     expect(JSON.stringify(outcome)).not.toContain('secret-value');
   });
 
-  it('times out with the bounded default timeout', async () => {
+  it('classifies non-Error readiness failures by bounded type only', async () => {
+    const outcome = await waitForMapWorkspaceViewReady({
+      when: async () => Promise.reject({ token: 'secret-value' }),
+    });
+    expect(outcome).toMatchObject({
+      status: 'failed',
+      code: 'MAP_VIEW_FAILED',
+      failureKind: 'object',
+    });
+    expect(JSON.stringify(outcome)).not.toContain('secret-value');
+  });
+
+  it('times out with the bounded default timeout and a safe diagnostic kind', async () => {
     const ready = deferred<void>();
     const promise = waitForMapWorkspaceViewReady({ when: () => ready.promise });
     vi.advanceTimersByTime(MAP_WORKSPACE_VIEW_READY_TIMEOUT_MS - 1);
@@ -73,7 +100,12 @@ describe('waitForMapWorkspaceViewReady', () => {
     await Promise.resolve();
     expect(settled).toBe(false);
     vi.advanceTimersByTime(1);
-    await expect(promise).resolves.toEqual({ status: 'timeout', ready: false, code: 'MAP_VIEW_TIMEOUT' });
+    await expect(promise).resolves.toEqual({
+      status: 'timeout',
+      ready: false,
+      code: 'MAP_VIEW_TIMEOUT',
+      failureKind: 'TimeoutError',
+    });
   });
 
   it('clamps too-small timeout to one second', async () => {
@@ -86,7 +118,7 @@ describe('waitForMapWorkspaceViewReady', () => {
     await Promise.resolve();
     expect(resolved).toBe(false);
     vi.advanceTimersByTime(1);
-    await expect(promise).resolves.toMatchObject({ status: 'timeout' });
+    await expect(promise).resolves.toMatchObject({ status: 'timeout', failureKind: 'TimeoutError' });
   });
 
   it('clamps too-large timeout to sixty seconds', async () => {
@@ -99,7 +131,7 @@ describe('waitForMapWorkspaceViewReady', () => {
     await Promise.resolve();
     expect(resolved).toBe(false);
     vi.advanceTimersByTime(1);
-    await expect(promise).resolves.toMatchObject({ status: 'timeout' });
+    await expect(promise).resolves.toMatchObject({ status: 'timeout', failureKind: 'TimeoutError' });
   });
 
   it('returns aborted immediately for an already-aborted signal', async () => {
@@ -107,7 +139,12 @@ describe('waitForMapWorkspaceViewReady', () => {
     controller.abort();
     const when = vi.fn(async () => undefined);
     const outcome = await waitForMapWorkspaceViewReady({ when }, { signal: controller.signal });
-    expect(outcome).toEqual({ status: 'aborted', ready: false, code: 'MAP_VIEW_ABORTED' });
+    expect(outcome).toEqual({
+      status: 'aborted',
+      ready: false,
+      code: 'MAP_VIEW_ABORTED',
+      failureKind: null,
+    });
     expect(when).not.toHaveBeenCalled();
   });
 
@@ -120,7 +157,12 @@ describe('waitForMapWorkspaceViewReady', () => {
       { signal: controller.signal, clearScheduledTimeout },
     );
     controller.abort();
-    await expect(promise).resolves.toEqual({ status: 'aborted', ready: false, code: 'MAP_VIEW_ABORTED' });
+    await expect(promise).resolves.toEqual({
+      status: 'aborted',
+      ready: false,
+      code: 'MAP_VIEW_ABORTED',
+      failureKind: null,
+    });
     expect(clearScheduledTimeout).toHaveBeenCalledTimes(1);
   });
 
@@ -142,7 +184,7 @@ describe('waitForMapWorkspaceViewReady', () => {
     await expect(promise).resolves.toMatchObject({ status: 'timeout' });
     ready.reject(new Error('late private detail'));
     await Promise.resolve();
-    await expect(promise).resolves.toMatchObject({ status: 'timeout' });
+    await expect(promise).resolves.toMatchObject({ status: 'timeout', failureKind: 'TimeoutError' });
   });
 
   it('returns failed when a view is destroyed before readiness resolves', async () => {
@@ -151,7 +193,12 @@ describe('waitForMapWorkspaceViewReady', () => {
     const promise = waitForMapWorkspaceViewReady(view);
     view.destroyed = true;
     ready.resolve();
-    await expect(promise).resolves.toEqual({ status: 'failed', ready: false, code: 'MAP_VIEW_FAILED' });
+    await expect(promise).resolves.toEqual({
+      status: 'failed',
+      ready: false,
+      code: 'MAP_VIEW_FAILED',
+      failureKind: 'DestroyedView',
+    });
   });
 
   it('clears timeout after successful readiness', async () => {
@@ -161,6 +208,7 @@ describe('waitForMapWorkspaceViewReady', () => {
       { clearScheduledTimeout },
     );
     expect(outcome.status).toBe('ready');
+    expect(outcome.failureKind).toBeNull();
     expect(clearScheduledTimeout).toHaveBeenCalledTimes(1);
   });
 
@@ -182,6 +230,8 @@ describe('waitForMapWorkspaceViewReady', () => {
     const legacy = await waitForMapWorkspaceViewReady({});
     expect(isMapWorkspaceReadinessFailure(ready)).toBe(false);
     expect(isMapWorkspaceReadinessFailure(legacy)).toBe(false);
+    expect(ready.failureKind).toBeNull();
+    expect(legacy.failureKind).toBeNull();
   });
 
   it('classifies timeout and failure outcomes as failures but abort as lifecycle cancellation', async () => {
@@ -196,9 +246,12 @@ describe('waitForMapWorkspaceViewReady', () => {
     expect(isMapWorkspaceReadinessFailure(timeoutOutcome)).toBe(true);
     expect(isMapWorkspaceReadinessFailure(failed)).toBe(true);
     expect(isMapWorkspaceReadinessFailure(aborted)).toBe(false);
+    expect(timeoutOutcome.failureKind).toBe('TimeoutError');
+    expect(failed.failureKind).toBe('Error');
+    expect(aborted.failureKind).toBeNull();
   });
 
-  it('provides safe user-facing readiness messages', async () => {
+  it('provides safe user-facing readiness messages that do not expose failureKind internals', async () => {
     const ready = await waitForMapWorkspaceViewReady({ when: async () => undefined });
     expect(mapWorkspaceReadinessMessage(ready)).toBe('Harita görünümü hazır.');
 
@@ -207,8 +260,10 @@ describe('waitForMapWorkspaceViewReady', () => {
     const aborted = await waitForMapWorkspaceViewReady({ when: async () => undefined }, { signal: controller.signal });
     expect(mapWorkspaceReadinessMessage(aborted)).toBe('Harita görünümü başlatma işlemi iptal edildi.');
 
-    const failed = await waitForMapWorkspaceViewReady({ when: async () => { throw new Error('secret'); } });
+    const failed = await waitForMapWorkspaceViewReady({ when: async () => { throw new TypeError('secret'); } });
     expect(mapWorkspaceReadinessMessage(failed)).toBe('Harita görünümü güvenli biçimde başlatılamadı.');
+    expect(failed.failureKind).toBe('TypeError');
+    expect(mapWorkspaceReadinessMessage(failed)).not.toContain('TypeError');
     expect(mapWorkspaceReadinessMessage(failed)).not.toContain('secret');
   });
 });
