@@ -1,4 +1,4 @@
-import { useId, useSyncExternalStore, type ReactNode } from 'react';
+import { useId, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type {
   MapModeTransitionModel,
@@ -40,7 +40,7 @@ export const MapModeTransitionControl = ({
     onRequest(mode, source);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
     event.preventDefault();
     if (event.key === 'ArrowLeft' || event.key === 'Home') request('2d');
