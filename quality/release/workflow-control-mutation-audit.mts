@@ -84,7 +84,7 @@ const OPERATIONS: readonly OperationSpec[] = [
   { pattern: /\b(?:github\.)?rest\.actions\.deleteWorkflowRunLogs\s*\(/i, kind: 'delete-logs', label: 'actions.deleteWorkflowRunLogs' },
 ];
 
-const FIELD = /\b(workflow_id|workflowId|ref|run_id|runId|job_id|jobId|inputs)\b\s*:\s*([^,}\n]+)/gi;
+const FIELD = /\b(workflow_id|workflowId|ref|run_id|runId|job_id|jobId|inputs)\b\s*:\s*((?:['"]?\$\{\{[\s\S]*?\}\}['"]?)|(?:[^,}\n]+))/gi;
 const SECRET_EXPRESSION = /\$\{\{[\s\S]*?secrets\./i;
 const ATTACKER_EXPRESSION = /\$\{\{[\s\S]*?(?:github\.event\.|github\.head_ref\b|inputs\.)/i;
 const INDIRECT_EXPRESSION = /\$\{\{[\s\S]*?(?:steps\.|needs\.|matrix\.)/i;
@@ -92,7 +92,7 @@ const CONTEXT_ATTACKER = /\b(?:context|github\.context)\.payload\b|\b(?:pull_req
 const PROCESS_ENV = /\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
 const SAFE_REF_EXPRESSION = /^['"]?\$\{\{\s*github\.(?:ref|ref_name)\s*\}\}['"]?$/i;
 const SAFE_SHA_EXPRESSION = /^['"]?\$\{\{\s*github\.sha\s*\}\}['"]?$/i;
-const LITERAL_WORKFLOW = /^['"][^'"\n]+\.ya?ml['"]$|^['"]\d+['"]$/i;
+const LITERAL_WORKFLOW = /^['"][^'"\n]+\.ya?ml['"]$|^['"]?\d+['"]?$/i;
 const LITERAL_RUN_ID = /^\d+$/;
 
 function githubScript(step: WorkflowStepBlock): boolean {
