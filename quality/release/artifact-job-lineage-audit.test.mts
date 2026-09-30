@@ -328,7 +328,7 @@ test('reports needs graph cycles deterministically', () => {
 
   const cycles = result.findings.filter(item => item.id === 'ci-artifact-lineage-needs-cycle');
   assert.equal(cycles.length, 2);
-  assert.deepEqual(cycles.map(item => item.location.file), ['.github/workflows/ci.yml', '.github/workflows/ci.yml']);
+  assert.deepEqual(cycles.map(item => item.location?.file), ['.github/workflows/ci.yml', '.github/workflows/ci.yml']);
   assert.ok(cycles.every(item => item.blocking));
 });
 
