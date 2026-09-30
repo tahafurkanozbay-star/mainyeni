@@ -14,6 +14,7 @@ import { auditArtifactJobLineage } from './artifact-job-lineage-audit.mts';
 import { auditArtifactProducerProvenance } from './artifact-producer-provenance-audit.mts';
 import { auditCheckoutBoundaries } from './checkout-boundary-audit.mts';
 import { auditConcurrencyBoundaries } from './concurrency-boundary-audit.mts';
+import { auditDeploymentMetadataProvenance } from './deployment-metadata-provenance-audit.mts';
 import { auditDependencyLifecycle } from './dependency-lifecycle-audit.mts';
 import { auditGitOperationBoundaries } from './git-operation-boundary-audit.mts';
 import { auditGitHubMutationBoundaries } from './github-mutation-boundary-audit.mts';
@@ -287,6 +288,7 @@ export function auditWorkflowExpressions(
     ...auditArtifactExecutionBoundaries(inventory).findings,
     ...auditArtifactJobLineage(inventory).findings,
     ...auditArtifactProducerProvenance(inventory).findings,
+    ...auditDeploymentMetadataProvenance(inventory).findings,
     ...auditProcessEnvironmentBoundaries(inventory).findings,
     ...auditWorkingDirectoryBoundaries(inventory).findings,
     ...auditPrivilegedConditions(inventory).findings,
