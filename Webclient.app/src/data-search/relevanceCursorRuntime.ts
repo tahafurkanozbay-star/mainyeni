@@ -46,6 +46,12 @@ const normalizeInteger = (value: number | undefined, fallback: number, minimum: 
   return value;
 };
 
+const normalizeRequestedPageSize = (value: number | undefined, maximum: number): number => {
+  const fallback = Math.min(25, maximum);
+  if (value === undefined || !Number.isSafeInteger(value)) return fallback;
+  return Math.min(maximum, Math.max(1, value));
+};
+
 const normalizePolicy = (input: Partial<RelevanceCursorPolicy>): RelevanceCursorPolicy => Object.freeze({
   maximumCursorLength: normalizeInteger(input.maximumCursorLength, DEFAULT_POLICY.maximumCursorLength, 128, 16_384),
   maximumPageSize: normalizeInteger(input.maximumPageSize, DEFAULT_POLICY.maximumPageSize, 1, 5000),
@@ -188,7 +194,7 @@ export class RelevanceCursorRuntime {
     requestedPageSize?: number,
   ): RelevanceCursorPage {
     const identity = normalizeIdentity(identityInput);
-    const pageSize = normalizeInteger(requestedPageSize, Math.min(25, this.#policy.maximumPageSize), 1, this.#policy.maximumPageSize);
+    const pageSize = normalizeRequestedPageSize(requestedPageSize, this.#policy.maximumPageSize);
     let start = 0;
     let scanned = 0;
     let staleCursor = false;
