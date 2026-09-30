@@ -241,7 +241,9 @@ export const analyzeSearchIntentV7 = (
   const coordinateResidual = coordinate.coordinates
     ? coordinate.residualQuery
     : rawQuery;
-  const residualQuery = expandCivicSearchQueryV7(coordinateResidual);
+  const residualQuery = coordinate.coordinates
+    ? coordinateResidual
+    : expandCivicSearchQueryV7(coordinateResidual);
   const text = analyzeTextQuery(residualQuery, policy.text);
   const address = addressAnalysis(residualQuery, request, center);
   const hierarchyHints = countHierarchyHints(request, policy.maximumHierarchyHints);
