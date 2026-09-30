@@ -7,6 +7,7 @@ import {
   type ExperienceMapMode,
 } from '../../experience/experienceRuntime';
 import { MapModeTransitionControl } from './MapModeTransitionControl';
+import { MapViewportContinuityDetails } from './MapViewportContinuityDetails';
 import {
   createMapModeTransitionCoordinator,
   type MapModeTransitionCoordinator,
@@ -194,6 +195,7 @@ export const ExperienceMapModeGovernedOverlay = ({
     <>
       <MapModeTransitionControl model={model} onRequest={requestMode} />
       <MapViewportContinuityStatus model={continuity} />
+      <MapViewportContinuityDetails model={continuity} />
     </>
   );
 };
