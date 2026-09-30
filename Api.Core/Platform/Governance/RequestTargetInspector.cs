@@ -1,32 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace Api.Core.Platform.Governance
 {
     /// <summary>
-    /// Allocation-conscious inspection helpers for the raw request target. The checks operate on
-    /// the path/query text supplied by the HTTP server before model binding and controller logic,
-    /// which allows malformed or intentionally expensive targets to be rejected early.
+    /// Allocation-bounded inspection helpers for the raw request target. Path security checks are
+    /// evaluated across a bounded sequence of ASCII percent-decoding passes so mixed/double/triple
+    /// encoded traversal and separator payloads cannot bypass a fixed token list. Query values are
+    /// deliberately excluded from path canonicalization checks.
     /// </summary>
     public static class RequestTargetInspector
     {
-        private static readonly string[] EncodedSeparatorTokens =
-        {
-            "%2f",
-            "%5c",
-            "%252f",
-            "%255c"
-        };
-
-        private static readonly string[] EncodedTraversalTokens =
-        {
-            "%2e%2e",
-            "%2e.",
-            ".%2e",
-            "%252e%252e",
-            "%252e.",
-            ".%252e"
-        };
+        private const int MaxPercentDecodePasses = 8;
 
         public static RequestTargetSnapshot Inspect(string rawTarget)
         {
@@ -37,6 +23,8 @@ namespace Api.Core.Platform.Governance
                 ? string.Empty
                 : value.Substring(queryIndex + 1);
 
+            var encodedPath = InspectEncodedPath(path);
+
             return new RequestTargetSnapshot(
                 rawTargetLength: value.Length,
                 pathLength: path.Length,
@@ -45,8 +33,12 @@ namespace Api.Core.Platform.Governance
                 containsControlCharacters: ContainsControlCharacters(value),
                 containsBackslash: path.IndexOf('\\') >= 0,
                 containsPlainTraversal: ContainsPlainTraversal(path),
-                containsEncodedSeparator: ContainsAny(path, EncodedSeparatorTokens),
-                containsEncodedTraversal: ContainsAny(path, EncodedTraversalTokens));
+                containsEncodedSeparator: encodedPath.ContainsEncodedSeparator,
+                containsEncodedTraversal: encodedPath.ContainsEncodedTraversal,
+                containsMalformedPercentEncoding: encodedPath.ContainsMalformedPercentEncoding,
+                containsEncodedControlCharacter: encodedPath.ContainsEncodedControlCharacter,
+                containsOverEncodedReservedSequence: encodedPath.ContainsOverEncodedReservedSequence,
+                percentDecodePassCount: encodedPath.PercentDecodePassCount);
         }
 
         public static int CountQueryParameters(string query)
@@ -120,7 +112,7 @@ namespace Api.Core.Platform.Governance
             for (var index = 0; index <= path.Length; index++)
             {
                 var atEnd = index == path.Length;
-                var separator = !atEnd && path[index] == '/';
+                var separator = !atEnd && (path[index] == '/' || path[index] == '\\');
                 if (!atEnd && !separator)
                 {
                     continue;
@@ -163,6 +155,251 @@ namespace Api.Core.Platform.Governance
 
             return false;
         }
+
+        private static EncodedPathInspection InspectEncodedPath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.IndexOf('%') < 0)
+            {
+                return EncodedPathInspection.Empty;
+            }
+
+            var current = path;
+            var containsEncodedSeparator = false;
+            var containsEncodedTraversal = false;
+            var containsMalformed = false;
+            var containsEncodedControl = false;
+            var decodePassCount = 0;
+
+            for (var pass = 0; pass < MaxPercentDecodePasses; pass++)
+            {
+                var decoded = DecodeAsciiPercentTriplets(current);
+                containsEncodedSeparator |= decoded.DecodedSeparator;
+                containsMalformed |= decoded.MalformedPercentEncoding;
+                containsEncodedControl |= decoded.DecodedControlCharacter;
+
+                if (!decoded.Changed)
+                {
+                    current = decoded.Value;
+                    break;
+                }
+
+                decodePassCount++;
+                current = decoded.Value;
+
+                if (ContainsPlainTraversal(current))
+                {
+                    containsEncodedTraversal = true;
+                }
+            }
+
+            var overEncodedReserved =
+                decodePassCount == MaxPercentDecodePasses &&
+                ContainsEncodedReservedCharacter(current);
+
+            return new EncodedPathInspection(
+                containsEncodedSeparator,
+                containsEncodedTraversal,
+                containsMalformed,
+                containsEncodedControl,
+                overEncodedReserved,
+                decodePassCount);
+        }
+
+        private static PercentDecodeResult DecodeAsciiPercentTriplets(string value)
+        {
+            if (string.IsNullOrEmpty(value) || value.IndexOf('%') < 0)
+            {
+                return new PercentDecodeResult(
+                    value ?? string.Empty,
+                    changed: false,
+                    malformedPercentEncoding: false,
+                    decodedSeparator: false,
+                    decodedControlCharacter: false);
+            }
+
+            var builder = new StringBuilder(value.Length);
+            var changed = false;
+            var malformed = false;
+            var decodedSeparator = false;
+            var decodedControl = false;
+
+            for (var index = 0; index < value.Length; index++)
+            {
+                var character = value[index];
+                if (character != '%')
+                {
+                    builder.Append(character);
+                    continue;
+                }
+
+                if (index + 2 >= value.Length ||
+                    !TryParseHex(value[index + 1], out var high) ||
+                    !TryParseHex(value[index + 2], out var low))
+                {
+                    malformed = true;
+                    builder.Append(character);
+                    continue;
+                }
+
+                var octet = (high << 4) | low;
+                if (octet <= 0x7f)
+                {
+                    var decodedCharacter = (char)octet;
+                    builder.Append(decodedCharacter);
+                    changed = true;
+                    index += 2;
+
+                    if (decodedCharacter == '/' || decodedCharacter == '\\')
+                    {
+                        decodedSeparator = true;
+                    }
+
+                    if (decodedCharacter < 0x20 || decodedCharacter == 0x7f)
+                    {
+                        decodedControl = true;
+                    }
+                    continue;
+                }
+
+                // Non-ASCII percent octets are left encoded. Kestrel remains authoritative for
+                // UTF-8 path decoding; this inspector only needs ASCII reserved/control bytes to
+                // close request-routing ambiguity without reimplementing a URI codec.
+                builder.Append('%');
+                builder.Append(value[index + 1]);
+                builder.Append(value[index + 2]);
+                index += 2;
+            }
+
+            return new PercentDecodeResult(
+                changed ? builder.ToString() : value,
+                changed,
+                malformed,
+                decodedSeparator,
+                decodedControl);
+        }
+
+        private static bool ContainsEncodedReservedCharacter(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            for (var index = 0; index + 2 < value.Length; index++)
+            {
+                if (value[index] != '%' ||
+                    !TryParseHex(value[index + 1], out var high) ||
+                    !TryParseHex(value[index + 2], out var low))
+                {
+                    continue;
+                }
+
+                var octet = (high << 4) | low;
+                if (octet == '%' ||
+                    octet == '.' ||
+                    octet == '/' ||
+                    octet == '\\' ||
+                    octet < 0x20 ||
+                    octet == 0x7f)
+                {
+                    return true;
+                }
+
+                index += 2;
+            }
+
+            return false;
+        }
+
+        private static bool TryParseHex(char character, out int value)
+        {
+            if (character >= '0' && character <= '9')
+            {
+                value = character - '0';
+                return true;
+            }
+
+            if (character >= 'a' && character <= 'f')
+            {
+                value = character - 'a' + 10;
+                return true;
+            }
+
+            if (character >= 'A' && character <= 'F')
+            {
+                value = character - 'A' + 10;
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        private readonly struct EncodedPathInspection
+        {
+            public static EncodedPathInspection Empty { get; } = new EncodedPathInspection(
+                containsEncodedSeparator: false,
+                containsEncodedTraversal: false,
+                containsMalformedPercentEncoding: false,
+                containsEncodedControlCharacter: false,
+                containsOverEncodedReservedSequence: false,
+                percentDecodePassCount: 0);
+
+            public EncodedPathInspection(
+                bool containsEncodedSeparator,
+                bool containsEncodedTraversal,
+                bool containsMalformedPercentEncoding,
+                bool containsEncodedControlCharacter,
+                bool containsOverEncodedReservedSequence,
+                int percentDecodePassCount)
+            {
+                ContainsEncodedSeparator = containsEncodedSeparator;
+                ContainsEncodedTraversal = containsEncodedTraversal;
+                ContainsMalformedPercentEncoding = containsMalformedPercentEncoding;
+                ContainsEncodedControlCharacter = containsEncodedControlCharacter;
+                ContainsOverEncodedReservedSequence = containsOverEncodedReservedSequence;
+                PercentDecodePassCount = percentDecodePassCount;
+            }
+
+            public bool ContainsEncodedSeparator { get; }
+
+            public bool ContainsEncodedTraversal { get; }
+
+            public bool ContainsMalformedPercentEncoding { get; }
+
+            public bool ContainsEncodedControlCharacter { get; }
+
+            public bool ContainsOverEncodedReservedSequence { get; }
+
+            public int PercentDecodePassCount { get; }
+        }
+
+        private readonly struct PercentDecodeResult
+        {
+            public PercentDecodeResult(
+                string value,
+                bool changed,
+                bool malformedPercentEncoding,
+                bool decodedSeparator,
+                bool decodedControlCharacter)
+            {
+                Value = value;
+                Changed = changed;
+                MalformedPercentEncoding = malformedPercentEncoding;
+                DecodedSeparator = decodedSeparator;
+                DecodedControlCharacter = decodedControlCharacter;
+            }
+
+            public string Value { get; }
+
+            public bool Changed { get; }
+
+            public bool MalformedPercentEncoding { get; }
+
+            public bool DecodedSeparator { get; }
+
+            public bool DecodedControlCharacter { get; }
+        }
     }
 
     public readonly struct RequestTargetSnapshot
@@ -176,7 +413,11 @@ namespace Api.Core.Platform.Governance
             bool containsBackslash,
             bool containsPlainTraversal,
             bool containsEncodedSeparator,
-            bool containsEncodedTraversal)
+            bool containsEncodedTraversal,
+            bool containsMalformedPercentEncoding,
+            bool containsEncodedControlCharacter,
+            bool containsOverEncodedReservedSequence,
+            int percentDecodePassCount)
         {
             RawTargetLength = rawTargetLength;
             PathLength = pathLength;
@@ -187,6 +428,10 @@ namespace Api.Core.Platform.Governance
             ContainsPlainTraversal = containsPlainTraversal;
             ContainsEncodedSeparator = containsEncodedSeparator;
             ContainsEncodedTraversal = containsEncodedTraversal;
+            ContainsMalformedPercentEncoding = containsMalformedPercentEncoding;
+            ContainsEncodedControlCharacter = containsEncodedControlCharacter;
+            ContainsOverEncodedReservedSequence = containsOverEncodedReservedSequence;
+            PercentDecodePassCount = percentDecodePassCount;
         }
 
         public int RawTargetLength { get; }
@@ -206,5 +451,13 @@ namespace Api.Core.Platform.Governance
         public bool ContainsEncodedSeparator { get; }
 
         public bool ContainsEncodedTraversal { get; }
+
+        public bool ContainsMalformedPercentEncoding { get; }
+
+        public bool ContainsEncodedControlCharacter { get; }
+
+        public bool ContainsOverEncodedReservedSequence { get; }
+
+        public int PercentDecodePassCount { get; }
     }
 }
