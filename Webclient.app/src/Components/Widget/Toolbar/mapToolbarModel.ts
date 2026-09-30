@@ -287,7 +287,7 @@ export class MapToolbarModel {
   #publish(locationPhase: MapToolbarLocationPhase): void {
     if (this.#disposed) return;
     this.#snapshot = createMapToolbarSnapshot(this.#snapshot.revision + 1, locationPhase);
-    for (const listener of [...this.#listeners]) {
+    for (const listener of Array.from(this.#listeners)) {
       try {
         listener();
       } catch (error) {
