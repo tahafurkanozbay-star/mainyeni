@@ -20,6 +20,7 @@ export interface MapWorkspaceViewportDiagnostics {
   readonly appliedCount: number;
   readonly coalescedCount: number;
   readonly errorCount: number;
+  readonly lastErrorKind: string | null;
   readonly disposed: boolean;
 }
 
@@ -30,17 +31,26 @@ export interface MapWorkspaceViewportRuntime {
   readonly dispose: () => void;
 }
 
+const classifyError = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  const kind = typeof error;
+  return kind.length <= 24 ? kind : 'unknown';
+};
+
 const frozenDiagnostics = (
   scheduledCount: number,
   appliedCount: number,
   coalescedCount: number,
   errorCount: number,
+  lastErrorKind: string | null,
   disposed: boolean,
 ): MapWorkspaceViewportDiagnostics => Object.freeze({
   scheduledCount,
   appliedCount,
   coalescedCount,
   errorCount,
+  lastErrorKind,
   disposed,
 });
 
@@ -60,15 +70,21 @@ export const createMapWorkspaceViewportRuntime = <TConfiguration>(
   let appliedCount = 0;
   let coalescedCount = 0;
   let errorCount = 0;
+  let lastErrorKind: string | null = null;
   let disposed = false;
 
-  const reportError = (error: unknown): void => {
+  const recordError = (error: unknown): void => {
     errorCount += 1;
+    lastErrorKind = classifyError(error);
+  };
+
+  const reportError = (error: unknown): void => {
+    recordError(error);
     if (!options.onError) return;
     try {
       options.onError(error);
-    } catch {
-      errorCount += 1;
+    } catch (reporterError) {
+      recordError(reporterError);
     }
   };
 
@@ -114,7 +130,14 @@ export const createMapWorkspaceViewportRuntime = <TConfiguration>(
   return Object.freeze({
     requestUpdate,
     flush,
-    diagnostics: () => frozenDiagnostics(scheduledCount, appliedCount, coalescedCount, errorCount, disposed),
+    diagnostics: () => frozenDiagnostics(
+      scheduledCount,
+      appliedCount,
+      coalescedCount,
+      errorCount,
+      lastErrorKind,
+      disposed,
+    ),
     dispose: () => {
       if (disposed) return;
       disposed = true;
