@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Api.Core.Base;
 using Api.Admin.Filters;
 using Business.Core.Context;
@@ -10,42 +12,42 @@ namespace Api.Admin.Core.Controllers
 {
     public partial class AuthController : _BaseController
     {
-        private UserAccountOperations userAccountOperations { get; set; }
-        private AuthOperations authOperations { get; set; }
-
+        private readonly AuthOperations authOperations;
 
         public AuthController(BusinessContext context)
         {
-            this.dbContext = context;
-            this.userAccountOperations = new UserAccountOperations(context);
-            this.authOperations = new AuthOperations(context);
+            dbContext = context ?? throw new ArgumentNullException(nameof(context));
+            authOperations = new AuthOperations(context);
         }
 
-
         /// <summary>
-        /// Provide Login facility for the users 
+        /// Provides login while flowing request cancellation through the database authentication path.
         /// </summary>
         [HttpPost]
         [Route("[controller]/Login")]
-        public IActionResult Login([FromForm] UserAccountLoginViewModel viewModel)
+        public async Task<IActionResult> Login(
+            [FromForm] UserAccountLoginViewModel viewModel,
+            CancellationToken cancellationToken)
         {
             try
             {
-                var authResult = authOperations.LoginUser(viewModel);
+                var authResult = await authOperations
+                    .LoginUserAsync(viewModel, cancellationToken)
+                    .ConfigureAwait(false);
                 return new JsonResult(authResult);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 handleExceptionResult(ex);
                 return new JsonResult(exceptionResult(ex));
             }
-    
         }
 
-
-        /// <summary>
-        /// Provides logout facility for the user 
-        /// </summary>
+        /// <summary>Provides logout facility for the user.</summary>
         [HttpPost]
         [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("[controller]/Logout")]
@@ -54,19 +56,12 @@ namespace Api.Admin.Core.Controllers
             try
             {
                 var sessionResult = GetSession(HttpContext);
-
-                if (sessionResult.IsSuccess)
-                {
-                    var session = sessionResult.Data;
-
-                    //var result = ops.Create(viewModel, session);
-
-                    return new JsonResult("Çıkış yapıldı");
-                }
-                else
+                if (!sessionResult.IsSuccess)
                 {
                     return new JsonResult(sessionResult);
                 }
+
+                return new JsonResult("Çıkış yapıldı");
             }
             catch (Exception ex)
             {
