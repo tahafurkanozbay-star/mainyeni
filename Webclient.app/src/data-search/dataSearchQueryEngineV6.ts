@@ -291,18 +291,24 @@ const emptyResponse = (
 
 const sliceHits = (hits: readonly RelevanceHit[], offset: number, limit: number): readonly RelevanceHit[] => Object.freeze(hits.slice(offset, offset + limit));
 
+const maximumRankedResults = (policy: DataSearchQueryEnginePolicy): number => Math.min(
+  10_000,
+  Math.max(policy.maximumLimit + policy.maximumOffset, policy.maximumLimit),
+);
+
 const executeRelevance = (
   records: readonly NormalizedRecord[],
   analysis: TextQueryAnalysis,
   policy: DataSearchQueryEnginePolicy,
 ): { readonly hits: readonly RelevanceHit[]; readonly diagnostics: RelevanceSearchDiagnostics } => {
+  const maximumResults = maximumRankedResults(policy);
   const runtime = new RelevanceIndexRuntime(records, 'query-subset', {
     ...policy.relevance,
     maximumRecords: Math.min(policy.maximumRerankDocuments, policy.maximumRecords),
-    maximumResults: Math.min(10_000, Math.max(policy.maximumLimit + policy.maximumOffset, policy.maximumLimit)),
+    maximumResults,
     maximumCandidates: Math.min(policy.maximumRerankDocuments, policy.maximumRecords),
   });
-  return runtime.search(analysis, Math.min(10_000, Math.max(policy.maximumLimit + policy.maximumOffset, policy.maximumLimit)));
+  return runtime.search(analysis, maximumResults);
 };
 
 export class DataSearchQueryEngineV6 {
@@ -335,7 +341,7 @@ export class DataSearchQueryEngineV6 {
     this.#globalRelevance = new RelevanceIndexRuntime(this.#records, this.#datasetRevision, {
       ...this.#policy.relevance,
       maximumRecords: this.#policy.maximumRecords,
-      maximumResults: Math.min(10_000, Math.max(this.#policy.maximumLimit + this.#policy.maximumOffset, this.#policy.maximumLimit)),
+      maximumResults: maximumRankedResults(this.#policy),
     });
     this.#facets = new FacetAggregationRuntime(this.#policy.facets);
     this.#suggestions = new SearchSuggestionRuntime(this.#records, this.#policy.suggestions);
@@ -367,26 +373,32 @@ export class DataSearchQueryEngineV6 {
     const request = normalizeRequest(requestInput, this.#policy);
     const analysis = this.#analyzer.analyze(request.query);
     const filters = request.filters ?? Object.freeze([]);
+    const filteredQuery = filters.length > 0;
     const plan = this.#filterIndex.plan(filters);
     this.#queries += 1;
-    if (filters.length > 0) this.#filteredQueries += 1;
+    if (filteredQuery) this.#filteredQueries += 1;
     if (plan.truncated) {
       this.#blockedQueries += 1;
       return emptyResponse(analysis, plan, this.#datasetRevision, request, plan.positions.length, 0, 'filter-plan-truncated');
     }
-    const plannedRecords = recordsForPositions(this.#records, plan.positions, this.#policy.maximumRerankDocuments + 1);
-    if (plannedRecords.length > this.#policy.maximumRerankDocuments) {
-      this.#blockedQueries += 1;
-      return emptyResponse(analysis, plan, this.#datasetRevision, request, plan.positions.length, 0, 'rerank-budget-exceeded');
+
+    let filteredRecords: readonly NormalizedRecord[] = this.#records;
+    if (filteredQuery) {
+      const plannedRecords = recordsForPositions(this.#records, plan.positions, this.#policy.maximumRerankDocuments + 1);
+      if (plannedRecords.length > this.#policy.maximumRerankDocuments) {
+        this.#blockedQueries += 1;
+        return emptyResponse(analysis, plan, this.#datasetRevision, request, plan.positions.length, 0, 'rerank-budget-exceeded');
+      }
+      filteredRecords = residualFilterRecords(plannedRecords, filters);
+      if (filteredRecords.length > this.#policy.maximumRerankDocuments) {
+        this.#blockedQueries += 1;
+        return emptyResponse(analysis, plan, this.#datasetRevision, request, plan.positions.length, filteredRecords.length, 'residual-filter-budget-exceeded');
+      }
     }
-    const filteredRecords = residualFilterRecords(plannedRecords, filters);
-    if (filteredRecords.length > this.#policy.maximumRerankDocuments) {
-      this.#blockedQueries += 1;
-      return emptyResponse(analysis, plan, this.#datasetRevision, request, plan.positions.length, filteredRecords.length, 'residual-filter-budget-exceeded');
-    }
-    const relevance = filters.length === 0
-      ? this.#globalRelevance.search(analysis, Math.min(10_000, request.offset + request.limit))
-      : executeRelevance(filteredRecords, analysis, this.#policy);
+
+    const relevance = filteredQuery
+      ? executeRelevance(filteredRecords, analysis, this.#policy)
+      : this.#globalRelevance.search(analysis, this.#globalRelevance.policy().maximumResults);
     const pageHits = sliceHits(relevance.hits, request.offset, request.limit);
     const filterSelection = selectionFromFilters(filters);
     const selection = mergeSelection(filterSelection, request.facetSelection);
