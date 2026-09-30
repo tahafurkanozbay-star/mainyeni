@@ -16,6 +16,7 @@ import { auditCheckStatusProvenance } from './check-status-provenance-audit.mts'
 import { auditCheckoutBoundaries } from './checkout-boundary-audit.mts';
 import { auditConcurrencyBoundaries } from './concurrency-boundary-audit.mts';
 import { auditDeploymentMetadataProvenance } from './deployment-metadata-provenance-audit.mts';
+import { auditDeploymentRequestProvenance } from './deployment-request-provenance-audit.mts';
 import { auditDependencyLifecycle } from './dependency-lifecycle-audit.mts';
 import { auditGitOperationBoundaries } from './git-operation-boundary-audit.mts';
 import { auditGitHubMutationBoundaries } from './github-mutation-boundary-audit.mts';
@@ -29,11 +30,13 @@ import { auditReleaseAssetMutations } from './release-asset-mutation-audit.mts';
 import { auditReleaseAssetSubjects } from './release-asset-subject-audit.mts';
 import { auditReleaseMetadataProvenance } from './release-metadata-provenance-audit.mts';
 import { auditReleaseTargetCommits } from './release-target-commit-audit.mts';
+import { auditReusableWorkflowSecretInheritance } from './reusable-workflow-secret-inheritance-audit.mts';
 import { reusableWorkflowContractFindings } from './reusable-workflow-contracts.mts';
 import { auditRunnerTrustBoundaries } from './runner-trust-boundary-audit.mts';
 import { auditShellBoundaries } from './shell-boundary-audit.mts';
 import { auditTokenPermissionBoundaries } from './token-permission-boundary-audit.mts';
 import { auditUntrustedEnvExecution } from './untrusted-env-execution-audit.mts';
+import { auditValidationTriggerIntegrity } from './validation-trigger-integrity-audit.mts';
 import { auditWorkingDirectoryBoundaries } from './working-directory-boundary-audit.mts';
 import { auditWorkflowAuthority } from './workflow-authority-audit.mts';
 import { auditWorkflowCommandFiles } from './workflow-command-file-audit.mts';
@@ -294,6 +297,7 @@ export function auditWorkflowExpressions(
     ...auditArtifactProducerProvenance(inventory).findings,
     ...auditCheckStatusProvenance(inventory).findings,
     ...auditDeploymentMetadataProvenance(inventory).findings,
+    ...auditDeploymentRequestProvenance(inventory).findings,
     ...auditProcessEnvironmentBoundaries(inventory).findings,
     ...auditWorkingDirectoryBoundaries(inventory).findings,
     ...auditPrivilegedConditions(inventory).findings,
@@ -308,10 +312,12 @@ export function auditWorkflowExpressions(
     ...auditJobResourceBoundaries(inventory).findings,
     ...auditOidcAuthority(inventory).findings,
     ...auditPackageRegistryBoundaries(inventory).findings,
+    ...auditReusableWorkflowSecretInheritance(inventory).findings,
     ...auditRunnerTrustBoundaries(inventory).findings,
     ...auditShellBoundaries(inventory).findings,
     ...auditTokenPermissionBoundaries(inventory).findings,
     ...auditUntrustedEnvExecution(inventory).findings,
+    ...auditValidationTriggerIntegrity(inventory).findings,
     ...auditWorkflowNetworkProvenance(inventory).findings,
     ...auditWorkflowSecretExposure(inventory).findings,
     ...auditWorkflowOutputProvenance(inventory).findings,
