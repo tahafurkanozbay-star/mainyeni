@@ -1,0 +1,59 @@
+import { stableSortFindings, type AuditSection, type Finding, type RepositoryInventory } from './contracts.mts';
+import { jobHasSecrets, jobHasWriteAuthority, jobUsesProtectedEnvironment, workflowFiles, workflowJobBlocks, workflowTriggerProfile, type WorkflowJobBlock } from './workflow-structure.mts';
+import { firstWorkflowStepField, stepDisplayName, stepNestedMapping, stepRunText, stepUsesIdentity, workflowStepBlocks, type WorkflowStepBlock } from './workflow-step-structure.mts';
+
+export interface ArtifactProducerSignal {
+  readonly file: string; readonly job: string; readonly step: string; readonly artifactName: string; readonly repository: string; readonly runId: string;
+  readonly crossRun: boolean; readonly dynamicRunSelector: boolean; readonly dynamicRepository: boolean; readonly dynamicArtifactSelector: boolean;
+  readonly mergesArtifacts: boolean; readonly executableConsumer: boolean; readonly privileged: boolean; readonly externalContribution: boolean;
+  readonly workflowRunTrigger: boolean; readonly staticProducerWorkflow: boolean; readonly producerWorkflowCount: number; readonly dynamicProducerWorkflow: boolean;
+}
+export interface ArtifactProducerProvenanceSummary {
+  readonly workflowFiles:number; readonly artifactDownloads:number; readonly crossRunDownloads:number; readonly dynamicProducerSelectors:number;
+  readonly executableCrossRunDownloads:number; readonly producerBoundDownloads:number; readonly signals:readonly ArtifactProducerSignal[]; readonly findings:readonly Finding[];
+}
+const DOWNLOAD=/^actions\/download-artifact@[0-9a-f]{40}$/i, EXPRESSION=/\$\{\{[\s\S]*?\}\}/;
+const UNTRUSTED_RUN=/\$\{\{\s*(?:inputs\.|github\.event\.(?:client_payload\.|issue|pull_request|comment|review|repository_dispatch)|github\.head_ref)/i;
+const WORKFLOW_RUN_ID=/\$\{\{\s*github\.event\.workflow_run\.id\s*\}\}/i, DYNAMIC_REPOSITORY=/\$\{\{/, DYNAMIC_ARTIFACT=/\$\{\{/;
+const EXECUTION=/(?:^|[;&|]\s*)(?:\.\/|bash\s+|sh\s+|zsh\s+|node\s+|python(?:3)?\s+|pwsh\s+|powershell\s+|dotnet\s+|java\s+-jar\s+|source\s+|\.\s+)/im;
+const PATH_PROMOTION=/(?:GITHUB_PATH|\bPATH\s*=)/i, RELEASE_USE=/\b(?:publish|deploy|release|upload|sign|attest|push)\b/i;
+function privileged(block:WorkflowJobBlock){return jobHasWriteAuthority(block)||jobHasSecrets(block)||jobUsesProtectedEnvironment(block);}
+function truthy(value:string|undefined){return /^(?:true|yes|on|1)$/i.test((value??'').trim());}
+function laterExecutableUse(steps:readonly WorkflowStepBlock[],current:WorkflowStepBlock){return steps.some(step=>{if(step.index<=current.index)return false;const run=stepRunText(step);if(run&&(EXECUTION.test(run)||PATH_PROMOTION.test(run)||RELEASE_USE.test(run)))return true;const identity=stepUsesIdentity(step)?.raw??'';return /(?:deploy|publish|release|upload|attest|sign)/i.test(identity);});}
+interface ProducerBinding { readonly workflowRun:boolean; readonly names:readonly string[]; readonly dynamic:boolean; }
+function producerBinding(text:string):ProducerBinding {
+  const lines=text.split(/\r?\n/); const markerIndex=lines.findIndex(line=>/^\s*workflow_run\s*:/.test(line));
+  if(markerIndex<0)return{workflowRun:false,names:[],dynamic:false};
+  const markerLine=lines[markerIndex]??'', markerIndent=markerLine.match(/^\s*/)?.[0].length??0;
+  const markerTail=markerLine.replace(/^\s*workflow_run\s*:\s*/, '').trim();
+  const region:string[]=[];
+  if(markerTail)region.push(markerTail);
+  for(let index=markerIndex+1;index<lines.length;index+=1){const line=lines[index]??'',trimmed=line.trim();if(trimmed&&(line.match(/^\s*/)?.[0].length??0)<=markerIndent)break;region.push(line);}
+  const workflowsIndex=region.findIndex(line=>/^\s*workflows\s*:/.test(line));
+  if(workflowsIndex<0)return{workflowRun:true,names:[],dynamic:false};
+  const workflowsLine=region[workflowsIndex]??'', workflowsIndent=workflowsLine.match(/^\s*/)?.[0].length??0;
+  const tail=workflowsLine.replace(/^\s*workflows\s*:\s*/, '').trim(); const raw:string[]=[];
+  if(tail.startsWith('[')&&tail.endsWith(']'))raw.push(...tail.slice(1,-1).split(','));
+  else if(tail)raw.push(tail);
+  else for(let index=workflowsIndex+1;index<region.length;index+=1){const line=region[index]??'',trimmed=line.trim();if(!trimmed)continue;const indent=line.match(/^\s*/)?.[0].length??0;if(indent<=workflowsIndent)break;const item=trimmed.match(/^-\s*([^#]+?)(?:\s+#.*)?$/)?.[1];if(item)raw.push(item);}
+  const names=raw.map(value=>value.trim().replace(/^['"]|['"]$/g,'')).filter(Boolean); return{workflowRun:true,names,dynamic:names.some(name=>EXPRESSION.test(name))};
+}
+function signalFor(block:WorkflowJobBlock,steps:readonly WorkflowStepBlock[],step:WorkflowStepBlock):ArtifactProducerSignal|undefined{
+  const identity=stepUsesIdentity(step);if(!identity||!DOWNLOAD.test(identity.raw))return;
+  const withMap=stepNestedMapping(step,'with'),artifactName=(withMap.get('name')??withMap.get('pattern')??'').trim(),repository=(withMap.get('repository')??'').trim(),runId=(withMap.get('run-id')??'').trim();
+  const trigger=workflowTriggerProfile(block.file), binding=producerBinding(block.file.text), crossRun=Boolean(runId||repository||withMap.get('github-token'));
+  return{file:block.file.repositoryPath,job:block.name,step:stepDisplayName(step),artifactName,repository,runId,crossRun,dynamicRunSelector:Boolean(runId&&EXPRESSION.test(runId)&&!WORKFLOW_RUN_ID.test(runId)),dynamicRepository:Boolean(repository&&DYNAMIC_REPOSITORY.test(repository)),dynamicArtifactSelector:Boolean(artifactName&&DYNAMIC_ARTIFACT.test(artifactName)),mergesArtifacts:truthy(withMap.get('merge-multiple')),executableConsumer:laterExecutableUse(steps,step),privileged:privileged(block),externalContribution:trigger.externalContribution,workflowRunTrigger:binding.workflowRun,staticProducerWorkflow:binding.names.length>0&&!binding.dynamic,producerWorkflowCount:binding.names.length,dynamicProducerWorkflow:binding.dynamic};
+}
+function where(step:WorkflowStepBlock){return{file:step.job.file.repositoryPath,line:firstWorkflowStepField(step,'uses')?.line??step.startLine};}
+function finding(id:string,title:string,message:string,remediation:string,signal:ArtifactProducerSignal,step:WorkflowStepBlock,critical=true):Finding{return{id,domain:'security',severity:critical?'critical':'high',...(critical?{blocking:true}:{}),title,message,location:where(step),evidence:{metadata:{job:signal.job,step:signal.step,artifact:signal.artifactName,producerWorkflowCount:signal.producerWorkflowCount}},remediation,tags:['ci','artifact','provenance','producer','supply-chain']};}
+function findingsFor(signal:ArtifactProducerSignal,step:WorkflowStepBlock):Finding[]{const out:Finding[]=[],high=signal.executableConsumer||signal.privileged;
+  if(signal.dynamicRunSelector)out.push(finding('ci-artifact-dynamic-run-selector','Artifact producer run is selected from mutable input','A cross-run artifact download selects its producer run from mutable input instead of a trusted workflow-run identity.','Bind run-id to github.event.workflow_run.id from a statically named producer workflow.',signal,step,high));
+  if(signal.runId&&UNTRUSTED_RUN.test(signal.runId))out.push(finding('ci-artifact-untrusted-run-selector','Untrusted event data controls artifact producer selection','Attacker- or operator-controlled event data can redirect the artifact download to another workflow run.','Do not accept run IDs from external event payloads or ordinary workflow inputs.',signal,step,true));
+  if(signal.dynamicRepository)out.push(finding('ci-artifact-dynamic-repository','Artifact producer repository is expression-derived','The repository supplying a cross-run artifact is selected dynamically.','Use a literal owner/repository identity for release artifacts.',signal,step,high));
+  if(signal.dynamicArtifactSelector&&high)out.push(finding('ci-artifact-dynamic-name','Executable artifact identity is expression-derived','The artifact name or pattern consumed by a privileged/executable job is expression-derived.','Use a literal allowlisted artifact name bound to the expected producer workflow.',signal,step,true));
+  if(signal.mergesArtifacts&&high)out.push(finding('ci-artifact-merge-multiple-executable','Multiple artifacts are merged before privileged or executable consumption','merge-multiple combines independently produced artifact trees before executable/release use.','Download each allowlisted artifact to an isolated path and verify independently.',signal,step,true));
+  if(signal.crossRun&&signal.executableConsumer&&!signal.workflowRunTrigger)out.push(finding('ci-artifact-cross-run-without-workflow-identity','Executable cross-run artifact lacks workflow_run producer binding','The job executes or promotes a cross-run artifact but is not bound to a workflow_run producer event.','Use workflow_run with a static workflows allowlist and bind run-id to github.event.workflow_run.id.',signal,step,true));
+  if(signal.crossRun&&signal.executableConsumer&&signal.workflowRunTrigger&&!signal.staticProducerWorkflow)out.push(finding(signal.dynamicProducerWorkflow?'ci-artifact-dynamic-producer-workflow':'ci-artifact-missing-producer-workflow','Executable artifact lacks a static producer workflow allowlist',signal.dynamicProducerWorkflow?'The workflow_run producer identity is expression-derived and cannot establish a reviewable producer boundary.':'workflow_run is present but does not declare a non-empty static workflows allowlist, so the executable artifact producer is not pinned to a reviewed workflow.','Declare workflow_run.workflows as a non-empty literal list of reviewed producer workflow names; keep run-id bound to github.event.workflow_run.id.',signal,step,true));
+  if(signal.crossRun&&signal.executableConsumer&&signal.workflowRunTrigger&&signal.staticProducerWorkflow&&!WORKFLOW_RUN_ID.test(signal.runId))out.push(finding('ci-artifact-run-id-not-bound-to-trigger','Artifact run-id is not bound to the triggering producer run','A static workflow_run allowlist exists, but the downloaded run-id is not github.event.workflow_run.id, breaking event-to-artifact producer binding.','Set run-id exactly from github.event.workflow_run.id and do not override it with inputs or derived outputs.',signal,step,true));
+  if(signal.crossRun&&signal.executableConsumer&&!signal.artifactName)out.push(finding('ci-artifact-cross-run-broad-selection','Executable cross-run download does not name an artifact','The download has no literal artifact name/pattern, so executable consumption can include unexpected outputs.','Require a literal artifact name and isolated destination path.',signal,step,true));return out;}
+export function auditArtifactProducerProvenance(inventory:RepositoryInventory):AuditSection<ArtifactProducerProvenanceSummary>{const started=performance.now(),files=workflowFiles(inventory),signals:ArtifactProducerSignal[]=[],findings:Finding[]=[];for(const file of files)for(const block of workflowJobBlocks(file)){const steps=workflowStepBlocks(block);for(const step of steps){const signal=signalFor(block,steps,step);if(!signal)continue;signals.push(signal);findings.push(...findingsFor(signal,step));}}const canonical=stableSortFindings(findings);return{domain:'security',title:'CI artifact producer provenance and identity audit',summary:{workflowFiles:files.length,artifactDownloads:signals.length,crossRunDownloads:signals.filter(x=>x.crossRun).length,dynamicProducerSelectors:signals.filter(x=>x.dynamicRunSelector||x.dynamicRepository||x.dynamicArtifactSelector||x.dynamicProducerWorkflow).length,executableCrossRunDownloads:signals.filter(x=>x.crossRun&&x.executableConsumer).length,producerBoundDownloads:signals.filter(x=>x.crossRun&&x.executableConsumer&&x.staticProducerWorkflow&&WORKFLOW_RUN_ID.test(x.runId)).length,signals,findings:canonical},findings:canonical,elapsedMs:Math.max(0,performance.now()-started)};}
