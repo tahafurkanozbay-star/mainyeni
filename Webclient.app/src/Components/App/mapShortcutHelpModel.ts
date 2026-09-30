@@ -125,6 +125,15 @@ export const normalizeMapShortcutHelpText = (value: string): string => {
     .trim();
 };
 
+const categoryForNormalizedLabel = (
+  normalizedQuery: string,
+): Exclude<MapShortcutHelpCategory, 'all'> | null => {
+  if (normalizedQuery === normalizeMapShortcutHelpText(CATEGORY_LABELS.navigation)) return 'navigation';
+  if (normalizedQuery === normalizeMapShortcutHelpText(CATEGORY_LABELS.workspace)) return 'workspace';
+  if (normalizedQuery === normalizeMapShortcutHelpText(CATEGORY_LABELS.tools)) return 'tools';
+  return null;
+};
+
 const categoryForShortcut = (shortcut: MapWorkspaceShortcutDefinition): Exclude<MapShortcutHelpCategory, 'all'> => (
   ACTION_CATEGORY[shortcut.action]
 );
@@ -216,9 +225,10 @@ const createSnapshot = (
   indexed: readonly IndexedShortcut[],
 ): MapShortcutHelpSnapshot => {
   const normalizedQuery = normalizeMapShortcutHelpText(query);
+  const categoryQuery = normalizedQuery ? categoryForNormalizedLabel(normalizedQuery) : null;
   const filtered = indexed.filter((item) => (
     (category === 'all' || item.category === category)
-    && (!normalizedQuery || item.searchText.includes(normalizedQuery))
+    && (!normalizedQuery || (categoryQuery ? item.category === categoryQuery : item.searchText.includes(normalizedQuery)))
   ));
   const nextActiveId = filtered.some((item) => item.source.id === activeId)
     ? activeId
