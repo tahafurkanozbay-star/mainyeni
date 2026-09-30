@@ -111,6 +111,11 @@ interface EvaluationState {
   scoredCount: number;
 }
 
+interface TermFamilyCache {
+  readonly terms: Map<string, readonly string[]>;
+  readonly documentFrequencies: Map<string, number>;
+}
+
 const DEFAULT_FIELD_WEIGHTS: RelevanceFieldWeights = Object.freeze({
   title: 8,
   category: 5,
@@ -371,9 +376,71 @@ const expandPrefix = (
   return Object.freeze(result);
 };
 
+const freeTextTerms = (analysis: TextQueryAnalysis): readonly string[] => Object.freeze(Array.from(new Set([
+  ...analysis.requiredTerms,
+  ...analysis.optionalTerms,
+])));
+
+const fieldSeedTerms = (analysis: TextQueryAnalysis): readonly string[] => {
+  const values: string[] = [];
+  for (const field of QUERY_FIELDS) values.push(...analysis.fieldTerms[field]);
+  return Object.freeze(Array.from(new Set(values)));
+};
+
+const createTermFamilyCache = (): TermFamilyCache => ({
+  terms: new Map<string, readonly string[]>(),
+  documentFrequencies: new Map<string, number>(),
+});
+
+const termFamily = (
+  term: string,
+  postings: ReadonlyMap<string, readonly Posting[]>,
+  dictionary: readonly string[],
+  policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
+): readonly string[] => {
+  const cached = cache.terms.get(term);
+  if (cached) return cached;
+  const family: string[] = [];
+  if (postings.has(term)) family.push(term);
+  if (term.length >= policy.minimumPrefixLength && policy.maximumPrefixExpansions > 0) {
+    const expanded = expandPrefix(dictionary, term, policy.maximumPrefixExpansions);
+    for (const expandedTerm of expanded) {
+      if (expandedTerm !== term) family.push(expandedTerm);
+    }
+  }
+  const frozen = Object.freeze(Array.from(new Set(family)));
+  cache.terms.set(term, frozen);
+  return frozen;
+};
+
+const addPostingRecords = (target: Set<number>, list: readonly Posting[] | undefined): void => {
+  if (!list) return;
+  for (const posting of list) target.add(posting.recordIndex);
+};
+
+const familyDocumentFrequency = (
+  term: string,
+  postings: ReadonlyMap<string, readonly Posting[]>,
+  dictionary: readonly string[],
+  policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
+): number => {
+  const cached = cache.documentFrequencies.get(term);
+  if (cached !== undefined) return cached;
+  const records = new Set<number>();
+  for (const familyTerm of termFamily(term, postings, dictionary, policy, cache)) {
+    addPostingRecords(records, postings.get(familyTerm));
+  }
+  const frequency = records.size;
+  cache.documentFrequencies.set(term, frequency);
+  return frequency;
+};
+
 const addPostingsToCandidates = (state: CandidateBuildState, list: readonly Posting[] | undefined, maximum: number): void => {
   if (!list || state.truncated) return;
   for (const posting of list) {
+    if (state.positions.has(posting.recordIndex)) continue;
     if (state.positions.size >= maximum) {
       state.truncated = true;
       return;
@@ -389,18 +456,18 @@ const addExactCandidateTerm = (
   maximum: number,
 ): void => addPostingsToCandidates(state, postings.get(term), maximum);
 
-const addPrefixCandidateTerm = (
+const addTermFamilyCandidates = (
   state: CandidateBuildState,
   postings: ReadonlyMap<string, readonly Posting[]>,
   dictionary: readonly string[],
   term: string,
   policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
 ): void => {
-  if (term.length < policy.minimumPrefixLength || state.truncated) return;
-  const expanded = expandPrefix(dictionary, term, policy.maximumPrefixExpansions);
-  state.prefixExpansions += expanded.length;
-  for (const expandedTerm of expanded) {
-    addPostingsToCandidates(state, postings.get(expandedTerm), policy.maximumCandidates);
+  const family = termFamily(term, postings, dictionary, policy, cache);
+  for (const familyTerm of family) {
+    if (familyTerm !== term) state.prefixExpansions += 1;
+    addPostingsToCandidates(state, postings.get(familyTerm), policy.maximumCandidates);
     if (state.truncated) return;
   }
 };
@@ -411,29 +478,72 @@ const buildCandidates = (
   dictionary: readonly string[],
   documentCount: number,
   policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
 ): CandidateBuildState => {
   const state: CandidateBuildState = { positions: new Set<number>(), prefixExpansions: 0, truncated: false };
-  if (analysis.positiveTerms.length === 0 && analysis.phrases.length > 0) {
+  const freeTerms = freeTextTerms(analysis);
+  if (freeTerms.length > 0) {
+    for (const term of freeTerms) {
+      addTermFamilyCandidates(state, postings, dictionary, term, policy, cache);
+      if (state.truncated) break;
+    }
+    return state;
+  }
+  const fieldTerms = fieldSeedTerms(analysis);
+  if (fieldTerms.length > 0) {
+    for (const term of fieldTerms) {
+      addExactCandidateTerm(state, postings, term, policy.maximumCandidates);
+      if (state.truncated) break;
+    }
+    return state;
+  }
+  if (analysis.phrases.length > 0) {
     const bound = Math.min(documentCount, policy.maximumCandidates);
     for (let index = 0; index < bound; index += 1) state.positions.add(index);
     state.truncated = documentCount > bound;
-    return state;
-  }
-  for (const term of analysis.positiveTerms) {
-    addExactCandidateTerm(state, postings, term, policy.maximumCandidates);
-    if (!postings.has(term)) addPrefixCandidateTerm(state, postings, dictionary, term, policy);
-    if (state.truncated) break;
   }
   return state;
 };
 
-const containsRequiredTerms = (document: IndexedDocument, terms: readonly string[]): boolean => {
-  for (const term of terms) if (!document.termWeights.has(term)) return false;
+const documentMatchesTermFamily = (
+  document: IndexedDocument,
+  term: string,
+  postings: ReadonlyMap<string, readonly Posting[]>,
+  dictionary: readonly string[],
+  policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
+): boolean => {
+  for (const familyTerm of termFamily(term, postings, dictionary, policy, cache)) {
+    if (document.termWeights.has(familyTerm)) return true;
+  }
+  return false;
+};
+
+const containsRequiredTerms = (
+  document: IndexedDocument,
+  terms: readonly string[],
+  postings: ReadonlyMap<string, readonly Posting[]>,
+  dictionary: readonly string[],
+  policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
+): boolean => {
+  for (const term of terms) {
+    if (!documentMatchesTermFamily(document, term, postings, dictionary, policy, cache)) return false;
+  }
   return true;
 };
 
-const containsExcludedTerms = (document: IndexedDocument, terms: readonly string[]): boolean => {
-  for (const term of terms) if (document.termWeights.has(term)) return true;
+const containsExcludedTerms = (
+  document: IndexedDocument,
+  terms: readonly string[],
+  postings: ReadonlyMap<string, readonly Posting[]>,
+  dictionary: readonly string[],
+  policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
+): boolean => {
+  for (const term of terms) {
+    if (documentMatchesTermFamily(document, term, postings, dictionary, policy, cache)) return true;
+  }
   return false;
 };
 
@@ -496,19 +606,22 @@ const exactContribution = (
   recordIndex: number,
   document: IndexedDocument,
   postings: ReadonlyMap<string, readonly Posting[]>,
+  dictionary: readonly string[],
   documentCount: number,
   averageLength: number,
   policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
 ): RelevanceTermContribution | null => {
   const list = postings.get(term);
   const posting = postingForRecord(list, recordIndex);
   if (!posting || !list) return null;
+  const semanticDocumentFrequency = Math.max(1, familyDocumentFrequency(term, postings, dictionary, policy, cache));
   return Object.freeze({
     term,
-    score: scorePosting(posting, document.length, averageLength, list.length, documentCount, policy),
+    score: scorePosting(posting, document.length, averageLength, semanticDocumentFrequency, documentCount, policy),
     exact: true,
     prefix: false,
-    documentFrequency: list.length,
+    documentFrequency: semanticDocumentFrequency,
   });
 };
 
@@ -521,13 +634,14 @@ const prefixContribution = (
   documentCount: number,
   averageLength: number,
   policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
 ): RelevanceTermContribution | null => {
   if (requestedTerm.length < policy.minimumPrefixLength) return null;
-  const expanded = expandPrefix(dictionary, requestedTerm, policy.maximumPrefixExpansions);
+  const family = termFamily(requestedTerm, postings, dictionary, policy, cache);
   let bestTerm = '';
   let bestScore = 0;
-  let bestDf = 0;
-  for (const term of expanded) {
+  for (const term of family) {
+    if (term === requestedTerm) continue;
     const list = postings.get(term);
     const posting = postingForRecord(list, recordIndex);
     if (!posting || !list) continue;
@@ -535,10 +649,16 @@ const prefixContribution = (
     if (score > bestScore) {
       bestTerm = term;
       bestScore = score;
-      bestDf = list.length;
     }
   }
-  return bestTerm ? Object.freeze({ term: bestTerm, score: bestScore, exact: false, prefix: true, documentFrequency: bestDf }) : null;
+  if (!bestTerm) return null;
+  return Object.freeze({
+    term: bestTerm,
+    score: bestScore,
+    exact: false,
+    prefix: true,
+    documentFrequency: Math.max(1, familyDocumentFrequency(requestedTerm, postings, dictionary, policy, cache)),
+  });
 };
 
 const termContribution = (
@@ -550,8 +670,28 @@ const termContribution = (
   documentCount: number,
   averageLength: number,
   policy: RelevanceIndexPolicy,
-): RelevanceTermContribution | null => exactContribution(requestedTerm, recordIndex, document, postings, documentCount, averageLength, policy)
-  ?? prefixContribution(requestedTerm, recordIndex, document, postings, dictionary, documentCount, averageLength, policy);
+  cache: TermFamilyCache,
+): RelevanceTermContribution | null => exactContribution(
+  requestedTerm,
+  recordIndex,
+  document,
+  postings,
+  dictionary,
+  documentCount,
+  averageLength,
+  policy,
+  cache,
+) ?? prefixContribution(
+  requestedTerm,
+  recordIndex,
+  document,
+  postings,
+  dictionary,
+  documentCount,
+  averageLength,
+  policy,
+  cache,
+);
 
 const buildContributions = (
   analysis: TextQueryAnalysis,
@@ -562,10 +702,11 @@ const buildContributions = (
   documentCount: number,
   averageLength: number,
   policy: RelevanceIndexPolicy,
+  cache: TermFamilyCache,
 ): readonly RelevanceTermContribution[] => {
   const contributions: RelevanceTermContribution[] = [];
-  for (const term of analysis.positiveTerms) {
-    const contribution = termContribution(term, recordIndex, document, postings, dictionary, documentCount, averageLength, policy);
+  for (const term of freeTextTerms(analysis)) {
+    const contribution = termContribution(term, recordIndex, document, postings, dictionary, documentCount, averageLength, policy, cache);
     if (contribution) contributions.push(contribution);
   }
   return Object.freeze(contributions);
@@ -592,12 +733,13 @@ const evaluateCandidate = (
   averageLength: number,
   policy: RelevanceIndexPolicy,
   state: EvaluationState,
+  cache: TermFamilyCache,
 ): RelevanceHit | null => {
-  if (!containsRequiredTerms(document, analysis.requiredTerms)) {
+  if (!containsRequiredTerms(document, analysis.requiredTerms, postings, dictionary, policy, cache)) {
     state.rejectedRequired += 1;
     return null;
   }
-  if (containsExcludedTerms(document, analysis.excludedTerms)) {
+  if (containsExcludedTerms(document, analysis.excludedTerms, postings, dictionary, policy, cache)) {
     state.rejectedExcluded += 1;
     return null;
   }
@@ -609,7 +751,7 @@ const evaluateCandidate = (
     state.rejectedPhrase += 1;
     return null;
   }
-  const contributions = buildContributions(analysis, recordIndex, document, postings, dictionary, documentCount, averageLength, policy);
+  const contributions = buildContributions(analysis, recordIndex, document, postings, dictionary, documentCount, averageLength, policy, cache);
   const phraseMatches = countPhraseMatches(document, analysis.phrases);
   const fieldMatches = countFieldMatches(document, analysis);
   const score = sumContributionScore(contributions)
@@ -721,7 +863,8 @@ export class RelevanceIndexRuntime {
         }),
       });
     }
-    const candidates = buildCandidates(analysis, this.#postings, this.#dictionary, this.#documents.length, this.#policy);
+    const termCache = createTermFamilyCache();
+    const candidates = buildCandidates(analysis, this.#postings, this.#dictionary, this.#documents.length, this.#policy, termCache);
     const evaluation: EvaluationState = { rejectedRequired: 0, rejectedExcluded: 0, rejectedField: 0, rejectedPhrase: 0, scoredCount: 0 };
     const hits: RelevanceHit[] = [];
     for (const recordIndex of candidates.positions) {
@@ -737,6 +880,7 @@ export class RelevanceIndexRuntime {
         this.#snapshot.averageDocumentLength,
         this.#policy,
         evaluation,
+        termCache,
       );
       if (hit) hits.push(hit);
     }
