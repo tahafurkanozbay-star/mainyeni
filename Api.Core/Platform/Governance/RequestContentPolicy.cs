@@ -36,11 +36,6 @@ namespace Api.Core.Platform.Governance
             return request.Headers.ContainsKey("Transfer-Encoding");
         }
 
-        /// <summary>
-        /// Parses an incoming Content-Type value and returns only its normalized media type. Wildcard
-        /// media types are not valid request entity declarations even though wildcards are supported
-        /// in the server-side allowlist grammar.
-        /// </summary>
         public static bool TryNormalizeMediaType(string contentType, out string mediaType)
         {
             mediaType = string.Empty;
@@ -60,44 +55,30 @@ namespace Api.Core.Platform.Governance
                 return false;
             }
 
-            mediaType = string.Concat(
-                type.ToLowerInvariant(),
-                "/",
-                subtype.ToLowerInvariant());
+            mediaType = string.Concat(type.ToLowerInvariant(), "/", subtype.ToLowerInvariant());
             return true;
         }
 
         public static string NormalizeMediaType(string contentType)
         {
-            return TryNormalizeMediaType(contentType, out var mediaType)
-                ? mediaType
-                : string.Empty;
+            return TryNormalizeMediaType(contentType, out var mediaType) ? mediaType : string.Empty;
         }
 
-        public static bool IsAllowed(
-            string contentType,
-            IEnumerable<string> allowedMediaTypes)
+        public static bool IsAllowed(string contentType, IEnumerable<string> allowedMediaTypes)
         {
-            if (!TryNormalizeMediaType(contentType, out var mediaType) ||
-                allowedMediaTypes == null)
+            if (!TryNormalizeMediaType(contentType, out var mediaType) || allowedMediaTypes == null)
             {
                 return false;
             }
 
             foreach (var allowed in allowedMediaTypes)
             {
-                if (!TryNormalizeAllowedMediaTypePattern(
-                        allowed,
-                        out var allowedType,
-                        out var allowedSubtype))
+                if (!TryNormalizeAllowedMediaTypePattern(allowed, out var allowedType, out var allowedSubtype))
                 {
                     continue;
                 }
 
-                if (MatchesAllowedPattern(
-                        mediaType,
-                        allowedType,
-                        allowedSubtype))
+                if (MatchesAllowedPattern(mediaType, allowedType, allowedSubtype))
                 {
                     return true;
                 }
@@ -120,10 +101,7 @@ namespace Api.Core.Platform.Governance
                 .ToArray();
         }
 
-        public static bool TryNormalizeAllowedMediaTypePattern(
-            string value,
-            out string type,
-            out string subtype)
+        public static bool TryNormalizeAllowedMediaTypePattern(string value, out string type, out string subtype)
         {
             type = string.Empty;
             subtype = string.Empty;
@@ -145,8 +123,14 @@ namespace Api.Core.Platform.Governance
                 return false;
             }
 
-            if (!IsAllowedTypePattern(parsedType) ||
-                !IsAllowedSubtypePattern(parsedSubtype))
+            if (!IsAllowedTypePattern(parsedType) || !IsAllowedSubtypePattern(parsedSubtype))
+            {
+                return false;
+            }
+
+            // A wildcard type is meaningful only as the complete */* pattern. Accepting */json
+            // creates an asymmetric grammar that operators can easily mistake for a suffix rule.
+            if (parsedType == "*" && parsedSubtype != "*")
             {
                 return false;
             }
@@ -163,10 +147,7 @@ namespace Api.Core.Platform.Governance
                 : string.Empty;
         }
 
-        private static bool MatchesAllowedPattern(
-            string mediaType,
-            string allowedType,
-            string allowedSubtype)
+        private static bool MatchesAllowedPattern(string mediaType, string allowedType, string allowedSubtype)
         {
             if (!TrySplitMediaType(mediaType, out var actualType, out var actualSubtype))
             {
@@ -178,10 +159,7 @@ namespace Api.Core.Platform.Governance
                 return true;
             }
 
-            if (!string.Equals(
-                    actualType,
-                    allowedType,
-                    StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(actualType, allowedType, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -195,21 +173,13 @@ namespace Api.Core.Platform.Governance
             {
                 var suffix = allowedSubtype.Substring(1);
                 return actualSubtype.Length > suffix.Length &&
-                       actualSubtype.EndsWith(
-                           suffix,
-                           StringComparison.OrdinalIgnoreCase);
+                       actualSubtype.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
             }
 
-            return string.Equals(
-                actualSubtype,
-                allowedSubtype,
-                StringComparison.OrdinalIgnoreCase);
+            return string.Equals(actualSubtype, allowedSubtype, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool TrySplitMediaType(
-            string value,
-            out string type,
-            out string subtype)
+        private static bool TrySplitMediaType(string value, out string type, out string subtype)
         {
             type = string.Empty;
             subtype = string.Empty;
@@ -220,9 +190,7 @@ namespace Api.Core.Platform.Governance
             }
 
             var slash = value.IndexOf('/');
-            if (slash <= 0 ||
-                slash == value.Length - 1 ||
-                slash != value.LastIndexOf('/'))
+            if (slash <= 0 || slash == value.Length - 1 || slash != value.LastIndexOf('/'))
             {
                 return false;
             }
@@ -241,7 +209,7 @@ namespace Api.Core.Platform.Governance
 
         private static bool IsAllowedTypePattern(string value)
         {
-            return value == "*" || IsToken(value);
+            return value == "*" || (value.IndexOf('*') < 0 && IsToken(value));
         }
 
         private static bool IsAllowedSubtypePattern(string value)
@@ -253,10 +221,12 @@ namespace Api.Core.Platform.Governance
 
             if (value.StartsWith("*+", StringComparison.Ordinal))
             {
-                return value.Length > 2 && IsToken(value.Substring(2));
+                return value.Length > 2 &&
+                       value.IndexOf('*', 1) < 0 &&
+                       IsToken(value.Substring(2));
             }
 
-            return IsToken(value);
+            return value.IndexOf('*') < 0 && IsToken(value);
         }
 
         private static bool IsToken(string value)
@@ -288,21 +258,8 @@ namespace Api.Core.Platform.Governance
 
             switch (character)
             {
-                case '!':
-                case '#':
-                case '$':
-                case '%':
-                case '&':
-                case '\'':
-                case '*':
-                case '+':
-                case '-':
-                case '.':
-                case '^':
-                case '_':
-                case '`':
-                case '|':
-                case '~':
+                case '!': case '#': case '$': case '%': case '&': case '\'': case '*':
+                case '+': case '-': case '.': case '^': case '_': case '`': case '|': case '~':
                     return true;
                 default:
                     return false;
