@@ -88,6 +88,7 @@ const ACTION_CATEGORY: Readonly<Record<MapWorkspaceShortcutDefinition['action'],
 });
 
 const TURKISH_ASCII_REPLACEMENTS: Readonly<Record<string, string>> = Object.freeze({
+  I: 'i',
   ı: 'i',
   İ: 'i',
   ş: 's',
