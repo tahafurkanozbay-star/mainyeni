@@ -31,9 +31,9 @@ export const MapModeTransitionControl = ({
 }: MapModeTransitionControlProps): ReactNode => {
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const statusId = useId();
-  const retryId = useId();
+  const recoveryId = useId();
   const classNames = ['map-mode-transition-control', className].filter(Boolean).join(' ');
-  const canRetry = snapshot.phase === 'error' && snapshot.activeMode !== snapshot.desiredMode;
+  const canRecover = snapshot.phase === 'error' && snapshot.activeMode !== snapshot.desiredMode;
 
   const request = (mode: ExperienceMapMode, source: MapModeTransitionSource = 'control'): void => {
     if (snapshot.busy && snapshot.desiredMode === mode) return;
@@ -120,12 +120,12 @@ export const MapModeTransitionControl = ({
         )}
       </div>
 
-      {canRetry && (
-        <div className="map-mode-transition-control__recovery" id={retryId}>
+      {canRecover && (
+        <div className="map-mode-transition-control__recovery" id={recoveryId}>
           <span>Mevcut {snapshot.activeMode === '3d' ? '3B' : '2B'} görünüm korunuyor.</span>
           <button
             type="button"
-            className="map-mode-transition-control__retry"
+            className="map-mode-transition-control__recovery-action"
             onClick={() => request(snapshot.desiredMode, 'recovery')}
           >
             {snapshot.desiredMode === '3d' ? '3B geçişini yeniden dene' : '2B geçişini yeniden dene'}
