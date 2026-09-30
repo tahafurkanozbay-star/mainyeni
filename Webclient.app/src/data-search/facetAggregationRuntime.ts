@@ -267,14 +267,23 @@ const numericStatistics = (records: readonly NormalizedRecord[]): NumericFacetSt
 
 const recordsFromHits = (hits: readonly RelevanceHit[], maximum: number): readonly NormalizedRecord[] => Object.freeze(hits.slice(0, maximum).map((hit) => hit.record));
 
-const sanitizeSelection = (selection: FacetAggregationSelection): FacetAggregationSelection => Object.freeze({
-  category: selection.category ? Object.freeze(selection.category.slice()) : undefined,
-  type: selection.type ? Object.freeze(selection.type.slice()) : undefined,
-  district: selection.district ? Object.freeze(selection.district.slice()) : undefined,
-  neighborhood: selection.neighborhood ? Object.freeze(selection.neighborhood.slice()) : undefined,
-  street: selection.street ? Object.freeze(selection.street.slice()) : undefined,
-  postalCode: selection.postalCode ? Object.freeze(selection.postalCode.slice()) : undefined,
-});
+const sanitizeSelection = (selection: FacetAggregationSelection): FacetAggregationSelection => {
+  const result: {
+    category?: readonly string[];
+    type?: readonly string[];
+    district?: readonly string[];
+    neighborhood?: readonly string[];
+    street?: readonly string[];
+    postalCode?: readonly string[];
+  } = {};
+  if (selection.category) result.category = Object.freeze(selection.category.slice());
+  if (selection.type) result.type = Object.freeze(selection.type.slice());
+  if (selection.district) result.district = Object.freeze(selection.district.slice());
+  if (selection.neighborhood) result.neighborhood = Object.freeze(selection.neighborhood.slice());
+  if (selection.street) result.street = Object.freeze(selection.street.slice());
+  if (selection.postalCode) result.postalCode = Object.freeze(selection.postalCode.slice());
+  return Object.freeze(result);
+};
 
 export const facetSelectionFingerprint = (selection: FacetAggregationSelection): string => {
   const normalized: string[] = [];
