@@ -74,6 +74,16 @@ export class MapModeTransitionCoordinator {
       return this.#drainPromise;
     }
 
+    // The model intentionally returns the active request when identical intent
+    // is coalesced so it can account for the interaction. Do not turn that
+    // accounting token back into pending work: doing so would replay the same
+    // expensive MapView/SceneView transition after the active execution ends.
+    const snapshot = this.#model.getSnapshot();
+    if (this.#running && snapshot.activeRequestId === request.requestId) {
+      this.#patch({ ignoredRequestCount: this.#diagnostics.ignoredRequestCount + 1 });
+      return this.#drainPromise;
+    }
+
     this.#latest = request;
     const pendingDepth = this.#running ? 2 : 1;
     this.#patch({
