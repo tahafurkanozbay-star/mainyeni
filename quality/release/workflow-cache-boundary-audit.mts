@@ -28,7 +28,7 @@ interface CacheStep {
   readonly line: number;
   readonly uses: string;
   readonly body: string;
-  readonly key?: string;
+  readonly key: string | undefined;
   readonly restoreKeys: readonly string[];
   readonly paths: readonly string[];
 }
