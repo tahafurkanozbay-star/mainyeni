@@ -85,6 +85,7 @@ const INDIRECT = /\$\{\{[\s\S]*?(?:needs\.|steps\.|matrix\.|vars\.)/i;
 const EXTERNAL_EVENT = /\$\{\{[\s\S]*?(?:github\.head_ref\b|github\.event\.(?:pull_request|issue|comment|review|discussion)\.)/i;
 const BRANCH_OR_REF = /\$\{\{\s*github\.(?:ref|ref_name|head_ref|base_ref)\s*\}\}/i;
 const EXPRESSION = /\$\{\{/;
+const EXPRESSION_SPACE_SENTINEL = '\u0007';
 
 function stripQuotes(value: string): string {
   const trimmed = value.trim();
@@ -96,12 +97,16 @@ function stripQuotes(value: string): string {
   return trimmed;
 }
 
+function protectExpressionWhitespace(value: string): string {
+  return value.replace(/\$\{\{[\s\S]*?\}\}/g, expression => expression.replace(/\s/g, EXPRESSION_SPACE_SENTINEL));
+}
+
 function shellTokens(value: string): string[] {
   const tokens: string[] = [];
   let current = '';
   let quote: '"' | "'" | undefined;
   let escaped = false;
-  for (const character of value.trim()) {
+  for (const character of protectExpressionWhitespace(value.trim())) {
     if (escaped) {
       current += character;
       escaped = false;
@@ -116,13 +121,14 @@ function shellTokens(value: string): string[] {
       continue;
     }
     if (/\s/.test(character) && !quote) {
-      if (current) tokens.push(current);
+      if (current) tokens.push(current.replaceAll(EXPRESSION_SPACE_SENTINEL, ' '));
       current = '';
       continue;
     }
     current += character;
   }
-  if (current) tokens.push(current);
+  if (escaped) current += '\\';
+  if (current) tokens.push(current.replaceAll(EXPRESSION_SPACE_SENTINEL, ' '));
   return tokens;
 }
 
