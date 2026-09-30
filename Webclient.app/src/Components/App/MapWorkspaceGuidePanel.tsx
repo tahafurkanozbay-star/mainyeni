@@ -176,7 +176,6 @@ export const MapWorkspaceGuidePanel = ({
                 <span className="map-workspace-guide__topic-category">{entry.categoryLabel}</span>
                 <strong>{entry.title}</strong>
                 <span>{entry.summary}</span>
-                {entry.shortcutHint ? <kbd>{entry.shortcutHint}</kbd> : null}
               </button>
             ))}
           </div>
