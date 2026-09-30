@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { chordMatches, createShortcutChord, evaluateShortcutPolicy } from './mapWorkspaceShortcutPolicy';
 import { MAP_WORKSPACE_SHORTCUTS } from './mapWorkspaceShortcuts';
 import './MapWorkspaceShortcutHelp.css';
 import './MapWorkspaceShortcutHelpLauncher.css';
@@ -12,6 +13,8 @@ const FOCUSABLE_SELECTOR = [
   'button:not([disabled])', '[href]', 'input:not([disabled])', 'select:not([disabled])',
   'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+const HELP_SHORTCUT = Object.freeze({ key: '?', shift: true });
 
 const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
   Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
@@ -98,13 +101,8 @@ export const MapWorkspaceShortcutHelpLauncher = () => {
 
   useEffect(() => {
     const onHelpShortcut = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || event.repeat || event.isComposing) return;
-      if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey) return;
-      const target = event.target;
-      if (target instanceof HTMLElement && (
-        target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
-        ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(target.getAttribute('role') ?? '')
-      )) return;
+      if (!evaluateShortcutPolicy(event).allowed) return;
+      if (!chordMatches(createShortcutChord(event), HELP_SHORTCUT)) return;
       event.preventDefault();
       setOpen(true);
     };
