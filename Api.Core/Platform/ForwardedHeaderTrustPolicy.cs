@@ -204,14 +204,16 @@ namespace Api.Core.Platform
                 return;
             }
 
-            var normalized = value.Trim();
-            if (normalized.IndexOf('\r') >= 0 || normalized.IndexOf('\n') >= 0)
+            // Validate the unmodified configuration value before trimming. Trimming first would
+            // silently turn a trailing CR/LF into a valid proxy/network token and weaken the
+            // trust-boundary parser's fail-closed behavior.
+            if (value.IndexOf('\r') >= 0 || value.IndexOf('\n') >= 0)
             {
                 failures.Add($"{path} cannot contain newline characters.");
                 return;
             }
 
-            result.Add(normalized);
+            result.Add(value.Trim());
         }
 
         private static bool IsUnspecifiedAddress(IPAddress address)
