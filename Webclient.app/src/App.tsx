@@ -7,7 +7,10 @@ import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
 import './experience/legacyPresentationModernization.css';
+import './Components/App/MapModeTransitionContinuity.css';
 import { MapComponent } from './Components/App/MapComponent';
+import { ExperienceMapModeGovernedOverlay } from './Components/App/ExperienceMapModeGovernedOverlay';
+import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
@@ -119,6 +122,7 @@ function App() {
       <ExperiencePresentationBridge />
       <ExperienceRuntimeBridge />
       <ExperienceSettingsValidationBridge />
+      <ExperienceMapModePreferenceBridge />
       <FastAccessResultAccessibilityBridge />
       <div id="app-shell">
         <ExperienceStartupBoundary
@@ -127,6 +131,7 @@ function App() {
         >
           <ExperienceSkipNavigation />
           <MapComponent windowManager={windowManager} />
+          <ExperienceMapModeGovernedOverlay />
           <ExperienceMapInteractionGuide />
           <ExperienceWorkspace />
           <ExperienceUXLayer windowManager={windowManager} />
