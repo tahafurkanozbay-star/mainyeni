@@ -1,0 +1,229 @@
+.map-viewport-continuity-details {
+  position: absolute;
+  inset-block-start: max(248px, calc(env(safe-area-inset-top) + 240px));
+  inset-inline-end: max(16px, env(safe-area-inset-right));
+  z-index: 22;
+  inline-size: min(360px, calc(100vw - 32px));
+  border: 1px solid color-mix(in srgb, var(--exp-warning, #b54708) 36%, var(--exp-border, #cbd5e1));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, transparent);
+  box-shadow: 0 14px 40px rgb(15 23 42 / 16%);
+  color: var(--exp-text, #0f172a);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.map-viewport-continuity-details__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-block-size: 48px;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  cursor: pointer;
+  list-style: none;
+  touch-action: manipulation;
+}
+
+.map-viewport-continuity-details__summary::-webkit-details-marker {
+  display: none;
+}
+
+.map-viewport-continuity-details__summary::marker {
+  content: '';
+}
+
+.map-viewport-continuity-details__summary:hover {
+  background: color-mix(in srgb, var(--exp-warning, #b54708) 7%, transparent);
+}
+
+.map-viewport-continuity-details__summary:focus-visible {
+  outline: 3px solid var(--exp-accent, #155eef);
+  outline-offset: 2px;
+}
+
+.map-viewport-continuity-details__summary-icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--exp-warning, #b54708) 14%, var(--exp-surface, #fff));
+  color: var(--exp-warning-text, #92400e);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.map-viewport-continuity-details__summary-copy {
+  display: grid;
+  min-inline-size: 0;
+  gap: 2px;
+}
+
+.map-viewport-continuity-details__summary-copy strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 790;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-viewport-continuity-details__summary-copy span {
+  overflow: hidden;
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.68rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-viewport-continuity-details__score {
+  display: inline-grid;
+  place-items: center;
+  min-block-size: 30px;
+  min-inline-size: 54px;
+  padding-inline: 7px;
+  border: 1px solid var(--exp-border, #cbd5e1);
+  border-radius: 999px;
+  color: var(--exp-warning-text, #92400e);
+  background: var(--exp-surface, #fff);
+  font-size: 0.68rem;
+  font-weight: 820;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-viewport-continuity-details__body {
+  display: grid;
+  gap: 10px;
+  padding: 0 10px 10px;
+  border-block-start: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 72%, transparent);
+}
+
+.map-viewport-continuity-details__intro {
+  margin: 10px 0 0;
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.map-viewport-continuity-details__findings {
+  display: grid;
+  max-block-size: min(260px, 36vh);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.map-viewport-continuity-details__finding {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 76%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--exp-bg, #f8fafc) 70%, transparent);
+}
+
+.map-viewport-continuity-details__finding[data-severity='warning'] {
+  border-color: color-mix(in srgb, var(--exp-warning, #b54708) 30%, var(--exp-border, #cbd5e1));
+}
+
+.map-viewport-continuity-details__finding-icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exp-accent, #155eef) 9%, transparent);
+  color: var(--exp-accent-strong, #174ea6);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.map-viewport-continuity-details__finding[data-severity='warning'] .map-viewport-continuity-details__finding-icon {
+  background: color-mix(in srgb, var(--exp-warning, #b54708) 12%, transparent);
+  color: var(--exp-warning-text, #92400e);
+}
+
+.map-viewport-continuity-details__finding-copy {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.map-viewport-continuity-details__finding-copy strong {
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.map-viewport-continuity-details__finding-copy span {
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.69rem;
+  line-height: 1.42;
+}
+
+.map-viewport-continuity-details__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.65rem;
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .map-viewport-continuity-details {
+    inset-block-start: auto;
+    inset-inline: 10px;
+    inset-block-end: max(118px, calc(env(safe-area-inset-bottom) + 106px));
+    inline-size: auto;
+  }
+
+  .map-viewport-continuity-details__findings {
+    max-block-size: 28vh;
+  }
+}
+
+@media (pointer: coarse) {
+  .map-viewport-continuity-details__summary {
+    min-block-size: 52px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-viewport-continuity-details,
+  .map-viewport-continuity-details__summary {
+    scroll-behavior: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-viewport-continuity-details,
+  .map-viewport-continuity-details__finding,
+  .map-viewport-continuity-details__score {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    forced-color-adjust: auto;
+  }
+
+  .map-viewport-continuity-details__summary:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .map-viewport-continuity-details__summary-icon,
+  .map-viewport-continuity-details__finding-icon,
+  .map-viewport-continuity-details__finding[data-severity='warning'] .map-viewport-continuity-details__finding-icon {
+    outline: 1px solid CanvasText;
+    background: Highlight;
+    color: HighlightText;
+  }
+}
