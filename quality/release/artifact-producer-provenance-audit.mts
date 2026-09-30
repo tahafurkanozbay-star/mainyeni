@@ -22,17 +22,21 @@ function truthy(value:string|undefined){return /^(?:true|yes|on|1)$/i.test((valu
 function laterExecutableUse(steps:readonly WorkflowStepBlock[],current:WorkflowStepBlock){return steps.some(step=>{if(step.index<=current.index)return false;const run=stepRunText(step);if(run&&(EXECUTION.test(run)||PATH_PROMOTION.test(run)||RELEASE_USE.test(run)))return true;const identity=stepUsesIdentity(step)?.raw??'';return /(?:deploy|publish|release|upload|attest|sign)/i.test(identity);});}
 interface ProducerBinding { readonly workflowRun:boolean; readonly names:readonly string[]; readonly dynamic:boolean; }
 function producerBinding(text:string):ProducerBinding {
-  const marker=text.match(/^\s*workflow_run\s*:\s*(.*)$/im); if(!marker)return{workflowRun:false,names:[],dynamic:false};
-  const start=marker.index??0, first=(marker[1]??'').trim(); let region=first;
-  if(!first||first==='|'||first==='>'){
-    const tail=text.slice(start+marker[0].length).split('\n'); const base=(marker[0].match(/^\s*/)?.[0].length??0); const collected:string[]=[];
-    for(const line of tail){if(line.trim()&&(line.match(/^\s*/)?.[0].length??0)<=base)break;collected.push(line);} region=collected.join('\n');
-  }
-  const workflows=region.match(/(?:^|\n)\s*workflows\s*:\s*([^\n]*(?:\n\s*-\s*[^\n]+)*)/i)?.[1]??'';
-  if(!workflows)return{workflowRun:true,names:[],dynamic:false};
-  const dynamic=EXPRESSION.test(workflows); const inline=workflows.match(/^\s*\[([^\]]*)\]/)?.[1];
-  const raw=inline!==undefined?inline.split(','):Array.from(workflows.matchAll(/^\s*-\s*([^#\n]+)/gm),m=>m[1]??'');
-  const names=raw.map(x=>x.trim().replace(/^['"]|['"]$/g,'')).filter(Boolean); return{workflowRun:true,names,dynamic};
+  const lines=text.split(/\r?\n/); const markerIndex=lines.findIndex(line=>/^\s*workflow_run\s*:/.test(line));
+  if(markerIndex<0)return{workflowRun:false,names:[],dynamic:false};
+  const markerLine=lines[markerIndex]??'', markerIndent=markerLine.match(/^\s*/)?.[0].length??0;
+  const markerTail=markerLine.replace(/^\s*workflow_run\s*:\s*/, '').trim();
+  const region:string[]=[];
+  if(markerTail)region.push(markerTail);
+  for(let index=markerIndex+1;index<lines.length;index+=1){const line=lines[index]??'',trimmed=line.trim();if(trimmed&&(line.match(/^\s*/)?.[0].length??0)<=markerIndent)break;region.push(line);}
+  const workflowsIndex=region.findIndex(line=>/^\s*workflows\s*:/.test(line));
+  if(workflowsIndex<0)return{workflowRun:true,names:[],dynamic:false};
+  const workflowsLine=region[workflowsIndex]??'', workflowsIndent=workflowsLine.match(/^\s*/)?.[0].length??0;
+  const tail=workflowsLine.replace(/^\s*workflows\s*:\s*/, '').trim(); const raw:string[]=[];
+  if(tail.startsWith('[')&&tail.endsWith(']'))raw.push(...tail.slice(1,-1).split(','));
+  else if(tail)raw.push(tail);
+  else for(let index=workflowsIndex+1;index<region.length;index+=1){const line=region[index]??'',trimmed=line.trim();if(!trimmed)continue;const indent=line.match(/^\s*/)?.[0].length??0;if(indent<=workflowsIndent)break;const item=trimmed.match(/^-\s*([^#]+?)(?:\s+#.*)?$/)?.[1];if(item)raw.push(item);}
+  const names=raw.map(value=>value.trim().replace(/^['"]|['"]$/g,'')).filter(Boolean); return{workflowRun:true,names,dynamic:names.some(name=>EXPRESSION.test(name))};
 }
 function signalFor(block:WorkflowJobBlock,steps:readonly WorkflowStepBlock[],step:WorkflowStepBlock):ArtifactProducerSignal|undefined{
   const identity=stepUsesIdentity(step);if(!identity||!DOWNLOAD.test(identity.raw))return;
