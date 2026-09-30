@@ -16,6 +16,7 @@ import {
   firstWorkflowStepField,
   stepDisplayName,
   stepNestedBlockLines,
+  stepNestedMapping,
   stepRunText,
   stepUsesIdentity,
   workflowStepBlocks,
@@ -84,6 +85,7 @@ const GH_ATTEST_VERIFY = /\bgh\s+attestation\s+verify\s+([^\n]+)/gi;
 const COSIGN_VERIFY_BLOB = /\bcosign\s+verify-blob\b([^\n]*)/gi;
 const WORKSPACE_EXPRESSION = /^\$\{\{\s*github\.workspace\s*\}\}[\/\\]?/i;
 const WORKSPACE_ENV = /^(?:\$GITHUB_WORKSPACE|\$\{GITHUB_WORKSPACE\}|%GITHUB_WORKSPACE%)[\/\\]?/i;
+const EXPRESSION_SPACE_SENTINEL = '\u0007';
 
 function privileged(block: WorkflowJobBlock): boolean {
   return jobHasWriteAuthority(block) || jobHasSecrets(block) || jobUsesProtectedEnvironment(block);
@@ -108,12 +110,23 @@ function normalizeSubject(value: string): string {
   return current.replace(/\/$/, '');
 }
 
+function exactSubject(value: string): boolean {
+  const withoutWorkspace = stripQuotes(value)
+    .replace(WORKSPACE_EXPRESSION, '')
+    .replace(WORKSPACE_ENV, '');
+  return !EXPRESSION.test(withoutWorkspace) && !GLOB.test(withoutWorkspace);
+}
+
+function protectExpressionWhitespace(value: string): string {
+  return value.replace(/\$\{\{[\s\S]*?\}\}/g, expression => expression.replace(/\s/g, EXPRESSION_SPACE_SENTINEL));
+}
+
 function shellTokens(value: string): string[] {
   const tokens: string[] = [];
   let current = '';
   let quote: '"' | "'" | undefined;
   let escaped = false;
-  for (const character of value.trim()) {
+  for (const character of protectExpressionWhitespace(value.trim())) {
     if (escaped) {
       current += character;
       escaped = false;
@@ -128,33 +141,46 @@ function shellTokens(value: string): string[] {
       continue;
     }
     if (/\s/.test(character) && !quote) {
-      if (current) tokens.push(current);
+      if (current) tokens.push(current.replaceAll(EXPRESSION_SPACE_SENTINEL, ' '));
       current = '';
       continue;
     }
     current += character;
   }
   if (escaped) current += '\\';
-  if (current) tokens.push(current);
+  if (current) tokens.push(current.replaceAll(EXPRESSION_SPACE_SENTINEL, ' '));
   return tokens;
 }
 
-function fieldValues(step: WorkflowStepBlock, key: string): string[] {
-  const field = firstWorkflowStepField(step, key);
-  if (!field) return [];
-  const scalar = field.value.trim();
-  if (/^[>|][+-]?$/.test(scalar)) {
-    return stepNestedBlockLines(step, key)
-      .map(line => line.trimmed)
-      .filter(line => line && !line.startsWith('#'))
-      .flatMap(line => line.split(/\s*,\s*/))
-      .map(stripQuotes)
-      .filter(Boolean);
-  }
-  return scalar
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function splitFieldValues(value: string): string[] {
+  return value
     .split(/\r?\n|\s*,\s*/)
     .map(stripQuotes)
     .filter(Boolean);
+}
+
+function withFieldValues(step: WorkflowStepBlock, key: string): string[] {
+  const mapping = stepNestedMapping(step, 'with');
+  const scalar = mapping.get(key)?.trim();
+  if (scalar === undefined) return [];
+  if (!/^[>|][+-]?$/.test(scalar)) return splitFieldValues(scalar);
+
+  const lines = stepNestedBlockLines(step, 'with');
+  const matcher = new RegExp(`^\\s*${escapeRegex(key)}\\s*:\\s*(.*)$`, 'i');
+  const field = lines.find(line => matcher.test(line.text));
+  if (!field) return [];
+  const values: string[] = [];
+  for (const line of lines) {
+    if (line.line <= field.line) continue;
+    if (line.trimmed && line.indent <= field.indent) break;
+    if (!line.trimmed || line.trimmed.startsWith('#')) continue;
+    values.push(...splitFieldValues(line.trimmed));
+  }
+  return values;
 }
 
 function preFlagAssets(commandTail: string): string[] {
@@ -188,13 +214,13 @@ function runPublications(step: WorkflowStepBlock): PublicationRecord[] {
 function actionPublications(step: WorkflowStepBlock): PublicationRecord[] {
   const identity = stepUsesIdentity(step)?.raw ?? '';
   if (SOFTPROPS_RELEASE.test(identity)) {
-    return fieldValues(step, 'files').map(rawAsset => ({ step, position: 0, kind: 'softprops-release' as const, rawAsset }));
+    return withFieldValues(step, 'files').map(rawAsset => ({ step, position: 0, kind: 'softprops-release' as const, rawAsset }));
   }
   if (NICIPOLLO_RELEASE.test(identity)) {
-    return fieldValues(step, 'artifacts').map(rawAsset => ({ step, position: 0, kind: 'ncipollo-release' as const, rawAsset }));
+    return withFieldValues(step, 'artifacts').map(rawAsset => ({ step, position: 0, kind: 'ncipollo-release' as const, rawAsset }));
   }
   if (UPLOAD_RELEASE_ASSET.test(identity)) {
-    return fieldValues(step, 'asset_path').map(rawAsset => ({ step, position: 0, kind: 'upload-release-asset' as const, rawAsset }));
+    return withFieldValues(step, 'asset_path').map(rawAsset => ({ step, position: 0, kind: 'upload-release-asset' as const, rawAsset }));
   }
   return [];
 }
@@ -202,7 +228,7 @@ function actionPublications(step: WorkflowStepBlock): PublicationRecord[] {
 function attestationEvidence(block: WorkflowJobBlock, step: WorkflowStepBlock): ReleaseIntegrityEvidence[] {
   const identity = stepUsesIdentity(step)?.raw ?? '';
   if (!ATTEST_ACTION.test(identity)) return [];
-  return fieldValues(step, 'subject-path').map(rawSubject => ({
+  return withFieldValues(step, 'subject-path').map(rawSubject => ({
     file: block.file.repositoryPath,
     job: block.name,
     step: stepDisplayName(step),
@@ -211,7 +237,7 @@ function attestationEvidence(block: WorkflowJobBlock, step: WorkflowStepBlock): 
     kind: 'attestation' as const,
     rawSubject,
     subject: normalizeSubject(rawSubject),
-    exact: !EXPRESSION.test(rawSubject) && !GLOB.test(rawSubject),
+    exact: exactSubject(rawSubject),
   }));
 }
 
@@ -252,7 +278,7 @@ function runEvidence(block: WorkflowJobBlock, step: WorkflowStepBlock): ReleaseI
       kind: 'gh-attestation-verify',
       rawSubject,
       subject: normalizeSubject(rawSubject),
-      exact: !EXPRESSION.test(rawSubject) && !GLOB.test(rawSubject),
+      exact: exactSubject(rawSubject),
     });
   }
 
@@ -269,7 +295,7 @@ function runEvidence(block: WorkflowJobBlock, step: WorkflowStepBlock): ReleaseI
       kind: 'cosign-verify-blob',
       rawSubject,
       subject: normalizeSubject(rawSubject),
-      exact: !EXPRESSION.test(rawSubject) && !GLOB.test(rawSubject),
+      exact: exactSubject(rawSubject),
     });
   }
 
@@ -292,8 +318,8 @@ function signalFor(
   evidence: readonly ReleaseIntegrityEvidence[],
 ): ReleaseAssetSubjectSignal {
   const asset = normalizeSubject(publication.rawAsset);
-  const dynamic = EXPRESSION.test(publication.rawAsset);
-  const broad = GLOB.test(publication.rawAsset) || asset === '.' || asset === '';
+  const dynamic = EXPRESSION.test(publication.rawAsset) && !WORKSPACE_EXPRESSION.test(publication.rawAsset);
+  const broad = GLOB.test(publication.rawAsset.replace(WORKSPACE_EXPRESSION, '')) || asset === '.' || asset === '';
   const prior = evidence.filter(item => before(item, publication));
   const exactPriorEvidence = prior.some(item => item.exact && item.subject === asset);
   const exactLaterEvidence = evidence.some(item => after(item, publication) && item.exact && item.subject === asset);
