@@ -59,15 +59,12 @@ interface LocatedValue {
 
 interface StatusMutation {
   readonly line: number;
-  readonly step: WorkflowStepBlock;
-  readonly kind: 'gh-api' | 'github-script';
   readonly text: string;
   readonly untrustedFields: readonly string[];
   readonly secretFields: readonly string[];
   readonly dynamicState: boolean;
 }
 
-const ENVIRONMENT_METADATA_KEY = /^(?:name|url)$/i;
 const DEPLOYMENT_JOB = /\b(?:deploy|deployment|publish|release|production|prod|pages)\b/i;
 const DANGEROUS_SCHEME = /^(?:javascript|data|file|vbscript):/i;
 const HTTP_SCHEME = /^http:\/\//i;
@@ -81,7 +78,6 @@ const DEPLOYMENT_STATUS_ENDPOINT = /(?:^|[\s'"`])(?:https:\/\/api\.github\.com\/
 const GH_API = /\bgh\s+api\b/i;
 const STATUS_METHOD = /(?:--method|-X)\s+(?:POST|PUT|PATCH)\b/i;
 const CREATE_DEPLOYMENT_STATUS = /\b(?:github\.)?rest\.repos\.createDeploymentStatus\s*\(|\bcreateDeploymentStatus\s*\(/i;
-const MUTATION_FIELD = /\b(state|environment_url|environmentUrl|log_url|logUrl|description|environment)\b\s*(?:=|:)/gi;
 const STATE_FIELD = /\bstate\b\s*(?:=|:)\s*([^,}\n]+)/i;
 const SAFE_LITERAL_STATE = /^(?:['"])?(?:queued|in_progress|success|failure|error|inactive|pending)(?:['"])?$/i;
 const CONTEXT_ATTACKER = /\b(?:context|github\.context)\.payload\b|\b(?:issue|pullRequest|pull_request|comment|review|discussion)\b/i;
@@ -110,19 +106,6 @@ function nestedEnvironmentValue(block: WorkflowJobBlock, key: 'name' | 'url'): L
     if (line.indent <= environment.indent) break;
   }
   return undefined;
-}
-
-function environmentMetadataBlock(block: WorkflowJobBlock): string {
-  const environment = firstWorkflowField(block, 'environment');
-  if (!environment) return '';
-  if (environment.value) return environment.raw;
-  return [environment.raw, ...blockScalarLines(block, environment)
-    .filter(line => {
-      if (!line.trimmed || line.trimmed.startsWith('#')) return true;
-      const match = line.text.match(/^\s*([A-Za-z0-9_.-]+)\s*:/);
-      return !match || ENVIRONMENT_METADATA_KEY.test(match[1] ?? '');
-    })
-    .map(line => line.text)].join('\n');
 }
 
 function deploymentJob(block: WorkflowJobBlock): boolean {
@@ -350,8 +333,6 @@ function statusMutations(block: WorkflowJobBlock): StatusMutation[] {
       const risks = fieldRisks(run, step);
       mutations.push({
         line: firstWorkflowStepField(step, 'run')?.line ?? step.startLine,
-        step,
-        kind: 'gh-api',
         text: run,
         untrustedFields: risks.untrusted,
         secretFields: risks.secret,
@@ -361,13 +342,11 @@ function statusMutations(block: WorkflowJobBlock): StatusMutation[] {
 
     const identity = stepUsesIdentity(step);
     if (identity?.owner?.toLowerCase() !== 'actions' || identity.repository?.toLowerCase() !== 'github-script') continue;
-    const script = stepNestedMapping(step, 'with').get('script') ?? step.text;
+    const script = step.text;
     if (!CREATE_DEPLOYMENT_STATUS.test(script)) continue;
     const risks = fieldRisks(script, step);
     mutations.push({
       line: firstWorkflowStepField(step, 'uses')?.line ?? step.startLine,
-      step,
-      kind: 'github-script',
       text: script,
       untrustedFields: risks.untrusted,
       secretFields: risks.secret,
