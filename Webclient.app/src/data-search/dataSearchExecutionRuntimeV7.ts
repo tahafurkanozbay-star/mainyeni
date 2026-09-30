@@ -39,8 +39,8 @@ import {
   DataSearchQueryEngineV6,
   type DataSearchQueryEnginePolicy,
   type DataSearchQueryResponseV6,
-  type RelevanceHit,
 } from './dataSearchQueryEngineV6';
+import type { RelevanceHit } from './relevanceIndexRuntime';
 import {
   analyzeSearchIntentV7,
   searchIntentRequiresAddressV7,
@@ -161,12 +161,6 @@ interface MutableExecutionStatsV7 {
   hybridSearches: number;
   emptySearches: number;
   maximumObservedCandidates: number;
-}
-
-interface LocalEvaluationV7 {
-  readonly hit: DataSearchExecutionHitV7;
-  readonly address: AddressScore | null;
-  readonly text: RelevanceHit | null;
 }
 
 interface CandidateResolutionV7 {
