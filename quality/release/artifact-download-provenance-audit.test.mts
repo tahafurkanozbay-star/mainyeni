@@ -4,10 +4,10 @@ import type { RepositoryInventory, SourceFile } from './contracts.mts';
 import { auditArtifactDownloadProvenance } from './artifact-download-provenance-audit.mts';
 
 function source(repositoryPath: string, text: string): SourceFile {
-  return { repositoryPath, absolutePath: `/repo/${repositoryPath}`, extension: '.yml', bytes: Buffer.byteLength(text), text };
+  return { repositoryPath, absolutePath: `/repo/${repositoryPath}`, extension: '.yml', kind: 'yaml', bytes: Buffer.byteLength(text), lines: text.split('\n').length, text };
 }
 function inventory(...files: SourceFile[]): RepositoryInventory {
-  return { root: '/repo', files, ignoredDirectories: [], scannedFiles: files.length, scannedBytes: files.reduce((sum, file) => sum + file.bytes, 0) };
+  return { root: '/repo', files, ignoredDirectories: [], languageStats: [{ kind: 'yaml', files: files.length, lines: files.reduce((sum, file) => sum + file.lines, 0), bytes: files.reduce((sum, file) => sum + file.bytes, 0) }], totalFiles: files.length, totalLines: files.reduce((sum, file) => sum + file.lines, 0), totalBytes: files.reduce((sum, file) => sum + file.bytes, 0), generatedAt: '2026-09-30T00:00:00.000Z' };
 }
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 function workflow(body: string, header = 'on:\n  push:\n    branches: [main]\npermissions:\n  contents: read'): SourceFile {
@@ -17,122 +17,24 @@ function ids(file: SourceFile): string[] { return auditArtifactDownloadProvenanc
 
 const safe = workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release-bundle\n          path: .artifacts/release`);
 
-test('accepts immutable same-run named artifact download', () => {
-  assert.deepEqual(ids(safe), []);
-});
-
-test('rejects mutable download-artifact action identity', () => {
-  const result = ids(workflow('      - uses: actions/download-artifact@v4\n        with:\n          name: release-bundle'));
-  assert.ok(result.includes('ci-artifact-download-action-mutable-ref'));
-});
-
-test('flags unbounded artifact selection', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}`));
-  assert.ok(result.includes('ci-artifact-download-selection-unbounded'));
-});
-
-test('rejects attacker-controlled artifact name', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: \${{ github.event.pull_request.head.ref }}`));
-  assert.ok(result.includes('ci-artifact-download-name-untrusted'));
-});
-
-test('reviews trusted dynamic artifact name without treating it as attacker input', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: build-\${{ github.sha }}`));
-  assert.ok(result.includes('ci-artifact-download-name-dynamic'));
-  assert.ok(!result.includes('ci-artifact-download-name-untrusted'));
-});
-
-test('flags broad wildcard artifact pattern', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          pattern: artifact-*`));
-  assert.ok(result.includes('ci-artifact-download-pattern-broad'));
-});
-
-test('flags merge-multiple because producer filesystem boundaries disappear', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          pattern: release-linux-*\n          merge-multiple: true`));
-  assert.ok(result.includes('ci-artifact-download-merge-multiple'));
-});
-
-test('rejects attacker-controlled extraction path', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          path: \${{ github.event.issue.body }}`));
-  assert.ok(result.includes('ci-artifact-download-path-untrusted'));
-});
-
-test('rejects extraction into git control directory', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          path: .git/hooks`));
-  assert.ok(result.includes('ci-artifact-download-sensitive-path'));
-});
-
-test('rejects attacker-controlled cross-repository selector', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: \${{ inputs.repository }}\n          run-id: 123\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`));
-  assert.ok(result.includes('ci-artifact-download-repository-untrusted'));
-});
-
-test('requires explicit token for cross-repository artifact access', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: 123`));
-  assert.ok(result.includes('ci-artifact-download-cross-repository'));
-  assert.ok(result.includes('ci-artifact-download-cross-repository-token-missing'));
-});
-
-test('requires explicit run identity for cross-repository artifact access', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`));
-  assert.ok(result.includes('ci-artifact-download-run-id-missing'));
-});
-
-test('rejects attacker-controlled run id', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: \${{ github.event.pull_request.head.sha }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`));
-  assert.ok(result.includes('ci-artifact-download-run-id-untrusted'));
-});
-
-test('accepts workflow_run id as authoritative dynamic run binding', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: \${{ github.event.workflow_run.id }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`));
-  assert.ok(!result.includes('ci-artifact-download-run-id-dynamic'));
-  assert.ok(!result.includes('ci-artifact-download-run-id-untrusted'));
-});
-
-test('reviews non-authoritative dynamic run id', () => {
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: \${{ github.run_id }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`));
-  assert.ok(result.includes('ci-artifact-download-run-id-dynamic'));
-});
-
-test('blocks privileged artifact consumer reachable from pull_request_target', () => {
-  const header = 'on:\n  pull_request_target:\npermissions:\n  contents: write';
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release`, header));
-  assert.ok(result.includes('ci-artifact-download-privileged-untrusted-trigger'));
-});
-
-test('does not apply privileged-untrusted-trigger finding to protected push read-only workflow', () => {
-  const result = ids(safe);
-  assert.ok(!result.includes('ci-artifact-download-privileged-untrusted-trigger'));
-});
-
-test('reviews execution after artifact download in privileged workflow', () => {
-  const header = 'on:\n  push:\n    branches: [main]\npermissions:\n  contents: write';
-  const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n      - run: ./release/deploy.sh`, header));
-  assert.ok(result.includes('ci-artifact-download-privileged-execution-review'));
-});
-
-test('ignores non-workflow files', () => {
-  const file = source('docs/example.yml', `steps:\n  - uses: actions/download-artifact@v4`);
-  const section = auditArtifactDownloadProvenance(inventory(file));
-  assert.equal(section.summary.workflowFiles, 0);
-  assert.equal(section.findings.length, 0);
-});
-
-test('reports deterministic findings for repeated audits', () => {
-  const file = workflow(`      - uses: actions/download-artifact@v4\n        with:\n          pattern: artifact-*\n          merge-multiple: true\n          path: .git/hooks`);
-  const first = auditArtifactDownloadProvenance(inventory(file)).findings;
-  const second = auditArtifactDownloadProvenance(inventory(file)).findings;
-  assert.deepEqual(first.map(item => ({ id: item.id, severity: item.severity, blocking: item.blocking, location: item.location })), second.map(item => ({ id: item.id, severity: item.severity, blocking: item.blocking, location: item.location })));
-});
-
-test('summary counts artifact provenance risk signals', () => {
-  const file = workflow(`      - uses: actions/download-artifact@v4\n        with:\n          pattern: artifact-*\n          merge-multiple: true\n          path: \${{ github.sha }}\n          repository: trusted/producer\n          run-id: \${{ github.run_id }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`);
-  const summary = auditArtifactDownloadProvenance(inventory(file)).summary;
-  assert.equal(summary.downloadSteps, 1);
-  assert.equal(summary.workflows[0]?.mutableActions, 1);
-  assert.equal(summary.workflows[0]?.dynamicPaths, 1);
-  assert.equal(summary.workflows[0]?.broadPatterns, 1);
-  assert.equal(summary.workflows[0]?.mergeMultiple, 1);
-  assert.equal(summary.workflows[0]?.externalRepositories, 1);
-  assert.equal(summary.workflows[0]?.dynamicRunIds, 1);
-});
+test('accepts immutable same-run named artifact download', () => { assert.deepEqual(ids(safe), []); });
+test('rejects mutable download-artifact action identity', () => { assert.ok(ids(workflow('      - uses: actions/download-artifact@v4\n        with:\n          name: release-bundle')).includes('ci-artifact-download-action-mutable-ref')); });
+test('flags unbounded artifact selection', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}`)).includes('ci-artifact-download-selection-unbounded')); });
+test('rejects attacker-controlled artifact name', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: \${{ github.event.pull_request.head.ref }}`)).includes('ci-artifact-download-name-untrusted')); });
+test('reviews trusted dynamic artifact name without treating it as attacker input', () => { const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: build-\${{ github.sha }}`)); assert.ok(result.includes('ci-artifact-download-name-dynamic')); assert.ok(!result.includes('ci-artifact-download-name-untrusted')); });
+test('flags broad wildcard artifact pattern', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          pattern: artifact-*`)).includes('ci-artifact-download-pattern-broad')); });
+test('flags merge-multiple because producer filesystem boundaries disappear', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          pattern: release-linux-*\n          merge-multiple: true`)).includes('ci-artifact-download-merge-multiple')); });
+test('rejects attacker-controlled extraction path', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          path: \${{ github.event.issue.body }}`)).includes('ci-artifact-download-path-untrusted')); });
+test('rejects extraction into git control directory', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          path: .git/hooks`)).includes('ci-artifact-download-sensitive-path')); });
+test('rejects attacker-controlled cross-repository selector', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: \${{ inputs.repository }}\n          run-id: 123\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`)).includes('ci-artifact-download-repository-untrusted')); });
+test('requires explicit token for cross-repository artifact access', () => { const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: 123`)); assert.ok(result.includes('ci-artifact-download-cross-repository')); assert.ok(result.includes('ci-artifact-download-cross-repository-token-missing')); });
+test('requires explicit run identity for cross-repository artifact access', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`)).includes('ci-artifact-download-run-id-missing')); });
+test('rejects attacker-controlled run id', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: \${{ github.event.pull_request.head.sha }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`)).includes('ci-artifact-download-run-id-untrusted')); });
+test('accepts workflow_run id as authoritative dynamic run binding', () => { const result = ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: \${{ github.event.workflow_run.id }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`)); assert.ok(!result.includes('ci-artifact-download-run-id-dynamic')); assert.ok(!result.includes('ci-artifact-download-run-id-untrusted')); });
+test('reviews non-authoritative dynamic run id', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n          repository: trusted/producer\n          run-id: \${{ github.run_id }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`)).includes('ci-artifact-download-run-id-dynamic')); });
+test('blocks privileged artifact consumer reachable from pull_request_target', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release`, 'on:\n  pull_request_target:\npermissions:\n  contents: write')).includes('ci-artifact-download-privileged-untrusted-trigger')); });
+test('does not apply privileged-untrusted-trigger finding to protected push read-only workflow', () => { assert.ok(!ids(safe).includes('ci-artifact-download-privileged-untrusted-trigger')); });
+test('reviews execution after artifact download in privileged workflow', () => { assert.ok(ids(workflow(`      - uses: actions/download-artifact@${SHA}\n        with:\n          name: release\n      - run: ./release/deploy.sh`, 'on:\n  push:\n    branches: [main]\npermissions:\n  contents: write')).includes('ci-artifact-download-privileged-execution-review')); });
+test('ignores non-workflow files', () => { const section = auditArtifactDownloadProvenance(inventory(source('docs/example.yml', `steps:\n  - uses: actions/download-artifact@v4`))); assert.equal(section.summary.workflowFiles, 0); assert.equal(section.findings.length, 0); });
+test('reports deterministic findings for repeated audits', () => { const file = workflow(`      - uses: actions/download-artifact@v4\n        with:\n          pattern: artifact-*\n          merge-multiple: true\n          path: .git/hooks`); const first = auditArtifactDownloadProvenance(inventory(file)).findings; const second = auditArtifactDownloadProvenance(inventory(file)).findings; assert.deepEqual(first.map(item => ({ id: item.id, severity: item.severity, blocking: item.blocking, location: item.location })), second.map(item => ({ id: item.id, severity: item.severity, blocking: item.blocking, location: item.location }))); });
+test('summary counts artifact provenance risk signals', () => { const summary = auditArtifactDownloadProvenance(inventory(workflow(`      - uses: actions/download-artifact@v4\n        with:\n          pattern: artifact-*\n          merge-multiple: true\n          path: \${{ github.sha }}\n          repository: trusted/producer\n          run-id: \${{ github.run_id }}\n          github-token: \${{ secrets.ARTIFACT_TOKEN }}`))).summary; assert.equal(summary.downloadSteps, 1); assert.equal(summary.workflows[0]?.mutableActions, 1); assert.equal(summary.workflows[0]?.dynamicPaths, 1); assert.equal(summary.workflows[0]?.broadPatterns, 1); assert.equal(summary.workflows[0]?.mergeMultiple, 1); assert.equal(summary.workflows[0]?.externalRepositories, 1); assert.equal(summary.workflows[0]?.dynamicRunIds, 1); });
