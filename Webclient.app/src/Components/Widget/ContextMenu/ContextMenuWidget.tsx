@@ -3,22 +3,25 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
 import { RiFocusLine, RiGoogleFill, RiInformationLine, RiRouteLine } from 'react-icons/ri';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
-import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { GoogleMapsBusiness } from '../../../Business/GoogleMapsBusiness';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
+import {
+  ExperienceMenu,
+  type ExperienceMenuDismissReason,
+  type ExperienceMenuItem,
+} from '../../Common/ExperienceMenu';
 import type { MapWidgetManagerLike } from '../_shared/MapWidgetSurface';
 import {
   clampContextMenuPosition,
-  nextRovingIndex,
   normalizeMapPoint,
   openExternalUrl,
   type ContextMenuPosition,
@@ -31,13 +34,6 @@ interface MapClickEventLike {
   readonly mapPoint?: unknown;
 }
 
-interface ContextAction {
-  readonly id: string;
-  readonly label: string;
-  readonly icon: ReactNode;
-  readonly run: () => void;
-}
-
 export interface ContextMenuWidgetProps {
   readonly id: string;
   readonly windowManager: MapWidgetManagerLike;
@@ -47,29 +43,39 @@ const finiteCoordinate = (value: unknown): number => (
   typeof value === 'number' && Number.isFinite(value) ? value : 0
 );
 
+const isRestorableFocusTarget = (value: Element | null): value is HTMLElement => (
+  value instanceof HTMLElement
+  && value !== document.body
+  && value.isConnected
+  && !value.hasAttribute('disabled')
+  && value.getAttribute('aria-hidden') !== 'true'
+);
+
 export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidgetProps>(
   ({ id, windowManager }, ref): ReactNode => {
-    const menuRef = useRef<HTMLDivElement | null>(null);
+    const focusOriginRef = useRef<HTMLElement | null>(null);
     const [requestedPosition, setRequestedPosition] = useState<ContextMenuPosition>({ x: 0, y: 0 });
     const [position, setPosition] = useState<ContextMenuPosition>({ x: 8, y: 8 });
-    const [activeIndex, setActiveIndex] = useState(0);
+    const [focusRequestKey, setFocusRequestKey] = useState(0);
 
-    const close = useCallback((): void => {
+    const restoreFocus = useCallback((): void => {
+      const origin = focusOriginRef.current;
+      focusOriginRef.current = null;
+      if (!isRestorableFocusTarget(origin)) return;
+      queueMicrotask(() => {
+        if (isRestorableFocusTarget(origin)) origin.focus({ preventScroll: true });
+      });
+    }, []);
+
+    const close = useCallback((restore = true): void => {
       windowManager.HideWindow(id);
-    }, [id, windowManager]);
+      if (restore) restoreFocus();
+      else focusOriginRef.current = null;
+    }, [id, restoreFocus, windowManager]);
 
     const getClickedPoint = useCallback((): unknown | null => (
       (MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null)?.mapPoint ?? null
     ), []);
-
-    const logPointAction = useCallback((label: string, point: unknown): void => {
-      const normalized = normalizeMapPoint(point as never);
-      if (!normalized) return;
-      LoggingBusiness.CreateClientLog(
-        label,
-        `${normalized.latitude}/${normalized.longitude}`,
-      );
-    }, []);
 
     const showVicinityQuery = useCallback((): void => {
       const point = getClickedPoint();
@@ -77,81 +83,80 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       windowManager.ShowWindow('vicinity-query-window');
       close();
       GisGraphicsHelper.ZoomToGeometry(MapManager.GetMapView(), point, 14);
-      logPointAction('Sağ Tık/Yakınımda ara', point);
-    }, [close, getClickedPoint, logPointAction, windowManager]);
+    }, [close, getClickedPoint, windowManager]);
 
     const showIdentify = useCallback((): void => {
       const point = getClickedPoint();
       if (!point) return;
       windowManager.ShowWindow('global-identify-widget');
       close();
-      logPointAction('Sağ Tık/Bilgi al', point);
-    }, [close, getClickedPoint, logPointAction, windowManager]);
+    }, [close, getClickedPoint, windowManager]);
 
     const showRoute = useCallback((): void => {
       const point = getClickedPoint();
       const normalized = normalizeMapPoint(point as never);
       if (!point || !normalized) return;
       close();
-      logPointAction('Sağ Tık/Yol Tarifi', point);
       const target = new URL('https://www.google.com.tr/maps');
       target.searchParams.set('saddr', 'My Location');
       target.searchParams.set('daddr', `${normalized.latitude},${normalized.longitude}`);
       openExternalUrl(target.toString());
-    }, [close, getClickedPoint, logPointAction]);
+    }, [close, getClickedPoint]);
 
     const showStreetView = useCallback((): void => {
       const point = getClickedPoint();
       if (!point) return;
-      if (openExternalUrl(GoogleMapsBusiness.CreateStreetViewUrlFromPoint(point))) {
-        logPointAction('Sağ Tık/Sokak Görünümü', point);
-      }
+      openExternalUrl(GoogleMapsBusiness.CreateStreetViewUrlFromPoint(point));
       close();
-    }, [close, getClickedPoint, logPointAction]);
+    }, [close, getClickedPoint]);
 
-    const actions: readonly ContextAction[] = [
+    const actions = useMemo<readonly ExperienceMenuItem[]>(() => [
       {
         id: 'identify',
         label: 'Bilgi Al',
+        description: 'Seçilen noktadaki harita detaylarını açar.',
         icon: <RiInformationLine aria-hidden="true" />,
-        run: showIdentify,
+        onActivate: showIdentify,
       },
       {
         id: 'nearby',
         label: 'Yakınımda Ara',
+        description: 'Seçilen noktanın çevresindeki hizmetleri arar.',
         icon: <RiFocusLine aria-hidden="true" />,
-        run: showVicinityQuery,
+        onActivate: showVicinityQuery,
       },
       {
         id: 'route',
         label: 'Yol Tarifi Al',
+        description: 'Seçilen noktayı harici yol tarifi hedefi olarak açar.',
         icon: <RiRouteLine aria-hidden="true" />,
-        run: showRoute,
+        onActivate: showRoute,
       },
       {
         id: 'street-view',
         label: 'Sokak Görünümü',
+        description: 'Seçilen noktayı desteklenen sokak görünümünde açar.',
         icon: <RiGoogleFill aria-hidden="true" />,
-        run: showStreetView,
+        onActivate: showStreetView,
       },
-    ];
+    ], [showIdentify, showRoute, showStreetView, showVicinityQuery]);
 
-    const positionMenu = useCallback((): void => {
-      const menu = menuRef.current;
+    const positionMenuAt = useCallback((requested: ContextMenuPosition): void => {
+      const menu = document.getElementById(id) as HTMLDivElement | null;
       const next = clampContextMenuPosition(
-        requestedPosition,
+        requested,
         {
           width: window.innerWidth,
           height: window.innerHeight,
         },
         {
-          width: menu?.offsetWidth ?? 224,
-          height: menu?.offsetHeight ?? 200,
+          width: menu?.offsetWidth ?? 248,
+          height: menu?.offsetHeight ?? 252,
         },
         8,
       );
       setPosition(next);
-    }, [requestedPosition]);
+    }, [id]);
 
     useImperativeHandle(ref, () => ({
       id,
@@ -160,92 +165,69 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       OnShow: () => {
         const clickEvent = MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null;
         if (!clickEvent) return;
-        setRequestedPosition({
+        const activeElement = document.activeElement;
+        focusOriginRef.current = isRestorableFocusTarget(activeElement) ? activeElement : null;
+        const nextRequested = {
           x: finiteCoordinate(clickEvent.x),
           y: finiteCoordinate(clickEvent.y),
-        });
-        setActiveIndex(0);
-        queueMicrotask(() => {
-          positionMenu();
-          menuRef.current
-            ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
-            ?.focus({ preventScroll: true });
-        });
+        };
+        setRequestedPosition(nextRequested);
+        positionMenuAt(nextRequested);
+        setFocusRequestKey((current) => current + 1);
       },
-      OnClose: () => setActiveIndex(0),
-    }), [id, positionMenu]);
+      OnClose: () => restoreFocus(),
+    }), [id, positionMenuAt, restoreFocus]);
 
     useEffect(() => {
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
-      return () => windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
+      return () => {
+        focusOriginRef.current = null;
+        windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
+      };
     }, [id, ref, windowManager]);
 
     useEffect(() => {
-      positionMenu();
-      const handleResize = (): void => positionMenu();
+      const handleResize = (): void => positionMenuAt(requestedPosition);
       window.addEventListener('resize', handleResize, { passive: true });
-      return () => window.removeEventListener('resize', handleResize);
-    }, [positionMenu]);
-
-    const focusIndex = useCallback((index: number): void => {
-      const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
-      const target = buttons?.item(index);
-      if (!target) return;
-      setActiveIndex(index);
-      target.focus({ preventScroll: true });
-    }, []);
-
-    const onMenuKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        close();
-        return;
-      }
-      const next = nextRovingIndex(
-        { activeIndex, itemCount: actions.length },
-        event.key,
-      );
-      if (next === activeIndex) return;
-      event.preventDefault();
-      focusIndex(next);
-    }, [actions.length, activeIndex, close, focusIndex]);
+      window.visualViewport?.addEventListener('resize', handleResize, { passive: true });
+      window.visualViewport?.addEventListener('scroll', handleResize, { passive: true });
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        window.visualViewport?.removeEventListener('resize', handleResize);
+        window.visualViewport?.removeEventListener('scroll', handleResize);
+      };
+    }, [positionMenuAt, requestedPosition]);
 
     const visible = windowManager.IsVisible(id);
 
+    const handleDismiss = useCallback((reason: ExperienceMenuDismissReason): void => {
+      close(reason !== 'tab');
+    }, [close]);
+
     return (
-      <div
-        ref={menuRef}
-        className="context-menu-container context-menu-container--modern"
-        role="menu"
-        aria-label="Harita işlemleri"
-        aria-hidden={!visible}
-        onKeyDown={onMenuKeyDown}
-        style={{
-          position: 'absolute',
-          top: position.y,
-          left: position.x,
-          zIndex: 999,
-          visibility: visible ? 'visible' : 'hidden',
-        }}
-      >
-        <div className="context-menu-heading" aria-hidden="true">
-          Harita işlemleri
-        </div>
-        {actions.map((action, index) => (
-          <button
-            key={action.id}
-            type="button"
-            role="menuitem"
-            className="context-menu-item"
-            tabIndex={index === activeIndex ? 0 : -1}
-            onFocus={() => setActiveIndex(index)}
-            onClick={action.run}
-          >
-            <span className="context-menu-item-icon" aria-hidden="true">{action.icon}</span>
-            <span className="context-menu-item-text">{action.label}</span>
-          </button>
-        ))}
-      </div>
+      <>
+        <ExperienceMenu
+          id={id}
+          className="context-menu-container context-menu-container--modern"
+          itemClassName="context-menu-item"
+          label="Harita işlemleri"
+          items={actions}
+          visible={visible}
+          autoFocusWhenVisible
+          focusRequestKey={focusRequestKey}
+          onDismiss={handleDismiss}
+          style={{
+            position: 'absolute',
+            top: position.y,
+            left: position.x,
+            zIndex: 999,
+            visibility: visible ? 'visible' : 'hidden',
+          }}
+        />
+        <span className="context-menu-privacy-note experience-sr-only">
+          Harita işlemleri seçilen koordinatı istemci günlüğüne kaydetmez.
+        </span>
+      </>
     );
   },
 );
