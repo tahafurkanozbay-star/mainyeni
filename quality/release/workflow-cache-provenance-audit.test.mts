@@ -278,6 +278,9 @@ test('findings are deterministically sorted', () => {
     'on:\n  push:\n    branches: [main]',
     cache('path: ~/.npm\nkey: npm-main\nrestore-keys: |\n  npm-\nfail-on-cache-miss: true'),
   ));
-  const ordered = [...result.findings].map(item => `${item.location.file}:${item.location.line}:${item.id}`);
+  const ordered = [...result.findings].map(item => {
+    const location = item.location;
+    return location === undefined ? `<unknown>:0:${item.id}` : `${location.file}:${location.line}:${item.id}`;
+  });
   assert.deepEqual(ordered, [...ordered].sort());
 });
