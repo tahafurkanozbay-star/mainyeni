@@ -36,7 +36,6 @@ export class MapModeTransitionCoordinator {
   readonly #model: MapModeTransitionModel;
   #executor: MapModeTransitionExecutor;
   #latest: MapModeTransitionRequest | null = null;
-  #runningRequest: MapModeTransitionRequest | null = null;
   #running = false;
   #disposed = false;
   #drainPromise: Promise<void> = Promise.resolve();
@@ -107,7 +106,6 @@ export class MapModeTransitionCoordinator {
       while (!this.#disposed && this.#latest) {
         const request = this.#latest;
         this.#latest = null;
-        this.#runningRequest = request;
 
         if (!this.#model.begin(request)) {
           this.#patch({ staleCompletionCount: this.#diagnostics.staleCompletionCount + 1 });
@@ -134,8 +132,6 @@ export class MapModeTransitionCoordinator {
           if (!this.#model.fail(request, error, fallback)) {
             this.#patch({ staleCompletionCount: this.#diagnostics.staleCompletionCount + 1 });
           }
-        } finally {
-          this.#runningRequest = null;
         }
       }
     } finally {
