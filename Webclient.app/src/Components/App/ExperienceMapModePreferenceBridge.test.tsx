@@ -119,7 +119,7 @@ describe('ExperienceMapModePreferenceBridge', () => {
       window.dispatchEvent(new CustomEvent(EXPERIENCE_PREFERENCE_EVENT, { detail: { lastMapMode: 'invalid' } }));
     });
     expect(command).toHaveBeenCalledTimes(1);
-    expect((command.mock.calls[0]?.[0] as CustomEvent).detail).toMatchObject({ mode: '2d' });
+    expect((command.mock.calls[0]![0] as CustomEvent).detail).toMatchObject({ mode: '2d' });
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, command);
   });
 
