@@ -1,0 +1,159 @@
+.map-shortcut-help--workspace-center {
+  inline-size: min(860px, 100%);
+}
+
+.map-workspace-help-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 22px 0;
+  border-block-end: 1px solid color-mix(in srgb, var(--exp-border, #d7dde6) 70%, transparent);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 97%, var(--exp-text, #172033));
+}
+
+.map-workspace-help-tabs [role='tab'] {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  min-block-size: 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 9px;
+  border: 1px solid transparent;
+  border-block-end: 0;
+  border-radius: 11px 11px 0 0;
+  color: var(--exp-text-muted, #667085);
+  background: transparent;
+  text-align: start;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.map-workspace-help-tabs [role='tab'] > span:first-child {
+  display: grid;
+  inline-size: 28px;
+  block-size: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--exp-text-muted, #667085) 8%, transparent);
+  font-size: 0.95rem;
+}
+
+.map-workspace-help-tabs [role='tab'] small {
+  min-inline-size: 26px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exp-text-muted, #667085) 9%, transparent);
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.map-workspace-help-tabs [role='tab']:hover {
+  color: var(--exp-text, #172033);
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 5%, transparent);
+}
+
+.map-workspace-help-tabs [role='tab'][aria-selected='true'] {
+  border-color: color-mix(in srgb, var(--exp-border, #d7dde6) 84%, transparent);
+  color: var(--exp-accent, #0b6fcb);
+  background: var(--exp-surface, #fff);
+  box-shadow: 0 -2px 0 var(--exp-accent, #0b6fcb) inset;
+}
+
+.map-workspace-help-tabs [role='tab'][aria-selected='true'] > span:first-child,
+.map-workspace-help-tabs [role='tab'][aria-selected='true'] small {
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 10%, transparent);
+}
+
+.map-workspace-help-tabs [role='tab']:focus-visible {
+  z-index: 1;
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 72%, white);
+  outline-offset: -2px;
+}
+
+.map-shortcut-help__body--workspace-center {
+  max-block-size: min(560px, calc(100dvh - 250px));
+}
+
+.map-workspace-help-tabpanel {
+  min-block-size: 0;
+}
+
+.map-workspace-help-tabpanel[hidden] {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .map-shortcut-help--workspace-center {
+    inline-size: min(680px, 100%);
+  }
+
+  .map-shortcut-help__body--workspace-center {
+    max-block-size: calc(100dvh - 255px);
+  }
+}
+
+@media (max-width: 520px) {
+  .map-workspace-help-tabs {
+    gap: 5px;
+    padding: 8px 12px 0;
+  }
+
+  .map-workspace-help-tabs [role='tab'] {
+    grid-template-columns: 24px minmax(0, 1fr);
+    min-block-size: 50px;
+    padding-inline: 9px;
+  }
+
+  .map-workspace-help-tabs [role='tab'] > span:first-child {
+    inline-size: 24px;
+    block-size: 24px;
+  }
+
+  .map-workspace-help-tabs [role='tab'] small {
+    display: none;
+  }
+
+  .map-shortcut-help__body--workspace-center {
+    max-block-size: calc(100dvh - 245px);
+  }
+}
+
+@media (pointer: coarse) {
+  .map-workspace-help-tabs [role='tab'] {
+    min-block-size: 52px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-workspace-help-tabs [role='tab'] {
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-workspace-help-tabs {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .map-workspace-help-tabs [role='tab'] {
+    color: CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .map-workspace-help-tabs [role='tab'][aria-selected='true'] {
+    border-color: Highlight;
+    color: HighlightText;
+    background: Highlight;
+    box-shadow: none;
+  }
+
+  .map-workspace-help-tabs [role='tab']:focus-visible {
+    outline-color: Highlight;
+  }
+}
