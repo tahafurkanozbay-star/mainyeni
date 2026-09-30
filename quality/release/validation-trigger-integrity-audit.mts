@@ -47,7 +47,7 @@ interface EventBlock {
   readonly lines: readonly WorkflowLine[];
 }
 
-const AUTHORITATIVE_NAME = /\b(?:release|quality|validation|audit|test|build|typecheck|lint|security|gate|governance|architecture)\b/i;
+const AUTHORITATIVE_NAME = /\b(?:release|quality|validation|audit|test|build|typecheck|typed|source[- ]?boundary|lint|security|gate|governance|architecture)\b/i;
 const RELEASE_CRITICAL_NAME = /\b(?:release|quality|validation|gate)\b/i;
 const VALIDATION_COMMAND = /\b(?:npm\s+(?:test|run\s+(?:test|lint|build|typecheck|check|audit))|npx\s+(?:tsc|vitest|eslint|oxlint)|node\s+--test|dotnet\s+(?:test|build|publish)|pytest|cargo\s+test|go\s+test|quality\/release\/(?:cli|pr-gate)\.mts)\b/i;
 const EVENT_HEADER = /^\s*([A-Za-z0-9_-]+)\s*:\s*(.*?)\s*(?:#.*)?$/;
