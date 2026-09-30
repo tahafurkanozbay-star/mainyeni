@@ -58,9 +58,7 @@ namespace Api.Core.Platform.Governance
                 hostValueCount: GetHeaderValueCount(headers, "Host"));
         }
 
-        public static long GetHeaderUtf8Length(
-            IHeaderDictionary headers,
-            string headerName)
+        public static long GetHeaderUtf8Length(IHeaderDictionary headers, string headerName)
         {
             if (headers == null || string.IsNullOrWhiteSpace(headerName))
             {
@@ -85,18 +83,14 @@ namespace Api.Core.Platform.Governance
             return total;
         }
 
-        public static int GetHeaderValueCount(
-            IHeaderDictionary headers,
-            string headerName)
+        public static int GetHeaderValueCount(IHeaderDictionary headers, string headerName)
         {
             if (headers == null || string.IsNullOrWhiteSpace(headerName))
             {
                 return 0;
             }
 
-            return headers.TryGetValue(headerName, out var values)
-                ? values.Count
-                : 0;
+            return headers.TryGetValue(headerName, out var values) ? values.Count : 0;
         }
 
         public static bool ContainsNewline(IHeaderDictionary headers)
@@ -110,8 +104,7 @@ namespace Api.Core.Platform.Governance
             {
                 foreach (var value in pair.Value)
                 {
-                    if (value != null &&
-                        (value.IndexOf('\r') >= 0 || value.IndexOf('\n') >= 0))
+                    if (value != null && (value.IndexOf('\r') >= 0 || value.IndexOf('\n') >= 0))
                     {
                         return true;
                     }
@@ -121,14 +114,61 @@ namespace Api.Core.Platform.Governance
             return false;
         }
 
-        private static int Utf8Length(string value)
+        /// <summary>
+        /// Detects field-value octets that are forbidden by HTTP field-value grammar even when a
+        /// hosting adapter has materialized them into <see cref="IHeaderDictionary"/>. Horizontal
+        /// tab is intentionally retained because HTTP permits it as optional whitespace. CR/LF are
+        /// handled by <see cref="ContainsNewline"/> so callers can preserve the more specific
+        /// rejection reason. DEL and C0 controls are rejected fail-closed.
+        /// </summary>
+        public static bool ContainsInvalidControlCharacter(IHeaderDictionary headers)
+        {
+            if (headers == null)
+            {
+                return false;
+            }
+
+            foreach (var pair in headers)
+            {
+                foreach (var value in pair.Value)
+                {
+                    if (ContainsInvalidControlCharacter(value))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool ContainsInvalidControlCharacter(string value)
         {
             if (string.IsNullOrEmpty(value))
             {
-                return 0;
+                return false;
             }
 
-            return Encoding.UTF8.GetByteCount(value);
+            for (var index = 0; index < value.Length; index++)
+            {
+                var character = value[index];
+                if (character == '\r' || character == '\n' || character == '\t')
+                {
+                    continue;
+                }
+
+                if (character < 0x20 || character == 0x7f)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int Utf8Length(string value)
+        {
+            return string.IsNullOrEmpty(value) ? 0 : Encoding.UTF8.GetByteCount(value);
         }
 
         private static long SaturatingAdd(long left, long right)
@@ -148,9 +188,7 @@ namespace Api.Core.Platform.Governance
                 return left;
             }
 
-            return left > int.MaxValue - right
-                ? int.MaxValue
-                : left + right;
+            return left > int.MaxValue - right ? int.MaxValue : left + right;
         }
     }
 
@@ -183,25 +221,15 @@ namespace Api.Core.Platform.Governance
         }
 
         public int HeaderCount { get; }
-
         public int HeaderValueCount { get; }
-
         public long EstimatedUtf8Bytes { get; }
-
         public long AuthorizationBytes { get; }
-
         public long CookieBytes { get; }
-
         public long ContentTypeBytes { get; }
-
         public long ForwardedForBytes { get; }
-
         public int AuthorizationValueCount { get; }
-
         public int ContentLengthValueCount { get; }
-
         public int TransferEncodingValueCount { get; }
-
         public int HostValueCount { get; }
     }
 }
