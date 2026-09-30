@@ -22,6 +22,11 @@ import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
 import { MapWorkspaceHealthSurface } from './MapWorkspaceHealthSurface';
 import { MapWorkspaceShortcutHelpLauncher, requestMapWorkspaceHelp } from './MapWorkspaceShortcutHelp';
 import { handleMapWorkspaceKeyDown } from './mapWorkspaceShortcuts';
+import {
+  isMapWorkspaceReadinessFailure,
+  mapWorkspaceReadinessMessage,
+  waitForMapWorkspaceViewReady,
+} from './mapWorkspaceViewReadiness';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { createViewStateBridge } from '../../gis-engine/viewState';
@@ -58,6 +63,7 @@ interface MapViewLike {
   popup: PopupLike;
   padding?: unknown;
   updating?: boolean;
+  when?: () => Promise<unknown>;
   on?: (eventName: string, callback: (event: MapClickEvent) => void) => RemovableHandle;
   destroy?: () => void;
 }
@@ -140,7 +146,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     let performanceMonitor: ReturnType<typeof createViewPerformanceMonitor> | null = null;
     let unbindViewState: () => void = () => undefined;
     let kentRehberiLayerHandle: KentRehberiLayerHandle | null = null;
-    const kentRehberiAbortController = new AbortController();
+    const workspaceAbortController = new AbortController();
     const handles: RemovableHandle[] = [];
 
     const initializeMap = async (): Promise<void> => {
@@ -152,6 +158,13 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       accessorWatchRef.current = watchUtils.watch;
       const map = new MapCtor({ basemap: 'osm' });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
+
+      const readiness = await waitForMapWorkspaceViewReady(view, { signal: workspaceAbortController.signal });
+      if (disposed || readiness.status === 'aborted') return;
+      if (isMapWorkspaceReadinessFailure(readiness)) {
+        throw new Error(mapWorkspaceReadinessMessage(readiness));
+      }
+
       bridge = createViewStateBridge({ mode: '2d' }, { onListenerError: (error: unknown) => DebugHelper.Log(error) });
       MapManager.SetViewStateBridge?.(bridge as never);
       unbindViewState = bindMapViewState(view as never, bridge, {
@@ -188,7 +201,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       if (view.updating) accessibilityModel.markUpdating(true);
 
       accessibilityModel.markResourceLoading('kent-rehberi-data');
-      void attachKentRehberiGeoJsonLayer({ map: map as KentRehberiMapLike, signal: kentRehberiAbortController.signal })
+      void attachKentRehberiGeoJsonLayer({ map: map as KentRehberiMapLike, signal: workspaceAbortController.signal })
         .then((handle) => {
           if (disposed) {
             handle.dispose();
@@ -205,16 +218,16 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     };
 
     void initializeMap().catch((error: unknown) => {
-      if (disposed) return;
+      if (disposed || workspaceAbortController.signal.aborted) return;
       accessibilityModel.markError(error);
       DebugHelper.Log(error);
     });
 
     return () => {
       disposed = true;
+      workspaceAbortController.abort();
       activeViewModeRef.current = '2d';
       accessorWatchRef.current = null;
-      kentRehberiAbortController.abort();
       kentRehberiLayerHandle?.dispose();
       kentRehberiLayerHandle = null;
       unbindViewState();
