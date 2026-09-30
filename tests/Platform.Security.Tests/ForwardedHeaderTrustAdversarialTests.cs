@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using AspNetCoreIPNetwork = Microsoft.AspNetCore.HttpOverrides.IPNetwork;
 using Xunit;
 
 namespace Platform.Security.Tests;
@@ -17,11 +18,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData(" 2001:db8::10 ", "2001:db8::10")]
     public void Build_TrimsConfiguredProxyAddresses(string configured, string expected)
     {
-        var result = Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:KnownProxies:0"] = configured
-        });
-
+        var result = Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownProxies:0"] = configured });
         Assert.Contains(IPAddress.Parse(expected), result.KnownProxies);
     }
 
@@ -34,11 +31,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData("169.254.1.1")]
     public void Build_AllowsExplicitNonUnspecifiedProxyAddresses(string address)
     {
-        var result = Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:KnownProxies:0"] = address
-        });
-
+        var result = Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownProxies:0"] = address });
         Assert.Contains(IPAddress.Parse(address), result.KnownProxies);
     }
 
@@ -51,12 +44,8 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData("fd00::/8")]
     public void Build_AllowsExplicitBoundedNetworks(string network)
     {
-        var result = Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = network
-        });
-
-        Assert.Contains(IPNetwork.Parse(network), result.KnownIPNetworks);
+        var result = Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = network });
+        Assert.Contains(AspNetCoreIPNetwork.Parse(network), result.KnownIPNetworks);
     }
 
     [Theory]
@@ -68,10 +57,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData("garbage/24")]
     public void Build_RejectsMalformedNetworks(string network)
     {
-        Assert.Throws<OptionsValidationException>(() => Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = network
-        }));
+        Assert.Throws<OptionsValidationException>(() => Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = network }));
     }
 
     [Theory]
@@ -82,10 +68,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData("203.0.113.10 198.51.100.1")]
     public void Build_RejectsCompositeOrControlBearingProxyValues(string address)
     {
-        Assert.Throws<OptionsValidationException>(() => Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:KnownProxies:0"] = address
-        }));
+        Assert.Throws<OptionsValidationException>(() => Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownProxies:0"] = address }));
     }
 
     [Fact]
@@ -96,7 +79,6 @@ public sealed class ForwardedHeaderTrustAdversarialTests
             ["Platform:ForwardedHeaders:KnownProxies:0"] = "2001:db8::1",
             ["Platform:ForwardedHeaders:KnownProxies:1"] = "2001:0db8:0:0:0:0:0:1"
         });
-
         Assert.Single(result.KnownProxies.Where(address => address.Equals(IPAddress.Parse("2001:db8::1"))));
     }
 
@@ -108,53 +90,32 @@ public sealed class ForwardedHeaderTrustAdversarialTests
             ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = "2001:db8::/32",
             ["Platform:ForwardedHeaders:KnownIPNetworks:1"] = "2001:0db8:0000:0000::/32"
         });
-
-        Assert.Single(result.KnownIPNetworks.Where(network => network.Equals(IPNetwork.Parse("2001:db8::/32"))));
+        Assert.Single(result.KnownIPNetworks.Where(network => network.Equals(AspNetCoreIPNetwork.Parse("2001:db8::/32"))));
     }
 
     [Fact]
     public void Build_ExactProxyCardinalityLimitIsAccepted()
     {
         var values = new Dictionary<string, string?>();
-        for (var index = 0; index < ForwardedHeaderTrustPolicy.MaxTrustedProxyEntries; index++)
-        {
-            values[$"Platform:ForwardedHeaders:KnownProxies:{index}"] = $"192.0.2.{index + 1}";
-        }
-
+        for (var index = 0; index < ForwardedHeaderTrustPolicy.MaxTrustedProxyEntries; index++) values[$"Platform:ForwardedHeaders:KnownProxies:{index}"] = $"192.0.2.{index + 1}";
         var result = Build(values);
-
-        foreach (var value in values.Values)
-        {
-            Assert.Contains(IPAddress.Parse(value!), result.KnownProxies);
-        }
+        foreach (var value in values.Values) Assert.Contains(IPAddress.Parse(value!), result.KnownProxies);
     }
 
     [Fact]
     public void Build_ExactNetworkCardinalityLimitIsAccepted()
     {
         var values = new Dictionary<string, string?>();
-        for (var index = 0; index < ForwardedHeaderTrustPolicy.MaxTrustedNetworkEntries; index++)
-        {
-            values[$"Platform:ForwardedHeaders:KnownIPNetworks:{index}"] = $"10.{index}.0.0/16";
-        }
-
+        for (var index = 0; index < ForwardedHeaderTrustPolicy.MaxTrustedNetworkEntries; index++) values[$"Platform:ForwardedHeaders:KnownIPNetworks:{index}"] = $"10.{index}.0.0/16";
         var result = Build(values);
-
-        foreach (var value in values.Values)
-        {
-            Assert.Contains(IPNetwork.Parse(value!), result.KnownIPNetworks);
-        }
+        foreach (var value in values.Values) Assert.Contains(AspNetCoreIPNetwork.Parse(value!), result.KnownIPNetworks);
     }
 
     [Fact]
     public void Build_DuplicateEntriesStillConsumeConfiguredCardinalityBudget()
     {
         var values = new Dictionary<string, string?>();
-        for (var index = 0; index <= ForwardedHeaderTrustPolicy.MaxTrustedProxyEntries; index++)
-        {
-            values[$"Platform:ForwardedHeaders:KnownProxies:{index}"] = "203.0.113.10";
-        }
-
+        for (var index = 0; index <= ForwardedHeaderTrustPolicy.MaxTrustedProxyEntries; index++) values[$"Platform:ForwardedHeaders:KnownProxies:{index}"] = "203.0.113.10";
         Assert.Throws<OptionsValidationException>(() => Build(values));
     }
 
@@ -162,11 +123,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     public void Build_DuplicateNetworksStillConsumeConfiguredCardinalityBudget()
     {
         var values = new Dictionary<string, string?>();
-        for (var index = 0; index <= ForwardedHeaderTrustPolicy.MaxTrustedNetworkEntries; index++)
-        {
-            values[$"Platform:ForwardedHeaders:KnownIPNetworks:{index}"] = "198.51.100.0/24";
-        }
-
+        for (var index = 0; index <= ForwardedHeaderTrustPolicy.MaxTrustedNetworkEntries; index++) values[$"Platform:ForwardedHeaders:KnownIPNetworks:{index}"] = "198.51.100.0/24";
         Assert.Throws<OptionsValidationException>(() => Build(values));
     }
 
@@ -179,11 +136,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData(" False ", false)]
     public void Build_HeaderSymmetryParsingIsExplicitAndCaseInsensitive(string configured, bool expected)
     {
-        var result = Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:RequireHeaderSymmetry"] = configured
-        });
-
+        var result = Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:RequireHeaderSymmetry"] = configured });
         Assert.Equal(expected, result.RequireHeaderSymmetry);
     }
 
@@ -194,25 +147,14 @@ public sealed class ForwardedHeaderTrustAdversarialTests
     [InlineData(8)]
     public void Build_PreservesConfiguredForwardLimit(int limit)
     {
-        var result = ForwardedHeaderTrustPolicy.Build(
-            new ApiPlatformOptions.ForwardedHeaderOptions
-            {
-                Enabled = true,
-                ForwardLimit = limit
-            },
-            Configuration(null));
-
+        var result = ForwardedHeaderTrustPolicy.Build(new ApiPlatformOptions.ForwardedHeaderOptions { Enabled = true, ForwardLimit = limit }, Configuration(null));
         Assert.Equal(limit, result.ForwardLimit);
     }
 
     [Fact]
     public void Build_NeverEnablesForwardedHost()
     {
-        var result = Build(new Dictionary<string, string?>
-        {
-            ["Platform:ForwardedHeaders:KnownProxies:0"] = "203.0.113.10"
-        });
-
+        var result = Build(new Dictionary<string, string?> { ["Platform:ForwardedHeaders:KnownProxies:0"] = "203.0.113.10" });
         Assert.False(result.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedHost));
         Assert.True(result.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedFor));
         Assert.True(result.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedProto));
@@ -227,15 +169,8 @@ public sealed class ForwardedHeaderTrustAdversarialTests
             ["Platform:ForwardedHeaders:KnownProxies:0"] = "203.0.113.10",
             ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = "198.51.100.0/24"
         });
-
-        foreach (var proxy in baseline.KnownProxies)
-        {
-            Assert.Contains(proxy, configured.KnownProxies);
-        }
-        foreach (var network in baseline.KnownIPNetworks)
-        {
-            Assert.Contains(network, configured.KnownIPNetworks);
-        }
+        foreach (var proxy in baseline.KnownProxies) Assert.Contains(proxy, configured.KnownProxies);
+        foreach (var network in baseline.KnownIPNetworks) Assert.Contains(network, configured.KnownIPNetworks);
     }
 
     [Fact]
@@ -247,10 +182,7 @@ public sealed class ForwardedHeaderTrustAdversarialTests
             ["Platform:ForwardedHeaders:KnownProxies:0"] = "not-an-ip",
             ["ConnectionStrings:Primary"] = secretLikeValue
         });
-
-        var exception = Assert.Throws<OptionsValidationException>(() =>
-            ForwardedHeaderTrustPolicy.Build(new ApiPlatformOptions.ForwardedHeaderOptions(), configuration));
-
+        var exception = Assert.Throws<OptionsValidationException>(() => ForwardedHeaderTrustPolicy.Build(new ApiPlatformOptions.ForwardedHeaderOptions(), configuration));
         Assert.DoesNotContain(secretLikeValue, exception.Message, StringComparison.Ordinal);
     }
 
@@ -263,29 +195,16 @@ public sealed class ForwardedHeaderTrustAdversarialTests
             ["Platform:ForwardedHeaders:KnownIPNetworks:0"] = "not-a-network",
             ["Platform:ForwardedHeaders:RequireHeaderSymmetry"] = "maybe"
         }));
-
         Assert.NotEmpty(exception.Failures);
     }
 
-    private static Microsoft.AspNetCore.Builder.ForwardedHeadersOptions Build(
-        IDictionary<string, string?>? values = null)
-    {
-        return ForwardedHeaderTrustPolicy.Build(
-            new ApiPlatformOptions.ForwardedHeaderOptions
-            {
-                Enabled = true,
-                ForwardLimit = 1
-            },
-            Configuration(values));
-    }
+    private static Microsoft.AspNetCore.Builder.ForwardedHeadersOptions Build(IDictionary<string, string?>? values = null) =>
+        ForwardedHeaderTrustPolicy.Build(new ApiPlatformOptions.ForwardedHeaderOptions { Enabled = true, ForwardLimit = 1 }, Configuration(values));
 
     private static IConfiguration Configuration(IDictionary<string, string?>? values)
     {
         var builder = new ConfigurationBuilder();
-        if (values != null)
-        {
-            builder.AddInMemoryCollection(values);
-        }
+        if (values != null) builder.AddInMemoryCollection(values);
         return builder.Build();
     }
 }
