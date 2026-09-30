@@ -356,6 +356,15 @@ const collectRecordTerms = (
   return Object.freeze(Array.from(tokens).map(term => Object.freeze({ term, source })));
 };
 
+const accumulateRecordFrequencies = (
+  frequencies: Map<string, number>,
+  record: NormalizedRecord,
+  source: string,
+): void => {
+  const terms = collectRecordTerms(record, source);
+  for (const item of terms) frequencies.set(item.term, (frequencies.get(item.term) ?? 0) + 1);
+};
+
 export const createFuzzyLexiconTermsFromRecordsV8 = (
   records: readonly NormalizedRecord[],
   sourceInput = 'dataset',
@@ -371,9 +380,7 @@ export const createFuzzyLexiconTermsFromRecordsV8 = (
   const limit = Math.min(records.length, maximumRecords);
   for (let index = 0; index < limit; index += 1) {
     const record = records[index];
-    if (!record) continue;
-    const terms = collectRecordTerms(record, source);
-    for (const item of terms) frequencies.set(item.term, (frequencies.get(item.term) ?? 0) + 1);
+    if (record) accumulateRecordFrequencies(frequencies, record, source);
   }
   return Object.freeze(Array.from(frequencies.entries())
     .map(([term, frequency]) => Object.freeze({ term, frequency, source }))
@@ -388,7 +395,7 @@ const nextDistanceRow = (
   previousPrevious: readonly number[] | null,
   rowIndex: number,
 ): readonly number[] => {
-  const current = new Array<number>(right.length + 1);
+  const current = Array.from({ length: right.length + 1 }, () => 0);
   current[0] = rowIndex;
   for (let column = 1; column <= right.length; column += 1) {
     const rightCharacter = right[column - 1] ?? '';
@@ -405,6 +412,12 @@ const nextDistanceRow = (
     current[column] = value;
   }
   return current;
+};
+
+const minimumValue = (values: readonly number[]): number => {
+  let minimum = Number.POSITIVE_INFINITY;
+  for (const value of values) minimum = Math.min(minimum, value);
+  return minimum;
 };
 
 export const boundedDamerauLevenshteinV8 = (
@@ -430,20 +443,12 @@ export const boundedDamerauLevenshteinV8 = (
       previousPrevious,
       row,
     );
-    let rowMinimum = Number.POSITIVE_INFINITY;
-    for (const value of current) rowMinimum = Math.min(rowMinimum, value);
-    if (rowMinimum > maximumDistance) return maximumDistance + 1;
+    if (minimumValue(current) > maximumDistance) return maximumDistance + 1;
     previousPrevious = previous;
     previous = current;
   }
   const distance = previous[right.length] ?? maximumDistance + 1;
   return distance <= maximumDistance ? distance : maximumDistance + 1;
-};
-
-const sharedGramCount = (left: readonly string[], right: ReadonlySet<string>): number => {
-  let count = 0;
-  for (const gram of left) if (right.has(gram)) count += 1;
-  return count;
 };
 
 const gramSimilarity = (
@@ -456,6 +461,13 @@ const gramSimilarity = (
   return union > 0 ? shared / union : 0;
 };
 
+const accumulateCandidateCounts = (
+  counts: Map<number, number>,
+  ordinals: readonly number[],
+): void => {
+  for (const ordinal of ordinals) counts.set(ordinal, (counts.get(ordinal) ?? 0) + 1);
+};
+
 const candidateEvidence = (
   grams: readonly string[],
   postings: ReadonlyMap<string, readonly number[]>,
@@ -464,8 +476,7 @@ const candidateEvidence = (
   const counts = new Map<number, number>();
   let truncated = false;
   for (const gram of grams) {
-    const ordinals = postings.get(gram) ?? [];
-    for (const ordinal of ordinals) counts.set(ordinal, (counts.get(ordinal) ?? 0) + 1);
+    accumulateCandidateCounts(counts, postings.get(gram) ?? []);
     if (counts.size > maximumCandidates * 4) {
       truncated = true;
       break;
