@@ -22,6 +22,7 @@ import { auditPackageRegistryBoundaries } from './package-registry-boundary-audi
 import { auditPrivilegedConditions } from './privileged-condition-audit.mts';
 import { auditProcessEnvironmentBoundaries } from './process-env-boundary-audit.mts';
 import { auditPublicationRefBoundaries } from './publication-ref-boundary-audit.mts';
+import { auditReleaseAssetSubjects } from './release-asset-subject-audit.mts';
 import { reusableWorkflowContractFindings } from './reusable-workflow-contracts.mts';
 import { auditRunnerTrustBoundaries } from './runner-trust-boundary-audit.mts';
 import { auditShellBoundaries } from './shell-boundary-audit.mts';
@@ -287,6 +288,7 @@ export function auditWorkflowExpressions(
     ...auditPrivilegedConditions(inventory).findings,
     ...auditDependencyLifecycle(inventory).findings,
     ...auditPublicationRefBoundaries(inventory).findings,
+    ...auditReleaseAssetSubjects(inventory).findings,
     ...auditGitOperationBoundaries(inventory).findings,
     ...auditGitHubMutationBoundaries(inventory).findings,
     ...auditJobResourceBoundaries(inventory).findings,
