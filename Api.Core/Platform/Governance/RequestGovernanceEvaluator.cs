@@ -65,9 +65,9 @@ namespace Api.Core.Platform.Governance
         internal RequestGovernanceDecision EvaluateHeaders(RequestHeaderSnapshot headers, IHeaderDictionary values)
         {
             if (headers.ContentLengthValueCount > 0 && headers.TransferEncodingValueCount > 0) return RejectBadRequest("ambiguous-body-framing", "Content-Length and Transfer-Encoding cannot be combined.");
-            var contentLength = RequestFramingPolicy.ValidateContentLength(values.ContentLength);
+            var contentLength = RequestFramingPolicy.ValidateContentLength(values["Content-Length"]);
             if (!contentLength.IsValid) return RejectBadRequest(contentLength.Code, "Content-Length framing is invalid or ambiguous.");
-            var transferEncoding = RequestFramingPolicy.ValidateTransferEncoding(values.TransferEncoding);
+            var transferEncoding = RequestFramingPolicy.ValidateTransferEncoding(values["Transfer-Encoding"]);
             if (!transferEncoding.IsValid) return RejectBadRequest(transferEncoding.Code, "Transfer-Encoding framing is not supported by the API runtime.");
             if (headers.AuthorizationValueCount > 1) return RejectBadRequest("multiple-authorization-values", "Multiple Authorization header values are not accepted.");
             if (headers.HostValueCount > 1) return RejectBadRequest("multiple-host-values", "Multiple Host header values are not accepted.");
