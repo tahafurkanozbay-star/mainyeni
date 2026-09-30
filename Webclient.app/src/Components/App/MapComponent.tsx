@@ -20,6 +20,10 @@ import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
 import { MapWorkspaceHealthSurface } from './MapWorkspaceHealthSurface';
+import {
+  createMapWorkspaceRecoveryFocusController,
+  type MapWorkspaceRecoveryFocusController,
+} from './mapWorkspaceRecoveryFocus';
 import { MapWorkspaceShortcutHelpLauncher, requestMapWorkspaceHelp } from './MapWorkspaceShortcutHelp';
 import { handleMapWorkspaceKeyDown } from './mapWorkspaceShortcuts';
 import {
@@ -94,6 +98,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
   const startedGenerationRef = useRef<number | null>(null);
   const accessibilityModelRef = useRef<MapWorkspaceAccessibilityModel | null>(null);
+  const recoveryFocusRef = useRef<MapWorkspaceRecoveryFocusController | null>(null);
   if (!accessibilityModelRef.current) {
     accessibilityModelRef.current = new MapWorkspaceAccessibilityModel({
       onObserverError(error) {
@@ -101,7 +106,16 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       },
     });
   }
+  if (!recoveryFocusRef.current) {
+    recoveryFocusRef.current = createMapWorkspaceRecoveryFocusController({
+      getTarget: () => mapDiv.current,
+      onError(error) {
+        DebugHelper.Log(error);
+      },
+    });
+  }
   const accessibilityModel = accessibilityModelRef.current;
+  const recoveryFocus = recoveryFocusRef.current;
   const accessibilitySnapshot = useSyncExternalStore(accessibilityModel.subscribe, accessibilityModel.getSnapshot, accessibilityModel.getSnapshot);
   const [workspaceGeneration, setWorkspaceGeneration] = useState(0);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
@@ -117,13 +131,18 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
   const retryWorkspace = useCallback((): void => {
     if (!accessibilityModel.getSnapshot().canRetry) return;
+    recoveryFocus.requestRestore();
     setMapView(null);
     setWorkspaceGeneration((generation) => generation + 1);
-  }, [accessibilityModel]);
+  }, [accessibilityModel, recoveryFocus]);
 
   const reloadWorkspacePage = useCallback((): void => {
     window.location.reload();
   }, []);
+
+  useEffect(() => {
+    recoveryFocus.sync(accessibilitySnapshot);
+  }, [accessibilitySnapshot, recoveryFocus]);
 
   useEffect(() => {
     const onWorkspaceKeyDown = (event: KeyboardEvent): void => {
@@ -259,7 +278,10 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     };
   }, [accessibilityModel, windowManager, workspaceGeneration]);
 
-  useEffect(() => () => accessibilityModel.dispose(), [accessibilityModel]);
+  useEffect(() => () => {
+    recoveryFocus.dispose();
+    accessibilityModel.dispose();
+  }, [accessibilityModel, recoveryFocus]);
 
   return (
     <div
