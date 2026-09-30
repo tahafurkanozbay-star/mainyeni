@@ -173,19 +173,20 @@ export const ToolbarWidgetModern = ({ id, windowManager }: ToolbarWidgetModernPr
     }
   };
 
-  const toolbarItems: readonly ExperienceToolbarItem[] = snapshot.actions.map((action, index) => ({
-    id: action.id,
-    label: action.label,
-    icon: <ToolbarGlyph name={action.id} />,
-    busy: action.busy,
-    disabled: action.disabled,
-    tooltip: action.tooltip,
-    group: action.group,
-    groupLabel: index === 0 || snapshot.actions[index - 1]?.group !== action.group
-      ? MAP_TOOLBAR_GROUP_LABELS[action.group]
-      : undefined,
-    onActivate: () => activateToolbarAction(action.id),
-  }));
+  const toolbarItems: readonly ExperienceToolbarItem[] = snapshot.actions.map((action, index) => {
+    const isGroupStart = index === 0 || snapshot.actions[index - 1]?.group !== action.group;
+    return {
+      id: action.id,
+      label: action.label,
+      icon: <ToolbarGlyph name={action.id} />,
+      busy: action.busy,
+      disabled: action.disabled,
+      tooltip: action.tooltip,
+      group: action.group,
+      ...(isGroupStart ? { groupLabel: MAP_TOOLBAR_GROUP_LABELS[action.group] } : {}),
+      onActivate: () => activateToolbarAction(action.id),
+    };
+  });
 
   return (
     <>
