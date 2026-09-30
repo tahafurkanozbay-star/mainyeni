@@ -271,7 +271,7 @@ export const createMapToolbarSnapshot = (
 
 export class MapToolbarModel {
   readonly #listeners = new Set<() => void>();
-  readonly #onListenerError?: (error: unknown) => void;
+  readonly #onListenerError: ((error: unknown) => void) | undefined;
   readonly #maxListeners: number;
   #snapshot: MapToolbarSnapshot = createMapToolbarSnapshot(0, 'idle');
   #generation = 0;
