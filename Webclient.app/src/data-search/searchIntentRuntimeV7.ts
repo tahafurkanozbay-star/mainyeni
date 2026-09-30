@@ -11,6 +11,7 @@ import {
   hashFingerprint,
   normalizeCoordinates,
   normalizeInteger,
+  normalizeSearchText,
   normalizeText,
   stableSerialize,
 } from './normalization';
@@ -183,10 +184,16 @@ const signatureFor = (
   kind,
   center,
   centerSource,
-  residualQuery,
+  residualQuery: normalizeSearchText(residualQuery),
   textSignature: text.signature,
   addressSignature: address.signature,
-  coordinateSignature: coordinate.signature,
+  coordinate: {
+    kind: coordinate.kind,
+    order: coordinate.order,
+    coordinates: coordinate.coordinates,
+    residualQuery: normalizeSearchText(coordinate.residualQuery),
+    rejectedReason: coordinate.diagnostics.rejectedReason,
+  },
   hierarchy: {
     level: request.level ?? null,
     district: canonicalizeAddressText(request.district),
