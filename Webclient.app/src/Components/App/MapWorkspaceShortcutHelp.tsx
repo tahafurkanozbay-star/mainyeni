@@ -7,6 +7,10 @@ import {
   MapShortcutHelpModel,
   type MapShortcutHelpMove,
 } from './mapShortcutHelpModel';
+import {
+  MapWorkspaceHelpTabsModel,
+  type MapWorkspaceHelpTabId,
+} from './mapWorkspaceHelpTabsModel';
 import { MapWorkspaceGuidePanel } from './MapWorkspaceGuidePanel';
 import './MapWorkspaceShortcutHelp.css';
 import './MapWorkspaceShortcutHelpDiscovery.css';
@@ -17,8 +21,6 @@ export interface MapWorkspaceShortcutHelpProps {
   readonly open: boolean;
   readonly onClose: () => void;
 }
-
-type MapWorkspaceHelpTab = 'shortcuts' | 'guide';
 
 const HELP_SHORTCUT = Object.freeze({ key: '?', shift: true });
 const ACTIVE_DESCENDANT_KEYS: Readonly<Partial<Record<string, MapShortcutHelpMove>>> = Object.freeze({
@@ -42,18 +44,25 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
   const shortcutTabRef = useRef<HTMLButtonElement | null>(null);
   const guideTabRef = useRef<HTMLButtonElement | null>(null);
   const modelRef = useRef<MapShortcutHelpModel | null>(null);
+  const tabsModelRef = useRef<MapWorkspaceHelpTabsModel | null>(null);
   if (!modelRef.current) modelRef.current = new MapShortcutHelpModel(MAP_WORKSPACE_SHORTCUTS);
+  if (!tabsModelRef.current) tabsModelRef.current = new MapWorkspaceHelpTabsModel();
   const model = modelRef.current;
+  const tabsModel = tabsModelRef.current;
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const tabsSnapshot = useSyncExternalStore(tabsModel.subscribe, tabsModel.getSnapshot, tabsModel.getSnapshot);
   const activeEntry = snapshot.entries.find((entry) => entry.sourceId === snapshot.activeId) ?? null;
-  const [activeTab, setActiveTab] = useState<MapWorkspaceHelpTab>('shortcuts');
+  const activeTab = tabsSnapshot.activeTab;
 
-  useEffect(() => () => model.dispose(), [model]);
+  useEffect(() => () => {
+    model.dispose();
+    tabsModel.dispose();
+  }, [model, tabsModel]);
 
   useEffect(() => {
     if (!open || !dialogRef.current) return;
     model.reset();
-    setActiveTab('shortcuts');
+    tabsModel.reset();
     const session = createMapWorkspaceDialogSession(dialogRef.current, onClose);
     session.focusInitial();
     searchRef.current?.focus({ preventScroll: true });
@@ -63,7 +72,7 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
       document.removeEventListener('keydown', onKeyDown, true);
       session.dispose();
     };
-  }, [model, onClose, open]);
+  }, [model, onClose, open, tabsModel]);
 
   if (!open) return null;
 
@@ -74,24 +83,30 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
     model.moveActive(movement);
   };
 
-  const activateTab = (tab: MapWorkspaceHelpTab, focus = false): void => {
-    setActiveTab(tab);
-    if (!focus) return;
+  const focusTab = (tab: MapWorkspaceHelpTabId): void => {
     requestAnimationFrame(() => {
       (tab === 'shortcuts' ? shortcutTabRef.current : guideTabRef.current)?.focus({ preventScroll: true });
     });
   };
 
-  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, tab: MapWorkspaceHelpTab): void => {
-    let next: MapWorkspaceHelpTab | null = null;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = tab === 'shortcuts' ? 'guide' : 'shortcuts';
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = tab === 'guide' ? 'shortcuts' : 'guide';
-    if (event.key === 'Home') next = 'shortcuts';
-    if (event.key === 'End') next = 'guide';
+  const activateTab = (tab: MapWorkspaceHelpTabId, focus = false): void => {
+    tabsModel.select(tab);
+    if (focus) focusTab(tab);
+  };
+
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    let next: MapWorkspaceHelpTabId | null = null;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = tabsModel.move('next');
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = tabsModel.move('previous');
+    if (event.key === 'Home') next = tabsModel.move('first');
+    if (event.key === 'End') next = tabsModel.move('last');
     if (!next) return;
     event.preventDefault();
-    activateTab(next, true);
+    focusTab(next);
   };
+
+  const shortcutTab = tabsSnapshot.tabs.find((tab) => tab.id === 'shortcuts')!;
+  const guideTab = tabsSnapshot.tabs.find((tab) => tab.id === 'guide')!;
 
   return (
     <div className="map-shortcut-help-backdrop" role="presentation" onMouseDown={(event) => {
@@ -121,14 +136,14 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
             id={`${shortcutPanelId}-tab`}
             type="button"
             role="tab"
-            aria-selected={activeTab === 'shortcuts'}
+            aria-selected={shortcutTab.selected}
             aria-controls={shortcutPanelId}
-            tabIndex={activeTab === 'shortcuts' ? 0 : -1}
+            tabIndex={shortcutTab.tabIndex}
             onClick={() => activateTab('shortcuts')}
-            onKeyDown={(event) => handleTabKeyDown(event, 'shortcuts')}
+            onKeyDown={handleTabKeyDown}
           >
             <span aria-hidden="true">⌨</span>
-            <span>Kısayollar</span>
+            <span>{shortcutTab.label}</span>
             <small>{snapshot.totalCount}</small>
           </button>
           <button
@@ -136,14 +151,14 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
             id={`${guidePanelId}-tab`}
             type="button"
             role="tab"
-            aria-selected={activeTab === 'guide'}
+            aria-selected={guideTab.selected}
             aria-controls={guidePanelId}
-            tabIndex={activeTab === 'guide' ? 0 : -1}
+            tabIndex={guideTab.tabIndex}
             onClick={() => activateTab('guide')}
-            onKeyDown={(event) => handleTabKeyDown(event, 'guide')}
+            onKeyDown={handleTabKeyDown}
           >
             <span aria-hidden="true">◎</span>
-            <span>Çalışma rehberi</span>
+            <span>{guideTab.label}</span>
             <small>16</small>
           </button>
         </div>
@@ -153,7 +168,7 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
             id={shortcutPanelId}
             role="tabpanel"
             aria-labelledby={`${shortcutPanelId}-tab`}
-            hidden={activeTab !== 'shortcuts'}
+            hidden={shortcutTab.panelHidden}
             className="map-workspace-help-tabpanel"
           >
             <div className="map-shortcut-help__discovery">
@@ -240,10 +255,10 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
             id={guidePanelId}
             role="tabpanel"
             aria-labelledby={`${guidePanelId}-tab`}
-            hidden={activeTab !== 'guide'}
+            hidden={guideTab.panelHidden}
             className="map-workspace-help-tabpanel"
           >
-            <MapWorkspaceGuidePanel active={activeTab === 'guide'} />
+            <MapWorkspaceGuidePanel active={guideTab.selected} />
           </section>
         </div>
 
