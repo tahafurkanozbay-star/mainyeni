@@ -65,7 +65,20 @@ jobs:
         run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
 
       - name: Run xUnit v3 tests through Microsoft.Testing.Platform
-        run: dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/test-diagnostics
+          dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore 2>&1 | tee artifacts/test-diagnostics/platform-security-tests.log
+
+      - name: Upload backend test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: platform-backend-test-diagnostics-${{ github.run_id }}
+          path: artifacts/test-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Publish User API
         run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output artifacts/api-user
