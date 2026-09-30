@@ -27,6 +27,10 @@ import {
   mapWorkspaceReadinessMessage,
   waitForMapWorkspaceViewReady,
 } from './mapWorkspaceViewReadiness';
+import {
+  createMapWorkspaceViewportRuntime,
+  type MapWorkspaceViewportRuntime,
+} from './mapWorkspaceViewportRuntime';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { createViewStateBridge } from '../../gis-engine/viewState';
@@ -144,6 +148,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     let view: MapViewLike | null = null;
     let bridge: ReturnType<typeof createViewStateBridge> | null = null;
     let performanceMonitor: ReturnType<typeof createViewPerformanceMonitor> | null = null;
+    let viewportRuntime: MapWorkspaceViewportRuntime | null = null;
     let unbindViewState: () => void = () => undefined;
     let kentRehberiLayerHandle: KentRehberiLayerHandle | null = null;
     const workspaceAbortController = new AbortController();
@@ -165,6 +170,12 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         throw new Error(mapWorkspaceReadinessMessage(readiness));
       }
 
+      viewportRuntime = createMapWorkspaceViewportRuntime({
+        getView: () => view,
+        getConfiguration: () => mapConfig,
+        createPadding: createResponsivePadding,
+        onError: (error: unknown) => DebugHelper.Log(error),
+      });
       bridge = createViewStateBridge({ mode: '2d' }, { onListenerError: (error: unknown) => DebugHelper.Log(error) });
       MapManager.SetViewStateBridge?.(bridge as never);
       unbindViewState = bindMapViewState(view as never, bridge, {
@@ -192,9 +203,6 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         } else windowManager.HideWindow('context-menu-widget');
       });
       if (clickHandle) handles.push(clickHandle);
-      const updatePadding = (): void => { if (view && !view.destroyed) view.padding = createResponsivePadding(window.innerWidth, mapConfig); };
-      window.addEventListener('resize', updatePadding, { passive: true });
-      handles.push({ remove: () => window.removeEventListener('resize', updatePadding) });
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: view });
       setMapView(view);
       accessibilityModel.markReady();
@@ -228,6 +236,8 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       workspaceAbortController.abort();
       activeViewModeRef.current = '2d';
       accessorWatchRef.current = null;
+      viewportRuntime?.dispose();
+      viewportRuntime = null;
       kentRehberiLayerHandle?.dispose();
       kentRehberiLayerHandle = null;
       unbindViewState();
