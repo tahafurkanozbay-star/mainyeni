@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -25,33 +26,58 @@ export interface ExperienceToolbarItem {
   readonly pressed?: boolean;
   readonly disabled?: boolean;
   readonly hidden?: boolean;
+  readonly busy?: boolean;
+  readonly tooltip?: string;
+  readonly className?: string;
+  readonly group?: string;
+  readonly groupLabel?: string;
+  readonly ariaKeyShortcuts?: string;
   readonly onActivate?: () => void;
 }
 
 export interface ExperienceToolbarProps {
+  readonly id?: string;
   readonly items: readonly ExperienceToolbarItem[];
   readonly label: string;
   readonly orientation?: RovingFocusOrientation;
   readonly direction?: RovingFocusDirection;
   readonly loop?: boolean;
   readonly className?: string;
+  readonly describedBy?: string;
 }
 
 const toRovingItems = (
   items: readonly ExperienceToolbarItem[],
 ): readonly RovingFocusItem[] => items.map((item) => ({
   id: item.id,
-  disabled: item.disabled,
+  disabled: item.disabled || item.busy,
   hidden: item.hidden,
 }));
 
+const hasGroupBoundary = (
+  items: readonly ExperienceToolbarItem[],
+  index: number,
+): boolean => {
+  if (index <= 0) return false;
+  const current = items[index];
+  if (!current || current.hidden || !current.group) return false;
+  for (let previousIndex = index - 1; previousIndex >= 0; previousIndex -= 1) {
+    const previous = items[previousIndex];
+    if (!previous || previous.hidden) continue;
+    return Boolean(previous.group && previous.group !== current.group);
+  }
+  return false;
+};
+
 export function ExperienceToolbar({
+  id,
   items,
   label,
   orientation = 'horizontal',
   direction = 'ltr',
   loop = true,
   className = '',
+  describedBy,
 }: ExperienceToolbarProps): ReactNode {
   const rootRef = useRef<HTMLDivElement>(null);
   const previousItemsRef = useRef<readonly RovingFocusItem[]>([]);
@@ -83,10 +109,12 @@ export function ExperienceToolbar({
 
   return (
     <div
+      id={id}
       ref={rootRef}
       className={`experience-toolbar ${className}`.trim()}
       role="toolbar"
       aria-label={label}
+      aria-describedby={describedBy}
       aria-orientation={orientation === 'vertical' ? 'vertical' : 'horizontal'}
       data-orientation={orientation}
       dir={direction}
@@ -94,24 +122,44 @@ export function ExperienceToolbar({
     >
       {items.map((item, index) => {
         if (item.hidden) return null;
+        const disabled = Boolean(item.disabled || item.busy);
+        const groupBoundary = hasGroupBoundary(items, index);
         return (
-          <button
-            key={item.id}
-            type="button"
-            className="experience-toolbar__button"
-            data-roving-focus-id={item.id}
-            tabIndex={tabIndices[index] ?? -1}
-            disabled={item.disabled}
-            aria-label={item.label}
-            aria-pressed={item.pressed}
-            onFocus={() => setActiveIndex(index)}
-            onClick={item.onActivate}
-          >
-            {item.icon ? (
-              <span className="experience-toolbar__icon" aria-hidden="true">{item.icon}</span>
+          <Fragment key={item.id}>
+            {groupBoundary ? (
+              <span
+                className="experience-toolbar__separator"
+                role="separator"
+                aria-orientation={orientation === 'vertical' ? 'horizontal' : 'vertical'}
+                data-group-start={item.group}
+              />
             ) : null}
-            <span>{item.label}</span>
-          </button>
+            <button
+              type="button"
+              className={`experience-toolbar__button ${item.className ?? ''}`.trim()}
+              data-roving-focus-id={item.id}
+              data-toolbar-group={item.group}
+              data-tooltip={item.tooltip}
+              tabIndex={tabIndices[index] ?? -1}
+              disabled={disabled}
+              aria-label={item.label}
+              aria-pressed={item.pressed}
+              aria-busy={item.busy || undefined}
+              aria-keyshortcuts={item.ariaKeyShortcuts}
+              onFocus={() => setActiveIndex(index)}
+              onClick={item.onActivate}
+            >
+              {item.icon ? (
+                <span className="experience-toolbar__icon" aria-hidden="true">{item.icon}</span>
+              ) : null}
+              <span className="experience-toolbar__label">{item.label}</span>
+            </button>
+            {item.groupLabel ? (
+              <span className="experience-sr-only" data-toolbar-group-label={item.group}>
+                {item.groupLabel}
+              </span>
+            ) : null}
+          </Fragment>
         );
       })}
     </div>
