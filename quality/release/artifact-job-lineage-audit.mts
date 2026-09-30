@@ -361,7 +361,7 @@ function cycleFindings(lineage: WorkflowLineage): Finding[] {
     if (!block) continue;
     findings.push({
       id: 'ci-artifact-lineage-needs-cycle',
-      domain: 'reliability',
+      domain: 'release',
       severity: 'high',
       blocking: true,
       title: 'Workflow job dependency graph contains a cycle',
