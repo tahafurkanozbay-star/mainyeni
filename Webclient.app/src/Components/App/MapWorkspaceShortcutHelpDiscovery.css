@@ -15,7 +15,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  min-block-size: 46px;
+  min-block-size: 48px;
   border: 1px solid var(--exp-border, #d7dde6);
   border-radius: 12px;
   background: var(--exp-surface, #fff);
@@ -29,8 +29,8 @@
 
 .map-shortcut-help__search-glyph {
   display: grid;
-  inline-size: 42px;
-  block-size: 42px;
+  inline-size: 44px;
+  block-size: 44px;
   place-items: center;
   color: var(--exp-text-muted, #667085);
   font-size: 1.15rem;
@@ -42,11 +42,15 @@
   min-block-size: 44px;
   padding: 0 6px;
   border: 0;
-  outline: 0;
   color: var(--exp-text, #172033);
   background: transparent;
   font: inherit;
   font-size: 0.86rem;
+}
+
+.map-shortcut-help__search:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 
 .map-shortcut-help__search::placeholder {
@@ -58,9 +62,9 @@
 }
 
 .map-shortcut-help__clear {
-  min-block-size: 36px;
-  margin-inline-end: 5px;
-  padding-inline: 10px;
+  min-block-size: 44px;
+  margin-inline-end: 4px;
+  padding-inline: 11px;
   border: 0;
   border-radius: 8px;
   color: var(--exp-accent, #0b6fcb);
@@ -91,7 +95,7 @@
 }
 
 .map-shortcut-help__filter {
-  min-block-size: 38px;
+  min-block-size: 44px;
   flex: 0 0 auto;
   padding-inline: 12px;
   border: 1px solid var(--exp-border, #d7dde6);
@@ -175,7 +179,7 @@
 }
 
 .map-shortcut-help__empty button {
-  min-block-size: 42px;
+  min-block-size: 44px;
   margin-block-start: 4px;
   padding-inline: 13px;
   border: 1px solid var(--exp-border, #d7dde6);
@@ -213,7 +217,7 @@
   .map-shortcut-help__search-shell { min-block-size: 48px; }
   .map-shortcut-help__search { min-block-size: 46px; }
   .map-shortcut-help__filters { margin-inline: -2px; padding-inline: 2px; }
-  .map-shortcut-help__filter { min-block-size: 42px; }
+  .map-shortcut-help__filter { min-block-size: 44px; }
   .map-shortcut-help__item[data-active='true'] { box-shadow: inset 0 3px 0 var(--exp-accent, #0b6fcb); }
   .map-shortcut-help__footer-count { margin-inline-start: 0; }
 }
