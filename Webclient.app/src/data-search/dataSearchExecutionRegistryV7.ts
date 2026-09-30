@@ -390,7 +390,7 @@ export class DataSearchExecutionRegistryV7 {
 
   dispose(): void {
     if (this.#disposed) return;
-    for (const session of [...this.#sessions]) session.dispose();
+    for (const session of this.#sessions) session.dispose();
     this.#sessions.clear();
     this.#cache.clear();
     this.#entries.clear();
