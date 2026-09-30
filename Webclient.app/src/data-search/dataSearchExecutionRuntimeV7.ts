@@ -1,4 +1,5 @@
 import type {
+  AddressScore,
   CandidatePlan,
   CandidatePlannerOptions,
   DatasetSnapshot,
@@ -15,7 +16,6 @@ import { throwIfAborted } from './contracts';
 import {
   matchesAddressHierarchy,
   scoreAddressRecord,
-  type AddressScore,
 } from './addressSemantics';
 import { planCandidates } from './candidatePlanner';
 import {
