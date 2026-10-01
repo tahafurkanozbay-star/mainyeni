@@ -17,3 +17,14 @@
 - REVIEW DURUMU: product head’de submitted review yok ve unresolved review thread yok.
 - MERGE DURUMU: bu progress commit’i yeni exact head oluşturacağı için henüz merge yapılmadı. Progress head üzerinde dört mandatory workflow tekrar completed+success olmadan ready/merge yapılmayacak.
 - SONRAKİ GÖREV NOTU: progress head green olduktan sonra current `main` tekrar okunmalı; base...head additions>=4,000, behind=0/exact merge-base, `mergeable=true`, review/thread temizliği ve kritik UX/release risk yokluğu doğrulanmalı. Sonra PR draft’tan çıkarılıp `expected_head_sha` korumalı squash merge yapılmalı; merge SHA ve yeni main SHA doğrulanmalıdır. Merge sonrası bu branch yeniden kullanılmaz.
+
+## Deep Platform / exact-base release-gate repair — PR #416 — 2026-10-01
+- TUR / GÖREV: Platform / Architecture; PR #416 exact-base Release QA blocker teşhisi ve fail-closed backend CI repair.
+- BRANCH / PR: `agent/platform-deep-20261001-1430-3df6f246`; PR #416 kanonik Platform PR’ıdır. Base/current main `3df6f24673248be3ae222c3dbd29855d020743ac`.
+- KAPSAM / GATE: repair öncesi PR 4,138 additions / 748 deletions / 27 dosya ve mergeable=true; mandatory >=4,000 additions gate’i sağlanmıştı.
+- ROOT CAUSE: Release QA run `36857775893` artifact `typed-release-qa` indirildi ve exact regression raporu incelendi. Tek yeni blocking critical finding `testing|ci-failure-shell-swallow|.github/workflows/platform-backend-validation.yml:80|shell command failure is converted to success` idi. Backend diagnostic log yokken workflow `exit 0` ile başarısızlığı başarıya çeviriyordu.
+- DÜZELTME: `.github/workflows/platform-backend-validation.yml` diagnostic missing-log yolu `exit 1` ile fail-closed yapıldı; diagnostic-only grep için kontrollü status handling korunuyor. Repair commit `5729832b32e6865e998ecc62adb4ea9a36cc040a`.
+- ÖNCEKİ EXACT-HEAD CI: `6ffe158eeef243420e50bec11a3255637109d1bd` üzerinde Platform Architecture Audit ve Platform Backend Validation success; Release QA backend + webclient success, typed-release yalnız exact-base regression gate nedeniyle failure.
+- NETWORK / GIS / GÜVENLİK / PERFORMANS: yeni endpoint, browser transport, WMS/WFS, telemetry, remote asset veya runtime dependency eklenmedi. Değişiklik yalnız CI failure semantics’ini sıkılaştırır; test failure masking kaldırılır.
+- MERGE DURUMU: repair + progress commit yeni exact head oluşturacağından merge yapılmadı. Yeni exact head üzerinde Platform Architecture Audit + Platform Backend Validation + Release QA completed+success olmadan ready/merge yapılmayacak.
+- SONRAKİ GÖREV NOTU: yeni exact head CI tamamlandığında typed-release regression gate’in blocking finding’i kaldırdığını doğrula; current main’i tekrar refresh et, behind=0/exact merge-base, additions>=4,000, mergeable=true ve review/thread temizliğini doğrula. Tüm gate’ler yeşilse draft’tan çıkar ve expected-head korumalı squash merge yap; merge SHA + yeni main SHA’yı doğrula.
