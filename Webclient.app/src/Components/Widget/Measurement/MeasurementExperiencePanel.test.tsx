@@ -30,12 +30,12 @@ const snapshot = (
 
 describe('MeasurementExperiencePanel', () => {
   it('renders a polite ready status and guidance', () => {
-    render(<MeasurementExperiencePanel snapshot={snapshot()} onRetry={vi.fn()} />);
+    const { container } = render(<MeasurementExperiencePanel snapshot={snapshot()} onRetry={vi.fn()} />);
 
     expect(screen.getByText('Ölçüm araçları hazır.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ölçüm rehberi' })).toBeInTheDocument();
     expect(screen.getByText('Alan veya mesafe aracını seçin.')).toBeInTheDocument();
-    expect(screen.getByText('Hazır')).toBeInTheDocument();
+    expect(container.querySelector('.measurement-experience__phase')).toHaveTextContent('Hazır');
   });
 
   it('renders explicit map readiness and unknown modality facts', () => {
