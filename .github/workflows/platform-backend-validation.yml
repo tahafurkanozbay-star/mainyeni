@@ -64,7 +64,48 @@ jobs:
         run: dotnet list CityWorks.NetCore.sln package --vulnerable --include-transitive
 
       - name: Build Release
-        run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
+        id: release-build
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/build-diagnostics
+          dotnet build CityWorks.NetCore.sln --configuration Release --no-restore 2>&1 | tee artifacts/build-diagnostics/release-build.log
+
+      - name: Surface Release build failure diagnostics
+        if: failure() && steps.release-build.outcome == 'failure'
+        shell: bash
+        run: |
+          log='artifacts/build-diagnostics/release-build.log'
+          if [[ ! -s "$log" ]]; then
+            echo '### Platform Release build failure' >> "$GITHUB_STEP_SUMMARY"
+            echo 'The build process failed without producing a diagnostic log.' >> "$GITHUB_STEP_SUMMARY"
+            echo '::error title=Platform Release build failed::The build process failed without producing a diagnostic log.'
+            exit 1
+          fi
+
+          echo '### Platform Release build failure diagnostics' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 160 "$log" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          matches='artifacts/build-diagnostics/release-build-errors.log'
+          grep_status=0
+          if grep -E '(^|[[:space:]])(error [A-Z]+[0-9]+:|error:|Build FAILED)' "$log" > "$matches"; then
+            grep_status=0
+          else
+            grep_status=$?
+          fi
+          if [[ $grep_status -gt 1 ]]; then
+            echo '::error title=Platform build diagnostics::Failed to scan the Release build diagnostic log.'
+            exit "$grep_status"
+          fi
+
+          tail -n 20 "$matches" | while IFS= read -r line; do
+            safe=${line//'%'/'%25'}
+            safe=${safe//$'\r'/'%0D'}
+            safe=${safe//$'\n'/'%0A'}
+            echo "::error title=Platform Release build failure::$safe"
+          done
 
       - name: Run xUnit v3 tests through Microsoft.Testing.Platform
         id: platform-tests
@@ -91,8 +132,6 @@ jobs:
           tail -n 160 "$log" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-          # Annotation extraction is diagnostic-only: grep status 1 means no conventional
-          # xUnit marker was present; status >1 is a real scanner failure and must fail closed.
           matches='artifacts/test-diagnostics/platform-security-failure-lines.log'
           grep_status=0
           if grep -E '(^|[[:space:]])(failed|FAIL|Error Message:|Stack Trace:|\[FAIL\]|\[x\])' "$log" > "$matches"; then
@@ -112,12 +151,14 @@ jobs:
             echo "::error title=Platform backend test failure::$safe"
           done
 
-      - name: Upload backend test diagnostics
+      - name: Upload backend diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: platform-backend-test-diagnostics-${{ github.run_id }}
-          path: artifacts/test-diagnostics/
+          name: platform-backend-diagnostics-${{ github.run_id }}
+          path: |
+            artifacts/build-diagnostics/
+            artifacts/test-diagnostics/
           if-no-files-found: error
           retention-days: 7
 
