@@ -45,10 +45,12 @@ jobs:
       NUGET_XMLDOC_MODE: skip
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Setup .NET 10 LTS
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@b1deca2d6e39d6668e5e38df80e7c83d5f9d018b
         with:
           global-json-file: global.json
 
@@ -89,24 +91,30 @@ jobs:
           tail -n 160 "$log" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-          # Promote the most useful bounded failure lines into check annotations so API-only
-          # operators can identify the failing test without requiring artifact download access.
-          grep -E '(^|[[:space:]])(failed|FAIL|Error Message:|Stack Trace:|\[FAIL\]|\[x\])' "$log" \
-            | tail -n 20 \
-            | while IFS= read -r line; do
-                safe=${line//'%'/'%25'}
-                safe=${safe//$'\r'/'%0D'}
-                safe=${safe//$'\n'/'%0A'}
-                echo "::error title=Platform backend test failure::$safe"
-              done || true
+          # Annotation extraction is diagnostic-only: an empty grep result is valid when the
+          # runner terminates without a conventional xUnit failure marker. Avoid shell-level
+          # failure masking by handling grep status explicitly instead of using `|| true`.
+          matches='artifacts/test-diagnostics/platform-security-failure-lines.log'
+          grep -E '(^|[[:space:]])(failed|FAIL|Error Message:|Stack Trace:|\[FAIL\]|\[x\])' "$log" > "$matches" || grep_status=$?
+          if [[ ${grep_status:-0} -gt 1 ]]; then
+            echo '::error title=Platform backend diagnostics::Failed to scan the xUnit diagnostic log.'
+            exit "$grep_status"
+          fi
+
+          tail -n 20 "$matches" | while IFS= read -r line; do
+            safe=${line//'%'/'%25'}
+            safe=${safe//$'\r'/'%0D'}
+            safe=${safe//$'\n'/'%0A'}
+            echo "::error title=Platform backend test failure::$safe"
+          done
 
       - name: Upload backend test diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: platform-backend-test-diagnostics-${{ github.run_id }}
           path: artifacts/test-diagnostics/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Publish User API
