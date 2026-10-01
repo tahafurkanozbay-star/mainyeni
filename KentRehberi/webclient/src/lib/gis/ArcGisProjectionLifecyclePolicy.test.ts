@@ -1,0 +1,25 @@
+import{describe,expect,it}from'vitest'
+import{ArcGisProjectionLifecyclePolicy,type ArcGisProjectionBudget,type ArcGisProjectionRequest}from'./ArcGisProjectionLifecyclePolicy'
+const budget:ArcGisProjectionBudget={maxRequests:4,maxRunning:2,maxReady:2,maxPoints:20,maxPointsPerRequest:10,maxEstimatedBytes:1000,maxEstimatedBytesPerRequest:500,queueTtlMs:100,runLeaseMs:50,readyTtlMs:200}
+const request=(o:Partial<ArcGisProjectionRequest>={}):ArcGisProjectionRequest=>({requestId:'a',revision:1,requestedAt:10,sourceWkid:4326,targetWkid:3857,pointCount:2,estimatedBytes:100,...o})
+describe('ArcGisProjectionLifecyclePolicy',()=>{
+it('admits metadata',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);expect(p.admit(request())).toBe(true);expect(p.snapshot()).toMatchObject({requests:1,points:2,estimatedBytes:100})})
+it('canonicalizes web mercator aliases',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);expect(p.admit(request({targetWkid:102100}))).toBe(true);expect(p.entries()[0].targetWkid).toBe(3857)})
+it('rejects no-op projection',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);expect(()=>p.admit(request({sourceWkid:3857,targetWkid:102100}))).toThrow()})
+it('rejects malformed id',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);expect(()=>p.admit(request({requestId:' a'}))).toThrow()})
+it('enforces point budget',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);expect(p.admit(request({pointCount:11}))).toBe(false)})
+it('enforces byte budget',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);expect(p.admit(request({estimatedBytes:501}))).toBe(false)})
+it('invalidates stale revision',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());expect(p.admit(request({requestId:'new',revision:2}))).toBe(true);expect(p.admit(request({requestId:'old',revision:1}))).toBe(false)})
+it('orders smaller work first',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request({requestId:'large',pointCount:5}));p.admit(request({requestId:'small',pointCount:1}));expect(p.nextQueued()?.requestId).toBe('small')})
+it('enforces running cardinality',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);['a','b','c'].forEach(id=>p.admit(request({requestId:id})));expect(p.begin('a',1,20)).toBe(true);expect(p.begin('b',1,20)).toBe(true);expect(p.begin('c',1,20)).toBe(false)})
+it('rejects expired queue',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());expect(p.begin('a',1,111)).toBe(false)})
+it('rejects stale completion',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());p.begin('a',1,20);expect(p.markReady('a',1,71,10)).toBe(false)})
+it('accounts ready result bytes',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());p.begin('a',1,20);expect(p.markReady('a',1,30,123)).toBe(true);expect(p.snapshot().resultBytes).toBe(123)})
+it('consumes ready work',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());p.begin('a',1,20);p.markReady('a',1,30,10);expect(p.consume('a',1)).toBe(true);expect(p.snapshot().requests).toBe(0)})
+it('cancels queued work',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());expect(p.cancel('a')).toBe(true)})
+it('expires leases',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());expect(p.expire(111)).toBe(1)})
+it('returns immutable entries',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.admit(request());const e=p.entries();expect(Object.isFrozen(e)).toBe(true);expect(Object.isFrozen(e[0])).toBe(true)})
+it('has stable fingerprint',()=>{const a=new ArcGisProjectionLifecyclePolicy(budget);const b=new ArcGisProjectionLifecyclePolicy(budget);a.admit(request());b.admit(request());expect(a.snapshot().fingerprint).toBe(b.snapshot().fingerprint)})
+it('disposes fail closed',()=>{const p=new ArcGisProjectionLifecyclePolicy(budget);p.dispose();expect(()=>p.snapshot()).toThrow('disposed')})
+it('validates contradictory budgets',()=>{expect(()=>new ArcGisProjectionLifecyclePolicy({...budget,maxPointsPerRequest:21})).toThrow();expect(()=>new ArcGisProjectionLifecyclePolicy({...budget,maxEstimatedBytesPerRequest:1001})).toThrow()})
+})
