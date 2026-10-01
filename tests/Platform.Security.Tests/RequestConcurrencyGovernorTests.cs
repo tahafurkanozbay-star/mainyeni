@@ -103,15 +103,16 @@ public sealed class RequestConcurrencyGovernorTests
     }
 
     [Fact]
-    public void LongKeys_AreNormalizedWithoutBreakingCapacity()
+    public void LongKeys_AreHashedWithoutCollapsingSharedPrefixes()
     {
         var governor = CreateGovernor(global: 4, perClient: 1);
         var prefix = new string('a', 160);
         using var first = governor.TryAcquire(prefix + "one");
         using var second = governor.TryAcquire(prefix + "two");
         Assert.True(first.IsAcquired);
-        Assert.False(second.IsAcquired);
-        Assert.Equal(RequestConcurrencyRejection.ClientLimit, second.Rejection);
+        Assert.True(second.IsAcquired);
+        Assert.Equal(2, governor.ActiveRequests);
+        Assert.Equal(2, governor.TrackedClients);
     }
 
     [Fact]
