@@ -239,13 +239,3 @@ export * from './coordinateQueryRuntimeV7';
 export * from './searchIntentRuntimeV7';
 export * from './dataSearchExecutionRuntimeV7';
 export * from './dataSearchExecutionRegistryV7';
-
-// Production v8 typo-tolerant recovery. Canonical v6 grammar and v7 execution
-// remain authoritative; this layer adds bounded trigram candidate discovery,
-// confidence-gated spelling correction, explicit scoped synonyms and an
-// original-first recovery orchestrator. It never introduces a remote language
-// service, a new network path or a second normalization/query authority.
-export * from './fuzzyLexiconRuntimeV8';
-export * from './synonymRegistryRuntimeV8';
-export * from './queryCorrectionRuntimeV8';
-export * from './searchRecoveryRuntimeV8';
