@@ -12,6 +12,8 @@ namespace Api.Core.Platform
         public const string CorsPolicyName = "SiteCorsPolicy";
         public const string CorrelationHeaderName = "X-Correlation-ID";
         public const string TraceIdItemKey = "KentRehberi.TraceId";
+        public const string RequestWorkloadClassItemKey = "KentRehberi.RequestWorkloadClass";
+        public const string RequestTimeoutMillisecondsItemKey = "KentRehberi.RequestTimeoutMilliseconds";
         public const string ReadinessTag = "ready";
         public const string LivenessTag = "live";
         public const string DatabaseHealthCheckName = "database";
