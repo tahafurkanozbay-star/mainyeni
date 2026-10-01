@@ -98,7 +98,8 @@ namespace Api.Core.Platform
 
         private static Task WriteTimeoutResponse(HttpContext context)
         {
-            context.Response.ContentType = "application/problem+json"; context.Response.Headers.CacheControl = "no-store";
+            context.Response.ContentType = "application/problem+json";
+            context.Response.Headers["Cache-Control"] = "no-store";
             return context.Response.WriteAsync(JsonSerializer.Serialize(new { type = "about:blank", title = "Request timed out", status = 504, traceId = context.TraceIdentifier }));
         }
 
