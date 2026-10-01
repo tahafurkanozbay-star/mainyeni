@@ -159,14 +159,16 @@ export const bindFastAccessResultPresentation = (
     queueApply();
   };
 
-  const observer = new MutationObserver((mutations) => {
-    if (mutations.some((mutation) => (
-      mutation.type === 'childList'
-      || mutation.type === 'characterData'
-      || mutation.type === 'attributes'
-    ))) {
-      queueApply();
+  const isRelevantMutation = (mutation: MutationRecord): boolean => {
+    if (mutation.type === 'attributes') {
+      return mutation.target === host && mutation.attributeName === 'aria-busy';
     }
+    if (mutation.target === liveStatus || liveStatus.contains(mutation.target)) return false;
+    return mutation.type === 'childList' || mutation.type === 'characterData';
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.some(isRelevantMutation)) queueApply();
   });
 
   try {
