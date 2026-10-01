@@ -20,6 +20,7 @@ namespace Api.Core.Platform
             Requests = new RequestOptions();
             Health = new HealthOptions();
             ForwardedHeaders = new ForwardedHeaderOptions();
+            ClientPartitioning = new ClientPartitionOptions();
             RateLimiting = new RateLimitOptions();
             ResponseCompression = new ResponseCompressionOptions();
             Diagnostics = new DiagnosticsOptions();
@@ -38,6 +39,8 @@ namespace Api.Core.Platform
         public HealthOptions Health { get; set; }
 
         public ForwardedHeaderOptions ForwardedHeaders { get; set; }
+
+        public ClientPartitionOptions ClientPartitioning { get; set; }
 
         public RateLimitOptions RateLimiting { get; set; }
 
@@ -133,10 +136,32 @@ namespace Api.Core.Platform
         }
 
         /// <summary>
-        /// Global abuse-resistance controls. The limiter partitions authenticated users by a
-        /// one-way hash of their subject identifier and anonymous callers by the normalized remote
-        /// address established after forwarded-header processing. Arbitrary client headers are not
-        /// accepted as an authorization or trust boundary.
+        /// Shared identity policy for abuse-resistance controls. Rate limiting and request
+        /// concurrency deliberately consume the same partition key so one boundary cannot be
+        /// bypassed by presenting an identity differently to the other. Anonymous addresses are
+        /// transformed to bounded pseudonymous tokens; raw network addresses are never retained in
+        /// limiter/governor keys.
+        /// </summary>
+        public sealed class ClientPartitionOptions
+        {
+            /// <summary>
+            /// Uses stable authenticated subject identifiers when available. Principals without a
+            /// stable subject fall back to the anonymous network partition rather than mutable names.
+            /// </summary>
+            public bool PartitionAuthenticatedUsers { get; set; } = true;
+
+            /// <summary>
+            /// Number of significant IPv6 address bits used for anonymous partitioning. A /64
+            /// default groups temporary/privacy addresses from the same typical client subnet while
+            /// deployments with different allocation policies can choose a value from /48 to /128.
+            /// IPv4 addresses are always partitioned by their full normalized address.
+            /// </summary>
+            public int AnonymousIpv6PrefixLength { get; set; } = 64;
+        }
+
+        /// <summary>
+        /// Global abuse-resistance controls. Partition identity is owned by ClientPartitioning so
+        /// rate limiting and the concurrency bulkhead cannot drift into different client semantics.
         /// </summary>
         public sealed class RateLimitOptions
         {
@@ -147,7 +172,14 @@ namespace Api.Core.Platform
             public int QueueLimit { get; set; } = 0;
             public bool ExemptOptionsRequests { get; set; } = true;
             public bool ExemptHealthChecks { get; set; } = true;
+
+            /// <summary>
+            /// Legacy configuration bridge. New configuration belongs under
+            /// Platform:ClientPartitioning:PartitionAuthenticatedUsers. ResolveOptions copies this
+            /// value only when the modern setting is absent.
+            /// </summary>
             public bool PartitionAuthenticatedUsers { get; set; } = true;
+
             public int RetryAfterSeconds { get; set; } = 1;
         }
 

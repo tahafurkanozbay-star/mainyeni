@@ -2,7 +2,6 @@ using Api.Core.Platform;
 using Api.Core.Platform.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Security.Claims;
 using Xunit;
@@ -12,25 +11,35 @@ namespace Platform.Security.Tests
     public sealed class ClientRateLimitPartitionerTests
     {
         [Fact]
-        public void ResolvePartitionKey_UsesNormalizedRemoteAddressForAnonymousClient()
+        public void ResolvePartitionKey_UsesStablePseudonymousRemoteAddressForAnonymousClient()
         {
-            var context = CreateContext();
-            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.25");
+            var first = CreateContext();
+            var second = CreateContext();
+            first.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.25");
+            second.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.25");
 
-            var key = ClientRateLimitPartitioner.ResolvePartitionKey(context, CreateOptions());
+            var firstKey = ClientRateLimitPartitioner.ResolvePartitionKey(first, CreateOptions());
+            var secondKey = ClientRateLimitPartitioner.ResolvePartitionKey(second, CreateOptions());
 
-            Assert.Equal("ip:203.0.113.25", key);
+            Assert.Equal(firstKey, secondKey);
+            Assert.StartsWith("anon:", firstKey, StringComparison.Ordinal);
+            Assert.DoesNotContain("203.0.113.25", firstKey, StringComparison.Ordinal);
+            Assert.Equal("anon:".Length + 24, firstKey.Length);
         }
 
         [Fact]
         public void ResolvePartitionKey_NormalizesIpv4MappedIpv6Address()
         {
-            var context = CreateContext();
-            context.Connection.RemoteIpAddress = IPAddress.Parse("::ffff:203.0.113.42");
+            var mapped = CreateContext();
+            var ipv4 = CreateContext();
+            mapped.Connection.RemoteIpAddress = IPAddress.Parse("::ffff:203.0.113.42");
+            ipv4.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.42");
 
-            var key = ClientRateLimitPartitioner.ResolvePartitionKey(context, CreateOptions());
+            var mappedKey = ClientRateLimitPartitioner.ResolvePartitionKey(mapped, CreateOptions());
+            var ipv4Key = ClientRateLimitPartitioner.ResolvePartitionKey(ipv4, CreateOptions());
 
-            Assert.Equal("ip:203.0.113.42", key);
+            Assert.Equal(ipv4Key, mappedKey);
+            Assert.StartsWith("anon:", mappedKey, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -78,19 +87,16 @@ namespace Platform.Security.Tests
         }
 
         [Fact]
-        public void ResolvePartitionKey_NameFallbackDoesNotExposeName()
+        public void ResolvePartitionKey_NameFallbackIsNotAcceptedAsStableIdentity()
         {
-            var identity = new ClaimsIdentity(authenticationType: "test")
-            {
-                Label = "test"
-            };
+            var identity = new ClaimsIdentity(authenticationType: "test") { Label = "test" };
             identity.AddClaim(new Claim(identity.NameClaimType, "human-readable-user"));
             var context = CreateContext();
             context.User = new ClaimsPrincipal(identity);
 
             var key = ClientRateLimitPartitioner.ResolvePartitionKey(context, CreateOptions());
 
-            Assert.StartsWith("user:", key, StringComparison.Ordinal);
+            Assert.Equal("client:unknown", key);
             Assert.DoesNotContain("human-readable-user", key, StringComparison.Ordinal);
         }
 
@@ -100,11 +106,13 @@ namespace Platform.Security.Tests
             var context = CreateAuthenticatedContext("person-42");
             context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.9");
             var options = CreateOptions();
-            options.RateLimiting.PartitionAuthenticatedUsers = false;
+            options.ClientPartitioning.PartitionAuthenticatedUsers = false;
 
             var key = ClientRateLimitPartitioner.ResolvePartitionKey(context, options);
 
-            Assert.Equal("ip:203.0.113.9", key);
+            Assert.StartsWith("anon:", key, StringComparison.Ordinal);
+            Assert.DoesNotContain("203.0.113.9", key, StringComparison.Ordinal);
+            Assert.DoesNotContain("person-42", key, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -130,9 +138,7 @@ namespace Platform.Security.Tests
             var bypass = ClientRateLimitPartitioner.ShouldBypass(context, options);
 
             Assert.True(bypass);
-            Assert.Equal(
-                "bypass:preflight",
-                ClientRateLimitPartitioner.ResolveBypassPartition(context, options));
+            Assert.Equal("bypass:preflight", ClientRateLimitPartitioner.ResolveBypassPartition(context, options));
         }
 
         [Fact]
@@ -160,9 +166,7 @@ namespace Platform.Security.Tests
             var bypass = ClientRateLimitPartitioner.ShouldBypass(context, options);
 
             Assert.True(bypass);
-            Assert.Equal(
-                "bypass:health",
-                ClientRateLimitPartitioner.ResolveBypassPartition(context, options));
+            Assert.Equal("bypass:health", ClientRateLimitPartitioner.ResolveBypassPartition(context, options));
         }
 
         [Theory]
@@ -200,56 +204,49 @@ namespace Platform.Security.Tests
         }
 
         [Fact]
-        public void ShouldBypass_ThrowsForMissingContext()
-        {
-            Assert.Throws<ArgumentNullException>(() =>
-                ClientRateLimitPartitioner.ShouldBypass(null!, CreateOptions()));
-        }
+        public void ShouldBypass_ThrowsForMissingContext() =>
+            Assert.Throws<ArgumentNullException>(() => ClientRateLimitPartitioner.ShouldBypass(null!, CreateOptions()));
 
         [Fact]
-        public void ShouldBypass_ThrowsForMissingOptions()
-        {
-            Assert.Throws<ArgumentNullException>(() =>
-                ClientRateLimitPartitioner.ShouldBypass(CreateContext(), null!));
-        }
+        public void ShouldBypass_ThrowsForMissingOptions() =>
+            Assert.Throws<ArgumentNullException>(() => ClientRateLimitPartitioner.ShouldBypass(CreateContext(), null!));
 
         [Fact]
-        public void ResolvePartitionKey_ThrowsForMissingContext()
-        {
-            Assert.Throws<ArgumentNullException>(() =>
-                ClientRateLimitPartitioner.ResolvePartitionKey(null!, CreateOptions()));
-        }
+        public void ResolvePartitionKey_ThrowsForMissingContext() =>
+            Assert.Throws<ArgumentNullException>(() => ClientRateLimitPartitioner.ResolvePartitionKey(null!, CreateOptions()));
 
         [Fact]
-        public void ResolvePartitionKey_ThrowsForMissingOptions()
-        {
-            Assert.Throws<ArgumentNullException>(() =>
-                ClientRateLimitPartitioner.ResolvePartitionKey(CreateContext(), null!));
-        }
+        public void ResolvePartitionKey_ThrowsForMissingOptions() =>
+            Assert.Throws<ArgumentNullException>(() => ClientRateLimitPartitioner.ResolvePartitionKey(CreateContext(), null!));
 
         [Fact]
         public void ResolvePartitionKey_DoesNotReadSpoofableForwardedForHeaderDirectly()
         {
-            var context = CreateContext();
-            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.10");
-            context.Request.Headers["X-Forwarded-For"] = "198.51.100.99";
+            var baseline = CreateContext();
+            baseline.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.10");
+            var spoofed = CreateContext();
+            spoofed.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.10");
+            spoofed.Request.Headers["X-Forwarded-For"] = "198.51.100.99";
 
-            var key = ClientRateLimitPartitioner.ResolvePartitionKey(context, CreateOptions());
-
-            Assert.Equal("ip:203.0.113.10", key);
+            Assert.Equal(
+                ClientRateLimitPartitioner.ResolvePartitionKey(baseline, CreateOptions()),
+                ClientRateLimitPartitioner.ResolvePartitionKey(spoofed, CreateOptions()));
         }
 
         [Fact]
         public void ResolvePartitionKey_DoesNotReadApiKeyHeaderAsIdentity()
         {
-            var context = CreateContext();
-            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.11");
-            context.Request.Headers["X-Api-Key"] = "sensitive-client-key";
+            var baseline = CreateContext();
+            baseline.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.11");
+            var withApiKey = CreateContext();
+            withApiKey.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.11");
+            withApiKey.Request.Headers["X-Api-Key"] = "sensitive-client-key";
 
-            var key = ClientRateLimitPartitioner.ResolvePartitionKey(context, CreateOptions());
+            var baselineKey = ClientRateLimitPartitioner.ResolvePartitionKey(baseline, CreateOptions());
+            var apiKeyPartition = ClientRateLimitPartitioner.ResolvePartitionKey(withApiKey, CreateOptions());
 
-            Assert.Equal("ip:203.0.113.11", key);
-            Assert.DoesNotContain("sensitive-client-key", key, StringComparison.Ordinal);
+            Assert.Equal(baselineKey, apiKeyPartition);
+            Assert.DoesNotContain("sensitive-client-key", apiKeyPartition, StringComparison.Ordinal);
         }
 
         private static DefaultHttpContext CreateContext()
@@ -263,37 +260,36 @@ namespace Platform.Security.Tests
         private static DefaultHttpContext CreateAuthenticatedContext(string subject)
         {
             var context = CreateContext();
-            var identity = new ClaimsIdentity(
-                new[] { new Claim("sub", subject) },
-                authenticationType: "test");
+            var identity = new ClaimsIdentity(new[] { new Claim("sub", subject) }, authenticationType: "test");
             context.User = new ClaimsPrincipal(identity);
             return context;
         }
 
-        private static ApiPlatformOptions CreateOptions()
+        private static ApiPlatformOptions CreateOptions() => new()
         {
-            return new ApiPlatformOptions
+            RateLimiting = new ApiPlatformOptions.RateLimitOptions
             {
-                RateLimiting = new ApiPlatformOptions.RateLimitOptions
-                {
-                    Enabled = true,
-                    PermitLimit = 100,
-                    WindowSeconds = 60,
-                    SegmentsPerWindow = 6,
-                    QueueLimit = 0,
-                    ExemptOptionsRequests = true,
-                    ExemptHealthChecks = true,
-                    PartitionAuthenticatedUsers = true,
-                    RetryAfterSeconds = 1
-                },
-                Health = new ApiPlatformOptions.HealthOptions
-                {
-                    Enabled = true,
-                    LivenessPath = "/health/live",
-                    ReadinessPath = "/health/ready",
-                    DatabaseTimeoutSeconds = 3
-                }
-            };
-        }
+                Enabled = true,
+                PermitLimit = 100,
+                WindowSeconds = 60,
+                SegmentsPerWindow = 6,
+                QueueLimit = 0,
+                ExemptOptionsRequests = true,
+                ExemptHealthChecks = true,
+                RetryAfterSeconds = 1
+            },
+            ClientPartitioning = new ApiPlatformOptions.ClientPartitionOptions
+            {
+                PartitionAuthenticatedUsers = true,
+                AnonymousIpv6PrefixLength = 64
+            },
+            Health = new ApiPlatformOptions.HealthOptions
+            {
+                Enabled = true,
+                LivenessPath = "/health/live",
+                ReadinessPath = "/health/ready",
+                DatabaseTimeoutSeconds = 3
+            }
+        };
     }
 }
