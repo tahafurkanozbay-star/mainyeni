@@ -1,0 +1,192 @@
+.ego-stops-modern {
+  display: grid;
+  gap: var(--exp-space-3, 0.75rem);
+  min-inline-size: 0;
+}
+
+.ego-stops-modern__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--exp-space-3, 0.75rem);
+}
+
+.ego-stops-modern__title {
+  margin: 0;
+  color: var(--exp-text-primary, #172033);
+  font-size: 1rem;
+  font-weight: 780;
+  line-height: 1.25;
+}
+
+.ego-stops-modern__description {
+  max-inline-size: 62ch;
+  margin: 0.3rem 0 0;
+  color: var(--exp-text-secondary, #667085);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.ego-stops-modern__count {
+  flex: 0 0 auto;
+  min-inline-size: 3.5rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--exp-border-soft, #d7dde6);
+  border-radius: 999px;
+  color: var(--exp-text-secondary, #667085);
+  background: var(--exp-surface-subtle, #f8fafc);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.ego-stops-modern__search-shell {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.ego-stops-modern__search-label {
+  color: var(--exp-text-primary, #172033);
+  font-size: 0.75rem;
+  font-weight: 740;
+}
+
+.ego-stops-modern__search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.ego-stops-modern__search {
+  min-inline-size: 0;
+  min-block-size: 44px;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--exp-border-soft, #d7dde6);
+  border-radius: var(--exp-radius-sm, 0.55rem);
+  color: var(--exp-text-primary, #172033);
+  background: var(--exp-surface, #fff);
+  font: inherit;
+  font-size: 0.875rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.ego-stops-modern__search::placeholder {
+  color: color-mix(in srgb, var(--exp-text-secondary, #667085) 78%, transparent);
+}
+
+.ego-stops-modern__search:hover {
+  border-color: color-mix(in srgb, var(--exp-accent, #0b6fcb) 40%, var(--exp-border-soft, #d7dde6));
+}
+
+.ego-stops-modern__search:focus-visible,
+.ego-stops-modern__clear:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 62%, transparent);
+  outline-offset: 2px;
+}
+
+.ego-stops-modern__clear {
+  min-block-size: 44px;
+  min-inline-size: 5rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--exp-border-soft, #d7dde6);
+  border-radius: var(--exp-radius-sm, 0.55rem);
+  color: var(--exp-accent, #0b6fcb);
+  background: var(--exp-surface, #fff);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.ego-stops-modern__clear:hover {
+  border-color: var(--exp-accent, #0b6fcb);
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 7%, var(--exp-surface, #fff));
+}
+
+.ego-stops-modern__search-status {
+  min-block-size: 1.25rem;
+  color: var(--exp-text-secondary, #667085);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.ego-stops-modern__busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--exp-accent, #0b6fcb);
+  font-weight: 720;
+}
+
+.ego-stops-modern__busy::before {
+  content: '';
+  inline-size: 0.7rem;
+  block-size: 0.7rem;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: ego-stops-modern-spin 700ms linear infinite;
+}
+
+@keyframes ego-stops-modern-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 40rem) {
+  .ego-stops-modern__header {
+    align-items: center;
+  }
+
+  .ego-stops-modern__description {
+    font-size: 0.75rem;
+  }
+
+  .ego-stops-modern__search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ego-stops-modern__clear {
+    inline-size: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  .ego-stops-modern__search,
+  .ego-stops-modern__clear {
+    min-block-size: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ego-stops-modern__search {
+    transition: none;
+  }
+
+  .ego-stops-modern__busy::before {
+    animation: none;
+    border-inline-end-color: currentColor;
+  }
+}
+
+@media (forced-colors: active) {
+  .ego-stops-modern__count,
+  .ego-stops-modern__search,
+  .ego-stops-modern__clear {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .ego-stops-modern__search:focus-visible,
+  .ego-stops-modern__clear:focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .ego-stops-modern__busy {
+    color: Highlight;
+  }
+}
