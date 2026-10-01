@@ -52,10 +52,15 @@ const sameEnvironment = (
   && left.forcedColors === right.forcedColors
 );
 
-const readTargetWidth = (target: ResponsiveDataTableRuntimeTarget): number => {
+const readTargetWidth = (
+  target: ResponsiveDataTableRuntimeTarget,
+  fallbackWidth: number,
+): number => {
   const clientWidth = safeWidth(target.clientWidth, 0);
   if (clientWidth > 0) return clientWidth;
-  return safeWidth(target.getBoundingClientRect().width, DEFAULT_WIDTH);
+  const boundingWidth = safeWidth(target.getBoundingClientRect().width, 0);
+  if (boundingWidth > 0) return boundingWidth;
+  return safeWidth(fallbackWidth, DEFAULT_WIDTH) || DEFAULT_WIDTH;
 };
 
 const readMedia = (
@@ -74,13 +79,16 @@ const readMedia = (
 const readEnvironment = (
   target: ResponsiveDataTableRuntimeTarget,
   windowObject: ResponsiveDataTableRuntimeOptions['windowObject'],
-): ResponsiveDataTableEnvironment => Object.freeze({
-  containerWidth: readTargetWidth(target),
-  viewportWidth: safeWidth(windowObject?.innerWidth ?? DEFAULT_WIDTH),
-  coarsePointer: readMedia(windowObject, MEDIA_COARSE),
-  reducedMotion: readMedia(windowObject, MEDIA_REDUCED_MOTION),
-  forcedColors: readMedia(windowObject, MEDIA_FORCED_COLORS),
-});
+): ResponsiveDataTableEnvironment => {
+  const viewportWidth = safeWidth(windowObject?.innerWidth ?? DEFAULT_WIDTH) || DEFAULT_WIDTH;
+  return Object.freeze({
+    containerWidth: readTargetWidth(target, viewportWidth),
+    viewportWidth,
+    coarsePointer: readMedia(windowObject, MEDIA_COARSE),
+    reducedMotion: readMedia(windowObject, MEDIA_REDUCED_MOTION),
+    forcedColors: readMedia(windowObject, MEDIA_FORCED_COLORS),
+  });
+};
 
 const defaultResizeObserver = (
   callback: ResizeObserverCallback,
