@@ -95,11 +95,19 @@ const normalizeErrorCode = (value: unknown): string | null => {
   const candidate = sanitizeText(value, 48).toUpperCase();
   if (!candidate) return null;
   let normalized = '';
+  let pendingSeparator = false;
   for (const character of candidate) {
     const codePoint = character.codePointAt(0) ?? 0;
     const asciiUpper = codePoint >= 65 && codePoint <= 90;
     const digit = codePoint >= 48 && codePoint <= 57;
-    if (asciiUpper || digit || character === '_' || character === '-') normalized += character;
+    const safePunctuation = character === '_' || character === '-';
+    if (asciiUpper || digit || safePunctuation) {
+      if (pendingSeparator && normalized && !normalized.endsWith('-') && !safePunctuation) normalized += '-';
+      normalized += character;
+      pendingSeparator = false;
+      continue;
+    }
+    if (character.trim()) pendingSeparator = true;
   }
   return normalized || null;
 };
