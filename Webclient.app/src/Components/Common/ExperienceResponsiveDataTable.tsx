@@ -192,6 +192,7 @@ export function ExperienceResponsiveDataTable<Row>({
   const status = useMemo(() => (
     `${snapshot.announcement} ${describeHiddenColumns(snapshot, definitionColumns)}`
   ), [definitionColumns, snapshot]);
+  const announceProjection = tableProps.busy !== true && tableProps.rows.length > 0;
 
   return (
     <section
@@ -236,13 +237,22 @@ export function ExperienceResponsiveDataTable<Row>({
             </details>
           ) : null}
 
-          <output className="experience-responsive-table__projection-count" aria-label={projectionStatusLabel}>
+          <span className="experience-responsive-table__projection-count" aria-label={projectionStatusLabel}>
             {snapshot.visibleColumns.length}/{definitionColumns.length} sütun
-          </output>
+          </span>
         </div>
       ) : null}
 
-      <p className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">{status}</p>
+      {announceProjection ? (
+        <p
+          className="experience-sr-only"
+          aria-label={`${projectionStatusLabel} duyurusu`}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {status}
+        </p>
+      ) : null}
 
       <div className="experience-responsive-table__viewport" data-overflow={snapshot.horizontalOverflow ? 'true' : 'false'}>
         <ExperienceDataTable
