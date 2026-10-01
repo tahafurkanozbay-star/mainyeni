@@ -2,6 +2,16 @@
 
 > Bu canonical entrypoint bounded tutulur. Bu dosyanın PR #414 kapanış checkpoint’inden hemen önceki **tam ve verbatim** sürümü [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261001_PRE_PR414.md`](./KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261001_PRE_PR414.md) içinde aynı Git blob SHA ile korunur. Daha eski arşiv zinciri de o dosyanın içindeki bağlantılar üzerinden korunmaktadır.
 
+## Deep QA / current-main release provenance recovery — PR #419 checkpoint — 2026-10-01
+- TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization; stale QA lineage sonrası release provenance authority recovery.
+- BRANCH / PR: `agent/qa-release-20261001-1752-a0e6101`; PR #419 kanonik QA recovery PR'ıdır. Eski #415 superseded olarak closed/merged=false.
+- CURRENT MAIN / LINEAGE: current main ve exact merge-base `a0e6101b27c76e77fa6528345c75b112c6e366af`; recovery branch current main'den oluşturuldu ve ilk product head current main'e göre ahead-only/behind=0 doğrulandı.
+- KAPSAM: artifact-download provenance ve workflow-cache provenance authority'leri ile adversarial regressions temiz current-main lineage'a yeniden uygulandı; stale branch tree veya kırık TypeScript toolchain dilimi taşınmadı.
+- SECURITY: mutable artifact action identity, unbounded/dynamic selector, sensitive extraction path, cross-repository token/run provenance, untrusted cache writers, fallback namespaces, content-addressing ve runner-platform isolation sınırları fail-closed denetleniyor.
+- NETWORK / GIS / İKON: yeni endpoint, browser transport, WMS/WFS/WMTS, telemetry, remote asset, secret veya icon resolver eklenmedi. Yeni GIS main merge'i korunuyor.
+- GATE / MERGE: PR draft kalır; >=4,000 meaningful additions gate'i henüz açık. Exact-head CI success, current-main refresh, behind=0/exact merge-base, mergeable=true ve final security/performance/regression review olmadan merge yapılmaz.
+- SONRAKİ GÖREV NOTU: #419 üzerinde canonical workflow-expression aggregation entegrasyonu, type-safe repository toolchain/runtime modernization ve diğer yüksek etkili release authorities ile substantive kapsamı büyüt; her head'de CI sonuçlarını doğrula.
+
 ## Deep GIS / ArcGIS runtime lifecycle governance — PR #412 gate checkpoint — 2026-10-01
 - TUR / GÖREV: Deep GIS / Whole-Code Modernization; ArcGIS runtime/query/layer/geometry/projection/scene/edit lifecycle sınırlarının bounded, deterministic ve payload-free hale getirilmesi.
 - BRANCH / PR: `agent/gis-runtime-20261001-0512-56aab05`; PR #412 kanonik GIS PR’ıdır. Gate product head `70e879a4c4ea851e7cfa238ae0b5154a29bbd2b3`; progress commit bu SHA sonrasında yeni exact head oluşturacaktır.
