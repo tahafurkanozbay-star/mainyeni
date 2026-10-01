@@ -79,7 +79,11 @@ export const MeasurementExperiencePanel = ({
           <h3 id="measurement-experience-guidance-title">Ölçüm rehberi</h3>
           <p>{snapshot.guidance}</p>
         </div>
-        <div className="measurement-experience__facts" aria-label="Ölçüm oturumu durumu">
+        <div
+          className="measurement-experience__facts"
+          role="group"
+          aria-label="Ölçüm oturumu durumu"
+        >
           <span>
             <strong>Harita</strong>
             <span>{snapshot.viewReady ? 'Hazır' : 'Bekleniyor'}</span>
