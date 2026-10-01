@@ -50,3 +50,11 @@
 - KAPSAM: artifact-download provenance authority + adversarial regression paketi current-main'e yeniden uygulandı; immutable action identity, bounded selector, untrusted name/path/repository/run-id, sensitive extraction path, cross-repository token/run provenance, privileged trigger/execution sınırları fail-closed denetleniyor.
 - GATE: ilk substantive diff 2 dosya / 191 additions / 0 deletions; >=4,000 meaningful-additions şartı açık, merge yok. Progress commit yeni exact head oluşturacağı için CI sonucu bir sonraki turda exact-head üzerinden doğrulanmalı.
 - SONRAKİ GÖREV NOTU: aynı #425 üzerinde cache provenance ve canonical aggregation'ı reconcile et; ardından type-safe Node 24/TypeScript ESM tooling, browser-runtime/module-graph/package-lock/platform boundary kapsamını current main ile çakışmaları çözerek yeniden uygula. Her dilimde exact-head CI ve final security/performance/regression review yap; 4,000 additions + green CI + behind=0/exact merge-base + mergeable=true olmadan merge etme.
+
+### Deep QA follow-up — release-lineage CI repair — 2026-10-02
+- TUR / GÖREV: PR #425 exact-head CI failure triage ve TypeScript 7 `exactOptionalPropertyTypes` uyumluluk düzeltmesi.
+- ROOT CAUSE: head `d66b9c04138df53f857037445348d289645dee48` için Release QA `36937035536` ve QA Typed Release Diagnostics `36937035532` failure oldu; typed job doğrudan `tools/release-lineage-audit.mts(24,150)` üzerinde optional `detail` alanına explicit `undefined` yazılmasını TS2375 ile reddetti.
+- DÜZELTME: `finding(...)` helper artık `detail` yoksa property'yi hiç üretmiyor; varsa aynı immutable finding shape içine ekliyor. Test contractı gevşetilmedi ve `exactOptionalPropertyTypes` korunuyor.
+- PRODUCT COMMIT: `ff6032c112f163631a0104f4d18236235d04ed9b`; current main `83d845f9...` ile compare `9 ahead / 0 behind`, merge-base exact current main. Diff 8 dosya / 497 additions / 0 deletions; >=4,000 additions gate açık.
+- CI / MERGE: product commit yazımı sonrası yeni exact-head workflow henüz görünmedi; PASS iddiası yok. PR draft/open kalır ve merge yapılmaz.
+- SONRAKİ GÖREV NOTU: yeni progress head workflow'larını doğrula; TypeScript/Release QA green olursa substantive browser-runtime/module-graph/package-lock/toolchain governance kapsamına devam et. Additions>=4,000 + exact-head green CI + fresh current-main lineage + mergeable=true olmadan merge etme.
