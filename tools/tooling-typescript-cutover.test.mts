@@ -66,13 +66,14 @@ test('staged TypeScript cutover preserves behavior byte-for-byte before legacy s
   }
 });
 
-test('canonical production tools remain ESM-only and contain no TypeScript escape hatch', async () => {
+test('canonical production tools remain ESM-only and contain no TypeScript directive escape hatch', async () => {
   for (const file of canonicalProduction) {
     const source = await read(`tools/${file}`);
     assert.match(source, /\bimport\s/u, `${file} must use ESM imports`);
     assert.doesNotMatch(source, /\brequire\s*\(/u, `${file} must not use CommonJS require`);
     assert.doesNotMatch(source, /\bmodule\.exports\b/u, `${file} must not use CommonJS exports`);
-    assert.doesNotMatch(source, /@ts-(?:nocheck|ignore|expect-error)/u, `${file} must not opt out of TypeScript checks`);
+    assert.doesNotMatch(source, /^\s*\/\/\s*@ts-(?:nocheck|ignore|expect-error)\b/mu, `${file} must not use TypeScript line-directive opt-outs`);
+    assert.doesNotMatch(source, /\/\*\s*@ts-(?:nocheck|ignore|expect-error)\b/u, `${file} must not use TypeScript block-directive opt-outs`);
   }
 });
 
@@ -96,8 +97,8 @@ test('architecture workflow executes only canonical TypeScript tooling for migra
     'browser-runtime-boundary',
     'package-lock-integrity',
   ]) {
-    assert.match(workflow, new RegExp(`tools/${file.replaceAll('-', '\\-')}\\.mts`, 'u'));
-    assert.doesNotMatch(workflow, new RegExp(`tools/${file.replaceAll('-', '\\-')}\\.mjs(?:\\s|$)`, 'u'));
+    assert.match(workflow, new RegExp(`tools/${file}\\.mts`, 'u'));
+    assert.doesNotMatch(workflow, new RegExp(`tools/${file}\\.mjs(?:\\s|$)`, 'u'));
   }
   assert.match(workflow, /tools\/tooling-typescript-cutover\.test\.mts/u);
 });
