@@ -4,16 +4,18 @@ on:
   pull_request:
     paths:
       - 'Webclient.app/src/**'
-      - 'tools/typed-source-boundary.mjs'
-      - 'tools/typed-source-boundary.test.mjs'
+      - 'tools/typed-source-boundary.mts'
+      - 'tools/typed-source-boundary.test.mts'
+      - 'tools/tooling-typescript-cutover.test.mts'
       - '.github/workflows/typed-source-boundary.yml'
   push:
     branches:
       - main
     paths:
       - 'Webclient.app/src/**'
-      - 'tools/typed-source-boundary.mjs'
-      - 'tools/typed-source-boundary.test.mjs'
+      - 'tools/typed-source-boundary.mts'
+      - 'tools/typed-source-boundary.test.mts'
+      - 'tools/tooling-typescript-cutover.test.mts'
       - '.github/workflows/typed-source-boundary.yml'
 
 permissions:
@@ -30,15 +32,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24'
 
       - name: Audit unit tests
-        run: node --test tools/typed-source-boundary.test.mjs
+        run: node --test tools/typed-source-boundary.test.mts tools/tooling-typescript-cutover.test.mts
 
       - name: Enforce typed source boundary
-        run: node tools/typed-source-boundary.mjs --strict
+        run: node tools/typed-source-boundary.mts --strict
