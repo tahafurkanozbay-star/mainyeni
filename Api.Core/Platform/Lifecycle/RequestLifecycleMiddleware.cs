@@ -76,8 +76,8 @@ namespace Api.Core.Platform.Lifecycle
         {
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             context.Response.ContentType = "application/problem+json";
-            context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers.RetryAfter = "1";
+            context.Response.Headers["Cache-Control"] = "no-store";
+            context.Response.Headers["Retry-After"] = "1";
             return context.Response.WriteAsync(JsonSerializer.Serialize(new
             {
                 type = "about:blank",
@@ -91,7 +91,7 @@ namespace Api.Core.Platform.Lifecycle
         {
             context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
             context.Response.ContentType = "application/problem+json";
-            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers["Cache-Control"] = "no-store";
             return context.Response.WriteAsync(JsonSerializer.Serialize(new
             {
                 type = "about:blank",
