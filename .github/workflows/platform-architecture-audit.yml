@@ -5,8 +5,10 @@ on:
     paths:
       - '**/*.js'
       - '**/*.jsx'
+      - '**/*.mjs'
       - '**/*.ts'
       - '**/*.tsx'
+      - '**/*.mts'
       - '**/*.cs'
       - '**/*.csproj'
       - '**/*.props'
@@ -16,12 +18,7 @@ on:
       - 'global.json'
       - '**/*.css'
       - '.github/workflows/**'
-      - 'tools/platform-audit.mjs'
-      - 'tools/platform-audit.test.mjs'
-      - 'tools/platform-contracts.mjs'
-      - 'tools/platform-contracts.test.mjs'
-      - 'tools/package-lock-integrity.mjs'
-      - 'tools/package-lock-integrity.test.mjs'
+      - 'tools/**'
   workflow_dispatch:
 
 permissions:
@@ -49,35 +46,36 @@ jobs:
       - name: Unit tests
         run: >-
           node --test
-          tools/platform-audit.test.mjs
-          tools/platform-contracts.test.mjs
-          tools/platform-module-graph.test.mjs
-          tools/platform-language-ratchet.test.mjs
-          tools/platform-boundary-audit.test.mjs
-          tools/browser-runtime-boundary.test.mjs
-          tools/platform-ts-cutover.test.mjs
-          tools/package-lock-integrity.test.mjs
+          tools/platform-audit.test.mts
+          tools/platform-contracts.test.mts
+          tools/platform-module-graph.test.mts
+          tools/platform-language-ratchet.test.mts
+          tools/platform-boundary-audit.test.mts
+          tools/browser-runtime-boundary.test.mts
+          tools/platform-ts-cutover.test.mts
+          tools/package-lock-integrity.test.mts
+          tools/tooling-typescript-cutover.test.mts
 
       - name: Enforce modernization contracts
-        run: node tools/platform-contracts.mjs
+        run: node tools/platform-contracts.mts
 
       - name: Enforce typed module graph
-        run: node tools/platform-module-graph.mjs --strict
+        run: node tools/platform-module-graph.mts --strict
 
       - name: Enforce language modernization ratchet
-        run: node tools/platform-language-ratchet.mjs --strict
+        run: node tools/platform-language-ratchet.mts --strict
 
       - name: Enforce Platform responsibility boundaries
-        run: node tools/platform-boundary-audit.mjs --strict
+        run: node tools/platform-boundary-audit.mts --strict
 
       - name: Enforce browser runtime boundary
-        run: node tools/browser-runtime-boundary.mjs --strict
+        run: node tools/browser-runtime-boundary.mts --strict
 
       - name: Generate architecture inventory
-        run: node tools/platform-audit.mjs
+        run: node tools/platform-audit.mts
 
       - name: Audit package lock integrity
-        run: node tools/package-lock-integrity.mjs
+        run: node tools/package-lock-integrity.mts
 
       - name: Publish summary
         if: always()
