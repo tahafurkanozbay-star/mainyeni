@@ -35,7 +35,7 @@ describe('MeasurementExperiencePanel', () => {
     expect(screen.getByText('Ölçüm araçları hazır.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Ölçüm rehberi' })).toBeInTheDocument();
     expect(screen.getByText('Alan veya mesafe aracını seçin.')).toBeInTheDocument();
-    expect(container.querySelector('.measurement-experience__phase')).toHaveTextContent('Hazır');
+    expect(container.querySelector('.measurement-experience__phase')).toHaveTextContent('Kullanıma hazır');
   });
 
   it('renders explicit map readiness and unknown modality facts', () => {
