@@ -206,6 +206,7 @@ describe('createResponsiveDataTableRuntime', () => {
     resize(new Event('resize'));
     frame.flush();
     expect(onEnvironment.mock.calls[0]?.[0].viewportWidth).toBe(700);
+    runtime.dispose();
   });
 
   it('disconnects observer, browser and media listeners on dispose', () => {
