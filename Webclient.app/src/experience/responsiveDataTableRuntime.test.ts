@@ -146,6 +146,26 @@ describe('createResponsiveDataTableRuntime', () => {
     runtime.dispose();
   });
 
+  it('falls back to viewport width while the host is not measurable', () => {
+    const target: MutableTarget = {
+      clientWidth: 0,
+      getBoundingClientRect: () => ({ width: 0 }),
+    };
+    const { windowObject } = createWindow();
+    windowObject.innerWidth = 912;
+    const runtime = createResponsiveDataTableRuntime({
+      target,
+      windowObject,
+      onEnvironment: vi.fn(),
+      createResizeObserver: () => ({ observe: vi.fn(), disconnect: vi.fn() }),
+    });
+    expect(runtime.snapshot()).toMatchObject({
+      containerWidth: 912,
+      viewportWidth: 912,
+    });
+    runtime.dispose();
+  });
+
   it('tracks coarse pointer, reduced motion and forced colors', () => {
     const target = createTarget(800);
     const frame = createFrameHarness();
