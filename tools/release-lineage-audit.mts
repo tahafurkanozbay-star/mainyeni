@@ -21,7 +21,7 @@ export const DEFAULT_RELEASE_LINEAGE_POLICY: ReleaseLineagePolicy = Object.freez
   requiredChecks: Object.freeze(['Release QA', 'QA Typed Release Diagnostics']),
   requireExactMergeBase: true, requireZeroBehind: true, requireMergeable: true, forbidDraftMerge: true,
 });
-const finding = (severity: LineageFinding['severity'], code: string, message: string, detail?: Readonly<Record<string, unknown>>): LineageFinding => Object.freeze({ severity, code, message, detail });
+const finding = (severity: LineageFinding['severity'], code: string, message: string, detail?: Readonly<Record<string, unknown>>): LineageFinding => Object.freeze(detail === undefined ? { severity, code, message } : { severity, code, message, detail });
 const normalized = (value: string) => value.trim().toLowerCase();
 const successfulCheckForHead = (checks: readonly CheckSnapshot[], requiredName: string, headSha: string): boolean => checks.some((check) =>
   normalized(check.name) === normalized(requiredName) && check.headSha === headSha
