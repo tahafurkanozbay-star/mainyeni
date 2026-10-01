@@ -297,7 +297,7 @@ describe('MeasurementExperienceModel', () => {
 
     const activity = model.getSnapshot().activity;
     expect(activity).toHaveLength(3);
-    expect(activity.map((entry) => entry.id)).toEqual([...activity.map((entry) => entry.id)].sort((a, b) => a - b));
+    expect(activity.map((entry) => entry.id)).toEqual(activity.map((entry) => entry.id).sort((a, b) => a - b));
     expect(activity.at(-1)?.kind).toBe('clear');
     expect(activity.every(Object.isFrozen)).toBe(true);
   });
