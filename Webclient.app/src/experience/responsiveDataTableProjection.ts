@@ -150,8 +150,9 @@ const normalizeColumns = (
     }));
   }
 
-  if (normalized.length > 0 && !normalized.some((column) => column.essential)) {
-    normalized[0] = Object.freeze({ ...normalized[0], essential: true });
+  const firstNormalized = normalized[0];
+  if (firstNormalized && !normalized.some((column) => column.essential)) {
+    normalized[0] = Object.freeze({ ...firstNormalized, essential: true });
   }
 
   return Object.freeze(normalized);
@@ -210,8 +211,14 @@ const chooseVisibleColumns = (
     usedWidth += minimum;
   }
 
-  if (chosen.length === 0 && candidates.length > 0) chosen.push(candidates[0]);
-  if (chosen.length === 0 && columns.length > 0) chosen.push(columns[0]);
+  if (chosen.length === 0) {
+    const firstCandidate = candidates[0];
+    if (firstCandidate) chosen.push(firstCandidate);
+  }
+  if (chosen.length === 0) {
+    const firstColumn = columns[0];
+    if (firstColumn) chosen.push(firstColumn);
+  }
   const chosenIds = new Set(chosen.map((column) => column.id));
   return Object.freeze(columns.filter((column) => chosenIds.has(column.id)));
 };
@@ -228,7 +235,7 @@ const allocateWidths = (
     Math.round((column.minimumWidth ?? MIN_COLUMN_WIDTH) * densityScale),
   ));
   const preferred = columns.map((column, index) => Math.max(
-    minimums[index],
+    minimums[index] ?? MIN_COLUMN_WIDTH,
     Math.round((column.preferredWidth ?? DEFAULT_COLUMN_WIDTH) * densityScale),
   ));
   const availableWidth = Math.max(environment.containerWidth, MIN_COLUMN_WIDTH);
@@ -242,7 +249,7 @@ const allocateWidths = (
     return Object.freeze(preferred.map((width) => Math.min(MAX_COLUMN_WIDTH, width + share)));
   }
 
-  const flexible = preferred.map((width, index) => width - minimums[index]);
+  const flexible = preferred.map((width, index) => width - (minimums[index] ?? MIN_COLUMN_WIDTH));
   const flexibleTotal = flexible.reduce((sum, width) => sum + width, 0);
   const distributable = availableWidth - minimumTotal;
   return Object.freeze(minimums.map((minimum, index) => {
