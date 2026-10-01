@@ -83,7 +83,7 @@ jobs:
             echo '### Platform backend test failure' >> "$GITHUB_STEP_SUMMARY"
             echo 'The test process failed without producing a diagnostic log.' >> "$GITHUB_STEP_SUMMARY"
             echo '::error title=Platform backend tests failed::The test process failed without producing a diagnostic log.'
-            exit 0
+            exit 1
           fi
 
           echo '### Platform backend test failure diagnostics' >> "$GITHUB_STEP_SUMMARY"
