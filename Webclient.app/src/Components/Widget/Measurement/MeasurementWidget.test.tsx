@@ -7,14 +7,34 @@ import type { MeasurementExperienceSnapshot } from './measurementExperienceModel
 import type { MeasurementExperienceController } from './measurementExperienceController';
 import { MeasurementWidget, type MeasurementWindowHandle } from './MeasurementWidget';
 
-const focusOpen = vi.fn();
-const focusClose = vi.fn();
-const focusDispose = vi.fn();
-const createFocusLifecycle = vi.fn(() => ({
-  open: focusOpen,
-  close: focusClose,
-  dispose: focusDispose,
-}));
+const {
+  focusOpen,
+  focusClose,
+  focusDispose,
+  createFocusLifecycle,
+  captureError,
+  recordDiagnostic,
+  getMapView,
+  createController,
+} = vi.hoisted(() => {
+  const focusOpen = vi.fn();
+  const focusClose = vi.fn();
+  const focusDispose = vi.fn();
+  return {
+    focusOpen,
+    focusClose,
+    focusDispose,
+    createFocusLifecycle: vi.fn(() => ({
+      open: focusOpen,
+      close: focusClose,
+      dispose: focusDispose,
+    })),
+    captureError: vi.fn(),
+    recordDiagnostic: vi.fn(),
+    getMapView: vi.fn(),
+    createController: vi.fn(),
+  };
+});
 
 vi.mock('../../Query/_Common/ManagedWindowFocus', () => ({
   createManagedWindowFocusLifecycle: () => createFocusLifecycle(),
@@ -47,8 +67,6 @@ vi.mock('../../Common/ExperienceToolbar', () => ({
   ),
 }));
 
-const captureError = vi.fn();
-const recordDiagnostic = vi.fn();
 vi.mock('../../../platform/runtime/runtimeDiagnostics', () => ({
   runtimeDiagnostics: {
     captureError,
@@ -57,7 +75,6 @@ vi.mock('../../../platform/runtime/runtimeDiagnostics', () => ({
 }));
 
 const mapView = { id: 'map-view' };
-const getMapView = vi.fn(() => mapView as unknown);
 vi.mock('../../../Store/Managers/MapManager', () => ({
   default: {
     GetMapView: () => getMapView(),
@@ -65,7 +82,6 @@ vi.mock('../../../Store/Managers/MapManager', () => ({
 }));
 
 let currentController: FakeMeasurementController;
-const createController = vi.fn(() => currentController.controller);
 vi.mock('./measurementExperienceController', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./measurementExperienceController')>();
   return {
@@ -209,6 +225,7 @@ describe('MeasurementWidget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getMapView.mockReturnValue(mapView);
+    createController.mockImplementation(() => currentController.controller);
   });
 
   it('creates one governed controller and refreshes view readiness on mount', () => {
