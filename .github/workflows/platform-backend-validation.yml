@@ -91,12 +91,16 @@ jobs:
           tail -n 160 "$log" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-          # Annotation extraction is diagnostic-only: an empty grep result is valid when the
-          # runner terminates without a conventional xUnit failure marker. Avoid shell-level
-          # failure masking by handling grep status explicitly instead of using `|| true`.
+          # Annotation extraction is diagnostic-only: grep status 1 means no conventional
+          # xUnit marker was present; status >1 is a real scanner failure and must fail closed.
           matches='artifacts/test-diagnostics/platform-security-failure-lines.log'
-          grep -E '(^|[[:space:]])(failed|FAIL|Error Message:|Stack Trace:|\[FAIL\]|\[x\])' "$log" > "$matches" || grep_status=$?
-          if [[ ${grep_status:-0} -gt 1 ]]; then
+          grep_status=0
+          if grep -E '(^|[[:space:]])(failed|FAIL|Error Message:|Stack Trace:|\[FAIL\]|\[x\])' "$log" > "$matches"; then
+            grep_status=0
+          else
+            grep_status=$?
+          fi
+          if [[ $grep_status -gt 1 ]]; then
             echo '::error title=Platform backend diagnostics::Failed to scan the xUnit diagnostic log.'
             exit "$grep_status"
           fi
