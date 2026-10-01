@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup .NET 10 LTS
-        uses: actions/setup-dotnet@b1deca2d6e39d6668e5e38df80e7c83d5f9d018b
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
 
