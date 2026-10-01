@@ -239,3 +239,15 @@ export * from './coordinateQueryRuntimeV7';
 export * from './searchIntentRuntimeV7';
 export * from './dataSearchExecutionRuntimeV7';
 export * from './dataSearchExecutionRegistryV7';
+
+// Production v8 typo resilience. Canonical v7 execution remains first and
+// authoritative; this layer adds a bounded corpus lexicon, thresholded edit
+// distance, syntax-safe rewrite planning and at most one high-confidence
+// fallback execution. Existing revision cache and SearchSession authorities are
+// reused; no spell-check endpoint, new network carrier or alternate scorer is
+// introduced.
+export * from './boundedEditDistanceRuntimeV8';
+export * from './termLexiconRuntimeV8';
+export * from './queryRewriteRuntimeV8';
+export * from './queryResilienceRuntimeV8';
+export * from './queryResilienceRegistryV8';
