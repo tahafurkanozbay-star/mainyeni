@@ -1,6 +1,8 @@
 import { evictArcgisModule, loadArcgisModule } from './arcgisModuleRuntime';
 
 const MEASUREMENT_MODULE_ID = 'esri/widgets/Measurement';
+const DEFAULT_MAX_LISTENERS = 64;
+const MAX_LISTENERS_LIMIT = 256;
 
 export const clearMeasurementRuntimeCache = (): void => {
   evictArcgisModule(MEASUREMENT_MODULE_ID);
@@ -59,11 +61,34 @@ export interface MeasurementDiagnostic {
   readonly message: string;
   readonly error: unknown;
 }
+
+export interface MeasurementRuntimeDiagnostics {
+  readonly listenerCount: number;
+  readonly rejectedListenerCount: number;
+  readonly listenerFailureCount: number;
+  readonly diagnosticReporterFailureCount: number;
+  readonly lastFailurePhase: MeasurementDiagnosticPhase | null;
+  readonly lastFailureKind: string | null;
+  readonly destroyed: boolean;
+}
+
 export interface MeasurementControllerOptions {
   view?: unknown;
   container?: unknown;
   onDiagnostic?: (diagnostic: MeasurementDiagnostic) => void;
+  maxListeners?: number;
 }
+
+const clampListenerLimit = (value: number | undefined): number => {
+  if (!Number.isFinite(value)) return DEFAULT_MAX_LISTENERS;
+  return Math.max(1, Math.min(MAX_LISTENERS_LIMIT, Math.trunc(value ?? DEFAULT_MAX_LISTENERS)));
+};
+
+const failureKind = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  return typeof error;
+};
 
 const errorRecord = (error: unknown): Readonly<{ code: string; message: string }> => {
   if (error instanceof Error) {
@@ -98,6 +123,15 @@ const createDiagnostic = (
   };
 };
 
+const cloneMeasurementState = (state: MeasurementState): MeasurementState => ({
+  status: state.status,
+  activeTool: state.activeTool,
+  error: state.error ? { ...state.error } : null,
+  createdAt: state.createdAt,
+  clearedAt: state.clearedAt,
+  destroyedAt: state.destroyedAt,
+});
+
 export interface MeasurementController {
   ensureWidget: () => Promise<MeasurementWidgetLike | null>;
   setTool: (tool: unknown) => Promise<MeasurementWidgetLike | null>;
@@ -108,6 +142,7 @@ export interface MeasurementController {
   destroy: () => void;
   getWidget: () => MeasurementWidgetLike | null;
   getState: () => MeasurementState;
+  getDiagnostics?: () => MeasurementRuntimeDiagnostics;
   readonly destroyed: boolean;
 }
 
@@ -119,18 +154,59 @@ export const createMeasurementController = (options: MeasurementControllerOption
   let destroyed = false;
   let state = createMeasurementState();
   const listeners = new Set<MeasurementListener>();
+  const maxListeners = clampListenerLimit(options.maxListeners);
+  let diagnostics: MeasurementRuntimeDiagnostics = Object.freeze({
+    listenerCount: 0,
+    rejectedListenerCount: 0,
+    listenerFailureCount: 0,
+    diagnosticReporterFailureCount: 0,
+    lastFailurePhase: null,
+    lastFailureKind: null,
+    destroyed: false,
+  });
+
+  const updateDiagnostics = (patch: Partial<MeasurementRuntimeDiagnostics>): void => {
+    diagnostics = Object.freeze({ ...diagnostics, ...patch });
+  };
+
+  const recordListenerCount = (): void => {
+    updateDiagnostics({ listenerCount: listeners.size });
+  };
+
   const report = (phase: MeasurementDiagnosticPhase, error: unknown): void => {
-    options.onDiagnostic?.(createDiagnostic(phase, error));
+    updateDiagnostics({
+      lastFailurePhase: phase,
+      lastFailureKind: failureKind(error),
+    });
+    if (!options.onDiagnostic) return;
+    try {
+      options.onDiagnostic(createDiagnostic(phase, error));
+    } catch (reporterError) {
+      updateDiagnostics({
+        diagnosticReporterFailureCount: diagnostics.diagnosticReporterFailureCount + 1,
+        lastFailurePhase: phase,
+        lastFailureKind: `reporter:${failureKind(reporterError)}`,
+      });
+    }
+  };
+
+  const callListener = (listener: MeasurementListener, nextState: MeasurementState): void => {
+    try {
+      listener(cloneMeasurementState(nextState));
+    } catch (error) {
+      updateDiagnostics({
+        listenerFailureCount: diagnostics.listenerFailureCount + 1,
+        lastFailurePhase: 'listener',
+        lastFailureKind: failureKind(error),
+      });
+      report('listener', error);
+    }
   };
 
   const notify = (nextState: MeasurementState): void => {
-    listeners.forEach((listener) => {
-      try {
-        listener(nextState);
-      } catch (error) {
-        report('listener', error);
-      }
-    });
+    for (const listener of listeners) {
+      callListener(listener, nextState);
+    }
   };
 
   const setState = (patch: Partial<MeasurementState>): MeasurementState => {
@@ -203,9 +279,41 @@ export const createMeasurementController = (options: MeasurementControllerOption
     setState({ activeTool: MEASUREMENT_TOOLS.NONE, clearedAt: new Date().toISOString() });
     return true;
   };
-  const setView = (nextView: unknown): boolean => { if (destroyed) return false; view = nextView || null; if (widget) widget.view = view; return true; };
-  const setContainer = (nextContainer: unknown): boolean => { if (destroyed) return false; container = nextContainer || null; if (widget) widget.container = container; return true; };
-  const subscribe = (listener: MeasurementListener): (() => boolean) => { if (typeof listener !== 'function') return () => false; listeners.add(listener); listener(state); return () => listeners.delete(listener); };
+
+  const setView = (nextView: unknown): boolean => {
+    if (destroyed) return false;
+    view = nextView || null;
+    if (widget) widget.view = view;
+    return true;
+  };
+
+  const setContainer = (nextContainer: unknown): boolean => {
+    if (destroyed) return false;
+    container = nextContainer || null;
+    if (widget) widget.container = container;
+    return true;
+  };
+
+  const subscribe = (listener: MeasurementListener): (() => boolean) => {
+    if (typeof listener !== 'function' || destroyed) {
+      updateDiagnostics({ rejectedListenerCount: diagnostics.rejectedListenerCount + 1 });
+      return () => false;
+    }
+    if (!listeners.has(listener) && listeners.size >= maxListeners) {
+      updateDiagnostics({ rejectedListenerCount: diagnostics.rejectedListenerCount + 1 });
+      return () => false;
+    }
+    const alreadySubscribed = listeners.has(listener);
+    listeners.add(listener);
+    recordListenerCount();
+    if (!alreadySubscribed) callListener(listener, state);
+    return () => {
+      const removed = listeners.delete(listener);
+      if (removed) recordListenerCount();
+      return removed;
+    };
+  };
+
   const destroy = (): void => {
     if (destroyed) return;
     destroyed = true;
@@ -215,11 +323,36 @@ export const createMeasurementController = (options: MeasurementControllerOption
     } catch (error) {
       report('destroy', error);
     }
-    widget = null; creationPromise = null; listeners.clear();
-    state = { ...state, status: 'destroyed', activeTool: MEASUREMENT_TOOLS.NONE, destroyedAt: new Date().toISOString() };
+    widget = null;
+    creationPromise = null;
+    listeners.clear();
+    state = {
+      ...state,
+      status: 'destroyed',
+      activeTool: MEASUREMENT_TOOLS.NONE,
+      destroyedAt: new Date().toISOString(),
+    };
+    updateDiagnostics({
+      listenerCount: 0,
+      destroyed: true,
+    });
   };
 
-  return { ensureWidget, setTool, clear, setView, setContainer, subscribe, destroy, getWidget: () => widget, getState: () => ({ ...state }), get destroyed() { return destroyed; } };
+  return {
+    ensureWidget,
+    setTool,
+    clear,
+    setView,
+    setContainer,
+    subscribe,
+    destroy,
+    getWidget: () => widget,
+    getState: () => cloneMeasurementState(state),
+    getDiagnostics: () => diagnostics,
+    get destroyed() {
+      return destroyed;
+    },
+  };
 };
 
 export interface MeasurementCapability {
