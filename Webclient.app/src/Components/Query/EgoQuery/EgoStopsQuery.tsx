@@ -163,7 +163,7 @@ export const EgoStopsQuery = ({
       minimumWidth: 96,
       preferredWidth: 150,
     }),
-  ])), [loadingStopKey]);
+  ]), [loadingStopKey]);
 
   if (stops === null || stops === undefined) return <ContainerLoading />;
   if (!Array.isArray(stops) || stops.length === 0) {
