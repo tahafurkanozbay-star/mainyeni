@@ -66,13 +66,43 @@ const projectionColumns = <Row,>(
   align: column.align,
 })));
 
+const projectionSchemaKey = (
+  columns: readonly ResponsiveDataTableColumnDefinition[],
+): string => JSON.stringify(columns.map((column) => [
+  column.id,
+  column.label,
+  column.priority ?? null,
+  column.essential === true,
+  column.hideOnPhone === true,
+  column.minimumWidth ?? null,
+  column.preferredWidth ?? null,
+  column.align ?? 'start',
+]));
+
+const useStableProjectionColumns = <Row,>(
+  columns: readonly ExperienceResponsiveDataColumn<Row>[],
+): readonly ResponsiveDataTableColumnDefinition[] => {
+  const projected = projectionColumns(columns);
+  const schemaKey = projectionSchemaKey(projected);
+  const cacheRef = useRef<{
+    readonly key: string;
+    readonly columns: readonly ResponsiveDataTableColumnDefinition[];
+  } | null>(null);
+
+  if (cacheRef.current === null || cacheRef.current.key !== schemaKey) {
+    cacheRef.current = Object.freeze({ key: schemaKey, columns: projected });
+  }
+
+  return cacheRef.current.columns;
+};
+
 const toPixelWidth = (value: number): string => `${Math.max(88, Math.round(value))}px`;
 
-const createProjectionModel = <Row,>(
-  columns: readonly ExperienceResponsiveDataColumn<Row>[],
+const createProjectionModel = (
+  columns: readonly ResponsiveDataTableColumnDefinition[],
   initialDensity: ResponsiveDataTableDensity,
 ): ResponsiveDataTableProjectionModel => createResponsiveDataTableProjectionModel({
-  columns: projectionColumns(columns),
+  columns,
   initialEnvironment: initialEnvironment(),
   initialDensity,
   maxObservers: 24,
@@ -102,10 +132,10 @@ export function ExperienceResponsiveDataTable<Row>({
   ...tableProps
 }: ExperienceResponsiveDataTableProps<Row>): ReactNode {
   const rootRef = useRef<HTMLElement | null>(null);
-  const definitionColumns = useMemo(() => projectionColumns(columns), [columns]);
+  const definitionColumns = useStableProjectionColumns(columns);
   const model = useMemo(
-    () => createProjectionModel(columns, initialDensity),
-    [columns, initialDensity],
+    () => createProjectionModel(definitionColumns, initialDensity),
+    [definitionColumns, initialDensity],
   );
 
   const subscribe = useCallback((notify: () => void): (() => void) => (
