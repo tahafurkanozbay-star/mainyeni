@@ -17,3 +17,9 @@
 - REVIEW DURUMU: product head’de submitted review yok ve unresolved review thread yok.
 - MERGE DURUMU: bu progress commit’i yeni exact head oluşturacağı için henüz merge yapılmadı. Progress head üzerinde dört mandatory workflow tekrar completed+success olmadan ready/merge yapılmayacak.
 - SONRAKİ GÖREV NOTU: progress head green olduktan sonra current `main` tekrar okunmalı; base...head additions>=4,000, behind=0/exact merge-base, `mergeable=true`, review/thread temizliği ve kritik UX/release risk yokluğu doğrulanmalı. Sonra PR draft’tan çıkarılıp `expected_head_sha` korumalı squash merge yapılmalı; merge SHA ve yeni main SHA doğrulanmalıdır. Merge sonrası bu branch yeniden kullanılmaz.
+
+## Deep QA / current-main provenance recovery — 2026-10-01
+- CURRENT MAIN / LINEAGE: recovery exact `3df6f24673248be3ae222c3dbd29855d020743ac` tabanından sürdürülüyor; stale PR #415 üzerine yeni iş eklenmedi.
+- ROOT CAUSE: PR #415 exact head TypeScript 7 strict diagnostics iki gerçek type error gösterdi: `repository-toolchain-modernization-audit.mts` içinde `RegExpExecArray | undefined` değeri `RegExpExecArray | null` değişkenine atanıyordu; `runtime-baseline-audit.test.mts` içinde `Array.find(...)` sonucu null-check olmadan kullanılıyordu. Bu nedenle kırık toolchain dilimi recovery branch’e taşınmadı.
+- RECOVERY: doğrulanmış artifact-download provenance ve workflow-cache provenance authority/testleri current-main branch’e Git blob kimlikleri korunarak yeniden uygulandı; Experience/GIS main değişiklikleri korunuyor.
+- GATE: bu checkpoint merge değildir. >=4,000 meaningful additions gate açık; toolchain/runtime dilimi type-safe olarak yeniden uygulanmalı, canonical aggregation tamamlanmalı ve exact-head Release QA + Typed Release Diagnostics success olmadan merge yapılmamalıdır.
