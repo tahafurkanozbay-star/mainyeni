@@ -1,0 +1,47 @@
+import { describe, expect, it } from 'vitest';
+import { closeResultDetail, moveResultFocus, normalizeResultInteractionSnapshot, openResultDetail, reconcileResultInteraction, toggleResultSelection } from './ArcGisResultInteractionExperiencePolicy';
+
+const ids = ['a', 'b', 'c', 'd', 'e'];
+const base = () => normalizeResultInteractionSnapshot({ resultIds: ids, selectedIds: ['b'], focusedId: 'b', activeId: 'b', anchorId: 'b', surface: 'collection', viewport: 'desktop', rowHeight: 50, viewportHeight: 100 });
+
+describe('ArcGisResultInteractionExperiencePolicy', () => {
+  it('deduplicates result identities', () => expect(normalizeResultInteractionSnapshot({ resultIds: ['a', 'a', '', 'b'] }).resultIds).toEqual(['a', 'b']));
+  it('removes selection outside current results', () => expect(normalizeResultInteractionSnapshot({ resultIds: ['a'], selectedIds: ['a', 'b'] }).selectedIds).toEqual(['a']));
+  it('removes stale focused identity', () => expect(normalizeResultInteractionSnapshot({ resultIds: ['a'], focusedId: 'b' }).focusedId).toBeNull());
+  it('removes stale active identity', () => expect(normalizeResultInteractionSnapshot({ resultIds: ['a'], activeId: 'b', detailOpen: true }).activeId).toBeNull());
+  it('closes detail when active identity is invalid', () => expect(normalizeResultInteractionSnapshot({ resultIds: ['a'], activeId: 'b', detailOpen: true }).detailOpen).toBe(false));
+  it('bounds row height at touch-safe lower edge', () => expect(normalizeResultInteractionSnapshot({ resultIds: ids, rowHeight: 1 }).rowHeight).toBe(36));
+  it('bounds row height at density upper edge', () => expect(normalizeResultInteractionSnapshot({ resultIds: ids, rowHeight: 500 }).rowHeight).toBe(96));
+  it('normalizes hostile scroll values', () => expect(normalizeResultInteractionSnapshot({ resultIds: ids, scrollTop: Number.NaN }).scrollTop).toBe(0));
+  it('clamps scroll to collection extent', () => expect(normalizeResultInteractionSnapshot({ resultIds: ids, rowHeight: 50, viewportHeight: 100, scrollTop: 999 }).scrollTop).toBe(150));
+  it('forces desktop filters inline', () => expect(normalizeResultInteractionSnapshot({ viewport: 'desktop', filterOpen: true }).filterOpen).toBe(false));
+  it('preserves phone filter overlay state', () => expect(normalizeResultInteractionSnapshot({ viewport: 'phone', filterOpen: true }).filterOpen).toBe(true));
+  it('bounds result cardinality', () => expect(normalizeResultInteractionSnapshot({ resultIds: Array.from({ length: 30_000 }, (_, i) => `r-${i}`) }).resultIds).toHaveLength(20_000));
+  it('bounds selection cardinality', () => { const many = Array.from({ length: 2_000 }, (_, i) => `r-${i}`); expect(normalizeResultInteractionSnapshot({ resultIds: many, selectedIds: many }).selectedIds).toHaveLength(1_000); });
+  it('reconciles stable focus across refresh', () => { const result = reconcileResultInteraction(base(), ['a', 'b', 'c'], 'result-refresh'); expect(result.focusTarget).toBe('b'); expect(result.announcement).toBe('3 sonuç güncellendi'); });
+  it('moves focus to nearest surviving index', () => { const previous = normalizeResultInteractionSnapshot({ resultIds: ids, focusedId: 'c' }); const result = reconcileResultInteraction(previous, ['a', 'b'], 'result-refresh'); expect(result.focusTarget).toBe('b'); });
+  it('moves focus to first result for keyboard refresh when prior focus is absent', () => { const previous = normalizeResultInteractionSnapshot({ resultIds: ids }); expect(reconcileResultInteraction(previous, ['x', 'y'], 'keyboard').focusTarget).toBe('x'); });
+  it('does not invent pointer focus after refresh', () => { const previous = normalizeResultInteractionSnapshot({ resultIds: ids }); expect(reconcileResultInteraction(previous, ['x', 'y'], 'pointer').focusTarget).toBeNull(); });
+  it('closes detail when active result disappears', () => { const previous = normalizeResultInteractionSnapshot({ resultIds: ids, activeId: 'b', detailOpen: true, surface: 'detail' }); const result = reconcileResultInteraction(previous, ['a', 'c'], 'result-refresh'); expect(result.next.detailOpen).toBe(false); expect(result.next.activeId).toBeNull(); expect(result.restoreMapFocus).toBe(true); expect(result.announcement).toContain('detay kapatıldı'); });
+  it('announces selection removal after filtering', () => { const previous = normalizeResultInteractionSnapshot({ resultIds: ids, selectedIds: ['a', 'b', 'c'] }); const result = reconcileResultInteraction(previous, ['a', 'c'], 'filter-change'); expect(result.next.selectedIds).toEqual(['a', 'c']); expect(result.announcement).toBe('1 seçili sonuç artık listede değil'); });
+  it('announces filtered count when continuity is otherwise stable', () => { const previous = normalizeResultInteractionSnapshot({ resultIds: ids }); expect(reconcileResultInteraction(previous, ['a', 'b'], 'filter-change').announcement).toBe('2 sonuç filtrelendi'); });
+  it('opens valid detail with focus continuity', () => { const result = openResultDetail(base(), 'd'); expect(result.next.detailOpen).toBe(true); expect(result.next.activeId).toBe('d'); expect(result.next.focusedId).toBe('d'); expect(result.next.surface).toBe('detail'); expect(result.announcement).toBe('Sonuç ayrıntıları açıldı'); });
+  it('ignores detail open for missing result', () => { const snapshot = base(); expect(openResultDetail(snapshot, 'missing').next).toBe(snapshot); });
+  it('closes detail and restores focus to active row', () => { const opened = openResultDetail(base(), 'd').next; const result = closeResultDetail(opened); expect(result.next.detailOpen).toBe(false); expect(result.next.focusedId).toBe('d'); expect(result.next.surface).toBe('collection'); expect(result.focusTarget).toBe('d'); });
+  it('makes close detail idempotent', () => { const snapshot = base(); expect(closeResultDetail(snapshot).next).toBe(snapshot); });
+  it('moves focus forward', () => { const result = moveResultFocus(base(), 1); expect(result.focusTarget).toBe('c'); expect(result.announcement).toBe('3 / 5'); });
+  it('moves focus backward', () => expect(moveResultFocus(base(), -1).focusTarget).toBe('a'));
+  it('clamps focus at start', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids, focusedId: 'a' }); expect(moveResultFocus(snapshot, -10).focusTarget).toBe('a'); });
+  it('clamps focus at end', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids, focusedId: 'e' }); expect(moveResultFocus(snapshot, 10).focusTarget).toBe('e'); });
+  it('uses first result when moving without prior focus', () => expect(moveResultFocus(normalizeResultInteractionSnapshot({ resultIds: ids }), 1).focusTarget).toBe('b'));
+  it('does not move focus in empty collection', () => expect(moveResultFocus(normalizeResultInteractionSnapshot({ resultIds: [] }), 1).focusTarget).toBeNull());
+  it('scrolls focused row into view below viewport', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids, focusedId: 'a', rowHeight: 50, viewportHeight: 100, scrollTop: 0 }); expect(moveResultFocus(snapshot, 3).scrollTop).toBe(100); });
+  it('scrolls focused row into view above viewport', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids, focusedId: 'e', rowHeight: 50, viewportHeight: 100, scrollTop: 150 }); expect(moveResultFocus(snapshot, -3).scrollTop).toBe(50); });
+  it('toggles a selection on', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids }); const result = toggleResultSelection(snapshot, 'b'); expect(result.next.selectedIds).toEqual(['b']); expect(result.next.anchorId).toBe('b'); expect(result.announcement).toBe('1 sonuç seçili'); });
+  it('toggles a selection off', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids, selectedIds: ['b'] }); const result = toggleResultSelection(snapshot, 'b'); expect(result.next.selectedIds).toEqual([]); expect(result.announcement).toBe('Seçim temizlendi'); });
+  it('ignores selection for missing result', () => { const snapshot = base(); expect(toggleResultSelection(snapshot, 'missing').next).toBe(snapshot); });
+  it('extends selection from stable anchor forward', () => { const result = toggleResultSelection(base(), 'e', true); expect(result.next.selectedIds).toEqual(['b', 'c', 'd', 'e']); });
+  it('extends selection from stable anchor backward', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids, anchorId: 'd' }); expect(toggleResultSelection(snapshot, 'b', true).next.selectedIds).toEqual(['b', 'c', 'd']); });
+  it('creates anchor when extending without one', () => { const snapshot = normalizeResultInteractionSnapshot({ resultIds: ids }); const result = toggleResultSelection(snapshot, 'c', true); expect(result.next.anchorId).toBe('c'); expect(result.next.selectedIds).toEqual(['c']); });
+  it('keeps interaction outputs normalized after repeated operations', () => { let snapshot = normalizeResultInteractionSnapshot({ resultIds: ids }); snapshot = toggleResultSelection(snapshot, 'a').next; snapshot = moveResultFocus(snapshot, 2).next; snapshot = openResultDetail(snapshot, 'c').next; snapshot = closeResultDetail(snapshot).next; expect(snapshot.selectedIds).toEqual(['a']); expect(snapshot.focusedId).toBe('c'); expect(snapshot.detailOpen).toBe(false); });
+});
