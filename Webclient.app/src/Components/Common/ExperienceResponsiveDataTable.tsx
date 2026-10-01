@@ -55,16 +55,19 @@ const initialEnvironment = () => ({
 
 const projectionColumns = <Row,>(
   columns: readonly ExperienceResponsiveDataColumn<Row>[],
-): readonly ResponsiveDataTableColumnDefinition[] => Object.freeze(columns.map((column, index) => Object.freeze({
-  id: column.id,
-  label: typeof column.header === 'string' ? column.header : column.id,
-  priority: column.priority ?? index,
-  essential: column.essential === true,
-  hideOnPhone: column.hideOnPhone === true,
-  minimumWidth: column.minimumWidth,
-  preferredWidth: column.preferredWidth,
-  align: column.align,
-})));
+): readonly ResponsiveDataTableColumnDefinition[] => Object.freeze(columns.map((column, index) => {
+  const definition: ResponsiveDataTableColumnDefinition = {
+    id: column.id,
+    label: typeof column.header === 'string' ? column.header : column.id,
+    priority: column.priority ?? index,
+    essential: column.essential === true,
+    hideOnPhone: column.hideOnPhone === true,
+    ...(column.minimumWidth === undefined ? {} : { minimumWidth: column.minimumWidth }),
+    ...(column.preferredWidth === undefined ? {} : { preferredWidth: column.preferredWidth }),
+    ...(column.align === undefined ? {} : { align: column.align }),
+  };
+  return Object.freeze(definition);
+}));
 
 const projectionSchemaKey = (
   columns: readonly ResponsiveDataTableColumnDefinition[],
@@ -173,15 +176,16 @@ export function ExperienceResponsiveDataTable<Row>({
     return Object.freeze(snapshot.visibleColumns.flatMap((projected) => {
       const source = sourceById.get(projected.id);
       if (!source) return [];
-      return [Object.freeze({
+      const projectedColumn: ExperienceDataColumn<Row> = {
         id: source.id,
         header: source.header,
         cell: source.cell,
         align: source.align ?? projected.align,
         width: toPixelWidth(projected.width),
-        sortDirection: source.sortDirection,
-        onSort: source.onSort,
-      })];
+        ...(source.sortDirection === undefined ? {} : { sortDirection: source.sortDirection }),
+        ...(source.onSort === undefined ? {} : { onSort: source.onSort }),
+      };
+      return [Object.freeze(projectedColumn)];
     }));
   }, [columns, snapshot.visibleColumns]);
 
@@ -205,22 +209,8 @@ export function ExperienceResponsiveDataTable<Row>({
           {allowDensityControl ? (
             <div className="experience-responsive-table__density" role="group" aria-label="Satır yoğunluğu">
               <span className="experience-responsive-table__toolbar-label">Yoğunluk</span>
-              <button
-                type="button"
-                className="experience-responsive-table__segment"
-                aria-pressed={snapshot.density === 'comfortable'}
-                onClick={() => model.setDensity('comfortable')}
-              >
-                Rahat
-              </button>
-              <button
-                type="button"
-                className="experience-responsive-table__segment"
-                aria-pressed={snapshot.density === 'compact'}
-                onClick={() => model.setDensity('compact')}
-              >
-                Sıkı
-              </button>
+              <button type="button" className="experience-responsive-table__segment" aria-pressed={snapshot.density === 'comfortable'} onClick={() => model.setDensity('comfortable')}>Rahat</button>
+              <button type="button" className="experience-responsive-table__segment" aria-pressed={snapshot.density === 'compact'} onClick={() => model.setDensity('compact')}>Sıkı</button>
             </div>
           ) : null}
 
@@ -233,47 +223,28 @@ export function ExperienceResponsiveDataTable<Row>({
                   const automaticallyHidden = snapshot.automaticHiddenColumnIds.includes(column.id);
                   return (
                     <label key={column.id} className="experience-responsive-table__column-option">
-                      <input
-                        type="checkbox"
-                        checked={!hiddenByUser}
-                        disabled={column.essential === true}
-                        onChange={(event) => model.setColumnHidden(column.id, !event.currentTarget.checked)}
-                      />
+                      <input type="checkbox" checked={!hiddenByUser} disabled={column.essential === true} onChange={(event) => model.setColumnHidden(column.id, !event.currentTarget.checked)} />
                       <span>{column.label}</span>
                       {column.essential ? <em>Zorunlu</em> : automaticallyHidden ? <em>Dar görünümde gizli</em> : null}
                     </label>
                   );
                 })}
                 {snapshot.userHiddenColumnIds.length > 0 ? (
-                  <button
-                    type="button"
-                    className="experience-responsive-table__reset"
-                    onClick={() => model.resetColumnVisibility()}
-                  >
-                    Sütun görünümünü sıfırla
-                  </button>
+                  <button type="button" className="experience-responsive-table__reset" onClick={() => model.resetColumnVisibility()}>Sütun görünümünü sıfırla</button>
                 ) : null}
               </div>
             </details>
           ) : null}
 
-          <output
-            className="experience-responsive-table__projection-count"
-            aria-label={projectionStatusLabel}
-          >
+          <output className="experience-responsive-table__projection-count" aria-label={projectionStatusLabel}>
             {snapshot.visibleColumns.length}/{definitionColumns.length} sütun
           </output>
         </div>
       ) : null}
 
-      <p className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {status}
-      </p>
+      <p className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">{status}</p>
 
-      <div
-        className="experience-responsive-table__viewport"
-        data-overflow={snapshot.horizontalOverflow ? 'true' : 'false'}
-      >
+      <div className="experience-responsive-table__viewport" data-overflow={snapshot.horizontalOverflow ? 'true' : 'false'}>
         <ExperienceDataTable
           {...tableProps}
           columns={projectedColumns}
