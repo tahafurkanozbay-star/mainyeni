@@ -9,6 +9,7 @@ import {
   type DataTableInteractionModel,
   type DataTableSnapshot,
 } from '../../experience/dataTableInteractionModel';
+import { bindFastAccessResultPresentation } from './fastAccessResultPresentationRuntime';
 import './FastAccessResultAccessibilityBridge.css';
 
 const RESULT_LIST_SELECTOR = '.kr-fast-query__results';
@@ -69,7 +70,7 @@ const normalizeToken = (value: string): string => value
 const appendToken = (value: string | null, token: string): string => {
   const tokens = new Set((value ?? '').split(/\s+/).filter(Boolean));
   tokens.add(token);
-  return [...tokens].join(' ');
+  return Array.from(tokens).join(' ');
 };
 
 const restoreAttribute = (
@@ -89,7 +90,7 @@ const safeReport = (
   try {
     reporter(error);
   } catch (reportingError) {
-    void reportingError;
+    console.warn('Fast-access result accessibility reporter failed.', reportingError);
   }
 };
 
@@ -175,6 +176,10 @@ export const bindFastAccessResultList = (
     appendToken(originalAriaDescribedBy, liveStatus.id),
   );
 
+  const presentation = bindFastAccessResultPresentation(list, liveStatus, {
+    onError: (error) => safeReport(options.onError, error),
+  });
+
   const model: DataTableInteractionModel<BridgeRow> = createDataTableInteractionModel({
     rowId: (row) => row.key,
     columns: [
@@ -226,11 +231,6 @@ export const bindFastAccessResultList = (
 
   const applySnapshot = (snapshot: DataTableSnapshot<BridgeRow>): void => {
     if (disposed) return;
-    liveStatus.textContent = snapshot.announcement || (
-      snapshot.totalRows === 0
-        ? 'Sonuç listesi boş.'
-        : `${snapshot.totalRows} sonuç. Ok tuşlarıyla kayıtlar arasında gezinebilirsiniz.`
-    );
 
     for (const bound of boundRows.values()) {
       bound.element.id = `${surfaceId}-experience-row-${normalizeToken(bound.key)}`;
@@ -257,6 +257,22 @@ export const bindFastAccessResultList = (
       bound.element.tabIndex = facts.tabIndex;
       bound.element.setAttribute('data-experience-row-active', String(facts.active));
     }
+
+    let activeIndex: number | null = null;
+    if (snapshot.activeRowId !== null) {
+      for (const bound of boundRows.values()) {
+        if (bound.key === snapshot.activeRowId) {
+          activeIndex = Math.max(0, bound.position - 1);
+          break;
+        }
+      }
+    }
+
+    presentation.update({
+      totalRows: snapshot.totalRows,
+      visibleRows: Math.min(snapshot.totalRows, directResultRows(list).length),
+      activeIndex,
+    });
   };
 
   const unsubscribeModel = model.subscribe(applySnapshot);
@@ -298,6 +314,7 @@ export const bindFastAccessResultList = (
     if (rows.length > 0 && snapshot.activeRowId === null) {
       model.setActive(rows[0]?.key ?? null);
     }
+    presentation.refresh();
   };
 
   const queueSync = (): void => {
@@ -357,7 +374,10 @@ export const bindFastAccessResultList = (
 
   return Object.freeze({
     list,
-    refresh: sync,
+    refresh() {
+      sync();
+      presentation.refresh();
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -368,6 +388,7 @@ export const bindFastAccessResultList = (
       unsubscribeModel();
       controller.dispose();
       model.dispose();
+      presentation.dispose();
 
       for (const bound of boundRows.values()) restoreRow(bound);
       boundRows.clear();
