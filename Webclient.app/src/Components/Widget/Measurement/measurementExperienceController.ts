@@ -121,6 +121,12 @@ const cloneState = (state: MeasurementState): MeasurementState => ({
   destroyedAt: state.destroyedAt,
 });
 
+const settleSuccessfulInitializationState = (state: MeasurementState): MeasurementState => (
+  state.status === 'idle'
+    ? { ...state, status: 'ready', error: null }
+    : state
+);
+
 export const createMeasurementExperienceController = (
   options: MeasurementExperienceControllerOptions,
 ): MeasurementExperienceController => {
@@ -287,7 +293,7 @@ export const createMeasurementExperienceController = (
     try {
       await controller.ensureWidget();
       if (!isCurrentOperation(revision)) return false;
-      model.syncRuntime(cloneState(controller.getState()));
+      model.syncRuntime(settleSuccessfulInitializationState(cloneState(controller.getState())));
       return true;
     } catch (error) {
       if (!isCurrentOperation(revision)) return false;
