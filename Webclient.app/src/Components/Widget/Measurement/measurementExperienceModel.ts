@@ -204,7 +204,7 @@ export class MeasurementExperienceModel {
   readonly #maxObservers: number;
   readonly #historyLimit: number;
   readonly #maxErrorLength: number;
-  readonly #onObserverError?: (error: unknown) => void;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   #runtimeState = initialRuntimeState();
   #snapshot: MeasurementExperienceSnapshot;
   #diagnostics: MeasurementExperienceDiagnostics;
