@@ -301,7 +301,7 @@ describe('MeasurementWidget', () => {
     const section = container.querySelector('section.measurement-widget');
 
     expect(section).toHaveStyle({ visibility: 'hidden' });
-    expect(screen.getByRole('toolbar', { name: 'Ölçüm araçları' })).toBeInTheDocument();
+    expect(screen.getByRole('toolbar', { name: 'Ölçüm araçları', hidden: true })).toBeInTheDocument();
   });
 
   it('renders the modernized toolbar with area, distance and clear actions', () => {
