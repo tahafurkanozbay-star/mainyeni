@@ -277,7 +277,9 @@ const safeSynonymVariant = (
 ): string | null => {
   if (grammarProtected(correction)) return null;
   if (correction.expandedTerms.length <= correction.correctedAnalysis.positiveTerms.length) return null;
-  const values = Array.from(new Set(correction.expandedTerms.map(normalizeSearchText).filter(Boolean)));
+  const values = Array.from(new Set(
+    correction.expandedTerms.map(value => normalizeSearchText(value)).filter(Boolean),
+  ));
   const query = values.join(' ').trim();
   return query && query !== normalizeSearchText(correction.correctedQuery) ? query : null;
 };
