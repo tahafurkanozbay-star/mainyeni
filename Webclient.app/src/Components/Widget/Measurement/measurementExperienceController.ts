@@ -360,7 +360,10 @@ export const createMeasurementExperienceController = (
   };
 
   const retry = async (): Promise<boolean> => {
-    if (disposed || !model.recordRetry()) return false;
+    if (disposed) return false;
+    const snapshot = model.getSnapshot();
+    const withinRetryBudget = snapshot.canRetry && snapshot.retryCount < snapshot.maxRetries;
+    if (!withinRetryBudget || !model.recordRetry()) return false;
     return initializeRuntime('retry');
   };
 
