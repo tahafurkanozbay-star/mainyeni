@@ -22,7 +22,7 @@ namespace Platform.Security.Tests
             Assert.Equal(0, options.RateLimiting.QueueLimit);
             Assert.True(options.RateLimiting.ExemptOptionsRequests);
             Assert.True(options.RateLimiting.ExemptHealthChecks);
-            Assert.True(options.RateLimiting.PartitionAuthenticatedUsers);
+            Assert.True(options.ClientPartitioning.PartitionAuthenticatedUsers);
             Assert.True(options.ResponseCompression.Enabled);
             Assert.True(options.ResponseCompression.EnableForHttps);
             Assert.True(options.Diagnostics.Enabled);
@@ -76,9 +76,7 @@ namespace Platform.Security.Tests
             var options = new ApiPlatformOptions();
             options.RateLimiting.PermitLimit = value;
 
-            Assert.Contains(
-                Failures(options),
-                failure => failure.Contains("PermitLimit", System.StringComparison.Ordinal));
+            Assert.Contains(Failures(options), failure => failure.Contains("PermitLimit", System.StringComparison.Ordinal));
         }
 
         [Theory]
@@ -90,9 +88,7 @@ namespace Platform.Security.Tests
             var options = new ApiPlatformOptions();
             options.RateLimiting.WindowSeconds = value;
 
-            Assert.Contains(
-                Failures(options),
-                failure => failure.Contains("WindowSeconds", System.StringComparison.Ordinal));
+            Assert.Contains(Failures(options), failure => failure.Contains("WindowSeconds", System.StringComparison.Ordinal));
         }
 
         [Theory]
@@ -104,9 +100,7 @@ namespace Platform.Security.Tests
             var options = new ApiPlatformOptions();
             options.RateLimiting.SegmentsPerWindow = value;
 
-            Assert.Contains(
-                Failures(options),
-                failure => failure.Contains("SegmentsPerWindow", System.StringComparison.Ordinal));
+            Assert.Contains(Failures(options), failure => failure.Contains("SegmentsPerWindow", System.StringComparison.Ordinal));
         }
 
         [Fact]
@@ -116,9 +110,7 @@ namespace Platform.Security.Tests
             options.RateLimiting.WindowSeconds = 5;
             options.RateLimiting.SegmentsPerWindow = 6;
 
-            Assert.Contains(
-                Failures(options),
-                failure => failure.Contains("cannot exceed WindowSeconds", System.StringComparison.Ordinal));
+            Assert.Contains(Failures(options), failure => failure.Contains("cannot exceed WindowSeconds", System.StringComparison.Ordinal));
         }
 
         [Theory]
@@ -129,9 +121,7 @@ namespace Platform.Security.Tests
             var options = new ApiPlatformOptions();
             options.RateLimiting.QueueLimit = value;
 
-            Assert.Contains(
-                Failures(options),
-                failure => failure.Contains("QueueLimit", System.StringComparison.Ordinal));
+            Assert.Contains(Failures(options), failure => failure.Contains("QueueLimit", System.StringComparison.Ordinal));
         }
 
         [Theory]
@@ -142,9 +132,7 @@ namespace Platform.Security.Tests
             var options = new ApiPlatformOptions();
             options.RateLimiting.RetryAfterSeconds = value;
 
-            Assert.Contains(
-                Failures(options),
-                failure => failure.Contains("RetryAfterSeconds", System.StringComparison.Ordinal));
+            Assert.Contains(Failures(options), failure => failure.Contains("RetryAfterSeconds", System.StringComparison.Ordinal));
         }
 
         [Fact]
@@ -188,7 +176,7 @@ namespace Platform.Security.Tests
             Assert.Equal(20, options.RateLimiting.QueueLimit);
             Assert.False(options.RateLimiting.ExemptOptionsRequests);
             Assert.False(options.RateLimiting.ExemptHealthChecks);
-            Assert.False(options.RateLimiting.PartitionAuthenticatedUsers);
+            Assert.False(options.ClientPartitioning.PartitionAuthenticatedUsers);
             Assert.Equal(3, options.RateLimiting.RetryAfterSeconds);
         }
 
@@ -281,12 +269,9 @@ namespace Platform.Security.Tests
             return result.Failures?.ToArray() ?? System.Array.Empty<string>();
         }
 
-        private static IConfiguration BuildConfiguration(
-            IDictionary<string, string?> values)
+        private static IConfiguration BuildConfiguration(IDictionary<string, string?> values)
         {
-            return new ConfigurationBuilder()
-                .AddInMemoryCollection(values)
-                .Build();
+            return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         }
     }
 }
