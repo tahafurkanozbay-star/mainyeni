@@ -1,0 +1,90 @@
+.map-mode-continuity-status {
+  position: absolute;
+  inset-block-start: max(206px, calc(env(safe-area-inset-top) + 198px));
+  inset-inline-end: max(16px, env(safe-area-inset-right));
+  z-index: 21;
+  display: inline-flex;
+  align-items: center;
+  max-inline-size: min(320px, calc(100vw - 32px));
+  min-block-size: 34px;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #cbd5e1) 86%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 90%, transparent);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+  color: var(--exp-text, #0f172a);
+  font-size: 0.7rem;
+  font-weight: 680;
+  line-height: 1.2;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.map-mode-continuity-status__indicator {
+  inline-size: 9px;
+  block-size: 9px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--exp-success, #14804a);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exp-success, #14804a) 14%, transparent);
+}
+
+.map-mode-continuity-status[data-status='degraded'] .map-mode-continuity-status__indicator {
+  background: var(--exp-warning, #b54708);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exp-warning, #b54708) 16%, transparent);
+}
+
+.map-mode-continuity-status__score {
+  margin-inline-start: auto;
+  color: var(--exp-text-muted, #64748b);
+  font-variant-numeric: tabular-nums;
+}
+
+.map-mode-continuity-status__announcement {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 45rem) {
+  .map-mode-continuity-status {
+    inset-block-start: auto;
+    inset-inline: 10px;
+    inset-block-end: max(78px, calc(env(safe-area-inset-bottom) + 66px));
+    max-inline-size: calc(100vw - 20px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-mode-continuity-status {
+    scroll-behavior: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-mode-continuity-status {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    forced-color-adjust: auto;
+  }
+
+  .map-mode-continuity-status__indicator,
+  .map-mode-continuity-status[data-status='degraded'] .map-mode-continuity-status__indicator {
+    outline: 1px solid CanvasText;
+    background: Highlight;
+    box-shadow: none;
+  }
+}
