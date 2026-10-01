@@ -86,8 +86,9 @@ namespace Api.Core.Platform.Lifecycle
 
         private bool IsHealthPath(PathString path)
         {
-            return path.Equals(_health.LivenessPath, StringComparison.OrdinalIgnoreCase) ||
-                   path.Equals(_health.ReadinessPath, StringComparison.OrdinalIgnoreCase);
+            var value = path.Value ?? string.Empty;
+            return string.Equals(value, _health.LivenessPath, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, _health.ReadinessPath, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsBulkPath(PathString path)
