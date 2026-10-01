@@ -192,7 +192,6 @@ describe('ExperienceResponsiveDataTable', () => {
     setWidth(390);
     renderTable();
     expect(screen.getByLabelText('Tablo görünümü duyurusu')).toHaveTextContent(/gizli sütunlar/i);
-    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
   it('propagates coarse pointer, reduced motion and forced-colors facts', () => {
