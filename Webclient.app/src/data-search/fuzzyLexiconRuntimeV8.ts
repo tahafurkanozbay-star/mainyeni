@@ -433,7 +433,7 @@ export const boundedDamerauLevenshteinV8 = (
   if (!right) return left.length <= maximumDistance ? left.length : maximumDistance + 1;
   if (Math.abs(left.length - right.length) > maximumDistance) return maximumDistance + 1;
   let previousPrevious: readonly number[] | null = null;
-  let previous = Array.from({ length: right.length + 1 }, (_value, index) => index);
+  let previous: readonly number[] = Array.from({ length: right.length + 1 }, (_value, index) => index);
   for (let row = 1; row <= left.length; row += 1) {
     const current = nextDistanceRow(
       left[row - 1] ?? '',
