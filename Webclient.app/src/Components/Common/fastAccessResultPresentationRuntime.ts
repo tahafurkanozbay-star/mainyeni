@@ -129,6 +129,15 @@ export const bindFastAccessResultPresentation = (
       hasMore: hasMoreResults(host),
     });
 
+    if (!host) {
+      liveStatus.setAttribute('aria-live', 'polite');
+      liveStatus.setAttribute('aria-atomic', 'true');
+      liveStatus.textContent = current.totalRows === 0
+        ? 'Sonuç listesi boş.'
+        : `${current.totalRows} kayıt. Ok tuşlarıyla kayıtlar arasında gezinebilirsiniz.`;
+      return;
+    }
+
     list.setAttribute('aria-busy', String(current.ariaBusy));
     list.setAttribute('data-experience-result-status', current.status);
     list.setAttribute('data-experience-result-count', String(current.totalRows));
