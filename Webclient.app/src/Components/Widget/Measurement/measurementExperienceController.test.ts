@@ -369,7 +369,14 @@ describe('measurementExperienceController', () => {
     fake.ensureWidget
       .mockRejectedValueOnce(new Error('first'))
       .mockRejectedValueOnce(new Error('second'))
-      .mockResolvedValueOnce({ activeTool: MEASUREMENT_TOOLS.NONE });
+      .mockImplementationOnce(async () => {
+        fake.setState(createState({
+          status: 'ready',
+          activeTool: MEASUREMENT_TOOLS.NONE,
+          createdAt: '2026-10-01T12:03:00.000Z',
+        }));
+        return { activeTool: MEASUREMENT_TOOLS.NONE };
+      });
     const controller = createMeasurementExperienceController({
       getView: () => ({ id: 'view' }),
       container: 'measurementDiv',
