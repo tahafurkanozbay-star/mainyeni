@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 
 namespace Api.Core.Platform.Governance
@@ -13,6 +16,8 @@ namespace Api.Core.Platform.Governance
     public sealed class RequestConcurrencyGovernor
     {
         private const string OverflowPartition = "client:overflow";
+        private const string LongPartitionPrefix = "client:long:";
+        private const int MaxInlinePartitionLength = 160;
 
         private readonly ConcurrentDictionary<string, ClientState> clients =
             new ConcurrentDictionary<string, ClientState>(StringComparer.Ordinal);
@@ -28,15 +33,30 @@ namespace Api.Core.Platform.Governance
         private readonly int maxTrackedClients;
         private readonly long idleTicks;
         private readonly int cleanupInterval;
+        private readonly TimeProvider timeProvider;
         private long activeRequests;
         private long acquisitionAttempts;
 
         public RequestConcurrencyGovernor(ApiPlatformOptions options)
+            : this(options, TimeProvider.System)
+        {
+        }
+
+        /// <summary>
+        /// Creates a governor with an explicit clock. The overload keeps time-dependent admission
+        /// semantics deterministic in regression tests while production uses <see cref="TimeProvider.System"/>.
+        /// </summary>
+        public RequestConcurrencyGovernor(
+            ApiPlatformOptions options,
+            TimeProvider timeProvider)
         {
             if (options == null)
             {
                 throw new ArgumentNullException(nameof(options));
             }
+
+            this.timeProvider = timeProvider
+                ?? throw new ArgumentNullException(nameof(timeProvider));
 
             var configuration = options.Governance?.Concurrency
                 ?? new ApiPlatformOptions.ConcurrencyOptions();
@@ -64,7 +84,7 @@ namespace Api.Core.Platform.Governance
         public RequestConcurrencyLease TryAcquire(string partitionKey)
         {
             var normalizedKey = NormalizePartitionKey(partitionKey);
-            var now = DateTime.UtcNow.Ticks;
+            var now = GetUtcTicks();
 
             var global = Interlocked.Increment(ref activeRequests);
             if (global > maxConcurrentRequests)
@@ -140,7 +160,7 @@ namespace Api.Core.Platform.Governance
                         state.Active--;
                     }
 
-                    state.LastSeenTicks = DateTime.UtcNow.Ticks;
+                    state.LastSeenTicks = GetUtcTicks();
                 }
             }
 
@@ -168,9 +188,16 @@ namespace Api.Core.Platform.Governance
                     return existing;
                 }
 
-                // Reserve the final configured slot for the overflow partition. Without this
-                // reservation, admitting maxTrackedClients unique keys and then creating overflow
-                // would make the observable dictionary cardinality maxTrackedClients + 1.
+                // Reserve the final configured slot for the overflow partition. Under sustained
+                // churn, expired idle partitions are reclaimed synchronously before unrelated
+                // callers are coalesced into overflow. This preserves per-client isolation when
+                // capacity exists logically even if the periodic bounded cleanup has not sampled
+                // the stale dictionary entries yet.
+                if (clients.Count >= maxTrackedClients - 1)
+                {
+                    ReclaimExpiredIdleClient(now);
+                }
+
                 if (clients.Count >= maxTrackedClients - 1)
                 {
                     return clients.GetOrAdd(
@@ -182,6 +209,76 @@ namespace Api.Core.Platform.Governance
                     partitionKey,
                     _ => new ClientState(now));
             }
+        }
+
+        private bool ReclaimExpiredIdleClient(long now)
+        {
+            var cutoff = ComputeIdleCutoff(now);
+            List<IdleCandidate> candidates = null;
+
+            // This full scan only runs at the cardinality boundary. Normal acquisitions continue
+            // to use the bounded periodic cleanup path below. Candidate snapshots are value-free:
+            // only already-pseudonymous partition keys and aggregate timestamps are retained.
+            foreach (var pair in clients)
+            {
+                if (pair.Key == OverflowPartition)
+                {
+                    continue;
+                }
+
+                var state = pair.Value;
+                long lastSeen;
+                lock (state.Gate)
+                {
+                    if (state.Active != 0 || state.LastSeenTicks >= cutoff)
+                    {
+                        continue;
+                    }
+
+                    lastSeen = state.LastSeenTicks;
+                }
+
+                candidates ??= new List<IdleCandidate>();
+                candidates.Add(new IdleCandidate(pair.Key, state, lastSeen));
+            }
+
+            if (candidates == null || candidates.Count == 0)
+            {
+                return false;
+            }
+
+            candidates.Sort(static (left, right) =>
+            {
+                var timestampOrder = left.LastSeenTicks.CompareTo(right.LastSeenTicks);
+                return timestampOrder != 0
+                    ? timestampOrder
+                    : StringComparer.Ordinal.Compare(left.PartitionKey, right.PartitionKey);
+            });
+
+            foreach (var candidate in candidates)
+            {
+                lock (candidate.State.Gate)
+                {
+                    // The state can become active after the snapshot because existing-key
+                    // acquisitions do not take clientRegistrationGate. Revalidate all eviction
+                    // predicates while holding the state gate before removing by identity.
+                    if (candidate.State.Active != 0 ||
+                        candidate.State.LastSeenTicks >= cutoff)
+                    {
+                        continue;
+                    }
+
+                    if (clients.TryRemove(
+                        new KeyValuePair<string, ClientState>(
+                            candidate.PartitionKey,
+                            candidate.State)))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private bool IsRegisteredState(string partitionKey, ClientState state)
@@ -206,7 +303,7 @@ namespace Api.Core.Platform.Governance
                 return;
             }
 
-            var cutoff = now - idleTicks;
+            var cutoff = ComputeIdleCutoff(now);
             var scanned = 0;
             var scanBudget = Math.Min(Math.Max(32, maxTrackedClients / 8), 512);
 
@@ -236,11 +333,23 @@ namespace Api.Core.Platform.Governance
                     }
 
                     clients.TryRemove(
-                        new System.Collections.Generic.KeyValuePair<string, ClientState>(
+                        new KeyValuePair<string, ClientState>(
                             pair.Key,
                             state));
                 }
             }
+        }
+
+        private long ComputeIdleCutoff(long now)
+        {
+            return now <= idleTicks
+                ? 0
+                : now - idleTicks;
+        }
+
+        private long GetUtcTicks()
+        {
+            return timeProvider.GetUtcNow().UtcDateTime.Ticks;
         }
 
         private static string NormalizePartitionKey(string value)
@@ -251,12 +360,18 @@ namespace Api.Core.Platform.Governance
             }
 
             var trimmed = value.Trim();
-            if (trimmed.Length <= 160)
+            if (trimmed.Length <= MaxInlinePartitionLength)
             {
                 return trimmed;
             }
 
-            return trimmed.Substring(0, 160);
+            // Truncation would collapse attacker-controlled or future partition formats that share
+            // a long prefix into one per-client budget. A fixed 96-bit SHA-256 token keeps the key
+            // bounded without retaining the original identifier and makes accidental collisions
+            // negligibly likely for this in-process cardinality domain.
+            var digest = SHA256.HashData(Encoding.UTF8.GetBytes(trimmed));
+            return LongPartitionPrefix +
+                   Convert.ToHexString(digest.AsSpan(0, 12)).ToLowerInvariant();
         }
 
         private sealed class ClientState
@@ -271,6 +386,25 @@ namespace Api.Core.Platform.Governance
             public int Active;
 
             public long LastSeenTicks;
+        }
+
+        private readonly struct IdleCandidate
+        {
+            public IdleCandidate(
+                string partitionKey,
+                ClientState state,
+                long lastSeenTicks)
+            {
+                PartitionKey = partitionKey;
+                State = state;
+                LastSeenTicks = lastSeenTicks;
+            }
+
+            public string PartitionKey { get; }
+
+            public ClientState State { get; }
+
+            public long LastSeenTicks { get; }
         }
     }
 

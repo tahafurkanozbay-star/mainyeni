@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System;
@@ -32,11 +33,12 @@ namespace Api.Core.Platform
 
             if (options.ForwardedHeaders.Enabled)
             {
-                app.UseForwardedHeaders(new ForwardedHeadersOptions
-                {
-                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-                    ForwardLimit = options.ForwardedHeaders.ForwardLimit
-                });
+                var configuration = app.ApplicationServices
+                    .GetRequiredService<IConfiguration>();
+                app.UseForwardedHeaders(
+                    ForwardedHeaderTrustPolicy.Build(
+                        options.ForwardedHeaders,
+                        configuration));
             }
 
             // Compression wraps the response before the error/security middleware writes a body,

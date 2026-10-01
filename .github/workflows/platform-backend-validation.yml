@@ -45,10 +45,12 @@ jobs:
       NUGET_XMLDOC_MODE: skip
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Setup .NET 10 LTS
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
 
@@ -65,7 +67,59 @@ jobs:
         run: dotnet build CityWorks.NetCore.sln --configuration Release --no-restore
 
       - name: Run xUnit v3 tests through Microsoft.Testing.Platform
-        run: dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore
+        id: platform-tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/test-diagnostics
+          dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore 2>&1 | tee artifacts/test-diagnostics/platform-security-tests.log
+
+      - name: Surface backend test failure diagnostics
+        if: failure() && steps.platform-tests.outcome == 'failure'
+        shell: bash
+        run: |
+          log='artifacts/test-diagnostics/platform-security-tests.log'
+          if [[ ! -s "$log" ]]; then
+            echo '### Platform backend test failure' >> "$GITHUB_STEP_SUMMARY"
+            echo 'The test process failed without producing a diagnostic log.' >> "$GITHUB_STEP_SUMMARY"
+            echo '::error title=Platform backend tests failed::The test process failed without producing a diagnostic log.'
+            exit 1
+          fi
+
+          echo '### Platform backend test failure diagnostics' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 160 "$log" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          # Annotation extraction is diagnostic-only: grep status 1 means no conventional
+          # xUnit marker was present; status >1 is a real scanner failure and must fail closed.
+          matches='artifacts/test-diagnostics/platform-security-failure-lines.log'
+          grep_status=0
+          if grep -E '(^|[[:space:]])(failed|FAIL|Error Message:|Stack Trace:|\[FAIL\]|\[x\])' "$log" > "$matches"; then
+            grep_status=0
+          else
+            grep_status=$?
+          fi
+          if [[ $grep_status -gt 1 ]]; then
+            echo '::error title=Platform backend diagnostics::Failed to scan the xUnit diagnostic log.'
+            exit "$grep_status"
+          fi
+
+          tail -n 20 "$matches" | while IFS= read -r line; do
+            safe=${line//'%'/'%25'}
+            safe=${safe//$'\r'/'%0D'}
+            safe=${safe//$'\n'/'%0A'}
+            echo "::error title=Platform backend test failure::$safe"
+          done
+
+      - name: Upload backend test diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: platform-backend-test-diagnostics-${{ github.run_id }}
+          path: artifacts/test-diagnostics/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Publish User API
         run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output artifacts/api-user
