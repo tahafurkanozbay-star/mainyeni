@@ -1,0 +1,329 @@
+.measurement-experience {
+  display: grid;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+
+.measurement-experience__status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.625rem;
+}
+
+.measurement-experience__phase {
+  display: inline-flex;
+  min-block-size: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #d7dde6) 88%, transparent);
+  border-radius: 999px;
+  color: var(--exp-text-muted, #667085);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 94%, var(--exp-text, #172033));
+  font-size: 0.72rem;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.measurement-experience[data-phase='error'] .measurement-experience__phase {
+  border-color: color-mix(in srgb, #b42318 42%, var(--exp-border, #d7dde6));
+  color: #8f1d15;
+  background: color-mix(in srgb, #fef3f2 88%, var(--exp-surface, #fff));
+}
+
+.measurement-experience[data-phase='waiting-map'] .measurement-experience__phase {
+  border-color: color-mix(in srgb, #b54708 38%, var(--exp-border, #d7dde6));
+  color: #8a3b08;
+  background: color-mix(in srgb, #fffaeb 90%, var(--exp-surface, #fff));
+}
+
+.measurement-experience__guidance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.875rem;
+  padding: 0.875rem;
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 96%, var(--exp-accent, #0b6fcb));
+}
+
+.measurement-experience__guidance-copy {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+
+.measurement-experience__guidance h3,
+.measurement-experience__recovery h3 {
+  margin: 0;
+  color: var(--exp-text, #172033);
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.measurement-experience__guidance p,
+.measurement-experience__recovery p,
+.measurement-experience__waiting {
+  margin: 0;
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.measurement-experience__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(4.5rem, auto));
+  gap: 0.375rem;
+  align-self: start;
+}
+
+.measurement-experience__facts > span {
+  display: grid;
+  gap: 0.125rem;
+  min-inline-size: 4.5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--exp-border, #d7dde6) 85%, transparent);
+  border-radius: 0.625rem;
+  background: var(--exp-surface, #fff);
+}
+
+.measurement-experience__facts strong {
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.64rem;
+  font-weight: 720;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.measurement-experience__facts span span {
+  color: var(--exp-text, #172033);
+  font-size: 0.72rem;
+  font-weight: 730;
+}
+
+.measurement-experience__recovery {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem;
+  border: 1px solid color-mix(in srgb, #b42318 44%, var(--exp-border, #d7dde6));
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, #fef3f2 86%, var(--exp-surface, #fff));
+}
+
+.measurement-experience__recovery > div {
+  display: grid;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+
+.measurement-experience__error-code {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.measurement-experience__error-code span {
+  font-size: 0.68rem;
+  font-weight: 690;
+}
+
+.measurement-experience__error-code code {
+  padding: 0.125rem 0.375rem;
+  border: 1px solid color-mix(in srgb, #b42318 24%, var(--exp-border, #d7dde6));
+  border-radius: 0.375rem;
+  color: #8f1d15;
+  background: var(--exp-surface, #fff);
+  font-size: 0.68rem;
+}
+
+.measurement-experience__retry {
+  min-block-size: 2.75rem;
+  min-inline-size: 7.5rem;
+  padding-inline: 0.875rem;
+  border: 1px solid #b42318;
+  border-radius: 0.625rem;
+  color: #fff;
+  background: #b42318;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 780;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.measurement-experience__retry:hover {
+  filter: brightness(0.96);
+}
+
+.measurement-experience__retry:active {
+  transform: translateY(1px);
+}
+
+.measurement-experience__retry:focus-visible {
+  outline: 3px solid color-mix(in srgb, #b42318 64%, white);
+  outline-offset: 2px;
+}
+
+.measurement-experience__retry-limit {
+  max-inline-size: 18rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, #b42318 7%, transparent);
+}
+
+.measurement-experience__waiting {
+  padding: 0.625rem 0.75rem;
+  border-inline-start: 3px solid #b54708;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, #fffaeb 78%, var(--exp-surface, #fff));
+}
+
+.measurement-experience__activity {
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 0.75rem;
+  background: var(--exp-surface, #fff);
+  overflow: clip;
+}
+
+.measurement-experience__activity summary {
+  display: flex;
+  min-block-size: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: 0.75rem;
+  color: var(--exp-text, #172033);
+  font-size: 0.74rem;
+  font-weight: 760;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.measurement-experience__activity summary:hover {
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 5%, transparent);
+}
+
+.measurement-experience__activity summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 70%, white);
+  outline-offset: -3px;
+}
+
+.measurement-experience__activity-count {
+  display: inline-grid;
+  min-inline-size: 1.5rem;
+  block-size: 1.5rem;
+  place-items: center;
+  margin-inline-start: auto;
+  border-radius: 999px;
+  color: var(--exp-text-muted, #667085);
+  background: color-mix(in srgb, var(--exp-text, #172033) 7%, transparent);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-experience__activity ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: 1px solid var(--exp-border, #d7dde6);
+}
+
+.measurement-experience__activity li {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem;
+  min-block-size: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.measurement-experience__activity li + li {
+  border-block-start: 1px solid color-mix(in srgb, var(--exp-border, #d7dde6) 68%, transparent);
+}
+
+.measurement-experience__activity-icon {
+  display: inline-grid;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--exp-accent, #0b6fcb);
+  background: color-mix(in srgb, var(--exp-accent, #0b6fcb) 9%, transparent);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .measurement-experience__status-row,
+  .measurement-experience__guidance,
+  .measurement-experience__recovery {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .measurement-experience__phase {
+    justify-self: start;
+  }
+
+  .measurement-experience__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    inline-size: 100%;
+  }
+
+  .measurement-experience__retry {
+    inline-size: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  .measurement-experience__retry,
+  .measurement-experience__activity summary {
+    min-block-size: 3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .measurement-experience__retry {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .measurement-experience__phase,
+  .measurement-experience__guidance,
+  .measurement-experience__facts > span,
+  .measurement-experience__recovery,
+  .measurement-experience__error-code code,
+  .measurement-experience__activity {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+
+  .measurement-experience__retry {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .measurement-experience__retry:focus-visible,
+  .measurement-experience__activity summary:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .measurement-experience__activity-icon {
+    color: HighlightText;
+    background: Highlight;
+  }
+}
