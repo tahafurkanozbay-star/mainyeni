@@ -185,13 +185,14 @@ describe('ExperienceResponsiveDataTable', () => {
     expect(screen.getByRole('columnheader', { name: 'Durak no' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Durak adı' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Tür' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Tablo görünümü')).toHaveTextContent('2/4 sütun');
+    expect(screen.getByLabelText('Tablo görünümü')).toHaveTextContent('3/4 sütun');
   });
 
-  it('announces hidden columns for assistive technology', () => {
+  it('announces hidden columns for assistive technology without adding a competing status landmark', () => {
     setWidth(390);
     renderTable();
-    expect(screen.getByRole('status', { hidden: true })).toHaveTextContent(/gizli sütunlar/i);
+    expect(screen.getByLabelText('Tablo görünümü duyurusu')).toHaveTextContent(/gizli sütunlar/i);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
   it('propagates coarse pointer, reduced motion and forced-colors facts', () => {
@@ -227,21 +228,25 @@ describe('ExperienceResponsiveDataTable', () => {
       ? { ...column, sortDirection: 'ascending' as const, onSort }
       : column);
     renderTable({ columns: sortable });
-    const header = screen.getByRole('columnheader', { name: /Durak adı sütununu sırala/i });
+    const sortButton = screen.getByRole('button', { name: 'Durak adı sütununu sırala' });
+    const header = sortButton.closest('th');
+    expect(header).not.toBeNull();
     expect(header).toHaveAttribute('aria-sort', 'ascending');
-    fireEvent.click(screen.getByRole('button', { name: 'Durak adı sütununu sırala' }));
+    fireEvent.click(sortButton);
     expect(onSort).toHaveBeenCalledTimes(1);
   });
 
-  it('forwards busy presentation', () => {
+  it('forwards busy presentation without a duplicate projection status landmark', () => {
     renderTable({ busy: true, busyLabel: 'Duraklar yenileniyor' });
     expect(screen.getByRole('status')).toHaveTextContent('Duraklar yenileniyor');
+    expect(screen.queryByLabelText('Tablo görünümü duyurusu')).not.toBeInTheDocument();
   });
 
   it('forwards empty presentation', () => {
     renderTable({ rows: [], emptyTitle: 'Durak yok', emptyDescription: 'Başka bir arama deneyin.' });
     expect(screen.getByText('Durak yok')).toBeInTheDocument();
     expect(screen.getByText('Başka bir arama deneyin.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Tablo görünümü duyurusu')).not.toBeInTheDocument();
   });
 
   it('can suppress view controls for fixed-layout consumers', () => {
@@ -253,5 +258,6 @@ describe('ExperienceResponsiveDataTable', () => {
   it('uses the caller projection status label', () => {
     renderTable({ projectionStatusLabel: 'Durak sütun görünümü' });
     expect(screen.getByLabelText('Durak sütun görünümü')).toBeInTheDocument();
+    expect(screen.getByLabelText('Durak sütun görünümü duyurusu')).toBeInTheDocument();
   });
 });
