@@ -1,0 +1,312 @@
+.experience-responsive-table {
+  --experience-responsive-table-touch-target: 44px;
+  display: grid;
+  gap: var(--exp-space-3);
+  min-inline-size: 0;
+}
+
+.experience-responsive-table__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--exp-space-2);
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  padding: var(--exp-space-2);
+  border: 1px solid var(--exp-border-soft);
+  border-radius: var(--exp-radius-md);
+  background: color-mix(in srgb, var(--exp-surface) 96%, var(--exp-accent));
+}
+
+.experience-responsive-table__density {
+  display: inline-grid;
+  grid-template-columns: auto repeat(2, minmax(4.25rem, auto));
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.experience-responsive-table__toolbar-label {
+  margin-inline-end: 0.25rem;
+  color: var(--exp-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.experience-responsive-table__segment,
+.experience-responsive-table__reset,
+.experience-responsive-table__columns > summary {
+  min-block-size: var(--experience-responsive-table-touch-target);
+  border: 1px solid var(--exp-border-soft);
+  border-radius: var(--exp-radius-sm);
+  padding: 0.45rem 0.75rem;
+  color: var(--exp-text-primary);
+  background: var(--exp-surface);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.experience-responsive-table__segment,
+.experience-responsive-table__reset {
+  cursor: pointer;
+}
+
+.experience-responsive-table__segment:hover,
+.experience-responsive-table__reset:hover,
+.experience-responsive-table__columns > summary:hover {
+  border-color: color-mix(in srgb, var(--exp-accent) 48%, var(--exp-border-soft));
+  background: color-mix(in srgb, var(--exp-accent) 7%, var(--exp-surface));
+}
+
+.experience-responsive-table__segment[aria-pressed='true'] {
+  border-color: var(--exp-accent);
+  color: var(--exp-accent-contrast, #fff);
+  background: var(--exp-accent);
+}
+
+.experience-responsive-table__segment:focus-visible,
+.experience-responsive-table__reset:focus-visible,
+.experience-responsive-table__columns > summary:focus-visible,
+.experience-responsive-table__column-option input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent) 64%, transparent);
+  outline-offset: 2px;
+}
+
+.experience-responsive-table__columns {
+  position: relative;
+}
+
+.experience-responsive-table__columns > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.experience-responsive-table__columns > summary::-webkit-details-marker {
+  display: none;
+}
+
+.experience-responsive-table__columns > summary::after {
+  content: '▾';
+  font-size: 0.72rem;
+  transition: transform 140ms ease;
+}
+
+.experience-responsive-table__columns[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.experience-responsive-table__column-menu {
+  position: absolute;
+  z-index: 8;
+  inset-block-start: calc(100% + 0.4rem);
+  inset-inline-start: 0;
+  display: grid;
+  gap: 0.35rem;
+  inline-size: min(22rem, calc(100vw - 2rem));
+  max-block-size: min(24rem, 70vh);
+  overflow: auto;
+  padding: 0.6rem;
+  border: 1px solid var(--exp-border-soft);
+  border-radius: var(--exp-radius-md);
+  background: var(--exp-surface);
+  box-shadow: 0 14px 34px color-mix(in srgb, #000 18%, transparent);
+}
+
+.experience-responsive-table__column-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-block-size: var(--experience-responsive-table-touch-target);
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--exp-radius-sm);
+  color: var(--exp-text-primary);
+  cursor: pointer;
+}
+
+.experience-responsive-table__column-option:hover {
+  background: color-mix(in srgb, var(--exp-accent) 6%, transparent);
+}
+
+.experience-responsive-table__column-option:has(input:disabled) {
+  cursor: default;
+}
+
+.experience-responsive-table__column-option input {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  margin: 0;
+  accent-color: var(--exp-accent);
+}
+
+.experience-responsive-table__column-option em {
+  color: var(--exp-text-secondary);
+  font-size: 0.6875rem;
+  font-style: normal;
+  font-weight: 650;
+  text-align: end;
+}
+
+.experience-responsive-table__reset {
+  justify-self: stretch;
+  margin-block-start: 0.25rem;
+}
+
+.experience-responsive-table__projection-count {
+  min-block-size: 1.75rem;
+  margin-inline-start: auto;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--exp-border-soft);
+  border-radius: 999px;
+  color: var(--exp-text-secondary);
+  background: var(--exp-surface-subtle);
+  font-size: 0.75rem;
+  font-weight: 750;
+  line-height: 1.3rem;
+  white-space: nowrap;
+}
+
+.experience-responsive-table__viewport {
+  min-inline-size: 0;
+}
+
+.experience-responsive-table__viewport[data-overflow='true'] {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.experience-responsive-table__viewport[data-overflow='true'] .experience-managed-table {
+  min-inline-size: max-content;
+}
+
+.experience-responsive-table[data-density='compact'] .experience-data-table th,
+.experience-responsive-table[data-density='compact'] .experience-data-table td {
+  padding-block: 0.45rem;
+}
+
+.experience-responsive-table[data-density='compact'] .experience-data-table tbody tr,
+.experience-responsive-table[data-density='compact'] .experience-data-table td {
+  min-block-size: var(--experience-responsive-table-touch-target);
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__toolbar,
+.experience-responsive-table[data-viewport='tablet'] .experience-responsive-table__toolbar {
+  align-items: stretch;
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__density {
+  grid-template-columns: 1fr 1fr;
+  inline-size: 100%;
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__toolbar-label {
+  grid-column: 1 / -1;
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__segment {
+  inline-size: 100%;
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__columns {
+  flex: 1 1 auto;
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__columns > summary {
+  justify-content: center;
+  inline-size: 100%;
+}
+
+.experience-responsive-table[data-viewport='phone'] .experience-responsive-table__projection-count {
+  margin-inline-start: 0;
+  align-self: center;
+}
+
+.experience-responsive-table[data-coarse-pointer='true'] {
+  --experience-responsive-table-touch-target: 48px;
+}
+
+.experience-responsive-table[data-coarse-pointer='true'] .experience-responsive-table__segment,
+.experience-responsive-table[data-coarse-pointer='true'] .experience-responsive-table__reset,
+.experience-responsive-table[data-coarse-pointer='true'] .experience-responsive-table__columns > summary,
+.experience-responsive-table[data-coarse-pointer='true'] .experience-responsive-table__column-option {
+  min-block-size: 48px;
+}
+
+.experience-responsive-table[data-reduced-motion='true'] *,
+.experience-responsive-table[data-reduced-motion='true'] *::before,
+.experience-responsive-table[data-reduced-motion='true'] *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+@media (max-width: 42rem) {
+  .experience-responsive-table__toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+
+  .experience-responsive-table__density {
+    grid-column: 1 / -1;
+  }
+
+  .experience-responsive-table__column-menu {
+    position: fixed;
+    inset-inline: 1rem;
+    inset-block: auto 1rem;
+    inline-size: auto;
+    max-block-size: min(28rem, calc(100vh - 2rem));
+    border-radius: var(--exp-radius-lg, 1rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-responsive-table *,
+  .experience-responsive-table *::before,
+  .experience-responsive-table *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (pointer: coarse) {
+  .experience-responsive-table {
+    --experience-responsive-table-touch-target: 48px;
+  }
+}
+
+@media (forced-colors: active) {
+  .experience-responsive-table__toolbar,
+  .experience-responsive-table__segment,
+  .experience-responsive-table__reset,
+  .experience-responsive-table__columns > summary,
+  .experience-responsive-table__column-menu,
+  .experience-responsive-table__projection-count {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .experience-responsive-table__segment[aria-pressed='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .experience-responsive-table__segment:focus-visible,
+  .experience-responsive-table__reset:focus-visible,
+  .experience-responsive-table__columns > summary:focus-visible,
+  .experience-responsive-table__column-option input:focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+}

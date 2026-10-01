@@ -7,11 +7,13 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from 'react';
-import { InputGroup } from 'react-bootstrap';
-import { BiSearch } from 'react-icons/bi';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
+import {
+  ExperienceResponsiveDataTable,
+  type ExperienceResponsiveDataColumn,
+} from '../../Common/ExperienceResponsiveDataTable';
 import { ContainerLoading, NoResultsFound } from '../../Common/Loading';
 import {
   createLatestRequestGate,
@@ -24,13 +26,41 @@ import {
   type EgoStop,
 } from '../_Common/QuerySearchRuntime';
 import type { UnknownRecord } from '../_Common/QuerySurfaceContracts';
+import './EgoStopsQueryModern.css';
 
 const RESULT_LIMIT = 100;
+const TABLE_PAGE_SIZE = 25;
 
 interface EgoStopsQueryProps {
   readonly stops: readonly UnknownRecord[] | null | undefined;
   readonly showAll?: boolean;
 }
+
+const stopIdentity = (stop: EgoStop): string => `${stop.stopNo || 'stop'}:${stop.stopName || ''}`;
+
+const stopRowKey = (stop: EgoStop, index: number): string => `${stopIdentity(stop)}:${index}`;
+
+const stopRowLabel = (stop: EgoStop): string => {
+  const number = stop.stopNo?.trim() || 'Numarasız';
+  const name = stop.stopName?.trim() || 'İsimsiz durak';
+  return `${number} ${name} konumunu haritada göster`;
+};
+
+const firstPresentValue = (...values: readonly unknown[]): unknown => {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (String(value).trim() === '') continue;
+    return value;
+  }
+  return '';
+};
+
+const toSearchCompatibleStop = (record: UnknownRecord): UnknownRecord => ({
+  ...record,
+  duraK_NO: firstPresentValue(record.duraK_NO, record.DURAK_NO, record.durakNo, record.stopNo),
+  duraK_ADI: firstPresentValue(record.duraK_ADI, record.DURAK_ADI, record.durakAdi, record.stopName),
+  haT_TIPI: firstPresentValue(record.haT_TIPI, record.HAT_TIPI, record.hatTipi, record.lineType),
+});
 
 export const EgoStopsQuery = ({
   stops,
@@ -48,9 +78,13 @@ export const EgoStopsQuery = ({
   const [loadingStopKey, setLoadingStopKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const searchCompatibleStops = useMemo<readonly UnknownRecord[] | null | undefined>(() => (
+    Array.isArray(stops) ? stops.map(toSearchCompatibleStop) : stops
+  ), [stops]);
+
   const filteredList = useMemo(
-    () => filterEgoStops(stops, searchText, showAll).slice(0, RESULT_LIMIT),
-    [searchText, showAll, stops],
+    () => filterEgoStops(searchCompatibleStops, searchText, showAll).slice(0, RESULT_LIMIT),
+    [searchCompatibleStops, searchText, showAll],
   );
 
   const clearOwnedGraphics = useCallback((): void => {
@@ -75,7 +109,7 @@ export const EgoStopsQuery = ({
   }, [stops]);
 
   const showDetails = useCallback(async (stop: EgoStop): Promise<void> => {
-    const stopKey = `${stop.stopNo || 'stop'}:${stop.stopName || ''}`;
+    const stopKey = stopIdentity(stop);
     const requestId = requestGateRef.current.next();
 
     setLoadingStopKey(stopKey);
@@ -117,6 +151,40 @@ export const EgoStopsQuery = ({
     }
   }, [clearOwnedGraphics]);
 
+  const columns = useMemo<readonly ExperienceResponsiveDataColumn<EgoStop>[]>(() => Object.freeze([
+    Object.freeze({
+      id: 'stopNo',
+      header: 'Durak no',
+      cell: (stop: EgoStop) => stop.stopNo || '—',
+      priority: 0,
+      essential: true,
+      minimumWidth: 96,
+      preferredWidth: 120,
+    }),
+    Object.freeze({
+      id: 'stopName',
+      header: 'Durak adı',
+      cell: (stop: EgoStop) => stop.stopName || 'İsimsiz durak',
+      priority: 1,
+      essential: true,
+      minimumWidth: 160,
+      preferredWidth: 300,
+    }),
+    Object.freeze({
+      id: 'lineType',
+      header: 'Tür',
+      cell: (stop: EgoStop) => (
+        loadingStopKey === stopIdentity(stop)
+          ? <span className="ego-stops-modern__busy">Konum açılıyor…</span>
+          : stop.lineType || 'Durak'
+      ),
+      priority: 2,
+      hideOnPhone: true,
+      minimumWidth: 96,
+      preferredWidth: 150,
+    }),
+  ]), [loadingStopKey]);
+
   if (stops === null || stops === undefined) return <ContainerLoading />;
   if (!Array.isArray(stops) || stops.length === 0) {
     return <NoResultsFound message="Aktif durak bulunamadı." />;
@@ -128,18 +196,30 @@ export const EgoStopsQuery = ({
 
   return (
     <section
-      className="ego-query-window-items-container"
-      aria-label="EGO durakları"
+      className="ego-stops-modern"
+      aria-labelledby="ego-stops-modern-title"
     >
-      <div className="ego-query-window-items-search">
-        <InputGroup className="fulltextsearch-text-group ego-query-window-items-search-group">
-          <label className="visually-hidden" htmlFor="ego-stop-search">
-            EGO durağı ara
-          </label>
+      <header className="ego-stops-modern__header">
+        <div>
+          <h3 id="ego-stops-modern-title" className="ego-stops-modern__title">EGO durakları</h3>
+          <p className="ego-stops-modern__description">
+            Durakları arayın, tabloyu klavyeyle gezin ve Enter ile seçili durağı haritada açın.
+          </p>
+        </div>
+        <output className="ego-stops-modern__count" aria-label="Durak sonuç sayısı">
+          {visibleCount}/{Math.min(totalCount, RESULT_LIMIT)}
+        </output>
+      </header>
+
+      <div className="ego-stops-modern__search-shell">
+        <label className="ego-stops-modern__search-label" htmlFor="ego-stop-search">
+          Durak ara
+        </label>
+        <div className="ego-stops-modern__search-row">
           <input
             id="ego-stop-search"
             type="search"
-            className="fulltextsearch-text-input"
+            className="ego-stops-modern__search"
             placeholder="Durak adıyla ya da numarasıyla arayın"
             value={searchText}
             onChange={(event: ChangeEvent<HTMLInputElement>) => {
@@ -147,15 +227,24 @@ export const EgoStopsQuery = ({
             }}
             aria-describedby="ego-stop-search-status"
             autoComplete="off"
+            spellCheck={false}
           />
-          <InputGroup.Text className="fulltextsearch-text-icon">
-            <BiSearch size="2rem" aria-hidden="true" />
-          </InputGroup.Text>
-        </InputGroup>
+          {searchText ? (
+            <button
+              type="button"
+              className="ego-stops-modern__clear"
+              onClick={() => setSearchText('')}
+            >
+              Temizle
+            </button>
+          ) : null}
+        </div>
         <div
           id="ego-stop-search-status"
-          className="ego-query-window-items-status"
+          className="ego-stops-modern__search-status"
+          role="status"
           aria-live="polite"
+          aria-atomic="true"
         >
           {searchActive
             ? `${visibleCount} durak eşleşti`
@@ -178,41 +267,23 @@ export const EgoStopsQuery = ({
             : 'Durak aramak için en az bir karakter yazın.'}
         />
       ) : (
-        <div
-          className="ego-query-window-item-list"
-          role="list"
-          aria-label="Durak sonuçları"
-        >
-          {filteredList.map((stop: EgoStop, index: number) => {
-            const stopKey = `${stop.stopNo || 'stop'}:${stop.stopName || ''}`;
-            const busy = loadingStopKey === stopKey;
-
-            return (
-              <button
-                type="button"
-                key={`${stopKey}:${index}`}
-                className="ego-query-window-item"
-                onClick={() => {
-                  void showDetails(stop);
-                }}
-                aria-label={`${stop.stopNo || ''} ${stop.stopName || 'Durak'} konumunu haritada göster`}
-                aria-busy={busy}
-                disabled={busy}
-                role="listitem"
-              >
-                <span className="ego-query-window-item-no">
-                  {stop.stopNo || '—'}
-                </span>
-                <span className="ego-query-window-item-name">
-                  {stop.stopName || 'İsimsiz durak'}
-                </span>
-                <span className="ego-query-window-item-type">
-                  {busy ? 'Konum açılıyor…' : stop.lineType || 'Durak'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <ExperienceResponsiveDataTable<EgoStop>
+          rows={filteredList}
+          columns={columns}
+          getRowKey={stopRowKey}
+          getRowLabel={(stop) => stopRowLabel(stop)}
+          caption="EGO durak sonuçları"
+          description="Yön tuşlarıyla satırlar arasında ilerleyin. Enter veya boşluk tuşuyla durağı haritada açın."
+          selectionMode="none"
+          onRowActivate={(stop) => {
+            if (loadingStopKey === stopIdentity(stop)) return;
+            void showDetails(stop);
+          }}
+          pageSize={TABLE_PAGE_SIZE}
+          emptyTitle="Durak bulunamadı"
+          emptyDescription="Arama ifadesini değiştirip yeniden deneyin."
+          projectionStatusLabel="Durak tablosu sütun görünümü"
+        />
       )}
     </section>
   );
