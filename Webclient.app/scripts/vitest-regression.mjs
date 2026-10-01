@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const FAIL_STATES = new Set(['fail', 'failed', 'failure']);
+const MAX_DETAIL_LENGTH = 600;
 
 const readReport = (filePath) => {
   if (!filePath) throw new Error('A Vitest JSON report path is required.');
@@ -32,8 +33,29 @@ const failureName = (assertion, index) => {
   return `${ancestor} > ${title}`.trim();
 };
 
+const sanitizeDetail = (value) => String(value ?? '')
+  .replace(/\u001b\[[0-9;]*m/gu, '')
+  .replace(/\r?\n/gu, ' ')
+  .replace(/\s+/gu, ' ')
+  .trim()
+  .slice(0, MAX_DETAIL_LENGTH);
+
+const assertionDetail = (assertion) => {
+  const messages = Array.isArray(assertion.failureMessages)
+    ? assertion.failureMessages
+    : Array.isArray(assertion.errors)
+      ? assertion.errors.map((error) => error?.message ?? error)
+      : assertion.failureMessage
+        ? [assertion.failureMessage]
+        : assertion.error?.message
+          ? [assertion.error.message]
+          : [];
+  return sanitizeDetail(messages.find((message) => String(message ?? '').trim()) ?? '');
+};
+
 const collectReportState = (report) => {
   const failures = new Set();
+  const details = new Map();
   let failedAssertions = 0;
   let failedSuites = 0;
 
@@ -53,13 +75,21 @@ const collectReportState = (report) => {
       if (!FAIL_STATES.has(state)) return;
       suiteAssertionFailures += 1;
       failedAssertions += 1;
-      failures.add(`${file} :: ${failureName(assertion, assertionIndex)}`);
+      const identity = `${file} :: ${failureName(assertion, assertionIndex)}`;
+      failures.add(identity);
+      const detail = assertionDetail(assertion);
+      if (detail && !details.has(identity)) details.set(identity, detail);
     });
 
     const suiteState = String(result.status ?? '').toLowerCase();
     if (FAIL_STATES.has(suiteState)) {
       failedSuites += 1;
-      if (suiteAssertionFailures === 0) failures.add(`${file} :: <suite-level failure>`);
+      if (suiteAssertionFailures === 0) {
+        const identity = `${file} :: <suite-level failure>`;
+        failures.add(identity);
+        const detail = sanitizeDetail(result.message ?? result.failureMessage ?? result.error?.message ?? '');
+        if (detail && !details.has(identity)) details.set(identity, detail);
+      }
     }
   });
 
@@ -77,6 +107,7 @@ const collectReportState = (report) => {
 
   return Object.freeze({
     failures: Object.freeze([...failures].sort()),
+    details,
     failedAssertions,
     failedTests: reportedFailedTests,
     failedSuites: reportedFailedSuites,
@@ -89,7 +120,11 @@ const printState = (label, state) => {
   console.log(`[vitest:regression] ${label} failed tests: ${state.failedTests}`);
   console.log(`[vitest:regression] ${label} failed suites: ${state.failedSuites}`);
   console.log(`[vitest:regression] ${label} unhandled errors: ${state.unhandledErrors}`);
-  for (const failure of state.failures) console.log(`[vitest:regression] ${label} failure: ${failure}`);
+  for (const failure of state.failures) {
+    console.log(`[vitest:regression] ${label} failure: ${failure}`);
+    const detail = state.details.get(failure);
+    if (detail) console.log(`[vitest:regression] ${label} detail: ${detail}`);
+  }
 };
 
 const args = process.argv.slice(2);
@@ -116,7 +151,11 @@ const addedUnhandledErrors = Math.max(0, current.unhandledErrors - baseline.unha
 
 console.log(`[vitest:regression] resolved failures: ${resolved.length}`);
 console.log(`[vitest:regression] added failures: ${added.length}`);
-for (const failure of added) console.error(`[vitest:regression] NEW failure: ${failure}`);
+for (const failure of added) {
+  console.error(`[vitest:regression] NEW failure: ${failure}`);
+  const detail = current.details.get(failure);
+  if (detail) console.error(`[vitest:regression] NEW detail: ${detail}`);
+}
 
 if (current.failedTests > baseline.failedTests && added.length === 0) {
   console.error('[vitest:regression] Current failed-test count increased without a normalized assertion identity; failing closed.');
