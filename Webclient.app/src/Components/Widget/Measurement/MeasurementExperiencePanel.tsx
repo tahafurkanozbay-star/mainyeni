@@ -22,10 +22,10 @@ const phaseLabel = (snapshot: MeasurementExperienceSnapshot): string => {
   switch (snapshot.phase) {
     case 'waiting-map': return 'Harita bekleniyor';
     case 'loading': return 'Hazırlanıyor';
-    case 'ready': return snapshot.activeTool ? 'Ölçüm etkin' : 'Hazır';
+    case 'ready': return snapshot.activeTool ? 'Ölçüm etkin' : 'Kullanıma hazır';
     case 'error': return 'İşlem tamamlanamadı';
     case 'destroyed': return 'Oturum kapatıldı';
-    default: return 'Hazır';
+    default: return 'Kullanıma hazır';
   }
 };
 
