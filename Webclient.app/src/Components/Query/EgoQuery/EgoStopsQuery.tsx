@@ -46,6 +46,22 @@ const stopRowLabel = (stop: EgoStop): string => {
   return `${number} ${name} konumunu haritada göster`;
 };
 
+const firstPresentValue = (...values: readonly unknown[]): unknown => {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (String(value).trim() === '') continue;
+    return value;
+  }
+  return '';
+};
+
+const toSearchCompatibleStop = (record: UnknownRecord): UnknownRecord => ({
+  ...record,
+  duraK_NO: firstPresentValue(record.duraK_NO, record.DURAK_NO, record.durakNo, record.stopNo),
+  duraK_ADI: firstPresentValue(record.duraK_ADI, record.DURAK_ADI, record.durakAdi, record.stopName),
+  haT_TIPI: firstPresentValue(record.haT_TIPI, record.HAT_TIPI, record.hatTipi, record.lineType),
+});
+
 export const EgoStopsQuery = ({
   stops,
   showAll = false,
@@ -62,9 +78,13 @@ export const EgoStopsQuery = ({
   const [loadingStopKey, setLoadingStopKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const searchCompatibleStops = useMemo<readonly UnknownRecord[] | null | undefined>(() => (
+    Array.isArray(stops) ? stops.map(toSearchCompatibleStop) : stops
+  ), [stops]);
+
   const filteredList = useMemo(
-    () => filterEgoStops(stops, searchText, showAll).slice(0, RESULT_LIMIT),
-    [searchText, showAll, stops],
+    () => filterEgoStops(searchCompatibleStops, searchText, showAll).slice(0, RESULT_LIMIT),
+    [searchCompatibleStops, searchText, showAll],
   );
 
   const clearOwnedGraphics = useCallback((): void => {
