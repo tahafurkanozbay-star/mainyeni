@@ -32,7 +32,7 @@ namespace Api.Core.Platform
         {
             if (services == null) throw new ArgumentNullException(nameof(services)); if (configuration == null) throw new ArgumentNullException(nameof(configuration));
             var options = ApiPlatformConfigurationResolver.ResolveOptions(configuration); ValidateOptions(options); var database = ApiPlatformConfigurationResolver.ResolveDatabase(configuration); ValidateDatabase(database);
-            services.AddSingleton<IOptions<ApiPlatformOptions>>(Options.Create(options)); services.AddSingleton(options); AddDatabase(services, database); AddCors(services, options); AddRequestTimeoutPolicy(services, options); AddHealthChecks(services, options); AddResponseCompression(services, options); AddRateLimiting(services, options); AddDiagnostics(services, options);
+            services.AddSingleton<IOptions<ApiPlatformOptions>>(Options.Create(options)); services.AddSingleton(options); AddDatabase(services, database); AddCors(services, options); if (RequestTimeoutAuthority.UsesFrameworkDefaultTimeout(options)) AddRequestTimeoutPolicy(services, options); AddHealthChecks(services, options); AddResponseCompression(services, options); AddRateLimiting(services, options); AddDiagnostics(services, options);
             services.AddSingleton<RequestConcurrencyGovernor>(); services.AddSingleton<RequestLifecyclePolicy>(); services.AddSingleton<RequestLifecycleMetrics>(); services.AddSingleton<RequestLifecycleCoordinator>(); services.AddHostedService<RequestLifecycleDrainService>(); services.AddHttpContextAccessor(); return services;
         }
         private static void ValidateOptions(ApiPlatformOptions options)

@@ -24,7 +24,7 @@ namespace Api.Core.Platform
         }
         public static IApplicationBuilder UseKentRehberiPlatformAfterRouting(this IApplicationBuilder app)
         {
-            if (app == null) throw new ArgumentNullException(nameof(app)); var options = app.ApplicationServices.GetRequiredService<IOptions<ApiPlatformOptions>>().Value; app.UseCors(ApiPlatformDefaults.CorsPolicyName); if (options.Diagnostics.Enabled) app.UseMiddleware<RequestMetricsMiddleware>(); if (options.RateLimiting.Enabled) app.UseRateLimiter(); app.UseRequestTimeouts(); return app;
+            if (app == null) throw new ArgumentNullException(nameof(app)); var options = app.ApplicationServices.GetRequiredService<IOptions<ApiPlatformOptions>>().Value; app.UseCors(ApiPlatformDefaults.CorsPolicyName); if (options.Diagnostics.Enabled) app.UseMiddleware<RequestMetricsMiddleware>(); if (options.RateLimiting.Enabled) app.UseRateLimiter(); if (RequestTimeoutAuthority.UsesFrameworkDefaultTimeout(options)) app.UseRequestTimeouts(); return app;
         }
         public static IEndpointRouteBuilder MapKentRehberiHealthChecks(this IEndpointRouteBuilder endpoints)
         {
