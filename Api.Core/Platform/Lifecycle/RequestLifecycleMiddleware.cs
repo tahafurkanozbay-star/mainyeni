@@ -9,13 +9,20 @@ namespace Api.Core.Platform.Lifecycle
 {
     public sealed class RequestLifecycleMiddleware
     {
+        private const int MaxSafeTraceIdLength = 96;
+
         private readonly RequestDelegate _next;
         private readonly RequestLifecyclePolicy _policy;
         private readonly RequestLifecycleCoordinator _coordinator;
         private readonly ILogger<RequestLifecycleMiddleware> _logger;
         private readonly RequestLifecycleMetrics _metrics;
 
-        public RequestLifecycleMiddleware(RequestDelegate next, RequestLifecyclePolicy policy, RequestLifecycleCoordinator coordinator, ILogger<RequestLifecycleMiddleware> logger, RequestLifecycleMetrics metrics = null)
+        public RequestLifecycleMiddleware(
+            RequestDelegate next,
+            RequestLifecyclePolicy policy,
+            RequestLifecycleCoordinator coordinator,
+            ILogger<RequestLifecycleMiddleware> logger,
+            RequestLifecycleMetrics metrics = null)
         {
             _next = next ?? throw new ArgumentNullException(nameof(next));
             _policy = policy ?? throw new ArgumentNullException(nameof(policy));
@@ -26,7 +33,11 @@ namespace Api.Core.Platform.Lifecycle
 
         public async Task InvokeAsync(HttpContext context)
         {
-            if (context == null) throw new ArgumentNullException(nameof(context));
+            if (context == null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
             var budget = _policy.Resolve(context);
             if (!_coordinator.TryAcquire(budget, out var lease))
             {
@@ -40,13 +51,17 @@ namespace Api.Core.Platform.Lifecycle
                 timeout.CancelAfter(budget.Timeout);
                 var originalAbort = context.RequestAborted;
                 context.RequestAborted = timeout.Token;
-                context.Items[ApiPlatformDefaults.RequestWorkloadClassItemKey] = budget.WorkloadClass.ToString();
-                context.Items[ApiPlatformDefaults.RequestTimeoutMillisecondsItemKey] = (long)budget.Timeout.TotalMilliseconds;
+                context.Items[ApiPlatformDefaults.RequestWorkloadClassItemKey] =
+                    budget.WorkloadClass.ToString();
+                context.Items[ApiPlatformDefaults.RequestTimeoutMillisecondsItemKey] =
+                    (long)budget.Timeout.TotalMilliseconds;
+
                 try
                 {
                     await _next(context);
                 }
-                catch (OperationCanceledException) when (timeout.IsCancellationRequested && !originalAbort.IsCancellationRequested)
+                catch (OperationCanceledException)
+                    when (timeout.IsCancellationRequested && !originalAbort.IsCancellationRequested)
                 {
                     _metrics?.RequestTimedOut(budget);
                     if (!context.Response.HasStarted)
@@ -55,7 +70,12 @@ namespace Api.Core.Platform.Lifecycle
                         await WriteTimeoutResponse(context, budget);
                         return;
                     }
-                    _logger.LogWarning("Request lifecycle timeout occurred after response start. Workload={WorkloadClass} TraceId={TraceId}", budget.WorkloadClass, context.TraceIdentifier);
+
+                    _logger.LogWarning(
+                        "Request lifecycle timeout occurred after response start. " +
+                        "Workload={WorkloadClass} CorrelationId={CorrelationId}",
+                        budget.WorkloadClass,
+                        ResolveSafeCorrelationId(context) ?? "unavailable");
                     throw;
                 }
                 catch (OperationCanceledException) when (originalAbort.IsCancellationRequested)
@@ -81,11 +101,13 @@ namespace Api.Core.Platform.Lifecycle
                 type = "about:blank",
                 title = "Service is draining",
                 status = StatusCodes.Status503ServiceUnavailable,
-                traceId = context.TraceIdentifier
+                traceId = ResolveSafeCorrelationId(context)
             }));
         }
 
-        private static Task WriteTimeoutResponse(HttpContext context, RequestLifecycleBudget budget)
+        private static Task WriteTimeoutResponse(
+            HttpContext context,
+            RequestLifecycleBudget budget)
         {
             context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
             context.Response.ContentType = "application/problem+json";
@@ -96,8 +118,25 @@ namespace Api.Core.Platform.Lifecycle
                 title = "Request timed out",
                 status = StatusCodes.Status504GatewayTimeout,
                 workload = budget.WorkloadClass.ToString(),
-                traceId = context.TraceIdentifier
+                traceId = ResolveSafeCorrelationId(context)
             }));
+        }
+
+        private static string ResolveSafeCorrelationId(HttpContext context)
+        {
+            if (context.Items.TryGetValue(ApiPlatformDefaults.TraceIdItemKey, out var value) &&
+                value is string correlationId &&
+                ApiPlatformDefaults.IsValidCorrelationId(
+                    correlationId,
+                    MaxSafeTraceIdLength))
+            {
+                return correlationId;
+            }
+
+            // CorrelationIdMiddleware runs before lifecycle governance in the product pipeline.
+            // Do not fall back to TraceIdentifier here: an isolated/custom pipeline could replace
+            // it with an arbitrary or unbounded value, while Items contains the server-owned value.
+            return null;
         }
     }
 }
