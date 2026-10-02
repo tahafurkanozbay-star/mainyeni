@@ -167,7 +167,6 @@ export const createResourceLifecycleRegistry = (
 
     for (const candidate of evictionCandidates()) {
       if (!overScope() && !overGlobal()) break;
-      // A scope-specific overflow may only be repaired by evicting from that scope.
       if (overScope() && candidate.scope !== scope && !overGlobal()) continue;
       remove(candidate.id, candidate.generation, 'evicted');
     }
@@ -269,7 +268,18 @@ export const createResourceLifecycleRegistry = (
     sweep();
     const entries = [...resources.values()]
       .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
-      .map(({ metadata: _metadata, ...resource }) => Object.freeze(resource));
+      .map((resource) => Object.freeze({
+        id: resource.id,
+        key: resource.key,
+        scope: resource.scope,
+        priority: resource.priority,
+        state: resource.state,
+        weight: resource.weight,
+        createdAt: resource.createdAt,
+        touchedAt: resource.touchedAt,
+        leaseDeadline: resource.leaseDeadline,
+        generation: resource.generation,
+      }));
     const states = { reserved: 0, active: 0, idle: 0, retiring: 0 };
     for (const resource of entries) states[resource.state] += 1;
     return Object.freeze({
