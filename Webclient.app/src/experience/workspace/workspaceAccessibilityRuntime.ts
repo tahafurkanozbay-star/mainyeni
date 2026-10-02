@@ -1,6 +1,9 @@
 import {
+  closeWorkspaceDialog,
   createWorkspaceAccessibilityState,
   enterWorkspaceFocusZone,
+  openWorkspaceDialog,
+  setCommandPaletteOpen as setCommandPaletteOpenState,
   setWorkspaceConnectivity,
   setWorkspaceInputModality,
   setWorkspaceMapBusy,
@@ -45,6 +48,7 @@ export interface WorkspaceAccessibilityRuntimeDiagnostics {
 type Listener = () => void;
 
 const MAX_LISTENERS = 64;
+const MAX_DIALOG_DEPTH = 8;
 
 const FOCUS_ZONE_SELECTORS: readonly Readonly<{ zone: WorkspaceFocusZone; selector: string }>[] = Object.freeze([
   Object.freeze({ zone: 'dialog', selector: '[role="dialog"],[aria-modal="true"]' }),
@@ -199,6 +203,21 @@ export class WorkspaceAccessibilityRuntime {
 
   setMapBusy(busy: boolean): void {
     this.apply(setWorkspaceMapBusy(this.accessibility, busy));
+  }
+
+  setDialogDepth(depth: number): void {
+    const target = Math.min(MAX_DIALOG_DEPTH, Math.max(0, Math.trunc(Number.isFinite(depth) ? depth : 0)));
+    let remaining = Math.abs(target - this.accessibility.dialogDepth);
+    while (remaining > 0) {
+      this.apply(target > this.accessibility.dialogDepth
+        ? openWorkspaceDialog(this.accessibility)
+        : closeWorkspaceDialog(this.accessibility));
+      remaining -= 1;
+    }
+  }
+
+  setCommandPaletteOpen(open: boolean): void {
+    this.apply(setCommandPaletteOpenState(this.accessibility, open));
   }
 
   private readonly onKeyDown = (): void => this.apply(setWorkspaceInputModality(this.accessibility, 'keyboard'));
