@@ -14,6 +14,8 @@ namespace Api.Core.Platform.Health
     /// <summary>
     /// Readiness check for PostgreSQL connectivity. A fresh DI scope is created for each probe so
     /// pooled DbContext lifetimes are respected and the health-check singleton never captures one.
+    /// Caller/host cancellation is propagated instead of being rewritten as a database failure;
+    /// only the probe's own bounded timeout is reported as an unhealthy dependency result.
     /// </summary>
     public sealed class DatabaseHealthCheck : IHealthCheck
     {
@@ -32,6 +34,8 @@ namespace Api.Core.Platform.Health
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(_options.DatabaseTimeoutSeconds));
 
@@ -48,7 +52,13 @@ namespace Api.Core.Platform.Health
                     ? HealthCheckResult.Healthy("Database is reachable.", data)
                     : HealthCheckResult.Unhealthy("Database is not reachable.", data: data);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Request/host cancellation owns the lifecycle of the probe. Propagating it avoids
+                // manufacturing a dependency outage during client disconnect or host shutdown.
+                throw;
+            }
+            catch (OperationCanceledException)
             {
                 stopwatch.Stop();
                 return HealthCheckResult.Unhealthy(
