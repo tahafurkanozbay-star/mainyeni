@@ -157,7 +157,7 @@ describe('v8 recovery scale and attempt budgets', () => {
 
   it('recovers typo against larger corpus without exceeding attempt budget', () => {
     const runtime = createSearchRecoveryRuntimeV8({
-      maximumAttempts: 2,
+      maxAttempts: 2,
       fuzzy: { maximumCandidates: 128 },
       correction: {
         minimumAutoApplyScore: 100,
@@ -172,7 +172,7 @@ describe('v8 recovery scale and attempt budgets', () => {
 
   it('does not recursively recover a successful recovered query', () => {
     const runtime = createSearchRecoveryRuntimeV8({
-      maximumAttempts: 3,
+      maxAttempts: 3,
       correction: {
         minimumAutoApplyScore: 100,
         minimumAutoApplyMargin: 1,
