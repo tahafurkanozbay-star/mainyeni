@@ -9,7 +9,7 @@ import { MapWorkspaceShellBrowserRuntime } from './mapWorkspaceShellBrowserRunti
 import './MapWorkspaceShellOverlay.css';
 
 export interface MapWorkspaceShellOverlayProps {
-  readonly phase: MapWorkspaceShellPhase;
+  readonly phase?: MapWorkspaceShellPhase;
 }
 
 const PHASE_LABEL: Readonly<Record<MapWorkspaceShellPhase, string>> = Object.freeze({
@@ -35,9 +35,13 @@ const LANDMARK_HINT: Readonly<Record<MapWorkspaceLandmarkId, string>> = Object.f
   help: 'Çalışma alanı yardımını aç veya odakla',
 });
 
+const isWorkspacePhase = (value: string | undefined): value is MapWorkspaceShellPhase => (
+  value === 'booting' || value === 'ready' || value === 'updating' || value === 'error'
+);
+
 export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProps) => {
   const model = useMemo(() => new MapWorkspaceShellModel({
-    initialPhase: phase,
+    initialPhase: phase ?? 'booting',
     initialEnvironment: {
       width: typeof window === 'undefined' ? 1280 : window.innerWidth,
       height: typeof window === 'undefined' ? 720 : window.innerHeight,
@@ -53,7 +57,24 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
 
   useEffect(() => {
-    model.setPhase(phase);
+    if (phase) model.setPhase(phase);
+  }, [model, phase]);
+
+  useEffect(() => {
+    if (phase || typeof document === 'undefined') return undefined;
+    const mapRoot = document.getElementById('esri-map-container');
+    if (!(mapRoot instanceof HTMLElement)) return undefined;
+
+    const syncPhase = (): void => {
+      const candidate = mapRoot.dataset.workspacePhase;
+      if (isWorkspacePhase(candidate)) model.setPhase(candidate);
+    };
+
+    syncPhase();
+    if (typeof MutationObserver === 'undefined') return undefined;
+    const observer = new MutationObserver(syncPhase);
+    observer.observe(mapRoot, { attributes: true, attributeFilter: ['data-workspace-phase'] });
+    return () => observer.disconnect();
   }, [model, phase]);
 
   useEffect(() => {
