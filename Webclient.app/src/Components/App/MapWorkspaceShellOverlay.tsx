@@ -1,0 +1,154 @@
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
+import {
+  MapWorkspaceShellModel,
+  type MapWorkspaceLandmarkId,
+  type MapWorkspaceShellPhase,
+} from './mapWorkspaceShellModel';
+import { MapWorkspaceShellBrowserRuntime } from './mapWorkspaceShellBrowserRuntime';
+import './MapWorkspaceShellOverlay.css';
+
+export interface MapWorkspaceShellOverlayProps {
+  readonly phase: MapWorkspaceShellPhase;
+}
+
+const PHASE_LABEL: Readonly<Record<MapWorkspaceShellPhase, string>> = Object.freeze({
+  booting: 'Hazırlanıyor',
+  ready: 'Hazır',
+  updating: 'Güncelleniyor',
+  error: 'Dikkat gerekiyor',
+});
+
+const PHASE_DETAIL: Readonly<Record<MapWorkspaceShellPhase, string>> = Object.freeze({
+  booting: 'Harita araçları hazırlanıyor.',
+  ready: 'Harita ve çalışma alanı kontrolleri kullanıma hazır.',
+  updating: 'Harita verisi veya görünümü güncelleniyor; kontroller kullanılabilir.',
+  error: 'Harita görünümü hazırlanamadı. Sayfa gezinmesi ve yardım seçenekleri kullanılabilir.',
+});
+
+const LANDMARK_HINT: Readonly<Record<MapWorkspaceLandmarkId, string>> = Object.freeze({
+  map: 'Harita yüzeyine odaklan',
+  navigation: 'Üst gezinmeye git',
+  search: 'Adres, yer veya katman aramasına git',
+  sidebar: 'Katman ve hizmet menüsüne git',
+  toolbar: 'Harita araçlarına git',
+  help: 'Çalışma alanı yardımını aç veya odakla',
+});
+
+export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProps) => {
+  const model = useMemo(() => new MapWorkspaceShellModel({
+    initialPhase: phase,
+    initialEnvironment: {
+      width: typeof window === 'undefined' ? 1280 : window.innerWidth,
+      height: typeof window === 'undefined' ? 720 : window.innerHeight,
+      coarsePointer: false,
+      reducedMotion: false,
+      forcedColors: false,
+    },
+    onListenerError(error) {
+      runtimeDiagnostics.captureError(error, { source: 'experience.workspace-shell.observer' }, 'warn');
+    },
+  }), []);
+  const runtimeRef = useRef<MapWorkspaceShellBrowserRuntime | null>(null);
+  const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+
+  useEffect(() => {
+    model.setPhase(phase);
+  }, [model, phase]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+    const runtime = new MapWorkspaceShellBrowserRuntime(model, {
+      onError(error) {
+        runtimeDiagnostics.captureError(error, { source: 'experience.workspace-shell.focus' }, 'warn');
+      },
+    });
+    runtimeRef.current = runtime;
+    runtime.start();
+    return () => {
+      runtimeRef.current = null;
+      runtime.dispose();
+    };
+  }, [model]);
+
+  useEffect(() => () => model.dispose(), [model]);
+
+  const focusLandmark = (id: MapWorkspaceLandmarkId): void => {
+    const result = runtimeRef.current?.focus(id);
+    if (!result?.ok) {
+      runtimeDiagnostics.record('experience.workspace-shell.focus-unavailable', {
+        landmarkId: id,
+        reason: result?.reason ?? 'runtime-unavailable',
+      });
+    }
+  };
+
+  const availableLandmarks = snapshot.landmarks.filter((landmark) => landmark.available);
+  const statusId = 'map-workspace-shell-status';
+
+  return (
+    <aside
+      className="map-workspace-shell-overlay"
+      data-viewport={snapshot.viewport}
+      data-health={snapshot.healthTone}
+      data-input-modality={snapshot.inputModality}
+      data-coarse-pointer={String(snapshot.coarsePointer)}
+      data-reduced-motion={String(snapshot.reducedMotion)}
+      data-forced-colors={String(snapshot.forcedColors)}
+      data-collapsed={String(snapshot.utilityCollapsed)}
+      aria-label="Çalışma alanı durumu ve hızlı gezinme"
+    >
+      <div className="map-workspace-shell-overlay__status" aria-describedby={statusId}>
+        <span className="map-workspace-shell-overlay__pulse" aria-hidden="true" />
+        <span className="map-workspace-shell-overlay__status-copy">
+          <strong>{PHASE_LABEL[snapshot.phase]}</strong>
+          <span id={statusId}>{PHASE_DETAIL[snapshot.phase]}</span>
+        </span>
+        <span className="map-workspace-shell-overlay__count" aria-label={`${snapshot.availableLandmarkCount} hızlı gezinme hedefi`}>
+          {snapshot.availableLandmarkCount}
+        </span>
+        <button
+          type="button"
+          className="map-workspace-shell-overlay__collapse"
+          aria-expanded={!snapshot.utilityCollapsed}
+          aria-controls="map-workspace-shell-actions"
+          onClick={() => model.toggleUtilityCollapsed()}
+        >
+          {snapshot.utilityCollapsed ? 'Hızlı gezinmeyi aç' : 'Daralt'}
+        </button>
+      </div>
+
+      <div
+        id="map-workspace-shell-actions"
+        className="map-workspace-shell-overlay__actions"
+        hidden={snapshot.utilityCollapsed}
+        aria-label="Hızlı gezinme hedefleri"
+      >
+        {availableLandmarks.length > 0 ? availableLandmarks.map((landmark) => (
+          <button
+            key={landmark.id}
+            type="button"
+            className="map-workspace-shell-overlay__action"
+            data-landmark={landmark.id}
+            data-active={landmark.active || undefined}
+            aria-current={landmark.active ? 'location' : undefined}
+            aria-label={LANDMARK_HINT[landmark.id]}
+            onClick={() => focusLandmark(landmark.id)}
+          >
+            <span>{landmark.shortLabel}</span>
+          </button>
+        )) : (
+          <p className="map-workspace-shell-overlay__empty" role="status">
+            Harita kontrolleri hazırlanıyor.
+          </p>
+        )}
+      </div>
+
+      <span className="map-workspace-shell-overlay__announcement experience-sr-only" aria-live="polite" aria-atomic="true">
+        {snapshot.announcement}
+      </span>
+    </aside>
+  );
+};
+
+export default MapWorkspaceShellOverlay;
