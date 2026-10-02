@@ -44,6 +44,7 @@ namespace Api.Core.Platform
             services.AddSingleton<RequestConcurrencyGovernor>();
             services.AddSingleton<RequestLifecyclePolicy>();
             services.AddSingleton<RequestLifecycleCoordinator>();
+            services.AddHostedService<RequestLifecycleDrainService>();
             services.AddHttpContextAccessor();
             return services;
         }
