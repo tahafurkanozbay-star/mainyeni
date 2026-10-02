@@ -88,30 +88,24 @@ test('Platform test TypeScript project is strict, curated and rejects JavaScript
     assert.equal(await exists(path.join(ROOT, 'Webclient.app', entry)), true, `missing strict Platform test include: ${entry}`);
   }
   const requiredModernizationSuites = [
-    'runtimeAdmissionController.test.ts',
-    'runtimeBackpressureCoordinator.test.ts',
-    'runtimeCapacityHealth.integration.test.ts',
-    'runtimeCapacityReservationPool.test.ts',
-    'runtimeConcurrencyGovernor.test.ts',
-    'runtimeDegradationController.test.ts',
-    'runtimeFailureBudget.test.ts',
-    'runtimeFairShareAllocator.test.ts',
-    'runtimeHealthEscalationMatrix.test.ts',
-    'runtimeLoadWindow.test.ts',
-    'runtimeOverloadGuard.test.ts',
-    'runtimeQuarantineRegistry.test.ts',
-    'runtimeRecoveryPlanner.test.ts',
-    'runtimeSaturationLedger.test.ts',
+    'runtimeAdmissionController.test.ts', 'runtimeBackpressureCoordinator.test.ts',
+    'runtimeCapacityHealth.integration.test.ts', 'runtimeCapacityReservationPool.test.ts',
+    'runtimeConcurrencyGovernor.test.ts', 'runtimeDegradationController.test.ts',
+    'runtimeFailureBudget.test.ts', 'runtimeFairShareAllocator.test.ts',
+    'runtimeHealthEscalationMatrix.test.ts', 'runtimeLoadWindow.test.ts',
+    'runtimeOverloadGuard.test.ts', 'runtimeQuarantineRegistry.test.ts',
+    'runtimeRecoveryPlanner.test.ts', 'runtimeSaturationLedger.test.ts',
   ].map((file) => `src/platform/runtime/${file}`);
   for (const required of requiredModernizationSuites) {
     assert.ok(config.include.includes(required), `modernized runtime suite escaped strict compilation: ${required}`);
   }
 });
 
-test('root compatibility bridge does not weaken Platform boundary', async () => {
+test('root TypeScript project permanently rejects JavaScript admission after whole-source cutover', async () => {
   const rootConfig = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.json'), 'utf8'));
   const platformConfig = JSON.parse(await fs.readFile(path.join(ROOT, 'Webclient.app', 'tsconfig.platform.json'), 'utf8'));
-  assert.equal(rootConfig.compilerOptions?.allowJs, true);
+  assert.equal(rootConfig.compilerOptions?.allowJs, false);
+  assert.equal(rootConfig.compilerOptions?.checkJs, undefined);
   assert.equal(platformConfig.compilerOptions?.allowJs, false);
 });
 
