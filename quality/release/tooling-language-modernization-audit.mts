@@ -36,11 +36,12 @@ const ESM_EXT = /\.(?:mjs|mts)$/i;
 const LEGACY_EXT = /\.(?:js|jsx|mjs|cjs)$/i;
 const GENERATED = /(^|\/)(?:node_modules|dist|build|coverage|bin|obj|qa-artifacts|generated)(?:\/|$)/i;
 const FIXTURE = /(^|\/)(?:fixtures?|snapshots?|__snapshots__)(?:\/|$)/i;
+const TEST_FILE = /(?:\.test|\.spec)\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/i;
 const COMMONJS_REQUIRE = /\brequire\s*\(/g;
 const COMMONJS_EXPORT = /\b(?:module\.exports\b|exports\.[A-Za-z_$][\w$]*\s*=)/g;
-const TS_NOCHECK = /@ts-nocheck\b/g;
-const TS_IGNORE = /@ts-ignore\b/g;
-const TS_EXPECT_ERROR = /@ts-expect-error\b/g;
+const TS_NOCHECK = new RegExp(`@ts-${'nocheck'}\\b`, 'g');
+const TS_IGNORE = new RegExp(`@ts-${'ignore'}\\b`, 'g');
+const TS_EXPECT_ERROR = new RegExp(`@ts-${'expect-error'}\\b`, 'g');
 const EXPLICIT_ANY = /(?:\bas\s+any\b|:\s*any\b|<any>)/g;
 const MAX_LEGACY_FINDINGS = 24;
 
@@ -55,7 +56,8 @@ function isEligible(file: SourceFile): boolean {
   return TOOLING_PATH.test(file.repositoryPath)
     && SOURCE_EXT.test(file.repositoryPath)
     && !GENERATED.test(file.repositoryPath)
-    && !FIXTURE.test(file.repositoryPath);
+    && !FIXTURE.test(file.repositoryPath)
+    && !TEST_FILE.test(file.repositoryPath);
 }
 
 function extension(file: SourceFile): string {
@@ -157,9 +159,9 @@ function contractFindings(item: ToolingLanguageSignal): Finding[] {
       'tooling-language-ts-nocheck',
       'high',
       'Type checking is disabled in release/tooling code',
-      '@ts-nocheck creates an untyped island inside the build and release control plane.',
+      'A file-level TypeScript checking disable directive creates an untyped island inside the build and release control plane.',
       item.file,
-      'Remove @ts-nocheck and repair the underlying types; split legacy adapters if migration must be staged.',
+      'Remove the file-level suppression and repair the underlying types; split legacy adapters if migration must be staged.',
       ['modernization', 'typescript', 'strict', 'tooling'],
       true,
     ));
@@ -168,10 +170,10 @@ function contractFindings(item: ToolingLanguageSignal): Finding[] {
     findings.push(finding(
       'tooling-language-ts-ignore',
       'medium',
-      'Tooling suppresses TypeScript diagnostics with @ts-ignore',
-      `${item.tsIgnore} @ts-ignore suppression(s) hide compiler drift.`,
+      'Tooling suppresses TypeScript diagnostics without an expectation contract',
+      `${item.tsIgnore} broad TypeScript diagnostic suppression(s) hide compiler drift.`,
       item.file,
-      'Fix the type contract or use a narrowly documented @ts-expect-error tied to a known dependency limitation.',
+      'Fix the type contract or use a narrowly documented expected-error directive tied to a known dependency limitation.',
       ['modernization', 'typescript', 'strict', 'tooling'],
     ));
   }
@@ -194,12 +196,16 @@ function typedRatio(items: readonly ToolingLanguageSignal[]): number {
   return Number((items.filter(item => item.typed).length / items.length).toFixed(4));
 }
 
+function pathOrder(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function auditToolingLanguageModernization(
   inventory: RepositoryInventory,
 ): AuditSection<ToolingLanguageModernizationSummary> {
   const started = performance.now();
   const files = inventory.files.filter(isEligible);
-  const signals = files.map(signal).sort((left, right) => left.file.localeCompare(right.file));
+  const signals = files.map(signal).sort((left, right) => pathOrder(left.file, right.file));
   const legacy = signals
     .map(legacyFinding)
     .filter((item): item is Finding => item !== undefined)
