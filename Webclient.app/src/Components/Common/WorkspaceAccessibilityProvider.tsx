@@ -172,6 +172,7 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
     },
   }), []);
   const focusRuntime = useMemo(() => new WorkspaceFocusRecoveryRuntime({
+    focusRingAttribute: 'data-workspace-focus-recovery',
     onError(error) {
       runtimeDiagnostics.captureError(error, {
         source: 'experience.workspace-focus-recovery',
