@@ -11,7 +11,7 @@ export interface NavigationBarProps {
   readonly windowManager: Pick<WindowManagerApi, 'ShowWindow'>;
 }
 
-export function NavigationBar({ windowManager }: NavigationBarProps) {
+export function NavigationBar({ id, windowManager }: NavigationBarProps) {
   const searchModel = useMemo(() => new NavigationSearchModel(), []);
   const search = useSyncExternalStore(searchModel.subscribe, searchModel.getSnapshot, searchModel.getSnapshot);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -37,7 +37,7 @@ export function NavigationBar({ windowManager }: NavigationBarProps) {
   };
 
   return (
-    <header className="mainbar-container" role="banner" aria-label="Kent Rehberi üst gezinme">
+    <header id={id} className="mainbar-container" role="banner" aria-label="Kent Rehberi üst gezinme">
       <div className="row h-100"><div className="col-12 h-100"><div className="mainbar">
         <div className="mainbar-logo"><a href="https://www.ankara.bel.tr/" target="_blank" rel="noopener noreferrer" aria-label="Ankara Büyükşehir Belediyesi ana sayfası"><img src="images/abblogo.svg" alt="Ankara Büyükşehir Belediyesi" title={`v${AppConfig.App.Version}`} decoding="async" /></a></div>
         <a href="https://kentrehberi.ankara.bel.tr" target="_blank" rel="noopener noreferrer" aria-label="Kent Rehberi ana sayfası"><span className="mainbar-text">KENT REHBERİ</span></a>
