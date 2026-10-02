@@ -249,3 +249,17 @@ export * from './fuzzyLexiconRuntimeV8';
 export * from './synonymRegistryRuntimeV8';
 export * from './queryCorrectionRuntimeV8';
 export * from './searchRecoveryRuntimeV8';
+
+// Production v9 usable search-experience model. Search truth remains owned by
+// v8/v7/v6; this layer only turns canonical results and diagnostics into bounded
+// immutable UI facts: safe highlight ranges, explanations, grouping, empty and
+// blocked guidance, revision-safe selection, memory-only recent-query history
+// and a debounce/cancellation adapter that reuses the existing SearchSession.
+// It imports no React/GIS transport and adds no endpoint, telemetry or icon path.
+export * from './searchResultPresentationRuntimeV9';
+export * from './searchGroupingRuntimeV9';
+export * from './searchGuidanceRuntimeV9';
+export * from './searchSelectionRuntimeV9';
+export * from './searchHistoryRuntimeV9';
+export * from './searchExperienceRuntimeV9';
+export * from './searchExperienceSessionV9';
