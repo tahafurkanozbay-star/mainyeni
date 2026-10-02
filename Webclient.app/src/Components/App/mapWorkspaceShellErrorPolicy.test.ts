@@ -46,7 +46,10 @@ describe('mapWorkspaceShellErrorPolicy', () => {
   it('removes control characters without exposing raw codes', () => {
     const safe = sanitizeMapWorkspaceShellError('Harita\u0000\u0007 başarısız\u007f oldu');
     expect(safe.message).toBe('Harita başarısız oldu');
-    expect(safe.message).not.toMatch(/[\u0000-\u001f\u007f]/u);
+    expect([...(safe.message ?? '')].some((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint !== undefined && (codePoint < 32 || codePoint === 127);
+    })).toBe(false);
   });
 
   it('redacts http URLs', () => {
