@@ -211,7 +211,8 @@ describe('search presentation v9 unicode and boundary regressions', () => {
       const value = 'Atatürk Bulvarı No: 42 Çankaya Ankara';
       const ranges = createSearchHighlightRangesV9(value, ['ataturk', '42', 'cankaya', 'ankara']);
       expect(ranges).toHaveLength(4);
-      expect(ranges.map(range => range.start)).toEqual([...ranges.map(range => range.start)].sort((a, b) => a - b));
+      const starts = ranges.map(range => range.start);
+      expect(starts).toEqual(starts.toSorted((a, b) => a - b));
     });
   });
 });
