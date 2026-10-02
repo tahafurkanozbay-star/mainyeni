@@ -47,7 +47,7 @@ export class MapWorkspaceShellSessionStore {
   readonly #storage: Storage | null;
   readonly #key: string;
   readonly #maxSerializedLength: number;
-  readonly #onError?: (error: unknown) => void;
+  readonly #onError: ((error: unknown) => void) | undefined;
   #readCount = 0;
   #writeCount = 0;
   #rejectedCount = 0;
