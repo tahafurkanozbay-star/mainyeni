@@ -6,6 +6,7 @@ import {
   type MapWorkspaceShellPhase,
 } from './mapWorkspaceShellModel';
 import { MapWorkspaceShellBrowserRuntime } from './mapWorkspaceShellBrowserRuntime';
+import { resolveMapWorkspaceShellDensity } from './mapWorkspaceShellDensityPolicy';
 import { MapWorkspaceShellKeyboardController } from './mapWorkspaceShellKeyboardController';
 import { MapWorkspaceShellPlacementRuntime } from './mapWorkspaceShellPlacementRuntime';
 import { MapWorkspaceShellSessionStore } from './mapWorkspaceShellSessionStore';
@@ -134,6 +135,15 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
   };
 
   const availableLandmarks = snapshot.landmarks.filter((landmark) => landmark.available);
+  const density = resolveMapWorkspaceShellDensity({
+    viewport: snapshot.viewport,
+    width: snapshot.width,
+    height: snapshot.height,
+    coarsePointer: snapshot.coarsePointer,
+    phase: snapshot.phase,
+    utilityCollapsed: snapshot.utilityCollapsed,
+    availableLandmarkCount: snapshot.availableLandmarkCount,
+  });
   const statusId = 'map-workspace-shell-status';
 
   return (
@@ -141,6 +151,8 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
       ref={rootRef}
       className="map-workspace-shell-overlay"
       data-viewport={snapshot.viewport}
+      data-density={density.density}
+      data-density-reason={density.reason}
       data-health={snapshot.healthTone}
       data-input-modality={snapshot.inputModality}
       data-coarse-pointer={String(snapshot.coarsePointer)}
@@ -153,7 +165,7 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
         <span className="map-workspace-shell-overlay__pulse" aria-hidden="true" />
         <span className="map-workspace-shell-overlay__status-copy">
           <strong>{PHASE_LABEL[snapshot.phase]}</strong>
-          <span id={statusId}>{PHASE_DETAIL[snapshot.phase]}</span>
+          <span id={statusId} className={density.showStatusDetail ? undefined : 'experience-sr-only'}>{PHASE_DETAIL[snapshot.phase]}</span>
         </span>
         <span className="map-workspace-shell-overlay__count" aria-label={`${snapshot.availableLandmarkCount} hızlı gezinme hedefi`}>
           {snapshot.availableLandmarkCount}
@@ -161,7 +173,7 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
         <button
           type="button"
           className="map-workspace-shell-overlay__collapse"
-          aria-expanded={!snapshot.utilityCollapsed}
+          aria-expanded={density.showActions}
           aria-controls="map-workspace-shell-actions"
           onClick={() => model.toggleUtilityCollapsed()}
         >
@@ -172,10 +184,10 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
       <div
         id="map-workspace-shell-actions"
         className="map-workspace-shell-overlay__actions"
-        hidden={snapshot.utilityCollapsed}
+        hidden={!density.showActions}
         aria-label="Hızlı gezinme hedefleri"
       >
-        {availableLandmarks.length > 0 ? availableLandmarks.map((landmark) => (
+        {availableLandmarks.map((landmark) => (
           <button
             key={landmark.id}
             type="button"
@@ -188,14 +200,12 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
           >
             <span>{landmark.shortLabel}</span>
           </button>
-        )) : (
-          <p className="map-workspace-shell-overlay__empty" role="status">
-            Harita kontrolleri hazırlanıyor.
-          </p>
-        )}
-        <span className="map-workspace-shell-overlay__shortcut-hint" aria-hidden="true">
-          <kbd>F6</kbd> ileri · <kbd>Shift</kbd>+<kbd>F6</kbd> geri
-        </span>
+        ))}
+        {density.showKeyboardHint ? (
+          <span className="map-workspace-shell-overlay__shortcut-hint" aria-hidden="true">
+            <kbd>F6</kbd> ileri · <kbd>Shift</kbd>+<kbd>F6</kbd> geri
+          </span>
+        ) : null}
       </div>
 
       <span className="map-workspace-shell-overlay__announcement experience-sr-only" aria-live="polite" aria-atomic="true">
