@@ -14,6 +14,7 @@ namespace Api.Core.Platform
         public const string ReadinessTag = "ready";
         public const string LivenessTag = "live";
         public const string DatabaseHealthCheckName = "database";
+        public const string LifecycleHealthCheckName = "lifecycle";
         public const string PostgreSqlProvider = "PGSQL";
         public const string PrimaryConnectionStringName = "Primary";
         private static readonly HashSet<char> AllowedCorrelationCharacters = new HashSet<char>("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.:".ToCharArray());
