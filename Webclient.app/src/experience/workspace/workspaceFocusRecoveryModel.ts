@@ -28,7 +28,7 @@ export interface WorkspaceFocusRecoveryDecision {
 
 const selectors: Readonly<Record<WorkspaceFocusZone, WorkspaceFocusTarget | null>> = Object.freeze({
   map: Object.freeze({ zone: 'map', selector: '#esri-map-container', fallbackSelector: 'main', preventScroll: true }),
-  tools: Object.freeze({ zone: 'tools', selector: '#sidebar', fallbackSelector: '#experience-workspace-controls', preventScroll: true }),
+  tools: Object.freeze({ zone: 'tools', selector: '#sidebar,[data-workspace-tools]', fallbackSelector: '#experience-workspace-controls', preventScroll: true }),
   workspace: Object.freeze({ zone: 'workspace', selector: '#experience-workspace-controls', fallbackSelector: 'main', preventScroll: true }),
   dialog: Object.freeze({ zone: 'dialog', selector: '[role="dialog"]', fallbackSelector: null, preventScroll: true }),
   'command-palette': Object.freeze({ zone: 'command-palette', selector: '[data-experience-command-palette]', fallbackSelector: '#experience-workspace-controls', preventScroll: true }),
