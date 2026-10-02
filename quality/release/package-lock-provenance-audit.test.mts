@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
 import { buildRepositoryInventory } from './inventory.mts';
 import { auditPackageLockProvenance } from './package-lock-provenance-audit.mts';
 import type { RepositoryInventory, SourceFile } from './contracts.mts';
@@ -283,8 +282,7 @@ test('canonical findings preserve package path evidence', () => {
 });
 
 test('real Webclient lockfile has no blocking provenance findings', () => {
-  const root = resolve(import.meta.dirname, '../..');
-  const repository = buildRepositoryInventory({ root, maxTextBytes: 16 * 1024 * 1024, includeTests: true });
+  const repository = buildRepositoryInventory({ root: process.cwd(), maxTextBytes: 16 * 1024 * 1024, includeTests: true });
   const report = auditPackageLockProvenance(repository);
   const blocking = report.findings.filter(finding => finding.blocking === true);
   assert.equal(report.lockfileCount, 1, 'Webclient.app/package-lock.json must remain in release inventory');
