@@ -1,7 +1,3 @@
-import { builtinModules } from 'node:module';
-import { readFile, readdir } from 'node:fs/promises';
-import path from 'node:path';
-
 export type RuntimeFindingCode =
   | 'browser-node-builtin'
   | 'browser-remote-executable-import'
@@ -23,24 +19,24 @@ export interface RuntimeManifest {
   readonly devDependencies: Readonly<Record<string, string>>;
 }
 
-export interface RuntimeAuditReport {
-  readonly filesScanned: number;
-  readonly importsScanned: number;
-  readonly findings: readonly RuntimeFinding[];
-  readonly passed: boolean;
+export interface ImportReference {
+  readonly specifier: string;
+  readonly offset: number;
+  readonly line: number;
 }
 
-const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx', '.mts']);
-const SKIP_DIRECTORIES = new Set(['node_modules', 'build', 'dist', 'coverage', '.git', '.cache']);
-const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/iu;
 const REMOTE_SCHEME = /^(?:https?:|data:|blob:|file:)/iu;
 const DYNAMIC_CODE = /\b(?:eval\s*\(|new\s+Function\s*\()/gu;
 const COMMONJS = /\b(?:require\s*\(|module\.exports\b|exports\.[A-Za-z_$])/gu;
 const PROCESS_ENV = /\bprocess\.env\.([A-Z0-9_]+)\b/gu;
 const ALLOWED_BROWSER_ENV = new Set(['PUBLIC_URL']);
 const NODE_BUILTINS = new Set([
-  ...builtinModules,
-  ...builtinModules.map((name) => name.startsWith('node:') ? name : `node:${name}`),
+  'assert', 'assert/strict', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+  'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns', 'domain', 'events', 'fs',
+  'fs/promises', 'http', 'http2', 'https', 'module', 'net', 'os', 'path', 'perf_hooks',
+  'process', 'punycode', 'querystring', 'readline', 'repl', 'stream', 'string_decoder',
+  'sys', 'timers', 'tls', 'trace_events', 'tty', 'url', 'util', 'v8', 'vm', 'wasi',
+  'worker_threads', 'zlib', 'test',
 ]);
 const IMPORT_PATTERNS = [
   /\bimport\s+(?:type\s+)?(?:[^'";()]*?\s+from\s+)?['"]([^'"]+)['"]/gu,
@@ -48,12 +44,6 @@ const IMPORT_PATTERNS = [
   /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
   /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
 ] as const;
-
-interface ImportReference {
-  readonly specifier: string;
-  readonly offset: number;
-  readonly line: number;
-}
 
 const lineAt = (source: string, offset: number): number => {
   let line = 1;
@@ -63,14 +53,18 @@ const lineAt = (source: string, offset: number): number => {
   return line;
 };
 
-const normalize = (value: string): string => value.split(path.sep).join('/');
-
 const packageName = (specifier: string): string | null => {
   if (!specifier || specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('#')) return null;
   if (REMOTE_SCHEME.test(specifier)) return null;
   const parts = specifier.split('/');
   if (specifier.startsWith('@')) return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
   return parts[0] ?? null;
+};
+
+const nodeBuiltinName = (specifier: string): string | null => {
+  const bare = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
+  const root = bare.split('/')[0] ?? bare;
+  return NODE_BUILTINS.has(bare) || NODE_BUILTINS.has(root) ? bare : null;
 };
 
 export const extractRuntimeImports = (source: string): readonly ImportReference[] => {
@@ -123,8 +117,9 @@ export const auditRuntimeSource = (
     }
     const name = packageName(reference.specifier);
     if (name === null) continue;
-    if (NODE_BUILTINS.has(name) || NODE_BUILTINS.has(reference.specifier)) {
-      findings.push(finding('browser-node-builtin', file, reference.line, reference.specifier));
+    const builtin = nodeBuiltinName(reference.specifier);
+    if (builtin !== null) {
+      findings.push(finding('browser-node-builtin', file, reference.line, builtin));
       continue;
     }
     if (Object.hasOwn(manifest.dependencies, name)) continue;
@@ -137,54 +132,4 @@ export const auditRuntimeSource = (
 
   return Object.freeze(findings.sort((left, right) =>
     left.line - right.line || left.code.localeCompare(right.code) || left.detail.localeCompare(right.detail)));
-};
-
-const walk = async (directory: string, output: string[] = []): Promise<string[]> => {
-  let entries: Awaited<ReturnType<typeof readdir>>;
-  try {
-    entries = await readdir(directory, { withFileTypes: true });
-  } catch {
-    return output;
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory() && SKIP_DIRECTORIES.has(entry.name)) continue;
-    const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) await walk(absolute, output);
-    else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) output.push(absolute);
-  }
-  return output;
-};
-
-export const readRuntimeManifest = async (root: string): Promise<RuntimeManifest> => {
-  const manifestPath = path.join(root, 'Webclient.app', 'package.json');
-  const parsed = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
-  return Object.freeze({
-    dependencies: Object.freeze({ ...(parsed.dependencies ?? {}) }),
-    devDependencies: Object.freeze({ ...(parsed.devDependencies ?? {}) }),
-  });
-};
-
-export const auditBrowserRuntimeGovernance = async (root: string): Promise<RuntimeAuditReport> => {
-  const manifest = await readRuntimeManifest(root);
-  const sourceRoot = path.join(root, 'Webclient.app', 'src');
-  const files = (await walk(sourceRoot)).sort();
-  const findings: RuntimeFinding[] = [];
-  let filesScanned = 0;
-  let importsScanned = 0;
-
-  for (const absolute of files) {
-    const relative = normalize(path.relative(root, absolute));
-    if (TEST_PATH.test(relative)) continue;
-    const source = await readFile(absolute, 'utf8');
-    filesScanned += 1;
-    importsScanned += extractRuntimeImports(source).length;
-    findings.push(...auditRuntimeSource(relative, source, manifest));
-  }
-
-  const ordered = Object.freeze(findings.sort((left, right) =>
-    left.file.localeCompare(right.file) || left.line - right.line || left.code.localeCompare(right.code)));
-  return Object.freeze({ filesScanned, importsScanned, findings: ordered, passed: ordered.length === 0 });
 };
