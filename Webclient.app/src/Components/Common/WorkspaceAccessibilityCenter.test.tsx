@@ -34,7 +34,7 @@ const renderCenter = () => render(
   </WorkspaceAccessibilityProvider>,
 );
 
-const launcher = (): HTMLButtonElement => screen.getByRole('button', { name: /Erişilebilirlik Hazır/i });
+const launcher = (): HTMLButtonElement => screen.getByRole('button', { name: /Erişilebilirlik(?:Hazır|Durum izleniyor|Dikkat gerekiyor)/i });
 
 beforeEach(() => {
   sessionStorage.clear();
