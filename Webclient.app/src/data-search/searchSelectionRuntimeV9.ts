@@ -152,7 +152,7 @@ export class SearchSelectionRuntimeV9 {
       this.#activeKey = null;
       if (this.#dataset !== null) this.#stats.revisionResets += 1;
     } else {
-      for (const key of [...this.#selected]) {
+      for (const key of this.#selected) {
         if (!valid.has(key)) this.#selected.delete(key);
       }
       if (this.#activeKey && !valid.has(this.#activeKey)) this.#activeKey = null;
