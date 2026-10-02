@@ -203,7 +203,7 @@ describe('createWorkBudgetCoordinator', () => {
 
   it('expires stale active leases and admits queued work', async () => {
     let clock = 0;
-    const coordinator = createWorkBudgetCoordinator({ ...policy(), maxActive: 1 }, () => clock);
+    const coordinator = createWorkBudgetCoordinator({ ...policy(), maxActive: 1, maxQueueAgeMs: 1_000 }, () => clock);
     await coordinator.acquire({ key: 'stale' });
     const pending = coordinator.acquire({ key: 'next' });
     clock = 201;
