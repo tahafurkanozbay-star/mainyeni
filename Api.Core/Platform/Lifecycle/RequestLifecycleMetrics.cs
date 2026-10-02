@@ -13,7 +13,6 @@ namespace Api.Core.Platform.Lifecycle
     {
         public const string MeterName = "KentRehberi.Api.Lifecycle";
         public const string MeterVersion = "1.0.0";
-
         private readonly bool enabled;
         private readonly Meter meter;
         private readonly Counter<long> accepted;
@@ -80,9 +79,8 @@ namespace Api.Core.Platform.Lifecycle
         public void DrainStarted(long blockingInFlight)
         {
             if (!CanRecord()) return;
-            var count = Math.Max(0L, blockingInFlight);
             drainStarted.Add(1);
-            drainInitialInFlight.Record(count);
+            drainInitialInFlight.Record(Math.Max(0L, blockingInFlight));
         }
 
         public void DrainWaitCompleted(bool drained, TimeSpan elapsed)
@@ -109,7 +107,7 @@ namespace Api.Core.Platform.Lifecycle
         {
             switch (workload)
             {
-                case RequestWorkloadClass.Read: return "read";
+                case RequestWorkloadClass.InteractiveRead: return "read";
                 case RequestWorkloadClass.Mutation: return "mutation";
                 case RequestWorkloadClass.Bulk: return "bulk";
                 case RequestWorkloadClass.Health: return "health";
