@@ -216,7 +216,7 @@ const normalizePolicy = (input: SynonymRegistryPolicyV8 = {}): NormalizedSynonym
   ),
 });
 
-const normalizeId = (value: unknown): string => normalizeSearchToken(value)
+const normalizeId = (value: unknown): string => normalizeSearchText(value)
   .replace(/[^a-z0-9._:-]+/g, '-')
   .replace(/^-+|-+$/g, '')
   .slice(0, 120);
