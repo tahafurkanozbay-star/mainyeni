@@ -3,8 +3,9 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import {
@@ -15,19 +16,21 @@ import {
   createManagedWindowFocusLifecycle,
   type ManagedWindowFocusLifecycle,
 } from '../../Query/_Common/ManagedWindowFocus';
-import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import {
   ExperienceToolbar,
   type ExperienceToolbarItem,
 } from '../../Common/ExperienceToolbar';
 import MapManager from '../../../Store/Managers/MapManager';
 import {
-  createMeasurementController,
   MEASUREMENT_TOOLS,
-  type MeasurementController,
-  type MeasurementState,
   type MeasurementTool,
 } from '../../../gis-engine/measurementRuntime';
+import { runtimeDiagnostics } from '../../../platform/runtime/runtimeDiagnostics';
+import { MeasurementExperiencePanel } from './MeasurementExperiencePanel';
+import {
+  createMeasurementExperienceController,
+  type MeasurementExperienceController,
+} from './measurementExperienceController';
 import './MeasurementWidget.css';
 
 interface WindowManagerLike extends QueryWindowManagerLike {
@@ -49,33 +52,6 @@ export interface MeasurementWindowHandle {
   readonly OnClose: () => void;
 }
 
-const INITIAL_STATE: MeasurementState = {
-  status: 'idle',
-  activeTool: MEASUREMENT_TOOLS.NONE,
-  error: null,
-  createdAt: null,
-  clearedAt: null,
-  destroyedAt: null,
-};
-
-const statusText = (state: MeasurementState): string => {
-  if (state.error) return state.error.message;
-  if (state.status === 'loading') return 'Ölçüm aracı hazırlanıyor.';
-  if (state.status === 'destroyed') return 'Ölçüm aracı kapatıldı.';
-  if (state.activeTool === MEASUREMENT_TOOLS.AREA) {
-    return 'Alan ölçümü etkin. Harita üzerinde ölçmek istediğiniz alanı çizin.';
-  }
-  if (state.activeTool === MEASUREMENT_TOOLS.DISTANCE) {
-    return 'Mesafe ölçümü etkin. Harita üzerinde ölçmek istediğiniz hattı çizin.';
-  }
-  return 'Alan veya mesafe aracını seçerek ölçüme başlayın.';
-};
-
-const errorMessage = (error: unknown): string => {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  return 'Ölçüm aracı hazırlanırken beklenmeyen bir sorun oluştu.';
-};
-
 const ToolGlyph = ({ kind }: { readonly kind: 'area' | 'distance' | 'clear' }): ReactNode => {
   if (kind === 'area') {
     return <span className="measurement-widget__tool-glyph" aria-hidden="true">▱</span>;
@@ -91,12 +67,32 @@ export const MeasurementWidget = forwardRef<
   MeasurementWidgetProps
 >(({ id, windowManager }, ref): ReactNode => {
   const rootRef = useRef<HTMLElement>(null);
-  const controllerRef = useRef<MeasurementController | null>(null);
-  const unsubscribeRef = useRef<(() => boolean) | null>(null);
   const focusLifecycleRef = useRef<ManagedWindowFocusLifecycle | null>(null);
-  const mapViewRef = useRef<unknown>(null);
-  const [state, setState] = useState<MeasurementState>(INITIAL_STATE);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const controller = useMemo<MeasurementExperienceController>(() => createMeasurementExperienceController({
+    getView: () => MapManager.GetMapView?.() ?? null,
+    container: 'measurementDiv',
+    modelOptions: {
+      maxRetries: 3,
+      historyLimit: 12,
+      onObserverError(error) {
+        runtimeDiagnostics.captureError(error, {
+          source: 'experience.measurement.observer',
+        }, 'warn');
+      },
+    },
+    onDiagnostic(diagnostic) {
+      runtimeDiagnostics.record('experience.measurement.diagnostic', {
+        phase: diagnostic.phase,
+        code: diagnostic.code,
+        failureKind: diagnostic.failureKind,
+      });
+    },
+  }), []);
+  const snapshot = useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+    controller.getSnapshot,
+  );
 
   const getFocusLifecycle = useCallback((): ManagedWindowFocusLifecycle | null => {
     if (typeof document === 'undefined') return null;
@@ -104,73 +100,17 @@ export const MeasurementWidget = forwardRef<
     return focusLifecycleRef.current;
   }, []);
 
-  const ensureController = useCallback((): MeasurementController | null => {
-    const view = MapManager.GetMapView?.() ?? mapViewRef.current;
-    if (!view) {
-      setActionError('Harita görünümü hazır değil. Harita yüklendikten sonra tekrar deneyin.');
-      return null;
-    }
-
-    if (!controllerRef.current || controllerRef.current.destroyed) {
-      const controller = createMeasurementController({
-        view,
-        container: 'measurementDiv',
-        onDiagnostic: (diagnostic) => {
-          if (diagnostic.phase === 'load' || diagnostic.phase === 'tool') {
-            setActionError(diagnostic.message);
-          }
-        },
-      });
-      controllerRef.current = controller;
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = controller.subscribe((nextState) => {
-        setState(nextState);
-        if (!nextState.error) setActionError(null);
-      });
-    } else {
-      controllerRef.current.setView(view);
-      controllerRef.current.setContainer('measurementDiv');
-    }
-
-    return controllerRef.current;
-  }, []);
-
-  const initialize = useCallback(async (): Promise<void> => {
-    const view = MapManager.GetMapView?.() ?? null;
-    mapViewRef.current = view;
-    const controller = ensureController();
-    if (!controller) return;
-
-    try {
-      await controller.ensureWidget();
-      setActionError(null);
-    } catch (error) {
-      setActionError(errorMessage(error));
-    }
-  }, [ensureController]);
-
-  const selectTool = useCallback(async (tool: MeasurementTool): Promise<void> => {
-    const controller = ensureController();
-    if (!controller) return;
-
-    if (state.activeTool === tool) {
-      controller.clear();
-      setActionError(null);
-      return;
-    }
-
-    try {
-      await controller.setTool(tool);
-      setActionError(null);
-    } catch (error) {
-      setActionError(errorMessage(error));
-    }
-  }, [ensureController, state.activeTool]);
+  const selectTool = useCallback((tool: MeasurementTool): void => {
+    void controller.selectTool(tool);
+  }, [controller]);
 
   const clearMeasurement = useCallback((): void => {
-    controllerRef.current?.clear();
-    setActionError(null);
-  }, []);
+    controller.clear();
+  }, [controller]);
+
+  const retryMeasurement = useCallback((): void => {
+    void controller.retry();
+  }, [controller]);
 
   useImperativeHandle(ref, () => ({
     id,
@@ -184,58 +124,48 @@ export const MeasurementWidget = forwardRef<
         initialFocusSelector: '[data-roving-focus-id]',
         restorePolicy: 'if-focus-within',
       });
-      void initialize();
+      void controller.open();
     },
     OnClose: () => {
-      controllerRef.current?.clear();
+      controller.close();
       getFocusLifecycle()?.close();
     },
-  }), [getFocusLifecycle, id, initialize, windowManager]);
+  }), [controller, getFocusLifecycle, id, windowManager]);
 
   useEffect(() => {
     windowManager.RegisterWindow(ref);
-    mapViewRef.current = MapManager.GetMapView?.() ?? null;
+    controller.refreshView();
 
     return () => {
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = null;
-      controllerRef.current?.destroy();
-      controllerRef.current = null;
+      controller.dispose();
       focusLifecycleRef.current?.dispose();
       focusLifecycleRef.current = null;
     };
-  }, [ref, windowManager]);
+  }, [controller, ref, windowManager]);
 
-  const loading = state.status === 'loading';
-  const message = actionError ?? statusText(state);
-  const tone = actionError || state.error
-    ? 'danger'
-    : state.activeTool === MEASUREMENT_TOOLS.NONE
-      ? 'info'
-      : 'success';
-
+  const unavailable = snapshot.busy || !snapshot.viewReady || snapshot.phase === 'destroyed';
   const toolbarItems: readonly ExperienceToolbarItem[] = [
     {
       id: MEASUREMENT_TOOLS.AREA,
       label: 'Alan ölç',
       icon: <ToolGlyph kind="area" />,
-      pressed: state.activeTool === MEASUREMENT_TOOLS.AREA,
-      disabled: loading,
-      onActivate: () => void selectTool(MEASUREMENT_TOOLS.AREA),
+      pressed: snapshot.activeTool === MEASUREMENT_TOOLS.AREA,
+      disabled: unavailable,
+      onActivate: () => selectTool(MEASUREMENT_TOOLS.AREA),
     },
     {
       id: MEASUREMENT_TOOLS.DISTANCE,
       label: 'Mesafe ölç',
       icon: <ToolGlyph kind="distance" />,
-      pressed: state.activeTool === MEASUREMENT_TOOLS.DISTANCE,
-      disabled: loading,
-      onActivate: () => void selectTool(MEASUREMENT_TOOLS.DISTANCE),
+      pressed: snapshot.activeTool === MEASUREMENT_TOOLS.DISTANCE,
+      disabled: unavailable,
+      onActivate: () => selectTool(MEASUREMENT_TOOLS.DISTANCE),
     },
     {
       id: 'clear',
       label: 'Ölçümü temizle',
       icon: <ToolGlyph kind="clear" />,
-      disabled: loading || state.activeTool === MEASUREMENT_TOOLS.NONE,
+      disabled: unavailable || !snapshot.canClear,
       onActivate: clearMeasurement,
     },
   ];
@@ -246,17 +176,55 @@ export const MeasurementWidget = forwardRef<
       className="common-query-window common-query-window-right measurement-widget"
       style={{ visibility: windowManager.IsVisible(id) ? 'visible' : 'hidden' }}
       aria-labelledby={`${id}-title`}
-      aria-busy={loading || undefined}
+      aria-busy={snapshot.busy || undefined}
+      data-measurement-phase={snapshot.phase}
+      data-measurement-tool={snapshot.activeTool || 'none'}
+      onKeyDownCapture={() => controller.recordInputModality('keyboard')}
+      onPointerDownCapture={() => controller.recordInputModality('pointer')}
     >
       <div className="common-query-window-header">
-        <img className="common-query-window-header-icon" src="images/icons/toolbar/olcumaraci.png" alt="" aria-hidden="true" />
+        <img
+          className="common-query-window-header-icon"
+          src="images/icons/toolbar/olcumaraci.png"
+          alt=""
+          aria-hidden="true"
+        />
         <span id={`${id}-title`}>Ölçüm Araçları</span>
-        <CommonQueryWindowTools windowManager={windowManager} windowId={id} showNearbySearch={false} showMapSelect={false} setQueryField={() => undefined} />
+        <CommonQueryWindowTools
+          windowManager={windowManager}
+          windowId={id}
+          showNearbySearch={false}
+          showMapSelect={false}
+          setQueryField={() => undefined}
+        />
       </div>
+
       <div className="measurement-widget__body">
-        <ExperienceToolbar label="Ölçüm araçları" items={toolbarItems} orientation="horizontal" />
-        <ExperienceStatus tone={tone} live={actionError || state.error ? 'assertive' : 'polite'}>{message}</ExperienceStatus>
-        <div id="measurementDiv" className="measurement-widget__canvas" aria-label="ArcGIS ölçüm denetimi" />
+        <p className="measurement-widget__intro">
+          Harita üzerinde alan ve mesafe ölçün. Araç seçimi, yükleme ve hata durumu klavye ve ekran okuyucu kullanıcılarına canlı olarak bildirilir.
+        </p>
+
+        <ExperienceToolbar
+          label="Ölçüm araçları"
+          items={toolbarItems}
+          orientation="horizontal"
+        />
+
+        <MeasurementExperiencePanel
+          snapshot={snapshot}
+          onRetry={retryMeasurement}
+        />
+
+        <div
+          id="measurementDiv"
+          className="measurement-widget__canvas"
+          aria-label="ArcGIS ölçüm denetimi"
+          aria-busy={snapshot.busy || undefined}
+          aria-describedby="measurement-widget-canvas-help"
+        />
+        <p id="measurement-widget-canvas-help" className="measurement-widget__canvas-help">
+          Ölçüm aracını seçtikten sonra harita üzerinde gerekli noktaları işaretleyin. Sonuçlar ArcGIS ölçüm denetiminde gösterilir.
+        </p>
       </div>
     </section>
   );
