@@ -208,7 +208,7 @@ export class WorkspaceAccessibilityRuntime {
 
   private publish(): void {
     this.snapshot = freezeSnapshot(this.accessibility, this.liveRegions);
-    for (const listener of [...this.listeners]) this.safe(listener);
+    for (const listener of this.listeners) this.safe(listener);
   }
 
   private safe(operation: () => void): void {
