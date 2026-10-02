@@ -59,7 +59,7 @@ export type SearchRecoverySkipReasonV8 =
 
 export interface SearchRecoveryPolicyV8 {
   readonly minimumPrimaryResults?: number;
-  readonly maximumAttempts?: number;
+  readonly maxAttempts?: number;
   readonly maximumDatasets?: number;
   readonly enableCorrection?: boolean;
   readonly enableSynonyms?: boolean;
@@ -140,7 +140,7 @@ export interface SearchRecoverySnapshotV8 {
 
 interface NormalizedRecoveryPolicyV8 {
   readonly minimumPrimaryResults: number;
-  readonly maximumAttempts: number;
+  readonly maxAttempts: number;
   readonly maximumDatasets: number;
   readonly enableCorrection: boolean;
   readonly enableSynonyms: boolean;
@@ -180,7 +180,7 @@ const normalizePolicy = (input: SearchRecoveryPolicyV8 = {}): NormalizedRecovery
       max: 1_000,
       fallback: 1,
     }),
-    maximumAttempts: normalizeInteger(input.maximumAttempts, {
+    maxAttempts: normalizeInteger(input.maxAttempts, {
       min: 1,
       max: 3,
       fallback: 3,
@@ -189,7 +189,7 @@ const normalizePolicy = (input: SearchRecoveryPolicyV8 = {}): NormalizedRecovery
     enableCorrection: input.enableCorrection !== false,
     enableSynonyms: input.enableSynonyms !== false,
     enableDefaultCivicSynonyms: input.enableDefaultCivicSynonyms !== false,
-    allowSynonymAfterCorrection: input.allowSynonymAfterCorrection !== false,
+    allowSynonymAfterCorrection: input.allowSynonymAfterCorrection === true,
     registry: Object.freeze({
       ...input.registry,
       maximumDatasets,
@@ -445,7 +445,7 @@ export class SearchRecoveryRuntimeV8 {
     let attemptsUsed = 1;
     let attemptedCorrection = false;
 
-    if (this.#policy.enableCorrection && correction.changed && attemptsUsed < this.#policy.maximumAttempts) {
+    if (this.#policy.enableCorrection && correction.changed && attemptsUsed < this.#policy.maxAttempts) {
       throwIfAborted(request.signal);
       attemptedCorrection = true;
       this.#stats.recoveryAttempts += 1;
@@ -467,10 +467,11 @@ export class SearchRecoveryRuntimeV8 {
     }
 
     const synonymVariant = this.#policy.enableSynonyms
+      && (this.#policy.enableCorrection || !correction.changed)
       ? safeSynonymVariant(correction)
       : null;
     const synonymAllowed = synonymVariant
-      && attemptsUsed < this.#policy.maximumAttempts
+      && attemptsUsed < this.#policy.maxAttempts
       && (!attemptedCorrection || this.#policy.allowSynonymAfterCorrection);
     if (synonymAllowed) {
       throwIfAborted(request.signal);
@@ -492,7 +493,7 @@ export class SearchRecoveryRuntimeV8 {
     if (best === primary) {
       if (!correction.changed && grammarProtected(correction)) terminalSkip = 'grammar-protected';
       else if (!correction.changed) terminalSkip = 'correction-unchanged';
-      else if (attemptsUsed >= this.#policy.maximumAttempts) terminalSkip = 'attempt-budget';
+      else if (attemptsUsed >= this.#policy.maxAttempts) terminalSkip = 'attempt-budget';
     }
     const diagnostics = finalDiagnostics(
       entry.dataset,
