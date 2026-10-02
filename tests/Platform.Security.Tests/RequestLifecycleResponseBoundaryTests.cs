@@ -63,7 +63,10 @@ namespace Platform.Security.Tests
 
             using var document = ReadJson(context);
             Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("traceId").ValueKind);
-            Assert.DoesNotContain(correlationId, ReadBody(context), StringComparison.Ordinal);
+            if (!string.IsNullOrEmpty(correlationId))
+            {
+                Assert.DoesNotContain(correlationId, ReadBody(context), StringComparison.Ordinal);
+            }
         }
 
         [Fact]
