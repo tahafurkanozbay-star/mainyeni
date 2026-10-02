@@ -1,78 +1,217 @@
 .measurement-widget {
-  max-inline-size: min(30rem, calc(100vw - 1rem));
+  --measurement-surface-gap: 0.875rem;
+  max-inline-size: min(32rem, calc(100vw - 1rem));
+  min-inline-size: min(20rem, calc(100vw - 1rem));
+  contain: layout style;
 }
 
-.measurement-widget-body {
+.measurement-widget__body {
   display: grid;
-  gap: 0.875rem;
+  gap: var(--measurement-surface-gap);
   align-content: start;
   min-inline-size: 0;
-  padding-block-end: 1rem;
+  padding: 0.75rem 0.75rem 1rem;
 }
 
-.measurement-widget-toolbar {
+.measurement-widget__intro {
+  max-inline-size: 62ch;
+  margin: 0;
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.measurement-widget .experience-toolbar {
   inline-size: 100%;
   padding: 0.25rem;
-}
-
-.measurement-widget-toolbar .experience-toolbar__button {
-  flex: 1 1 7rem;
-  min-block-size: 3rem;
-}
-
-.measurement-widget-toolbar .experience-toolbar__icon {
-  font-size: 1.15rem;
-}
-
-.measurement-widget-status {
-  margin-inline: 0.25rem;
-}
-
-.measurement-widget-result {
-  min-inline-size: 0;
-  min-block-size: 3rem;
-  overflow-wrap: anywhere;
+  border: 1px solid var(--exp-border, #d7dde6);
   border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 96%, var(--exp-text, #172033));
 }
 
-.measurement-widget-result:empty {
-  display: none;
+.measurement-widget .experience-toolbar__button {
+  flex: 1 1 7rem;
+  min-block-size: 2.75rem;
+  border-radius: 0.625rem;
+  touch-action: manipulation;
 }
 
-.measurement-widget-result .esri-widget {
+.measurement-widget .experience-toolbar__button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 70%, white);
+  outline-offset: 2px;
+}
+
+.measurement-widget .experience-toolbar__button[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--exp-accent, #0b6fcb) 38%, transparent);
+}
+
+.measurement-widget__tool-glyph {
+  display: inline-grid;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  place-items: center;
+  font-size: 1.08rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.measurement-widget__canvas {
+  position: relative;
+  min-inline-size: 0;
+  min-block-size: 3.5rem;
+  overflow: clip;
+  border: 1px solid var(--exp-border, #d7dde6);
+  border-radius: 0.875rem;
+  background: var(--exp-surface, #fff);
+  overflow-wrap: anywhere;
+}
+
+.measurement-widget__canvas:empty {
+  min-block-size: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.measurement-widget__canvas:not(:empty) {
+  box-shadow: 0 1px 2px rgb(16 24 40 / 5%);
+}
+
+.measurement-widget__canvas .esri-widget {
+  max-inline-size: 100%;
+  border: 0;
+  box-shadow: none;
+}
+
+.measurement-widget__canvas .esri-measurement {
+  inline-size: 100%;
   max-inline-size: 100%;
 }
 
-.measurement-widget-result .esri-measurement {
-  inline-size: 100%;
+.measurement-widget__canvas .esri-measurement__tool-button {
+  min-block-size: 2.75rem;
+  min-inline-size: 2.75rem;
+}
+
+.measurement-widget__canvas .esri-button {
+  min-block-size: 2.75rem;
+  touch-action: manipulation;
+}
+
+.measurement-widget__canvas :is(button, [role='button'], input, select):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 72%, white);
+  outline-offset: 2px;
+}
+
+.measurement-widget__canvas-help {
+  margin: -0.25rem 0 0;
+  color: var(--exp-text-muted, #667085);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.measurement-widget[data-measurement-phase='loading'] .measurement-widget__canvas {
+  cursor: progress;
+}
+
+.measurement-widget[data-measurement-phase='error'] .measurement-widget__canvas {
+  opacity: 0.82;
+}
+
+.measurement-widget[data-measurement-tool='area'] .measurement-widget__canvas,
+.measurement-widget[data-measurement-tool='distance'] .measurement-widget__canvas {
+  border-color: color-mix(in srgb, var(--exp-accent, #0b6fcb) 38%, var(--exp-border, #d7dde6));
 }
 
 @media (max-width: 640px) {
   .measurement-widget {
+    --measurement-surface-gap: 0.75rem;
+    inline-size: 100%;
     max-inline-size: 100%;
+    min-inline-size: 0;
   }
 
-  .measurement-widget-toolbar {
+  .measurement-widget__body {
+    padding-inline: max(0.625rem, env(safe-area-inset-left)) max(0.625rem, env(safe-area-inset-right));
+    padding-block-end: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .measurement-widget .experience-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .measurement-widget-toolbar .experience-toolbar__button {
+  .measurement-widget .experience-toolbar__button {
     inline-size: 100%;
-    min-block-size: 3.25rem;
+    min-block-size: 3rem;
+  }
+
+  .measurement-widget__canvas {
+    border-radius: 0.75rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .measurement-widget__body {
+    padding-inline: 0.5rem;
+  }
+
+  .measurement-widget__intro,
+  .measurement-widget__canvas-help {
+    font-size: 0.72rem;
+  }
+}
+
+@media (pointer: coarse) {
+  .measurement-widget .experience-toolbar__button,
+  .measurement-widget__canvas .esri-measurement__tool-button,
+  .measurement-widget__canvas .esri-button {
+    min-block-size: 3rem;
+    min-inline-size: 3rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .measurement-widget,
   .measurement-widget *,
   .measurement-widget *::before,
   .measurement-widget *::after {
     scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
 @media (forced-colors: active) {
-  .measurement-widget-result .esri-widget {
-    border: 1px solid CanvasText;
+  .measurement-widget .experience-toolbar,
+  .measurement-widget__canvas {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .measurement-widget .experience-toolbar__button[aria-pressed='true'] {
+    border-color: Highlight;
+    color: HighlightText;
+    background: Highlight;
+    box-shadow: none;
+  }
+
+  .measurement-widget .experience-toolbar__button:focus-visible,
+  .measurement-widget__canvas :is(button, [role='button'], input, select):focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .measurement-widget .experience-toolbar,
+  .measurement-widget__canvas {
+    border-width: 2px;
+  }
+
+  .measurement-widget__intro,
+  .measurement-widget__canvas-help {
+    color: var(--exp-text, #172033);
   }
 }
