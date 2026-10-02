@@ -121,6 +121,7 @@ export class WorkspaceFocusRecoveryRuntime {
   focusZone(zone: WorkspaceFocusZone, modality: WorkspaceInputModality = 'keyboard'): WorkspaceFocusExecutionResult {
     const target = workspaceFocusTargetForZone(zone);
     if (!target) return frozenResult(false, zone, null, 'target-missing');
+    if (this.disposed) return frozenResult(false, zone, target.selector, 'runtime-disposed');
     return this.focusTarget(target, modality === 'keyboard');
   }
 
