@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Store from '../../Store/Store';
 import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
@@ -19,6 +19,7 @@ import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
+import { MapWorkspaceShellChrome } from './MapWorkspaceShellChrome';
 import { MapWorkspaceShortcutHelpLauncher } from './MapWorkspaceShortcutHelp';
 import { handleMapWorkspaceKeyDown } from './mapWorkspaceShortcuts';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
@@ -86,6 +87,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const accessibilityModel = accessibilityModelRef.current;
   const accessibilitySnapshot = useSyncExternalStore(accessibilityModel.subscribe, accessibilityModel.getSnapshot, accessibilityModel.getSnapshot);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
+  const [mapGeneration, setMapGeneration] = useState(0);
   const sidebarRef = useRef<unknown>(null);
   const basemapWidgetRef = useRef<ManagedWindowHandle | null>(null);
   const bookmarkWidgetRef = useRef<ManagedWindowHandle | null>(null);
@@ -95,6 +97,11 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const measurementWidgetRef = useRef<unknown>(null);
   const sketchWidgetRef = useRef<ManagedWindowHandle | null>(null);
   const streetViewWidgetRef = useRef<ManagedWindowHandle | null>(null);
+
+  const retryMapInitialization = useCallback((): void => {
+    setMapView(null);
+    setMapGeneration((generation) => generation + 1);
+  }, []);
 
   useEffect(() => {
     const onWorkspaceKeyDown = (event: KeyboardEvent): void => {
@@ -174,13 +181,26 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
     };
-  }, [accessibilityModel, windowManager]);
+  }, [accessibilityModel, mapGeneration, windowManager]);
 
   useEffect(() => () => accessibilityModel.dispose(), [accessibilityModel]);
 
   return (
-    <div className="esri-map" id="esri-map-container" ref={mapDiv} tabIndex={-1} aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-workspace-phase={accessibilitySnapshot.phase}>
-      <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
+    <div
+      className="esri-map"
+      id="esri-map-container"
+      ref={mapDiv}
+      tabIndex={-1}
+      aria-label="Kent Rehberi ana harita çalışma alanı"
+      aria-busy={accessibilitySnapshot.isBusy}
+      data-workspace-phase={accessibilitySnapshot.phase}
+      data-map-generation={mapGeneration}
+    >
+      <MapWorkspaceShellChrome
+        phase={accessibilitySnapshot.phase}
+        errorMessage={accessibilitySnapshot.errorMessage}
+        onRetry={retryMapInitialization}
+      />
       {mapView && <>
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
