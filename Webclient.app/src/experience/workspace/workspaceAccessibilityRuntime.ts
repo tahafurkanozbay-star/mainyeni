@@ -31,7 +31,20 @@ export interface WorkspaceAccessibilityRuntimeOptions {
   readonly onError?: (error: unknown) => void;
 }
 
+export interface WorkspaceAccessibilityRuntimeDiagnostics {
+  readonly operationFailures: number;
+  readonly reporterFailures: number;
+  readonly rejectedListeners: number;
+  readonly activeListeners: number;
+  readonly mapBindings: number;
+  readonly waitingForMap: boolean;
+  readonly lastFailureKind: string | null;
+  readonly started: boolean;
+}
+
 type Listener = () => void;
+
+const MAX_LISTENERS = 64;
 
 const FOCUS_ZONE_SELECTORS: readonly Readonly<{ zone: WorkspaceFocusZone; selector: string }>[] = Object.freeze([
   Object.freeze({ zone: 'dialog', selector: '[role="dialog"],[aria-modal="true"]' }),
@@ -57,6 +70,12 @@ const zoneForTarget = (target: EventTarget | null): WorkspaceFocusZone => {
   return 'unknown';
 };
 
+const failureKind = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  return typeof error;
+};
+
 const freezeSnapshot = (
   accessibility: WorkspaceAccessibilitySnapshot,
   liveRegions: WorkspaceLiveRegionState,
@@ -80,6 +99,13 @@ export class WorkspaceAccessibilityRuntime {
   private reducedMotionQuery: MediaQueryList | null = null;
   private forcedColorsQuery: MediaQueryList | null = null;
   private mapObserver: MutationObserver | null = null;
+  private rootObserver: MutationObserver | null = null;
+  private observedMap: HTMLElement | null = null;
+  private operationFailures = 0;
+  private reporterFailures = 0;
+  private rejectedListeners = 0;
+  private mapBindings = 0;
+  private lastFailureKind: string | null = null;
 
   constructor(options: WorkspaceAccessibilityRuntimeOptions = {}) {
     this.doc = options.document ?? (typeof document === 'undefined' ? undefined : document);
@@ -90,7 +116,23 @@ export class WorkspaceAccessibilityRuntime {
 
   readonly getSnapshot = (): WorkspaceAccessibilityRuntimeSnapshot => this.snapshot;
 
+  readonly getDiagnostics = (): WorkspaceAccessibilityRuntimeDiagnostics => Object.freeze({
+    operationFailures: this.operationFailures,
+    reporterFailures: this.reporterFailures,
+    rejectedListeners: this.rejectedListeners,
+    activeListeners: this.listeners.size,
+    mapBindings: this.mapBindings,
+    waitingForMap: this.started && this.observedMap === null,
+    lastFailureKind: this.lastFailureKind,
+    started: this.started,
+  });
+
   readonly subscribe = (listener: Listener): (() => void) => {
+    if (this.listeners.has(listener)) return () => this.listeners.delete(listener);
+    if (this.listeners.size >= MAX_LISTENERS) {
+      this.rejectedListeners += 1;
+      return () => undefined;
+    }
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
@@ -138,8 +180,11 @@ export class WorkspaceAccessibilityRuntime {
       this.reducedMotionQuery?.removeEventListener?.('change', this.onMediaChange);
       this.forcedColorsQuery?.removeEventListener?.('change', this.onMediaChange);
       this.mapObserver?.disconnect();
+      this.rootObserver?.disconnect();
     });
     this.mapObserver = null;
+    this.rootObserver = null;
+    this.observedMap = null;
     this.reducedMotionQuery = null;
     this.forcedColorsQuery = null;
     this.listeners.clear();
@@ -171,20 +216,54 @@ export class WorkspaceAccessibilityRuntime {
     }));
   }
 
-  private observeMapBusy(): void {
-    const doc = this.doc;
-    if (!doc) return;
-    const map = doc.getElementById('esri-map-container');
-    if (!(map instanceof HTMLElement)) return;
-    const sync = (): void => {
-      const phase = map.dataset.workspacePhase;
-      this.setMapBusy(phase === 'booting' || phase === 'updating');
-    };
-    sync();
+  private syncObservedMap(): void {
+    const map = this.observedMap;
+    if (!map || !map.isConnected) {
+      if (map && !map.isConnected) {
+        this.mapObserver?.disconnect();
+        this.mapObserver = null;
+        this.observedMap = null;
+        this.observeMapBusy();
+      }
+      return;
+    }
+    const phase = map.dataset.workspacePhase;
+    this.setMapBusy(phase === 'booting' || phase === 'updating');
+  }
+
+  private bindMap(map: HTMLElement): void {
+    if (this.observedMap === map) {
+      this.syncObservedMap();
+      return;
+    }
+    this.mapObserver?.disconnect();
+    this.observedMap = map;
+    this.mapBindings += 1;
+    this.syncObservedMap();
     if (typeof MutationObserver === 'undefined') return;
     this.safe(() => {
-      this.mapObserver = new MutationObserver(sync);
+      this.mapObserver = new MutationObserver(() => this.syncObservedMap());
       this.mapObserver.observe(map, { attributes: true, attributeFilter: ['data-workspace-phase'] });
+    });
+    this.rootObserver?.disconnect();
+    this.rootObserver = null;
+  }
+
+  private observeMapBusy(): void {
+    const doc = this.doc;
+    if (!doc || !this.started) return;
+    const map = doc.getElementById('esri-map-container');
+    if (map instanceof HTMLElement) {
+      this.bindMap(map);
+      return;
+    }
+    if (typeof MutationObserver === 'undefined' || this.rootObserver || !doc.body) return;
+    this.safe(() => {
+      this.rootObserver = new MutationObserver(() => {
+        const candidate = doc.getElementById('esri-map-container');
+        if (candidate instanceof HTMLElement) this.bindMap(candidate);
+      });
+      this.rootObserver.observe(doc.body, { childList: true, subtree: true });
     });
   }
 
@@ -208,8 +287,15 @@ export class WorkspaceAccessibilityRuntime {
   }
 
   private reportError(error: unknown): void {
+    this.operationFailures += 1;
+    this.lastFailureKind = failureKind(error);
     if (!this.onError) return;
-    this.onError(error);
+    try {
+      this.onError(error);
+    } catch (reporterError) {
+      this.reporterFailures += 1;
+      this.lastFailureKind = `reporter:${failureKind(reporterError)}`;
+    }
   }
 
   private safe(operation: () => void): void {
