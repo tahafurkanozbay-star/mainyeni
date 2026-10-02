@@ -99,6 +99,7 @@ export class WorkspaceFocusRecoveryRuntime {
   private readonly focusRingAttribute: string;
   private cleanupTarget: HTMLElement | null = null;
   private cleanupTabIndex: string | null = null;
+  private focusRingTarget: HTMLElement | null = null;
   private disposed = false;
 
   constructor(options: WorkspaceFocusRecoveryRuntimeOptions = {}) {
@@ -162,6 +163,7 @@ export class WorkspaceFocusRecoveryRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.cleanupFocusRing();
     this.cleanupTemporaryTabIndex();
   }
 
@@ -188,6 +190,7 @@ export class WorkspaceFocusRecoveryRuntime {
     const descendant = naturallyFocusable(root) ? null : findFocusableDescendant(root);
     const focusTarget = descendant ?? root;
     let temporaryTabIndex = false;
+    this.cleanupFocusRing();
     this.cleanupTemporaryTabIndex();
 
     if (!naturallyFocusable(focusTarget)) {
@@ -198,8 +201,13 @@ export class WorkspaceFocusRecoveryRuntime {
       temporaryTabIndex = true;
     }
 
-    if (showFocusRing) focusTarget.setAttribute(this.focusRingAttribute, 'true');
-    else focusTarget.removeAttribute(this.focusRingAttribute);
+    if (showFocusRing) {
+      this.focusRingTarget = focusTarget;
+      focusTarget.setAttribute(this.focusRingAttribute, 'true');
+      focusTarget.addEventListener('blur', this.onFocusRingBlur, { once: true });
+    } else {
+      focusTarget.removeAttribute(this.focusRingAttribute);
+    }
 
     try {
       focusTarget.focus({ preventScroll: target.preventScroll });
@@ -208,16 +216,31 @@ export class WorkspaceFocusRecoveryRuntime {
         if (fallbackDescendant) fallbackDescendant.focus({ preventScroll: target.preventScroll });
       }
       const focused = doc.activeElement === focusTarget || (root.contains(doc.activeElement) && doc.activeElement !== null);
+      if (!focused) {
+        this.cleanupFocusRing();
+        this.cleanupTemporaryTabIndex();
+      }
       return focused
         ? frozenResult(true, target.zone, selector, 'focused', usedFallback, temporaryTabIndex)
         : frozenResult(false, target.zone, selector, 'focus-failed', usedFallback, temporaryTabIndex);
     } catch (error) {
+      this.cleanupFocusRing();
+      this.cleanupTemporaryTabIndex();
       this.reportError(error);
       return frozenResult(false, target.zone, selector, 'focus-failed', usedFallback, temporaryTabIndex);
     }
   }
 
   private readonly onTemporaryTargetBlur = (): void => this.cleanupTemporaryTabIndex();
+  private readonly onFocusRingBlur = (): void => this.cleanupFocusRing();
+
+  private cleanupFocusRing(): void {
+    const target = this.focusRingTarget;
+    if (!target) return;
+    target.removeEventListener('blur', this.onFocusRingBlur);
+    target.removeAttribute(this.focusRingAttribute);
+    this.focusRingTarget = null;
+  }
 
   private cleanupTemporaryTabIndex(): void {
     const target = this.cleanupTarget;
