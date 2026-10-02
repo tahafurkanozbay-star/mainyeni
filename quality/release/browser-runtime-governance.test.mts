@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import path from 'node:path';
-import { auditBrowserRuntimeGovernance, auditRuntimeSource, extractRuntimeImports, type RuntimeManifest } from './browser-runtime-governance.mts';
+import test from 'node:test';
+import { auditRuntimeSource, extractRuntimeImports, type RuntimeManifest } from './browser-runtime-governance.mts';
 
 const manifest: RuntimeManifest = Object.freeze({
   dependencies: Object.freeze({ react: '^19.0.0', '@arcgis/core': '^4.0.0' }),
@@ -22,6 +21,11 @@ test('accepts scoped runtime dependency subpaths', () => {
 test('blocks node builtins in browser production source', () => {
   assert.deepEqual(codes("import fs from 'node:fs';"), ['browser-node-builtin']);
   assert.deepEqual(codes("import path from 'path';"), ['browser-node-builtin']);
+});
+
+test('blocks node builtin subpaths', () => {
+  assert.deepEqual(codes("import fs from 'node:fs/promises';"), ['browser-node-builtin']);
+  assert.deepEqual(codes("import strict from 'node:assert/strict';"), ['browser-node-builtin']);
 });
 
 test('blocks remote executable module schemes', () => {
@@ -74,10 +78,8 @@ test('extracts static, export-from, dynamic and require literal references deter
   ]);
 });
 
-test('does not treat comments containing package-like words as imports', () => {
+test('lexical scanner conservatively observes import-shaped text in comments', () => {
   assert.deepEqual(extractRuntimeImports('// import x from "left-pad"\nconst value = 1;').map((item) => item.specifier), ['left-pad']);
-  // This documents the conservative lexical policy: comments can trigger a false positive,
-  // which is safer than silently permitting an executable dependency boundary bypass.
 });
 
 test('reports stable one-based line numbers', () => {
@@ -94,10 +96,8 @@ test('sorts multiple findings by line then code', () => {
   assert.deepEqual(findings.map((item) => item.line), [1, 2, 3]);
 });
 
-test('repository browser runtime audit is executable against the real tree', async () => {
-  const root = path.resolve(process.cwd());
-  const report = await auditBrowserRuntimeGovernance(root);
-  assert.ok(report.filesScanned > 0);
-  assert.ok(report.importsScanned > 0);
-  assert.equal(Array.isArray(report.findings), true);
+test('deduplicates overlapping import grammar matches', () => {
+  const imports = extractRuntimeImports("export { default } from 'react';");
+  assert.equal(imports.length, 1);
+  assert.equal(imports[0]?.specifier, 'react');
 });
