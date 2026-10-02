@@ -299,9 +299,10 @@ describe('MeasurementWidget', () => {
   it('preserves WindowManager visibility without unmounting the session state', () => {
     const { container } = renderWidget({ visible: false });
     const section = container.querySelector('section.measurement-widget');
+    const hiddenToolbar = container.querySelector('[role="toolbar"]');
 
     expect(section).toHaveStyle({ visibility: 'hidden' });
-    expect(screen.getByRole('toolbar', { name: 'Ölçüm araçları', hidden: true })).toBeInTheDocument();
+    expect(hiddenToolbar).toHaveAttribute('aria-label', 'Ölçüm araçları');
   });
 
   it('renders the modernized toolbar with area, distance and clear actions', () => {
