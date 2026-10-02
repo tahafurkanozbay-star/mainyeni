@@ -10,6 +10,7 @@ import {
   createMapWorkspaceShellController,
   type MapWorkspaceShellController,
 } from './mapWorkspaceShellController';
+import { buildMapWorkspaceRegionGuideEntries } from './mapWorkspaceRegionGuide';
 import {
   createMapWorkspaceShellModel,
   type MapWorkspaceShellModel,
@@ -60,6 +61,7 @@ interface RegionMenuProps {
 const RegionMenu = ({ model, controller }: RegionMenuProps): ReactNode => {
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const entries = buildMapWorkspaceRegionGuideEntries(snapshot.regions);
 
   const moveToRegion = (id: MapWorkspaceShellRegionId): void => {
     if (!controller.focusRegion(id)) return;
@@ -83,19 +85,22 @@ const RegionMenu = ({ model, controller }: RegionMenuProps): ReactNode => {
           Klavyede <kbd>F6</kbd> ile ileri, <kbd>Shift</kbd>+<kbd>F6</kbd> ile geri dolaşabilirsiniz.
         </p>
         <div className="map-workspace-shell__region-grid">
-          {snapshot.regions.map((region) => (
+          {entries.map((region) => (
             <button
               key={region.id}
               type="button"
               className="map-workspace-shell__region-button"
               disabled={!region.available}
               aria-pressed={region.active || undefined}
+              aria-label={`${region.shortLabel}. ${region.stateLabel}. ${region.purpose}`}
               data-region={region.id}
               onClick={() => moveToRegion(region.id)}
             >
               <span className="map-workspace-shell__region-dot" aria-hidden="true" />
-              <span>{region.shortLabel}</span>
-              <small>{region.available ? 'Kullanılabilir' : 'Şu anda kapalı'}</small>
+              <span className="map-workspace-shell__region-name">{region.shortLabel}</span>
+              <small className="map-workspace-shell__region-purpose">{region.purpose}</small>
+              <span className="map-workspace-shell__region-state">{region.stateLabel}</span>
+              <span className="map-workspace-shell__region-keyboard">{region.keyboardHint}</span>
             </button>
           ))}
         </div>
