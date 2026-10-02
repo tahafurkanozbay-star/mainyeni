@@ -8,6 +8,7 @@ import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
+import './Components/App/MapWorkspaceShellPlacement.css';
 import { MapComponent } from './Components/App/MapComponent';
 import { ExperienceMapModeGovernedOverlay } from './Components/App/ExperienceMapModeGovernedOverlay';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
