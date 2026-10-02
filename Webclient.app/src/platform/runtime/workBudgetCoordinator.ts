@@ -219,7 +219,9 @@ export const createWorkBudgetCoordinator = (
 
   const expire = (): void => {
     const timestamp = now();
-    for (const entry of [...queue]) {
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      const entry = queue[index];
+      if (!entry) continue;
       const deadlineExpired = entry.request.deadlineMs !== undefined && timestamp > entry.request.deadlineMs;
       const ageExpired = timestamp - entry.enqueuedAt > policy.maxQueueAgeMs;
       if (!deadlineExpired && !ageExpired) continue;
@@ -227,7 +229,7 @@ export const createWorkBudgetCoordinator = (
       expiredQueued += 1;
       entry.reject(new WorkBudgetRejectedError('Runtime work request expired while queued.'));
     }
-    for (const entry of [...active.values()]) {
+    for (const entry of active.values()) {
       if (timestamp <= entry.expiresAt) continue;
       if (!active.delete(entry.id)) continue;
       entry.released = true;
@@ -336,8 +338,9 @@ export const createWorkBudgetCoordinator = (
 
   const cancelQueued = (predicate: (request: Readonly<WorkBudgetRequest>) => boolean = () => true): number => {
     let count = 0;
-    for (const entry of [...queue]) {
-      if (!predicate(entry.request)) continue;
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      const entry = queue[index];
+      if (!entry || !predicate(entry.request)) continue;
       if (!removeQueued(entry)) continue;
       cancelled += 1;
       count += 1;
@@ -401,7 +404,11 @@ export const createWorkBudgetCoordinator = (
   const dispose = (): void => {
     if (disposed) return;
     disposed = true;
-    for (const entry of [...queue]) rejectEntry(entry, new WorkBudgetCancelledError('Work budget coordinator disposed.'));
+    while (queue.length > 0) {
+      const entry = queue[queue.length - 1];
+      if (!entry) break;
+      rejectEntry(entry, new WorkBudgetCancelledError('Work budget coordinator disposed.'));
+    }
     for (const entry of active.values()) entry.released = true;
     active.clear();
     knownScopes.clear();
