@@ -42,6 +42,7 @@ const DEFAULT_MARGIN = 14;
 const DEFAULT_COMPACT_BREAKPOINT = 719;
 const MAX_DIMENSION = 20_000;
 const MAX_OCCLUDERS = 32;
+const ANCHORS = Object.freeze(['bottom-left', 'bottom-center', 'bottom-right'] as const);
 
 const finite = (value: number, fallback = 0): number => Number.isFinite(value) ? value : fallback;
 const clampDimension = (value: number): number => Math.max(0, Math.min(MAX_DIMENSION, finite(value)));
@@ -110,9 +111,8 @@ export const evaluateMapWorkspacePlacement = (
   const safeBottom = Math.max(0, Math.min(256, finite(input.safeBottom ?? 0)));
   const viewportBounds = viewportRect(viewport);
   const occluders = input.occluders.slice(0, MAX_OCCLUDERS).map(normalizeMapWorkspaceRect);
-  const anchors: readonly MapWorkspaceShellAnchor[] = ['bottom-left', 'bottom-center', 'bottom-right'];
 
-  return Object.freeze(anchors.map((anchor) => {
+  return Object.freeze(ANCHORS.map((anchor) => {
     const rect = candidateRect(anchor, viewport, overlay, margin, safeBottom);
     const overlapArea = occluders.reduce((sum, occluder) => sum + mapWorkspaceIntersectionArea(rect, occluder), 0);
     const outside = overflowArea(rect, viewportBounds);
@@ -125,13 +125,14 @@ export const evaluateMapWorkspacePlacement = (
 export const chooseMapWorkspaceShellPlacement = (input: MapWorkspacePlacementInput): MapWorkspacePlacementResult => {
   const compactBreakpoint = Math.max(320, Math.min(1_200, finite(input.compactBreakpoint ?? DEFAULT_COMPACT_BREAKPOINT)));
   const candidates = evaluateMapWorkspacePlacement(input);
+  const fallback = candidates[0]!;
 
   if (input.viewport.width <= compactBreakpoint) {
-    const center = candidates.find((candidate) => candidate.anchor === 'bottom-center') ?? candidates[0];
+    const center = candidates.find((candidate) => candidate.anchor === 'bottom-center') ?? fallback;
     return Object.freeze({ anchor: center.anchor, candidates, winningScore: center.score });
   }
 
-  let winner = candidates[0];
+  let winner = fallback;
   for (const candidate of candidates.slice(1)) {
     if (candidate.score < winner.score) winner = candidate;
   }
