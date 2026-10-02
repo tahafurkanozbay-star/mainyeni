@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using System;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace Api.Core.Platform.Lifecycle
