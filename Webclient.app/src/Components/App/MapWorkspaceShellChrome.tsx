@@ -10,6 +10,11 @@ import {
   createMapWorkspaceShellController,
   type MapWorkspaceShellController,
 } from './mapWorkspaceShellController';
+import {
+  deriveMapWorkspaceRetryPresentation,
+  mapWorkspaceRetryMessage,
+  sanitizeMapWorkspaceShellError,
+} from './mapWorkspaceShellErrorPolicy';
 import { buildMapWorkspaceRegionGuideEntries } from './mapWorkspaceRegionGuide';
 import {
   createMapWorkspaceShellModel,
@@ -40,18 +45,6 @@ const STATUS_ICONS: Readonly<Record<MapWorkspaceShellPhase, string>> = Object.fr
   updating: '↻',
   error: '!',
 });
-
-const sanitizeVisibleError = (value: string | null | undefined): string | null => {
-  if (!value) return null;
-  let output = '';
-  for (const character of value) {
-    const code = character.codePointAt(0);
-    output += code !== undefined && (code < 32 || code === 127) ? ' ' : character;
-    if (output.length >= 180) break;
-  }
-  const normalized = output.replace(/\s+/gu, ' ').trim();
-  return normalized || null;
-};
 
 interface RegionMenuProps {
   readonly model: MapWorkspaceShellModel;
@@ -126,7 +119,7 @@ export const MapWorkspaceShellChrome = ({
   }), [suppliedModel]);
   const controller = useMemo(() => suppliedController ?? createMapWorkspaceShellController({ model }), [model, suppliedController]);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
-  const visibleError = sanitizeVisibleError(errorMessage);
+  const safeError = sanitizeMapWorkspaceShellError(errorMessage);
 
   useEffect(() => {
     const release = controller.install();
@@ -153,23 +146,17 @@ export const MapWorkspaceShellChrome = ({
   };
 
   const renderRecoveryAction = (): ReactNode => {
-    if (snapshot.canRetry && onRetry) {
+    const presentation = deriveMapWorkspaceRetryPresentation(snapshot.canRetry, Boolean(onRetry));
+    if (presentation === 'action') {
       return (
         <button type="button" className="map-workspace-shell__retry" onClick={handleRetry}>
           Haritayı yeniden hazırla
         </button>
       );
     }
-    if (snapshot.canRetry) {
-      return (
-        <span className="map-workspace-shell__retry-limit" role="note">
-          Bu ekranda yeniden başlatma eylemi kullanılamıyor. Bağlantınızı kontrol edip sayfayı yeniden yükleyebilirsiniz.
-        </span>
-      );
-    }
     return (
-      <span className="map-workspace-shell__retry-limit" role="note">
-        Yeniden deneme güvenlik sınırına ulaşıldı. Bağlantınızı kontrol edip sayfayı yeniden yükleyebilirsiniz.
+      <span className="map-workspace-shell__retry-limit" role="note" data-retry-state={presentation}>
+        {mapWorkspaceRetryMessage(presentation)}
       </span>
     );
   };
@@ -218,7 +205,7 @@ export const MapWorkspaceShellChrome = ({
             <span className="map-workspace-shell__recovery-eyebrow">Harita çalışma alanı</span>
             <h2 id="map-workspace-shell-recovery-title">Harita hazırlanamadı</h2>
             <p>
-              {visibleError ?? 'Harita motoru başlatılırken bir sorun oluştu. Mevcut sayfa ve navigasyon kullanılabilir durumda.'}
+              {safeError.message ?? 'Harita motoru başlatılırken bir sorun oluştu. Mevcut sayfa ve navigasyon kullanılabilir durumda.'}
             </p>
             <p className="map-workspace-shell__recovery-meta">
               Deneme {snapshot.retryAttempt}/{snapshot.maxRetries}
