@@ -152,6 +152,28 @@ export const MapWorkspaceShellChrome = ({
     onRetry();
   };
 
+  const renderRecoveryAction = (): ReactNode => {
+    if (snapshot.canRetry && onRetry) {
+      return (
+        <button type="button" className="map-workspace-shell__retry" onClick={handleRetry}>
+          Haritayı yeniden hazırla
+        </button>
+      );
+    }
+    if (snapshot.canRetry) {
+      return (
+        <span className="map-workspace-shell__retry-limit" role="note">
+          Bu ekranda yeniden başlatma eylemi kullanılamıyor. Bağlantınızı kontrol edip sayfayı yeniden yükleyebilirsiniz.
+        </span>
+      );
+    }
+    return (
+      <span className="map-workspace-shell__retry-limit" role="note">
+        Yeniden deneme güvenlik sınırına ulaşıldı. Bağlantınızı kontrol edip sayfayı yeniden yükleyebilirsiniz.
+      </span>
+    );
+  };
+
   return (
     <aside
       className="map-workspace-shell"
@@ -202,15 +224,7 @@ export const MapWorkspaceShellChrome = ({
               Deneme {snapshot.retryAttempt}/{snapshot.maxRetries}
             </p>
           </div>
-          {snapshot.canRetry && onRetry ? (
-            <button type="button" className="map-workspace-shell__retry" onClick={handleRetry}>
-              Haritayı yeniden hazırla
-            </button>
-          ) : (
-            <span className="map-workspace-shell__retry-limit" role="note">
-              Otomatik güvenlik sınırına ulaşıldı. Sayfayı yeniden yüklemeden önce bağlantınızı kontrol edin.
-            </span>
-          )}
+          {renderRecoveryAction()}
         </section>
       ) : null}
     </aside>
