@@ -83,6 +83,7 @@ export const focusMapWorkspaceLandmark = (
     if (addTemporaryTabIndex) element.setAttribute('tabindex', '-1');
     element.focus({ preventScroll: options.preventScroll ?? true });
     if (doc.activeElement !== element && !element.contains(doc.activeElement)) {
+      if (addTemporaryTabIndex && element.getAttribute('tabindex') === '-1') element.removeAttribute('tabindex');
       return Object.freeze({ ok: false, id, reason: 'focus-failed' });
     }
     if (addTemporaryTabIndex) {
