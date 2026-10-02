@@ -12,16 +12,8 @@ import type { SearchResultCardV9 } from './searchResultPresentationRuntimeV9';
 
 export const SEARCH_GUIDANCE_VERSION_V9 = 'search-guidance-v9' as const;
 
-export type SearchGuidanceStatusV9 =
-  | 'idle'
-  | 'success'
-  | 'recovered'
-  | 'partial'
-  | 'empty'
-  | 'blocked';
-
+export type SearchGuidanceStatusV9 = 'idle' | 'success' | 'recovered' | 'partial' | 'empty' | 'blocked';
 export type SearchGuidanceSeverityV9 = 'neutral' | 'success' | 'info' | 'warning' | 'error';
-
 export type SearchGuidanceActionKindV9 =
   | 'use-executed-query'
   | 'use-original-query'
@@ -83,7 +75,7 @@ export interface SearchGuidanceSnapshotV9 {
   readonly fingerprint: string;
 }
 
-interface NormalizedGuidancePolicyV9 {
+interface NormalizedPolicy {
   readonly maxActions: number;
   readonly maxQueryLabelLength: number;
   readonly lowResultThreshold: number;
@@ -93,7 +85,7 @@ interface NormalizedGuidancePolicyV9 {
   readonly showQueryRecoveryAction: boolean;
 }
 
-interface MutableGuidanceStatsV9 {
+interface MutableStats {
   evaluations: number;
   success: number;
   recovered: number;
@@ -103,9 +95,7 @@ interface MutableGuidanceStatsV9 {
   actionsBuilt: number;
 }
 
-const normalizePolicy = (
-  policy: SearchGuidancePolicyV9 = {},
-): NormalizedGuidancePolicyV9 => Object.freeze({
+const normalizePolicy = (policy: SearchGuidancePolicyV9 = {}): NormalizedPolicy => Object.freeze({
   maxActions: normalizeInteger(policy.maxActions, { min: 0, max: 12, fallback: 5 }),
   maxQueryLabelLength: normalizeInteger(policy.maxQueryLabelLength, { min: 8, max: 240, fallback: 96 }),
   lowResultThreshold: normalizeInteger(policy.lowResultThreshold, { min: 0, max: 1_000, fallback: 3 }),
@@ -115,28 +105,24 @@ const normalizePolicy = (
   showQueryRecoveryAction: policy.showQueryRecoveryAction !== false,
 });
 
-const boundedQueryLabel = (value: unknown, maximum: number): string => {
+const boundLabel = (value: unknown, maximum: number): string => {
   const text = normalizeText(value);
-  if (text.length <= maximum) return text;
-  return `${text.slice(0, Math.max(1, maximum - 1)).trimEnd()}…`;
+  return text.length <= maximum ? text : `${text.slice(0, maximum - 1).trimEnd()}…`;
 };
 
-const pluralResults = (count: number): string => count === 1
-  ? '1 sonuç'
-  : `${Math.max(0, count)} sonuç`;
+const resultText = (count: number): string => count === 1 ? '1 sonuç' : `${Math.max(0, count)} sonuç`;
 
-const blockReasonLabel = (reason: string | null | undefined): string => {
-  const normalized = normalizeSearchText(reason);
-  if (normalized === 'invalid-explicit-center') return 'Konum bilgisi geçerli değil.';
-  if (normalized === 'address-candidate-budget-exceeded') return 'Adres sorgusu güvenli aday sınırını aştı.';
-  if (normalized === 'spatial-candidate-budget-exceeded') return 'Konumsal sorgu güvenli aday sınırını aştı.';
-  if (normalized === 'text-execution-blocked') return 'Metin sorgusu güvenli yürütüm sınırını aştı.';
-  if (normalized === 'result-window-offset-exceeded') return 'İstenen sonuç sayfası güvenli pencere sınırının dışında.';
-  if (normalized) return 'Arama güvenlik veya iş yükü politikası nedeniyle yürütülemedi.';
+const blockedCopy = (reason: unknown): string => {
+  const value = normalizeSearchText(reason);
+  if (value === 'invalid-explicit-center') return 'Konum bilgisi geçerli değil.';
+  if (value === 'address-candidate-budget-exceeded') return 'Adres sorgusu güvenli aday sınırını aştı.';
+  if (value === 'spatial-candidate-budget-exceeded') return 'Konumsal sorgu güvenli aday sınırını aştı.';
+  if (value === 'text-execution-blocked') return 'Metin sorgusu güvenli yürütüm sınırını aştı.';
+  if (value === 'result-window-offset-exceeded') return 'İstenen sonuç sayfası güvenli pencere sınırının dışında.';
   return 'Arama güvenlik veya iş yükü politikası nedeniyle yürütülemedi.';
 };
 
-const actionFingerprint = (
+const actionKey = (
   kind: SearchGuidanceActionKindV9,
   query: string | null,
   clearFilters: boolean,
@@ -151,7 +137,7 @@ const actionFingerprint = (
   clearAddressScope,
 }));
 
-const createAction = (
+const action = (
   kind: SearchGuidanceActionKindV9,
   label: string,
   description: string,
@@ -167,8 +153,9 @@ const createAction = (
   const clearFilters = options.clearFilters === true;
   const clearSpatial = options.clearSpatial === true;
   const clearAddressScope = options.clearAddressScope === true;
+  const fingerprint = actionKey(kind, query, clearFilters, clearSpatial, clearAddressScope);
   return Object.freeze({
-    id: `${kind}:${actionFingerprint(kind, query, clearFilters, clearSpatial, clearAddressScope)}`,
+    id: `${kind}:${fingerprint}`,
     kind,
     label: normalizeText(label),
     description: normalizeText(description),
@@ -177,145 +164,38 @@ const createAction = (
     clearSpatial,
     clearAddressScope,
     resetOffset: options.resetOffset !== false,
-    fingerprint: actionFingerprint(kind, query, clearFilters, clearSpatial, clearAddressScope),
+    fingerprint,
   });
 };
 
-const hasFilters = (request: SearchRequest): boolean => Boolean(request.filters?.length);
-
-const hasSpatialConstraint = (request: SearchRequest): boolean => Boolean(
-  request.center
-  || (Number.isFinite(Number(request.radiusMeters)) && Number(request.radiusMeters) > 0),
-);
-
-const hasAddressScope = (request: SearchRequest): boolean => Boolean(
-  normalizeText(request.district)
-  || normalizeText(request.neighborhood)
-  || normalizeText(request.street)
-  || request.level,
-);
-
-const addUniqueAction = (
+const addAction = (
   actions: SearchGuidanceActionV9[],
-  action: SearchGuidanceActionV9,
+  candidate: SearchGuidanceActionV9,
   maximum: number,
 ): void => {
-  if (actions.length >= maximum) return;
-  if (actions.some(existing => existing.fingerprint === action.fingerprint)) return;
-  actions.push(action);
+  if (actions.length >= maximum || actions.some(item => item.fingerprint === candidate.fingerprint)) return;
+  actions.push(candidate);
 };
 
-const broadenedQuery = (queryInput: unknown): string | null => {
-  const parts = normalizeText(queryInput).split(/\s+/u).filter(Boolean);
-  if (parts.length <= 1) return null;
-  const next = parts.slice(0, Math.max(1, parts.length - 1)).join(' ');
-  return next || null;
-};
+const hasFilters = (request: SearchRequest): boolean => Boolean(request.filters?.length);
+const hasSpatial = (request: SearchRequest): boolean => Boolean(
+  request.center || (Number.isFinite(Number(request.radiusMeters)) && Number(request.radiusMeters) > 0),
+);
+const hasAddress = (request: SearchRequest): boolean => Boolean(
+  request.level || normalizeText(request.district) || normalizeText(request.neighborhood) || normalizeText(request.street),
+);
 
-const guidanceActions = (
-  request: SearchRequest,
-  recovery: SearchRecoveryResultV8,
-  status: SearchGuidanceStatusV9,
-  policy: NormalizedGuidancePolicyV9,
-): readonly SearchGuidanceActionV9[] => {
-  const actions: SearchGuidanceActionV9[] = [];
-  const originalQuery = normalizeText(recovery.diagnostics.originalQuery);
-  const executedQuery = normalizeText(recovery.diagnostics.executedQuery);
-
-  if (policy.showQueryRecoveryAction && recovery.diagnostics.recovered && executedQuery && executedQuery !== originalQuery) {
-    addUniqueAction(actions, createAction(
-      'use-executed-query',
-      `“${boundedQueryLabel(executedQuery, policy.maxQueryLabelLength)}” ile ara`,
-      'Kurtarma sorgusunu arama kutusuna uygular.',
-      { query: executedQuery },
-    ), policy.maxActions);
-    if (originalQuery) {
-      addUniqueAction(actions, createAction(
-        'use-original-query',
-        `“${boundedQueryLabel(originalQuery, policy.maxQueryLabelLength)}” sorgusuna dön`,
-        'İlk yazdığınız sorguyu yeniden kullanır.',
-        { query: originalQuery },
-      ), policy.maxActions);
-    }
-  }
-
-  if ((status === 'empty' || status === 'blocked' || status === 'partial')
-    && policy.showClearFilterAction
-    && hasFilters(request)) {
-    addUniqueAction(actions, createAction(
-      'clear-filters',
-      'Filtreleri temizle',
-      'Metin veya konum sorgusunu koruyup seçili filtreleri kaldırır.',
-      { clearFilters: true },
-    ), policy.maxActions);
-  }
-
-  if ((status === 'empty' || status === 'blocked' || status === 'partial')
-    && policy.showClearSpatialAction
-    && hasSpatialConstraint(request)) {
-    addUniqueAction(actions, createAction(
-      'clear-spatial',
-      'Konum sınırını kaldır',
-      'Merkez ve yarıçap koşulunu kaldırarak daha geniş alanda arama önerir.',
-      { clearSpatial: true },
-    ), policy.maxActions);
-  }
-
-  if ((status === 'empty' || status === 'blocked' || status === 'partial')
-    && policy.showClearAddressAction
-    && hasAddressScope(request)) {
-    addUniqueAction(actions, createAction(
-      'clear-address-scope',
-      'Adres kapsamını genişlet',
-      'İlçe, mahalle, sokak ve adres seviyesi kısıtlarını kaldırır.',
-      { clearAddressScope: true },
-    ), policy.maxActions);
-  }
-
-  if (status === 'empty' || status === 'partial') {
-    const broader = broadenedQuery(executedQuery || originalQuery || request.query);
-    if (broader) {
-      addUniqueAction(actions, createAction(
-        'broaden-query',
-        `Daha geniş ara: “${boundedQueryLabel(broader, policy.maxQueryLabelLength)}”`,
-        'Son sorgu terimini kaldırarak daha geniş bir arama önerir.',
-        { query: broader },
-      ), policy.maxActions);
-    }
-  }
-
-  if (status === 'empty' || status === 'blocked') {
-    addUniqueAction(actions, createAction(
-      'show-all-results',
-      'Tüm sonuçları göster',
-      'Sorgu, filtre, konum ve adres kapsamını temizleyerek veri kümesindeki sonuçları listeler.',
-      {
-        query: '',
-        clearFilters: true,
-        clearSpatial: true,
-        clearAddressScope: true,
-      },
-    ), policy.maxActions);
-  }
-
-  if (normalizeText(request.query) && actions.length < policy.maxActions) {
-    addUniqueAction(actions, createAction(
-      'reset-query',
-      'Arama metnini temizle',
-      'Filtreleri koruyarak yalnız arama metnini temizler.',
-      { query: '' },
-    ), policy.maxActions);
-  }
-
-  return Object.freeze(actions);
+const broaden = (value: unknown): string | null => {
+  const tokens = normalizeText(value).split(/\s+/u).filter(Boolean);
+  return tokens.length > 1 ? tokens.slice(0, -1).join(' ') || null : null;
 };
 
 const statusFor = (
   recovery: SearchRecoveryResultV8,
   cards: readonly SearchResultCardV9[],
   grouping: SearchGroupingResultV9 | null,
-  policy: NormalizedGuidancePolicyV9,
-): SearchGuidanceStatusV9 => {
+  policy: NormalizedPolicy,
+): Exclude<SearchGuidanceStatusV9, 'idle'> => {
   if (recovery.final.result.diagnostics.blocked) return 'blocked';
   if (cards.length === 0) return 'empty';
   if (recovery.diagnostics.recovered) return 'recovered';
@@ -323,71 +203,100 @@ const statusFor = (
   return 'success';
 };
 
-const severityFor = (status: SearchGuidanceStatusV9): SearchGuidanceSeverityV9 => {
+const severityFor = (status: Exclude<SearchGuidanceStatusV9, 'idle'>): SearchGuidanceSeverityV9 => {
   if (status === 'success' || status === 'recovered') return 'success';
   if (status === 'partial') return 'info';
   if (status === 'empty') return 'warning';
-  if (status === 'blocked') return 'error';
-  return 'neutral';
+  return 'error';
+};
+
+const actionsFor = (
+  request: SearchRequest,
+  recovery: SearchRecoveryResultV8,
+  status: Exclude<SearchGuidanceStatusV9, 'idle'>,
+  policy: NormalizedPolicy,
+): readonly SearchGuidanceActionV9[] => {
+  const actions: SearchGuidanceActionV9[] = [];
+  const original = normalizeText(recovery.diagnostics.originalQuery);
+  const executed = normalizeText(recovery.diagnostics.executedQuery);
+
+  if (policy.showQueryRecoveryAction && recovery.diagnostics.recovered && executed && executed !== original) {
+    addAction(actions, action(
+      'use-executed-query',
+      `“${boundLabel(executed, policy.maxQueryLabelLength)}” ile ara`,
+      'Kurtarma sorgusunu arama kutusuna uygular.',
+      { query: executed },
+    ), policy.maxActions);
+    if (original) addAction(actions, action(
+      'use-original-query',
+      `“${boundLabel(original, policy.maxQueryLabelLength)}” sorgusuna dön`,
+      'İlk yazdığınız sorguyu yeniden kullanır.',
+      { query: original },
+    ), policy.maxActions);
+  }
+
+  const restrictive = status === 'empty' || status === 'blocked' || status === 'partial';
+  if (restrictive && policy.showClearFilterAction && hasFilters(request)) addAction(actions, action(
+    'clear-filters', 'Filtreleri temizle', 'Metin veya konum sorgusunu koruyup seçili filtreleri kaldırır.', { clearFilters: true },
+  ), policy.maxActions);
+  if (restrictive && policy.showClearSpatialAction && hasSpatial(request)) addAction(actions, action(
+    'clear-spatial', 'Konum sınırını kaldır', 'Merkez ve yarıçap koşulunu kaldırarak daha geniş alanda arama önerir.', { clearSpatial: true },
+  ), policy.maxActions);
+  if (restrictive && policy.showClearAddressAction && hasAddress(request)) addAction(actions, action(
+    'clear-address-scope', 'Adres kapsamını genişlet', 'İlçe, mahalle, sokak ve adres seviyesi kısıtlarını kaldırır.', { clearAddressScope: true },
+  ), policy.maxActions);
+
+  if (status === 'empty' || status === 'partial') {
+    const broader = broaden(executed || original || request.query);
+    if (broader) addAction(actions, action(
+      'broaden-query',
+      `Daha geniş ara: “${boundLabel(broader, policy.maxQueryLabelLength)}”`,
+      'Son sorgu terimini kaldırarak daha geniş bir arama önerir.',
+      { query: broader },
+    ), policy.maxActions);
+  }
+  if (status === 'empty' || status === 'blocked') addAction(actions, action(
+    'show-all-results',
+    'Tüm sonuçları göster',
+    'Sorgu, filtre, konum ve adres kapsamını temizleyerek veri kümesindeki sonuçları listeler.',
+    { query: '', clearFilters: true, clearSpatial: true, clearAddressScope: true },
+  ), policy.maxActions);
+  if (normalizeText(request.query)) addAction(actions, action(
+    'reset-query', 'Arama metnini temizle', 'Filtreleri koruyarak yalnız arama metnini temizler.', { query: '' },
+  ), policy.maxActions);
+  return Object.freeze(actions);
 };
 
 const copyFor = (
-  status: SearchGuidanceStatusV9,
+  status: Exclude<SearchGuidanceStatusV9, 'idle'>,
   recovery: SearchRecoveryResultV8,
   cards: readonly SearchResultCardV9[],
   grouping: SearchGroupingResultV9 | null,
 ): Readonly<{ headline: string; message: string; resultCountText: string; announcement: string }> => {
-  const count = cards.length;
-  const countText = pluralResults(count);
+  const countText = resultText(cards.length);
   if (status === 'blocked') {
-    const reason = blockReasonLabel(recovery.final.result.diagnostics.blockReason);
-    return Object.freeze({
-      headline: 'Arama güvenli biçimde durduruldu',
-      message: reason,
-      resultCountText: 'Sonuç gösterilmedi',
-      announcement: `Arama durduruldu. ${reason}`,
-    });
+    const reason = blockedCopy(recovery.final.result.diagnostics.blockReason);
+    return Object.freeze({ headline: 'Arama güvenli biçimde durduruldu', message: reason, resultCountText: 'Sonuç gösterilmedi', announcement: `Arama durduruldu. ${reason}` });
   }
-  if (status === 'empty') {
-    return Object.freeze({
-      headline: 'Sonuç bulunamadı',
-      message: 'Yazımı, filtreleri, adres kapsamını veya konum sınırını değiştirerek tekrar deneyebilirsiniz.',
-      resultCountText: '0 sonuç',
-      announcement: 'Arama tamamlandı. Sonuç bulunamadı.',
-    });
-  }
+  if (status === 'empty') return Object.freeze({
+    headline: 'Sonuç bulunamadı',
+    message: 'Yazımı, filtreleri, adres kapsamını veya konum sınırını değiştirerek tekrar deneyebilirsiniz.',
+    resultCountText: '0 sonuç',
+    announcement: 'Arama tamamlandı. Sonuç bulunamadı.',
+  });
   if (status === 'recovered') {
     const executed = normalizeText(recovery.diagnostics.executedQuery);
-    const message = executed
-      ? `Daha iyi sonuç için “${executed}” sorgusu kullanıldı.`
-      : 'Daha iyi sonuç için güvenli kurtarma araması kullanıldı.';
-    return Object.freeze({
-      headline: 'Sonuçlar iyileştirildi',
-      message,
-      resultCountText: countText,
-      announcement: `Arama tamamlandı. ${countText} bulundu. ${message}`,
-    });
+    const message = executed ? `Daha iyi sonuç için “${executed}” sorgusu kullanıldı.` : 'Daha iyi sonuç için güvenli kurtarma araması kullanıldı.';
+    return Object.freeze({ headline: 'Sonuçlar iyileştirildi', message, resultCountText: countText, announcement: `Arama tamamlandı. ${countText} bulundu. ${message}` });
   }
   if (status === 'partial') {
-    const truncation = grouping?.truncated === true
-      ? ' Görünüm performans sınırı nedeniyle özetlenmiş olabilir.'
-      : '';
-    return Object.freeze({
-      headline: 'Sınırlı sayıda sonuç bulundu',
-      message: `Aramanızı genişleterek daha fazla sonuç bulabilirsiniz.${truncation}`,
-      resultCountText: countText,
-      announcement: `Arama tamamlandı. ${countText} bulundu.`,
-    });
+    const suffix = grouping?.truncated === true ? ' Görünüm performans sınırı nedeniyle özetlenmiş olabilir.' : '';
+    return Object.freeze({ headline: 'Sınırlı sayıda sonuç bulundu', message: `Aramanızı genişleterek daha fazla sonuç bulabilirsiniz.${suffix}`, resultCountText: countText, announcement: `Arama tamamlandı. ${countText} bulundu.` });
   }
-  return Object.freeze({
-    headline: 'Arama sonuçları',
-    message: 'En uygun sonuçlar hazır.',
-    resultCountText: countText,
-    announcement: `Arama tamamlandı. ${countText} bulundu.`,
-  });
+  return Object.freeze({ headline: 'Arama sonuçları', message: 'En uygun sonuçlar hazır.', resultCountText: countText, announcement: `Arama tamamlandı. ${countText} bulundu.` });
 };
 
-const guidanceFingerprint = (
+const fingerprintFor = (
   status: SearchGuidanceStatusV9,
   recovery: SearchRecoveryResultV8,
   cards: readonly SearchResultCardV9[],
@@ -397,35 +306,25 @@ const guidanceFingerprint = (
   status,
   requestFingerprint: recovery.diagnostics.requestFingerprint,
   datasetFingerprint: recovery.diagnostics.datasetFingerprint,
-  cardKeys: cards.map(card => card.key),
-  actions: actions.map(action => action.fingerprint),
+  cards: cards.map(card => card.key),
+  actions: actions.map(item => item.fingerprint),
 }));
 
 export const applySearchGuidanceActionV9 = (
   request: SearchRequest,
-  action: SearchGuidanceActionV9,
+  selected: SearchGuidanceActionV9,
 ): SearchRequest => Object.freeze({
   ...request,
-  ...(action.query === null ? {} : { query: action.query }),
-  ...(action.clearFilters ? { filters: Object.freeze([]) } : {}),
-  ...(action.clearSpatial ? { center: null, radiusMeters: 0 } : {}),
-  ...(action.clearAddressScope
-    ? { level: null, district: null, neighborhood: null, street: null }
-    : {}),
-  ...(action.resetOffset ? { offset: 0 } : {}),
+  ...(selected.query === null ? {} : { query: selected.query }),
+  ...(selected.clearFilters ? { filters: Object.freeze([]) } : {}),
+  ...(selected.clearSpatial ? { center: null, radiusMeters: 0 } : {}),
+  ...(selected.clearAddressScope ? { level: null, district: null, neighborhood: null, street: null } : {}),
+  ...(selected.resetOffset ? { offset: 0 } : {}),
 });
 
 export class SearchGuidanceRuntimeV9 {
-  readonly #policy: NormalizedGuidancePolicyV9;
-  readonly #stats: MutableGuidanceStatsV9 = {
-    evaluations: 0,
-    success: 0,
-    recovered: 0,
-    partial: 0,
-    empty: 0,
-    blocked: 0,
-    actionsBuilt: 0,
-  };
+  readonly #policy: NormalizedPolicy;
+  readonly #stats: MutableStats = { evaluations: 0, success: 0, recovered: 0, partial: 0, empty: 0, blocked: 0, actionsBuilt: 0 };
 
   constructor(policy: SearchGuidancePolicyV9 = {}) {
     this.#policy = normalizePolicy(policy);
@@ -438,21 +337,16 @@ export class SearchGuidanceRuntimeV9 {
     grouping: SearchGroupingResultV9 | null = null,
   ): SearchGuidanceV9 {
     const status = statusFor(recovery, cards, grouping, this.#policy);
-    const severity = severityFor(status);
+    const actions = actionsFor(request, recovery, status, this.#policy);
     const copy = copyFor(status, recovery, cards, grouping);
-    const actions = guidanceActions(request, recovery, status, this.#policy);
-    const blockedReason = recovery.final.result.diagnostics.blocked
-      ? blockReasonLabel(recovery.final.result.diagnostics.blockReason)
-      : null;
-
     this.#stats.evaluations += 1;
     this.#stats[status] += 1;
     this.#stats.actionsBuilt += actions.length;
-
+    const blockedReason = status === 'blocked' ? blockedCopy(recovery.final.result.diagnostics.blockReason) : null;
     return Object.freeze({
       version: SEARCH_GUIDANCE_VERSION_V9,
       status,
-      severity,
+      severity: severityFor(status),
       headline: copy.headline,
       message: copy.message,
       resultCountText: copy.resultCountText,
@@ -462,7 +356,7 @@ export class SearchGuidanceRuntimeV9 {
       originalQuery: recovery.diagnostics.originalQuery,
       executedQuery: recovery.diagnostics.executedQuery,
       actions,
-      fingerprint: guidanceFingerprint(status, recovery, cards, actions),
+      fingerprint: fingerprintFor(status, recovery, cards, actions),
     });
   }
 
@@ -470,15 +364,10 @@ export class SearchGuidanceRuntimeV9 {
     return Object.freeze({
       version: SEARCH_GUIDANCE_VERSION_V9,
       ...this.#stats,
-      fingerprint: hashFingerprint(stableSerialize({
-        version: SEARCH_GUIDANCE_VERSION_V9,
-        policy: this.#policy,
-        stats: this.#stats,
-      })),
+      fingerprint: hashFingerprint(stableSerialize({ version: SEARCH_GUIDANCE_VERSION_V9, policy: this.#policy, stats: this.#stats })),
     });
   }
 }
 
-export const createSearchGuidanceRuntimeV9 = (
-  policy: SearchGuidancePolicyV9 = {},
-): SearchGuidanceRuntimeV9 => new SearchGuidanceRuntimeV9(policy);
+export const createSearchGuidanceRuntimeV9 = (policy: SearchGuidancePolicyV9 = {}): SearchGuidanceRuntimeV9 =>
+  new SearchGuidanceRuntimeV9(policy);
