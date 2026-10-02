@@ -2,6 +2,7 @@ import type { NormalizedRecord } from './contracts';
 import {
   hashFingerprint,
   normalizeInteger,
+  normalizeSearchText,
   normalizeSearchToken,
   stableSerialize,
   tokenizeSearchText,
@@ -244,7 +245,7 @@ const canonicalTerm = (value: unknown, maximumLength = DEFAULT_POLICY_V8.maximum
     .replace(/[^a-z0-9]+/g, '')
     .slice(0, maximumLength);
 
-const canonicalSource = (value: unknown): string => normalizeSearchToken(value)
+const canonicalSource = (value: unknown): string => normalizeSearchText(value)
   .replace(/[^a-z0-9._:-]+/g, '-')
   .replace(/^-+|-+$/g, '')
   .slice(0, 120);
