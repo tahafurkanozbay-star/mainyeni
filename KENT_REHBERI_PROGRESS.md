@@ -2,6 +2,17 @@
 
 > Bu canonical entrypoint bounded tutulur. Bu checkpoint öncesindeki tam canonical progress sürümü [`KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261002_PRE_PR424.md`](./KENT_REHBERI_PROGRESS_ARCHIVE_MAIN_THROUGH_20261002_PRE_PR424.md) içinde aynı Git blob SHA ile korunur; önceki arşiv zinciri de oradan erişilebilir.
 
+## Deep QA / Release / Whole-Code Modernization fresh-main checkpoint — PR #441 — 2026-10-02
+- TUR / GÖREV: Deep QA / Release / Regression / Whole-Code Modernization; release provenance, typed runtime/toolchain, Node execution/package-script boundaries ve whole-page usability governance.
+- BRANCH / PR: `agent/qa-modernization-20261002-0950-840e682`; PR #441 kanonik QA PR'ıdır. Stale/diverged PR #434 superseded olarak kapatıldı ve merge edilmedi.
+- CURRENT MAIN / LINEAGE: fresh base/merge-base `840e68256965a51681d4469c7d14c50d8c26469f`; product head `1a76e0c204175e9d4c6bdc6bbda5b9559e42a081` current main'e göre 1 ahead / 0 behind. Yalnız current-main'de eksik QA release-governance subtree seçici reapplike edildi; Experience/GIS/Data/Platform product tree ve stale progress/history taşınmadı.
+- KAPSAM / GATE: 24 QA release dosyası, GitHub base...head 4,561 meaningful additions / 8 deletions. Mandatory >=4,000 additions gate gerçek audit authority ve adversarial/integration regression kapsamıyla karşılandı.
+- QA MODERNİZASYONU: artifact-download/cache/package-lock provenance, browser runtime governance, Node execution, package-script boundary, toolchain/tooling-language modernization, page usability governance, canonical modernization aggregation ve release-lineage regression authority'leri kapsamda.
+- SECURITY / NETWORK / GIS: supply-chain ve execution trust boundaries fail-closed denetleniyor; yeni endpoint, browser transport, WMS/WFS/WMTS, telemetry/analytics, remote asset, secret veya ikinci icon resolver eklenmedi. GIS product runtime değiştirilmedi.
+- TEST / CI: fresh PR açıldıktan hemen sonra exact product head için workflow run listesi henüz boştu; dolayısıyla CI PASS ilan edilmedi. Yerel worktree zorunlu tutulmadı; doğrulama kaynağı exact-head GitHub Actions olacaktır.
+- MERGE DURUMU: additions ve fresh-lineage gate'leri sağlandı; progress commit yeni exact head oluşturacağı ve exact-head CI henüz tamamlanmadığı için PR draft/open bırakılır, merge yapılmaz.
+- SONRAKİ GÖREV NOTU: progress sonrası exact head SHA için Release QA, QA Typed Release Diagnostics ve ilgili required workflow/check'leri completed+success doğrula; review/thread temizliği, current main refresh, behind=0/exact merge-base, additions>=4,000, mergeable=true ve kritik release riski yokluğunu yeniden doğrula. Tümü sağlanırsa ready yapıp expected-head korumalı squash merge et; merge SHA ve yeni main SHA'yı doğrula.
+
 ## Deep Experience / adaptive workspace shell fresh-main checkpoint — PR #439 — 2026-10-02
 - TUR / GÖREV: Deep Experience / Whole-Code Modernization; aktif harita sayfasının tamamında strict-TypeScript shell state authority, responsive placement/density, keyboard landmark navigation, bounded session preference ve accessibility davranışlarını current-main lineage üzerinde modernize etme.
 - BRANCH / PR: `agent/experience-shell-20261002-0920-5bb6567`; PR #439 kanonik Experience PR'ıdır. Stale/diverged #435 ve #436 superseded olarak kapatıldı ve merge edilmedi.
