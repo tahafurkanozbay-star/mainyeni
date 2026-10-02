@@ -209,12 +209,17 @@ export class MapWorkspaceShellBrowserRuntime {
   }
 
   focus(id: MapWorkspaceLandmarkId): MapWorkspaceFocusResult {
+    const failuresBeforeFocus = this.#focusFailureCount;
     const result = focusMapWorkspaceLandmark(id, {
       document: this.#document,
       onError: (error) => this.#recordFocusFailure(error),
     });
-    if (result.ok) this.#model.setActiveLandmark(id);
-    else if (result.reason === 'focus-failed') this.#focusFailureCount += 1;
+    if (result.ok) {
+      this.#model.setActiveLandmark(id);
+    } else if (result.reason === 'focus-failed' && this.#focusFailureCount === failuresBeforeFocus) {
+      this.#focusFailureCount += 1;
+      this.#lastFocusFailureKind = 'focus-mismatch';
+    }
     return result;
   }
 
