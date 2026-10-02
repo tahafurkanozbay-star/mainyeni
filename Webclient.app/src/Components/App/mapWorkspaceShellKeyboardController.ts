@@ -23,7 +23,6 @@ export interface MapWorkspaceShellKeyboardDiagnostics {
 
 export interface MapWorkspaceShellKeyboardControllerOptions {
   readonly window?: Window;
-  readonly document?: Document;
 }
 
 const NONE: MapWorkspaceShellKeyboardDecision = Object.freeze({ intent: 'none', preventDefault: false });
@@ -68,7 +67,6 @@ export class MapWorkspaceShellKeyboardController {
   readonly #model: MapWorkspaceShellModel;
   readonly #runtime: Pick<MapWorkspaceShellBrowserRuntime, 'focus'>;
   readonly #window: Window;
-  readonly #document: Document;
   #attached = false;
   #disposed = false;
   #handledCount = 0;
@@ -85,7 +83,6 @@ export class MapWorkspaceShellKeyboardController {
     this.#model = model;
     this.#runtime = runtime;
     this.#window = options.window ?? window;
-    this.#document = options.document ?? document;
   }
 
   getDiagnostics(): MapWorkspaceShellKeyboardDiagnostics {
@@ -159,7 +156,7 @@ export class MapWorkspaceShellKeyboardController {
 
     return Object.freeze({
       ok: false,
-      id: this.#lastTargetId ?? ids[0],
+      id: this.#lastTargetId ?? ids[0]!,
       reason: 'focus-failed',
     });
   }
