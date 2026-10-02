@@ -21,6 +21,12 @@ interface NormalizedSpatialOptions {
   readonly maxCandidates: number;
 }
 
+interface SpatialCellEnumeration {
+  readonly keys: readonly string[];
+  readonly matchedCellCount: number;
+  readonly truncated: boolean;
+}
+
 const normalizeOptions = (options: SpatialIndexOptions = {}): NormalizedSpatialOptions => ({
   cellSizeMeters: normalizeInteger(options.cellSizeMeters, {
     min: 25,
@@ -171,22 +177,55 @@ const cellRange = (
   maxLongitudeCell: cellCoordinate(bounds.maxLongitude, cellSizeDegrees, 180),
 });
 
-const enumerateCellKeys = (
+const cellInsideRange = (
+  latitudeCell: number,
+  longitudeCell: number,
+  range: ReturnType<typeof cellRange>,
+): boolean => latitudeCell >= range.minLatitudeCell
+  && latitudeCell <= range.maxLatitudeCell
+  && longitudeCell >= range.minLongitudeCell
+  && longitudeCell <= range.maxLongitudeCell;
+
+/**
+ * Enumerate only occupied index cells that intersect the query bounds.
+ *
+ * The previous implementation walked the entire rectangular grid from the
+ * south-west corner and stopped at maxCellsPerQuery. For wide-radius queries
+ * that meant the budget could be exhausted by empty cells before the traversal
+ * ever reached an occupied bucket near the query center. Sparse real-world
+ * datasets could therefore return zero results even when a nearby record was
+ * present.
+ *
+ * Scanning the bounded set of occupied buckets makes sparse queries exact and
+ * independent from empty-grid area. When the number of occupied matching cells
+ * itself exceeds the configured budget, the result is marked truncated. The
+ * caller then fails closed instead of exposing a silently incomplete spatial
+ * result set.
+ */
+const enumerateOccupiedCellKeys = (
   index: SpatialIndex,
   bounds: SpatialBounds,
   maximum: number,
   signal?: AbortSignal | null,
-): readonly string[] => {
+): SpatialCellEnumeration => {
   const range = cellRange(bounds, index.cellSizeDegrees);
   const keys: string[] = [];
-  for (let latitudeCell = range.minLatitudeCell; latitudeCell <= range.maxLatitudeCell; latitudeCell += 1) {
+  let matchedCellCount = 0;
+
+  for (const key of index.buckets.keys()) {
     throwIfAborted(signal);
-    for (let longitudeCell = range.minLongitudeCell; longitudeCell <= range.maxLongitudeCell; longitudeCell += 1) {
-      if (keys.length >= maximum) return Object.freeze(keys);
-      keys.push(`${latitudeCell}:${longitudeCell}`);
-    }
+    const parsed = parseCellKey(key);
+    if (!parsed || !cellInsideRange(parsed[0], parsed[1], range)) continue;
+    matchedCellCount += 1;
+    if (keys.length < maximum) keys.push(key);
   }
-  return Object.freeze(keys);
+
+  const truncated = matchedCellCount > maximum;
+  return Object.freeze({
+    keys: truncated ? Object.freeze([]) : Object.freeze(keys),
+    matchedCellCount,
+    truncated,
+  });
 };
 
 export interface SpatialCandidateResult {
@@ -201,26 +240,37 @@ export const collectSpatialCandidatePositions = (
   options: SpatialIndexOptions & { readonly signal?: AbortSignal | null } = {},
 ): SpatialCandidateResult => {
   const normalized = normalizeOptions(options);
-  const keys = enumerateCellKeys(index, bounds, normalized.maxCellsPerQuery, options.signal);
+  const cells = enumerateOccupiedCellKeys(index, bounds, normalized.maxCellsPerQuery, options.signal);
+  if (cells.truncated) {
+    return Object.freeze({
+      positions: Object.freeze([]),
+      cellCount: cells.matchedCellCount,
+      truncated: true,
+    });
+  }
+
   const positions = new Set<number>();
-  let truncated = false;
-  for (const key of keys) {
+  let candidateTruncated = false;
+  for (const key of cells.keys) {
     throwIfAborted(options.signal);
     const bucket = index.buckets.get(key);
     if (!bucket) continue;
     for (const position of bucket) {
       positions.add(position);
       if (positions.size >= normalized.maxCandidates) {
-        truncated = true;
+        candidateTruncated = true;
         break;
       }
     }
-    if (truncated) break;
+    if (candidateTruncated) break;
   }
+
   return Object.freeze({
-    positions: Object.freeze(Array.from(positions).sort((left, right) => left - right)),
-    cellCount: keys.length,
-    truncated,
+    positions: candidateTruncated
+      ? Object.freeze([])
+      : Object.freeze(Array.from(positions).sort((left, right) => left - right)),
+    cellCount: cells.matchedCellCount,
+    truncated: candidateTruncated,
   });
 };
 
@@ -255,6 +305,13 @@ export const searchRadius = <TRecord extends NormalizedRecord>(
     });
   }
   const candidates = collectSpatialCandidatePositions(index, bounds, options);
+  if (candidates.truncated) {
+    return Object.freeze({
+      items: Object.freeze([]),
+      page: createPageInfo(0, options.limit, 0, 0),
+    });
+  }
+
   const hits: SpatialHit<TRecord>[] = [];
   for (const position of candidates.positions) {
     throwIfAborted(options.signal);
