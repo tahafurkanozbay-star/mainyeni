@@ -1,0 +1,381 @@
+.map-workspace-shell-overlay {
+  --workspace-shell-surface: color-mix(in srgb, var(--exp-surface, #fff) 92%, transparent);
+  --workspace-shell-border: color-mix(in srgb, var(--exp-border, #cbd5e1) 86%, transparent);
+  --workspace-shell-shadow: 0 16px 42px rgb(15 23 42 / 16%);
+  position: absolute;
+  inset-inline-start: max(14px, env(safe-area-inset-left));
+  inset-block-end: max(14px, env(safe-area-inset-bottom));
+  z-index: 24;
+  display: grid;
+  width: min(760px, calc(100vw - 28px));
+  max-width: calc(100vw - max(28px, env(safe-area-inset-left) + env(safe-area-inset-right)));
+  overflow: clip;
+  border: 1px solid var(--workspace-shell-border);
+  border-radius: 18px;
+  background: var(--workspace-shell-surface);
+  box-shadow: var(--workspace-shell-shadow);
+  color: var(--exp-text, #0f172a);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06);
+  backdrop-filter: blur(16px) saturate(1.06);
+  isolation: isolate;
+}
+
+.map-workspace-shell-overlay__status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 7px 8px 7px 12px;
+  border-block-end: 1px solid var(--workspace-shell-border);
+}
+
+.map-workspace-shell-overlay[data-collapsed='true'] .map-workspace-shell-overlay__status {
+  border-block-end: 0;
+}
+
+.map-workspace-shell-overlay__pulse {
+  inline-size: 10px;
+  block-size: 10px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  background: currentColor;
+  color: var(--exp-text-muted, #64748b);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.map-workspace-shell-overlay[data-health='success'] .map-workspace-shell-overlay__pulse {
+  color: var(--exp-success, #16794b);
+}
+
+.map-workspace-shell-overlay[data-health='progress'] .map-workspace-shell-overlay__pulse {
+  color: var(--exp-accent, #155eef);
+  animation: map-workspace-shell-pulse 1.4s ease-in-out infinite;
+}
+
+.map-workspace-shell-overlay[data-health='danger'] .map-workspace-shell-overlay__pulse {
+  color: var(--exp-danger, #b42318);
+}
+
+.map-workspace-shell-overlay__status-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.map-workspace-shell-overlay__status-copy strong {
+  overflow: hidden;
+  color: var(--exp-text, #0f172a);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-workspace-shell-overlay__status-copy span {
+  overflow: hidden;
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.69rem;
+  font-weight: 560;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-workspace-shell-overlay__count {
+  display: inline-grid;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  place-items: center;
+  padding-inline: 7px;
+  border: 1px solid var(--workspace-shell-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exp-surface, #fff) 86%, transparent);
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-workspace-shell-overlay__collapse,
+.map-workspace-shell-overlay__action {
+  min-block-size: 44px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--exp-text, #0f172a);
+  background: transparent;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 740;
+  line-height: 1.1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform var(--exp-transition, 140ms ease),
+    background-color var(--exp-transition, 140ms ease),
+    border-color var(--exp-transition, 140ms ease),
+    color var(--exp-transition, 140ms ease);
+}
+
+.map-workspace-shell-overlay__collapse {
+  min-inline-size: 74px;
+  padding-inline: 10px;
+  border-color: var(--workspace-shell-border);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 82%, transparent);
+  color: var(--exp-text-muted, #64748b);
+}
+
+.map-workspace-shell-overlay__collapse:hover,
+.map-workspace-shell-overlay__action:hover {
+  border-color: color-mix(in srgb, var(--exp-accent, #155eef) 42%, var(--workspace-shell-border));
+  background: color-mix(in srgb, var(--exp-accent, #155eef) 8%, var(--exp-surface, #fff));
+  color: var(--exp-accent, #155eef);
+}
+
+.map-workspace-shell-overlay__collapse:active,
+.map-workspace-shell-overlay__action:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.map-workspace-shell-overlay__collapse:focus-visible,
+.map-workspace-shell-overlay__action:focus-visible {
+  outline: 3px solid var(--exp-accent, #155eef);
+  outline-offset: 2px;
+}
+
+.map-workspace-shell-overlay__actions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  gap: 6px;
+  padding: 7px;
+}
+
+.map-workspace-shell-overlay__actions[hidden] {
+  display: none;
+}
+
+.map-workspace-shell-overlay__action {
+  display: inline-grid;
+  min-width: 0;
+  place-items: center;
+  padding: 7px 8px;
+  border-color: color-mix(in srgb, var(--workspace-shell-border) 72%, transparent);
+  background: color-mix(in srgb, var(--exp-surface, #fff) 58%, transparent);
+}
+
+.map-workspace-shell-overlay__action span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-workspace-shell-overlay__action[data-active='true'] {
+  border-color: color-mix(in srgb, var(--exp-accent, #155eef) 54%, var(--workspace-shell-border));
+  background: color-mix(in srgb, var(--exp-accent, #155eef) 12%, var(--exp-surface, #fff));
+  color: var(--exp-accent, #155eef);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--exp-accent, #155eef) 78%, transparent);
+}
+
+.map-workspace-shell-overlay__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.map-workspace-shell-overlay__announcement {
+  pointer-events: none;
+}
+
+.map-workspace-shell-overlay[data-input-modality='keyboard'] .map-workspace-shell-overlay__action[data-active='true'] {
+  outline: 2px solid color-mix(in srgb, var(--exp-accent, #155eef) 68%, transparent);
+  outline-offset: -3px;
+}
+
+.map-workspace-shell-overlay[data-health='danger'] {
+  --workspace-shell-border: color-mix(in srgb, var(--exp-danger, #b42318) 34%, var(--exp-border, #cbd5e1));
+}
+
+.map-workspace-shell-overlay[data-health='danger'] .map-workspace-shell-overlay__status-copy strong {
+  color: var(--exp-danger, #b42318);
+}
+
+.map-workspace-shell-overlay[data-health='progress'] .map-workspace-shell-overlay__status-copy strong {
+  color: var(--exp-accent, #155eef);
+}
+
+@keyframes map-workspace-shell-pulse {
+  0%, 100% {
+    opacity: 0.75;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@media (max-width: 1199px) {
+  .map-workspace-shell-overlay {
+    width: min(620px, calc(100vw - 24px));
+    inset-inline-start: max(12px, env(safe-area-inset-left));
+    inset-block-end: max(12px, env(safe-area-inset-bottom));
+    border-radius: 16px;
+  }
+
+  .map-workspace-shell-overlay__actions {
+    grid-template-columns: repeat(3, minmax(88px, 1fr));
+  }
+}
+
+@media (max-width: 719px) {
+  .map-workspace-shell-overlay {
+    inset-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+    inset-block-end: max(8px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    border-radius: 14px;
+  }
+
+  .map-workspace-shell-overlay__status {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 54px;
+    gap: 8px;
+    padding: 6px 6px 6px 10px;
+  }
+
+  .map-workspace-shell-overlay__count {
+    display: none;
+  }
+
+  .map-workspace-shell-overlay__collapse {
+    grid-column: 3;
+    grid-row: 1;
+    min-inline-size: 62px;
+    min-block-size: 44px;
+    padding-inline: 8px;
+    font-size: 0.68rem;
+  }
+
+  .map-workspace-shell-overlay__status-copy span {
+    max-width: 48vw;
+  }
+
+  .map-workspace-shell-overlay__actions {
+    display: flex;
+    gap: 5px;
+    max-width: 100%;
+    padding: 6px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    scroll-snap-type: inline proximity;
+  }
+
+  .map-workspace-shell-overlay__action {
+    min-inline-size: 92px;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .map-workspace-shell-overlay__empty {
+    min-inline-size: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .map-workspace-shell-overlay__status-copy span {
+    display: none;
+  }
+
+  .map-workspace-shell-overlay__status-copy strong {
+    font-size: 0.76rem;
+  }
+
+  .map-workspace-shell-overlay__action {
+    min-inline-size: 82px;
+    padding-inline: 6px;
+    font-size: 0.7rem;
+  }
+}
+
+@media (pointer: coarse) {
+  .map-workspace-shell-overlay__collapse,
+  .map-workspace-shell-overlay__action {
+    min-block-size: 48px;
+  }
+
+  .map-workspace-shell-overlay__status {
+    min-height: 56px;
+  }
+
+  .map-workspace-shell-overlay__actions {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-workspace-shell-overlay__pulse {
+    animation: none;
+  }
+
+  .map-workspace-shell-overlay__collapse,
+  .map-workspace-shell-overlay__action {
+    transition: none;
+  }
+}
+
+html[data-experience-motion='reduced'] .map-workspace-shell-overlay__pulse {
+  animation: none;
+}
+
+html[data-experience-motion='reduced'] .map-workspace-shell-overlay__collapse,
+html[data-experience-motion='reduced'] .map-workspace-shell-overlay__action {
+  transition: none;
+}
+
+@media (forced-colors: active) {
+  .map-workspace-shell-overlay {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    forced-color-adjust: auto;
+  }
+
+  .map-workspace-shell-overlay__status,
+  .map-workspace-shell-overlay__count,
+  .map-workspace-shell-overlay__collapse,
+  .map-workspace-shell-overlay__action {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .map-workspace-shell-overlay__pulse {
+    border-color: Highlight;
+    background: Highlight;
+    color: Highlight;
+    box-shadow: none;
+  }
+
+  .map-workspace-shell-overlay__action[data-active='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: none;
+  }
+
+  .map-workspace-shell-overlay__collapse:focus-visible,
+  .map-workspace-shell-overlay__action:focus-visible {
+    outline-color: Highlight;
+  }
+}
