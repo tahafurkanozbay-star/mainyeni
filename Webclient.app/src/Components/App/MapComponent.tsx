@@ -42,6 +42,7 @@ import {
   type KentRehberiMapLike,
 } from '../../data-services/kentRehberiGeoJsonLayer';
 import './MapComponent.css';
+import './MapWorkspaceRegionGuide.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
 
 type WindowManagerLike = WindowManagerApi;
