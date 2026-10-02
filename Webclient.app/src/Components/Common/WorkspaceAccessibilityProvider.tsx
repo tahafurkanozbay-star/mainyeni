@@ -336,7 +336,12 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
       <div className="workspace-accessibility-live" aria-live="polite" aria-atomic="true">
         {snapshot.politeAnnouncement}
       </div>
-      <div className="workspace-accessibility-live" role="alert" aria-live="assertive" aria-atomic="true">
+      <div
+        className="workspace-accessibility-live"
+        role={snapshot.assertiveAnnouncement ? 'alert' : undefined}
+        aria-live="assertive"
+        aria-atomic="true"
+      >
         {snapshot.assertiveAnnouncement}
       </div>
     </WorkspaceAccessibilityContext.Provider>
