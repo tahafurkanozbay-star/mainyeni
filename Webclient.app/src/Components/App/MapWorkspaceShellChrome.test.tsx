@@ -1,11 +1,13 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MapWorkspaceShellChrome } from './MapWorkspaceShellChrome';
 import { createMapWorkspaceShellModel } from './mapWorkspaceShellModel';
 
-const captureError = vi.fn();
-const record = vi.fn();
+const { captureError, record } = vi.hoisted(() => ({
+  captureError: vi.fn(),
+  record: vi.fn(),
+}));
 
 vi.mock('../../platform/runtime/runtimeDiagnostics', () => ({
   runtimeDiagnostics: {
@@ -148,9 +150,9 @@ describe('MapWorkspaceShellChrome', () => {
     render(<MapWorkspaceShellChrome phase="error" onRetry={onRetry} model={model} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Haritayı yeniden hazırla' }));
-    model.markRetryFailed();
+    act(() => model.markRetryFailed());
     fireEvent.click(screen.getByRole('button', { name: 'Haritayı yeniden hazırla' }));
-    model.markRetryFailed();
+    act(() => model.markRetryFailed());
 
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('button', { name: 'Haritayı yeniden hazırla' })).not.toBeInTheDocument();
@@ -174,12 +176,12 @@ describe('MapWorkspaceShellChrome', () => {
     render(<MapWorkspaceShellChrome phase="ready" />);
 
     fireEvent.click(screen.getByText('Bölgeler'));
-    expect(screen.getByRole('button', { name: /Navigasyon Kullanılabilir/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Harita Kullanılabilir/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Panel Kullanılabilir/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Araçlar Kullanılabilir/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Görünüm Kullanılabilir/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Yardım Kullanılabilir/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Navigasyon\. Navigasyon kullanılabilir/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Harita\. Harita kullanılabilir/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Panel\. Katman paneli kullanılabilir/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Araçlar\. Harita araçları kullanılabilir/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Görünüm\. Görünüm kontrolleri kullanılabilir/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Yardım\. Yardım kullanılabilir/i })).toBeEnabled();
   });
 
   it('shows the region count in the summary', () => {
@@ -192,7 +194,7 @@ describe('MapWorkspaceShellChrome', () => {
     render(<MapWorkspaceShellChrome phase="ready" />);
     fireEvent.click(screen.getByText('Bölgeler'));
 
-    fireEvent.click(screen.getByRole('button', { name: /Araçlar Kullanılabilir/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Araçlar\. Harita araçları kullanılabilir/i }));
 
     expect(document.activeElement?.textContent).toContain('Araçlar');
   });
@@ -203,7 +205,7 @@ describe('MapWorkspaceShellChrome', () => {
     const details = container.querySelector<HTMLDetailsElement>('.map-workspace-shell__regions')!;
     expect(details.open).toBe(true);
 
-    fireEvent.click(screen.getByRole('button', { name: /Harita Kullanılabilir/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Harita\. Harita kullanılabilir/i }));
 
     expect(details.open).toBe(false);
   });
@@ -216,11 +218,20 @@ describe('MapWorkspaceShellChrome', () => {
     expect(screen.getByText(/ileri,.*geri dolaşabilirsiniz/i)).toBeInTheDocument();
   });
 
+  it('renders explicit region purpose and keyboard guidance', () => {
+    render(<MapWorkspaceShellChrome phase="ready" />);
+    fireEvent.click(screen.getByText('Bölgeler'));
+
+    expect(screen.getByText(/2D\/3D harita görünümünü/i)).toBeInTheDocument();
+    expect(screen.getByText(/yön tuşları ve artı\/eksi/i)).toBeInTheDocument();
+    expect(screen.getByText(/Katmanları, belediye hizmetlerini/i)).toBeInTheDocument();
+  });
+
   it('updates active region data when focus enters a known region', () => {
     const { container } = render(<MapWorkspaceShellChrome phase="ready" />);
     const toolbarButton = document.querySelector<HTMLButtonElement>('#toolbar-widget button')!;
 
-    toolbarButton.focus();
+    act(() => toolbarButton.focus());
 
     expect(container.querySelector('.map-workspace-shell')).toHaveAttribute('data-active-region', 'toolbar');
   });
@@ -228,14 +239,15 @@ describe('MapWorkspaceShellChrome', () => {
   it('updates modality after keyboard interaction', () => {
     const { container } = render(<MapWorkspaceShellChrome phase="ready" />);
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    fireEvent.keyDown(window, { key: 'Tab' });
 
     expect(container.querySelector('.map-workspace-shell')).toHaveAttribute('data-modality', 'keyboard');
   });
 
   it('uses a polite hidden announcement for region focus changes', () => {
     render(<MapWorkspaceShellChrome phase="ready" />);
-    document.querySelector<HTMLButtonElement>('#sidebar button')!.focus();
+    const sidebarButton = document.querySelector<HTMLButtonElement>('#sidebar button')!;
+    act(() => sidebarButton.focus());
 
     const announcement = document.querySelector('.map-workspace-shell__announcement');
     expect(announcement).toHaveAttribute('aria-live', 'polite');
@@ -262,7 +274,7 @@ describe('MapWorkspaceShellChrome', () => {
     model.subscribe(() => { throw new Error('observer failure'); });
     render(<MapWorkspaceShellChrome phase="ready" model={model} />);
 
-    model.setPhase('updating');
+    act(() => model.setPhase('updating'));
 
     expect(captureError).toHaveBeenCalled();
   });
