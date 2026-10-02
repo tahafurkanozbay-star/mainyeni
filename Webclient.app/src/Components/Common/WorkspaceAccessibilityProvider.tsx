@@ -77,20 +77,20 @@ const focusElement = (element: HTMLElement, showFocusRing: boolean): void => {
   const addedTabIndex = !isNaturallyFocusable(element) && !element.hasAttribute('tabindex');
   if (addedTabIndex) element.setAttribute('tabindex', '-1');
   if (showFocusRing) element.dataset.workspaceFocusRecovery = 'true';
+  const cleanup = (): void => {
+    element.removeEventListener('blur', cleanup);
+    if (addedTabIndex) element.removeAttribute('tabindex');
+    delete element.dataset.workspaceFocusRecovery;
+  };
+  element.addEventListener('blur', cleanup, { once: true });
   element.focus({ preventScroll: true });
-  if (addedTabIndex) {
-    const cleanup = (): void => {
-      element.removeEventListener('blur', cleanup);
-      element.removeAttribute('tabindex');
-      delete element.dataset.workspaceFocusRecovery;
-    };
-    element.addEventListener('blur', cleanup, { once: true });
-  }
+  if (document.activeElement !== element) cleanup();
 };
 
 const applyRootFacts = (
   root: HTMLElement | null,
   snapshot: WorkspaceAccessibilityRuntimeSnapshot,
+  preferences: WorkspaceAccessibilityPreferences,
 ): void => {
   if (!root) return;
   root.dataset.workspaceInput = snapshot.accessibility.modality;
@@ -99,6 +99,7 @@ const applyRootFacts = (
   root.dataset.workspaceMapBusy = String(snapshot.accessibility.mapBusy);
   root.dataset.workspaceReducedMotion = String(snapshot.accessibility.reducedMotion);
   root.dataset.workspaceForcedColors = String(snapshot.accessibility.forcedColors);
+  root.dataset.workspaceKeyboardGuide = String(preferences.showKeyboardGuide);
 };
 
 export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibilityProviderProps): ReactNode => {
@@ -148,8 +149,8 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
     const root = typeof document === 'undefined'
       ? null
       : document.getElementById('app-shell');
-    applyRootFacts(root, snapshot);
-  }, [snapshot]);
+    applyRootFacts(root, snapshot, preferences);
+  }, [preferences, snapshot]);
 
   useEffect(() => {
     if (!preferences.autoRevealOnOffline || snapshot.accessibility.online) return;
