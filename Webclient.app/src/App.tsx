@@ -12,6 +12,7 @@ import { MapComponent } from './Components/App/MapComponent';
 import { ExperienceMapModeGovernedOverlay } from './Components/App/ExperienceMapModeGovernedOverlay';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
 import { ExperienceMapModeFocusBridge } from './Components/App/ExperienceMapModeFocusBridge';
+import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { AppConfig } from './Core/AppConfig';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
@@ -133,6 +134,7 @@ function App() {
         >
           <ExperienceSkipNavigation />
           <MapComponent windowManager={windowManager} />
+          <MapWorkspaceShellOverlay />
           <ExperienceMapModeGovernedOverlay />
           <ExperienceMapInteractionGuide />
           <ExperienceWorkspace />
