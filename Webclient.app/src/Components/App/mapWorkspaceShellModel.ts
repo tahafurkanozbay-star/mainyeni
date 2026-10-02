@@ -191,7 +191,7 @@ export class MapWorkspaceShellModel {
   readonly #listeners = new Set<Listener>();
   readonly #availability = new Map<MapWorkspaceLandmarkId, boolean>();
   readonly #listenerLimit: number;
-  readonly #onListenerError?: (error: unknown) => void;
+  readonly #onListenerError: ((error: unknown) => void) | undefined;
   #environment: MapWorkspaceShellEnvironment;
   #snapshot: MapWorkspaceShellSnapshot;
   #disposed = false;
