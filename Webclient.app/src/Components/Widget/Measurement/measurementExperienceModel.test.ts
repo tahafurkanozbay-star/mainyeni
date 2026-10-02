@@ -182,7 +182,7 @@ describe('MeasurementExperienceModel', () => {
     const snapshot = model.getSnapshot();
     expect(snapshot.phase).toBe('error');
     expect(snapshot.errorMessage).toBe('Ölçüm başarısız oldu.');
-    expect(snapshot.errorCode).toBe('BADCODESCRIPT');
+    expect(snapshot.errorCode).toBe('BADCODE-SCRIPT');
     expect(snapshot.errorCode).toMatch(/^[A-Z0-9_-]+$/u);
     expect(snapshot.announcement).toContain('Ölçüm başarısız oldu.');
     expect(snapshot.canRetry).toBe(true);
