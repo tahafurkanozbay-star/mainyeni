@@ -218,7 +218,7 @@ describe('SearchRecoveryRuntimeV8 typo recovery', () => {
 
   it('respects total attempt budget', () => {
     const runtime = createSearchRecoveryRuntimeV8({
-      maximumAttempts: 1,
+      maxAttempts: 1,
       correction: { minimumAutoApplyScore: 100, minimumAutoApplyMargin: 5 },
     });
     runtime.register(dataset());
