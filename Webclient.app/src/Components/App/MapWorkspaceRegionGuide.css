@@ -1,0 +1,192 @@
+.map-workspace-shell__regions {
+  top: max(76px, calc(env(safe-area-inset-top) + 68px));
+  right: max(14px, env(safe-area-inset-right));
+  bottom: auto;
+}
+
+.map-workspace-shell__region-menu {
+  top: calc(100% + 8px);
+  right: 0;
+  bottom: auto;
+}
+
+.map-workspace-shell__region-grid {
+  align-items: stretch;
+}
+
+.map-workspace-shell__region-button {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  min-block-size: 94px;
+  align-content: start;
+  padding: 10px 11px;
+}
+
+.map-workspace-shell__region-dot {
+  grid-row: 1 / span 3;
+  align-self: start;
+  margin-block-start: 4px;
+}
+
+.map-workspace-shell__region-name {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--exp-text, #0f172a);
+  font-size: 0.73rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-workspace-shell__region-state {
+  grid-column: 3;
+  justify-self: end;
+  align-self: start;
+  max-inline-size: 104px;
+  overflow: hidden;
+  color: #067647;
+  font-size: 0.6rem;
+  font-weight: 760;
+  line-height: 1.25;
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-workspace-shell__region-button:disabled .map-workspace-shell__region-state {
+  color: var(--exp-text-muted, #64748b);
+}
+
+.map-workspace-shell__region-purpose {
+  grid-column: 2 / span 2;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--exp-text-muted, #64748b);
+  font-size: 0.64rem;
+  font-weight: 560;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.map-workspace-shell__region-keyboard {
+  grid-column: 2 / span 2;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--exp-accent, #155eef) 84%, var(--exp-text, #0f172a));
+  font-size: 0.6rem;
+  font-weight: 680;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-name,
+.map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-keyboard {
+  color: var(--exp-accent, #155eef);
+}
+
+.map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-state {
+  color: color-mix(in srgb, var(--exp-accent, #155eef) 82%, #067647);
+}
+
+.map-workspace-shell__region-button:disabled .map-workspace-shell__region-keyboard {
+  color: var(--exp-text-muted, #64748b);
+}
+
+@media (max-width: 900px) {
+  .map-workspace-shell__regions {
+    top: max(70px, calc(env(safe-area-inset-top) + 62px));
+  }
+
+  .map-workspace-shell__region-menu {
+    max-block-size: min(68vh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 640px) {
+  .map-workspace-shell__regions {
+    top: max(64px, calc(env(safe-area-inset-top) + 56px));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: auto;
+  }
+
+  .map-workspace-shell__region-menu {
+    top: calc(100% + 6px);
+    right: 0;
+    bottom: auto;
+    max-block-size: min(72vh, 540px);
+  }
+
+  .map-workspace-shell__region-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .map-workspace-shell__region-button {
+    min-block-size: 88px;
+  }
+
+  .map-workspace-shell__region-purpose {
+    -webkit-line-clamp: 2;
+  }
+
+  .map-workspace-shell__region-state {
+    max-inline-size: 94px;
+  }
+}
+
+@media (pointer: coarse) {
+  .map-workspace-shell__region-button {
+    min-block-size: 98px;
+    padding-block: 11px;
+  }
+
+  .map-workspace-shell__region-name {
+    font-size: 0.75rem;
+  }
+
+  .map-workspace-shell__region-purpose,
+  .map-workspace-shell__region-keyboard {
+    font-size: 0.66rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-workspace-shell__region-button {
+    scroll-behavior: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-workspace-shell__region-button,
+  .map-workspace-shell__region-button:disabled {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+    opacity: 1;
+  }
+
+  .map-workspace-shell__region-name,
+  .map-workspace-shell__region-purpose,
+  .map-workspace-shell__region-state,
+  .map-workspace-shell__region-keyboard,
+  .map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-name,
+  .map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-state,
+  .map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-keyboard {
+    color: ButtonText;
+  }
+
+  .map-workspace-shell__region-button[aria-pressed='true'] {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .map-workspace-shell__region-button:not(:disabled) .map-workspace-shell__region-dot,
+  .map-workspace-shell__region-button[aria-pressed='true'] .map-workspace-shell__region-dot {
+    border-color: Highlight;
+    background: Highlight;
+  }
+}
