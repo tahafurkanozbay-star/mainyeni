@@ -52,11 +52,7 @@ const topicForAnnouncement = (text: string): WorkspaceLiveTopic => {
 const zoneForTarget = (target: EventTarget | null): WorkspaceFocusZone => {
   if (!(target instanceof Element)) return 'unknown';
   for (const candidate of FOCUS_ZONE_SELECTORS) {
-    try {
-      if (target.closest(candidate.selector)) return candidate.zone;
-    } catch {
-      // Invalid host selector support must not break keyboard access.
-    }
+    if (target.closest(candidate.selector)) return candidate.zone;
   }
   return 'unknown';
 };
@@ -211,11 +207,16 @@ export class WorkspaceAccessibilityRuntime {
     for (const listener of this.listeners) this.safe(listener);
   }
 
+  private reportError(error: unknown): void {
+    if (!this.onError) return;
+    this.onError(error);
+  }
+
   private safe(operation: () => void): void {
     try {
       operation();
     } catch (error) {
-      try { this.onError?.(error); } catch { /* diagnostics must never break accessibility */ }
+      this.reportError(error);
     }
   }
 }
