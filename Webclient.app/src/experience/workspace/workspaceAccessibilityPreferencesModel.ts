@@ -22,8 +22,11 @@ export interface WorkspaceAccessibilityPreferenceStorage {
 export interface WorkspaceAccessibilityPreferenceDiagnostics {
   readonly readFailures: number;
   readonly writeFailures: number;
+  readonly listenerFailures: number;
+  readonly rejectedListeners: number;
   readonly rejectedPayloads: number;
-  readonly lastFailureKind: 'read' | 'write' | 'parse' | 'shape' | 'size' | null;
+  readonly activeListeners: number;
+  readonly lastFailureKind: 'read' | 'write' | 'listener' | 'parse' | 'shape' | 'size' | null;
 }
 
 export interface WorkspaceAccessibilityPreferenceSession {
@@ -50,7 +53,10 @@ const DEFAULTS: WorkspaceAccessibilityPreferences = Object.freeze({
 const DEFAULT_DIAGNOSTICS: WorkspaceAccessibilityPreferenceDiagnostics = Object.freeze({
   readFailures: 0,
   writeFailures: 0,
+  listenerFailures: 0,
+  rejectedListeners: 0,
   rejectedPayloads: 0,
+  activeListeners: 0,
   lastFailureKind: null,
 });
 
@@ -135,12 +141,20 @@ export const createWorkspaceAccessibilityPreferenceSession = (
     currentDiagnostics = Object.freeze({ ...currentDiagnostics, ...patch });
   };
 
+  const syncListenerCount = (): void => {
+    if (currentDiagnostics.activeListeners === listeners.size) return;
+    setDiagnostics({ activeListeners: listeners.size });
+  };
+
   const notify = (): void => {
     for (const listener of listeners) {
       try {
         listener();
       } catch {
-        // Listener failures are isolated; they never mutate preference state.
+        setDiagnostics({
+          listenerFailures: currentDiagnostics.listenerFailures + 1,
+          lastFailureKind: 'listener',
+        });
       }
     }
   };
@@ -231,15 +245,23 @@ export const createWorkspaceAccessibilityPreferenceSession = (
     subscribe(listener: () => void): () => void {
       if (disposed) return () => undefined;
       if (listeners.size >= MAX_LISTENERS && !listeners.has(listener)) {
+        setDiagnostics({
+          rejectedListeners: currentDiagnostics.rejectedListeners + 1,
+        });
         return () => undefined;
       }
       listeners.add(listener);
-      return () => listeners.delete(listener);
+      syncListenerCount();
+      return () => {
+        if (!listeners.delete(listener)) return;
+        syncListenerCount();
+      };
     },
     dispose(): void {
       if (disposed) return;
       disposed = true;
       listeners.clear();
+      syncListenerCount();
     },
   });
 };
