@@ -15,8 +15,19 @@
   visibility: visible;
 }
 
+#app-shell [data-workspace-focus-recovery='true']:focus {
+  outline: 3px solid color-mix(in srgb, var(--exp-accent, #0b6fcb) 78%, white);
+  outline-offset: 3px;
+  scroll-margin: 12px;
+}
+
 @media (forced-colors: active) {
   #app-shell[data-workspace-keyboard-guide='true'] .experience-map-interaction-guide {
+    forced-color-adjust: auto;
+  }
+
+  #app-shell [data-workspace-focus-recovery='true']:focus {
+    outline-color: Highlight;
     forced-color-adjust: auto;
   }
 }
