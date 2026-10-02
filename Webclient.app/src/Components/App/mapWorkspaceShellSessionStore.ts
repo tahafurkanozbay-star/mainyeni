@@ -37,15 +37,6 @@ const failureKind = (error: unknown): string => {
   return typeof error;
 };
 
-const safeDefaultStorage = (): Storage | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-};
-
 const isSerializedPreference = (value: unknown): value is SerializedPreference => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
@@ -64,10 +55,10 @@ export class MapWorkspaceShellSessionStore {
   #lastFailureKind: string | null = null;
 
   constructor(options: MapWorkspaceShellSessionStoreOptions = {}) {
-    this.#storage = options.storage === undefined ? safeDefaultStorage() : options.storage;
+    this.#onError = options.onError;
+    this.#storage = options.storage === undefined ? this.#resolveDefaultStorage() : options.storage;
     this.#key = options.key?.trim() || DEFAULT_KEY;
     this.#maxSerializedLength = clampMaxLength(options.maxSerializedLength);
-    this.#onError = options.onError;
   }
 
   getDiagnostics(): MapWorkspaceShellSessionDiagnostics {
@@ -128,6 +119,16 @@ export class MapWorkspaceShellSessionStore {
     } catch (error) {
       this.#recordFailure(error);
       return false;
+    }
+  }
+
+  #resolveDefaultStorage(): Storage | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window.sessionStorage;
+    } catch (error) {
+      this.#recordFailure(error);
+      return null;
     }
   }
 
