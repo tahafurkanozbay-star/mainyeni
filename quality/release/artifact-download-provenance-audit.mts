@@ -1,0 +1,163 @@
+import { stableSortFindings, type AuditSection, type Finding, type RepositoryInventory, type SourceFile } from './contracts.mts';
+import { snippetAround } from './inventory.mts';
+
+export interface ArtifactDownloadSignal {
+  readonly file: string;
+  readonly downloadSteps: number;
+  readonly mutableActions: number;
+  readonly missingNames: number;
+  readonly dynamicNames: number;
+  readonly dynamicPaths: number;
+  readonly broadPatterns: number;
+  readonly mergeMultiple: number;
+  readonly externalRepositories: number;
+  readonly dynamicRunIds: number;
+}
+
+export interface ArtifactDownloadSummary {
+  readonly workflows: readonly ArtifactDownloadSignal[];
+  readonly workflowFiles: number;
+  readonly downloadSteps: number;
+  readonly findings: readonly Finding[];
+}
+
+interface Line { readonly text: string; readonly offset: number; readonly number: number }
+interface DownloadStep {
+  readonly file: SourceFile;
+  readonly line: number;
+  readonly offset: number;
+  readonly actionRef: string;
+  readonly body: string;
+  readonly name: string | undefined;
+  readonly pattern: string | undefined;
+  readonly path: string | undefined;
+  readonly mergeMultiple: string | undefined;
+  readonly repository: string | undefined;
+  readonly runId: string | undefined;
+  readonly githubToken: string | undefined;
+}
+
+const WORKFLOW_PATH = /^\.github\/workflows\/[^/]+\.ya?ml$/i;
+const DOWNLOAD_ACTION = /^\s*-\s+uses\s*:\s*actions\/download-artifact@([^\s#]+)(?:\s+#.*)?$/i;
+const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
+const UNTRUSTED = /\b(?:github\.event\.(?:pull_request\.(?:title|body|head\.ref|head\.sha)|issue\.(?:title|body)|comment\.body|review\.body|review_comment\.body|discussion\.(?:title|body)|head_commit\.message|commits|inputs\.)|github\.head_ref|inputs\.)\b/i;
+const PRIVILEGED_TRIGGER = /^\s*(?:push|release|workflow_run|workflow_dispatch|schedule)\s*:/im;
+const UNTRUSTED_TRIGGER = /^\s*(?:pull_request|pull_request_target|issues|issue_comment|pull_request_review|pull_request_review_comment|discussion|discussion_comment)\s*:/im;
+const WRITE_PERMISSION = /^\s*(?:contents|packages|actions|deployments|id-token|security-events|statuses|checks|pull-requests)\s*:\s*write\b/im;
+const EXECUTION_NEARBY = /(?:^|\n)\s*(?:run\s*:|[-]\s+uses\s*:|container\s*:|shell\s*:)/im;
+
+function physicalLines(text: string): Line[] {
+  const result: Line[] = [];
+  let offset = 0;
+  text.split('\n').forEach((raw, index) => {
+    const value = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+    result.push({ text: value, offset, number: index + 1 });
+    offset += raw.length + 1;
+  });
+  return result;
+}
+
+function indentation(text: string): number { return text.match(/^\s*/)?.[0].length ?? 0; }
+function workflows(inventory: RepositoryInventory): SourceFile[] { return inventory.files.filter(file => WORKFLOW_PATH.test(file.repositoryPath)); }
+
+function scalar(source: readonly Line[], index: number, stepIndent: number, name: string): string | undefined {
+  const pattern = new RegExp(`^\\s*${name.replace('-', '\\-')}\\s*:\\s*(.*)$`, 'i');
+  for (let cursor = index + 1; cursor < source.length; cursor += 1) {
+    const current = source[cursor]!;
+    if (current.text.trim() && indentation(current.text) <= stepIndent && /^\s*-\s+/.test(current.text)) break;
+    const match = current.text.match(pattern);
+    if (!match) continue;
+    const value = (match[1] ?? '').trim();
+    return value ? value.replace(/^['"]|['"]$/g, '') : undefined;
+  }
+  return undefined;
+}
+
+function downloadSteps(file: SourceFile): DownloadStep[] {
+  const source = physicalLines(file.text);
+  const result: DownloadStep[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index]!;
+    const match = current.text.match(DOWNLOAD_ACTION);
+    if (!match) continue;
+    const stepIndent = indentation(current.text);
+    let end = index + 1;
+    while (end < source.length && !(source[end]!.text.trim() && indentation(source[end]!.text) <= stepIndent && /^\s*-\s+/.test(source[end]!.text))) end += 1;
+    result.push({
+      file,
+      line: current.number,
+      offset: current.offset,
+      actionRef: match[1] ?? '',
+      body: source.slice(index, end).map(item => item.text).join('\n'),
+      name: scalar(source, index, stepIndent, 'name'),
+      pattern: scalar(source, index, stepIndent, 'pattern'),
+      path: scalar(source, index, stepIndent, 'path'),
+      mergeMultiple: scalar(source, index, stepIndent, 'merge-multiple'),
+      repository: scalar(source, index, stepIndent, 'repository'),
+      runId: scalar(source, index, stepIndent, 'run-id'),
+      githubToken: scalar(source, index, stepIndent, 'github-token'),
+    });
+  }
+  return result;
+}
+
+function expressions(value: string | undefined): readonly string[] {
+  if (!value) return [];
+  const result: string[] = [];
+  const matcher = new RegExp(EXPRESSION.source, EXPRESSION.flags);
+  let match: RegExpExecArray | null;
+  while ((match = matcher.exec(value)) !== null) result.push((match[1] ?? '').trim());
+  return result;
+}
+function dynamic(value: string | undefined): boolean { return expressions(value).length > 0; }
+function untrusted(value: string | undefined): boolean { return expressions(value).some(expression => UNTRUSTED.test(expression)); }
+function privileged(file: SourceFile): boolean { return WRITE_PERMISSION.test(file.text) || /permissions\s*:\s*write-all\b/i.test(file.text); }
+function trustedProducerContext(file: SourceFile): boolean { return PRIVILEGED_TRIGGER.test(file.text) && !UNTRUSTED_TRIGGER.test(file.text); }
+function broadPattern(value: string | undefined): boolean {
+  if (!value) return false;
+  const literal = value.replace(/\$\{\{[\s\S]*?\}\}/g, '').replace(/[*?\[\]{}!]+/g, '').replace(/[-_/.:]+$/g, '').trim();
+  return literal.length < 6 || /^(?:artifact|artifacts|build|dist|package|packages|output|outputs)$/i.test(literal);
+}
+
+function finding(step: DownloadStep, id: string, severity: Finding['severity'], title: string, message: string, remediation: string, blocking: boolean): Finding {
+  return { id, domain: 'security', severity, blocking, title, message, location: { file: step.file.repositoryPath, line: step.line }, evidence: { excerpt: snippetAround(step.file.text, step.offset, 220) }, remediation, tags: ['ci', 'workflow', 'artifact', 'provenance', 'supply-chain'] };
+}
+
+function findingsFor(step: DownloadStep): readonly Finding[] {
+  const result: Finding[] = [];
+  const isPrivileged = privileged(step.file);
+  const trustedContext = trustedProducerContext(step.file);
+  if (!/^[0-9a-f]{40}$/i.test(step.actionRef)) result.push(finding(step, 'ci-artifact-download-action-mutable-ref', 'critical', 'Artifact download action is mutable', 'A mutable download-artifact identity can replace code at the artifact trust boundary.', 'Pin actions/download-artifact to a reviewed 40-character commit SHA.', true));
+  if (!step.name && !step.pattern) result.push(finding(step, 'ci-artifact-download-selection-unbounded', isPrivileged ? 'critical' : 'high', 'Artifact selection is not explicitly bounded', 'Downloading every available artifact makes producer identity and artifact purpose ambiguous.', 'Select one reviewed artifact name or a narrowly scoped immutable pattern.', isPrivileged));
+  if (untrusted(step.name) || untrusted(step.pattern)) result.push(finding(step, 'ci-artifact-download-name-untrusted', 'critical', 'Artifact selector includes attacker-controlled input', 'Attacker-controlled event text can redirect the consumer to a different artifact.', 'Derive artifact selectors only from trusted repository state and immutable producer identity.', true));
+  else if (dynamic(step.name) || dynamic(step.pattern)) result.push(finding(step, 'ci-artifact-download-name-dynamic', isPrivileged ? 'high' : 'medium', 'Artifact selector is expression-derived', 'Dynamic artifact selection weakens static proof of producer-to-consumer provenance.', 'Prefer a literal artifact name or bind the expression to an immutable trusted producer contract.', isPrivileged));
+  if (broadPattern(step.pattern)) result.push(finding(step, 'ci-artifact-download-pattern-broad', isPrivileged ? 'high' : 'medium', 'Artifact pattern is broad', 'A broad pattern can mix unrelated producer outputs into the consumer workspace.', 'Use a narrow producer-specific pattern and keep merge-multiple disabled unless collision safety is proven.', isPrivileged));
+  if (/^(?:true|yes|on|1)$/i.test(step.mergeMultiple ?? '')) result.push(finding(step, 'ci-artifact-download-merge-multiple', isPrivileged ? 'high' : 'medium', 'Multiple artifacts are merged into one directory', 'Merging multiple artifacts erases per-producer filesystem boundaries and permits filename collisions.', 'Keep artifacts in isolated directories and validate each producer before combining outputs.', isPrivileged));
+  if (untrusted(step.path)) result.push(finding(step, 'ci-artifact-download-path-untrusted', 'critical', 'Artifact destination includes attacker-controlled input', 'Attacker-controlled extraction destinations can steer downloaded files into sensitive workspace locations.', 'Use a literal dedicated extraction directory outside repository control metadata and credential paths.', true));
+  if (step.path && /(?:^|[\\/])(?:\.git|\.ssh|\.gnupg|\.aws|\.azure|\.config\/gcloud)(?:[\\/]|$)/i.test(step.path)) result.push(finding(step, 'ci-artifact-download-sensitive-path', 'critical', 'Artifact is downloaded into a sensitive control path', 'Artifact extraction into repository or credential control paths can alter subsequent trusted operations.', 'Extract into an isolated non-sensitive directory and validate content before use.', true));
+  if (step.repository) {
+    if (untrusted(step.repository)) result.push(finding(step, 'ci-artifact-download-repository-untrusted', 'critical', 'External artifact repository is attacker-controlled', 'An attacker-controlled repository selector can redirect artifact consumption across trust domains.', 'Use a literal allowlisted owner/repository and bind it to a reviewed producer workflow.', true));
+    else result.push(finding(step, 'ci-artifact-download-cross-repository', isPrivileged ? 'high' : 'medium', 'Artifact crosses repository trust boundary', 'Cross-repository downloads require explicit producer identity, token scope and run provenance review.', 'Document the producer repository, pin run provenance and use a least-privilege token scoped only to artifact read.', isPrivileged));
+    if (!step.githubToken) result.push(finding(step, 'ci-artifact-download-cross-repository-token-missing', 'high', 'Cross-repository artifact token is not explicit', 'Cross-repository artifact access without an explicit reviewed token obscures credential authority.', 'Provide a dedicated least-privilege artifact-read token and document its repository scope.', isPrivileged));
+  }
+  if (step.runId) {
+    if (untrusted(step.runId)) result.push(finding(step, 'ci-artifact-download-run-id-untrusted', 'critical', 'Artifact run-id includes attacker-controlled input', 'Attacker-controlled run selection can redirect a trusted consumer to unreviewed producer output.', 'Bind run-id to an authenticated trusted workflow_run or otherwise validated immutable producer run.', true));
+    else if (dynamic(step.runId) && !/github\.event\.workflow_run\.id\b/i.test(step.runId)) result.push(finding(step, 'ci-artifact-download-run-id-dynamic', isPrivileged ? 'high' : 'medium', 'Artifact run-id provenance is dynamic', 'A dynamic run-id without an authoritative workflow_run binding is difficult to prove statically.', 'Bind run-id to a validated workflow_run producer or a literal reviewed run for recovery-only workflows.', isPrivileged));
+  } else if (step.repository) result.push(finding(step, 'ci-artifact-download-run-id-missing', isPrivileged ? 'critical' : 'high', 'Cross-repository artifact lacks explicit run identity', 'Repository identity alone does not prove which producer execution created the consumed artifact.', 'Provide an immutable validated run-id tied to the expected producer workflow and commit.', isPrivileged));
+  if (isPrivileged && !trustedContext) result.push(finding(step, 'ci-artifact-download-privileged-untrusted-trigger', 'critical', 'Privileged artifact consumer is reachable from an untrusted trigger', 'A write-capable workflow that consumes artifacts from an untrusted event can promote attacker-produced bytes into a privileged context.', 'Split untrusted validation from privileged promotion and consume only artifacts from authenticated protected-branch producers.', true));
+  if (isPrivileged && EXECUTION_NEARBY.test(step.file.text.slice(step.offset))) result.push(finding(step, 'ci-artifact-download-privileged-execution-review', 'high', 'Privileged workflow executes after artifact download', 'Downloaded bytes can become executable input later in the privileged workflow unless content and producer provenance are validated.', 'Verify producer workflow, commit SHA, artifact digest and expected file manifest before any execution or publication step.', false));
+  return result;
+}
+
+function signal(file: SourceFile): ArtifactDownloadSignal {
+  const steps = downloadSteps(file);
+  return { file: file.repositoryPath, downloadSteps: steps.length, mutableActions: steps.filter(step => !/^[0-9a-f]{40}$/i.test(step.actionRef)).length, missingNames: steps.filter(step => !step.name && !step.pattern).length, dynamicNames: steps.filter(step => dynamic(step.name) || dynamic(step.pattern)).length, dynamicPaths: steps.filter(step => dynamic(step.path)).length, broadPatterns: steps.filter(step => broadPattern(step.pattern)).length, mergeMultiple: steps.filter(step => /^(?:true|yes|on|1)$/i.test(step.mergeMultiple ?? '')).length, externalRepositories: steps.filter(step => Boolean(step.repository)).length, dynamicRunIds: steps.filter(step => dynamic(step.runId)).length };
+}
+
+export function auditArtifactDownloadProvenance(inventory: RepositoryInventory): AuditSection<ArtifactDownloadSummary> {
+  const started = performance.now();
+  const files = workflows(inventory);
+  const workflowSignals = files.map(signal);
+  const findings = stableSortFindings(files.flatMap(file => downloadSteps(file).flatMap(findingsFor)));
+  return { domain: 'security', title: 'Artifact download provenance audit', summary: { workflows: workflowSignals, workflowFiles: workflowSignals.length, downloadSteps: workflowSignals.reduce((sum, item) => sum + item.downloadSteps, 0), findings }, findings, elapsedMs: Math.max(0, performance.now() - started) };
+}
