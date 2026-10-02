@@ -247,7 +247,7 @@ export const createResourceLifecycleRegistry = (
   const retireScope = (scopeInput: string): number => {
     const scope = normalizeScope(scopeInput);
     let count = 0;
-    for (const resource of [...resources.values()]) {
+    for (const resource of resources.values()) {
       if (resource.scope !== scope) continue;
       if (remove(resource.id, resource.generation, 'retired')) count += 1;
     }
@@ -257,7 +257,7 @@ export const createResourceLifecycleRegistry = (
   const retireKey = (keyInput: string): number => {
     const key = normalizeKey(keyInput);
     let count = 0;
-    for (const resource of [...resources.values()]) {
+    for (const resource of resources.values()) {
       if (resource.key !== key) continue;
       if (remove(resource.id, resource.generation, 'retired')) count += 1;
     }
