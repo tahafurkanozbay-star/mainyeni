@@ -5,7 +5,7 @@ const WEB_SOURCE=/^Webclient\.app\/src\//,COMPONENT=/\.(?:tsx|jsx)$/i,STYLE=/\.c
 const NATIVE=new Set(['button','a','input','select','textarea','summary','option']);
 const CLICK=/<([A-Za-z][A-Za-z0-9.-]*)\b([^>]*\bonClick\s*=\s*\{[^}]*\}[^>]*)>/g,IMAGE=/<img\b([^>]*)>/gi,BLANK=/<a\b([^>]*\btarget\s*=\s*(?:['"]_blank['"]|\{['"]_blank['"]\})[^>]*)>/gi;
 const OUTLINE=/\boutline\s*:\s*(?:none|0(?:px)?)\s*(?:!important)?(?=\s*[;}])/gi;
-const WIDTH=/\b(?:width|min-width)\s*:\s*(\d+(?:\.\d+)?)px\s*(?:!important)?(?=\s*[;}])/gi;
+const WIDTH=/(?:^|[;{]\s*)(?:width|min-width)\s*:\s*(\d+(?:\.\d+)?)px\s*(?:!important)?(?=\s*[;}])/gim;
 const OVERFLOW=/(?:^|[},\s])(?:html|body|#root)\s*(?:,\s*(?:html|body|#root)\s*)*\{[^}]*\boverflow(?:-x)?\s*:\s*hidden\b/gi;
 const REDUCED=/@media\s*\([^)]*prefers-reduced-motion\s*:\s*reduce[^)]*\)/gi,FORCED=/@media\s*\([^)]*forced-colors\s*:\s*active[^)]*\)/gi,FOCUS=/:focus-visible\b/gi,MAX=24;
 function count(t:string,p:RegExp){const m=new RegExp(p.source,p.flags);let n=0;while(m.exec(t)!==null)n++;return n} function lineAt(t:string,o:number){let n=1;for(let i=0;i<o;i++)if(t.charCodeAt(i)===10)n++;return n} function excerpt(t:string,o:number){const s=Math.max(0,t.lastIndexOf('\n',Math.max(0,o-1))+1),x=t.indexOf('\n',o),e=x<0?t.length:x,v=t.slice(s,e).trim().replace(/\s+/g,' ');return v.length<=180?v:`${v.slice(0,179)}…`}
