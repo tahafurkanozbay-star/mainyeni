@@ -7,6 +7,7 @@ import {
 } from './mapWorkspaceShellModel';
 import { MapWorkspaceShellBrowserRuntime } from './mapWorkspaceShellBrowserRuntime';
 import { MapWorkspaceShellKeyboardController } from './mapWorkspaceShellKeyboardController';
+import { MapWorkspaceShellPlacementRuntime } from './mapWorkspaceShellPlacementRuntime';
 import { MapWorkspaceShellSessionStore } from './mapWorkspaceShellSessionStore';
 import './MapWorkspaceShellOverlay.css';
 
@@ -42,6 +43,7 @@ const isWorkspacePhase = (value: string | undefined): value is MapWorkspaceShell
 );
 
 export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProps) => {
+  const rootRef = useRef<HTMLElement | null>(null);
   const model = useMemo(() => new MapWorkspaceShellModel({
     initialPhase: phase ?? 'booting',
     initialEnvironment: {
@@ -111,6 +113,14 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
     };
   }, [model]);
 
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+    const placement = new MapWorkspaceShellPlacementRuntime(root);
+    placement.start();
+    return () => placement.dispose();
+  }, []);
+
   useEffect(() => () => model.dispose(), [model]);
 
   const focusLandmark = (id: MapWorkspaceLandmarkId): void => {
@@ -128,6 +138,7 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
 
   return (
     <aside
+      ref={rootRef}
       className="map-workspace-shell-overlay"
       data-viewport={snapshot.viewport}
       data-health={snapshot.healthTone}
