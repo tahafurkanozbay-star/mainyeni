@@ -26,3 +26,12 @@
 - MERGE: PR draft/open kalır; additions>=4,000 + exact-head green CI + behind=0/exact current-main merge-base + mergeable=true + temiz review/security/performance/regression gate olmadan merge edilmez.
 - NETWORK / GIS / İKON: yeni browser endpoint/transport, WMS/WFS/WMTS, telemetry, remote asset, secret veya ikinci icon resolver eklenmedi; yeni GIS runtime davranışı değiştirilmedi.
 - SONRAKİ GÖREV NOTU: yeni progress exact-head workflow'larını doğrula; ardından eski blob SHA transplantı yerine kaynak içeriğinden browser-runtime/module-graph/package-lock/platform-boundary ve type-safe Node 24/TypeScript ESM tooling modernization dilimlerini aynı kanonik PR üzerinde yeniden üret.
+
+## Deep QA / browser-runtime typed-boundary repair — PR #427 — 2026-10-02
+- TUR / GÖREV: Browser production runtime dependency governance ve CI root-cause repair.
+- PRODUCT: `quality/release/browser-runtime-governance.mts` + adversarial test paketi eklendi. Node built-in/subpath, remote executable import, arbitrary browser env, eval/Function, CommonJS, devDependency ve undeclared dependency sınırları fail-closed modellenir.
+- İLK DOĞRULAMA: product head `ab20eec31b1071e32682899aa4baac8577ee2317` için Release QA `36965999265` success; QA Typed Release Diagnostics `36965999279` failure. Artifact `qa-typed-release-diagnostics` incelendi ve kök neden release tsconfig'in intentionally narrow Node shim boundary'sinde `node:module`, `node:fs/promises`, `node:path` declarations bulunmaması ile `node:test` named-export kullanımının shim ile uyuşmaması olarak doğrulandı.
+- DÜZELTME: governance authority filesystem/runtime Node API bağımlılığından ayrılıp pure source+manifest audit authority'sine dönüştürüldü; built-in inventory deterministic local allowlist oldu. Testler repository shim standardına uygun default `node:test` importuna geçirildi ve Node subpath adversarial kapsamı eklendi. Policy veya CI threshold gevşetilmedi.
+- NETWORK / SECURITY / GIS / İKON: yeni network çağrısı, endpoint, WMS/WFS/WMTS, telemetry, remote asset, secret, GIS runtime veya icon resolver değişikliği yok.
+- GATE / MERGE: >=4,000 meaningful additions gate hâlâ açık; PR draft/open ve merge yasak. Bu progress commit yeni exact head oluşturur; PASS yalnız exact-head Release QA + QA Typed Release Diagnostics completed+success sonrası ilan edilir.
+- SONRAKİ GÖREV NOTU: exact-head CI'ı doğrula; failure varsa artifact/log kök nedenini aynı branch'te düzelt. Green ise module-graph/package-lock/platform-boundary ve Node 24/TypeScript ESM modernization dilimlerine devam et.
