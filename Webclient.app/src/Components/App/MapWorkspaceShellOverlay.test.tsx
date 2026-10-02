@@ -198,10 +198,17 @@ describe('MapWorkspaceShellOverlay', () => {
 
   it('discovers landmarks mounted after the overlay', async () => {
     render(<MapWorkspaceShellOverlay phase="ready" />);
-    expect(screen.getByText('Harita kontrolleri hazırlanıyor.')).toBeInTheDocument();
+    const region = screen.getByRole('complementary');
+    expect(region).toHaveAttribute('data-density', 'status-only');
+    expect(region).toHaveAttribute('data-density-reason', 'no-landmarks');
+    expect(screen.getByLabelText('0 hızlı gezinme hedefi')).toHaveTextContent('0');
+
     addLandmark('sidebar');
     await flushFrame();
+
     expect(await screen.findByRole('button', { name: 'Katman ve hizmet menüsüne git' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('1 hızlı gezinme hedefi')).toHaveTextContent('1'));
+    expect(region).not.toHaveAttribute('data-density-reason', 'no-landmarks');
   });
 
   it('removes controls for landmarks that leave the DOM', async () => {
