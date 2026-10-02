@@ -134,7 +134,7 @@ export class MapWorkspaceShellBrowserRuntime {
   readonly #model: MapWorkspaceShellModel;
   readonly #document: Document;
   readonly #window: Window;
-  readonly #onError?: (error: unknown) => void;
+  readonly #onError: ((error: unknown) => void) | undefined;
   readonly #mediaQueries: readonly MediaQueryList[];
   #started = false;
   #disposed = false;
