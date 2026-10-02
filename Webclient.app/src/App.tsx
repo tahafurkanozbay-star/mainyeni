@@ -6,6 +6,7 @@ import './Components/Common/experience-ui.css';
 import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
+import './Components/Common/workspace-accessibility-guide-preference.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
 import './Components/App/MapWorkspaceShellPlacement.css';
