@@ -6,6 +6,8 @@ import {
   type MapWorkspaceShellPhase,
 } from './mapWorkspaceShellModel';
 import { MapWorkspaceShellBrowserRuntime } from './mapWorkspaceShellBrowserRuntime';
+import { MapWorkspaceShellKeyboardController } from './mapWorkspaceShellKeyboardController';
+import { MapWorkspaceShellSessionStore } from './mapWorkspaceShellSessionStore';
 import './MapWorkspaceShellOverlay.css';
 
 export interface MapWorkspaceShellOverlayProps {
@@ -53,6 +55,11 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
       runtimeDiagnostics.captureError(error, { source: 'experience.workspace-shell.observer' }, 'warn');
     },
   }), []);
+  const sessionStore = useMemo(() => new MapWorkspaceShellSessionStore({
+    onError(error) {
+      runtimeDiagnostics.captureError(error, { source: 'experience.workspace-shell.session' }, 'warn');
+    },
+  }), []);
   const runtimeRef = useRef<MapWorkspaceShellBrowserRuntime | null>(null);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
 
@@ -78,16 +85,28 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
   }, [model, phase]);
 
   useEffect(() => {
+    const preference = sessionStore.read();
+    if (preference) model.setUtilityCollapsed(preference.collapsed);
+  }, [model, sessionStore]);
+
+  useEffect(() => {
+    sessionStore.write({ collapsed: snapshot.utilityCollapsed });
+  }, [sessionStore, snapshot.utilityCollapsed]);
+
+  useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
     const runtime = new MapWorkspaceShellBrowserRuntime(model, {
       onError(error) {
         runtimeDiagnostics.captureError(error, { source: 'experience.workspace-shell.focus' }, 'warn');
       },
     });
+    const keyboard = new MapWorkspaceShellKeyboardController(model, runtime);
     runtimeRef.current = runtime;
     runtime.start();
+    keyboard.attach();
     return () => {
       runtimeRef.current = null;
+      keyboard.dispose();
       runtime.dispose();
     };
   }, [model]);
@@ -163,6 +182,9 @@ export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProp
             Harita kontrolleri hazırlanıyor.
           </p>
         )}
+        <span className="map-workspace-shell-overlay__shortcut-hint" aria-hidden="true">
+          <kbd>F6</kbd> ileri · <kbd>Shift</kbd>+<kbd>F6</kbd> geri
+        </span>
       </div>
 
       <span className="map-workspace-shell-overlay__announcement experience-sr-only" aria-live="polite" aria-atomic="true">
