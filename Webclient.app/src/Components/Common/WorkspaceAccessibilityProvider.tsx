@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
@@ -19,18 +20,23 @@ import {
   type WorkspaceAccessibilityPreferences,
 } from '../../experience/workspace/workspaceAccessibilityPreferencesModel';
 import {
-  collectWorkspaceSurfaceFacts,
   createWorkspaceAccessibilityStatusSnapshot,
   type WorkspaceAccessibilityStatusSnapshot,
+  type WorkspaceSurfaceFact,
 } from '../../experience/workspace/workspaceAccessibilityStatusModel';
-import {
-  workspaceFocusTargetForZone,
-  type WorkspaceFocusReason,
-} from '../../experience/workspace/workspaceFocusRecoveryModel';
+import type { WorkspaceFocusReason } from '../../experience/workspace/workspaceFocusRecoveryModel';
+import { WorkspaceFocusRecoveryRuntime } from '../../experience/workspace/workspaceFocusRecoveryRuntime';
+import { WorkspaceLandmarkRuntime } from '../../experience/workspace/workspaceLandmarkRuntime';
+import type {
+  WorkspaceLandmarkHealth,
+  WorkspaceLandmarkInventorySnapshot,
+  WorkspaceLandmarkEntry,
+} from '../../experience/workspace/workspaceLandmarkInventoryModel';
 import type { WorkspaceFocusZone } from '../../experience/workspace/workspaceAccessibilityModel';
 
 export interface WorkspaceAccessibilityContextValue {
   readonly snapshot: WorkspaceAccessibilityRuntimeSnapshot;
+  readonly landmarks: WorkspaceLandmarkInventorySnapshot;
   readonly preferences: WorkspaceAccessibilityPreferences;
   readonly status: WorkspaceAccessibilityStatusSnapshot;
   readonly updatePreferences: (patch: WorkspaceAccessibilityPreferencePatch) => void;
@@ -68,28 +74,43 @@ const fallbackSnapshot = Object.freeze({
   assertiveAnnouncement: '',
 }) satisfies WorkspaceAccessibilityRuntimeSnapshot;
 
-const isNaturallyFocusable = (element: HTMLElement): boolean => (
-  element.matches('button,a[href],input,select,textarea,summary,iframe,[contenteditable="true"]')
-  || element.tabIndex >= 0
-);
+const entryFor = (
+  inventory: WorkspaceLandmarkInventorySnapshot,
+  id: WorkspaceLandmarkEntry['id'],
+): WorkspaceLandmarkEntry | null => inventory.entries.find((entry) => entry.id === id) ?? null;
 
-const focusElement = (element: HTMLElement, showFocusRing: boolean): void => {
-  const addedTabIndex = !isNaturallyFocusable(element) && !element.hasAttribute('tabindex');
-  if (addedTabIndex) element.setAttribute('tabindex', '-1');
-  if (showFocusRing) element.dataset.workspaceFocusRecovery = 'true';
-  const cleanup = (): void => {
-    element.removeEventListener('blur', cleanup);
-    if (addedTabIndex) element.removeAttribute('tabindex');
-    delete element.dataset.workspaceFocusRecovery;
-  };
-  element.addEventListener('blur', cleanup, { once: true });
-  element.focus({ preventScroll: true });
-  if (document.activeElement !== element) cleanup();
-};
+const surfaceFact = (
+  id: WorkspaceSurfaceFact['id'],
+  label: string,
+  entries: readonly (WorkspaceLandmarkEntry | null)[],
+): WorkspaceSurfaceFact => Object.freeze({
+  id,
+  label,
+  available: entries.some((entry) => entry?.present === true && entry.visible),
+  focusable: entries.some((entry) => entry?.usable === true),
+});
+
+const surfaceFactsFromLandmarks = (
+  inventory: WorkspaceLandmarkInventorySnapshot,
+): readonly WorkspaceSurfaceFact[] => Object.freeze([
+  surfaceFact('workspace', 'Çalışma alanı', [
+    entryFor(inventory, 'workspace'),
+    entryFor(inventory, 'navigation'),
+    entryFor(inventory, 'search'),
+  ]),
+  surfaceFact('tools', 'Araçlar', [
+    entryFor(inventory, 'sidebar'),
+    entryFor(inventory, 'toolbar'),
+  ]),
+  surfaceFact('map', 'Harita', [entryFor(inventory, 'map')]),
+  surfaceFact('command-palette', 'Komut merkezi', [entryFor(inventory, 'command-palette')]),
+  surfaceFact('dialog', 'Açık iletişim penceresi', [entryFor(inventory, 'dialog')]),
+]);
 
 const applyRootFacts = (
   root: HTMLElement | null,
   snapshot: WorkspaceAccessibilityRuntimeSnapshot,
+  landmarks: WorkspaceLandmarkInventorySnapshot,
   preferences: WorkspaceAccessibilityPreferences,
 ): void => {
   if (!root) return;
@@ -100,6 +121,39 @@ const applyRootFacts = (
   root.dataset.workspaceReducedMotion = String(snapshot.accessibility.reducedMotion);
   root.dataset.workspaceForcedColors = String(snapshot.accessibility.forcedColors);
   root.dataset.workspaceKeyboardGuide = String(preferences.showKeyboardGuide);
+  root.dataset.workspaceLandmarkHealth = landmarks.health;
+  root.dataset.workspaceLandmarkReady = String(landmarks.readyCount);
+  root.dataset.workspaceLandmarkTotal = String(landmarks.totalCount);
+};
+
+const surfaceIsOpen = (
+  inventory: WorkspaceLandmarkInventorySnapshot,
+  id: 'dialog' | 'command-palette',
+): boolean => {
+  const entry = entryFor(inventory, id);
+  return Boolean(entry?.present && entry.visible && !entry.disabled);
+};
+
+const landmarkHealthAnnouncement = (
+  health: WorkspaceLandmarkHealth,
+  landmarks: WorkspaceLandmarkInventorySnapshot,
+): Readonly<{ text: string; priority: 'polite' | 'assertive' }> | null => {
+  if (health === 'critical') {
+    return Object.freeze({
+      text: `${landmarks.missingRequiredCount} temel çalışma alanı hedefi şu anda kullanılamıyor.`,
+      priority: 'assertive',
+    });
+  }
+  if (health === 'degraded') {
+    return Object.freeze({
+      text: 'Çalışma alanındaki bazı gezinme hedefleri sınırlı durumda.',
+      priority: 'polite',
+    });
+  }
+  return Object.freeze({
+    text: 'Çalışma alanı gezinme hedefleri yeniden kullanıma hazır.',
+    priority: 'polite',
+  });
 };
 
 export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibilityProviderProps): ReactNode => {
@@ -107,6 +161,20 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
     onError(error) {
       runtimeDiagnostics.captureError(error, {
         source: 'experience.workspace-accessibility-runtime',
+      }, 'warn');
+    },
+  }), []);
+  const landmarkRuntime = useMemo(() => new WorkspaceLandmarkRuntime({
+    onError(error) {
+      runtimeDiagnostics.captureError(error, {
+        source: 'experience.workspace-landmark-runtime',
+      }, 'warn');
+    },
+  }), []);
+  const focusRuntime = useMemo(() => new WorkspaceFocusRecoveryRuntime({
+    onError(error) {
+      runtimeDiagnostics.captureError(error, {
+        source: 'experience.workspace-focus-recovery',
       }, 'warn');
     },
   }), []);
@@ -132,16 +200,29 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
     runtime.getSnapshot,
     () => fallbackSnapshot,
   );
+  const landmarks = useSyncExternalStore(
+    landmarkRuntime.subscribe,
+    landmarkRuntime.getSnapshot,
+    landmarkRuntime.getSnapshot,
+  );
   const preferences = useSyncExternalStore(
     preferenceSession.subscribe,
     preferenceSession.snapshot,
     preferenceSession.snapshot,
   );
+  const previousLandmarkHealth = useRef<WorkspaceLandmarkHealth | null>(null);
+  const previousDialogOpen = useRef(false);
+  const previousPaletteOpen = useRef(false);
 
   useEffect(() => {
     runtime.start();
-    return () => runtime.dispose();
-  }, [runtime]);
+    landmarkRuntime.start();
+    return () => {
+      focusRuntime.dispose();
+      landmarkRuntime.dispose();
+      runtime.dispose();
+    };
+  }, [focusRuntime, landmarkRuntime, runtime]);
 
   useEffect(() => () => preferenceSession.dispose(), [preferenceSession]);
 
@@ -149,8 +230,50 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
     const root = typeof document === 'undefined'
       ? null
       : document.getElementById('app-shell');
-    applyRootFacts(root, snapshot, preferences);
-  }, [preferences, snapshot]);
+    applyRootFacts(root, snapshot, landmarks, preferences);
+  }, [landmarks, preferences, snapshot]);
+
+  useEffect(() => {
+    const dialogOpen = surfaceIsOpen(landmarks, 'dialog');
+    const paletteOpen = surfaceIsOpen(landmarks, 'command-palette');
+    runtime.setDialogDepth(dialogOpen ? 1 : 0);
+    runtime.setCommandPaletteOpen(paletteOpen);
+
+    const dialogClosed = previousDialogOpen.current && !dialogOpen;
+    const paletteClosed = previousPaletteOpen.current && !paletteOpen;
+    previousDialogOpen.current = dialogOpen;
+    previousPaletteOpen.current = paletteOpen;
+
+    if (!dialogClosed && !paletteClosed) return;
+    if (typeof document !== 'undefined' && document.activeElement instanceof Element && document.activeElement !== document.body && document.activeElement.isConnected) return;
+
+    const accessibility = runtime.getSnapshot().accessibility;
+    const result = focusRuntime.recoverDisconnectedFocus({
+      preferredZone: accessibility.previousFocusZone,
+      originZone: accessibility.previousFocusZone,
+      modality: accessibility.modality,
+      inventory: landmarks,
+      dialogDepth: dialogOpen ? 1 : 0,
+      paletteOpen,
+      reason: dialogClosed ? 'dialog-close' : 'palette-close',
+    });
+    if (result.ok) {
+      runtimeDiagnostics.record('experience.workspace-focus-recovered', {
+        zone: result.zone,
+        reason: dialogClosed ? 'dialog-close' : 'palette-close',
+        fallback: result.usedFallback,
+      });
+    }
+  }, [focusRuntime, landmarks, runtime]);
+
+  useEffect(() => {
+    const previous = previousLandmarkHealth.current;
+    previousLandmarkHealth.current = landmarks.health;
+    if (previous === null || previous === landmarks.health) return;
+    const announcement = landmarkHealthAnnouncement(landmarks.health, landmarks);
+    if (!announcement) return;
+    runtime.announce(announcement.text, announcement.priority, 'navigation');
+  }, [landmarks, runtime]);
 
   useEffect(() => {
     if (!preferences.autoRevealOnOffline || snapshot.accessibility.online) return;
@@ -164,8 +287,8 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
 
   const status = useMemo(() => createWorkspaceAccessibilityStatusSnapshot(
     snapshot.accessibility,
-    collectWorkspaceSurfaceFacts(typeof document === 'undefined' ? null : document),
-  ), [snapshot]);
+    surfaceFactsFromLandmarks(landmarks),
+  ), [landmarks, snapshot.accessibility]);
 
   const updatePreferences = useCallback((patch: WorkspaceAccessibilityPreferencePatch): void => {
     preferenceSession.update(patch);
@@ -176,28 +299,20 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
   }, [preferenceSession]);
 
   const focusZone = useCallback((zone: WorkspaceFocusZone, reason: WorkspaceFocusReason = 'landmark-cycle'): boolean => {
-    if (typeof document === 'undefined') return false;
-    const target = workspaceFocusTargetForZone(zone);
-    if (!target) return false;
-    const primary = document.querySelector<HTMLElement>(target.selector);
-    const fallback = target.fallbackSelector
-      ? document.querySelector<HTMLElement>(target.fallbackSelector)
-      : null;
-    const element = primary ?? fallback;
-    if (!element) {
+    const result = focusRuntime.focusZone(zone, runtime.getSnapshot().accessibility.modality);
+    if (!result.ok) {
       runtime.announce('İstenen çalışma alanı şu anda kullanılamıyor.', 'assertive', 'navigation');
       return false;
     }
-    const showFocusRing = snapshot.accessibility.modality === 'keyboard';
-    focusElement(element, showFocusRing);
     runtimeDiagnostics.record('experience.workspace-focus-navigation', {
       zone,
       reason,
-      recovered: primary === null,
+      recovered: result.usedFallback,
+      temporaryTabIndex: result.temporaryTabIndex,
     });
     runtime.announce(`${zone === 'map' ? 'Harita' : zone === 'tools' ? 'Araçlar' : zone === 'workspace' ? 'Çalışma alanı' : zone === 'command-palette' ? 'Komut merkezi' : 'İletişim penceresi'} odağına geçildi.`, 'polite', 'navigation');
     return true;
-  }, [runtime, snapshot.accessibility.modality]);
+  }, [focusRuntime, runtime]);
 
   const announce = useCallback((text: string, priority: 'polite' | 'assertive' = 'polite'): void => {
     runtime.announce(text, priority, 'system');
@@ -205,13 +320,14 @@ export const WorkspaceAccessibilityProvider = ({ children }: WorkspaceAccessibil
 
   const contextValue = useMemo<WorkspaceAccessibilityContextValue>(() => Object.freeze({
     snapshot,
+    landmarks,
     preferences,
     status,
     updatePreferences,
     resetPreferences,
     focusZone,
     announce,
-  }), [announce, focusZone, preferences, resetPreferences, snapshot, status, updatePreferences]);
+  }), [announce, focusZone, landmarks, preferences, resetPreferences, snapshot, status, updatePreferences]);
 
   return (
     <WorkspaceAccessibilityContext.Provider value={contextValue}>
