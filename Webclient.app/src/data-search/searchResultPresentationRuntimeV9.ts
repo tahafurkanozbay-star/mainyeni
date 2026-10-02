@@ -304,7 +304,7 @@ const explanationFor = (hit: SearchHit, recovery: SearchRecoveryResultV8, policy
   if (recovery.diagnostics.recovered) details.push(`Orijinal sorgu yerine “${recovery.diagnostics.executedQuery}” varyantı daha iyi sonuç verdi.`);
   const bounded = Object.freeze(details.slice(0, policy.maxExplanationDetails));
   return Object.freeze({
-    primary: bounded[0] ?? scoreLabel(hit.score) || 'Arama koşullarını karşılıyor.',
+    primary: bounded[0] ?? (scoreLabel(hit.score) || 'Arama koşullarını karşılıyor.'),
     details: bounded,
     reasons: Object.freeze([...hit.reasons].slice(0, policy.maxExplanationDetails)),
     recovered: recovery.diagnostics.recovered,
