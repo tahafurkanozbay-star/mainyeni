@@ -7,6 +7,10 @@ import {
   type RepositoryInventory,
 } from './contracts.mts';
 import { collectManifestInventory, findFile } from './inventory.mts';
+import {
+  auditModernizationPlatform,
+  type ModernizationPlatformSummary,
+} from './modernization-platform-audit.mts';
 
 export interface ModernizationTarget {
   readonly area: string;
@@ -29,6 +33,7 @@ export interface ModernizationSummary {
   readonly languageVersion: string | null;
   readonly nullableMode: string | null;
   readonly targets: readonly ModernizationTarget[];
+  readonly platformGovernance: ModernizationPlatformSummary;
   readonly findings: readonly Finding[];
 }
 
@@ -213,14 +218,18 @@ export function auditModernization(inventory: RepositoryInventory): AuditSection
   const languageVersion = buildProps ? xmlValue(buildProps.text, 'LangVersion') : null;
   const nullableMode = buildProps ? xmlValue(buildProps.text, 'Nullable') : null;
   const migrationTargets = targets(reactVersion, reactScriptsVersion, viteDetected, targetFramework, languageVersion, typescriptRatio);
-  const findings = stableSortFindings(buildFindings(
-    reactVersion,
-    reactScriptsVersion,
-    viteDetected,
-    targetFramework,
-    nullableMode,
-    typescriptRatio,
-  ));
+  const platformGovernance = auditModernizationPlatform(inventory);
+  const findings = stableSortFindings([
+    ...buildFindings(
+      reactVersion,
+      reactScriptsVersion,
+      viteDetected,
+      targetFramework,
+      nullableMode,
+      typescriptRatio,
+    ),
+    ...platformGovernance.findings,
+  ]);
 
   return {
     domain: 'architecture',
@@ -237,6 +246,7 @@ export function auditModernization(inventory: RepositoryInventory): AuditSection
       languageVersion,
       nullableMode,
       targets: migrationTargets,
+      platformGovernance: platformGovernance.summary,
       findings,
     },
     findings,
