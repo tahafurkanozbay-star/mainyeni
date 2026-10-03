@@ -132,15 +132,7 @@ export class RuntimeRetryBudgetRegistry {
     let state = this.scopes.get(scope)
     if (!state) {
       this.ensureScopeCapacity(now)
-      state = {
-        scope,
-        generation: 1,
-        tokens: this.policy.initialTokens,
-        consecutiveFailures: 0,
-        cooldownUntil: null,
-        lastRefillAt: now,
-        touchedAt: now,
-      }
+      state = { scope, generation: 1, tokens: this.policy.initialTokens, consecutiveFailures: 0, cooldownUntil: null, lastRefillAt: now, touchedAt: now }
       this.scopes.set(scope, state)
     }
     this.refill(state, now)
@@ -148,15 +140,7 @@ export class RuntimeRetryBudgetRegistry {
     if (state.cooldownUntil !== null && now < state.cooldownUntil && request.priority !== 'critical') return null
     if (state.tokens < cost) return null
     state.tokens -= cost
-    const lease: StoredLease = Object.freeze({
-      id: this.nextLeaseId++,
-      scope,
-      generation: state.generation,
-      cost,
-      acquiredAt: now,
-      expiresAt: now + this.policy.leaseMs,
-      priority: request.priority,
-    })
+    const lease: StoredLease = Object.freeze({ id: this.nextLeaseId++, scope, generation: state.generation, cost, acquiredAt: now, expiresAt: now + this.policy.leaseMs, priority: request.priority })
     this.leases.set(lease.id, lease)
     return this.publicLease(lease)
   }
@@ -168,10 +152,7 @@ export class RuntimeRetryBudgetRegistry {
     const stored = this.leases.get(lease.id)
     if (!stored || stored.scope !== lease.scope || stored.generation !== lease.generation) return false
     const state = this.scopes.get(stored.scope)
-    if (!state || state.generation !== stored.generation) {
-      this.leases.delete(stored.id)
-      return false
-    }
+    if (!state || state.generation !== stored.generation) { this.leases.delete(stored.id); return false }
     this.leases.delete(stored.id)
     this.refill(state, at)
     state.touchedAt = Math.max(state.touchedAt, at)
@@ -188,9 +169,7 @@ export class RuntimeRetryBudgetRegistry {
     state.consecutiveFailures += 1
     const penalty = outcome === 'timeout' ? this.policy.timeoutPenalty : this.policy.failurePenalty
     state.tokens = Math.max(0, state.tokens - penalty)
-    if (state.consecutiveFailures >= this.policy.maxConsecutiveFailures) {
-      state.cooldownUntil = at + this.policy.cooldownMs
-    }
+    if (state.consecutiveFailures >= this.policy.maxConsecutiveFailures) state.cooldownUntil = at + this.policy.cooldownMs
     return true
   }
 
@@ -252,9 +231,7 @@ export class RuntimeRetryBudgetRegistry {
   snapshot(now?: number): RuntimeRetryBudgetSnapshot {
     if (now !== undefined) this.sweep(now)
     if (this.disposed) return Object.freeze({ disposed: true, scopeCount: 0, activeLeaseCount: 0, scopes: Object.freeze([]) })
-    const scopes = [...this.scopes.values()]
-      .sort((left, right) => left.scope.localeCompare(right.scope))
-      .map((state) => this.scopeSnapshot(state))
+    const scopes = [...this.scopes.values()].sort((left, right) => left.scope.localeCompare(right.scope)).map((state) => this.scopeSnapshot(state))
     return Object.freeze({ disposed: false, scopeCount: scopes.length, activeLeaseCount: this.leases.size, scopes: Object.freeze(scopes) })
   }
 
@@ -266,15 +243,15 @@ export class RuntimeRetryBudgetRegistry {
   }
 
   private refill(state: ScopeState, now: number): void {
+    if (state.cooldownUntil !== null && now >= state.cooldownUntil) {
+      state.cooldownUntil = null
+      state.consecutiveFailures = 0
+    }
     if (now <= state.lastRefillAt) return
     const intervals = Math.floor((now - state.lastRefillAt) / this.policy.refillIntervalMs)
     if (intervals <= 0) return
     state.tokens = Math.min(this.policy.maxTokensPerScope, state.tokens + intervals * this.policy.refillTokens)
     state.lastRefillAt += intervals * this.policy.refillIntervalMs
-    if (state.cooldownUntil !== null && now >= state.cooldownUntil) {
-      state.cooldownUntil = null
-      state.consecutiveFailures = 0
-    }
   }
 
   private ensureScopeCapacity(now: number): void {
@@ -282,18 +259,13 @@ export class RuntimeRetryBudgetRegistry {
     let victim: ScopeState | null = null
     let victimRank = Number.POSITIVE_INFINITY
     for (const candidate of this.scopes.values()) {
-      const highestPriority = [...this.leases.values()]
-        .filter((lease) => lease.scope === candidate.scope)
-        .reduce((rank, lease) => Math.max(rank, priorityRank(lease.priority)), -1)
+      const highestPriority = [...this.leases.values()].filter((lease) => lease.scope === candidate.scope).reduce((rank, lease) => Math.max(rank, priorityRank(lease.priority)), -1)
       if (victim === null || highestPriority < victimRank || (highestPriority === victimRank && (candidate.touchedAt < victim.touchedAt || (candidate.touchedAt === victim.touchedAt && candidate.scope.localeCompare(victim.scope) < 0)))) {
         victim = candidate
         victimRank = highestPriority
       }
     }
-    if (victim) {
-      this.removeScopeLeases(victim.scope)
-      this.scopes.delete(victim.scope)
-    }
+    if (victim) { this.removeScopeLeases(victim.scope); this.scopes.delete(victim.scope) }
     void now
   }
 
@@ -304,16 +276,7 @@ export class RuntimeRetryBudgetRegistry {
   private scopeSnapshot(state: ScopeState): RuntimeRetryScopeSnapshot {
     let activeLeases = 0
     for (const lease of this.leases.values()) if (lease.scope === state.scope && lease.generation === state.generation) activeLeases += 1
-    return Object.freeze({
-      scope: state.scope,
-      generation: state.generation,
-      tokens: state.tokens,
-      activeLeases,
-      consecutiveFailures: state.consecutiveFailures,
-      cooldownUntil: state.cooldownUntil,
-      lastRefillAt: state.lastRefillAt,
-      touchedAt: state.touchedAt,
-    })
+    return Object.freeze({ scope: state.scope, generation: state.generation, tokens: state.tokens, activeLeases, consecutiveFailures: state.consecutiveFailures, cooldownUntil: state.cooldownUntil, lastRefillAt: state.lastRefillAt, touchedAt: state.touchedAt })
   }
 
   private publicLease(lease: StoredLease): RuntimeRetryLease {
