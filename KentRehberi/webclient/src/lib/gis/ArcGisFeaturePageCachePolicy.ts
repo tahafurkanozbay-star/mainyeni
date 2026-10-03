@@ -44,14 +44,20 @@ export class ArcGisFeaturePageCachePolicy {
     if (previous && page.revision < previous.revision) return false
     if (page.objectIdCount > this.budget.maxObjectIdsPerPage || page.byteSize > this.budget.maxBytesPerPage) return false
 
+    // Admission must not be denied by metadata that is already dead at the
+    // candidate's observation time. Purging here keeps bounded cache pressure
+    // self-healing even when callers never probe or explicitly expire old pages.
+    this.release(entry => page.storedAt >= entry.expiresAt)
+
+    const currentPrevious = this.entries.get(key)
     const advances = page.revision > watermark
-    const survives = (entry: Entry) => entry !== previous && !(advances && entry.layerId === page.layerId && entry.revision < page.revision)
+    const survives = (entry: Entry) => entry !== currentPrevious && !(advances && entry.layerId === page.layerId && entry.revision < page.revision)
     const layerCount = this.count(entry => survives(entry) && entry.layerId === page.layerId)
     if (layerCount + 1 > this.budget.maxEntriesPerLayer) return false
     if (!this.canFit(page, survives)) return false
 
     if (advances) this.invalidateLayer(page.layerId, page.revision)
-    else if (previous) this.entries.delete(key)
+    else if (currentPrevious) this.entries.delete(key)
     this.revisions.set(page.layerId, Math.max(watermark, page.revision))
     this.evictUntilFits(page)
     if (this.entries.size >= this.budget.maxEntries) this.evictOne(page)
