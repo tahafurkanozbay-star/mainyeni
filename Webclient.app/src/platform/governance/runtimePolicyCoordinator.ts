@@ -50,7 +50,8 @@ interface ScopeState {
   lastTouchedAt: number
 }
 
-interface LeaseState extends RuntimePolicyLease {
+interface LeaseState extends Omit<RuntimePolicyLease, 'expiresAt'> {
+  expiresAt: number
   settled: boolean
 }
 
