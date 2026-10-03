@@ -56,14 +56,21 @@ export class ArcGisFeatureHydrationLifecyclePolicy {
     if (previous && request.revision <= previous.revision) return false
     if (request.objectIdCount > this.budget.maxObjectIdsPerJob || request.estimatedBytes > this.budget.maxEstimatedBytesPerJob) return false
 
-    // Admission must be atomic: a rejected replacement must not destroy the
-    // caller's currently admitted ownership. Capacity is evaluated as though
-    // the matching prior generation were replaced, without mutating state.
-    const totalAfterReplacement = this.jobs.size - (previous ? 1 : 0) + 1
-    const layerAfterReplacement = this.count(entry => entry.layerId === request.layerId && entry !== previous) + 1
+    // Admission is evaluated against the state that would remain after a
+    // monotonic revision supersession. This avoids rejecting a fresh revision
+    // merely because stale generations currently occupy the bounded registry,
+    // while still leaving all existing ownership untouched when admission fails.
+    const supersedesLayer = request.revision > watermark
+    const survivesReplacement = (entry: Entry): boolean => {
+      if (entry === previous) return false
+      if (supersedesLayer && entry.layerId === request.layerId && entry.revision < request.revision) return false
+      return true
+    }
+    const totalAfterReplacement = this.count(survivesReplacement) + 1
+    const layerAfterReplacement = this.count(entry => survivesReplacement(entry) && entry.layerId === request.layerId) + 1
     if (totalAfterReplacement > this.budget.maxJobs || layerAfterReplacement > this.budget.maxJobsPerLayer) return false
 
-    if (request.revision > watermark) this.invalidateLayer(request.layerId, request.revision)
+    if (supersedesLayer) this.invalidateLayer(request.layerId, request.revision)
     else if (previous) this.jobs.delete(key)
     this.revisions.set(request.layerId, request.revision)
     this.jobs.set(key, { ...request, phase: 'queued', actualBytes: 0, featureCount: 0, expiresAt: request.requestedAt + this.budget.queueTtlMs, sequence: this.sequence++ })
