@@ -6,6 +6,7 @@ import './Components/Common/experience-ui.css';
 import './Components/Common/experience-quality.css';
 import './Components/Common/experience-shell.css';
 import './Components/Common/experience-data-ux.css';
+import './Components/Common/workspace-accessibility-guide-preference.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
 import './Components/App/MapWorkspaceShellPlacement.css';
@@ -30,6 +31,8 @@ import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSys
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { ExperienceRuntimeBridge } from './Components/Common/ExperienceRuntimeBridge';
 import { ExperienceStartupBoundary } from './Components/Common/ExperienceStartupBoundary';
+import { WorkspaceAccessibilityCenter } from './Components/Common/WorkspaceAccessibilityCenter';
+import { WorkspaceAccessibilityProvider } from './Components/Common/WorkspaceAccessibilityProvider';
 import { createStartupExperienceModel } from './experience/startupExperienceModel';
 import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
@@ -123,29 +126,32 @@ function App() {
 
   return (
     <ExperienceThemeProvider>
-      <ExperiencePresentationBridge />
-      <ExperienceRuntimeBridge />
-      <ExperienceSettingsValidationBridge />
-      <ExperienceMapModePreferenceBridge />
-      <ExperienceMapModeFocusBridge />
-      <FastAccessResultAccessibilityBridge />
-      <div id="app-shell">
-        <ExperienceStartupBoundary
-          model={startupModel}
-          onRetry={retryBootstrap}
-        >
-          <ExperienceSkipNavigation />
-          <MapComponent windowManager={windowManager} />
-          <MapWorkspaceShellOverlay />
-          <ExperienceMapModeGovernedOverlay />
-          <ExperienceMapInteractionGuide />
-          <ExperienceWorkspace />
-          <ExperienceUXLayer windowManager={windowManager} />
-          <ExperienceCommandCenter windowManager={windowManager} />
-          <ExperienceConnectivityNotice />
-          <ExperienceDataDisclaimer />
-        </ExperienceStartupBoundary>
-      </div>
+      <WorkspaceAccessibilityProvider>
+        <ExperiencePresentationBridge />
+        <ExperienceRuntimeBridge />
+        <ExperienceSettingsValidationBridge />
+        <ExperienceMapModePreferenceBridge />
+        <ExperienceMapModeFocusBridge />
+        <FastAccessResultAccessibilityBridge />
+        <div id="app-shell">
+          <ExperienceStartupBoundary
+            model={startupModel}
+            onRetry={retryBootstrap}
+          >
+            <ExperienceSkipNavigation />
+            <MapComponent windowManager={windowManager} />
+            <MapWorkspaceShellOverlay />
+            <ExperienceMapModeGovernedOverlay />
+            <ExperienceMapInteractionGuide />
+            <ExperienceWorkspace />
+            <ExperienceUXLayer windowManager={windowManager} />
+            <ExperienceCommandCenter windowManager={windowManager} />
+            <ExperienceConnectivityNotice />
+            <ExperienceDataDisclaimer />
+          </ExperienceStartupBoundary>
+        </div>
+        <WorkspaceAccessibilityCenter />
+      </WorkspaceAccessibilityProvider>
     </ExperienceThemeProvider>
   );
 }
