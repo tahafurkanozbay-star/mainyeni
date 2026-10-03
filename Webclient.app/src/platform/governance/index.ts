@@ -12,3 +12,4 @@ export * from './runtimeCircuitBreaker';
 export * from './runtimeRetryGovernor';
 export * from './runtimeHealthWindow';
 export * from './runtimeRecoveryCoordinator';
+export * from './runtimeDeadlineGovernor';
