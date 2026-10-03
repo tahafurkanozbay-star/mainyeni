@@ -152,7 +152,6 @@ export class WorkspaceLandmarkRuntime {
   private revision = 0;
   private started = false;
   private disposed = false;
-  private reporterFailures = 0;
 
   constructor(options: WorkspaceLandmarkRuntimeOptions = {}) {
     this.doc = options.document ?? (typeof document === 'undefined' ? undefined : document);
@@ -247,10 +246,6 @@ export class WorkspaceLandmarkRuntime {
     return this.disposed;
   }
 
-  getReporterFailureCount(): number {
-    return this.reporterFailures;
-  }
-
   private readonly onResize = (): void => this.scheduleRefresh();
 
   private publish(): void {
@@ -264,8 +259,10 @@ export class WorkspaceLandmarkRuntime {
       if (!this.onError) return;
       try {
         this.onError(error);
-      } catch {
-        this.reporterFailures += 1;
+      } catch (reporterError) {
+        if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+          console.warn('Workspace landmark diagnostic reporter failed.', reporterError);
+        }
       }
     }
   }
