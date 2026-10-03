@@ -104,12 +104,6 @@ function positiveInteger(value: unknown, fallback: number): number {
     : fallback;
 }
 
-function nonNegativeInteger(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-    ? Math.floor(value)
-    : fallback;
-}
-
 function safeClock(value: number): number {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
