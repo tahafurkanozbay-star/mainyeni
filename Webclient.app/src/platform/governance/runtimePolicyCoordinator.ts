@@ -292,7 +292,7 @@ export class RuntimePolicyCoordinator {
   }
 
   private validateLease(lease: RuntimePolicyLease): LeaseState | null {
-    if (!lease || typeof lease.id !== 'string') return null
+    if (typeof lease.id !== 'string') return null
     const current = this.leases.get(lease.id)
     if (!current) return null
     if (current.scope !== lease.scope || current.lane !== lease.lane || current.generation !== lease.generation || current.units !== lease.units || current.acquiredAt !== lease.acquiredAt) return null
