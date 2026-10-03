@@ -50,22 +50,10 @@ export interface ArcGisIdentifyDiagnostics {
 
 type Work = ArcGisIdentifyWorkSnapshot
 
-const INTENT_RANK: Record<ArcGisIdentifyIntent, number> = {
-  interactive: 0,
-  foreground: 1,
-  background: 2,
-}
-
+const INTENT_RANK: Record<ArcGisIdentifyIntent, number> = { interactive: 0, foreground: 1, background: 2 }
 const KEY_SEPARATOR = '\u0000'
 
-/**
- * Bounded, payload-free admission authority for ArcGIS REST identify work.
- *
- * The policy deliberately stores scalar scheduling metadata only. Geometry,
- * screen points, layer objects, credentials, response payloads and SDK object
- * graphs remain owned by the caller. This makes cancellation and revision
- * invalidation deterministic without turning the scheduler into a data cache.
- */
+/** Bounded, payload-free admission authority for ArcGIS REST identify work. */
 export class ArcGisIdentifyWorkPolicy {
   private readonly work = new Map<string, Work>()
   private readonly viewRevisions = new Map<string, number>()
@@ -105,8 +93,7 @@ export class ArcGisIdentifyWorkPolicy {
     if (item.layerCount > this.budget.maxLayersPerRequest || item.tolerancePixels > this.budget.maxTolerancePixels) return this.reject()
     if (!this.viewRevisions.has(item.viewId) && this.viewRevisions.size >= this.budget.maxViews) return this.reject()
     if (item.revision > watermark) this.advanceRevision(item.viewId, item.revision)
-    if (this.count('queued') >= this.budget.maxQueued) return this.reject()
-    if (this.count('queued', item.viewId) >= this.budget.maxQueuedPerView) return this.reject()
+    if (this.count('queued') >= this.budget.maxQueued || this.count('queued', item.viewId) >= this.budget.maxQueuedPerView) return this.reject()
     this.viewRevisions.set(item.viewId, Math.max(watermark, item.revision))
     this.work.set(key, { ...item, state: 'queued', sequence: this.sequence++ })
     return true
@@ -140,23 +127,12 @@ export class ArcGisIdentifyWorkPolicy {
       this.staleCompletions++
       return false
     }
-    if (input.startedAt !== undefined) {
-      // Kept intentionally impossible: completion contract has no caller-owned
-      // start timestamp. Runtime age is derived exclusively from authority state.
-    }
     if (item.startedAt === undefined || input.completedAt - item.startedAt > this.budget.runTtlMs) {
       this.work.delete(key)
       this.expired++
       return false
     }
-    if (input.responseBytes > this.budget.maxResponseBytes) {
-      this.work.delete(key)
-      this.rejected++
-      return false
-    }
-    const currentBytes = this.totalResidentBytes()
-    const previous = this.residentBytes.get(key) ?? 0
-    if (currentBytes - previous + input.responseBytes > this.budget.maxAggregateResponseBytes) {
+    if (input.responseBytes > this.budget.maxResponseBytes || this.totalResidentBytes() + input.responseBytes > this.budget.maxAggregateResponseBytes) {
       this.work.delete(key)
       this.rejected++
       return false
@@ -179,16 +155,10 @@ export class ArcGisIdentifyWorkPolicy {
     if (revision <= current) return 0
     this.viewRevisions.set(id, revision)
     let removed = 0
-    for (const [key, item] of this.work) {
-      if (item.viewId === id && item.revision < revision) {
-        this.work.delete(key)
-        this.cancelled++
-        removed++
-      }
+    for (const [key, item] of this.work) if (item.viewId === id && item.revision < revision) {
+      this.work.delete(key); this.cancelled++; removed++
     }
-    for (const key of [...this.residentBytes.keys()]) {
-      if (key.startsWith(`${id}${KEY_SEPARATOR}`)) this.residentBytes.delete(key)
-    }
+    for (const key of [...this.residentBytes.keys()]) if (key.startsWith(`${id}${KEY_SEPARATOR}`)) this.residentBytes.delete(key)
     return removed
   }
 
@@ -196,16 +166,10 @@ export class ArcGisIdentifyWorkPolicy {
     this.assertActive()
     const id = this.assertId(viewId, 'viewId')
     let removed = 0
-    for (const [key, item] of this.work) {
-      if (item.viewId === id) {
-        this.work.delete(key)
-        this.cancelled++
-        removed++
-      }
+    for (const [key, item] of this.work) if (item.viewId === id) {
+      this.work.delete(key); this.cancelled++; removed++
     }
-    for (const key of [...this.residentBytes.keys()]) {
-      if (key.startsWith(`${id}${KEY_SEPARATOR}`)) this.residentBytes.delete(key)
-    }
+    for (const key of [...this.residentBytes.keys()]) if (key.startsWith(`${id}${KEY_SEPARATOR}`)) this.residentBytes.delete(key)
     this.viewRevisions.delete(id)
     return removed
   }
@@ -224,111 +188,45 @@ export class ArcGisIdentifyWorkPolicy {
     this.assertTimestamp(now)
     let removed = 0
     for (const [key, item] of this.work) {
-      const deadline = item.state === 'queued'
-        ? item.queuedAt + this.budget.queueTtlMs
-        : (item.startedAt ?? item.queuedAt) + this.budget.runTtlMs
-      if (now >= deadline) {
-        this.work.delete(key)
-        this.expired++
-        removed++
-      }
+      const deadline = item.state === 'queued' ? item.queuedAt + this.budget.queueTtlMs : (item.startedAt ?? item.queuedAt) + this.budget.runTtlMs
+      if (now >= deadline) { this.work.delete(key); this.expired++; removed++ }
     }
     return removed
   }
 
   snapshot(): ArcGisIdentifyWorkSnapshot[] {
     this.assertActive()
-    return [...this.work.values()]
-      .sort((a, b) => a.sequence - b.sequence)
-      .map((item) => this.detach(item))
+    return [...this.work.values()].sort((a, b) => a.sequence - b.sequence).map((item) => this.detach(item))
   }
 
   diagnostics(): ArcGisIdentifyDiagnostics {
     this.assertActive()
-    return {
-      queued: this.count('queued'),
-      running: this.count('running'),
-      residentResponseBytes: this.totalResidentBytes(),
-      rejected: this.rejected,
-      expired: this.expired,
-      cancelled: this.cancelled,
-      staleCompletions: this.staleCompletions,
-    }
+    return { queued: this.count('queued'), running: this.count('running'), residentResponseBytes: this.totalResidentBytes(), rejected: this.rejected, expired: this.expired, cancelled: this.cancelled, staleCompletions: this.staleCompletions }
   }
 
   fingerprint(): string {
-    return this.snapshot()
-      .map((item) => `${item.viewId}:${item.requestId}:${item.revision}:${item.intent}:${item.state}:${item.layerCount}:${item.tolerancePixels}`)
-      .join('|')
+    return this.snapshot().map((item) => `${item.viewId}:${item.requestId}:${item.revision}:${item.intent}:${item.state}:${item.layerCount}:${item.tolerancePixels}`).join('|')
   }
 
   dispose(): void {
     if (this.disposed) return
-    this.work.clear()
-    this.viewRevisions.clear()
-    this.residentBytes.clear()
-    this.disposed = true
+    this.work.clear(); this.viewRevisions.clear(); this.residentBytes.clear(); this.disposed = true
   }
 
   private normalize(input: ArcGisIdentifyWorkInput): ArcGisIdentifyWorkInput {
     if (!(input.intent in INTENT_RANK)) throw new Error('intent is invalid')
-    this.assertPositive(input.revision, 'revision')
-    this.assertPositive(input.layerCount, 'layerCount')
-    this.assertNonNegative(input.tolerancePixels, 'tolerancePixels')
-    this.assertTimestamp(input.queuedAt)
-    return {
-      ...input,
-      requestId: this.assertId(input.requestId, 'requestId'),
-      viewId: this.assertId(input.viewId, 'viewId'),
-    }
+    this.assertPositive(input.revision, 'revision'); this.assertPositive(input.layerCount, 'layerCount')
+    this.assertNonNegative(input.tolerancePixels, 'tolerancePixels'); this.assertTimestamp(input.queuedAt)
+    return { ...input, requestId: this.assertId(input.requestId, 'requestId'), viewId: this.assertId(input.viewId, 'viewId') }
   }
-
-  private count(state: Work['state'], viewId?: string): number {
-    let count = 0
-    for (const item of this.work.values()) if (item.state === state && (!viewId || item.viewId === viewId)) count++
-    return count
-  }
-
-  private totalResidentBytes(): number {
-    let bytes = 0
-    for (const value of this.residentBytes.values()) bytes += value
-    return bytes
-  }
-
-  private detach(item: Work): ArcGisIdentifyWorkSnapshot {
-    return { ...item }
-  }
-
-  private reject(): false {
-    this.rejected++
-    return false
-  }
-
-  private key(viewId: string, requestId: string): string {
-    return `${viewId}${KEY_SEPARATOR}${requestId}`
-  }
-
-  private assertId(value: string, name: string): string {
-    const normalized = value.trim()
-    if (!normalized || normalized.length > 160 || normalized.includes(KEY_SEPARATOR) || normalized.includes(':')) {
-      throw new Error(`${name} must contain safe characters`)
-    }
-    return normalized
-  }
-
-  private assertPositive(value: number, name: string): void {
-    if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`)
-  }
-
-  private assertNonNegative(value: number, name: string): void {
-    if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a non-negative safe integer`)
-  }
-
-  private assertTimestamp(value: number): void {
-    if (!Number.isFinite(value) || value < 0) throw new RangeError('timestamp must be finite and non-negative')
-  }
-
-  private assertActive(): void {
-    if (this.disposed) throw new Error('ArcGisIdentifyWorkPolicy is disposed')
-  }
+  private count(state: Work['state'], viewId?: string): number { let count = 0; for (const item of this.work.values()) if (item.state === state && (!viewId || item.viewId === viewId)) count++; return count }
+  private totalResidentBytes(): number { let bytes = 0; for (const value of this.residentBytes.values()) bytes += value; return bytes }
+  private detach(item: Work): ArcGisIdentifyWorkSnapshot { return { ...item } }
+  private reject(): false { this.rejected++; return false }
+  private key(viewId: string, requestId: string): string { return `${viewId}${KEY_SEPARATOR}${requestId}` }
+  private assertId(value: string, name: string): string { const normalized = value.trim(); if (!normalized || normalized.length > 160 || normalized.includes(KEY_SEPARATOR) || normalized.includes(':')) throw new Error(`${name} must contain safe characters`); return normalized }
+  private assertPositive(value: number, name: string): void { if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`) }
+  private assertNonNegative(value: number, name: string): void { if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a non-negative safe integer`) }
+  private assertTimestamp(value: number): void { if (!Number.isFinite(value) || value < 0) throw new RangeError('timestamp must be finite and non-negative') }
+  private assertActive(): void { if (this.disposed) throw new Error('ArcGisIdentifyWorkPolicy is disposed') }
 }
