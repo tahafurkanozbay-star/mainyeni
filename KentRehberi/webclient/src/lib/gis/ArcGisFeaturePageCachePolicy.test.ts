@@ -58,6 +58,28 @@ describe('ArcGisFeaturePageCachePolicy', () => {
     expect(cache.snapshot()).toHaveLength(0)
   })
 
+  it('purges expired residency before admission so dead pages cannot block capacity', () => {
+    const cache = new ArcGisFeaturePageCachePolicy({ ...budget, maxEntries: 2, maxEntriesPerLayer: 2 })
+    expect(cache.put(page({ pageKey: 'old-a', storedAt: 10, fingerprint: 'old-a' }))).toBe(true)
+    expect(cache.put(page({ pageKey: 'old-b', storedAt: 11, fingerprint: 'old-b' }))).toBe(true)
+    expect(cache.put(page({ pageKey: 'fresh', storedAt: 111, fingerprint: 'fresh' }))).toBe(true)
+    expect(cache.snapshot().map(item => item.pageKey)).toEqual(['fresh'])
+  })
+
+  it('purges expired bytes before aggregate-byte admission', () => {
+    const cache = new ArcGisFeaturePageCachePolicy({ ...budget, maxEntriesPerLayer: 3, maxAggregateBytes: 1_000 })
+    expect(cache.put(page({ pageKey: 'old', byteSize: 1_000, storedAt: 10, fingerprint: 'old' }))).toBe(true)
+    expect(cache.put(page({ pageKey: 'fresh', byteSize: 1_000, storedAt: 110, fingerprint: 'fresh' }))).toBe(true)
+    expect(cache.snapshot()).toEqual([expect.objectContaining({ pageKey: 'fresh', byteSize: 1_000 })])
+  })
+
+  it('does not purge live residency one millisecond before the ttl boundary', () => {
+    const cache = new ArcGisFeaturePageCachePolicy({ ...budget, maxEntries: 1, maxEntriesPerLayer: 1 })
+    expect(cache.put(page({ pageKey: 'live', storedAt: 10, fingerprint: 'live' }))).toBe(true)
+    expect(cache.put(page({ pageKey: 'candidate', storedAt: 109, fingerprint: 'candidate' }))).toBe(false)
+    expect(cache.snapshot().map(item => item.pageKey)).toEqual(['live'])
+  })
+
   it('evicts background residency before visible residency for an interactive page', () => {
     const cache = new ArcGisFeaturePageCachePolicy({ ...budget, maxEntriesPerLayer: 3 })
     cache.put(page({ pageKey: 'visible', intent: 'visible', byteSize: 700, fingerprint: 'v' }))
