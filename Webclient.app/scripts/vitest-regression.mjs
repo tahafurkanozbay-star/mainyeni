@@ -127,6 +127,18 @@ const printState = (label, state) => {
   }
 };
 
+const escapeWorkflowCommand = (value) => String(value ?? '')
+  .replaceAll('%', '%25')
+  .replaceAll('\r', '%0D')
+  .replaceAll('\n', '%0A');
+
+const annotateRegression = (failure, detail) => {
+  if (!process.env.GITHUB_ACTIONS) return;
+  const title = escapeWorkflowCommand(`Exact-base Vitest regression: ${failure}`);
+  const message = escapeWorkflowCommand(detail || 'Candidate introduces a failure that is absent from the exact PR base.');
+  console.error(`::error title=${title}::${message}`);
+};
+
 const args = process.argv.slice(2);
 if (args[0] === '--list') {
   const state = collectReportState(readReport(args[1]));
@@ -155,18 +167,25 @@ for (const failure of added) {
   console.error(`[vitest:regression] NEW failure: ${failure}`);
   const detail = current.details.get(failure);
   if (detail) console.error(`[vitest:regression] NEW detail: ${detail}`);
+  annotateRegression(failure, detail);
 }
 
 if (current.failedTests > baseline.failedTests && added.length === 0) {
-  console.error('[vitest:regression] Current failed-test count increased without a normalized assertion identity; failing closed.');
+  const message = 'Current failed-test count increased without a normalized assertion identity; failing closed.';
+  console.error(`[vitest:regression] ${message}`);
+  annotateRegression('<failed-test-count>', message);
   process.exit(1);
 }
 if (current.failedSuites > baseline.failedSuites && added.length === 0) {
-  console.error('[vitest:regression] Current failed-suite count increased without a normalized assertion identity; failing closed.');
+  const message = 'Current failed-suite count increased without a normalized assertion identity; failing closed.';
+  console.error(`[vitest:regression] ${message}`);
+  annotateRegression('<failed-suite-count>', message);
   process.exit(1);
 }
 if (addedUnhandledErrors > 0) {
-  console.error(`[vitest:regression] NEW unhandled errors: ${addedUnhandledErrors}`);
+  const message = `NEW unhandled errors: ${addedUnhandledErrors}`;
+  console.error(`[vitest:regression] ${message}`);
+  annotateRegression('<unhandled-errors>', message);
   process.exit(1);
 }
 if (added.length > 0) process.exit(1);
