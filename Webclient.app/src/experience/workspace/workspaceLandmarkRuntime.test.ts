@@ -6,7 +6,7 @@ const mountCoreLandmarks = (): void => {
   document.body.innerHTML = `
     <nav id="mainbar" aria-label="Üst gezinme"><button type="button">Menü</button></nav>
     <label for="kentrehberi-global-search">Adres veya yer ara</label>
-    <input id="kentrehberi-global-search" />
+    <input id="kentrehberi-global-search" aria-label="Adres veya yer ara" />
     <aside id="sidebar" aria-label="Katman ve hizmet menüsü" tabindex="0"></aside>
     <div id="toolbar-widget" aria-label="Harita araçları" tabindex="0"></div>
     <main id="experience-workspace-controls" aria-label="Çalışma alanı" tabindex="0"></main>
@@ -81,7 +81,7 @@ describe('WorkspaceLandmarkRuntime', () => {
   });
 
   it('recognizes native form labels', () => {
-    document.body.innerHTML = '<label for="kentrehberi-global-search">Yer ara</label><input id="kentrehberi-global-search">';
+    document.body.innerHTML = '<label for="kentrehberi-global-search">Yer ara</label><input id="kentrehberi-global-search" aria-label="Yer ara">';
     const definition = WORKSPACE_LANDMARK_DEFINITIONS.find((item) => item.id === 'search')!;
     const result = observeWorkspaceLandmark(definition, document, window);
     expect(result.labelled).toBe(true);
