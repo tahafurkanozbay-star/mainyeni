@@ -157,7 +157,9 @@ describe('WorkspaceAccessibilityCenter integration', () => {
     fireEvent.click(keyboardGuide);
     expect(keyboardGuide).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Görsel tercihleri sıfırla' }));
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Klavye rehberini göster/i })).toBeChecked());
+    await waitFor(() => expect(launcher()).toHaveAttribute('aria-expanded', 'false'));
+    expect(document.getElementById('app-shell')).toHaveAttribute('data-workspace-keyboard-guide', 'true');
+    expect(sessionStorage.getItem('kentrehberi:workspace-accessibility:v1')).toBeNull();
     expect(document.querySelectorAll('.workspace-accessibility-live')).toHaveLength(2);
   });
 
