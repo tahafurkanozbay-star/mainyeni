@@ -101,6 +101,7 @@ export class WorkspaceFocusRecoveryRuntime {
   private cleanupTabIndex: string | null = null;
   private focusRingTarget: HTMLElement | null = null;
   private disposed = false;
+  private reporterFailures = 0;
 
   constructor(options: WorkspaceFocusRecoveryRuntimeOptions = {}) {
     this.doc = options.document ?? (typeof document === 'undefined' ? undefined : document);
@@ -170,6 +171,10 @@ export class WorkspaceFocusRecoveryRuntime {
 
   isDisposed(): boolean {
     return this.disposed;
+  }
+
+  getReporterFailureCount(): number {
+    return this.reporterFailures;
   }
 
   private focusTarget(target: WorkspaceFocusTarget, showFocusRing: boolean): WorkspaceFocusExecutionResult {
@@ -257,10 +262,8 @@ export class WorkspaceFocusRecoveryRuntime {
     if (!this.onError) return;
     try {
       this.onError(error);
-    } catch (reporterError) {
-      if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-        console.warn('Workspace focus recovery diagnostic reporter failed.', reporterError);
-      }
+    } catch {
+      this.reporterFailures += 1;
     }
   }
 }
