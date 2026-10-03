@@ -18,6 +18,18 @@ describe('ArcGisFeatureHydrationLifecyclePolicy', () => {
     const p = new ArcGisFeatureHydrationLifecyclePolicy({...budget,maxJobs:2,maxJobsPerLayer:1,maxLoading:1,maxReady:1})
     expect(p.enqueue(request({jobId:'a'}))).toBe(true); expect(p.enqueue(request({jobId:'b'}))).toBe(false); expect(p.enqueue(request({layerId:'layer-2',jobId:'c'}))).toBe(true); expect(p.enqueue(request({layerId:'layer-3',jobId:'d'}))).toBe(false)
   })
+  it('replaces an admitted job atomically when capacity is full', () => {
+    const p = new ArcGisFeatureHydrationLifecyclePolicy({...budget,maxJobs:1,maxJobsPerLayer:1,maxLoading:1,maxReady:1})
+    expect(p.enqueue(request({revision:1}))).toBe(true)
+    expect(p.enqueue(request({revision:2,requestedAt:11}))).toBe(true)
+    expect(p.snapshot()).toEqual([expect.objectContaining({jobId:'job-1',revision:2,requestedAt:11})])
+  })
+  it('preserves prior ownership when a replacement fails admission', () => {
+    const p = new ArcGisFeatureHydrationLifecyclePolicy({...budget,maxJobs:1,maxJobsPerLayer:1,maxLoading:1,maxReady:1})
+    expect(p.enqueue(request({revision:1}))).toBe(true)
+    expect(p.enqueue(request({revision:2,objectIdCount:101}))).toBe(false)
+    expect(p.snapshot()).toEqual([expect.objectContaining({jobId:'job-1',revision:1,objectIdCount:20})])
+  })
   it('bounds object-id and byte admission', () => {
     const p = new ArcGisFeatureHydrationLifecyclePolicy(budget); expect(p.enqueue(request({objectIdCount:101}))).toBe(false); expect(p.enqueue(request({estimatedBytes:10001}))).toBe(false); expect(p.snapshot()).toHaveLength(0)
   })
