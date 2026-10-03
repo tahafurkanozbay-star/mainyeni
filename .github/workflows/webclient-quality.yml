@@ -182,6 +182,17 @@ jobs:
           git -C .. worktree remove --force /tmp/vitest-baseline
           trap - EXIT
 
+      - name: Persist exact-base Vitest diagnostics
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: webclient-vitest-regression
+          path: |
+            /tmp/current-vitest.json
+            /tmp/baseline-vitest.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Native tooling regression suite
         run: npm run test:tooling
 
