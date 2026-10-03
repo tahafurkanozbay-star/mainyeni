@@ -54,10 +54,17 @@ export class ArcGisFeatureHydrationLifecyclePolicy {
     const key = this.key(request.layerId, request.jobId)
     const previous = this.jobs.get(key)
     if (previous && request.revision <= previous.revision) return false
-    if (previous) this.jobs.delete(key)
-    if (this.jobs.size >= this.budget.maxJobs || this.count(entry => entry.layerId === request.layerId) >= this.budget.maxJobsPerLayer) return false
     if (request.objectIdCount > this.budget.maxObjectIdsPerJob || request.estimatedBytes > this.budget.maxEstimatedBytesPerJob) return false
+
+    // Admission must be atomic: a rejected replacement must not destroy the
+    // caller's currently admitted ownership. Capacity is evaluated as though
+    // the matching prior generation were replaced, without mutating state.
+    const totalAfterReplacement = this.jobs.size - (previous ? 1 : 0) + 1
+    const layerAfterReplacement = this.count(entry => entry.layerId === request.layerId && entry !== previous) + 1
+    if (totalAfterReplacement > this.budget.maxJobs || layerAfterReplacement > this.budget.maxJobsPerLayer) return false
+
     if (request.revision > watermark) this.invalidateLayer(request.layerId, request.revision)
+    else if (previous) this.jobs.delete(key)
     this.revisions.set(request.layerId, request.revision)
     this.jobs.set(key, { ...request, phase: 'queued', actualBytes: 0, featureCount: 0, expiresAt: request.requestedAt + this.budget.queueTtlMs, sequence: this.sequence++ })
     return true
