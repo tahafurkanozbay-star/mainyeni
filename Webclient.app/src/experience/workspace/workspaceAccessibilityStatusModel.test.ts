@@ -17,7 +17,7 @@ describe('workspaceAccessibilityStatusModel', () => {
       <main id="experience-workspace-controls"><button>Workspace</button></main>
       <aside id="sidebar"><button>Tools</button></aside>
       <div id="esri-map-container" tabindex="0"></div>
-      <div data-experience-command-palette><input /></div>
+      <div data-experience-command-palette><input aria-label="Komut ara" /></div>
       <div role="dialog"><button>Dialog</button></div>
     `;
     const facts = collectWorkspaceSurfaceFacts(document);
