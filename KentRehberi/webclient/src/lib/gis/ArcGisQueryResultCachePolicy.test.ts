@@ -1,0 +1,163 @@
+import { describe, expect, it } from 'vitest'
+import { ArcGisQueryResultCachePolicy, type ArcGisQueryResultCacheBudget } from './ArcGisQueryResultCachePolicy'
+
+const budget: ArcGisQueryResultCacheBudget = {
+  maxEntries: 4,
+  maxEntriesPerLayer: 3,
+  maxObjectIdsPerEntry: 1_000,
+  maxBytesPerEntry: 500,
+  maxAggregateBytes: 1_200,
+  maxAggregateBytesPerLayer: 800,
+  ttlMs: 100,
+}
+
+const entry = (layerId: string, queryKey: string, revision = 1, storedAt = 0, intent: 'interactive' | 'visible' | 'background' = 'visible', byteSize = 200) => ({
+  layerId, queryKey, revision, storedAt, intent, byteSize, objectIdCount: 10, fingerprint: `${layerId}-${queryKey}-${revision}`,
+})
+
+describe('ArcGisQueryResultCachePolicy', () => {
+  it('stores and retrieves detached scalar descriptors', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    expect(cache.put(entry('parcels', 'viewport'))).toBe(true)
+    const result = cache.get('parcels', 'viewport', 1, 1)!
+    result.layerId = 'tampered'
+    expect(cache.get('parcels', 'viewport', 1, 2)?.layerId).toBe('parcels')
+  })
+
+  it('invalidates older cached queries when a layer revision advances', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'one', 1, 0)); cache.put(entry('a', 'two', 1, 1))
+    expect(cache.put(entry('a', 'fresh', 2, 2))).toBe(true)
+    expect(cache.snapshot().map(item => item.queryKey)).toEqual(['fresh'])
+    expect(cache.put(entry('a', 'stale', 1, 3))).toBe(false)
+  })
+
+  it('keeps same-key replacement atomic when replacement cannot be admitted', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    expect(cache.put(entry('a', 'query', 1, 0, 'interactive', 300))).toBe(true)
+    expect(cache.put({ ...entry('a', 'query', 1, 1), byteSize: 501 })).toBe(false)
+    expect(cache.get('a', 'query', 1, 2)?.byteSize).toBe(300)
+  })
+
+  it('purges expired entries before admission without explicit reads', () => {
+    const tight = new ArcGisQueryResultCachePolicy({ ...budget, maxEntries: 1, maxEntriesPerLayer: 1 })
+    expect(tight.put(entry('a', 'old', 1, 0))).toBe(true)
+    expect(tight.put(entry('b', 'fresh', 1, 100))).toBe(true)
+    expect(tight.snapshot().map(item => item.queryKey)).toEqual(['fresh'])
+  })
+
+  it('enforces per-layer cardinality independently of global cardinality', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    expect(cache.put(entry('a', '1', 1, 0))).toBe(true)
+    expect(cache.put(entry('a', '2', 1, 1))).toBe(true)
+    expect(cache.put(entry('a', '3', 1, 2))).toBe(true)
+    expect(cache.put(entry('a', '4', 1, 3))).toBe(false)
+    expect(cache.put(entry('b', '1', 1, 4))).toBe(true)
+  })
+
+  it('evicts background work before visible work for interactive admission', () => {
+    const cache = new ArcGisQueryResultCachePolicy({ ...budget, maxEntries: 2, maxEntriesPerLayer: 2 })
+    cache.put(entry('a', 'visible', 1, 0, 'visible'))
+    cache.put(entry('b', 'background', 1, 1, 'background'))
+    expect(cache.put(entry('c', 'interactive', 1, 2, 'interactive'))).toBe(true)
+    expect(cache.snapshot().map(item => item.queryKey)).toEqual(['visible', 'interactive'])
+  })
+
+  it('does not evict higher-priority interactive data for background admission', () => {
+    const cache = new ArcGisQueryResultCachePolicy({ ...budget, maxEntries: 1, maxEntriesPerLayer: 1 })
+    cache.put(entry('a', 'interactive', 1, 0, 'interactive'))
+    expect(cache.put(entry('b', 'background', 1, 1, 'background'))).toBe(false)
+    expect(cache.snapshot()[0]?.queryKey).toBe('interactive')
+  })
+
+  it('uses access recency as deterministic eviction tie-break', () => {
+    const cache = new ArcGisQueryResultCachePolicy({ ...budget, maxEntries: 2, maxEntriesPerLayer: 2 })
+    cache.put(entry('a', 'older', 1, 0, 'visible'))
+    cache.put(entry('b', 'newer', 1, 1, 'visible'))
+    expect(cache.touch('a', 'older', 1, 2)).toBe(true)
+    expect(cache.put(entry('c', 'incoming', 1, 3, 'interactive'))).toBe(true)
+    expect(cache.snapshot().map(item => item.queryKey)).toEqual(['older', 'incoming'])
+  })
+
+  it('enforces aggregate byte residency across layers', () => {
+    const cache = new ArcGisQueryResultCachePolicy({ ...budget, maxAggregateBytes: 700, maxAggregateBytesPerLayer: 500 })
+    cache.put(entry('a', 'protected', 1, 0, 'interactive', 400))
+    expect(cache.put(entry('b', 'background', 1, 1, 'background', 400))).toBe(false)
+    expect(cache.snapshot().map(item => item.queryKey)).toEqual(['protected'])
+  })
+
+  it('enforces aggregate byte residency per layer', () => {
+    const cache = new ArcGisQueryResultCachePolicy({ ...budget, maxAggregateBytesPerLayer: 500 })
+    cache.put(entry('a', 'protected', 1, 0, 'interactive', 300))
+    expect(cache.put(entry('a', 'background', 1, 1, 'background', 300))).toBe(false)
+    expect(cache.put(entry('b', 'background', 1, 2, 'background', 300))).toBe(true)
+  })
+
+  it('can evict lower-priority same-layer data to recover layer byte budget', () => {
+    const cache = new ArcGisQueryResultCachePolicy({ ...budget, maxAggregateBytesPerLayer: 500 })
+    cache.put(entry('a', 'background', 1, 0, 'background', 300))
+    expect(cache.put(entry('a', 'interactive', 1, 1, 'interactive', 300))).toBe(true)
+    expect(cache.snapshot().map(item => item.queryKey)).toEqual(['interactive'])
+  })
+
+  it('expires entries at the exact TTL boundary', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'query', 1, 10))
+    expect(cache.get('a', 'query', 1, 109)).toBeDefined()
+    expect(cache.get('a', 'query', 1, 110)).toBeUndefined()
+    expect(cache.snapshot()).toEqual([])
+  })
+
+  it('rejects stale revision lookups without mutating fresh data', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'query', 2, 0))
+    expect(cache.get('a', 'query', 1, 1)).toBeUndefined()
+    expect(cache.get('a', 'query', 2, 1)).toBeDefined()
+  })
+
+  it('releases one layer without disturbing another layer', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'one', 1, 0)); cache.put(entry('b', 'two', 1, 1))
+    expect(cache.releaseLayer('a')).toBe(1)
+    expect(cache.snapshot().map(item => item.layerId)).toEqual(['b'])
+  })
+
+  it('produces deterministic scalar fingerprints', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'one', 1, 0)); cache.put(entry('b', 'two', 1, 1))
+    expect(cache.fingerprint()).toBe('a:one:1:visible:10:200:a-one-1|b:two:1:visible:10:200:b-two-1')
+  })
+
+  it('fails closed on invalid identifiers, counts, bytes, timestamps, and intents', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    expect(() => cache.put({ ...entry('', 'x'), layerId: ' ' })).toThrow()
+    expect(() => cache.put({ ...entry('a', 'x'), queryKey: 'bad:key' })).toThrow()
+    expect(() => cache.put({ ...entry('a', 'x'), revision: 0 })).toThrow()
+    expect(() => cache.put({ ...entry('a', 'x'), objectIdCount: -1 })).toThrow()
+    expect(() => cache.put({ ...entry('a', 'x'), byteSize: -1 })).toThrow()
+    expect(() => cache.put({ ...entry('a', 'x'), storedAt: Number.NaN })).toThrow()
+    expect(() => cache.put({ ...entry('a', 'x'), intent: 'invalid' as 'visible' })).toThrow()
+  })
+
+  it('rejects entries exceeding object-id and byte budgets without disturbing state', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'good', 1, 0))
+    expect(cache.put({ ...entry('b', 'ids', 1, 1), objectIdCount: 1_001 })).toBe(false)
+    expect(cache.put({ ...entry('b', 'bytes', 1, 1), byteSize: 501 })).toBe(false)
+    expect(cache.snapshot().map(item => item.queryKey)).toEqual(['good'])
+  })
+
+  it('validates coherent cache budgets', () => {
+    expect(() => new ArcGisQueryResultCachePolicy({ ...budget, maxEntriesPerLayer: 5 })).toThrow()
+    expect(() => new ArcGisQueryResultCachePolicy({ ...budget, maxBytesPerEntry: 801 })).toThrow()
+    expect(() => new ArcGisQueryResultCachePolicy({ ...budget, maxAggregateBytesPerLayer: 1_201 })).toThrow()
+    expect(() => new ArcGisQueryResultCachePolicy({ ...budget, ttlMs: 0 })).toThrow()
+  })
+
+  it('clears authority on disposal and prevents reuse', () => {
+    const cache = new ArcGisQueryResultCachePolicy(budget)
+    cache.put(entry('a', 'query', 1, 0)); cache.dispose(); cache.dispose()
+    expect(() => cache.snapshot()).toThrow('disposed')
+    expect(() => cache.put(entry('a', 'again', 1, 1))).toThrow('disposed')
+  })
+})
