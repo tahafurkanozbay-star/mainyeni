@@ -220,7 +220,7 @@ export class RuntimePolicyCoordinator {
   removeScope(scopeValue: string): boolean {
     this.assertUsable()
     const scope = normalizeScope(scopeValue)
-    for (const lease of [...this.leases.values()]) {
+    for (const lease of this.leases.values()) {
       if (lease.scope === scope) this.leases.delete(lease.id)
     }
     return this.scopes.delete(scope)
@@ -229,14 +229,14 @@ export class RuntimePolicyCoordinator {
   sweep(nowValue: number): void {
     this.assertUsable()
     const now = finiteNow(nowValue)
-    for (const lease of [...this.leases.values()]) {
+    for (const lease of this.leases.values()) {
       if (!lease.settled && lease.expiresAt <= now) this.expireLease(lease, now)
     }
     for (const state of this.scopes.values()) {
       this.trimFailures(state, now)
       if (state.cooldownUntil <= now) state.cooldownUntil = 0
     }
-    for (const [scope, state] of [...this.scopes.entries()]) {
+    for (const [scope, state] of this.scopes.entries()) {
       if (state.active === 0 && state.queued === 0 && now - state.lastTouchedAt >= this.policy.idleScopeTtlMs) this.scopes.delete(scope)
     }
   }
