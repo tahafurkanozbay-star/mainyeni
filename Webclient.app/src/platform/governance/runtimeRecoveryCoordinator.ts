@@ -68,7 +68,6 @@ export class RuntimeRecoveryCoordinator {
   }
 
   fail(attempt: RuntimeRecoveryAttempt, nowInput: number, signal: Exclude<RuntimeHealthSignal, 'success'> = 'failure'): boolean {
-    if (signal === 'success') throw new TypeError('failure signal required')
     return this.complete(attempt, signal, nowInput)
   }
 
