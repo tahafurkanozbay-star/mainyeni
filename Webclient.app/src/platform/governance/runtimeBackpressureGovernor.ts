@@ -88,6 +88,17 @@ function finiteNow(value: number): number {
   return value
 }
 
+function isLeaseShape(value: unknown): value is RuntimeBackpressureLease {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<RuntimeBackpressureLease>
+  return typeof candidate.id === 'string'
+    && typeof candidate.scope === 'string'
+    && (candidate.lane === 'background' || candidate.lane === 'interactive' || candidate.lane === 'critical')
+    && typeof candidate.generation === 'number'
+    && typeof candidate.acquiredAt === 'number'
+    && typeof candidate.expiresAt === 'number'
+}
+
 export class RuntimeBackpressureGovernor {
   private readonly policy: RuntimeBackpressurePolicy
   private readonly scopes = new Map<string, ScopeState>()
@@ -273,8 +284,8 @@ export class RuntimeBackpressureGovernor {
     if (candidate) this.scopes.delete(candidate[0])
   }
 
-  private validateLease(lease: RuntimeBackpressureLease | null | undefined): LeaseState | null {
-    if (!lease || typeof lease.id !== 'string') return null
+  private validateLease(lease: unknown): LeaseState | null {
+    if (!isLeaseShape(lease)) return null
     const current = this.leases.get(lease.id)
     if (!current) return null
     if (current.scope !== lease.scope || current.lane !== lease.lane || current.generation !== lease.generation || current.acquiredAt !== lease.acquiredAt || current.expiresAt !== lease.expiresAt) return null
