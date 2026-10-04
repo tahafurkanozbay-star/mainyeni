@@ -90,13 +90,13 @@ function finiteNow(value: number): number {
 
 function isLeaseShape(value: unknown): value is RuntimeBackpressureLease {
   if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Partial<RuntimeBackpressureLease>
-  return typeof candidate.id === 'string'
-    && typeof candidate.scope === 'string'
-    && (candidate.lane === 'background' || candidate.lane === 'interactive' || candidate.lane === 'critical')
-    && typeof candidate.generation === 'number'
-    && typeof candidate.acquiredAt === 'number'
-    && typeof candidate.expiresAt === 'number'
+  if (!('id' in value) || !('scope' in value) || !('lane' in value) || !('generation' in value) || !('acquiredAt' in value) || !('expiresAt' in value)) return false
+  return typeof value.id === 'string'
+    && typeof value.scope === 'string'
+    && (value.lane === 'background' || value.lane === 'interactive' || value.lane === 'critical')
+    && typeof value.generation === 'number'
+    && typeof value.acquiredAt === 'number'
+    && typeof value.expiresAt === 'number'
 }
 
 export class RuntimeBackpressureGovernor {
