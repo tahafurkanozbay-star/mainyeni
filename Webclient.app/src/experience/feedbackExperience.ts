@@ -34,12 +34,15 @@ const MAX_ID = 80;
 const MAX_TITLE = 120;
 const MAX_MESSAGE = 320;
 const MAX_ACTION = 64;
-const CONTROL_CHARACTER_PATTERN = new RegExp('[\\x00-\\x1F\\x7F]', 'g');
+
+const stripControls = (value: string): string => Array.from(value, (character) => {
+  const code = character.charCodeAt(0);
+  return code <= 31 || code === 127 ? ' ' : character;
+}).join('');
 
 const clean = (value: unknown, max: number): string => {
   if (typeof value !== 'string') return '';
-  return value
-    .replace(CONTROL_CHARACTER_PATTERN, ' ')
+  return stripControls(value)
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
