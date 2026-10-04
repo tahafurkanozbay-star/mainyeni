@@ -1,0 +1,63 @@
+const SHA=/^[0-9a-f]{40}$/;
+const SAFE_NAME=/^[A-Za-z0-9][A-Za-z0-9 ._:/()\-]{0,119}$/;
+export const QUORUM_VERSION=1;
+export const DEFAULT_REQUIRED=Object.freeze(['Release QA','Platform Architecture Audit','Platform Typed Test Validation','Release Evidence Contract','Webclient Quality']);
+const freeze=v=>{if(Array.isArray(v))return Object.freeze(v.map(freeze));if(v&&typeof v==='object'){const o={};for(const [k,x] of Object.entries(v))o[k]=freeze(x);return Object.freeze(o)}return v};
+const finding=(code,field,message)=>freeze({code,field,message,severity:'error'});
+const text=(v,max=120)=>typeof v==='string'&&v===v.trim()&&v.length>0&&v.length<=max&&!/[\u0000-\u001f\u007f]/.test(v)?v:null;
+const sha=v=>{const s=text(v,40)?.toLowerCase();return s&&SHA.test(s)?s:null};
+const integer=v=>Number.isSafeInteger(v)&&v>=0;
+function normalizeRun(raw,index,out){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw)){out.push(finding('run-invalid',`runs[${index}]`,'Workflow evidence must be an object.'));return null}
+ const name=text(raw.name),headSha=sha(raw.headSha),event=text(raw.event,32),status=text(raw.status,32)?.toLowerCase(),conclusion=raw.conclusion==null?null:text(raw.conclusion,32)?.toLowerCase();
+ const runId=raw.runId,attempt=raw.attempt,createdAt=text(raw.createdAt,64),updatedAt=text(raw.updatedAt,64);
+ if(!name||!SAFE_NAME.test(name))out.push(finding('run-name-invalid',`runs[${index}].name`,'Workflow name is invalid.'));
+ if(!headSha)out.push(finding('run-head-invalid',`runs[${index}].headSha`,'Workflow evidence requires an exact head SHA.'));
+ if(!event)out.push(finding('run-event-invalid',`runs[${index}].event`,'Workflow event is required.'));
+ if(!status)out.push(finding('run-status-invalid',`runs[${index}].status`,'Workflow status is required.'));
+ if(raw.conclusion!=null&&!conclusion)out.push(finding('run-conclusion-invalid',`runs[${index}].conclusion`,'Workflow conclusion is invalid.'));
+ if(!integer(runId)||runId===0)out.push(finding('run-id-invalid',`runs[${index}].runId`,'runId must be a positive safe integer.'));
+ if(!integer(attempt)||attempt===0)out.push(finding('run-attempt-invalid',`runs[${index}].attempt`,'attempt must be a positive safe integer.'));
+ const created=createdAt?Date.parse(createdAt):NaN,updated=updatedAt?Date.parse(updatedAt):NaN;
+ if(!Number.isFinite(created))out.push(finding('run-created-invalid',`runs[${index}].createdAt`,'createdAt must be valid.'));
+ if(!Number.isFinite(updated))out.push(finding('run-updated-invalid',`runs[${index}].updatedAt`,'updatedAt must be valid.'));
+ if(Number.isFinite(created)&&Number.isFinite(updated)&&updated<created)out.push(finding('run-time-reversed',`runs[${index}].updatedAt`,'updatedAt cannot precede createdAt.'));
+ return name&&headSha&&event&&status&&integer(runId)&&runId>0&&integer(attempt)&&attempt>0&&Number.isFinite(created)&&Number.isFinite(updated)?freeze({name,headSha,event,status,conclusion,runId,attempt,createdAt,updatedAt,created,updated}):null;
+}
+function normalize(input,out){
+ if(!input||typeof input!=='object'||Array.isArray(input)){out.push(finding('evidence-invalid','$','Release evidence must be an object.'));return null}
+ if(input.version!==QUORUM_VERSION)out.push(finding('version-invalid','version',`Evidence version must be ${QUORUM_VERSION}.`));
+ const headSha=sha(input.headSha),baseSha=sha(input.baseSha),currentMainSha=sha(input.currentMainSha);
+ for(const [k,v] of Object.entries({headSha,baseSha,currentMainSha}))if(!v)out.push(finding('sha-invalid',k,`${k} must be a 40-character Git SHA.`));
+ if(!Array.isArray(input.runs))out.push(finding('runs-invalid','runs','runs must be an array.'));
+ if(!integer(input.maxEvidenceAgeMs)||input.maxEvidenceAgeMs<60000||input.maxEvidenceAgeMs>86400000)out.push(finding('age-policy-invalid','maxEvidenceAgeMs','Evidence age must be between one minute and one day.'));
+ const observedAt=text(input.observedAt,64),observed=observedAt?Date.parse(observedAt):NaN;
+ if(!Number.isFinite(observed))out.push(finding('observed-at-invalid','observedAt','observedAt must be valid.'));
+ const runs=Array.isArray(input.runs)?input.runs.map((r,i)=>normalizeRun(r,i,out)).filter(Boolean):[];
+ if(out.some(x=>['evidence-invalid','version-invalid','sha-invalid','runs-invalid','age-policy-invalid','observed-at-invalid'].includes(x.code)))return null;
+ return freeze({headSha,baseSha,currentMainSha,runs,maxEvidenceAgeMs:input.maxEvidenceAgeMs,observedAt,observed});
+}
+function selectLatest(runs,out){
+ const byKey=new Map(),ids=new Map();
+ for(const run of runs){
+  const idKey=String(run.runId),oldId=ids.get(idKey);
+  if(oldId&&(oldId.name!==run.name||oldId.headSha!==run.headSha)){out.push(finding('run-id-collision','runs',`Run id ${run.runId} is reused by inconsistent evidence.`));continue}
+  ids.set(idKey,run);const key=`${run.name}\u0000${run.headSha}`,old=byKey.get(key);
+  if(!old||run.attempt>old.attempt||(run.attempt===old.attempt&&run.updated>old.updated))byKey.set(key,run);
+  else if(run.attempt===old.attempt&&run.updated===old.updated&&run.runId!==old.runId)out.push(finding('ambiguous-latest-run','runs',`Workflow ${run.name} has ambiguous latest evidence.`));
+ }
+ return byKey;
+}
+export function evaluateReleaseEvidenceQuorum(input,options={}){
+ const findings=[],evidence=normalize(input,findings),required=Array.isArray(options.required)&&options.required.length?options.required:[...DEFAULT_REQUIRED],requiredNames=[],seen=new Set();
+ for(const value of required){const name=text(value);if(!name||!SAFE_NAME.test(name)){findings.push(finding('required-name-invalid','required','Required workflow name is invalid.'));continue}if(seen.has(name)){findings.push(finding('required-name-duplicate','required',`Required workflow is duplicated: ${name}.`));continue}seen.add(name);requiredNames.push(name)}
+ if(evidence){
+  if(evidence.baseSha!==evidence.currentMainSha)findings.push(finding('base-stale','baseSha','Evidence base must equal current main.'));
+  if(evidence.headSha===evidence.currentMainSha)findings.push(finding('head-equals-main','headSha','Candidate head must differ from current main.'));
+  const latest=selectLatest(evidence.runs,findings);
+  for(const name of requiredNames){const run=latest.get(`${name}\u0000${evidence.headSha}`);if(!run){findings.push(finding('required-run-missing','runs',`Missing exact-head evidence for ${name}.`));continue}if(!['pull_request','pull_request_target'].includes(run.event))findings.push(finding('run-event-untrusted','runs',`${name} must be bound to a pull-request event.`));if(run.status!=='completed')findings.push(finding('run-pending','runs',`${name} is not completed.`));if(run.conclusion!=='success')findings.push(finding('run-not-success','runs',`${name} did not conclude success.`));if(run.updated>evidence.observed)findings.push(finding('run-from-future','runs',`${name} evidence is newer than observation time.`));if(evidence.observed-run.updated>evidence.maxEvidenceAgeMs)findings.push(finding('run-stale','runs',`${name} evidence exceeds freshness window.`))}
+  const namesAtHead=new Map();for(const run of evidence.runs.filter(r=>r.headSha===evidence.headSha)){const set=namesAtHead.get(run.name)??new Set();set.add(run.runId);namesAtHead.set(run.name,set)}for(const [name,ids] of namesAtHead)if(ids.size>32)findings.push(finding('run-cardinality-exceeded','runs',`${name} exceeds bounded evidence cardinality.`));
+ }
+ const errors=findings.filter(x=>x.severity==='error');return freeze({version:QUORUM_VERSION,passed:errors.length===0,findings:[...findings].sort((a,b)=>a.field.localeCompare(b.field)||a.code.localeCompare(b.code)||a.message.localeCompare(b.message)),summary:{errors:errors.length,total:findings.length,required:Object.freeze([...requiredNames])}});
+}
+export const formatReleaseEvidenceQuorum=result=>[`Release evidence quorum: ${result.passed?'PASS':'FAIL'} (${result.summary.errors} errors)`,...result.findings.map(x=>`ERROR ${x.code} ${x.field} — ${x.message}`)].join('\n');
