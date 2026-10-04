@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DEFAULT_REQUIRED,evaluateReleaseEvidenceQuorum} from './release-evidence-quorum.mjs';
+const A='a'.repeat(40),B='b'.repeat(40);
+const run=(name,overrides={})=>({name,headSha:B,event:'pull_request',status:'completed',conclusion:'success',runId:100+DEFAULT_REQUIRED.indexOf(name),attempt:1,createdAt:'2026-10-04T02:00:00.000Z',updatedAt:'2026-10-04T02:05:00.000Z',...overrides});
+const fixture=(overrides={})=>({version:1,headSha:B,baseSha:A,currentMainSha:A,observedAt:'2026-10-04T02:10:00.000Z',maxEvidenceAgeMs:3600000,runs:DEFAULT_REQUIRED.map(name=>run(name)),...overrides});
+const rejects=(input,code,options)=>assert.ok(evaluateReleaseEvidenceQuorum(input,options).findings.some(x=>x.code===code));
+test('accepts fresh exact-head successful quorum',()=>assert.equal(evaluateReleaseEvidenceQuorum(fixture()).passed,true));
+test('requires every exact-head workflow',()=>{const x=fixture();x.runs=x.runs.slice(1);rejects(x,'required-run-missing')});
+test('rejects stale base and untrusted event',()=>{rejects(fixture({baseSha:'c'.repeat(40)}),'base-stale');const x=fixture();x.runs[0]=run(DEFAULT_REQUIRED[0],{event:'push'});rejects(x,'run-event-untrusted')});
+test('rejects pending failed stale and future evidence',()=>{let x=fixture();x.runs[0]=run(DEFAULT_REQUIRED[0],{status:'in_progress',conclusion:null});rejects(x,'run-pending');x=fixture();x.runs[0]=run(DEFAULT_REQUIRED[0],{conclusion:'failure'});rejects(x,'run-not-success');rejects(fixture({maxEvidenceAgeMs:60000}),'run-stale');x=fixture();x.runs[0]=run(DEFAULT_REQUIRED[0],{updatedAt:'2026-10-04T03:00:00.000Z'});rejects(x,'run-from-future')});
+test('latest attempt controls outcome',()=>{let x=fixture();x.runs[0]={...x.runs[0],conclusion:'failure'};x.runs.push(run(DEFAULT_REQUIRED[0],{runId:999,attempt:2,updatedAt:'2026-10-04T02:06:00.000Z'}));assert.equal(evaluateReleaseEvidenceQuorum(x).passed,true);x=fixture();x.runs.push(run(DEFAULT_REQUIRED[0],{runId:999,attempt:2,conclusion:'failure',updatedAt:'2026-10-04T02:06:00.000Z'}));rejects(x,'run-not-success')});
+test('detects ambiguous and colliding evidence',()=>{let x=fixture();x.runs.push(run(DEFAULT_REQUIRED[0],{runId:999}));rejects(x,'ambiguous-latest-run');x=fixture();x.runs.push(run('Other Workflow',{runId:100}));rejects(x,'run-id-collision')});
+test('required policy fails closed',()=>{rejects(fixture(),'required-invalid',{required:[]});rejects(fixture(),'required-name-duplicate',{required:['Release QA','Release QA']})});
+test('malformed evidence fails closed',()=>{rejects(null,'evidence-invalid');rejects(fixture({version:2}),'version-invalid');rejects(fixture({observedAt:'never'}),'observed-at-invalid')});
