@@ -74,8 +74,8 @@ export const createFeedbackAccessibilitySnapshot = (input: FeedbackAccessibility
       id: item.id, semanticId: base, titleId, messageId, actionId, dismissId,
       role: item.role, ariaLive: item.ariaLive, ariaAtomic: true,
       ariaLabelledBy: titleId, ariaDescribedBy: messageId,
-      actionTabIndex: actionId && active ? 0 : -1,
-      dismissTabIndex: !actionId && dismissId && active ? 0 : -1,
+      actionTabIndex: active && actionId !== null ? 0 : -1,
+      dismissTabIndex: active && actionId === null && dismissId !== null ? 0 : -1,
     };
   });
   const latest = items.at(-1);
@@ -143,14 +143,15 @@ export const moveFeedbackAccessibilityFocus = (
   else if (direction === 'next') index = (index + 1) % actionable.length;
   else index = (index - 1 + actionable.length) % actionable.length;
   const active = actionable[index];
+  if (!active) return { ...snapshot, activeFeedbackId: null, focusTarget: 'region', focusId: snapshot.regionId };
   const focusId = active.actionId ?? active.dismissId;
   return {
     ...snapshot, activeFeedbackId: active.id,
     focusTarget: active.actionId ? 'latest-action' : 'region', focusId,
     items: snapshot.items.map((item) => ({
       ...item,
-      actionTabIndex: item.id === active.id && item.actionId ? 0 : -1,
-      dismissTabIndex: item.id === active.id && !item.actionId && item.dismissId ? 0 : -1,
+      actionTabIndex: item.id === active.id && item.actionId !== null ? 0 : -1,
+      dismissTabIndex: item.id === active.id && item.actionId === null && item.dismissId !== null ? 0 : -1,
     })),
   };
 };
