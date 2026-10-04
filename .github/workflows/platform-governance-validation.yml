@@ -53,10 +53,9 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      # Keep per-file probes while this boundary is being migrated. GitHub's job
-      # metadata then identifies the failing file even when raw Actions logs are
-      # unavailable to an automation client. The canonical aggregate gate below
-      # remains authoritative and still fails the job on any warning.
+      # Keep bounded diagnostic probes while this boundary is being migrated.
+      # They expose the failing slice in job metadata when raw logs are not
+      # available to automation. The aggregate gate below remains authoritative.
       - name: Diagnostic lint runtime deadline governor
         continue-on-error: true
         run: npx oxlint --deny-warnings src/platform/governance/runtimeDeadlineGovernor.ts src/platform/governance/runtimeDeadlineGovernor.test.ts
@@ -76,6 +75,33 @@ jobs:
       - name: Diagnostic lint runtime backpressure governor
         continue-on-error: true
         run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.ts src/platform/governance/runtimeBackpressureGovernor.test.ts
+
+      - name: Diagnostic lint pre-existing governance and config
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/governance src/platform/config
+
+      - name: Diagnostic lint migrated bootstrap tests
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/bootstrap/bootstrapCore.test.ts src/platform/bootstrap/bootstrapDiagnostics.test.ts
+
+      - name: Diagnostic lint migrated HTTP tests
+        continue-on-error: true
+        run: >-
+          npx oxlint --deny-warnings
+          src/platform/http/fetchTransport.test.ts
+          src/platform/http/networkDiagnostics.test.ts
+          src/platform/http/requestScheduler.test.ts
+          src/platform/http/retryPolicy.test.ts
+          src/platform/http/runtimeCapabilities.test.ts
+          src/platform/http/typescriptRuntime.integration.test.ts
+
+      - name: Diagnostic lint migrated performance tests
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/performance/performanceMonitor.test.ts
+
+      - name: Diagnostic lint migrated runtime tests
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/runtime/runtime.test.ts src/platform/runtime/runtimeDiagnostics.test.ts
 
       - name: Strict lint governance, config and migrated Platform tests
         run: >-
