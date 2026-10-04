@@ -1,224 +1,305 @@
-export type EditTransactionIntent = 'interactive' | 'visible' | 'background'
-export type EditTransactionPhase = 'queued' | 'preparing' | 'prepared' | 'committing' | 'resident'
+export type ArcGisEditIntent = 'background' | 'user' | 'critical'
+export type ArcGisEditOperation = 'add' | 'update' | 'delete'
+export type ArcGisEditPhase = 'queued' | 'running' | 'committed'
 
-export interface EditTransactionBudget {
-  maxLayers: number
+export interface ArcGisEditTransactionBudget {
   maxTransactions: number
   maxTransactionsPerLayer: number
-  maxPreparing: number
-  maxPreparingPerLayer: number
-  maxCommitting: number
-  maxCommittingPerLayer: number
-  maxResident: number
-  maxResidentPerLayer: number
+  maxRunning: number
+  maxCommitted: number
   maxOperationsPerTransaction: number
-  maxBytesPerTransaction: number
-  maxResidentOperations: number
-  maxResidentBytes: number
+  maxAggregateOperations: number
+  maxEstimatedBytesPerTransaction: number
+  maxAggregateEstimatedBytes: number
   queueTtlMs: number
-  prepareLeaseMs: number
-  preparedTtlMs: number
-  commitLeaseMs: number
-  residentTtlMs: number
+  runLeaseMs: number
+  committedTtlMs: number
 }
 
-export interface EditTransactionRequest {
+export interface ArcGisEditTransactionRequest {
   transactionId: string
   layerId: string
   revision: number
-  intent: EditTransactionIntent
+  intent: ArcGisEditIntent
+  requestedAt: number
   operationCount: number
   estimatedBytes: number
-  requestedAt: number
+  operation: ArcGisEditOperation
 }
 
-export interface EditTransactionView {
+export interface ArcGisEditTransactionView {
   readonly transactionId: string
   readonly layerId: string
   readonly revision: number
-  readonly intent: EditTransactionIntent
-  readonly phase: EditTransactionPhase
+  readonly intent: ArcGisEditIntent
+  readonly operation: ArcGisEditOperation
+  readonly phase: ArcGisEditPhase
   readonly operationCount: number
-  readonly bytes: number
-  readonly attempt: number
+  readonly estimatedBytes: number
   readonly sequence: number
-  readonly touchedAt: number
   readonly expiresAt: number
 }
 
-interface Entry extends EditTransactionRequest {
-  phase: EditTransactionPhase
-  bytes: number
-  attempt: number
+interface Entry extends ArcGisEditTransactionRequest {
+  phase: ArcGisEditPhase
   sequence: number
-  touchedAt: number
   expiresAt: number
 }
 
-const intentRank: Readonly<Record<EditTransactionIntent, number>> = Object.freeze({ interactive: 2, visible: 1, background: 0 })
-const intents: readonly EditTransactionIntent[] = ['interactive', 'visible', 'background']
+const priority: Readonly<Record<ArcGisEditIntent, number>> = Object.freeze({ background: 0, user: 1, critical: 2 })
 
-function identifier(name: string, value: string): string {
-  const normalized = value.trim()
-  if (!normalized || normalized.length > 192 || /[\u0000-\u001f]/.test(normalized)) throw new Error(`${name} must contain 1..192 safe characters`)
-  return normalized
+function integer(name: string, value: number, minimum: number): void {
+  if (!Number.isInteger(value) || value < minimum) throw new Error(`${name} must be an integer >= ${minimum}`)
 }
-function integer(name: string, value: number, min = 0): void {
-  if (!Number.isSafeInteger(value) || value < min) throw new Error(`${name} must be an integer >= ${min}`)
-}
+
 function finite(name: string, value: number): void {
   if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be finite and non-negative`)
 }
 
+function identifier(name: string, value: string): string {
+  const normalized = value.trim()
+  if (!normalized || normalized.length > 256 || normalized.includes('\u0000')) throw new Error(`${name} must contain 1..256 safe characters`)
+  return normalized
+}
+
 /**
- * Payload-free authority for multi-stage ArcGIS edit transactions.
- * Caller-owned Graphic/Geometry/attributes/request bodies never enter lifecycle state.
+ * Payload-free admission and lifecycle authority for ArcGIS applyEdits-style
+ * transactions. Graphic/Geometry objects, attributes, credentials, request
+ * bodies and AbortControllers remain caller-owned. This class intentionally
+ * stores only bounded accounting metadata so edit payloads cannot become a
+ * second client-side data store and layer teardown releases all references.
+ *
+ * Revision watermarks make stale queued/running completions fail closed after
+ * a layer refresh or authoritative server revision advances. Transaction ids
+ * provide deterministic dedupe without hashing or retaining feature content.
  */
 export class ArcGisEditTransactionLifecyclePolicy {
-  readonly #budget: Readonly<EditTransactionBudget>
+  readonly #budget: Readonly<ArcGisEditTransactionBudget>
   readonly #entries = new Map<string, Entry>()
-  readonly #revisions = new Map<string, number>()
+  readonly #layerRevisions = new Map<string, number>()
   #sequence = 0
   #disposed = false
 
-  constructor(budget: EditTransactionBudget) {
-    for (const key of ['maxLayers','maxTransactions','maxTransactionsPerLayer','maxPreparing','maxPreparingPerLayer','maxCommitting','maxCommittingPerLayer','maxResident','maxResidentPerLayer','maxOperationsPerTransaction','maxBytesPerTransaction','maxResidentOperations','maxResidentBytes'] as const) integer(key, budget[key], 1)
-    for (const key of ['queueTtlMs','prepareLeaseMs','preparedTtlMs','commitLeaseMs','residentTtlMs'] as const) finite(key, budget[key])
+  constructor(budget: ArcGisEditTransactionBudget) {
+    integer('maxTransactions', budget.maxTransactions, 1)
+    integer('maxTransactionsPerLayer', budget.maxTransactionsPerLayer, 1)
+    integer('maxRunning', budget.maxRunning, 1)
+    integer('maxCommitted', budget.maxCommitted, 1)
+    integer('maxOperationsPerTransaction', budget.maxOperationsPerTransaction, 1)
+    integer('maxAggregateOperations', budget.maxAggregateOperations, 1)
+    integer('maxEstimatedBytesPerTransaction', budget.maxEstimatedBytesPerTransaction, 1)
+    integer('maxAggregateEstimatedBytes', budget.maxAggregateEstimatedBytes, 1)
+    finite('queueTtlMs', budget.queueTtlMs)
+    finite('runLeaseMs', budget.runLeaseMs)
+    finite('committedTtlMs', budget.committedTtlMs)
     if (budget.maxTransactionsPerLayer > budget.maxTransactions) throw new Error('maxTransactionsPerLayer cannot exceed maxTransactions')
-    if (budget.maxPreparingPerLayer > budget.maxPreparing) throw new Error('maxPreparingPerLayer cannot exceed maxPreparing')
-    if (budget.maxCommittingPerLayer > budget.maxCommitting) throw new Error('maxCommittingPerLayer cannot exceed maxCommitting')
-    if (budget.maxResidentPerLayer > budget.maxResident) throw new Error('maxResidentPerLayer cannot exceed maxResident')
-    if (budget.maxOperationsPerTransaction > budget.maxResidentOperations) throw new Error('maxOperationsPerTransaction cannot exceed maxResidentOperations')
-    if (budget.maxBytesPerTransaction > budget.maxResidentBytes) throw new Error('maxBytesPerTransaction cannot exceed maxResidentBytes')
+    if (budget.maxRunning > budget.maxTransactions || budget.maxCommitted > budget.maxTransactions) throw new Error('phase limits cannot exceed maxTransactions')
+    if (budget.maxOperationsPerTransaction > budget.maxAggregateOperations) throw new Error('operation budget is inconsistent')
+    if (budget.maxEstimatedBytesPerTransaction > budget.maxAggregateEstimatedBytes) throw new Error('byte budget is inconsistent')
     this.#budget = Object.freeze({ ...budget })
   }
 
-  setRevision(layerId: string, revision: number): number {
-    this.#assertLive(); const layer = identifier('layerId', layerId); integer('revision', revision)
-    const current = this.#revisions.get(layer)
-    if (current !== undefined && revision < current) return -1
-    if (current === undefined && this.#revisions.size >= this.#budget.maxLayers) return -1
-    this.#revisions.set(layer, revision)
-    if (current === undefined || current === revision) return 0
-    let removed = 0
-    for (const [id, entry] of this.#entries) if (entry.layerId === layer && entry.revision !== revision) { this.#entries.delete(id); removed++ }
-    return removed
-  }
-
-  admit(request: EditTransactionRequest): boolean {
-    this.#assertLive()
+  admit(request: ArcGisEditTransactionRequest): boolean {
+    this.#active()
     const transactionId = identifier('transactionId', request.transactionId)
     const layerId = identifier('layerId', request.layerId)
-    integer('revision', request.revision); integer('operationCount', request.operationCount, 1); integer('estimatedBytes', request.estimatedBytes, 1); finite('requestedAt', request.requestedAt)
-    if (!intents.includes(request.intent)) throw new Error('intent is invalid')
-    if (this.#revisions.get(layerId) !== request.revision || this.#entries.has(transactionId)) return false
-    if (request.operationCount > this.#budget.maxOperationsPerTransaction || request.estimatedBytes > this.#budget.maxBytesPerTransaction) return false
-    if (this.#entries.size >= this.#budget.maxTransactions || this.#countLayer(layerId) >= this.#budget.maxTransactionsPerLayer) return false
-    const sequence = ++this.#sequence
-    this.#entries.set(transactionId, { ...request, transactionId, layerId, phase: 'queued', bytes: request.estimatedBytes, attempt: 0, sequence, touchedAt: request.requestedAt, expiresAt: request.requestedAt + this.#budget.queueTtlMs })
+    integer('revision', request.revision, 0)
+    finite('requestedAt', request.requestedAt)
+    integer('operationCount', request.operationCount, 1)
+    integer('estimatedBytes', request.estimatedBytes, 0)
+    if (request.operationCount > this.#budget.maxOperationsPerTransaction) return false
+    if (request.estimatedBytes > this.#budget.maxEstimatedBytesPerTransaction) return false
+
+    const watermark = this.#layerRevisions.get(layerId)
+    if (watermark !== undefined && request.revision < watermark) return false
+    if (watermark !== undefined && request.revision > watermark) this.invalidateLayer(layerId, request.revision)
+
+    const existing = this.#entries.get(transactionId)
+    if (existing) {
+      if (existing.layerId !== layerId || existing.revision !== request.revision || existing.operation !== request.operation) return false
+      if (existing.phase !== 'queued' || priority[existing.intent] > priority[request.intent]) return false
+    }
+    if (!existing && this.#entries.size >= this.#budget.maxTransactions) return false
+    if (!existing && this.#countLayer(layerId) >= this.#budget.maxTransactionsPerLayer) return false
+    if (this.#sumOperations() - (existing?.operationCount ?? 0) + request.operationCount > this.#budget.maxAggregateOperations) return false
+    if (this.#sumBytes() - (existing?.estimatedBytes ?? 0) + request.estimatedBytes > this.#budget.maxAggregateEstimatedBytes) return false
+
+    const entry: Entry = {
+      ...request,
+      transactionId,
+      layerId,
+      phase: 'queued',
+      sequence: existing?.sequence ?? this.#sequence++,
+      expiresAt: request.requestedAt + this.#budget.queueTtlMs,
+    }
+    this.#entries.set(transactionId, Object.freeze(entry))
+    this.#layerRevisions.set(layerId, request.revision)
     return true
   }
 
-  startPrepare(now: number): EditTransactionView | null {
-    this.#assertLive(); finite('now', now); this.expire(now)
-    if (this.#countPhase('preparing') >= this.#budget.maxPreparing) return null
-    const candidate = this.#candidate('queued', 'preparing', this.#budget.maxPreparingPerLayer)
-    if (!candidate) return null
-    candidate.phase = 'preparing'; candidate.attempt++; candidate.touchedAt = now; candidate.expiresAt = now + this.#budget.prepareLeaseMs
-    return this.#view(candidate)
+  next(now: number): Readonly<ArcGisEditTransactionView> | null {
+    this.#active()
+    finite('now', now)
+    this.expire(now)
+    if (this.#countPhase('running') >= this.#budget.maxRunning) return null
+    const entry = [...this.#entries.values()]
+      .filter(candidate => candidate.phase === 'queued')
+      .sort((a, b) => priority[b.intent] - priority[a.intent] || a.sequence - b.sequence)[0]
+    if (!entry) return null
+    const running: Entry = Object.freeze({ ...entry, phase: 'running', expiresAt: now + this.#budget.runLeaseMs })
+    this.#entries.set(entry.transactionId, running)
+    return this.#view(running)
   }
 
-  finishPrepare(transactionId: string, revision: number, actualOperations: number, actualBytes: number, now: number): boolean {
-    this.#assertLive(); const id = identifier('transactionId', transactionId); integer('revision', revision); integer('actualOperations', actualOperations, 1); integer('actualBytes', actualBytes, 1); finite('now', now); this.expire(now)
+  commit(transactionId: string, revision: number, now: number): boolean {
+    this.#active()
+    const id = identifier('transactionId', transactionId)
+    integer('revision', revision, 0)
+    finite('now', now)
     const entry = this.#entries.get(id)
-    if (!entry || entry.phase !== 'preparing' || entry.revision !== revision || this.#revisions.get(entry.layerId) !== revision) return false
-    if (actualOperations > this.#budget.maxOperationsPerTransaction || actualBytes > this.#budget.maxBytesPerTransaction) { this.#entries.delete(id); return false }
-    entry.phase = 'prepared'; entry.operationCount = actualOperations; entry.bytes = actualBytes; entry.touchedAt = now; entry.expiresAt = now + this.#budget.preparedTtlMs
+    if (!entry || entry.phase !== 'running' || entry.revision !== revision || now > entry.expiresAt) return false
+    if (this.#layerRevisions.get(entry.layerId) !== revision) return false
+    if (this.#countPhase('committed') >= this.#budget.maxCommitted) return false
+    this.#entries.set(id, Object.freeze({ ...entry, phase: 'committed', expiresAt: now + this.#budget.committedTtlMs }))
     return true
   }
 
-  startCommit(now: number): EditTransactionView | null {
-    this.#assertLive(); finite('now', now); this.expire(now)
-    if (this.#countPhase('committing') >= this.#budget.maxCommitting) return null
-    const candidate = this.#candidate('prepared', 'committing', this.#budget.maxCommittingPerLayer)
-    if (!candidate) return null
-    candidate.phase = 'committing'; candidate.attempt++; candidate.touchedAt = now; candidate.expiresAt = now + this.#budget.commitLeaseMs
-    return this.#view(candidate)
-  }
-
-  finishCommit(transactionId: string, revision: number, now: number): boolean {
-    this.#assertLive(); const id = identifier('transactionId', transactionId); integer('revision', revision); finite('now', now); this.expire(now)
+  consume(transactionId: string, revision: number): boolean {
+    this.#active()
+    const id = identifier('transactionId', transactionId)
+    integer('revision', revision, 0)
     const entry = this.#entries.get(id)
-    if (!entry || entry.phase !== 'committing' || entry.revision !== revision || this.#revisions.get(entry.layerId) !== revision) return false
-    this.#evictFor(entry)
-    if (this.#countPhase('resident') >= this.#budget.maxResident || this.#countLayerPhase(entry.layerId, 'resident') >= this.#budget.maxResidentPerLayer || this.#residentOperations() + entry.operationCount > this.#budget.maxResidentOperations || this.#residentBytes() + entry.bytes > this.#budget.maxResidentBytes) { this.#entries.delete(id); return false }
-    entry.phase = 'resident'; entry.touchedAt = now; entry.expiresAt = now + this.#budget.residentTtlMs
-    return true
+    if (!entry || entry.phase !== 'committed' || entry.revision !== revision) return false
+    return this.#entries.delete(id)
   }
 
-  retry(transactionId: string, now: number): boolean {
-    this.#assertLive(); const entry = this.#entries.get(identifier('transactionId', transactionId)); finite('now', now)
-    if (!entry || (entry.phase !== 'preparing' && entry.phase !== 'prepared' && entry.phase !== 'committing')) return false
-    if (this.#revisions.get(entry.layerId) !== entry.revision) { this.#entries.delete(entry.transactionId); return false }
-    entry.phase = 'queued'; entry.touchedAt = now; entry.expiresAt = now + this.#budget.queueTtlMs; return true
+  cancel(transactionId: string): boolean {
+    this.#active()
+    const id = identifier('transactionId', transactionId)
+    const entry = this.#entries.get(id)
+    if (!entry || entry.phase === 'committed') return false
+    return this.#entries.delete(id)
   }
 
-  touch(transactionId: string, now: number): boolean {
-    this.#assertLive(); const entry = this.#entries.get(identifier('transactionId', transactionId)); finite('now', now)
-    if (!entry || entry.phase !== 'resident') return false
-    entry.touchedAt = now; entry.expiresAt = now + this.#budget.residentTtlMs; return true
-  }
-
-  consume(transactionId: string, revision: number): EditTransactionView | null {
-    this.#assertLive(); const id = identifier('transactionId', transactionId); integer('revision', revision); const entry = this.#entries.get(id)
-    if (!entry || entry.phase !== 'resident' || entry.revision !== revision || this.#revisions.get(entry.layerId) !== revision) return null
-    this.#entries.delete(id); return this.#view(entry)
-  }
-
-  cancel(transactionId: string): boolean { this.#assertLive(); return this.#entries.delete(identifier('transactionId', transactionId)) }
-  releaseLayer(layerId: string): number {
-    this.#assertLive(); const layer = identifier('layerId', layerId); let removed = 0
-    for (const [id, entry] of this.#entries) if (entry.layerId === layer) { this.#entries.delete(id); removed++ }
-    this.#revisions.delete(layer); return removed
-  }
-  expire(now: number): number {
-    this.#assertLive(); finite('now', now); let removed = 0
-    for (const [id, entry] of this.#entries) if (entry.expiresAt <= now) { this.#entries.delete(id); removed++ }
+  invalidateLayer(layerId: string, revision: number): number {
+    this.#active()
+    const layer = identifier('layerId', layerId)
+    integer('revision', revision, 0)
+    const current = this.#layerRevisions.get(layer)
+    if (current !== undefined && revision <= current) return 0
+    let removed = 0
+    for (const [id, entry] of this.#entries) {
+      if (entry.layerId === layer && entry.revision < revision) {
+        this.#entries.delete(id)
+        removed += 1
+      }
+    }
+    this.#layerRevisions.set(layer, revision)
     return removed
   }
 
-  snapshot(): Readonly<{ layers: number; transactions: number; queued: number; preparing: number; prepared: number; committing: number; resident: number; residentOperations: number; residentBytes: number }> {
-    this.#assertLive(); return Object.freeze({ layers: this.#revisions.size, transactions: this.#entries.size, queued: this.#countPhase('queued'), preparing: this.#countPhase('preparing'), prepared: this.#countPhase('prepared'), committing: this.#countPhase('committing'), resident: this.#countPhase('resident'), residentOperations: this.#residentOperations(), residentBytes: this.#residentBytes() })
-  }
-  fingerprint(): string {
-    this.#assertLive(); return [...this.#entries.values()].sort((a,b) => a.layerId.localeCompare(b.layerId) || a.transactionId.localeCompare(b.transactionId)).map(entry => `${entry.layerId}:${entry.transactionId}:${entry.revision}:${entry.intent}:${entry.phase}:${entry.operationCount}:${entry.bytes}:${entry.attempt}`).join('|')
-  }
-  dispose(): void { if (this.#disposed) return; this.#entries.clear(); this.#revisions.clear(); this.#disposed = true }
-
-  #candidate(phase: EditTransactionPhase, activePhase: EditTransactionPhase, perLayer: number): Entry | undefined {
-    let candidate: Entry | undefined
-    for (const entry of this.#entries.values()) {
-      if (entry.phase !== phase || this.#countLayerPhase(entry.layerId, activePhase) >= perLayer) continue
-      if (!candidate || intentRank[entry.intent] > intentRank[candidate.intent] || (intentRank[entry.intent] === intentRank[candidate.intent] && entry.sequence < candidate.sequence)) candidate = entry
-    }
-    return candidate
-  }
-  #evictFor(incoming: Entry): void {
-    while (this.#countPhase('resident') >= this.#budget.maxResident || this.#countLayerPhase(incoming.layerId, 'resident') >= this.#budget.maxResidentPerLayer || this.#residentOperations() + incoming.operationCount > this.#budget.maxResidentOperations || this.#residentBytes() + incoming.bytes > this.#budget.maxResidentBytes) {
-      let victim: Entry | undefined
-      for (const entry of this.#entries.values()) {
-        if (entry.phase !== 'resident') continue
-        if (!victim || intentRank[entry.intent] < intentRank[victim.intent] || (intentRank[entry.intent] === intentRank[victim.intent] && (entry.touchedAt < victim.touchedAt || (entry.touchedAt === victim.touchedAt && entry.sequence < victim.sequence)))) victim = entry
+  releaseLayer(layerId: string): number {
+    this.#active()
+    const layer = identifier('layerId', layerId)
+    let removed = 0
+    for (const [id, entry] of this.#entries) {
+      if (entry.layerId === layer) {
+        this.#entries.delete(id)
+        removed += 1
       }
-      if (!victim || intentRank[victim.intent] > intentRank[incoming.intent]) return
-      this.#entries.delete(victim.transactionId)
     }
+    this.#layerRevisions.delete(layer)
+    return removed
   }
-  #countLayer(layerId: string): number { let count = 0; for (const entry of this.#entries.values()) if (entry.layerId === layerId) count++; return count }
-  #countPhase(phase: EditTransactionPhase): number { let count = 0; for (const entry of this.#entries.values()) if (entry.phase === phase) count++; return count }
-  #countLayerPhase(layerId: string, phase: EditTransactionPhase): number { let count = 0; for (const entry of this.#entries.values()) if (entry.layerId === layerId && entry.phase === phase) count++; return count }
-  #residentOperations(): number { let count = 0; for (const entry of this.#entries.values()) if (entry.phase === 'resident') count += entry.operationCount; return count }
-  #residentBytes(): number { let bytes = 0; for (const entry of this.#entries.values()) if (entry.phase === 'resident') bytes += entry.bytes; return bytes }
-  #view(entry: Entry): EditTransactionView { return Object.freeze({ transactionId: entry.transactionId, layerId: entry.layerId, revision: entry.revision, intent: entry.intent, phase: entry.phase, operationCount: entry.operationCount, bytes: entry.bytes, attempt: entry.attempt, sequence: entry.sequence, touchedAt: entry.touchedAt, expiresAt: entry.expiresAt }) }
-  #assertLive(): void { if (this.#disposed) throw new Error('edit transaction lifecycle policy is disposed') }
+
+  expire(now: number): number {
+    this.#active()
+    finite('now', now)
+    let removed = 0
+    for (const [id, entry] of this.#entries) {
+      if (now > entry.expiresAt) {
+        this.#entries.delete(id)
+        removed += 1
+      }
+    }
+    return removed
+  }
+
+  entriesForLayer(layerId: string): readonly Readonly<ArcGisEditTransactionView>[] {
+    this.#active()
+    const layer = identifier('layerId', layerId)
+    return Object.freeze([...this.#entries.values()]
+      .filter(entry => entry.layerId === layer)
+      .sort((a, b) => a.sequence - b.sequence)
+      .map(entry => this.#view(entry)))
+  }
+
+  snapshot(): Readonly<{ transactions: number; queued: number; running: number; committed: number; operations: number; estimatedBytes: number }> {
+    this.#active()
+    return Object.freeze({
+      transactions: this.#entries.size,
+      queued: this.#countPhase('queued'),
+      running: this.#countPhase('running'),
+      committed: this.#countPhase('committed'),
+      operations: this.#sumOperations(),
+      estimatedBytes: this.#sumBytes(),
+    })
+  }
+
+  fingerprint(): string {
+    this.#active()
+    return [...this.#entries.values()]
+      .sort((a, b) => a.layerId.localeCompare(b.layerId) || a.transactionId.localeCompare(b.transactionId))
+      .map(entry => [entry.layerId, entry.transactionId, entry.revision, entry.intent, entry.operation, entry.phase, entry.operationCount, entry.estimatedBytes].join(':'))
+      .join('|')
+  }
+
+  dispose(): void {
+    this.#entries.clear()
+    this.#layerRevisions.clear()
+    this.#disposed = true
+  }
+
+  #countLayer(layerId: string): number {
+    let total = 0
+    for (const entry of this.#entries.values()) if (entry.layerId === layerId) total += 1
+    return total
+  }
+
+  #countPhase(phase: ArcGisEditPhase): number {
+    let total = 0
+    for (const entry of this.#entries.values()) if (entry.phase === phase) total += 1
+    return total
+  }
+
+  #sumOperations(): number {
+    let total = 0
+    for (const entry of this.#entries.values()) total += entry.operationCount
+    return total
+  }
+
+  #sumBytes(): number {
+    let total = 0
+    for (const entry of this.#entries.values()) total += entry.estimatedBytes
+    return total
+  }
+
+  #view(entry: Entry): Readonly<ArcGisEditTransactionView> {
+    return Object.freeze({
+      transactionId: entry.transactionId,
+      layerId: entry.layerId,
+      revision: entry.revision,
+      intent: entry.intent,
+      operation: entry.operation,
+      phase: entry.phase,
+      operationCount: entry.operationCount,
+      estimatedBytes: entry.estimatedBytes,
+      sequence: entry.sequence,
+      expiresAt: entry.expiresAt,
+    })
+  }
+
+  #active(): void {
+    if (this.#disposed) throw new Error('ArcGisEditTransactionLifecyclePolicy is disposed')
+  }
 }
