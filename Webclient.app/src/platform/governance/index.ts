@@ -14,3 +14,4 @@ export * from './runtimeHealthWindow';
 export * from './runtimeRecoveryCoordinator';
 export * from './runtimeDeadlineGovernor';
 export * from './runtimeLoadShedGovernor';
+export * from './runtimeAdmissionGovernor';
