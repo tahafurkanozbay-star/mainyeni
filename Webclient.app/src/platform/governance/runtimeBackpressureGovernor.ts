@@ -273,7 +273,7 @@ export class RuntimeBackpressureGovernor {
     if (candidate) this.scopes.delete(candidate[0])
   }
 
-  private validateLease(lease: RuntimeBackpressureLease): LeaseState | null {
+  private validateLease(lease: RuntimeBackpressureLease | null | undefined): LeaseState | null {
     if (!lease || typeof lease.id !== 'string') return null
     const current = this.leases.get(lease.id)
     if (!current) return null
