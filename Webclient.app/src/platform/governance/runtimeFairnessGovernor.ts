@@ -69,7 +69,6 @@ const DEFAULT_POLICY: RuntimeFairnessPolicy = Object.freeze({
 });
 const SAFE_SCOPE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/;
 const MAX_COUNTER = Number.MAX_SAFE_INTEGER - 1;
-const PRIORITY_ORDER: Readonly<Record<RuntimeFairnessPriority, number>> = Object.freeze({ critical: 0, interactive: 1, background: 2 });
 
 function integer(value: number, name: string, min: number): number {
   if (!Number.isFinite(value) || !Number.isInteger(value) || value < min) throw new TypeError(`${name} must be an integer >= ${min}`);
