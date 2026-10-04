@@ -47,9 +47,12 @@ export interface FeedbackAccessibilitySnapshot {
 
 const MAX_ITEMS = 5;
 const MAX_ANNOUNCEMENT = 240;
-const CONTROL_CHARACTER_PATTERN = new RegExp('[\\x00-\\x1F\\x7F]', 'g');
 const safeId = (value: string): string => value.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 96);
-const bounded = (value: string): string => value.replace(CONTROL_CHARACTER_PATTERN, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_ANNOUNCEMENT);
+const stripControls = (value: string): string => Array.from(value, (character) => {
+  const code = character.charCodeAt(0);
+  return code <= 31 || code === 127 ? ' ' : character;
+}).join('');
+const bounded = (value: string): string => stripControls(value).replace(/\s+/g, ' ').trim().slice(0, MAX_ANNOUNCEMENT);
 
 const resolveActive = (items: readonly FeedbackViewModel[], requested?: string | null): string | null => {
   if (requested && items.some((item) => item.id === requested)) return requested;
@@ -57,9 +60,7 @@ const resolveActive = (items: readonly FeedbackViewModel[], requested?: string |
   return actionable?.id ?? items.at(-1)?.id ?? null;
 };
 
-export const createFeedbackAccessibilitySnapshot = (
-  input: FeedbackAccessibilityInput,
-): FeedbackAccessibilitySnapshot => {
+export const createFeedbackAccessibilitySnapshot = (input: FeedbackAccessibilityInput): FeedbackAccessibilitySnapshot => {
   const items = input.items.slice(-MAX_ITEMS);
   const activeFeedbackId = resolveActive(items, input.activeFeedbackId);
   const models: FeedbackAccessibilityItem[] = items.map((item) => {
@@ -70,38 +71,22 @@ export const createFeedbackAccessibilitySnapshot = (
     const dismissId = item.dismissible ? `${base}-dismiss` : null;
     const active = item.id === activeFeedbackId;
     return {
-      id: item.id,
-      semanticId: base,
-      titleId,
-      messageId,
-      actionId,
-      dismissId,
-      role: item.role,
-      ariaLive: item.ariaLive,
-      ariaAtomic: true,
-      ariaLabelledBy: titleId,
-      ariaDescribedBy: messageId,
+      id: item.id, semanticId: base, titleId, messageId, actionId, dismissId,
+      role: item.role, ariaLive: item.ariaLive, ariaAtomic: true,
+      ariaLabelledBy: titleId, ariaDescribedBy: messageId,
       actionTabIndex: actionId && active ? 0 : -1,
       dismissTabIndex: !actionId && dismissId && active ? 0 : -1,
     };
   });
   const latest = items.at(-1);
-  const announcement = latest
-    ? bounded(`${latest.title}${latest.message ? `. ${latest.message}` : ''}`) || null
-    : null;
+  const announcement = latest ? bounded(`${latest.title}${latest.message ? `. ${latest.message}` : ''}`) || null : null;
   return {
-    regionId: 'kr-feedback-region',
-    regionRole: 'region',
-    regionLabel: 'Bildirimler',
+    regionId: 'kr-feedback-region', regionRole: 'region', regionLabel: 'Bildirimler',
     placement: input.viewport === 'phone' ? 'bottom-sheet' : 'floating-stack',
     targetSize: input.coarsePointer ? 48 : 44,
     motion: input.reducedMotion ? 'reduced' : 'standard',
     contrast: input.forcedColors ? 'forced' : 'standard',
-    items: models,
-    activeFeedbackId,
-    focusTarget: 'none',
-    focusId: null,
-    announcement,
+    items: models, activeFeedbackId, focusTarget: 'none', focusId: null, announcement,
   };
 };
 
@@ -160,10 +145,8 @@ export const moveFeedbackAccessibilityFocus = (
   const active = actionable[index];
   const focusId = active.actionId ?? active.dismissId;
   return {
-    ...snapshot,
-    activeFeedbackId: active.id,
-    focusTarget: active.actionId ? 'latest-action' : 'region',
-    focusId,
+    ...snapshot, activeFeedbackId: active.id,
+    focusTarget: active.actionId ? 'latest-action' : 'region', focusId,
     items: snapshot.items.map((item) => ({
       ...item,
       actionTabIndex: item.id === active.id && item.actionId ? 0 : -1,
