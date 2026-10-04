@@ -53,6 +53,30 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
+      # Keep per-file probes while this boundary is being migrated. GitHub's job
+      # metadata then identifies the failing file even when raw Actions logs are
+      # unavailable to an automation client. The canonical aggregate gate below
+      # remains authoritative and still fails the job on any warning.
+      - name: Diagnostic lint runtime deadline governor
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeDeadlineGovernor.ts src/platform/governance/runtimeDeadlineGovernor.test.ts
+
+      - name: Diagnostic lint runtime load-shed governor
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeLoadShedGovernor.ts src/platform/governance/runtimeLoadShedGovernor.test.ts
+
+      - name: Diagnostic lint runtime admission governor
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeAdmissionGovernor.ts src/platform/governance/runtimeAdmissionGovernor.test.ts
+
+      - name: Diagnostic lint runtime fairness governor
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeFairnessGovernor.ts src/platform/governance/runtimeFairnessGovernor.test.ts
+
+      - name: Diagnostic lint runtime backpressure governor
+        continue-on-error: true
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.ts src/platform/governance/runtimeBackpressureGovernor.test.ts
+
       - name: Strict lint governance, config and migrated Platform tests
         run: >-
           npx oxlint --deny-warnings
