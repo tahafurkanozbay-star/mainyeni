@@ -1,6 +1,8 @@
 const SHA=/^[0-9a-f]{40}$/;
 const SAFE_NAME=/^[A-Za-z0-9][A-Za-z0-9 ._:/()\-]{0,119}$/;
 export const QUORUM_VERSION=1;
+export const MAX_REQUIRED_WORKFLOWS=64;
+export const MAX_RUN_EVIDENCE=256;
 export const DEFAULT_REQUIRED=Object.freeze(['Release QA','Platform Architecture Audit','Platform Typed Test Validation','Release Evidence Contract','Webclient Quality']);
 const freeze=v=>{if(Array.isArray(v))return Object.freeze(v.map(freeze));if(v&&typeof v==='object'){const o={};for(const [k,x] of Object.entries(v))o[k]=freeze(x);return Object.freeze(o)}return v};
 const finding=(code,field,message)=>freeze({code,field,message,severity:'error'});
@@ -30,12 +32,20 @@ function normalize(input,out){
  const headSha=sha(input.headSha),baseSha=sha(input.baseSha),currentMainSha=sha(input.currentMainSha);
  for(const [k,v] of Object.entries({headSha,baseSha,currentMainSha}))if(!v)out.push(finding('sha-invalid',k,`${k} must be a 40-character Git SHA.`));
  if(!Array.isArray(input.runs))out.push(finding('runs-invalid','runs','runs must be an array.'));
+ else if(input.runs.length>MAX_RUN_EVIDENCE)out.push(finding('runs-limit','runs',`runs must contain at most ${MAX_RUN_EVIDENCE} entries.`));
  if(!integer(input.maxEvidenceAgeMs)||input.maxEvidenceAgeMs<60000||input.maxEvidenceAgeMs>86400000)out.push(finding('age-policy-invalid','maxEvidenceAgeMs','Evidence age must be between one minute and one day.'));
  const observedAt=text(input.observedAt,64),observed=observedAt?Date.parse(observedAt):NaN;
  if(!Number.isFinite(observed))out.push(finding('observed-at-invalid','observedAt','observedAt must be valid.'));
- const runs=Array.isArray(input.runs)?input.runs.map((r,i)=>normalizeRun(r,i,out)).filter(Boolean):[];
- if(out.some(x=>['evidence-invalid','version-invalid','sha-invalid','runs-invalid','age-policy-invalid','observed-at-invalid'].includes(x.code)))return null;
+ const runs=Array.isArray(input.runs)&&input.runs.length<=MAX_RUN_EVIDENCE?input.runs.map((r,i)=>normalizeRun(r,i,out)).filter(Boolean):[];
+ if(out.some(x=>['evidence-invalid','version-invalid','sha-invalid','runs-invalid','runs-limit','age-policy-invalid','observed-at-invalid'].includes(x.code)))return null;
  return freeze({headSha,baseSha,currentMainSha,runs,maxEvidenceAgeMs:input.maxEvidenceAgeMs,observedAt,observed});
+}
+function normalizeRequired(value,out){
+ const source=value===undefined?[...DEFAULT_REQUIRED]:value;
+ if(!Array.isArray(source)||source.length===0||source.length>MAX_REQUIRED_WORKFLOWS){out.push(finding('required-invalid','required',`required must contain 1-${MAX_REQUIRED_WORKFLOWS} workflow names.`));return []}
+ const names=[],seen=new Set();
+ for(const value of source){const name=text(value);if(!name||!SAFE_NAME.test(name)){out.push(finding('required-name-invalid','required','Required workflow name is invalid.'));continue}if(seen.has(name)){out.push(finding('required-name-duplicate','required',`Required workflow is duplicated: ${name}.`));continue}seen.add(name);names.push(name)}
+ return names;
 }
 function selectLatest(runs,out){
  const byKey=new Map(),ids=new Map();
@@ -49,8 +59,7 @@ function selectLatest(runs,out){
  return byKey;
 }
 export function evaluateReleaseEvidenceQuorum(input,options={}){
- const findings=[],evidence=normalize(input,findings),required=Array.isArray(options.required)&&options.required.length?options.required:[...DEFAULT_REQUIRED],requiredNames=[],seen=new Set();
- for(const value of required){const name=text(value);if(!name||!SAFE_NAME.test(name)){findings.push(finding('required-name-invalid','required','Required workflow name is invalid.'));continue}if(seen.has(name)){findings.push(finding('required-name-duplicate','required',`Required workflow is duplicated: ${name}.`));continue}seen.add(name);requiredNames.push(name)}
+ const findings=[],evidence=normalize(input,findings),requiredNames=normalizeRequired(options?.required,findings);
  if(evidence){
   if(evidence.baseSha!==evidence.currentMainSha)findings.push(finding('base-stale','baseSha','Evidence base must equal current main.'));
   if(evidence.headSha===evidence.currentMainSha)findings.push(finding('head-equals-main','headSha','Candidate head must differ from current main.'));
