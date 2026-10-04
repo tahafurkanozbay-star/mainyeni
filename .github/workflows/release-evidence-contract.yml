@@ -7,6 +7,8 @@ on:
       - 'Webclient.app/package-lock.json'
       - 'Webclient.app/scripts/release-evidence-audit.mjs'
       - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.test.mjs'
       - 'Webclient.app/scripts/verify-chain-security.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
@@ -25,6 +27,8 @@ on:
       - 'Webclient.app/package-lock.json'
       - 'Webclient.app/scripts/release-evidence-audit.mjs'
       - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.test.mjs'
       - 'Webclient.app/scripts/verify-chain-security.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
@@ -67,6 +71,12 @@ jobs:
 
       - name: Audit adversarial fixture suite
         run: node --test scripts/release-evidence-audit.test.mjs
+
+      - name: Release candidate gate adversarial suite
+        run: node --test scripts/release-candidate-gate.test.mjs
+
+      - name: Release candidate gate embedded smoke
+        run: node scripts/release-candidate-gate.mjs --self-test
 
       - name: Verify-chain bypass security contract
         run: node --test scripts/verify-chain-security.test.mjs
