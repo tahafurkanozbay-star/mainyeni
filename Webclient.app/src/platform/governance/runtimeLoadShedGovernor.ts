@@ -183,6 +183,11 @@ export class RuntimeLoadShedGovernor {
   }
 
   private recompute(state: ScopeState): void {
+    if (state.samples.length === 0) {
+      state.band = 'normal';
+      state.recoveryStreak = 0;
+      return;
+    }
     let peak = 0;
     for (const sample of state.samples) peak = Math.max(peak, sample.cpu, sample.memory, sample.network);
     if (peak >= this.policy.severeThreshold) { state.band = 'severe'; state.recoveryStreak = 0; return; }
