@@ -47,8 +47,9 @@ export interface FeedbackAccessibilitySnapshot {
 
 const MAX_ITEMS = 5;
 const MAX_ANNOUNCEMENT = 240;
+const CONTROL_CHARACTER_PATTERN = new RegExp('[\\x00-\\x1F\\x7F]', 'g');
 const safeId = (value: string): string => value.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 96);
-const bounded = (value: string): string => value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_ANNOUNCEMENT);
+const bounded = (value: string): string => value.replace(CONTROL_CHARACTER_PATTERN, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_ANNOUNCEMENT);
 
 const resolveActive = (items: readonly FeedbackViewModel[], requested?: string | null): string | null => {
   if (requested && items.some((item) => item.id === requested)) return requested;
