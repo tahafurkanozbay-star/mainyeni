@@ -128,19 +128,19 @@ describe('RuntimeFairnessGovernor', () => {
   it('tolerates bounded clock rollback monotonically', () => {
     const c = clock(); const governor = new RuntimeFairnessGovernor(policy, c.now);
     governor.enqueue({ scope: 'a', priority: 'critical', cost: 1 });
-    c.advance(4); governor.snapshot(); c.set(1002);
-    expect(() => governor.snapshot()).not.toThrow();
+    c.advance(4); governor.sweep(); c.set(1002);
+    expect(() => governor.sweep()).not.toThrow();
   });
 
   it('fails closed on excessive clock rollback', () => {
     const c = clock(); const governor = new RuntimeFairnessGovernor(policy, c.now);
-    governor.snapshot(); c.advance(10); governor.snapshot(); c.set(1000);
-    expect(() => governor.snapshot()).toThrow();
+    c.advance(10); governor.sweep(); c.set(1000);
+    expect(() => governor.sweep()).toThrow('clock moved backwards beyond policy');
   });
 
   it('fails closed when clock is non-finite or negative', () => {
-    expect(() => new RuntimeFairnessGovernor(policy, () => Number.NaN).snapshot()).toThrow();
-    expect(() => new RuntimeFairnessGovernor(policy, () => -1).snapshot()).toThrow();
+    expect(() => new RuntimeFairnessGovernor(policy, () => Number.NaN)).toThrow('finite non-negative');
+    expect(() => new RuntimeFairnessGovernor(policy, () => -1)).toThrow('finite non-negative');
   });
 
   it('validates policy relationships', () => {
