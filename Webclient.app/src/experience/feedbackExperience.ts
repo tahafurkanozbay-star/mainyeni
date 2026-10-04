@@ -34,11 +34,12 @@ const MAX_ID = 80;
 const MAX_TITLE = 120;
 const MAX_MESSAGE = 320;
 const MAX_ACTION = 64;
+const CONTROL_CHARACTER_PATTERN = new RegExp('[\\x00-\\x1F\\x7F]', 'g');
 
 const clean = (value: unknown, max: number): string => {
   if (typeof value !== 'string') return '';
   return value
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(CONTROL_CHARACTER_PATTERN, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
