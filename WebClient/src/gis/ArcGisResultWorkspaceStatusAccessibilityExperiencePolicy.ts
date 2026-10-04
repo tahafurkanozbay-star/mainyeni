@@ -42,24 +42,16 @@ const MAX_QUERY = 80;
 const DEFAULT_SCOPE = 'results';
 
 const sanitizeId = (value: string, fallback: string): string => {
-  const normalized = value
-    .normalize('NFKC')
-    .toLocaleLowerCase('tr-TR')
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
+  const normalized = value.normalize('NFKC').toLocaleLowerCase('tr-TR').replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
   return normalized || fallback;
 };
 
 const boundedText = (value: string | null | undefined, max = MAX_MESSAGE): string => {
   if (!value) return '';
-  const normalized = value.normalize('NFKC').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return normalized.slice(0, max);
+  return value.normalize('NFKC').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 };
 
-const normalizedStatus = (snapshot: ResultWorkspaceSnapshot): string =>
-  boundedText(snapshot.model?.status ? String(snapshot.model.status) : 'idle', 32).toLocaleLowerCase('tr-TR');
-
+const normalizedStatus = (snapshot: ResultWorkspaceSnapshot): string => boundedText(String(snapshot.model?.status ?? 'idle'), 32).toLocaleLowerCase('tr-TR');
 const isLoading = (status: string): boolean => ['loading', 'pending', 'refreshing'].includes(status);
 const isError = (status: string): boolean => ['error', 'failed', 'failure'].includes(status);
 const isEmpty = (status: string, resultCount: number): boolean => ['empty', 'no-results'].includes(status) || (status === 'ready' && resultCount === 0);
@@ -74,55 +66,32 @@ const querySuffix = (queryLabel?: string | null): string => {
   return query ? ` “${query}” için` : '';
 };
 
-const messageFor = (
-  status: string,
-  count: number,
-  queryLabel: string | null | undefined,
-  errorMessage: string | null | undefined,
-): { message: string; description: string; tone: WorkspaceStatusTone; role: WorkspaceStatusRole; live: 'polite' | 'assertive' } => {
-  if (isError(status)) {
-    const safeError = boundedText(errorMessage);
-    return {
-      message: safeError || 'Sonuçlar yüklenemedi.',
-      description: 'Bağlantınızı kontrol edip yeniden deneyin. Harita üzerindeki mevcut içerik kullanılmaya devam edebilir.',
-      tone: 'danger',
-      role: 'alert',
-      live: 'assertive',
-    };
-  }
-  if (isLoading(status)) {
-    return {
-      message: `Sonuçlar${querySuffix(queryLabel)} yükleniyor.`,
-      description: 'Arama tamamlanırken mevcut odak konumu korunur.',
-      tone: 'progress',
-      role: 'status',
-      live: 'polite',
-    };
-  }
-  if (isEmpty(status, count)) {
-    return {
-      message: `${querySuffix(queryLabel).trimStart() || 'Bu arama için'} sonuç bulunamadı.`,
-      description: 'Filtreleri azaltın, arama ifadesini değiştirin veya haritada farklı bir alan deneyin.',
-      tone: 'warning',
-      role: 'status',
-      live: 'polite',
-    };
-  }
-  if (status === 'ready') {
-    return {
-      message: count === 1 ? '1 sonuç hazır.' : `${count.toLocaleString('tr-TR')} sonuç hazır.`,
-      description: 'Sonuçlar klavye, tablo veya harita üzerinden incelenebilir.',
-      tone: 'success',
-      role: 'status',
-      live: 'polite',
-    };
-  }
+const messageFor = (status: string, count: number, queryLabel?: string | null, errorMessage?: string | null): {
+  message: string; description: string; tone: WorkspaceStatusTone; role: WorkspaceStatusRole; live: 'polite' | 'assertive';
+} => {
+  if (isError(status)) return {
+    message: boundedText(errorMessage) || 'Sonuçlar yüklenemedi.',
+    description: 'Bağlantınızı kontrol edip yeniden deneyin. Harita üzerindeki mevcut içerik kullanılmaya devam edebilir.',
+    tone: 'danger', role: 'alert', live: 'assertive',
+  };
+  if (isLoading(status)) return {
+    message: `Sonuçlar${querySuffix(queryLabel)} yükleniyor.`,
+    description: 'Arama tamamlanırken mevcut odak konumu korunur.',
+    tone: 'progress', role: 'status', live: 'polite',
+  };
+  if (isEmpty(status, count)) return {
+    message: `${querySuffix(queryLabel).trimStart() || 'Bu arama için'} sonuç bulunamadı.`,
+    description: 'Filtreleri azaltın, arama ifadesini değiştirin veya haritada farklı bir alan deneyin.',
+    tone: 'warning', role: 'status', live: 'polite',
+  };
+  if (status === 'ready') return {
+    message: count === 1 ? '1 sonuç hazır.' : `${count.toLocaleString('tr-TR')} sonuç hazır.`,
+    description: 'Sonuçlar klavye, tablo veya harita üzerinden incelenebilir.',
+    tone: 'success', role: 'status', live: 'polite',
+  };
   return {
-    message: 'Sonuç alanı hazır.',
-    description: 'Arama yaptığınızda sonuçlar burada gösterilir.',
-    tone: 'neutral',
-    role: 'status',
-    live: 'polite',
+    message: 'Sonuç alanı hazır.', description: 'Arama yaptığınızda sonuçlar burada gösterilir.',
+    tone: 'neutral', role: 'status', live: 'polite',
   };
 };
 
@@ -140,71 +109,40 @@ export const createArcGisResultWorkspaceStatusAccessibilityContract = (
   const transitionedToError = isError(status) && !isError(previousStatus);
   const transitionedToReady = status === 'ready' && previousStatus !== 'ready';
   const transitionedToEmpty = isEmpty(status, count) && !isEmpty(previousStatus, count);
-
   let focusAction: WorkspaceStatusFocusAction = 'none';
   let focusTarget: string | null = null;
   if (transitionedToError && recoveryVisible) {
-    focusAction = 'focus-recovery';
-    focusTarget = `${scopeId}-status-recovery`;
+    focusAction = 'focus-recovery'; focusTarget = `${scopeId}-status-recovery`;
   } else if ((transitionedToReady || transitionedToEmpty) && snapshot.modality === 'keyboard') {
-    focusAction = 'focus-collection';
-    focusTarget = `${scopeId}-collection`;
+    focusAction = 'focus-collection'; focusTarget = `${scopeId}-collection`;
   }
-
-  const changed = !previous
-    || previous.message !== copy.message
-    || previous.busy !== isLoading(status)
-    || previous.focusTarget !== focusTarget
-    || previous.recoveryVisible !== recoveryVisible;
-
+  const changed = !previous || previous.message !== copy.message || previous.busy !== isLoading(status)
+    || previous.focusTarget !== focusTarget || previous.recoveryVisible !== recoveryVisible;
+  const revision = changed ? (previous?.revision ?? -1) + 1 : (previous?.revision ?? 0);
   return Object.freeze({
     scopeId,
-    containerId: `${scopeId}-status`,
-    headingId: `${scopeId}-status-heading`,
-    descriptionId: `${scopeId}-status-description`,
-    recoveryId: `${scopeId}-status-recovery`,
-    role: copy.role,
-    ariaLive: copy.live,
-    ariaAtomic: true,
-    busy: isLoading(status),
-    tone: copy.tone,
-    message: boundedText(copy.message),
-    description: boundedText(copy.description),
-    recoveryVisible,
-    recoveryLabel: 'Yeniden dene',
-    focusAction,
-    focusTarget,
+    containerId: `${scopeId}-status`, headingId: `${scopeId}-status-heading`,
+    descriptionId: `${scopeId}-status-description`, recoveryId: `${scopeId}-status-recovery`,
+    role: copy.role, ariaLive: copy.live, ariaAtomic: true, busy: isLoading(status), tone: copy.tone,
+    message: boundedText(copy.message), description: boundedText(copy.description), recoveryVisible,
+    recoveryLabel: 'Yeniden dene', focusAction, focusTarget,
     minimumTargetSize: snapshot.accessibility.minimumTargetSize,
     reducedMotion: snapshot.accessibility.reducedMotion,
     forcedColors: snapshot.accessibility.forcedColors,
-    focusVisible: snapshot.modality === 'keyboard',
-    revision: changed ? (previous?.revision ?? -1) + 1 : previous.revision,
+    focusVisible: snapshot.modality === 'keyboard', revision,
   });
 };
 
 export interface WorkspaceStatusKeyEvent {
-  key: string;
-  editable?: boolean;
-  composing?: boolean;
-  repeat?: boolean;
-  defaultPrevented?: boolean;
-  altKey?: boolean;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-  shiftKey?: boolean;
+  key: string; editable?: boolean; composing?: boolean; repeat?: boolean; defaultPrevented?: boolean;
+  altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean;
 }
-
 export interface WorkspaceStatusKeyResolution {
-  handled: boolean;
-  preventDefault: boolean;
-  action: 'none' | 'retry' | 'focus-results';
-  focusTarget: string | null;
+  handled: boolean; preventDefault: boolean; action: 'none' | 'retry' | 'focus-results'; focusTarget: string | null;
 }
-
 const ignoredKeyContext = (event: WorkspaceStatusKeyEvent): boolean => Boolean(
   event.editable || event.composing || event.repeat || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey,
 );
-
 export const resolveArcGisResultWorkspaceStatusAccessibilityKey = (
   contract: WorkspaceStatusAccessibilityContract,
   event: WorkspaceStatusKeyEvent,
