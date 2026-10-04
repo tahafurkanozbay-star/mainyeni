@@ -165,6 +165,7 @@ export class RuntimeFairnessGovernor {
       for (let offset = 0; offset < active.length; offset += 1) {
         const index = (start + offset) % active.length;
         const state = active[index];
+        if (!state) continue;
         const head = state.queue[0];
         if (!head) continue;
         state.deficit = Math.min(this.policy.maxDeficitPerScope, state.deficit + this.quantum(head.priority));
