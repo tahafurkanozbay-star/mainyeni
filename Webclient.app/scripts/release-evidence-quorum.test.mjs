@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_REQUIRED,evaluateReleaseEvidenceQuorum,formatReleaseEvidenceQuorum} from './release-evidence-quorum.mjs';
+import {DEFAULT_REQUIRED,MAX_REQUIRED_WORKFLOWS,MAX_RUN_EVIDENCE,evaluateReleaseEvidenceQuorum,formatReleaseEvidenceQuorum} from './release-evidence-quorum.mjs';
 const A='a'.repeat(40),B='b'.repeat(40);
 const run=(name,overrides={})=>({name,headSha:B,event:'pull_request',status:'completed',conclusion:'success',runId:100+DEFAULT_REQUIRED.indexOf(name),attempt:1,createdAt:'2026-10-04T02:00:00.000Z',updatedAt:'2026-10-04T02:05:00.000Z',...overrides});
 const fixture=(overrides={})=>({version:1,headSha:B,baseSha:A,currentMainSha:A,observedAt:'2026-10-04T02:10:00.000Z',maxEvidenceAgeMs:3600000,runs:DEFAULT_REQUIRED.map(name=>run(name)),...overrides});
@@ -28,6 +28,10 @@ test('rejects malformed roots and version',()=>{has(null,'evidence-invalid');has
 test('normalizes uppercase SHA',()=>{const x=fixture({headSha:B.toUpperCase(),baseSha:A.toUpperCase(),currentMainSha:A.toUpperCase()});x.runs=x.runs.map(r=>({...r,headSha:B.toUpperCase()}));assert.equal(evaluateReleaseEvidenceQuorum(x).passed,true)});
 test('rejects malformed run metadata',()=>{const x=fixture();x.runs[0]=run('bad\nname',{status:'',conclusion:'bad\nvalue'});has(x,'run-name-invalid');has(x,'run-status-invalid');has(x,'run-conclusion-invalid')});
 test('rejects duplicate required names',()=>has(fixture(),'required-name-duplicate',{required:['Release QA','Release QA']}));
+test('rejects malformed required policy instead of weakening quorum',()=>{has(fixture(),'required-invalid',{required:[]});has(fixture(),'required-invalid',{required:null});has(fixture(),'required-invalid',{required:'Release QA'});has(fixture(),'required-invalid',{required:Array.from({length:MAX_REQUIRED_WORKFLOWS+1},(_,i)=>`Workflow ${i}`)})});
+test('rejects required names containing controls or unsupported punctuation',()=>{has(fixture(),'required-name-invalid',{required:['Release QA\nspoof']});has(fixture(),'required-name-invalid',{required:['Release QA <spoof>']})});
 test('supports narrowed explicit quorum',()=>{const x=fixture();x.runs=[run('Release QA')];assert.equal(evaluateReleaseEvidenceQuorum(x,{required:['Release QA']}).passed,true)});
-test('bounds evidence cardinality',()=>{const x=fixture();for(let i=0;i<33;i++)x.runs.push(run('Release QA',{runId:1000+i,attempt:2+i,updatedAt:'2026-10-04T02:06:00.000Z'}));has(x,'run-cardinality-exceeded')});
+test('bounds evidence cardinality per workflow',()=>{const x=fixture();for(let i=0;i<33;i++)x.runs.push(run('Release QA',{runId:1000+i,attempt:2+i,updatedAt:'2026-10-04T02:06:00.000Z'}));has(x,'run-cardinality-exceeded')});
+test('bounds total evidence before normalization work',()=>{const x=fixture({runs:Array.from({length:MAX_RUN_EVIDENCE+1},(_,i)=>run('Release QA',{runId:10000+i,attempt:i+1}))});has(x,'runs-limit')});
+test('accepts total evidence exactly at global bound when policy quorum is present',()=>{const extras=Array.from({length:MAX_RUN_EVIDENCE-DEFAULT_REQUIRED.length},(_,i)=>run(`Noise ${i}`,{runId:10000+i,attempt:1}));const x=fixture({runs:[...DEFAULT_REQUIRED.map(name=>run(name)),...extras]});assert.equal(evaluateReleaseEvidenceQuorum(x).passed,true)});
 test('formatter and immutable result are deterministic',()=>{const r=evaluateReleaseEvidenceQuorum(fixture({baseSha:'c'.repeat(40)}));assert.match(formatReleaseEvidenceQuorum(r),/base-stale/);assert.ok(Object.isFrozen(r));assert.ok(Object.isFrozen(r.findings));assert.ok(Object.isFrozen(r.summary))});
