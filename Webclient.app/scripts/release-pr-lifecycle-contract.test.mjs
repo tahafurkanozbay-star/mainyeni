@@ -75,6 +75,16 @@ test('rejects malformed expected base policy', () => {
   assert.ok(codes(evaluateReleasePrLifecycle(valid(), { expectedBaseSha: 'bad' })).has('expected-base-invalid'));
 });
 
+test('rejects malformed policy containers without throwing', () => {
+  for (const policy of [null, [], 'policy', 42, false]) {
+    const result = evaluateReleasePrLifecycle(valid(), policy);
+    assert.equal(result.passed, false);
+    assert.equal(result.mergeAllowed, false);
+    assert.ok(codes(result).has('policy-invalid'));
+    assert.equal(result.summary.errors, 1);
+  }
+});
+
 test('rejects metadata timestamp before creation timestamp', () => {
   const input = valid(); input.updatedAt = '2026-10-05T00:59:59.000Z';
   assert.ok(codes(evaluateReleasePrLifecycle(input)).has('timestamp-order-invalid'));
