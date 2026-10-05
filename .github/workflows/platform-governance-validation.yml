@@ -53,11 +53,39 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      # Keep lint fail-closed while separating the two ownership boundaries.
-      # Each source is still checked independently so an oxlint warning/error
-      # remains authoritative without relying on a mixed directory invocation.
-      - name: Strict lint governance sources
-        run: find src/platform/governance -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
+      # Keep lint fail-closed while exposing ownership in Actions job metadata.
+      # The five governor slices are the product scope of this PR; the index and
+      # pre-existing governance sources are validated separately so a baseline
+      # warning cannot be mistaken for a governor regression when raw logs are
+      # unavailable through constrained automation connectors.
+      - name: Strict lint runtime deadline governor
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeDeadlineGovernor.ts src/platform/governance/runtimeDeadlineGovernor.test.ts
+
+      - name: Strict lint runtime load-shed governor
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeLoadShedGovernor.ts src/platform/governance/runtimeLoadShedGovernor.test.ts
+
+      - name: Strict lint runtime admission governor
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeAdmissionGovernor.ts src/platform/governance/runtimeAdmissionGovernor.test.ts
+
+      - name: Strict lint runtime fairness governor
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeFairnessGovernor.ts src/platform/governance/runtimeFairnessGovernor.test.ts
+
+      - name: Strict lint runtime backpressure governor
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.ts src/platform/governance/runtimeBackpressureGovernor.test.ts
+
+      - name: Strict lint governance barrel
+        run: npx oxlint --deny-warnings src/platform/governance/index.ts
+
+      - name: Strict lint pre-existing governance sources
+        run: >-
+          find src/platform/governance -type f \( -name '*.ts' -o -name '*.tsx' \)
+          ! -name 'index.ts'
+          ! -name 'runtimeDeadlineGovernor.ts' ! -name 'runtimeDeadlineGovernor.test.ts'
+          ! -name 'runtimeLoadShedGovernor.ts' ! -name 'runtimeLoadShedGovernor.test.ts'
+          ! -name 'runtimeAdmissionGovernor.ts' ! -name 'runtimeAdmissionGovernor.test.ts'
+          ! -name 'runtimeFairnessGovernor.ts' ! -name 'runtimeFairnessGovernor.test.ts'
+          ! -name 'runtimeBackpressureGovernor.ts' ! -name 'runtimeBackpressureGovernor.test.ts'
+          -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
 
       - name: Strict lint config sources
         run: find src/platform/config -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
