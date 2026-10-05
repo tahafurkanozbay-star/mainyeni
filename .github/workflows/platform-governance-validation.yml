@@ -49,6 +49,8 @@ jobs:
         run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.ts
       - name: Strict lint runtime backpressure tests
         run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.test.ts
+      - name: Strict lint runtime work coordinator
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeWorkCoordinator.ts src/platform/governance/runtimeWorkCoordinator.test.ts
       - name: Strict lint governance barrel
         run: npx oxlint --deny-warnings src/platform/governance/index.ts
       - name: Strict lint pre-existing governance sources
@@ -60,6 +62,7 @@ jobs:
           ! -name 'runtimeAdmissionGovernor.ts' ! -name 'runtimeAdmissionGovernor.test.ts'
           ! -name 'runtimeFairnessGovernor.ts' ! -name 'runtimeFairnessGovernor.test.ts'
           ! -name 'runtimeBackpressureGovernor.ts' ! -name 'runtimeBackpressureGovernor.test.ts'
+          ! -name 'runtimeWorkCoordinator.ts' ! -name 'runtimeWorkCoordinator.test.ts'
           -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
       - name: Strict lint config sources
         run: find src/platform/config -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
@@ -79,6 +82,17 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.platform-governance.json --pretty false
       - name: Strict migrated Platform test TypeScript
         run: npm run typecheck:platform-tests -- --pretty false
+      - name: Focused runtime work coordinator tests
+        run: npx vitest run src/platform/governance/runtimeWorkCoordinator.test.ts --reporter=verbose
+      - name: Focused runtime governor tests
+        run: >-
+          npx vitest run
+          src/platform/governance/runtimeDeadlineGovernor.test.ts
+          src/platform/governance/runtimeLoadShedGovernor.test.ts
+          src/platform/governance/runtimeAdmissionGovernor.test.ts
+          src/platform/governance/runtimeFairnessGovernor.test.ts
+          src/platform/governance/runtimeBackpressureGovernor.test.ts
+          --reporter=verbose
       - name: Focused governance and config tests
         run: npx vitest run src/platform/governance src/platform/config --reporter=verbose
       - name: Migrated Platform regression tests
