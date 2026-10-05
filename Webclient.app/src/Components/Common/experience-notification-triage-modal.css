@@ -1,0 +1,72 @@
+.experience-notification-triage__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(2px);
+  cursor: default;
+}
+
+.experience-notification-triage[data-modal='true'][data-expanded='true'] {
+  z-index: 64;
+}
+
+.experience-notification-triage[data-modal='true'][data-expanded='true'] .experience-notification-triage__panel {
+  position: relative;
+  z-index: 1;
+}
+
+.experience-notification-triage[data-modal='true'][data-expanded='true'] .experience-notification-triage__trigger {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.experience-notification-triage[data-surface='sheet'] .experience-notification-triage__panel {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.experience-notification-triage[data-motion='reduced'] .experience-notification-triage__panel,
+.experience-notification-triage[data-motion='reduced'] .experience-notification-triage__trigger,
+.experience-notification-triage[data-motion='reduced'] .experience-notification-triage__item {
+  animation: none;
+  transition: none;
+}
+
+.experience-notification-triage[data-forced-colors='true'] .experience-notification-triage__backdrop {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+@media (max-width: 639px) {
+  .experience-notification-triage[data-surface='sheet'] {
+    inset-inline: 0;
+    inset-block-end: 0;
+  }
+
+  .experience-notification-triage[data-surface='sheet'] .experience-notification-triage__panel {
+    inline-size: 100vw;
+    max-block-size: min(86dvh, 760px);
+    margin: 0;
+    padding-block-end: max(16px, env(safe-area-inset-bottom));
+    border-inline: 0;
+    border-block-end: 0;
+    border-start-start-radius: 22px;
+    border-start-end-radius: 22px;
+  }
+}
+
+@media (pointer: coarse) {
+  .experience-notification-triage[data-min-target='48'] .experience-notification-triage__search-shell input,
+  .experience-notification-triage[data-min-target='48'] .experience-notification-triage__sort {
+    min-block-size: 48px;
+  }
+}
+
+@media (forced-colors: active) {
+  .experience-notification-triage__backdrop {
+    background: transparent;
+    backdrop-filter: none;
+  }
+}
