@@ -128,12 +128,14 @@ export const resolveNotificationTriageAccessibilityIntent = (
 const sanitizeIdPart = (value: string, fallback: string): string => {
   let normalized = '';
   let separatorPending = false;
-  const source = replaceControlCharacters(value, '').normalize('NFKD');
+  const filteredInput = Array.from(value, (character) => (
+    character === 'İ' || character === 'ı' ? '' : character
+  )).join('');
+  const source = replaceControlCharacters(filteredInput, '').normalize('NFKD');
   for (const character of source) {
     const codePoint = character.codePointAt(0);
     if (codePoint === undefined) continue;
     if (codePoint >= 0x0300 && codePoint <= 0x036f) continue;
-    if (character === 'İ' || character === 'ı') continue;
     const lower = character === 'I' ? 'i' : character.toLowerCase();
     const lowerCode = lower.codePointAt(0);
     const alphanumeric = lowerCode !== undefined && (
