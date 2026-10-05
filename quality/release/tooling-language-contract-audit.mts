@@ -52,7 +52,7 @@ const TEST_FILE = /(?:^|\/).*\.(?:test|spec)\.(?:[cm]?[jt]s|[cm]?[jt]sx)$/i;
 const TYPED_EXTENSION = /\.(?:ts|tsx|mts|cts)$/i;
 const LEGACY_EXTENSION = /\.(?:js|jsx|mjs|cjs)$/i;
 const COMMON_JS = /\brequire\s*\(|\bmodule\.exports\b|\bexports\.[A-Za-z_$][\w$]*\s*=/;
-const TYPE_SUPPRESSION = /@ts-(?:nocheck|ignore)\b/;
+const TYPE_SUPPRESSION = /^\s*\/\/\s*@ts-(?:nocheck|ignore)\b/m;
 const RELEASE_AUTHORITY = /(?:^|[-_.\/])(?:release|workflow|security|integrity|governance|quality|audit|verify|dependency|artifact|build)(?:[-_.\/]|$)/i;
 const DEPRECATED_NODE_API = /\b(?:new\s+Buffer\s*\(|fs\.exists\s*\(|util\.isArray\s*\(|url\.parse\s*\(|punycode\.)/;
 const RELATIVE_IMPORT = /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g;
