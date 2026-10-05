@@ -368,7 +368,14 @@ export const ExperienceNotificationTriage = ({
         <span className="experience-notification-triage__pulse" aria-hidden="true" />
         <span className="experience-notification-triage__trigger-copy">
           <strong>{triage.unreadCount} okunmamış</strong>
-          <span>{triage.urgentCount > 0 ? `${triage.urgentCount} acil` : triage.importantCount > 0 ? `${triage.importantCount} önemli` : 'Yeni bildirimler'}</span>
+          {triage.urgentCount > 0 ? (
+            <span>
+              <span>{triage.urgentCount} acil</span>
+              {triage.importantCount > 0 ? <> · <span>{triage.importantCount} önemli</span></> : null}
+            </span>
+          ) : (
+            <span>{triage.importantCount > 0 ? `${triage.importantCount} önemli` : 'Yeni bildirimler'}</span>
+          )}
         </span>
         <span className="experience-notification-triage__trigger-key" aria-hidden="true">Alt+N</span>
       </button>
@@ -388,7 +395,7 @@ export const ExperienceNotificationTriage = ({
           className="experience-notification-triage__panel"
           role={presentation.modal ? 'dialog' : 'region'}
           aria-modal={presentation.modal ? true : undefined}
-          aria-labelledby="experience-notification-triage-heading"
+          aria-labelledby={presentation.modal ? 'experience-notification-triage-heading' : undefined}
           aria-describedby="experience-notification-triage-status"
           aria-label={presentation.modal ? undefined : 'Bildirim hızlı inceleme paneli'}
           tabIndex={-1}
