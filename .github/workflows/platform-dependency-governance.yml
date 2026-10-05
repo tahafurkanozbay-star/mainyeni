@@ -1,0 +1,65 @@
+name: Platform Dependency Governance
+
+on:
+  pull_request:
+    paths:
+      - 'Webclient.app/package.json'
+      - 'Webclient.app/package-lock.json'
+      - 'Webclient.app/scripts/dependency-*.mjs'
+      - 'Webclient.app/scripts/dependency-*.json'
+      - '.github/workflows/platform-dependency-governance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-governance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      - name: Setup Node 24
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+      - name: Verify runtime major
+        shell: bash
+        run: node -e "const major=Number(process.versions.node.split('.')[0]); if (major !== 24) process.exit(1)"
+      - name: Install from lockfile
+        working-directory: Webclient.app
+        shell: bash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Dependency governance diagnostics
+        id: governance
+        working-directory: Webclient.app
+        shell: bash
+        run: |
+          set +e
+          npm run dependency:verify > dependency-governance.log 2>&1
+          status=$?
+          cat dependency-governance.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload dependency governance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dependency-governance-${{ github.event.pull_request.head.sha || github.sha }}
+          path: Webclient.app/dependency-governance.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce dependency governance
+        if: always()
+        shell: bash
+        env:
+          GOVERNANCE_STATUS: ${{ steps.governance.outputs.status }}
+        run: |
+          test "$GOVERNANCE_STATUS" = "0"
