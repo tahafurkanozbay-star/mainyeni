@@ -417,4 +417,84 @@ describe('BookmarkWidget modern screen', () => {
     expect(goTo).not.toHaveBeenCalled();
   });
 
+  it('supports PageDown and PageUp through the governed collection policy', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    const firstId = options()[0].id;
+    const lastId = options()[2].id;
+    fireEvent.keyDown(listbox(), { key: 'PageDown' });
+    expect(listbox()).toHaveAttribute('aria-activedescendant', lastId);
+    fireEvent.keyDown(listbox(), { key: 'PageUp' });
+    expect(listbox()).toHaveAttribute('aria-activedescendant', firstId);
+  });
+
+  it('supports Home and End from search without mutating the query', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'a' } });
+    const currentOptions = options();
+    expect(currentOptions.length).toBeGreaterThan(1);
+    fireEvent.keyDown(searchInput(), { key: 'End' });
+    expect(searchInput()).toHaveAttribute('aria-activedescendant', currentOptions.at(-1)?.id);
+    fireEvent.keyDown(searchInput(), { key: 'Home' });
+    expect(searchInput()).toHaveAttribute('aria-activedescendant', currentOptions[0].id);
+    expect(searchInput()).toHaveValue('a');
+  });
+
+  it('keeps an empty search untouched when Escape has no local action', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(searchInput(), { key: 'Escape' });
+    expect(searchInput()).toHaveValue('');
+    expect(options()).toHaveLength(3);
+  });
+
+  it('does not move search active descendant for Ctrl+ArrowDown', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    const activeBefore = searchInput().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(searchInput(), { key: 'ArrowDown', ctrlKey: true });
+    expect(searchInput()).toHaveAttribute('aria-activedescendant', activeBefore);
+  });
+
+  it('does not move collection active descendant during IME composition', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    const activeBefore = listbox().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(listbox(), { key: 'ArrowDown', isComposing: true });
+    expect(listbox()).toHaveAttribute('aria-activedescendant', activeBefore);
+  });
+
+  it('opens keyboard delete confirmation for the filtered active result only', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'Kuğulu' } });
+    expect(options()).toHaveLength(1);
+    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    expect(screen.getByRole('group', { name: 'Kuğulu Park silme onayı' })).toBeVisible();
+    expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
+    expect(readStored()).toHaveLength(3);
+  });
+
+  it('keeps filtered storage intact after keyboard delete cancellation', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
+    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    fireEvent.keyDown(listbox(), { key: 'Escape' });
+    expect(readStored().map((item) => item.Title)).toEqual(['Kızılay', 'Çankaya', 'Kuğulu Park']);
+    expect(options()).toHaveLength(1);
+    expect(options()[0]).toHaveTextContent('Çankaya');
+  });
+
+  it('preserves roving selection when slash returns focus to search', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'ArrowDown' });
+    const selectedId = listbox().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(listbox(), { key: '/' });
+    expect(searchInput()).toHaveFocus();
+    expect(searchInput()).toHaveAttribute('aria-activedescendant', selectedId);
+  });
+
 });
