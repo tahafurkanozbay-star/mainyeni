@@ -64,7 +64,7 @@ describe('ExperienceFeedbackCenter', () => {
     render(<ExperienceFeedbackCenter model={model} />);
     expect(screen.getByRole('heading', { name: 'Bildirim merkezi' })).toBeInTheDocument();
     expect(screen.getByText('Bildirim geçmişi boş.')).toBeInTheDocument();
-    expect(screen.getByText(/0 okunmamış/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Bildirim özeti')).toHaveTextContent('0 okunmamış');
     expect(screen.getByRole('list', { name: 'Bildirim geçmişi' })).toBeInTheDocument();
   });
 
