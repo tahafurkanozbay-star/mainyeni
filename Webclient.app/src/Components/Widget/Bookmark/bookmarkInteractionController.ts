@@ -255,6 +255,7 @@ export const createBookmarkInteractionController = (
     const index = current.findIndex((bookmark) => bookmarkIdentity(bookmark) === key);
     if (index < 0) return false;
     const target = current[index];
+    if (!target) return false;
     publish('deleting', key, null);
     if (!persist(removeBookmarkAt(current, index))) return false;
     publish('idle', null, notify('info', `${target.Title} silindi.`));
