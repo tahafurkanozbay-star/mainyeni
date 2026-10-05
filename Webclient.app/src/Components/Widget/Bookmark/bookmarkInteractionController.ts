@@ -42,6 +42,15 @@ export interface BookmarkInteractionSnapshot {
   readonly operationGeneration: number;
 }
 
+export interface BookmarkInteractionDiagnostics {
+  readonly observerFailureCount: number;
+  readonly noticeAdapterFailureCount: number;
+  readonly activeObserverCount: number;
+  readonly rejectedObserverCount: number;
+  readonly lastFailureKind: string | null;
+  readonly disposed: boolean;
+}
+
 export interface BookmarkInteractionControllerOptions {
   readonly model: BookmarkExperienceModel;
   readonly storage: BookmarkStoragePort;
@@ -52,6 +61,7 @@ export interface BookmarkInteractionControllerOptions {
 
 export interface BookmarkInteractionController {
   readonly getSnapshot: () => BookmarkInteractionSnapshot;
+  readonly getDiagnostics: () => BookmarkInteractionDiagnostics;
   readonly subscribe: (listener: () => void) => () => void;
   readonly refresh: () => void;
   readonly saveCurrentView: (title: string) => boolean;
@@ -85,12 +95,52 @@ const sanitizeNotice = (
   message: normalizeWidgetError(message, 'İşlem tamamlanamadı.'),
 });
 
+const classifyFailure = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  return typeof error;
+};
+
 export const createBookmarkInteractionController = (
   options: BookmarkInteractionControllerOptions,
 ): BookmarkInteractionController => {
   const listeners = new Set<() => void>();
   let disposed = false;
   let snapshot = createSnapshot(0, 'idle', null, null, 0);
+  let diagnostics: BookmarkInteractionDiagnostics = Object.freeze({
+    observerFailureCount: 0,
+    noticeAdapterFailureCount: 0,
+    activeObserverCount: 0,
+    rejectedObserverCount: 0,
+    lastFailureKind: null,
+    disposed: false,
+  });
+
+  const recordObserverFailure = (error: unknown): void => {
+    diagnostics = Object.freeze({
+      ...diagnostics,
+      observerFailureCount: diagnostics.observerFailureCount + 1,
+      lastFailureKind: classifyFailure(error),
+    });
+  };
+
+  const recordNoticeAdapterFailure = (error: unknown): void => {
+    diagnostics = Object.freeze({
+      ...diagnostics,
+      noticeAdapterFailureCount: diagnostics.noticeAdapterFailureCount + 1,
+      lastFailureKind: classifyFailure(error),
+    });
+  };
+
+  const emit = (): void => {
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (error) {
+        recordObserverFailure(error);
+      }
+    }
+  };
 
   const publish = (
     phase: BookmarkInteractionSnapshot['phase'],
@@ -100,21 +150,17 @@ export const createBookmarkInteractionController = (
   ): void => {
     if (disposed) return;
     snapshot = createSnapshot(snapshot.revision + 1, phase, pendingBookmarkKey, notice, operationGeneration);
-    for (const listener of listeners) {
-      try {
-        listener();
-      } catch {
-        // State propagation must continue for healthy observers. The model carries observer diagnostics.
-      }
-    }
+    emit();
   };
 
   const notify = (severity: BookmarkInteractionSeverity, message: string): BookmarkInteractionNotice => {
     const notice = sanitizeNotice(severity, message);
-    try {
-      options.onNotice?.(notice);
-    } catch {
-      // Notification adapters are non-authoritative and cannot break bookmark state transitions.
+    if (options.onNotice) {
+      try {
+        options.onNotice(notice);
+      } catch (error) {
+        recordNoticeAdapterFailure(error);
+      }
     }
     return notice;
   };
@@ -161,13 +207,7 @@ export const createBookmarkInteractionController = (
         : snapshot.lastNotice,
       operation.generation,
     );
-    for (const listener of listeners) {
-      try {
-        listener();
-      } catch {
-        // Non-authoritative observer failures are isolated from operation lifecycle.
-      }
-    }
+    emit();
   });
 
   const saveCurrentView = (title: string): boolean => {
@@ -219,12 +259,15 @@ export const createBookmarkInteractionController = (
     }
     publish('navigating', key, null);
     try {
+      const gateOptions = options.operationTimeoutMs === undefined
+        ? undefined
+        : Object.freeze({ timeoutMs: options.operationTimeoutMs });
       await operationGate.run(
         () => Promise.resolve(view.goTo?.({
           center: [target.bookmark.Lng, target.bookmark.Lat],
           zoom: target.bookmark.Zoom,
         })),
-        { timeoutMs: options.operationTimeoutMs },
+        gateOptions,
       );
       if (disposed) return false;
       publish('idle', null, notify('info', `${target.bookmark.Title} görünümüne gidildi.`));
@@ -238,10 +281,28 @@ export const createBookmarkInteractionController = (
 
   return Object.freeze({
     getSnapshot: () => snapshot,
+    getDiagnostics: () => diagnostics,
     subscribe(listener: () => void) {
-      if (disposed || listeners.size >= MAX_LISTENERS) return () => undefined;
+      if (disposed || listeners.size >= MAX_LISTENERS) {
+        diagnostics = Object.freeze({
+          ...diagnostics,
+          rejectedObserverCount: diagnostics.rejectedObserverCount + 1,
+        });
+        return () => undefined;
+      }
+      if (listeners.has(listener)) return () => undefined;
       listeners.add(listener);
-      return () => listeners.delete(listener);
+      diagnostics = Object.freeze({
+        ...diagnostics,
+        activeObserverCount: listeners.size,
+      });
+      return () => {
+        listeners.delete(listener);
+        diagnostics = Object.freeze({
+          ...diagnostics,
+          activeObserverCount: listeners.size,
+        });
+      };
     },
     refresh,
     saveCurrentView,
@@ -255,6 +316,11 @@ export const createBookmarkInteractionController = (
       if (disposed) return;
       disposed = true;
       listeners.clear();
+      diagnostics = Object.freeze({
+        ...diagnostics,
+        activeObserverCount: 0,
+        disposed: true,
+      });
       operationGate.dispose();
     },
   });
