@@ -89,6 +89,9 @@ export const ExperienceConnectivityNotice = ({
     if (snapshot.phase !== 'offline' && snapshot.phase !== 'restored') return;
     const interruption = Math.max(1, snapshot.interruptionCount);
     try {
+      if (snapshot.phase === 'restored') {
+        notificationModel.dismiss(`connectivity-offline-${interruption}`);
+      }
       notificationModel.push({
         id: `connectivity-${snapshot.phase}-${interruption}`,
         title: snapshot.heading,
@@ -96,8 +99,8 @@ export const ExperienceConnectivityNotice = ({
         tone: snapshot.phase === 'offline' ? 'warning' : 'success',
         priority: snapshot.phase === 'offline' ? 'urgent' : 'normal',
         category: 'connectivity',
-        dismissible: snapshot.phase === 'restored',
-        sticky: snapshot.phase === 'offline',
+        dismissible: true,
+        sticky: false,
       });
     } catch (error) {
       runtimeDiagnostics.captureError(error, {
