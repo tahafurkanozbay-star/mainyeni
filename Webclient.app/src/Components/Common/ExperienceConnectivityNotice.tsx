@@ -9,11 +9,13 @@ import {
   type ConnectivityExperienceModel,
   type ConnectivityExperienceSnapshot,
 } from '../../experience/connectivityExperienceModel';
+import type { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
 import './experience-connectivity-notice.css';
 
 export interface ExperienceConnectivityNoticeProps {
   readonly model?: ConnectivityExperienceModel;
+  readonly notificationModel?: NotificationCenterModel;
 }
 
 const formatOfflineDuration = (durationMs: number): string => {
@@ -41,6 +43,7 @@ const phaseIcon = (snapshot: ConnectivityExperienceSnapshot): ReactNode => {
 
 export const ExperienceConnectivityNotice = ({
   model: suppliedModel,
+  notificationModel,
 }: ExperienceConnectivityNoticeProps): ReactNode => {
   const model = useMemo<ConnectivityExperienceModel>(() => suppliedModel ?? createConnectivityExperienceModel({
     initialOnline: typeof navigator === 'undefined' ? true : navigator.onLine !== false,
@@ -80,6 +83,33 @@ export const ExperienceConnectivityNotice = ({
       offlineDurationMs: snapshot.offlineDurationMs,
     });
   }, [snapshot.interruptionCount, snapshot.offlineDurationMs, snapshot.phase, snapshot.visible]);
+
+  useEffect(() => {
+    if (!notificationModel) return;
+    if (snapshot.phase !== 'offline' && snapshot.phase !== 'restored') return;
+    const interruption = Math.max(1, snapshot.interruptionCount);
+    try {
+      if (snapshot.phase === 'restored') {
+        notificationModel.dismiss(`connectivity-offline-${interruption}`);
+      }
+      notificationModel.push({
+        id: `connectivity-${snapshot.phase}-${interruption}`,
+        title: snapshot.heading,
+        message: snapshot.message,
+        tone: snapshot.phase === 'offline' ? 'warning' : 'success',
+        priority: snapshot.phase === 'offline' ? 'urgent' : 'normal',
+        category: 'connectivity',
+        dismissible: true,
+        sticky: false,
+      });
+    } catch (error) {
+      runtimeDiagnostics.captureError(error, {
+        source: 'experience.connectivity-notice.feedback',
+        phase: snapshot.phase,
+        interruptionCount: interruption,
+      }, 'warn');
+    }
+  }, [notificationModel, snapshot.heading, snapshot.interruptionCount, snapshot.message, snapshot.phase]);
 
   if (!snapshot.visible) return null;
 
