@@ -62,7 +62,7 @@ export const notificationToFeedbackHistoryInput = (
   now = Date.now(),
 ): FeedbackHistoryInput | null => {
   const feedback = notificationToFeedbackViewModel(item, now);
-  if (!feedback) return null;
+  if (!feedback || feedback.expired) return null;
   return Object.freeze({
     feedback,
     occurredAt: item.createdAt,
