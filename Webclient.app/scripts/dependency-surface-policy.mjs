@@ -8,6 +8,11 @@ const POLICY_PATH = path.join(ROOT, 'scripts', 'dependency-policy.json');
 const ISSUE_TYPES = new Set(['unused-runtime', 'deprecated-direct', 'install-script-direct']);
 const DEP_SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
 const FORBIDDEN_SPEC_PREFIXES = ['file:', 'link:', 'git:', 'git+http:', 'git+https:', 'http:', 'https:'];
+const COMMAND_BOUNDARY_OPERATORS = new Set(['&&', '||', ';', '|', '&', '\n', '(', ')']);
+const COMMAND_PREFIX_WORDS = new Set(['!', 'if', 'then', 'elif', 'else', 'do', 'while', 'until']);
+const COMMAND_WRAPPERS = new Set(['command', 'exec', 'builtin', 'nohup', 'time', 'sudo']);
+const SHELL_INTERPRETERS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
+const MAX_NESTED_SHELL_DEPTH = 4;
 
 export class DependencySurfacePolicyError extends Error {
   constructor(code, message, details = {}) {
@@ -51,6 +56,234 @@ function parseDate(value, label) {
     throw new DependencySurfacePolicyError('invalid-date', `${label} is not a real date`, { value });
   }
   return timestamp;
+}
+
+function shellBasename(value) {
+  const normalized = String(value ?? '').replaceAll('\\', '/');
+  const slash = normalized.lastIndexOf('/');
+  return (slash >= 0 ? normalized.slice(slash + 1) : normalized).trim();
+}
+
+function isAssignmentWord(value) {
+  return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(value);
+}
+
+function isOptionWord(value) {
+  return /^-[^-]|^--/.test(value);
+}
+
+function freezeToken(type, value) {
+  return Object.freeze({ type, value });
+}
+
+/**
+ * Tokenizes the subset of POSIX shell syntax used by package scripts.
+ *
+ * This is deliberately not a command executor and does not perform expansion.
+ * Its sole purpose is to distinguish actual command-position words from
+ * arguments and file names so supply-chain rules do not report false positives.
+ */
+export function tokenizePackageScript(command) {
+  if (typeof command !== 'string') {
+    throw new DependencySurfacePolicyError('invalid-script-command', 'script command must be a string');
+  }
+
+  const tokens = [];
+  let current = '';
+  let quote = null;
+  let escaped = false;
+
+  const flushWord = () => {
+    if (current.length > 0) {
+      tokens.push(freezeToken('word', current));
+      current = '';
+    }
+  };
+
+  const pushOperator = (operator) => {
+    flushWord();
+    tokens.push(freezeToken('operator', operator));
+  };
+
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
+
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+
+    if (quote === "'") {
+      if (character === "'") quote = null;
+      else current += character;
+      continue;
+    }
+
+    if (quote === '"') {
+      if (character === '"') {
+        quote = null;
+      } else if (character === '\\') {
+        escaped = true;
+      } else {
+        current += character;
+      }
+      continue;
+    }
+
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+
+    if (character === '\r') continue;
+    if (character === '\n') {
+      pushOperator('\n');
+      continue;
+    }
+
+    if (/\s/.test(character)) {
+      flushWord();
+      continue;
+    }
+
+    if ((character === '&' || character === '|') && command[index + 1] === character) {
+      pushOperator(`${character}${character}`);
+      index += 1;
+      continue;
+    }
+
+    if (';|&()'.includes(character)) {
+      pushOperator(character);
+      continue;
+    }
+
+    current += character;
+  }
+
+  if (escaped) current += '\\';
+  if (quote !== null) {
+    throw new DependencySurfacePolicyError('malformed-script-shell', 'script command contains an unterminated quote');
+  }
+
+  flushWord();
+  return Object.freeze(tokens);
+}
+
+function segmentEnd(tokens, startIndex) {
+  let index = startIndex;
+  while (index < tokens.length && tokens[index].type !== 'operator') index += 1;
+  return index;
+}
+
+function skipWrapperOptions(tokens, index, end) {
+  let cursor = index;
+  while (cursor < end && tokens[cursor].type === 'word' && isOptionWord(tokens[cursor].value)) cursor += 1;
+  return cursor;
+}
+
+function resolveInvocation(tokens, startIndex) {
+  const end = segmentEnd(tokens, startIndex);
+  let index = startIndex;
+
+  while (index < end && tokens[index].type === 'word' && COMMAND_PREFIX_WORDS.has(tokens[index].value)) index += 1;
+  while (index < end && tokens[index].type === 'word' && isAssignmentWord(tokens[index].value)) index += 1;
+
+  let wrapperDepth = 0;
+  while (index < end && wrapperDepth < 8) {
+    const word = tokens[index].value;
+    const basename = shellBasename(word);
+
+    if (basename === 'env') {
+      index = skipWrapperOptions(tokens, index + 1, end);
+      while (index < end && isAssignmentWord(tokens[index].value)) index += 1;
+      wrapperDepth += 1;
+      continue;
+    }
+
+    if (COMMAND_WRAPPERS.has(basename)) {
+      index = skipWrapperOptions(tokens, index + 1, end);
+      wrapperDepth += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  if (index >= end || tokens[index].type !== 'word') return null;
+  return Object.freeze({ index, end, word: tokens[index].value, command: shellBasename(tokens[index].value) });
+}
+
+function nestedShellCommand(tokens, invocation) {
+  if (!SHELL_INTERPRETERS.has(invocation.command)) return null;
+
+  for (let index = invocation.index + 1; index < invocation.end; index += 1) {
+    const value = tokens[index].value;
+    if (value === '-c' || value === '--command') {
+      const nested = tokens[index + 1];
+      return nested?.type === 'word' ? nested.value : null;
+    }
+    if (!isOptionWord(value)) break;
+  }
+  return null;
+}
+
+/**
+ * Returns command-position invocations from a package script without executing
+ * or expanding the shell. Nested `sh -c` / `bash -c` commands are inspected to
+ * a bounded depth so policy cannot be bypassed by a trivial shell wrapper.
+ */
+export function collectPackageScriptInvocations(command, options = {}) {
+  const depth = Number(options.depth ?? 0);
+  if (!Number.isInteger(depth) || depth < 0 || depth > MAX_NESTED_SHELL_DEPTH) {
+    throw new DependencySurfacePolicyError('invalid-shell-depth', 'shell inspection depth is outside the supported range');
+  }
+
+  const tokens = tokenizePackageScript(command);
+  const invocations = [];
+  let expectCommand = true;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+
+    if (token.type === 'operator') {
+      expectCommand = COMMAND_BOUNDARY_OPERATORS.has(token.value);
+      continue;
+    }
+
+    if (!expectCommand) continue;
+
+    const invocation = resolveInvocation(tokens, index);
+    if (!invocation) {
+      expectCommand = false;
+      continue;
+    }
+
+    invocations.push(Object.freeze({
+      command: invocation.command,
+      word: invocation.word,
+      depth,
+    }));
+
+    const nested = nestedShellCommand(tokens, invocation);
+    if (nested && depth < MAX_NESTED_SHELL_DEPTH) {
+      invocations.push(...collectPackageScriptInvocations(nested, { depth: depth + 1 }));
+    }
+
+    index = invocation.end - 1;
+    expectCommand = false;
+  }
+
+  return Object.freeze(invocations);
+}
+
+function scriptInvocationNames(command) {
+  return new Set(collectPackageScriptInvocations(command).map((entry) => entry.command));
 }
 
 export function collectManifestSurface(manifest) {
@@ -135,10 +368,25 @@ export function validateManifestSurface(manifest, policy, options = {}) {
 
   const scripts = assertObject(manifest.scripts ?? {}, 'invalid-scripts', 'scripts');
   for (const [name, command] of Object.entries(scripts)) {
-    if (typeof command !== 'string' || !command.trim()) findings.push({ severity: 'error', code: 'invalid-script-command', script: name });
-    if (/\bnpx\b/.test(String(command))) findings.push({ severity: 'error', code: 'unreviewed-npx-script', script: name });
-    if (/\bcurl\b|\bwget\b/.test(String(command))) findings.push({ severity: 'error', code: 'network-bootstrap-script', script: name });
-    if (/\b(?:preinstall|postinstall)\b/.test(name)) findings.push({ severity: 'error', code: 'root-install-lifecycle-script', script: name });
+    if (typeof command !== 'string' || !command.trim()) {
+      findings.push({ severity: 'error', code: 'invalid-script-command', script: name });
+      continue;
+    }
+
+    let invocationNames;
+    try {
+      invocationNames = scriptInvocationNames(command);
+    } catch (error) {
+      if (error instanceof DependencySurfacePolicyError && error.code === 'malformed-script-shell') {
+        findings.push({ severity: 'error', code: 'malformed-script-shell', script: name });
+        continue;
+      }
+      throw error;
+    }
+
+    if (invocationNames.has('npx')) findings.push({ severity: 'error', code: 'unreviewed-npx-script', script: name });
+    if (invocationNames.has('curl') || invocationNames.has('wget')) findings.push({ severity: 'error', code: 'network-bootstrap-script', script: name });
+    if (/^(?:preinstall|postinstall)$/.test(name)) findings.push({ severity: 'error', code: 'root-install-lifecycle-script', script: name });
   }
 
   const engines = assertObject(manifest.engines ?? {}, 'invalid-engines', 'engines');
