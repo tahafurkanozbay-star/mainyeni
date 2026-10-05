@@ -1,10 +1,5 @@
 import type { SearchRequest } from './contracts';
-import {
-  hashFingerprint,
-  normalizeInteger,
-  normalizeText,
-  stableSerialize,
-} from './normalization';
+import { hashFingerprint, normalizeInteger, normalizeText, stableSerialize } from './normalization';
 import {
   SearchExperienceRuntimeV9,
   type SearchExperiencePageModelV9,
@@ -54,14 +49,8 @@ export interface SearchWorkspacePageV10 {
   readonly fingerprint: string;
 }
 
-export type SearchWorkspaceActionOutcomeKindV10 =
-  | 'state-updated'
-  | 'request-updated'
-  | 'handoff-ready'
-  | 'ignored';
-
 export interface SearchWorkspaceActionOutcomeV10 {
-  readonly kind: SearchWorkspaceActionOutcomeKindV10;
+  readonly kind: 'state-updated' | 'request-updated' | 'handoff-ready' | 'ignored';
   readonly action: SearchWorkspaceActionV10;
   readonly request: SearchRequest;
   readonly state: SearchWorkspaceStateSnapshotV10;
@@ -76,9 +65,8 @@ export interface SearchWorkspaceActionHistoryEntryV10 {
   readonly sequence: number;
   readonly actionKind: SearchWorkspaceActionV10['kind'];
   readonly actionId: string;
-  readonly outcome: SearchWorkspaceActionOutcomeKindV10;
+  readonly outcome: SearchWorkspaceActionOutcomeV10['kind'];
   readonly accepted: boolean;
-  readonly requestFingerprint: string;
   readonly stateFingerprint: string;
   readonly at: number;
 }
@@ -99,6 +87,7 @@ export interface SearchWorkspaceModelHistoryEntryV10 {
 export interface SearchWorkspaceRuntimeSnapshotV10 {
   readonly version: typeof SEARCH_WORKSPACE_RUNTIME_VERSION_V10;
   readonly searches: number;
+  readonly adoptedModels: number;
   readonly actionExecutions: number;
   readonly stateActions: number;
   readonly requestActions: number;
@@ -114,14 +103,15 @@ export interface SearchWorkspaceRuntimeSnapshotV10 {
   readonly fingerprint: string;
 }
 
-interface NormalizedWorkspaceRuntimePolicyV10 {
+interface Policy {
   readonly maxActionHistory: number;
   readonly maxModelHistory: number;
   readonly clock: () => number;
 }
 
-interface MutableWorkspaceRuntimeStatsV10 {
+interface Stats {
   searches: number;
+  adoptedModels: number;
   actionExecutions: number;
   stateActions: number;
   requestActions: number;
@@ -131,12 +121,10 @@ interface MutableWorkspaceRuntimeStatsV10 {
   lastPageFingerprint: string | null;
 }
 
-const normalizePolicy = (
-  policy: SearchWorkspaceRuntimePolicyV10,
-): NormalizedWorkspaceRuntimePolicyV10 => Object.freeze({
-  maxActionHistory: normalizeInteger(policy.maxActionHistory, { min: 1, max: 2_000, fallback: 128 }),
-  maxModelHistory: normalizeInteger(policy.maxModelHistory, { min: 1, max: 1_000, fallback: 64 }),
-  clock: typeof policy.clock === 'function' ? policy.clock : () => Date.now(),
+const policyFor = (input: SearchWorkspaceRuntimePolicyV10): Policy => Object.freeze({
+  maxActionHistory: normalizeInteger(input.maxActionHistory, { min: 1, max: 2_000, fallback: 128 }),
+  maxModelHistory: normalizeInteger(input.maxModelHistory, { min: 1, max: 1_000, fallback: 64 }),
+  clock: typeof input.clock === 'function' ? input.clock : () => Date.now(),
 });
 
 const safeNow = (clock: () => number): number => {
@@ -144,7 +132,13 @@ const safeNow = (clock: () => number): number => {
   return Number.isFinite(value) && value >= 0 ? Math.trunc(value) : Date.now();
 };
 
-const actionNeedsRequest = (kind: SearchWorkspaceActionV10['kind']): boolean =>
+const immutableRequest = (request: SearchRequest): SearchRequest => Object.freeze({
+  ...request,
+  ...(request.filters ? { filters: Object.freeze([...request.filters]) } : {}),
+  ...(request.facetFields ? { facetFields: Object.freeze([...request.facetFields]) } : {}),
+});
+
+const requestAction = (kind: SearchWorkspaceActionV10['kind']): boolean =>
   kind === 'previous-page'
   || kind === 'next-page'
   || kind === 'first-page'
@@ -156,7 +150,7 @@ const actionNeedsRequest = (kind: SearchWorkspaceActionV10['kind']): boolean =>
   || kind === 'use-query'
   || kind === 'repeat-history-query';
 
-const actionNeedsState = (kind: SearchWorkspaceActionV10['kind']): boolean =>
+const stateAction = (kind: SearchWorkspaceActionV10['kind']): boolean =>
   kind === 'focus-query'
   || kind === 'focus-filters'
   || kind === 'focus-results'
@@ -167,9 +161,6 @@ const actionNeedsState = (kind: SearchWorkspaceActionV10['kind']): boolean =>
   || kind === 'toggle-result'
   || kind === 'clear-selection'
   || kind === 'show-result-on-map';
-
-const actionNeedsResultHandoff = (kind: SearchWorkspaceActionV10['kind']): boolean =>
-  kind === 'show-result-on-map' || kind === 'open-details';
 
 const pageFingerprint = (
   experience: SearchExperiencePageModelV9,
@@ -189,26 +180,20 @@ const pageFingerprint = (
     limit: request.limit ?? null,
     sort: request.sort ?? null,
     filterCount: request.filters?.length ?? 0,
-    facetCount: request.facetFields?.length ?? 0,
   },
 }));
-
-const immutableRequest = (request: SearchRequest): SearchRequest => Object.freeze({
-  ...request,
-  filters: request.filters ? Object.freeze([...request.filters]) : request.filters,
-  facetFields: request.facetFields ? Object.freeze([...request.facetFields]) : request.facetFields,
-});
 
 export class SearchWorkspaceRuntimeV10 {
   readonly #experience: SearchExperienceRuntimeV9;
   readonly #handoff: SearchWorkspaceHandoffRuntimeV10;
   readonly #state: SearchWorkspaceStateRuntimeV10;
   readonly #accessibility: SearchWorkspaceAccessibilityRuntimeV10;
-  readonly #policy: NormalizedWorkspaceRuntimePolicyV10;
+  readonly #policy: Policy;
   readonly #actions: SearchWorkspaceActionHistoryEntryV10[] = [];
   readonly #models: SearchWorkspaceModelHistoryEntryV10[] = [];
-  readonly #stats: MutableWorkspaceRuntimeStatsV10 = {
+  readonly #stats: Stats = {
     searches: 0,
+    adoptedModels: 0,
     actionExecutions: 0,
     stateActions: 0,
     requestActions: 0,
@@ -221,68 +206,27 @@ export class SearchWorkspaceRuntimeV10 {
   #actionSequence = 0;
   #modelSequence = 0;
 
-  constructor(
-    experience: SearchExperienceRuntimeV9,
-    policy: SearchWorkspaceRuntimePolicyV10 = {},
-  ) {
-    if (!(experience instanceof SearchExperienceRuntimeV9)) {
-      throw new TypeError('SearchWorkspaceRuntimeV10 requires SearchExperienceRuntimeV9');
-    }
+  constructor(experience: SearchExperienceRuntimeV9, policy: SearchWorkspaceRuntimePolicyV10 = {}) {
+    if (!(experience instanceof SearchExperienceRuntimeV9)) throw new TypeError('SearchWorkspaceRuntimeV10 requires SearchExperienceRuntimeV9');
     this.#experience = experience;
-    this.#policy = normalizePolicy(policy);
+    this.#policy = policyFor(policy);
     this.#handoff = new SearchWorkspaceHandoffRuntimeV10(policy.handoff);
     this.#state = new SearchWorkspaceStateRuntimeV10(policy.state, this.#policy.clock);
     this.#accessibility = new SearchWorkspaceAccessibilityRuntimeV10(policy.accessibility);
   }
 
-  #now(): number {
-    return safeNow(this.#policy.clock);
-  }
+  experienceRuntime(): SearchExperienceRuntimeV9 { return this.#experience; }
 
-  #recordModel(page: SearchWorkspacePageV10): void {
-    this.#modelSequence += 1;
-    this.#models.push(Object.freeze({
-      sequence: this.#modelSequence,
-      datasetKey: page.handoff.dataset.key,
-      datasetRevision: page.handoff.dataset.revision,
-      requestFingerprint: page.handoff.requestFingerprint,
-      modelFingerprint: page.fingerprint,
-      resultCount: page.handoff.resultCount,
-      totalResultCount: page.handoff.totalResultCount,
-      blocked: page.handoff.status.status === 'blocked',
-      recovered: page.handoff.status.recovered,
-      at: page.createdAt,
-    }));
-    while (this.#models.length > this.#policy.maxModelHistory) this.#models.shift();
-  }
+  #now(): number { return safeNow(this.#policy.clock); }
 
-  #recordAction(
-    action: SearchWorkspaceActionV10,
-    outcome: SearchWorkspaceActionOutcomeV10,
-  ): void {
-    this.#actionSequence += 1;
-    this.#actions.push(Object.freeze({
-      sequence: this.#actionSequence,
-      actionKind: action.kind,
-      actionId: action.id,
-      outcome: outcome.kind,
-      accepted: outcome.accepted,
-      requestFingerprint: this.#current?.handoff.requestFingerprint ?? '',
-      stateFingerprint: outcome.state.fingerprint,
-      at: this.#now(),
-    }));
-    while (this.#actions.length > this.#policy.maxActionHistory) this.#actions.shift();
-  }
-
-  search(
-    datasetKey: unknown,
-    requestInput: SearchRequest = {},
-    options: SearchWorkspaceSearchOptionsV10 = {},
+  #build(
+    experience: SearchExperiencePageModelV9,
+    requestInput: SearchRequest,
+    preserveSurface = true,
   ): SearchWorkspacePageV10 {
     const request = immutableRequest(requestInput);
-    const experience = this.#experience.search(datasetKey, request, options);
     const handoff = this.#handoff.handoff(experience);
-    if (options.preserveSurface === false) this.#state.reset();
+    if (!preserveSurface) this.#state.reset();
     const state = this.#state.replaceModel(handoff);
     const accessibility = this.#accessibility.build(handoff, state);
     const createdAt = this.#now();
@@ -298,33 +242,52 @@ export class SearchWorkspaceRuntimeV10 {
       fingerprint,
     });
     this.#current = page;
-    this.#stats.searches += 1;
     this.#stats.lastPageFingerprint = fingerprint;
-    this.#recordModel(page);
+    this.#modelSequence += 1;
+    this.#models.push(Object.freeze({
+      sequence: this.#modelSequence,
+      datasetKey: handoff.dataset.key,
+      datasetRevision: handoff.dataset.revision,
+      requestFingerprint: handoff.requestFingerprint,
+      modelFingerprint: fingerprint,
+      resultCount: handoff.resultCount,
+      totalResultCount: handoff.totalResultCount,
+      blocked: handoff.status.status === 'blocked',
+      recovered: handoff.status.recovered,
+      at: createdAt,
+    }));
+    while (this.#models.length > this.#policy.maxModelHistory) this.#models.shift();
     return page;
   }
 
-  current(): SearchWorkspacePageV10 | null {
-    return this.#current;
+  search(datasetKey: unknown, request: SearchRequest = {}, options: SearchWorkspaceSearchOptionsV10 = {}): SearchWorkspacePageV10 {
+    this.#stats.searches += 1;
+    const experience = this.#experience.search(datasetKey, request, options);
+    return this.#build(experience, request, options.preserveSurface !== false);
   }
+
+  adoptExperienceModel(
+    experience: SearchExperiencePageModelV9,
+    request: SearchRequest = {},
+    options: Readonly<{ preserveSurface?: boolean }> = {},
+  ): SearchWorkspacePageV10 {
+    if (experience.version !== 'search-experience-v9') throw new TypeError('Canonical v9 experience model is required');
+    this.#stats.adoptedModels += 1;
+    return this.#build(experience, request, options.preserveSurface !== false);
+  }
+
+  current(): SearchWorkspacePageV10 | null { return this.#current; }
 
   action(actionIdInput: unknown): SearchWorkspaceActionV10 | null {
-    const actionId = normalizeText(actionIdInput);
-    if (!actionId || !this.#current) return null;
-    return this.#current.handoff.actions.find(action => action.id === actionId) ?? null;
+    const id = normalizeText(actionIdInput);
+    return id && this.#current ? this.#current.handoff.actions.find(action => action.id === id) ?? null : null;
   }
 
-  executeAction(
-    requestInput: SearchRequest,
-    actionInput: SearchWorkspaceActionV10,
-  ): SearchWorkspaceActionOutcomeV10 {
-    if (!this.#current) {
-      throw new Error('Search workspace action requires a current page model');
-    }
+  executeAction(requestInput: SearchRequest, action: SearchWorkspaceActionV10): SearchWorkspaceActionOutcomeV10 {
+    if (!this.#current) throw new Error('A current workspace page is required');
     const request = immutableRequest(requestInput);
-    const action = actionInput;
     this.#stats.actionExecutions += 1;
-    let kind: SearchWorkspaceActionOutcomeKindV10 = 'ignored';
+    let kind: SearchWorkspaceActionOutcomeV10['kind'] = 'ignored';
     let accepted = false;
     let reason = 'unsupported-action';
     let nextRequest = request;
@@ -332,36 +295,31 @@ export class SearchWorkspaceRuntimeV10 {
 
     if (!action.enabled) {
       reason = 'action-disabled';
-    } else if (actionNeedsRequest(action.kind)) {
-      nextRequest = this.#handoff.requestPatchForAction(
-        request,
-        this.#current.experience,
-        action,
-      );
+      this.#stats.ignoredActions += 1;
+    } else if (requestAction(action.kind)) {
+      nextRequest = this.#handoff.requestPatchForAction(request, this.#current.experience, action);
       kind = 'request-updated';
       accepted = true;
       reason = 'request-patch-ready';
       this.#stats.requestActions += 1;
-    } else if (actionNeedsState(action.kind)) {
-      const previous = this.#state.snapshot();
-      const state = this.#state.applyActionKind(action.kind, action.resultKey);
-      accepted = state.fingerprint !== previous.fingerprint || state.transitionSequence > previous.transitionSequence;
-      kind = actionNeedsResultHandoff(action.kind) ? 'handoff-ready' : 'state-updated';
-      reason = accepted ? 'workspace-state-updated' : 'workspace-state-unchanged';
+    } else if (stateAction(action.kind)) {
+      const before = this.#state.snapshot();
+      const after = this.#state.applyActionKind(action.kind, action.resultKey);
+      accepted = after.transitionSequence > before.transitionSequence;
+      kind = action.kind === 'open-details' || action.kind === 'show-result-on-map' ? 'handoff-ready' : 'state-updated';
+      reason = accepted ? 'workspace-state-processed' : 'workspace-state-unchanged';
       this.#stats.stateActions += 1;
-      if (actionNeedsResultHandoff(action.kind)) {
+      if (kind === 'handoff-ready') {
         resultHandoff = action.resultKey ? this.#state.resultHandoff(action.resultKey) : null;
         if (!resultHandoff) {
-          accepted = false;
           kind = 'ignored';
+          accepted = false;
           reason = 'result-handoff-unavailable';
           this.#stats.ignoredActions += 1;
         } else if (action.kind === 'show-result-on-map') this.#stats.mapHandoffs += 1;
-        else if (action.kind === 'open-details') this.#stats.detailHandoffs += 1;
+        else this.#stats.detailHandoffs += 1;
       }
-    } else {
-      this.#stats.ignoredActions += 1;
-    }
+    } else this.#stats.ignoredActions += 1;
 
     const state = this.#state.snapshot();
     const fingerprint = hashFingerprint(stableSerialize({
@@ -371,13 +329,8 @@ export class SearchWorkspaceRuntimeV10 {
       accepted,
       reason,
       state: state.fingerprint,
-      resultHandoff,
-      request: {
-        query: normalizeText(nextRequest.query),
-        offset: nextRequest.offset ?? null,
-        limit: nextRequest.limit ?? null,
-        filterCount: nextRequest.filters?.length ?? 0,
-      },
+      request: { query: normalizeText(nextRequest.query), offset: nextRequest.offset ?? null },
+      handoff: resultHandoff,
     }));
     const outcome: SearchWorkspaceActionOutcomeV10 = Object.freeze({
       kind,
@@ -390,57 +343,38 @@ export class SearchWorkspaceRuntimeV10 {
       reason,
       fingerprint,
     });
-    this.#recordAction(action, outcome);
+    this.#actionSequence += 1;
+    this.#actions.push(Object.freeze({
+      sequence: this.#actionSequence,
+      actionKind: action.kind,
+      actionId: action.id,
+      outcome: kind,
+      accepted,
+      stateFingerprint: state.fingerprint,
+      at: this.#now(),
+    }));
+    while (this.#actions.length > this.#policy.maxActionHistory) this.#actions.shift();
     return outcome;
   }
 
-  runAction(
-    datasetKey: unknown,
-    request: SearchRequest,
-    actionInput: SearchWorkspaceActionV10,
-    options: SearchWorkspaceSearchOptionsV10 = {},
-  ): Readonly<{ outcome: SearchWorkspaceActionOutcomeV10; page: SearchWorkspacePageV10 | null }> {
-    const outcome = this.executeAction(request, actionInput);
-    if (!outcome.shouldSearch) {
-      const current = this.#current;
-      if (current && outcome.kind === 'state-updated') {
-        const state = this.#state.snapshot();
-        const accessibility = this.#accessibility.build(current.handoff, state);
-        const fingerprint = pageFingerprint(current.experience, current.handoff, state, accessibility, current.request);
-        this.#current = Object.freeze({
-          ...current,
-          state,
-          accessibility,
-          fingerprint,
-        });
-      }
-      return Object.freeze({ outcome, page: this.#current });
+  runAction(datasetKey: unknown, request: SearchRequest, action: SearchWorkspaceActionV10, options: SearchWorkspaceSearchOptionsV10 = {}): Readonly<{ outcome: SearchWorkspaceActionOutcomeV10; page: SearchWorkspacePageV10 | null }> {
+    const outcome = this.executeAction(request, action);
+    if (outcome.shouldSearch) return Object.freeze({ outcome, page: this.search(datasetKey, outcome.request, options) });
+    const current = this.#current;
+    if (current && (outcome.kind === 'state-updated' || outcome.kind === 'handoff-ready')) {
+      const state = this.#state.snapshot();
+      const accessibility = this.#accessibility.build(current.handoff, state);
+      const fingerprint = pageFingerprint(current.experience, current.handoff, state, accessibility, current.request);
+      this.#current = Object.freeze({ ...current, state, accessibility, fingerprint });
     }
-    return Object.freeze({
-      outcome,
-      page: this.search(datasetKey, outcome.request, options),
-    });
+    return Object.freeze({ outcome, page: this.#current });
   }
 
-  resultHandoff(resultKey: unknown): SearchWorkspaceResultHandoffV10 | null {
-    return this.#state.resultHandoff(resultKey);
-  }
-
-  mapHandoff(): SearchWorkspaceResultHandoffV10 | null {
-    return this.#state.mapHandoff();
-  }
-
-  detailHandoff(): SearchWorkspaceResultHandoffV10 | null {
-    return this.#state.detailHandoff();
-  }
-
-  actionHistory(): readonly SearchWorkspaceActionHistoryEntryV10[] {
-    return Object.freeze(this.#actions.map(entry => Object.freeze({ ...entry })));
-  }
-
-  modelHistory(): readonly SearchWorkspaceModelHistoryEntryV10[] {
-    return Object.freeze(this.#models.map(entry => Object.freeze({ ...entry })));
-  }
+  resultHandoff(key: unknown): SearchWorkspaceResultHandoffV10 | null { return this.#state.resultHandoff(key); }
+  mapHandoff(): SearchWorkspaceResultHandoffV10 | null { return this.#state.mapHandoff(); }
+  detailHandoff(): SearchWorkspaceResultHandoffV10 | null { return this.#state.detailHandoff(); }
+  actionHistory(): readonly SearchWorkspaceActionHistoryEntryV10[] { return Object.freeze([...this.#actions]); }
+  modelHistory(): readonly SearchWorkspaceModelHistoryEntryV10[] { return Object.freeze([...this.#models]); }
 
   snapshot(): SearchWorkspaceRuntimeSnapshotV10 {
     const handoff = this.#handoff.snapshot();
