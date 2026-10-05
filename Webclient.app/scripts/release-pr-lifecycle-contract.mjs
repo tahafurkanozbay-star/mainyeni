@@ -14,6 +14,9 @@ export function evaluateReleasePrLifecycle(input, options = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return freeze({ version: RELEASE_PR_LIFECYCLE_VERSION, passed: false, mergeAllowed: false, findings: freeze([finding('evidence-invalid', '$', 'PR lifecycle evidence must be an object.')]) });
   }
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    return freeze({ version: RELEASE_PR_LIFECYCLE_VERSION, passed: false, mergeAllowed: false, findings: freeze([finding('policy-invalid', 'options', 'PR lifecycle policy must be an object.')]), summary: freeze({ errors: 1 }) });
+  }
   if (input.version !== RELEASE_PR_LIFECYCLE_VERSION) findings.push(finding('version-unsupported', 'version', `Version must be ${RELEASE_PR_LIFECYCLE_VERSION}.`));
   const number = Number.isSafeInteger(input.number) && input.number > 0 ? input.number : null;
   const state = input.state === 'open' || input.state === 'closed' ? input.state : null;
