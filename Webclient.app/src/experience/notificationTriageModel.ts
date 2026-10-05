@@ -77,6 +77,7 @@ const DEFAULT_PAGE_SIZE = 6;
 const MAX_PAGE_SIZE = 20;
 
 const TURKISH_REPLACEMENTS: Readonly<Record<string, string>> = Object.freeze({
+  'I': 'i',
   'ı': 'i',
   'İ': 'i',
   'ş': 's',
