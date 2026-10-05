@@ -33,9 +33,9 @@ export interface FeedbackHistoryControlsSnapshot {
   readonly toolbarId: 'feedback-history-controls';
   readonly toolbarLabel: 'Bildirim geçmişi denetimleri';
   readonly filterGroupId: 'feedback-history-filter-group';
-  readonly filterGroupLabel: 'Bildirimları filtrele';
+  readonly filterGroupLabel: 'Bildirimleri filtrele';
   readonly sortGroupId: 'feedback-history-sort-group';
-  readonly sortGroupLabel: 'Bildirimları sırala';
+  readonly sortGroupLabel: 'Bildirimleri sırala';
   readonly summaryId: 'feedback-history-controls-summary';
   readonly placement: 'stacked' | 'inline';
   readonly density: FeedbackHistoryControlsDensity;
@@ -58,7 +58,7 @@ export interface FeedbackHistoryControlsKeyboardEventLike {
   readonly repeat?: boolean;
   readonly defaultPrevented?: boolean;
   readonly isComposing?: boolean;
-  readonly target?: { readonly tagName?: string; readonly isContentEditable?: boolean } | null;
+  readonly target?: unknown;
 }
 
 const FILTERS: readonly FeedbackHistoryFilter[] = Object.freeze(['all', 'unread', 'important']);
@@ -75,10 +75,11 @@ const SORT_LABELS: Readonly<Record<FeedbackHistorySort, string>> = Object.freeze
 
 const optionId = (kind: 'filter' | 'sort', value: string): string => `feedback-history-${kind}-${value}`;
 
-const editable = (target: FeedbackHistoryControlsKeyboardEventLike['target']): boolean => {
-  if (!target) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName?.toLowerCase();
+const editable = (target: unknown): boolean => {
+  if (!target || typeof target !== 'object') return false;
+  const candidate = target as { readonly tagName?: unknown; readonly isContentEditable?: unknown };
+  if (candidate.isContentEditable === true) return true;
+  const tag = typeof candidate.tagName === 'string' ? candidate.tagName.toLowerCase() : undefined;
   return tag === 'input' || tag === 'textarea' || tag === 'select';
 };
 
@@ -108,9 +109,9 @@ export const createFeedbackHistoryControlsSnapshot = (input: FeedbackHistoryCont
     toolbarId: 'feedback-history-controls',
     toolbarLabel: 'Bildirim geçmişi denetimleri',
     filterGroupId: 'feedback-history-filter-group',
-    filterGroupLabel: 'Bildirimları filtrele',
+    filterGroupLabel: 'Bildirimleri filtrele',
     sortGroupId: 'feedback-history-sort-group',
-    sortGroupLabel: 'Bildirimları sırala',
+    sortGroupLabel: 'Bildirimleri sırala',
     summaryId: 'feedback-history-controls-summary',
     placement: input.viewport === 'phone' ? 'stacked' : 'inline',
     density: input.viewport === 'desktop' ? 'compact' : 'comfortable',
