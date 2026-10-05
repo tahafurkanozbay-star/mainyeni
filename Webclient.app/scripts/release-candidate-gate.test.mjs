@@ -1,0 +1,17 @@
+import './release-admission-snapshot.test.mjs';
+import './release-pr-lifecycle-contract.test.mjs';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {MIN_MEANINGFUL_ADDITIONS,REQUIRED_CHECKS,evaluateReleaseCandidate} from './release-candidate-gate.mjs';
+const MAIN='a'.repeat(40),HEAD='b'.repeat(40),OTHER='c'.repeat(40);
+const candidate=(overrides={})=>({version:1,baseSha:MAIN,headSha:HEAD,mergeBaseSha:MAIN,currentMainSha:MAIN,additions:MIN_MEANINGFUL_ADDITIONS,deletions:0,aheadBy:1,behindBy:0,unresolvedThreads:0,mergeable:true,draft:false,checks:REQUIRED_CHECKS.map(name=>({name,status:'completed',conclusion:'success',headSha:HEAD})),...overrides});
+const rejects=(input,code,options)=>assert.ok(evaluateReleaseCandidate(input,options).findings.some(x=>x.code===code));
+test('accepts fresh exact-head candidate at additions threshold',()=>assert.equal(evaluateReleaseCandidate(candidate()).passed,true));
+test('requires the five release-critical workflows by default',()=>assert.deepEqual(evaluateReleaseCandidate(candidate()).summary.requiredChecks,REQUIRED_CHECKS));
+test('deletions cannot satisfy additions gate',()=>rejects(candidate({additions:3999,deletions:100000}),'additions-gate'));
+test('rejects stale lineage',()=>{rejects(candidate({baseSha:OTHER}),'base-stale');rejects(candidate({mergeBaseSha:OTHER}),'merge-base-stale');rejects(candidate({behindBy:1}),'branch-behind')});
+test('rejects draft nonmergeable and unresolved candidates',()=>{rejects(candidate({draft:true}),'draft');rejects(candidate({mergeable:false}),'not-mergeable');rejects(candidate({unresolvedThreads:1}),'review-threads')});
+test('requires exact-head completed successful checks',()=>{rejects(candidate({checks:candidate().checks.slice(1)}),'required-check-missing');rejects(candidate({checks:candidate().checks.map((x,i)=>i?x:{...x,headSha:OTHER})}),'check-head-mismatch');rejects(candidate({checks:candidate().checks.map((x,i)=>i?x:{...x,status:'queued',conclusion:null})}),'check-pending');rejects(candidate({checks:candidate().checks.map((x,i)=>i?x:{...x,conclusion:'failure'})}),'check-failed')});
+test('custom policy cannot silently weaken itself',()=>{rejects(candidate(),'required-checks-invalid',{requiredChecks:[]});rejects(candidate(),'required-check-duplicate',{requiredChecks:['Release QA','Release QA']})});
+test('caller check policy can strengthen but cannot replace mandatory checks',()=>{let x=candidate({checks:candidate().checks.slice(0,1)});rejects(x,'required-check-missing',{requiredChecks:['Release QA']});x=candidate();x.checks.push({name:'Security Review',status:'completed',conclusion:'success',headSha:HEAD});const result=evaluateReleaseCandidate(x,{requiredChecks:['Security Review']});assert.equal(result.passed,true);assert.deepEqual(result.summary.requiredChecks,[...REQUIRED_CHECKS,'Security Review']);rejects(candidate(),'required-check-missing',{requiredChecks:['Security Review']})});
+test('schema failures are fail closed',()=>{rejects(null,'candidate-invalid');rejects(candidate({version:2}),'version-unsupported');rejects(candidate({headSha:'abc'}),'sha-invalid');rejects(candidate({additions:-1}),'integer-invalid');rejects(candidate({checks:{}}),'checks-invalid')});
