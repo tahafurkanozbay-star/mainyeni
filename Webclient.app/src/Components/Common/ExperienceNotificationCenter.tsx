@@ -23,6 +23,10 @@ interface ExperienceNotificationToastsProps {
   readonly onAction?: (notification: NotificationItem, action: NotificationAction) => void;
 }
 
+interface ExperienceNotificationLiveRegionsProps {
+  readonly snapshot: NotificationCenterSnapshot;
+}
+
 const toneLabel = (tone: NotificationItem['tone']): string => {
   switch (tone) {
     case 'success': return 'Başarılı';
@@ -37,6 +41,17 @@ const normalizeVisible = (value: number | undefined): number => {
   if (!Number.isFinite(numeric)) return 4;
   return Math.max(1, Math.min(8, Math.floor(numeric)));
 };
+
+const ExperienceNotificationLiveRegions = ({ snapshot }: ExperienceNotificationLiveRegionsProps): ReactNode => (
+  <>
+    <div className="experience-notifications__live" aria-live="polite" aria-atomic="true">
+      {snapshot.announcement?.politeness === 'polite' ? snapshot.announcement.text : ''}
+    </div>
+    <div className="experience-notifications__live" role="alert" aria-atomic="true">
+      {snapshot.announcement?.politeness === 'assertive' ? snapshot.announcement.text : ''}
+    </div>
+  </>
+);
 
 const ExperienceNotificationToasts = ({
   model,
@@ -64,12 +79,7 @@ const ExperienceNotificationToasts = ({
       data-unread-count={snapshot.unreadCount}
       data-urgent-count={snapshot.urgentUnreadCount}
     >
-      <div className="experience-notifications__live" aria-live="polite" aria-atomic="true">
-        {snapshot.announcement?.politeness === 'polite' ? snapshot.announcement.text : ''}
-      </div>
-      <div className="experience-notifications__live" role="alert" aria-atomic="true">
-        {snapshot.announcement?.politeness === 'assertive' ? snapshot.announcement.text : ''}
-      </div>
+      <ExperienceNotificationLiveRegions snapshot={snapshot} />
 
       <div className="experience-notifications__list">
         {visibleItems.map((item) => (
@@ -128,6 +138,33 @@ const ExperienceNotificationToasts = ({
   );
 };
 
+const ExperienceNotificationCenterMode = ({
+  model,
+  label,
+  onAction,
+}: Pick<ExperienceNotificationCenterProps, 'model' | 'label' | 'onAction'> & { readonly label: string }): ReactNode => {
+  const [snapshot, setSnapshot] = useState<NotificationCenterSnapshot>(() => model.snapshot());
+
+  useEffect(() => model.subscribe(setSnapshot), [model]);
+
+  return (
+    <aside
+      className="experience-notifications experience-notifications--center"
+      aria-label={label}
+      data-unread-count={snapshot.unreadCount}
+      data-urgent-count={snapshot.urgentUnreadCount}
+    >
+      <ExperienceNotificationLiveRegions snapshot={snapshot} />
+      <ExperienceFeedbackCenter
+        model={model}
+        label={label}
+        callerId="experience-utility-notifications"
+        onAction={onAction}
+      />
+    </aside>
+  );
+};
+
 export const ExperienceNotificationCenter = ({
   model,
   mode = 'toasts',
@@ -137,7 +174,7 @@ export const ExperienceNotificationCenter = ({
 }: ExperienceNotificationCenterProps): ReactNode => {
   if (mode === 'center') {
     return (
-      <ExperienceFeedbackCenter
+      <ExperienceNotificationCenterMode
         model={model}
         label={label}
         onAction={onAction}
