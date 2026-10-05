@@ -70,6 +70,39 @@ describe('ExperienceNotificationCenter', () => {
     expect(screen.getByLabelText('Bildirim merkezi')).toHaveAttribute('data-unread-count', '1');
   });
 
+  it('opens drawer mode from the bounded unread trigger', () => {
+    const model = createModel();
+    push(model, 'drawer', { tone: 'warning', priority: 'urgent' });
+
+    render(<ExperienceNotificationCenter model={model} mode="drawer" />);
+
+    const trigger = screen.getByRole('button', { name: 'Bildirimler, 1 okunmamış' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('dialog', { name: 'Bildirimler ve işlem geçmişi' })).toBeInTheDocument();
+    const center = screen.getByTestId('governed-feedback-center');
+    expect(center).toHaveAttribute('aria-label', 'Bildirim geçmişi');
+    expect(center).toHaveAttribute('data-caller-id', 'experience-feedback-trigger');
+  });
+
+  it('closes drawer mode with Escape and preserves the trigger entrypoint', () => {
+    const model = createModel();
+    render(<ExperienceNotificationCenter model={model} mode="drawer" />);
+
+    const trigger = screen.getByRole('button', { name: 'Bildirimler' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('preserves assertive source announcements while governed history is mounted', () => {
     const model = createModel();
     render(<ExperienceNotificationCenter model={model} mode="center" />);
