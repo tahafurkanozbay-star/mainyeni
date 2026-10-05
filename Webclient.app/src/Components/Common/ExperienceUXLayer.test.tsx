@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { ExperienceUXLayer, dispatchExperienceCommand } from './ExperienceUXLayer';
 
@@ -213,10 +213,11 @@ describe('ExperienceUXLayer', () => {
     opener.focus();
     fireEvent.click(opener);
 
-    expect(screen.getByRole('dialog', {
+    const dialog = screen.getByRole('dialog', {
       name: 'Bildirim merkezi',
-    })).toHaveAttribute('aria-modal', 'true');
-    expect(screen.getByText('Ortak bildirim')).toBeInTheDocument();
+    });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(within(dialog).getByRole('heading', { name: 'Ortak bildirim' })).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.keyDown(document, { key: 'Escape' });
