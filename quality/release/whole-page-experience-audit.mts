@@ -48,7 +48,7 @@ export interface WholePageExperienceSummary {
 const PRODUCT_TSX = /^Webclient\.app\/src\/.*\.tsx$/i;
 const PRODUCT_HTML = /^Webclient\.app\/(?:index\.html|public\/.*\.html)$/i;
 const PRODUCT_CSS = /^Webclient\.app\/src\/.*\.css$/i;
-const TEST_OR_GENERATED = /(?:^|\/)(?:__tests__|fixtures?|snapshots?|coverage|dist|build|node_modules|qa-artifacts)(?:\/|$)|\.(?:test|spec)\./i;
+const TEST_OR_GENERATED = /(?:^|\/)(?:__tests__|fixtures?|snapshots?|coverage|dist|build|generated|node_modules|qa-artifacts)(?:\/|$)|\.(?:test|spec)\./i;
 const MAIN = /<main(?:\s|>)|role\s*=\s*["']main["']/gi;
 const HEADING = /<h[1-6](?:\s|>)/gi;
 const INTERACTIVE = /<(?:button|a|input|select|textarea|summary)\b|role\s*=\s*["'](?:button|link|checkbox|radio|switch|tab|menuitem|option|slider|spinbutton|combobox|gridcell)["']/gi;
