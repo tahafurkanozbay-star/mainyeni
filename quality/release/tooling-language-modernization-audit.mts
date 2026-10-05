@@ -39,9 +39,9 @@ const FIXTURE = /(^|\/)(?:fixtures?|snapshots?|__snapshots__)(?:\/|$)/i;
 const TEST_FILE = /(?:\.test|\.spec)\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/i;
 const COMMONJS_REQUIRE = /\brequire\s*\(/g;
 const COMMONJS_EXPORT = /\b(?:module\.exports\b|exports\.[A-Za-z_$][\w$]*\s*=)/g;
-const TS_NOCHECK = new RegExp(`@ts-${'nocheck'}\\b`, 'g');
-const TS_IGNORE = new RegExp(`@ts-${'ignore'}\\b`, 'g');
-const TS_EXPECT_ERROR = new RegExp(`@ts-${'expect-error'}\\b`, 'g');
+const TS_NOCHECK = /^\s*\/\/\s*@ts-nocheck\b/gm;
+const TS_IGNORE = /^\s*\/\/\s*@ts-ignore\b/gm;
+const TS_EXPECT_ERROR = /^\s*\/\/\s*@ts-expect-error\b/gm;
 const EXPLICIT_ANY = /(?:\bas\s+any\b|:\s*any\b|<any>)/g;
 const MAX_LEGACY_FINDINGS = 24;
 
@@ -220,7 +220,7 @@ export function auditToolingLanguageModernization(
     summary: {
       files: signals,
       totalToolingFiles: signals.length,
-      typedFiles: signals.filter(item => item.typed).length,
+      typedFiles: typedFilesCount(signals),
       legacyJavaScriptFiles: signals.filter(item => LEGACY_EXT.test(item.file)).length,
       commonJsFiles: signals.filter(item => item.commonJsRequire > 0 || item.commonJsExports > 0).length,
       typedRatio: typedRatio(signals),
@@ -229,4 +229,8 @@ export function auditToolingLanguageModernization(
     findings,
     elapsedMs: Math.max(0, performance.now() - started),
   };
+}
+
+function typedFilesCount(items: readonly ToolingLanguageSignal[]): number {
+  return items.filter(item => item.typed).length;
 }
