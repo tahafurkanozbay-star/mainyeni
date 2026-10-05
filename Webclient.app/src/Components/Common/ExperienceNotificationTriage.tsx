@@ -13,6 +13,10 @@ import {
   type NotificationCenterSnapshot,
 } from '../../experience/notificationCenterModel';
 import {
+  resolveNotificationTriagePresentation,
+  type NotificationTriagePresentation,
+} from '../../experience/notificationTriageAccessibility';
+import {
   createNotificationTriageCommandDefinitions,
   resolveNotificationTriageIntent,
   type NotificationTriageIntent,
@@ -25,6 +29,7 @@ import {
 import { createNotificationTriageWindow } from '../../experience/notificationTriageWindow';
 import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
 import './experience-notification-triage.css';
+import './experience-notification-triage-modal.css';
 
 export interface ExperienceNotificationTriageProps {
   readonly model: NotificationCenterModel;
@@ -57,6 +62,15 @@ const SORT_OPTIONS: readonly SortOption[] = Object.freeze([
   Object.freeze({ id: 'oldest', label: 'En eski önce' }),
   Object.freeze({ id: 'priority', label: 'Önceliğe göre' }),
 ]);
+
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[href]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 const commandTarget = (target: EventTarget | null) => target instanceof HTMLElement
   ? Object.freeze({
@@ -106,6 +120,44 @@ const emptyMessage = (reason: 'none' | 'no-items' | 'query' | 'scope'): string =
   return 'Henüz gösterilecek bir bildirim bulunmuyor.';
 };
 
+const readPresentation = (): NotificationTriagePresentation => {
+  if (typeof window === 'undefined') {
+    return resolveNotificationTriagePresentation({ width: 1280, height: 720 });
+  }
+  const matches = (query: string): boolean => (
+    typeof window.matchMedia === 'function' && window.matchMedia(query).matches
+  );
+  return resolveNotificationTriagePresentation({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    coarsePointer: matches('(pointer: coarse)'),
+    reducedMotion: matches('(prefers-reduced-motion: reduce)'),
+    forcedColors: matches('(forced-colors: active)'),
+  });
+};
+
+const trapModalFocus = (event: ReactKeyboardEvent<HTMLElement>, panel: HTMLElement | null): boolean => {
+  if (event.key !== 'Tab' || !panel) return false;
+  const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((candidate) => candidate.tabIndex >= 0 && !candidate.hasAttribute('hidden'));
+  if (focusables.length === 0) {
+    panel.focus({ preventScroll: true });
+    return true;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || !panel.contains(active))) {
+    last.focus({ preventScroll: true });
+    return true;
+  }
+  if (!event.shiftKey && (active === last || !panel.contains(active))) {
+    first.focus({ preventScroll: true });
+    return true;
+  }
+  return false;
+};
+
 export const ExperienceNotificationTriage = ({
   model,
   previewLimit = 6,
@@ -114,8 +166,10 @@ export const ExperienceNotificationTriage = ({
 }: ExperienceNotificationTriageProps): ReactNode => {
   const [centerSnapshot, setCenterSnapshot] = useState<NotificationCenterSnapshot>(() => model.snapshot());
   const [expanded, setExpanded] = useState(false);
+  const [presentation, setPresentation] = useState<NotificationTriagePresentation>(readPresentation);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const triageModel = useMemo(() => {
@@ -144,6 +198,34 @@ export const ExperienceNotificationTriage = ({
   }), [model, triageModel]);
 
   useEffect(() => () => triageModel.dispose(), [triageModel]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mediaQueries = typeof window.matchMedia === 'function'
+      ? [
+        window.matchMedia('(pointer: coarse)'),
+        window.matchMedia('(prefers-reduced-motion: reduce)'),
+        window.matchMedia('(forced-colors: active)'),
+      ]
+      : [];
+    let frame: number | null = null;
+    const refresh = (): void => {
+      frame = null;
+      setPresentation(readPresentation());
+    };
+    const schedule = (): void => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(refresh);
+    };
+    window.addEventListener('resize', schedule, { passive: true });
+    for (const query of mediaQueries) query.addEventListener?.('change', schedule);
+    refresh();
+    return () => {
+      window.removeEventListener('resize', schedule);
+      for (const query of mediaQueries) query.removeEventListener?.('change', schedule);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -176,6 +258,13 @@ export const ExperienceNotificationTriage = ({
     }
   }, [onOpenCenter]);
 
+  const close = useCallback((): void => {
+    setExpanded(false);
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+    }
+  }, []);
+
   const applyIntent = useCallback((intent: NotificationTriageIntent): void => {
     switch (intent.type) {
       case 'none':
@@ -205,6 +294,10 @@ export const ExperienceNotificationTriage = ({
   }, [model, triageModel]);
 
   const handleKeyboard = useCallback((event: ReactKeyboardEvent<HTMLElement>): void => {
+    if (presentation.modal && trapModalFocus(event, panelRef.current)) {
+      event.preventDefault();
+      return;
+    }
     const intent = resolveNotificationTriageIntent({
       key: event.key,
       altKey: event.altKey,
@@ -216,10 +309,16 @@ export const ExperienceNotificationTriage = ({
       isComposing: event.nativeEvent.isComposing,
       target: commandTarget(event.target),
     }, triage);
-    if (intent.type === 'none') return;
-    event.preventDefault();
-    applyIntent(intent);
-  }, [applyIntent, triage]);
+    if (intent.type !== 'none') {
+      event.preventDefault();
+      applyIntent(intent);
+      return;
+    }
+    if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      close();
+    }
+  }, [applyIntent, close, presentation.modal, triage]);
 
   const toggle = (): void => {
     const willOpen = !expanded;
@@ -229,13 +328,6 @@ export const ExperienceNotificationTriage = ({
         if (triage.query) searchRef.current?.focus({ preventScroll: true });
         else listRef.current?.focus({ preventScroll: true });
       });
-    }
-  };
-
-  const close = (): void => {
-    setExpanded(false);
-    if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
     }
   };
 
@@ -251,6 +343,12 @@ export const ExperienceNotificationTriage = ({
       className="experience-notification-triage"
       data-expanded={String(expanded)}
       data-has-important={String(triage.importantCount > 0)}
+      data-modal={String(presentation.modal)}
+      data-surface={presentation.surface}
+      data-placement={presentation.placement}
+      data-motion={presentation.motion}
+      data-forced-colors={String(presentation.forcedColors)}
+      data-min-target={String(presentation.minimumTargetPx)}
       aria-label={label}
     >
       <button
@@ -259,7 +357,8 @@ export const ExperienceNotificationTriage = ({
         className="experience-notification-triage__trigger"
         aria-expanded={expanded}
         aria-controls="experience-notification-triage-panel"
-        aria-haspopup="true"
+        aria-haspopup={presentation.modal ? 'dialog' : undefined}
+        tabIndex={expanded && presentation.modal ? -1 : undefined}
         onClick={toggle}
       >
         <span className="experience-notification-triage__pulse" aria-hidden="true" />
@@ -270,17 +369,31 @@ export const ExperienceNotificationTriage = ({
         <span className="experience-notification-triage__trigger-key" aria-hidden="true">Alt+N</span>
       </button>
 
+      {expanded && presentation.modal ? (
+        <div
+          className="experience-notification-triage__backdrop"
+          aria-hidden="true"
+          onMouseDown={close}
+        />
+      ) : null}
+
       {expanded ? (
         <section
+          ref={panelRef}
           id="experience-notification-triage-panel"
           className="experience-notification-triage__panel"
-          aria-label="Bildirim hızlı inceleme paneli"
+          role={presentation.modal ? 'dialog' : 'region'}
+          aria-modal={presentation.modal ? true : undefined}
+          aria-labelledby="experience-notification-triage-heading"
+          aria-describedby="experience-notification-triage-status"
+          aria-label={presentation.modal ? undefined : 'Bildirim hızlı inceleme paneli'}
+          tabIndex={-1}
           onKeyDown={handleKeyboard}
         >
           <header className="experience-notification-triage__header">
             <div>
               <p className="experience-notification-triage__eyebrow">Hızlı inceleme</p>
-              <h2>Bildirimler</h2>
+              <h2 id="experience-notification-triage-heading">Bildirimler</h2>
               <p>Harita akışından ayrılmadan arayın, önceliklendirin ve gerekli bildirimleri yönetin.</p>
             </div>
             <button
