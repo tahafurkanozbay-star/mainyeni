@@ -135,10 +135,12 @@ export const reduceFeedbackHistorySession = (
   switch (command.type) {
     case 'open': {
       const callerId = safeDomId(command.callerId, DEFAULT_CALLER_ID);
+      const history = reduceFeedbackHistory(state.history, { type: 'first' }, now);
       const next = Object.freeze({
         ...state,
         open: true,
         callerId,
+        history,
         revision: nextRevision(state.revision),
         lastAnnouncement: announce('Bildirim geçmişi açıldı.'),
       });
