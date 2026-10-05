@@ -227,7 +227,7 @@ export const GenelAramaQeryWindow = forwardRef<
         error,
         'Arama sırasında beklenmeyen bir hata oluştu.',
       );
-      setResultList([]);
+      setResultList(null);
       applyPresentation(runtime.replaceRecords([]));
       setErrorMessage(message);
       windowManager.ShowMessage(Constants_MessageType.Error, message);
@@ -308,7 +308,7 @@ export const GenelAramaQeryWindow = forwardRef<
 
     try {
       const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) return;
+      if (!itemDetails?.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
 
       const mapView = MapManager.GetMapView();
       if (!mapView) throw new Error('Harita görünümü hazır değil.');
@@ -341,7 +341,7 @@ export const GenelAramaQeryWindow = forwardRef<
 
     try {
       const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) return;
+      if (!itemDetails?.geometry) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
 
       const url = buildGoogleDirectionsUrl(itemDetails.geometry);
       if (!url) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
@@ -630,8 +630,8 @@ export const GenelAramaQeryWindow = forwardRef<
               <FiFilter aria-hidden="true" />
               <span>
                 {selectedFacetTotal > 0
-                  ? `${selectedFacetTotal} facet filtresi etkin`
-                  : 'Facet filtresi yok'}
+                  ? `${selectedFacetTotal} kategori/tür filtresi etkin`
+                  : 'Kategori/tür filtresi yok'}
               </span>
               {presentation.hasFilters ? (
                 <button type="button" onClick={clearLocalFilters}>Tümünü temizle</button>
