@@ -194,13 +194,25 @@ describe('ExperienceFeedbackDigest', () => {
     expect(screen.queryByText('Okunmamış bildirimleri hızlıca gözden geçirebilirsiniz.')).not.toBeInTheDocument();
   });
 
-  it('announces the digest without giving the live region another interactive role', () => {
+  it('keeps live announcement ownership in the parent feedback center', () => {
     renderDigest(history([
       item('important', { important: true, tone: 'warning' }),
     ]));
-    const live = screen.getByText(/Önemli bildirimler bekliyor\./i, { selector: '.experience-feedback-digest__announcement' });
-    expect(live).toHaveAttribute('aria-live', 'polite');
-    expect(live).toHaveAttribute('aria-atomic', 'true');
+    expect(document.querySelector('[aria-live]')).toBeNull();
+  });
+
+  it('uses unique labelled-by identifiers across multiple digest instances', () => {
+    const state = history([item('one')]);
+    render(
+      <>
+        <ExperienceFeedbackDigest history={state} selectedFilter="all" onSelectFilter={vi.fn()} now={NOW} />
+        <ExperienceFeedbackDigest history={state} selectedFilter="all" onSelectFilter={vi.fn()} now={NOW} />
+      </>,
+    );
+    const digests = screen.getAllByRole('complementary');
+    expect(digests).toHaveLength(2);
+    expect(digests[0]?.getAttribute('aria-labelledby')).not.toBe(digests[1]?.getAttribute('aria-labelledby'));
+    expect(digests[0]?.getAttribute('aria-describedby')).not.toBe(digests[1]?.getAttribute('aria-describedby'));
   });
 
   it('keeps empty metrics non-actionable for keyboard users', () => {
