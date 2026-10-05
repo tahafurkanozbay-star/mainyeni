@@ -15,7 +15,7 @@ import {
   type DialogKind,
   type DialogPresentation,
 } from '../../experience/dialogStackModel';
-import { NotificationCenterModel } from '../../experience/notificationCenterModel';
+import type { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { createShortcutRuntime } from '../../experience/shortcutRuntime';
 import './experience-ui.css';
 import './experience-ux-layer-modern.css';
@@ -40,6 +40,7 @@ interface ActionIconProps {
 
 interface ExperienceUXLayerProps {
   readonly windowManager: Pick<WindowManagerApi, 'ShowWindow'>;
+  readonly notificationModel: NotificationCenterModel;
 }
 
 interface ExperienceCommandDetail {
@@ -154,6 +155,7 @@ export const dispatchExperienceCommand = (
 
 export function ExperienceUXLayer({
   windowManager,
+  notificationModel,
 }: ExperienceUXLayerProps): ReactNode {
   const { theme, toggleTheme } = useExperienceTheme();
   const [collapsed, setCollapsed] = useState(false);
@@ -162,13 +164,6 @@ export function ExperienceUXLayer({
     onObserverError: error => reportUxRuntimeError(
       error,
       'experience.ux-layer.dialog-observer',
-    ),
-  }), []);
-  const notifications = useMemo(() => new NotificationCenterModel({
-    capacity: 48,
-    onObserverError: error => reportUxRuntimeError(
-      error,
-      'experience.ux-layer.notification-observer',
     ),
   }), []);
   const backgroundRoots = useMemo<readonly HTMLElement[]>(() => {
@@ -207,7 +202,7 @@ export function ExperienceUXLayer({
 
   const toggleThemeWithFeedback = useCallback((): void => {
     toggleTheme();
-    notifications.push({
+    notificationModel.push({
       id: 'experience-theme-feedback',
       dedupeKey: 'experience-theme-feedback',
       title: theme === 'dark' ? 'Açık tema seçildi' : 'Koyu tema seçildi',
@@ -215,7 +210,7 @@ export function ExperienceUXLayer({
       category: 'Görünüm',
       expiresAt: Date.now() + 7_000,
     });
-  }, [notifications, theme, toggleTheme]);
+  }, [notificationModel, theme, toggleTheme]);
 
   useEffect(() => {
     document.documentElement.dataset.experienceTheme = theme;
@@ -322,7 +317,7 @@ export function ExperienceUXLayer({
     if (dialog.id === NOTIFICATION_DIALOG_ID) {
       return (
         <ExperienceNotificationCenter
-          model={notifications}
+          model={notificationModel}
           mode="center"
           label="Bildirim merkezi"
         />
@@ -383,7 +378,7 @@ export function ExperienceUXLayer({
         </footer>
       </div>
     );
-  }, [closeSurfaceAndDispatch, notifications, theme, toggleThemeWithFeedback]);
+  }, [closeSurfaceAndDispatch, notificationModel, theme, toggleThemeWithFeedback]);
 
   return (
     <>
@@ -491,7 +486,7 @@ export function ExperienceUXLayer({
       />
 
       <ExperienceNotificationCenter
-        model={notifications}
+        model={notificationModel}
         mode="toasts"
         label="Anlık bildirimler"
       />
