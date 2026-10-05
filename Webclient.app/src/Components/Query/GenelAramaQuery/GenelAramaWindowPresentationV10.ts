@@ -5,10 +5,7 @@ import {
   normalizeText,
   stableSerialize,
 } from '../../../data-search/normalization';
-import {
-  normalizeTurkishSearchText,
-  type NormalizedSearchRecord,
-} from '../_Common/QuerySearchRuntime';
+import type { NormalizedSearchRecord } from '../_Common/QuerySearchRuntime';
 import {
   GENERAL_SEARCH_FACET_LABELS_V10,
   GENERAL_SEARCH_SORT_MODES_V10,
@@ -426,8 +423,9 @@ export const createGeneralSearchFacetsV10 = (
   ),
 ]);
 
-const normalizedForHighlight = (value: string): string =>
-  normalizeTurkishSearchText(value);
+const normalizedForHighlight = (value: string): string => normalizeSearchText(value);
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 
 export const highlightGeneralSearchTextV10 = (
   valueInput: unknown,
@@ -449,35 +447,22 @@ export const highlightGeneralSearchTextV10 = (
     return Object.freeze([Object.freeze({ text: value, matched: false })]);
   }
 
+  const matcher = new RegExp(normalizedTerms.map(escapeRegExp).join('|'), 'gu');
   const ranges: Array<readonly [number, number]> = [];
-  for (const term of normalizedTerms) {
-    let start = 0;
-    while (start < normalizedValue.length) {
-      const index = normalizedValue.indexOf(term, start);
-      if (index < 0) break;
-      ranges.push([index, Math.min(value.length, index + term.length)]);
-      start = index + Math.max(1, term.length);
-      if (ranges.length >= maxSegments * 2) break;
-    }
+  for (const match of normalizedValue.matchAll(matcher)) {
+    const index = match.index;
+    const text = match[0];
+    if (index === undefined || !text) continue;
+    ranges.push([index, Math.min(value.length, index + text.length)]);
     if (ranges.length >= maxSegments * 2) break;
   }
   if (ranges.length === 0) {
     return Object.freeze([Object.freeze({ text: value, matched: false })]);
   }
-  ranges.sort((left, right) => left[0] - right[0] || right[1] - left[1]);
-  const merged: Array<[number, number]> = [];
-  for (const range of ranges) {
-    const previous = merged[merged.length - 1];
-    if (previous && range[0] <= previous[1]) {
-      previous[1] = Math.max(previous[1], range[1]);
-    } else {
-      merged.push([range[0], range[1]]);
-    }
-  }
 
   const segments: GeneralSearchHighlightSegmentV10[] = [];
   let cursor = 0;
-  for (const [start, end] of merged) {
+  for (const [start, end] of ranges) {
     if (segments.length >= maxSegments) break;
     if (start > cursor) {
       segments.push(Object.freeze({ text: value.slice(cursor, start), matched: false }));
@@ -546,12 +531,14 @@ export const createGeneralSearchRenderWindowV10 = (
 
   let startIndex = preferredStart ?? Math.max(0, activeIndex - Math.floor(windowSize / 2));
   startIndex = Math.min(maximumStart, startIndex);
-  const lowerSafe = startIndex + policy.renderOverscan;
-  const upperSafe = startIndex + windowSize - policy.renderOverscan - 1;
-  if (activeIndex < lowerSafe) {
-    startIndex = Math.max(0, activeIndex - policy.renderOverscan);
-  } else if (activeIndex > upperSafe) {
-    startIndex = Math.min(maximumStart, activeIndex - windowSize + policy.renderOverscan + 1);
+  if (preferredStart === null) {
+    const lowerSafe = startIndex + policy.renderOverscan;
+    const upperSafe = startIndex + windowSize - policy.renderOverscan - 1;
+    if (activeIndex < lowerSafe) {
+      startIndex = Math.max(0, activeIndex - policy.renderOverscan);
+    } else if (activeIndex > upperSafe) {
+      startIndex = Math.min(maximumStart, activeIndex - windowSize + policy.renderOverscan + 1);
+    }
   }
   const endIndexExclusive = Math.min(totalMatched, startIndex + windowSize);
   return Object.freeze({
@@ -664,5 +651,7 @@ export const createGeneralSearchAnnouncementV10 = (
   return truncateAnnouncement(parts.join(' '), policy.maxAnnouncementLength);
 };
 
-export const generalSearchPresentationFingerprintV10 = (value: unknown): string =>
-  hashFingerprint(stableSerialize(value));
+export const generalSearchPresentationFingerprintV10 = (value: unknown): string => {
+  const fingerprint = hashFingerprint(stableSerialize(value));
+  return fingerprint.startsWith('fnv1a-') ? fingerprint.slice('fnv1a-'.length) : fingerprint;
+};
