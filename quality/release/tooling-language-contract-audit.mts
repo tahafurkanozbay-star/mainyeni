@@ -369,8 +369,8 @@ export function auditToolingLanguageContracts(
     ...manifestFindings(manifest),
   ]);
   return {
-    name: 'tooling-language-contract',
-    durationMs: performance.now() - started,
+    domain: 'build',
+    title: 'Tooling language modernization contract audit',
     summary: {
       files,
       inspectedFiles: files.length,
@@ -388,5 +388,6 @@ export function auditToolingLanguageContracts(
       findings,
     },
     findings,
+    elapsedMs: Math.max(0, performance.now() - started),
   };
 }
