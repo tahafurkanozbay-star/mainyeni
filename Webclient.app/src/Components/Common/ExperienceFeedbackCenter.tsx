@@ -46,6 +46,7 @@ import {
 } from '../../experience/feedbackHistorySession';
 import { synchronizeNotificationHistory } from '../../experience/feedbackNotificationAdapter';
 import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
+import { ExperienceFeedbackDigest } from './ExperienceFeedbackDigest';
 import './experience-feedback-center.css';
 
 export interface ExperienceFeedbackCenterProps {
@@ -407,6 +408,12 @@ export const ExperienceFeedbackCenter = ({
           <span><strong>{history.importantCount}</strong> önemli</span>
         </div>
       </header>
+
+      <ExperienceFeedbackDigest
+        history={session.history}
+        selectedFilter={session.history.filter}
+        onSelectFilter={selectFilter}
+      />
 
       <div
         id={controls.toolbarId}
