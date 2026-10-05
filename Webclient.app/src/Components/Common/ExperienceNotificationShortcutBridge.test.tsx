@@ -16,7 +16,9 @@ describe('ExperienceNotificationShortcutBridge', () => {
     render(<ExperienceNotificationShortcutBridge />);
     fireEvent.keyDown(window, { key: 'n', altKey: true });
     expect(listener).toHaveBeenCalledTimes(1);
-    expect((listener.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+    const firstEvent = listener.mock.calls[0]?.[0];
+    expect(firstEvent).toBeInstanceOf(CustomEvent);
+    expect((firstEvent as CustomEvent).detail).toEqual({
       name: 'notifications',
       source: 'keyboard',
     });
