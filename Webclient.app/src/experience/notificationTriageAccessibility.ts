@@ -43,6 +43,17 @@ const finiteDimension = (value: number, fallback: number): number => (
   Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
 );
 
+const isControlCodePoint = (codePoint: number): boolean => codePoint < 32 || codePoint === 127;
+
+const replaceControlCharacters = (value: string, replacement: string): string => {
+  let result = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    result += codePoint !== undefined && isControlCodePoint(codePoint) ? replacement : character;
+  }
+  return result;
+};
+
 export const resolveNotificationTriagePresentation = (
   input: NotificationTriageViewportInput,
 ): NotificationTriagePresentation => {
@@ -115,9 +126,7 @@ export const resolveNotificationTriageAccessibilityIntent = (
 };
 
 const sanitizeIdPart = (value: string, fallback: string): string => {
-  const normalized = value
-    .normalize('NFKC')
-    .replace(/[\u0000-\u001F\u007F]/g, '')
+  const normalized = replaceControlCharacters(value.normalize('NFKC'), '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
@@ -174,8 +183,7 @@ export const notificationTriageItemAriaLabel = (input: {
   readonly position: number;
   readonly setSize: number;
 }): string => {
-  const title = input.title
-    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+  const title = replaceControlCharacters(input.title, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 120) || 'Başlıksız bildirim';
