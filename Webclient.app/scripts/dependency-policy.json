@@ -27,9 +27,6 @@
     {"package":"oxlint","peer":"vite-plus","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Optional tooling peer metadata is intentionally broad upstream; lockfile provenance and concrete installed versions remain governed."},
     {"package":"react-icons","peer":"react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"React Icons publishes broad compatibility metadata; installed React remains concrete and source usage is independently governed."},
     {"package":"use-debounce","peer":"react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Use-debounce publishes broad React compatibility metadata; installed React remains concrete and lockfile provenance is enforced."},
-    {"package":"vitest","peer":"@edge-runtime/vm","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Vitest optional environment peer is broad upstream; this test-only surface remains pinned through the lockfile and registry policy."},
-    {"package":"vitest","peer":"@vitest/browser-webdriverio","range":"^5.0.0-beta.5 || >=5.0.0","owner":"platform","expiresOn":"2026-11-30","reason":"Explicit prerelease-compatible Vitest peer range is valid npm metadata but exceeds the local parser vocabulary; lock resolution stays pinned."},
-    {"package":"vitest","peer":"happy-dom","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Vitest optional DOM provider peer is broad upstream; the project does not rely on floating installation and lock provenance stays enforced."},
-    {"package":"vitest","peer":"jsdom","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Vitest optional DOM provider peer is broad upstream; the project does not rely on floating installation and lock provenance stays enforced."}
+    {"package":"vitest","peer":"@edge-runtime/vm","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Vitest optional environment peer is broad upstream; this test-only surface remains pinned through the lockfile and registry policy."}
   ]
 }
