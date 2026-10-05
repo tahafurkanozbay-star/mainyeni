@@ -126,13 +126,30 @@ export const resolveNotificationTriageAccessibilityIntent = (
 };
 
 const sanitizeIdPart = (value: string, fallback: string): string => {
-  const normalized = replaceControlCharacters(value.normalize('NFKC'), '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  return normalized || fallback;
+  let normalized = '';
+  let separatorPending = false;
+  const source = replaceControlCharacters(value, '').normalize('NFKD');
+  for (const character of source) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) continue;
+    if (codePoint >= 0x0300 && codePoint <= 0x036f) continue;
+    if (character === 'İ' || character === 'ı') continue;
+    const lower = character === 'I' ? 'i' : character.toLowerCase();
+    const lowerCode = lower.codePointAt(0);
+    const alphanumeric = lowerCode !== undefined && (
+      (lowerCode >= 48 && lowerCode <= 57)
+      || (lowerCode >= 97 && lowerCode <= 122)
+    );
+    if (alphanumeric || lower === '_' || lower === '-') {
+      if (separatorPending && normalized && !normalized.endsWith('-')) normalized += '-';
+      normalized += lower;
+      separatorPending = false;
+    } else if (normalized) {
+      separatorPending = true;
+    }
+    if (normalized.length >= 48) break;
+  }
+  return normalized.replace(/-+$/g, '').slice(0, 48) || fallback;
 };
 
 export const notificationTriageSemanticIds = (instanceId: string) => {
