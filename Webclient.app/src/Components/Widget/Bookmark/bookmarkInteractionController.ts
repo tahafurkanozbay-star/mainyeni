@@ -9,11 +9,12 @@ import {
   sanitizeWidgetLabel,
   type BookmarkRecord,
   type LatestOperationGate,
+  type MapPointLike,
 } from '../_shared/MapWidgetRuntime';
 import { bookmarkIdentity, type BookmarkExperienceModel } from './bookmarkExperienceModel';
 
 export interface BookmarkMapViewPort {
-  readonly center?: unknown;
+  readonly center?: MapPointLike | null;
   readonly zoom?: unknown;
   readonly goTo?: (target: unknown) => Promise<unknown> | unknown;
 }
