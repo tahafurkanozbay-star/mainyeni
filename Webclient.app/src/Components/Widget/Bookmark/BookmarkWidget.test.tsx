@@ -291,4 +291,130 @@ describe('BookmarkWidget modern screen', () => {
     expect(await screen.findByText('Henüz yer işareti yok')).toBeVisible();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
+  it('publishes keyboard shortcuts and help on the search control', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(searchInput()).toHaveAttribute(
+      'aria-keyshortcuts',
+      'ArrowDown ArrowUp Home End PageDown PageUp Escape',
+    );
+    expect(searchInput().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+    expect(screen.getByText(/Delete ile silme onayını aç/)).toBeVisible();
+  });
+
+  it('publishes collection keyboard shortcuts and shared help description', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(listbox()).toHaveAttribute(
+      'aria-keyshortcuts',
+      'ArrowDown ArrowUp ArrowLeft ArrowRight Home End PageDown PageUp Enter Delete Escape',
+    );
+    expect(listbox().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+  });
+
+  it('clears search with Escape without changing stored bookmarks', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
+    expect(options()).toHaveLength(1);
+    fireEvent.keyDown(searchInput(), { key: 'Escape' });
+    expect(searchInput()).toHaveValue('');
+    expect(options()).toHaveLength(3);
+    expect(readStored()).toHaveLength(3);
+  });
+
+  it('does not clear search during IME composition', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
+    fireEvent.keyDown(searchInput(), { key: 'Escape', isComposing: true });
+    expect(searchInput()).toHaveValue('Çankaya');
+  });
+
+  it('moves focus from collection to search with slash', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    listbox().focus();
+    expect(listbox()).toHaveFocus();
+    fireEvent.keyDown(listbox(), { key: '/' });
+    expect(searchInput()).toHaveFocus();
+  });
+
+  it('does not steal shifted slash from the collection', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    listbox().focus();
+    fireEvent.keyDown(listbox(), { key: '/', shiftKey: true });
+    expect(listbox()).toHaveFocus();
+  });
+
+  it('opens delete confirmation from the active row with Delete', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'ArrowDown' });
+    expect(listbox()).toHaveAttribute('aria-activedescendant', options()[1].id);
+    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    expect(screen.getByRole('group', { name: 'Çankaya silme onayı' })).toBeVisible();
+    expect(readStored()).toHaveLength(3);
+  });
+
+  it('opens delete confirmation from the active row with Backspace', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'Backspace' });
+    expect(screen.getByRole('group', { name: 'Kızılay silme onayı' })).toBeVisible();
+    expect(readStored()).toHaveLength(3);
+  });
+
+  it('cancels keyboard delete confirmation with Escape', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    expect(screen.getByRole('group', { name: 'Kızılay silme onayı' })).toBeVisible();
+    fireEvent.keyDown(listbox(), { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
+    expect(readStored()).toHaveLength(3);
+  });
+
+  it('does not repeat keyboard deletion intent', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'Delete', repeat: true });
+    expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
+  });
+
+  it('does not repeat Enter map navigation', async () => {
+    const goTo = vi.fn().mockResolvedValue(undefined);
+    mapRuntime.getMapView.mockReturnValue({
+      center: { latitude: 39.93, longitude: 32.85 },
+      zoom: 13,
+      goTo,
+    });
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'Enter', repeat: true });
+    expect(goTo).not.toHaveBeenCalled();
+  });
+
+  it('does not steal Ctrl+ArrowDown from browser or assistive technology commands', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    const activeBefore = listbox().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(listbox(), { key: 'ArrowDown', ctrlKey: true });
+    expect(listbox()).toHaveAttribute('aria-activedescendant', activeBefore);
+  });
+
+  it('does not steal Meta+Enter from platform commands', async () => {
+    const goTo = vi.fn().mockResolvedValue(undefined);
+    mapRuntime.getMapView.mockReturnValue({
+      center: { latitude: 39.93, longitude: 32.85 },
+      zoom: 13,
+      goTo,
+    });
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(listbox(), { key: 'Enter', metaKey: true });
+    expect(goTo).not.toHaveBeenCalled();
+  });
+
 });
