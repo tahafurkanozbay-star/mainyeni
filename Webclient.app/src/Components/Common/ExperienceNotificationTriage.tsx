@@ -146,6 +146,10 @@ const trapModalFocus = (event: ReactKeyboardEvent<HTMLElement>, panel: HTMLEleme
   }
   const first = focusables[0];
   const last = focusables[focusables.length - 1];
+  if (!first || !last) {
+    panel.focus({ preventScroll: true });
+    return true;
+  }
   const active = document.activeElement;
   if (event.shiftKey && (active === first || !panel.contains(active))) {
     last.focus({ preventScroll: true });
