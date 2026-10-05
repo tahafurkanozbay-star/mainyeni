@@ -306,7 +306,9 @@ describe('ExperienceNotificationTriage', () => {
     const panel = openPanel();
     fireEvent.click(within(panel).getByRole('button', { name: 'Tam bildirim merkezini aç' }));
     expect(listener).toHaveBeenCalledTimes(1);
-    expect((listener.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ name: 'notifications', source: 'triage' });
+    const firstCall = listener.mock.calls[0];
+    if (!firstCall) throw new Error('Expected kentrehberi:command event');
+    expect((firstCall[0] as CustomEvent).detail).toEqual({ name: 'notifications', source: 'triage' });
     expect(screen.queryByRole('region', { name: 'Bildirim hızlı inceleme paneli' })).not.toBeInTheDocument();
     window.removeEventListener('kentrehberi:command', listener);
   });
