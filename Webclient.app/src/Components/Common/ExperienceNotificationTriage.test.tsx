@@ -209,15 +209,19 @@ describe('ExperienceNotificationTriage', () => {
     expect(search).toHaveValue('');
   });
 
-  it('changes result ordering through the sort control', () => {
+  it('changes result ordering through the sort control without stealing the active item', () => {
     const model = createModel();
     model.push({ id: 'old', title: 'Eski', createdAt: 10 });
     model.push({ id: 'new', title: 'Yeni', createdAt: 20 });
     renderTriage(model);
     const panel = openPanel();
+    const before = within(getListbox(panel)).getAllByRole('option');
+    expect(before[0]).toHaveTextContent('Yeni');
     expect(getSelectedOption(panel)).toHaveTextContent('Yeni');
     fireEvent.change(within(panel).getByRole('combobox', { name: 'Sıralama' }), { target: { value: 'oldest' } });
-    expect(getSelectedOption(panel)).toHaveTextContent('Eski');
+    const after = within(getListbox(panel)).getAllByRole('option');
+    expect(after[0]).toHaveTextContent('Eski');
+    expect(getSelectedOption(panel)).toHaveTextContent('Yeni');
   });
 
   it('uses one listbox tab stop with an active descendant', () => {
