@@ -159,7 +159,7 @@ const ExperienceNotificationCenterMode = ({
         model={model}
         label={label}
         callerId="experience-utility-notifications"
-        onAction={onAction}
+        {...(onAction ? { onAction } : {})}
       />
     </aside>
   );
@@ -177,7 +177,7 @@ export const ExperienceNotificationCenter = ({
       <ExperienceNotificationCenterMode
         model={model}
         label={label}
-        onAction={onAction}
+        {...(onAction ? { onAction } : {})}
       />
     );
   }
@@ -187,7 +187,7 @@ export const ExperienceNotificationCenter = ({
       model={model}
       maxVisibleToasts={maxVisibleToasts}
       label={label}
-      onAction={onAction}
+      {...(onAction ? { onAction } : {})}
     />
   );
 };
