@@ -264,8 +264,9 @@ export const createBookmarkInteractionController = (
   const navigate = async (key: string): Promise<boolean> => {
     if (disposed) return false;
 
-    let target = options.model.getSnapshot().entries.find((entry) => entry.key === key);
-    if (!target) {
+    let bookmark: BookmarkRecord | undefined = options.model.getSnapshot().entries
+      .find((entry) => entry.key === key)?.bookmark;
+    if (!bookmark) {
       let canonical: readonly BookmarkRecord[];
       try {
         canonical = readCanonical();
@@ -273,10 +274,9 @@ export const createBookmarkInteractionController = (
         publish('error', key, notify('error', normalizeWidgetError(error, 'Yer işaretleri okunamadı.')));
         return false;
       }
-      const bookmark = canonical.find((candidate) => bookmarkIdentity(candidate) === key);
-      if (bookmark) target = { key, bookmark } as typeof target;
+      bookmark = canonical.find((candidate) => bookmarkIdentity(candidate) === key);
     }
-    if (!target) return false;
+    if (!bookmark) return false;
 
     const view = options.map.getView();
     if (!view?.goTo) {
@@ -290,13 +290,13 @@ export const createBookmarkInteractionController = (
         : Object.freeze({ timeoutMs: options.operationTimeoutMs });
       await operationGate.run(
         () => Promise.resolve(view.goTo?.({
-          center: [target.bookmark.Lng, target.bookmark.Lat],
-          zoom: target.bookmark.Zoom,
+          center: [bookmark.Lng, bookmark.Lat],
+          zoom: bookmark.Zoom,
         })),
         gateOptions,
       );
       if (disposed) return false;
-      publish('idle', null, notify('info', `${target.bookmark.Title} görünümüne gidildi.`));
+      publish('idle', null, notify('info', `${bookmark.Title} görünümüne gidildi.`));
       return true;
     } catch (error) {
       if (disposed || isAbortLikeError(error)) return false;
