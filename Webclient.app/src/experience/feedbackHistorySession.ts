@@ -96,54 +96,27 @@ const viewFor = (state: FeedbackHistorySessionState): FeedbackHistorySessionView
   restoreFocusId: state.callerId,
 });
 
-const result = (
-  state: FeedbackHistorySessionState,
-  effect: FeedbackHistorySessionEffect = Object.freeze({ type: 'none' }),
-): FeedbackHistorySessionResult => Object.freeze({ state, view: viewFor(state), effect });
+const result = (state: FeedbackHistorySessionState, effect: FeedbackHistorySessionEffect = Object.freeze({ type: 'none' })): FeedbackHistorySessionResult =>
+  Object.freeze({ state, view: viewFor(state), effect });
 
-const mutateHistory = (
-  state: FeedbackHistorySessionState,
-  action: FeedbackHistoryAction,
-  now: number,
-  announcement?: string,
-): FeedbackHistorySessionState => {
+const mutateHistory = (state: FeedbackHistorySessionState, action: FeedbackHistoryAction, now: number, announcement?: string): FeedbackHistorySessionState => {
   const history = reduceFeedbackHistory(state.history, action, now);
   if (history === state.history && !announcement) return state;
-  return Object.freeze({
-    ...state,
-    history,
-    revision: nextRevision(state.revision),
-    lastAnnouncement: announcement ? announce(announcement) : state.lastAnnouncement,
-  });
+  return Object.freeze({ ...state, history, revision: nextRevision(state.revision), lastAnnouncement: announcement ? announce(announcement) : state.lastAnnouncement });
 };
 
 export const createFeedbackHistorySessionState = (now = Date.now()): FeedbackHistorySessionState => Object.freeze({
-  open: false,
-  callerId: null,
-  history: createFeedbackHistoryState(now),
-  revision: 0,
-  lastAnnouncement: '',
+  open: false, callerId: null, history: createFeedbackHistoryState(now), revision: 0, lastAnnouncement: '',
 });
 
 export const createFeedbackHistorySessionView = viewFor;
 
-export const reduceFeedbackHistorySession = (
-  state: FeedbackHistorySessionState,
-  command: FeedbackHistorySessionCommand,
-  now = Date.now(),
-): FeedbackHistorySessionResult => {
+export const reduceFeedbackHistorySession = (state: FeedbackHistorySessionState, command: FeedbackHistorySessionCommand, now = Date.now()): FeedbackHistorySessionResult => {
   switch (command.type) {
     case 'open': {
       const callerId = safeDomId(command.callerId, DEFAULT_CALLER_ID);
       const history = reduceFeedbackHistory(state.history, { type: 'first' }, now);
-      const next = Object.freeze({
-        ...state,
-        open: true,
-        callerId,
-        history,
-        revision: nextRevision(state.revision),
-        lastAnnouncement: announce('Bildirim geçmişi açıldı.'),
-      });
+      const next = Object.freeze({ ...state, open: true, callerId, history, revision: nextRevision(state.revision), lastAnnouncement: announce('Bildirim geçmişi açıldı.') });
       const snapshot = createFeedbackHistorySnapshot(next.history);
       const targetId = snapshot.activeId ? `feedback-history-item-${safeDomId(snapshot.activeId, 'active')}` : 'feedback-history-close';
       return result(next, Object.freeze({ type: 'focus', targetId }));
@@ -151,16 +124,14 @@ export const reduceFeedbackHistorySession = (
     case 'close': {
       if (!state.open) return result(state);
       const restoreTarget = state.callerId ?? DEFAULT_CALLER_ID;
-      const next = Object.freeze({
-        ...state,
-        open: false,
-        revision: nextRevision(state.revision),
-        lastAnnouncement: announce('Bildirim geçmişi kapatıldı.'),
-      });
+      const next = Object.freeze({ ...state, open: false, revision: nextRevision(state.revision), lastAnnouncement: announce('Bildirim geçmişi kapatıldı.') });
       return result(next, Object.freeze({ type: 'restore-focus', targetId: restoreTarget }));
     }
     case 'append': {
-      const next = mutateHistory(state, { type: 'append', item: command.item }, now);
+      let next = mutateHistory(state, { type: 'append', item: command.item }, now);
+      if (!state.open && next.history.items.some(item => item.id === command.item.feedback.id)) {
+        next = mutateHistory(next, { type: 'activate', id: command.item.feedback.id }, now);
+      }
       return result(next);
     }
     case 'filter': {
@@ -211,11 +182,7 @@ export const reduceFeedbackHistorySession = (
         return activeId ? result(state, Object.freeze({ type: 'open-item', id: activeId })) : result(state);
       }
       if (intent.type === 'remove-active') return reduceFeedbackHistorySession(state, { type: 'remove-active' }, now);
-      const action: FeedbackHistoryAction = intent.type === 'move'
-        ? { type: 'move', delta: intent.delta }
-        : intent.type === 'first'
-          ? { type: 'first' }
-          : { type: 'last' };
+      const action: FeedbackHistoryAction = intent.type === 'move' ? { type: 'move', delta: intent.delta } : intent.type === 'first' ? { type: 'first' } : { type: 'last' };
       const next = mutateHistory(state, action, now);
       const snapshot = createFeedbackHistorySnapshot(next.history);
       const targetId = snapshot.activeId ? `feedback-history-item-${safeDomId(snapshot.activeId, 'active')}` : 'feedback-history-close';
