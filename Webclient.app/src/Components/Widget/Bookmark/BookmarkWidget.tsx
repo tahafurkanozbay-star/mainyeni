@@ -22,10 +22,8 @@ import {
   MapWidgetSurface,
   type MapWidgetManagerLike,
 } from '../_shared/MapWidgetSurface';
-import {
-  createBookmarkExperienceModel,
-  type BookmarkMove,
-} from './bookmarkExperienceModel';
+import { createBookmarkExperienceModel } from './bookmarkExperienceModel';
+import { bookmarkKeyboardAriaShortcuts, bookmarkKeyboardHelpText, resolveBookmarkKeyboardIntent } from './bookmarkKeyboardPolicy';
 import {
   createBookmarkInteractionController,
   type BookmarkMapViewPort,
@@ -36,17 +34,6 @@ export interface BookmarkWidgetProps {
   readonly id: string;
   readonly windowManager: MapWidgetManagerLike;
 }
-
-const MOVEMENT_KEYS: Readonly<Partial<Record<string, BookmarkMove>>> = Object.freeze({
-  ArrowDown: 'next',
-  ArrowRight: 'next',
-  ArrowUp: 'previous',
-  ArrowLeft: 'previous',
-  Home: 'first',
-  End: 'last',
-  PageDown: 'page-next',
-  PageUp: 'page-previous',
-});
 
 const NoticeGlyph = ({ severity }: { readonly severity: 'info' | 'warning' | 'error' }) => (
   <span className="bookmark-modern__notice-glyph" aria-hidden="true">
@@ -133,26 +120,28 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
     };
 
     const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-      const movement = MOVEMENT_KEYS[event.key];
-      if (!movement || snapshot.entries.length === 0) return;
-      event.preventDefault();
-      model.moveActive(movement);
+      const resolved = resolveBookmarkKeyboardIntent(event, {
+        surface: 'search', resultCount: snapshot.resultCount, hasActiveEntry: activeEntry !== null,
+        hasPendingDelete: pendingDeleteKey !== null, hasQuery: snapshot.query.length > 0, busy,
+      });
+      if (resolved.preventDefault) event.preventDefault();
+      if (resolved.intent.kind === 'move') model.moveActive(resolved.intent.move);
+      if (resolved.intent.kind === 'clear-search') model.setQuery('');
     };
 
     const handleListKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-      const movement = MOVEMENT_KEYS[event.key];
-      if (movement && snapshot.entries.length > 0) {
-        event.preventDefault();
-        model.moveActive(movement);
-        return;
-      }
-      if (event.key === 'Enter' && activeEntry) {
-        event.preventDefault();
-        void controller.navigate(activeEntry.key);
-      }
-      if (event.key === 'Escape' && pendingDeleteKey) {
-        event.preventDefault();
-        setPendingDeleteKey(null);
+      const resolved = resolveBookmarkKeyboardIntent(event, {
+        surface: 'collection', resultCount: snapshot.resultCount, hasActiveEntry: activeEntry !== null,
+        hasPendingDelete: pendingDeleteKey !== null, hasQuery: snapshot.query.length > 0, busy,
+      });
+      if (resolved.preventDefault) event.preventDefault();
+      switch (resolved.intent.kind) {
+        case 'move': model.moveActive(resolved.intent.move); break;
+        case 'activate': if (activeEntry) void controller.navigate(activeEntry.key); break;
+        case 'request-delete': if (activeEntry) setPendingDeleteKey(activeEntry.key); break;
+        case 'cancel-delete': setPendingDeleteKey(null); break;
+        case 'focus-search': searchRef.current?.focus({ preventScroll: true }); break;
+        default: break;
       }
     };
 
@@ -235,7 +224,8 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                     aria-controls={`${id}-bookmark-list`}
                     aria-expanded={snapshot.resultCount > 0}
                     aria-activedescendant={activeEntry?.id}
-                    aria-describedby={`${id}-bookmark-status`}
+                    aria-describedby={`${id}-bookmark-status ${id}-bookmark-keyboard-help`}
+                    aria-keyshortcuts={bookmarkKeyboardAriaShortcuts('search')}
                   />
                   {snapshot.query && (
                     <button
@@ -274,6 +264,11 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                 </button>
               </div>
             </div>
+
+            <p id={`${id}-bookmark-keyboard-help`} className="bookmark-modern__keyboard-help">
+              <span aria-hidden="true" className="bookmark-modern__keyboard-key">⌨</span>
+              <span>{bookmarkKeyboardHelpText()}</span>
+            </p>
 
             <p
               id={`${id}-bookmark-status`}
@@ -325,6 +320,8 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                 role="listbox"
                 aria-label="Kayıtlı yer işaretleri"
                 aria-activedescendant={activeEntry?.id}
+                aria-describedby={`${id}-bookmark-keyboard-help ${id}-bookmark-status`}
+                aria-keyshortcuts={bookmarkKeyboardAriaShortcuts('collection')}
                 tabIndex={0}
                 onKeyDown={handleListKeyDown}
               >
