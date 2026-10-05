@@ -17,3 +17,4 @@ export * from './runtimeLoadShedGovernor';
 export * from './runtimeAdmissionGovernor';
 export * from './runtimeFairnessGovernor';
 export * from './runtimeBackpressureGovernor';
+export * from './runtimeWorkCoordinator';
