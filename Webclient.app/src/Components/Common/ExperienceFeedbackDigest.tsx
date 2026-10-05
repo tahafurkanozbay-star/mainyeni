@@ -78,12 +78,13 @@ export const ExperienceFeedbackDigest = ({
             type="button"
             className="experience-feedback-digest__metric"
             data-emphasized={metric.emphasized || undefined}
+            aria-label={`${metric.label}: ${metric.value}`}
             aria-pressed={selectedFilter === metric.filter}
             disabled={!metric.actionable}
             onClick={() => onSelectFilter(metric.filter)}
           >
-            <span className="experience-feedback-digest__metric-value">{metric.value}</span>
-            <span className="experience-feedback-digest__metric-label">{metric.label}</span>
+            <span className="experience-feedback-digest__metric-value" aria-hidden="true">{metric.value}</span>
+            <span className="experience-feedback-digest__metric-label" aria-hidden="true">{metric.label}</span>
           </button>
         ))}
       </div>
