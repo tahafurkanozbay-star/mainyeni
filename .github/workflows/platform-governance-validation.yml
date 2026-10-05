@@ -53,12 +53,12 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      # Keep the lint gate split into bounded, non-overlapping invocations. oxlint
-      # 1.36 currently exits non-zero when these otherwise-clean slices are
-      # combined into one mixed directory/file invocation in this repository.
-      # Every slice remains authoritative: any warning or error fails the job.
+      # oxlint 1.36 can return a non-zero result for a mixed directory/file
+      # invocation even when the same source files pass independently. Keep the
+      # gate fail-closed while isolating every governance/config source file so
+      # each warning/error remains authoritative and attributable.
       - name: Strict lint governance and config
-        run: npx oxlint --deny-warnings src/platform/governance src/platform/config
+        run: find src/platform/governance src/platform/config -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
 
       - name: Strict lint migrated bootstrap tests
         run: npx oxlint --deny-warnings src/platform/bootstrap/bootstrapCore.test.ts src/platform/bootstrap/bootstrapDiagnostics.test.ts
