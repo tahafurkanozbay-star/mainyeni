@@ -12,13 +12,7 @@ on:
       - 'Webclient.app/tsconfig.platform-governance.json'
       - '.github/workflows/platform-governance-validation.yml'
   push:
-    branches:
-      - main
-    paths:
-      - 'Webclient.app/src/platform/governance/**'
-      - 'Webclient.app/src/platform/config/**'
-      - 'Webclient.app/tsconfig.platform-governance.json'
-      - '.github/workflows/platform-governance-validation.yml'
+    branches: [main]
 
 permissions:
   contents: read
@@ -36,46 +30,35 @@ jobs:
         working-directory: Webclient.app
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - name: Setup Node 24
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: Webclient.app/package-lock.json
-
       - name: Install from lockfile
         run: npm ci
-
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
-
-      # Keep lint fail-closed while exposing ownership in Actions job metadata.
-      # The five governor slices are the product scope of this PR; the index and
-      # pre-existing governance sources are validated separately so a baseline
-      # warning cannot be mistaken for a governor regression when raw logs are
-      # unavailable through constrained automation connectors.
       - name: Strict lint runtime deadline governor
         run: npx oxlint --deny-warnings src/platform/governance/runtimeDeadlineGovernor.ts src/platform/governance/runtimeDeadlineGovernor.test.ts
-
       - name: Strict lint runtime load-shed governor
         run: npx oxlint --deny-warnings src/platform/governance/runtimeLoadShedGovernor.ts src/platform/governance/runtimeLoadShedGovernor.test.ts
-
       - name: Strict lint runtime admission governor
         run: npx oxlint --deny-warnings src/platform/governance/runtimeAdmissionGovernor.ts src/platform/governance/runtimeAdmissionGovernor.test.ts
-
       - name: Strict lint runtime fairness governor
         run: npx oxlint --deny-warnings src/platform/governance/runtimeFairnessGovernor.ts src/platform/governance/runtimeFairnessGovernor.test.ts
-
-      - name: Strict lint runtime backpressure governor
-        run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.ts src/platform/governance/runtimeBackpressureGovernor.test.ts
-
+      # Keep both files fail-closed, but split them so Actions metadata identifies
+      # whether the product source or its adversarial contract is responsible.
+      - name: Strict lint runtime backpressure source
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.ts
+      - name: Strict lint runtime backpressure tests
+        run: npx oxlint --deny-warnings src/platform/governance/runtimeBackpressureGovernor.test.ts
       - name: Strict lint governance barrel
         run: npx oxlint --deny-warnings src/platform/governance/index.ts
-
       - name: Strict lint pre-existing governance sources
         run: >-
           find src/platform/governance -type f \( -name '*.ts' -o -name '*.tsx' \)
@@ -86,50 +69,31 @@ jobs:
           ! -name 'runtimeFairnessGovernor.ts' ! -name 'runtimeFairnessGovernor.test.ts'
           ! -name 'runtimeBackpressureGovernor.ts' ! -name 'runtimeBackpressureGovernor.test.ts'
           -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
-
       - name: Strict lint config sources
         run: find src/platform/config -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
-
       - name: Strict lint migrated bootstrap tests
         run: npx oxlint --deny-warnings src/platform/bootstrap/bootstrapCore.test.ts src/platform/bootstrap/bootstrapDiagnostics.test.ts
-
       - name: Strict lint migrated HTTP tests
         run: >-
           npx oxlint --deny-warnings
-          src/platform/http/fetchTransport.test.ts
-          src/platform/http/networkDiagnostics.test.ts
-          src/platform/http/requestScheduler.test.ts
-          src/platform/http/retryPolicy.test.ts
-          src/platform/http/runtimeCapabilities.test.ts
-          src/platform/http/typescriptRuntime.integration.test.ts
-
+          src/platform/http/fetchTransport.test.ts src/platform/http/networkDiagnostics.test.ts
+          src/platform/http/requestScheduler.test.ts src/platform/http/retryPolicy.test.ts
+          src/platform/http/runtimeCapabilities.test.ts src/platform/http/typescriptRuntime.integration.test.ts
       - name: Strict lint migrated performance tests
         run: npx oxlint --deny-warnings src/platform/performance/performanceMonitor.test.ts
-
       - name: Strict lint migrated runtime tests
         run: npx oxlint --deny-warnings src/platform/runtime/runtime.test.ts src/platform/runtime/runtimeDiagnostics.test.ts
-
       - name: Strict TypeScript governance boundary
         run: npx tsc --noEmit -p tsconfig.platform-governance.json --pretty false
-
       - name: Strict migrated Platform test TypeScript
         run: npm run typecheck:platform-tests -- --pretty false
-
       - name: Focused governance and config tests
         run: npx vitest run src/platform/governance src/platform/config --reporter=verbose
-
       - name: Migrated Platform regression tests
         run: >-
-          npx vitest run
-          src/platform/bootstrap/bootstrapCore.test.ts
-          src/platform/bootstrap/bootstrapDiagnostics.test.ts
-          src/platform/http/fetchTransport.test.ts
-          src/platform/http/networkDiagnostics.test.ts
-          src/platform/http/requestScheduler.test.ts
-          src/platform/http/retryPolicy.test.ts
-          src/platform/http/runtimeCapabilities.test.ts
-          src/platform/http/typescriptRuntime.integration.test.ts
-          src/platform/performance/performanceMonitor.test.ts
-          src/platform/runtime/runtime.test.ts
-          src/platform/runtime/runtimeDiagnostics.test.ts
-          --reporter=verbose
+          npx vitest run src/platform/bootstrap/bootstrapCore.test.ts src/platform/bootstrap/bootstrapDiagnostics.test.ts
+          src/platform/http/fetchTransport.test.ts src/platform/http/networkDiagnostics.test.ts
+          src/platform/http/requestScheduler.test.ts src/platform/http/retryPolicy.test.ts
+          src/platform/http/runtimeCapabilities.test.ts src/platform/http/typescriptRuntime.integration.test.ts
+          src/platform/performance/performanceMonitor.test.ts src/platform/runtime/runtime.test.ts
+          src/platform/runtime/runtimeDiagnostics.test.ts --reporter=verbose
