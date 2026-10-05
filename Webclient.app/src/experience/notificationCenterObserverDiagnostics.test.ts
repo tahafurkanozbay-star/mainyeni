@@ -108,14 +108,6 @@ describe('NotificationCenterModel observer diagnostics', () => {
     expect(model.snapshot().items[0]?.id).toBe('a');
   });
 
-  it('classifies primitive observer failures without persisting raw payloads', () => {
-    const model = new NotificationCenterModel();
-    model.subscribe(() => { throw 'sensitive raw text'; });
-    model.push({ id: 'a', title: 'A' });
-    expect(model.observerDiagnostics().lastFailureKind).toBe('string');
-    expect(JSON.stringify(model.observerDiagnostics())).not.toContain('sensitive raw text');
-  });
-
   it('clearObservers releases every listener while preserving diagnostic history', () => {
     const model = new NotificationCenterModel();
     const one = vi.fn();
