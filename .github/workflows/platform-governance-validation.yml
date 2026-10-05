@@ -53,12 +53,14 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      # oxlint 1.36 can return a non-zero result for a mixed directory/file
-      # invocation even when the same source files pass independently. Keep the
-      # gate fail-closed while isolating every governance/config source file so
-      # each warning/error remains authoritative and attributable.
-      - name: Strict lint governance and config
-        run: find src/platform/governance src/platform/config -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
+      # Keep lint fail-closed while separating the two ownership boundaries.
+      # Each source is still checked independently so an oxlint warning/error
+      # remains authoritative without relying on a mixed directory invocation.
+      - name: Strict lint governance sources
+        run: find src/platform/governance -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
+
+      - name: Strict lint config sources
+        run: find src/platform/config -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | sort -z | xargs -0 -r -n 1 npx oxlint --deny-warnings
 
       - name: Strict lint migrated bootstrap tests
         run: npx oxlint --deny-warnings src/platform/bootstrap/bootstrapCore.test.ts src/platform/bootstrap/bootstrapDiagnostics.test.ts
