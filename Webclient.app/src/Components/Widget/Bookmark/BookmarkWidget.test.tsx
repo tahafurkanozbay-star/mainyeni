@@ -497,4 +497,28 @@ describe('BookmarkWidget modern screen', () => {
     expect(searchInput()).toHaveAttribute('aria-activedescendant', selectedId);
   });
 
+  it('keeps keyboard help associated after switching visual layout', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
+    expect(listbox()).toHaveAttribute('data-view', 'list');
+    expect(listbox().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+    fireEvent.click(screen.getByRole('button', { name: 'Kart' }));
+    expect(listbox()).toHaveAttribute('data-view', 'grid');
+    expect(listbox().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+  });
+
+  it('keeps keyboard navigation available after clearing a no-results query', async () => {
+    renderWidget();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'eşleşmeyen' } });
+    expect(screen.getByText('Eşleşme bulunamadı')).toBeVisible();
+    fireEvent.keyDown(searchInput(), { key: 'Escape' });
+    expect(options()).toHaveLength(3);
+    const firstId = options()[0].id;
+    fireEvent.keyDown(searchInput(), { key: 'ArrowDown' });
+    expect(searchInput()).not.toHaveAttribute('aria-activedescendant', firstId);
+    expect(searchInput()).toHaveAttribute('aria-activedescendant', options()[1].id);
+  });
+
 });
