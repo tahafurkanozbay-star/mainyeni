@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useId, useMemo, type ReactNode } from 'react';
 import {
   createFeedbackHistoryDigest,
   type FeedbackHistoryHealth,
@@ -45,6 +45,8 @@ export const ExperienceFeedbackDigest = ({
   onSelectFilter,
   now = Date.now(),
 }: ExperienceFeedbackDigestProps): ReactNode => {
+  const titleId = useId();
+  const summaryId = useId();
   const digest = useMemo(() => createFeedbackHistoryDigest(history, now), [history, now]);
   const dominantToneLabel = digest.dominantTone ? TONE_LABELS[digest.dominantTone] : 'Yok';
 
@@ -52,8 +54,8 @@ export const ExperienceFeedbackDigest = ({
     <aside
       className="experience-feedback-digest"
       data-health={digest.health}
-      aria-labelledby="experience-feedback-digest-title"
-      aria-describedby="experience-feedback-digest-summary"
+      aria-labelledby={titleId}
+      aria-describedby={summaryId}
     >
       <div className="experience-feedback-digest__lead">
         <div className="experience-feedback-digest__heading-row">
@@ -65,8 +67,8 @@ export const ExperienceFeedbackDigest = ({
             Son 15 dk: <strong>{digest.timeCounts.fresh}</strong>
           </span>
         </div>
-        <h3 id="experience-feedback-digest-title">{digest.headline}</h3>
-        <p id="experience-feedback-digest-summary">{digest.summary}</p>
+        <h3 id={titleId}>{digest.headline}</h3>
+        <p id={summaryId}>{digest.summary}</p>
       </div>
 
       <div className="experience-feedback-digest__metrics" aria-label="Bildirim hızlı filtreleri">
@@ -136,10 +138,6 @@ export const ExperienceFeedbackDigest = ({
           </button>
         </div>
       ) : null}
-
-      <span className="experience-feedback-digest__announcement" aria-live="polite" aria-atomic="true">
-        {digest.announcement}
-      </span>
     </aside>
   );
 };
