@@ -42,7 +42,10 @@ export const validatePeerExceptions = (policy, today = new Date().toISOString().
 };
 
 export const applyPeerExceptions = (result, policy, today) => {
-  const policyIssues = validatePeerExceptions(policy, today);
+  // validatePeerExceptions intentionally returns a frozen diagnostic snapshot. Keep
+  // that public immutability contract intact and use a private mutable accumulator
+  // for graph-dependent stale/unnecessary findings discovered below.
+  const policyIssues = [...validatePeerExceptions(policy, today)];
   const exceptions = new Map((policy?.peerExceptions ?? []).map((entry) => [keyOf(entry), entry]));
   const peerEdges = new Map((result?.inventory?.peerEdges ?? []).map((edge) => [edgeKey(edge), edge]));
   const used = new Set();
