@@ -73,6 +73,7 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
     const galleryContainerRef = useRef<HTMLDivElement | null>(null);
     const galleryRef = useRef<BasemapGalleryLike | null>(null);
     const gateRef = useRef<LatestOperationGate | null>(null);
+    const initialLoadRequestedRef = useRef(false);
     const model = useMemo(() => createBasemapExperienceModel({ maxAttempts: 3 }), []);
     const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
 
@@ -158,9 +159,10 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
     }, [destroyGallery, id, model, ref, windowManager]);
 
     useEffect(() => {
-      if (!windowManager.IsVisible(id) || galleryRef.current || snapshot.phase !== 'idle') return;
+      if (initialLoadRequestedRef.current || !windowManager.IsVisible(id)) return;
+      initialLoadRequestedRef.current = true;
       void initialize();
-    }, [id, initialize, snapshot.phase, windowManager]);
+    }, [id, initialize, windowManager]);
 
     const status = snapshot.phase === 'ready'
       ? `${snapshot.readyCount} altlık harita kullanıma hazır`
