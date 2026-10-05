@@ -17,4 +17,16 @@ export * from './runtimeLoadShedGovernor';
 export * from './runtimeAdmissionGovernor';
 export * from './runtimeFairnessGovernor';
 export * from './runtimeBackpressureGovernor';
-export * from './runtimeWorkCoordinator';
+export {
+  RuntimeWorkCoordinator,
+  createRuntimeWorkCoordinator,
+  type RuntimeWorkCoordinatorPolicy,
+  type RuntimeWorkStatus,
+  type RuntimeWorkOutcome,
+  type RuntimeWorkRejectReason,
+  type RuntimeWorkPermit,
+  type RuntimeWorkDecision,
+  type RuntimeWorkCoordinatorSnapshot,
+  type RuntimeWorkPriority as RuntimeCoordinatedWorkPriority,
+  type RuntimeWorkRequest as RuntimeCoordinatedWorkRequest,
+} from './runtimeWorkCoordinator';
