@@ -263,16 +263,21 @@ export const createBookmarkInteractionController = (
 
   const navigate = async (key: string): Promise<boolean> => {
     if (disposed) return false;
-    const target = options.model.getSnapshot().entries.find((entry) => entry.key === key)
-      ?? (() => {
-        try {
-          const bookmark = readCanonical().find((candidate) => bookmarkIdentity(candidate) === key);
-          return bookmark ? { key, bookmark } : undefined;
-        } catch {
-          return undefined;
-        }
-      })();
+
+    let target = options.model.getSnapshot().entries.find((entry) => entry.key === key);
+    if (!target) {
+      let canonical: readonly BookmarkRecord[];
+      try {
+        canonical = readCanonical();
+      } catch (error) {
+        publish('error', key, notify('error', normalizeWidgetError(error, 'Yer işaretleri okunamadı.')));
+        return false;
+      }
+      const bookmark = canonical.find((candidate) => bookmarkIdentity(candidate) === key);
+      if (bookmark) target = { key, bookmark } as typeof target;
+    }
     if (!target) return false;
+
     const view = options.map.getView();
     if (!view?.goTo) {
       publish('error', key, notify('error', 'Harita görünümü henüz hazır değil.'));
