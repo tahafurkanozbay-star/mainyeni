@@ -34,7 +34,7 @@
     "setup:local": "node scripts/setup-local-env.mjs",
     "build": "vite build && node scripts/release-artifacts.mjs && node scripts/build-integrity.mjs",
     "build:verify": "node scripts/verify-build.mjs",
-    "dependency:verify": "node scripts/dependency-contract.mjs && node scripts/dependency-lock-graph.mjs",
+    "dependency:verify": "node scripts/dependency-contract.mjs && node scripts/dependency-lock-graph.mjs && node scripts/dependency-surface-policy.mjs",
     "lint": "oxlint src tooling vite.config.ts vitest.config.ts",
     "lint:strict": "oxlint --deny-warnings src tooling vite.config.ts vitest.config.ts",
     "quality:experience": "node scripts/experience-quality-audit.js --self-test && node scripts/experience-quality-audit.js",
@@ -42,7 +42,7 @@
     "quality:release-evidence": "node scripts/release-evidence-audit.mjs --strict",
     "test": "vitest",
     "test:ci": "vitest run",
-    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/dependency-lock-graph.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs scripts/spatial-selection-index-audit.test.mjs scripts/release-evidence-audit.test.mjs scripts/verify-chain-security.test.mjs scripts/workflow-action-allowlist-contract.test.mjs scripts/workflow-job-permissions-contract.test.mjs scripts/workflow-npx-security-contract.test.mjs scripts/workflow-permissions-contract.test.mjs scripts/workflow-reliability-contract.test.mjs scripts/workflow-security-contract.test.mjs scripts/workflow-shell-security-contract.test.mjs",
+    "test:tooling": "node --test scripts/dependency-contract.test.mjs scripts/dependency-lock-graph.test.mjs scripts/dependency-surface-policy.test.mjs scripts/build-integrity.test.mjs scripts/release-artifacts.test.mjs scripts/gis-query-governance-audit.test.mjs scripts/kent-rehberi-all-layers-audit.test.mjs scripts/spatial-selection-index-audit.test.mjs scripts/release-evidence-audit.test.mjs scripts/verify-chain-security.test.mjs scripts/workflow-action-allowlist-contract.test.mjs scripts/workflow-job-permissions-contract.test.mjs scripts/workflow-npx-security-contract.test.mjs scripts/workflow-permissions-contract.test.mjs scripts/workflow-reliability-contract.test.mjs scripts/workflow-security-contract.test.mjs scripts/workflow-shell-security-contract.test.mjs",
     "test:build-budget": "node --test scripts/web-build-budget.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck:platform && npm run typecheck:platform-tests && npm run typecheck:gis && npm run typecheck:gis-modern-core && npm run typecheck:experience && npm run typecheck:modern-shell && npm run typecheck:data-search && npm run typecheck:performance && npm run typecheck:shared-shell && npm run typecheck:business",
     "typecheck:platform": "tsc --noEmit -p tsconfig.platform.json",
@@ -65,24 +65,13 @@
     "quality:gis-query-governance": "node scripts/gis-query-governance-audit.mjs --strict",
     "quality:kent-rehberi-all-layers": "node scripts/kent-rehberi-all-layers-audit.mjs --strict",
     "quality:spatial-selection-index": "node scripts/spatial-selection-index-audit.mjs --strict",
-    "dependency:graph": "node scripts/dependency-lock-graph.mjs"
+    "dependency:graph": "node scripts/dependency-lock-graph.mjs",
+    "dependency:surface": "node scripts/dependency-surface-policy.mjs"
   },
-  "engines": {
-    "node": ">=24.0.0",
-    "npm": ">=11.0.0"
-  },
+  "engines": { "node": ">=24.0.0", "npm": ">=11.0.0" },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all",
-      "supports es6-module"
-    ],
-    "development": [
-      "last 2 chrome version",
-      "last 2 firefox version",
-      "last 2 safari version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all", "supports es6-module"],
+    "development": ["last 2 chrome version", "last 2 firefox version", "last 2 safari version"]
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
