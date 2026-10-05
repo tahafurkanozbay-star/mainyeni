@@ -15,7 +15,7 @@ vi.mock('./ExperienceFeedbackCenter', () => ({
     <section
       data-testid="governed-feedback-center"
       data-caller-id={callerId}
-      aria-label={label}
+      data-label={label}
     >
       Governed feedback history
     </section>
@@ -65,7 +65,7 @@ describe('ExperienceNotificationCenter', () => {
     );
 
     const center = screen.getByTestId('governed-feedback-center');
-    expect(center).toHaveAttribute('aria-label', 'Bildirim merkezi');
+    expect(center).toHaveAttribute('data-label', 'Bildirim merkezi');
     expect(center).toHaveAttribute('data-caller-id', 'experience-utility-notifications');
     expect(screen.getByLabelText('Bildirim merkezi')).toHaveAttribute('data-unread-count', '1');
   });
