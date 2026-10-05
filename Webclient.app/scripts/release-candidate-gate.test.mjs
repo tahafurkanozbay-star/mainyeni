@@ -1,3 +1,4 @@
+import './release-admission-snapshot.test.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {MIN_MEANINGFUL_ADDITIONS,REQUIRED_CHECKS,evaluateReleaseCandidate} from './release-candidate-gate.mjs';
