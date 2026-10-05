@@ -233,10 +233,9 @@ export class RuntimeBackpressureGovernor {
   }
 
   snapshot(): RuntimeBackpressureSnapshot {
-    this.assertUsable();
     const inflight = this.inflightCount();
     const queued = this.queuedCount();
-    return Object.freeze({ scopes: this.scopes.size, inflight, queued, pressure: this.pressure(inflight, queued), generation: this.generation, disposed: false });
+    return Object.freeze({ scopes: this.scopes.size, inflight, queued, pressure: this.pressure(inflight, queued), generation: this.generation, disposed: this.disposed });
   }
 
   dispose(): void {
