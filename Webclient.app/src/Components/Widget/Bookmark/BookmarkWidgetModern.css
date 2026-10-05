@@ -193,6 +193,33 @@
   box-shadow: 0 1px 3px color-mix(in srgb, var(--bookmark-text) 10%, transparent);
 }
 
+.bookmark-modern__keyboard-help {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: -2px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--bookmark-accent) 16%, var(--bookmark-border));
+  border-radius: 9px;
+  color: var(--bookmark-muted);
+  background: color-mix(in srgb, var(--bookmark-accent) 4%, var(--bookmark-surface-muted));
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.bookmark-modern__keyboard-key {
+  display: inline-grid;
+  inline-size: 24px;
+  block-size: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--bookmark-border);
+  border-radius: 6px;
+  color: var(--bookmark-text);
+  background: var(--bookmark-surface);
+  font-size: 0.76rem;
+}
+
 .bookmark-modern__result-status {
   min-block-size: 1.3em;
   margin: 0 0 10px;
@@ -475,6 +502,8 @@
 
 @media (forced-colors: active) {
   .bookmark-modern__search-shell,
+  .bookmark-modern__keyboard-help,
+  .bookmark-modern__keyboard-key,
   .bookmark-modern__view-switch,
   .bookmark-modern__view-button,
   .bookmark-modern__notice,
