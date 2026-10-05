@@ -33,6 +33,7 @@ import { ExperienceRuntimeBridge } from './Components/Common/ExperienceRuntimeBr
 import { ExperienceStartupBoundary } from './Components/Common/ExperienceStartupBoundary';
 import { WorkspaceAccessibilityCenter } from './Components/Common/WorkspaceAccessibilityCenter';
 import { WorkspaceAccessibilityProvider } from './Components/Common/WorkspaceAccessibilityProvider';
+import { NotificationCenterModel } from './experience/notificationCenterModel';
 import { createStartupExperienceModel } from './experience/startupExperienceModel';
 import { configureArcgisModuleRuntime } from './gis-engine/arcgisModuleRuntime';
 import { bootstrapApplication } from './platform/bootstrap/bootstrapApplication';
@@ -59,6 +60,14 @@ const describeBootstrapError = (error: unknown): string => {
 function App() {
   const windowManager = useWindowManager();
   const [bootstrapGeneration, setBootstrapGeneration] = useState(0);
+  const notificationCenter = useMemo(() => new NotificationCenterModel({
+    capacity: 96,
+    onObserverError(error) {
+      runtimeDiagnostics.captureError(error, {
+        source: 'app.notification-center.observer',
+      }, 'warn');
+    },
+  }), []);
   const startupModel = useMemo(() => createStartupExperienceModel({
     delayedAfterMs: 7_000,
     maxAttempts: 4,
@@ -99,6 +108,16 @@ function App() {
           durationMs,
         });
         startupModel.succeed();
+        if (attempt > 1) {
+          notificationCenter.push({
+            id: `app-bootstrap-recovered-${attempt}`,
+            title: 'Harita çalışma alanı hazır',
+            message: 'Yeniden deneme başarılı oldu. Harita ve araçlar tekrar kullanılabilir.',
+            tone: 'success',
+            category: 'startup',
+            dismissible: true,
+          });
+        }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || isBootstrapAbortError(error)) return;
@@ -109,15 +128,33 @@ function App() {
           attempt,
           durationMs,
         });
+        const message = describeBootstrapError(error);
         startupModel.fail({
-          message: describeBootstrapError(error),
+          message,
           code: bootstrapErrorCode(error),
           retryable: true,
         });
+        try {
+          notificationCenter.push({
+            id: `app-bootstrap-failure-${attempt}`,
+            title: 'Harita çalışma alanı başlatılamadı',
+            message,
+            tone: 'error',
+            priority: 'urgent',
+            category: 'startup',
+            dismissible: true,
+            sticky: true,
+          });
+        } catch (notificationError) {
+          runtimeDiagnostics.captureError(notificationError, {
+            source: 'app.bootstrap.feedback',
+            attempt,
+          }, 'warn');
+        }
       });
 
     return () => controller.abort();
-  }, [bootstrapGeneration, startupModel]);
+  }, [bootstrapGeneration, notificationCenter, startupModel]);
 
   const retryBootstrap = useCallback((): void => {
     if (!startupModel.snapshot().canRetry) return;
@@ -144,9 +181,12 @@ function App() {
             <ExperienceMapModeGovernedOverlay />
             <ExperienceMapInteractionGuide />
             <ExperienceWorkspace />
-            <ExperienceUXLayer windowManager={windowManager} />
+            <ExperienceUXLayer
+              windowManager={windowManager}
+              notificationModel={notificationCenter}
+            />
             <ExperienceCommandCenter windowManager={windowManager} />
-            <ExperienceConnectivityNotice />
+            <ExperienceConnectivityNotice notificationModel={notificationCenter} />
             <ExperienceDataDisclaimer />
           </ExperienceStartupBoundary>
         </div>

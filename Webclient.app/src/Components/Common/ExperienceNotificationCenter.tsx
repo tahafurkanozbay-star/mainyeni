@@ -5,6 +5,7 @@ import {
   type NotificationCenterSnapshot,
   type NotificationItem,
 } from '../../experience/notificationCenterModel';
+import { ExperienceFeedbackCenter } from './ExperienceFeedbackCenter';
 import './experience-notification-center.css';
 
 export interface ExperienceNotificationCenterProps {
@@ -13,6 +14,17 @@ export interface ExperienceNotificationCenterProps {
   readonly maxVisibleToasts?: number;
   readonly label?: string;
   readonly onAction?: (notification: NotificationItem, action: NotificationAction) => void;
+}
+
+interface ExperienceNotificationToastsProps {
+  readonly model: NotificationCenterModel;
+  readonly maxVisibleToasts: number;
+  readonly label: string;
+  readonly onAction?: (notification: NotificationItem, action: NotificationAction) => void;
+}
+
+interface ExperienceNotificationLiveRegionsProps {
+  readonly snapshot: NotificationCenterSnapshot;
 }
 
 const toneLabel = (tone: NotificationItem['tone']): string => {
@@ -30,20 +42,30 @@ const normalizeVisible = (value: number | undefined): number => {
   return Math.max(1, Math.min(8, Math.floor(numeric)));
 };
 
-export const ExperienceNotificationCenter = ({
+const ExperienceNotificationLiveRegions = ({ snapshot }: ExperienceNotificationLiveRegionsProps): ReactNode => (
+  <>
+    <div className="experience-notifications__live" aria-live="polite" aria-atomic="true">
+      {snapshot.announcement?.politeness === 'polite' ? snapshot.announcement.text : ''}
+    </div>
+    <div className="experience-notifications__live" role="alert" aria-atomic="true">
+      {snapshot.announcement?.politeness === 'assertive' ? snapshot.announcement.text : ''}
+    </div>
+  </>
+);
+
+const ExperienceNotificationToasts = ({
   model,
-  mode = 'toasts',
-  maxVisibleToasts = 4,
-  label = 'Bildirimler',
+  maxVisibleToasts,
+  label,
   onAction,
-}: ExperienceNotificationCenterProps): ReactNode => {
+}: ExperienceNotificationToastsProps): ReactNode => {
   const [snapshot, setSnapshot] = useState<NotificationCenterSnapshot>(() => model.snapshot());
 
   useEffect(() => model.subscribe(setSnapshot), [model]);
 
-  const visibleItems = mode === 'toasts'
-    ? snapshot.items.filter((item) => !item.read).slice(0, normalizeVisible(maxVisibleToasts))
-    : snapshot.items;
+  const visibleItems = snapshot.items
+    .filter((item) => !item.read)
+    .slice(0, normalizeVisible(maxVisibleToasts));
 
   const activateAction = (notification: NotificationItem, action: NotificationAction): void => {
     model.markRead(notification.id);
@@ -52,61 +74,21 @@ export const ExperienceNotificationCenter = ({
 
   return (
     <aside
-      className={`experience-notifications experience-notifications--${mode}`}
+      className="experience-notifications experience-notifications--toasts"
       aria-label={label}
       data-unread-count={snapshot.unreadCount}
       data-urgent-count={snapshot.urgentUnreadCount}
     >
-      <div className="experience-notifications__live" aria-live="polite" aria-atomic="true">
-        {snapshot.announcement?.politeness === 'polite' ? snapshot.announcement.text : ''}
-      </div>
-      <div className="experience-notifications__live" role="alert" aria-atomic="true">
-        {snapshot.announcement?.politeness === 'assertive' ? snapshot.announcement.text : ''}
-      </div>
+      <ExperienceNotificationLiveRegions snapshot={snapshot} />
 
-      {mode === 'center' ? (
-        <header className="experience-notifications__header">
-          <div>
-            <h2 className="experience-notifications__heading">{label}</h2>
-            <p className="experience-notifications__summary">
-              {snapshot.unreadCount > 0 ? `${snapshot.unreadCount} okunmamış bildirim` : 'Tüm bildirimler okundu'}
-            </p>
-          </div>
-          <div className="experience-notifications__header-actions">
-            <button
-              type="button"
-              className="experience-notifications__secondary-action"
-              disabled={snapshot.unreadCount === 0}
-              onClick={() => model.markAllRead()}
-            >
-              Tümünü okundu işaretle
-            </button>
-            <button
-              type="button"
-              className="experience-notifications__secondary-action"
-              onClick={() => model.clearRead()}
-            >
-              Okunanları temizle
-            </button>
-          </div>
-        </header>
-      ) : null}
-
-      <div className="experience-notifications__list" role={mode === 'center' ? 'list' : undefined}>
-        {visibleItems.length === 0 ? (
-          mode === 'center' ? (
-            <div className="experience-notifications__empty" role="status">
-              <strong>Yeni bildirim yok</strong>
-              <span>İşlem ve harita durumları burada görünecek.</span>
-            </div>
-          ) : null
-        ) : visibleItems.map((item) => (
+      <div className="experience-notifications__list">
+        {visibleItems.map((item) => (
           <article
             key={item.id}
             className={`experience-notification experience-notification--${item.tone}`}
             data-priority={item.priority}
             data-read={String(item.read)}
-            role={mode === 'center' ? 'listitem' : item.tone === 'error' ? 'alert' : 'status'}
+            role={item.tone === 'error' ? 'alert' : 'status'}
             aria-labelledby={`experience-notification-title-${item.id}`}
           >
             <div className="experience-notification__tone" aria-hidden="true">
@@ -138,16 +120,6 @@ export const ExperienceNotificationCenter = ({
               ) : null}
             </div>
             <div className="experience-notification__controls">
-              {mode === 'center' ? (
-                <button
-                  type="button"
-                  className="experience-notification__icon-action"
-                  aria-label={item.read ? `${item.title}: okunmadı işaretle` : `${item.title}: okundu işaretle`}
-                  onClick={() => item.read ? model.markUnread(item.id) : model.markRead(item.id)}
-                >
-                  <span aria-hidden="true">{item.read ? '○' : '●'}</span>
-                </button>
-              ) : null}
               {item.dismissible ? (
                 <button
                   type="button"
@@ -163,6 +135,60 @@ export const ExperienceNotificationCenter = ({
         ))}
       </div>
     </aside>
+  );
+};
+
+const ExperienceNotificationCenterMode = ({
+  model,
+  label,
+  onAction,
+}: Pick<ExperienceNotificationCenterProps, 'model' | 'label' | 'onAction'> & { readonly label: string }): ReactNode => {
+  const [snapshot, setSnapshot] = useState<NotificationCenterSnapshot>(() => model.snapshot());
+
+  useEffect(() => model.subscribe(setSnapshot), [model]);
+
+  return (
+    <aside
+      className="experience-notifications experience-notifications--center"
+      aria-label={label}
+      data-unread-count={snapshot.unreadCount}
+      data-urgent-count={snapshot.urgentUnreadCount}
+    >
+      <ExperienceNotificationLiveRegions snapshot={snapshot} />
+      <ExperienceFeedbackCenter
+        model={model}
+        label={label}
+        callerId="experience-utility-notifications"
+        {...(onAction ? { onAction } : {})}
+      />
+    </aside>
+  );
+};
+
+export const ExperienceNotificationCenter = ({
+  model,
+  mode = 'toasts',
+  maxVisibleToasts = 4,
+  label = 'Bildirimler',
+  onAction,
+}: ExperienceNotificationCenterProps): ReactNode => {
+  if (mode === 'center') {
+    return (
+      <ExperienceNotificationCenterMode
+        model={model}
+        label={label}
+        {...(onAction ? { onAction } : {})}
+      />
+    );
+  }
+
+  return (
+    <ExperienceNotificationToasts
+      model={model}
+      maxVisibleToasts={maxVisibleToasts}
+      label={label}
+      {...(onAction ? { onAction } : {})}
+    />
   );
 };
 

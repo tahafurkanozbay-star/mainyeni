@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { ExperienceUXLayer, dispatchExperienceCommand } from './ExperienceUXLayer';
 
 const mocks = vi.hoisted(() => ({
@@ -43,6 +44,17 @@ const createWindowManager = () => ({
   UnregisterWindow: vi.fn(() => true),
 });
 
+const renderLayer = (manager = createWindowManager()) => {
+  const notificationModel = new NotificationCenterModel();
+  const result = render(
+    <ExperienceUXLayer
+      windowManager={manager}
+      notificationModel={notificationModel}
+    />,
+  );
+  return { ...result, manager, notificationModel };
+};
+
 describe('ExperienceUXLayer', () => {
   beforeEach(() => {
     mocks.layerOnShow.mockReset();
@@ -63,7 +75,7 @@ describe('ExperienceUXLayer', () => {
 
   test('renders the utility navigation with accessible labels', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     expect(screen.getByRole('complementary', {
       name: 'Kent Rehberi yardımcı araçları',
@@ -92,7 +104,7 @@ describe('ExperienceUXLayer', () => {
 
   test('routes search actions through the canonical window manager', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Genel aramayı aç',
@@ -105,7 +117,7 @@ describe('ExperienceUXLayer', () => {
 
   test('routes layer and legend actions to the managed layer surface', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Katman yönetimini aç',
@@ -120,7 +132,7 @@ describe('ExperienceUXLayer', () => {
 
   test('responds to externally dispatched Experience commands', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     dispatchExperienceCommand('search');
     dispatchExperienceCommand('layers');
@@ -135,7 +147,7 @@ describe('ExperienceUXLayer', () => {
 
   test('collapses and expands utility copy without removing controls', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     const collapse = screen.getByRole('button', {
       name: 'Yardımcı araçları daralt',
@@ -160,7 +172,7 @@ describe('ExperienceUXLayer', () => {
 
   test('opens help through the shared overlay stack and focuses the close control', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Kısayolları ve yardım bilgisini aç',
@@ -186,9 +198,14 @@ describe('ExperienceUXLayer', () => {
     expect(document.body.style.overflow).toBe('hidden');
   });
 
-  test('opens the notification center as an accessible drawer', () => {
+  test('opens the notification center as an accessible drawer using the canonical model', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    const { notificationModel } = renderLayer(manager);
+    notificationModel.push({
+      id: 'shared-notification',
+      title: 'Ortak bildirim',
+      message: 'Tek notification authority üzerinden geldi.',
+    });
 
     const opener = screen.getByRole('button', {
       name: 'Bildirim merkezini aç',
@@ -196,10 +213,11 @@ describe('ExperienceUXLayer', () => {
     opener.focus();
     fireEvent.click(opener);
 
-    expect(screen.getByRole('dialog', {
+    const dialog = screen.getByRole('dialog', {
       name: 'Bildirim merkezi',
-    })).toHaveAttribute('aria-modal', 'true');
-    expect(screen.getByText('Yeni bildirim yok')).toBeInTheDocument();
+    });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(within(dialog).getByRole('heading', { name: 'Ortak bildirim' })).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -211,7 +229,7 @@ describe('ExperienceUXLayer', () => {
 
   test('opens help with the question-mark shortcut outside editable fields', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.keyDown(document.body, {
       key: '?',
@@ -227,7 +245,7 @@ describe('ExperienceUXLayer', () => {
     document.body.appendChild(input);
 
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.keyDown(input, {
       key: '?',
@@ -243,7 +261,7 @@ describe('ExperienceUXLayer', () => {
     const listener = vi.fn();
     window.addEventListener('kentrehberi:command', listener);
 
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.keyDown(document.body, {
       key: 'k',
@@ -268,7 +286,7 @@ describe('ExperienceUXLayer', () => {
     const listener = vi.fn();
     window.addEventListener('kentrehberi:command', listener);
 
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
     fireEvent.keyDown(input, {
       key: 'k',
       metaKey: true,
@@ -280,7 +298,7 @@ describe('ExperienceUXLayer', () => {
 
   test('Escape closes help and restores focus to the invoking control', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     const opener = screen.getByRole('button', {
       name: 'Kısayolları ve yardım bilgisini aç',
@@ -308,7 +326,7 @@ describe('ExperienceUXLayer', () => {
 
   test('clicking the shared backdrop closes help without treating dialog clicks as backdrop clicks', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Kısayolları ve yardım bilgisini aç',
@@ -335,7 +353,7 @@ describe('ExperienceUXLayer', () => {
 
   test('help action can open layers and closes the modal first', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Kısayolları ve yardım bilgisini aç',
@@ -352,7 +370,7 @@ describe('ExperienceUXLayer', () => {
 
   test('theme control exposes the next action, delegates to the provider, and emits bounded feedback', () => {
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    const { notificationModel } = renderLayer(manager);
 
     const themeButton = screen.getByRole('button', {
       name: 'Koyu temaya geç',
@@ -367,13 +385,14 @@ describe('ExperienceUXLayer', () => {
     expect(window.localStorage.getItem(
       'kent-rehberi-experience-theme',
     )).toBe('light');
+    expect(notificationModel.snapshot().items.some((item) => item.title === 'Koyu tema seçildi')).toBe(true);
     expect(screen.getByText('Koyu tema seçildi')).toBeInTheDocument();
   });
 
   test('renders the dark-theme action label when dark theme is active', () => {
     mocks.themeState.theme = 'dark';
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     expect(screen.getByRole('button', {
       name: 'Açık temaya geç',
@@ -391,7 +410,7 @@ describe('ExperienceUXLayer', () => {
       });
 
     const manager = createWindowManager();
-    render(<ExperienceUXLayer windowManager={manager} />);
+    renderLayer(manager);
 
     expect(mocks.captureError).toHaveBeenCalledWith(
       expect.any(Error),
@@ -407,9 +426,7 @@ describe('ExperienceUXLayer', () => {
     const listener = vi.fn();
     window.addEventListener('kentrehberi:command', listener);
 
-    const { unmount } = render(
-      <ExperienceUXLayer windowManager={manager} />,
-    );
+    const { unmount } = renderLayer(manager);
 
     fireEvent.click(screen.getByRole('button', {
       name: 'Kısayolları ve yardım bilgisini aç',
