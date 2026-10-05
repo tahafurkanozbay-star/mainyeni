@@ -158,10 +158,9 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
     }, [destroyGallery, id, model, ref, windowManager]);
 
     useEffect(() => {
-      if (!windowManager.IsVisible(id) || galleryRef.current || snapshot.phase === 'loading') return;
-      if (snapshot.phase === 'error' && !snapshot.canReload) return;
+      if (!windowManager.IsVisible(id) || galleryRef.current || snapshot.phase !== 'idle') return;
       void initialize();
-    }, [id, initialize, snapshot.canReload, snapshot.phase, windowManager]);
+    }, [id, initialize, snapshot.phase, windowManager]);
 
     const status = snapshot.phase === 'ready'
       ? `${snapshot.readyCount} altlık harita kullanıma hazır`
