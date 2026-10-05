@@ -160,7 +160,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
       ?? snapshot.storageWarning
       ?? (snapshot.totalCount > 0 ? `${snapshot.totalCount} yer işareti kayıtlı` : null);
     const statusTone = interaction.lastNotice?.severity === 'error'
-      ? 'error'
+      ? 'danger'
       : interaction.lastNotice?.severity === 'warning' || snapshot.storageWarning
         ? 'warning'
         : 'info';
