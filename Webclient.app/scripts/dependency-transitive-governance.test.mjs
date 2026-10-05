@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { applyPeerExceptions, validatePeerExceptions } from './dependency-transitive-governance.mjs';
+
+const edge = Object.freeze({ from: 'node_modules/react-color', name: 'react', range: '*', optional: false, target: 'node_modules/react', targetVersion: '19.3.0' });
+const finding = Object.freeze({ code: 'peer-range', path: edge.from, detail: 'react uses unreviewable peer range *', severity: 'error' });
+const base = Object.freeze({
+  ok: false,
+  issues: Object.freeze([finding]),
+  inventory: Object.freeze({ peerEdges: Object.freeze([edge]), summary: Object.freeze({ reachable: 2, peerEdges: 1, installScripts: 0, deprecated: 0 }), fingerprint: 'fixture' }),
+});
+const exception = Object.freeze({
+  package: 'react-color',
+  peer: 'react',
+  range: '*',
+  owner: 'platform',
+  expiresOn: '2026-11-30',
+  reason: 'Legacy unused package is scheduled for deterministic removal from the lock graph.',
+});
+
+test('accepts a bounded, owned and unexpired exact peer exception', () => {
+  assert.deepEqual(validatePeerExceptions({ peerExceptions: [exception] }, '2026-10-05'), []);
+});
+
+test('rejects expired peer exceptions', () => {
+  const issues = validatePeerExceptions({ peerExceptions: [{ ...exception, expiresOn: '2026-10-04' }] }, '2026-10-05');
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /expired/);
+});
+
+test('rejects duplicate peer exceptions', () => {
+  const issues = validatePeerExceptions({ peerExceptions: [exception, exception] }, '2026-10-05');
+  assert.ok(issues.some((issue) => issue.includes('duplicate peer exception')));
+});
+
+test('rejects weak exception metadata', () => {
+  const issues = validatePeerExceptions({ peerExceptions: [{ package: 'react-color', peer: 'react', range: '*', owner: '', expiresOn: 'tomorrow', reason: 'short' }] }, '2026-10-05');
+  assert.ok(issues.some((issue) => issue.includes('owner')));
+  assert.ok(issues.some((issue) => issue.includes('reason')));
+  assert.ok(issues.some((issue) => issue.includes('YYYY-MM-DD')));
+});
+
+test('suppresses only the exact reviewed legacy peer finding', () => {
+  const result = applyPeerExceptions(base, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, true);
+  assert.equal(result.usedPeerExceptions, 1);
+  assert.equal(result.peerExceptionCount, 1);
+  assert.deepEqual(result.issues, []);
+});
+
+test('does not suppress a different peer range', () => {
+  const result = applyPeerExceptions(base, { peerExceptions: [{ ...exception, range: '^18.0.0' }] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => issue.code === 'peer-range'));
+  assert.ok(result.issues.some((issue) => issue.code === 'peer-exception-policy'));
+});
+
+test('does not suppress unrelated transitive findings', () => {
+  const other = Object.freeze({ code: 'install-script-budget', path: 'node_modules/native', detail: 'fixture', severity: 'error' });
+  const result = applyPeerExceptions({ ...base, issues: Object.freeze([finding, other]) }, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.equal(result.issues.some((issue) => issue.code === 'install-script-budget'), true);
+});
+
+test('fails closed when an exception becomes stale', () => {
+  const clean = Object.freeze({ ...base, ok: true, issues: Object.freeze([]) });
+  const result = applyPeerExceptions(clean, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => /unnecessary peer exception/.test(issue.detail)));
+});
+
+test('fails closed when an exception target disappears', () => {
+  const result = applyPeerExceptions({ ...base, inventory: { ...base.inventory, peerEdges: Object.freeze([]) } }, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((issue) => /stale peer exception/.test(issue.detail)));
+});
+
+test('keeps returned issue arrays immutable', () => {
+  const result = applyPeerExceptions(base, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(Object.isFrozen(result.issues), true);
+});
