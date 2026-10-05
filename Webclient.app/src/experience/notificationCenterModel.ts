@@ -53,8 +53,18 @@ export interface NotificationCenterSnapshot {
   readonly revision: number;
 }
 
+export interface NotificationObserverDiagnostics {
+  readonly activeObserverCount: number;
+  readonly rejectedObserverCount: number;
+  readonly observerFailureCount: number;
+  readonly reporterFailureCount: number;
+  readonly lastFailureRevision: number | null;
+  readonly lastFailureKind: string | null;
+}
+
 export interface NotificationCenterModelOptions {
   readonly capacity?: number;
+  readonly maxObservers?: number;
   readonly now?: () => number;
   readonly onObserverError?: (error: unknown) => void;
 }
@@ -63,6 +73,8 @@ type Observer = (snapshot: NotificationCenterSnapshot) => void;
 
 const DEFAULT_CAPACITY = 64;
 const MAX_CAPACITY = 200;
+const DEFAULT_MAX_OBSERVERS = 48;
+const MAX_OBSERVERS = 128;
 const MAX_ACTIONS = 4;
 const MAX_TEXT = 800;
 
@@ -84,6 +96,17 @@ const normalizeCapacity = (value: number | undefined): number => {
   return Math.max(1, Math.min(MAX_CAPACITY, Math.floor(value ?? DEFAULT_CAPACITY)));
 };
 
+const normalizeObserverLimit = (value: number | undefined): number => {
+  if (!Number.isFinite(value)) return DEFAULT_MAX_OBSERVERS;
+  return Math.max(1, Math.min(MAX_OBSERVERS, Math.floor(value ?? DEFAULT_MAX_OBSERVERS)));
+};
+
+const failureKind = (error: unknown): string => {
+  if (error instanceof Error) return (error.name || 'Error').slice(0, 48);
+  if (error === null) return 'null';
+  return typeof error;
+};
+
 const freezeItem = (item: NotificationItem): NotificationItem => Object.freeze({
   ...item,
   actions: Object.freeze([...item.actions]),
@@ -103,15 +126,25 @@ const announcementText = (item: NotificationItem): string => {
 
 export class NotificationCenterModel {
   readonly #capacity: number;
+  readonly #maxObservers: number;
   readonly #now: () => number;
   readonly #onObserverError: ((error: unknown) => void) | undefined;
   readonly #observers = new Set<Observer>();
   #items: NotificationItem[] = [];
   #revision = 0;
   #announcement: NotificationAnnouncement | null = null;
+  #observerDiagnostics: NotificationObserverDiagnostics = Object.freeze({
+    activeObserverCount: 0,
+    rejectedObserverCount: 0,
+    observerFailureCount: 0,
+    reporterFailureCount: 0,
+    lastFailureRevision: null,
+    lastFailureKind: null,
+  });
 
   constructor(options: NotificationCenterModelOptions = {}) {
     this.#capacity = normalizeCapacity(options.capacity);
+    this.#maxObservers = normalizeObserverLimit(options.maxObservers);
     this.#now = options.now ?? Date.now;
     this.#onObserverError = options.onObserverError;
   }
@@ -226,10 +259,29 @@ export class NotificationCenterModel {
     });
   }
 
+  observerDiagnostics(): NotificationObserverDiagnostics {
+    return this.#observerDiagnostics;
+  }
+
   subscribe(observer: Observer): () => void {
+    if (this.#observers.has(observer)) return () => this.#unsubscribe(observer);
+    if (this.#observers.size >= this.#maxObservers) {
+      this.#observerDiagnostics = Object.freeze({
+        ...this.#observerDiagnostics,
+        rejectedObserverCount: this.#observerDiagnostics.rejectedObserverCount + 1,
+      });
+      return () => undefined;
+    }
     this.#observers.add(observer);
+    this.#refreshObserverCount();
     this.#deliver(observer, this.snapshot());
-    return () => this.#observers.delete(observer);
+    return () => this.#unsubscribe(observer);
+  }
+
+  clearObservers(): void {
+    if (this.#observers.size === 0) return;
+    this.#observers.clear();
+    this.#refreshObserverCount();
   }
 
   #normalizeInput(input: NotificationInput, now: number): NotificationItem {
@@ -286,6 +338,36 @@ export class NotificationCenterModel {
     if (this.#items.length > this.#capacity) this.#items.length = this.#capacity;
   }
 
+  #unsubscribe(observer: Observer): void {
+    if (!this.#observers.delete(observer)) return;
+    this.#refreshObserverCount();
+  }
+
+  #refreshObserverCount(): void {
+    this.#observerDiagnostics = Object.freeze({
+      ...this.#observerDiagnostics,
+      activeObserverCount: this.#observers.size,
+    });
+  }
+
+  #recordObserverFailure(error: unknown): void {
+    this.#observerDiagnostics = Object.freeze({
+      ...this.#observerDiagnostics,
+      observerFailureCount: this.#observerDiagnostics.observerFailureCount + 1,
+      lastFailureRevision: this.#revision,
+      lastFailureKind: failureKind(error),
+    });
+  }
+
+  #recordReporterFailure(error: unknown): void {
+    this.#observerDiagnostics = Object.freeze({
+      ...this.#observerDiagnostics,
+      reporterFailureCount: this.#observerDiagnostics.reporterFailureCount + 1,
+      lastFailureRevision: this.#revision,
+      lastFailureKind: failureKind(error),
+    });
+  }
+
   #changed(): void {
     this.#revision += 1;
     const snapshot = this.snapshot();
@@ -296,12 +378,13 @@ export class NotificationCenterModel {
     try {
       observer(snapshot);
     } catch (error) {
+      this.#recordObserverFailure(error);
       const reporter = this.#onObserverError;
       if (!reporter) return;
       try {
         reporter(error);
       } catch (reporterError) {
-        void reporterError;
+        this.#recordReporterFailure(reporterError);
       }
     }
   }
