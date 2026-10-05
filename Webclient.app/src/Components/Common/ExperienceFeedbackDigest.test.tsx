@@ -66,20 +66,20 @@ describe('ExperienceFeedbackDigest', () => {
       item('read', { read: true }),
     ]));
     const group = screen.getByLabelText('Bildirim hızlı filtreleri');
-    expect(within(group).getByRole('button', { name: /2 Toplam/i })).toBeInTheDocument();
-    expect(within(group).getByRole('button', { name: /1 Okunmamış/i })).toBeInTheDocument();
-    expect(within(group).getByRole('button', { name: /1 Önemli/i })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: 'Toplam: 2' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: 'Okunmamış: 1' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: 'Önemli: 1' })).toBeInTheDocument();
   });
 
   it('marks the selected quick filter as pressed', () => {
     renderDigest(history([item('one')], 'unread'), 'unread');
-    expect(screen.getByRole('button', { name: /Okunmamış/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Toplam/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Okunmamış: 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Toplam: 1' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('selects unread through the quick filter without owning navigation state', () => {
     const { onSelectFilter } = renderDigest(history([item('one')]));
-    fireEvent.click(screen.getByRole('button', { name: /Okunmamış/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Okunmamış: 1' }));
     expect(onSelectFilter).toHaveBeenCalledTimes(1);
     expect(onSelectFilter).toHaveBeenCalledWith('unread');
   });
@@ -88,13 +88,13 @@ describe('ExperienceFeedbackDigest', () => {
     const { onSelectFilter } = renderDigest(history([
       item('one', { important: true, tone: 'warning' }),
     ]));
-    fireEvent.click(screen.getByRole('button', { name: /Önemli/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Önemli: 1' }));
     expect(onSelectFilter).toHaveBeenCalledWith('important');
   });
 
   it('selects all through the total quick filter', () => {
     const { onSelectFilter } = renderDigest(history([item('one')], 'unread'), 'unread');
-    fireEvent.click(screen.getByRole('button', { name: /Toplam/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toplam: 1' }));
     expect(onSelectFilter).toHaveBeenCalledWith('all');
   });
 
@@ -102,8 +102,8 @@ describe('ExperienceFeedbackDigest', () => {
     renderDigest(history([
       item('read', { read: true }),
     ]));
-    expect(screen.getByRole('button', { name: /Okunmamış/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Önemli/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Okunmamış: 0' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Önemli: 0' })).toBeDisabled();
   });
 
   it('renders a stable reviewed history', () => {
