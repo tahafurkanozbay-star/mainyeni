@@ -525,7 +525,8 @@ export const createGeneralSearchRenderWindowV10 = (
   const windowSize = Math.min(totalMatched, policy.renderWindowSize);
   const maximumStart = Math.max(0, totalMatched - windowSize);
   const activeIndex = clampInteger(activeIndexInput, 0, totalMatched - 1, 0);
-  const preferredStart = Number.isFinite(Number(preferredStartInput))
+  const hasPreferredStart = preferredStartInput !== null && preferredStartInput !== undefined;
+  const preferredStart = hasPreferredStart && Number.isFinite(Number(preferredStartInput))
     ? Math.min(maximumStart, Math.max(0, Math.trunc(Number(preferredStartInput))))
     : null;
 
