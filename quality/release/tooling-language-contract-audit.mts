@@ -164,7 +164,7 @@ function aggregateFinding(
     ...(blocking ? { blocking: true } : {}),
     title,
     message,
-    location: files[0] ? { file: files[0], line: 1 } : undefined,
+    ...(files[0] ? { location: { file: files[0], line: 1 } } : {}),
     evidence: {
       value: files.length,
       metadata: {
@@ -369,17 +369,17 @@ export function auditToolingLanguageContracts(
     ...manifestFindings(manifest),
   ]);
   return {
-    domain: 'architecture',
-    title: 'Node tooling TypeScript and ESM modernization contract',
+    name: 'tooling-language-contract',
+    durationMs: performance.now() - started,
     summary: {
       files,
       inspectedFiles: files.length,
       typedFiles: typedFiles.length,
-      legacyFiles: files.length - typedFiles.length,
-      typedRatio: files.length === 0 ? 1 : typedFiles.length / files.length,
+      legacyFiles: files.filter(item => LEGACY_EXTENSION.test(item.file)).length,
+      typedRatio: files.length > 0 ? typedFiles.length / files.length : 1,
       releaseAuthorityFiles: releaseAuthorities.length,
       typedReleaseAuthorityFiles: typedReleaseAuthorities.length,
-      typedReleaseAuthorityRatio: releaseAuthorities.length === 0 ? 1 : typedReleaseAuthorities.length / releaseAuthorities.length,
+      typedReleaseAuthorityRatio: releaseAuthorities.length > 0 ? typedReleaseAuthorities.length / releaseAuthorities.length : 1,
       commonJsFiles: files.filter(item => item.commonJs).map(item => item.file),
       suppressionFiles: files.filter(item => item.suppression).map(item => item.file),
       deprecatedNodeApiFiles: files.filter(item => item.deprecatedNodeApi).map(item => item.file),
@@ -388,6 +388,5 @@ export function auditToolingLanguageContracts(
       findings,
     },
     findings,
-    elapsedMs: Math.max(0, performance.now() - started),
   };
 }
