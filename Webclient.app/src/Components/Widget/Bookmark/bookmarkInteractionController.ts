@@ -10,7 +10,7 @@ import {
   type BookmarkRecord,
   type LatestOperationGate,
 } from '../_shared/MapWidgetRuntime';
-import type { BookmarkExperienceModel } from './bookmarkExperienceModel';
+import { bookmarkIdentity, type BookmarkExperienceModel } from './bookmarkExperienceModel';
 
 export interface BookmarkMapViewPort {
   readonly center?: unknown;
@@ -165,6 +165,8 @@ export const createBookmarkInteractionController = (
     return notice;
   };
 
+  const readCanonical = (): readonly BookmarkRecord[] => decodeBookmarks(options.storage.read()).bookmarks;
+
   const persist = (bookmarks: readonly BookmarkRecord[]): boolean => {
     try {
       options.storage.write(bookmarks);
@@ -223,7 +225,13 @@ export const createBookmarkInteractionController = (
       publish('error', null, notify('error', 'Harita konumu okunamadı.'));
       return false;
     }
-    const current = options.model.getSnapshot().entries.map((entry) => entry.bookmark);
+    let current: readonly BookmarkRecord[];
+    try {
+      current = readCanonical();
+    } catch (error) {
+      publish('error', null, notify('error', normalizeWidgetError(error, 'Yer işaretleri okunamadı.')));
+      return false;
+    }
     const next = appendBookmark(current, bookmark);
     if (next === current) {
       publish('error', null, notify('warning', 'Aynı adla bir yer işareti bulunuyor. Lütfen farklı bir isim giriniz.'));
@@ -237,20 +245,33 @@ export const createBookmarkInteractionController = (
 
   const remove = (key: string): boolean => {
     if (disposed) return false;
-    const snapshotModel = options.model.getSnapshot();
-    const index = snapshotModel.entries.findIndex((entry) => entry.key === key);
+    let current: readonly BookmarkRecord[];
+    try {
+      current = readCanonical();
+    } catch (error) {
+      publish('error', key, notify('error', normalizeWidgetError(error, 'Yer işaretleri okunamadı.')));
+      return false;
+    }
+    const index = current.findIndex((bookmark) => bookmarkIdentity(bookmark) === key);
     if (index < 0) return false;
-    const target = snapshotModel.entries[index];
-    const all = snapshotModel.entries.map((entry) => entry.bookmark);
+    const target = current[index];
     publish('deleting', key, null);
-    if (!persist(removeBookmarkAt(all, index))) return false;
-    publish('idle', null, notify('info', `${target.bookmark.Title} silindi.`));
+    if (!persist(removeBookmarkAt(current, index))) return false;
+    publish('idle', null, notify('info', `${target.Title} silindi.`));
     return true;
   };
 
   const navigate = async (key: string): Promise<boolean> => {
     if (disposed) return false;
-    const target = options.model.getSnapshot().entries.find((entry) => entry.key === key);
+    const target = options.model.getSnapshot().entries.find((entry) => entry.key === key)
+      ?? (() => {
+        try {
+          const bookmark = readCanonical().find((candidate) => bookmarkIdentity(candidate) === key);
+          return bookmark ? { key, bookmark } : undefined;
+        } catch {
+          return undefined;
+        }
+      })();
     if (!target) return false;
     const view = options.map.getView();
     if (!view?.goTo) {
