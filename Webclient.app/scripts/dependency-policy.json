@@ -78,5 +78,15 @@
       "expiresOn": "2026-11-30",
       "reason": "Legacy styling helper has no src import and is also a react-color transitive; prune after graph verification."
     }
+  ],
+  "peerExceptions": [
+    {
+      "package": "react-color",
+      "peer": "react",
+      "range": "*",
+      "owner": "platform",
+      "expiresOn": "2026-11-30",
+      "reason": "Legacy unused react-color publishes an unbounded React peer; remove the package instead of normalizing upstream metadata."
+    }
   ]
 }
