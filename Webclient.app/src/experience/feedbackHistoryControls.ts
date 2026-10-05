@@ -139,13 +139,13 @@ export const resolveFeedbackHistoryControlsIntent = (
   if (event.shiftKey) {
     if (event.key === 'ArrowRight' || event.key === 'ArrowDown') return { type: 'set-sort', sort: cycle(SORTS, current.sort, 1) };
     if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') return { type: 'set-sort', sort: cycle(SORTS, current.sort, -1) };
-    if (event.key === 'Home') return { type: 'set-sort', sort: SORTS[0] };
+    if (event.key === 'Home') return { type: 'set-sort', sort: SORTS[0] ?? current.sort };
     if (event.key === 'End') return { type: 'set-sort', sort: SORTS.at(-1) ?? current.sort };
     return null;
   }
   if (event.key === 'ArrowRight' || event.key === 'ArrowDown') return { type: 'set-filter', filter: cycle(FILTERS, current.filter, 1) };
   if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') return { type: 'set-filter', filter: cycle(FILTERS, current.filter, -1) };
-  if (event.key === 'Home') return { type: 'set-filter', filter: FILTERS[0] };
+  if (event.key === 'Home') return { type: 'set-filter', filter: FILTERS[0] ?? current.filter };
   if (event.key === 'End') return { type: 'set-filter', filter: FILTERS.at(-1) ?? current.filter };
   if (event.key.toLocaleLowerCase('tr-TR') === 'r') return { type: 'mark-all-read' };
   if (event.key === 'Delete') return { type: 'clear-read' };
