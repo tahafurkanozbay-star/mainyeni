@@ -2,6 +2,7 @@ import {
   FeedbackQueue,
   createFeedbackViewModel,
   type FeedbackInput,
+  type FeedbackQueueOptions,
   type FeedbackViewModel,
 } from './feedbackExperience';
 import {
@@ -51,8 +52,22 @@ export interface FeedbackCenterEnvironment {
   readonly keyboardModality?: boolean;
 }
 
+interface NormalizedFeedbackCenterEnvironment {
+  readonly viewport: FeedbackCenterViewport;
+  readonly coarsePointer: boolean;
+  readonly reducedMotion: boolean;
+  readonly forcedColors: boolean;
+  readonly keyboardModality: boolean;
+}
+
 export interface FeedbackCenterPublication extends FeedbackInput {
   readonly occurredAt?: number;
+}
+
+export interface FeedbackCenterObserverDiagnostics {
+  readonly observerFailureCount: number;
+  readonly reporterFailureCount: number;
+  readonly lastFailureKind: string | null;
 }
 
 export interface FeedbackCenterSnapshot {
@@ -69,6 +84,7 @@ export interface FeedbackCenterSnapshot {
   readonly triggerDescription: string;
   readonly lastEffect: FeedbackHistorySessionEffect;
   readonly lastAnnouncement: string;
+  readonly observerDiagnostics: FeedbackCenterObserverDiagnostics;
 }
 
 export interface FeedbackCenterRuntimeOptions {
@@ -80,7 +96,7 @@ export interface FeedbackCenterRuntimeOptions {
 
 type FeedbackCenterSubscriber = () => void;
 
-const DEFAULT_ENVIRONMENT: FeedbackCenterEnvironment = Object.freeze({
+const DEFAULT_ENVIRONMENT: NormalizedFeedbackCenterEnvironment = Object.freeze({
   viewport: 'desktop',
   coarsePointer: false,
   reducedMotion: false,
@@ -93,7 +109,7 @@ const normalizedViewport = (value: FeedbackCenterViewport): FeedbackCenterViewpo
 
 const normalizeEnvironment = (
   environment: FeedbackCenterEnvironment = DEFAULT_ENVIRONMENT,
-): FeedbackCenterEnvironment => Object.freeze({
+): NormalizedFeedbackCenterEnvironment => Object.freeze({
   viewport: normalizedViewport(environment.viewport),
   coarsePointer: Boolean(environment.coarsePointer),
   reducedMotion: Boolean(environment.reducedMotion),
@@ -111,6 +127,12 @@ const nextRevision = (revision: number): number =>
     ? Math.min(Number.MAX_SAFE_INTEGER, revision + 1)
     : 1;
 
+const classifyFailure = (error: unknown): string => {
+  if (error instanceof Error) return error.name || 'Error';
+  if (error === null) return 'null';
+  return typeof error;
+};
+
 const triggerLabel = (unreadCount: number): string =>
   unreadCount > 0 ? `Bildirimler, ${unreadCount} okunmamış` : 'Bildirimler';
 
@@ -126,7 +148,7 @@ const triggerDescription = (
 };
 
 const preferenceContext = (
-  environment: FeedbackCenterEnvironment,
+  environment: NormalizedFeedbackCenterEnvironment,
   now: number,
 ): FeedbackHistoryPreferenceContext => Object.freeze({
   now,
@@ -134,6 +156,13 @@ const preferenceContext = (
   reducedMotion: environment.reducedMotion,
   forcedColors: environment.forcedColors,
 });
+
+const queueOptions = (options: FeedbackCenterRuntimeOptions): FeedbackQueueOptions => {
+  const normalized: FeedbackQueueOptions = {};
+  if (options.maxVisible !== undefined) normalized.maxVisible = options.maxVisible;
+  if (options.maxQueued !== undefined) normalized.maxQueued = options.maxQueued;
+  return normalized;
+};
 
 const viewportForAccessibility = (viewport: FeedbackCenterViewport): FeedbackViewport => viewport;
 const viewportForHistory = (viewport: FeedbackCenterViewport): FeedbackHistoryViewport => viewport;
@@ -144,24 +173,45 @@ export class FeedbackCenterRuntime {
   readonly #clock: () => number;
   readonly #onObserverError: ((error: unknown) => void) | null;
   readonly #subscribers = new Set<FeedbackCenterSubscriber>();
-  #environment: FeedbackCenterEnvironment = DEFAULT_ENVIRONMENT;
+  #environment: NormalizedFeedbackCenterEnvironment = DEFAULT_ENVIRONMENT;
   #history: FeedbackHistorySessionState;
   #preferences: FeedbackHistoryPreferenceEnvelope;
   #revision = 0;
   #lastEffect: FeedbackHistorySessionEffect = Object.freeze({ type: 'none' });
+  #observerFailureCount = 0;
+  #reporterFailureCount = 0;
+  #lastFailureKind: string | null = null;
   #snapshot: FeedbackCenterSnapshot;
 
   constructor(options: FeedbackCenterRuntimeOptions = {}) {
     this.#clock = typeof options.now === 'function' ? options.now : () => Date.now();
     this.#onObserverError = typeof options.onObserverError === 'function' ? options.onObserverError : null;
-    this.#queue = new FeedbackQueue({
-      maxVisible: options.maxVisible,
-      maxQueued: options.maxQueued,
-    });
+    this.#queue = new FeedbackQueue(queueOptions(options));
     const now = safeNow(this.#clock);
     this.#history = createFeedbackHistorySessionState(now);
     this.#preferences = createDefaultFeedbackHistoryPreferenceEnvelope(now);
     this.#snapshot = this.#buildSnapshot(now);
+  }
+
+  #observerDiagnostics(): FeedbackCenterObserverDiagnostics {
+    return Object.freeze({
+      observerFailureCount: this.#observerFailureCount,
+      reporterFailureCount: this.#reporterFailureCount,
+      lastFailureKind: this.#lastFailureKind,
+    });
+  }
+
+  #recordObserverFailure(error: unknown): void {
+    this.#observerFailureCount += 1;
+    this.#lastFailureKind = classifyFailure(error);
+    const reporter = this.#onObserverError;
+    if (!reporter) return;
+    try {
+      reporter(error);
+    } catch (reporterError) {
+      this.#reporterFailureCount += 1;
+      this.#lastFailureKind = `reporter:${classifyFailure(reporterError)}`;
+    }
   }
 
   #buildSnapshot(now = safeNow(this.#clock)): FeedbackCenterSnapshot {
@@ -219,6 +269,7 @@ export class FeedbackCenterRuntime {
       ),
       lastEffect: this.#lastEffect,
       lastAnnouncement: this.#history.lastAnnouncement,
+      observerDiagnostics: this.#observerDiagnostics(),
     });
   }
 
@@ -230,12 +281,11 @@ export class FeedbackCenterRuntime {
       try {
         subscriber();
       } catch (error) {
-        try {
-          this.#onObserverError?.(error);
-        } catch {
-          // Observer reporting must never break the feedback surface.
-        }
+        this.#recordObserverFailure(error);
       }
+    }
+    if (this.#observerFailureCount > this.#snapshot.observerDiagnostics.observerFailureCount) {
+      this.#snapshot = this.#buildSnapshot();
     }
   }
 
