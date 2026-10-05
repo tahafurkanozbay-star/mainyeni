@@ -22,7 +22,6 @@ import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConn
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
 import { FastAccessResultAccessibilityBridge } from './Components/Common/FastAccessResultAccessibilityBridge';
 import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
-import { ExperienceNotificationCenter } from './Components/Common/ExperienceNotificationCenter';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
 import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
@@ -182,18 +181,16 @@ function App() {
             <ExperienceMapModeGovernedOverlay />
             <ExperienceMapInteractionGuide />
             <ExperienceWorkspace />
-            <ExperienceUXLayer windowManager={windowManager} />
+            <ExperienceUXLayer
+              windowManager={windowManager}
+              notificationModel={notificationCenter}
+            />
             <ExperienceCommandCenter windowManager={windowManager} />
             <ExperienceConnectivityNotice notificationModel={notificationCenter} />
             <ExperienceDataDisclaimer />
           </ExperienceStartupBoundary>
         </div>
         <WorkspaceAccessibilityCenter />
-        <ExperienceNotificationCenter
-          model={notificationCenter}
-          mode="drawer"
-          label="Bildirimler"
-        />
       </WorkspaceAccessibilityProvider>
     </ExperienceThemeProvider>
   );
