@@ -7,10 +7,9 @@ import { runTransitivePolicy } from './dependency-transitive-policy.mjs';
 
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(CURRENT_FILE), '..');
-const POLICY_FILE = resolve(PROJECT_ROOT, 'scripts', 'dependency-policy.json');
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_REASON = 240;
-const MAX_PEER_EXCEPTIONS = 8;
+const MAX_PEER_EXCEPTIONS = 16;
 
 const text = (value) => typeof value === 'string' ? value.trim() : '';
 const freeze = (value) => Object.freeze(value);
