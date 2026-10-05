@@ -173,10 +173,12 @@ test('rejects non-canonical observation timestamp', () => {
   assert.ok(codes(evaluateReleasePrLifecycle(input)).has('observed-at-invalid'));
 });
 
-test('result and findings are immutable', () => {
-  const result = evaluateReleasePrLifecycle(valid());
+test('result, findings, finding entries, and summary are immutable', () => {
+  const input = valid(); input.state = 'closed';
+  const result = evaluateReleasePrLifecycle(input);
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.findings), true);
-  assert.equal(Object.isFrozen(result.findings[0] ?? {}), true);
+  assert.ok(result.findings.length > 0);
+  assert.equal(Object.isFrozen(result.findings[0]), true);
   assert.equal(Object.isFrozen(result.summary), true);
 });
