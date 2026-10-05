@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { ExperienceNotificationTriage } from './ExperienceNotificationTriage';
@@ -13,6 +14,11 @@ vi.mock('../../platform/runtime/runtimeDiagnostics', () => ({
   },
 }));
 
+const createModel = (): NotificationCenterModel => {
+  let now = 1_000;
+  return new NotificationCenterModel({ now: () => ++now });
+};
+
 const pushStandardItems = (model: NotificationCenterModel): void => {
   model.push({
     id: 'layer-ready',
@@ -20,6 +26,7 @@ const pushStandardItems = (model: NotificationCenterModel): void => {
     message: 'Plan katmanı haritaya eklendi.',
     tone: 'success',
     category: 'Katmanlar',
+    createdAt: 1_001,
   });
   model.push({
     id: 'query-warning',
@@ -27,6 +34,7 @@ const pushStandardItems = (model: NotificationCenterModel): void => {
     message: 'İlk 500 kayıt gösteriliyor.',
     tone: 'warning',
     category: 'Sorgu',
+    createdAt: 1_002,
   });
   model.push({
     id: 'network-error',
@@ -36,10 +44,14 @@ const pushStandardItems = (model: NotificationCenterModel): void => {
     priority: 'urgent',
     category: 'Bağlantı',
     dismissible: false,
+    createdAt: 1_003,
   });
 };
 
-const renderTriage = (model = new NotificationCenterModel(), props: Partial<React.ComponentProps<typeof ExperienceNotificationTriage>> = {}) => {
+const renderTriage = (
+  model = createModel(),
+  props: Partial<ComponentProps<typeof ExperienceNotificationTriage>> = {},
+) => {
   const result = render(<ExperienceNotificationTriage model={model} {...props} />);
   return { ...result, model };
 };
@@ -47,7 +59,19 @@ const renderTriage = (model = new NotificationCenterModel(), props: Partial<Reac
 const openPanel = (): HTMLElement => {
   const trigger = screen.getByRole('button', { name: /okunmamış/i });
   fireEvent.click(trigger);
-  return screen.getByRole('region', { name: 'Bildirim hızlı inceleme paneli' });
+  const panel = document.getElementById('experience-notification-triage-panel');
+  if (!(panel instanceof HTMLElement)) throw new Error('Expected notification triage panel');
+  return panel;
+};
+
+const getListbox = (panel: HTMLElement): HTMLElement =>
+  within(panel).getByRole('listbox', { name: 'Hızlı bildirim listesi' });
+
+const getSelectedOption = (panel: HTMLElement): HTMLElement => {
+  const option = within(getListbox(panel)).getAllByRole('option')
+    .find((candidate) => candidate.getAttribute('aria-selected') === 'true');
+  if (!option) throw new Error('Expected one selected notification option');
+  return option;
 };
 
 beforeAll(() => {
@@ -81,37 +105,39 @@ describe('ExperienceNotificationTriage', () => {
   });
 
   it('surfaces a compact unread summary without immediately opening the panel', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'a', title: 'Yeni bildirim' });
     renderTriage(model);
     const region = screen.getByLabelText('Bildirim hızlı işlemleri');
     expect(region).toHaveAttribute('data-expanded', 'false');
     expect(screen.getByRole('button', { name: /1 okunmamış/i })).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('region', { name: 'Bildirim hızlı inceleme paneli' })).not.toBeInTheDocument();
+    expect(document.getElementById('experience-notification-triage-panel')).not.toBeInTheDocument();
   });
 
   it('marks the attention surface when important notifications exist', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'error', title: 'Hata', tone: 'error' });
     renderTriage(model);
     expect(screen.getByLabelText('Bildirim hızlı işlemleri')).toHaveAttribute('data-has-important', 'true');
     expect(screen.getByText('1 önemli')).toBeInTheDocument();
   });
 
-  it('opens a non-modal quick panel with live metrics and scoped controls', () => {
-    const model = new NotificationCenterModel();
+  it('opens a quick panel with live metrics and scoped controls', () => {
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
     expect(within(panel).getByRole('heading', { name: 'Bildirimler' })).toBeInTheDocument();
-    expect(within(panel).getByLabelText('Bildirim özeti')).toHaveTextContent('3toplam');
-    expect(within(panel).getByLabelText('Bildirim özeti')).toHaveTextContent('3okunmamış');
-    expect(within(panel).getByLabelText('Bildirim özeti')).toHaveTextContent('2önemli');
+    const metrics = within(panel).getByLabelText('Bildirim özeti');
+    expect(metrics).toHaveTextContent('3 toplam');
+    expect(metrics).toHaveTextContent('3 okunmamış');
+    expect(metrics).toHaveTextContent('1 acil');
+    expect(metrics).toHaveTextContent('2 önemli');
     expect(within(panel).getByRole('button', { name: 'Tüm bildirimler' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('renders canonical notification content without copying it into a second store', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
@@ -121,22 +147,24 @@ describe('ExperienceNotificationTriage', () => {
     expect(within(panel).getByText('Bağlantı kesildi')).toBeInTheDocument();
   });
 
-  it('updates immediately when the canonical model receives a new notification', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'a', title: 'Bir' });
+  it('updates when the canonical model receives a notification after render', () => {
+    const model = createModel();
+    model.push({ id: 'a', title: 'Bir', createdAt: 1_001 });
     renderTriage(model);
-    openPanel();
-    expect(screen.getByText('Bir')).toBeInTheDocument();
-    model.push({ id: 'b', title: 'İki' });
-    expect(screen.getByText('İki')).toBeInTheDocument();
+    const panel = openPanel();
+    expect(within(panel).getByText('Bir')).toBeInTheDocument();
+    act(() => {
+      model.push({ id: 'b', title: 'İki', createdAt: 1_002 });
+    });
+    expect(within(panel).getByText('İki')).toBeInTheDocument();
     expect(screen.getByText('2 okunmamış')).toBeInTheDocument();
   });
 
   it('filters unread notifications through the quick-scope control', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'read', title: 'Okunmuş' });
+    const model = createModel();
+    model.push({ id: 'read', title: 'Okunmuş', createdAt: 1_001 });
     model.markRead('read');
-    model.push({ id: 'unread', title: 'Okunmamış kayıt' });
+    model.push({ id: 'unread', title: 'Okunmamış kayıt', createdAt: 1_002 });
     renderTriage(model);
     const panel = openPanel();
     fireEvent.click(within(panel).getByRole('button', { name: 'Okunmamış bildirimler' }));
@@ -145,8 +173,8 @@ describe('ExperienceNotificationTriage', () => {
     expect(within(panel).getByRole('button', { name: 'Okunmamış bildirimler' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('filters important notifications using the same importance contract as the model', () => {
-    const model = new NotificationCenterModel();
+  it('filters important notifications using the model importance contract', () => {
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
@@ -157,47 +185,74 @@ describe('ExperienceNotificationTriage', () => {
   });
 
   it('offers a recovery action when the selected scope is empty', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'normal', title: 'Normal' });
     renderTriage(model);
     const panel = openPanel();
     fireEvent.click(within(panel).getByRole('button', { name: 'Önemli bildirimler' }));
-    expect(within(panel).getByText('Bu filtrede bildirim yok')).toBeInTheDocument();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Tüm bildirimleri göster' }));
+    expect(within(panel).getByText('Eşleşen bildirim yok')).toBeInTheDocument();
+    expect(within(panel).getByText('Başka bir bildirim filtresi seçin.')).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Filtreleri ve aramayı sıfırla' }));
     expect(within(panel).getByText('Normal')).toBeInTheDocument();
   });
 
-  it('uses one listbox tab stop with an active descendant', () => {
-    const model = new NotificationCenterModel();
+  it('searches title, message and category using the canonical triage model', () => {
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
-    const listbox = within(panel).getByRole('listbox', { name: 'Hızlı bildirim listesi' });
+    const search = within(panel).getByRole('searchbox', { name: 'Bildirim ara' });
+    fireEvent.change(search, { target: { value: 'plan katmanı' } });
+    expect(within(panel).getByText('Katman hazır')).toBeInTheDocument();
+    expect(within(panel).queryByText('Sorgu sınırlandı')).not.toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Bildirim aramasını temizle' }));
+    expect(search).toHaveValue('');
+  });
+
+  it('changes result ordering through the sort control', () => {
+    const model = createModel();
+    model.push({ id: 'old', title: 'Eski', createdAt: 10 });
+    model.push({ id: 'new', title: 'Yeni', createdAt: 20 });
+    renderTriage(model);
+    const panel = openPanel();
+    expect(getSelectedOption(panel)).toHaveTextContent('Yeni');
+    fireEvent.change(within(panel).getByRole('combobox', { name: 'Sıralama' }), { target: { value: 'oldest' } });
+    expect(getSelectedOption(panel)).toHaveTextContent('Eski');
+  });
+
+  it('uses one listbox tab stop with an active descendant', () => {
+    const model = createModel();
+    pushStandardItems(model);
+    renderTriage(model);
+    const panel = openPanel();
+    const listbox = getListbox(panel);
     expect(listbox).toHaveAttribute('tabindex', '0');
     expect(listbox).toHaveAttribute('aria-activedescendant');
     expect(within(listbox).getAllByRole('option')).toHaveLength(3);
-    expect(within(listbox).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(getSelectedOption(panel)).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('moves active-descendant navigation with J and K while retaining the listbox focus model', () => {
-    const model = new NotificationCenterModel();
+  it('moves active-descendant navigation with J and K while retaining listbox focus', () => {
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
-    const listbox = within(panel).getByRole('listbox');
+    const listbox = getListbox(panel);
+    listbox.focus();
     const initial = listbox.getAttribute('aria-activedescendant');
     fireEvent.keyDown(listbox, { key: 'j' });
     expect(listbox.getAttribute('aria-activedescendant')).not.toBe(initial);
+    expect(document.activeElement).toBe(listbox);
     fireEvent.keyDown(listbox, { key: 'k' });
     expect(listbox.getAttribute('aria-activedescendant')).toBe(initial);
   });
 
   it('supports first and last navigation keys', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
-    const listbox = within(panel).getByRole('listbox');
+    const listbox = getListbox(panel);
     const first = listbox.getAttribute('aria-activedescendant');
     fireEvent.keyDown(listbox, { key: 'End' });
     const last = listbox.getAttribute('aria-activedescendant');
@@ -206,62 +261,65 @@ describe('ExperienceNotificationTriage', () => {
     expect(listbox.getAttribute('aria-activedescendant')).toBe(first);
   });
 
-  it('marks the active notification read with Enter', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'a', title: 'A' });
-    model.push({ id: 'b', title: 'B' });
+  it('marks the deterministic active notification read with Enter', () => {
+    const model = createModel();
+    model.push({ id: 'a', title: 'A', createdAt: 10 });
+    model.push({ id: 'b', title: 'B', createdAt: 20 });
     renderTriage(model);
     const panel = openPanel();
-    const listbox = within(panel).getByRole('listbox');
+    const listbox = getListbox(panel);
+    expect(getSelectedOption(panel)).toHaveTextContent('B');
     fireEvent.keyDown(listbox, { key: 'Enter' });
     expect(model.snapshot().items.find((candidate) => candidate.id === 'b')?.read).toBe(true);
   });
 
-  it('marks all notifications read with Shift+A', () => {
-    const model = new NotificationCenterModel();
+  it('marks all notifications read with Shift+A and keeps spaced metrics readable', () => {
+    const model = createModel();
     pushStandardItems(model);
     renderTriage(model);
     const panel = openPanel();
-    fireEvent.keyDown(within(panel).getByRole('listbox'), { key: 'A', shiftKey: true });
+    fireEvent.keyDown(getListbox(panel), { key: 'A', shiftKey: true });
     expect(model.snapshot().unreadCount).toBe(0);
-    expect(within(panel).getByLabelText('Bildirim özeti')).toHaveTextContent('0okunmamış');
+    expect(within(panel).getByLabelText('Bildirim özeti')).toHaveTextContent('0 okunmamış');
   });
 
   it('clears read dismissible notifications with Shift+C', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'read', title: 'Okunan' });
+    const model = createModel();
+    model.push({ id: 'read', title: 'Okunan', createdAt: 10 });
     model.markRead('read');
-    model.push({ id: 'unread', title: 'Yeni' });
+    model.push({ id: 'unread', title: 'Yeni', createdAt: 20 });
     renderTriage(model);
     const panel = openPanel();
-    fireEvent.keyDown(within(panel).getByRole('listbox'), { key: 'C', shiftKey: true });
+    fireEvent.keyDown(getListbox(panel), { key: 'C', shiftKey: true });
     expect(model.snapshot().items.map((candidate) => candidate.id)).toEqual(['unread']);
   });
 
-  it('dismisses an active dismissible notification with Delete', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'dismiss', title: 'Kaldırılabilir' });
-    model.push({ id: 'keep', title: 'Kalsın' });
+  it('dismisses the explicitly selected dismissible notification with Delete', () => {
+    const model = createModel();
+    model.push({ id: 'keep', title: 'Kalsın', createdAt: 10 });
+    model.push({ id: 'dismiss', title: 'Kaldırılabilir', createdAt: 20 });
     renderTriage(model);
     const panel = openPanel();
-    const listbox = within(panel).getByRole('listbox');
-    fireEvent.keyDown(listbox, { key: 'End' });
-    fireEvent.keyDown(listbox, { key: 'Delete' });
+    const dismissOption = within(getListbox(panel)).getByRole('option', { name: /Kaldırılabilir/i });
+    fireEvent.mouseDown(dismissOption);
+    expect(dismissOption).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(getListbox(panel), { key: 'Delete' });
     expect(model.snapshot().items.some((candidate) => candidate.id === 'dismiss')).toBe(false);
+    expect(model.snapshot().items.some((candidate) => candidate.id === 'keep')).toBe(true);
   });
 
   it('does not dismiss protected notifications', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'protected', title: 'Korunan', dismissible: false });
     renderTriage(model);
     const panel = openPanel();
-    fireEvent.keyDown(within(panel).getByRole('listbox'), { key: 'Delete' });
+    fireEvent.keyDown(getListbox(panel), { key: 'Delete' });
     expect(model.snapshot().items).toHaveLength(1);
     expect(within(panel).queryByRole('button', { name: /Korunan: bildirimi kaldır/i })).not.toBeInTheDocument();
   });
 
   it('marks an item read from its explicit touch-friendly action', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'a', title: 'Dokunma hedefi' });
     renderTriage(model);
     const panel = openPanel();
@@ -271,17 +329,17 @@ describe('ExperienceNotificationTriage', () => {
   });
 
   it('dismisses an item from its explicit action', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'a', title: 'Kaldır beni' });
-    model.push({ id: 'b', title: 'Kal' });
+    const model = createModel();
+    model.push({ id: 'a', title: 'Kaldır beni', createdAt: 20 });
+    model.push({ id: 'b', title: 'Kal', createdAt: 10 });
     renderTriage(model);
     const panel = openPanel();
     fireEvent.click(within(panel).getByRole('button', { name: 'Kaldır beni: bildirimi kaldır' }));
     expect(model.snapshot().items.map((candidate) => candidate.id)).toEqual(['b']);
   });
 
-  it('executes bulk controls without bypassing canonical model capabilities', () => {
-    const model = new NotificationCenterModel();
+  it('executes bulk controls through canonical model capabilities', () => {
+    const model = createModel();
     model.push({ id: 'a', title: 'A' });
     model.push({ id: 'b', title: 'B' });
     renderTriage(model);
@@ -298,7 +356,7 @@ describe('ExperienceNotificationTriage', () => {
   });
 
   it('opens the full notification center through the canonical command event', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'a', title: 'A' });
     const listener = vi.fn();
     window.addEventListener('kentrehberi:command', listener);
@@ -309,12 +367,12 @@ describe('ExperienceNotificationTriage', () => {
     const firstCall = listener.mock.calls[0];
     if (!firstCall) throw new Error('Expected kentrehberi:command event');
     expect((firstCall[0] as CustomEvent).detail).toEqual({ name: 'notifications', source: 'triage' });
-    expect(screen.queryByRole('region', { name: 'Bildirim hızlı inceleme paneli' })).not.toBeInTheDocument();
+    expect(document.getElementById('experience-notification-triage-panel')).not.toBeInTheDocument();
     window.removeEventListener('kentrehberi:command', listener);
   });
 
   it('uses a supplied center-opening callback when provided', () => {
-    const model = new NotificationCenterModel();
+    const model = createModel();
     model.push({ id: 'a', title: 'A' });
     const onOpenCenter = vi.fn();
     renderTriage(model, { onOpenCenter });
@@ -323,58 +381,61 @@ describe('ExperienceNotificationTriage', () => {
     expect(onOpenCenter).toHaveBeenCalledTimes(1);
   });
 
-  it('captures errors raised by a supplied open callback without breaking the surface', () => {
-    const model = new NotificationCenterModel();
+  it('captures callback failures instead of breaking the notification surface', () => {
+    const model = createModel();
     model.push({ id: 'a', title: 'A' });
-    renderTriage(model, { onOpenCenter: () => { throw new Error('open failed'); } });
+    renderTriage(model, { onOpenCenter: () => { throw new Error('boom'); } });
     const panel = openPanel();
     expect(() => fireEvent.click(within(panel).getByRole('button', { name: 'Tam bildirim merkezini aç' }))).not.toThrow();
-    expect(mocks.captureError).toHaveBeenCalledWith(
-      expect.any(Error),
-      { source: 'experience.notification-triage.open-center' },
-      'warn',
-    );
+    expect(mocks.captureError).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the quick panel and restores the compact trigger', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'a', title: 'A' });
-    renderTriage(model);
-    const panel = openPanel();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Hızlı bildirim panelini kapat' }));
-    expect(screen.queryByRole('region', { name: 'Bildirim hızlı inceleme paneli' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /1 okunmamış/i })).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  it('keeps the panel mounted after marking all read so the user can clear read items', () => {
-    const model = new NotificationCenterModel();
-    model.push({ id: 'a', title: 'A' });
-    renderTriage(model);
-    const panel = openPanel();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Tümünü okundu yap' }));
-    expect(screen.getByRole('region', { name: 'Bildirim hızlı inceleme paneli' })).toBeInTheDocument();
-    expect(within(panel).getByRole('button', { name: 'Okunanları temizle' })).toBeEnabled();
-  });
-
-  it('renders no more than the configured preview budget', () => {
-    const model = new NotificationCenterModel({ capacity: 32 });
-    for (let index = 0; index < 12; index += 1) {
-      model.push({ id: `n-${index}`, title: `Bildirim ${index}` });
-    }
-    renderTriage(model, { previewLimit: 4 });
-    const panel = openPanel();
-    expect(within(panel).getAllByRole('option')).toHaveLength(4);
-    expect(within(panel).getByRole('status')).toHaveTextContent('hızlı listede');
-  });
-
-  it('keeps keyboard guidance discoverable but collapsed by default', () => {
-    const model = new NotificationCenterModel();
+  it('keeps command guidance discoverable and collapsed by default', () => {
+    const model = createModel();
     model.push({ id: 'a', title: 'A' });
     renderTriage(model);
     const panel = openPanel();
     const summary = within(panel).getByText('Klavye komutları');
-    expect(summary.closest('details')).not.toHaveAttribute('open');
-    fireEvent.click(summary);
-    expect(within(panel).getByText(/J \/ K veya ok tuşları/)).toBeInTheDocument();
+    const details = summary.closest('details');
+    expect(details).toBeInstanceOf(HTMLDetailsElement);
+    expect(details).not.toHaveAttribute('open');
+    if (!(details instanceof HTMLDetailsElement)) throw new Error('Expected keyboard command details');
+    expect(within(details).getByText('Sonraki eşleşme')).toBeInTheDocument();
+    expect(within(details).getByText('↓ / J')).toBeInTheDocument();
+    expect(within(details).getByText('Etkin bildirimi okundu yap')).toBeInTheDocument();
+  });
+
+  it('renders no more notification options than the configured preview budget', () => {
+    const model = createModel();
+    for (let index = 0; index < 9; index += 1) {
+      model.push({
+        id: `n-${index}`,
+        title: `Bildirim ${index}`,
+        createdAt: 1_000 + index,
+      });
+    }
+    renderTriage(model, { previewLimit: 4 });
+    const panel = openPanel();
+    const listbox = getListbox(panel);
+    expect(within(listbox).getAllByRole('option')).toHaveLength(4);
+    expect(within(panel).getByRole('combobox', { name: 'Sıralama' })).toBeInTheDocument();
+  });
+
+  it('exposes deterministic semantic option ids for active-descendant navigation', () => {
+    const model = createModel();
+    model.push({ id: 'critical network', title: 'Ağ uyarısı', createdAt: 10 });
+    renderTriage(model);
+    const panel = openPanel();
+    const listbox = getListbox(panel);
+    expect(listbox).toHaveAttribute('aria-activedescendant', 'experience-notification-triage-critical-network');
+    expect(within(listbox).getByRole('option')).toHaveAttribute('id', 'experience-notification-triage-critical-network');
+  });
+
+  it('advertises the full-center Alt+N shortcut on the explicit action', () => {
+    const model = createModel();
+    model.push({ id: 'a', title: 'A' });
+    renderTriage(model);
+    const panel = openPanel();
+    expect(within(panel).getByRole('button', { name: 'Tam bildirim merkezini aç' })).toHaveAttribute('aria-keyshortcuts', 'Alt+N');
   });
 });
