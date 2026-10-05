@@ -155,12 +155,17 @@ describe('RuntimeBackpressureGovernor', () => {
     expect(() => governor.enqueue('x'.repeat(129), 1)).toThrow()
   })
 
-  it('disposes terminally and idempotently', () => {
+  it('disposes terminally and idempotently while keeping a passive terminal snapshot', () => {
     const governor = new RuntimeBackpressureGovernor(policy)
     governor.acquire({ scope: 'a', lane: 'interactive', now: 1 })
+    governor.enqueue('b', 2)
     governor.dispose()
     governor.dispose()
-    expect(() => governor.snapshot()).toThrow('RuntimeBackpressureGovernor is disposed')
+
+    const snapshot = governor.snapshot()
+    expect(snapshot).toMatchObject({ scopes: 0, inflight: 0, queued: 0, pressure: 0, disposed: true })
+    expect(Object.isFrozen(snapshot)).toBe(true)
+    expect(governor.snapshot()).toEqual(snapshot)
     expect(() => governor.decide({ scope: 'a', lane: 'critical', now: 2 })).toThrow('RuntimeBackpressureGovernor is disposed')
   })
 
