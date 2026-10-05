@@ -99,7 +99,7 @@ describe('BookmarkWidget modern screen', () => {
     fireEvent.change(searchInput(), { target: { value: 'CANKAYA' } });
     expect(options()).toHaveLength(1);
     expect(options()[0]).toHaveTextContent('Çankaya');
-    expect(screen.getByRole('status', { name: '' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('searches coordinate fragments', async () => {
@@ -133,8 +133,8 @@ describe('BookmarkWidget modern screen', () => {
   it('switches between card and list views with pressed state', async () => {
     renderWidget();
     await waitFor(() => expect(options()).toHaveLength(3));
-    const card = screen.getByRole('button', { name: '▦ Kart' });
-    const list = screen.getByRole('button', { name: '☷ Liste' });
+    const card = screen.getByRole('button', { name: 'Kart' });
+    const list = screen.getByRole('button', { name: 'Liste' });
     expect(card).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(list);
     expect(list).toHaveAttribute('aria-pressed', 'true');
