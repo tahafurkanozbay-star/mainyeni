@@ -163,7 +163,8 @@ describe('ExperienceFeedbackCenter', () => {
     clock += 1_000;
     push(model, 'second');
     fireEvent.click(screen.getByRole('button', { name: 'En eski' }));
-    const headings = screen.getAllByRole('heading', { level: 3 });
+    const list = screen.getByRole('list', { name: 'Bildirim geçmişi' });
+    const headings = within(list).getAllByRole('heading', { level: 3 });
     expect(headings.map((heading) => heading.textContent)).toEqual(['Bildirim first', 'Bildirim second']);
     expect(model.snapshot().items.map((entry) => entry.id)).toEqual(['second', 'first']);
   });
