@@ -1,0 +1,238 @@
+import fs from 'node:fs';
+import process from 'node:process';
+import { evaluateReleaseCandidate, REQUIRED_CHECKS } from './release-candidate-gate.mjs';
+import { evaluateWorkflowEvidence } from './release-evidence-quorum.mjs';
+
+export const RELEASE_ADMISSION_SNAPSHOT_VERSION = 1;
+export const MAX_WORKFLOW_RUNS = 256;
+export const MAX_REVIEW_THREADS = 256;
+export const MAX_REF_LENGTH = 255;
+const SHA = /^[0-9a-f]{40}$/;
+const freeze = value => {
+  if (Array.isArray(value)) return Object.freeze(value.map(freeze));
+  if (value && typeof value === 'object') {
+    const copy = {};
+    for (const [key, item] of Object.entries(value)) copy[key] = freeze(item);
+    return Object.freeze(copy);
+  }
+  return value;
+};
+const finding = (code, field, message) => freeze({ code, field, message, severity: 'error' });
+const clean = (value, max = 160) => {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  return text && text.length <= max && !/[\u0000-\u001f\u007f]/.test(text) ? text : null;
+};
+const sha = value => {
+  const normalized = clean(value, 40)?.toLowerCase();
+  return normalized && SHA.test(normalized) ? normalized : null;
+};
+const nonNegativeInteger = value => Number.isSafeInteger(value) && value >= 0;
+const boolean = value => typeof value === 'boolean' ? value : null;
+
+function object(value, field, findings) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    findings.push(finding('object-invalid', field, `${field} must be an object.`));
+    return null;
+  }
+  return value;
+}
+
+function normalizePullRequest(raw, findings) {
+  const value = object(raw, 'pullRequest', findings);
+  if (!value) return null;
+  const baseSha = sha(value.baseSha);
+  const headSha = sha(value.headSha);
+  const baseRef = clean(value.baseRef, MAX_REF_LENGTH);
+  const headRef = clean(value.headRef, MAX_REF_LENGTH);
+  const draft = boolean(value.draft);
+  const mergeable = boolean(value.mergeable);
+  const additions = value.additions;
+  const deletions = value.deletions;
+  if (!baseSha) findings.push(finding('pr-base-sha-invalid', 'pullRequest.baseSha', 'pullRequest.baseSha must be an exact 40-character SHA.'));
+  if (!headSha) findings.push(finding('pr-head-sha-invalid', 'pullRequest.headSha', 'pullRequest.headSha must be an exact 40-character SHA.'));
+  if (!baseRef) findings.push(finding('pr-base-ref-invalid', 'pullRequest.baseRef', 'pullRequest.baseRef must be a bounded non-control string.'));
+  if (!headRef) findings.push(finding('pr-head-ref-invalid', 'pullRequest.headRef', 'pullRequest.headRef must be a bounded non-control string.'));
+  if (draft === null) findings.push(finding('pr-draft-invalid', 'pullRequest.draft', 'pullRequest.draft must be boolean.'));
+  if (mergeable === null) findings.push(finding('pr-mergeable-invalid', 'pullRequest.mergeable', 'pullRequest.mergeable must be boolean.'));
+  if (!nonNegativeInteger(additions)) findings.push(finding('pr-additions-invalid', 'pullRequest.additions', 'pullRequest.additions must be a non-negative safe integer.'));
+  if (!nonNegativeInteger(deletions)) findings.push(finding('pr-deletions-invalid', 'pullRequest.deletions', 'pullRequest.deletions must be a non-negative safe integer.'));
+  if (!baseSha || !headSha || !baseRef || !headRef || draft === null || mergeable === null || !nonNegativeInteger(additions) || !nonNegativeInteger(deletions)) return null;
+  return freeze({ baseSha, headSha, baseRef, headRef, draft, mergeable, additions, deletions });
+}
+
+function normalizeCompare(raw, findings) {
+  const value = object(raw, 'compare', findings);
+  if (!value) return null;
+  const baseSha = sha(value.baseSha);
+  const headSha = sha(value.headSha);
+  const mergeBaseSha = sha(value.mergeBaseSha);
+  const aheadBy = value.aheadBy;
+  const behindBy = value.behindBy;
+  const status = clean(value.status, 40)?.toLowerCase();
+  if (!baseSha) findings.push(finding('compare-base-invalid', 'compare.baseSha', 'compare.baseSha must be an exact SHA.'));
+  if (!headSha) findings.push(finding('compare-head-invalid', 'compare.headSha', 'compare.headSha must be an exact SHA.'));
+  if (!mergeBaseSha) findings.push(finding('compare-merge-base-invalid', 'compare.mergeBaseSha', 'compare.mergeBaseSha must be an exact SHA.'));
+  if (!nonNegativeInteger(aheadBy)) findings.push(finding('compare-ahead-invalid', 'compare.aheadBy', 'compare.aheadBy must be a non-negative safe integer.'));
+  if (!nonNegativeInteger(behindBy)) findings.push(finding('compare-behind-invalid', 'compare.behindBy', 'compare.behindBy must be a non-negative safe integer.'));
+  if (!status || !new Set(['ahead', 'behind', 'diverged', 'identical']).has(status)) findings.push(finding('compare-status-invalid', 'compare.status', 'compare.status must be ahead, behind, diverged, or identical.'));
+  if (!baseSha || !headSha || !mergeBaseSha || !nonNegativeInteger(aheadBy) || !nonNegativeInteger(behindBy) || !status) return null;
+  return freeze({ baseSha, headSha, mergeBaseSha, aheadBy, behindBy, status });
+}
+
+function normalizeMain(raw, findings) {
+  const value = object(raw, 'main', findings);
+  if (!value) return null;
+  const headSha = sha(value.headSha);
+  const ref = clean(value.ref, MAX_REF_LENGTH);
+  if (!headSha) findings.push(finding('main-sha-invalid', 'main.headSha', 'main.headSha must be an exact SHA.'));
+  if (!ref) findings.push(finding('main-ref-invalid', 'main.ref', 'main.ref must be a bounded non-control string.'));
+  if (!headSha || !ref) return null;
+  return freeze({ headSha, ref });
+}
+
+function normalizeReviewThreads(raw, findings) {
+  if (!Array.isArray(raw)) {
+    findings.push(finding('review-threads-invalid', 'reviewThreads', 'reviewThreads must be an array.'));
+    return null;
+  }
+  if (raw.length > MAX_REVIEW_THREADS) {
+    findings.push(finding('review-threads-limit', 'reviewThreads', `reviewThreads must contain at most ${MAX_REVIEW_THREADS} entries.`));
+    return null;
+  }
+  const ids = new Set();
+  const normalized = [];
+  for (let index = 0; index < raw.length; index += 1) {
+    const item = raw[index];
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      findings.push(finding('review-thread-invalid', `reviewThreads[${index}]`, 'Review thread must be an object.'));
+      continue;
+    }
+    const id = clean(item.id, 160);
+    const resolved = boolean(item.resolved);
+    if (!id) findings.push(finding('review-thread-id-invalid', `reviewThreads[${index}].id`, 'Review thread id must be a bounded non-control string.'));
+    if (resolved === null) findings.push(finding('review-thread-resolved-invalid', `reviewThreads[${index}].resolved`, 'Review thread resolved must be boolean.'));
+    if (id && ids.has(id)) findings.push(finding('review-thread-duplicate', `reviewThreads[${index}].id`, `Duplicate review thread id: ${id}.`));
+    if (id && resolved !== null && !ids.has(id)) {
+      ids.add(id);
+      normalized.push(freeze({ id, resolved }));
+    }
+  }
+  return normalized;
+}
+
+function normalizeWorkflowRuns(raw, findings) {
+  if (!Array.isArray(raw)) {
+    findings.push(finding('workflow-runs-invalid', 'workflowRuns', 'workflowRuns must be an array.'));
+    return null;
+  }
+  if (raw.length > MAX_WORKFLOW_RUNS) {
+    findings.push(finding('workflow-runs-limit', 'workflowRuns', `workflowRuns must contain at most ${MAX_WORKFLOW_RUNS} entries.`));
+    return null;
+  }
+  return raw.map((run, index) => {
+    if (!run || typeof run !== 'object' || Array.isArray(run)) {
+      findings.push(finding('workflow-run-invalid', `workflowRuns[${index}]`, 'Workflow run must be an object.'));
+      return null;
+    }
+    return freeze({ ...run });
+  }).filter(Boolean);
+}
+
+function crossValidate(main, pullRequest, compare, findings) {
+  if (!main || !pullRequest || !compare) return;
+  if (main.ref !== 'main') findings.push(finding('main-ref-unexpected', 'main.ref', 'Release admission requires the main branch authority.'));
+  if (pullRequest.baseRef !== 'main') findings.push(finding('pr-base-ref-unexpected', 'pullRequest.baseRef', 'Release candidate must target main.'));
+  if (pullRequest.headRef === 'main') findings.push(finding('pr-head-ref-main', 'pullRequest.headRef', 'Release candidate head ref must not be main.'));
+  if (pullRequest.baseSha !== main.headSha) findings.push(finding('pr-base-stale', 'pullRequest.baseSha', 'Pull request base SHA must equal current main.'));
+  if (compare.baseSha !== main.headSha) findings.push(finding('compare-base-stale', 'compare.baseSha', 'Compare base SHA must equal current main.'));
+  if (pullRequest.headSha !== compare.headSha) findings.push(finding('head-authority-mismatch', 'compare.headSha', 'Compare head SHA must equal pull request head SHA.'));
+  if (compare.mergeBaseSha !== main.headSha) findings.push(finding('merge-base-stale', 'compare.mergeBaseSha', 'Compare merge-base must equal current main.'));
+  if (compare.behindBy !== 0) findings.push(finding('compare-behind', 'compare.behindBy', 'Candidate must be zero commits behind current main.'));
+  if (compare.aheadBy === 0) findings.push(finding('compare-empty', 'compare.aheadBy', 'Candidate must contain commits ahead of current main.'));
+  if (compare.status !== 'ahead') findings.push(finding('compare-not-ahead', 'compare.status', `Candidate compare status must be ahead; observed ${compare.status}.`));
+}
+
+export function evaluateReleaseAdmissionSnapshot(input, options = {}) {
+  const findings = [];
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return freeze({ version: RELEASE_ADMISSION_SNAPSHOT_VERSION, passed: false, mergeAllowed: false, findings: [finding('snapshot-invalid', '$', 'Release admission snapshot must be an object.')], candidate: null, workflow: null });
+  }
+  if (input.version !== RELEASE_ADMISSION_SNAPSHOT_VERSION) findings.push(finding('snapshot-version', 'version', `Snapshot version must be ${RELEASE_ADMISSION_SNAPSHOT_VERSION}.`));
+  const main = normalizeMain(input.main, findings);
+  const pullRequest = normalizePullRequest(input.pullRequest, findings);
+  const compare = normalizeCompare(input.compare, findings);
+  const reviewThreads = normalizeReviewThreads(input.reviewThreads, findings);
+  const workflowRuns = normalizeWorkflowRuns(input.workflowRuns, findings);
+  crossValidate(main, pullRequest, compare, findings);
+
+  let workflow = null;
+  let candidate = null;
+  if (main && pullRequest && compare && reviewThreads && workflowRuns) {
+    workflow = evaluateWorkflowEvidence({
+      version: 1,
+      headSha: pullRequest.headSha,
+      now: input.now,
+      runs: workflowRuns,
+    }, { required: options.requiredWorkflows });
+    for (const item of workflow.findings) findings.push(finding(`workflow-${item.code}`, `workflow.${item.field}`, item.message));
+
+    const checks = REQUIRED_CHECKS.map(name => {
+      const selected = workflow.selected?.find?.(entry => entry.name === name);
+      return selected
+        ? { name, status: selected.status, conclusion: selected.conclusion, headSha: pullRequest.headSha }
+        : { name, status: 'missing', conclusion: null, headSha: pullRequest.headSha };
+    });
+    candidate = evaluateReleaseCandidate({
+      version: 1,
+      baseSha: pullRequest.baseSha,
+      headSha: pullRequest.headSha,
+      mergeBaseSha: compare.mergeBaseSha,
+      currentMainSha: main.headSha,
+      additions: pullRequest.additions,
+      deletions: pullRequest.deletions,
+      aheadBy: compare.aheadBy,
+      behindBy: compare.behindBy,
+      unresolvedThreads: reviewThreads.filter(thread => !thread.resolved).length,
+      mergeable: pullRequest.mergeable,
+      draft: pullRequest.draft,
+      checks,
+    }, { requiredChecks: options.requiredChecks });
+    for (const item of candidate.findings) findings.push(finding(`candidate-${item.code}`, `candidate.${item.field}`, item.message));
+  }
+
+  const errors = findings.length;
+  return freeze({
+    version: RELEASE_ADMISSION_SNAPSHOT_VERSION,
+    passed: errors === 0,
+    mergeAllowed: errors === 0 && candidate?.mergeAllowed === true && workflow?.passed === true,
+    findings: [...findings].sort((a, b) => a.field.localeCompare(b.field) || a.code.localeCompare(b.code)),
+    candidate,
+    workflow,
+    summary: freeze({ errors, workflowRuns: workflowRuns?.length ?? 0, reviewThreads: reviewThreads?.length ?? 0 }),
+  });
+}
+
+export function parseReleaseAdmissionSnapshot(text) {
+  if (typeof text !== 'string' || text.length > 2 * 1024 * 1024) throw new Error('Release admission snapshot must be UTF-8 JSON no larger than 2 MiB.');
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Release admission snapshot root must be an object.');
+  return parsed;
+}
+
+export function formatReleaseAdmissionSnapshot(result) {
+  return [
+    `Release admission snapshot: ${result.passed ? 'PASS' : 'FAIL'} (${result.summary?.errors ?? result.findings.length} errors)`,
+    ...result.findings.map(item => `ERROR ${item.code} ${item.field} — ${item.message}`),
+  ].join('\n');
+}
+
+function cli() {
+  const args = process.argv.slice(2);
+  const index = args.indexOf('--file');
+  if (index < 0 || !args[index + 1]) throw new Error('Usage: release-admission-snapshot.mjs --file <snapshot.json> [--strict]');
+  const result = evaluateReleaseAdmissionSnapshot(parseReleaseAdmissionSnapshot(fs.readFileSync(args[index + 1], 'utf8')));
+  console.log(formatReleaseAdmissionSnapshot(result));
+  if (args.includes('--strict') && !result.passed) process.exitCode = 1;
+}
+if (process.argv[1] && import.meta.filename === process.argv[1]) cli();
