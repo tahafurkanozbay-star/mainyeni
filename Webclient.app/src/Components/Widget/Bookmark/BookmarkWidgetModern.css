@@ -131,7 +131,8 @@
 }
 
 .bookmark-modern__search input:focus-visible {
-  outline: 0;
+  outline: 3px solid color-mix(in srgb, var(--bookmark-accent) 70%, white);
+  outline-offset: -3px;
 }
 
 .bookmark-modern__clear {
@@ -171,7 +172,7 @@
 
 .bookmark-modern__view-button {
   display: inline-flex;
-  min-block-size: 38px;
+  min-block-size: var(--bookmark-control-height);
   align-items: center;
   gap: 6px;
   padding-inline: 10px;
@@ -497,6 +498,7 @@
   }
 
   .bookmark-modern__input-row input:focus-visible,
+  .bookmark-modern__search input:focus-visible,
   .bookmark-modern__clear:focus-visible,
   .bookmark-modern__view-button:focus-visible,
   .bookmark-modern__notice button:focus-visible,
