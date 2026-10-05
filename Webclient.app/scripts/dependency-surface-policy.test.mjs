@@ -44,7 +44,7 @@ test('accepts a deterministic registry-only manifest surface', () => {
 test('sorts dependency identity independent of manifest insertion order', () => {
   const manifest = baseManifest();
   manifest.dependencies = { zed: '^1.0.0', alpha: '^1.0.0', middle: '^1.0.0' };
-  assert.deepEqual(collectManifestSurface(manifest).map((entry) => entry.name), ['alpha', 'middle', 'zed']);
+  assert.deepEqual(collectManifestSurface(manifest).map((entry) => entry.name), ['alpha', 'middle', 'vite', 'zed']);
 });
 
 for (const [label, spec] of [
