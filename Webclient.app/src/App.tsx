@@ -23,6 +23,7 @@ import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisc
 import { FastAccessResultAccessibilityBridge } from './Components/Common/FastAccessResultAccessibilityBridge';
 import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
 import { ExperienceNotificationShortcutBridge } from './Components/Common/ExperienceNotificationShortcutBridge';
+import { ExperienceNotificationTriage } from './Components/Common/ExperienceNotificationTriage';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
 import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
@@ -187,6 +188,7 @@ function App() {
               windowManager={windowManager}
               notificationModel={notificationCenter}
             />
+            <ExperienceNotificationTriage model={notificationCenter} />
             <ExperienceCommandCenter windowManager={windowManager} />
             <ExperienceConnectivityNotice notificationModel={notificationCenter} />
             <ExperienceDataDisclaimer />
