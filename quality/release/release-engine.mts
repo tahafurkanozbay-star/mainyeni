@@ -39,7 +39,6 @@ import { auditModernization } from './modernization-audit.mts';
 import { auditNetwork } from './network-audit.mts';
 import { auditObservability } from './observability-audit.mts';
 import { auditOidcTrust } from './oidc-trust-audit.mts';
-import { auditPageUsabilityContracts } from './page-usability-contract-audit.mts';
 import { auditPerformance } from './performance-audit.mts';
 import { auditReleaseEvidenceMatrix } from './release-evidence-matrix.mts';
 import { auditResponsive } from './responsive-audit.mts';
@@ -47,9 +46,7 @@ import { auditReusableWorkflows } from './reusable-workflow-audit.mts';
 import { auditRunnerBoundaries } from './runner-boundary-audit.mts';
 import { auditRuntimeResilience } from './runtime-resilience-audit.mts';
 import { auditSecurity } from './security-audit.mts';
-import { auditToolingLanguageContracts } from './tooling-language-contract-audit.mts';
 import { auditValidationIntegrity } from './validation-integrity-audit.mts';
-import { auditWholePageExperience } from './whole-page-experience-audit.mts';
 import { auditWorkflowEvidence } from './workflow-evidence-audit.mts';
 import { auditWorkflowExpressions } from './workflow-expression-audit.mts';
 import { scanSource } from './source-audit.mts';
@@ -249,7 +246,6 @@ export async function runReleaseEngine(
   const sections: AuditSection<unknown>[] = [
     auditModernization(inventory),
     auditLanguageModernization(inventory),
-    auditToolingLanguageContracts(inventory),
     scanSource(inventory),
     auditSecurity(inventory),
     auditBackendSecurity(inventory),
@@ -273,8 +269,6 @@ export async function runReleaseEngine(
     auditGisReleaseContracts(inventory),
     auditUx(inventory),
     auditAccessibility(inventory),
-    auditPageUsabilityContracts(inventory),
-    auditWholePageExperience(inventory),
     auditResponsive(inventory),
     auditPerformance(inventory),
     auditDataIntegrity(inventory),

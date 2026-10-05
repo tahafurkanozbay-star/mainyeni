@@ -1,0 +1,611 @@
+.experience-notification-triage {
+  --triage-surface: var(--exp-surface, #ffffff);
+  --triage-surface-subtle: var(--exp-surface-subtle, #f7f9fc);
+  --triage-text: var(--exp-text, #172033);
+  --triage-muted: var(--exp-text-muted, #667085);
+  --triage-border: var(--exp-border, #d7dde6);
+  --triage-accent: var(--exp-accent, #0b6fcb);
+  --triage-danger: var(--exp-danger, #b42318);
+  --triage-warning: var(--exp-warning, #a15c00);
+  position: fixed;
+  inset-inline-end: max(18px, env(safe-area-inset-right));
+  inset-block-end: max(18px, env(safe-area-inset-bottom));
+  z-index: 36;
+  display: grid;
+  justify-items: end;
+  max-inline-size: min(430px, calc(100vw - 32px));
+  color: var(--triage-text);
+  font-family: inherit;
+  pointer-events: none;
+}
+
+.experience-notification-triage > * {
+  pointer-events: auto;
+}
+
+.experience-notification-triage__trigger {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-block-size: 48px;
+  min-inline-size: min(290px, calc(100vw - 32px));
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--triage-accent) 24%, var(--triage-border));
+  border-radius: 16px;
+  color: var(--triage-text);
+  background: color-mix(in srgb, var(--triage-surface) 96%, var(--triage-accent));
+  box-shadow:
+    0 14px 34px rgba(15, 23, 42, 0.14),
+    0 2px 7px rgba(15, 23, 42, 0.08);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.experience-notification-triage__trigger:hover {
+  border-color: color-mix(in srgb, var(--triage-accent) 52%, var(--triage-border));
+  background: color-mix(in srgb, var(--triage-surface) 92%, var(--triage-accent));
+  transform: translateY(-1px);
+}
+
+.experience-notification-triage__trigger:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--triage-accent) 72%, white);
+  outline-offset: 3px;
+}
+
+.experience-notification-triage__pulse {
+  position: relative;
+  display: block;
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 50%;
+  background: var(--triage-accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--triage-accent) 15%, transparent);
+}
+
+.experience-notification-triage[data-has-important='true'] .experience-notification-triage__pulse {
+  background: var(--triage-danger);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--triage-danger) 15%, transparent);
+}
+
+.experience-notification-triage__trigger-copy {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1px;
+}
+
+.experience-notification-triage__trigger-copy strong {
+  overflow: hidden;
+  color: var(--triage-text);
+  font-size: 0.79rem;
+  font-weight: 790;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experience-notification-triage__trigger-copy span {
+  overflow: hidden;
+  color: var(--triage-muted);
+  font-size: 0.69rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experience-notification-triage__trigger-key {
+  display: inline-grid;
+  min-block-size: 28px;
+  padding-inline: 8px;
+  place-items: center;
+  border: 1px solid var(--triage-border);
+  border-radius: 8px;
+  color: var(--triage-muted);
+  background: var(--triage-surface);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 760;
+}
+
+.experience-notification-triage__panel {
+  display: grid;
+  inline-size: min(420px, calc(100vw - 32px));
+  max-block-size: min(720px, calc(100vh - 108px));
+  gap: 12px;
+  margin-block-end: 10px;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--triage-accent) 18%, var(--triage-border));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--triage-surface) 98%, var(--triage-accent));
+  box-shadow:
+    0 28px 72px rgba(15, 23, 42, 0.2),
+    0 6px 18px rgba(15, 23, 42, 0.12);
+  animation: experience-notification-triage-enter 160ms ease-out;
+}
+
+@keyframes experience-notification-triage-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.experience-notification-triage__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.experience-notification-triage__eyebrow {
+  margin: 0 0 3px;
+  color: var(--triage-accent);
+  font-size: 0.67rem;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.experience-notification-triage__header h2 {
+  margin: 0;
+  color: var(--triage-text);
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.experience-notification-triage__header p:not(.experience-notification-triage__eyebrow) {
+  max-inline-size: 52ch;
+  margin: 5px 0 0;
+  color: var(--triage-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.experience-notification-triage__close {
+  inline-size: 44px;
+  block-size: 44px;
+  border: 1px solid var(--triage-border);
+  border-radius: 12px;
+  color: var(--triage-muted);
+  background: var(--triage-surface);
+  font: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.experience-notification-triage__close:hover {
+  color: var(--triage-text);
+  background: var(--triage-surface-subtle);
+}
+
+.experience-notification-triage__close:focus-visible,
+.experience-notification-triage__scope:focus-visible,
+.experience-notification-triage__item-actions button:focus-visible,
+.experience-notification-triage__bulk-actions button:focus-visible,
+.experience-notification-triage__open-center:focus-visible,
+.experience-notification-triage__empty button:focus-visible,
+.experience-notification-triage__keyboard-help summary:focus-visible,
+.experience-notification-triage__list:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--triage-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.experience-notification-triage__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.experience-notification-triage__metrics span {
+  display: grid;
+  min-block-size: 48px;
+  place-content: center;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--triage-border);
+  border-radius: 12px;
+  color: var(--triage-muted);
+  background: var(--triage-surface-subtle);
+  font-size: 0.66rem;
+  text-align: center;
+}
+
+.experience-notification-triage__metrics strong {
+  color: var(--triage-text);
+  font-size: 0.92rem;
+}
+
+.experience-notification-triage__scopes {
+  display: flex;
+  max-inline-size: 100%;
+  gap: 6px;
+  padding-block: 1px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.experience-notification-triage__scope {
+  min-block-size: 44px;
+  flex: 0 0 auto;
+  padding-inline: 13px;
+  border: 1px solid var(--triage-border);
+  border-radius: 999px;
+  color: var(--triage-muted);
+  background: var(--triage-surface);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.experience-notification-triage__scope:hover {
+  border-color: color-mix(in srgb, var(--triage-accent) 36%, var(--triage-border));
+  color: var(--triage-text);
+}
+
+.experience-notification-triage__scope[aria-pressed='true'] {
+  border-color: var(--triage-accent);
+  color: white;
+  background: var(--triage-accent);
+}
+
+.experience-notification-triage__status {
+  min-block-size: 18px;
+  margin: 0;
+  color: var(--triage-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.experience-notification-triage__list {
+  display: grid;
+  max-block-size: min(390px, 48vh);
+  gap: 7px;
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 14px;
+  scroll-padding-block: 6px;
+}
+
+.experience-notification-triage__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--triage-border);
+  border-inline-start-width: 3px;
+  border-radius: 13px;
+  background: var(--triage-surface);
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.experience-notification-triage__item--info {
+  border-inline-start-color: var(--triage-accent);
+}
+
+.experience-notification-triage__item--success {
+  border-inline-start-color: var(--exp-success, #067647);
+}
+
+.experience-notification-triage__item--warning {
+  border-inline-start-color: var(--triage-warning);
+}
+
+.experience-notification-triage__item--error {
+  border-inline-start-color: var(--triage-danger);
+}
+
+.experience-notification-triage__item[data-active='true'] {
+  border-color: color-mix(in srgb, var(--triage-accent) 52%, var(--triage-border));
+  background: color-mix(in srgb, var(--triage-surface) 94%, var(--triage-accent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--triage-accent) 14%, transparent);
+}
+
+.experience-notification-triage__item[data-read='true'] {
+  opacity: 0.82;
+}
+
+.experience-notification-triage__item-main {
+  display: grid;
+  min-inline-size: 0;
+  gap: 4px;
+}
+
+.experience-notification-triage__item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--triage-muted);
+  font-size: 0.64rem;
+  font-weight: 650;
+}
+
+.experience-notification-triage__important {
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--triage-danger);
+  background: color-mix(in srgb, var(--triage-danger) 9%, transparent);
+  font-weight: 780;
+}
+
+.experience-notification-triage__item h3 {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--triage-text);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.experience-notification-triage__item p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--triage-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.experience-notification-triage__item-actions {
+  display: grid;
+  gap: 6px;
+  justify-items: stretch;
+}
+
+.experience-notification-triage__item-actions button,
+.experience-notification-triage__bulk-actions button,
+.experience-notification-triage__empty button {
+  min-block-size: 44px;
+  padding-inline: 10px;
+  border: 1px solid var(--triage-border);
+  border-radius: 9px;
+  color: var(--triage-text);
+  background: var(--triage-surface);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.experience-notification-triage__item-actions button:hover,
+.experience-notification-triage__bulk-actions button:hover,
+.experience-notification-triage__empty button:hover {
+  border-color: color-mix(in srgb, var(--triage-accent) 34%, var(--triage-border));
+  background: var(--triage-surface-subtle);
+}
+
+.experience-notification-triage__read {
+  display: grid;
+  min-block-size: 44px;
+  place-items: center;
+  padding-inline: 8px;
+  color: var(--triage-muted);
+  font-size: 0.67rem;
+  font-weight: 680;
+}
+
+.experience-notification-triage__empty {
+  display: grid;
+  min-block-size: 150px;
+  place-content: center;
+  justify-items: start;
+  gap: 7px;
+  padding: 18px;
+  border: 1px dashed var(--triage-border);
+  border-radius: 14px;
+  color: var(--triage-muted);
+  background: var(--triage-surface-subtle);
+}
+
+.experience-notification-triage__empty strong {
+  color: var(--triage-text);
+  font-size: 0.86rem;
+}
+
+.experience-notification-triage__empty span {
+  max-inline-size: 42ch;
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.experience-notification-triage__keyboard-help {
+  border-block: 1px solid var(--triage-border);
+  padding-block: 6px;
+}
+
+.experience-notification-triage__keyboard-help summary {
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--triage-text);
+  font-size: 0.72rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.experience-notification-triage__keyboard-help ul {
+  display: grid;
+  gap: 4px;
+  margin: 3px 0 8px;
+  padding-inline-start: 20px;
+  color: var(--triage-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.experience-notification-triage__footer {
+  display: grid;
+  gap: 9px;
+}
+
+.experience-notification-triage__bulk-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.experience-notification-triage__bulk-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.experience-notification-triage__open-center {
+  min-block-size: 46px;
+  padding-inline: 14px;
+  border: 1px solid var(--triage-accent);
+  border-radius: 11px;
+  color: white;
+  background: var(--triage-accent);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 790;
+  cursor: pointer;
+}
+
+.experience-notification-triage__open-center:hover {
+  background: color-mix(in srgb, var(--triage-accent) 88%, black);
+}
+
+@media (max-width: 720px) {
+  .experience-notification-triage {
+    inset-inline: max(10px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-right));
+    inset-block-end: max(10px, env(safe-area-inset-bottom));
+    max-inline-size: none;
+    justify-items: stretch;
+  }
+
+  .experience-notification-triage__trigger,
+  .experience-notification-triage__panel {
+    inline-size: 100%;
+    max-inline-size: none;
+  }
+
+  .experience-notification-triage__panel {
+    max-block-size: min(78vh, 720px);
+    border-radius: 18px;
+  }
+
+  .experience-notification-triage__trigger-key {
+    display: none;
+  }
+
+  .experience-notification-triage__item {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-notification-triage__item-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .experience-notification-triage__read {
+    min-block-size: 44px;
+  }
+}
+
+@media (max-width: 420px) {
+  .experience-notification-triage__panel {
+    padding: 13px;
+  }
+
+  .experience-notification-triage__metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .experience-notification-triage__metrics span:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .experience-notification-triage__bulk-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (pointer: coarse) {
+  .experience-notification-triage__trigger,
+  .experience-notification-triage__close,
+  .experience-notification-triage__scope,
+  .experience-notification-triage__item-actions button,
+  .experience-notification-triage__bulk-actions button,
+  .experience-notification-triage__empty button,
+  .experience-notification-triage__keyboard-help summary,
+  .experience-notification-triage__open-center,
+  .experience-notification-triage__read {
+    min-block-size: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experience-notification-triage__panel {
+    animation: none;
+  }
+
+  .experience-notification-triage__trigger,
+  .experience-notification-triage__item {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .experience-notification-triage__trigger,
+  .experience-notification-triage__panel,
+  .experience-notification-triage__metrics span,
+  .experience-notification-triage__scope,
+  .experience-notification-triage__item,
+  .experience-notification-triage__empty,
+  .experience-notification-triage__item-actions button,
+  .experience-notification-triage__bulk-actions button,
+  .experience-notification-triage__empty button,
+  .experience-notification-triage__open-center,
+  .experience-notification-triage__trigger-key,
+  .experience-notification-triage__close {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+    forced-color-adjust: auto;
+  }
+
+  .experience-notification-triage__scope[aria-pressed='true'],
+  .experience-notification-triage__item[data-active='true'],
+  .experience-notification-triage__open-center {
+    border-color: Highlight;
+    color: HighlightText;
+    background: Highlight;
+  }
+
+  .experience-notification-triage__pulse,
+  .experience-notification-triage[data-has-important='true'] .experience-notification-triage__pulse {
+    background: Highlight;
+    box-shadow: none;
+  }
+
+  .experience-notification-triage__trigger:focus-visible,
+  .experience-notification-triage__close:focus-visible,
+  .experience-notification-triage__scope:focus-visible,
+  .experience-notification-triage__item-actions button:focus-visible,
+  .experience-notification-triage__bulk-actions button:focus-visible,
+  .experience-notification-triage__open-center:focus-visible,
+  .experience-notification-triage__empty button:focus-visible,
+  .experience-notification-triage__keyboard-help summary:focus-visible,
+  .experience-notification-triage__list:focus-visible {
+    outline-color: Highlight;
+  }
+}
