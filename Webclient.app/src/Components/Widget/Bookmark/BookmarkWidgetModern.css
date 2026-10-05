@@ -437,6 +437,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .bookmark-modern__keyboard-help {
+    align-items: center;
+    font-size: 0.72rem;
+  }
+
   .bookmark-modern__primary-action {
     inline-size: 100%;
     justify-content: center;
