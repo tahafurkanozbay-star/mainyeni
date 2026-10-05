@@ -3,8 +3,9 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -19,9 +20,10 @@ import {
 } from '../_shared/MapWidgetSurface';
 import {
   createLatestOperationGate,
-  normalizeWidgetError,
+  isAbortLikeError,
   type LatestOperationGate,
 } from '../_shared/MapWidgetRuntime';
+import { createBasemapExperienceModel } from './basemapExperienceModel';
 
 const BASEMAP_IDS = Object.freeze([
   'topo',
@@ -71,33 +73,30 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
     const galleryContainerRef = useRef<HTMLDivElement | null>(null);
     const galleryRef = useRef<BasemapGalleryLike | null>(null);
     const gateRef = useRef<LatestOperationGate | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [readyCount, setReadyCount] = useState(0);
+    const model = useMemo(() => createBasemapExperienceModel({ maxAttempts: 3 }), []);
+    const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
 
-    if (gateRef.current === null) {
-      gateRef.current = createLatestOperationGate((snapshot) => {
-        setLoading(snapshot.phase === 'running');
-        if (snapshot.phase === 'error') setError(snapshot.error);
-      });
-    }
+    if (gateRef.current === null) gateRef.current = createLatestOperationGate();
 
     const destroyGallery = useCallback((): void => {
       try {
         galleryRef.current?.destroy?.();
       } finally {
         galleryRef.current = null;
-        setReadyCount(0);
       }
     }, []);
 
     const initialize = useCallback(async (): Promise<void> => {
       const container = galleryContainerRef.current;
-      if (!container) return;
-      setError(null);
+      if (!container || !model.beginLoad()) return;
+      const gate = gateRef.current;
+      if (!gate) {
+        model.fail('Altlık harita yükleme altyapısı hazır değil.');
+        return;
+      }
 
       try {
-        await gateRef.current?.run(async (operation) => {
+        await gate.run(async (operation) => {
           const [BasemapGallery, Basemap] = await loadArcgisModules<[
             BasemapGalleryConstructor,
             BasemapConstructor,
@@ -119,13 +118,16 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
             container: galleryContainerRef.current,
             source,
           });
-          setReadyCount(source.length);
+          model.succeed(source.length);
         });
       } catch (caught) {
-        if (gateRef.current?.snapshot().phase === 'cancelled') return;
-        setError(normalizeWidgetError(caught, 'Altlık haritalar yüklenemedi.'));
+        if (gate.snapshot().phase === 'cancelled' || isAbortLikeError(caught)) {
+          model.cancel();
+          return;
+        }
+        model.fail(caught);
       }
-    }, [destroyGallery]);
+    }, [destroyGallery, model]);
 
     useImperativeHandle(ref, () => ({
       id,
@@ -133,57 +135,83 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
       minimized: false,
       OnShow: () => {
         windowManager.ShowWindow('sidebar');
+        if (model.getSnapshot().phase === 'error' && !model.getSnapshot().canReload) {
+          model.resetAttempts();
+        }
         void initialize();
       },
       OnClose: () => {
         gateRef.current?.cancel('widget-closed');
         destroyGallery();
-        setError(null);
+        model.resetAttempts();
       },
-    }), [destroyGallery, id, initialize, windowManager]);
+    }), [destroyGallery, id, initialize, model, windowManager]);
 
     useEffect(() => {
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
       return () => {
         gateRef.current?.dispose();
         destroyGallery();
+        model.dispose();
         windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
       };
-    }, [destroyGallery, id, ref, windowManager]);
+    }, [destroyGallery, id, model, ref, windowManager]);
 
     useEffect(() => {
-      if (!windowManager.IsVisible(id) || galleryRef.current) return;
+      if (!windowManager.IsVisible(id) || galleryRef.current || snapshot.phase === 'loading') return;
+      if (snapshot.phase === 'error' && !snapshot.canReload) return;
       void initialize();
-    }, [id, initialize, windowManager]);
+    }, [id, initialize, snapshot.canReload, snapshot.phase, windowManager]);
+
+    const status = snapshot.phase === 'ready'
+      ? `${snapshot.readyCount} altlık harita kullanıma hazır`
+      : snapshot.phase === 'loading'
+        ? `Altlık haritalar hazırlanıyor · deneme ${snapshot.attempt}/${snapshot.maxAttempts}`
+        : null;
 
     return (
       <MapWidgetSurface
         id={id}
         title="Altlık Haritalar"
-        iconSrc="images/icons/toolbar/basemap.png"
         windowManager={windowManager}
-        busy={loading}
-        error={error}
-        status={readyCount > 0 ? `${readyCount} altlık harita kullanıma hazır` : null}
+        busy={snapshot.busy}
+        busyLabel={`Altlık haritalar hazırlanıyor · ${snapshot.attempt}/${snapshot.maxAttempts}`}
+        error={snapshot.error}
+        status={status}
         statusTone="info"
         bodyClassName="layer-list-window-body"
       >
-        {loading && readyCount === 0 ? <MapWidgetSkeleton rows={6} label="Altlık haritalar hazırlanıyor" /> : null}
-        {!loading && error ? (
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {snapshot.announcement}
+        </p>
+
+        {snapshot.busy && snapshot.readyCount === 0 ? (
+          <MapWidgetSkeleton rows={6} label="Altlık haritalar hazırlanıyor" />
+        ) : null}
+
+        {snapshot.phase === 'error' ? (
           <MapWidgetEmptyState
             title="Altlık harita galerisi açılamadı"
-            description="Harita görünümü hazır olduğunda tekrar deneyebilirsiniz."
-            action={(
-              <button type="button" className="map-widget-action map-widget-action--primary" onClick={() => void initialize()}>
-                Yeniden dene
+            description={snapshot.canReload
+              ? `Harita görünümü hazır olduğunda yeniden yükleyebilirsiniz. ${snapshot.maxAttempts - snapshot.attempt} deneme hakkı kaldı.`
+              : 'Bu açılış oturumu için yükleme sınırına ulaşıldı. Pencereyi kapatıp yeniden açarak güvenli bir oturum başlatabilirsiniz.'}
+            action={snapshot.canReload ? (
+              <button
+                type="button"
+                className="map-widget-action map-widget-action--primary"
+                onClick={() => void initialize()}
+              >
+                Galeriyi yeniden yükle
               </button>
-            )}
+            ) : undefined}
           />
         ) : null}
+
         <div
           ref={galleryContainerRef}
           className="map-widget-arcgis-host"
           aria-label="Altlık harita galerisi"
+          aria-busy={snapshot.busy || undefined}
         />
       </MapWidgetSurface>
     );
