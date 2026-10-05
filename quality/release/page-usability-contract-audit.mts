@@ -55,7 +55,7 @@ const ROOT_SCROLL_LOCK = /(?:^|[}\s,])(?:html|body|#root|#app)\s*(?:,\s*(?:html|
 const TOUCH_DIMENSION = /(?:min-)?(?:width|height)\s*:\s*(\d+(?:\.\d+)?)px\b/gi;
 const INTERACTIVE_SELECTOR = /(?:button|\[role=["']button["']\]|\.btn\b|\.button\b|\.action\b|\.control\b|\.toolbar[^,{]*)/i;
 const LEGACY_VH = /(?:^|[\s:(])(?:height|min-height|max-height)\s*:\s*(?:100|[89]\d)vh\b/gi;
-const MODERN_VH = /\b(?:dvh|svh|lvh)\b/i;
+const MODERN_VH = /(?:^|[\s:(])(?:height|min-height|max-height)\s*:\s*[^;{}]*(?:dvh|svh|lvh)\b/i;
 const FIXED = /position\s*:\s*fixed\b/gi;
 const DIALOG_NAME = /aria-(?:label|labelledby)\s*=/i;
 const DIALOG_MODAL = /aria-modal\s*=\s*(?:["']true["']|\{true\})/i;
@@ -186,35 +186,13 @@ function shellFindings(file: SourceFile, current: PageUsabilitySignal): Finding[
   if (current.kind !== 'tsx' || !PAGE_SHELL.test(current.file)) return [];
   const findings: Finding[] = [];
   if (current.mainLandmarks === 0) {
-    findings.push(finding(
-      current,
-      'page-shell-main-landmark-missing',
-      'medium',
-      'Page shell has no main landmark',
-      'A page-level shell should expose one semantic main region so keyboard and assistive-technology users can reach primary content predictably.',
-      'Render the primary application workspace inside one <main> landmark or a single role="main" region owned by the shell.',
-    ));
+    findings.push(finding(current, 'page-shell-main-landmark-missing', 'medium', 'Page shell has no main landmark', 'A page-level shell should expose one semantic main region so keyboard and assistive-technology users can reach primary content predictably.', 'Render the primary application workspace inside one <main> landmark or a single role="main" region owned by the shell.'));
   }
   if (current.mainLandmarks > 1) {
-    findings.push(finding(
-      current,
-      'page-shell-main-landmark-duplicated',
-      'medium',
-      'Page shell exposes multiple main landmarks',
-      `The shell contains ${current.mainLandmarks} main landmarks, making primary-content navigation ambiguous.`,
-      'Keep one top-level main landmark; use section/article/region with accessible names for nested workspaces.',
-      MAIN,
-    ));
+    findings.push(finding(current, 'page-shell-main-landmark-duplicated', 'medium', 'Page shell exposes multiple main landmarks', `The shell contains ${current.mainLandmarks} main landmarks, making primary-content navigation ambiguous.`, 'Keep one top-level main landmark; use section/article/region with accessible names for nested workspaces.', MAIN));
   }
   if (current.headings === 0 && /return\s*\(|<Routes?\b|<Outlet\b|workspace/i.test(file.text)) {
-    findings.push(finding(
-      current,
-      'page-shell-heading-contract-missing',
-      'low',
-      'Page shell has no static heading contract',
-      'A page workspace without a discoverable heading can make orientation difficult after navigation or mode changes.',
-      'Ensure the rendered route/workspace contributes a meaningful h1/h2 hierarchy or a documented dynamically owned heading.',
-    ));
+    findings.push(finding(current, 'page-shell-heading-contract-missing', 'low', 'Page shell has no static heading contract', 'A page workspace without a discoverable heading can make orientation difficult after navigation or mode changes.', 'Ensure the rendered route/workspace contributes a meaningful h1/h2 hierarchy or a documented dynamically owned heading.'));
   }
   return findings;
 }
@@ -226,28 +204,12 @@ function dialogFindings(file: SourceFile, current: PageUsabilitySignal): Finding
   for (const fragment of dialogFragments) {
     const sample = fragment.slice(0, 900);
     if (!DIALOG_NAME.test(sample)) {
-      findings.push(finding(
-        current,
-        'dialog-accessible-name-missing',
-        'medium',
-        'Dialog lacks a visible/ARIA naming contract',
-        'Dialog surfaces require a stable accessible name so users understand context when focus moves into the overlay.',
-        'Bind aria-labelledby to the dialog heading or provide a concise aria-label when no visible heading exists.',
-        DIALOG,
-      ));
+      findings.push(finding(current, 'dialog-accessible-name-missing', 'medium', 'Dialog lacks a visible/ARIA naming contract', 'Dialog surfaces require a stable accessible name so users understand context when focus moves into the overlay.', 'Bind aria-labelledby to the dialog heading or provide a concise aria-label when no visible heading exists.', DIALOG));
       break;
     }
   }
   if (/role\s*=\s*["']dialog["']/i.test(file.text) && !DIALOG_MODAL.test(file.text) && /(?:modal|overlay|drawer|sheet)/i.test(current.file + file.text.slice(0, 1500))) {
-    findings.push(finding(
-      current,
-      'modal-dialog-modality-ambiguous',
-      'low',
-      'Modal-looking dialog does not declare modal semantics',
-      'A blocking overlay that is not exposed as modal can leave background content reachable to assistive technology while visual users cannot interact with it.',
-      'For truly blocking overlays set aria-modal="true" and enforce focus return/trap semantics; otherwise keep the surface explicitly non-modal.',
-      DIALOG,
-    ));
+    findings.push(finding(current, 'modal-dialog-modality-ambiguous', 'low', 'Modal-looking dialog does not declare modal semantics', 'A blocking overlay that is not exposed as modal can leave background content reachable to assistive technology while visual users cannot interact with it.', 'For truly blocking overlays set aria-modal="true" and enforce focus return/trap semantics; otherwise keep the surface explicitly non-modal.', DIALOG));
   }
   return findings;
 }
@@ -262,15 +224,7 @@ function formFindings(file: SourceFile, current: PageUsabilitySignal): Finding[]
     if (!LABEL_ASSOCIATION.test(control) && !/\bplaceholder\s*=/i.test(control)) unnamed += 1;
   }
   if (unnamed > 0 && !/<label\b/i.test(file.text)) {
-    findings.push(finding(
-      current,
-      'form-control-label-contract-missing',
-      'medium',
-      'Form controls lack an explicit labeling contract',
-      `${unnamed} visible form control(s) have no local id/name/ARIA label signal and the file contains no label element.`,
-      'Associate visible labels with htmlFor/id or use aria-label/aria-labelledby for controls whose visual label is provided elsewhere.',
-      FORM_CONTROL,
-    ));
+    findings.push(finding(current, 'form-control-label-contract-missing', 'medium', 'Form controls lack an explicit labeling contract', `${unnamed} visible form control(s) have no local id/name/ARIA label signal and the file contains no label element.`, 'Associate visible labels with htmlFor/id or use aria-label/aria-labelledby for controls whose visual label is provided elsewhere.', FORM_CONTROL));
   }
   return findings;
 }
@@ -278,103 +232,31 @@ function formFindings(file: SourceFile, current: PageUsabilitySignal): Finding[]
 function asyncFindings(file: SourceFile, current: PageUsabilitySignal): Finding[] {
   if (current.kind !== 'tsx' || !ASYNC_COMPONENT.test(file.text)) return [];
   if (STATUS_SEMANTICS.test(file.text)) return [];
-  return [finding(
-    current,
-    'async-status-announcement-contract-missing',
-    'low',
-    'Async UI state has no status announcement contract',
-    'The component models loading/pending/error state but exposes no aria-busy, status, alert, or live-region signal in the same module.',
-    'Expose aria-busy on the affected region and announce meaningful completion/error changes through a bounded status/alert live region.',
-  )];
+  return [finding(current, 'async-status-announcement-contract-missing', 'low', 'Async UI state has no status announcement contract', 'The component models loading/pending/error state but exposes no aria-busy, status, alert, or live-region signal in the same module.', 'Expose aria-busy on the affected region and announce meaningful completion/error changes through a bounded status/alert live region.')];
 }
 
 function linkFindings(current: PageUsabilitySignal): Finding[] {
   if (current.unsafeTargetBlankLinks === 0) return [];
-  return [finding(
-    current,
-    'external-target-blank-rel-missing',
-    'medium',
-    'New-tab link is missing noopener protection',
-    `${current.unsafeTargetBlankLinks} target="_blank" link(s) do not visibly include rel="noopener".`,
-    'Add rel="noopener noreferrer" to external new-tab links and retain a clear accessible indication that the destination opens separately.',
-    TARGET_BLANK,
-  )];
+  return [finding(current, 'external-target-blank-rel-missing', 'medium', 'New-tab link is missing noopener protection', `${current.unsafeTargetBlankLinks} target="_blank" link(s) do not visibly include rel="noopener".`, 'Add rel="noopener noreferrer" to external new-tab links and retain a clear accessible indication that the destination opens separately.', TARGET_BLANK)];
 }
 
 function htmlFindings(current: PageUsabilitySignal): Finding[] {
   if (current.kind !== 'html' || current.zoomRestrictions === 0) return [];
-  return [finding(
-    current,
-    'viewport-user-zoom-disabled',
-    'high',
-    'Viewport configuration restricts user zoom',
-    'The document viewport constrains pinch/browser zoom, which blocks an essential low-vision interaction.',
-    'Remove user-scalable=no and restrictive maximum/minimum-scale values. Keep width=device-width and initial-scale=1 only.',
-    VIEWPORT_RESTRICTION,
-    true,
-  )];
+  return [finding(current, 'viewport-user-zoom-disabled', 'high', 'Viewport configuration restricts user zoom', 'The document viewport constrains pinch/browser zoom, which blocks an essential low-vision interaction.', 'Remove user-scalable=no and restrictive maximum/minimum-scale values. Keep width=device-width and initial-scale=1 only.', VIEWPORT_RESTRICTION, true)];
 }
 
 function cssFindings(file: SourceFile, current: PageUsabilitySignal): Finding[] {
   if (current.kind !== 'css') return [];
   const findings: Finding[] = [];
-  if (current.rootScrollLocks > 0) {
-    findings.push(finding(
-      current,
-      'root-scroll-lock-review',
-      'medium',
-      'Root page scrolling is globally locked',
-      'A global html/body/#root overflow lock can make content unreachable at browser zoom, small viewport heights, or when overlays fail to restore state.',
-      'Prefer component-scoped scroll containers. If an overlay temporarily locks body scrolling, implement bounded lifecycle restoration in runtime code rather than permanent CSS.',
-      ROOT_SCROLL_LOCK,
-    ));
-  }
-  if (current.smallTouchTargets > 0) {
-    findings.push(finding(
-      current,
-      'interactive-touch-target-small',
-      'low',
-      'Interactive CSS declares a small pointer target',
-      `${current.smallTouchTargets} width/height declaration(s) below 40px were found on button/control-like selectors.`,
-      'Provide an effective coarse-pointer target close to 44×44 CSS pixels using min-size, padding, or an expanded hit area without distorting visual density.',
-      TOUCH_DIMENSION,
-    ));
-  }
-  if (current.legacyViewportUnits > 0 && !MODERN_VH.test(file.text)) {
-    findings.push(finding(
-      current,
-      'mobile-viewport-static-vh',
-      'low',
-      'Full-height surface relies only on legacy vh units',
-      `${current.legacyViewportUnits} near-full viewport height declaration(s) use vh without a dvh/svh/lvh companion. Mobile browser chrome can obscure content.`,
-      'Add a progressive dvh/svh override or use a layout that derives available height from a bounded container.',
-      LEGACY_VH,
-    ));
-  }
-  if (current.fixedSurfaces > 0 && !/(?:env\(safe-area-inset-|max-height\s*:|overflow(?:-y)?\s*:\s*(?:auto|scroll))/i.test(file.text)) {
-    findings.push(finding(
-      current,
-      'fixed-surface-viewport-safety-review',
-      'info',
-      'Fixed surface has no visible viewport-safety companion',
-      'Fixed-position UI can cover content on small/zoomed displays when it lacks safe-area, max-height, or overflow behavior.',
-      'For persistent fixed controls, validate safe-area insets and constrained-height overflow at narrow widths and 200–400% zoom.',
-      FIXED,
-    ));
-  }
+  if (current.rootScrollLocks > 0) findings.push(finding(current, 'root-scroll-lock-review', 'medium', 'Root page scrolling is globally locked', 'A global html/body/#root overflow lock can make content unreachable at browser zoom, small viewport heights, or when overlays fail to restore state.', 'Prefer component-scoped scroll containers. If an overlay temporarily locks body scrolling, implement bounded lifecycle restoration in runtime code rather than permanent CSS.', ROOT_SCROLL_LOCK));
+  if (current.smallTouchTargets > 0) findings.push(finding(current, 'interactive-touch-target-small', 'low', 'Interactive CSS declares a small pointer target', `${current.smallTouchTargets} width/height declaration(s) below 40px were found on button/control-like selectors.`, 'Provide an effective coarse-pointer target close to 44×44 CSS pixels using min-size, padding, or an expanded hit area without distorting visual density.', TOUCH_DIMENSION));
+  if (current.legacyViewportUnits > 0 && !MODERN_VH.test(file.text)) findings.push(finding(current, 'mobile-viewport-static-vh', 'low', 'Full-height surface relies only on legacy vh units', `${current.legacyViewportUnits} near-full viewport height declaration(s) use vh without a dvh/svh/lvh companion. Mobile browser chrome can obscure content.`, 'Add a progressive dvh/svh override or use a layout that derives available height from a bounded container.', LEGACY_VH));
+  if (current.fixedSurfaces > 0 && !/(?:env\(safe-area-inset-|max-height\s*:|overflow(?:-y)?\s*:\s*(?:auto|scroll))/i.test(file.text)) findings.push(finding(current, 'fixed-surface-viewport-safety-review', 'info', 'Fixed surface has no visible viewport-safety companion', 'Fixed-position UI can cover content on small/zoomed displays when it lacks safe-area, max-height, or overflow behavior.', 'For persistent fixed controls, validate safe-area insets and constrained-height overflow at narrow widths and 200–400% zoom.', FIXED));
   return findings;
 }
 
 function findingsFor(file: SourceFile, current: PageUsabilitySignal): Finding[] {
-  return [
-    ...shellFindings(file, current),
-    ...dialogFindings(file, current),
-    ...formFindings(file, current),
-    ...asyncFindings(file, current),
-    ...linkFindings(current),
-    ...htmlFindings(current),
-    ...cssFindings(file, current),
-  ];
+  return [...shellFindings(file, current), ...dialogFindings(file, current), ...formFindings(file, current), ...asyncFindings(file, current), ...linkFindings(current), ...htmlFindings(current), ...cssFindings(file, current)];
 }
 
 export function auditPageUsabilityContracts(inventory: RepositoryInventory): AuditSection<PageUsabilityContractSummary> {
