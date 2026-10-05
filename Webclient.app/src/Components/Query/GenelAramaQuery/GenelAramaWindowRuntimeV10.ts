@@ -5,7 +5,6 @@ import {
   type GeneralSearchMutableDiagnosticsV10,
   type GeneralSearchMutableStateV10,
   type GeneralSearchNormalizedPolicyV10,
-  type GeneralSearchSortModeV10,
   type GeneralSearchWindowDiagnosticsV10,
   type GeneralSearchWindowPolicyV10,
   type GeneralSearchWindowSnapshotV10,
