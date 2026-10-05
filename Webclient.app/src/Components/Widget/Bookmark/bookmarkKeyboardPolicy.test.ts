@@ -256,4 +256,12 @@ describe('bookmark keyboard discoverability', () => {
     expect(remove?.description).toContain('onay');
     expect(remove?.description).toContain('doğrudan silmez');
   });
+  it('keeps visible shortcut labels non-empty for assistive documentation', () => {
+    for (const shortcut of BOOKMARK_KEYBOARD_SHORTCUTS) {
+      expect(shortcut.label.trim().length).toBeGreaterThan(0);
+      expect(shortcut.description.trim().length).toBeGreaterThan(0);
+      expect(shortcut.surfaces.length).toBeGreaterThan(0);
+    }
+  });
+
 });
