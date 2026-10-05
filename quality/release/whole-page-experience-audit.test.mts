@@ -321,8 +321,8 @@ test('summary remains deterministic regardless of fixture order', () => {
   const left = audit([accessibleShell, resilientCss]);
   const right = audit([resilientCss, accessibleShell]);
   assert.deepEqual(
-    left.files ?? left.summary.files.map(item => item.file),
-    right.files ?? right.summary.files.map(item => item.file),
+    left.summary.files.map(item => item.file),
+    right.summary.files.map(item => item.file),
   );
   assert.deepEqual(left.findings.map(item => item.id), right.findings.map(item => item.id));
 });
