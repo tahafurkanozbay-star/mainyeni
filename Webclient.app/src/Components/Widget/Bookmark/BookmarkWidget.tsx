@@ -145,14 +145,8 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
       }
     };
 
-    const status = interaction.lastNotice?.message
-      ?? snapshot.storageWarning
-      ?? (snapshot.totalCount > 0 ? `${snapshot.totalCount} yer işareti kayıtlı` : null);
-    const statusTone = interaction.lastNotice?.severity === 'error'
-      ? 'danger'
-      : interaction.lastNotice?.severity === 'warning' || snapshot.storageWarning
-        ? 'warning'
-        : 'info';
+    const status = snapshot.storageWarning;
+    const statusTone = snapshot.storageWarning ? 'warning' : 'info';
 
     return (
       <MapWidgetSurface
@@ -220,6 +214,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                     autoComplete="off"
                     spellCheck={false}
                     role="combobox"
+                    aria-label="Yer işareti ara"
                     aria-autocomplete="list"
                     aria-controls={`${id}-bookmark-list`}
                     aria-expanded={snapshot.resultCount > 0}

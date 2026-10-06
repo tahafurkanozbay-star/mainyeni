@@ -110,7 +110,7 @@ export class BasemapExperienceModel {
   readonly getDiagnostics = (): BasemapExperienceDiagnostics => this.#diagnostics;
 
   readonly subscribe = (listener: Listener): (() => void) => {
-    if (this.#disposed || this.#listeners.size >= this.#maxObservers) {
+    if (this.#disposed) {
       this.#diagnostics = Object.freeze({
         ...this.#diagnostics,
         rejectedObserverCount: this.#diagnostics.rejectedObserverCount + 1,
@@ -118,6 +118,13 @@ export class BasemapExperienceModel {
       return () => undefined;
     }
     if (this.#listeners.has(listener)) return () => undefined;
+    if (this.#listeners.size >= this.#maxObservers) {
+      this.#diagnostics = Object.freeze({
+        ...this.#diagnostics,
+        rejectedObserverCount: this.#diagnostics.rejectedObserverCount + 1,
+      });
+      return () => undefined;
+    }
     this.#listeners.add(listener);
     this.#diagnostics = Object.freeze({
       ...this.#diagnostics,

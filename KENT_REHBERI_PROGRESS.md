@@ -55,3 +55,12 @@
 - TEST / BUILD: yeni product head için GitHub Actions exact-head sonucu henüz oluşmadı; PASS iddia edilmez. Local shell zorunlu tutulmadı.
 - MERGE DURUMU: additions gate karşılanmış olsa da progress commit yeni exact head oluşturur. Tüm zorunlu workflow'lar `completed+success`, current main fresh/behind=0, `mergeable=true` ve kritik regression/release riski yok doğrulanmadan merge yapılmaz.
 - SONRAKİ GÖREV NOTU: progress exact-head CI'ını doğrula; Webclient Quality'de strict lint, exact-base TypeScript/Vitest, production build/integrity ve budgets; Typed Source Boundary, Platform Architecture Audit ve Release QA sonuçlarını kontrol et. Main ilerlediyse conflict-safe reconciliation yap. Tüm gate'ler yeşilse PR'ı ready yapıp expected-head kilitli squash merge et ve merge/main SHA'yı doğrula.
+
+
+## Deep Experience / map-tool exact-base regression repair — PR #474 checkpoint — 2026-10-06
+- EXACT-HEAD TEŞHİSİ: `1d4909c0f1490a413a959fb672b8eec1e83285d8` için Typed Source Boundary, Platform Architecture Audit ve Release QA success; Webclient Quality yalnız exact-base Vitest regression gate'te failure verdi. Strict TypeScript/lint blokajı yok.
+- REPAIR: Basemap observer admission duplicate listener'ı capacity rejection'dan önce tanıyor; duplicate subscribe artık rejectedObserverCount artırmıyor. Bookmark combobox explicit `aria-label="Yer işareti ara"` ile clear-control label composition'dan bağımsız deterministic accessible name taşıyor.
+- LIVE-REGION AUTHORITY: Bookmark operation notice yalnız inline notice/alert authority'sinde yayınlanır; MapWidgetSurface status yalnız storage recovery warning'ına ayrıldı. Böylece save/navigation/validation feedback iki live region'da yinelenmiyor ve normal result announcement tek status authority olarak kalıyor.
+- TEST CONTRACT: forwardRef verilmeden render edilen lifecycle regression testi unregister çağrısındaki gerçek null external ref kontratını doğruluyor; production lifecycle davranışı değiştirilmedi.
+- GATE: Bu repair commit'i yeni exact head oluşturur. PR additions>=4,000 korunmalı; current main fresh/behind=0, mergeable=true ve dört zorunlu workflow exact-head completed+success olmadan merge yapılmaz.
+- SONRAKİ GÖREV NOTU: yeni exact-head CI'ı doğrula. Webclient Quality exact-base Vitest, TypeScript, production build/integrity/budgets dahil success ise final accessibility/interaction review yap; main ilerlemediyse ready + expected-head squash merge uygula ve merge/main SHA'yı doğrula.

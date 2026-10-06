@@ -75,7 +75,7 @@ describe('BookmarkWidget modern screen', () => {
     const { unmount, windowManager } = renderWidget();
     expect(windowManager.RegisterWindow).toHaveBeenCalledTimes(1);
     unmount();
-    expect(windowManager.UnregisterWindow).toHaveBeenCalledWith('bookmark-test', expect.anything());
+    expect(windowManager.UnregisterWindow).toHaveBeenCalledWith('bookmark-test', null);
   });
 
   it('shows the canonical stored bookmark count', async () => {
