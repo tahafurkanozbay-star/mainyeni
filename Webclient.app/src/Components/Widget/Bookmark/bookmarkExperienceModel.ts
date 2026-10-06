@@ -118,7 +118,6 @@ const createAnnouncement = (
   totalCount: number,
   resultCount: number,
   query: string,
-  rejectedCount: number,
 ): string => {
   if (totalCount === 0) return 'Henüz kayıtlı yer işareti yok.';
   if (resultCount === 0) return 'Aramayla eşleşen yer işareti bulunamadı.';
@@ -191,7 +190,7 @@ const createSnapshot = (
     rejectedCount,
     entries,
     emptyReason,
-    announcement: createAnnouncement(indexed.length, filtered.length, normalizedQuery, rejectedCount),
+    announcement: createAnnouncement(indexed.length, filtered.length, normalizedQuery),
     storageWarning: createStorageWarning(rejectedCount),
   });
 };
