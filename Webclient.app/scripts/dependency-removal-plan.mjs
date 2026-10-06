@@ -70,7 +70,11 @@ export const collectSharedDependents = (graph, closure) => {
   const owned = new Set(closure);
   const shared = new Set();
   for (const path of closure) {
-    // The lockfile root ('') is manifest ownership, not an installed-package dependent.\n    // Real package parents remain fail-closed blockers.\n    for (const parent of parentsOf(graph, path)) {\n      if (parent !== '' && !owned.has(parent)) shared.add(parent);\n    }
+    // The lockfile root ('') is manifest ownership, not an installed-package dependent.
+    // Real package parents remain fail-closed blockers.
+    for (const parent of parentsOf(graph, path)) {
+      if (parent !== '' && !owned.has(parent)) shared.add(parent);
+    }
   }
   return freeze([...shared].sort());
 };

@@ -38,28 +38,16 @@ jobs:
         shell: bash
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Dependency governance diagnostics
-        id: governance
         working-directory: Webclient.app
         shell: bash
         run: |
-          set +e
-          npm run dependency:verify > dependency-governance.log 2>&1
-          status=$?
-          cat dependency-governance.log
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
+          set -o pipefail
+          npm run dependency:verify 2>&1 | tee dependency-governance.log
       - name: Upload dependency governance evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: dependency-governance-${{ github.event.pull_request.head.sha || github.sha }}
+          name: dependency-governance-evidence
           path: Webclient.app/dependency-governance.log
           if-no-files-found: error
           retention-days: 7
-      - name: Enforce dependency governance
-        if: always()
-        shell: bash
-        env:
-          GOVERNANCE_STATUS: ${{ steps.governance.outputs.status }}
-        run: |
-          test "$GOVERNANCE_STATUS" = "0"
