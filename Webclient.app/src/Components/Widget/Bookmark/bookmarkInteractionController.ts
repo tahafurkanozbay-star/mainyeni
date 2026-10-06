@@ -184,10 +184,7 @@ export const createBookmarkInteractionController = (
     try {
       const decoded = decodeBookmarks(options.storage.read());
       options.model.setBookmarks(decoded.bookmarks, decoded.rejected);
-      const notice = decoded.rejected > 0
-        ? notify('warning', `${decoded.rejected} geçersiz veya yinelenen yer işareti güvenli biçimde atlandı.`)
-        : null;
-      publish('idle', null, notice);
+      publish('idle', null, null);
     } catch (error) {
       options.model.setBookmarks([], 0);
       publish('error', null, notify('error', normalizeWidgetError(error, 'Yer işaretleri okunamadı.')));
