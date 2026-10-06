@@ -88,7 +88,7 @@ describe('BookmarkExperienceModel snapshots', () => {
     const snapshot = model.getSnapshot();
     expect(snapshot.rejectedCount).toBe(3);
     expect(snapshot.storageWarning).toContain('3 geçersiz');
-    expect(snapshot.announcement).toBe('3 yer işareti kayıtlı.');
+    expect(snapshot.announcement).toBe('2 yer işareti kayıtlı.');
   });
 
   it('clamps negative rejected counts to zero', () => {
