@@ -1,168 +1,274 @@
 import { describe, expect, it } from 'vitest'
-import { ArcGisLayerRefreshLifecyclePolicy, type LayerRefreshBudget } from './ArcGisLayerRefreshLifecyclePolicy'
+import { ArcGisLayerRefreshLifecyclePolicy, type ArcGisLayerRefreshBudget, type ArcGisLayerRefreshRequest } from './ArcGisLayerRefreshLifecyclePolicy'
 
-const budget: LayerRefreshBudget = {
-  maxLayers: 3,
-  maxJobs: 5,
-  maxJobsPerLayer: 3,
-  maxRunning: 2,
-  maxRunningPerLayer: 1,
-  maxResident: 2,
-  maxResidentBytes: 100,
-  maxBytesPerJob: 60,
+const budget: ArcGisLayerRefreshBudget = {
+  maxLayers: 2,
+  maxRequests: 4,
+  maxRequestsPerLayer: 2,
+  maxRunning: 1,
+  maxReady: 2,
+  maxEstimatedBytes: 1_000,
+  maxEstimatedBytesPerRequest: 600,
+  maxFeaturesPerRequest: 100,
+  maxAggregateFeatures: 150,
   queueTtlMs: 100,
-  leaseMs: 50,
-  residentTtlMs: 200,
+  runLeaseMs: 50,
+  readyTtlMs: 200,
 }
 
-function ready(): ArcGisLayerRefreshLifecyclePolicy {
-  const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
-  expect(policy.setRevision('roads', 1)).toBe(0)
-  expect(policy.setRevision('buildings', 1)).toBe(0)
-  return policy
-}
-
-function request(jobId: string, layerId: string, intent: 'interactive'|'visible'|'background', requestedAt: number, estimatedBytes = 40) {
-  return { jobId, layerId, revision: 1, intent, estimatedBytes, requestedAt }
+function request(overrides: Partial<ArcGisLayerRefreshRequest> = {}): ArcGisLayerRefreshRequest {
+  return {
+    layerId: 'parcels',
+    refreshKey: 'extent-a',
+    revision: 1,
+    intent: 'visible',
+    requestedAt: 10,
+    estimatedBytes: 100,
+    estimatedFeatures: 20,
+    spatialReferenceWkid: 3857,
+    minScale: 10_000,
+    maxScale: 0,
+    ...overrides,
+  }
 }
 
 describe('ArcGisLayerRefreshLifecyclePolicy', () => {
-  it('uses deterministic intent priority and per-layer concurrency', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-bg','roads','background',10))).toBe(true)
-    expect(policy.admit(request('roads-ui','roads','interactive',20))).toBe(true)
-    expect(policy.admit(request('buildings-visible','buildings','visible',30))).toBe(true)
-    expect(policy.startNext(31)?.jobId).toBe('roads-ui')
-    expect(policy.startNext(32)?.jobId).toBe('buildings-visible')
-    expect(policy.startNext(33)).toBeNull()
-    expect(policy.snapshot()).toEqual({ layers:2,jobs:3,queued:1,running:2,resident:0,residentBytes:0 })
+  it('rejects invalid and internally inconsistent budgets', () => {
+    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxLayers: 0 })).toThrow(/maxLayers/)
+    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxRequestsPerLayer: 5 })).toThrow(/maxRequestsPerLayer/)
+    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxRunning: 5 })).toThrow(/maxRunning/)
+    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxReady: 5 })).toThrow(/maxReady/)
+    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxEstimatedBytesPerRequest: 1_001 })).toThrow(/byte budget/)
+    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxFeaturesPerRequest: 151 })).toThrow(/feature budget/)
   })
 
-  it('invalidates stale revisions across every lifecycle phase', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-a','roads','interactive',10))).toBe(true)
-    expect(policy.startNext(11)?.jobId).toBe('roads-a')
-    expect(policy.setRevision('roads',2)).toBe(1)
-    expect(policy.renew('roads-a',1,12)).toBe(false)
-    expect(policy.complete('roads-a',1,20,13)).toBeNull()
-    expect(policy.admit(request('roads-stale','roads','visible',14))).toBe(false)
-    expect(policy.snapshot().jobs).toBe(0)
+  it('validates identifiers, revisions, accounting and ArcGIS scale metadata', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(() => policy.admit(request({ layerId: ' ' }))).toThrow(/layerId/)
+    expect(() => policy.admit(request({ refreshKey: ' ' }))).toThrow(/refreshKey/)
+    expect(() => policy.admit(request({ revision: -1 }))).toThrow(/revision/)
+    expect(() => policy.admit(request({ requestedAt: Number.NaN }))).toThrow(/requestedAt/)
+    expect(() => policy.admit(request({ estimatedBytes: -1 }))).toThrow(/estimatedBytes/)
+    expect(() => policy.admit(request({ estimatedFeatures: 1.5 }))).toThrow(/estimatedFeatures/)
+    expect(() => policy.admit(request({ spatialReferenceWkid: 0 }))).toThrow(/spatialReferenceWkid/)
+    expect(() => policy.admit(request({ minScale: 100, maxScale: 1_000 }))).toThrow(/minScale/)
   })
 
-  it('expires queue and running leases at the exact boundary', () => {
-    const policy = ready()
-    expect(policy.admit(request('queued','roads','visible',10))).toBe(true)
-    expect(policy.expire(109)).toBe(0)
-    expect(policy.expire(110)).toBe(1)
-    expect(policy.admit(request('running','roads','interactive',200))).toBe(true)
-    expect(policy.startNext(201)?.jobId).toBe('running')
-    expect(policy.renew('running',1,250)).toBe(false)
-    expect(policy.snapshot().jobs).toBe(0)
+  it('enforces per-request byte and feature budgets without retaining rejected work', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(policy.admit(request({ estimatedBytes: 601 }))).toBe(false)
+    expect(policy.admit(request({ estimatedFeatures: 101 }))).toBe(false)
+    expect(policy.snapshot().requests).toBe(0)
   })
 
-  it('renews live leases without changing scheduling identity', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-a','roads','interactive',10))).toBe(true)
-    const running=policy.startNext(11)
-    expect(running?.sequence).toBe(1)
-    expect(policy.renew('roads-a',1,40)).toBe(true)
-    expect(policy.snapshot().running).toBe(1)
-    expect(policy.complete('roads-a',1,30,89)?.sequence).toBe(1)
+  it('bounds layer and per-layer cardinality', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(policy.admit(request({ refreshKey: 'a' }))).toBe(true)
+    expect(policy.admit(request({ refreshKey: 'b' }))).toBe(true)
+    expect(policy.admit(request({ refreshKey: 'c' }))).toBe(false)
+    expect(policy.admit(request({ layerId: 'roads', refreshKey: 'a' }))).toBe(true)
+    expect(policy.admit(request({ layerId: 'buildings', refreshKey: 'a' }))).toBe(false)
   })
 
-  it('reconciles actual bytes and evicts lower intent residents first', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-bg','roads','background',10,50))).toBe(true)
-    expect(policy.startNext(11)?.jobId).toBe('roads-bg')
-    expect(policy.complete('roads-bg',1,50,12)?.residentBytes).toBe(50)
-    expect(policy.admit(request('buildings-ui','buildings','interactive',20,60))).toBe(true)
-    expect(policy.startNext(21)?.jobId).toBe('buildings-ui')
-    expect(policy.complete('buildings-ui',1,60,22)?.residentBytes).toBe(60)
-    expect(policy.get('roads-bg',1,23)).toBeNull()
-    expect(policy.get('buildings-ui',1,23)?.residentBytes).toBe(60)
-    expect(policy.snapshot().residentBytes).toBe(60)
+  it('enforces aggregate byte and feature budgets', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(policy.admit(request({ refreshKey: 'a', estimatedBytes: 500, estimatedFeatures: 75 }))).toBe(true)
+    expect(policy.admit(request({ refreshKey: 'b', estimatedBytes: 500, estimatedFeatures: 75 }))).toBe(true)
+    expect(policy.admit(request({ layerId: 'roads', refreshKey: 'a', estimatedBytes: 1, estimatedFeatures: 1 }))).toBe(false)
   })
 
-  it('does not evict higher intent residency for lower intent work', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-ui','roads','interactive',10,60))).toBe(true)
-    expect(policy.startNext(11)?.jobId).toBe('roads-ui')
-    expect(policy.complete('roads-ui',1,60,12)).not.toBeNull()
-    expect(policy.admit(request('buildings-bg','buildings','background',20,60))).toBe(true)
-    expect(policy.startNext(21)?.jobId).toBe('buildings-bg')
-    expect(policy.complete('buildings-bg',1,60,22)).toBeNull()
-    expect(policy.get('roads-ui',1,23)).not.toBeNull()
+  it('schedules interactive work before visible, background and prefetch work', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxRequestsPerLayer: 4, maxLayers: 4 })
+    expect(policy.admit(request({ layerId: 'a', refreshKey: 'a', intent: 'prefetch' }))).toBe(true)
+    expect(policy.admit(request({ layerId: 'b', refreshKey: 'b', intent: 'background' }))).toBe(true)
+    expect(policy.admit(request({ layerId: 'c', refreshKey: 'c', intent: 'visible' }))).toBe(true)
+    expect(policy.admit(request({ layerId: 'd', refreshKey: 'd', intent: 'interactive' }))).toBe(true)
+    expect(policy.next(20)?.intent).toBe('interactive')
   })
 
-  it('rejects oversized estimates and drops oversized actual responses', () => {
-    const policy = ready()
-    expect(policy.admit(request('too-large','roads','interactive',10,61))).toBe(false)
-    expect(policy.admit(request('estimated-ok','roads','interactive',11,50))).toBe(true)
-    expect(policy.startNext(12)?.jobId).toBe('estimated-ok')
-    expect(policy.complete('estimated-ok',1,61,13)).toBeNull()
-    expect(policy.snapshot().jobs).toBe(0)
+  it('preserves FIFO sequence inside an intent class', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxRunning: 2 })
+    expect(policy.admit(request({ refreshKey: 'first', requestedAt: 10 }))).toBe(true)
+    expect(policy.admit(request({ refreshKey: 'second', requestedAt: 11 }))).toBe(true)
+    expect(policy.next(20)?.refreshKey).toBe('first')
+    expect(policy.next(21)?.refreshKey).toBe('second')
   })
 
-  it('touches resident ttl and consumes atomically', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-a','roads','visible',10))).toBe(true)
-    expect(policy.startNext(11)?.jobId).toBe('roads-a')
-    expect(policy.complete('roads-a',1,30,12)).not.toBeNull()
-    expect(policy.touch('roads-a',1,100)).toBe(true)
-    expect(policy.get('roads-a',1,299)).not.toBeNull()
-    expect(policy.consume('roads-a',1,299)?.jobId).toBe('roads-a')
-    expect(policy.get('roads-a',1,299)).toBeNull()
+  it('does not exceed running cardinality', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ refreshKey: 'a' }))
+    policy.admit(request({ refreshKey: 'b' }))
+    expect(policy.next(20)?.refreshKey).toBe('a')
+    expect(policy.next(21)).toBeNull()
   })
 
-  it('releases one layer without disturbing another layer authority', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-a','roads','visible',10))).toBe(true)
-    expect(policy.admit(request('buildings-a','buildings','visible',11))).toBe(true)
-    expect(policy.releaseLayer('roads')).toBe(1)
-    expect(policy.snapshot()).toEqual({ layers:1,jobs:1,queued:1,running:0,resident:0,residentBytes:0 })
-    expect(policy.admit(request('roads-stale','roads','visible',12))).toBe(false)
+  it('expires queued work before scheduling it', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ requestedAt: 10 }))
+    expect(policy.next(111)).toBeNull()
+    expect(policy.snapshot().requests).toBe(0)
   })
 
-  it('bounds layer and job cardinality without retaining payload objects', () => {
-    const policy = new ArcGisLayerRefreshLifecyclePolicy({ ...budget,maxLayers:1,maxJobs:2,maxJobsPerLayer:2 })
-    expect(policy.setRevision('roads',1)).toBe(0)
-    expect(policy.setRevision('buildings',1)).toBe(-1)
-    expect(policy.admit(request('a','roads','visible',10))).toBe(true)
-    expect(policy.admit(request('b','roads','visible',11))).toBe(true)
-    expect(policy.admit(request('c','roads','interactive',12))).toBe(false)
-    expect(Object.keys(policy.snapshot()).sort()).toEqual(['jobs','layers','queued','resident','residentBytes','running'])
+  it('rejects stale completion after run lease expiry', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request())
+    policy.next(20)
+    expect(policy.complete('parcels', 'extent-a', 1, 71)).toBe(false)
   })
 
-  it('returns frozen scalar views and deterministic fingerprints', () => {
-    const policy = ready()
-    expect(policy.admit(request('b','roads','visible',20))).toBe(true)
-    expect(policy.admit(request('a','buildings','interactive',10))).toBe(true)
-    const view=policy.startNext(21)
-    expect(Object.isFrozen(view)).toBe(true)
-    expect(policy.fingerprint()).toContain('buildings:a:1:interactive:running:0')
-    expect(policy.fingerprint()).toContain('roads:b:1:visible:queued:0')
+  it('requires exact revision and running phase for completion', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request())
+    expect(policy.complete('parcels', 'extent-a', 1, 20)).toBe(false)
+    policy.next(20)
+    expect(policy.complete('parcels', 'extent-a', 2, 21)).toBe(false)
+    expect(policy.complete('parcels', 'extent-a', 1, 21)).toBe(true)
   })
 
-  it('fails closed for unsafe identifiers and invalid clocks', () => {
-    const policy = ready()
-    expect(() => policy.setRevision('bad\nlayer',2)).toThrow('invalid')
-    expect(() => policy.admit(request('x','roads','visible',Number.NaN))).toThrow('finite')
-    expect(() => policy.admit({ ...request('x','roads','visible',10),estimatedBytes:0 })).toThrow('positive')
+  it('reconciles actual completion accounting against aggregate budgets', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ refreshKey: 'a', estimatedBytes: 100, estimatedFeatures: 20 }))
+    policy.admit(request({ refreshKey: 'b', estimatedBytes: 500, estimatedFeatures: 75 }))
+    policy.next(20)
+    expect(policy.complete('parcels', 'a', 1, 21, 600, 80)).toBe(false)
+    expect(policy.complete('parcels', 'a', 1, 21, 400, 70)).toBe(true)
+    expect(policy.snapshot().estimatedBytes).toBe(900)
+    expect(policy.snapshot().estimatedFeatures).toBe(145)
   })
 
-  it('validates parent budgets before accepting work', () => {
-    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget,maxJobs:1,maxJobsPerLayer:2 })).toThrow('maxJobsPerLayer')
-    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget,maxRunning:1,maxRunningPerLayer:2 })).toThrow('maxRunningPerLayer')
-    expect(() => new ArcGisLayerRefreshLifecyclePolicy({ ...budget,maxResidentBytes:10 })).toThrow('fit one')
+  it('rejects actual completion values over per-request budgets', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request())
+    policy.next(20)
+    expect(policy.complete('parcels', 'extent-a', 1, 21, 601, 20)).toBe(false)
+    expect(policy.complete('parcels', 'extent-a', 1, 21, 100, 101)).toBe(false)
   })
 
-  it('disposes idempotently and makes observation terminal', () => {
-    const policy = ready()
-    expect(policy.admit(request('roads-a','roads','visible',10))).toBe(true)
+  it('bounds ready residency', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy({ ...budget, maxRunning: 3, maxReady: 1 })
+    policy.admit(request({ refreshKey: 'a' }))
+    policy.admit(request({ refreshKey: 'b' }))
+    policy.next(20)
+    policy.next(20)
+    expect(policy.complete('parcels', 'a', 1, 21)).toBe(true)
+    expect(policy.complete('parcels', 'b', 1, 21)).toBe(false)
+  })
+
+  it('consumes only exact ready revisions', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request())
+    policy.next(20)
+    policy.complete('parcels', 'extent-a', 1, 21)
+    expect(policy.consume('parcels', 'extent-a', 2)).toBe(false)
+    expect(policy.consume('parcels', 'extent-a', 1)).toBe(true)
+    expect(policy.snapshot().requests).toBe(0)
+  })
+
+  it('invalidates older revisions and rejects stale re-admission', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ revision: 1 }))
+    expect(policy.invalidate('parcels', 'extent-a', 2)).toBe(1)
+    expect(policy.admit(request({ revision: 1 }))).toBe(false)
+    expect(policy.admit(request({ revision: 2 }))).toBe(true)
+  })
+
+  it('automatically invalidates an existing entry when a newer revision is admitted', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(policy.admit(request({ revision: 1, estimatedBytes: 500 }))).toBe(true)
+    expect(policy.admit(request({ revision: 2, estimatedBytes: 100 }))).toBe(true)
+    const snapshot = policy.snapshot()
+    expect(snapshot.requests).toBe(1)
+    expect(snapshot.estimatedBytes).toBe(100)
+    expect(snapshot.revisionWatermark['parcels\u0000extent-a']).toBe(2)
+  })
+
+  it('prevents lower-priority duplicate work from replacing higher-priority work', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(policy.admit(request({ intent: 'interactive' }))).toBe(true)
+    expect(policy.admit(request({ intent: 'prefetch' }))).toBe(false)
+    expect(policy.entriesForLayer('parcels')[0]?.intent).toBe('interactive')
+  })
+
+  it('allows priority escalation for the same revision while preserving sequence', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    expect(policy.admit(request({ intent: 'background' }))).toBe(true)
+    const before = policy.entriesForLayer('parcels')[0]
+    expect(policy.admit(request({ intent: 'interactive', requestedAt: 12 }))).toBe(true)
+    const after = policy.entriesForLayer('parcels')[0]
+    expect(after?.intent).toBe('interactive')
+    expect(after?.sequence).toBe(before?.sequence)
+  })
+
+  it('invalidates only older entries for a layer watermark', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ refreshKey: 'old', revision: 1 }))
+    policy.admit(request({ refreshKey: 'new', revision: 3 }))
+    expect(policy.invalidateLayer('parcels', 2)).toBe(1)
+    expect(policy.entriesForLayer('parcels').map(entry => entry.refreshKey)).toEqual(['new'])
+  })
+
+  it('cancels one request without disturbing sibling work', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ refreshKey: 'a' }))
+    policy.admit(request({ refreshKey: 'b' }))
+    expect(policy.cancel('parcels', 'a')).toBe(true)
+    expect(policy.entriesForLayer('parcels').map(entry => entry.refreshKey)).toEqual(['b'])
+  })
+
+  it('releases layer entries and revision watermarks together', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ refreshKey: 'a' }))
+    policy.admit(request({ refreshKey: 'b' }))
+    expect(policy.releaseLayer('parcels')).toBe(2)
+    expect(policy.snapshot().layers).toBe(0)
+    expect(policy.snapshot().revisionWatermark).toEqual({})
+  })
+
+  it('expires running and ready residency using phase-specific leases', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request({ refreshKey: 'running' }))
+    policy.admit(request({ refreshKey: 'ready' }))
+    policy.next(20)
+    expect(policy.expire(71)).toBe(1)
+    expect(policy.next(72)?.refreshKey).toBe('ready')
+    expect(policy.complete('parcels', 'ready', 1, 73)).toBe(true)
+    expect(policy.expire(274)).toBe(1)
+  })
+
+  it('produces immutable snapshots with deterministic fingerprints', () => {
+    const first = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    const second = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    first.admit(request({ refreshKey: 'a' }))
+    first.admit(request({ refreshKey: 'b' }))
+    second.admit(request({ refreshKey: 'a' }))
+    second.admit(request({ refreshKey: 'b' }))
+    expect(first.snapshot().fingerprint).toBe(second.snapshot().fingerprint)
+    expect(Object.isFrozen(first.snapshot())).toBe(true)
+    expect(Object.isFrozen(first.snapshot().revisionWatermark)).toBe(true)
+  })
+
+  it('changes fingerprints when material lifecycle metadata changes', () => {
+    const first = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    const second = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    first.admit(request({ estimatedFeatures: 20 }))
+    second.admit(request({ estimatedFeatures: 21 }))
+    expect(first.snapshot().fingerprint).not.toBe(second.snapshot().fingerprint)
+  })
+
+  it('returns immutable layer entry collections', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request())
+    const entries = policy.entriesForLayer('parcels')
+    expect(Object.isFrozen(entries)).toBe(true)
+    expect(Object.isFrozen(entries[0])).toBe(true)
+  })
+
+  it('fails closed after disposal', () => {
+    const policy = new ArcGisLayerRefreshLifecyclePolicy(budget)
+    policy.admit(request())
     policy.dispose()
-    policy.dispose()
-    expect(() => policy.snapshot()).toThrow('disposed')
-    expect(() => policy.fingerprint()).toThrow('disposed')
-    expect(() => policy.cancel('roads-a')).toThrow('disposed')
+    expect(() => policy.snapshot()).toThrow(/disposed/)
+    expect(() => policy.admit(request())).toThrow(/disposed/)
+    expect(() => policy.next(20)).toThrow(/disposed/)
   })
 })
