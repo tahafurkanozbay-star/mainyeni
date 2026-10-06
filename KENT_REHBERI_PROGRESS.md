@@ -70,3 +70,10 @@
 - CI TEŞHİSİ: exact head `58d0d192b033c9f6ac420b08e3610b5b9ff86bdf` için Release QA, Typed Source Boundary ve Platform Architecture Audit success; Webclient Quality yalnız Exact-base Vitest regression gate'te 4 yeni Bookmark failure ile kaldı.
 - ONARIM: keyboard policy React/native `isComposing` sözleşmelerinin ikisini de fail-closed kabul eder. Bookmark announcement canonical kayıt sayısını `N yer işareti kayıtlı.` olarak taşır; storage recovery metni yalnız `storageWarning` authority'sinde kalır ve live-region tekrarını kaldırır.
 - MERGE DURUMU: bu repair yeni exact head oluşturur. Dört zorunlu workflow completed+success, behind=0, merge-base=current main, additions>=4,000 ve mergeable=true yeniden doğrulanmadan merge yapılmaz.
+
+
+## Deep Experience strict-lint repair — PR #474 checkpoint — 2026-10-06
+- Exact-head CI triage confirmed the remaining Experience-owned release blocker was the stale unused `rejectedCount` parameter on Bookmark announcement construction; changed-source strict lint treats this warning as blocking.
+- Removed only that obsolete parameter and its call argument. Storage recovery remains owned by `storageWarning`; canonical result/count announcement behavior is unchanged.
+- Pre-repair lineage: main/merge-base `d364f991b88a0668a1337490227af4936eac232f`, branch 0 behind, PR mergeable=true, 4,036 additions / 198 deletions / 15 files. Typed Source Boundary and Platform Architecture Audit were success; Webclient Quality and Release QA failed at the strict changed-source lint warning.
+- Repair commit: `815db041d1a39ac124b4c450bc0163a635f8ddb4`. This progress update creates a newer exact head; do not merge until that exact head has all required workflows completed+success, current-main/merge-base remains fresh, additions>=4,000 and mergeable=true.
