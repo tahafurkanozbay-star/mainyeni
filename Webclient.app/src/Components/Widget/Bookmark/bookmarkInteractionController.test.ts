@@ -69,7 +69,8 @@ describe('bookmark interaction refresh', () => {
     controller.refresh();
     expect(model.getSnapshot().totalCount).toBe(3);
     expect(model.getSnapshot().rejectedCount).toBe(1);
-    expect(controller.getSnapshot().lastNotice).toMatchObject({ severity: 'warning' });
+    expect(model.getSnapshot().storageWarning).toContain('1 geçersiz kayıt');
+    expect(controller.getSnapshot().lastNotice).toBeNull();
   });
 
   it('handles storage read exceptions as bounded errors', () => {
