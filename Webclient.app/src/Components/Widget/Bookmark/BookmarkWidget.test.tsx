@@ -80,7 +80,7 @@ describe('BookmarkWidget modern screen', () => {
 
   it('shows the canonical stored bookmark count', async () => {
     renderWidget();
-    await waitFor(() => expect(screen.getAllByText('3 yer işareti kayıtlı').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText('3 yer işareti kayıtlı.').length).toBeGreaterThan(0));
   });
 
   it('renders semantic listbox metadata', async () => {
