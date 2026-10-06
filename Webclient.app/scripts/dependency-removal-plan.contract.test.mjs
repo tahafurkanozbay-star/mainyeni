@@ -166,3 +166,91 @@ test('candidate shared dependent list is frozen', () => {
   const plan = buildRemovalPlan(mkManifest(names), mkLock(names), names, { graph: independentGraph(names) });
   assert.ok(Object.isFrozen(plan.candidates[0].sharedDependents));
 });
+
+
+test('manifest root ownership is not an external package dependent', () => {
+  const g = mkGraph({
+    children: { '': ['node_modules/a'], 'node_modules/a': [] },
+    parents: { 'node_modules/a': [''] },
+  });
+  assert.deepEqual(collectSharedDependents(g, ['node_modules/a']), []);
+});
+
+test('real package parent remains an external blocker beside manifest root', () => {
+  const g = mkGraph({
+    children: { '': ['node_modules/a'], 'node_modules/host': ['node_modules/a'], 'node_modules/a': [] },
+    parents: { 'node_modules/a': ['', 'node_modules/host'] },
+  });
+  assert.deepEqual(collectSharedDependents(g, ['node_modules/a']), ['node_modules/host']);
+});
+
+test('manifest root plus owned parent does not create a false blocker', () => {
+  const g = mkGraph({
+    children: { '': ['node_modules/a'], 'node_modules/a': ['node_modules/leaf'], 'node_modules/leaf': [] },
+    parents: { 'node_modules/a': [''], 'node_modules/leaf': ['node_modules/a'] },
+  });
+  assert.deepEqual(
+    collectSharedDependents(g, ['node_modules/a', 'node_modules/leaf']),
+    [],
+  );
+});
+
+test('independent direct dependency is plannable when graph records manifest root parent', () => {
+  const names = ['a'];
+  const plan = buildRemovalPlan(mkManifest(names), mkLock(names), names, {
+    graph: independentGraph(names),
+  });
+  assert.equal(plan.candidates[0].status, 'plannable');
+  assert.deepEqual(plan.candidates[0].sharedDependents, []);
+  assert.deepEqual(plan.candidates[0].blockers, []);
+});
+
+test('real external package parent forces review while manifest root is ignored', () => {
+  const names = ['a'];
+  const g = mkGraph({
+    children: {
+      '': ['node_modules/a'],
+      'node_modules/host': ['node_modules/a'],
+      'node_modules/a': [],
+    },
+    parents: {
+      'node_modules/a': ['', 'node_modules/host'],
+    },
+  });
+  const plan = buildRemovalPlan(mkManifest(names), mkLock(names), names, { graph: g });
+  assert.equal(plan.candidates[0].status, 'review');
+  assert.deepEqual(plan.candidates[0].sharedDependents, ['node_modules/host']);
+  assert.match(plan.candidates[0].blockers[0], /external dependent/);
+});
+
+test('multiple real external parents remain deterministic and deduplicated', () => {
+  const g = mkGraph({
+    children: {},
+    parents: {
+      'node_modules/a': ['', 'node_modules/z', 'node_modules/x', 'node_modules/z'],
+    },
+  });
+  assert.deepEqual(
+    collectSharedDependents(g, ['node_modules/a']),
+    ['node_modules/x', 'node_modules/z'],
+  );
+});
+
+test('manifest root sentinel is ignored only by dependent analysis, not closure ownership', () => {
+  const g = mkGraph({
+    children: { '': ['node_modules/a'], 'node_modules/a': ['node_modules/leaf'], 'node_modules/leaf': [] },
+    parents: { 'node_modules/a': [''], 'node_modules/leaf': ['node_modules/a'] },
+  });
+  const closure = collectExclusiveClosure(g, 'node_modules/a');
+  assert.deepEqual(closure, ['node_modules/a', 'node_modules/leaf']);
+  assert.deepEqual(collectSharedDependents(g, closure), []);
+});
+
+test('root filtering does not mutate graph parent evidence', () => {
+  const parents = { 'node_modules/a': ['', 'node_modules/host'] };
+  const g = mkGraph({ children: {}, parents });
+  const before = JSON.stringify(g);
+  collectSharedDependents(g, ['node_modules/a']);
+  assert.equal(JSON.stringify(g), before);
+  assert.deepEqual(parents['node_modules/a'], ['', 'node_modules/host']);
+});
