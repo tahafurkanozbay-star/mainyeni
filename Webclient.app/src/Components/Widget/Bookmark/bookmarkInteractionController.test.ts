@@ -69,7 +69,7 @@ describe('bookmark interaction refresh', () => {
     controller.refresh();
     expect(model.getSnapshot().totalCount).toBe(3);
     expect(model.getSnapshot().rejectedCount).toBe(1);
-    expect(model.getSnapshot().storageWarning).toContain('1 geçersiz kayıt');
+    expect(model.getSnapshot().storageWarning).toContain('1 geçersiz veya yinelenen yer işareti');
     expect(controller.getSnapshot().lastNotice).toBeNull();
   });
 
