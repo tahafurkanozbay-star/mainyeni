@@ -19,6 +19,7 @@ export interface BookmarkKeyboardEventLike {
   readonly repeat?: boolean;
   readonly defaultPrevented?: boolean;
   readonly isComposing?: boolean;
+  readonly nativeEvent?: { readonly isComposing?: boolean };
 }
 export interface BookmarkKeyboardContext {
   readonly surface: BookmarkKeyboardSurface;
@@ -72,7 +73,7 @@ const decision = (intent: BookmarkKeyboardIntent, preventDefault = true, announc
   announceShortcut,
 });
 const hasCommandModifier = (event: BookmarkKeyboardEventLike): boolean => event.altKey === true || event.ctrlKey === true || event.metaKey === true;
-const isUnsafeToHandle = (event: BookmarkKeyboardEventLike): boolean => event.defaultPrevented === true || event.isComposing === true || event.key === 'Process' || event.key === 'Dead';
+const isUnsafeToHandle = (event: BookmarkKeyboardEventLike): boolean => event.defaultPrevented === true || event.isComposing === true || event.nativeEvent?.isComposing === true || event.key === 'Process' || event.key === 'Dead';
 
 const movementDecision = (event: BookmarkKeyboardEventLike, context: BookmarkKeyboardContext): BookmarkKeyboardDecision | null => {
   const move = MOVEMENT_BY_KEY[event.key];

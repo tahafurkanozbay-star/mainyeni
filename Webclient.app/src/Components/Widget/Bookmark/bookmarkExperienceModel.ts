@@ -124,10 +124,8 @@ const createAnnouncement = (
   if (resultCount === 0) return 'Aramayla eşleşen yer işareti bulunamadı.';
   const resultText = query
     ? `${resultCount} yer işareti bulundu.`
-    : `${totalCount} yer işareti gösteriliyor.`;
-  return rejectedCount > 0
-    ? `${resultText} ${rejectedCount} geçersiz kayıt güvenli biçimde atlandı.`
-    : resultText;
+    : `${totalCount} yer işareti kayıtlı.`;
+  return resultText;
 };
 
 const createStorageWarning = (rejectedCount: number): string | null => (

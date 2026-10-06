@@ -64,3 +64,9 @@
 - TEST CONTRACT: forwardRef verilmeden render edilen lifecycle regression testi unregister çağrısındaki gerçek null external ref kontratını doğruluyor; production lifecycle davranışı değiştirilmedi.
 - GATE: Bu repair commit'i yeni exact head oluşturur. PR additions>=4,000 korunmalı; current main fresh/behind=0, mergeable=true ve dört zorunlu workflow exact-head completed+success olmadan merge yapılmaz.
 - SONRAKİ GÖREV NOTU: yeni exact-head CI'ı doğrula. Webclient Quality exact-base Vitest, TypeScript, production build/integrity/budgets dahil success ise final accessibility/interaction review yap; main ilerlemediyse ready + expected-head squash merge uygula ve merge/main SHA'yı doğrula.
+
+
+## Deep Experience / exact-base Vitest repair — PR #474 — 2026-10-06
+- CI TEŞHİSİ: exact head `58d0d192b033c9f6ac420b08e3610b5b9ff86bdf` için Release QA, Typed Source Boundary ve Platform Architecture Audit success; Webclient Quality yalnız Exact-base Vitest regression gate'te 4 yeni Bookmark failure ile kaldı.
+- ONARIM: keyboard policy React/native `isComposing` sözleşmelerinin ikisini de fail-closed kabul eder. Bookmark announcement canonical kayıt sayısını `N yer işareti kayıtlı.` olarak taşır; storage recovery metni yalnız `storageWarning` authority'sinde kalır ve live-region tekrarını kaldırır.
+- MERGE DURUMU: bu repair yeni exact head oluşturur. Dört zorunlu workflow completed+success, behind=0, merge-base=current main, additions>=4,000 ve mergeable=true yeniden doğrulanmadan merge yapılmaz.
