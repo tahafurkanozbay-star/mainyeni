@@ -7,6 +7,8 @@ export interface ArcGisStatisticsBudget {
   maxRunningPerLayer: number;
   maxResidentGroups: number;
   maxResidentBytes: number;
+  /** Explicit bound for zero-group/zero-byte cached results. */
+  maxResidentEntries?: number;
   queueTtlMs: number;
   leaseTtlMs: number;
   residentTtlMs: number;
@@ -91,6 +93,7 @@ function timestamp(name: string, value: number): number {
 
 export class ArcGisQueryStatisticsLifecyclePolicy {
   readonly #budget: Readonly<ArcGisStatisticsBudget>;
+  readonly #maxResidentEntries: number;
   readonly #revisions = new Map<string, number>();
   readonly #queued = new Map<string, Queued>();
   readonly #running = new Map<string, Running>();
@@ -104,6 +107,9 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
     }
     for (const key of ["queueTtlMs","leaseTtlMs","residentTtlMs"] as const) positive(key, budget[key]);
     if (budget.maxRunningPerLayer > budget.maxRunning) throw new Error("maxRunningPerLayer cannot exceed maxRunning");
+    this.#maxResidentEntries = budget.maxResidentEntries === undefined
+      ? Math.min(budget.maxResidentGroups, budget.maxResidentBytes)
+      : positive("maxResidentEntries", budget.maxResidentEntries);
     this.#budget = Object.freeze({ ...budget });
   }
 
@@ -148,7 +154,7 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
     this.expire(now);
     if (this.#running.size >= this.#budget.maxRunning) return null;
     const candidate = [...this.#queued.values()]
-      .filter((item) => this.#runningForLayer(item.layerId) < this.#budget.maxRunningPerLayer)
+      .filter((item) => item.queuedAt <= now && this.#runningForLayer(item.layerId) < this.#budget.maxRunningPerLayer)
       .sort((a,b) => rank[b.intent]-rank[a.intent] || a.sequence-b.sequence || a.requestId.localeCompare(b.requestId))[0];
     if (!candidate) return null;
     this.#queued.delete(candidate.requestId);
@@ -162,7 +168,8 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
     const key = identity("requestId", requestId, 512);
     natural("revision", revision); timestamp("now", now);
     const running = this.#running.get(key);
-    if (!running || running.revision !== revision || this.#revisions.get(running.layerId) !== revision || now >= running.leaseExpiresAt) return null;
+    if (!running || running.revision !== revision || this.#revisions.get(running.layerId) !== revision ||
+        now < running.startedAt || now >= running.leaseExpiresAt) return null;
     running.leaseExpiresAt = now + this.#budget.leaseTtlMs;
     return this.#lease(running);
   }
@@ -175,8 +182,11 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
     const running = this.#running.get(key);
     if (!running || running.revision !== completion.revision ||
         this.#revisions.get(running.layerId) !== completion.revision ||
-        completion.completedAt >= running.leaseExpiresAt) return null;
+        completion.completedAt < running.startedAt || completion.completedAt >= running.leaseExpiresAt) return null;
     this.#running.delete(key);
+    // An impossible-to-fit result must not evict good residents or report success.
+    if (completion.groupCount > this.#budget.maxResidentGroups ||
+        completion.actualBytes > this.#budget.maxResidentBytes) return null;
     const resident: Resident = {
       requestId: key, layerId: running.layerId, revision: running.revision, signature: running.signature,
       groupBySignature: running.groupBySignature, statisticSignature: running.statisticSignature,
@@ -200,7 +210,7 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
     this.expire(now);
     if (this.#revisions.get(probe.layerId) !== revision) return null;
     const resident = this.#resident.get(this.#logicalKey(probe));
-    if (!resident) return null;
+    if (!resident || now < resident.touchedAt) return null;
     resident.touchedAt = now;
     resident.expiresAt = now + this.#budget.residentTtlMs;
     return this.#view(resident);
@@ -276,7 +286,7 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
   }
   #runningForLayer(layer:string) { let n=0; for(const x of this.#running.values()) if(x.layerId===layer)n++; return n; }
   #evictQueued(intent:ArcGisStatisticsIntent) {
-    const victim=[...this.#queued.values()].filter(x=>rank[x.intent]<=rank[intent])
+    const victim=[...this.#queued.values()].filter(x=>rank[x.intent]<rank[intent])
       .sort((a,b)=>rank[a.intent]-rank[b.intent] || a.sequence-b.sequence || a.requestId.localeCompare(b.requestId))[0];
     if(!victim)return false; this.#queued.delete(victim.requestId); return true;
   }
@@ -284,7 +294,8 @@ export class ArcGisQueryStatisticsLifecyclePolicy {
     const totals=()=>{let groups=0,bytes=0;for(const x of this.#resident.values()){groups+=x.groupCount;bytes+=x.actualBytes}return{groups,bytes}};
     for (;;) {
       const t=totals();
-      if(t.groups<=this.#budget.maxResidentGroups && t.bytes<=this.#budget.maxResidentBytes)return;
+      if(t.groups<=this.#budget.maxResidentGroups && t.bytes<=this.#budget.maxResidentBytes &&
+         this.#resident.size<=this.#maxResidentEntries)return;
       const victim=[...this.#resident.entries()].filter(([key])=>key!==protectedKey)
         .sort((a,b)=>a[1].touchedAt-b[1].touchedAt || a[1].sequence-b[1].sequence || a[0].localeCompare(b[0]))[0];
       if(!victim){this.#resident.delete(protectedKey);return} this.#resident.delete(victim[0]);
