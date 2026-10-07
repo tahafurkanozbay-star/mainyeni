@@ -41,7 +41,7 @@ export interface ArcGisQueryPagePolicyOptions {
 }
 
 type Queued = ArcGisQueryPageRequest & { sequence: number };
-type Running = Queued & { expiresAt: number };
+type Running = Queued & { expiresAt: number; startedAt: number };
 type Resident = {
   key: string; requestId: string; layerId: string; revision: number; signature: string; offset: number;
   pageSize: number; featureCount: number; exceededTransferLimit: boolean;
@@ -55,7 +55,7 @@ const finiteInt = (value: number, name: string, min = 0) => {
 };
 const nonEmpty = (value: string, name: string) => {
   const v = value.trim();
-  if (!v) throw new Error(`${name} must be non-empty`);
+  if (!v || v.length > 2048 || /[\u0000-\u001f\u007f]/.test(v)) throw new Error(`${name} is invalid`);
   return v;
 };
 
@@ -79,6 +79,8 @@ export class ArcGisQueryPageLifecyclePolicy {
       leaseTtlMs: finiteInt(options.leaseTtlMs, "leaseTtlMs", 1),
       residentTtlMs: finiteInt(options.residentTtlMs, "residentTtlMs", 1),
     };
+    if (this.options.maxConcurrentPerLayer > this.options.maxConcurrent)
+      throw new Error("maxConcurrentPerLayer exceeds maxConcurrent");
   }
 
   setRevision(layerId: string, revision: number): void {
@@ -112,13 +114,13 @@ export class ArcGisQueryPageLifecyclePolicy {
     this.sweep(now);
     if (this.running.size >= this.options.maxConcurrent) return undefined;
     const candidates = [...this.queued.values()]
-      .filter(q => this.runningForLayer(q.layerId) < this.options.maxConcurrentPerLayer)
+      .filter(q => q.now <= now && this.runningForLayer(q.layerId) < this.options.maxConcurrentPerLayer)
       .sort((a, b) => rank[a.intent] - rank[b.intent] || a.sequence - b.sequence);
     const next = candidates[0];
     if (!next) return undefined;
     this.queued.delete(next.requestId);
     const expiresAt = now + this.options.leaseTtlMs;
-    this.running.set(next.requestId, { ...next, expiresAt });
+    this.running.set(next.requestId, { ...next, expiresAt, startedAt: now });
     return Object.freeze({
       requestId: next.requestId, layerId: next.layerId, revision: next.revision,
       signature: next.signature, offset: next.offset, pageSize: next.pageSize, expiresAt,
@@ -132,6 +134,7 @@ export class ArcGisQueryPageLifecyclePolicy {
     const id = nonEmpty(requestId, "requestId");
     const item = this.running.get(id);
     if (!item) throw new Error("request is not running");
+    if (now < item.startedAt) throw new Error("lease clock moved backwards");
     item.expiresAt = now + this.options.leaseTtlMs;
     return Object.freeze({
       requestId: item.requestId, layerId: item.layerId, revision: item.revision,
@@ -149,6 +152,9 @@ export class ArcGisQueryPageLifecyclePolicy {
     if (!item) throw new Error("request is not running");
     this.running.delete(item.requestId);
     this.assertRevision(item.layerId, item.revision);
+    if (result.now < item.startedAt || result.featureCount > item.pageSize ||
+        typeof result.exceededTransferLimit !== "boolean" || result.actualBytes > this.options.maxResidentBytes)
+      throw new Error("invalid or oversized ArcGIS page completion");
     const key = this.logicalKey(item);
     this.resident.set(key, {
       key, requestId: item.requestId, layerId: item.layerId, revision: item.revision, signature: item.signature,
@@ -162,9 +168,13 @@ export class ArcGisQueryPageLifecyclePolicy {
   lookup(layerId: string, revision: number, signature: string, offset: number, pageSize: number, now: number) {
     this.assertActive();
     this.sweep(now);
-    const key = this.logicalKey({ layerId: nonEmpty(layerId,"layerId"), revision, signature: nonEmpty(signature,"signature"), offset, pageSize });
+    const layer = nonEmpty(layerId, "layerId");
+    const key = this.logicalKey({ layerId: layer, revision: finiteInt(revision,"revision"),
+      signature: nonEmpty(signature,"signature"), offset: finiteInt(offset,"offset"),
+      pageSize: finiteInt(pageSize,"pageSize",1) });
+    if (this.revisions.get(layer) !== revision) return undefined;
     const item = this.resident.get(key);
-    if (!item) return undefined;
+    if (!item || now < item.touchedAt) return undefined;
     item.touchedAt = now;
     item.expiresAt = now + this.options.residentTtlMs;
     return Object.freeze({ featureCount: item.featureCount, exceededTransferLimit: item.exceededTransferLimit });

@@ -43,4 +43,35 @@ describe("ArcGIS query page lifecycle collision and privacy boundaries", () => {
     ]);
     expect(JSON.stringify(lease)).not.toContain("geometry");
   });
+
+  it("fails closed on invalid page count and resident byte budgets", () => {
+    const p = new ArcGisQueryPageLifecyclePolicy(options); p.setRevision("parcels", 1);
+    p.enqueue(request("bad-count")); p.acquire(1);
+    expect(() => p.complete({ requestId: "bad-count", featureCount: 11,
+      exceededTransferLimit: false, actualBytes: 10, now: 2 })).toThrow("invalid or oversized");
+    expect(p.snapshot(2).resident).toBe(0);
+    p.enqueue({ ...request("bad-bytes", "visible", 3), offset: 10 }); p.acquire(3);
+    expect(() => p.complete({ requestId: "bad-bytes", featureCount: 1,
+      exceededTransferLimit: true, actualBytes: 101, now: 4 })).toThrow("invalid or oversized");
+    expect(p.snapshot(4)).toMatchObject({ running: 0, resident: 0 });
+  });
+
+  it("does not start future-queued work or accept rollback clocks", () => {
+    const p = new ArcGisQueryPageLifecyclePolicy(options); p.setRevision("parcels", 1);
+    p.enqueue(request("future", "visible", 10));
+    expect(p.acquire(9)).toBeUndefined();
+    expect(p.acquire(10)?.requestId).toBe("future");
+    expect(() => p.renew("future", 9)).toThrow("clock");
+    expect(() => p.complete({ requestId: "future", featureCount: 1,
+      exceededTransferLimit: false, actualBytes: 1, now: 9 })).toThrow("invalid or oversized");
+  });
+
+  it("validates lookup keys and rejects resident clock rollback", () => {
+    const p = new ArcGisQueryPageLifecyclePolicy(options); p.setRevision("parcels", 1);
+    p.enqueue(request("a")); p.acquire(1);
+    p.complete({ requestId: "a", featureCount: 1, exceededTransferLimit: false, actualBytes: 1, now: 2 });
+    expect(() => p.lookup("parcels", 1, "where=1", -1, 10, 3)).toThrow("offset");
+    expect(p.lookup("parcels", 1, "where=1", 0, 10, 1)).toBeUndefined();
+    expect(p.lookup("parcels", 1, "where=1", 0, 10, 3)?.featureCount).toBe(1);
+  });
 });
