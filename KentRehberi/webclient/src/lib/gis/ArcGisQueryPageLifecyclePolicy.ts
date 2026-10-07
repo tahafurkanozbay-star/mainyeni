@@ -43,7 +43,7 @@ export interface ArcGisQueryPagePolicyOptions {
 type Queued = ArcGisQueryPageRequest & { sequence: number };
 type Running = Queued & { expiresAt: number };
 type Resident = {
-  key: string; layerId: string; revision: number; signature: string; offset: number;
+  key: string; requestId: string; layerId: string; revision: number; signature: string; offset: number;
   pageSize: number; featureCount: number; exceededTransferLimit: boolean;
   actualBytes: number; touchedAt: number; expiresAt: number; sequence: number;
 };
@@ -92,14 +92,16 @@ export class ArcGisQueryPageLifecyclePolicy {
     this.invalidateLayer(layer);
   }
 
-  enqueue(request: ArcGisQueryPageRequest): "queued" | "deduped" {
+  enqueue(request: ArcGisQueryPageRequest): "queued" | "deduped" | "rejected" {
     this.assertActive();
-    this.sweep(request.now);
     const normalized = this.normalize(request);
+    this.sweep(normalized.now);
     this.assertRevision(normalized.layerId, normalized.revision);
-    const existing = this.findLogical(normalized);
-    if (existing) return "deduped";
-    if (this.queued.size >= this.options.maxQueued) this.evictQueued();
+    const collision = this.queued.get(normalized.requestId) ?? this.running.get(normalized.requestId)
+      ?? [...this.resident.values()].find(x => x.requestId === normalized.requestId);
+    if (collision) return this.logicalKey(collision) === this.logicalKey(normalized) ? "deduped" : "rejected";
+    if (this.findLogical(normalized)) return "deduped";
+    if (this.queued.size >= this.options.maxQueued && !this.evictQueued(normalized.intent)) return "rejected";
     this.queued.set(normalized.requestId, { ...normalized, sequence: this.sequence++ });
     return "queued";
   }
@@ -149,7 +151,7 @@ export class ArcGisQueryPageLifecyclePolicy {
     this.assertRevision(item.layerId, item.revision);
     const key = this.logicalKey(item);
     this.resident.set(key, {
-      key, layerId: item.layerId, revision: item.revision, signature: item.signature,
+      key, requestId: item.requestId, layerId: item.layerId, revision: item.revision, signature: item.signature,
       offset: item.offset, pageSize: item.pageSize, featureCount: result.featureCount,
       exceededTransferLimit: result.exceededTransferLimit, actualBytes: result.actualBytes,
       touchedAt: result.now, expiresAt: result.now + this.options.residentTtlMs, sequence: this.sequence++,
@@ -195,11 +197,13 @@ export class ArcGisQueryPageLifecyclePolicy {
   }
 
   private normalize(r: ArcGisQueryPageRequest): ArcGisQueryPageRequest {
+    if (r.intent !== "interactive" && r.intent !== "visible" && r.intent !== "background")
+      throw new Error("intent is invalid");
     return {
-      ...r, requestId: nonEmpty(r.requestId,"requestId"), layerId: nonEmpty(r.layerId,"layerId"),
+      requestId: nonEmpty(r.requestId,"requestId"), layerId: nonEmpty(r.layerId,"layerId"),
       signature: nonEmpty(r.signature,"signature"), revision: finiteInt(r.revision,"revision"),
       offset: finiteInt(r.offset,"offset"), pageSize: finiteInt(r.pageSize,"pageSize",1),
-      now: finiteInt(r.now,"now"),
+      intent: r.intent, now: finiteInt(r.now,"now"),
     };
   }
   private logicalKey(x: {layerId:string;revision:number;signature:string;offset:number;pageSize:number}) {
@@ -215,9 +219,12 @@ export class ArcGisQueryPageLifecyclePolicy {
     else if(current!==revision) throw new Error("stale layer revision");
   }
   private runningForLayer(layerId:string) { return [...this.running.values()].filter(x=>x.layerId===layerId).length; }
-  private evictQueued() {
-    const victim=[...this.queued.values()].sort((a,b)=>rank[b.intent]-rank[a.intent]||a.sequence-b.sequence)[0];
-    if(victim) this.queued.delete(victim.requestId);
+  private evictQueued(incoming: ArcGisPageIntent): boolean {
+    const victim=[...this.queued.values()].filter(x=>rank[x.intent]>rank[incoming])
+      .sort((a,b)=>rank[b.intent]-rank[a.intent]||a.sequence-b.sequence)[0];
+    if (!victim) return false;
+    this.queued.delete(victim.requestId);
+    return true;
   }
   private invalidateLayer(layerId:string) {
     for(const [id,x] of this.queued) if(x.layerId===layerId) this.queued.delete(id);
