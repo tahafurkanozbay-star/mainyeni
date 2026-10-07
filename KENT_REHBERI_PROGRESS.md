@@ -49,3 +49,9 @@
 - TEST / CI: pre-turn exact product head `3fea66590bb5e924409e2dcf9378330fcf144693` had Platform Architecture Audit #37387022691 and Release QA #37387022712 completed+success. Any new progress exact head requires fresh CI; do not inherit PASS.
 - NETWORK / SECURITY / ICONS: no endpoint, WMS/WFS, telemetry, secret, remote asset or second icon resolver added. Collision repair preserved current-main implementation exactly.
 - SONRAKİ GÖREV NOTU: inventory current-main GIS modules before selecting the next slice; choose a non-duplicate high-impact runtime/geometry/query/layer/2D-3D gap, add adversarial coverage, and continue until base...head additions >=4,000. Verify exact-head CI and mergeability before any merge.
+
+## Deep GIS — PR #477 integrity checkpoint (2026-10-08)
+- Main/base: d364f991b88a0668a1337490227af4936eac232f; PR #477 draft/open. Product commits: 4479a266299581f477b2b16964e3400bab28b569, efe03668c045d38922ab777135cdac263a158880, e0ead81ae67a44c861eb3a6fa4a641eccec9b469.
+- Statistics: reject impossible-to-fit aggregate completion, bound zero-byte empty-group residents, guard future queue/clock rollback and preserve FIFO. Page: reject request-ID collisions and invalid page completions, protect priority queue, whitelist scalar request fields, validate lookup and lease clocks. Added adversarial Vitest suites.
+- Baseline head 8ca874ef32d9a70e60859a425e82c2769e2435d2 passed Platform Architecture Audit #37694707841 and Release QA #37694707835. New exact-head CI is required; do not inherit PASS. Local npm/build unavailable.
+- No new network endpoint, WMS/WFS, telemetry, remote asset or icon resolver. Mandatory >=4000 additions not reached; do not merge. Next: exact-head CI, security/performance/data-integrity review, meaningful GIS backlog and current-main/mergeability recheck.
