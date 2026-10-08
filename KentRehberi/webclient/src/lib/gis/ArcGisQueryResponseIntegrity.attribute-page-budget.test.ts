@@ -56,4 +56,15 @@ describe('ArcGIS query page-wide attribute integrity', () => {
     expect(() => new ArcGisQueryResponseIntegrity({ maxAttributeTextCharactersPerPage: Number.NaN })).toThrow()
     expect(() => new ArcGisQueryResponseIntegrity({ requireObjectId: 'yes' as never })).toThrow()
   })
+  it('keeps ordinary large ArcGIS pages compatible with default aggregate budgets', () => {
+    const inspector = new ArcGisQueryResponseIntegrity()
+    const extras = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => ['field' + index, index]),
+    )
+    const features = Array.from({ length: 500 }, (_, index) => feature(index + 1, extras))
+    const result = inspector.inspect({ features }, context)
+    expect(result.kind).toBe('accepted')
+    if (result.kind === 'accepted') expect(result.objectIds).toHaveLength(500)
+  })
+
 })

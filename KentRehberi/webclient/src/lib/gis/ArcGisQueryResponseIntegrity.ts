@@ -71,8 +71,8 @@ export type ArcGisQueryIntegrityResult =
 const DEFAULTS: ArcGisQueryResponseIntegrityOptions = {
   maxFeaturesPerPage: 2_000,
   maxAttributesPerFeature: 256,
-  maxAttributesPerPage: 16_384,
-  maxAttributeTextCharactersPerPage: 2_000_000,
+  maxAttributesPerPage: 131_072,
+  maxAttributeTextCharactersPerPage: 16_777_216,
   maxAttributeTextLength: 16_384,
   maxGeometryDepth: 12,
   maxGeometryCoordinates: 200_000,
