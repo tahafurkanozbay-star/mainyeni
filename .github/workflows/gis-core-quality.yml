@@ -58,6 +58,7 @@ jobs:
             src/lib/gis/ArcGisQueryResponseIntegrity.transport-ownership.test.ts \
             src/lib/gis/ArcGisQueryExecutionCoordinator.ts \
             src/lib/gis/ArcGisQueryExecutionCoordinator.physical-capacity.test.ts \
+            src/lib/gis/ArcGisQueryExecutionCoordinator.snapshot.test.ts \
             src/lib/gis/ArcGisQueryCountLifecyclePolicy.ts \
             src/lib/gis/ArcGisQueryExtentLifecyclePolicy.ts
 

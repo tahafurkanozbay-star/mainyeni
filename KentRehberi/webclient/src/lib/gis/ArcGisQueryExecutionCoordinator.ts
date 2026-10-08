@@ -53,16 +53,17 @@ export type ArcGisQueryExecutionResult = ArcGisQueryExecutionSuccess | ArcGisQue
 const MAX_EXECUTION_PAGES = 4096
 
 function validPlan(plan: ArcGisQueryPlan): plan is Extract<ArcGisQueryPlan, { kind: 'planned' }> {
-  if (plan.kind !== 'planned' || typeof plan.key !== 'string' || !plan.key.trim() ||
+  if (plan === null || typeof plan !== 'object' || plan.kind !== 'planned' ||
+      typeof plan.key !== 'string' || !plan.key.trim() ||
       plan.key.length > 8192 || !positiveInteger(plan.pageSize) ||
       !Array.isArray(plan.pages) || plan.pages.length === 0 || plan.pages.length > MAX_EXECUTION_PAGES) return false
   const seenPages = new Set<number>()
   const seenObjectIds = new Set<number>()
   const first = plan.pages[0]
-  if (first === undefined) return false
+  if (first === undefined || first === null || typeof first !== 'object') return false
   for (const entry of plan.pages) {
-    if (entry.kind !== first.kind) return false
-    if (!entry || !Number.isSafeInteger(entry.page) || entry.page < 0 ||
+    if (entry === null || typeof entry !== 'object' || entry.kind !== first.kind) return false
+    if (!Number.isSafeInteger(entry.page) || entry.page < 0 ||
         entry.page >= plan.pages.length || seenPages.has(entry.page)) return false
     seenPages.add(entry.page)
     if (entry.kind === 'objectIds') {
@@ -87,6 +88,30 @@ function validPlan(plan: ArcGisQueryPlan): plan is Extract<ArcGisQueryPlan, { ki
     } else return false
   }
   return true
+}
+
+// Caller-owned plans are mutable even when their TypeScript type is readonly.
+// Capture a bounded, frozen execution snapshot before yielding to transports,
+// which may otherwise mutate page identities or arrays between awaits.
+function snapshotPlan(plan: Extract<ArcGisQueryPlan, { kind: 'planned' }>):
+  Extract<ArcGisQueryPlan, { kind: 'planned' }> {
+  const pages: ArcGisQueryPage[] = plan.pages.map(page => page.kind === 'objectIds'
+    ? Object.freeze({
+      kind: 'objectIds' as const,
+      page: page.page,
+      objectIds: Object.freeze([...page.objectIds]),
+    })
+    : Object.freeze({
+      kind: 'offset' as const,
+      page: page.page,
+      resultOffset: page.resultOffset,
+      resultRecordCount: page.resultRecordCount,
+      orderByFields: Object.freeze([...page.orderByFields]),
+    }))
+  return Object.freeze({
+    kind: 'planned', key: plan.key, pageSize: plan.pageSize,
+    pages: Object.freeze(pages),
+  })
 }
 
 const DEFAULTS: ArcGisQueryExecutionOptions = {
@@ -134,6 +159,7 @@ export class ArcGisQueryExecutionCoordinator {
   async execute(plan: ArcGisQueryPlan, signal?: AbortSignal): Promise<ArcGisQueryExecutionResult> {
     if (!validPlan(plan)) return { kind: 'failed', code: 'invalid-plan' }
     if (signal?.aborted === true) return { kind: 'failed', code: 'aborted' }
+    const stablePlan = snapshotPlan(plan)
 
     const root = new AbortController()
     const onAbort = (): void => root.abort(signal?.reason)
@@ -141,7 +167,7 @@ export class ArcGisQueryExecutionCoordinator {
     if (signal?.aborted) root.abort(signal.reason)
 
     try {
-      const outcomes = await this.#executeBounded(plan.pages, root)
+      const outcomes = await this.#executeBounded(stablePlan.pages, root)
       if ('kind' in outcomes) return outcomes
 
       const features: unknown[] = []
@@ -156,13 +182,16 @@ export class ArcGisQueryExecutionCoordinator {
         const requestedIds = outcome.page.kind === 'objectIds'
           ? new Set(outcome.page.objectIds)
           : null
-        if (outcome.result.features.length !== outcome.result.objectIds.length ||
-            outcome.result.features.length > plan.pageSize ||
+        if (!Array.isArray(outcome.result.features) || !Array.isArray(outcome.result.objectIds) ||
+            typeof outcome.result.exceededTransferLimit !== 'boolean' ||
+            outcome.result.features.length !== outcome.result.objectIds.length ||
+            outcome.result.features.length > stablePlan.pageSize ||
+            outcome.result.objectIds.some(id => !positiveInteger(id)) ||
             (requestedIds !== null && outcome.result.objectIds.some(id => !requestedIds.has(id)))) {
           return { kind: 'failed', code: 'integrity-error', page: outcome.page.page }
         }
         if (outcome.result.exceededTransferLimit &&
-            (outcome.page.kind === 'objectIds' || outcome.page.page === plan.pages.length - 1)) {
+            (outcome.page.kind === 'objectIds' || outcome.page.page === stablePlan.pages.length - 1)) {
           return { kind: 'failed', code: 'incomplete-transfer', page: outcome.page.page }
         }
         if (features.length + outcome.result.features.length > this.#options.maxFeatures) {
@@ -181,7 +210,7 @@ export class ArcGisQueryExecutionCoordinator {
 
       return Object.freeze({
         kind: 'completed',
-        key: plan.key,
+        key: stablePlan.key,
         features: Object.freeze(features),
         objectIds: Object.freeze(objectIds),
         pagesCompleted: outcomes.length,
