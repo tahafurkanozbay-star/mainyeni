@@ -103,13 +103,25 @@ function normalizeOptions(input: Partial<ArcGisQueryResponseIntegrityOptions>): 
   return Object.freeze(options)
 }
 
+// Untrusted REST data must be read through own data descriptors. Accessors
+// must never execute during response validation or snapshot construction.
+function ownData(record: Record<string, unknown>, key: string):
+  { readonly valid: true; readonly value: unknown } | { readonly valid: false } {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key)
+  if (descriptor === undefined) return { valid: true, value: undefined }
+  if (!('value' in descriptor)) return { valid: false }
+  return { valid: true, value: descriptor.value }
+}
+
 function parseWkid(value: unknown): number | undefined | null {
   if (value === undefined) return undefined
   if (!isRecord(value)) return null
-  const wkid = value.latestWkid ?? value.wkid
-  if (wkid === undefined) return undefined
-  if (!positiveInteger(wkid as number)) return null
-  return wkid as number
+  const latest = ownData(value, 'latestWkid')
+  const legacy = ownData(value, 'wkid')
+  if (!latest.valid || !legacy.valid) return null
+  if (latest.value !== undefined && !positiveInteger(latest.value as number)) return null
+  if (legacy.value !== undefined && !positiveInteger(legacy.value as number)) return null
+  return (latest.value ?? legacy.value) as number | undefined
 }
 
 // A single bounded walk validates and snapshots geometry. Never retain a
@@ -233,6 +245,7 @@ function inspectAttributes(
   let featureAttributes = 0
   // A bounded own-property walk avoids allocating an unbounded Object.entries array
   // before the attribute cardinality limit has been checked.
+  const snapshot: Record<string, unknown> = {}
   for (const field in attributes) {
     if (!Object.prototype.hasOwnProperty.call(attributes, field)) continue
     featureAttributes += 1
@@ -240,7 +253,9 @@ function inspectAttributes(
     page.attributes += 1
     if (page.attributes > maxPageAttributes) return { issue: 'attribute-page-budget' }
     if (field.length === 0 || field.length > 256) return { issue: 'invalid-attributes', field }
-    const value = attributes[field]
+    const descriptor = Object.getOwnPropertyDescriptor(attributes, field)
+    if (descriptor === undefined || !('value' in descriptor)) return { issue: 'invalid-attributes', field }
+    const value: unknown = descriptor.value
     if (typeof value === 'string') {
       if (value.length > maxTextLength) return { issue: 'attribute-text-budget', field }
       page.textCharacters += value.length
@@ -251,8 +266,12 @@ function inspectAttributes(
     if (!['string', 'number', 'boolean', 'object', 'undefined'].includes(typeof value)) {
       return { issue: 'invalid-attributes', field }
     }
+    // Define own keys without prototype setter side effects.
+    Object.defineProperty(snapshot, field, {
+      value, enumerable: true, writable: false, configurable: false,
+    })
   }
-  return { record: attributes }
+  return { record: Object.freeze(snapshot) }
 }
 
 export class ArcGisQueryResponseIntegrity {
@@ -267,15 +286,21 @@ export class ArcGisQueryResponseIntegrity {
     if (!FIELD.test(context.objectIdField.trim())) {
       return { kind: 'rejected', issue: { code: 'invalid-object-id', field: context.objectIdField } }
     }
-    if (!Array.isArray(response.features)) return { kind: 'rejected', issue: { code: 'invalid-features' } }
-    if (response.features.length > this.#options.maxFeaturesPerPage) {
+    const featureData = ownData(response, 'features')
+    if (!featureData.valid || !Array.isArray(featureData.value)) {
+      return { kind: 'rejected', issue: { code: 'invalid-features' } }
+    }
+    const features = featureData.value
+    if (features.length > this.#options.maxFeaturesPerPage) {
       return { kind: 'rejected', issue: { code: 'feature-budget' } }
     }
-    if (response.exceededTransferLimit !== undefined && typeof response.exceededTransferLimit !== 'boolean') {
+    const transferData = ownData(response, 'exceededTransferLimit')
+    if (!transferData.valid || (transferData.value !== undefined && typeof transferData.value !== 'boolean')) {
       return { kind: 'rejected', issue: { code: 'invalid-transfer-limit' } }
     }
-
-    const wkid = parseWkid(response.spatialReference)
+    const referenceData = ownData(response, 'spatialReference')
+    if (!referenceData.valid) return { kind: 'rejected', issue: { code: 'invalid-spatial-reference' } }
+    const wkid = parseWkid(referenceData.value)
     if (wkid === null) return { kind: 'rejected', issue: { code: 'invalid-spatial-reference' } }
     if (context.expectedSpatialReferenceWkid !== undefined) {
       if (!positiveInteger(context.expectedSpatialReferenceWkid)) {
@@ -291,16 +316,24 @@ export class ArcGisQueryResponseIntegrity {
     const accepted: ArcGisFeatureLike[] = []
     const pageGeometryBudget = { nodes: 0 }
     const pageAttributeBudget = { attributes: 0, textCharacters: 0 }
-    for (let index = 0; index < response.features.length; index += 1) {
-      const raw = response.features[index]
+    for (let index = 0; index < features.length; index += 1) {
+      const raw = features[index]
       if (!isRecord(raw)) return { kind: 'rejected', issue: { code: 'invalid-feature', featureIndex: index } }
+      const attributeData = ownData(raw, 'attributes')
+      const geometryData = ownData(raw, 'geometry')
+      if (!attributeData.valid) return { kind: 'rejected', issue: { code: 'invalid-attributes', featureIndex: index } }
+      if (!geometryData.valid) return { kind: 'rejected', issue: { code: 'invalid-geometry', featureIndex: index } }
+      const rawAttributes = attributeData.value
+      const rawGeometry = geometryData.value
       // Classify malformed object IDs precisely before generic attribute validation.
-      const candidateId = isRecord(raw.attributes) ? raw.attributes[context.objectIdField] : undefined
+      const idData = isRecord(rawAttributes) ? ownData(rawAttributes, context.objectIdField) : { valid: true, value: undefined }
+      if (!idData.valid) return { kind: 'rejected', issue: { code: 'invalid-attributes', featureIndex: index, field: context.objectIdField } }
+      const candidateId = idData.value
       if (candidateId !== undefined && candidateId !== null && !positiveInteger(candidateId as number)) {
         return { kind: 'rejected', issue: { code: 'invalid-object-id', featureIndex: index, field: context.objectIdField } }
       }
       const attributes = inspectAttributes(
-        raw.attributes,
+        rawAttributes,
         this.#options.maxAttributesPerFeature,
         this.#options.maxAttributeTextLength,
         pageAttributeBudget,
@@ -326,8 +359,9 @@ export class ArcGisQueryResponseIntegrity {
       }
       // ArcGIS may attach a spatial reference to each geometry independently.
       // A mismatched feature SR must not be rendered as if it used the response SR.
-      if (isRecord(raw.geometry) && 'spatialReference' in raw.geometry) {
-        const geometryWkid = parseWkid(raw.geometry.spatialReference)
+      if (isRecord(rawGeometry) && Object.prototype.hasOwnProperty.call(rawGeometry, 'spatialReference')) {
+        const geometryReference = ownData(rawGeometry, 'spatialReference')
+        const geometryWkid = geometryReference.valid ? parseWkid(geometryReference.value) : null
         if (geometryWkid === null) {
           return { kind: 'rejected', issue: { code: 'invalid-spatial-reference', featureIndex: index } }
         }
@@ -339,7 +373,7 @@ export class ArcGisQueryResponseIntegrity {
         }
       }
       const geometryInspection = inspectGeometry(
-        raw.geometry,
+        rawGeometry,
         this.#options.maxGeometryDepth,
         this.#options.maxGeometryCoordinates,
         this.#options.maxGeometryNodesPerFeature,
@@ -350,8 +384,8 @@ export class ArcGisQueryResponseIntegrity {
         return { kind: 'rejected', issue: { code: geometryInspection.issue, featureIndex: index } }
       }
       accepted.push(Object.freeze({
-        attributes: Object.freeze({ ...attributes.record }),
-        ...(raw.geometry === undefined ? {} : { geometry: geometryInspection.snapshot }),
+        attributes: attributes.record,
+        ...(rawGeometry === undefined ? {} : { geometry: geometryInspection.snapshot }),
       }))
     }
 
@@ -359,7 +393,7 @@ export class ArcGisQueryResponseIntegrity {
       kind: 'accepted',
       features: Object.freeze(accepted),
       objectIds: Object.freeze([...seen]),
-      exceededTransferLimit: response.exceededTransferLimit === true,
+      exceededTransferLimit: transferData.value === true,
       ...(wkid === undefined ? {} : { spatialReferenceWkid: wkid }),
     })
   }
