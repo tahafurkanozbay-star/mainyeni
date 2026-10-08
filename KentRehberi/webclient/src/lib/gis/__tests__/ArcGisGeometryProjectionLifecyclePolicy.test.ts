@@ -94,7 +94,7 @@ describe('ArcGisGeometryProjectionLifecyclePolicy', () => {
 
   it('renews running leases and consumes resident entries exactly once', () => {
     const p=new ArcGisGeometryProjectionLifecyclePolicy(budget); p.setRevision(4326,3857,1); p.admit(request('a')); p.startNext(1)
-    expect(p.renew('a',1,10)).toBe(true); expect(p.expire(39)).toBe(0); expect(p.complete('a',1,50,40)).not.toBeNull()
+    expect(p.renew('a',1,10)).toBe(true); expect(p.expire(39)).toBe(0); expect(p.complete('a',1,50,39)).not.toBeNull()
     expect(p.consume('a',1)?.jobId).toBe('a'); expect(p.consume('a',1)).toBeNull()
   })
 

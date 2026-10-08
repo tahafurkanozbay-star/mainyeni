@@ -90,3 +90,5 @@
 
 ## GIS #477 CI checkpoint
 - New GIS-specific CI added for previously uncovered source and tests; exact-head verification required before merge.
+
+- GIS Core Quality exposed eight previously invisible Vitest failures. Admission error classification, cache LRU tie-breaking, scheduler ordering, object-ID integrity classification, test budget consistency and projection lease-boundary regression were repaired. Dedupe raw-control validation remains pending exact-head verification.

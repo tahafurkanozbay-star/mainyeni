@@ -203,6 +203,11 @@ export class ArcGisQueryResponseIntegrity {
     for (let index = 0; index < response.features.length; index += 1) {
       const raw = response.features[index]
       if (!isRecord(raw)) return { kind: 'rejected', issue: { code: 'invalid-feature', featureIndex: index } }
+      // Classify malformed object IDs precisely before generic attribute validation.
+      const candidateId = isRecord(raw.attributes) ? raw.attributes[context.objectIdField] : undefined
+      if (candidateId !== undefined && candidateId !== null && !positiveInteger(candidateId as number)) {
+        return { kind: 'rejected', issue: { code: 'invalid-object-id', featureIndex: index, field: context.objectIdField } }
+      }
       const attributes = inspectAttributes(raw.attributes, this.#options.maxAttributesPerFeature, this.#options.maxAttributeTextLength)
       if ('issue' in attributes) {
         return { kind: 'rejected', issue: { code: attributes.issue, featureIndex: index, ...(attributes.field === undefined ? {} : { field: attributes.field }) } }
