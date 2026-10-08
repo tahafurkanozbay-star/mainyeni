@@ -221,6 +221,20 @@ export class ArcGisQueryResponseIntegrity {
         }
         seen.add(id)
       }
+      // ArcGIS may attach a spatial reference to each geometry independently.
+      // A mismatched feature SR must not be rendered as if it used the response SR.
+      if (isRecord(raw.geometry) && 'spatialReference' in raw.geometry) {
+        const geometryWkid = parseWkid(raw.geometry.spatialReference)
+        if (geometryWkid === null) {
+          return { kind: 'rejected', issue: { code: 'invalid-spatial-reference', featureIndex: index } }
+        }
+        if (geometryWkid !== undefined &&
+            ((wkid !== undefined && geometryWkid !== wkid) ||
+             (context.expectedSpatialReferenceWkid !== undefined &&
+              geometryWkid !== context.expectedSpatialReferenceWkid))) {
+          return { kind: 'rejected', issue: { code: 'spatial-reference-mismatch', featureIndex: index } }
+        }
+      }
       const geometryIssue = inspectGeometry(raw.geometry, this.#options.maxGeometryDepth, this.#options.maxGeometryCoordinates)
       if (geometryIssue !== null) return { kind: 'rejected', issue: { code: geometryIssue, featureIndex: index } }
       accepted.push(Object.freeze({ attributes: Object.freeze({ ...attributes.record }), ...(raw.geometry === undefined ? {} : { geometry: raw.geometry }) }))

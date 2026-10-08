@@ -71,3 +71,12 @@
 - ArcGisQueryExecutionCoordinator.adversarial.test.ts adds five focused regression tests.
 - No network endpoint, WMS/WFS, telemetry or icon authority added. Local npm validation unavailable. Exact-head CI pending; do not inherit older success.
 - Additions below 4000: no merge. Next: review exact-head CI and continue meaningful GIS repairs.
+
+## Deep GIS — PR #477 query identity and spatial integrity — 2026-10-08
+- Branch: `agent/gis-reconcile-20261005-2110-d364f99`; base/main: `d364f991b88a0668a1337490227af4936eac232f`.
+- Query planner identities now distinguish effective page counts and server ordering capabilities, normalize object-ID sets, reject unordered multi-page offset requests and malformed order/controls.
+- Response inspector rejects geometry WKID mismatches; query coordinator checks synchronous abort and raw controls.
+- Added focused Vitest regressions for identity, spatial-reference integrity, abort and invalid runtime input.
+- Previous exact-head CI success does not transfer to new commits. Local npm/build not executed; recheck GitHub Actions on new head.
+- No endpoint, WMS/WFS, telemetry, secret or new icon resolver. Additions gate below 4,000: keep PR draft/open, do not merge.
+- Next: check exact-head CI, repair failures, review performance/security/data integrity and continue meaningful GIS work.

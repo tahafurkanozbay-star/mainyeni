@@ -25,7 +25,7 @@ describe('ArcGIS query identity integrity', () => {
     const executor = vi.fn(async () => ({ value: 'cached', estimatedBytes: 16 }))
     const coordinator = new ArcGisQueryCoordinator(executor, budget)
     await coordinator.query(key('OBJECTID > 1'))
-    expect((await coordinator.query(key('OBJECTID > 1')).value).toBe('cached')
+    expect((await coordinator.query(key('OBJECTID > 1'))).value).toBe('cached')
     expect(executor).toHaveBeenCalledTimes(1)
     expect(coordinator.diagnostics().cacheHits).toBe(1)
   })
@@ -36,5 +36,24 @@ describe('ArcGIS query identity integrity', () => {
     await expect(coordinator.query({ ...key('1=1'), returnGeometry: 'yes' } as unknown as ArcGisQueryKey)).rejects.toThrow()
     await expect(coordinator.query({ ...key('1=1'), outFields: 'OBJECTID' } as unknown as ArcGisQueryKey)).rejects.toThrow()
     expect(executor).not.toHaveBeenCalled()
+  })
+
+  it('rejects control characters even when they appear at trimmed boundaries', async () => {
+    const executor = vi.fn(async () => ({ value: 1, estimatedBytes: 8 }))
+    const coordinator = new ArcGisQueryCoordinator(executor, budget)
+    await expect(coordinator.query({ ...key('1=1'), serviceId: 'parcels\n' })).rejects.toThrow()
+    await expect(coordinator.query(key('1=1\n'))).rejects.toThrow()
+    expect(executor).not.toHaveBeenCalled()
+  })
+
+  it('observes abort that fires synchronously during transport startup', async () => {
+    const controller = new AbortController()
+    const executor = vi.fn(() => {
+      controller.abort()
+      return new Promise<{ value: number; estimatedBytes: number }>(() => {})
+    })
+    const coordinator = new ArcGisQueryCoordinator(executor, budget)
+    await expect(coordinator.query(key('1=1'), controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(executor).toHaveBeenCalledTimes(1)
   })
 })

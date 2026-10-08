@@ -55,6 +55,8 @@ export type ArcGisQueryPlanRejection =
   | 'page-budget'
   | 'object-id-budget'
   | 'pagination-unsupported-without-object-ids'
+  | 'non-deterministic-pagination'
+  | 'invalid-order'
 
 const DEFAULTS: ArcGisQueryPagePlannerOptions = {
   defaultPageSize: 1000,
@@ -72,8 +74,9 @@ function positiveInteger(value: number): boolean {
 }
 
 function boundedText(value: string, max: number): boolean {
+  if (typeof value !== 'string' || CONTROL.test(value)) return false
   const normalized = value.trim()
-  return normalized.length > 0 && normalized.length <= max && !CONTROL.test(normalized)
+  return normalized.length > 0 && normalized.length <= max
 }
 
 function normalizeOptions(input: Partial<ArcGisQueryPagePlannerOptions>): ArcGisQueryPagePlannerOptions {
@@ -86,10 +89,11 @@ function normalizeOptions(input: Partial<ArcGisQueryPagePlannerOptions>): ArcGis
 }
 
 function normalizeFields(fields: readonly string[]): readonly string[] | null {
-  if (fields.length === 0 || fields.length > 256) return null
+  if (!Array.isArray(fields) || fields.length === 0 || fields.length > 256) return null
   const seen = new Set<string>()
   const normalized: string[] = []
   for (const raw of fields) {
+    if (typeof raw !== 'string' || CONTROL.test(raw)) return null
     const field = raw.trim()
     if (!FIELD.test(field) && field !== '*') return null
     const key = field.toLowerCase()
@@ -109,9 +113,15 @@ function normalizeObjectIds(values: readonly number[]): readonly number[] | null
   return Object.freeze([...unique].sort((left, right) => left - right))
 }
 
-function stableKey(request: ArcGisQueryPageRequest, fields: readonly string[], pageSize: number): string {
-  const ids = request.objectIds === undefined ? '' : request.objectIds.join(',')
-  return [request.layerId.trim(), request.where.trim(), fields.join(','), String(pageSize), request.order ?? 'asc', ids].join('\u001e')
+// Identity includes the effective plan to prevent cache collisions when capabilities
+// or estimated page counts change. Canonical IDs share identity across permutations.
+function stableKey(
+  request: ArcGisQueryPageRequest,
+  fields: readonly string[],
+  pageSize: number,
+  shape: readonly ['objectIds', readonly number[]] | readonly ['offset', number, readonly string[]],
+): string {
+  return JSON.stringify([request.layerId.trim(), request.where.trim(), fields, pageSize, shape])
 }
 
 export class ArcGisQueryPagePlanner {
@@ -124,7 +134,12 @@ export class ArcGisQueryPagePlanner {
   plan(request: ArcGisQueryPageRequest, capabilities: ArcGisQueryCapabilities): ArcGisQueryPlan {
     if (!boundedText(request.layerId, 256)) return { kind: 'rejected', reason: 'invalid-layer' }
     if (!boundedText(request.where, 8192)) return { kind: 'rejected', reason: 'invalid-where' }
-    if (!FIELD.test(capabilities.objectIdField.trim())) return { kind: 'rejected', reason: 'invalid-object-id-field' }
+    if (!boundedText(capabilities.objectIdField, 256) || !FIELD.test(capabilities.objectIdField.trim())) {
+      return { kind: 'rejected', reason: 'invalid-object-id-field' }
+    }
+    if (request.order !== undefined && request.order !== 'asc' && request.order !== 'desc') {
+      return { kind: 'rejected', reason: 'invalid-order' }
+    }
     const fields = normalizeFields(request.outFields)
     if (fields === null) return { kind: 'rejected', reason: 'invalid-out-fields' }
 
@@ -146,7 +161,8 @@ export class ArcGisQueryPagePlanner {
     }
 
     if (request.objectIds !== undefined) {
-      if (request.objectIds.length > this.#options.maxObjectIds) return { kind: 'rejected', reason: 'object-id-budget' }
+      if (!Array.isArray(request.objectIds) || request.objectIds.length === 0 ||
+          request.objectIds.length > this.#options.maxObjectIds) return { kind: 'rejected', reason: 'object-id-budget' }
       const objectIds = normalizeObjectIds(request.objectIds)
       if (objectIds === null) return { kind: 'rejected', reason: 'object-id-budget' }
       const pageCount = Math.ceil(objectIds.length / pageSize)
@@ -159,7 +175,7 @@ export class ArcGisQueryPagePlanner {
           objectIds: Object.freeze(objectIds.slice(index, index + pageSize)),
         }))
       }
-      return Object.freeze({ kind: 'planned', key: stableKey(request, fields, pageSize), pageSize, pages: Object.freeze(pages) })
+      return Object.freeze({ kind: 'planned', key: stableKey(request, fields, pageSize, ['objectIds', objectIds]), pageSize, pages: Object.freeze(pages) })
     }
 
     if (capabilities.supportsPagination !== true) {
@@ -168,6 +184,10 @@ export class ArcGisQueryPagePlanner {
     const estimated = request.estimatedFeatures ?? pageSize
     const pageCount = Math.max(1, Math.ceil(estimated / pageSize))
     if (pageCount > this.#options.maxPages) return { kind: 'rejected', reason: 'page-budget' }
+    // Multiple offset pages without a stable order can silently skip/repeat rows.
+    if (pageCount > 1 && capabilities.supportsOrderBy !== true) {
+      return { kind: 'rejected', reason: 'non-deterministic-pagination' }
+    }
     const orderByFields = capabilities.supportsOrderBy === true
       ? Object.freeze([`${capabilities.objectIdField.trim()} ${request.order ?? 'asc'}`])
       : Object.freeze([])
@@ -181,6 +201,6 @@ export class ArcGisQueryPagePlanner {
         orderByFields,
       }))
     }
-    return Object.freeze({ kind: 'planned', key: stableKey(request, fields, pageSize), pageSize, pages: Object.freeze(pages) })
+    return Object.freeze({ kind: 'planned', key: stableKey(request, fields, pageSize, ['offset', pageCount, orderByFields]), pageSize, pages: Object.freeze(pages) })
   }
 }
