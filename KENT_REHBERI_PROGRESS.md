@@ -65,3 +65,10 @@
 - WRITE / MERGE: governance kod düzeltme çağrısı ve PR review yazımı güvenlik katmanında engellendi; bu değişiklikler uygulanmış sayılmaz. Progress koruma commit'i başarılıdır. Kritik QA bulguları açık olduğu için squash merge YASAK; PR draft/açık kalmalı.
 - NETWORK / SECURITY / GIS / ICON: bu turdaki tek başarılı değişiklik progress dokümantasyonudur; network, GIS 2D/3D, JSON ikon resolver, dependency veya runtime kodu değiştirilmedi.
 - SONRAKİ GÖREV: GitHub head SHA / main merge-base / CI'ı yeniden doğrula; peer exception, required peer ve semver fail-closed düzeltmelerini yetkili yazma yoluyla uygula, regresyon + full CI'yı çalıştır, security/performance/release gate tamamlanmadan merge etme.
+
+
+## Deep QA — Platform supply-chain security checkpoint — 2026-10-08 22:47 +03:00
+- TUR: PR #473 head ec6e9717791cd1ece2c8644e67c4a922b20c7471; main d364f991b88a0668a1337490227af4936eac232f; 4,040 additions before this change, 42 ahead/0 behind, open draft, mergeable=true; six exact-head CI successes before this update.
+- DÜZELTME: dependency-surface parser now fails closed on shell wrapper and nesting budgets, rejects dynamic command substitutions, malformed policy exceptions and impossible calendar dates; adversarial boundary tests added. No GIS, icon, network endpoint, dependency or runtime asset changed.
+- RELEASE: New head requires fresh exact-head Platform Dependency Governance, Platform Architecture Audit, Platform Typed Test Validation, Release Evidence Contract, Webclient Quality and Release QA success; do not merge before outstanding peer/semver findings and final security/performance/regression review are cleared.
+- SONRAKİ TUR: Recheck CI/head/base and investigate peer exception matching and semver logic. Keep draft until release gates pass.

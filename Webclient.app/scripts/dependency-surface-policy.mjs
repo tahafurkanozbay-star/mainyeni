@@ -52,7 +52,7 @@ function parseDate(value, label) {
     throw new DependencySurfacePolicyError('invalid-date', `${label} must use YYYY-MM-DD`, { value });
   }
   const timestamp = Date.parse(`${value}T00:00:00Z`);
-  if (!Number.isFinite(timestamp)) {
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) {
     throw new DependencySurfacePolicyError('invalid-date', `${label} is not a real date`, { value });
   }
   return timestamp;
@@ -118,6 +118,10 @@ export function tokenizePackageScript(command) {
       if (character === "'") quote = null;
       else current += character;
       continue;
+    }
+
+    if (character === '`' || (character === '$' && command[index + 1] === '(')) {
+      throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script contains unreviewable command substitution');
     }
 
     if (quote === '"') {
@@ -215,6 +219,12 @@ function resolveInvocation(tokens, startIndex) {
     break;
   }
 
+  if (index < end && tokens[index].type === 'word') {
+    const unresolved = shellBasename(tokens[index].value);
+    if (unresolved === 'env' || COMMAND_WRAPPERS.has(unresolved)) {
+      throw new DependencySurfacePolicyError('shell-wrapper-depth', 'package script exceeds the reviewed command-wrapper depth');
+    }
+  }
   if (index >= end || tokens[index].type !== 'word') return null;
   return Object.freeze({ index, end, word: tokens[index].value, command: shellBasename(tokens[index].value) });
 }
@@ -271,7 +281,10 @@ export function collectPackageScriptInvocations(command, options = {}) {
     }));
 
     const nested = nestedShellCommand(tokens, invocation);
-    if (nested && depth < MAX_NESTED_SHELL_DEPTH) {
+    if (nested) {
+      if (depth >= MAX_NESTED_SHELL_DEPTH) {
+        throw new DependencySurfacePolicyError('shell-nesting-depth', 'package script exceeds the reviewed nested-shell depth');
+      }
       invocations.push(...collectPackageScriptInvocations(nested, { depth: depth + 1 }));
     }
 
@@ -319,7 +332,10 @@ export function validateManifestSurface(manifest, policy, options = {}) {
 
   const entries = collectManifestSurface(manifest);
   const policyObject = assertObject(policy, 'invalid-policy', 'policy');
-  const exceptions = Array.isArray(policyObject.exceptions) ? policyObject.exceptions : [];
+  const exceptions = policyObject.exceptions === undefined ? [] : policyObject.exceptions;
+  if (!Array.isArray(exceptions)) {
+    throw new DependencySurfacePolicyError('invalid-policy-exceptions', 'policy.exceptions must be an array');
+  }
   const findings = [];
   const directNames = new Set(entries.map((entry) => entry.name));
   const exceptionKeys = new Set();
@@ -377,8 +393,9 @@ export function validateManifestSurface(manifest, policy, options = {}) {
     try {
       invocationNames = scriptInvocationNames(command);
     } catch (error) {
-      if (error instanceof DependencySurfacePolicyError && error.code === 'malformed-script-shell') {
-        findings.push({ severity: 'error', code: 'malformed-script-shell', script: name });
+      if (error instanceof DependencySurfacePolicyError &&
+          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion'].includes(error.code)) {
+        findings.push({ severity: 'error', code: error.code, script: name });
         continue;
       }
       throw error;

