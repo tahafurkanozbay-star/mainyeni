@@ -54,6 +54,9 @@ jobs:
             src/lib/gis/ArcGisQueryCoordinator.ts \
             src/lib/gis/ArcGisQueryPagePlanner.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.ts \
+            src/lib/gis/ArcGisQueryResponseIntegrity.snapshot.test.ts \
+            src/lib/gis/ArcGisQueryExecutionCoordinator.ts \
+            src/lib/gis/ArcGisQueryExecutionCoordinator.physical-capacity.test.ts \
             src/lib/gis/ArcGisQueryCountLifecyclePolicy.ts \
             src/lib/gis/ArcGisQueryExtentLifecyclePolicy.ts
 
