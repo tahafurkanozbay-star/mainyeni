@@ -80,4 +80,64 @@ describe('ArcGIS REST response transport ownership', () => {
     expect(result.objectIds).toEqual([7])
     expect(result.features[0]?.attributes).toEqual({ OBJECTID: 7, name: 'road' })
   })
+  it('preserves own JSON attribute keys without changing the snapshot prototype', () => {
+    const attributes = JSON.parse('{"OBJECTID":7,"__proto__":"data"}') as Record<string, unknown>
+    const result = inspector.inspect(page(attributes), context)
+    expect(result.kind).toBe('accepted')
+    if (result.kind !== 'accepted') return
+    const accepted = result.features[0]?.attributes as Record<string, unknown>
+    expect(Object.getPrototypeOf(accepted)).toBe(Object.prototype)
+    expect(Object.prototype.hasOwnProperty.call(accepted, '__proto__')).toBe(true)
+    expect(accepted['__proto__']).toBe('data')
+    expect(Object.isFrozen(accepted)).toBe(true)
+  })
+
+  it('does not invoke an object-ID accessor during classification', () => {
+    let calls = 0
+    const attributes: Record<string, unknown> = {}
+    Object.defineProperty(attributes, 'OBJECTID', {
+      enumerable: true, get: () => { calls += 1; return 7 },
+    })
+    expect(inspector.inspect(page(attributes), context)).toMatchObject({
+      kind: 'rejected', issue: { code: 'invalid-attributes', featureIndex: 0, field: 'OBJECTID' },
+    })
+    expect(calls).toBe(0)
+  })
+
+  it('rejects an accessor for the top-level features collection without reading it', () => {
+    let calls = 0
+    const response: Record<string, unknown> = {}
+    Object.defineProperty(response, 'features', {
+      enumerable: true, get: () => { calls += 1; return [] },
+    })
+    expect(inspector.inspect(response, context)).toMatchObject({
+      kind: 'rejected', issue: { code: 'invalid-features' },
+    })
+    expect(calls).toBe(0)
+  })
+
+  it('rejects an accessor for transfer-limit metadata without evaluating it', () => {
+    let calls = 0
+    const response: Record<string, unknown> = { features: [] }
+    Object.defineProperty(response, 'exceededTransferLimit', {
+      enumerable: true, get: () => { calls += 1; return false },
+    })
+    expect(inspector.inspect(response, context)).toMatchObject({
+      kind: 'rejected', issue: { code: 'invalid-transfer-limit' },
+    })
+    expect(calls).toBe(0)
+  })
+
+  it('rejects feature spatial-reference accessors without invoking them', () => {
+    let calls = 0
+    const geometry: Record<string, unknown> = { x: 1, y: 2 }
+    Object.defineProperty(geometry, 'spatialReference', {
+      enumerable: true, get: () => { calls += 1; return { wkid: 4326 } },
+    })
+    expect(inspector.inspect(page({ OBJECTID: 7 }, geometry), context)).toMatchObject({
+      kind: 'rejected', issue: { code: 'invalid-spatial-reference', featureIndex: 0 },
+    })
+    expect(calls).toBe(0)
+  })
+
 })
