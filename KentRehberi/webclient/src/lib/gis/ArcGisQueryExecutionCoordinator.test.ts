@@ -98,7 +98,16 @@ describe('ArcGisQueryExecutionCoordinator', () => {
       { inspect: () => accepted(7) },
       { maxConcurrentPages: 1 },
     )
-    await expect(coordinator.execute(plan(2))).resolves.toEqual({ kind: 'failed', code: 'integrity-error', page: 1 })
+    // Offset pages can both be individually well-formed while a changing
+    // result set repeats the same object ID across page boundaries.
+    const offsetPlan: ArcGisQueryPlan = {
+      kind: 'planned', key: 'offset-duplicate', pageSize: 1,
+      pages: [
+        { kind: 'offset', page: 0, resultOffset: 0, resultRecordCount: 1, orderByFields: ['OBJECTID asc'] },
+        { kind: 'offset', page: 1, resultOffset: 1, resultRecordCount: 1, orderByFields: ['OBJECTID asc'] },
+      ],
+    }
+    await expect(coordinator.execute(offsetPlan)).resolves.toEqual({ kind: 'failed', code: 'integrity-error', page: 1 })
   })
 
   it('enforces the aggregate feature budget', async () => {
