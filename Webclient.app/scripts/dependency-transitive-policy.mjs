@@ -13,8 +13,6 @@ const MAX_PEERS_PER_PACKAGE = 64;
 const MAX_INSTALL_SCRIPT_PACKAGES = 128;
 const MAX_DEPRECATED_PACKAGES = 128;
 const SAFE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/i;
-const EXACT_VERSION = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const RANGE_TOKEN = /^(?:\^|~|>=?|<=?|=)?\s*v?\d+(?:\.\d+)?(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?$/;
 
 const text = (value) => typeof value === 'string' ? value.trim() : '';
 const entries = (value) => Object.entries(value && typeof value === 'object' ? value : {}).sort(([a], [b]) => a.localeCompare(b));
@@ -25,68 +23,131 @@ const hash = (value) => createHash('sha256').update(JSON.stringify(value)).diges
 const issue = (code, path, detail, severity = 'error') => freeze({ code, path, detail, severity });
 const packageEntry = (lockfile, path) => lockfile?.packages?.[path] ?? null;
 
-export const normalizePeerRange = (value) => text(value).replaceAll(/\s+/g, ' ');
+// Bounded npm-compatible subset: full versions, partial/x ranges, comparators,
+// caret/tilde and OR sets. Unsupported syntax is never treated as a match.
+const VERSION_PATTERN = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+const COMPARATOR_PATTERN = /^(\^|~|>=|<=|>|<|=)?v?(0|[1-9]\d*)(?:\.(0|[1-9]\d*|x|X))?(?:\.(0|[1-9]\d*|x|X))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+const numericIdentifier = (value) => /^\d+$/.test(value);
+const parsePrerelease = (value) => {
+  if (!value) return [];
+  const identifiers = value.split('.');
+  if (identifiers.some((identifier) => !identifier || (numericIdentifier(identifier) &&
+    ((identifier.length > 1 && identifier[0] === '0') || !Number.isSafeInteger(Number(identifier)))))) return null;
+  return identifiers;
+};
+const parseVersion = (value) => {
+  const match = text(value).match(VERSION_PATTERN);
+  if (!match) return null;
+  const [major, minor, patch] = match.slice(1, 4).map(Number);
+  const prerelease = parsePrerelease(match[4]);
+  if (![major, minor, patch].every(Number.isSafeInteger) || prerelease === null) return null;
+  return freeze({ major, minor, patch, prerelease: freeze(prerelease) });
+};
 
-export const isConcreteVersion = (value) => EXACT_VERSION.test(text(value));
+export const normalizePeerRange = (value) => text(value).replaceAll(/\s+/g, ' ');
+export const isConcreteVersion = (value) => parseVersion(value) !== null;
+
+const parseComparator = (token) => {
+  const match = token.match(COMPARATOR_PATTERN);
+  if (!match) return null;
+  const [, operator = '', majorText, minorText, patchText, prereleaseText] = match;
+  if (/^x$/i.test(minorText ?? '') && patchText !== undefined) return null;
+  const precision = minorText === undefined || /^x$/i.test(minorText) ? 1 :
+    patchText === undefined || /^x$/i.test(patchText) ? 2 : 3;
+  if (prereleaseText && precision !== 3) return null;
+  const major = Number(majorText);
+  const minor = precision >= 2 ? Number(minorText) : 0;
+  const patch = precision === 3 ? Number(patchText) : 0;
+  const prerelease = parsePrerelease(prereleaseText);
+  if (![major, minor, patch].every(Number.isSafeInteger) || prerelease === null) return null;
+  return freeze({ operator, precision, target: freeze({ major, minor, patch, prerelease: freeze(prerelease) }) });
+};
 
 export const isReviewablePeerRange = (value) => {
   const normalized = normalizePeerRange(value);
   if (!normalized || normalized.length > MAX_TEXT) return false;
+  // Floating release channels require explicit reviewed exceptions. Concrete
+  // prerelease versions remain valid inputs for compatibility checks.
   if (/\b(?:latest|next|canary|beta|alpha)\b/i.test(normalized)) return false;
   if (/^(?:file:|link:|git(?:\+|:)|https?:|github:|workspace:)/i.test(normalized)) return false;
-  if (normalized === '*' || normalized === 'x' || normalized === 'X') return false;
-  const alternatives = normalized.split('||').map((part) => part.trim()).filter(Boolean);
+  const alternatives = normalized.split('||').map((part) => part.trim());
   if (alternatives.length === 0 || alternatives.length > 8) return false;
   return alternatives.every((alternative) => {
     const tokens = alternative.split(/\s+/).filter(Boolean);
-    if (tokens.length === 0 || tokens.length > 8) return false;
-    return tokens.every((token) => RANGE_TOKEN.test(token) || /^\d+\.x$/i.test(token) || /^\d+\.\d+\.x$/i.test(token));
+    return tokens.length > 0 && tokens.length <= 8 && tokens.every((token) => parseComparator(token) !== null);
   });
-};
-
-const parseVersion = (value) => {
-  const match = text(value).replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return freeze({ major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) });
 };
 
 const compare = (left, right) => {
   for (const key of ['major', 'minor', 'patch']) {
-    if (left[key] !== right[key]) return left[key] - right[key];
+    if (left[key] !== right[key]) return left[key] < right[key] ? -1 : 1;
   }
-  return 0;
+  const a = left.prerelease;
+  const b = right.prerelease;
+  if (a.length === 0 || b.length === 0) return a.length === b.length ? 0 : a.length === 0 ? 1 : -1;
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index] === b[index]) continue;
+    const aNumeric = numericIdentifier(a[index]);
+    const bNumeric = numericIdentifier(b[index]);
+    if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+    if (aNumeric) return Number(a[index]) < Number(b[index]) ? -1 : 1;
+    return a[index] < b[index] ? -1 : 1;
+  }
+  return a.length === b.length ? 0 : a.length < b.length ? -1 : 1;
 };
 
-const satisfiesComparator = (version, comparator) => {
-  const token = comparator.trim();
-  const match = token.match(/^(\^|~|>=|<=|>|<|=)?\s*v?(\d+)(?:\.(\d+|x))?(?:\.(\d+|x))?/i);
-  if (!match) return false;
-  const operator = match[1] ?? '';
-  const major = Number(match[2]);
-  const minorWild = match[3] == null || /^x$/i.test(match[3]);
-  const patchWild = match[4] == null || /^x$/i.test(match[4]);
-  const target = { major, minor: minorWild ? 0 : Number(match[3]), patch: patchWild ? 0 : Number(match[4]) };
-  if (minorWild) return version.major === target.major;
-  if (patchWild) return version.major === target.major && version.minor === target.minor;
+const upperBound = (target, field) => {
+  if (target[field] === Number.MAX_SAFE_INTEGER) return null;
+  return {
+    major: field === 'major' ? target.major + 1 : target.major,
+    minor: field === 'major' ? 0 : field === 'minor' ? target.minor + 1 : target.minor,
+    patch: field === 'patch' ? target.patch + 1 : 0,
+    prerelease: [],
+  };
+};
+
+const satisfiesComparator = (version, { operator, precision, target }) => {
   const order = compare(version, target);
+  const partialUpper = precision === 1 ? 'major' : 'minor';
   if (operator === '^') {
-    if (target.major > 0) return version.major === target.major && order >= 0;
-    if (target.minor > 0) return version.major === 0 && version.minor === target.minor && order >= 0;
-    return version.major === 0 && version.minor === 0 && version.patch === target.patch;
+    const field = target.major > 0 || precision === 1 ? 'major' :
+      target.minor > 0 || precision === 2 ? 'minor' : 'patch';
+    const ceiling = upperBound(target, field);
+    return ceiling !== null && order >= 0 && compare(version, ceiling) < 0;
   }
-  if (operator === '~') return version.major === target.major && version.minor === target.minor && order >= 0;
+  if (operator === '~') {
+    const ceiling = upperBound(target, partialUpper);
+    return ceiling !== null && order >= 0 && compare(version, ceiling) < 0;
+  }
   if (operator === '>=') return order >= 0;
-  if (operator === '<=') return order <= 0;
-  if (operator === '>') return order > 0;
+  if (operator === '>') {
+    if (precision === 3) return order > 0;
+    const ceiling = upperBound(target, partialUpper);
+    return ceiling !== null && compare(version, ceiling) >= 0;
+  }
   if (operator === '<') return order < 0;
-  return order === 0;
+  if (operator === '<=') {
+    if (precision === 3) return order <= 0;
+    const ceiling = upperBound(target, partialUpper);
+    return ceiling !== null && compare(version, ceiling) < 0;
+  }
+  if (precision === 3) return order === 0;
+  const ceiling = upperBound(target, partialUpper);
+  return ceiling !== null && order >= 0 && compare(version, ceiling) < 0;
 };
 
 export const satisfiesPeerRange = (versionValue, rangeValue) => {
   const version = parseVersion(versionValue);
   const range = normalizePeerRange(rangeValue);
   if (!version || !isReviewablePeerRange(range)) return false;
-  return range.split('||').some((alternative) => alternative.trim().split(/\s+/).filter(Boolean).every((token) => satisfiesComparator(version, token)));
+  return range.split('||').some((alternative) => {
+    const comparators = alternative.trim().split(/\s+/).map(parseComparator);
+    // npm semver excludes prereleases unless the same OR-set explicitly names
+    // a prerelease comparator for the candidate's major.minor.patch tuple.
+    if (version.prerelease.length && !comparators.some(({ target }) => target.prerelease.length &&
+      target.major === version.major && target.minor === version.minor && target.patch === version.patch)) return false;
+    return comparators.every((comparator) => satisfiesComparator(version, comparator));
+  });
 };
 
 export const collectPeerEdges = (lockfile, graph) => {
@@ -125,9 +186,9 @@ export const validatePeerEdges = (edges) => {
       issues.push(issue('peer-name', edge.from, `invalid peer dependency name ${edge.name}`));
       continue;
     }
-    if (!isReviewablePeerRange(edge.range)) {
+    const reviewableRange = isReviewablePeerRange(edge.range);
+    if (!reviewableRange) {
       issues.push(issue('peer-range', edge.from, `${edge.name} uses unreviewable peer range ${edge.range || '<empty>'}`));
-      continue;
     }
     if (!edge.target) {
       if (!edge.optional) issues.push(issue('peer-unresolved', edge.from, `required peer ${edge.name}@${edge.range} is not installed`));
@@ -137,7 +198,7 @@ export const validatePeerEdges = (edges) => {
       issues.push(issue('peer-version', edge.target, `${edge.name} resolved without a concrete semver version`));
       continue;
     }
-    if (!satisfiesPeerRange(edge.targetVersion, edge.range)) {
+    if (reviewableRange && !satisfiesPeerRange(edge.targetVersion, edge.range)) {
       issues.push(issue('peer-mismatch', edge.from, `${edge.name}@${edge.targetVersion} does not satisfy ${edge.range}`));
     }
   }

@@ -155,3 +155,18 @@ test('three exact optional Vitest peer exceptions cannot hide sibling findings',
   assert.equal(result.usedPeerExceptions, 3);
   assert.equal(result.peerExceptionCount, 3);
 });
+
+test('exact peer-range exception cannot suppress a missing required peer on the same edge', () => {
+  const unresolved = Object.freeze({ ...edge, target: null, targetVersion: null });
+  const unresolvedFinding = Object.freeze({
+    code: 'peer-unresolved', path: edge.from, detail: 'required peer react@* is not installed', severity: 'error',
+  });
+  const result = applyPeerExceptions({
+    ...base,
+    issues: Object.freeze([finding, unresolvedFinding]),
+    inventory: Object.freeze({ ...base.inventory, peerEdges: Object.freeze([unresolved]) }),
+  }, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.equal(result.usedPeerExceptions, 1);
+  assert.deepEqual(result.issues, [unresolvedFinding]);
+});

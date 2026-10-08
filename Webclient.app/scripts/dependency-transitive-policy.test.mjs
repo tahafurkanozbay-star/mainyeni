@@ -459,3 +459,66 @@ test('policy issue records are immutable', () => {
   assert.equal(Object.isFrozen(result.issues[0]), true);
   assert.throws(() => result.issues.push({}), TypeError);
 });
+
+test('evaluates partial comparator boundaries without widening > or <=', () => {
+  const cases = [
+    ['18.3.0', '>=18.2', true], ['18.2.9', '>18.2', false],
+    ['18.3.0', '>18.2', true], ['18.2.9', '<=18.2', true],
+    ['18.3.0', '<=18.2', false], ['18.2.9', '<18.3', true],
+    ['18.3.0', '<18.3', false], ['18.2.9', '18.2', true],
+    ['18.3.0', '18.2', false],
+  ];
+  for (const [version, range, expected] of cases) {
+    assert.equal(satisfiesPeerRange(version, range), expected, version + ' ' + range);
+  }
+});
+
+test('evaluates partial caret, tilde and zero-major boundaries', () => {
+  const cases = [
+    ['1.3.0', '^1.2', true], ['2.0.0', '^1.2', false],
+    ['0.0.9', '^0.0', true], ['0.1.0', '^0.0', false],
+    ['0.0.4', '^0.0.4', true], ['0.0.5', '^0.0.4', false],
+    ['18.2.9', '~18.2', true], ['18.3.0', '~18.2', false],
+    ['18.9.9', '~18', true], ['19.0.0', '~18', false],
+  ];
+  for (const [version, range, expected] of cases) {
+    assert.equal(satisfiesPeerRange(version, range), expected, version + ' ' + range);
+  }
+});
+
+test('excludes prerelease candidates unless a comparator names the same tuple', () => {
+  assert.equal(satisfiesPeerRange('1.2.3-beta.1', '>=1.2.3'), false);
+  assert.equal(satisfiesPeerRange('1.2.3-rc.1', '>=1.2.2'), false);
+  assert.equal(satisfiesPeerRange('1.2.3-rc.2', '^1.2.3-rc.1'), true);
+  assert.equal(satisfiesPeerRange('1.2.3', '^1.2.3-rc.1'), true);
+  assert.equal(satisfiesPeerRange('1.3.0-rc.1', '^1.2.3-rc.1'), false);
+  assert.equal(satisfiesPeerRange('1.2.3-rc.2', '>=1.2.3 || ^1.2.3-rc.1'), true);
+});
+
+test('rejects empty OR branches, trailing garbage and invalid concrete versions', () => {
+  for (const range of ['1.0.0 ||', '|| 1.0.0', '1.0.0 || || 2.0.0', '1.0.0junk', '1.0.0.4', '1.x.2', '>=01.0']) {
+    assert.equal(isReviewablePeerRange(range), false, range);
+    assert.equal(satisfiesPeerRange('1.0.0', range), false, range);
+  }
+  for (const version of ['1.2.3suffix', '1.2.3.4', '01.2.3', '1.2.3-rc.01', '1.2.3-', '1.2.3+']) {
+    assert.equal(isConcreteVersion(version), false, version);
+    assert.equal(satisfiesPeerRange(version, '>=1.0.0'), false, version);
+  }
+  assert.equal(isConcreteVersion('1.2.3-rc.2+build.7'), true);
+});
+
+test('reports missing required peers independently of invalid ranges', () => {
+  for (const range of ['*', '1.0.0 ||']) {
+    const missing = { from: 'node_modules/widget', name: 'react', range, optional: false, target: null, targetVersion: null };
+    assert.deepEqual(validatePeerEdges([missing]).map(({ code }) => code), ['peer-range', 'peer-unresolved']);
+    assert.deepEqual(validatePeerEdges([{ ...missing, optional: true }]).map(({ code }) => code), ['peer-range']);
+  }
+});
+
+test('reports invalid ranges and invalid resolved versions independently', () => {
+  const issues = validatePeerEdges([{
+    from: 'node_modules/widget', name: 'react', range: '1.0.0 ||',
+    optional: false, target: 'node_modules/react', targetVersion: '1.0.0oops',
+  }]);
+  assert.deepEqual(issues.map(({ code }) => code), ['peer-range', 'peer-version']);
+});
