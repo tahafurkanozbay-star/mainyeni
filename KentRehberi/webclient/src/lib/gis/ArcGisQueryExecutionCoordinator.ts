@@ -63,13 +63,13 @@ function validPlan(plan: ArcGisQueryPlan): plan is Extract<ArcGisQueryPlan, { ki
     if (entry.kind === 'objectIds') {
       if (!Array.isArray(entry.objectIds) || entry.objectIds.length === 0 ||
           entry.objectIds.length > plan.pageSize ||
-          entry.objectIds.some(id => !positiveInteger(id)) ||
+          entry.objectIds.some((id: number) => !positiveInteger(id)) ||
           new Set(entry.objectIds).size !== entry.objectIds.length) return false
     } else if (entry.kind === 'offset') {
       if (!Number.isSafeInteger(entry.resultOffset) || entry.resultOffset < 0 ||
           !positiveInteger(entry.resultRecordCount) || entry.resultRecordCount > plan.pageSize ||
           !Array.isArray(entry.orderByFields) ||
-          entry.orderByFields.some(field => typeof field !== 'string' || field.length > 256)) return false
+          entry.orderByFields.some((field: string) => typeof field !== 'string' || field.length > 256)) return false
     } else return false
   }
   return true

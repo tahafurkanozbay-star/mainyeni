@@ -30,7 +30,7 @@ export interface ArcGisExtentResident extends Readonly<ArcGisExtentValue> {
 }
 type Queued = ArcGisExtentRequest & { sequence:number; expiresAt:number };
 type Running = Queued & { leaseExpiresAt:number; startedAt:number };
-type Resident = ArcGisExtentResident & { requestId:string; touchedAt:number; sequence:number };
+type Resident = ArcGisExtentResident & { expiresAt:number; requestId:string; touchedAt:number; sequence:number };
 
 const priority: Readonly<Record<ArcGisExtentIntent,number>> = Object.freeze({interactive:2,visible:1,background:0});
 const intents: readonly ArcGisExtentIntent[] = ["interactive","visible","background"];
