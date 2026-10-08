@@ -80,7 +80,7 @@ describe('ArcGIS physical transport admission', () => {
     const first = coordinator.execute(plan, controller.signal)
     await entered
     controller.abort()
-    await expect(first).resolves.toEqual({ kind: 'failed', code: 'aborted', page: 0 })
+    await expect(first).resolves.toEqual({ kind: 'failed', code: 'aborted' })
     await expect(coordinator.execute(plan)).resolves.toEqual({
       kind: 'failed', code: 'transport-capacity', page: 0,
     })
