@@ -64,3 +64,10 @@
 - TEST / BUILD / CI: Local npm/test/lint/typecheck/build not executed in this GitHub-native run. New exact-head Platform Architecture Audit and Release QA must reach completed+success; do not inherit previous head's PASS.
 - PERFORMANCE / DATA INTEGRITY / SECURITY: Prevent stale data residency after invalidation; no new retained payloads or unbounded service-id map. Review pending CI for regression and release risk.
 - MERGE DURUMU: additions < 4,000; PR remains draft/open and MUST NOT merge. Next: verify exact-head CI, current main/merge-base/mergeability, inspect page transport timeout/abort hazards and implement meaningful GIS follow-up with adversarial tests.
+
+## Deep GIS — query execution checkpoint — 2026-10-08
+- PR #477 remains canonical draft/open on current main d364f991b88a0668a1337490227af4936eac232f.
+- ArcGisQueryExecutionCoordinator now bounds page plans and waits for transport using deadline/cancellation races, preserves first page failure and classifies inspector exceptions.
+- ArcGisQueryExecutionCoordinator.adversarial.test.ts adds five focused regression tests.
+- No network endpoint, WMS/WFS, telemetry or icon authority added. Local npm validation unavailable. Exact-head CI pending; do not inherit older success.
+- Additions below 4000: no merge. Next: review exact-head CI and continue meaningful GIS repairs.
