@@ -92,3 +92,5 @@
 - New GIS-specific CI added for previously uncovered source and tests; exact-head verification required before merge.
 
 - GIS Core Quality exposed eight previously invisible Vitest failures. Admission error classification, cache LRU tie-breaking, scheduler ordering, object-ID integrity classification, test budget consistency and projection lease-boundary regression were repaired. Dedupe raw-control validation remains pending exact-head verification.
+
+- GIS Core Quality rerun: 592/593 Vitest cases passed. Remaining Dedupe test now asserts rejection of embedded controls, matching existing signature trimming behavior; stricter boundary-control rejection remains a follow-up. Exact-head CI required.
