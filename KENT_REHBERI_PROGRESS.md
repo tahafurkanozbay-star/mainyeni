@@ -80,3 +80,10 @@
 - Previous exact-head CI success does not transfer to new commits. Local npm/build not executed; recheck GitHub Actions on new head.
 - No endpoint, WMS/WFS, telemetry, secret or new icon resolver. Additions gate below 4,000: keep PR draft/open, do not merge.
 - Next: check exact-head CI, repair failures, review performance/security/data integrity and continue meaningful GIS work.
+
+## GIS PR #477 — clock integrity checkpoint — 2026-10-08
+- Count and extent lifecycle scheduling now fences future-dated admission, pre-start lease completion, and pre-capture cache reads.
+- Extent enqueue no longer expires other residents using an untrusted future timestamp. Added focused adversarial clock tests and identifier control checks.
+- Prior head `9640519f44f6a6560a23658145f94c43be284e64` passed Architecture Audit #37722223069 and Release QA #37722222595; new exact-head CI pending.
+- No network, WMS/WFS, secret, telemetry or icon resolver changes. Local npm unavailable. Additions < 4000, draft PR remains open.
+- Next: exact-head CI, performance/data integrity/security review, continue real GIS modernization.

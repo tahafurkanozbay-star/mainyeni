@@ -29,12 +29,12 @@ export interface ArcGisExtentResident extends Readonly<ArcGisExtentValue> {
   readonly capturedAt: number; readonly expiresAt: number;
 }
 type Queued = ArcGisExtentRequest & { sequence:number; expiresAt:number };
-type Running = Queued & { leaseExpiresAt:number };
+type Running = Queued & { leaseExpiresAt:number; startedAt:number };
 type Resident = ArcGisExtentResident & { requestId:string; touchedAt:number; sequence:number };
 
 const priority: Readonly<Record<ArcGisExtentIntent,number>> = Object.freeze({interactive:2,visible:1,background:0});
 const intents: readonly ArcGisExtentIntent[] = ["interactive","visible","background"];
-function id(name:string,value:string,max=2048){const v=value.trim();if(!v||v.length>max||/[\u0000-\u001f\u007f]/.test(v))throw new Error(`${name} is invalid`);return v}
+function id(name:string,value:string,max=2048){if(typeof value!=="string"||/[\u0000-\u001f\u007f]/.test(value))throw new Error(`${name} is invalid`);const v=value.trim();if(!v||v.length>max)throw new Error(`${name} is invalid`);return v}
 function nat(name:string,value:number){if(!Number.isSafeInteger(value)||value<0)throw new Error(`${name} must be a non-negative safe integer`);return value}
 function pos(name:string,value:number){if(!Number.isSafeInteger(value)||value<1)throw new Error(`${name} must be a positive safe integer`);return value}
 function time(name:string,value:number){if(!Number.isFinite(value)||value<0)throw new Error(`${name} must be finite and non-negative`);return value}
@@ -61,7 +61,7 @@ export class ArcGisQueryExtentLifecyclePolicy {
     return removed;
   }
   enqueue(request:ArcGisExtentRequest):"queued"|"deduped"|"rejected"{
-    this.#live();const item=this.#normalize(request);this.expire(item.queuedAt);
+    this.#live();const item=this.#normalize(request);
     if(this.#revisions.get(item.layerId)!==item.revision)return "rejected";
     const collision=this.#queued.get(item.requestId)??this.#running.get(item.requestId)??[...this.#resident.values()].find(x=>x.requestId===item.requestId);
     if(collision)return this.#same(collision,item)?"deduped":"rejected";
@@ -71,21 +71,21 @@ export class ArcGisQueryExtentLifecyclePolicy {
   }
   acquire(now:number):ArcGisExtentLease|null{
     this.#live();time("now",now);this.expire(now);if(this.#running.size>=this.#budget.maxRunning)return null;
-    const next=[...this.#queued.values()].filter(x=>this.#runningFor(x.layerId)<this.#budget.maxRunningPerLayer)
+    const next=[...this.#queued.values()].filter(x=>x.queuedAt<=now&&this.#runningFor(x.layerId)<this.#budget.maxRunningPerLayer)
       .sort((a,b)=>priority[b.intent]-priority[a.intent]||a.sequence-b.sequence||a.requestId.localeCompare(b.requestId))[0];
     if(!next)return null;this.#queued.delete(next.requestId);
-    const running:Running={...next,leaseExpiresAt:now+this.#budget.leaseTtlMs};this.#running.set(next.requestId,running);return this.#lease(running);
+    const running:Running={...next,startedAt:now,leaseExpiresAt:now+this.#budget.leaseTtlMs};this.#running.set(next.requestId,running);return this.#lease(running);
   }
   renew(requestId:string,revision:number,now:number):ArcGisExtentLease|null{
     this.#live();const key=id("requestId",requestId,512);nat("revision",revision);time("now",now);const item=this.#running.get(key);
-    if(!item||item.revision!==revision||this.#revisions.get(item.layerId)!==revision||now>=item.leaseExpiresAt)return null;
+    if(!item||item.revision!==revision||this.#revisions.get(item.layerId)!==revision||now<item.startedAt||now>=item.leaseExpiresAt)return null;
     item.leaseExpiresAt=now+this.#budget.leaseTtlMs;return this.#lease(item);
   }
   complete(result:ArcGisExtentCompletion):ArcGisExtentResident|null{
     this.#live();const key=id("requestId",result.requestId,512);nat("revision",result.revision);time("completedAt",result.completedAt);
     const xmin=coordinate("xmin",result.xmin),ymin=coordinate("ymin",result.ymin),xmax=coordinate("xmax",result.xmax),ymax=coordinate("ymax",result.ymax);
     pos("spatialReferenceWkid",result.spatialReferenceWkid);if(xmin>xmax||ymin>ymax)throw new Error("extent bounds are invalid");
-    const item=this.#running.get(key);if(!item||item.revision!==result.revision||this.#revisions.get(item.layerId)!==result.revision||result.completedAt>=item.leaseExpiresAt)return null;
+    const item=this.#running.get(key);if(!item||item.revision!==result.revision||this.#revisions.get(item.layerId)!==result.revision||result.completedAt<item.startedAt||result.completedAt>=item.leaseExpiresAt)return null;
     this.#running.delete(key);const logical=this.#logicalKey(item);
     const resident:Resident={requestId:key,layerId:item.layerId,revision:item.revision,signature:item.signature,xmin,ymin,xmax,ymax,
       spatialReferenceWkid:result.spatialReferenceWkid,capturedAt:result.completedAt,expiresAt:result.completedAt+this.#budget.residentTtlMs,touchedAt:result.completedAt,sequence:item.sequence};
@@ -93,7 +93,7 @@ export class ArcGisQueryExtentLifecyclePolicy {
   }
   lookup(layerId:string,revision:number,signature:string,now:number):ArcGisExtentResident|null{
     this.#live();const probe={layerId:id("layerId",layerId,512),revision:nat("revision",revision),signature:id("signature",signature)};time("now",now);this.expire(now);
-    if(this.#revisions.get(probe.layerId)!==revision)return null;const item=this.#resident.get(this.#logicalKey(probe));if(!item)return null;
+    if(this.#revisions.get(probe.layerId)!==revision)return null;const item=this.#resident.get(this.#logicalKey(probe));if(!item||now<item.capturedAt)return null;
     item.touchedAt=now;item.expiresAt=now+this.#budget.residentTtlMs;return this.#view(item);
   }
   cancel(requestId:string):boolean{this.#live();const key=id("requestId",requestId,512);return this.#queued.delete(key)||this.#running.delete(key)}
