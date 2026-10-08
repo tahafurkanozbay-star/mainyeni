@@ -106,3 +106,11 @@
 - TEST / BUILD: Pre-change exact head `7b0bdba55fd048576355010eaca20c726d1c1ee5` passed GIS Core Quality #37723640513, Platform Architecture Audit #37723640007 and Release QA #37723640040. New exact-head CI must be verified; prior success does not transfer. Local npm/build not run in GitHub-native environment.
 - MERGE: base...head additions remained 2,684 before this change, below 4,000. Keep PR draft/open; do not merge until additions >=4,000, current-main ancestry and all exact-head CI pass.
 - SONRAKİ GÖREV: Verify GitHub tree/commit/ref and new exact-head CI. Repair any TypeScript/Vitest/Release QA failure; review geometry traversal and request collision behavior, then continue meaningful GIS backlog and final regression.
+
+## Deep GIS — page-wide attribute pressure guard — 2026-10-08
+- TUR / GÖREV: GIS query response integrity second pass, extending bounded geometry inspection with bounded page-wide attribute processing.
+- PRODUCT: `ArcGisQueryResponseIntegrity` now rejects page-wide attribute count >16,384 and total string characters >2,000,000 by default, while retaining the existing per-feature/per-field limits. Uses bounded own-property iteration instead of eagerly allocating `Object.entries` for an oversized untrusted attributes object. `requireObjectId` option must be boolean.
+- REGRESSION: `ArcGisQueryResponseIntegrity.attribute-page-budget.test.ts` covers aggregate attribute cardinality, text pressure, oversized single-feature object, ordinary valid pages and malformed budget options.
+- CI: Previous exact head `f5cbb823f07e39ceefdf2818ef760e086b79b18f` GIS Core Quality #37742221781 and Platform Architecture Audit #37742221680 completed+success; Release QA #37742221698 was in progress at checkpoint. This new commit requires new exact-head CI.
+- SECURITY / PERFORMANCE: no new endpoint, WMS/WFS, secret, telemetry, remote asset or icon resolver. Bounded work prevents adversarial multi-feature attribute fanout; no payload retained by policy.
+- MERGE / NEXT: #477 remains draft/open until >=4,000 meaningful additions, current main ancestry, mergeability and all exact-head CI success. Review CI and fix regressions, then continue high-priority GIS work.

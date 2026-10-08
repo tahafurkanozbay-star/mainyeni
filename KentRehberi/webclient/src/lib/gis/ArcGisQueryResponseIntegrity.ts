@@ -1,6 +1,8 @@
 export interface ArcGisQueryResponseIntegrityOptions {
   readonly maxFeaturesPerPage: number
   readonly maxAttributesPerFeature: number
+  readonly maxAttributesPerPage: number
+  readonly maxAttributeTextCharactersPerPage: number
   readonly maxAttributeTextLength: number
   readonly maxGeometryDepth: number
   readonly maxGeometryCoordinates: number
@@ -33,6 +35,8 @@ export type ArcGisQueryIntegrityIssueCode =
   | 'invalid-feature'
   | 'invalid-attributes'
   | 'attribute-budget'
+  | 'attribute-page-budget'
+  | 'attribute-text-page-budget'
   | 'attribute-text-budget'
   | 'missing-object-id'
   | 'invalid-object-id'
@@ -67,6 +71,8 @@ export type ArcGisQueryIntegrityResult =
 const DEFAULTS: ArcGisQueryResponseIntegrityOptions = {
   maxFeaturesPerPage: 2_000,
   maxAttributesPerFeature: 256,
+  maxAttributesPerPage: 16_384,
+  maxAttributeTextCharactersPerPage: 2_000_000,
   maxAttributeTextLength: 16_384,
   maxGeometryDepth: 12,
   maxGeometryCoordinates: 200_000,
@@ -88,7 +94,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeOptions(input: Partial<ArcGisQueryResponseIntegrityOptions>): ArcGisQueryResponseIntegrityOptions {
   const options = { ...DEFAULTS, ...input }
   for (const [name, value] of Object.entries(options)) {
-    if (name === 'requireObjectId') continue
+    if (name === 'requireObjectId') {
+      if (typeof value !== 'boolean') throw new Error('Invalid ArcGIS response integrity option: requireObjectId')
+      continue
+    }
     if (!positiveInteger(value as number)) throw new Error(`Invalid ArcGIS response integrity option: ${name}`)
   }
   return Object.freeze(options)
@@ -174,13 +183,27 @@ function inspectAttributes(
   attributes: unknown,
   maxAttributes: number,
   maxTextLength: number,
+  page: { attributes: number; textCharacters: number },
+  maxPageAttributes: number,
+  maxPageTextCharacters: number,
 ): { readonly record: Record<string, unknown> } | { readonly issue: ArcGisQueryIntegrityIssueCode; readonly field?: string } {
   if (!isRecord(attributes)) return { issue: 'invalid-attributes' }
-  const entries = Object.entries(attributes)
-  if (entries.length > maxAttributes) return { issue: 'attribute-budget' }
-  for (const [field, value] of entries) {
+  let featureAttributes = 0
+  // A bounded own-property walk avoids allocating an unbounded Object.entries array
+  // before the attribute cardinality limit has been checked.
+  for (const field in attributes) {
+    if (!Object.prototype.hasOwnProperty.call(attributes, field)) continue
+    featureAttributes += 1
+    if (featureAttributes > maxAttributes) return { issue: 'attribute-budget' }
+    page.attributes += 1
+    if (page.attributes > maxPageAttributes) return { issue: 'attribute-page-budget' }
     if (field.length === 0 || field.length > 256) return { issue: 'invalid-attributes', field }
-    if (typeof value === 'string' && value.length > maxTextLength) return { issue: 'attribute-text-budget', field }
+    const value = attributes[field]
+    if (typeof value === 'string') {
+      if (value.length > maxTextLength) return { issue: 'attribute-text-budget', field }
+      page.textCharacters += value.length
+      if (page.textCharacters > maxPageTextCharacters) return { issue: 'attribute-text-page-budget', field }
+    }
     if (typeof value === 'number' && !Number.isFinite(value)) return { issue: 'invalid-attributes', field }
     if (typeof value === 'object' && value !== null) return { issue: 'invalid-attributes', field }
     if (!['string', 'number', 'boolean', 'object', 'undefined'].includes(typeof value)) {
@@ -225,6 +248,7 @@ export class ArcGisQueryResponseIntegrity {
     const seen = new Set<number>()
     const accepted: ArcGisFeatureLike[] = []
     const pageGeometryBudget = { nodes: 0 }
+    const pageAttributeBudget = { attributes: 0, textCharacters: 0 }
     for (let index = 0; index < response.features.length; index += 1) {
       const raw = response.features[index]
       if (!isRecord(raw)) return { kind: 'rejected', issue: { code: 'invalid-feature', featureIndex: index } }
@@ -233,7 +257,14 @@ export class ArcGisQueryResponseIntegrity {
       if (candidateId !== undefined && candidateId !== null && !positiveInteger(candidateId as number)) {
         return { kind: 'rejected', issue: { code: 'invalid-object-id', featureIndex: index, field: context.objectIdField } }
       }
-      const attributes = inspectAttributes(raw.attributes, this.#options.maxAttributesPerFeature, this.#options.maxAttributeTextLength)
+      const attributes = inspectAttributes(
+        raw.attributes,
+        this.#options.maxAttributesPerFeature,
+        this.#options.maxAttributeTextLength,
+        pageAttributeBudget,
+        this.#options.maxAttributesPerPage,
+        this.#options.maxAttributeTextCharactersPerPage,
+      )
       if ('issue' in attributes) {
         return { kind: 'rejected', issue: { code: attributes.issue, featureIndex: index, ...(attributes.field === undefined ? {} : { field: attributes.field }) } }
       }
