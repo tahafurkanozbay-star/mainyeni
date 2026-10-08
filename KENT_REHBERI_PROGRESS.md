@@ -96,3 +96,13 @@
 - GIS Core Quality rerun: 592/593 Vitest cases passed. Remaining Dedupe test now asserts rejection of embedded controls, matching existing signature trimming behavior; stricter boundary-control rejection remains a follow-up. Exact-head CI required.
 
 - Exact-head GIS Core Quality #37723292147 passed: 42 suites, 593 tests, strict GIS TypeScript and lint. Release QA #37723292141 failed its regression gate because new workflow concurrency used an untrusted ref. Changed concurrency to numeric PR/run identifiers and checkout to full baseline history; reverify new exact-head CI.
+
+## Deep GIS — dedupe identity and bounded geometry traversal — 2026-10-08
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; prevent ArcGIS query request-ID aliasing and bound adversarial geometry traversal across an entire query page.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99` / #477 (canonical draft/open). Base/merge-base main `d364f991b88a0668a1337490227af4936eac232f` at pre-commit refresh.
+- IMPLEMENTATION: Dedupe validates ASCII controls before trimming identities and rejects a reused request ID when signature/layer/revision differs; identical logical requests remain coalescible. Response integrity adds per-feature and per-page geometry node budgets, including empty array/object fanout, without allocating an Object.entries array per geometry object.
+- REGRESSION: New dedupe collision/boundary-control cases and a dedicated geometry traversal suite cover shallow fanout, cross-feature pressure, normal geometry, invalid options, nonfinite coordinates and spatial-reference mismatch.
+- PERFORMANCE / SECURITY / DATA INTEGRITY: Geometry traversal is bounded by scalar counters (default 250k nodes/feature, 500k nodes/page). No retained geometry payload, network endpoint, WMS/WFS, secret, telemetry, remote asset or second icon resolver introduced.
+- TEST / BUILD: Pre-change exact head `7b0bdba55fd048576355010eaca20c726d1c1ee5` passed GIS Core Quality #37723640513, Platform Architecture Audit #37723640007 and Release QA #37723640040. New exact-head CI must be verified; prior success does not transfer. Local npm/build not run in GitHub-native environment.
+- MERGE: base...head additions remained 2,684 before this change, below 4,000. Keep PR draft/open; do not merge until additions >=4,000, current-main ancestry and all exact-head CI pass.
+- SONRAKİ GÖREV: Verify GitHub tree/commit/ref and new exact-head CI. Repair any TypeScript/Vitest/Release QA failure; review geometry traversal and request collision behavior, then continue meaningful GIS backlog and final regression.

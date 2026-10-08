@@ -4,6 +4,8 @@ export interface ArcGisQueryResponseIntegrityOptions {
   readonly maxAttributeTextLength: number
   readonly maxGeometryDepth: number
   readonly maxGeometryCoordinates: number
+  readonly maxGeometryNodesPerFeature: number
+  readonly maxGeometryNodesPerPage: number
   readonly requireObjectId: boolean
 }
 
@@ -39,6 +41,8 @@ export type ArcGisQueryIntegrityIssueCode =
   | 'invalid-geometry'
   | 'geometry-depth-budget'
   | 'geometry-coordinate-budget'
+  | 'geometry-node-budget'
+  | 'geometry-page-node-budget'
   | 'invalid-coordinate'
   | 'invalid-transfer-limit'
   | 'invalid-spatial-reference'
@@ -66,6 +70,8 @@ const DEFAULTS: ArcGisQueryResponseIntegrityOptions = {
   maxAttributeTextLength: 16_384,
   maxGeometryDepth: 12,
   maxGeometryCoordinates: 200_000,
+  maxGeometryNodesPerFeature: 250_000,
+  maxGeometryNodesPerPage: 500_000,
   requireObjectId: true,
 }
 
@@ -101,11 +107,24 @@ function inspectGeometry(
   geometry: unknown,
   maxDepth: number,
   maxCoordinates: number,
+  maxNodesPerFeature: number,
+  maxNodesPerPage: number,
+  page: { nodes: number },
 ): ArcGisQueryIntegrityIssueCode | null {
   if (geometry === undefined || geometry === null) return null
   if (!isRecord(geometry)) return 'invalid-geometry'
 
   let coordinateCount = 0
+  let featureNodes = 1
+  page.nodes += 1
+  if (page.nodes > maxNodesPerPage) return 'geometry-page-node-budget'
+  const consumeNode = (): ArcGisQueryIntegrityIssueCode | null => {
+    featureNodes += 1
+    page.nodes += 1
+    if (featureNodes > maxNodesPerFeature) return 'geometry-node-budget'
+    if (page.nodes > maxNodesPerPage) return 'geometry-page-node-budget'
+    return null
+  }
   const stack: Array<{ readonly value: unknown; readonly depth: number }> = [{ value: geometry, depth: 0 }]
   while (stack.length > 0) {
     const current = stack.pop()
@@ -114,6 +133,8 @@ function inspectGeometry(
     const value = current.value
     if (Array.isArray(value)) {
       for (let index = value.length - 1; index >= 0; index -= 1) {
+        const exceeded = consumeNode()
+        if (exceeded !== null) return exceeded
         const child = value[index]
         if (typeof child === 'number') {
           if (!Number.isFinite(child)) return 'invalid-coordinate'
@@ -128,8 +149,11 @@ function inspectGeometry(
       continue
     }
     if (!isRecord(value)) return 'invalid-geometry'
-    for (const [key, child] of Object.entries(value)) {
-      if (key === 'spatialReference') continue
+    for (const key in value) {
+      if (!Object.prototype.hasOwnProperty.call(value, key) || key === 'spatialReference') continue
+      const exceeded = consumeNode()
+      if (exceeded !== null) return exceeded
+      const child = value[key]
       if (typeof child === 'number') {
         if (!Number.isFinite(child)) return 'invalid-coordinate'
         if (key === 'x' || key === 'y' || key === 'z' || key === 'm') {
@@ -200,6 +224,7 @@ export class ArcGisQueryResponseIntegrity {
     const expected = context.expectedObjectIds === undefined ? undefined : new Set(context.expectedObjectIds)
     const seen = new Set<number>()
     const accepted: ArcGisFeatureLike[] = []
+    const pageGeometryBudget = { nodes: 0 }
     for (let index = 0; index < response.features.length; index += 1) {
       const raw = response.features[index]
       if (!isRecord(raw)) return { kind: 'rejected', issue: { code: 'invalid-feature', featureIndex: index } }
@@ -240,7 +265,14 @@ export class ArcGisQueryResponseIntegrity {
           return { kind: 'rejected', issue: { code: 'spatial-reference-mismatch', featureIndex: index } }
         }
       }
-      const geometryIssue = inspectGeometry(raw.geometry, this.#options.maxGeometryDepth, this.#options.maxGeometryCoordinates)
+      const geometryIssue = inspectGeometry(
+        raw.geometry,
+        this.#options.maxGeometryDepth,
+        this.#options.maxGeometryCoordinates,
+        this.#options.maxGeometryNodesPerFeature,
+        this.#options.maxGeometryNodesPerPage,
+        pageGeometryBudget,
+      )
       if (geometryIssue !== null) return { kind: 'rejected', issue: { code: geometryIssue, featureIndex: index } }
       accepted.push(Object.freeze({ attributes: Object.freeze({ ...attributes.record }), ...(raw.geometry === undefined ? {} : { geometry: raw.geometry }) }))
     }

@@ -36,4 +36,24 @@ describe('ArcGisQueryDedupeLifecyclePolicy',()=>{
   it('releases layer state atomically',()=>{const p=policy();p.setRevision('parcels',1);p.admit(req('a'));expect(p.releaseLayer('parcels')).toBe(1);expect(p.snapshot()).toMatchObject({layers:0,entries:0})})
   it('produces deterministic scalar fingerprints',()=>{const p=policy();p.setRevision('b',1);p.setRevision('a',1);p.admit(req('b1','b'));p.admit(req('a1','a'));expect(p.fingerprint()).toBe('a:sig-a1:1:visible:pending:10:200|b:sig-b1:1:visible:pending:10:200')})
   it('disposes idempotently and rejects reuse',()=>{const p=policy();p.setRevision('parcels',1);p.admit(req('a'));p.dispose();p.dispose();expect(()=>p.snapshot()).toThrow();expect(()=>p.setRevision('x',1)).toThrow()})
+  it('rejects request-id collisions without changing the original query',()=>{
+    const p=policy(); p.setRevision('a',1); p.setRevision('b',1)
+    expect(p.admit(req('same','a'))).toBe('admitted')
+    expect(p.admit(req('same','a'))).toBe('duplicate')
+    expect(p.admit({...req('same','a'),signature:'different'})).toBe('rejected')
+    expect(p.admit(req('same','b'))).toBe('rejected')
+    expect(p.snapshot()).toMatchObject({entries:1,pending:1})
+    expect(p.startNext(1)?.signature).toBe('sig-same')
+  })
+  it('rejects boundary control characters in identifiers',()=>{
+    const p=policy(); p.setRevision('a',1)
+    for(const code of [9,10,13,31,127]){
+      const invalid=String.fromCharCode(code)+'stable'
+      expect(()=>p.admit({...req('a','a'),requestId:invalid})).toThrow()
+      expect(()=>p.admit({...req('a','a'),signature:invalid})).toThrow()
+      expect(()=>p.lookup(invalid,'a',1,0)).toThrow()
+    }
+    expect(p.snapshot().entries).toBe(0)
+  })
+
 })

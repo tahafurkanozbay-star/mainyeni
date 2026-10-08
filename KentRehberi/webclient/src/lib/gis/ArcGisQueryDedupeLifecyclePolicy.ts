@@ -49,7 +49,7 @@ interface Entry extends QueryDedupeRequest {
 
 const intents: readonly QueryDedupeIntent[] = ['interactive', 'visible', 'background']
 const priority: Readonly<Record<QueryDedupeIntent, number>> = Object.freeze({ interactive: 2, visible: 1, background: 0 })
-function id(name:string,value:string):string { const v=value.trim(); if(!v||v.length>256||/[\u0000-\u001f]/.test(v)) throw new Error(`${name} is invalid`); return v }
+function id(name:string,value:string):string { if(typeof value!=='string'||/[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${name} is invalid`); const v=value.trim(); if(!v||v.length>256) throw new Error(`${name} is invalid`); return v }
 function integer(name:string,value:number,min=0):void { if(!Number.isSafeInteger(value)||value<min) throw new Error(`${name} must be a safe integer >= ${min}`) }
 function time(name:string,value:number):void { if(!Number.isFinite(value)||value<0) throw new Error(`${name} must be finite and non-negative`) }
 
@@ -98,7 +98,8 @@ export class ArcGisQueryDedupeLifecyclePolicy {
     if(!intents.includes(request.intent)) throw new Error('intent is invalid')
     if(this.#revisions.get(layerId)!==request.revision) return 'rejected'
     if(request.estimatedFeatures>this.#budget.maxFeaturesPerEntry||request.estimatedBytes>this.#budget.maxBytesPerEntry) return 'rejected'
-    if(this.#entries.has(requestId)) return 'duplicate'
+    const existing=this.#entries.get(requestId)
+    if(existing) return existing.layerId===layerId&&existing.revision===request.revision&&existing.signature===signature ? 'duplicate' : 'rejected'
     const key=this.#signatureKey(layerId,request.revision,signature)
     if(this.#signatures.has(key)) return 'duplicate'
     if(this.#entries.size>=this.#budget.maxEntries||this.#layerCount(layerId)>=this.#budget.maxEntriesPerLayer) return 'rejected'
