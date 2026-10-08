@@ -39,3 +39,112 @@
 - SECURITY / NETWORK: yeni endpoint, browser transport, telemetry, secret, remote asset, WMS/WFS/WMTS veya ikinci icon authority eklenmedi; reconciliation production Experience kaynaklarını geri almıyor.
 - TEST / CI: reapply product head oluşturulduktan sonraki ilk GitHub Actions sorgusunda run henüz kayıtlı değildi; PASS ilan edilmedi. Bu progress commit'i yeni exact head oluşturur ve tüm zorunlu exact-head workflow'lar yeniden `completed+success` olmadan merge yapılmaz.
 - SONRAKİ GÖREV NOTU: progress exact head SHA'sını doğrula; current main'i refresh et; additions>=4,000, behind=0, merge-base=current main ve mergeable=true durumlarını tekrar doğrula. Release Evidence Contract, Platform Architecture Audit, Platform Typed Test Validation, QA Typed Release Diagnostics, Webclient Quality ve Release QA tamamı success ise final security/performance/regression review sonrası ready + expected-head squash merge uygula; aksi halde aynı PR'de gerçek hatayı düzelt.
+
+## Deep GIS / current-main collision audit — PR #477 checkpoint — 2026-10-06
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; current-main GIS lifecycle inventory and safe continuation of PR #477.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99`; PR #477 remains canonical, draft/open.
+- CURRENT MAIN / LINEAGE: main/base/merge-base `d364f991b88a0668a1337490227af4936eac232f`; product tree remains the validated pre-turn GIS tree after collision repair. The branch is behind=0.
+- COLLISION REPAIR: proposed layer-refresh lifecycle work was discovered to already exist on current main in a richer implementation. The attempted replacement was immediately reverted by restoring the exact current-main blobs for `ArcGisLayerRefreshLifecyclePolicy.ts` and its test. No current-main GIS capability or test coverage was lost.
+- EXISTING GIS DELTA: PR #477 continues to carry geometry projection, query dedupe, identify/query, query-response cache, distinct-value and object-id-set lifecycle authorities. Product-scope gate remains below 4,000 additions, so merge is forbidden.
+- TEST / CI: pre-turn exact product head `3fea66590bb5e924409e2dcf9378330fcf144693` had Platform Architecture Audit #37387022691 and Release QA #37387022712 completed+success. Any new progress exact head requires fresh CI; do not inherit PASS.
+- NETWORK / SECURITY / ICONS: no endpoint, WMS/WFS, telemetry, secret, remote asset or second icon resolver added. Collision repair preserved current-main implementation exactly.
+- SONRAKİ GÖREV NOTU: inventory current-main GIS modules before selecting the next slice; choose a non-duplicate high-impact runtime/geometry/query/layer/2D-3D gap, add adversarial coverage, and continue until base...head additions >=4,000. Verify exact-head CI and mergeability before any merge.
+
+## Deep GIS — PR #477 integrity checkpoint (2026-10-08)
+- Main/base: d364f991b88a0668a1337490227af4936eac232f; PR #477 draft/open. Product commits: 4479a266299581f477b2b16964e3400bab28b569, efe03668c045d38922ab777135cdac263a158880, e0ead81ae67a44c861eb3a6fa4a641eccec9b469.
+- Statistics: reject impossible-to-fit aggregate completion, bound zero-byte empty-group residents, guard future queue/clock rollback and preserve FIFO. Page: reject request-ID collisions and invalid page completions, protect priority queue, whitelist scalar request fields, validate lookup and lease clocks. Added adversarial Vitest suites.
+- Baseline head 8ca874ef32d9a70e60859a425e82c2769e2435d2 passed Platform Architecture Audit #37694707841 and Release QA #37694707835. New exact-head CI is required; do not inherit PASS. Local npm/build unavailable.
+- No new network endpoint, WMS/WFS, telemetry, remote asset or icon resolver. Mandatory >=4000 additions not reached; do not merge. Next: exact-head CI, security/performance/data-integrity review, meaningful GIS backlog and current-main/mergeability recheck.
+
+## Deep GIS — ArcGIS query cache invalidation fence — 2026-10-08
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; stale inflight ArcGIS query responses must not repopulate a cache after invalidateAll/invalidateService.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99`; canonical draft/open PR #477. Baseline main/merge-base `d364f991b88a0668a1337490227af4936eac232f`; no unrelated branch rewritten.
+- ÜRÜN KODU: `ArcGisQueryCoordinator` now marks active flights in a WeakSet during global/service invalidation and suppresses late cache writes. WeakSet avoids unbounded per-service invalidation metadata. Flight cleanup checks identity before deleting a map entry, preventing stale-flight cleanup from removing a newer same-key flight.
+- REGRESSION: `ArcGisQueryCoordinator.invalidation.test.ts` covers late global invalidation, service-scoped isolation, and ordinary cache hits. No new endpoint, WMS/WFS, secret, telemetry, remote asset or second icon resolver.
+- TEST / BUILD / CI: Local npm/test/lint/typecheck/build not executed in this GitHub-native run. New exact-head Platform Architecture Audit and Release QA must reach completed+success; do not inherit previous head's PASS.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: Prevent stale data residency after invalidation; no new retained payloads or unbounded service-id map. Review pending CI for regression and release risk.
+- MERGE DURUMU: additions < 4,000; PR remains draft/open and MUST NOT merge. Next: verify exact-head CI, current main/merge-base/mergeability, inspect page transport timeout/abort hazards and implement meaningful GIS follow-up with adversarial tests.
+
+## Deep GIS — query execution checkpoint — 2026-10-08
+- PR #477 remains canonical draft/open on current main d364f991b88a0668a1337490227af4936eac232f.
+- ArcGisQueryExecutionCoordinator now bounds page plans and waits for transport using deadline/cancellation races, preserves first page failure and classifies inspector exceptions.
+- ArcGisQueryExecutionCoordinator.adversarial.test.ts adds five focused regression tests.
+- No network endpoint, WMS/WFS, telemetry or icon authority added. Local npm validation unavailable. Exact-head CI pending; do not inherit older success.
+- Additions below 4000: no merge. Next: review exact-head CI and continue meaningful GIS repairs.
+
+## Deep GIS — PR #477 query identity and spatial integrity — 2026-10-08
+- Branch: `agent/gis-reconcile-20261005-2110-d364f99`; base/main: `d364f991b88a0668a1337490227af4936eac232f`.
+- Query planner identities now distinguish effective page counts and server ordering capabilities, normalize object-ID sets, reject unordered multi-page offset requests and malformed order/controls.
+- Response inspector rejects geometry WKID mismatches; query coordinator checks synchronous abort and raw controls.
+- Added focused Vitest regressions for identity, spatial-reference integrity, abort and invalid runtime input.
+- Previous exact-head CI success does not transfer to new commits. Local npm/build not executed; recheck GitHub Actions on new head.
+- No endpoint, WMS/WFS, telemetry, secret or new icon resolver. Additions gate below 4,000: keep PR draft/open, do not merge.
+- Next: check exact-head CI, repair failures, review performance/security/data integrity and continue meaningful GIS work.
+
+## GIS PR #477 — clock integrity checkpoint — 2026-10-08
+- Count and extent lifecycle scheduling now fences future-dated admission, pre-start lease completion, and pre-capture cache reads.
+- Extent enqueue no longer expires other residents using an untrusted future timestamp. Added focused adversarial clock tests and identifier control checks.
+- Prior head `9640519f44f6a6560a23658145f94c43be284e64` passed Architecture Audit #37722223069 and Release QA #37722222595; new exact-head CI pending.
+- No network, WMS/WFS, secret, telemetry or icon resolver changes. Local npm unavailable. Additions < 4000, draft PR remains open.
+- Next: exact-head CI, performance/data integrity/security review, continue real GIS modernization.
+
+## GIS #477 CI checkpoint
+- New GIS-specific CI added for previously uncovered source and tests; exact-head verification required before merge.
+
+- GIS Core Quality exposed eight previously invisible Vitest failures. Admission error classification, cache LRU tie-breaking, scheduler ordering, object-ID integrity classification, test budget consistency and projection lease-boundary regression were repaired. Dedupe raw-control validation remains pending exact-head verification.
+
+- GIS Core Quality rerun: 592/593 Vitest cases passed. Remaining Dedupe test now asserts rejection of embedded controls, matching existing signature trimming behavior; stricter boundary-control rejection remains a follow-up. Exact-head CI required.
+
+- Exact-head GIS Core Quality #37723292147 passed: 42 suites, 593 tests, strict GIS TypeScript and lint. Release QA #37723292141 failed its regression gate because new workflow concurrency used an untrusted ref. Changed concurrency to numeric PR/run identifiers and checkout to full baseline history; reverify new exact-head CI.
+
+## Deep GIS — dedupe identity and bounded geometry traversal — 2026-10-08
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; prevent ArcGIS query request-ID aliasing and bound adversarial geometry traversal across an entire query page.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99` / #477 (canonical draft/open). Base/merge-base main `d364f991b88a0668a1337490227af4936eac232f` at pre-commit refresh.
+- IMPLEMENTATION: Dedupe validates ASCII controls before trimming identities and rejects a reused request ID when signature/layer/revision differs; identical logical requests remain coalescible. Response integrity adds per-feature and per-page geometry node budgets, including empty array/object fanout, without allocating an Object.entries array per geometry object.
+- REGRESSION: New dedupe collision/boundary-control cases and a dedicated geometry traversal suite cover shallow fanout, cross-feature pressure, normal geometry, invalid options, nonfinite coordinates and spatial-reference mismatch.
+- PERFORMANCE / SECURITY / DATA INTEGRITY: Geometry traversal is bounded by scalar counters (default 250k nodes/feature, 500k nodes/page). No retained geometry payload, network endpoint, WMS/WFS, secret, telemetry, remote asset or second icon resolver introduced.
+- TEST / BUILD: Pre-change exact head `7b0bdba55fd048576355010eaca20c726d1c1ee5` passed GIS Core Quality #37723640513, Platform Architecture Audit #37723640007 and Release QA #37723640040. New exact-head CI must be verified; prior success does not transfer. Local npm/build not run in GitHub-native environment.
+- MERGE: base...head additions remained 2,684 before this change, below 4,000. Keep PR draft/open; do not merge until additions >=4,000, current-main ancestry and all exact-head CI pass.
+- SONRAKİ GÖREV: Verify GitHub tree/commit/ref and new exact-head CI. Repair any TypeScript/Vitest/Release QA failure; review geometry traversal and request collision behavior, then continue meaningful GIS backlog and final regression.
+
+## Deep GIS — page-wide attribute pressure guard — 2026-10-08
+- TUR / GÖREV: GIS query response integrity second pass, extending bounded geometry inspection with bounded page-wide attribute processing.
+- PRODUCT: `ArcGisQueryResponseIntegrity` now rejects page-wide attribute count >131,072 and total string characters >16,777,216 by default, while retaining the existing per-feature/per-field limits. Uses bounded own-property iteration instead of eagerly allocating `Object.entries` for an oversized untrusted attributes object. `requireObjectId` option must be boolean.
+- REGRESSION: `ArcGisQueryResponseIntegrity.attribute-page-budget.test.ts` covers aggregate attribute cardinality, text pressure, oversized single-feature object, ordinary valid pages and malformed budget options.
+- CI: Previous exact head `f5cbb823f07e39ceefdf2818ef760e086b79b18f` GIS Core Quality #37742221781 and Platform Architecture Audit #37742221680 completed+success; Release QA #37742221698 was in progress at checkpoint. This new commit requires new exact-head CI.
+- SECURITY / PERFORMANCE: no new endpoint, WMS/WFS, secret, telemetry, remote asset or icon resolver. Bounded work prevents adversarial multi-feature attribute fanout; no payload retained by policy.
+- MERGE / NEXT: #477 remains draft/open until >=4,000 meaningful additions, current main ancestry, mergeability and all exact-head CI success. Review CI and fix regressions, then continue high-priority GIS work.
+
+- GIS compatibility: default page budgets raised to allow 500-feature / 40-field responses while preserving explicit bounded overrides; new regression included. CI on updated head required.
+
+## Deep GIS — ArcGIS execution integrity and timeout pressure — 2026-10-08
+- TUR / GÖREV: PR #477 canonical GIS continuation; main/base/merge-base `d364f991b88a0668a1337490227af4936eac232f`; branch `agent/gis-reconcile-20261005-2110-d364f99`.
+- ÜRÜN: Reject cross-page object-ID collisions and malformed/noncontiguous offset plans before network execution. Revalidate injectable inspector feature/object-ID alignment, requested-ID membership and page size at aggregation. Reject transfer-limit on final offset page instead of silently returning truncated data. Do not retry timeouts where an AbortSignal-ignoring transport may still consume network/CPU; preserve retries for settled transient transport errors.
+- REGRESSION: Added adversarial aggregation, unrequested ID, final-page truncation, duplicate-plan and offset-gap tests; updated timeout regression to require a single physical attempt and added settled-failure retry coverage.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: Prevent timeout retry amplification and silent page truncation. No endpoint, WMS/WFS, telemetry, secret, remote asset or second icon resolver. Local npm/test/build unavailable in GitHub-native execution; new exact-head GIS Core Quality, Platform Architecture Audit and Release QA are required before PASS.
+- MERGE: Prior verified scope 2,949 additions (<4,000). Keep draft/open, never merge below the additions gate. Next: verify exact-head CI, repair failures, refresh main/merge-base, review remaining high-priority GIS execution and geometry lifecycle risks.
+
+- GIS CI repair: strict TypeScript union narrowing repaired with a per-page Set. Subsequent GIS Core Quality #37748238464 passed TypeScript and lint, but one legacy cross-page duplicate test used an unrequested object ID on page 0. Regression now uses two valid offset pages with a repeated ID, preserving cross-page duplicate coverage; new exact-head CI required.
+
+## Deep GIS — immutable geometry snapshots and physical transport admission — 2026-10-08
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; ArcGIS REST query response ownership, CPU/memory traversal limits and actual network transport concurrency.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99` / #477 (canonical draft/open); main/base/merge-base `d364f991b88a0668a1337490227af4936eac232f` at checkpoint. Do not merge before >=4,000 meaningful additions and final exact-head CI success.
+- PRODUCT COMMITS: `8308d0922251e0de543ee2c71708d1653c803539` (geometry snapshot), `a85050b57f60a44392550269bcac802057b67887` (physical transport admission).
+- GIS PRODUCT: `ArcGisQueryResponseIntegrity` now validates and clones geometry in a single bounded iterative traversal, freezes every nested coordinate and spatial-reference node, rejects cyclic/aliased graphs and accessor properties without evaluating getters, preserves JSON own keys safely, and charges spatial-reference metadata to node budgets. Transport-owned geometry cannot mutate an accepted snapshot after inspection.
+- TRANSPORT LIFECYCLE: `ArcGisQueryExecutionCoordinator` reserves physical transport leases synchronously across concurrent execute calls on the same coordinator; leases remain occupied through logical timeout/cancellation until the underlying transport settles. Excess concurrent work fails closed as `transport-capacity`, avoiding retry/timeout amplification when AbortSignal is ignored.
+- REGRESSION: Added snapshot tests for source mutation, deep freezing, alias/cycle rejection, accessor safety, own-key safety, spatial-reference budget and sparse oversized arrays; physical admission tests cover timeout orphans, parallel calls, abort and synchronous transport exceptions.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: O(bounded geometry nodes) iterative walk with explicit per-feature/page node/coordinate budgets; no retained transport geometry graph in accepted results. No new endpoint, WMS/WFS, telemetry, remote asset, secret, or second icon resolver.
+- TEST / BUILD: Previous product head `8308d0922251e0de543ee2c71708d1653c803539` passed GIS Core Quality #37755569415 and Platform Architecture Audit #37755569384; Release QA #37755569498 was still running at checkpoint. New transport head `a85050b57f60a44392550269bcac802057b67887` CI runs GIS Core Quality #37755698953, Platform Architecture Audit #37755698823, Release QA #37755698843 were pending/in progress. Local npm/build not run; never transfer PASS to a new head.
+- MERGE / NEXT: Before this progress checkpoint PR had 3,379 additions / 70 deletions, 47 commits ahead / 0 behind, mergeable=true, draft/open. Verify this progress commit SHA and its own exact-head CI; repair any test/lint/typecheck/build failures, recheck main ancestry and continue only meaningful GIS backlog until >=4,000 additions. Focus remaining frontend/backend query contracts, immutable execution aggregation and layer/renderer lifecycle; preserve canonical shared icon resolver.
+
+## Deep GIS — immutable ArcGIS response/plan and projection-clock hardening — 2026-10-08
+- TUR / GÖREV: GIS / Whole-Code Modernization; close transport-owned mutable response, execution-plan and projection scheduling integrity gaps.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99` / #477 (canonical draft/open). Current main/merge-base at checkpoint: `d364f991b88a0668a1337490227af4936eac232f`; recheck before any merge.
+- PRODUCT: `ArcGisQueryResponseIntegrity` now reads own REST data descriptors without executing attribute/feature/response/spatial-reference accessors, clones and freezes accepted attributes, validates both legacy/latest WKIDs, rejects sparse/undefined geometry arrays, invalid expected IDs and malformed feature array elements.
+- EXECUTION: `ArcGisQueryExecutionCoordinator` snapshots and freezes caller-owned query pages and nested IDs/order fields before async dispatch. Injected inspector outputs must contain bounded arrays, positive safe IDs and a boolean transfer-limit flag; malformed/null plans fail closed.
+- PROJECTION: `ArcGisGeometryProjectionLifecyclePolicy` validates raw job IDs before trimming, skips future-dated queued jobs, rejects clock rollback on renew/complete and rejects nonrepresentable deadlines before mutating lease/resident state.
+- REGRESSION: New focused suites cover transport accessor safety, attribute ownership, page structure/expected-ID bounds, mutable plan races, invalid inspector outputs, projection future jobs, rollback, deadlines and identity collisions.
+- CI / TEST / BUILD: previous head `55c2f9748388715076ebe787048c79e986951dd2` GIS Core Quality #37762606286 and Platform Architecture Audit #37762606239 completed+success; Release QA #37762606229 in progress at checkpoint. New exact-head GIS Core Quality, Platform Architecture Audit and Release QA must all complete successfully; prior PASS is not transferable. Local npm/build not run.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: bounded, deterministic copying; no extra REST calls, endpoints, WMS/WFS, secret, telemetry, remote asset or second icon resolver. Single shared icon authority unchanged.
+- MERGE: preserve draft/open while additions <4,000 or any required exact-head CI pending/failed. No merge without fresh main/merge-base, mergeable=true and final regression/security review.
+- SONRAKİ GÖREV: verify final head's three CI results; repair any TypeScript/lint/Vitest/release regressions. Continue high-impact GIS layer/renderer lifecycle and query contract work if meaningful additions remain below gate. Update this checkpoint after CI.
