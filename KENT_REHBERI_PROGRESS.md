@@ -94,3 +94,5 @@
 - GIS Core Quality exposed eight previously invisible Vitest failures. Admission error classification, cache LRU tie-breaking, scheduler ordering, object-ID integrity classification, test budget consistency and projection lease-boundary regression were repaired. Dedupe raw-control validation remains pending exact-head verification.
 
 - GIS Core Quality rerun: 592/593 Vitest cases passed. Remaining Dedupe test now asserts rejection of embedded controls, matching existing signature trimming behavior; stricter boundary-control rejection remains a follow-up. Exact-head CI required.
+
+- Exact-head GIS Core Quality #37723292147 passed: 42 suites, 593 tests, strict GIS TypeScript and lint. Release QA #37723292141 failed its regression gate because new workflow concurrency used an untrusted ref. Changed concurrency to numeric PR/run identifiers and checkout to full baseline history; reverify new exact-head CI.
