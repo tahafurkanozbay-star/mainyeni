@@ -3,11 +3,16 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packageNameFromLockPath } from './dependency-lock-graph.mjs';
-import { runTransitivePolicy } from './dependency-transitive-policy.mjs';
+import { runTransitivePolicy, validatePeerEdges } from './dependency-transitive-policy.mjs';
 
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(CURRENT_FILE), '..');
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const isRealCalendarDate = (value) => {
+  if (!DATE_ONLY.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+};
 const MAX_REASON = 240;
 const MAX_PEER_EXCEPTIONS = 16;
 
@@ -19,6 +24,9 @@ const edgeKey = (edge) => `${packageNameFromLockPath(edge.from)}\0${edge.name}\0
 export const validatePeerExceptions = (policy, today = new Date().toISOString().slice(0, 10)) => {
   const issues = [];
   const entries = Array.isArray(policy?.peerExceptions) ? policy.peerExceptions : [];
+  if (policy?.peerExceptions !== undefined && !Array.isArray(policy.peerExceptions)) {
+    issues.push('peerExceptions must be an array');
+  }
   if (entries.length > MAX_PEER_EXCEPTIONS) issues.push(`peer exception count ${entries.length} exceeds hard budget ${MAX_PEER_EXCEPTIONS}`);
   const seen = new Set();
   for (const [index, entry] of entries.entries()) {
@@ -32,7 +40,7 @@ export const validatePeerExceptions = (policy, today = new Date().toISOString().
     if (!packageName || !peer || !range) issues.push(`${prefix}: package, peer and exact range are required`);
     if (!owner || owner.length > 80) issues.push(`${prefix}: bounded owner is required`);
     if (reason.length < 20 || reason.length > MAX_REASON) issues.push(`${prefix}: reason must contain 20-${MAX_REASON} characters`);
-    if (!DATE_ONLY.test(expiresOn)) issues.push(`${prefix}: expiresOn must be YYYY-MM-DD`);
+    if (!isRealCalendarDate(expiresOn)) issues.push(`${prefix}: expiresOn must be a real YYYY-MM-DD calendar date`);
     else if (expiresOn < today) issues.push(`${prefix}: exception expired on ${expiresOn}`);
     const key = keyOf({ package: packageName, peer, range });
     if (seen.has(key)) issues.push(`${prefix}: duplicate peer exception ${packageName} -> ${peer}@${range}`);
@@ -46,18 +54,28 @@ export const applyPeerExceptions = (result, policy, today) => {
   // that public immutability contract intact and use a private mutable accumulator
   // for graph-dependent stale/unnecessary findings discovered below.
   const policyIssues = [...validatePeerExceptions(policy, today)];
-  const exceptions = new Map((policy?.peerExceptions ?? []).map((entry) => [keyOf(entry), entry]));
-  const peerEdges = new Map((result?.inventory?.peerEdges ?? []).map((edge) => [edgeKey(edge), edge]));
+  const exceptions = new Map((Array.isArray(policy?.peerExceptions) ? policy.peerExceptions : []).map((entry) => [keyOf(entry), entry]));
+  const peerEdges = result?.inventory?.peerEdges ?? [];
+  const peerEdgeKeys = new Set(peerEdges.map(edgeKey));
+  const edgesByPath = new Map();
+  for (const edge of peerEdges) {
+    const bucket = edgesByPath.get(edge.from) ?? [];
+    bucket.push(edge);
+    edgesByPath.set(edge.from, bucket);
+  }
   const used = new Set();
   const remaining = [];
 
   for (const finding of result?.issues ?? []) {
-    if (finding.code !== 'peer-range' && finding.code !== 'peer-mismatch' && finding.code !== 'peer-unresolved') {
+    // Exceptions only waive review of an upstream range; never hide missing or incompatible peers.
+    if (finding.code !== 'peer-range') {
       remaining.push(finding);
       continue;
     }
-    const candidateEdges = [...peerEdges.values()].filter((edge) => edge.from === finding.path);
-    const matched = candidateEdges.find((edge) => exceptions.has(edgeKey(edge)));
+    const candidateEdges = edgesByPath.get(finding.path) ?? [];
+    const matched = candidateEdges.find((edge) => exceptions.has(edgeKey(edge)) &&
+      validatePeerEdges([edge]).some((candidate) => candidate.code === finding.code &&
+        candidate.path === finding.path && candidate.detail === finding.detail));
     if (!matched) {
       remaining.push(finding);
       continue;
@@ -66,7 +84,7 @@ export const applyPeerExceptions = (result, policy, today) => {
   }
 
   for (const [key, entry] of exceptions) {
-    if (!peerEdges.has(key)) policyIssues.push(`stale peer exception ${entry.package} -> ${entry.peer}@${entry.range}`);
+    if (!peerEdgeKeys.has(key)) policyIssues.push(`stale peer exception ${entry.package} -> ${entry.peer}@${entry.range}`);
     else if (!used.has(key)) policyIssues.push(`unnecessary peer exception ${entry.package} -> ${entry.peer}@${entry.range}`);
   }
 

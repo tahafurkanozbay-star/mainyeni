@@ -80,3 +80,50 @@ test('keeps returned issue arrays immutable', () => {
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.issues), true);
 });
+
+
+// Peer exceptions must match the exact failing edge, never a sibling peer at the same lock path.
+test('does not hide a sibling unreviewable peer range', () => {
+  const sibling = Object.freeze({ ...edge, name: 'other-peer', range: '*' });
+  const siblingFinding = Object.freeze({ code: 'peer-range', path: edge.from, detail: 'other-peer uses unreviewable peer range *', severity: 'error' });
+  const result = applyPeerExceptions({
+    ...base,
+    issues: Object.freeze([finding, siblingFinding]),
+    inventory: Object.freeze({ ...base.inventory, peerEdges: Object.freeze([edge, sibling]) }),
+  }, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.equal(result.usedPeerExceptions, 1);
+  assert.deepEqual(result.issues, [siblingFinding]);
+});
+
+test('never suppresses unresolved or incompatible required peers', () => {
+  const missing = Object.freeze({ ...edge, name: 'vite', range: '^8.0.0', target: null, targetVersion: null });
+  const incompatible = Object.freeze({ ...edge, name: 'react-dom', range: '^19.0.0', target: 'node_modules/react-dom', targetVersion: '18.0.0' });
+  const unresolved = Object.freeze({ code: 'peer-unresolved', path: edge.from, detail: 'required peer vite@^8.0.0 is not installed', severity: 'error' });
+  const mismatch = Object.freeze({ code: 'peer-mismatch', path: edge.from, detail: 'react-dom@18.0.0 does not satisfy ^19.0.0', severity: 'error' });
+  const result = applyPeerExceptions({
+    ...base,
+    issues: Object.freeze([finding, unresolved, mismatch]),
+    inventory: Object.freeze({ ...base.inventory, peerEdges: Object.freeze([edge, missing, incompatible]) }),
+  }, { peerExceptions: [exception] }, '2026-10-05');
+  assert.equal(result.ok, false);
+  assert.equal(result.usedPeerExceptions, 1);
+  assert.equal(result.issues.some((issue) => issue.code === 'peer-unresolved'), true);
+  assert.equal(result.issues.some((issue) => issue.code === 'peer-mismatch'), true);
+});
+
+test('rejects malformed peer exception containers without TypeError or silent acceptance', () => {
+  for (const peerExceptions of [null, {}, 'bad', 0]) {
+    const result = applyPeerExceptions(base, { peerExceptions }, '2026-10-05');
+    assert.equal(result.ok, false);
+    assert.equal(result.issues.some((issue) => issue.code === 'peer-exception-policy'), true);
+    assert.equal(result.issues.some((issue) => issue.code === 'peer-range'), true);
+  }
+});
+
+test('rejects impossible peer exception expiry dates and accepts leap day', () => {
+  for (const expiresOn of ['2026-02-29', '2026-02-30', '2026-04-31', '2026-99-99']) {
+    assert.ok(validatePeerExceptions({ peerExceptions: [{ ...exception, expiresOn }] }, '2026-01-01').some((issue) => issue.includes('calendar date')));
+  }
+  assert.deepEqual(validatePeerExceptions({ peerExceptions: [{ ...exception, expiresOn: '2028-02-29' }] }, '2026-10-05'), []);
+});

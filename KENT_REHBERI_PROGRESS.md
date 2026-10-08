@@ -72,3 +72,10 @@
 - DÜZELTME: dependency-surface parser now fails closed on shell wrapper and nesting budgets, rejects dynamic command substitutions, malformed policy exceptions and impossible calendar dates; adversarial boundary tests added. No GIS, icon, network endpoint, dependency or runtime asset changed.
 - RELEASE: New head requires fresh exact-head Platform Dependency Governance, Platform Architecture Audit, Platform Typed Test Validation, Release Evidence Contract, Webclient Quality and Release QA success; do not merge before outstanding peer/semver findings and final security/performance/regression review are cleared.
 - SONRAKİ TUR: Recheck CI/head/base and investigate peer exception matching and semver logic. Keep draft until release gates pass.
+
+
+## Deep QA — exact peer-exception matching checkpoint — 2026-10-08 22:50 +03:00
+- TUR: Platform PR #473 head aaba0c97f66da465116f08622b3ca8361891e46c after prior shell/policy fix; still open draft and 0 behind main.
+- DÜZELTME: peer exception suppression now matches the exact peer-range diagnostic on the same lockfile path; missing required peers and incompatible installed peers cannot be suppressed by a sibling exception. Duplicate package paths are retained in path-indexed matching. Invalid peerExceptions container and nonexistent expiry dates fail closed.
+- TEST: Added adversarial sibling-range, unresolved/mismatch, malformed-container, calendar-date regression cases. Previous shell/policy CI may still be pending; this new commit requires a fresh exact-head CI set.
+- RELEASE: Do not merge before all six required checks completed+success, semver evaluator review and final security/performance/regression gate. Next tour verify CI/head/main and fix evidence-backed semver issues.
