@@ -29,6 +29,19 @@ describe('ArcGisQueryExecutionCoordinator adversarial deadlines', () => {
     await expect(coordinator.execute(plan(1))).resolves.toEqual({
       kind: 'failed', code: 'timeout', page: 0,
     })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries settled transport failures without amplifying timeouts', async () => {
+    const execute = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary connection reset'))
+      .mockResolvedValueOnce({})
+    const coordinator = new ArcGisQueryExecutionCoordinator({ execute }, inspector, {
+      maxAttemptsPerPage: 3, pageTimeoutMs: 1000,
+    })
+    await expect(coordinator.execute(plan(1))).resolves.toMatchObject({
+      kind: 'completed', pagesCompleted: 1,
+    })
     expect(execute).toHaveBeenCalledTimes(2)
   })
 

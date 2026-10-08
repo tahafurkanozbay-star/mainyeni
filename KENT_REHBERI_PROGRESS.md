@@ -116,3 +116,10 @@
 - MERGE / NEXT: #477 remains draft/open until >=4,000 meaningful additions, current main ancestry, mergeability and all exact-head CI success. Review CI and fix regressions, then continue high-priority GIS work.
 
 - GIS compatibility: default page budgets raised to allow 500-feature / 40-field responses while preserving explicit bounded overrides; new regression included. CI on updated head required.
+
+## Deep GIS — ArcGIS execution integrity and timeout pressure — 2026-10-08
+- TUR / GÖREV: PR #477 canonical GIS continuation; main/base/merge-base `d364f991b88a0668a1337490227af4936eac232f`; branch `agent/gis-reconcile-20261005-2110-d364f99`.
+- ÜRÜN: Reject cross-page object-ID collisions and malformed/noncontiguous offset plans before network execution. Revalidate injectable inspector feature/object-ID alignment, requested-ID membership and page size at aggregation. Reject transfer-limit on final offset page instead of silently returning truncated data. Do not retry timeouts where an AbortSignal-ignoring transport may still consume network/CPU; preserve retries for settled transient transport errors.
+- REGRESSION: Added adversarial aggregation, unrequested ID, final-page truncation, duplicate-plan and offset-gap tests; updated timeout regression to require a single physical attempt and added settled-failure retry coverage.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: Prevent timeout retry amplification and silent page truncation. No endpoint, WMS/WFS, telemetry, secret, remote asset or second icon resolver. Local npm/test/build unavailable in GitHub-native execution; new exact-head GIS Core Quality, Platform Architecture Audit and Release QA are required before PASS.
+- MERGE: Prior verified scope 2,949 additions (<4,000). Keep draft/open, never merge below the additions gate. Next: verify exact-head CI, repair failures, refresh main/merge-base, review remaining high-priority GIS execution and geometry lifecycle risks.

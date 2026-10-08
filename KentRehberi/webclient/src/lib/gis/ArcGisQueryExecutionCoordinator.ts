@@ -56,7 +56,11 @@ function validPlan(plan: ArcGisQueryPlan): plan is Extract<ArcGisQueryPlan, { ki
       plan.key.length > 8192 || !positiveInteger(plan.pageSize) ||
       !Array.isArray(plan.pages) || plan.pages.length === 0 || plan.pages.length > MAX_EXECUTION_PAGES) return false
   const seenPages = new Set<number>()
+  const seenObjectIds = new Set<number>()
+  const first = plan.pages[0]
+  if (first === undefined) return false
   for (const entry of plan.pages) {
+    if (entry.kind !== first.kind) return false
     if (!entry || !Number.isSafeInteger(entry.page) || entry.page < 0 ||
         entry.page >= plan.pages.length || seenPages.has(entry.page)) return false
     seenPages.add(entry.page)
@@ -65,11 +69,20 @@ function validPlan(plan: ArcGisQueryPlan): plan is Extract<ArcGisQueryPlan, { ki
           entry.objectIds.length > plan.pageSize ||
           entry.objectIds.some((id: number) => !positiveInteger(id)) ||
           new Set(entry.objectIds).size !== entry.objectIds.length) return false
+      for (const id of entry.objectIds) {
+        if (seenObjectIds.has(id)) return false
+        seenObjectIds.add(id)
+      }
     } else if (entry.kind === 'offset') {
       if (!Number.isSafeInteger(entry.resultOffset) || entry.resultOffset < 0 ||
           !positiveInteger(entry.resultRecordCount) || entry.resultRecordCount > plan.pageSize ||
           !Array.isArray(entry.orderByFields) ||
-          entry.orderByFields.some((field: string) => typeof field !== 'string' || field.length > 256)) return false
+          entry.orderByFields.some((field: string) => typeof field !== 'string' || field.length > 256 ||
+            !/^[A-Za-z_][A-Za-z0-9_.]* (asc|desc)$/iu.test(field)) ||
+          entry.resultOffset !== entry.page * plan.pageSize ||
+          entry.orderByFields.length > 8 ||
+          (plan.pages.length > 1 && entry.orderByFields.length === 0) ||
+          (first.kind === 'offset' && entry.orderByFields.join('\u0000') !== first.orderByFields.join('\u0000'))) return false
     } else return false
   }
   return true
@@ -134,7 +147,14 @@ export class ArcGisQueryExecutionCoordinator {
         if (outcome.result.kind !== 'accepted') {
           return { kind: 'failed', code: 'integrity-error', page: outcome.page.page, integrity: outcome.result }
         }
-        if (outcome.result.exceededTransferLimit && outcome.page.kind === 'objectIds') {
+        // Guard the injectable inspector contract at the aggregation boundary.
+        if (outcome.result.features.length !== outcome.result.objectIds.length ||
+            outcome.result.features.length > plan.pageSize ||
+            (outcome.page.kind === 'objectIds' && outcome.result.objectIds.some(id => !outcome.page.objectIds.includes(id)))) {
+          return { kind: 'failed', code: 'integrity-error', page: outcome.page.page }
+        }
+        if (outcome.result.exceededTransferLimit &&
+            (outcome.page.kind === 'objectIds' || outcome.page.page === plan.pages.length - 1)) {
           return { kind: 'failed', code: 'incomplete-transfer', page: outcome.page.page }
         }
         if (features.length + outcome.result.features.length > this.#options.maxFeatures) {
@@ -238,8 +258,11 @@ export class ArcGisQueryExecutionCoordinator {
       } catch {
         if (rootSignal.aborted) return { kind: 'failed', code: 'aborted', page: page.page }
         if (inspecting) return { kind: 'failed', code: 'integrity-error', page: page.page }
+        // A timed-out transport can ignore AbortSignal; retry would multiply
+        // physical in-flight work beyond the configured concurrency budget.
+        if (timedOut) return { kind: 'failed', code: 'timeout', page: page.page }
         if (attempt === this.#options.maxAttemptsPerPage) {
-          return { kind: 'failed', code: timedOut ? 'timeout' : 'transport-error', page: page.page }
+          return { kind: 'failed', code: 'transport-error', page: page.page }
         }
       } finally {
         clearTimeout(timer)
