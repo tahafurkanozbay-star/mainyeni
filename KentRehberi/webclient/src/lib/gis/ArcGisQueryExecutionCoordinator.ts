@@ -27,6 +27,7 @@ export type ArcGisQueryExecutionFailureCode =
   | 'aborted'
   | 'timeout'
   | 'transport-error'
+  | 'transport-capacity'
   | 'integrity-error'
   | 'feature-budget'
   | 'incomplete-transfer'
@@ -116,6 +117,9 @@ export class ArcGisQueryExecutionCoordinator {
   readonly #options: ArcGisQueryExecutionOptions
   readonly #transport: ArcGisQueryPageTransport
   readonly #inspector: ArcGisQueryPageInspector
+  // Physical transport leases outlive logical timeouts until the transport
+  // really settles. This bounds work even for AbortSignal-ignoring adapters.
+  #physicalInflight = 0
 
   constructor(
     transport: ArcGisQueryPageTransport,
@@ -221,6 +225,20 @@ export class ArcGisQueryExecutionCoordinator {
     return outcomes
   }
 
+  #tryTransport(page: ArcGisQueryPage, signal: AbortSignal): Promise<unknown> | undefined {
+    if (this.#physicalInflight >= this.#options.maxConcurrentPages) return undefined
+    this.#physicalInflight += 1
+    // Reserve synchronously across concurrent execute() calls. The lease is
+    // released only when the physical transport promise settles, not when a
+    // caller times out or aborts its logical wait.
+    return Promise.resolve()
+      .then(() => {
+        if (signal.aborted) throw new Error('ArcGIS transport cancelled before dispatch')
+        return this.#transport.execute(page, signal)
+      })
+      .finally(() => { this.#physicalInflight -= 1 })
+  }
+
   async #executePage(page: ArcGisQueryPage, rootSignal: AbortSignal): Promise<PageOutcome | ArcGisQueryExecutionFailure> {
     for (let attempt = 1; attempt <= this.#options.maxAttemptsPerPage; attempt += 1) {
       if (rootSignal.aborted) return { kind: 'failed', code: 'aborted', page: page.page }
@@ -247,10 +265,11 @@ export class ArcGisQueryExecutionCoordinator {
       try {
         // Bound wall-clock latency even if a transport ignores AbortSignal.
         // Promise.race observes late rejections without inspecting late results.
-        const response = await Promise.race([
-          Promise.resolve().then(() => this.#transport.execute(page, pageController.signal)),
-          interruption,
-        ])
+        const physical = this.#tryTransport(page, pageController.signal)
+        if (physical === undefined) {
+          return { kind: 'failed', code: 'transport-capacity', page: page.page }
+        }
+        const response = await Promise.race([physical, interruption])
         if (rootSignal.aborted) return { kind: 'failed', code: 'aborted', page: page.page }
         if (timedOut) return { kind: 'failed', code: 'timeout', page: page.page }
         inspecting = true
