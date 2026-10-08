@@ -127,3 +127,31 @@ test('rejects impossible peer exception expiry dates and accepts leap day', () =
   }
   assert.deepEqual(validatePeerExceptions({ peerExceptions: [{ ...exception, expiresOn: '2028-02-29' }] }, '2026-10-05'), []);
 });
+
+
+test('three exact optional Vitest peer exceptions cannot hide sibling findings', () => {
+  const from = 'node_modules/vitest';
+  const specs = [
+    ['@vitest/browser-webdriverio', '^5.0.0-beta.5 || >=5.0.0', null],
+    ['happy-dom', '*', null],
+    ['jsdom', '*', '30.0.1'],
+  ];
+  const peers = specs.map(([name, range, targetVersion]) => Object.freeze({
+    from, name, range, optional: true,
+    target: targetVersion ? 'node_modules/jsdom' : null, targetVersion,
+  }));
+  const findings = peers.map(({ name, range }) => Object.freeze({
+    code: 'peer-range', path: from, detail: `${name} uses unreviewable peer range ${range}`, severity: 'error',
+  }));
+  const peerExceptions = peers.map(({ name, range }) => Object.freeze({
+    package: 'vitest', peer: name, range, owner: 'platform', expiresOn: '2026-11-30',
+    reason: 'Optional Vitest environment peer has an explicitly reviewed bounded policy exception.',
+  }));
+  const result = applyPeerExceptions({
+    ...base, issues: Object.freeze(findings),
+    inventory: Object.freeze({ ...base.inventory, peerEdges: Object.freeze(peers) }),
+  }, { peerExceptions }, '2026-10-08');
+  assert.equal(result.ok, true);
+  assert.equal(result.usedPeerExceptions, 3);
+  assert.equal(result.peerExceptionCount, 3);
+});
