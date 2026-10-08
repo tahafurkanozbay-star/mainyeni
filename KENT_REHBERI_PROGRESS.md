@@ -79,3 +79,6 @@
 - DÜZELTME: peer exception suppression now matches the exact peer-range diagnostic on the same lockfile path; missing required peers and incompatible installed peers cannot be suppressed by a sibling exception. Duplicate package paths are retained in path-indexed matching. Invalid peerExceptions container and nonexistent expiry dates fail closed.
 - TEST: Added adversarial sibling-range, unresolved/mismatch, malformed-container, calendar-date regression cases. Previous shell/policy CI may still be pending; this new commit requires a fresh exact-head CI set.
 - RELEASE: Do not merge before all six required checks completed+success, semver evaluator review and final security/performance/regression gate. Next tour verify CI/head/main and fix evidence-backed semver issues.
+
+## Deep QA — 2026-10-08 final checkpoint
+- PR #473: Three optional Vitest peer-range exceptions added with owner, expiry and reasons; exact-match regression added. Original policy JSON formatting preserved. Prior dependency CI failure 37834932334 is addressed but latest exact-head CI must be checked. Semver partial/prerelease evaluation still needs review. PR remains draft; no merge.
