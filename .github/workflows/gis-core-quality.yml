@@ -1,0 +1,67 @@
+name: GIS Core Quality
+
+on:
+  pull_request:
+    paths:
+      - 'KentRehberi/webclient/**'
+      - '.github/workflows/gis-core-quality.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'KentRehberi/webclient/**'
+      - '.github/workflows/gis-core-quality.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gis-core-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gis-query-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Webclient.app/package-lock.json
+
+      - name: Install locked TypeScript and Vitest toolchain
+        working-directory: Webclient.app
+        run: npm ci --no-audit --no-fund
+
+      - name: Link local GIS module resolution
+        run: |
+          test ! -e KentRehberi/webclient/node_modules
+          ln -s ../../Webclient.app/node_modules KentRehberi/webclient/node_modules
+
+      - name: Strict GIS query TypeScript boundary
+        working-directory: KentRehberi/webclient
+        run: ../../Webclient.app/node_modules/.bin/tsc --noEmit -p tsconfig.gis-ci.json
+
+      - name: Strict GIS query lint
+        working-directory: KentRehberi/webclient
+        run: |
+          ../../Webclient.app/node_modules/.bin/oxlint --deny-warnings \
+            src/lib/gis/ArcGisQueryCoordinator.ts \
+            src/lib/gis/ArcGisQueryPagePlanner.ts \
+            src/lib/gis/ArcGisQueryResponseIntegrity.ts \
+            src/lib/gis/ArcGisQueryCountLifecyclePolicy.ts \
+            src/lib/gis/ArcGisQueryExtentLifecyclePolicy.ts
+
+      - name: ArcGIS query and projection Vitest regressions
+        working-directory: KentRehberi/webclient
+        run: |
+          ../../Webclient.app/node_modules/.bin/vitest run --config vitest.config.mts \
+            src/lib/gis/ArcGisQuery \
+            src/lib/gis/__tests__/ArcGisGeometryProjectionLifecyclePolicy.test.ts

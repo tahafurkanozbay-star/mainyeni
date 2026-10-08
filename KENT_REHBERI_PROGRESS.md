@@ -87,3 +87,6 @@
 - Prior head `9640519f44f6a6560a23658145f94c43be284e64` passed Architecture Audit #37722223069 and Release QA #37722222595; new exact-head CI pending.
 - No network, WMS/WFS, secret, telemetry or icon resolver changes. Local npm unavailable. Additions < 4000, draft PR remains open.
 - Next: exact-head CI, performance/data integrity/security review, continue real GIS modernization.
+
+## GIS #477 CI checkpoint
+- New GIS-specific CI added for previously uncovered source and tests; exact-head verification required before merge.
