@@ -112,6 +112,8 @@ function parseWkid(value: unknown): number | undefined | null {
   return wkid as number
 }
 
+// A single bounded walk validates and snapshots geometry. Never retain a
+// transport-owned nested coordinate array in an accepted response.
 function inspectGeometry(
   geometry: unknown,
   maxDepth: number,
@@ -119,14 +121,14 @@ function inspectGeometry(
   maxNodesPerFeature: number,
   maxNodesPerPage: number,
   page: { nodes: number },
-): ArcGisQueryIntegrityIssueCode | null {
-  if (geometry === undefined || geometry === null) return null
-  if (!isRecord(geometry)) return 'invalid-geometry'
+): { readonly issue: ArcGisQueryIntegrityIssueCode | null; readonly snapshot?: unknown } {
+  if (geometry === undefined || geometry === null) return { issue: null, snapshot: geometry }
+  if (!isRecord(geometry)) return { issue: 'invalid-geometry' }
 
   let coordinateCount = 0
   let featureNodes = 1
   page.nodes += 1
-  if (page.nodes > maxNodesPerPage) return 'geometry-page-node-budget'
+  if (page.nodes > maxNodesPerPage) return { issue: 'geometry-page-node-budget' }
   const consumeNode = (): ArcGisQueryIntegrityIssueCode | null => {
     featureNodes += 1
     page.nodes += 1
@@ -134,49 +136,89 @@ function inspectGeometry(
     if (page.nodes > maxNodesPerPage) return 'geometry-page-node-budget'
     return null
   }
-  const stack: Array<{ readonly value: unknown; readonly depth: number }> = [{ value: geometry, depth: 0 }]
+
+  type Copy = Record<string, unknown> | unknown[]
+  const snapshot: Record<string, unknown> = {}
+  const visited = new WeakSet<object>([geometry])
+  const stack: Array<{ readonly source: Copy; readonly target: Copy; readonly depth: number }> = [
+    { source: geometry, target: snapshot, depth: 0 },
+  ]
+
   while (stack.length > 0) {
     const current = stack.pop()
     if (current === undefined) break
-    if (current.depth > maxDepth) return 'geometry-depth-budget'
-    const value = current.value
-    if (Array.isArray(value)) {
-      for (let index = value.length - 1; index >= 0; index -= 1) {
+    if (current.depth > maxDepth) return { issue: 'geometry-depth-budget' }
+    const { source, target, depth } = current
+    if (Array.isArray(source)) {
+      // Reject oversized and sparse arrays before allocating their slots.
+      if (source.length > maxNodesPerFeature - featureNodes) return { issue: 'geometry-node-budget' }
+      if (source.length > maxNodesPerPage - page.nodes) return { issue: 'geometry-page-node-budget' }
+      const copy = target as unknown[]
+      for (let index = 0; index < source.length; index += 1) {
         const exceeded = consumeNode()
-        if (exceeded !== null) return exceeded
-        const child = value[index]
+        if (exceeded !== null) return { issue: exceeded }
+        const descriptor = Object.getOwnPropertyDescriptor(source, String(index))
+        if (descriptor !== undefined && !('value' in descriptor)) return { issue: 'invalid-geometry' }
+        const child = descriptor?.value
         if (typeof child === 'number') {
-          if (!Number.isFinite(child)) return 'invalid-coordinate'
+          if (!Number.isFinite(child)) return { issue: 'invalid-coordinate' }
           coordinateCount += 1
-          if (coordinateCount > maxCoordinates) return 'geometry-coordinate-budget'
+          if (coordinateCount > maxCoordinates) return { issue: 'geometry-coordinate-budget' }
+          copy[index] = child
         } else if (Array.isArray(child) || isRecord(child)) {
-          stack.push({ value: child, depth: current.depth + 1 })
-        } else if (child !== null && child !== undefined) {
-          return 'invalid-geometry'
+          if (visited.has(child)) return { issue: 'invalid-geometry' }
+          visited.add(child)
+          const nested: Copy = Array.isArray(child) ? [] : {}
+          copy[index] = nested
+          stack.push({ source: child, target: nested, depth: depth + 1 })
+        } else if (child === null || child === undefined) {
+          copy[index] = child
+        } else {
+          return { issue: 'invalid-geometry' }
         }
       }
+      Object.freeze(copy)
       continue
     }
-    if (!isRecord(value)) return 'invalid-geometry'
-    for (const key in value) {
-      if (!Object.prototype.hasOwnProperty.call(value, key) || key === 'spatialReference') continue
+
+    if (!isRecord(source)) return { issue: 'invalid-geometry' }
+    const copy = target as Record<string, unknown>
+    for (const key in source) {
+      if (!Object.prototype.hasOwnProperty.call(source, key)) continue
       const exceeded = consumeNode()
-      if (exceeded !== null) return exceeded
-      const child = value[key]
+      if (exceeded !== null) return { issue: exceeded }
+      const descriptor = Object.getOwnPropertyDescriptor(source, key)
+      if (descriptor === undefined || !('value' in descriptor)) return { issue: 'invalid-geometry' }
+      const child = descriptor.value
+      let cloned: unknown
       if (typeof child === 'number') {
-        if (!Number.isFinite(child)) return 'invalid-coordinate'
+        if (!Number.isFinite(child)) return { issue: 'invalid-coordinate' }
         if (key === 'x' || key === 'y' || key === 'z' || key === 'm') {
           coordinateCount += 1
-          if (coordinateCount > maxCoordinates) return 'geometry-coordinate-budget'
+          if (coordinateCount > maxCoordinates) return { issue: 'geometry-coordinate-budget' }
         }
+        cloned = child
       } else if (Array.isArray(child) || isRecord(child)) {
-        stack.push({ value: child, depth: current.depth + 1 })
-      } else if (child !== null && child !== undefined && typeof child !== 'string' && typeof child !== 'boolean') {
-        return 'invalid-geometry'
+        if (visited.has(child)) return { issue: 'invalid-geometry' }
+        visited.add(child)
+        const nested: Copy = Array.isArray(child) ? [] : {}
+        cloned = nested
+        stack.push({ source: child, target: nested, depth: depth + 1 })
+      } else if (child === null || child === undefined ||
+                 typeof child === 'string' || typeof child === 'boolean') {
+        cloned = child
+      } else {
+        return { issue: 'invalid-geometry' }
       }
+      // Define own keys safely (including JSON's __proto__) without
+      // mutating the snapshot prototype or calling untrusted accessors.
+      Object.defineProperty(copy, key, {
+        value: cloned, enumerable: true, writable: true, configurable: true,
+      })
     }
+    Object.freeze(copy)
   }
-  return null
+  return { issue: null, snapshot }
 }
 
 function inspectAttributes(
@@ -296,7 +338,7 @@ export class ArcGisQueryResponseIntegrity {
           return { kind: 'rejected', issue: { code: 'spatial-reference-mismatch', featureIndex: index } }
         }
       }
-      const geometryIssue = inspectGeometry(
+      const geometryInspection = inspectGeometry(
         raw.geometry,
         this.#options.maxGeometryDepth,
         this.#options.maxGeometryCoordinates,
@@ -304,8 +346,13 @@ export class ArcGisQueryResponseIntegrity {
         this.#options.maxGeometryNodesPerPage,
         pageGeometryBudget,
       )
-      if (geometryIssue !== null) return { kind: 'rejected', issue: { code: geometryIssue, featureIndex: index } }
-      accepted.push(Object.freeze({ attributes: Object.freeze({ ...attributes.record }), ...(raw.geometry === undefined ? {} : { geometry: raw.geometry }) }))
+      if (geometryInspection.issue !== null) {
+        return { kind: 'rejected', issue: { code: geometryInspection.issue, featureIndex: index } }
+      }
+      accepted.push(Object.freeze({
+        attributes: Object.freeze({ ...attributes.record }),
+        ...(raw.geometry === undefined ? {} : { geometry: geometryInspection.snapshot }),
+      }))
     }
 
     return Object.freeze({
