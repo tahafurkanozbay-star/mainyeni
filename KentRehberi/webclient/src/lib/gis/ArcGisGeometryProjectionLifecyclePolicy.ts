@@ -54,9 +54,20 @@ function clock(name: string, value: number): void {
   if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be finite and non-negative`)
 }
 function id(name: string, value: string): string {
+  // Check raw identity before trimming. Otherwise boundary controls can
+  // disappear and distinct transport jobs can alias the same lease.
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${name} is invalid`)
   const normalized = value.trim()
-  if (!normalized || normalized.length > 192 || /[\u0000-\u001f\u007f]/.test(normalized)) throw new Error(`${name} is invalid`)
+  if (!normalized || normalized.length > 192) throw new Error(`${name} is invalid`)
   return normalized
+}
+
+function deadline(now: number, ttl: number): number {
+  const expires = now + ttl
+  if (!Number.isFinite(expires) || expires <= now) {
+    throw new Error('projection deadline cannot be represented safely')
+  }
+  return expires
 }
 function pairKey(sourceWkid: number, targetWkid: number): string { return `${sourceWkid}->${targetWkid}` }
 
@@ -103,8 +114,9 @@ export class ArcGisGeometryProjectionLifecyclePolicy {
     if (this.#revisions.get(key) !== request.revision || this.#jobs.has(jobId)) return false
     if (request.vertices > this.#budget.maxVerticesPerJob || request.estimatedBytes > this.#budget.maxBytesPerJob) return false
     if (this.#jobs.size >= this.#budget.maxJobs || this.#pairCount(key) >= this.#budget.maxJobsPerSpatialReference) return false
+    const expiresAt = deadline(request.requestedAt, this.#budget.queueTtlMs)
     const sequence = ++this.#sequence
-    this.#jobs.set(jobId, { ...request, jobId, phase: 'queued', sequence, touchedAt: request.requestedAt, expiresAt: request.requestedAt + this.#budget.queueTtlMs, residentBytes: 0 })
+    this.#jobs.set(jobId, { ...request, jobId, phase: 'queued', sequence, touchedAt: request.requestedAt, expiresAt, residentBytes: 0 })
     return true
   }
 
@@ -113,34 +125,41 @@ export class ArcGisGeometryProjectionLifecyclePolicy {
     if (this.#phaseCount('running') >= this.#budget.maxRunning) return null
     let candidate: Job | undefined
     for (const job of this.#jobs.values()) {
-      if (job.phase !== 'queued') continue
+      if (job.phase !== 'queued' || job.requestedAt > now) continue
       const key = pairKey(job.sourceWkid, job.targetWkid)
       if (this.#pairPhaseCount(key, 'running') >= this.#budget.maxRunningPerSpatialReference) continue
       if (!candidate || intentRank[job.intent] > intentRank[candidate.intent] || (intentRank[job.intent] === intentRank[candidate.intent] && (job.requestedAt < candidate.requestedAt || (job.requestedAt === candidate.requestedAt && job.sequence < candidate.sequence)))) candidate = job
     }
     if (!candidate) return null
-    candidate.phase = 'running'; candidate.touchedAt = now; candidate.expiresAt = now + this.#budget.leaseMs
+    const expiresAt = deadline(now, this.#budget.leaseMs)
+    candidate.phase = 'running'; candidate.touchedAt = now; candidate.expiresAt = expiresAt
     return this.#view(candidate)
   }
 
   renew(jobId: string, revision: number, now: number): boolean {
     this.#live(); const job = this.#jobs.get(id('jobId', jobId)); safeInteger('revision', revision); clock('now', now); this.expire(now)
-    if (!job || job.phase !== 'running' || job.revision !== revision || this.#revisions.get(pairKey(job.sourceWkid, job.targetWkid)) !== revision) return false
-    job.touchedAt = now; job.expiresAt = now + this.#budget.leaseMs; return true
+    if (!job || job.phase !== 'running' || job.revision !== revision ||
+        now < job.touchedAt || now < job.requestedAt ||
+        this.#revisions.get(pairKey(job.sourceWkid, job.targetWkid)) !== revision) return false
+    const expiresAt = deadline(now, this.#budget.leaseMs)
+    job.touchedAt = now; job.expiresAt = expiresAt; return true
   }
 
   complete(jobId: string, revision: number, actualBytes: number, now: number): ProjectionView | null {
     this.#live(); const key = id('jobId', jobId); safeInteger('revision', revision); safeInteger('actualBytes', actualBytes); clock('now', now); this.expire(now)
     const job = this.#jobs.get(key)
-    if (!job || job.phase !== 'running' || job.revision !== revision || this.#revisions.get(pairKey(job.sourceWkid, job.targetWkid)) !== revision) return null
+    if (!job || job.phase !== 'running' || job.revision !== revision ||
+        now < job.touchedAt || now < job.requestedAt ||
+        this.#revisions.get(pairKey(job.sourceWkid, job.targetWkid)) !== revision) return null
     if (actualBytes > this.#budget.maxBytesPerJob) { this.#jobs.delete(key); return null }
+    const expiresAt = deadline(now, this.#budget.residentTtlMs)
     job.residentBytes = actualBytes
     while (this.#phaseCount('resident') >= this.#budget.maxResident || this.#residentVertices() + job.vertices > this.#budget.maxResidentVertices || this.#residentBytes() + actualBytes > this.#budget.maxResidentBytes) {
       const victim = this.#residentVictim(job.intent)
       if (!victim) { this.#jobs.delete(key); return null }
       this.#jobs.delete(victim.jobId)
     }
-    job.phase = 'resident'; job.touchedAt = now; job.expiresAt = now + this.#budget.residentTtlMs
+    job.phase = 'resident'; job.touchedAt = now; job.expiresAt = expiresAt
     return this.#view(job)
   }
 

@@ -61,7 +61,9 @@ jobs:
             src/lib/gis/ArcGisQueryExecutionCoordinator.physical-capacity.test.ts \
             src/lib/gis/ArcGisQueryExecutionCoordinator.snapshot.test.ts \
             src/lib/gis/ArcGisQueryCountLifecyclePolicy.ts \
-            src/lib/gis/ArcGisQueryExtentLifecyclePolicy.ts
+            src/lib/gis/ArcGisQueryExtentLifecyclePolicy.ts \
+            src/lib/gis/ArcGisGeometryProjectionLifecyclePolicy.ts \
+            src/lib/gis/__tests__/ArcGisGeometryProjectionLifecyclePolicy.clock-integrity.test.ts
 
       - name: ArcGIS query and projection Vitest regressions
         working-directory: KentRehberi/webclient
