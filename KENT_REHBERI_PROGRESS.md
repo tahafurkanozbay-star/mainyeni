@@ -55,3 +55,12 @@
 - Statistics: reject impossible-to-fit aggregate completion, bound zero-byte empty-group residents, guard future queue/clock rollback and preserve FIFO. Page: reject request-ID collisions and invalid page completions, protect priority queue, whitelist scalar request fields, validate lookup and lease clocks. Added adversarial Vitest suites.
 - Baseline head 8ca874ef32d9a70e60859a425e82c2769e2435d2 passed Platform Architecture Audit #37694707841 and Release QA #37694707835. New exact-head CI is required; do not inherit PASS. Local npm/build unavailable.
 - No new network endpoint, WMS/WFS, telemetry, remote asset or icon resolver. Mandatory >=4000 additions not reached; do not merge. Next: exact-head CI, security/performance/data-integrity review, meaningful GIS backlog and current-main/mergeability recheck.
+
+## Deep GIS — ArcGIS query cache invalidation fence — 2026-10-08
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; stale inflight ArcGIS query responses must not repopulate a cache after invalidateAll/invalidateService.
+- BRANCH / PR: `agent/gis-reconcile-20261005-2110-d364f99`; canonical draft/open PR #477. Baseline main/merge-base `d364f991b88a0668a1337490227af4936eac232f`; no unrelated branch rewritten.
+- ÜRÜN KODU: `ArcGisQueryCoordinator` now marks active flights in a WeakSet during global/service invalidation and suppresses late cache writes. WeakSet avoids unbounded per-service invalidation metadata. Flight cleanup checks identity before deleting a map entry, preventing stale-flight cleanup from removing a newer same-key flight.
+- REGRESSION: `ArcGisQueryCoordinator.invalidation.test.ts` covers late global invalidation, service-scoped isolation, and ordinary cache hits. No new endpoint, WMS/WFS, secret, telemetry, remote asset or second icon resolver.
+- TEST / BUILD / CI: Local npm/test/lint/typecheck/build not executed in this GitHub-native run. New exact-head Platform Architecture Audit and Release QA must reach completed+success; do not inherit previous head's PASS.
+- PERFORMANCE / DATA INTEGRITY / SECURITY: Prevent stale data residency after invalidation; no new retained payloads or unbounded service-id map. Review pending CI for regression and release risk.
+- MERGE DURUMU: additions < 4,000; PR remains draft/open and MUST NOT merge. Next: verify exact-head CI, current main/merge-base/mergeability, inspect page transport timeout/abort hazards and implement meaningful GIS follow-up with adversarial tests.
