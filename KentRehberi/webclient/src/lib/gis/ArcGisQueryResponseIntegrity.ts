@@ -171,7 +171,10 @@ function inspectGeometry(
         if (exceeded !== null) return { issue: exceeded }
         const descriptor = Object.getOwnPropertyDescriptor(source, String(index))
         if (descriptor !== undefined && !('value' in descriptor)) return { issue: 'invalid-geometry' }
-        const child = descriptor?.value
+        // Sparse arrays and undefined elements are not representable in
+        // ArcGIS REST JSON and must not become holes in rendered geometry.
+        if (descriptor === undefined) return { issue: 'invalid-geometry' }
+        const child = descriptor.value
         if (typeof child === 'number') {
           if (!Number.isFinite(child)) return { issue: 'invalid-coordinate' }
           coordinateCount += 1
@@ -183,7 +186,7 @@ function inspectGeometry(
           const nested: Copy = Array.isArray(child) ? [] : {}
           copy[index] = nested
           stack.push({ source: child, target: nested, depth: depth + 1 })
-        } else if (child === null || child === undefined) {
+        } else if (child === null) {
           copy[index] = child
         } else {
           return { issue: 'invalid-geometry' }
@@ -216,8 +219,7 @@ function inspectGeometry(
         const nested: Copy = Array.isArray(child) ? [] : {}
         cloned = nested
         stack.push({ source: child, target: nested, depth: depth + 1 })
-      } else if (child === null || child === undefined ||
-                 typeof child === 'string' || typeof child === 'boolean') {
+      } else if (child === null || typeof child === 'string' || typeof child === 'boolean') {
         cloned = child
       } else {
         return { issue: 'invalid-geometry' }
@@ -283,8 +285,9 @@ export class ArcGisQueryResponseIntegrity {
 
   inspect(response: unknown, context: ArcGisQueryResponseContext): ArcGisQueryIntegrityResult {
     if (!isRecord(response)) return { kind: 'rejected', issue: { code: 'invalid-response' } }
-    if (!FIELD.test(context.objectIdField.trim())) {
-      return { kind: 'rejected', issue: { code: 'invalid-object-id', field: context.objectIdField } }
+    if (context === null || typeof context !== 'object' ||
+        typeof context.objectIdField !== 'string' || !FIELD.test(context.objectIdField)) {
+      return { kind: 'rejected', issue: { code: 'invalid-object-id' } }
     }
     const featureData = ownData(response, 'features')
     if (!featureData.valid || !Array.isArray(featureData.value)) {
@@ -311,13 +314,28 @@ export class ArcGisQueryResponseIntegrity {
       }
     }
 
-    const expected = context.expectedObjectIds === undefined ? undefined : new Set(context.expectedObjectIds)
+    // The expected-ID list is also a caller-supplied input. Bound and
+    // validate it before allocating a Set or comparing any feature IDs.
+    const expectedIds = context.expectedObjectIds
+    if (expectedIds !== undefined &&
+        (!Array.isArray(expectedIds) || expectedIds.length > this.#options.maxFeaturesPerPage ||
+         expectedIds.some(id => !positiveInteger(id)))) {
+      return { kind: 'rejected', issue: { code: 'invalid-object-id' } }
+    }
+    const expected = expectedIds === undefined ? undefined : new Set(expectedIds)
+    if (expectedIds !== undefined && expected?.size !== expectedIds.length) {
+      return { kind: 'rejected', issue: { code: 'invalid-object-id' } }
+    }
     const seen = new Set<number>()
     const accepted: ArcGisFeatureLike[] = []
     const pageGeometryBudget = { nodes: 0 }
     const pageAttributeBudget = { attributes: 0, textCharacters: 0 }
     for (let index = 0; index < features.length; index += 1) {
-      const raw = features[index]
+      const featureDescriptor = Object.getOwnPropertyDescriptor(features, String(index))
+      if (featureDescriptor === undefined || !('value' in featureDescriptor)) {
+        return { kind: 'rejected', issue: { code: 'invalid-feature', featureIndex: index } }
+      }
+      const raw: unknown = featureDescriptor.value
       if (!isRecord(raw)) return { kind: 'rejected', issue: { code: 'invalid-feature', featureIndex: index } }
       const attributeData = ownData(raw, 'attributes')
       const geometryData = ownData(raw, 'geometry')
