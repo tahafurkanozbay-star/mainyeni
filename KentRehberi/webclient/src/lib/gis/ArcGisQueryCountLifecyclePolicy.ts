@@ -1,3 +1,4 @@
+import { hasAsciiControl } from './ArcGisScalarValidation'
 export type QueryCountIntent='interactive'|'visible'|'background'
 export interface QueryCountBudget{maxLayers:number;maxQueued:number;maxRunning:number;maxRunningPerLayer:number;maxResident:number;queueTtlMs:number;leaseTtlMs:number;residentTtlMs:number}
 export interface QueryCountRequest{key:string;layerId:string;revision:number;intent:QueryCountIntent;signature:string;queuedAt:number}
@@ -8,7 +9,7 @@ interface R extends Q{startedAt:number;leaseExpiresAt:number}
 interface C{key:string;layerId:string;revision:number;signature:string;count:number;capturedAt:number;expiresAt:number;sequence:number;touchedAt:number}
 const rank:Readonly<Record<QueryCountIntent,number>>=Object.freeze({interactive:2,visible:1,background:0})
 const intents:readonly QueryCountIntent[]=['interactive','visible','background']
-function ident(n:string,v:string,m=512){if(typeof v!=='string'||/[\u0000-\u001f\u007f]/.test(v))throw new Error(`${n} is invalid`);const x=v.trim();if(!x||x.length>m)throw new Error(`${n} is invalid`);return x}
+function ident(n:string,v:string,m=512){if(typeof v!=='string'||hasAsciiControl(v))throw new Error(`${n} is invalid`);const x=v.trim();if(!x||x.length>m)throw new Error(`${n} is invalid`);return x}
 function nat(n:string,v:number){if(!Number.isSafeInteger(v)||v<0)throw new Error(`${n} must be a non-negative safe integer`)}
 function pos(n:string,v:number){if(!Number.isSafeInteger(v)||v<1)throw new Error(`${n} must be positive`)}
 function time(n:string,v:number){if(!Number.isFinite(v)||v<0)throw new Error(`${n} must be finite and non-negative`)}

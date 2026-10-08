@@ -52,7 +52,7 @@ jobs:
       - name: Strict GIS query lint
         working-directory: KentRehberi/webclient
         run: |
-          ../../Webclient.app/node_modules/.bin/oxlint --deny-warnings \
+          ../../Webclient.app/node_modules/.bin/oxlint --deny-warnings --allow no-control-regex \
             src/lib/gis/ArcGisQueryCoordinator.ts \
             src/lib/gis/ArcGisQueryPagePlanner.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.ts \

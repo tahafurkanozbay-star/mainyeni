@@ -1,3 +1,5 @@
+import { hasAsciiControl } from './ArcGisScalarValidation'
+
 export type ArcGisQueryOrder = 'asc' | 'desc'
 
 export interface ArcGisQueryPagePlannerOptions {
@@ -66,7 +68,7 @@ const DEFAULTS: ArcGisQueryPagePlannerOptions = {
   maxEstimatedFeatures: 100_000,
 }
 
-const CONTROL = /[\u0000-\u001f\u007f]/u
+
 const FIELD = /^[A-Za-z_][A-Za-z0-9_.]*$/u
 
 function positiveInteger(value: number): boolean {
@@ -74,7 +76,7 @@ function positiveInteger(value: number): boolean {
 }
 
 function boundedText(value: string, max: number): boolean {
-  if (typeof value !== 'string' || CONTROL.test(value)) return false
+  if (typeof value !== 'string' || hasAsciiControl(value)) return false
   const normalized = value.trim()
   return normalized.length > 0 && normalized.length <= max
 }
@@ -93,7 +95,7 @@ function normalizeFields(fields: readonly string[]): readonly string[] | null {
   const seen = new Set<string>()
   const normalized: string[] = []
   for (const raw of fields) {
-    if (typeof raw !== 'string' || CONTROL.test(raw)) return null
+    if (typeof raw !== 'string' || hasAsciiControl(raw)) return null
     const field = raw.trim()
     if (!FIELD.test(field) && field !== '*') return null
     const key = field.toLowerCase()
