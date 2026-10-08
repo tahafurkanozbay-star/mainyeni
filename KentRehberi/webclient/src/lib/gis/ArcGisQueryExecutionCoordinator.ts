@@ -148,9 +148,13 @@ export class ArcGisQueryExecutionCoordinator {
           return { kind: 'failed', code: 'integrity-error', page: outcome.page.page, integrity: outcome.result }
         }
         // Guard the injectable inspector contract at the aggregation boundary.
+        // The per-page Set also avoids quadratic membership checks for large ID pages.
+        const requestedIds = outcome.page.kind === 'objectIds'
+          ? new Set(outcome.page.objectIds)
+          : null
         if (outcome.result.features.length !== outcome.result.objectIds.length ||
             outcome.result.features.length > plan.pageSize ||
-            (outcome.page.kind === 'objectIds' && outcome.result.objectIds.some(id => !outcome.page.objectIds.includes(id)))) {
+            (requestedIds !== null && outcome.result.objectIds.some(id => !requestedIds.has(id)))) {
           return { kind: 'failed', code: 'integrity-error', page: outcome.page.page }
         }
         if (outcome.result.exceededTransferLimit &&
