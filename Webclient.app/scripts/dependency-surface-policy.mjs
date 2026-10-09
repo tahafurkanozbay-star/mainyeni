@@ -13,6 +13,21 @@ const COMMAND_PREFIX_WORDS = new Set(['!', 'if', 'then', 'elif', 'else', 'do', '
 const COMMAND_WRAPPERS = new Set(['command', 'exec', 'builtin', 'nohup', 'time', 'sudo']);
 const SHELL_INTERPRETERS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
 const UNREVIEWABLE_SHELL_EVALUATORS = new Set(['eval', 'source', '.', 'xargs']);
+const PACKAGE_EXEC_BINARIES = new Set(['pnpx', 'bunx', 'corepack']);
+const PACKAGE_EXEC_SUBCOMMANDS = Object.freeze({
+  npm: new Set(['exec', 'x', 'create', 'init']),
+  pnpm: new Set(['dlx', 'create']),
+  yarn: new Set(['dlx', 'create']),
+  bun: new Set(['x', 'create']),
+});
+const PACKAGE_MANAGER_VALUE_OPTIONS = new Set([
+  '--prefix', '--workspace', '-w', '--filter', '-F', '--dir', '-C',
+  '--cwd', '--config', '--registry', '--userconfig', '--cache', '--location',
+]);
+const PACKAGE_MANAGER_FLAG_OPTIONS = new Set([
+  '--silent', '-s', '--yes', '-y', '--offline', '--no-audit',
+  '--no-fund', '--ignore-scripts', '--color', '--no-color',
+]);
 const MAX_NESTED_SHELL_DEPTH = 4;
 
 export class DependencySurfacePolicyError extends Error {
@@ -326,6 +341,39 @@ function nestedShellCommand(tokens, invocation) {
   return null;
 }
 
+// Unreviewed package launchers can acquire code outside the reviewed lockfile.
+// Unknown option forms fail closed instead of hiding a subcommand in an operand.
+function isUnreviewedPackageExecution(tokens, invocation) {
+  if (PACKAGE_EXEC_BINARIES.has(invocation.command)) return true;
+  const forbidden = PACKAGE_EXEC_SUBCOMMANDS[invocation.command];
+  if (!forbidden) return false;
+
+  let index = invocation.index + 1;
+  while (index < invocation.end) {
+    const option = tokens[index].value;
+    if (option === '--') {
+      index += 1;
+      break;
+    }
+    if (!isOptionWord(option)) break;
+    if (PACKAGE_MANAGER_VALUE_OPTIONS.has(option)) {
+      if (tokens[index + 1]?.type !== 'word' || index + 1 >= invocation.end ||
+          isOptionWord(tokens[index + 1].value)) {
+        throw new DependencySurfacePolicyError('malformed-script-shell', 'package manager option requires an operand');
+      }
+      index += 2;
+      continue;
+    }
+    if (PACKAGE_MANAGER_FLAG_OPTIONS.has(option) ||
+        /^--(?:prefix|workspace|filter|dir|cwd|config|registry|userconfig|cache|location)=.+$/.test(option)) {
+      index += 1;
+      continue;
+    }
+    throw new DependencySurfacePolicyError('malformed-script-shell', 'unreviewable package manager option');
+  }
+  return forbidden.has(tokens[index]?.value);
+}
+
 /**
  * Returns command-position invocations from a package script without executing
  * or expanding the shell. Nested `sh -c` / `bash -c` commands are inspected to
@@ -360,6 +408,10 @@ export function collectPackageScriptInvocations(command, options = {}) {
     // Evaluators execute source or commands from arguments or stdin.
     if (UNREVIEWABLE_SHELL_EVALUATORS.has(invocation.command)) {
       throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script executes unreviewable dynamic shell source');
+    }
+
+    if (isUnreviewedPackageExecution(tokens, invocation)) {
+      throw new DependencySurfacePolicyError('unreviewed-package-exec-script', 'package script may acquire and execute an unreviewed package');
     }
 
     invocations.push(Object.freeze({
@@ -482,7 +534,7 @@ export function validateManifestSurface(manifest, policy, options = {}) {
       invocationNames = scriptInvocationNames(command);
     } catch (error) {
       if (error instanceof DependencySurfacePolicyError &&
-          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion'].includes(error.code)) {
+          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion', 'unreviewed-package-exec-script'].includes(error.code)) {
         findings.push({ severity: 'error', code: error.code, script: name });
         continue;
       }

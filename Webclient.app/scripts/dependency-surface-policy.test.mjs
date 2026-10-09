@@ -355,10 +355,58 @@ test('does not false-positive npx in quoted data', () => {
   assert.equal(report(manifest).ok, true);
 });
 
-test('does not false-positive npm exec as npx', () => {
+for (const script of [
+  'npm exec -- some-tool',
+  'npm x -- some-tool',
+  '/usr/bin/npm --yes exec some-tool',
+  'env CI=1 npm --prefix ./app exec some-tool',
+  'npm --workspace=packages/app exec some-tool',
+  'npm -w packages/app x some-tool',
+  "sh -c 'npm exec -- some-tool'",
+  'pnpm dlx some-tool',
+  'pnpm --filter packages/app dlx some-tool',
+  'yarn dlx some-tool',
+  'bun x some-tool',
+  'bunx some-tool',
+  'pnpx some-tool',
+  'corepack pnpm dlx some-tool',
+  'npm create vite@latest',
+  'yarn create vite',
+]) {
+  test(`rejects unreviewed package-manager execution: ${script}`, () => {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-package-exec-script'), script);
+  });
+}
+
+for (const script of [
+  'npm run build',
+  'npm run exec',
+  'npm --prefix ./app run build',
+  'node scripts/check.mjs --label exec',
+  'node scripts/check.mjs "npm exec -- some-tool"',
+  'pnpm run build',
+  'yarn run build',
+]) {
+  test(`allows non-acquiring command or inert data: ${script}`, () => {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  });
+}
+
+test('fails closed on ambiguous package-manager options', () => {
   const manifest = baseManifest();
-  manifest.scripts.audit = 'npm exec -- some-tool';
-  assert.equal(report(manifest).ok, true);
+  for (const script of [
+    'npm --unknown-operand exec some-tool',
+    'npm --unknown=foo exec some-tool',
+    'npm --prefix --yes exec some-tool',
+    'pnpm --filter --unknown dlx some-tool',
+  ]) {
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('malformed-script-shell'), script);
+  }
 });
 
 test('rejects curl bootstrap in root scripts', () => {
