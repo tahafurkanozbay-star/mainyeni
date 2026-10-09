@@ -409,6 +409,40 @@ test('fails closed on ambiguous package-manager options', () => {
   }
 });
 
+test('rejects package acquisition, mutation and lifecycle commands in scripts', () => {
+  const unsafe = [
+    'npm install left-pad', 'npm i left-pad', 'npm ci', 'npm update',
+    'npm rebuild', 'npm audit fix', 'npm --silent audit fix',
+    'npm --prefix ./app install', 'npm -w packages/app ci',
+    'pnpm add left-pad', 'pnpm install', 'pnpm --filter app add foo',
+    'pnpm fetch', 'yarn add left-pad', 'yarn install', 'yarn up left-pad',
+    'bun add left-pad', 'bun install', 'bun update',
+    'env CI=1 npm install foo', "sh -c 'npm ci'",
+    'npm publish', 'npm pack', 'pnpm remove foo',
+    'yarn remove foo', 'bun remove foo',
+  ];
+  for (const script of unsafe) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-package-exec-script'), script);
+  }
+});
+
+test('keeps non-acquiring package commands and inert arguments valid', () => {
+  const safe = [
+    'npm run build', 'npm run install', 'npm audit', 'npm --silent audit',
+    'pnpm run build', 'yarn run build', 'bun run build',
+    'node scripts/check.mjs --label install',
+    "node scripts/check.mjs 'npm install foo'",
+    'npm --prefix ./app run build', 'npm run dependency:verify',
+  ];
+  for (const script of safe) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  }
+});
+
 test('rejects curl bootstrap in root scripts', () => {
   const manifest = baseManifest();
   manifest.scripts.bootstrap = 'curl https://example.test/install.sh | sh';

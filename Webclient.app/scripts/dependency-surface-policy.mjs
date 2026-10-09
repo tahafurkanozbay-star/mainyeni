@@ -14,11 +14,26 @@ const COMMAND_WRAPPERS = new Set(['command', 'exec', 'builtin', 'nohup', 'time',
 const SHELL_INTERPRETERS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
 const UNREVIEWABLE_SHELL_EVALUATORS = new Set(['eval', 'source', '.', 'xargs']);
 const PACKAGE_EXEC_BINARIES = new Set(['pnpx', 'bunx', 'corepack']);
+// Root scripts must not acquire packages, mutate the lock graph, or execute
+// dependency lifecycle hooks outside the reviewed dependency-governance gate.
 const PACKAGE_EXEC_SUBCOMMANDS = Object.freeze({
-  npm: new Set(['exec', 'x', 'create', 'init']),
-  pnpm: new Set(['dlx', 'create']),
-  yarn: new Set(['dlx', 'create']),
-  bun: new Set(['x', 'create']),
+  npm: new Set([
+    'exec', 'x', 'create', 'init', 'install', 'i', 'ci', 'update', 'up',
+    'upgrade', 'rebuild', 'link', 'ln', 'uninstall', 'un', 'remove', 'rm',
+    'publish', 'pack',
+  ]),
+  pnpm: new Set([
+    'dlx', 'create', 'install', 'i', 'add', 'update', 'up', 'upgrade',
+    'rebuild', 'link', 'remove', 'rm', 'publish', 'pack', 'fetch', 'deploy',
+  ]),
+  yarn: new Set([
+    'dlx', 'create', 'install', 'add', 'up', 'upgrade', 'rebuild',
+    'link', 'remove', 'publish', 'pack',
+  ]),
+  bun: new Set([
+    'x', 'create', 'install', 'i', 'add', 'update', 'upgrade',
+    'link', 'remove', 'rm', 'publish',
+  ]),
 });
 const PACKAGE_MANAGER_VALUE_OPTIONS = new Set([
   '--prefix', '--workspace', '-w', '--filter', '-F', '--dir', '-C',
@@ -371,6 +386,10 @@ function isUnreviewedPackageExecution(tokens, invocation) {
     }
     throw new DependencySurfacePolicyError('malformed-script-shell', 'unreviewable package manager option');
   }
+  // npm audit is read-only, but "npm audit fix" rewrites the dependency
+  // graph and can run install lifecycle scripts.
+  if (invocation.command === 'npm' && tokens[index]?.value === 'audit' &&
+      tokens[index + 1]?.value === 'fix') return true;
   return forbidden.has(tokens[index]?.value);
 }
 
