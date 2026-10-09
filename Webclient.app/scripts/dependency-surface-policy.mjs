@@ -12,6 +12,7 @@ const COMMAND_BOUNDARY_OPERATORS = new Set(['&&', '||', ';', '|', '&', '\n', '('
 const COMMAND_PREFIX_WORDS = new Set(['!', 'if', 'then', 'elif', 'else', 'do', 'while', 'until']);
 const COMMAND_WRAPPERS = new Set(['command', 'exec', 'builtin', 'nohup', 'time', 'sudo']);
 const SHELL_INTERPRETERS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
+const UNREVIEWABLE_SHELL_EVALUATORS = new Set(['eval', 'source', '.', 'xargs']);
 const MAX_NESTED_SHELL_DEPTH = 4;
 
 export class DependencySurfacePolicyError extends Error {
@@ -120,8 +121,17 @@ export function tokenizePackageScript(command) {
       continue;
     }
 
-    if (character === '`' || (character === '$' && command[index + 1] === '(')) {
-      throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script contains unreviewable command substitution');
+    // Expansions can synthesize an executable; do not emulate shell evaluation.
+    if (character === '$' || character === '`' ||
+        (quote === null && (
+          ((character === '<' || character === '>') && command[index + 1] === '(') ||
+          (character === '<' && command.slice(index, index + 3) === '<<<')
+        ))) {
+      throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script contains unreviewable shell expansion');
+    }
+    // Unquoted glob, brace and leading tilde expansion can change command identity.
+    if (quote === null && ('*?[{'.includes(character) || (character === '~' && current.length === 0))) {
+      throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script contains unreviewable pathname expansion');
     }
 
     if (quote === '"') {
@@ -345,6 +355,11 @@ export function collectPackageScriptInvocations(command, options = {}) {
     if (!invocation) {
       expectCommand = false;
       continue;
+    }
+
+    // Evaluators execute source or commands from arguments or stdin.
+    if (UNREVIEWABLE_SHELL_EVALUATORS.has(invocation.command)) {
+      throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script executes unreviewable dynamic shell source');
     }
 
     invocations.push(Object.freeze({
