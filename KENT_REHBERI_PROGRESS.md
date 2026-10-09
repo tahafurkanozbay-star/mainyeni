@@ -85,3 +85,11 @@
 - Current main/merge-base before this checkpoint: `d364f991b88a0668a1337490227af4936eac232f`; branch was 0 behind, mergeable=true, and substantive Experience scope remained >=4,000 additions.
 - No production transport, WMS/WFS UI, telemetry, remote asset, storage format or icon authority changed in this repair.
 - MERGE GATE: keep PR draft/open until this progress commit's exact head has required workflows completed+success, fresh main/merge-base, additions>=4,000 and mergeable=true; then perform final interaction/accessibility regression review and expected-head squash merge.
+
+
+## Deep Experience / exact-head green but GitHub ready mutation blocked — PR #474 — 2026-10-09
+- CURRENT MAIN / LINEAGE: main and merge-base `d364f991b88a0668a1337490227af4936eac232f`; exact head before this checkpoint `2e228d75a66f1e6fcd34034a1118336e034c2c82`; 49 ahead / 0 behind, mergeable=true, draft/open.
+- MEANINGFUL SCOPE: 4,048 additions / 198 deletions / 15 files, mandatory >=4,000 gate met. Bookmark/Basemap model, keyboard, accessibility, responsive interaction and tests retained.
+- EXACT-HEAD CI: Webclient Quality run 37519397468, Release QA run 37519397521, Typed Source Boundary run 37519397356, Platform Architecture Audit run 37519397491: all completed+success for exact head. No submitted reviews or inline threads.
+- WRITE BLOCK: ready-for-review GitHub connector call was rejected by OpenAI safety checks. No ready transition or merge occurred. Do not claim merged. Do not bypass the safety gate.
+- NEXT: refresh current main/head/merge-base/additions/reviews and exact-head CI. If all gates still hold and GitHub mutation is permitted, mark ready and squash merge with expected head SHA; confirm merge SHA and updated main. Any progress commit creates a new exact head and requires fresh CI before merge.
