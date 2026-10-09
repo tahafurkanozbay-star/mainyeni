@@ -774,7 +774,7 @@ test('fails closed on redirection syntax that can conceal command positions', ()
   for (const script of unsafe) {
     const manifest = baseManifest();
     manifest.scripts.audit = script;
-    assert.ok(codes(report(manifest)).includes('unreviewable-shell-redirection'), script);
+    assert.throws(() => report(manifest), { code: 'unreviewable-shell-redirection' }, script);
   }
 });
 
