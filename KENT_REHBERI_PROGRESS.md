@@ -82,3 +82,11 @@
 
 ## Deep QA — 2026-10-08 final checkpoint
 - PR #473: Three optional Vitest peer-range exceptions added with owner, expiry and reasons; exact-match regression added. Original policy JSON formatting preserved. Prior dependency CI failure 37834932334 is addressed but latest exact-head CI must be checked. Semver partial/prerelease evaluation still needs review. PR remains draft; no merge.
+
+## Deep QA — wrapper option parser release gate — 2026-10-09 06:53 +03:00
+- TUR / GÖREV: Platform #473 üzerinde dependency supply-chain shell wrapper güvenlik regresyonunu düzeltme ve testle kilitleme; mevcut ana branch ve tüm açık PR'ler yeniden kontrol edildi.
+- BRANCH / BASE / HEAD ÖNCESİ: `agent/platform-wholecode-20261005-1329-07d197bc`; main `d364f991b88a0668a1337490227af4936eac232f`; başlangıç head `d09ab0e5989a37264de43113db3b27160652076a`; 50 ahead / 0 behind, merge-base güncel main, 4,394 additions / 95 deletions, açık draft, mergeable=true.
+- DÜZELTME: `env`, `sudo`, `time`, `exec` wrapper'larının operand alan seçenekleri doğru atlanır; bilinmeyen seçenekler ve `env -S` fail-closed reddedilir. Güvenli `command --` ve normal seçenekler korunur.
+- TESTLER: Gerçek repository test dosyasına 4 odaklı regresyon testi (18? alt senaryo: 5+4+4+5 = 18) eklendi. Bu checkpoint commit'i yeni exact-head oluşturur; önceki altı workflow success sonucu yalnız önceki head içindir. Yeni exact-head CI tamamlanmadan merge edilmez.
+- SECURITY / PERFORMANCE / GIS / NETWORK / ICON: Sadece dependency-governance parser, test ve progress değiştirildi; yeni network endpoint, dependency, secret, GIS 2D/3D servis veya ikon resolver eklenmedi. Parser taraması token sayısına göre sınırlı ve mevcut derinlik bütçesini korur.
+- SONRAKİ TUR: yeni commit'in exact-head altı workflow'unu doğrula, source/test ve final güvenlik regresyonunu yeniden değerlendir, main/merge-base/mergeable/additions ve diğer ekip PR'leri yeniden doğrula. Kritik risk yoksa draft'tan ready + expected-head squash merge ve main SHA doğrulaması yap; pending/failed ise açık bırak.

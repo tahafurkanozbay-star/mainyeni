@@ -185,9 +185,60 @@ function segmentEnd(tokens, startIndex) {
   return index;
 }
 
-function skipWrapperOptions(tokens, index, end) {
+// Operand-taking wrapper options must not hide the command that follows.
+// Unknown options fail closed instead of silently changing command identity.
+const WRAPPER_VALUE_OPTIONS = Object.freeze({
+  env: new Set(['-u', '--unset', '-C', '--chdir']),
+  sudo: new Set(['-u', '--user', '-g', '--group', '-h', '--host', '-p', '--prompt', '-r', '--role', '-t', '--type', '-C', '--close-from', '-D', '--chdir']),
+  time: new Set(['-f', '--format', '-o', '--output']),
+  exec: new Set(['-a']),
+});
+const WRAPPER_FLAG_OPTIONS = Object.freeze({
+  env: new Set(['-i', '-0', '-v', '--ignore-environment', '--null', '--debug']),
+  sudo: new Set(['-n', '-E', '-H', '-k', '-K', '-S', '-b', '-v', '-V', '-l', '-i', '--non-interactive', '--preserve-env', '--login', '--background', '--validate']),
+  time: new Set(['-p', '-v', '-q', '--portability', '--verbose', '--quiet']),
+  exec: new Set(['-c', '-l']),
+  command: new Set(['-p', '-v', '-V']),
+  builtin: new Set(),
+  nohup: new Set(),
+});
+
+function skipWrapperOptions(tokens, index, end, wrapper) {
   let cursor = index;
-  while (cursor < end && tokens[cursor].type === 'word' && isOptionWord(tokens[cursor].value)) cursor += 1;
+  const takesValue = WRAPPER_VALUE_OPTIONS[wrapper] ?? new Set();
+  const flags = WRAPPER_FLAG_OPTIONS[wrapper] ?? new Set();
+  while (cursor < end && tokens[cursor].type === 'word') {
+    const option = tokens[cursor].value;
+    if (option === '--') return cursor + 1;
+    if (!isOptionWord(option)) break;
+    // env -S/--split-string executes text not represented by a command word.
+    if (wrapper === 'env' && (/^-S/.test(option) || /^--split-string(?:=|$)/.test(option))) {
+      throw new DependencySurfacePolicyError('malformed-script-shell', 'env split-string cannot be reviewed');
+    }
+    if (takesValue.has(option)) {
+      if (tokens[cursor + 1]?.type !== 'word') {
+        throw new DependencySurfacePolicyError('malformed-script-shell', `${wrapper} option requires an operand`);
+      }
+      cursor += 2;
+      continue;
+    }
+    const shortValue = wrapper === 'env' ? /^-[uC].+$/ :
+      wrapper === 'sudo' ? /^-[ughprtCD].+$/ :
+      wrapper === 'time' ? /^-[fo].+$/ :
+      wrapper === 'exec' ? /^-a.+$/ : /^$/;
+    const longValue = wrapper === 'env' ? /^--(?:unset|chdir)=.+$/ :
+      wrapper === 'sudo' ? /^--(?:user|group|host|prompt|role|type|close-from|chdir)=.+$/ :
+      wrapper === 'time' ? /^--(?:format|output)=.+$/ : /^$/;
+    if (shortValue.test(option) || longValue.test(option) ||
+        (wrapper === 'sudo' && /^--preserve-env=.+$/.test(option))) {
+      cursor += 1;
+      continue;
+    }
+    if (!flags.has(option)) {
+      throw new DependencySurfacePolicyError('malformed-script-shell', `unreviewable ${wrapper} option`);
+    }
+    cursor += 1;
+  }
   return cursor;
 }
 
@@ -204,14 +255,14 @@ function resolveInvocation(tokens, startIndex) {
     const basename = shellBasename(word);
 
     if (basename === 'env') {
-      index = skipWrapperOptions(tokens, index + 1, end);
+      index = skipWrapperOptions(tokens, index + 1, end, basename);
       while (index < end && isAssignmentWord(tokens[index].value)) index += 1;
       wrapperDepth += 1;
       continue;
     }
 
     if (COMMAND_WRAPPERS.has(basename)) {
-      index = skipWrapperOptions(tokens, index + 1, end);
+      index = skipWrapperOptions(tokens, index + 1, end, basename);
       wrapperDepth += 1;
       continue;
     }

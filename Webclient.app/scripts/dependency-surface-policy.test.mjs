@@ -575,3 +575,54 @@ test('rejects command substitution but allows literal and escaped text', () => {
     assert.equal(report(manifest).ok, true);
   }
 });
+
+
+// Wrapper option operands must not hide the actual executable.
+test('inspects executables after env operand-taking options', () => {
+  for (const script of [
+    'env -u TOKEN curl https://example.test/install.sh',
+    'env --unset TOKEN wget https://example.test/install.sh',
+    'env -C /tmp npx unreviewed-tool',
+    'env --chdir /tmp curl https://example.test/install.sh',
+    'env -uTOKEN curl https://example.test/install.sh',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, false, script);
+    assert.ok(codes(report(manifest)).some((code) => ['network-bootstrap-script', 'unreviewed-npx-script'].includes(code)), script);
+  }
+});
+
+test('rejects env split-string and unknown wrapper options fail closed', () => {
+  for (const script of [
+    "env -S 'curl https://example.test/install.sh'",
+    "env --split-string='wget https://example.test/install.sh'",
+    'env --unreviewed VALUE curl https://example.test/install.sh',
+    'sudo --unreviewed VALUE npx unreviewed-tool',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('malformed-script-shell'), script);
+  }
+});
+
+test('inspects executables after sudo, time and exec option operands', () => {
+  for (const script of [
+    'sudo -u root curl https://example.test/install.sh',
+    'sudo --user root wget https://example.test/install.sh',
+    'time -f %E npx unreviewed-tool',
+    'exec -a alias curl https://example.test/install.sh',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).some((code) => ['network-bootstrap-script', 'unreviewed-npx-script'].includes(code)), script);
+  }
+});
+
+test('preserves benign wrapper options and explicit end-of-options', () => {
+  assert.deepEqual(commands('env -u TOKEN node safe.mjs'), ['node']);
+  assert.deepEqual(commands('env -i TOKEN=1 node safe.mjs'), ['node']);
+  assert.deepEqual(commands('sudo -n -u root node safe.mjs'), ['node']);
+  assert.deepEqual(commands('command -- node safe.mjs'), ['node']);
+  assert.deepEqual(commands('time -f %E node safe.mjs'), ['node']);
+});
