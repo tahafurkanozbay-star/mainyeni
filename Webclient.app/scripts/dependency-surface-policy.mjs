@@ -234,9 +234,31 @@ function nestedShellCommand(tokens, invocation) {
 
   for (let index = invocation.index + 1; index < invocation.end; index += 1) {
     const value = tokens[index].value;
-    if (value === '-c' || value === '--command') {
+    // A shell's -c can be grouped with other short options (bash -lc,
+    // sh -ec). The following word is executable source, not a data argument.
+    if (value === '--command' || (/^-[A-Za-z]+$/.test(value) && value.slice(1).includes('c'))) {
+      // -o/-O consume an operand, and their ordering with -c is
+      // shell-dependent. Reject mixed groups rather than guess.
+      if (value !== '--command' && /[oO]/.test(value.slice(1))) {
+        throw new DependencySurfacePolicyError('malformed-script-shell', 'ambiguous grouped shell command and option flags');
+      }
       const nested = tokens[index + 1];
-      return nested?.type === 'word' ? nested.value : null;
+      if (nested?.type !== 'word') {
+        throw new DependencySurfacePolicyError('malformed-script-shell', 'shell command option requires source');
+      }
+      return nested.value;
+    }
+    // -o/-O consume a separate option name even when grouped with other
+    // short options, e.g. bash -eo pipefail -c '...'.
+    if (/^[-+][oO]$/.test(value) || /^-[A-Za-z]*[oO]$/.test(value)) {
+      if (tokens[index + 1]?.type !== 'word') {
+        throw new DependencySurfacePolicyError('malformed-script-shell', 'shell option requires an argument');
+      }
+      index += 1;
+      continue;
+    }
+    if (/^-[A-Za-z]+$/.test(value) && /[oO]/.test(value.slice(1))) {
+      throw new DependencySurfacePolicyError('malformed-script-shell', 'unreviewable grouped shell option');
     }
     if (!isOptionWord(value)) break;
   }
