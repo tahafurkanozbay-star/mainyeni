@@ -159,6 +159,12 @@ export function tokenizePackageScript(command) {
         ))) {
       throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script contains unreviewable shell expansion');
     }
+    // POSIX redirections may precede the executable (e.g. >log npm install).
+    // The command-position parser does not model redirect operands; reject them
+    // rather than accidentally treating the redirect as the executable.
+    if (quote === null && (character === '<' || character === '>')) {
+      throw new DependencySurfacePolicyError('unreviewable-shell-redirection', 'package script contains shell redirection outside the reviewed grammar');
+    }
     // Unquoted glob, brace and leading tilde expansion can change command identity.
     if (quote === null && ('*?[{'.includes(character) || (character === '~' && current.length === 0))) {
       throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script contains unreviewable pathname expansion');

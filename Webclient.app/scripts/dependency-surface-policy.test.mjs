@@ -759,3 +759,34 @@ test('preserves literal and escaped shell metacharacters as inert data', () => {
     assert.equal(report(manifest).ok, true, script);
   }
 });
+
+test('fails closed on redirection syntax that can conceal command positions', () => {
+  const unsafe = [
+    '> /dev/null npm install left-pad',
+    '2>/dev/null npm ci',
+    '< /dev/null pnpm add left-pad',
+    '1>audit.log yarn add left-pad',
+    'npm run build > build.log',
+    'node scripts/check.mjs 2>>error.log',
+    'node scripts/check.mjs <<EOF',
+    'node scripts/check.mjs <>out.log',
+  ];
+  for (const script of unsafe) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewable-shell-redirection'), script);
+  }
+});
+
+test('keeps quoted redirection characters as inert argument data', () => {
+  for (const script of [
+    "node scripts/check.mjs '>'",
+    'node scripts/check.mjs "<"',
+    "node scripts/check.mjs '2>/dev/null'",
+    'node scripts/check.mjs "<<EOF"',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  }
+});
