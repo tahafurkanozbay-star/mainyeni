@@ -104,3 +104,12 @@
 - WRITE: Atomic source/test/progress Git Data write was attempted but blocked by safety checks; no new commit or CI exists for this repair. Do not count prepared source/test content as applied.
 - SECURITY / PERFORMANCE / GIS / NETWORK / ICON: No new dependency, endpoint, secret, GIS service, icon resolver or runtime change committed. This is an unmitigated supply-chain policy gap; release remains BLOCKED.
 - NEXT: Apply a reviewed fail-closed package-manager command scanner and tests through an authorized write path, verify fresh exact-head six-workflow CI, main merge-base, additions>=4,000, mergeable and final security/performance/regression gates. Keep PR draft until repaired; never merge based on old successful CI.
+
+
+## Deep QA — package-manager execution follow-up — 2026-10-09 12:50 +03:00
+- TUR / GÖREV: Platform #473 üzerinde dependency supply-chain release/regression incelemesi; main `d364f991b88a0668a1337490227af4936eac232f`, pre-change head `96d67836239bddfbfe0aac4f6fdcc92899e682b5`, 53 ahead/0 behind, exact merge-base main, 4,584 additions, mergeable=true, açık draft.
+- CI: Pre-change exact-head Platform Dependency Governance, Platform Architecture Audit, Platform Typed Test Validation, Release Evidence Contract, Webclient Quality ve Release QA altısı da completed+success. Bu kontroller henüz uygulanmamış package-exec düzeltmesini doğrulamaz.
+- BULGU: `npm exec` açıkça izinli; `npm x`, `pnpm dlx`, `yarn dlx`, `bun x`, `bunx`, `pnpx` ve `corepack` gibi paket çalıştırma/indirme yollarının fail-closed command-position denetimi gerekiyor. Manifestteki mevcut komutlar bu araçları çağırmıyor. Peer exception exact-match ve semver range uygulaması yeniden incelendi; önceki erken-continue/boş OR riskleri mevcut kodda giderilmiş görünüyor.
+- WRITE: `dependency-surface-policy.mjs` için gerçek branch üzerinde GitHub Contents update denendi, güvenlik kontrolleri engelledi; kaynak kod değişmedi. Uygulanmamış düzeltme PASS sayılmaz. Progress commit'i yeni head üretirse exact-head CI yeniden gereklidir.
+- GÜVENLİK / PERFORMANS / GIS / İKON: Yeni dependency, endpoint, GIS 2D/3D servisi, JSON ikon registry veya runtime asset eklenmedi; command parser incelemesi salt-okunur ve bounded. Release kritik supply-chain riski giderilmeden squash merge YASAK.
+- SONRAKİ TUR: Aynı PR'de paket yöneticisi launcher/subcommand scanner ve adversarial testleri yetkili yolla commit et; altı exact-head workflow'u doğrula; main, 4,000 additions, conflict/review ve final regression gate kontrolünden sonra ready/squash merge kararını ver.
