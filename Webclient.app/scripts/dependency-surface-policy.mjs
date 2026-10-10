@@ -24,6 +24,10 @@ const PACKAGE_EXEC_SUBCOMMANDS = Object.freeze({
     'install-test', 'it', 'install-ci-test', 'cit', 'clean-install-test', 'sit',
     'update', 'up', 'u', 'udpate', 'upgrade', 'rebuild', 'dedupe', 'ddp',
     'prune', 'link', 'ln', 'uninstall', 'un', 'unlink', 'remove', 'rm', 'r',
+    // npm pkg rewrites package.json; version/verison may update the lockfile,
+    // and shrinkwrap creates a publishable dependency-resolution lockfile.
+    // Reject the whole pkg family to cover all mutation subcommands/options.
+    'pkg', 'version', 'verison', 'shrinkwrap',
     'publish', 'pack',
   ]),
   pnpm: new Set([
