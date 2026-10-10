@@ -245,8 +245,8 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                     aria-label="Yer işareti ara"
                     aria-autocomplete="list"
                     aria-haspopup="grid"
-                    aria-controls={`${id}-bookmark-list`}
-                    aria-expanded={snapshot.resultCount > 0}
+                    aria-controls={snapshot.emptyReason === 'none' ? `${id}-bookmark-list` : undefined}
+                    aria-expanded={snapshot.emptyReason === 'none'}
                     aria-activedescendant={activeEntry?.id}
                     aria-describedby={`${id}-bookmark-status ${id}-bookmark-keyboard-help`}
                     aria-keyshortcuts={bookmarkKeyboardAriaShortcuts('search')}
