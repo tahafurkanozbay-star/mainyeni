@@ -53,6 +53,9 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
     const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
     const searchRef = useRef<HTMLInputElement | null>(null);
     const titleRef = useRef<HTMLInputElement | null>(null);
+    const collectionRef = useRef<HTMLDivElement | null>(null);
+    const confirmDeleteRef = useRef<HTMLButtonElement | null>(null);
+    const focusReturnRef = useRef<{ key: string; source: 'collection' | 'action' } | null>(null);
 
     const model = useMemo(() => createBookmarkExperienceModel({ pageSize: 6 }), []);
     const controller = useMemo(() => createBookmarkInteractionController({
@@ -77,6 +80,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
     const refreshBookmarks = useCallback((): void => {
       controller.refresh();
       setPendingDeleteKey(null);
+      focusReturnRef.current = null;
     }, [controller]);
 
     useImperativeHandle(ref, () => ({
@@ -90,6 +94,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
       OnClose: () => {
         setTitle('');
         setPendingDeleteKey(null);
+        focusReturnRef.current = null;
         model.resetInteraction();
         controller.clearNotice();
       },
@@ -111,6 +116,27 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
       node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }, [activeEntry]);
 
+    const requestDelete = (key: string, source: 'collection' | 'action'): void => {
+      focusReturnRef.current = { key, source };
+      setPendingDeleteKey(key);
+    };
+
+    const cancelDelete = (): void => setPendingDeleteKey(null);
+
+    useEffect(() => {
+      if (pendingDeleteKey !== null) {
+        confirmDeleteRef.current?.focus({ preventScroll: true });
+        return;
+      }
+      const returnFocus = focusReturnRef.current;
+      if (!returnFocus) return;
+      focusReturnRef.current = null;
+      const entry = snapshot.entries.find((candidate) => candidate.key === returnFocus.key);
+      const deleteButton = entry ? document.getElementById(`${id}-${entry.id}-delete`) : null;
+      const target = returnFocus.source === 'collection' ? collectionRef.current : deleteButton;
+      (target ?? collectionRef.current ?? searchRef.current)?.focus({ preventScroll: true });
+    }, [id, pendingDeleteKey, snapshot.entries]);
+
     const saveBookmark = (event: FormEvent<HTMLFormElement>): void => {
       event.preventDefault();
       if (controller.saveCurrentView(title)) {
@@ -130,6 +156,8 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
     };
 
     const handleListKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+      // Grid shortcuts belong to the grid tab stop, not to nested action buttons.
+      if (event.target !== event.currentTarget) return;
       const resolved = resolveBookmarkKeyboardIntent(event, {
         surface: 'collection', resultCount: snapshot.resultCount, hasActiveEntry: activeEntry !== null,
         hasPendingDelete: pendingDeleteKey !== null, hasQuery: snapshot.query.length > 0, busy,
@@ -138,8 +166,8 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
       switch (resolved.intent.kind) {
         case 'move': model.moveActive(resolved.intent.move); break;
         case 'activate': if (activeEntry) void controller.navigate(activeEntry.key); break;
-        case 'request-delete': if (activeEntry) setPendingDeleteKey(activeEntry.key); break;
-        case 'cancel-delete': setPendingDeleteKey(null); break;
+        case 'request-delete': if (activeEntry) requestDelete(activeEntry.key, 'collection'); break;
+        case 'cancel-delete': cancelDelete(); break;
         case 'focus-search': searchRef.current?.focus({ preventScroll: true }); break;
         default: break;
       }
@@ -216,6 +244,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                     role="combobox"
                     aria-label="Yer işareti ara"
                     aria-autocomplete="list"
+                    aria-haspopup="grid"
                     aria-controls={`${id}-bookmark-list`}
                     aria-expanded={snapshot.resultCount > 0}
                     aria-activedescendant={activeEntry?.id}
@@ -310,10 +339,12 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
             ) : (
               <div
                 id={`${id}-bookmark-list`}
+                ref={collectionRef}
                 className="bookmark-modern__collection"
                 data-view={snapshot.viewMode}
-                role="listbox"
+                role="grid"
                 aria-label="Kayıtlı yer işaretleri"
+                aria-rowcount={snapshot.resultCount}
                 aria-activedescendant={activeEntry?.id}
                 aria-describedby={`${id}-bookmark-keyboard-help ${id}-bookmark-status`}
                 aria-keyshortcuts={bookmarkKeyboardAriaShortcuts('collection')}
@@ -328,16 +359,15 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                     <article
                       id={entry.id}
                       className="bookmark-modern__card"
-                      role="option"
+                      role="row"
                       aria-selected={entry.active}
-                      aria-posinset={entry.position}
-                      aria-setsize={entry.setSize}
+                      aria-rowindex={entry.position}
                       data-active={entry.active || undefined}
                       data-pending-delete={pendingDelete || undefined}
                       key={entry.key}
                       onMouseMove={() => model.setActive(entry.id)}
                     >
-                      <div className="bookmark-modern__card-main">
+                      <div className="bookmark-modern__card-main" role="gridcell">
                         <span className="bookmark-modern__pin" aria-hidden="true">⌖</span>
                         <div className="bookmark-modern__card-copy">
                           <h3 className="bookmark-modern__card-title">{item.Title}</h3>
@@ -350,9 +380,25 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                       </div>
 
                       {pendingDelete ? (
-                        <div className="bookmark-modern__delete-confirm" role="group" aria-label={`${item.Title} silme onayı`}>
+                        <div role="gridcell">
+                          <div
+                            className="bookmark-modern__delete-confirm"
+                            role="group"
+                            aria-label={`${item.Title} silme onayı`}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Escape' && !event.defaultPrevented
+                                && !event.nativeEvent.isComposing
+                                && !event.altKey && !event.ctrlKey && !event.metaKey
+                                && !event.repeat) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                cancelDelete();
+                              }
+                            }}
+                          >
                           <span>Bu kayıt silinsin mi?</span>
                           <button
+                            ref={confirmDeleteRef}
                             type="button"
                             className="map-widget-action map-widget-action--danger"
                             onClick={() => {
@@ -362,12 +408,13 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                           >
                             Evet, sil
                           </button>
-                          <button type="button" className="map-widget-action" onClick={() => setPendingDeleteKey(null)}>
+                          <button type="button" className="map-widget-action" onClick={cancelDelete}>
                             Vazgeç
                           </button>
+                          </div>
                         </div>
                       ) : (
-                        <div className="bookmark-modern__card-actions" aria-label={`${item.Title} işlemleri`}>
+                        <div className="bookmark-modern__card-actions" role="gridcell" aria-label={`${item.Title} işlemleri`}>
                           <button
                             type="button"
                             className="map-widget-action bookmark-modern__locate"
@@ -378,9 +425,10 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                             <span>{navigating ? 'Gidiliyor…' : 'Haritada göster'}</span>
                           </button>
                           <button
+                            id={`${id}-${entry.id}-delete`}
                             type="button"
                             className="map-widget-action map-widget-action--danger bookmark-modern__delete"
-                            onClick={() => setPendingDeleteKey(entry.key)}
+                            onClick={() => requestDelete(entry.key, 'action')}
                             disabled={busy}
                             aria-label={`${item.Title} yer işaretini sil`}
                           >
