@@ -140,7 +140,9 @@ export function tokenizePackageScript(command) {
     const character = command[index];
 
     if (escaped) {
-      current += character;
+      // A POSIX backslash-newline is removed before shell word recognition.
+      // Keeping the newline could split a package-manager executable token.
+      if (character !== '\n') current += character;
       escaped = false;
       continue;
     }

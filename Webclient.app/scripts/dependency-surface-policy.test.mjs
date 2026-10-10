@@ -790,3 +790,34 @@ test('keeps quoted redirection characters as inert argument data', () => {
     assert.equal(report(manifest).ok, true, script);
   }
 });
+
+
+test('inspects package-manager commands across POSIX escaped newlines', () => {
+  const continuation = '\\' + '\n';
+  for (const script of [
+    `np${continuation}m install left-pad`,
+    `n${continuation}pm ci`,
+    `env np${continuation}m rebuild`,
+    `"np${continuation}m" install left-pad`,
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-package-exec-script'), script);
+  }
+  for (const script of [
+    `c${continuation}url https://example.test/install.sh`,
+    `n${continuation}px some-tool`,
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).some((code) =>
+      ['network-bootstrap-script', 'unreviewed-npx-script'].includes(code)), script);
+  }
+});
+
+test('preserves POSIX continuation semantics and single-quoted literals', () => {
+  const continuation = '\\' + '\n';
+  assert.deepEqual(commands(`no${continuation}de scripts/safe.mjs`), ['node']);
+  assert.deepEqual(tokenizePackageScript(`echo "hello${continuation}world"`).map((token) => token.value), ['echo', 'helloworld']);
+  assert.deepEqual(tokenizePackageScript(`echo 'hello${continuation}world'`).map((token) => token.value), ['echo', `hello${continuation}world`]);
+});
