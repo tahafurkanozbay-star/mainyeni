@@ -39,3 +39,66 @@
 - SECURITY / NETWORK: yeni endpoint, browser transport, telemetry, secret, remote asset, WMS/WFS/WMTS veya ikinci icon authority eklenmedi; reconciliation production Experience kaynaklarını geri almıyor.
 - TEST / CI: reapply product head oluşturulduktan sonraki ilk GitHub Actions sorgusunda run henüz kayıtlı değildi; PASS ilan edilmedi. Bu progress commit'i yeni exact head oluşturur ve tüm zorunlu exact-head workflow'lar yeniden `completed+success` olmadan merge yapılmaz.
 - SONRAKİ GÖREV NOTU: progress exact head SHA'sını doğrula; current main'i refresh et; additions>=4,000, behind=0, merge-base=current main ve mergeable=true durumlarını tekrar doğrula. Release Evidence Contract, Platform Architecture Audit, Platform Typed Test Validation, QA Typed Release Diagnostics, Webclient Quality ve Release QA tamamı success ise final security/performance/regression review sonrası ready + expected-head squash merge uygula; aksi halde aynı PR'de gerçek hatayı düzelt.
+
+## Deep Experience / map-tool keyboard governance — PR #474 gate checkpoint — 2026-10-06
+- TUR / GÖREV: Deep Experience / Whole-Code Modernization; Bookmark/Basemap map-tool UX devamı ve klavye etkileşim authority'sinin güvenli, keşfedilebilir, erişilebilir hale getirilmesi.
+- BRANCH / PR: `agent/experience-maptools-20261005-1455-1773e72`; PR #474 kanonik Experience PR'ıdır ve final exact-head gate tamamlanana kadar draft kalır.
+- CURRENT MAIN / LINEAGE: current main/base/merge-base `d364f991b88a0668a1337490227af4936eac232f`; branch current main'e göre 0 behind. Bu checkpoint öncesi product head `0d5a93242d98e81501a712fb5f006e6a3c9c6d00`.
+- KAPSAM / GATE: product head'de mandatory >=4,000 additions eşiği substantive Bookmark/Basemap UX, controller/model, responsive/a11y styling ve regression test kapsamıyla aşıldı; progress satırları gate doldurmak için kullanılmadı.
+- KEYBOARD GOVERNANCE: yeni `bookmarkKeyboardPolicy` Arrow/Home/End/Page hareketlerini, Enter aktivasyonunu, Delete/Backspace ile yalnız onay açılmasını, Escape cancellation/clear davranışını ve `/` search-focus intent'ini tek deterministic authority'de toplar.
+- INPUT SAFETY: composing/IME, dead/process key, defaultPrevented, Ctrl/Meta/Alt command çakışmaları ve destructive/activation key-repeat fail-closed ele alınır. Busy durumda activate/delete intent'i üretilmez; silme hiçbir keyboard shortcut ile doğrudan gerçekleşmez.
+- REAL SCREEN INTEGRATION: BookmarkWidget eski inline key map yerine governed policy kullanır; search ve listbox `aria-keyshortcuts`, ortak keyboard-help description, roving `aria-activedescendant`, visible keyboard guidance ve responsive/forced-colors uyumlu yüzey taşır.
+- ACCESSIBILITY / RESPONSIVE: 44/48px mevcut target kontratı korunur; visible help mobilde okunabilir kalır; forced-colors keyboard-help yüzeyleri sistem renklerine düşer; reduced-motion kontratı değişmez.
+- REGRESSION COVERAGE: policy unit testleri movement/action/input-safety/discoverability kontratlarını; widget integration testleri Escape clear, slash focus, keyboard delete confirmation/cancel, repeat guards, modifier/IME guards, filtered-state safety, Page/Home/End ve ARIA wiring'i kapsar.
+- NETWORK / SECURITY: yeni endpoint, transport, telemetry/analytics, remote font/CDN, WMS/WFS UI, secret, ağır asset veya ikinci icon resolver eklenmedi. Bookmark storage formatı ve GIS transport değişmedi.
+- ÖNCEKİ CI TEŞHİSİ: reconciliation head `560eea364a0397f68fafe372f22ea085f06c915b` için Platform Architecture Audit ve Release QA success; Typed Source Boundary ve Webclient Quality workflow conclusion failure görünmesine rağmen job conclusion `cancelled` ve step listesi boştu; product failure diagnostic yoktu.
+- TEST / BUILD: yeni product head için GitHub Actions exact-head sonucu henüz oluşmadı; PASS iddia edilmez. Local shell zorunlu tutulmadı.
+- MERGE DURUMU: additions gate karşılanmış olsa da progress commit yeni exact head oluşturur. Tüm zorunlu workflow'lar `completed+success`, current main fresh/behind=0, `mergeable=true` ve kritik regression/release riski yok doğrulanmadan merge yapılmaz.
+- SONRAKİ GÖREV NOTU: progress exact-head CI'ını doğrula; Webclient Quality'de strict lint, exact-base TypeScript/Vitest, production build/integrity ve budgets; Typed Source Boundary, Platform Architecture Audit ve Release QA sonuçlarını kontrol et. Main ilerlediyse conflict-safe reconciliation yap. Tüm gate'ler yeşilse PR'ı ready yapıp expected-head kilitli squash merge et ve merge/main SHA'yı doğrula.
+
+
+## Deep Experience / map-tool exact-base regression repair — PR #474 checkpoint — 2026-10-06
+- EXACT-HEAD TEŞHİSİ: `1d4909c0f1490a413a959fb672b8eec1e83285d8` için Typed Source Boundary, Platform Architecture Audit ve Release QA success; Webclient Quality yalnız exact-base Vitest regression gate'te failure verdi. Strict TypeScript/lint blokajı yok.
+- REPAIR: Basemap observer admission duplicate listener'ı capacity rejection'dan önce tanıyor; duplicate subscribe artık rejectedObserverCount artırmıyor. Bookmark combobox explicit `aria-label="Yer işareti ara"` ile clear-control label composition'dan bağımsız deterministic accessible name taşıyor.
+- LIVE-REGION AUTHORITY: Bookmark operation notice yalnız inline notice/alert authority'sinde yayınlanır; MapWidgetSurface status yalnız storage recovery warning'ına ayrıldı. Böylece save/navigation/validation feedback iki live region'da yinelenmiyor ve normal result announcement tek status authority olarak kalıyor.
+- TEST CONTRACT: forwardRef verilmeden render edilen lifecycle regression testi unregister çağrısındaki gerçek null external ref kontratını doğruluyor; production lifecycle davranışı değiştirilmedi.
+- GATE: Bu repair commit'i yeni exact head oluşturur. PR additions>=4,000 korunmalı; current main fresh/behind=0, mergeable=true ve dört zorunlu workflow exact-head completed+success olmadan merge yapılmaz.
+- SONRAKİ GÖREV NOTU: yeni exact-head CI'ı doğrula. Webclient Quality exact-base Vitest, TypeScript, production build/integrity/budgets dahil success ise final accessibility/interaction review yap; main ilerlemediyse ready + expected-head squash merge uygula ve merge/main SHA'yı doğrula.
+
+
+## Deep Experience / exact-base Vitest repair — PR #474 — 2026-10-06
+- CI TEŞHİSİ: exact head `58d0d192b033c9f6ac420b08e3610b5b9ff86bdf` için Release QA, Typed Source Boundary ve Platform Architecture Audit success; Webclient Quality yalnız Exact-base Vitest regression gate'te 4 yeni Bookmark failure ile kaldı.
+- ONARIM: keyboard policy React/native `isComposing` sözleşmelerinin ikisini de fail-closed kabul eder. Bookmark announcement canonical kayıt sayısını `N yer işareti kayıtlı.` olarak taşır; storage recovery metni yalnız `storageWarning` authority'sinde kalır ve live-region tekrarını kaldırır.
+- MERGE DURUMU: bu repair yeni exact head oluşturur. Dört zorunlu workflow completed+success, behind=0, merge-base=current main, additions>=4,000 ve mergeable=true yeniden doğrulanmadan merge yapılmaz.
+
+
+## Deep Experience strict-lint repair — PR #474 checkpoint — 2026-10-06
+- Exact-head CI triage confirmed the remaining Experience-owned release blocker was the stale unused `rejectedCount` parameter on Bookmark announcement construction; changed-source strict lint treats this warning as blocking.
+- Removed only that obsolete parameter and its call argument. Storage recovery remains owned by `storageWarning`; canonical result/count announcement behavior is unchanged.
+- Pre-repair lineage: main/merge-base `d364f991b88a0668a1337490227af4936eac232f`, branch 0 behind, PR mergeable=true, 4,036 additions / 198 deletions / 15 files. Typed Source Boundary and Platform Architecture Audit were success; Webclient Quality and Release QA failed at the strict changed-source lint warning.
+- Repair commit: `815db041d1a39ac124b4c450bc0163a635f8ddb4`. This progress update creates a newer exact head; do not merge until that exact head has all required workflows completed+success, current-main/merge-base remains fresh, additions>=4,000 and mergeable=true.
+
+
+## Deep Experience / final Bookmark Vitest expectation repair — PR #474 — 2026-10-06
+- Exact-head `d8baaa4418d7dd7f24e4e46061c285d4f2dadfb7` aligns the Bookmark widget stored-count regression with the canonical punctuation-bearing announcement `3 yer işareti kayıtlı.`; controller recovery-warning expectation was already aligned in parent `61d7d24b467f3cddda0d52b93786ba4da07918ee`.
+- Pre-repair required CI on the parent had Typed Source Boundary, Platform Architecture Audit and Release QA success; Webclient Quality failed only at Exact-base Vitest. The new head requires a fresh exact-head CI pass before merge.
+- Current main/merge-base before this checkpoint: `d364f991b88a0668a1337490227af4936eac232f`; branch was 0 behind, mergeable=true, and substantive Experience scope remained >=4,000 additions.
+- No production transport, WMS/WFS UI, telemetry, remote asset, storage format or icon authority changed in this repair.
+- MERGE GATE: keep PR draft/open until this progress commit's exact head has required workflows completed+success, fresh main/merge-base, additions>=4,000 and mergeable=true; then perform final interaction/accessibility regression review and expected-head squash merge.
+
+
+## Deep Experience / exact-head green but GitHub ready mutation blocked — PR #474 — 2026-10-09
+- CURRENT MAIN / LINEAGE: main and merge-base `d364f991b88a0668a1337490227af4936eac232f`; exact head before this checkpoint `2e228d75a66f1e6fcd34034a1118336e034c2c82`; 49 ahead / 0 behind, mergeable=true, draft/open.
+- MEANINGFUL SCOPE: 4,048 additions / 198 deletions / 15 files, mandatory >=4,000 gate met. Bookmark/Basemap model, keyboard, accessibility, responsive interaction and tests retained.
+- EXACT-HEAD CI: Webclient Quality run 37519397468, Release QA run 37519397521, Typed Source Boundary run 37519397356, Platform Architecture Audit run 37519397491: all completed+success for exact head. No submitted reviews or inline threads.
+- WRITE BLOCK: ready-for-review GitHub connector call was rejected by OpenAI safety checks. No ready transition or merge occurred. Do not claim merged. Do not bypass the safety gate.
+- NEXT: refresh current main/head/merge-base/additions/reviews and exact-head CI. If all gates still hold and GitHub mutation is permitted, mark ready and squash merge with expected head SHA; confirm merge SHA and updated main. Any progress commit creates a new exact head and requires fresh CI before merge.
+
+## Deep Experience / Bookmark combobox ARIA reconciliation — PR #474 — 2026-10-10
+- CURRENT MAIN / LINEAGE: main/merge-base d364f991b88a0668a1337490227af4936eac232f; current PR head before proposed patch 8b868ad56cbf6ca4ac91e3b45d9ec78bc5773acc; 53 ahead / 0 behind; mergeable=true; draft/open.
+- SCOPE: 4,181 meaningful base...head additions / 196 deletions, mandatory >=4,000 additions met. Four exact-head workflows (Webclient Quality 38020430156, Release QA 38020430152, Typed Source Boundary 38020430224, Platform Architecture Audit 38020430155) completed+success; no review threads/reviews.
+- A11Y FINDING: BookmarkWidget search combobox unconditionally declares aria-controls for a grid omitted in empty/no-results states; aria-expanded was tied to resultCount instead of the explicit rendered collection state. BookmarkExperienceModel emptyReason union is 'none' | 'no-bookmarks' | 'no-results'.
+- PROPOSED REPAIR: aria-controls only when emptyReason==='none'; aria-expanded mirrors that predicate. Regression expectations for no bookmarks, no results, recovery and deleting the final filtered row.
+- WRITE STATUS: GitHub update_file and create_blob attempts rejected by OpenAI safety checks; no source/test commit from this attempt. Existing green CI does not validate the proposed ARIA repair. Do not merge until source/test change is committed and exact-head CI re-passes.
+- SECURITY / NETWORK: no proposed new endpoint, WMS/WFS UI, telemetry, remote font, CDN, secret, or second icon resolver. Local runtime visual test not performed.
+- NEXT: apply two-file scoped patch on same Experience PR when permitted, refresh main, run exact-head CI and accessibility interaction review, then mark ready and expected-head squash merge only if all gates pass.
