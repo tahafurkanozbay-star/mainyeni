@@ -276,6 +276,7 @@ export const validateDependencyPolicy = ({ manifest, issues, policy, now = new D
 
   const directPackages = new Set(Object.keys(manifest.dependencies ?? {}));
   const observed = new Set(issues.map(issueKey));
+  if (!Array.isArray(policy.exceptions)) errors.push('dependency-policy: exceptions must be an array');
   const exceptions = Array.isArray(policy.exceptions) ? policy.exceptions : [];
   const exceptionKeys = new Set();
   const today = normalizeDate(now);
@@ -324,7 +325,7 @@ export const validateDependencyPolicy = ({ manifest, issues, policy, now = new D
 
   const budgets = policy.budgets ?? {};
   const counts = Object.fromEntries(POLICY_ISSUES.map((issue) => [issue, issues.filter((item) => item.issue === issue).length]));
-  const totalBudget = Number(budgets.maxExceptions);
+  const totalBudget = budgets.maxExceptions;
   if (!Number.isInteger(totalBudget) || totalBudget < 0) {
     errors.push('dependency-policy: budgets.maxExceptions must be a non-negative integer');
   } else if (exceptionKeys.size > totalBudget) {
@@ -337,7 +338,7 @@ export const validateDependencyPolicy = ({ manifest, issues, policy, now = new D
       : issue === 'deprecated-direct'
         ? 'maxDeprecatedDirect'
         : 'maxInstallScriptDirect';
-    const budget = Number(budgets[budgetName]);
+    const budget = budgets[budgetName];
     if (!Number.isInteger(budget) || budget < 0) {
       errors.push(`dependency-policy: budgets.${budgetName} must be a non-negative integer`);
     } else if (counts[issue] > budget) {
