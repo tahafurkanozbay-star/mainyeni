@@ -48,8 +48,8 @@ const renderWidget = () => {
 };
 
 const searchInput = (): HTMLInputElement => screen.getByRole('combobox', { name: 'Yer işareti ara' });
-const listbox = (): HTMLElement => screen.getByRole('listbox', { name: 'Kayıtlı yer işaretleri' });
-const options = (): HTMLElement[] => screen.queryAllByRole('option');
+const collection = (): HTMLElement => screen.getByRole('grid', { name: 'Kayıtlı yer işaretleri' });
+const rows = (): HTMLElement[] => screen.queryAllByRole('row');
 
 describe('BookmarkWidget modern screen', () => {
   beforeEach(() => {
@@ -68,7 +68,7 @@ describe('BookmarkWidget modern screen', () => {
     expect(screen.getByRole('region', { name: 'Yer İşaretleri' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Bu görünümü kaydet' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Kayıtlı görünümler' })).toBeVisible();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
   });
 
   it('registers and unregisters the managed window lifecycle', () => {
@@ -83,88 +83,148 @@ describe('BookmarkWidget modern screen', () => {
     await waitFor(() => expect(screen.getAllByText('3 yer işareti kayıtlı.').length).toBeGreaterThan(0));
   });
 
-  it('renders semantic listbox metadata', async () => {
+  it('renders semantic grid metadata', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    expect(listbox()).toHaveAttribute('tabindex', '0');
-    expect(options()[0]).toHaveAttribute('aria-selected', 'true');
-    expect(options()[0]).toHaveAttribute('aria-posinset', '1');
-    expect(options()[2]).toHaveAttribute('aria-setsize', '3');
-    expect(listbox()).toHaveAttribute('aria-activedescendant', options()[0].id);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(collection()).toHaveAttribute('tabindex', '0');
+    expect(rows()[0]).toHaveAttribute('aria-selected', 'true');
+    expect(rows()[0]).toHaveAttribute('aria-rowindex', '1');
+    expect(collection()).toHaveAttribute('aria-rowcount', '3');
+    expect(within(rows()[0]).getAllByRole('gridcell')).toHaveLength(2);
+    expect(collection()).toHaveAttribute('aria-activedescendant', rows()[0].id);
+  });
+
+  it('does not hijack keyboard events from nested action buttons', async () => {
+    const goTo = vi.fn().mockResolvedValue(undefined);
+    mapRuntime.getMapView.mockReturnValue({
+      center: { latitude: 39.93, longitude: 32.85 }, zoom: 13, goTo,
+    });
+    renderWidget();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const first = rows()[0];
+    fireEvent.keyDown(within(first).getByRole('button', { name: 'Haritada göster' }), { key: 'Enter' });
+    fireEvent.keyDown(within(first).getByRole('button', { name: 'Kızılay yer işaretini sil' }), { key: 'Delete' });
+    expect(goTo).not.toHaveBeenCalled();
+    expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
+  });
+
+  it('focuses confirmation and restores the delete action after cancel', async () => {
+    renderWidget();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(screen.getByRole('button', { name: 'Çankaya yer işaretini sil' }));
+    const confirmation = screen.getByRole('group', { name: 'Çankaya silme onayı' });
+    expect(within(confirmation).getByRole('button', { name: 'Evet, sil' })).toHaveFocus();
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Çankaya yer işaretini sil' })).toHaveFocus());
+  });
+
+  it('returns keyboard focus to the grid after Escape from confirmation', async () => {
+    renderWidget();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    collection().focus();
+    fireEvent.keyDown(collection(), { key: 'Delete' });
+    const confirm = screen.getByRole('button', { name: 'Evet, sil' });
+    expect(confirm).toHaveFocus();
+    fireEvent.keyDown(confirm, { key: 'Escape' });
+    await waitFor(() => expect(collection()).toHaveFocus());
+    expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
+  });
+
+  it('does not cancel confirmation for modifier or composing Escape', async () => {
+    renderWidget();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(screen.getByRole('button', { name: 'Kızılay yer işaretini sil' }));
+    const confirm = screen.getByRole('group', { name: 'Kızılay silme onayı' });
+    const cancel = within(confirm).getByRole('button', { name: 'Vazgeç' });
+    fireEvent.keyDown(cancel, { key: 'Escape', ctrlKey: true });
+    fireEvent.keyDown(cancel, { key: 'Escape', isComposing: true });
+    fireEvent.keyDown(cancel, { key: 'Escape', repeat: true });
+    expect(confirm).toBeInTheDocument();
+    expect(readStored()).toHaveLength(3);
+  });
+
+  it('restores focus to search when the final filtered row is deleted', async () => {
+    renderWidget();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Çankaya yer işaretini sil' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Evet, sil' }));
+    await waitFor(() => expect(searchInput()).toHaveFocus());
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
   });
 
   it('searches Turkish text without requiring exact diacritics', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'CANKAYA' } });
-    expect(options()).toHaveLength(1);
-    expect(options()[0]).toHaveTextContent('Çankaya');
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent('Çankaya');
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('searches coordinate fragments', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: '39.9027' } });
-    expect(options()).toHaveLength(1);
-    expect(options()[0]).toHaveTextContent('Kuğulu Park');
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent('Kuğulu Park');
   });
 
   it('shows and recovers from a no-results state', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'bulunmayan kayıt' } });
     expect(screen.getByText('Eşleşme bulunamadı')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Tüm yer işaretlerini göster' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Tüm yer işaretlerini göster' }));
     expect(searchInput()).toHaveValue('');
-    expect(options()).toHaveLength(3);
+    expect(rows()).toHaveLength(3);
   });
 
   it('clears search from the explicit accessible clear control', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'park' } });
     fireEvent.click(screen.getByRole('button', { name: 'Yer işareti aramasını temizle' }));
     expect(searchInput()).toHaveValue('');
-    expect(options()).toHaveLength(3);
+    expect(rows()).toHaveLength(3);
   });
 
   it('switches between card and list views with pressed state', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     const card = screen.getByRole('button', { name: 'Kart' });
     const list = screen.getByRole('button', { name: 'Liste' });
     expect(card).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(list);
     expect(list).toHaveAttribute('aria-pressed', 'true');
     expect(card).toHaveAttribute('aria-pressed', 'false');
-    expect(listbox()).toHaveAttribute('data-view', 'list');
+    expect(collection()).toHaveAttribute('data-view', 'list');
   });
 
   it('moves the active descendant with ArrowDown from search', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     const input = searchInput();
-    const secondId = options()[1].id;
+    const secondId = rows()[1].id;
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     expect(input).toHaveAttribute('aria-activedescendant', secondId);
   });
 
   it('supports End and Home on the collection', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    const firstId = options()[0].id;
-    const lastId = options()[2].id;
-    fireEvent.keyDown(listbox(), { key: 'End' });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', lastId);
-    fireEvent.keyDown(listbox(), { key: 'Home' });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', firstId);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const firstId = rows()[0].id;
+    const lastId = rows()[2].id;
+    fireEvent.keyDown(collection(), { key: 'End' });
+    expect(collection()).toHaveAttribute('aria-activedescendant', lastId);
+    fireEvent.keyDown(collection(), { key: 'Home' });
+    expect(collection()).toHaveAttribute('aria-activedescendant', firstId);
   });
 
   it('saves a new current view and keeps existing records', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     const input = screen.getByRole('textbox', { name: 'Yer işareti adı' });
     fireEvent.change(input, { target: { value: 'Yeni çalışma alanı' } });
     fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
@@ -176,9 +236,9 @@ describe('BookmarkWidget modern screen', () => {
 
   it('does not drop hidden bookmarks when saving with an active search', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'Kızılay' } });
-    expect(options()).toHaveLength(1);
+    expect(rows()).toHaveLength(1);
     fireEvent.change(screen.getByRole('textbox', { name: 'Yer işareti adı' }), { target: { value: 'Yeni' } });
     fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
     await waitFor(() => expect(readStored().map((item) => item.Title)).toEqual(['Kızılay', 'Çankaya', 'Kuğulu Park', 'Yeni']));
@@ -186,14 +246,14 @@ describe('BookmarkWidget modern screen', () => {
 
   it('shows inline validation when title is blank', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
     expect(screen.getByText('Lütfen yer işareti adını doldurunuz.')).toBeVisible();
   });
 
   it('shows duplicate-title validation without mutating storage', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(screen.getByRole('textbox', { name: 'Yer işareti adı' }), { target: { value: 'Kızılay' } });
     fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
     expect(screen.getByText(/Aynı adla bir yer işareti bulunuyor/)).toBeVisible();
@@ -202,7 +262,7 @@ describe('BookmarkWidget modern screen', () => {
 
   it('requires explicit confirmation before deleting a bookmark', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByRole('button', { name: 'Çankaya yer işaretini sil' }));
     const confirmation = screen.getByRole('group', { name: 'Çankaya silme onayı' });
     expect(within(confirmation).getByText('Bu kayıt silinsin mi?')).toBeVisible();
@@ -214,7 +274,7 @@ describe('BookmarkWidget modern screen', () => {
 
   it('deletes after confirmation and preserves other bookmarks', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByRole('button', { name: 'Çankaya yer işaretini sil' }));
     fireEvent.click(screen.getByRole('button', { name: 'Evet, sil' }));
     await waitFor(() => expect(readStored().map((item) => item.Title)).toEqual(['Kızılay', 'Kuğulu Park']));
@@ -223,7 +283,7 @@ describe('BookmarkWidget modern screen', () => {
 
   it('preserves hidden bookmarks when deleting under a search filter', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'Kızılay' } });
     fireEvent.click(screen.getByRole('button', { name: 'Kızılay yer işaretini sil' }));
     fireEvent.click(screen.getByRole('button', { name: 'Evet, sil' }));
@@ -238,8 +298,8 @@ describe('BookmarkWidget modern screen', () => {
       goTo,
     });
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    const first = options()[0];
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const first = rows()[0];
     fireEvent.click(within(first).getByRole('button', { name: 'Haritada göster' }));
     await waitFor(() => expect(goTo).toHaveBeenCalledWith({ center: [32.8541, 39.9208], zoom: 15 }));
     await waitFor(() => expect(screen.getByText('Kızılay görünümüne gidildi.')).toBeVisible());
@@ -253,22 +313,22 @@ describe('BookmarkWidget modern screen', () => {
       goTo,
     });
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'Enter' });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'Enter' });
     await waitFor(() => expect(goTo).toHaveBeenCalledWith({ center: [32.8541, 39.9208], zoom: 15 }));
   });
 
   it('shows navigation errors inline when the map view is unavailable', async () => {
     mapRuntime.getMapView.mockReturnValue({});
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.click(within(options()[0]).getByRole('button', { name: 'Haritada göster' }));
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Haritada göster' }));
     expect(await screen.findByText('Harita görünümü henüz hazır değil.')).toBeVisible();
   });
 
   it('allows dismissing an inline operation notice', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
     expect(screen.getByText('Lütfen yer işareti adını doldurunuz.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'İşlem bildirimini kapat' }));
@@ -282,18 +342,18 @@ describe('BookmarkWidget modern screen', () => {
     ]);
     renderWidget();
     expect(await screen.findByText(/1 geçersiz veya yinelenen yer işareti/)).toBeVisible();
-    expect(options()).toHaveLength(3);
+    expect(rows()).toHaveLength(3);
   });
 
   it('renders an empty state with no stored bookmarks', async () => {
     LocalStorageHelper.Set(Constants_ConfigKeys.BOOKMARKS, []);
     renderWidget();
     expect(await screen.findByText('Henüz yer işareti yok')).toBeVisible();
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
   });
   it('publishes keyboard shortcuts and help on the search control', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     expect(searchInput()).toHaveAttribute(
       'aria-keyshortcuts',
       'ArrowDown ArrowUp Home End PageDown PageUp Escape',
@@ -304,28 +364,28 @@ describe('BookmarkWidget modern screen', () => {
 
   it('publishes collection keyboard shortcuts and shared help description', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    expect(listbox()).toHaveAttribute(
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(collection()).toHaveAttribute(
       'aria-keyshortcuts',
       'ArrowDown ArrowUp ArrowLeft ArrowRight Home End PageDown PageUp Enter Delete Escape',
     );
-    expect(listbox().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+    expect(collection().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
   });
 
   it('clears search with Escape without changing stored bookmarks', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
-    expect(options()).toHaveLength(1);
+    expect(rows()).toHaveLength(1);
     fireEvent.keyDown(searchInput(), { key: 'Escape' });
     expect(searchInput()).toHaveValue('');
-    expect(options()).toHaveLength(3);
+    expect(rows()).toHaveLength(3);
     expect(readStored()).toHaveLength(3);
   });
 
   it('does not clear search during IME composition', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
     fireEvent.keyDown(searchInput(), { key: 'Escape', isComposing: true });
     expect(searchInput()).toHaveValue('Çankaya');
@@ -333,53 +393,53 @@ describe('BookmarkWidget modern screen', () => {
 
   it('moves focus from collection to search with slash', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    listbox().focus();
-    expect(listbox()).toHaveFocus();
-    fireEvent.keyDown(listbox(), { key: '/' });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    collection().focus();
+    expect(collection()).toHaveFocus();
+    fireEvent.keyDown(collection(), { key: '/' });
     expect(searchInput()).toHaveFocus();
   });
 
   it('does not steal shifted slash from the collection', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    listbox().focus();
-    fireEvent.keyDown(listbox(), { key: '/', shiftKey: true });
-    expect(listbox()).toHaveFocus();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    collection().focus();
+    fireEvent.keyDown(collection(), { key: '/', shiftKey: true });
+    expect(collection()).toHaveFocus();
   });
 
   it('opens delete confirmation from the active row with Delete', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'ArrowDown' });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', options()[1].id);
-    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'ArrowDown' });
+    expect(collection()).toHaveAttribute('aria-activedescendant', rows()[1].id);
+    fireEvent.keyDown(collection(), { key: 'Delete' });
     expect(screen.getByRole('group', { name: 'Çankaya silme onayı' })).toBeVisible();
     expect(readStored()).toHaveLength(3);
   });
 
   it('opens delete confirmation from the active row with Backspace', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'Backspace' });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'Backspace' });
     expect(screen.getByRole('group', { name: 'Kızılay silme onayı' })).toBeVisible();
     expect(readStored()).toHaveLength(3);
   });
 
   it('cancels keyboard delete confirmation with Escape', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'Delete' });
     expect(screen.getByRole('group', { name: 'Kızılay silme onayı' })).toBeVisible();
-    fireEvent.keyDown(listbox(), { key: 'Escape' });
+    fireEvent.keyDown(collection(), { key: 'Escape' });
     expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
     expect(readStored()).toHaveLength(3);
   });
 
   it('does not repeat keyboard deletion intent', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'Delete', repeat: true });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'Delete', repeat: true });
     expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
   });
 
@@ -391,17 +451,17 @@ describe('BookmarkWidget modern screen', () => {
       goTo,
     });
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'Enter', repeat: true });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'Enter', repeat: true });
     expect(goTo).not.toHaveBeenCalled();
   });
 
   it('does not steal Ctrl+ArrowDown from browser or assistive technology commands', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    const activeBefore = listbox().getAttribute('aria-activedescendant');
-    fireEvent.keyDown(listbox(), { key: 'ArrowDown', ctrlKey: true });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', activeBefore);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const activeBefore = collection().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(collection(), { key: 'ArrowDown', ctrlKey: true });
+    expect(collection()).toHaveAttribute('aria-activedescendant', activeBefore);
   });
 
   it('does not steal Meta+Enter from platform commands', async () => {
@@ -412,27 +472,27 @@ describe('BookmarkWidget modern screen', () => {
       goTo,
     });
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'Enter', metaKey: true });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'Enter', metaKey: true });
     expect(goTo).not.toHaveBeenCalled();
   });
 
   it('supports PageDown and PageUp through the governed collection policy', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    const firstId = options()[0].id;
-    const lastId = options()[2].id;
-    fireEvent.keyDown(listbox(), { key: 'PageDown' });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', lastId);
-    fireEvent.keyDown(listbox(), { key: 'PageUp' });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', firstId);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const firstId = rows()[0].id;
+    const lastId = rows()[2].id;
+    fireEvent.keyDown(collection(), { key: 'PageDown' });
+    expect(collection()).toHaveAttribute('aria-activedescendant', lastId);
+    fireEvent.keyDown(collection(), { key: 'PageUp' });
+    expect(collection()).toHaveAttribute('aria-activedescendant', firstId);
   });
 
   it('supports Home and End from search without mutating the query', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'a' } });
-    const currentOptions = options();
+    const currentOptions = rows();
     expect(currentOptions.length).toBeGreaterThan(1);
     fireEvent.keyDown(searchInput(), { key: 'End' });
     expect(searchInput()).toHaveAttribute('aria-activedescendant', currentOptions.at(-1)?.id);
@@ -443,15 +503,15 @@ describe('BookmarkWidget modern screen', () => {
 
   it('keeps an empty search untouched when Escape has no local action', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.keyDown(searchInput(), { key: 'Escape' });
     expect(searchInput()).toHaveValue('');
-    expect(options()).toHaveLength(3);
+    expect(rows()).toHaveLength(3);
   });
 
   it('does not move search active descendant for Ctrl+ArrowDown', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     const activeBefore = searchInput().getAttribute('aria-activedescendant');
     fireEvent.keyDown(searchInput(), { key: 'ArrowDown', ctrlKey: true });
     expect(searchInput()).toHaveAttribute('aria-activedescendant', activeBefore);
@@ -459,18 +519,18 @@ describe('BookmarkWidget modern screen', () => {
 
   it('does not move collection active descendant during IME composition', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    const activeBefore = listbox().getAttribute('aria-activedescendant');
-    fireEvent.keyDown(listbox(), { key: 'ArrowDown', isComposing: true });
-    expect(listbox()).toHaveAttribute('aria-activedescendant', activeBefore);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const activeBefore = collection().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(collection(), { key: 'ArrowDown', isComposing: true });
+    expect(collection()).toHaveAttribute('aria-activedescendant', activeBefore);
   });
 
   it('opens keyboard delete confirmation for the filtered active result only', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'Kuğulu' } });
-    expect(options()).toHaveLength(1);
-    fireEvent.keyDown(listbox(), { key: 'Delete' });
+    expect(rows()).toHaveLength(1);
+    fireEvent.keyDown(collection(), { key: 'Delete' });
     expect(screen.getByRole('group', { name: 'Kuğulu Park silme onayı' })).toBeVisible();
     expect(screen.queryByRole('group', { name: 'Kızılay silme onayı' })).not.toBeInTheDocument();
     expect(readStored()).toHaveLength(3);
@@ -478,47 +538,47 @@ describe('BookmarkWidget modern screen', () => {
 
   it('keeps filtered storage intact after keyboard delete cancellation', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'Çankaya' } });
-    fireEvent.keyDown(listbox(), { key: 'Delete' });
-    fireEvent.keyDown(listbox(), { key: 'Escape' });
+    fireEvent.keyDown(collection(), { key: 'Delete' });
+    fireEvent.keyDown(collection(), { key: 'Escape' });
     expect(readStored().map((item) => item.Title)).toEqual(['Kızılay', 'Çankaya', 'Kuğulu Park']);
-    expect(options()).toHaveLength(1);
-    expect(options()[0]).toHaveTextContent('Çankaya');
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent('Çankaya');
   });
 
   it('preserves roving selection when slash returns focus to search', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
-    fireEvent.keyDown(listbox(), { key: 'ArrowDown' });
-    const selectedId = listbox().getAttribute('aria-activedescendant');
-    fireEvent.keyDown(listbox(), { key: '/' });
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.keyDown(collection(), { key: 'ArrowDown' });
+    const selectedId = collection().getAttribute('aria-activedescendant');
+    fireEvent.keyDown(collection(), { key: '/' });
     expect(searchInput()).toHaveFocus();
     expect(searchInput()).toHaveAttribute('aria-activedescendant', selectedId);
   });
 
   it('keeps keyboard help associated after switching visual layout', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByRole('button', { name: 'Liste' }));
-    expect(listbox()).toHaveAttribute('data-view', 'list');
-    expect(listbox().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+    expect(collection()).toHaveAttribute('data-view', 'list');
+    expect(collection().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
     fireEvent.click(screen.getByRole('button', { name: 'Kart' }));
-    expect(listbox()).toHaveAttribute('data-view', 'grid');
-    expect(listbox().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
+    expect(collection()).toHaveAttribute('data-view', 'grid');
+    expect(collection().getAttribute('aria-describedby')).toContain('bookmark-keyboard-help');
   });
 
   it('keeps keyboard navigation available after clearing a no-results query', async () => {
     renderWidget();
-    await waitFor(() => expect(options()).toHaveLength(3));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'eşleşmeyen' } });
     expect(screen.getByText('Eşleşme bulunamadı')).toBeVisible();
     fireEvent.keyDown(searchInput(), { key: 'Escape' });
-    expect(options()).toHaveLength(3);
-    const firstId = options()[0].id;
+    expect(rows()).toHaveLength(3);
+    const firstId = rows()[0].id;
     fireEvent.keyDown(searchInput(), { key: 'ArrowDown' });
     expect(searchInput()).not.toHaveAttribute('aria-activedescendant', firstId);
-    expect(searchInput()).toHaveAttribute('aria-activedescendant', options()[1].id);
+    expect(searchInput()).toHaveAttribute('aria-activedescendant', rows()[1].id);
   });
 
 });

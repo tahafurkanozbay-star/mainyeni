@@ -110,6 +110,23 @@ describe('bookmark keyboard collection actions', () => {
     expect(resolveBookmarkKeyboardIntent(key('Delete', { repeat: true }), baseContext()).intent.kind).toBe('none');
   });
 
+  it.each(['ArrowDown', 'Home', 'Enter', 'Delete', 'Backspace', '/'])(
+    'does not handle %s while a delete confirmation is open',
+    (keyboardKey) => {
+      expect(resolveBookmarkKeyboardIntent(
+        key(keyboardKey),
+        baseContext({ hasPendingDelete: true }),
+      ).intent.kind).toBe('none');
+    },
+  );
+
+  it('does not change search selection while delete confirmation is open', () => {
+    expect(resolveBookmarkKeyboardIntent(
+      key('ArrowDown'),
+      baseContext({ surface: 'search', hasPendingDelete: true, hasQuery: true }),
+    ).intent.kind).toBe('none');
+  });
+
   it('cancels delete confirmation with Escape even while busy', () => {
     expect(resolveBookmarkKeyboardIntent(
       key('Escape'),

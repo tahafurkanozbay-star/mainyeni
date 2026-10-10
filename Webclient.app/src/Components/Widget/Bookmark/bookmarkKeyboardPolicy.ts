@@ -83,6 +83,7 @@ const movementDecision = (event: BookmarkKeyboardEventLike, context: BookmarkKey
 };
 
 const searchDecision = (event: BookmarkKeyboardEventLike, context: BookmarkKeyboardContext): BookmarkKeyboardDecision => {
+  if (context.hasPendingDelete) return NONE;
   const movement = movementDecision(event, context);
   if (movement) return movement;
   if (event.key === 'Escape' && context.hasQuery && !hasCommandModifier(event)) return decision({ kind: 'clear-search' });
