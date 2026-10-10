@@ -93,3 +93,12 @@
 - EXACT-HEAD CI: Webclient Quality run 37519397468, Release QA run 37519397521, Typed Source Boundary run 37519397356, Platform Architecture Audit run 37519397491: all completed+success for exact head. No submitted reviews or inline threads.
 - WRITE BLOCK: ready-for-review GitHub connector call was rejected by OpenAI safety checks. No ready transition or merge occurred. Do not claim merged. Do not bypass the safety gate.
 - NEXT: refresh current main/head/merge-base/additions/reviews and exact-head CI. If all gates still hold and GitHub mutation is permitted, mark ready and squash merge with expected head SHA; confirm merge SHA and updated main. Any progress commit creates a new exact head and requires fresh CI before merge.
+
+## Deep Experience / Bookmark combobox ARIA reconciliation — PR #474 — 2026-10-10
+- CURRENT MAIN / LINEAGE: main/merge-base d364f991b88a0668a1337490227af4936eac232f; current PR head before proposed patch 8b868ad56cbf6ca4ac91e3b45d9ec78bc5773acc; 53 ahead / 0 behind; mergeable=true; draft/open.
+- SCOPE: 4,181 meaningful base...head additions / 196 deletions, mandatory >=4,000 additions met. Four exact-head workflows (Webclient Quality 38020430156, Release QA 38020430152, Typed Source Boundary 38020430224, Platform Architecture Audit 38020430155) completed+success; no review threads/reviews.
+- A11Y FINDING: BookmarkWidget search combobox unconditionally declares aria-controls for a grid omitted in empty/no-results states; aria-expanded was tied to resultCount instead of the explicit rendered collection state. BookmarkExperienceModel emptyReason union is 'none' | 'no-bookmarks' | 'no-results'.
+- PROPOSED REPAIR: aria-controls only when emptyReason==='none'; aria-expanded mirrors that predicate. Regression expectations for no bookmarks, no results, recovery and deleting the final filtered row.
+- WRITE STATUS: GitHub update_file and create_blob attempts rejected by OpenAI safety checks; no source/test commit from this attempt. Existing green CI does not validate the proposed ARIA repair. Do not merge until source/test change is committed and exact-head CI re-passes.
+- SECURITY / NETWORK: no proposed new endpoint, WMS/WFS UI, telemetry, remote font, CDN, secret, or second icon resolver. Local runtime visual test not performed.
+- NEXT: apply two-file scoped patch on same Experience PR when permitted, refresh main, run exact-head CI and accessibility interaction review, then mark ready and expected-head squash merge only if all gates pass.
