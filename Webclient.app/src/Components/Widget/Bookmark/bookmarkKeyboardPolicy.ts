@@ -90,11 +90,12 @@ const searchDecision = (event: BookmarkKeyboardEventLike, context: BookmarkKeybo
 };
 
 const collectionDecision = (event: BookmarkKeyboardEventLike, context: BookmarkKeyboardContext): BookmarkKeyboardDecision => {
+  if (hasCommandModifier(event)) return NONE;
+  if (event.key === 'Escape' && context.hasPendingDelete) return decision({ kind: 'cancel-delete' });
+  if (context.hasPendingDelete) return NONE;
   const movement = movementDecision(event, context);
   if (movement) return movement;
-  if (hasCommandModifier(event)) return NONE;
   if (event.key === '/' && !event.shiftKey && !event.repeat) return decision({ kind: 'focus-search' }, true, true);
-  if (event.key === 'Escape' && context.hasPendingDelete) return decision({ kind: 'cancel-delete' });
   if (context.busy || !context.hasActiveEntry) return NONE;
   if (event.key === 'Enter' && !event.repeat) return decision({ kind: 'activate' });
   if ((event.key === 'Delete' || event.key === 'Backspace') && !event.repeat) return decision({ kind: 'request-delete' });
