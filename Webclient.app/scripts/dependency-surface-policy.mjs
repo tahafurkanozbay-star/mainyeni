@@ -20,8 +20,10 @@ const PACKAGE_EXEC_SUBCOMMANDS = Object.freeze({
   npm: new Set([
     'exec', 'x', 'create', 'init', 'install', 'add', 'i', 'in', 'ins',
     'inst', 'insta', 'instal', 'isnt', 'isnta', 'isntal', 'isntall',
-    'ci', 'clean-install', 'ic', 'install-clean', 'isntall-clean', 'install-test', 'it', 'install-ci-test', 'cit', 'clean-install-test', 'sit', 'update', 'up',
-    'upgrade', 'rebuild', 'link', 'ln', 'uninstall', 'un', 'remove', 'rm',
+    'ci', 'clean-install', 'ic', 'install-clean', 'isntall-clean',
+    'install-test', 'it', 'install-ci-test', 'cit', 'clean-install-test', 'sit',
+    'update', 'up', 'u', 'udpate', 'upgrade', 'rebuild', 'dedupe', 'ddp',
+    'prune', 'link', 'ln', 'uninstall', 'un', 'unlink', 'remove', 'rm', 'r',
     'publish', 'pack',
   ]),
   pnpm: new Set([
