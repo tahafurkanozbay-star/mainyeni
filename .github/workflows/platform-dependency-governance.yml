@@ -43,6 +43,10 @@ jobs:
         run: |
           set -o pipefail
           npm run dependency:verify 2>&1 | tee dependency-governance.log
+      - name: Dependency policy calendar-date regression
+        working-directory: Webclient.app
+        shell: bash
+        run: node --test scripts/dependency-policy-date.test.mjs
       - name: Upload dependency governance evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

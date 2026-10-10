@@ -252,9 +252,17 @@ export const collectDependencyHygieneIssues = ({ manifest, lockfile, source }) =
 const issueKey = ({ package: packageName, issue }) => `${packageName}\u0000${issue}`;
 
 const normalizeDate = (value) => {
-  if (value instanceof Date) return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.valueOf())) return null;
+    const normalized = new Date(value.valueOf());
+    normalized.setUTCHours(0, 0, 0, 0);
+    return normalized;
+  }
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return null;
   const parsed = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(parsed.valueOf()) ? null : parsed;
+  return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value
+    ? parsed
+    : null;
 };
 
 export const validateDependencyPolicy = ({ manifest, issues, policy, now = new Date() }) => {
@@ -270,7 +278,8 @@ export const validateDependencyPolicy = ({ manifest, issues, policy, now = new D
   const observed = new Set(issues.map(issueKey));
   const exceptions = Array.isArray(policy.exceptions) ? policy.exceptions : [];
   const exceptionKeys = new Set();
-  const today = normalizeDate(now) ?? new Date();
+  const today = normalizeDate(now);
+  if (!today) errors.push('dependency-policy: now must be a valid date');
 
   for (const [index, exception] of exceptions.entries()) {
     const prefix = `dependency-policy: exceptions[${index}]`;
