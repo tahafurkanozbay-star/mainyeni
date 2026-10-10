@@ -18,7 +18,9 @@ const PACKAGE_EXEC_BINARIES = new Set(['pnpx', 'bunx', 'corepack']);
 // dependency lifecycle hooks outside the reviewed dependency-governance gate.
 const PACKAGE_EXEC_SUBCOMMANDS = Object.freeze({
   npm: new Set([
-    'exec', 'x', 'create', 'init', 'install', 'i', 'ci', 'update', 'up',
+    'exec', 'x', 'create', 'init', 'install', 'add', 'i', 'in', 'ins',
+    'inst', 'insta', 'instal', 'isnt', 'isnta', 'isntal', 'isntall',
+    'ci', 'update', 'up',
     'upgrade', 'rebuild', 'link', 'ln', 'uninstall', 'un', 'remove', 'rm',
     'publish', 'pack',
   ]),
