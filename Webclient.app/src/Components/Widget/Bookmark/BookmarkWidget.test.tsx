@@ -151,6 +151,8 @@ describe('BookmarkWidget modern screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Evet, sil' }));
     await waitFor(() => expect(searchInput()).toHaveFocus());
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(searchInput()).toHaveAttribute('aria-expanded', 'false');
+    expect(searchInput()).not.toHaveAttribute('aria-controls');
   });
 
   it('searches Turkish text without requiring exact diacritics', async () => {
@@ -175,10 +177,14 @@ describe('BookmarkWidget modern screen', () => {
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(searchInput(), { target: { value: 'bulunmayan kayıt' } });
     expect(screen.getByText('Eşleşme bulunamadı')).toBeVisible();
+    expect(searchInput()).toHaveAttribute('aria-expanded', 'false');
+    expect(searchInput()).not.toHaveAttribute('aria-controls');
     expect(screen.getByRole('button', { name: 'Tüm yer işaretlerini göster' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Tüm yer işaretlerini göster' }));
     expect(searchInput()).toHaveValue('');
     expect(rows()).toHaveLength(3);
+    expect(searchInput()).toHaveAttribute('aria-expanded', 'true');
+    expect(searchInput()).toHaveAttribute('aria-controls', collection().id);
   });
 
   it('clears search from the explicit accessible clear control', async () => {
@@ -350,6 +356,8 @@ describe('BookmarkWidget modern screen', () => {
     renderWidget();
     expect(await screen.findByText('Henüz yer işareti yok')).toBeVisible();
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(searchInput()).toHaveAttribute('aria-expanded', 'false');
+    expect(searchInput()).not.toHaveAttribute('aria-controls');
   });
   it('publishes keyboard shortcuts and help on the search control', async () => {
     renderWidget();
