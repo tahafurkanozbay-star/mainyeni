@@ -649,7 +649,7 @@ export function validateManifestSurface(manifest, policy, options = {}) {
       invocationNames = scriptInvocationNames(command);
     } catch (error) {
       if (error instanceof DependencySurfacePolicyError &&
-          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion', 'unreviewed-package-exec-script', 'unreviewed-runtime-execution-script'].includes(error.code)) {
+          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion', 'unreviewable-shell-redirection', 'unreviewed-package-exec-script', 'unreviewed-runtime-execution-script'].includes(error.code)) {
         findings.push({ severity: 'error', code: error.code, script: name });
         continue;
       }

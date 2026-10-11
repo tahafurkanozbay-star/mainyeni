@@ -523,6 +523,13 @@ test('reports malformed shell commands fail-closed', () => {
   assert.ok(codes(report(manifest)).includes('malformed-script-shell'));
 });
 
+test('reports rejected shell redirections as manifest findings', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node check.mjs > output.txt';
+  assert.deepEqual(codes(report(manifest)), ['unreviewable-shell-redirection']);
+  assert.equal(report(manifest).ok, false);
+});
+
 test('rejects root preinstall lifecycle scripts', () => {
   const manifest = baseManifest();
   manifest.scripts.preinstall = 'node scripts/preinstall.mjs';
