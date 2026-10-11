@@ -214,3 +214,8 @@
 - REVIEW: Dependency script command-position parser, transitive peer semver, package manifest and governance workflow reviewed; no newly confirmed critical release risk. Live GIS 2D/3D, JSON icon visual and responsive/accessibility E2E not run; no claim of live validation. No dependency, endpoint, secret or runtime GIS change in this tour.
 - WRITE / MERGE: Ready-for-Review transition attempted but blocked by OpenAI safety checks; draft PR not merged. This progress update creates a new head and requires all six fresh exact-head checks again before release. Keep PR open; do not disable automation.
 - NEXT: verify new exact-head CI, refresh main/merge-base/additions/reviews/mergeability; if all gates pass and write permission allows, mark ready and expected-head squash merge, verify merged=true and main SHA.
+
+## Deep QA checkpoint — 2026-10-12 00:48 +03:00
+- PR #473: P3 shell-redirection structured finding fix and focused regression committed as 8909672ef260b253e5b6fe449cc713aa0621c32e. Previous head 090c344 passed six required workflows; new exact-head CI must be checked before merge.
+- Base main d364f991b88a0668a1337490227af4936eac232f, previous 5,284 additions / 76 ahead / 0 behind; refresh compare after commit. No dependency, endpoint, GIS service, JSON icon resolver or browser asset change. Live 2D/3D GIS and responsive/a11y E2E not run.
+- Next: verify new-head six workflows, fresh main, additions>=4000, mergeability and reviews; squash merge only if all gates pass. Keep automation enabled.
