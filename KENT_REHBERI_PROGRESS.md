@@ -112,3 +112,13 @@
 - REVIEW: no submitted reviews, comments or inline review threads. CSS source includes focus-visible, reduced-motion and forced-colors rules. No new real-browser visual regression run in this turn; source/test and CI evidence were re-reviewed. No new WMS/WFS UI, external transport, remote font/CDN, telemetry or icon authority.
 - MERGE: after fresh main/head/merge-base/additions/checks validation, expected-head squash merge attempted; GitHub connector mutation rejected by OpenAI safety checks. Merge NOT performed. This progress update, if committed, creates a NEW exact head; mandatory CI must be rechecked before any merge. Do not disable the scheduled Experience automation.
 - SONRAKI: verify updated exact head, all four required CI workflows, fresh main and merge-base, review status and release risks; only then retry expected-head squash merge if permitted. Verify merged=true, merge SHA and updated main SHA. Do not claim success if mutation blocked.
+
+
+## Deep Experience / final merge-gate verification — PR #474 — 2026-10-11
+- TUR / GÖREV: Experience / Whole-Code Modernization; exact-head release admission and accessibility source/regression review.
+- BRANCH / PR / COMMIT: `agent/experience-maptools-20261005-1455-1773e72`; PR #474 open, Ready for Review; exact head `0e14b272334550ca4a20c1c5db247a9dcbc13a25`.
+- MAIN / LINEAGE: main/base/merge-base `d364f991b88a0668a1337490227af4936eac232f`; 57 ahead / 0 behind; mergeable=true.
+- SCOPE: 15 files; 4,208 additions / 196 deletions. Bookmark/Basemap accessibility, keyboard, responsive, reduced-motion, forced-colors and widget regressions retained. No WMS/WFS UI, new endpoint, remote font/CDN, telemetry or second icon authority. No new browser visual regression was executed.
+- EXACT-HEAD CI: Webclient Quality `38114657346`, Release QA `38114657343`, Typed Source Boundary `38114657380`, Platform Architecture Audit `38114657344`: all completed+success. Review submissions and inline review threads: 0.
+- MERGE: expected-head squash merge attempted after fresh gate validation, but GitHub mutation was blocked by OpenAI safety checks. No merge; do not claim merged or main updated.
+- SONRAKI: this progress update creates a new exact head if accepted. Revalidate new head CI, current main, merge-base, behind=0, additions>=4,000, mergeability and reviews; then retry expected-head squash merge only if permitted. Confirm merged=true, merge SHA and updated main SHA. Keep Experience automation enabled.
