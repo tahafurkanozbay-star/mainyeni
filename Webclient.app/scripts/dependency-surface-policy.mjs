@@ -414,6 +414,67 @@ function isUnreviewedPackageExecution(tokens, invocation) {
  * or expanding the shell. Nested `sh -c` / `bash -c` commands are inspected to
  * a bounded depth so policy cannot be bypassed by a trivial shell wrapper.
  */
+
+const SCRIPT_RUNTIMES = new Set(['node', 'nodejs', 'bun', 'deno', 'tsx', 'ts-node', 'jiti']);
+const RUNTIME_SOURCE_OPTIONS = new Set([
+  '--eval', '--print', '--require', '--import', '--loader', '--experimental-loader',
+  '--test-reporter', '--preload', '--run', '--env-file', '--env-file-if-exists', '--inspect', '--inspect-brk',
+]);
+const RUNTIME_VALUE_OPTIONS = new Set([
+  '--conditions', '-C', '--icu-data-dir', '--openssl-config', '--title',
+  '--test-name-pattern', '--test-skip-pattern', '--test-reporter-destination',
+  '--test-shard', '--test-concurrency', '--watch-path', '--diagnostic-dir',
+]);
+
+// Only inspect interpreter switches before the first script/module operand.
+// Arguments after that operand are data owned by the reviewed entrypoint.
+function assertReviewedRuntimeInvocation(tokens, invocation) {
+  const runtime = invocation.command.toLowerCase().replace(/\.exe$/, '');
+  if (!SCRIPT_RUNTIMES.has(runtime)) return;
+  const isNode = runtime === 'node' || runtime === 'nodejs';
+  for (let index = invocation.index + 1; index < invocation.end; index += 1) {
+    const option = tokens[index].value;
+    if (option === '--') {
+      if (tokens[index + 1]?.value === '-') {
+        throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime reads unreviewed source from stdin');
+      }
+      return;
+    }
+    if (option === '-') {
+      throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime reads unreviewed source from stdin');
+    }
+    if (!isOptionWord(option)) {
+      if ((runtime === 'deno' || runtime === 'bun') && ['eval', 'repl'].includes(option) ||
+          (runtime === 'deno' && option === 'task') ||
+          ((runtime === 'deno' || runtime === 'bun') && option === 'run' && tokens[index + 1]?.value === '-')) {
+        throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime evaluates unreviewed inline source');
+      }
+      return;
+    }
+    const longName = option.split('=')[0];
+    if (RUNTIME_SOURCE_OPTIONS.has(longName) ||
+        (isNode && /^-[^-]*[epr]/.test(option)) ||
+        (!isNode && /^-(?:e|p|r)(?:$|[^-])/.test(option))) {
+      throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime evaluates or preloads unreviewed source');
+    }
+    if (RUNTIME_VALUE_OPTIONS.has(option)) {
+      if (tokens[index + 1]?.type !== 'word' || index + 1 >= invocation.end) {
+        throw new DependencySurfacePolicyError('malformed-script-shell', 'runtime option requires an operand');
+      }
+      index += 1;
+    }
+  }
+}
+
+function assertReviewedRuntimeEnvironment(tokens, invocation) {
+  for (let index = 0; index < invocation.index; index += 1) {
+    if (tokens[index].type !== 'word') continue;
+    if (/^NODE_OPTIONS=.+/.test(tokens[index].value)) {
+      throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'NODE_OPTIONS can preload or evaluate unreviewed source');
+    }
+  }
+}
+
 export function collectPackageScriptInvocations(command, options = {}) {
   const depth = Number(options.depth ?? 0);
   if (!Number.isInteger(depth) || depth < 0 || depth > MAX_NESTED_SHELL_DEPTH) {
@@ -444,6 +505,9 @@ export function collectPackageScriptInvocations(command, options = {}) {
     if (UNREVIEWABLE_SHELL_EVALUATORS.has(invocation.command)) {
       throw new DependencySurfacePolicyError('dynamic-shell-expansion', 'package script executes unreviewable dynamic shell source');
     }
+
+    assertReviewedRuntimeEnvironment(tokens.slice(index, invocation.end), { ...invocation, index: invocation.index - index });
+    assertReviewedRuntimeInvocation(tokens, invocation);
 
     if (isUnreviewedPackageExecution(tokens, invocation)) {
       throw new DependencySurfacePolicyError('unreviewed-package-exec-script', 'package script may acquire and execute an unreviewed package');
@@ -569,7 +633,7 @@ export function validateManifestSurface(manifest, policy, options = {}) {
       invocationNames = scriptInvocationNames(command);
     } catch (error) {
       if (error instanceof DependencySurfacePolicyError &&
-          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion', 'unreviewed-package-exec-script'].includes(error.code)) {
+          ['malformed-script-shell', 'shell-wrapper-depth', 'shell-nesting-depth', 'dynamic-shell-expansion', 'unreviewed-package-exec-script', 'unreviewed-runtime-execution-script'].includes(error.code)) {
         findings.push({ severity: 'error', code: error.code, script: name });
         continue;
       }

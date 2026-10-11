@@ -260,8 +260,8 @@ test('collector inspects nested bash --command strings', () => {
   assert.deepEqual(commands("bash --command 'node a.mjs | vite build'"), ['bash', 'node', 'vite']);
 });
 
-test('collector does not treat shell arguments as additional commands', () => {
-  assert.deepEqual(commands('node --eval "console.log(1)" scripts/a.mjs'), ['node']);
+test('collector does not treat script arguments as additional commands', () => {
+  assert.deepEqual(commands('node scripts/a.mjs --eval "inert argument"'), ['node']);
 });
 
 test('collector results are immutable', () => {
@@ -841,3 +841,64 @@ test('preserves POSIX continuation semantics and single-quoted literals', () => 
   assert.deepEqual(tokenizePackageScript(`echo "hello${continuation}world"`).map((token) => token.value), ['echo', 'helloworld']);
   assert.deepEqual(tokenizePackageScript(`echo 'hello${continuation}world'`).map((token) => token.value), ['echo', `hello${continuation}world`]);
 });
+
+for (const script of [
+  'node --eval "console.log(1)"',
+  'node --eval=console.log(1)',
+  'node -e "console.log(1)"',
+  'node -pe "process.version"',
+  'node -r ./unreviewed.cjs scripts/a.mjs',
+  'node --require=./unreviewed.cjs scripts/a.mjs',
+  'node --import ./unreviewed.mjs scripts/a.mjs',
+  'node --loader=./unreviewed.mjs scripts/a.mjs',
+  'node --experimental-loader ./unreviewed.mjs scripts/a.mjs',
+  'node --test-reporter ./unreviewed.mjs --test',
+  'node --run bootstrap',
+  'node --env-file=.env scripts/a.mjs',
+  'node --inspect-brk scripts/a.mjs',
+  'node --conditions development --eval \"console.log(1)\"',
+  'NODE_OPTIONS=--import=./unreviewed.mjs vite build',
+  'bun --preload=./unreviewed.ts scripts/a.ts',
+  'deno task bootstrap',
+  'deno run -',
+  'node -',
+  'node -- -',
+  'NODE_OPTIONS=--require=./unreviewed.cjs node scripts/a.mjs',
+  'env NODE_OPTIONS=--import=./unreviewed.mjs node scripts/a.mjs',
+  "sh -c 'node --eval \"console.log(1)\"'",
+  "bash -c 'NODE_OPTIONS=--require=./unreviewed.cjs node scripts/a.mjs'",
+  'bun --eval "console.log(1)"',
+  'bun -e "console.log(1)"',
+  'bun eval "console.log(1)"',
+  'deno eval "console.log(1)"',
+  'deno repl',
+  'tsx --eval "console.log(1)"',
+  'tsx -r ./unreviewed.cjs scripts/a.ts',
+  'ts-node --require=./unreviewed.cjs scripts/a.ts',
+  'jiti -e "console.log(1)"',
+]) {
+  test(`rejects unreviewed runtime execution: ${script}`, () => {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-runtime-execution-script'), script);
+  });
+}
+
+for (const script of [
+  'node scripts/check.mjs --eval=literal',
+  'node scripts/check.mjs -r inert',
+  'node --test scripts/dependency-surface-policy.test.mjs',
+  'node --check scripts/check.mjs',
+  'node --version',
+  'node --conditions=development scripts/check.mjs',
+  'node --conditions development scripts/check.mjs',
+  'node --test --test-reporter-destination stdout scripts/check.mjs',
+  'bun run build',
+  'deno run scripts/check.ts',
+]) {
+  test(`accepts reviewed runtime entrypoint: ${script}`, () => {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  });
+}
