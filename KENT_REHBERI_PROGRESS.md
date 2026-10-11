@@ -122,3 +122,14 @@
 - EXACT-HEAD CI: Webclient Quality `38114657346`, Release QA `38114657343`, Typed Source Boundary `38114657380`, Platform Architecture Audit `38114657344`: all completed+success. Review submissions and inline review threads: 0.
 - MERGE: expected-head squash merge attempted after fresh gate validation, but GitHub mutation was blocked by OpenAI safety checks. No merge; do not claim merged or main updated.
 - SONRAKI: this progress update creates a new exact head if accepted. Revalidate new head CI, current main, merge-base, behind=0, additions>=4,000, mergeability and reviews; then retry expected-head squash merge only if permitted. Confirm merged=true, merge SHA and updated main SHA. Keep Experience automation enabled.
+
+
+## Deep Experience / exact-head gate and write-permission checkpoint — PR #474 — 2026-10-11 20:24 Europe/Istanbul
+- TUR / GÖREV: Experience / Whole-Code Modernization; canonical map-tool PR #474 release-gate, source/a11y and CI verification; stale PR description identified.
+- BRANCH / HEAD: `agent/experience-maptools-20261005-1455-1773e72`; `3027a363054fae1236fcc5277349ac1c10df779f`; PR open, Ready for Review, mergeable=true, merged=false.
+- MAIN / LINEAGE: `d364f991b88a0668a1337490227af4936eac232f`; merge-base=current main, 58 ahead / 0 behind.
+- DIFF / SCOPE: 15 files, 4,218 additions / 196 deletions (GitHub base...head). Meaningful Bookmark/Basemap model/controller/keyboard policy, real-screen UX, responsive CSS and integration/unit regression coverage; no WMS/WFS UI, new transport, remote CDN/font, analytics, secret, heavy asset or second icon resolver.
+- ACCESSIBILITY / SECOND REVIEW: Bookmark semantic form and live status, deterministic keyboard intent, modifier/IME guards, delete confirmation, focus restoration, 44px controls, focus-visible; Basemap bounded loading/cancellation/error status reviewed at source level. No new real-browser visual regression executed; retain as residual verification gap.
+- EXACT-HEAD CI: Webclient Quality `38125003490`, Release QA `38125003521`, Typed Source Boundary `38125003529`, Platform Architecture Audit `38125003518` all completed+success on `3027a363054fae1236fcc5277349ac1c10df779f`; jobs/steps verified including exact-base TypeScript/Vitest, lint, production build/integrity/budgets, backend tests and publish. Submitted reviews/inline threads 0.
+- MERGE / PR METADATA: PR body remains stale (mentions 3,357 additions and Draft). Attempted to update PR body and perform expected-head locked squash merge; both mutations blocked by OpenAI safety checks. No merge, no new code commit, no main update claimed.
+- NEXT: Re-check current main/head, exact-head CI, merge-base, additions>=4,000, mergeability and review state; update PR body when permitted, then expected-head squash merge. Confirm merged=true, merge SHA and new main SHA. Preserve automation enabled; do not use a new PR to reset the threshold.
