@@ -432,11 +432,16 @@ function assertReviewedRuntimeInvocation(tokens, invocation) {
   const runtime = invocation.command.toLowerCase().replace(/\.exe$/, '');
   if (!SCRIPT_RUNTIMES.has(runtime)) return;
   const isNode = runtime === 'node' || runtime === 'nodejs';
+  // An interpreter without an entrypoint may read source from stdin or
+  // auto-discover executable tests. Require a reviewed file/module or a
+  // strictly informational invocation; never infer safety from an option.
+  const informationFlags = new Set(['--version', '-v', '--help', '-h', '--v8-options']);
+  let informationOnly = true;
   for (let index = invocation.index + 1; index < invocation.end; index += 1) {
     const option = tokens[index].value;
     if (option === '--') {
-      if (tokens[index + 1]?.value === '-') {
-        throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime reads unreviewed source from stdin');
+      if (tokens[index + 1]?.type !== 'word' || tokens[index + 1].value === '-') {
+        throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime has no reviewed entrypoint after --');
       }
       return;
     }
@@ -445,9 +450,16 @@ function assertReviewedRuntimeInvocation(tokens, invocation) {
     }
     if (!isOptionWord(option)) {
       if ((runtime === 'deno' || runtime === 'bun') && ['eval', 'repl'].includes(option) ||
-          (runtime === 'deno' && option === 'task') ||
-          ((runtime === 'deno' || runtime === 'bun') && option === 'run' && tokens[index + 1]?.value === '-')) {
+          (runtime === 'deno' && option === 'task')) {
         throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime evaluates unreviewed inline source');
+      }
+      if ((runtime === 'deno' || runtime === 'bun') && ['run', 'test'].includes(option)) {
+        const remaining = tokens.slice(index + 1, invocation.end).map((token) => token.value);
+        // No implicit test discovery, stdin runner or empty package-script
+        // dispatch. Explicit entrypoint names and files remain supported.
+        if (!remaining.some((word) => word !== '--' && word !== '-' && !isOptionWord(word))) {
+          throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime subcommand has no reviewed entrypoint');
+        }
       }
       return;
     }
@@ -457,12 +469,16 @@ function assertReviewedRuntimeInvocation(tokens, invocation) {
         (!isNode && /^-(?:e|p|r)(?:$|[^-])/.test(option))) {
       throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime evaluates or preloads unreviewed source');
     }
+    if (!informationFlags.has(option)) informationOnly = false;
     if (RUNTIME_VALUE_OPTIONS.has(option)) {
       if (tokens[index + 1]?.type !== 'word' || index + 1 >= invocation.end) {
         throw new DependencySurfacePolicyError('malformed-script-shell', 'runtime option requires an operand');
       }
       index += 1;
     }
+  }
+  if (!informationOnly || invocation.index + 1 === invocation.end) {
+    throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime has no explicit reviewed entrypoint');
   }
 }
 
