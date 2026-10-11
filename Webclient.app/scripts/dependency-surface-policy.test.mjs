@@ -1,0 +1,843 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  collectManifestSurface,
+  collectPackageScriptInvocations,
+  formatReport,
+  tokenizePackageScript,
+  validateManifestSurface,
+} from './dependency-surface-policy.mjs';
+
+const NOW = new Date('2026-10-05T12:00:00Z');
+const baseManifest = () => ({
+  private: true,
+  dependencies: { react: '^19.3.0', '@arcgis/core': '5.1.24' },
+  devDependencies: { vite: '^8.3.0' },
+  scripts: { build: 'vite build', test: 'node --test' },
+  engines: { node: '>=24.0.0', npm: '>=11.0.0' },
+});
+const basePolicy = () => ({ schemaVersion: 1, exceptions: [] });
+const exception = (overrides = {}) => ({
+  package: 'react',
+  issues: ['unused-runtime'],
+  owner: 'platform',
+  expiresOn: '2026-11-30',
+  reason: 'Temporary reviewed dependency debt with an explicit removal plan.',
+  ...overrides,
+});
+
+function codes(report) { return report.findings.map((finding) => finding.code); }
+function report(manifest = baseManifest(), policy = basePolicy()) { return validateManifestSurface(manifest, policy, { now: NOW }); }
+function commands(command) { return collectPackageScriptInvocations(command).map((entry) => entry.command); }
+
+// Manifest identity and provenance surface.
+test('accepts a deterministic registry-only manifest surface', () => {
+  const value = report();
+  assert.equal(value.ok, true);
+  assert.equal(value.dependencyCount, 3);
+  assert.equal(value.externalSourceCount, 0);
+  assert.equal(value.floatingSpecCount, 0);
+  assert.deepEqual(value.sectionCounts, { dependencies: 2, devDependencies: 1, optionalDependencies: 0, peerDependencies: 0 });
+  assert.equal(value.fingerprint, 'dependencies:@arcgis/core@5.1.24\ndependencies:react@^19.3.0\ndevDependencies:vite@^8.3.0');
+});
+
+test('sorts dependency identity independent of manifest insertion order', () => {
+  const manifest = baseManifest();
+  manifest.dependencies = { zed: '^1.0.0', alpha: '^1.0.0', middle: '^1.0.0' };
+  assert.deepEqual(collectManifestSurface(manifest).map((entry) => entry.name), ['alpha', 'middle', 'vite', 'zed']);
+});
+
+for (const [label, spec] of [
+  ['file dependency', 'file:../local'],
+  ['link dependency', 'link:../local'],
+  ['git dependency', 'git:https://example.test/a.git'],
+  ['git https dependency', 'git+https://example.test/a.git'],
+  ['http tarball', 'http://example.test/a.tgz'],
+  ['https tarball', 'https://example.test/a.tgz'],
+]) {
+  test(`rejects ${label} specs`, () => {
+    const manifest = baseManifest();
+    manifest.dependencies.react = spec;
+    const value = report(manifest);
+    assert.equal(value.ok, false);
+    assert.ok(codes(value).includes('external-source-spec'));
+    assert.equal(value.externalSourceCount, 1);
+  });
+}
+
+for (const spec of ['*', 'latest', 'next']) {
+  test(`rejects floating spec ${spec}`, () => {
+    const manifest = baseManifest();
+    manifest.dependencies.react = spec;
+    const value = report(manifest);
+    assert.ok(codes(value).includes('floating-version-spec'));
+    assert.equal(value.floatingSpecCount, 1);
+  });
+}
+
+test('permits registry aliases without classifying them as external source', () => {
+  const manifest = baseManifest();
+  manifest.dependencies.react = 'npm:preact@^10.0.0';
+  const value = report(manifest);
+  assert.equal(value.externalSourceCount, 0);
+  assert.equal(value.ok, true);
+});
+
+test('rejects duplicate direct dependencies across sections', () => {
+  const manifest = baseManifest();
+  manifest.devDependencies.react = '^19.3.0';
+  assert.throws(() => collectManifestSurface(manifest), (error) => error.code === 'duplicate-direct-dependency');
+});
+
+test('rejects malformed dependency sections', () => {
+  const manifest = baseManifest();
+  manifest.dependencies = [];
+  assert.throws(() => collectManifestSurface(manifest), (error) => error.code === 'invalid-section');
+});
+
+test('rejects malformed package names', () => {
+  const manifest = baseManifest();
+  manifest.dependencies['Bad Package'] = '^1.0.0';
+  assert.throws(() => collectManifestSurface(manifest), (error) => error.code === 'invalid-package-name');
+});
+
+test('accepts scoped package names', () => {
+  const names = collectManifestSurface(baseManifest()).map((entry) => entry.name);
+  assert.ok(names.includes('@arcgis/core'));
+});
+
+// Reviewed dependency-debt exceptions.
+test('accepts a reviewed non-expired exception', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception()];
+  const value = report(baseManifest(), policy);
+  assert.equal(value.ok, true);
+  assert.equal(value.exceptionPackageCount, 1);
+});
+
+test('rejects an expired exception', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ expiresOn: '2026-10-04' })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('expired-exception'));
+});
+
+test('accepts an exception expiring later on the review date', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ expiresOn: '2026-10-06' })];
+  assert.equal(report(baseManifest(), policy).ok, true);
+});
+
+test('rejects malformed exception expiry', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ expiresOn: '06/10/2026' })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('invalid-exception-expiry'));
+});
+
+test('rejects stale exception package names', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ package: 'removed-package' })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('stale-exception-package'));
+});
+
+test('rejects unknown exception issue types', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ issues: ['mystery-debt'] })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('unknown-exception-issue'));
+});
+
+test('rejects empty exception issue arrays', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ issues: [] })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('empty-exception-issues'));
+});
+
+test('rejects duplicate exception issue ownership', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception(), exception({ reason: 'Second duplicate debt record should never be accepted by policy.' })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('duplicate-exception-issue'));
+});
+
+test('rejects weak exception owner metadata', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ owner: 'Platform Team!' })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('invalid-exception-owner'));
+});
+
+test('rejects weak exception reasons', () => {
+  const policy = basePolicy();
+  policy.exceptions = [exception({ reason: 'temporary' })];
+  assert.ok(codes(report(baseManifest(), policy)).includes('weak-exception-reason'));
+});
+
+test('rejects invalid exception package values without throwing', () => {
+  const policy = basePolicy();
+  policy.exceptions = [{ ...exception(), package: '../escape' }];
+  const value = report(baseManifest(), policy);
+  assert.ok(codes(value).includes('invalid-exception-package'));
+});
+
+// Shell tokenizer behavior. These tests exist to keep policy checks bound to
+// actual command positions instead of arbitrary path or argument substrings.
+test('tokenizer separates shell control operators from words', () => {
+  assert.deepEqual(
+    tokenizePackageScript('node a.mjs && npm run build || echo fallback; vite build').map(({ type, value }) => [type, value]),
+    [
+      ['word', 'node'], ['word', 'a.mjs'], ['operator', '&&'],
+      ['word', 'npm'], ['word', 'run'], ['word', 'build'], ['operator', '||'],
+      ['word', 'echo'], ['word', 'fallback'], ['operator', ';'],
+      ['word', 'vite'], ['word', 'build'],
+    ],
+  );
+});
+
+test('tokenizer preserves spaces inside quoted arguments', () => {
+  const tokens = tokenizePackageScript('node "scripts/a file.mjs" \'literal value\'');
+  assert.deepEqual(tokens.map((token) => token.value), ['node', 'scripts/a file.mjs', 'literal value']);
+});
+
+test('tokenizer resolves escaped spaces without creating commands', () => {
+  const tokens = tokenizePackageScript('node scripts/a\\ file.mjs');
+  assert.deepEqual(tokens.map((token) => token.value), ['node', 'scripts/a file.mjs']);
+});
+
+test('tokenizer treats newline as a command boundary', () => {
+  assert.deepEqual(commands('node a.mjs\nvite build'), ['node', 'vite']);
+});
+
+test('tokenizer rejects unterminated single quotes', () => {
+  assert.throws(() => tokenizePackageScript("node 'broken"), (error) => error.code === 'malformed-script-shell');
+});
+
+test('tokenizer rejects unterminated double quotes', () => {
+  assert.throws(() => tokenizePackageScript('node "broken'), (error) => error.code === 'malformed-script-shell');
+});
+
+test('collector returns only command-position words', () => {
+  assert.deepEqual(commands('node scripts/curl-npx-wget.test.mjs --label npx && vite build'), ['node', 'vite']);
+});
+
+test('collector recognizes command after environment assignment', () => {
+  assert.deepEqual(commands('NODE_ENV=test CI=1 vitest run'), ['vitest']);
+});
+
+test('collector recognizes command after env wrapper and assignments', () => {
+  assert.deepEqual(commands('/usr/bin/env -i NODE_ENV=test CI=1 vitest run'), ['vitest']);
+});
+
+test('collector recognizes command after command wrapper', () => {
+  assert.deepEqual(commands('command -- vite build'), ['vite']);
+});
+
+test('collector recognizes command after exec wrapper', () => {
+  assert.deepEqual(commands('exec vite build'), ['vite']);
+});
+
+test('collector recognizes command after nohup wrapper', () => {
+  assert.deepEqual(commands('nohup vite build'), ['vite']);
+});
+
+test('collector recognizes command after simple sudo option', () => {
+  assert.deepEqual(commands('sudo -n vite build'), ['vite']);
+});
+
+test('collector recognizes commands on both sides of a pipeline', () => {
+  assert.deepEqual(commands('node produce.mjs | node consume.mjs'), ['node', 'node']);
+});
+
+test('collector recognizes commands inside a parenthesized group', () => {
+  assert.deepEqual(commands('(node a.mjs && vite build)'), ['node', 'vite']);
+});
+
+test('collector recognizes commands in if and then clauses', () => {
+  assert.deepEqual(commands('if node check.mjs; then vite build; else node fallback.mjs; fi'), ['node', 'vite', 'node', 'fi']);
+});
+
+test('collector inspects nested sh -c command strings', () => {
+  assert.deepEqual(commands("sh -c 'node a.mjs && vite build'"), ['sh', 'node', 'vite']);
+});
+
+test('collector inspects nested bash --command strings', () => {
+  assert.deepEqual(commands("bash --command 'node a.mjs | vite build'"), ['bash', 'node', 'vite']);
+});
+
+test('collector does not treat shell arguments as additional commands', () => {
+  assert.deepEqual(commands('node --eval "console.log(1)" scripts/a.mjs'), ['node']);
+});
+
+test('collector results are immutable', () => {
+  const value = collectPackageScriptInvocations('node a.mjs && vite build');
+  assert.equal(Object.isFrozen(value), true);
+  assert.equal(Object.isFrozen(value[0]), true);
+});
+
+// Supply-chain script policy.
+test('rejects npx in root scripts to prevent implicit package acquisition', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects quoted npx command invocation', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = "'npx' some-tool";
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects escaped npx command invocation', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'n\\px some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects absolute-path npx command invocation', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = '/usr/bin/npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx after environment assignments', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'CI=1 NODE_ENV=test npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx through env wrapper', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'env CI=1 npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx through command wrapper', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'command npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx through exec wrapper', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'exec npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx in a later command segment', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node prepare.mjs && npx some-tool';
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx inside sh -c', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = "sh -c 'npx some-tool'";
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('rejects npx inside nested shell pipelines', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = "bash -c 'node a.mjs | npx some-tool'";
+  assert.ok(codes(report(manifest)).includes('unreviewed-npx-script'));
+});
+
+test('does not false-positive npx embedded in a test filename', () => {
+  const manifest = baseManifest();
+  manifest.scripts.tooling = 'node --test scripts/workflow-npx-security-contract.test.mjs';
+  assert.equal(report(manifest).ok, true);
+});
+
+test('does not false-positive npx in a normal argument', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node audit.mjs --rule npx';
+  assert.equal(report(manifest).ok, true);
+});
+
+test('does not false-positive npx in quoted data', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node audit.mjs "npx should remain data"';
+  assert.equal(report(manifest).ok, true);
+});
+
+for (const script of [
+  'npm exec -- some-tool',
+  'npm x -- some-tool',
+  '/usr/bin/npm --yes exec some-tool',
+  'env CI=1 npm --prefix ./app exec some-tool',
+  'npm --workspace=packages/app exec some-tool',
+  'npm -w packages/app x some-tool',
+  "sh -c 'npm exec -- some-tool'",
+  'pnpm dlx some-tool',
+  'pnpm --filter packages/app dlx some-tool',
+  'yarn dlx some-tool',
+  'bun x some-tool',
+  'bunx some-tool',
+  'pnpx some-tool',
+  'corepack pnpm dlx some-tool',
+  'npm create vite@latest',
+  'yarn create vite',
+]) {
+  test(`rejects unreviewed package-manager execution: ${script}`, () => {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-package-exec-script'), script);
+  });
+}
+
+for (const script of [
+  'npm run build',
+  'npm run exec',
+  'npm --prefix ./app run build',
+  'node scripts/check.mjs --label exec',
+  'node scripts/check.mjs "npm exec -- some-tool"',
+  'pnpm run build',
+  'yarn run build',
+]) {
+  test(`allows non-acquiring command or inert data: ${script}`, () => {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  });
+}
+
+test('fails closed on ambiguous package-manager options', () => {
+  const manifest = baseManifest();
+  for (const script of [
+    'npm --unknown-operand exec some-tool',
+    'npm --unknown=foo exec some-tool',
+    'npm --prefix --yes exec some-tool',
+    'pnpm --filter --unknown dlx some-tool',
+  ]) {
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('malformed-script-shell'), script);
+  }
+});
+
+test('rejects package acquisition, mutation and lifecycle commands in scripts', () => {
+  const unsafe = [
+    'npm install left-pad', 'npm i left-pad', 'npm ci', 'npm update',
+    'npm add left-pad', 'npm in left-pad', 'npm ins left-pad',
+    'npm inst left-pad', 'npm insta left-pad', 'npm instal left-pad',
+    'npm isnt left-pad', 'npm isnta left-pad', 'npm isntal left-pad',
+    'npm isntall left-pad',
+    'npm clean-install', 'npm ic', 'npm install-clean', 'npm isntall-clean',
+    'npm install-test left-pad', 'npm it left-pad',
+    'npm install-ci-test', 'npm cit', 'npm clean-install-test', 'npm sit',
+    'npm u', 'npm udpate', 'npm r left-pad', 'npm unlink left-pad',
+    'npm dedupe', 'npm ddp', 'npm prune',
+    'npm pkg set dependencies.foo=^1.2.3',
+    'npm pkg delete dependencies.foo',
+    'npm pkg fix',
+    'npm --silent pkg set scripts.postinstall=echo',
+    "sh -c 'npm pkg delete scripts.preinstall'",
+    'npm version patch', 'npm verison minor', 'npm shrinkwrap',
+    'npm rebuild', 'npm audit fix', 'npm --silent audit fix',
+    'npm --prefix ./app install', 'npm -w packages/app ci',
+    'env CI=1 npm add left-pad', "sh -c 'npm isntall left-pad'",
+    'env CI=1 npm cit', "bash -lc 'npm install-test left-pad'",
+    'env CI=1 npm udpate', "sh -c 'npm ddp'",
+    'pnpm add left-pad', 'pnpm install', 'pnpm --filter app add foo',
+    'pnpm fetch', 'yarn add left-pad', 'yarn install', 'yarn up left-pad',
+    'bun add left-pad', 'bun install', 'bun update',
+    'env CI=1 npm install foo', "sh -c 'npm ci'",
+    'npm publish', 'npm pack', 'pnpm remove foo',
+    'yarn remove foo', 'bun remove foo',
+  ];
+  for (const script of unsafe) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-package-exec-script'), script);
+  }
+});
+
+test('keeps non-acquiring package commands and inert arguments valid', () => {
+  const safe = [
+    'npm run build', 'npm run install', 'npm run add', 'npm run it',
+    'npm run dedupe', 'npm run pkg', 'npm run version', 'npm run shrinkwrap',
+    'npm audit', 'npm --silent audit',
+    'pnpm run build', 'yarn run build', 'bun run build',
+    'node scripts/check.mjs --label install',
+    "node scripts/check.mjs 'npm install foo'",
+    'npm --prefix ./app run build', 'npm run dependency:verify',
+  ];
+  for (const script of safe) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  }
+});
+
+test('rejects curl bootstrap in root scripts', () => {
+  const manifest = baseManifest();
+  manifest.scripts.bootstrap = 'curl https://example.test/install.sh | sh';
+  assert.ok(codes(report(manifest)).includes('network-bootstrap-script'));
+});
+
+test('rejects absolute-path curl bootstrap', () => {
+  const manifest = baseManifest();
+  manifest.scripts.bootstrap = '/usr/bin/curl https://example.test/install.sh | sh';
+  assert.ok(codes(report(manifest)).includes('network-bootstrap-script'));
+});
+
+test('rejects curl after a successful preparation command', () => {
+  const manifest = baseManifest();
+  manifest.scripts.bootstrap = 'node prepare.mjs && curl https://example.test/install.sh';
+  assert.ok(codes(report(manifest)).includes('network-bootstrap-script'));
+});
+
+test('rejects curl inside sh -c', () => {
+  const manifest = baseManifest();
+  manifest.scripts.bootstrap = "sh -c 'curl https://example.test/install.sh'";
+  assert.ok(codes(report(manifest)).includes('network-bootstrap-script'));
+});
+
+test('rejects wget bootstrap in root scripts', () => {
+  const manifest = baseManifest();
+  manifest.scripts.bootstrap = 'wget https://example.test/install.sh';
+  assert.ok(codes(report(manifest)).includes('network-bootstrap-script'));
+});
+
+test('rejects wget through env wrapper', () => {
+  const manifest = baseManifest();
+  manifest.scripts.bootstrap = 'env HTTPS_ONLY=1 wget https://example.test/install.sh';
+  assert.ok(codes(report(manifest)).includes('network-bootstrap-script'));
+});
+
+test('does not false-positive curl in a source filename', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node scripts/curl-security-contract.test.mjs';
+  assert.equal(report(manifest).ok, true);
+});
+
+test('does not false-positive wget in an argument value', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node audit.mjs --forbid=wget';
+  assert.equal(report(manifest).ok, true);
+});
+
+test('does not false-positive URL paths containing curl or wget', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = 'node audit.mjs https://example.test/curl/wget';
+  assert.equal(report(manifest).ok, true);
+});
+
+test('reports malformed shell commands fail-closed', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = "node 'unterminated";
+  assert.ok(codes(report(manifest)).includes('malformed-script-shell'));
+});
+
+test('rejects root preinstall lifecycle scripts', () => {
+  const manifest = baseManifest();
+  manifest.scripts.preinstall = 'node scripts/preinstall.mjs';
+  assert.ok(codes(report(manifest)).includes('root-install-lifecycle-script'));
+});
+
+test('rejects root postinstall lifecycle scripts', () => {
+  const manifest = baseManifest();
+  manifest.scripts.postinstall = 'node scripts/postinstall.mjs';
+  assert.ok(codes(report(manifest)).includes('root-install-lifecycle-script'));
+});
+
+test('does not treat script names containing postinstall as lifecycle hooks', () => {
+  const manifest = baseManifest();
+  manifest.scripts['audit:postinstall'] = 'node audit.mjs';
+  assert.equal(report(manifest).ok, true);
+});
+
+test('rejects empty script commands', () => {
+  const manifest = baseManifest();
+  manifest.scripts.audit = '';
+  assert.ok(codes(report(manifest)).includes('invalid-script-command'));
+});
+
+// Runtime/toolchain contract.
+test('rejects missing Node engine contract', () => {
+  const manifest = baseManifest();
+  delete manifest.engines.node;
+  assert.ok(codes(report(manifest)).includes('missing-runtime-engine-contract'));
+});
+
+test('rejects missing npm engine contract', () => {
+  const manifest = baseManifest();
+  delete manifest.engines.npm;
+  assert.ok(codes(report(manifest)).includes('missing-runtime-engine-contract'));
+});
+
+test('rejects malformed engines object', () => {
+  const manifest = baseManifest();
+  manifest.engines = [];
+  assert.throws(() => report(manifest), (error) => error.code === 'invalid-engines');
+});
+
+test('rejects malformed scripts object', () => {
+  const manifest = baseManifest();
+  manifest.scripts = [];
+  assert.throws(() => report(manifest), (error) => error.code === 'invalid-scripts');
+});
+
+test('rejects invalid now values', () => {
+  assert.throws(() => validateManifestSurface(baseManifest(), basePolicy(), { now: Number.NaN }), (error) => error.code === 'invalid-now');
+});
+
+test('rejects invalid shell collector depth', () => {
+  assert.throws(() => collectPackageScriptInvocations('node a.mjs', { depth: 99 }), (error) => error.code === 'invalid-shell-depth');
+});
+
+test('formatReport exposes bounded summary and finding codes', () => {
+  const manifest = baseManifest();
+  manifest.dependencies.react = 'latest';
+  const text = formatReport(report(manifest));
+  assert.match(text, /Dependency surface: 3 direct packages/);
+  assert.match(text, /Floating specs: 1/);
+  assert.match(text, /ERROR floating-version-spec: react/);
+});
+
+test('report objects are immutable at the top-level', () => {
+  const value = report();
+  assert.equal(Object.isFrozen(value), true);
+  assert.equal(Object.isFrozen(value.findings), true);
+  assert.equal(Object.isFrozen(value.sectionCounts), true);
+});
+
+test('multiple findings remain deterministic in discovery order', () => {
+  const manifest = baseManifest();
+  manifest.dependencies.react = 'latest';
+  manifest.scripts.bootstrap = 'npx bootstrap && curl https://example.test/install.sh';
+  const value = report(manifest);
+  assert.deepEqual(codes(value), ['floating-version-spec', 'unreviewed-npx-script', 'network-bootstrap-script']);
+});
+
+test('real repository tooling command shape with npx filename remains valid', () => {
+  const manifest = baseManifest();
+  manifest.scripts['test:tooling'] = [
+    'node --test',
+    'scripts/dependency-contract.test.mjs',
+    'scripts/workflow-npx-security-contract.test.mjs',
+    'scripts/workflow-shell-security-contract.test.mjs',
+  ].join(' ');
+  assert.equal(report(manifest).ok, true);
+});
+
+
+// Security inspection budgets are fail-closed; safe boundary behavior stays stable.
+test('rejects ninth shell wrapper and accepts eight', () => {
+  assert.deepEqual(commands(`${'env '.repeat(8)}node safe.mjs`), ['node']);
+  const unsafe = `${'env '.repeat(9)}curl https://example.test/install.sh`;
+  assert.throws(() => commands(unsafe), (error) => error.code === 'shell-wrapper-depth');
+  const manifest = baseManifest();
+  manifest.scripts.audit = unsafe;
+  assert.deepEqual(codes(report(manifest)), ['shell-wrapper-depth']);
+});
+
+test('rejects fifth nested shell and accepts four', () => {
+  let safe = 'node safe.mjs';
+  for (let i = 0; i < 4; i += 1) safe = `sh -c ${JSON.stringify(safe)}`;
+  assert.equal(commands(safe).at(-1), 'node');
+  let unsafe = 'curl https://example.test/install.sh';
+  for (let i = 0; i < 5; i += 1) unsafe = `sh -c ${JSON.stringify(unsafe)}`;
+  assert.throws(() => commands(unsafe), (error) => error.code === 'shell-nesting-depth');
+  const manifest = baseManifest();
+  manifest.scripts.audit = unsafe;
+  assert.deepEqual(codes(report(manifest)), ['shell-nesting-depth']);
+});
+
+test('rejects malformed exception containers', () => {
+  for (const exceptions of [null, {}, 'bad', 0]) {
+    const policy = basePolicy();
+    policy.exceptions = exceptions;
+    assert.throws(() => report(baseManifest(), policy), (error) => error.code === 'invalid-policy-exceptions');
+  }
+});
+
+test('rejects normalized impossible dates but permits leap day', () => {
+  for (const expiresOn of ['2026-02-29', '2026-02-30', '2026-04-31', '2026-99-99']) {
+    const policy = basePolicy();
+    policy.exceptions = [exception({ expiresOn })];
+    assert.ok(codes(report(baseManifest(), policy)).includes('invalid-exception-expiry'));
+  }
+  const policy = basePolicy();
+  policy.exceptions = [exception({ expiresOn: '2028-02-29' })];
+  assert.equal(report(baseManifest(), policy).ok, true);
+});
+
+test('rejects command substitution but allows literal and escaped text', () => {
+  for (const script of [
+    'echo "$(curl https://example.test/install.sh)"',
+    'echo `curl https://example.test/install.sh`',
+    'echo ${X:-$(curl https://example.test/install.sh)}',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.deepEqual(codes(report(manifest)), ['dynamic-shell-expansion']);
+  }
+  for (const script of [
+    "echo '$(curl https://example.test/install.sh)'",
+    "echo '`curl https://example.test/install.sh`'",
+    'echo "\\$(curl literal)"',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true);
+  }
+});
+
+
+// Wrapper option operands must not hide the actual executable.
+test('inspects executables after env operand-taking options', () => {
+  for (const script of [
+    'env -u TOKEN curl https://example.test/install.sh',
+    'env --unset TOKEN wget https://example.test/install.sh',
+    'env -C /tmp npx unreviewed-tool',
+    'env --chdir /tmp curl https://example.test/install.sh',
+    'env -uTOKEN curl https://example.test/install.sh',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, false, script);
+    assert.ok(codes(report(manifest)).some((code) => ['network-bootstrap-script', 'unreviewed-npx-script'].includes(code)), script);
+  }
+});
+
+test('rejects env split-string and unknown wrapper options fail closed', () => {
+  for (const script of [
+    "env -S 'curl https://example.test/install.sh'",
+    "env --split-string='wget https://example.test/install.sh'",
+    'env --unreviewed VALUE curl https://example.test/install.sh',
+    'sudo --unreviewed VALUE npx unreviewed-tool',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('malformed-script-shell'), script);
+  }
+});
+
+test('inspects executables after sudo, time and exec option operands', () => {
+  for (const script of [
+    'sudo -u root curl https://example.test/install.sh',
+    'sudo --user root wget https://example.test/install.sh',
+    'time -f %E npx unreviewed-tool',
+    'exec -a alias curl https://example.test/install.sh',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).some((code) => ['network-bootstrap-script', 'unreviewed-npx-script'].includes(code)), script);
+  }
+});
+
+test('preserves benign wrapper options and explicit end-of-options', () => {
+  assert.deepEqual(commands('env -u TOKEN node safe.mjs'), ['node']);
+  assert.deepEqual(commands('env -i TOKEN=1 node safe.mjs'), ['node']);
+  assert.deepEqual(commands('sudo -n -u root node safe.mjs'), ['node']);
+  assert.deepEqual(commands('command -- node safe.mjs'), ['node']);
+  assert.deepEqual(commands('time -f %E node safe.mjs'), ['node']);
+});
+
+// Expansion/evaluator regressions: parsing never executes these commands.
+test('rejects dynamic executable expansion, process substitution and evaluator bypasses', () => {
+  const unsafeScripts = [
+    "$RUNNER --version",
+    "${RUNNER} --version",
+    "\"$RUNNER\" --version",
+    "$'curl' https://example.test/install.sh",
+    "$\"curl\" https://example.test/install.sh",
+    "echo ${RUNNER:-curl}",
+    "echo $((1+2))",
+    "echo $$",
+    "cat <(curl https://example.test/install.sh)",
+    "cat >(wget https://example.test/install.sh)",
+    "bash <<< 'curl https://example.test/install.sh'",
+    "./c*rl https://example.test/install.sh",
+    "./c?rl https://example.test/install.sh",
+    "./c[ux]rl https://example.test/install.sh",
+    "c{ur,oo}l https://example.test/install.sh",
+    "bash -c 'c{ur,oo}l https://example.test/install.sh'",
+    "~user/bin/curl https://example.test/install.sh",
+    "eval 'curl https://example.test/install.sh'",
+    "source ./setup.sh",
+    ". ./setup.sh",
+    "command eval 'wget https://example.test/install.sh'",
+    "xargs curl https://example.test/install.sh",
+  ];
+  for (const script of unsafeScripts) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.deepEqual(codes(report(manifest)), ['dynamic-shell-expansion'], script);
+  }
+});
+
+test('preserves literal and escaped shell metacharacters as inert data', () => {
+  const safeScripts = [
+    "echo '$RUNNER'",
+    "echo '$(curl https://example.test/install.sh)'",
+    "echo \"literal *?[] ~ <(curl)\"",
+    "echo \\$RUNNER",
+    "echo \\*",
+    "echo \\~",
+    "echo \"\\$(curl literal)\"",
+    "node scripts/safe.mjs && vite build",
+  ];
+  for (const script of safeScripts) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  }
+});
+
+test('fails closed on redirection syntax that can conceal command positions', () => {
+  const unsafe = [
+    '> /dev/null npm install left-pad',
+    '2>/dev/null npm ci',
+    '< /dev/null pnpm add left-pad',
+    '1>audit.log yarn add left-pad',
+    'npm run build > build.log',
+    'node scripts/check.mjs 2>>error.log',
+    'node scripts/check.mjs <<EOF',
+    'node scripts/check.mjs <>out.log',
+  ];
+  for (const script of unsafe) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.throws(() => report(manifest), { code: 'unreviewable-shell-redirection' }, script);
+  }
+});
+
+test('keeps quoted redirection characters as inert argument data', () => {
+  for (const script of [
+    "node scripts/check.mjs '>'",
+    'node scripts/check.mjs "<"',
+    "node scripts/check.mjs '2>/dev/null'",
+    'node scripts/check.mjs "<<EOF"',
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.equal(report(manifest).ok, true, script);
+  }
+});
+
+
+test('inspects package-manager commands across POSIX escaped newlines', () => {
+  const continuation = '\\' + '\n';
+  for (const script of [
+    `np${continuation}m install left-pad`,
+    `n${continuation}pm ci`,
+    `env np${continuation}m rebuild`,
+    `"np${continuation}m" install left-pad`,
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).includes('unreviewed-package-exec-script'), script);
+  }
+  for (const script of [
+    `c${continuation}url https://example.test/install.sh`,
+    `n${continuation}px some-tool`,
+  ]) {
+    const manifest = baseManifest();
+    manifest.scripts.audit = script;
+    assert.ok(codes(report(manifest)).some((code) =>
+      ['network-bootstrap-script', 'unreviewed-npx-script'].includes(code)), script);
+  }
+});
+
+test('preserves POSIX continuation semantics and single-quoted literals', () => {
+  const continuation = '\\' + '\n';
+  assert.deepEqual(commands(`no${continuation}de scripts/safe.mjs`), ['node']);
+  assert.deepEqual(tokenizePackageScript(`echo "hello${continuation}world"`).map((token) => token.value), ['echo', 'helloworld']);
+  assert.deepEqual(tokenizePackageScript(`echo 'hello${continuation}world'`).map((token) => token.value), ['echo', `hello${continuation}world`]);
+});

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-05",
+  "budgets": {
+    "maxExceptions": 17,
+    "maxUnusedRuntime": 10,
+    "maxDeprecatedDirect": 3,
+    "maxInstallScriptDirect": 4
+  },
+  "exceptions": [
+    {"package":"@fortawesome/fontawesome-svg-core","issues":["unused-runtime","deprecated-direct","install-script-direct"],"owner":"platform","expiresOn":"2026-11-30","reason":"Legacy FontAwesome 5 residue is unused by src; remove package and lock graph in this modernization track."},
+    {"package":"@fortawesome/free-brands-svg-icons","issues":["unused-runtime","install-script-direct"],"owner":"platform","expiresOn":"2026-11-30","reason":"Unused FontAwesome 5 icon pack; retained only until deterministic lockfile pruning lands."},
+    {"package":"@fortawesome/free-regular-svg-icons","issues":["unused-runtime","install-script-direct"],"owner":"platform","expiresOn":"2026-11-30","reason":"Unused FontAwesome 5 icon pack; retained only until deterministic lockfile pruning lands."},
+    {"package":"@fortawesome/free-solid-svg-icons","issues":["unused-runtime","install-script-direct"],"owner":"platform","expiresOn":"2026-11-30","reason":"Unused FontAwesome 5 icon pack; retained only until deterministic lockfile pruning lands."},
+    {"package":"@fortawesome/react-fontawesome","issues":["unused-runtime","deprecated-direct"],"owner":"platform","expiresOn":"2026-11-30","reason":"Deprecated React FontAwesome adapter is no longer imported; remove with the FontAwesome 5 lock graph."},
+    {"package":"axios","issues":["unused-runtime"],"owner":"platform","expiresOn":"2026-11-30","reason":"No src import remains after native fetch boundary consolidation; remove direct dependency and orphaned lock nodes."},
+    {"package":"crypto-js","issues":["unused-runtime","deprecated-direct"],"owner":"platform","expiresOn":"2026-11-30","reason":"Upstream is unmaintained and src has no import; remove instead of replacing an unused crypto abstraction."},
+    {"package":"react-color","issues":["unused-runtime"],"owner":"platform","expiresOn":"2026-11-30","reason":"Legacy color-picker package has no src import; remove direct dependency and its unique transitive graph."},
+    {"package":"react-redux","issues":["unused-runtime"],"owner":"platform","expiresOn":"2026-11-30","reason":"Current src imports Redux directly and no react-redux binding; verify architecture intent before pruning."},
+    {"package":"reactcss","issues":["unused-runtime"],"owner":"platform","expiresOn":"2026-11-30","reason":"Legacy styling helper has no src import and is also a react-color transitive; prune after graph verification."}
+  ],
+  "peerExceptions": [
+    {"package":"react-color","peer":"react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Legacy unused react-color publishes an unbounded React peer; remove the package instead of normalizing upstream metadata."},
+    {"package":"@icons/material","peer":"react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Published transitive peer metadata is intentionally broad; installed React remains concrete and removal follows parent dependency review."},
+    {"package":"@types/react-transition-group","peer":"@types/react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"DefinitelyTyped transitive peer metadata is broad by design; concrete installed type package remains lockfile governed."},
+    {"package":"d3-transition","peer":"d3-selection","range":"2 - 3","owner":"platform","expiresOn":"2026-11-30","reason":"Upstream uses a valid npm hyphen peer range not yet parsed by the bounded local evaluator; concrete resolution remains governed."},
+    {"package":"oxlint","peer":"vite-plus","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Optional tooling peer metadata is intentionally broad upstream; lockfile provenance and concrete installed versions remain governed."},
+    {"package":"react-icons","peer":"react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"React Icons publishes broad compatibility metadata; installed React remains concrete and source usage is independently governed."},
+    {"package":"use-debounce","peer":"react","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Use-debounce publishes broad React compatibility metadata; installed React remains concrete and lockfile provenance is enforced."},
+    {"package":"vitest","peer":"@edge-runtime/vm","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Vitest optional environment peer is broad upstream; this test-only surface remains pinned through the lockfile and registry policy."},
+    {"package":"vitest","peer":"@vitest/browser-webdriverio","range":"^5.0.0-beta.5 || >=5.0.0","owner":"platform","expiresOn":"2026-11-30","reason":"Optional Vitest browser environment is not installed; published prerelease peer range is time-bounded for review."},
+    {"package":"vitest","peer":"happy-dom","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Optional Vitest DOM environment is not installed; published wildcard peer range is time-bounded for review."},
+    {"package":"vitest","peer":"jsdom","range":"*","owner":"platform","expiresOn":"2026-11-30","reason":"Optional Vitest DOM peer has concrete installed jsdom version; published wildcard peer range is time-bounded for review."}
+  ]
+}

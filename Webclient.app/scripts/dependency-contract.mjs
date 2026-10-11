@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(CURRENT_FILE), '..');
 const SOURCE_ROOT = resolve(PROJECT_ROOT, 'src');
+const POLICY_FILE = resolve(PROJECT_ROOT, 'scripts', 'dependency-policy.json');
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts']);
 const BUILTINS = new Set([
   ...builtinModules,
@@ -20,6 +21,14 @@ const PACKAGE_SPECIFIER_PATTERNS = [
 ];
 const FORBIDDEN_VERSION_SPECIFIER = /^(?:\*|latest|next|https?:|git(?:\+|:)|github:|file:|link:|workspace:)/i;
 const FORBIDDEN_PACKAGES = new Set(['react-scripts']);
+const POLICY_ISSUES = Object.freeze([
+  'deprecated-direct',
+  'install-script-direct',
+  'unused-runtime',
+]);
+const POLICY_ISSUE_SET = new Set(POLICY_ISSUES);
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_EXCEPTION_REASON_CHARS = 240;
 
 export const packageNameFromSpecifier = (specifier) => {
   if (!specifier || typeof specifier !== 'string') return null;
@@ -186,8 +195,182 @@ export const validateLockfile = (manifest, lockfile) => {
   return errors;
 };
 
-export const analyzeDependencyContract = ({ manifest, lockfile, inventory }) => {
+const lockPathForPackage = (packageName) => `node_modules/${packageName}`;
+
+const collectDirectLockErrors = (manifest, lockfile) => {
+  const errors = [];
+  const sections = [
+    ['dependencies', manifest.dependencies ?? {}],
+    ['devDependencies', manifest.devDependencies ?? {}],
+  ];
+
+  for (const [sectionName, section] of sections) {
+    for (const packageName of Object.keys(section).sort()) {
+      const entry = lockfile.packages?.[lockPathForPackage(packageName)];
+      if (!entry) {
+        errors.push(`lockfile: ${sectionName} package ${packageName} has no resolved package entry`);
+        continue;
+      }
+      if (typeof entry.version !== 'string' || entry.version.trim().length === 0) {
+        errors.push(`lockfile: ${packageName} has no concrete resolved version`);
+      }
+      if (typeof entry.resolved !== 'string' || entry.resolved.trim().length === 0) {
+        errors.push(`lockfile: ${packageName} is missing registry provenance (resolved)`);
+      }
+      if (typeof entry.integrity !== 'string' || entry.integrity.trim().length === 0) {
+        errors.push(`lockfile: ${packageName} is missing integrity metadata`);
+      }
+    }
+  }
+
+  return errors;
+};
+
+export const collectDependencyHygieneIssues = ({ manifest, lockfile, source }) => {
+  const issues = [];
+  const usedRuntime = new Set(source.usedRuntime ?? []);
+  const dependencies = Object.keys(manifest.dependencies ?? {}).sort();
+
+  for (const packageName of dependencies) {
+    const entry = lockfile.packages?.[lockPathForPackage(packageName)] ?? {};
+    if (!usedRuntime.has(packageName)) {
+      issues.push(Object.freeze({ package: packageName, issue: 'unused-runtime' }));
+    }
+    if (typeof entry.deprecated === 'string' && entry.deprecated.trim().length > 0) {
+      issues.push(Object.freeze({ package: packageName, issue: 'deprecated-direct' }));
+    }
+    if (entry.hasInstallScript === true) {
+      issues.push(Object.freeze({ package: packageName, issue: 'install-script-direct' }));
+    }
+  }
+
+  return Object.freeze(issues.sort((left, right) => (
+    left.package.localeCompare(right.package) || left.issue.localeCompare(right.issue)
+  )));
+};
+
+const issueKey = ({ package: packageName, issue }) => `${packageName}\u0000${issue}`;
+
+const normalizeDate = (value) => {
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.valueOf())) return null;
+    const normalized = new Date(value.valueOf());
+    normalized.setUTCHours(0, 0, 0, 0);
+    return normalized;
+  }
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value
+    ? parsed
+    : null;
+};
+
+export const validateDependencyPolicy = ({ manifest, issues, policy, now = new Date() }) => {
+  const errors = [];
+  if (!policy || typeof policy !== 'object') {
+    return { errors: ['dependency-policy: policy document is required'], exceptions: [] };
+  }
+  if (policy.schemaVersion !== 1) {
+    errors.push(`dependency-policy: expected schemaVersion 1, received ${policy.schemaVersion}`);
+  }
+
+  const directPackages = new Set(Object.keys(manifest.dependencies ?? {}));
+  const observed = new Set(issues.map(issueKey));
+  if (!Array.isArray(policy.exceptions)) errors.push('dependency-policy: exceptions must be an array');
+  const exceptions = Array.isArray(policy.exceptions) ? policy.exceptions : [];
+  const exceptionKeys = new Set();
+  const today = normalizeDate(now);
+  if (!today) errors.push('dependency-policy: now must be a valid date');
+
+  for (const [index, exception] of exceptions.entries()) {
+    const prefix = `dependency-policy: exceptions[${index}]`;
+    const packageName = String(exception?.package ?? '').trim();
+    const owner = String(exception?.owner ?? '').trim();
+    const reason = String(exception?.reason ?? '').trim();
+    const expiresOn = String(exception?.expiresOn ?? '').trim();
+    const issueNames = Array.isArray(exception?.issues) ? [...new Set(exception.issues)] : [];
+
+    if (!packageName) errors.push(`${prefix} package is required`);
+    else if (!directPackages.has(packageName)) errors.push(`${prefix} references non-runtime dependency ${packageName}`);
+    if (!owner) errors.push(`${prefix} owner is required`);
+    if (!reason) errors.push(`${prefix} reason is required`);
+    else if (reason.length > MAX_EXCEPTION_REASON_CHARS) errors.push(`${prefix} reason exceeds ${MAX_EXCEPTION_REASON_CHARS} characters`);
+    if (!DATE_ONLY_PATTERN.test(expiresOn)) errors.push(`${prefix} expiresOn must use YYYY-MM-DD`);
+    const expiry = DATE_ONLY_PATTERN.test(expiresOn) ? normalizeDate(expiresOn) : null;
+    if (!expiry) {
+      if (DATE_ONLY_PATTERN.test(expiresOn)) errors.push(`${prefix} expiresOn is not a valid calendar date`);
+    } else if (expiry < today) {
+      errors.push(`${prefix} expired on ${expiresOn}`);
+    }
+    if (issueNames.length === 0) errors.push(`${prefix} must list at least one issue`);
+
+    for (const issue of issueNames) {
+      if (!POLICY_ISSUE_SET.has(issue)) {
+        errors.push(`${prefix} uses unknown issue ${issue}`);
+        continue;
+      }
+      const key = issueKey({ package: packageName, issue });
+      if (exceptionKeys.has(key)) errors.push(`${prefix} duplicates exception ${packageName}/${issue}`);
+      exceptionKeys.add(key);
+      if (!observed.has(key)) errors.push(`${prefix} is stale; ${packageName}/${issue} is no longer observed`);
+    }
+  }
+
+  for (const current of issues) {
+    const key = issueKey(current);
+    if (!exceptionKeys.has(key)) {
+      errors.push(`dependency-policy: unreviewed ${current.issue} issue for ${current.package}`);
+    }
+  }
+
+  const budgets = policy.budgets ?? {};
+  const counts = Object.fromEntries(POLICY_ISSUES.map((issue) => [issue, issues.filter((item) => item.issue === issue).length]));
+  const totalBudget = budgets.maxExceptions;
+  if (!Number.isInteger(totalBudget) || totalBudget < 0) {
+    errors.push('dependency-policy: budgets.maxExceptions must be a non-negative integer');
+  } else if (exceptionKeys.size > totalBudget) {
+    errors.push(`dependency-policy: ${exceptionKeys.size} exception issues exceed maxExceptions budget ${totalBudget}`);
+  }
+
+  for (const issue of POLICY_ISSUES) {
+    const budgetName = issue === 'unused-runtime'
+      ? 'maxUnusedRuntime'
+      : issue === 'deprecated-direct'
+        ? 'maxDeprecatedDirect'
+        : 'maxInstallScriptDirect';
+    const budget = budgets[budgetName];
+    if (!Number.isInteger(budget) || budget < 0) {
+      errors.push(`dependency-policy: budgets.${budgetName} must be a non-negative integer`);
+    } else if (counts[issue] > budget) {
+      errors.push(`dependency-policy: ${counts[issue]} ${issue} issues exceed ${budgetName} budget ${budget}`);
+    }
+  }
+
+  return {
+    errors,
+    exceptions: [...exceptionKeys].sort(),
+    counts: Object.freeze(counts),
+  };
+};
+
+export const validateDependencyHygiene = ({ manifest, lockfile, source, policy, now }) => {
+  const issues = collectDependencyHygieneIssues({ manifest, lockfile, source });
+  const policyResult = validateDependencyPolicy({ manifest, issues, policy, now });
+  return {
+    errors: [
+      ...collectDirectLockErrors(manifest, lockfile),
+      ...policyResult.errors,
+    ],
+    issues,
+    counts: policyResult.counts ?? Object.freeze({}),
+  };
+};
+
+export const analyzeDependencyContract = ({ manifest, lockfile, inventory, policy = null, now }) => {
   const source = validateSourceDependencies(inventory, manifest);
+  const hygiene = policy
+    ? validateDependencyHygiene({ manifest, lockfile, source, policy, now })
+    : { errors: [], issues: Object.freeze([]), counts: Object.freeze({}) };
   const errors = [
     ...validateLockfile(manifest, lockfile),
     ...validateVersionSpecifiers({
@@ -196,6 +379,7 @@ export const analyzeDependencyContract = ({ manifest, lockfile, inventory }) => 
     }),
     ...validateModernToolchain(manifest),
     ...source.errors,
+    ...hygiene.errors,
   ];
 
   return {
@@ -204,16 +388,19 @@ export const analyzeDependencyContract = ({ manifest, lockfile, inventory }) => 
     sourceFiles: inventory.length,
     runtimePackages: Object.freeze(source.usedRuntime),
     developmentPackages: Object.freeze(source.usedDevelopment),
+    hygieneIssues: hygiene.issues,
+    hygieneCounts: hygiene.counts,
   };
 };
 
-const loadInventory = async () => {
-  const files = await walkSourceFiles(SOURCE_ROOT);
+const loadInventory = async (root = PROJECT_ROOT) => {
+  const sourceRoot = resolve(root, 'src');
+  const files = await walkSourceFiles(sourceRoot);
   const inventory = [];
   for (const file of files.sort()) {
     const source = await readFile(file, 'utf8');
     inventory.push({
-      path: relative(PROJECT_ROOT, file).replaceAll('\\', '/'),
+      path: relative(root, file).replaceAll('\\', '/'),
       references: collectPackageReferences(source),
     });
   }
@@ -223,23 +410,12 @@ const loadInventory = async () => {
 export const runDependencyContract = async (root = PROJECT_ROOT) => {
   const manifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
   const lockfile = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8'));
-  const inventory = root === PROJECT_ROOT
-    ? await loadInventory()
-    : await (async () => {
-      const sourceRoot = resolve(root, 'src');
-      const files = await walkSourceFiles(sourceRoot);
-      const result = [];
-      for (const file of files.sort()) {
-        result.push({
-          path: relative(root, file).replaceAll('\\', '/'),
-          references: collectPackageReferences(await readFile(file, 'utf8')),
-        });
-      }
-      return result;
-    })();
-
-  return analyzeDependencyContract({ manifest, lockfile, inventory });
+  const policy = JSON.parse(await readFile(root === PROJECT_ROOT ? POLICY_FILE : resolve(root, 'scripts', 'dependency-policy.json'), 'utf8'));
+  const inventory = await loadInventory(root);
+  return analyzeDependencyContract({ manifest, lockfile, inventory, policy });
 };
+
+const formatHygieneIssue = ({ package: packageName, issue }) => `${packageName} (${issue})`;
 
 const main = async () => {
   const result = await runDependencyContract();
@@ -253,7 +429,8 @@ const main = async () => {
   console.log(`[dependency:verify] ${result.sourceFiles} source files inspected.`);
   console.log(`[dependency:verify] Runtime package imports: ${result.runtimePackages.join(', ') || '(none)'}`);
   console.log(`[dependency:verify] Test/dev package imports: ${result.developmentPackages.join(', ') || '(none)'}`);
-  console.log('[dependency:verify] Manifest, lockfile, source imports and modern toolchain contract are consistent.');
+  console.log(`[dependency:verify] Reviewed dependency debt: ${result.hygieneIssues.map(formatHygieneIssue).join(', ') || '(none)'}`);
+  console.log('[dependency:verify] Manifest, lockfile, source imports, supply-chain hygiene and modern toolchain contract are consistent.');
 };
 
 if (process.argv[1] && resolve(process.argv[1]) === CURRENT_FILE) {
