@@ -13,7 +13,7 @@ const baseManifest = () => ({
   private: true,
   dependencies: { react: '^19.3.0', '@arcgis/core': '5.1.24' },
   devDependencies: { vite: '^8.3.0' },
-  scripts: { build: 'vite build', test: 'node --test' },
+  scripts: { build: 'vite build', test: 'node --test scripts/dependency-surface-policy.test.mjs' },
   engines: { node: '>=24.0.0', npm: '>=11.0.0' },
 });
 const basePolicy = () => ({ schemaVersion: 1, exceptions: [] });
@@ -902,3 +902,50 @@ for (const script of [
     assert.equal(report(manifest).ok, true, script);
   });
 }
+
+
+// Runtime source hardening must not poison unrelated manifest tests through
+// an implicitly discovered test runner in the shared fixture.
+test('rejects interpreter stdin and implicit test discovery while preserving explicit entrypoints', () => {
+  const unsafe = [
+    'node',
+    'node --test',
+    'node --test --',
+    'node --test --test-name-pattern smoke',
+    'node --check',
+    'node --',
+    'bun',
+    'bun test',
+    'bun test --',
+    'deno',
+    'deno run',
+    'deno test',
+    'tsx',
+    'ts-node',
+    'jiti',
+  ];
+  for (const command of unsafe) {
+    const manifest = baseManifest();
+    manifest.scripts.test = command;
+    assert.ok(codes(report(manifest)).includes('unreviewed-runtime-execution-script'), command);
+    assert.throws(() => collectPackageScriptInvocations(command),
+      (error) => error.code === 'unreviewed-runtime-execution-script', command);
+  }
+  const safe = [
+    'node --version',
+    'node --test scripts/dependency-surface-policy.test.mjs',
+    'node --check scripts/check.mjs',
+    'node --test --test-name-pattern smoke scripts/check.test.mjs',
+    'bun run build',
+    'bun test scripts/check.test.ts',
+    'deno run scripts/check.ts',
+    'deno test scripts/check.test.ts',
+    'tsx scripts/check.ts',
+  ];
+  for (const command of safe) {
+    const manifest = baseManifest();
+    manifest.scripts.test = command;
+    assert.equal(report(manifest).ok, true, command);
+    assert.ok(collectPackageScriptInvocations(command).length > 0, command);
+  }
+});
