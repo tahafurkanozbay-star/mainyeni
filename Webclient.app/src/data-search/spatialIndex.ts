@@ -47,6 +47,9 @@ const normalizeOptions = (options: SpatialIndexOptions = {}): NormalizedSpatialO
 
 const degreesForMeters = (meters: number): number => Math.max(0.00001, meters / 111_320);
 const radians = (degrees: number): number => degrees * Math.PI / 180;
+const degrees = (angle: number): number => angle * 180 / Math.PI;
+// The index uses one canonical meridian for both -180 and +180 degrees.
+const wrapLongitude = (longitude: number): number => ((longitude + 540) % 360) - 180;
 
 export const haversineDistanceMeters = (
   leftInput: Coordinate | readonly [number, number] | null | undefined,
@@ -56,7 +59,7 @@ export const haversineDistanceMeters = (
   const right = normalizeCoordinates(rightInput);
   if (!left || !right) return null;
   const latitudeDelta = radians(right.latitude - left.latitude);
-  const longitudeDelta = radians(right.longitude - left.longitude);
+  const longitudeDelta = radians(wrapLongitude(right.longitude - left.longitude));
   const leftLatitude = radians(left.latitude);
   const rightLatitude = radians(right.latitude);
   const a = Math.sin(latitudeDelta / 2) ** 2
@@ -72,22 +75,24 @@ export const createSpatialBounds = (
   const center = normalizeCoordinates(centerInput);
   const radiusMeters = Number(radiusMetersInput);
   if (!center || !Number.isFinite(radiusMeters) || radiusMeters < 0) return null;
-  if (radiusMeters === 0) {
-    return Object.freeze({
-      minLatitude: center.latitude,
-      maxLatitude: center.latitude,
-      minLongitude: center.longitude,
-      maxLongitude: center.longitude,
-    });
-  }
-  const latitudeDelta = radiusMeters / 111_320;
-  const cosine = Math.max(0.01, Math.cos(radians(center.latitude)));
-  const longitudeDelta = radiusMeters / (111_320 * cosine);
+  const angularRadius = Math.min(Math.PI, radiusMeters / EARTH_RADIUS_METERS);
+  const latitudeDelta = degrees(angularRadius);
+  const minLatitude = Math.max(-90, center.latitude - latitudeDelta);
+  const maxLatitude = Math.min(90, center.latitude + latitudeDelta);
+  // A spherical cap touching either pole spans every longitude. Otherwise
+  // asin(sin(radius / earthRadius) / cos(latitude)) gives the exact longitude
+  // envelope; a fixed cosine floor can discard valid near-pole results.
+  const coversPole = minLatitude <= -90 || maxLatitude >= 90;
+  const longitudeDelta = radiusMeters === 0 ? 0 : coversPole
+    ? 180
+    : degrees(Math.asin(Math.min(1, Math.sin(angularRadius) / Math.cos(radians(center.latitude)))));
+  const allLongitudes = longitudeDelta >= 180;
   return Object.freeze({
-    minLatitude: Math.max(-90, center.latitude - latitudeDelta),
-    maxLatitude: Math.min(90, center.latitude + latitudeDelta),
-    minLongitude: Math.max(-180, center.longitude - longitudeDelta),
-    maxLongitude: Math.min(180, center.longitude + longitudeDelta),
+    minLatitude,
+    maxLatitude,
+    // min > max intentionally denotes a dateline-wrapping interval.
+    minLongitude: allLongitudes ? -180 : wrapLongitude(center.longitude - longitudeDelta),
+    maxLongitude: allLongitudes ? 180 : wrapLongitude(center.longitude + longitudeDelta),
   });
 };
 
@@ -97,10 +102,13 @@ export const isCoordinateInsideBounds = (
 ): boolean => {
   const coordinate = normalizeCoordinates(coordinateInput);
   if (!coordinate || !bounds) return false;
+  const longitude = wrapLongitude(coordinate.longitude);
+  const longitudeMatches = bounds.minLongitude <= bounds.maxLongitude
+    ? longitude >= bounds.minLongitude && longitude <= bounds.maxLongitude
+    : longitude >= bounds.minLongitude || longitude <= bounds.maxLongitude;
   return coordinate.latitude >= bounds.minLatitude
     && coordinate.latitude <= bounds.maxLatitude
-    && coordinate.longitude >= bounds.minLongitude
-    && coordinate.longitude <= bounds.maxLongitude;
+    && longitudeMatches;
 };
 
 const cellCoordinate = (value: number, size: number, offset: number): number =>
@@ -108,7 +116,7 @@ const cellCoordinate = (value: number, size: number, offset: number): number =>
 
 const cellKey = (latitude: number, longitude: number, cellSizeDegrees: number): string => {
   const latitudeCell = cellCoordinate(latitude, cellSizeDegrees, 90);
-  const longitudeCell = cellCoordinate(longitude, cellSizeDegrees, 180);
+  const longitudeCell = cellCoordinate(wrapLongitude(longitude), cellSizeDegrees, 180);
   return `${latitudeCell}:${longitudeCell}`;
 };
 
@@ -183,8 +191,9 @@ const cellInsideRange = (
   range: ReturnType<typeof cellRange>,
 ): boolean => latitudeCell >= range.minLatitudeCell
   && latitudeCell <= range.maxLatitudeCell
-  && longitudeCell >= range.minLongitudeCell
-  && longitudeCell <= range.maxLongitudeCell;
+  && (range.minLongitudeCell <= range.maxLongitudeCell
+    ? longitudeCell >= range.minLongitudeCell && longitudeCell <= range.maxLongitudeCell
+    : longitudeCell >= range.minLongitudeCell || longitudeCell <= range.maxLongitudeCell);
 
 /**
  * Enumerate only occupied index cells that intersect the query bounds.
@@ -256,11 +265,12 @@ export const collectSpatialCandidatePositions = (
     const bucket = index.buckets.get(key);
     if (!bucket) continue;
     for (const position of bucket) {
-      positions.add(position);
-      if (positions.size >= normalized.maxCandidates) {
+      // Saturation is valid; only an additional distinct candidate truncates.
+      if (!positions.has(position) && positions.size >= normalized.maxCandidates) {
         candidateTruncated = true;
         break;
       }
+      positions.add(position);
     }
     if (candidateTruncated) break;
   }
