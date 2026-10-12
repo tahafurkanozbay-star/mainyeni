@@ -36,7 +36,7 @@ export function createResponsiveWorkspaceRuntime(options: WorkspaceRuntimeOption
  const reportError = (error: unknown): void => {
   const capture = (failure: unknown): void => {
    try { runtimeDiagnostics.captureError(failure, { source: 'experience.responsive-workspace.observer' }, 'warn'); }
-   catch { /* Diagnostics cannot interrupt workspace interaction. */ }
+   catch { console.warn('Responsive workspace diagnostic reporting failed.'); }
   };
   if (!options.onError) { capture(error); return; }
   try { options.onError(error); }
