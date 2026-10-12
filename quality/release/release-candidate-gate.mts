@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import process from 'node:process';
 
 export const RELEASE_GATE_VERSION = 1 as const;
 export const MIN_MEANINGFUL_ADDITIONS = 4000;
@@ -322,7 +321,7 @@ export function parseCandidateJson(text: string): Record<string, unknown> {
   return parsed;
 }
 
-export function runReleaseCandidateCli(args: readonly string[] = process.argv.slice(2)): void {
+export function runReleaseCandidateCli(args: readonly string[]): boolean {
   const strict = args.includes('--strict');
   if (args.includes('--self-test')) {
     const base = 'a'.repeat(40);
@@ -343,13 +342,13 @@ export function runReleaseCandidateCli(args: readonly string[] = process.argv.sl
       checks: REQUIRED_CHECKS.map(name => ({ name, status: 'completed', conclusion: 'success', headSha: head })),
     });
     if (!result.passed) throw new Error(formatReleaseCandidateResult(result));
-    process.stdout.write('Release candidate gate self-test: PASS\n');
-    return;
+    console.log('Release candidate gate self-test: PASS');
+    return true;
   }
   const fileIndex = args.indexOf('--file');
   const file = fileIndex >= 0 ? args[fileIndex + 1] : undefined;
   if (!file) throw new Error('Usage: release-candidate-gate.mjs --file <candidate.json> [--strict]');
   const result = evaluateReleaseCandidate(parseCandidateJson(fs.readFileSync(file, 'utf8')));
-  process.stdout.write(formatReleaseCandidateResult(result) + '\n');
-  if (strict && !result.passed) process.exitCode = 1;
+  console.log(formatReleaseCandidateResult(result));
+  return !strict || result.passed;
 }
