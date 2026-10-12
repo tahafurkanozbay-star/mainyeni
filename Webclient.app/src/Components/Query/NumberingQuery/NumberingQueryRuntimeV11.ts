@@ -415,10 +415,12 @@ export class NumberingQueryRuntimeV11 {
 
   #publish(): void {
     this.#snapshot = this.#buildSnapshot();
+    let observerFailed = false;
     for (const observer of [...this.#observers]) {
       try {
         observer();
       } catch (error) {
+        observerFailed = true;
         this.#metrics.observerFailures += 1;
         try {
           this.#effects.reportObserverError?.(error);
@@ -427,6 +429,7 @@ export class NumberingQueryRuntimeV11 {
         }
       }
     }
+    if (observerFailed) this.#snapshot = this.#buildSnapshot();
   }
 
   #begin(level: NumberingLevelV11, operation: string): RequestTokenV11 {
@@ -531,6 +534,7 @@ export class NumberingQueryRuntimeV11 {
   #recordStale(token: RequestTokenV11): void {
     this.#metrics.staleResponses += 1;
     this.#recordHistory(token, 'stale', 0, '');
+    if (!this.#disposed) this.#publish();
   }
 
   #recordHistory(
