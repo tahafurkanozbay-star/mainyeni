@@ -22,7 +22,7 @@ describe('resolveMapModePresentation', () => {
       livePoliteness: 'polite',
       interactionState: 'ready',
       transitionSpeed: 'unknown',
-      retryVisible: false,
+      recoveryActionVisible: false,
       controlsDisabled: false,
       activeModeLabel: '2B',
       requestedModeLabel: null,
@@ -98,7 +98,7 @@ describe('resolveMapModePresentation', () => {
     }));
     expect(facts).toMatchObject({
       interactionState: 'recoverable',
-      retryVisible: true,
+      recoveryActionVisible: true,
       controlsDisabled: false,
       statusRole: 'alert',
       livePoliteness: 'assertive',
@@ -114,7 +114,7 @@ describe('resolveMapModePresentation', () => {
     const facts = resolveMapModePresentation(model.getSnapshot());
     expect(facts).toMatchObject({
       interactionState: 'terminal-error',
-      retryVisible: false,
+      recoveryActionVisible: false,
       statusRole: 'alert',
       livePoliteness: 'assertive',
     });
@@ -187,7 +187,7 @@ describe('resolveMapModePresentation', () => {
 
     expect(resolveMapModePresentation(model.getSnapshot())).toMatchObject({
       interactionState: 'ready',
-      retryVisible: false,
+      recoveryActionVisible: false,
       activeModeLabel: '3B',
       requestedModeLabel: null,
     });
