@@ -41,8 +41,11 @@ function integer(value: number, name: string, min: number, max: number): number 
 }
 
 function text(value: string, name: string, maxLength: number): string {
+  // Validate original input before trim(), which otherwise erases leading or
+  // trailing ASCII controls and aliases distinct service/query identities.
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`invalid-${name}`)
   const normalized = value.trim()
-  if (!normalized || normalized.length > maxLength || /[\u0000-\u001f\u007f]/.test(normalized)) throw new Error(`invalid-${name}`)
+  if (!normalized || normalized.length > maxLength) throw new Error(`invalid-${name}`)
   return normalized
 }
 
@@ -64,6 +67,8 @@ export class ArcGisQuerySchedulerPolicy {
   private readonly queued = new Map<string, ArcGisQueryAdmission>()
   private readonly running = new Map<string, ArcGisQueryLease>()
   private runningBytes = 0
+  // Never allow a clock rollback to resurrect completed/expired query work.
+  private lastObservedMs = 0
   private disposed = false
 
   constructor(budget: ArcGisQuerySchedulerBudget) {
@@ -114,7 +119,9 @@ export class ArcGisQuerySchedulerPolicy {
 
   startNext(nowMsInput: number): ArcGisQueryLease | undefined {
     this.assertLive()
-    const nowMs = integer(nowMsInput, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
+    const nowMs = this.observeClock(nowMsInput)
+    // Fail before mutating queue or running state on impossible lease deadlines.
+    if (nowMs > Number.MAX_SAFE_INTEGER - this.budget.maxRunMs) throw new Error('query-lease-overflow')
     this.pruneExpiredQueued(nowMs)
     this.expireRunning(nowMs)
     if (this.running.size >= this.budget.maxRunning) return undefined
@@ -126,9 +133,10 @@ export class ArcGisQuerySchedulerPolicy {
       a.layerId.localeCompare(b.layerId),
     )
     for (const candidate of candidates) {
+      // A higher-priority future request must not bypass its actual enqueue time.
+      if (candidate.enqueuedAtMs > nowMs) continue
       if (this.runningForLayer(candidate.layerId) >= this.budget.maxPerLayerRunning) continue
       if (this.runningBytes + candidate.estimatedResponseBytes > this.budget.maxAggregateRunningBytes) continue
-      if (nowMs > Number.MAX_SAFE_INTEGER - this.budget.maxRunMs) throw new Error('query-lease-overflow')
       this.queued.delete(candidate.requestId)
       const lease = Object.freeze({ ...candidate, startedAtMs: nowMs, expiresAtMs: nowMs + this.budget.maxRunMs })
       this.running.set(lease.requestId, lease)
@@ -177,7 +185,7 @@ export class ArcGisQuerySchedulerPolicy {
 
   tick(nowMsInput: number): { readonly queuedExpired: number; readonly runningExpired: number } {
     this.assertLive()
-    const nowMs = integer(nowMsInput, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
+    const nowMs = this.observeClock(nowMsInput)
     return Object.freeze({ queuedExpired: this.pruneExpiredQueued(nowMs), runningExpired: this.expireRunning(nowMs) })
   }
 
@@ -194,6 +202,13 @@ export class ArcGisQuerySchedulerPolicy {
     this.queued.clear()
     this.running.clear()
     this.runningBytes = 0
+    this.lastObservedMs = 0
+  }
+
+  private observeClock(nowMsInput: number): number {
+    const observed = integer(nowMsInput, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
+    this.lastObservedMs = Math.max(this.lastObservedMs, observed)
+    return this.lastObservedMs
   }
 
   private runningForLayer(layerId: string): number {
