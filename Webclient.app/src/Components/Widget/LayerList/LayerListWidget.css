@@ -1,6 +1,6 @@
 .layer-list-modern {
   --layer-list-row-min: 46px;
-  --layer-list-action-size: 40px;
+  --layer-list-action-size: 44px;
   --layer-list-radius: 12px;
   --layer-list-gap: 8px;
   --layer-list-tree-indent: 18px;
@@ -119,7 +119,7 @@
 }
 
 .layer-list-search-shell button {
-  min-block-size: 40px;
+  min-block-size: 44px;
   margin-inline-end: 4px;
   padding-inline: 10px;
   border: 0;
