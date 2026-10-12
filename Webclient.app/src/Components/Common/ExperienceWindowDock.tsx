@@ -15,6 +15,7 @@ import {
   createWindowWorkspaceModel,
   type WindowWorkspaceEntry,
   type WindowWorkspaceScope,
+  type WindowWorkspaceSnapshot,
 } from '../../experience/workspace/windowWorkspaceModel';
 import {
   createWindowWorkspaceKeyboardPolicy,
@@ -30,7 +31,7 @@ export interface ExperienceWindowDockProps {
 
 const policy = createWindowWorkspaceKeyboardPolicy();
 
-const emptyCopy = (reason: ReturnType<ReturnType<typeof createWindowWorkspaceModel>['getSnapshot']>['emptyReason']): Readonly<{
+const emptyCopy = (reason: WindowWorkspaceSnapshot['emptyReason']): Readonly<{
   title: string;
   description: string;
 }> => {
