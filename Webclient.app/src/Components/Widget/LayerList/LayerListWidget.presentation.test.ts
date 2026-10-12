@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(new URL('./LayerListWidget.css', import.meta.url), 'utf8');
+const css = readFileSync(resolve(process.cwd(), 'src/Components/Widget/LayerList/LayerListWidget.css'), 'utf8');
 
 const extractBlock = (pattern: RegExp): string => {
   const match = css.match(pattern);
