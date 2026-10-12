@@ -60,7 +60,7 @@ const createSnapshot = (
 export class MapModeFocusModel {
   readonly #listeners = new Set<Listener>();
   readonly #maxObservers: number;
-  readonly #onObserverError?: (error: unknown) => void;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   #snapshot: MapModeFocusSnapshot;
   #diagnostics: MapModeFocusDiagnostics;
   #disposed = false;
