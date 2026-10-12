@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import process from 'node:process';
 import {
   REQUIRED_CHECKS,
   evaluateReleaseCandidate,
@@ -338,9 +337,6 @@ export function evaluateReleaseAdmissionSnapshot(
   if (!isRecord(input)) {
     return invalidResult([finding('snapshot-invalid', '$', 'Release admission snapshot must be an object.')]);
   }
-  if (!isRecord(options)) {
-    return invalidResult([finding('policy-invalid', 'options', 'Release admission policy must be an object.')]);
-  }
   if (input.version !== RELEASE_ADMISSION_SNAPSHOT_VERSION) {
     findings.push(finding('snapshot-version', 'version', `Snapshot version must be ${RELEASE_ADMISSION_SNAPSHOT_VERSION}.`));
   }
@@ -363,7 +359,7 @@ export function evaluateReleaseAdmissionSnapshot(
       runs: workflowRuns,
       maxEvidenceAgeMs: input.maxEvidenceAgeMs,
       observedAt: input.observedAt,
-    }, options.requiredWorkflows === undefined ? {} : { required: options.requiredWorkflows });
+    }, Array.isArray(options.requiredWorkflows) ? { required: options.requiredWorkflows } : {});
     for (const item of workflow.findings) {
       findings.push(finding(`workflow-${item.code}`, `workflow.${item.field}`, item.message));
     }
@@ -382,7 +378,7 @@ export function evaluateReleaseAdmissionSnapshot(
       mergeable: pullRequest.mergeable,
       draft: pullRequest.draft,
       checks: candidateChecks(workflowRuns, pullRequest.headSha),
-    }, options.requiredChecks === undefined ? {} : { requiredChecks: options.requiredChecks });
+    }, Array.isArray(options.requiredChecks) ? { requiredChecks: options.requiredChecks } : {});
     for (const item of candidate.findings) {
       findings.push(finding(`candidate-${item.code}`, `candidate.${item.field}`, item.message));
     }
@@ -423,13 +419,13 @@ export function formatReleaseAdmissionSnapshot(result: ReleaseAdmissionResult): 
   ].join('\n');
 }
 
-export function runReleaseAdmissionSnapshotCli(args: readonly string[] = process.argv.slice(2)): void {
+export function runReleaseAdmissionSnapshotCli(args: readonly string[]): boolean {
   const index = args.indexOf('--file');
   const file = index >= 0 ? args[index + 1] : undefined;
   if (!file) throw new Error('Usage: release-admission-snapshot.mjs --file <snapshot.json> [--strict]');
   const result = evaluateReleaseAdmissionSnapshot(
     parseReleaseAdmissionSnapshot(fs.readFileSync(file, 'utf8')),
   );
-  process.stdout.write(formatReleaseAdmissionSnapshot(result) + '\n');
-  if (args.includes('--strict') && !result.passed) process.exitCode = 1;
+  console.log(formatReleaseAdmissionSnapshot(result));
+  return !args.includes('--strict') || result.passed;
 }
