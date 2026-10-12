@@ -286,11 +286,29 @@ describe('LayerListExperienceModel', () => {
     expect(model.getSnapshot().activeKey).toBe('group:base');
   });
 
-  it('expands a collapsed group and moves to its first child', () => {
+  it('expands a collapsed group without moving the active tree item', () => {
     const model = new LayerListExperienceModel();
     model.replace(GROUPS);
     model.moveActive('first-child');
+    expect(model.getSnapshot().activeKey).toBe('group:base');
+    expect(model.getSnapshot().rows.map((row) => row.key)).toContain('layer:base:roads');
+  });
+
+  it('moves to the first child when the active group is already expanded', () => {
+    const model = new LayerListExperienceModel();
+    model.replace(GROUPS);
+    model.toggleGroup('base');
+    model.moveActive('first-child');
     expect(model.getSnapshot().activeKey).toBe('layer:base:roads');
+  });
+
+  it('collapses an expanded active group on parent intent', () => {
+    const model = new LayerListExperienceModel();
+    model.replace(GROUPS);
+    model.toggleGroup('base');
+    model.moveActive('parent');
+    expect(model.getSnapshot().activeKey).toBe('group:base');
+    expect(model.getSnapshot().rows.map((row) => row.key)).not.toContain('layer:base:roads');
   });
 
   it('preserves an active row when it remains visible after mutation', () => {
