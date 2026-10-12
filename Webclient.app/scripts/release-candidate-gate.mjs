@@ -3,5 +3,5 @@ export * from '../../quality/release/release-candidate-gate.mts';
 import { runReleaseCandidateCli } from '../../quality/release/release-candidate-gate.mts';
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
-  runReleaseCandidateCli();
+  if (!runReleaseCandidateCli(process.argv.slice(2))) process.exitCode = 1;
 }
