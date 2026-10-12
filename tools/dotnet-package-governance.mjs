@@ -9,7 +9,7 @@ const REPOSITORY_ROOT = path.resolve(path.dirname(CURRENT_FILE), '..');
 const CENTRAL_FILE = 'Directory.Packages.props';
 const EXCLUDED_DIRECTORIES = new Set(['.git','.idea','.vs','.vscode','artifacts','bin','build','coverage','dist','node_modules','obj']);
 const PACKAGE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const STABLE_VERSION = /^\\d+(?:\\.\\d+){1,3}$/;
+const STABLE_VERSION = /^\d+(?:\.\d+){1,3}$/;
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value ?? {}, key);
 const lower = value => String(value ?? '').trim().toLowerCase();
 const normalizePath = value => value.split(path.sep).join('/');
@@ -24,7 +24,7 @@ export const decodeXmlAttribute = value => String(value ?? '')
 
 export const parseAttributes = source => {
   const attributes = {};
-  const pattern = /([A-Za-z_][\\w:.-]*)\\s*=\\s*(?:"([^"]*)"|'([^']*)')/g;
+  const pattern = /([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
   for (const match of String(source ?? '').matchAll(pattern)) {
     const name = match[1];
     if (own(attributes, name)) throw new Error('duplicate XML attribute ' + name);
@@ -33,11 +33,11 @@ export const parseAttributes = source => {
   return freeze(attributes);
 };
 
-const stripComments = source => String(source ?? '').replace(/<!--(?:.|\\r|\\n)*?-->/g, '');
+const stripComments = source => String(source ?? '').replace(/<!--(?:.|\r|\n)*?-->/g, '');
 
 export const extractElements = (xml, tagName) => {
   const source = stripComments(xml);
-  const escaped = String(tagName).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');
+  const escaped = String(tagName);
   const paired = new RegExp('<' + escaped + '\\b([^>]*)>([\\s\\S]*?)<\\/' + escaped + '\\s*>', 'gi');
   const selfClosing = new RegExp('<' + escaped + '\\b([^>]*)\\/\\s*>', 'gi');
   const result = [];
@@ -48,7 +48,7 @@ export const extractElements = (xml, tagName) => {
 
 export const extractPropertyValues = (xml, propertyName) => {
   const source = stripComments(xml);
-  const escaped = String(propertyName).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');
+  const escaped = String(propertyName);
   const pattern = new RegExp('<' + escaped + '\\b[^>]*>([\\s\\S]*?)<\\/' + escaped + '\\s*>', 'gi');
   return freeze([...source.matchAll(pattern)].map(match => String(match[1] ?? '').trim()).filter(Boolean));
 };
@@ -121,7 +121,7 @@ export const parseProjectFile = (xml, file) => {
     const { action, value } = actionFromAttributes(element.attributes);
     if (action === 'Remove') continue;
     if (action !== 'Include' || !String(value ?? '').trim()) { findings.push(finding('project-reference-invalid', file, 'ProjectReference requires a non-empty Include path.')); continue; }
-    projectReferences.push(freeze({ path: String(value).trim().replace(/\\\\/g,'/'), condition: element.attributes.Condition?.trim() || null }));
+    projectReferences.push(freeze({ path: String(value).trim().replace(/\\/g,'/'), condition: element.attributes.Condition?.trim() || null }));
   }
   return freeze({ packageReferences: freeze(packageReferences), projectReferences: freeze(projectReferences), findings: freeze(findings) });
 };
@@ -187,10 +187,10 @@ export const loadDotnetPackageInventory = async (root = REPOSITORY_ROOT) => {
   return freeze({ centralXml, projects });
 };
 
-const escapeMd = value => String(value ?? '').replaceAll('|','\\|').replaceAll('\\n',' ');
+const escapeMd = value => String(value ?? '').replaceAll('|','\\|').replaceAll('\n',' ');
 export const renderDotnetPackageGovernanceMarkdown = report => {
-  const findingRows = report.findings.length ? report.findings.map(item=>'| '+item.severity+' | '+item.code+' | '+escapeMd(item.file)+' | '+escapeMd(item.package)+' | '+escapeMd(item.message)+' |').join('\\n') : '| _none_ | | | | |';
-  const catalogRows = report.catalog.length ? report.catalog.map(item=>'| '+escapeMd(item.id)+' | '+escapeMd(item.version)+' | '+(report.usage.find(use=>lower(use.id)===lower(item.id))?.projects.length ?? 0)+' |').join('\\n') : '| _none_ | | |';
+  const findingRows = report.findings.length ? report.findings.map(item=>'| '+item.severity+' | '+item.code+' | '+escapeMd(item.file)+' | '+escapeMd(item.package)+' | '+escapeMd(item.message)+' |').join('\n') : '| _none_ | | | | |';
+  const catalogRows = report.catalog.length ? report.catalog.map(item=>'| '+escapeMd(item.id)+' | '+escapeMd(item.version)+' | '+(report.usage.find(use=>lower(use.id)===lower(item.id))?.projects.length ?? 0)+' |').join('\n') : '| _none_ | | |';
   return '# .NET Package Governance\\n\\n- Gate: **'+(report.ok?'PASS':'FAIL')+'**\\n- Fingerprint: `'+report.fingerprint+'`\\n- Projects: **'+report.summary.projects+'**\\n- Central packages: **'+report.summary.centralPackages+'**\\n- Referenced packages: **'+report.summary.referencedPackages+'**\\n- Errors: **'+report.summary.errors+'**\\n- Warnings: **'+report.summary.warnings+'**\\n\\n## Findings\\n\\n| Severity | Code | File | Package | Message |\\n| --- | --- | --- | --- | --- |\\n'+findingRows+'\\n\\n## Central catalog\\n\\n| Package | Version | Referencing projects |\\n| --- | --- | ---: |\\n'+catalogRows+'\\n';
 };
 
