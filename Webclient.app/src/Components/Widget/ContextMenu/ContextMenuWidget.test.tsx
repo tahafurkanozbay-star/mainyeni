@@ -127,7 +127,9 @@ describe('ContextMenuWidget', () => {
     show();
     act(() => ref.current?.OnShow?.());
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Bilgi Al' }));
-    expect(manager.ShowWindow).toHaveBeenCalledWith('global-identify-widget');
+    expect(manager.ShowWindow).toHaveBeenCalledWith('global-identify-widget', {
+      selectionEvent: expect.objectContaining({ mapPoint: expect.objectContaining({ latitude: 39.93 }) }),
+    });
     expect(manager.HideWindow).toHaveBeenCalledWith('context-menu');
   });
 
@@ -138,7 +140,9 @@ describe('ContextMenuWidget', () => {
     show();
     act(() => ref.current?.OnShow?.());
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Yakınımda Ara' }));
-    expect(manager.ShowWindow).toHaveBeenCalledWith('vicinity-query-window');
+    expect(manager.ShowWindow).toHaveBeenCalledWith('vicinity-query-window', {
+      selectionEvent: expect.objectContaining({ mapPoint: expect.objectContaining({ latitude: 39.93 }) }),
+    });
     expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledWith(
       { id: 'map-view' },
       clickedPoint,
@@ -182,6 +186,22 @@ describe('ContextMenuWidget', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Yol Tarifi Al' }));
     expect(manager.ShowWindow).not.toHaveBeenCalled();
     expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps menu actions bound to the opening click after another map click', async () => {
+    const { manager, show } = createManager();
+    const ref = createRef<ManagedWindowHandle>();
+    render(<ContextMenuWidget ref={ref} id="context-menu" windowManager={manager as never} />);
+    show();
+    act(() => ref.current?.OnShow?.());
+    vi.mocked(MapManager.GetMapClickEvent).mockReturnValue({
+      x: 20, y: 30, mapPoint: { latitude: 41, longitude: 29, x: 29, y: 41 },
+    } as never);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Yakınımda Ara' }));
+    expect(manager.ShowWindow).toHaveBeenCalledWith('vicinity-query-window', {
+      selectionEvent: expect.objectContaining({ mapPoint: expect.objectContaining({ latitude: 39.93, longitude: 32.82 }) }),
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledWith({ id: 'map-view' }, expect.objectContaining({ latitude: 39.93 }), 14);
   });
 
   it('unregisters the managed window on unmount', () => {

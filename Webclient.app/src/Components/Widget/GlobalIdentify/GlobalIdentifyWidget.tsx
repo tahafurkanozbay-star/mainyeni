@@ -28,6 +28,7 @@ import {
   objectIdFromIdentifyResult,
   safeRecordEntries,
 } from '../_shared/MapWidgetRuntime';
+import { selectionFromWindowQuery, snapshotMapSelection } from '../_shared/MapSelectionSnapshot';
 import './GlobalIdentifyWidget.css';
 
 interface IdentifyFeatureResult {
@@ -143,7 +144,9 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
       visible: false,
       minimized: false,
       OnShow: () => {
-        void executeIdentify(MapManager.GetMapClickEvent());
+        const selected = selectionFromWindowQuery(windowManager.GetQueryParams?.(id))
+          ?? snapshotMapSelection(MapManager.GetMapClickEvent());
+        void executeIdentify(selected);
       },
       OnClose: () => {
         cancelIdentify();

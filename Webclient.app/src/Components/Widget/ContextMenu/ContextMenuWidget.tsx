@@ -26,6 +26,7 @@ import {
   openExternalUrl,
   type ContextMenuPosition,
 } from '../_shared/MapWidgetRuntime';
+import { snapshotMapSelection, type MapSelectionEvent } from '../_shared/MapSelectionSnapshot';
 import './ContextMenuWidget.css';
 
 interface MapClickEventLike {
@@ -54,6 +55,7 @@ const isRestorableFocusTarget = (value: Element | null): value is HTMLElement =>
 export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidgetProps>(
   ({ id, windowManager }, ref): ReactNode => {
     const focusOriginRef = useRef<HTMLElement | null>(null);
+    const selectionRef = useRef<MapSelectionEvent | null>(null);
     const [requestedPosition, setRequestedPosition] = useState<ContextMenuPosition>({ x: 0, y: 0 });
     const [position, setPosition] = useState<ContextMenuPosition>({ x: 8, y: 8 });
     const [focusRequestKey, setFocusRequestKey] = useState(0);
@@ -69,18 +71,17 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
 
     const close = useCallback((restore = true): void => {
       windowManager.HideWindow(id);
+      selectionRef.current = null;
       if (restore) restoreFocus();
       else focusOriginRef.current = null;
     }, [id, restoreFocus, windowManager]);
 
-    const getClickedPoint = useCallback((): unknown | null => (
-      (MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null)?.mapPoint ?? null
-    ), []);
+    const getClickedPoint = useCallback((): unknown | null => selectionRef.current?.mapPoint ?? null, []);
 
     const showVicinityQuery = useCallback((): void => {
       const point = getClickedPoint();
       if (!point) return;
-      windowManager.ShowWindow('vicinity-query-window');
+      windowManager.ShowWindow('vicinity-query-window', { selectionEvent: selectionRef.current });
       close();
       GisGraphicsHelper.ZoomToGeometry(MapManager.GetMapView(), point, 14);
     }, [close, getClickedPoint, windowManager]);
@@ -88,7 +89,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
     const showIdentify = useCallback((): void => {
       const point = getClickedPoint();
       if (!point) return;
-      windowManager.ShowWindow('global-identify-widget');
+      windowManager.ShowWindow('global-identify-widget', { selectionEvent: selectionRef.current });
       close();
     }, [close, getClickedPoint, windowManager]);
 
@@ -165,6 +166,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       OnShow: () => {
         const clickEvent = MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null;
         if (!clickEvent) return;
+        selectionRef.current = snapshotMapSelection(clickEvent);
         const activeElement = document.activeElement;
         focusOriginRef.current = isRestorableFocusTarget(activeElement) ? activeElement : null;
         const nextRequested = {
@@ -175,13 +177,14 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
         positionMenuAt(nextRequested);
         setFocusRequestKey((current) => current + 1);
       },
-      OnClose: () => restoreFocus(),
+      OnClose: () => { selectionRef.current = null; restoreFocus(); },
     }), [id, positionMenuAt, restoreFocus]);
 
     useEffect(() => {
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
       return () => {
         focusOriginRef.current = null;
+        selectionRef.current = null;
         windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
       };
     }, [id, ref, windowManager]);
