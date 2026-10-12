@@ -51,6 +51,8 @@ jobs:
         working-directory: KentRehberi/webclient
         run: |
           ../../Webclient.app/node_modules/.bin/oxlint --deny-warnings --allow no-control-regex \
+            src/lib/gis/ArcGisQuerySchedulerPolicy.ts \
+            src/lib/gis/ArcGisQuerySchedulerPolicy.test.ts \
             src/lib/gis/ArcGisQueryCoordinator.ts \
             src/lib/gis/ArcGisQueryPagePlanner.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.ts \
