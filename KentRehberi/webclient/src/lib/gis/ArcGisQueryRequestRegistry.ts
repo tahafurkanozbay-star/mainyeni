@@ -37,12 +37,10 @@ interface InFlightEntry {
 }
 
 interface CachedEntry {
-  readonly key: string
   readonly result: Extract<ArcGisQueryExecutionResult, { kind: 'completed' }>
   readonly features: number
   readonly bytes: number
   readonly expiresAt: number
-  lastAccessSequence: number
 }
 
 type RegistryBudget = Required<ArcGisQueryRequestRegistryOptions>
@@ -116,7 +114,6 @@ export class ArcGisQueryRequestRegistry {
   #cachedFeatures = 0
   #cachedBytes = 0
   #subscriberId = 0
-  #accessSequence = 0
   #observedNow = 0
   #disposed = false
 
@@ -169,7 +166,9 @@ export class ArcGisQueryRequestRegistry {
     this.#pruneExpired(now)
     const cached = this.#cache.get(normalizedKey)
     if (cached !== undefined) {
-      cached.lastAccessSequence = ++this.#accessSequence
+      // Map insertion order is the LRU authority; hit promotion is O(1).
+      this.#cache.delete(normalizedKey)
+      this.#cache.set(normalizedKey, cached)
       return Promise.resolve(cached.result)
     }
 
@@ -308,24 +307,20 @@ export class ArcGisQueryRequestRegistry {
     if (now > Number.MAX_SAFE_INTEGER - this.#options.successTtlMs) return
     this.#deleteCache(key)
     this.#cache.set(key, {
-      key,
       result,
       features,
       bytes,
       expiresAt: now + this.#options.successTtlMs,
-      lastAccessSequence: ++this.#accessSequence,
     })
     this.#cachedFeatures += features
     this.#cachedBytes += bytes
     while (this.#cache.size > this.#options.maxEntries ||
            this.#cachedFeatures > this.#options.maxCachedFeatures ||
            this.#cachedBytes > this.#options.maxCachedBytes) {
-      let oldest: CachedEntry | undefined
-      for (const candidate of this.#cache.values()) {
-        if (oldest === undefined || candidate.lastAccessSequence < oldest.lastAccessSequence) oldest = candidate
-      }
-      if (oldest === undefined) break
-      this.#deleteCache(oldest.key)
+      // Oldest Map key is the least recently used entry; no O(n) scan.
+      const oldestKey = this.#cache.keys().next().value
+      if (oldestKey === undefined) break
+      this.#deleteCache(oldestKey)
     }
   }
 
