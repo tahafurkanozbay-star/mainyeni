@@ -166,4 +166,74 @@ describe('ArcGIS query dedupe cross-layer integrity and pressure', () => {
     }
     expect(policy.snapshot()).toMatchObject({ layers: 1, entries: 0 })
   })
+  it('holds future-dated work until the actual requested clock time, regardless of priority', () => {
+    const policy = create()
+    policy.setRevision('parcels', 1)
+    expect(policy.admit(request('future', 'parcels', 'future', 1, 'interactive', 100))).toBe('admitted')
+    expect(policy.admit(request('ready', 'parcels', 'ready', 1, 'background', 0))).toBe('admitted')
+    expect(policy.startNext(1)?.requestId).toBe('ready')
+    expect(policy.complete('ready', 1, 1, 1, 2)).not.toBeNull()
+    expect(policy.startNext(99)).toBeNull()
+    expect(policy.snapshot().pending).toBe(1)
+    expect(policy.startNext(100)?.requestId).toBe('future')
+  })
+
+  it('rejects unsafe timestamps, budgets and overflow at admission without an orphaned signature', () => {
+    expect(() => create({ cacheTtlMs: Number.POSITIVE_INFINITY })).toThrow()
+    expect(() => create({ requestLeaseMs: 0.5 })).toThrow()
+    const policy = create()
+    policy.setRevision('parcels', 1)
+    expect(() => policy.admit(request('unsafe', 'parcels', 'unsafe', 1, 'visible', Number.MAX_SAFE_INTEGER))).toThrow('deadline overflow')
+    expect(() => policy.admit(request('fraction', 'parcels', 'fraction', 1, 'visible', 0.5))).toThrow()
+    expect(policy.snapshot()).toMatchObject({ entries: 0, pending: 0 })
+    expect(policy.admit(request('safe'))).toBe('admitted')
+  })
+
+  it('does not consume a future-ineligible queue entry when its lease would overflow', () => {
+    const max = Number.MAX_SAFE_INTEGER
+    const policy = create({ pendingTtlMs: 100, requestLeaseMs: 200 })
+    policy.setRevision('parcels', 1)
+    expect(policy.admit(request('late', 'parcels', 'late', 1, 'visible', max - 150))).toBe('admitted')
+    expect(policy.startNext(max - 151)).toBeNull()
+    expect(() => policy.startNext(max - 150)).toThrow('lease deadline overflow')
+    expect(policy.snapshot()).toMatchObject({ pending: 1, inflight: 0 })
+    expect(policy.cancel('late')).toBe(true)
+    expect(policy.snapshot().entries).toBe(0)
+  })
+
+  it('does not mutate a running lease when renewal or cache residency deadline overflows', () => {
+    const max = Number.MAX_SAFE_INTEGER
+    const policy = create({ pendingTtlMs: 100, requestLeaseMs: 100, cacheTtlMs: 200 })
+    policy.setRevision('parcels', 1)
+    policy.admit(request('late', 'parcels', 'late', 1, 'visible', max - 150))
+    const lease = policy.startNext(max - 150)
+    expect(lease?.expiresAt).toBe(max - 50)
+    expect(() => policy.renew('late', 1, max - 99)).toThrow('lease deadline overflow')
+    expect(() => policy.complete('late', 1, 1, 1, max - 99)).toThrow('cache deadline overflow')
+    expect(policy.snapshot()).toMatchObject({ pending: 0, inflight: 1, cached: 0 })
+    expect(policy.expire(max - 50)).toBe(1)
+    expect(policy.snapshot().entries).toBe(0)
+  })
+
+  it('keeps the observed clock monotonic and prevents expired lease resurrection', () => {
+    const policy = create({ requestLeaseMs: 10, cacheTtlMs: 20 })
+    policy.setRevision('parcels', 1)
+    policy.admit(request('clock'))
+    expect(policy.startNext(1)?.expiresAt).toBe(11)
+    expect(policy.renew('clock', 1, 5)).toBe(true)
+    expect(policy.renew('clock', 1, 4)).toBe(false)
+    expect(policy.complete('clock', 1, 1, 1, 4)).toBeNull()
+    expect(policy.complete('clock', 1, 1, 1, 6)?.expiresAt).toBe(26)
+    expect(policy.lookup('clock', 'parcels', 1, 5)).toBeNull()
+    expect(policy.lookup('clock', 'parcels', 1, 10)?.expiresAt).toBe(30)
+    expect(policy.expire(30)).toBe(1)
+    expect(policy.expire(9)).toBe(0)
+    expect(policy.lookup('clock', 'parcels', 1, 9)).toBeNull()
+
+    policy.admit(request('expired', 'parcels', 'expired', 1, 'visible', 31))
+    expect(policy.startNext(31)?.requestId).toBe('expired')
+    expect(policy.renew('expired', 1, 41)).toBe(false)
+    expect(policy.snapshot()).toMatchObject({ inflight: 0, cached: 0 })
+  })
+
 })
