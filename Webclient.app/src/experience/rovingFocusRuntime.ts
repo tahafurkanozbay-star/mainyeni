@@ -162,6 +162,42 @@ export const reconcileRovingIndex = (
   return getInitialRovingIndex(nextItems, previousIndex);
 };
 
+/** A locale-aware lookup for native menu typeahead. */
+export interface RovingTypeaheadItem extends RovingFocusItem {
+  readonly label: string;
+}
+
+const normalizeRovingLabel = (value: string): string => value
+  .trim()
+  .toLocaleLowerCase('tr-TR')
+  .replace(/ı/g, 'i')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '');
+
+/** Search from the next enabled item and wrap once; repeated letters cycle. */
+export const resolveRovingTypeaheadMove = (
+  items: readonly RovingTypeaheadItem[],
+  currentIndex: number,
+  query: string,
+): RovingFocusMove | null => {
+  const normalized = normalizeRovingLabel(query);
+  if (!normalized) return null;
+  const characters = Array.from(normalized);
+  const needle = characters.length > 1 && characters.every((value) => value === characters[0])
+    ? characters[0] ?? normalized
+    : normalized;
+  const available = getAvailableRovingIndices(items);
+  if (available.length === 0) return null;
+  const currentPosition = available.indexOf(currentIndex);
+  for (let step = 1; step <= available.length; step += 1) {
+    const index = available[(currentPosition + step) % available.length];
+    if (index === undefined) continue;
+    const item = items[index];
+    if (item && normalizeRovingLabel(item.label).startsWith(needle)) return { index, id: item.id };
+  }
+  return null;
+};
+
 export const focusRovingTarget = (
   root: ParentNode | null | undefined,
   id: string,
