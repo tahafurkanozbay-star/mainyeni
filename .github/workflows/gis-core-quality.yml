@@ -58,6 +58,8 @@ jobs:
             src/lib/gis/ArcGisQueryRequestRegistry.integrity.test.ts \
             src/lib/gis/ArcGisQueryResultSnapshot.ts \
             src/lib/gis/ArcGisQueryResultSnapshot.test.ts \
+            src/lib/gis/ArcGisQueryPlanSnapshot.ts \
+            src/lib/gis/ArcGisQueryPlanSnapshot.test.ts \
             src/lib/gis/ArcGisQueryFeatureAccumulator.ts \
             src/lib/gis/ArcGisQueryFeatureAccumulator.test.ts \
             src/lib/gis/ArcGisQueryFeatureAccumulator.integrity.test.ts \

@@ -147,7 +147,7 @@ function captureFailure(raw: object): ArcGisQueryExecutionResult | null {
 }
 
 /** Null means a malformed executor response: never forward the original. */
-export function snapshotArcGisQueryResult(
+function snapshotUnchecked(
   raw: unknown,
   requestedKey: string,
   limits: ArcGisQueryResultSnapshotLimits,
@@ -196,4 +196,17 @@ export function snapshotArcGisQueryResult(
     objectIds: Object.freeze(objectIds), features: Object.freeze(copies),
   })
   return Object.freeze({ result, bytes: budget.bytes, features: copies.length })
+}
+
+/** Malformed executor payloads and throwing Proxy traps both fail closed. */
+export function snapshotArcGisQueryResult(
+  raw: unknown,
+  requestedKey: string,
+  limits: ArcGisQueryResultSnapshotLimits,
+): ArcGisQueryResultSnapshot | null {
+  try {
+    return snapshotUnchecked(raw, requestedKey, limits)
+  } catch {
+    return null
+  }
 }
