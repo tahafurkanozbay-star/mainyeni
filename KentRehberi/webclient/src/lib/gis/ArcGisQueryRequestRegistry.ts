@@ -224,7 +224,7 @@ export class ArcGisQueryRequestRegistry {
       const id = ++this.#subscriberId
       const onAbort = signal === undefined ? undefined : (): void => {
         if (!entry.subscribers.delete(id)) return
-        signal.removeEventListener('abort', onAbort)
+        signal?.removeEventListener('abort', onAbort as () => void)
         resolve(abortedResult())
         if (entry.subscribers.size === 0) this.#abandon(entry)
       }
