@@ -129,7 +129,7 @@ export class ArcGisQueryDedupeLifecyclePolicy {
 
   renew(requestId:string,revision:number,now:number):boolean {
     this.#live(); const e=this.#entries.get(id('requestId',requestId)); integer('revision',revision); time('now',now); this.expire(now)
-    if(!e||e.phase!=='inflight'||e.revision!==revision||this.#revisions.get(e.layerId)!==revision||now<e.touchedAt) return false
+    if(!e||this.#entries.get(e.requestId)!==e||e.phase!=='inflight'||e.revision!==revision||this.#revisions.get(e.layerId)!==revision||now<e.touchedAt) return false
     const at=this.#lastObservedAt; const expiresAt=deadline('lease',at,this.#budget.requestLeaseMs)
     e.touchedAt=at; e.expiresAt=expiresAt; return true
   }
