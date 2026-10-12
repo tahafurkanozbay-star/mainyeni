@@ -164,6 +164,9 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       visible: false,
       minimized: false,
       OnShow: () => {
+        // A fresh menu session must not inherit a previous map selection.
+        selectionRef.current = null;
+        focusOriginRef.current = null;
         const clickEvent = MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null;
         if (!clickEvent) return;
         selectionRef.current = snapshotMapSelection(clickEvent);

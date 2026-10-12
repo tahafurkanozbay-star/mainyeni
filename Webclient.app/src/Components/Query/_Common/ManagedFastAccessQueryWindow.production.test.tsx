@@ -49,32 +49,34 @@ beforeEach(() => {
 });
 
 describe('real fast-access window presentation and resource ownership', () => {
-  it('keeps rendered records bounded while every page remains reachable', async () => {
+  it('reveals bounded result batches without dropping prior records or actions', async () => {
     const view = setup(vi.fn(async () => success(1_000)));
     await view.open();
     const list = screen.getByRole('list', { name: 'Parklar sonuçları' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(10);
-    expect(screen.getByRole('navigation', { name: 'Parklar sonuç sayfaları' })).toHaveTextContent('1–10 / 1000 kayıt');
-    fireEvent.click(screen.getByRole('button', { name: 'Sonraki sayfa' }));
-    expect(list).toHaveFocus();
-    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
-    expect(within(list).getByText('Park 10')).toBeVisible();
-    expect(screen.getByRole('navigation')).toHaveTextContent('11–20 / 1000 kayıt');
-    fireEvent.click(screen.getByRole('button', { name: 'Önceki sayfa' }));
+    expect(screen.getByRole('button', { name: /Daha fazla sonuç göster \(990 kaldı\)/ })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
     expect(within(list).getByText('Işık Parkı')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Önceki sayfa' })).toBeDisabled();
+    expect(within(list).getByText('Park 10')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Daha fazla sonuç göster \(980 kaldı\)/ })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(30);
+    expect(within(list).getByText('Park 20')).toBeVisible();
+    expect(within(list).getByRole('button', { name: 'Işık Parkı — Haritada göster' })).toBeEnabled();
   });
 
-  it('filters Turkish text, resets the page and provides an empty-state recovery', async () => {
+  it('filters Turkish text, resets visible results and offers an empty-state recovery', async () => {
     const view = setup(); await view.open();
-    fireEvent.click(screen.getByRole('button', { name: 'Sonraki sayfa' }));
+    fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(20);
     const field = screen.getByRole('searchbox'); field.focus();
     fireEvent.change(field, { target: { value: 'isik parki' } });
     expect(field).toHaveFocus();
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.getByText('Işık Parkı')).toBeVisible();
     fireEvent.change(field, { target: { value: 'bulunmayan' } });
-    expect(screen.getByText(/Filtreye uygun sonuç bulunamadı/)).toBeVisible();
+    expect(screen.getByText(/Aramanızla eşleşen sonuç yok/)).toBeVisible();
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Filtreyi temizle' }));
     expect(field).toHaveValue('');
@@ -124,7 +126,7 @@ describe('real fast-access window presentation and resource ownership', () => {
     const pending = deferred<ReturnType<typeof success>>();
     const query = vi.fn().mockResolvedValueOnce(success()).mockReturnValueOnce(pending.promise);
     const view = setup(query); await view.open();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Haritada göster' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Işık Parkı — Haritada göster' }));
     await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
     const control = query.mock.calls[1]?.[2] as { signal?: AbortSignal } | undefined;
     expect(control?.signal).toBeInstanceOf(AbortSignal);

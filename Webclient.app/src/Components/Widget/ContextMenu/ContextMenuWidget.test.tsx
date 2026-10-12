@@ -204,6 +204,18 @@ describe('ContextMenuWidget', () => {
     expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledWith({ id: 'map-view' }, expect.objectContaining({ latitude: 39.93 }), 14);
   });
 
+  it('drops the prior selection if reopened without a new map click', async () => {
+    const { manager, show } = createManager();
+    const ref = createRef<ManagedWindowHandle>();
+    render(<ContextMenuWidget ref={ref} id="context-menu" windowManager={manager as never} />);
+    show();
+    act(() => ref.current?.OnShow?.());
+    vi.mocked(MapManager.GetMapClickEvent).mockReturnValue(null as never);
+    act(() => ref.current?.OnShow?.());
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Bilgi Al' }));
+    expect(manager.ShowWindow).not.toHaveBeenCalled();
+  });
+
   it('unregisters the managed window on unmount', () => {
     const { manager } = createManager();
     const ref = createRef<ManagedWindowHandle>();

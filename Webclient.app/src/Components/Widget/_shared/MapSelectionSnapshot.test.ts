@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { runtimeDiagnostics } from '../../../platform/runtime/runtimeDiagnostics';
 import { selectionFromWindowQuery, snapshotMapPoint, snapshotMapSelection } from './MapSelectionSnapshot';
 
 describe('map selection snapshots', () => {
@@ -28,5 +29,26 @@ describe('map selection snapshots', () => {
     expect(selectionFromWindowQuery({ arbitrary: { mapPoint: { x: 1 } } })).toBeNull();
     const query = { selectionEvent: { mapPoint: { x: 1, y: 2 }, x: 9, y: 8 } };
     expect(selectionFromWindowQuery(query)).toMatchObject({ x: 9, y: 8, mapPoint: { x: 1, y: 2 } });
+  });
+  it('reports clone and accessor fallback stages without exception text', () => {
+    const record = vi.spyOn(runtimeDiagnostics, 'record');
+    try {
+      const point = {
+        x: 32.82,
+        y: 39.93,
+        clone: () => { throw new Error('unexpected clone failure'); },
+        get latitude() { throw new Error('unexpected getter failure'); },
+        spatialReference: { get wkid() { throw new Error('unexpected reference failure'); } },
+      };
+      expect(snapshotMapPoint(point)).toMatchObject({ x: 32.82, y: 39.93, spatialReference: {} });
+      expect(record.mock.calls.map(([, details]) => details)).toEqual([
+        { stage: 'clone' },
+        { stage: 'coordinate-accessor' },
+        { stage: 'spatial-reference' },
+      ]);
+      expect(JSON.stringify(record.mock.calls)).not.toContain('unexpected');
+    } finally {
+      record.mockRestore();
+    }
   });
 });

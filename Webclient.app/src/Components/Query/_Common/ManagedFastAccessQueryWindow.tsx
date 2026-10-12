@@ -177,6 +177,7 @@ const readAttribute = (
 const normalizeText = (value: unknown): string => String(value ?? '')
   .trim()
   .toLocaleLowerCase('tr-TR')
+  .replace(/ı/g, 'i')
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '');
 
