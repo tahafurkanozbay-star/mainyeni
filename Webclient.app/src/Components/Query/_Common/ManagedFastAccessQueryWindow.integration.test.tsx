@@ -187,6 +187,18 @@ describe('shared service result window ownership and usability', () => {
     unmount();
     expect(manager.UnregisterWindow).toHaveBeenCalledExactlyOnceWith('service-window', ref);
   });
+  it('cancels pending page focus when the window unmounts', async () => {
+    const { ref, Query, unmount } = setup();
+    Query.mockResolvedValue(response(70));
+    await act(async () => { await ref.current!.OnShow(); });
+    const schedule = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(77);
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (10 kaldı)' }));
+      unmount();
+      expect(cancel).toHaveBeenCalledWith(77);
+    } finally { schedule.mockRestore(); cancel.mockRestore(); }
+  });
   it('bounds a stalled layer and releases its late result without losing the records', async () => {
     vi.useFakeTimers();
     try {

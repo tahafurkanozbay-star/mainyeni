@@ -291,6 +291,7 @@ export function createManagedFastAccessQueryWindow({
     const queryAbortRef = useRef<AbortController | null>(null);
     const actionAbortRef = useRef<AbortController | null>(null);
     const rootRef = useRef<HTMLElement | null>(null);
+    const pageFocusFrameRef = useRef<number | null>(null);
     const initialExtentRef = useRef<unknown>(null);
     const visible = windowManager.IsVisible?.(id) ?? true;
     const minimized = windowManager.IsMinimized?.(id) ?? false;
@@ -302,6 +303,12 @@ export function createManagedFastAccessQueryWindow({
     const [errorMessage, setErrorMessage] = useState('');
     const [activeActionKey, setActiveActionKey] = useState('');
 
+    const cancelPageFocus = useCallback((): void => {
+      if (pageFocusFrameRef.current === null) return;
+      window.cancelAnimationFrame(pageFocusFrameRef.current);
+      pageFocusFrameRef.current = null;
+    }, []);
+
     const clearOwnedLayer = useCallback((): void => {
       const envelope = layerRef.current as LayerEnvelope | null;
       const layer = envelope?.layerObj ?? layerRef.current as LayerLike | null;
@@ -310,6 +317,7 @@ export function createManagedFastAccessQueryWindow({
     }, []);
 
     const resetSurface = useCallback((): void => {
+      cancelPageFocus();
       requestGateRef.current.invalidate();
       actionGateRef.current.invalidate();
       queryAbortRef.current?.abort();
@@ -321,7 +329,7 @@ export function createManagedFastAccessQueryWindow({
       setLoading(false);
       setErrorMessage('');
       setActiveActionKey('');
-    }, [clearOwnedLayer, pageSize]);
+    }, [cancelPageFocus, clearOwnedLayer, pageSize]);
 
     const showError = useCallback((error: unknown): string => {
       const detail = normalizeErrorMessage(
@@ -407,6 +415,7 @@ export function createManagedFastAccessQueryWindow({
     }, [clearOwnedLayer, iconType, serviceKey, title]);
 
     const fetchQueryResults = useCallback(async (): Promise<void> => {
+      cancelPageFocus();
       const requestId = requestGateRef.current.next();
       queryAbortRef.current?.abort();
       actionAbortRef.current?.abort();
@@ -449,7 +458,7 @@ export function createManagedFastAccessQueryWindow({
           setLoading(false);
         }
       }
-    }, [business, clearOwnedLayer, id, logName, pageSize, renderLayer, showError, windowManager]);
+    }, [business, cancelPageFocus, clearOwnedLayer, id, logName, pageSize, renderLayer, showError, windowManager]);
 
     const getItemDetails = useCallback(async (
       item: FastAccessRecord,
@@ -557,6 +566,7 @@ export function createManagedFastAccessQueryWindow({
 
       return () => {
         mountedRef.current = false;
+        cancelPageFocus();
         requestGateRef.current.invalidate();
         actionGateRef.current.invalidate();
         queryAbortRef.current?.abort();
@@ -564,7 +574,7 @@ export function createManagedFastAccessQueryWindow({
         clearOwnedLayer();
         windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [clearOwnedLayer, id, ref, windowManager]);
+    }, [cancelPageFocus, clearOwnedLayer, id, ref, windowManager]);
 
     useEffect(() => {
       if (!visible) return;
@@ -633,6 +643,7 @@ export function createManagedFastAccessQueryWindow({
             <input
               id={id + '-filter'}
               type="search"
+              aria-label="Sonuçlarda filtrele"
               value={filterText}
               onChange={(event) => {
                 setFilterText(event.target.value);
@@ -717,7 +728,9 @@ export function createManagedFastAccessQueryWindow({
               const button = event.currentTarget;
               const requestId = requestGateRef.current.current();
               setVisibleCount((count) => Math.min(count + pageSize, filteredRecords.length));
-              requestAnimationFrame(() => {
+              cancelPageFocus();
+              pageFocusFrameRef.current = window.requestAnimationFrame(() => {
+                pageFocusFrameRef.current = null;
                 if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
                 if (document.activeElement !== button && document.activeElement !== document.body) return;
                 rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
