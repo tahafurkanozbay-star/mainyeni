@@ -13,10 +13,7 @@ import { FiFilter, FiMapPin, FiPhone, FiSearch, FiX } from 'react-icons/fi';
 import { HiOutlineArrowNarrowLeft } from 'react-icons/hi';
 import { GenelAramaQeryBusiness } from '../../../Business/GenelAramaQeryBusiness';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
-import {
-  Constants_MessageType,
-  Constants_ServiceResultType,
-} from '../../../Core/Constants';
+import { Constants_MessageType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { ButtonLoading, NoResultsFound } from '../../Common/Loading';
@@ -81,17 +78,8 @@ interface SearchDetailRecord extends SearchRecordInput {
   readonly geometry?: GeometryLike | null;
 }
 
-interface ServiceResult {
-  readonly type?: unknown;
-  readonly data?: readonly unknown[] | null;
-  readonly message?: unknown;
-}
-
 const EMPTY_QUERY: GenelAramaQueryState = Object.freeze({ name: '' });
 const createEmptyQuery = (): GenelAramaQueryState => ({ ...EMPTY_QUERY });
-
-const isServiceResult = (value: unknown): value is ServiceResult =>
-  value !== null && typeof value === 'object';
 
 const asDetailRecord = (value: unknown): SearchDetailRecord | null =>
   value !== null && typeof value === 'object'
@@ -286,7 +274,7 @@ export const GenelAramaQeryWindow = forwardRef<
       detailTaskRef.current?.cancel('Genel arama penceresi kapatıldı.');
       searchTaskRef.current = null;
       detailTaskRef.current = null;
-      transport.dispose();
+      transport.cancelAll('Genel arama bileşeni temizlendi.');
       windowManager.UnregisterWindow?.(id, ref);
     };
   }, [id, ref, transport, windowManager]);
@@ -344,7 +332,8 @@ export const GenelAramaQeryWindow = forwardRef<
 
     try {
       const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
+      if (!itemDetails) return;
+      if (!itemDetails.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
 
       const mapView = MapManager.GetMapView();
       if (!mapView) throw new Error('Harita görünümü hazır değil.');
@@ -374,7 +363,8 @@ export const GenelAramaQeryWindow = forwardRef<
 
     try {
       const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
+      if (!itemDetails) return;
+      if (!itemDetails.geometry) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
 
       const url = buildGoogleDirectionsUrl(itemDetails.geometry);
       if (!url) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
