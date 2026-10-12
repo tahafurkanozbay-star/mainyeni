@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
@@ -11,6 +12,7 @@ import {
   validateDependencyPolicy,
   validateLockfile,
   validateModernToolchain,
+  RETIRED_RUNTIME_PACKAGES,
   validateRetiredRuntimePackages,
   validateSourceDependencies,
   validateVersionSpecifiers,
@@ -551,4 +553,14 @@ describe('dependency hygiene policy', () => {
       'unused-runtime': 1,
     });
   });
+});
+
+test('Vite prebundle entries never reference retired runtime dependencies', () => {
+  const config = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
+  const block = config.match(/optimizeDeps:\s*\{\s*include:\s*\[([^\]]*)\]/u);
+  assert.ok(block, 'expected explicit optimizeDeps.include inventory');
+  const declared = new Set([...block[1].matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
+  for (const retired of RETIRED_RUNTIME_PACKAGES) {
+    assert.equal(declared.has(retired), false, `retired package ${retired} must not be prebundled`);
+  }
 });
