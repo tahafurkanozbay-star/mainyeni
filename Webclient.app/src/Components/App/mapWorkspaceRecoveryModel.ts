@@ -117,7 +117,7 @@ export class MapWorkspaceRecoveryModel {
   readonly #maxAttempts: number;
   readonly #maxObservers: number;
   readonly #now: () => number;
-  readonly #onObserverError?: (error: unknown) => void;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   #snapshot: MapWorkspaceRecoverySnapshot;
   #diagnostics: MapWorkspaceRecoveryDiagnostics;
   #disposed = false;
