@@ -11,7 +11,7 @@
 .map-workspace-recovery__retry:hover{background:color-mix(in srgb,var(--exp-accent,#155eef) 86%,#000)}
 .map-workspace-recovery__retry:focus-visible{outline:3px solid var(--exp-accent,#155eef);outline-offset:3px}
 .map-workspace-recovery__limit{color:var(--exp-danger-text,#b42318);font-size:.72rem;font-weight:700;line-height:1.45}
-@media(max-width:640px){.map-workspace-recovery{top:auto;bottom:max(12px,env(safe-area-inset-bottom));grid-template-columns:auto minmax(0,1fr);inline-size:calc(100vw - 20px);padding:14px}.map-workspace-recovery__actions{grid-column:1/-1}.map-workspace-recovery__retry{inline-size:100%}}
+@media(max-width:40rem){.map-workspace-recovery{top:auto;bottom:max(12px,env(safe-area-inset-bottom));grid-template-columns:auto minmax(0,1fr);inline-size:calc(100vw - 20px);padding:14px}.map-workspace-recovery__actions{grid-column:1/-1}.map-workspace-recovery__retry{inline-size:100%}}
 @media(pointer:coarse){.map-workspace-recovery__retry{min-block-size:48px}}
 @media(prefers-reduced-motion:reduce){.map-workspace-recovery,.map-workspace-recovery__retry{transition:none!important;animation:none!important}}
 @media(forced-colors:active){.map-workspace-recovery,.map-workspace-recovery__retry{border-color:CanvasText;background:Canvas;color:CanvasText;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;forced-color-adjust:auto}.map-workspace-recovery__icon{border:1px solid CanvasText;background:Canvas;color:CanvasText}.map-workspace-recovery[data-phase='error'] .map-workspace-recovery__icon{color:Mark}.map-workspace-recovery__retry{background:ButtonFace;color:ButtonText}.map-workspace-recovery__retry:focus-visible{outline-color:Highlight}}
