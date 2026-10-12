@@ -133,7 +133,7 @@ export class ArcGisQuerySchedulerPolicy {
     this.pruneExpiredQueued(nowMs)
     this.expireRunning(nowMs)
     if (this.running.size >= this.budget.maxRunning) return undefined
-    const candidates = [...this.queued.values()].sort((a, b) =>
+    const candidates = this.queued.values().sort((a, b) =>
       PRIORITY[a.priority] - PRIORITY[b.priority] ||
       a.deadlineAtMs - b.deadlineAtMs ||
       a.enqueuedAtMs - b.enqueuedAtMs ||
@@ -186,10 +186,10 @@ export class ArcGisQuerySchedulerPolicy {
     }
     if (floor > 0) this.revisionFloors.set(layerId, floor)
     let removed = 0
-    for (const admission of [...this.queued.values()]) {
+    for (const admission of this.queued.values()) {
       if (admission.layerId === layerId && admission.revision < floor && this.queued.delete(admission.requestId)) removed += 1
     }
-    for (const lease of [...this.running.values()]) {
+    for (const lease of this.running.values()) {
       if (lease.layerId === layerId && lease.revision < floor) {
         this.release(lease)
         removed += 1
@@ -203,10 +203,10 @@ export class ArcGisQuerySchedulerPolicy {
     this.assertLive()
     const layerId = text(layerIdInput, 'layer-id', this.budget.maxLayerIdLength)
     let removed = 0
-    for (const admission of [...this.queued.values()]) {
+    for (const admission of this.queued.values()) {
       if (admission.layerId === layerId && this.queued.delete(admission.requestId)) removed += 1
     }
-    for (const lease of [...this.running.values()]) {
+    for (const lease of this.running.values()) {
       if (lease.layerId === layerId) {
         this.release(lease)
         removed += 1
@@ -224,8 +224,8 @@ export class ArcGisQuerySchedulerPolicy {
 
   snapshot(): ArcGisQuerySchedulerSnapshot {
     this.assertLive()
-    const queued = [...this.queued.values()].sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority] || a.deadlineAtMs - b.deadlineAtMs || a.requestId.localeCompare(b.requestId))
-    const running = [...this.running.values()].sort((a, b) => a.startedAtMs - b.startedAtMs || a.requestId.localeCompare(b.requestId))
+    const queued = this.queued.values().sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority] || a.deadlineAtMs - b.deadlineAtMs || a.requestId.localeCompare(b.requestId))
+    const running = this.running.values().sort((a, b) => a.startedAtMs - b.startedAtMs || a.requestId.localeCompare(b.requestId))
     return Object.freeze({ queued: Object.freeze(queued), running: Object.freeze(running), runningBytes: this.runningBytes })
   }
 
@@ -253,13 +253,13 @@ export class ArcGisQuerySchedulerPolicy {
 
   private pruneExpiredQueued(nowMs: number): number {
     let removed = 0
-    for (const admission of [...this.queued.values()]) if (admission.deadlineAtMs <= nowMs && this.queued.delete(admission.requestId)) removed += 1
+    for (const admission of this.queued.values()) if (admission.deadlineAtMs <= nowMs && this.queued.delete(admission.requestId)) removed += 1
     return removed
   }
 
   private expireRunning(nowMs: number): number {
     let removed = 0
-    for (const lease of [...this.running.values()]) if (lease.expiresAtMs <= nowMs) { this.release(lease); removed += 1 }
+    for (const lease of this.running.values()) if (lease.expiresAtMs <= nowMs) { this.release(lease); removed += 1 }
     return removed
   }
 
