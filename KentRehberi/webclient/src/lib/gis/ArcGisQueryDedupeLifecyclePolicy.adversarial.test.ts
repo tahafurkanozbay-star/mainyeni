@@ -187,6 +187,7 @@ describe('ArcGIS query dedupe cross-layer integrity and pressure', () => {
     expect(() => policy.admit(request('fraction', 'parcels', 'fraction', 1, 'visible', 0.5))).toThrow()
     expect(policy.snapshot()).toMatchObject({ entries: 0, pending: 0 })
     expect(policy.admit(request('safe'))).toBe('admitted')
+    expect(policy.startNext(1)?.sequence).toBe(1)
   })
 
   it('does not consume a future-ineligible queue entry when its lease would overflow', () => {
@@ -234,6 +235,20 @@ describe('ArcGIS query dedupe cross-layer integrity and pressure', () => {
     expect(policy.startNext(31)?.requestId).toBe('expired')
     expect(policy.renew('expired', 1, 41)).toBe(false)
     expect(policy.snapshot()).toMatchObject({ inflight: 0, cached: 0 })
+  })
+
+  it('does not partially update cached touch metadata when cache TTL would overflow', () => {
+    const max = Number.MAX_SAFE_INTEGER
+    const policy = create({ pendingTtlMs: 200, requestLeaseMs: 200, cacheTtlMs: 100 })
+    policy.setRevision('parcels', 1)
+    policy.admit(request('cache', 'parcels', 'cache', 1, 'visible', max - 350))
+    expect(policy.startNext(max - 300)?.requestId).toBe('cache')
+    const initial = policy.complete('cache', 1, 1, 1, max - 150)
+    expect(initial?.expiresAt).toBe(max - 50)
+    expect(() => policy.lookup('cache', 'parcels', 1, max - 51)).toThrow('cache deadline overflow')
+    expect(policy.snapshot()).toMatchObject({ cached: 1, cachedFeatures: 1, cachedBytes: 1 })
+    expect(policy.expire(max - 50)).toBe(1)
+    expect(policy.snapshot()).toMatchObject({ entries: 0, cached: 0 })
   })
 
 })
