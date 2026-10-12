@@ -172,8 +172,9 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
   _ref: Ref<HTMLDivElement>,
 ): ReactNode {
   const visible = windowManager.IsVisible(id);
+  const minimized = windowManager.IsMinimized(id);
   const titleId = labelledBy ?? `${id}-title`;
-  const descriptionId = describedBy ?? (status ? `${id}-status` : undefined);
+  const descriptionId = describedBy ?? (status && !minimized ? `${id}-status` : undefined);
 
   return (
     <section
@@ -194,6 +195,7 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
       role={role}
       data-widget-id={id}
       data-widget-visible={visible ? 'true' : 'false'}
+      data-widget-minimized={String(minimized)}
     >
       <header className="common-query-window-header map-widget-surface__header">
         <div className="map-widget-surface__identity">
@@ -225,13 +227,13 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
         ) : null}
       </header>
 
-      {status ? (
+      {status && !minimized ? (
         <div id={descriptionId} className="map-widget-surface__status-row">
           <MapWidgetStatus tone={statusTone}>{status}</MapWidgetStatus>
         </div>
       ) : null}
 
-      {error ? (
+      {error && !minimized ? (
         <div className="map-widget-surface__status-row">
           <MapWidgetStatus tone="danger">{error}</MapWidgetStatus>
         </div>
@@ -241,12 +243,12 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
         'common-query-window-body',
         'map-widget-surface__body',
         bodyClassName,
-      )}>
+      )} hidden={minimized}>
         {children}
       </div>
 
       {footer ? (
-        <footer className="map-widget-surface__footer">
+        <footer className="map-widget-surface__footer" hidden={minimized}>
           {footer}
         </footer>
       ) : null}

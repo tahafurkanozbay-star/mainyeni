@@ -180,10 +180,9 @@ function App() {
           >
             <ExperienceSkipNavigation />
             <MapComponent windowManager={windowManager} />
-            <MapWorkspaceShellOverlay />
-            <ExperienceMapModeGovernedOverlay />
+            <MapWorkspaceShellOverlay initialCollapsed />
             <ExperienceMapInteractionGuide />
-            <ExperienceWorkspace />
+            <ExperienceWorkspace mapModeControl={<ExperienceMapModeGovernedOverlay />} />
             <ExperienceUXLayer
               windowManager={windowManager}
               notificationModel={notificationCenter}

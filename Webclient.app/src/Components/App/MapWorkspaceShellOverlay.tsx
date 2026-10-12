@@ -14,6 +14,7 @@ import './MapWorkspaceShellOverlay.css';
 
 export interface MapWorkspaceShellOverlayProps {
   readonly phase?: MapWorkspaceShellPhase;
+  readonly initialCollapsed?: boolean;
 }
 
 const PHASE_LABEL: Readonly<Record<MapWorkspaceShellPhase, string>> = Object.freeze({
@@ -43,10 +44,11 @@ const isWorkspacePhase = (value: string | undefined): value is MapWorkspaceShell
   value === 'booting' || value === 'ready' || value === 'updating' || value === 'error'
 );
 
-export const MapWorkspaceShellOverlay = ({ phase }: MapWorkspaceShellOverlayProps) => {
+export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false }: MapWorkspaceShellOverlayProps) => {
   const rootRef = useRef<HTMLElement | null>(null);
   const model = useMemo(() => new MapWorkspaceShellModel({
     initialPhase: phase ?? 'booting',
+    initialUtilityCollapsed: initialCollapsed,
     initialEnvironment: {
       width: typeof window === 'undefined' ? 1280 : window.innerWidth,
       height: typeof window === 'undefined' ? 720 : window.innerHeight,

@@ -52,6 +52,7 @@ export interface SidebarNavigationModelInput {
   readonly items: readonly ShellSidebarItem[];
   readonly initialFavoriteIds?: readonly string[];
   readonly initialRecentIds?: readonly string[];
+  readonly initialCollapsed?: boolean;
   readonly limits?: SidebarNavigationLimits;
 }
 
@@ -193,7 +194,7 @@ export const createSidebarNavigationModel = (input: SidebarNavigationModelInput)
   };
 
   let visible = true;
-  let collapsed = false;
+  let collapsed = input.initialCollapsed === true;
   let activeGroupId: string | null = null;
   let view: SidebarNavigationView = 'all';
   let query = '';

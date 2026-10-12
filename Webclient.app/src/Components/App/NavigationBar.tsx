@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { AppConfig } from '../../Core/AppConfig';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
-import { CompanyLogo } from './CompanyLogo';
 import { NAVIGATION_SEARCH_QUERY_LIMIT, NavigationSearchModel } from './navigationSearchModel';
 import { resolveNavigationShortcut } from './navigationShortcutPolicy';
 import './NavigationBar.css';
@@ -54,7 +53,6 @@ export function NavigationBar({ id, windowManager }: NavigationBarProps) {
           <a className="kr-header-shortcut kr-header-portal" href="https://cbsbaskent.ankara.bel.tr/" target="_blank" rel="noopener noreferrer" aria-label="CBS Başkent portalını yeni sekmede aç">
             <span aria-hidden="true">CBS Başkent</span>
           </a>
-          <CompanyLogo />
         </nav>
       </div></div></div>
     </header>

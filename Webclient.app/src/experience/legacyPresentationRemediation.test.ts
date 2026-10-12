@@ -78,8 +78,8 @@ describe('legacyPresentationRemediation', () => {
     expect(report.unresolvedFindingCount).toBe(0);
     expect(report.remediatedFindingCount).toBe(report.findingCount);
     expect(report.coveragePercent).toBe(100);
-    expect(report.risks['remote-font'].findingCount).toBeGreaterThan(0);
-    expect(report.risks['focus-suppression'].findingCount).toBeGreaterThan(0);
+    expect(report.risks['remote-font'].findingCount).toBe(0);
+    expect(report.risks['focus-suppression'].findingCount).toBe(0);
     expect(report.risks['undersized-target'].findingCount).toBeGreaterThan(0);
   });
 

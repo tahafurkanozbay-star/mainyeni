@@ -305,10 +305,13 @@ export function createManagedFastAccessQueryWindow({
     }, [clearOwnedLayer, pageSize]);
 
     const showError = useCallback((error: unknown): string => {
-      const message = normalizeErrorMessage(
+      const detail = normalizeErrorMessage(
         error,
         'Sorgu tamamlanamadı. Lütfen tekrar deneyin.',
       );
+      const message = /HTTP\s[45]\d\d|Failed to fetch|Network request failed/i.test(detail)
+        ? 'Hizmet verisi alınamadı. Bağlantınızı kontrol edip tekrar deneyin.'
+        : detail;
       setErrorMessage(message);
       windowManager.ShowMessage?.(Constants_MessageType.Error, message);
       return message;
