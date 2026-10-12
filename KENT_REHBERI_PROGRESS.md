@@ -219,3 +219,15 @@
 - PR #473: P3 shell-redirection structured finding fix and focused regression committed as 8909672ef260b253e5b6fe449cc713aa0621c32e. Previous head 090c344 passed six required workflows; new exact-head CI must be checked before merge.
 - Base main d364f991b88a0668a1337490227af4936eac232f, previous 5,284 additions / 76 ahead / 0 behind; refresh compare after commit. No dependency, endpoint, GIS service, JSON icon resolver or browser asset change. Live 2D/3D GIS and responsive/a11y E2E not run.
 - Next: verify new-head six workflows, fresh main, additions>=4000, mergeability and reviews; squash merge only if all gates pass. Keep automation enabled.
+
+
+## Deep Platform — dependency supply-chain governance final merge-gate checkpoint — 2026-10-12
+- TUR / GÖREV: Kent Rehberi Deep Platform / Whole-Code Modernization; dependency supply-chain, lockfile provenance, transitive dependency policy, package-script execution safety and CI enforcement.
+- BRANCH / PR: `agent/platform-wholecode-20261005-1329-07d197bc`; PR #473 canonical Platform PR.
+- CURRENT MAIN / LINEAGE: `d364f991b88a0668a1337490227af4936eac232f`; pre-checkpoint product head `1f852dfd3c34d2363f4715e7c49e30c93c00191f`; merge-base=current main, 79 ahead / 0 behind, mergeable=true.
+- KAPSAM / GATE: 21 files, 5,296 meaningful additions / 95 deletions. Mandatory >=4,000 additions gate is satisfied with real dependency-governance source, focused/adversarial tests and dedicated CI; no filler/boilerplate.
+- MODERNİZASYON: deterministic lock-graph inventory, direct/transitive dependency surface policy, HTTPS/integrity/version provenance checks, bounded peer/install-script/deprecation governance, owner/reason/expiry exception contracts, removal-plan generation and command-position npm/runtime mutation/evaluation guards are integrated. Existing stable runtime dependency versions remain unchanged; no blind language/framework rewrite was performed.
+- EXACT-HEAD PRODUCT CI: pre-checkpoint head `1f852dfd3c34d2363f4715e7c49e30c93c00191f` completed+success on Platform Dependency Governance, Release Evidence Contract, Platform Architecture Audit, Release QA, Platform Typed Test Validation and Webclient Quality.
+- SECURITY / PERFORMANCE / REGRESSION REVIEW: no new dependency, endpoint, secret, browser transport, remote asset, WMS/WFS, GIS runtime service or second icon authority. Governance scanners are bounded/deterministic and tests do not execute package-manager mutation commands. No blocking review threads or submitted reviews.
+- MERGE DURUMU: this progress update creates a new exact head. Re-run all required workflows on the new SHA; refresh main/merge-base/additions/mergeable immediately before merge. Squash merge only if every required exact-head workflow is completed+success and behind=0 remains true.
+- SONRAKİ GÖREV NOTU: after merge, verify merged=true, squash merge SHA and current main SHA. Start any further Platform modernization from a fresh current-main branch; do not reuse this branch. Keep automations enabled.
