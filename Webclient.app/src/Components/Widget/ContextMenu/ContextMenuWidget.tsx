@@ -70,10 +70,12 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
     }, []);
 
     const close = useCallback((restore = true): void => {
+      // HideWindow may synchronously call OnClose. Clear the origin first so
+      // destination-window focus is never overwritten during a handoff.
+      if (!restore) focusOriginRef.current = null;
       windowManager.HideWindow(id);
       selectionRef.current = null;
       if (restore) restoreFocus();
-      else focusOriginRef.current = null;
     }, [id, restoreFocus, windowManager]);
 
     const getClickedPoint = useCallback((): unknown | null => selectionRef.current?.mapPoint ?? null, []);

@@ -246,6 +246,31 @@ describe('ContextMenuWidget', () => {
     }
   });
 
+  it('keeps destination focus if hiding synchronously invokes the old OnClose hook', async () => {
+    const origin = document.createElement('button');
+    const destination = document.createElement('button');
+    document.body.append(origin, destination);
+    try {
+      origin.focus();
+      const { manager, show, hide } = createManager();
+      const ref = createRef<ManagedWindowHandle>();
+      manager.ShowWindow.mockImplementation(() => destination.focus());
+      manager.HideWindow.mockImplementation(() => {
+        hide();
+        ref.current?.OnClose?.();
+      });
+      render(<ContextMenuWidget ref={ref} id="context-menu" windowManager={manager as never} />);
+      show();
+      act(() => ref.current?.OnShow?.());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Bilgi Al' })));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Bilgi Al' }));
+      await waitFor(() => expect(document.activeElement).toBe(destination));
+    } finally {
+      origin.remove();
+      destination.remove();
+    }
+  });
+
   it('unregisters the managed window on unmount', () => {
     const { manager } = createManager();
     const ref = createRef<ManagedWindowHandle>();
