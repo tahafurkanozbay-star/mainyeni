@@ -142,9 +142,10 @@ const createWindowSnapshot = (
 export const createWindowManager = (requestRender: () => void = noop): WindowManagerApi => {
   let messageTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   let disposed = false;
+  const initialWindowList = Store.getState().Common.WindowList ?? [];
   let windowSnapshotRevision = 0;
-  let windowSnapshotSignature = '';
-  let windowSnapshot = createWindowSnapshot(0, Store.getState().Common.WindowList ?? []);
+  let windowSnapshotSignature = snapshotSignature(initialWindowList);
+  let windowSnapshot = createWindowSnapshot(0, initialWindowList);
   let storeUnsubscribe: (() => void) | null = null;
   let windowListenerFailures = 0;
   const windowListeners = new Set<() => void>();
