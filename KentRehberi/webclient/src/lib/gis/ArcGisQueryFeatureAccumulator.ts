@@ -137,8 +137,10 @@ function snapshotValue(value: unknown, depth: number, state: SnapshotBudget): un
   return Object.freeze(snapshot)
 }
 
-function snapshotFeature(feature: ArcGisFeatureLike, maxNodes: number, maxBytes: number):
-  { readonly copy: ArcGisFeatureLike; readonly bytes: number } {
+function snapshotFeature(
+  feature: ArcGisFeatureLike, maxNodes: number, maxBytes: number,
+  objectIdField: string, maxObjectIdLength: number,
+): { readonly copy: ArcGisFeatureLike; readonly bytes: number; readonly id: string | number } {
   if (feature === null || typeof feature !== 'object' || Array.isArray(feature)) {
     throw new Error('ArcGIS accumulator feature attributes are required')
   }
@@ -150,6 +152,9 @@ function snapshotFeature(feature: ArcGisFeatureLike, maxNodes: number, maxBytes:
       Array.isArray(attributeDescriptor.value)) {
     throw new Error('ArcGIS accumulator feature attributes are required')
   }
+  // Preserve precise object-ID integrity errors before expensive geometry work.
+  // objectId uses own data descriptors, never transport-defined accessors.
+  const id = objectId(attributeDescriptor.value as Record<string, unknown>, objectIdField, maxObjectIdLength)
   const state: SnapshotBudget = {
     nodes: 0, bytes: 32, maxNodes, maxBytes, visited: new WeakSet<object>(),
   }
@@ -158,6 +163,7 @@ function snapshotFeature(feature: ArcGisFeatureLike, maxNodes: number, maxBytes:
   return {
     copy: Object.freeze({ attributes, ...(geometryDescriptor === undefined ? {} : { geometry }) }),
     bytes: state.bytes,
+    id,
   }
 }
 
@@ -208,8 +214,9 @@ export class ArcGisQueryFeatureAccumulator {
         descriptor.value as ArcGisFeatureLike,
         this.options.maxNodesPerFeature,
         this.options.maxEstimatedBytes - this.estimatedBytes - pendingBytes,
+        this.objectIdField, this.options.maxObjectIdLength,
       )
-      const id = objectId(captured.copy.attributes, this.objectIdField, this.options.maxObjectIdLength)
+      const id = captured.id
       const key = stableIdKey(id)
       if (this.ids.has(key) || pendingKeys.has(key)) throw new Error(`ArcGIS accumulator duplicate object id ${String(id)}`)
       pendingKeys.add(key)
