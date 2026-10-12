@@ -85,7 +85,7 @@ describe('MapModeExperienceControl', () => {
     expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-busy', 'true');
     expect(get2D()).toBeDisabled();
     expect(get3D()).toBeDisabled();
-    expect(screen.getByText(/3B görünüm hazırlanıyor/)).toBeInTheDocument();
+    expect(screen.getByText(/3B görünüm hazırlanıyor/, { selector: 'strong' })).toBeInTheDocument();
 
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
   });
@@ -182,7 +182,7 @@ describe('MapModeExperienceControl', () => {
     });
 
     expect(screen.queryByRole('button', { name: /yeniden dene/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/yeniden deneme sınırına ulaşıldı/i)).toBeInTheDocument();
+    expect(screen.getByText('Görünüm geçişi için yeniden deneme sınırına ulaşıldı.', { selector: '.map-mode-experience__limit' })).toBeInTheDocument();
   });
 
   it('marks a runtime recovery event as an assertive error state', () => {
