@@ -336,11 +336,15 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
             }))
           : Object.freeze([]);
 
-        const loaded = await loader.load(work, async (item) => {
-          const created: unknown = await CommonBusiness.CreateLayer(item.source.source);
-          if (!isRecord(created)) throw new TypeError('Katman çalışma zamanı oluşturulamadı.');
-          return created as unknown as LayerRuntime;
-        });
+        const loaded = await loader.load(
+          work,
+          async (item) => {
+            const created: unknown = await CommonBusiness.CreateLayer(item.source.source);
+            if (!isRecord(created)) throw new TypeError('Katman çalışma zamanı oluşturulamadı.');
+            return created as unknown as LayerRuntime;
+          },
+          (runtime) => runtime.destroy?.(),
+        );
 
         if (!mountedRef.current || requestVersion !== requestVersionRef.current || loaded.cancelled) {
           for (const success of loaded.successes) success.result.destroy?.();
