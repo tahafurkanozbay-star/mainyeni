@@ -13,17 +13,13 @@ import { FiFilter, FiMapPin, FiPhone, FiSearch, FiX } from 'react-icons/fi';
 import { HiOutlineArrowNarrowLeft } from 'react-icons/hi';
 import { GenelAramaQeryBusiness } from '../../../Business/GenelAramaQeryBusiness';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
-import {
-  Constants_MessageType,
-  Constants_ServiceResultType,
-} from '../../../Core/Constants';
+import { Constants_MessageType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { ButtonLoading, NoResultsFound } from '../../Common/Loading';
 import { CommonQueryResultItemTools } from '../_Common/CommonQueryResultItemTools';
 import {
   buildGoogleDirectionsUrl,
-  createLatestRequestGate,
   isSmallViewport,
   normalizeErrorMessage,
   openExternalSafely,
@@ -54,6 +50,14 @@ import {
   type GenelAramaWindowRuntimeV10,
 } from './GenelAramaWindowRuntimeV10';
 import { keyboardDecisionForGeneralSearchV10 } from './GenelAramaWindowPresentationV10';
+import {
+  isGeneralSearchTransportCancellationV11,
+  type GeneralSearchTransportTaskV11,
+} from './GenelAramaTransportContractsV11';
+import {
+  createGeneralSearchTransportRuntimeV11,
+  type GeneralSearchTransportRuntimeV11,
+} from './GenelAramaTransportRuntimeV11';
 import './GenelAramaQeryWindow.css';
 
 const WINDOW_TITLE = 'ARAMA SONUÇLARI';
@@ -74,17 +78,8 @@ interface SearchDetailRecord extends SearchRecordInput {
   readonly geometry?: GeometryLike | null;
 }
 
-interface ServiceResult {
-  readonly type?: unknown;
-  readonly data?: readonly unknown[] | null;
-  readonly message?: unknown;
-}
-
 const EMPTY_QUERY: GenelAramaQueryState = Object.freeze({ name: '' });
 const createEmptyQuery = (): GenelAramaQueryState => ({ ...EMPTY_QUERY });
-
-const isServiceResult = (value: unknown): value is ServiceResult =>
-  value !== null && typeof value === 'object';
 
 const asDetailRecord = (value: unknown): SearchDetailRecord | null =>
   value !== null && typeof value === 'object'
@@ -150,8 +145,27 @@ export const GenelAramaQeryWindow = forwardRef<
   ManagedQueryWindowHandle,
   GenelAramaQeryWindowProps
 >(({ id, windowManager }, ref): ReactNode => {
-  const queryGateRef = useRef(createLatestRequestGate());
-  const detailGateRef = useRef(createLatestRequestGate());
+  const searchTaskRef = useRef<GeneralSearchTransportTaskV11 | null>(null);
+  const detailTaskRef = useRef<GeneralSearchTransportTaskV11 | null>(null);
+  const transportRef = useRef<GeneralSearchTransportRuntimeV11 | null>(null);
+  if (transportRef.current === null) {
+    transportRef.current = createGeneralSearchTransportRuntimeV11(
+      GenelAramaQeryBusiness,
+      {
+        policy: {
+          maximumSearchRecords: 50_000,
+          maximumDetailRecords: 8,
+          maximumMalformedRecords: 256,
+          searchTimeoutMs: 20_000,
+          detailTimeoutMs: 15_000,
+          searchCacheTtlMs: 15_000,
+          detailCacheTtlMs: 30_000,
+          maximumDiagnostics: 128,
+        },
+      },
+    );
+  }
+  const transport = transportRef.current;
   const mountedRef = useRef(true);
   const runtimeRef = useRef<GenelAramaWindowRuntimeV10 | null>(null);
   if (runtimeRef.current === null) {
@@ -185,19 +199,28 @@ export const GenelAramaQeryWindow = forwardRef<
   }, []);
 
   const resetWindow = useCallback((): void => {
-    queryGateRef.current.invalidate();
-    detailGateRef.current.invalidate();
+    searchTaskRef.current?.cancel('Genel arama penceresi sıfırlandı.');
+    detailTaskRef.current?.cancel('Genel arama detay işlemi sıfırlandı.');
+    searchTaskRef.current = null;
+    detailTaskRef.current = null;
+    transport.cancelAll('Genel arama penceresi sıfırlandı.');
     setQuery(createEmptyQuery());
     setResultList(null);
     setLoading(false);
     setDetailLoadingKey(null);
     setErrorMessage('');
     applyPresentation(runtime.replaceRecords([]));
-  }, [applyPresentation, runtime]);
+  }, [applyPresentation, runtime, transport]);
 
   const fetchQueryResults = useCallback(async (): Promise<void> => {
-    const requestId = queryGateRef.current.next();
     const searchQuery = (windowManager.GetQueryParams(id) ?? query) as GenelAramaQueryState;
+    const task = transport.startSearch({
+      query: searchQuery,
+      execution: {
+        requestKeySuffix: id,
+      },
+    });
+    searchTaskRef.current = task;
 
     setQuery(searchQuery);
     setLoading(true);
@@ -208,21 +231,15 @@ export const GenelAramaQeryWindow = forwardRef<
     void safeClientLog(LoggingBusiness, 'Genel Arama/Sorgu', searchQuery);
 
     try {
-      const result: unknown = await GenelAramaQeryBusiness.Query(searchQuery, false);
-      if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
+      const result = await task.promise;
+      if (!mountedRef.current || searchTaskRef.current !== task) return;
 
-      if (!isServiceResult(result) || result.type !== Constants_ServiceResultType.Success) {
-        const message = isServiceResult(result) && typeof result.message === 'string'
-          ? result.message
-          : 'Arama sonuçları alınamadı. Lütfen tekrar deneyin.';
-        throw new Error(message);
-      }
-
-      const normalized = normalizeSearchCollection(result.data ?? []);
+      const normalized = normalizeSearchCollection(result.records);
       setResultList(normalized);
       applyPresentation(runtime.replaceRecords(normalized));
     } catch (error) {
-      if (!mountedRef.current || !queryGateRef.current.isCurrent(requestId)) return;
+      if (!mountedRef.current || searchTaskRef.current !== task) return;
+      if (isGeneralSearchTransportCancellationV11(error)) return;
       const message = normalizeErrorMessage(
         error,
         'Arama sırasında beklenmeyen bir hata oluştu.',
@@ -232,11 +249,12 @@ export const GenelAramaQeryWindow = forwardRef<
       setErrorMessage(message);
       windowManager.ShowMessage(Constants_MessageType.Error, message);
     } finally {
-      if (mountedRef.current && queryGateRef.current.isCurrent(requestId)) {
+      if (mountedRef.current && searchTaskRef.current === task) {
+        searchTaskRef.current = null;
         setLoading(false);
       }
     }
-  }, [applyPresentation, id, query, runtime, windowManager]);
+  }, [applyPresentation, id, query, runtime, transport, windowManager]);
 
   useImperativeHandle(ref, () => ({
     id,
@@ -249,16 +267,17 @@ export const GenelAramaQeryWindow = forwardRef<
   useEffect(() => {
     mountedRef.current = true;
     windowManager.RegisterWindow(ref);
-    const queryGate = queryGateRef.current;
-    const detailGate = detailGateRef.current;
 
     return () => {
       mountedRef.current = false;
-      queryGate.invalidate();
-      detailGate.invalidate();
+      searchTaskRef.current?.cancel('Genel arama penceresi kapatıldı.');
+      detailTaskRef.current?.cancel('Genel arama penceresi kapatıldı.');
+      searchTaskRef.current = null;
+      detailTaskRef.current = null;
+      transport.cancelAll('Genel arama bileşeni temizlendi.');
       windowManager.UnregisterWindow?.(id, ref);
     };
-  }, [id, ref, windowManager]);
+  }, [id, ref, transport, windowManager]);
 
   const getItemDetails = useCallback(async (
     item: NormalizedSearchRecord,
@@ -268,37 +287,42 @@ export const GenelAramaQeryWindow = forwardRef<
       throw new Error('Kayıt kimliği bulunamadı.');
     }
 
-    const requestId = detailGateRef.current.next();
-    const result: unknown = await GenelAramaQeryBusiness.Query(
-      { ObjectId: objectId },
-      true,
-    );
+    const task = transport.startDetail({
+      objectId,
+      execution: {
+        requestKeySuffix: id,
+      },
+    });
+    detailTaskRef.current = task;
+    setDetailLoadingKey(item.key);
 
-    if (!mountedRef.current || !detailGateRef.current.isCurrent(requestId)) {
-      return null;
+    try {
+      const result = await task.promise;
+      if (!mountedRef.current || detailTaskRef.current !== task) return null;
+
+      const detail = result.records[0];
+      if (!detail) {
+        throw new Error(result.message || 'Kayıt ayrıntıları bulunamadı.');
+      }
+      return asDetailRecord(detail);
+    } catch (error) {
+      if (detailTaskRef.current !== task || isGeneralSearchTransportCancellationV11(error)) {
+        return null;
+      }
+      throw error;
+    } finally {
+      if (mountedRef.current && detailTaskRef.current === task) {
+        detailTaskRef.current = null;
+        setDetailLoadingKey(null);
+      }
     }
-
-    if (
-      !isServiceResult(result)
-      || result.type !== Constants_ServiceResultType.Success
-      || !Array.isArray(result.data)
-      || !result.data[0]
-    ) {
-      const message = isServiceResult(result) && typeof result.message === 'string'
-        ? result.message
-        : 'Kayıt ayrıntıları bulunamadı.';
-      throw new Error(message);
-    }
-
-    return asDetailRecord(result.data[0]);
-  }, []);
+  }, [id, transport]);
 
   const showItemOnMap = useCallback(async (
     item: NormalizedSearchRecord | null,
   ): Promise<void> => {
     if (!item) return;
 
-    setDetailLoadingKey(item.key);
     setErrorMessage('');
     void safeClientLog(
       LoggingBusiness,
@@ -308,7 +332,8 @@ export const GenelAramaQeryWindow = forwardRef<
 
     try {
       const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
+      if (!itemDetails) return;
+      if (!itemDetails.geometry) throw new Error('Kayıt için harita konumu bulunamadı.');
 
       const mapView = MapManager.GetMapView();
       if (!mapView) throw new Error('Harita görünümü hazır değil.');
@@ -319,8 +344,6 @@ export const GenelAramaQeryWindow = forwardRef<
       const message = normalizeErrorMessage(error, 'Kayıt konumu gösterilemedi.');
       setErrorMessage(message);
       windowManager.ShowMessage(Constants_MessageType.Error, message);
-    } finally {
-      if (mountedRef.current) setDetailLoadingKey(null);
     }
   }, [getItemDetails, id, windowManager]);
 
@@ -331,7 +354,6 @@ export const GenelAramaQeryWindow = forwardRef<
     event.preventDefault();
     event.stopPropagation();
 
-    setDetailLoadingKey(item.key);
     setErrorMessage('');
     void safeClientLog(
       LoggingBusiness,
@@ -341,7 +363,8 @@ export const GenelAramaQeryWindow = forwardRef<
 
     try {
       const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
+      if (!itemDetails) return;
+      if (!itemDetails.geometry) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
 
       const url = buildGoogleDirectionsUrl(itemDetails.geometry);
       if (!url) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
@@ -352,18 +375,19 @@ export const GenelAramaQeryWindow = forwardRef<
       const message = normalizeErrorMessage(error, 'Yol tarifi alınamadı.');
       setErrorMessage(message);
       windowManager.ShowMessage(Constants_MessageType.Error, message);
-    } finally {
-      if (mountedRef.current) setDetailLoadingKey(null);
     }
   }, [getItemDetails, windowManager]);
 
   const backToSidebar = useCallback((): void => {
-    queryGateRef.current.invalidate();
-    detailGateRef.current.invalidate();
+    searchTaskRef.current?.cancel('Genel arama ekranından çıkıldı.');
+    detailTaskRef.current?.cancel('Genel arama ekranından çıkıldı.');
+    searchTaskRef.current = null;
+    detailTaskRef.current = null;
+    transport.cancelAll('Genel arama ekranından çıkıldı.');
     setDetailLoadingKey(null);
     setErrorMessage('');
     windowManager.ShowWindow('sidebar');
-  }, [windowManager]);
+  }, [transport, windowManager]);
 
   const clearLocalFilters = useCallback((): void => {
     applyPresentation(runtime.clearFilters());
