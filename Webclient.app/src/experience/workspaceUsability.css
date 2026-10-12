@@ -460,3 +460,20 @@ body { margin: 0; user-select: text; }
 #app-shell .sidebar-container { position: absolute; }
 #app-shell .sidebar-container.kr-fast-query { position: absolute; }
 .experience-settings__body { grid-auto-rows: max-content; align-content: start; }
+
+/* Keep the minimize glyph inside its button; legacy mobile CSS positioned the
+ * SVG over the window title and left desktop buttons without a visible icon. */
+#app-shell .common-query-window-tool-minimise-button {
+  display: block !important;
+  position: static;
+  inset: auto;
+  top: auto !important;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 24px;
+}

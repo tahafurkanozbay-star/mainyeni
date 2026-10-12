@@ -8,6 +8,8 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import type { ManagedComponent } from './managedWindowLoading';
 import './LazyManagedWindow.css';
 
+const LAZY_WINDOW_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
+
 interface LazyManagedWindowProps {
   readonly id: string;
   readonly label?: string;
@@ -50,7 +52,7 @@ export function LazyManagedWindow({
   const LoadedComponent = loadedComponent;
   const onClose = (): void => { windowManager.HideWindow(id); };
   const retry = (): void => {
-    if (!createComponent || attempt >= 3) return;
+    if (!createComponent || attempt >= LAZY_WINDOW_RETRY_POLICY.maxAttempts) return;
     setLoadedComponent(() => createComponent());
     setAttempt((value) => value + 1);
   };
@@ -58,8 +60,8 @@ export function LazyManagedWindow({
     <section className="kr-lazy-window kr-lazy-window--error" role="alert" aria-label={`${label} açılamadı`}>
       <div>
         <strong>{label} açılamadı</strong>
-        <span>{attempt < 3 ? 'Bağlantınızı kontrol edip yeniden deneyin.' : 'Deneme sınırına ulaşıldı. Sayfayı yenileyebilirsiniz.'}</span>
-        {createComponent && attempt < 3 ? <button type="button" className="kr-lazy-window__retry" onClick={retry}>Yeniden dene</button> : null}
+        <span>{attempt < LAZY_WINDOW_RETRY_POLICY.maxAttempts ? 'Bağlantınızı kontrol edip yeniden deneyin.' : 'Deneme sınırına ulaşıldı. Sayfayı yenileyebilirsiniz.'}</span>
+        {createComponent && attempt < LAZY_WINDOW_RETRY_POLICY.maxAttempts ? <button type="button" className="kr-lazy-window__retry" onClick={retry}>Yeniden dene</button> : null}
       </div>
       <button className="kr-lazy-window__close" type="button" aria-label="Araç hatasını kapat" onClick={onClose}>×</button>
     </section>
