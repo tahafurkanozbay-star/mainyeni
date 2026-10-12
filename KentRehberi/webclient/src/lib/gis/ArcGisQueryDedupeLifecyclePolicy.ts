@@ -51,7 +51,11 @@ const intents: readonly QueryDedupeIntent[] = ['interactive', 'visible', 'backgr
 const priority: Readonly<Record<QueryDedupeIntent, number>> = Object.freeze({ interactive: 2, visible: 1, background: 0 })
 function id(name:string,value:string):string { if(typeof value!=='string'||/[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${name} is invalid`); const v=value.trim(); if(!v||v.length>256) throw new Error(`${name} is invalid`); return v }
 function integer(name:string,value:number,min=0):void { if(!Number.isSafeInteger(value)||value<min) throw new Error(`${name} must be a safe integer >= ${min}`) }
-function time(name:string,value:number):void { if(!Number.isFinite(value)||value<0) throw new Error(`${name} must be finite and non-negative`) }
+function time(name:string,value:number):void { if(!Number.isSafeInteger(value)||value<0) throw new Error(`${name} must be a non-negative safe millisecond integer`) }
+function deadline(name:string,at:number,ttl:number):number {
+  if(!Number.isSafeInteger(at+ttl)) throw new Error(`${name} deadline overflow`)
+  return at+ttl
+}
 
 /** Payload-free request coalescing and bounded result-cache authority for ArcGIS query work. */
 export class ArcGisQueryDedupeLifecyclePolicy {
@@ -60,6 +64,7 @@ export class ArcGisQueryDedupeLifecyclePolicy {
   readonly #signatures = new Map<string, string>()
   readonly #revisions = new Map<string, number>()
   #sequence = 0
+  #lastObservedAt = 0
   #disposed = false
 
   constructor(budget: QueryDedupeBudget) {
@@ -89,7 +94,7 @@ export class ArcGisQueryDedupeLifecyclePolicy {
     this.#live(); const sig=id('signature',signature); const layer=id('layerId',layerId); integer('revision',revision); time('now',now); this.expire(now)
     const requestId=this.#signatures.get(this.#signatureKey(layer,revision,sig)); if(!requestId) return null
     const e=this.#entries.get(requestId); if(!e||e.phase!=='cached'||this.#revisions.get(layer)!==revision) return null
-    e.touchedAt=now; e.expiresAt=now+this.#budget.cacheTtlMs; return this.#view(e)
+    const at=this.#lastObservedAt; e.touchedAt=at; e.expiresAt=deadline('cache',at,this.#budget.cacheTtlMs); return this.#view(e)
   }
 
   admit(request:QueryDedupeRequest):'admitted'|'duplicate'|'rejected' {
@@ -104,43 +109,47 @@ export class ArcGisQueryDedupeLifecyclePolicy {
     if(this.#signatures.has(key)) return 'duplicate'
     if(this.#entries.size>=this.#budget.maxEntries||this.#layerCount(layerId)>=this.#budget.maxEntriesPerLayer) return 'rejected'
     const sequence=++this.#sequence
-    const entry:Entry={...request,requestId,signature,layerId,phase:'pending',sequence,touchedAt:request.requestedAt,expiresAt:request.requestedAt+this.#budget.pendingTtlMs,features:request.estimatedFeatures,bytes:request.estimatedBytes}
+    const entry:Entry={...request,requestId,signature,layerId,phase:'pending',sequence,touchedAt:request.requestedAt,expiresAt:deadline('pending',request.requestedAt,this.#budget.pendingTtlMs),features:request.estimatedFeatures,bytes:request.estimatedBytes}
     this.#entries.set(requestId,entry); this.#signatures.set(key,requestId); return 'admitted'
   }
 
   startNext(now:number):QueryDedupeView|null {
     this.#live(); time('now',now); this.expire(now)
+    const at=this.#lastObservedAt
     if(this.#phaseCount('inflight')>=this.#budget.maxInflight) return null
     let candidate:Entry|undefined
     for(const e of this.#entries.values()) {
-      if(e.phase!=='pending'||this.#layerPhaseCount(e.layerId,'inflight')>=this.#budget.maxInflightPerLayer) continue
+      if(e.phase!=='pending'||e.requestedAt>at||this.#layerPhaseCount(e.layerId,'inflight')>=this.#budget.maxInflightPerLayer) continue
       if(!candidate||priority[e.intent]>priority[candidate.intent]||(priority[e.intent]===priority[candidate.intent]&&(e.requestedAt<candidate.requestedAt||(e.requestedAt===candidate.requestedAt&&e.sequence<candidate.sequence)))) candidate=e
     }
     if(!candidate) return null
-    candidate.phase='inflight'; candidate.touchedAt=now; candidate.expiresAt=now+this.#budget.requestLeaseMs; return this.#view(candidate)
+    const expiresAt=deadline('lease',at,this.#budget.requestLeaseMs)
+    candidate.phase='inflight'; candidate.touchedAt=at; candidate.expiresAt=expiresAt; return this.#view(candidate)
   }
 
   renew(requestId:string,revision:number,now:number):boolean {
     this.#live(); const e=this.#entries.get(id('requestId',requestId)); integer('revision',revision); time('now',now); this.expire(now)
-    if(!e||e.phase!=='inflight'||e.revision!==revision||this.#revisions.get(e.layerId)!==revision) return false
-    e.touchedAt=now; e.expiresAt=now+this.#budget.requestLeaseMs; return true
+    if(!e||e.phase!=='inflight'||e.revision!==revision||this.#revisions.get(e.layerId)!==revision||now<e.touchedAt) return false
+    const at=this.#lastObservedAt; const expiresAt=deadline('lease',at,this.#budget.requestLeaseMs)
+    e.touchedAt=at; e.expiresAt=expiresAt; return true
   }
 
   complete(requestId:string,revision:number,features:number,bytes:number,now:number):QueryDedupeView|null {
     this.#live(); const key=id('requestId',requestId); integer('revision',revision); integer('features',features); integer('bytes',bytes); time('now',now); this.expire(now)
     const e=this.#entries.get(key)
-    if(!e||e.phase!=='inflight'||e.revision!==revision||this.#revisions.get(e.layerId)!==revision) return null
+    if(!e||e.phase!=='inflight'||e.revision!==revision||this.#revisions.get(e.layerId)!==revision||now<e.touchedAt) return null
+    const at=this.#lastObservedAt; const expiresAt=deadline('cache',at,this.#budget.cacheTtlMs)
     if(features>this.#budget.maxFeaturesPerEntry||bytes>this.#budget.maxBytesPerEntry){this.#remove(key);return null}
     e.features=features; e.bytes=bytes
-    while(this.#phaseCount('cached')>=this.#budget.maxCached||this.#layerPhaseCount(e.layerId,'cached')>=this.#budget.maxCachedPerLayer||this.#cachedFeatures()+features>this.#budget.maxCachedFeatures||this.#cachedBytes()+bytes>this.#budget.maxCachedBytes){
+    while(this.#phaseCount('cached')>=this.#budget.maxCached||this.#layerPhaseCount(e.layerId,'cached')>=this.#budget.maxCachedPerLayer||this.#cachedFeatures()>this.#budget.maxCachedFeatures-features||this.#cachedBytes()>this.#budget.maxCachedBytes-bytes){
       const victim=this.#victim(e.layerId); if(!victim){this.#remove(key);return null}; this.#remove(victim.requestId)
     }
-    e.phase='cached'; e.touchedAt=now; e.expiresAt=now+this.#budget.cacheTtlMs; return this.#view(e)
+    e.phase='cached'; e.touchedAt=at; e.expiresAt=expiresAt; return this.#view(e)
   }
 
   cancel(requestId:string):boolean { this.#live(); const key=id('requestId',requestId); if(!this.#entries.has(key))return false; this.#remove(key); return true }
   releaseLayer(layerId:string):number { this.#live(); const layer=id('layerId',layerId); let n=0; for(const [key,e] of this.#entries)if(e.layerId===layer){this.#remove(key);n++}; this.#revisions.delete(layer); return n }
-  expire(now:number):number { this.#live(); time('now',now); let n=0; for(const [key,e] of this.#entries)if(e.expiresAt<=now){this.#remove(key);n++}; return n }
+  expire(now:number):number { this.#live(); time('now',now); const at=this.#lastObservedAt=Math.max(now,this.#lastObservedAt); let n=0; for(const [key,e] of this.#entries)if(e.expiresAt<=at){this.#remove(key);n++}; return n }
   snapshot():Readonly<{layers:number;entries:number;pending:number;inflight:number;cached:number;cachedFeatures:number;cachedBytes:number}> { this.#live(); return Object.freeze({layers:this.#revisions.size,entries:this.#entries.size,pending:this.#phaseCount('pending'),inflight:this.#phaseCount('inflight'),cached:this.#phaseCount('cached'),cachedFeatures:this.#cachedFeatures(),cachedBytes:this.#cachedBytes()}) }
   fingerprint():string { this.#live(); return [...this.#entries.values()].sort((a,b)=>a.layerId.localeCompare(b.layerId)||a.sequence-b.sequence).map(e=>`${e.layerId}:${e.signature}:${e.revision}:${e.intent}:${e.phase}:${e.features}:${e.bytes}`).join('|') }
   dispose():void { if(this.#disposed)return; this.#entries.clear(); this.#signatures.clear(); this.#revisions.clear(); this.#disposed=true }
