@@ -754,3 +754,29 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
   scroll-margin-block-start: 84px;
   scroll-margin-block-end: 100px;
 }
+
+/* Result drawers keep a readable width even when service navigation was
+ * collapsed before a command opened them. */
+@media (min-width: 681px) {
+  #app-shell .sidebar-container.kr-fast-query {
+    width: 320px;
+    inline-size: 320px;
+    max-width: calc(100dvw - 88px);
+    max-inline-size: calc(100dvw - 88px);
+  }
+}
+@media (min-width: 881px), (min-width: 800px) and (max-height: 540px) {
+  #app-shell:has(.kr-fast-query:not([aria-hidden='true'])) .experience-workspace {
+    left: 336px;
+    inset-inline-start: 336px;
+    max-width: calc(100dvw - 424px);
+    max-inline-size: calc(100dvw - 424px);
+  }
+}
+@media (min-width: 800px) and (max-height: 540px) {
+  #app-shell .sidebar-container.kr-fast-query {
+    top: var(--mainbar-height);
+    height: calc(100dvh - var(--mainbar-height) - 8px);
+    block-size: calc(100dvh - var(--mainbar-height) - 8px);
+  }
+}
