@@ -394,7 +394,6 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     useEffect(() => {
       mountedRef.current = true;
       windowManager.RegisterWindow(ref);
-      void fetchQueryResults();
 
       return () => {
         mountedRef.current = false;
@@ -412,7 +411,16 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
         }
         windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [fetchQueryResults, id, loader, model, ref, reloadGeneration, windowManager]);
+    }, [id, loader, model, ref, windowManager]);
+
+    useEffect(() => {
+      mountedRef.current = true;
+      void fetchQueryResults();
+      return () => {
+        requestVersionRef.current += 1;
+        loader.cancel();
+      };
+    }, [fetchQueryResults, loader, reloadGeneration]);
 
     const refreshLegend = useCallback(async (): Promise<void> => {
       if (legendRef.current || !mapView) return;
@@ -603,6 +611,11 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                       aria-controls={treeId}
                       aria-describedby={statusId}
                       onChange={(event) => model.setQuery(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Escape' || !snapshot.query) return;
+                        event.preventDefault();
+                        model.clearQuery();
+                      }}
                     />
                     {snapshot.query ? (
                       <button type="button" onClick={() => model.clearQuery()} aria-label="Katman aramasını temizle">
