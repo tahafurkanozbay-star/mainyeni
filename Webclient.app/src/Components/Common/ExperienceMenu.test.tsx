@@ -197,6 +197,23 @@ describe('ExperienceMenu', () => {
     expect(document.getElementById(describedBy ?? '')?.textContent).toBe('Noktadaki harita detaylarını açar.');
   });
 
+  it('keeps descriptions associated with their own menu when ids are omitted', () => {
+    render(
+      <>
+        <ExperienceMenu label="İlk menü" items={[{ id: 'open', label: 'Aç', description: 'Birinci menü açıklaması' }]} />
+        <ExperienceMenu label="İkinci menü" items={[{ id: 'open', label: 'Aç', description: 'İkinci menü açıklaması' }]} />
+      </>,
+    );
+    const [first, second] = screen.getAllByRole('menuitem', { name: 'Aç' });
+    const firstId = first?.getAttribute('aria-describedby');
+    const secondId = second?.getAttribute('aria-describedby');
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(firstId).not.toBe(secondId);
+    expect(document.getElementById(firstId ?? '')).toHaveTextContent('Birinci menü açıklaması');
+    expect(document.getElementById(secondId ?? '')).toHaveTextContent('İkinci menü açıklaması');
+  });
+
   it('supports non-looping menus', () => {
     render(
       <ExperienceMenu

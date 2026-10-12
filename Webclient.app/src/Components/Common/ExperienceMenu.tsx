@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -74,6 +75,8 @@ export function ExperienceMenu({
   loop = true,
   onDismiss,
 }: ExperienceMenuProps): ReactNode {
+  const generatedId = useId();
+  const descriptionIdPrefix = id ?? `experience-menu-${generatedId}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const previousItemsRef = useRef<readonly RovingFocusItem[]>([]);
   const rovingItems = useMemo(() => toRovingItems(items), [items]);
@@ -155,7 +158,7 @@ export function ExperienceMenu({
             tabIndex={visible ? (tabIndices[index] ?? -1) : -1}
             disabled={item.disabled}
             aria-label={item.label}
-            aria-describedby={item.description ? `${id ?? 'experience-menu'}-${item.id}-description` : undefined}
+            aria-describedby={item.description ? `${descriptionIdPrefix}-${item.id}-description` : undefined}
             onFocus={() => setActiveIndex(index)}
             onClick={item.onActivate}
           >
@@ -166,7 +169,7 @@ export function ExperienceMenu({
               <span className="experience-menu__label">{item.label}</span>
               {item.description ? (
                 <span
-                  id={`${id ?? 'experience-menu'}-${item.id}-description`}
+                  id={`${descriptionIdPrefix}-${item.id}-description`}
                   className="experience-menu__description"
                 >
                   {item.description}
