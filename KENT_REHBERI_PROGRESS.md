@@ -383,3 +383,11 @@
 - SECURITY REVIEW: AuthenticatedEncryptionUtils currently calls ParseEnvelope/DeriveKey outside Decrypt cleanup; unbounded Split can allocate proportional to attacker delimiters; Encrypt derives key before its cleanup boundary. Prepared bounded parsing, early UTF8 byte-count checks, and fail-path buffer cleanup; production change NOT committed or tested.
 - WRITE STATUS: GitHub update_file mutation rejected by safety checks. Do not claim source hardening, tests, or progress write landed. No WMS/WFS, external endpoint, telemetry, dependency, or icon authority added.
 - MERGE GATE / NEXT: >=4,000 additions still unmet (1,634 short). Keep PR draft/open; apply verified source+adversarial tests when writes permitted, rerun exact-head CI, extend substantive Platform scope, then refresh main/reviews/mergeability before merge.
+
+## Deep Platform / exact-head verification and deferred security fixes — 2026-10-13
+- TUR / GÖREV: Platform / Architecture / Whole-Code Modernization, canonical PR #483, open/draft. Exact head 0bce94c8c6c3ca6442a373bdde3c2296965ca4d5; main/merge-base 70f2ffb229c526e586deaf62b1a3249d0af2b271; 39 ahead / 0 behind, mergeable=true.
+- CI: exact-head Platform Architecture Audit, Dependency Governance, Typed Test Validation, Backend Validation, Webclient Quality, Release QA and Release Evidence Contract all completed+success.
+- SCOPE: GitHub base...head additions 2,373 / deletions 621, below mandatory 4,000 additions (1,627 short). No merge.
+- SECURITY REVIEW: AuthenticatedEncryptionUtils envelope length and Base64 preflight, malformed-part buffer cleanup, Encrypt/Decrypt failure-path zeroing, and request-target pre-decode length guard remain pending. Source and tests were reviewed; GitHub source mutation was blocked by OpenAI safety checks. Do not claim these patches shipped or that prior exact-head CI covers them.
+- NETWORK / MODERNIZATION: no new endpoint, telemetry, secret, remote asset, WMS/WFS or icon resolver introduced. No benchmark claims.
+- NEXT: apply source and adversarial regressions on the SAME PR when permitted, confirm .NET xUnit + full exact-head workflows, extend meaningful Platform/Architecture scope to >=4,000 additions, refresh current main/reviews/mergeability and only then consider squash merge.
