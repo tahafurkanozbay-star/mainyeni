@@ -83,6 +83,7 @@ export const CommonReducer = (
         WindowList: Object.freeze(state.WindowList.map((item) => Object.freeze({
           ...item,
           visible: item.id === windowid,
+          minimized: item.id === windowid ? false : (item.minimized ?? false),
           query: item.id === windowid ? (payload.query ?? {}) : (item.query ?? null),
         }))),
       };
