@@ -4,7 +4,6 @@ import {
   NUMBERING_QUERY_VERSION_V11,
   cloneNumberingPathV11,
   descendantsOfNumberingLevelV11,
-  emptyNumberingPathV11,
   errorMessageV11,
   errorNameV11,
   filterNumberingOptionsV11,
@@ -416,7 +415,7 @@ export class NumberingQueryRuntimeV11 {
   #publish(): void {
     this.#snapshot = this.#buildSnapshot();
     let observerFailed = false;
-    for (const observer of [...this.#observers]) {
+    for (const observer of this.#observers) {
       try {
         observer();
       } catch (error) {
