@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const read = (name: string): string => readFileSync(new URL(`./${name}`, import.meta.url), 'utf8');
+const webclientRoot = process.cwd().endsWith('Webclient.app') ? process.cwd() : resolve(process.cwd(), 'Webclient.app');
+const read = (name: string): string => readFileSync(resolve(webclientRoot, 'src', 'Components', 'App', name), 'utf8');
 
 const modeCss = read('MapModeExperienceControl.css');
 const recoveryCss = read('MapWorkspaceRecoverySurface.css');
