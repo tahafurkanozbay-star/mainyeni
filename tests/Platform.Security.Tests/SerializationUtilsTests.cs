@@ -209,7 +209,7 @@ public sealed class SerializationUtilsTests
 
     public sealed class SampleModel
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public int Count { get; set; }
     }
@@ -223,8 +223,8 @@ public sealed class SerializationUtilsTests
     {
         public string Name { get; set; }
 
-        public CyclicNode Parent { get; set; }
+        public CyclicNode? Parent { get; set; }
 
-        public CyclicNode Child { get; set; }
+        public CyclicNode? Child { get; set; }
     }
 }
