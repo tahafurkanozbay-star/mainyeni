@@ -155,8 +155,30 @@ describe('LayerListWidget modern workspace', () => {
   it('renders semantic tabs instead of Bootstrap tab state', () => {
     renderWidget();
     const tabs = screen.getByRole('tablist', { name: 'Katman yönetimi görünümleri' });
-    expect(within(tabs).getByRole('tab', { name: 'Katmanlar' })).toHaveAttribute('aria-selected', 'true');
-    expect(within(tabs).getByRole('tab', { name: 'Lejant' })).toHaveAttribute('aria-selected', 'false');
+    expect(within(tabs).getByRole('tab', { name: 'Katmanlar' }))
+      .toHaveAttribute('aria-selected', 'true');
+    expect(within(tabs).getByRole('tab', { name: 'Katmanlar' })).toHaveAttribute('tabindex', '0');
+    expect(within(tabs).getByRole('tab', { name: 'Lejant' }))
+      .toHaveAttribute('aria-selected', 'false');
+    expect(within(tabs).getByRole('tab', { name: 'Lejant' })).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('uses roving tab focus with Arrow, Home and End keys', async () => {
+    renderWidget();
+    const tabs = screen.getByRole('tablist', { name: 'Katman yönetimi görünümleri' });
+    const layers = within(tabs).getByRole('tab', { name: 'Katmanlar' });
+    const legend = within(tabs).getByRole('tab', { name: 'Lejant' });
+    layers.focus();
+    fireEvent.keyDown(layers, { key: 'ArrowRight' });
+    expect(legend).toHaveAttribute('aria-selected', 'true');
+    expect(legend).toHaveAttribute('tabindex', '0');
+    expect(document.activeElement).toBe(legend);
+    fireEvent.keyDown(legend, { key: 'Home' });
+    expect(layers).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(layers);
+    fireEvent.keyDown(layers, { key: 'End' });
+    expect(legend).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(legend);
   });
 
   it('renders a labelled searchable tree after the catalog is ready', async () => {
@@ -232,11 +254,20 @@ describe('LayerListWidget modern workspace', () => {
     expect(document.activeElement).toBe(tree);
   });
 
-  it('expands the active group with ArrowRight', async () => {
+  it('uses the ARIA tree ArrowRight and ArrowLeft expansion pattern', async () => {
     const tree = await waitForLayerTree();
     tree.focus();
+    const groupId = tree.getAttribute('aria-activedescendant');
     fireEvent.keyDown(tree, { key: 'ArrowRight' });
     expect(screen.getByText('Ana Yollar')).toBeVisible();
+    expect(tree).toHaveAttribute('aria-activedescendant', groupId);
+    fireEvent.keyDown(tree, { key: 'ArrowRight' });
+    expect(tree.getAttribute('aria-activedescendant')).not.toBe(groupId);
+    fireEvent.keyDown(tree, { key: 'ArrowLeft' });
+    expect(tree).toHaveAttribute('aria-activedescendant', groupId);
+    fireEvent.keyDown(tree, { key: 'ArrowLeft' });
+    expect(screen.queryByText('Ana Yollar')).not.toBeInTheDocument();
+    expect(tree).toHaveAttribute('aria-activedescendant', groupId);
   });
 
   it('supports Home and End navigation without wrapping', async () => {
