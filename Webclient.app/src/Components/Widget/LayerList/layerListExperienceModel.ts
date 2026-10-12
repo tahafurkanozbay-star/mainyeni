@@ -431,6 +431,10 @@ export class LayerListExperienceModel {
       case 'page-next': nextIndex = Math.min(rows.length - 1, currentIndex + this.#pageSize); break;
       case 'page-previous': nextIndex = Math.max(0, currentIndex - this.#pageSize); break;
       case 'parent': {
+        if (current?.kind === 'group' && current.expanded && !this.#snapshot.normalizedQuery) {
+          this.toggleGroup(current.groupId);
+          return;
+        }
         if (current?.kind === 'layer') {
           const index = rows.findIndex((row) => row.key === `group:${current.groupId}`);
           if (index >= 0) nextIndex = index;
@@ -439,11 +443,13 @@ export class LayerListExperienceModel {
       }
       case 'first-child': {
         if (current?.kind === 'group') {
-          if (!current.expanded) this.toggleGroup(current.groupId);
-          const refreshedRows = this.#snapshot.rows;
-          const index = refreshedRows.findIndex((row) => row.kind === 'layer' && row.groupId === current.groupId);
+          if (!current.expanded) {
+            this.toggleGroup(current.groupId);
+            return;
+          }
+          const index = rows.findIndex((row) => row.kind === 'layer' && row.groupId === current.groupId);
           if (index >= 0) {
-            this.setActive(refreshedRows[index]?.key ?? current.key);
+            this.setActive(rows[index]?.key ?? current.key);
             return;
           }
         }
