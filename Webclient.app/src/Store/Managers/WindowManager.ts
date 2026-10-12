@@ -47,9 +47,9 @@ export interface WindowManagerApi {
 
 const noop = (): void => undefined;
 
-const callSafely = (callback: (() => void) | null | undefined): void => {
+const callSafely = (callback: (() => unknown) | null | undefined): void => {
   try {
-    callback?.();
+    void Promise.resolve(callback?.()).catch((error: unknown) => DebugHelper.Log(error));
   } catch (error) {
     DebugHelper.Log(error);
   }

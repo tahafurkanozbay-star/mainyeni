@@ -3,6 +3,7 @@ import App from './App';
 import '@arcgis/core/assets/esri/themes/light/main.css';
 import './styles.css';
 import './experience-premium.css';
+import './experience/workspaceUsability.css';
 import { ExperienceRuntimeRecoveryBoundary } from './Components/Common/ExperienceRuntimeRecoveryBoundary';
 import { installBrowserRuntimeObservers, runtimeDiagnostics } from './platform/runtime/runtimeDiagnostics';
 import { installDeploymentRecovery } from './platform/runtime/deploymentRecovery';

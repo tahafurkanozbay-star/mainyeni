@@ -1,10 +1,12 @@
-@import url('https://fonts.googleapis.com/css?family=Mukta');
+/* Historical rem dimensions are expressed in pixels to preserve their original
+ * 9px geometry. The document root now uses the browser text scale. */
+html { font-size: 100%; }
 
 html,
 body,
 #app,
 #app>div {
-  font-size: 9px;
+  font-size: inherit;
   overflow: hidden;
   font-family: ankara display, Ubuntu, Segoe UI, Arial, sans-serif;
   background-color: #333;
@@ -62,7 +64,7 @@ canvas::after {
   text-shadow: none;
   border: none;
   -webkit-highlight: none;
-  font-size: 1.75rem;
+  font-size: 15.75px;
 }
 
 
@@ -101,7 +103,7 @@ canvas::after {
 }
 
 .common-query-window-header > span{
-  font-size: 1.75rem;
+  font-size: 15.75px;
   margin-left: 5px;
   font-weight: 600;
   color:var(--common-query-window-header-text-color)
@@ -145,7 +147,7 @@ canvas::after {
 
 /*checkbox*/
 .form-checkbox{
-  font-size: 1.5rem;
+  font-size: 13.5px;
   cursor: pointer;
   display: flex;
   flex-direction: row;
@@ -162,7 +164,7 @@ canvas::after {
   flex-grow: 0;
   flex-shrink: 0;
   font-weight: 600;
-  font-size: 2.5rem;
+  font-size: 22.5px;
 }
 
 .form-checkbox:hover{
@@ -201,7 +203,7 @@ canvas::after {
   height: 40px;
   margin-top: 10px;
   float: right;
-  font-size: 1.5rem;
+  font-size: 13.5px;
   font-weight: 400;
 }
 
@@ -236,12 +238,12 @@ canvas::after {
   
 }
 .results-container-count{
-  font-size: 1.75rem;
+  font-size: 15.75px;
   padding: 10px;
 }
 
 .results-container-back-button{
-  font-size: 1.5rem;
+  font-size: 13.5px;
   cursor: pointer;
   width: auto;
   margin: auto;
@@ -257,7 +259,7 @@ canvas::after {
 }
 
 .results-container-back-button-icon{
-  font-size: 2rem;
+  font-size: 18px;
   vertical-align: -5px;
 }
 
@@ -265,7 +267,7 @@ canvas::after {
 
 .result-item-info {
   padding: 10px;
-  font-size: 1.5rem;
+  font-size: 13.5px;
   cursor: pointer;
   flex-grow: 1;
   width: auto;
@@ -280,7 +282,7 @@ canvas::after {
 .result-item-info-title {
   color: var(--common-query-window-header-text-color);
   font-weight: 600;
-  font-size: 1.5rem;
+  font-size: 13.5px;
  
 }
 
@@ -305,7 +307,7 @@ canvas::after {
 
 .result-item-info-date {
   color: var(--colors-red);
-  font-size: 1.75rem;
+  font-size: 15.75px;
 }
 
 .result-item-container:hover > .result-item-info > .result-item-info-date{
@@ -485,36 +487,36 @@ canvas::after {
 }
 
 .item-Title {
-  font-size: 1.5rem;
+  font-size: 13.5px;
   color: darkred;
 }
 
 .item-Address_NeighborhoodName {
-  font-size: 1.45rem;
+  font-size: 13.05px;
   font-weight: 600;
   color: #444;
 }
 .item-Address_StreetName {
   color: #444;
-  font-size: 1.35rem;
+  font-size: 12.15px;
 }
 .item-Type {
   margin-top: 20px;
   font-weight: 600;
   color: #2d5989;
-  font-size: 1.25rem;
+  font-size: 11.25px;
 }
 
 .item-SubType {
   margin-top: 20px;
   font-weight: 600;
   color: #2d5989;
-  font-size: 1.15rem;
+  font-size: 10.35px;
 }
 
 
 .item-Tools_item-Button {
-  width: 3rem;
+  width: 27px;
 }
 
 .item-Tools_item-Button:hover {
@@ -528,7 +530,7 @@ canvas::after {
 }
 
 .item-Date {
-  font-size: 1.5rem;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--green);
   padding: 2px;
@@ -657,13 +659,7 @@ canvas::after {
 
 
 /*overrides*/
-.btn:focus-visible{
-  color: white !important;
-  background-color: var(--primary-button-background-hover) !important;
-  border-color: transparent !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-}
+
 
 
 .radio-group{
@@ -677,12 +673,12 @@ canvas::after {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 1.75rem;
+  font-size: 15.75px;
   cursor: pointer;
 }
 
 .radio-group-item-icon{
-  font-size: 3rem;
+  font-size: 27px;
   color: #444;
 }
 
@@ -699,12 +695,12 @@ canvas::after {
 }
 .popup-title{
   color: var(--primary-button-background) !important;
-  font-size: 2.5rem;
+  font-size: 22.5px;
 }
 
 .popup-header{
     color:var(--primary-button-background) !important;
-    font-size: 2.5rem;
+    font-size: 22.5px;
 }
 
 
@@ -804,8 +800,8 @@ canvas::after {
   
   .slider-link {
     display: inline-flex;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 13.5px;
+    height: 13.5px;
     background: #a8a8a8;
     text-decoration: none;
     align-items: center;

@@ -7,7 +7,7 @@ import type {
 } from './contracts';
 import type { FetchImplementation } from './fetchTransport';
 import type { ResponseLike } from './responseParser';
-import { executeFetch } from './fetchTransport';
+import { createFetchTransport, executeFetch } from './fetchTransport';
 import { createApiClient } from './httpClient';
 import { createRequestCoordinator } from './requestCoordinator';
 import {
@@ -217,6 +217,29 @@ describe('mutation safety request policy', () => {
 });
 
 describe('mutation safety fetch boundary', () => {
+  test.each(['get', 'post'])('passes a default %s policy from the coordinator through the real fetch boundary', async (method) => {
+    const fetchImpl = vi.fn<FetchImplementation>().mockResolvedValue(response());
+    const realTransport = createFetchTransport({
+      baseUrl: '/api',
+      timeoutMs: 5_000,
+      maxRetries: 0,
+      cacheTtlMs: 0,
+      fetchImpl,
+    });
+    const coordinator = createRequestCoordinator({ transport: realTransport });
+    const result = await coordinator.request({
+      method,
+      url: '/bootstrap',
+      cache: false,
+      dedupe: false,
+      maxRetries: 0,
+      ...(method === 'post' ? { data: { value: 1 } } : {}),
+    });
+    expect(result.data).toEqual({ saved: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const headers = new Headers(fetchImpl.mock.calls[0]?.[1]?.headers);
+    expect(headers.has('Idempotency-Key')).toBe(false);
+  });
   test('injects one governed Idempotency-Key header for protected POST', async () => {
     const fetchImpl = vi.fn<FetchImplementation>().mockResolvedValue(response());
 

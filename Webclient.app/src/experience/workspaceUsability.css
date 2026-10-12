@@ -1,0 +1,411 @@
+/* Final presentation contract for the active GIS workspace. Keep the browser's
+ * text scale, give each control a distinct place, and share surfaces across
+ * legacy query windows, map tools and modal dialogs. */
+:root {
+  --mainbar-height: 72px;
+  --exp-header-height: 72px;
+  --kr-premium-sidebar-width: 320px;
+  --sidebar-width: var(--kr-premium-sidebar-width);
+  --kr-workspace-gap: 16px;
+  --kr-panel-top: 148px;
+  --kr-panel-bottom: 88px;
+  --kr-control-size: 44px;
+}
+
+html { font-size: 100%; }
+body, #root, #app-shell {
+  font-size: 14px;
+  font-family: var(--exp-font-sans);
+  line-height: 1.5;
+}
+body { margin: 0; user-select: text; }
+#app-shell { position: relative; width: 100%; height: 100dvh; overflow: hidden; }
+#app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 72px; }
+
+/* The navigation and the workspace bar are separate rows. */
+.mainbar-container {
+  height: var(--mainbar-height);
+  min-height: var(--mainbar-height);
+  padding: 10px 16px;
+  background: var(--exp-surface);
+  backdrop-filter: none;
+}
+.mainbar-text { font-size: 18px; letter-spacing: .02em; }
+.mainbar-text::before { font-size: 10px; }
+.mainbar-container .ns-input { width: min(560px, 42vw); }
+.mainbar-container .ns-input-group { width: 100%; display: block; position: relative; }
+.mainbar-container .ns-input-group,
+.mainbar-container .ns-input-group input { height: 48px; }
+.mainbar-container .ns-input-group input { padding-inline: 16px 100px; font-size: 15px; }
+.mainbar-container .kr-search-submit {
+  width: 44px;
+  height: 44px;
+  top: 2px;
+  right: 2px;
+  border-radius: 10px;
+}
+.mainbar-container .kr-search-hint { position: absolute; right: 56px; top: 16px; }
+.mainbar-container .kr-search-hint kbd { font-size: 11px; }
+.mainbar-container .kr-header-portal { min-height: 44px; font-size: 12px; }
+
+#app-shell .experience-workspace {
+  inset: calc(var(--mainbar-height) + 12px) auto auto calc(var(--kr-premium-sidebar-width) + var(--kr-workspace-gap));
+  width: max-content;
+  max-width: calc(100vw - var(--kr-premium-sidebar-width) - 100px);
+  padding: 4px;
+  gap: 8px;
+  background: var(--exp-surface);
+  border-radius: 12px;
+  box-shadow: var(--exp-shadow-sm);
+  backdrop-filter: none;
+}
+.experience-workspace .experience-workspace__status { min-height: 44px; padding-inline: 10px; }
+.experience-workspace .experience-workspace__status-label { display: none; }
+.experience-workspace .experience-workspace__status strong { font-size: 12px; }
+.experience-workspace .experience-workspace__action {
+  min-height: 44px;
+  width: auto;
+  padding-inline: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.experience-workspace .experience-workspace__action::before { content: none; }
+.experience-workspace .experience-workspace__action kbd { font-size: 11px; }
+
+/* The governed switch is the sole production 2B/3B control. Its error recovery
+ * remains in place; successful transitions do not need a second floating card. */
+.experience-workspace .map-mode-transition-control {
+  position: relative;
+  inset: auto;
+  width: auto;
+  inline-size: auto;
+  min-width: 176px;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.experience-workspace .map-mode-transition-control__header,
+.experience-workspace .map-mode-transition-control__meta { display: none; }
+.experience-workspace .map-mode-transition-control__segments { padding: 0; gap: 2px; border: 0; }
+.experience-workspace .map-mode-transition-control__segment { min-height: 44px; padding: 6px 10px; gap: 6px; }
+.experience-workspace .map-mode-transition-control__mode { width: auto; padding: 0; font-size: 13px; }
+.experience-workspace .map-mode-transition-control__mode-label { font-size: 13px; }
+.experience-workspace .map-mode-transition-control__recovery {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px;
+  background: var(--exp-surface);
+  border: 1px solid var(--exp-danger);
+  border-radius: 12px;
+  box-shadow: var(--exp-shadow-md);
+  font-size: 13px;
+}
+
+/* Service discovery: readable labels, restrained decoration and an independently
+ * scrolling list. Favorites remain separate from the service activation button. */
+#app-shell .sidebar-container.kr-sidebar {
+  top: var(--mainbar-height);
+  width: var(--kr-premium-sidebar-width);
+  height: calc(100dvh - var(--mainbar-height));
+  border-radius: 0;
+  background: var(--exp-surface);
+  backdrop-filter: none;
+  box-shadow: 4px 0 16px rgb(17 36 59 / 6%);
+}
+.kr-sidebar .kr-sidebar__topline { padding: 12px 16px; min-height: 68px; }
+.kr-sidebar .kr-sidebar__title span { font-size: 11px; letter-spacing: .1em; }
+.kr-sidebar .kr-sidebar__title strong { font-size: 19px; }
+.kr-sidebar .kr-sidebar__groups { padding: 12px; gap: 4px; background: var(--exp-surface-2); }
+.kr-sidebar .kr-sidebar__group { min-height: 64px; border-radius: 10px; }
+.kr-sidebar .kr-sidebar__group-label,
+.kr-sidebar.is-collapsed .kr-sidebar__group-label { font-size: 11px; }
+.kr-sidebar .kr-sidebar__panel { padding: 12px; padding-bottom: 28px; }
+.kr-sidebar .kr-sidebar__search input { font-size: 14px; }
+.kr-sidebar .kr-sidebar__views button { font-size: 12px; }
+.kr-sidebar .kr-sidebar__panel-eyebrow { font-size: 10px; }
+.kr-sidebar .kr-sidebar__panel-head h2 { font-size: 16px; }
+.kr-sidebar .kr-sidebar__panel-head > span { font-size: 11px; }
+.kr-sidebar .kr-sidebar__item.ns-card { min-height: 64px; padding: 10px 52px 10px 10px; border-radius: 10px; box-shadow: none; }
+.kr-sidebar .kr-sidebar__item-copy { font-size: 14px; line-height: 1.4; }
+.kr-sidebar .kr-sidebar__item-copy strong { white-space: normal; overflow-wrap: anywhere; }
+.kr-sidebar .kr-sidebar__item-copy small { font-size: 11px; }
+.kr-sidebar .kr-sidebar__items { gap: 8px; }
+.kr-sidebar .kr-sidebar__favorite { border-radius: 8px; }
+.kr-sidebar .kr-sidebar__layer-load { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.kr-sidebar .kr-sidebar__layer-load-copy strong { font-size: 12px; white-space: normal; }
+.kr-sidebar .kr-sidebar__layer-load-copy small { font-size: 11px; white-space: normal; }
+.kr-sidebar .kr-sidebar__layer-retry { min-height: 44px; width: 100%; font-size: 12px; }
+
+/* Every map tool shares one rail and every managed query window starts beneath
+ * the workspace controls. Widths use the actual sidebar state. */
+#app-shell .toolbarwidget {
+  top: calc(var(--mainbar-height) + 12px);
+  right: 16px;
+  bottom: auto;
+  width: 56px;
+  max-height: calc(100dvh - var(--mainbar-height) - 108px);
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--exp-surface);
+  backdrop-filter: none;
+  scrollbar-gutter: auto;
+}
+#app-shell .toolbarwidget::before { display: none; }
+#app-shell .toolbarwidget .experience-toolbar__button { min-width: 44px; min-height: 44px; }
+#app-shell .common-query-window,
+#app-shell .kr-lazy-window {
+  top: var(--kr-panel-top);
+  left: calc(var(--kr-premium-sidebar-width) + var(--kr-workspace-gap));
+  right: auto;
+  width: min(560px, calc(100vw - var(--kr-premium-sidebar-width) - 112px));
+  inline-size: min(560px, calc(100vw - var(--kr-premium-sidebar-width) - 112px));
+  min-width: 0;
+  min-inline-size: 0;
+  max-width: calc(100vw - var(--kr-premium-sidebar-width) - 112px);
+  max-inline-size: calc(100vw - var(--kr-premium-sidebar-width) - 112px);
+  max-height: calc(100dvh - var(--kr-panel-top) - var(--kr-panel-bottom));
+  max-block-size: calc(100dvh - var(--kr-panel-top) - var(--kr-panel-bottom));
+  border: 1px solid var(--exp-border);
+  border-radius: 14px;
+  background: var(--exp-surface);
+  box-shadow: var(--exp-shadow-md);
+  z-index: 110;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+#app-shell .common-query-window-right {
+  left: auto;
+  inset-inline-start: auto;
+  right: 88px;
+  inset-inline-end: 88px;
+}
+#app-shell .common-query-window-header { min-height: 64px; padding: 12px 16px; gap: 8px; background: var(--exp-surface-2); }
+#app-shell .common-query-window-header > span { font-size: 17px; line-height: 1.3; }
+#app-shell .common-query-window-header-icon { margin: 0; flex: 0 0 36px; width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+#app-shell .common-query-window-body { padding: 16px; height: auto; max-height: none; max-block-size: none; font-size: 14px; }
+#app-shell .common-query-window-body[hidden],
+#app-shell .map-widget-surface__footer[hidden] { display: none; }
+#app-shell .map-widget-surface__title { font: 700 17px/1.3 var(--exp-font-sans); }
+#app-shell .common-query-window-tool-button { min-width: 44px; min-height: 44px; border-radius: 8px; }
+#app-shell .common-query-window-tools,
+#app-shell .results-container-toolbar { flex-wrap: wrap; gap: 8px; }
+#app-shell .results-container { height: auto; max-height: 54dvh; }
+#app-shell .result-item-info,
+#app-shell .result-item-info-title { font-size: 14px; line-height: 1.5; text-transform: none; }
+#app-shell .result-item-info-date { font-size: 13px; }
+#app-shell .form-label,
+#app-shell .form-control,
+#app-shell .form-select,
+#app-shell .btn,
+#app-shell .form-button { font-size: 14px; }
+#app-shell .form-control,
+#app-shell .form-select,
+#app-shell .btn,
+#app-shell .form-button { min-height: 44px; }
+#app-shell :is(input[type='checkbox'], input[type='radio']) { min-height: 20px; min-width: 20px; }
+#app-shell :is(input, select, textarea) { max-width: 100%; }
+#app-shell .common-query-window :is(th, td) { padding: 10px 12px; font-size: 13px; }
+#app-shell .common-query-window :is(.table-responsive, .experience-data-table__scroll) { overflow: auto; }
+
+/* Compact quick navigation opens only on demand in the production app. */
+#app-shell .map-workspace-shell-overlay {
+  width: min(420px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  bottom: 16px;
+  border-radius: 12px;
+  background: var(--exp-surface);
+  box-shadow: var(--exp-shadow-sm);
+  backdrop-filter: none;
+}
+#app-shell .map-workspace-shell-overlay[data-collapsed='true'] { width: max-content; max-width: min(420px, calc(100vw - 32px)); }
+#app-shell .map-workspace-shell-overlay[data-collapsed='true'] .map-workspace-shell-overlay__status-copy > span { display: none; }
+#app-shell .map-workspace-shell-overlay__status { min-height: 44px; gap: 8px; padding: 4px 6px 4px 12px; }
+#app-shell .map-workspace-shell-overlay__status-copy strong { font-size: 13px; }
+#app-shell .map-workspace-shell-overlay__status-copy span { font-size: 12px; }
+#app-shell .map-workspace-shell-overlay__count { display: none; }
+#app-shell .map-workspace-shell-overlay__collapse,
+#app-shell .map-workspace-shell-overlay__action { font-size: 13px; min-height: 44px; }
+#app-shell .map-workspace-shell-overlay__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#app-shell .map-workspace-shell-overlay__shortcut-hint { font-size: 11px; }
+#app-shell .map-workspace-shell-overlay__shortcut-hint kbd { font-size: 11px; }
+
+/* Footer utilities have separate rows so accessibility, help and notifications
+ * cannot mask each other. The data disclaimer keeps its full wording. */
+#app-shell .experience-utility { bottom: 76px; right: 16px !important; border-radius: 12px; background: var(--exp-surface); }
+#app-shell .map-shortcut-help__launcher { bottom: 16px; right: 224px; font-size: 13px; }
+.workspace-accessibility-center__launcher-copy strong { font-size: 13px; }
+.workspace-accessibility-center__launcher-copy span { font-size: 12px; }
+#app-shell .experience-data-disclaimer { top: auto; bottom: 16px; min-height: 44px; font-size: 12px; max-width: min(420px, calc(100vw - 32px)); }
+#app-shell .esri-ui-top-left { top: var(--kr-panel-top) !important; left: calc(var(--kr-premium-sidebar-width) + 16px) !important; }
+
+/* Modal dialogs are portalled to the body, outside map stacking contexts. */
+[data-experience-dialog-backdrop='true'] {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgb(15 23 42 / 48%);
+}
+[data-experience-dialog='true'] {
+  min-width: 0;
+  max-width: calc(100dvw - 32px);
+  max-height: calc(100dvh - 32px);
+  color: var(--exp-text);
+  background: var(--exp-surface);
+  border: 1px solid var(--exp-border);
+  border-radius: 16px;
+  box-shadow: 0 24px 72px rgb(15 23 42 / 24%);
+  font-family: var(--exp-font-sans);
+  font-size: 14px;
+}
+[data-experience-dialog='true'] :is(button, input, select, textarea) { min-height: 44px; font-size: 14px; }
+[data-experience-dialog='true'] :is(h2, h3) { line-height: 1.3; }
+.experience-settings__body { overflow: auto; min-height: 0; }
+.experience-settings__group { min-width: 0; }
+.experience-settings__header h2 { font-size: 22px; }
+.experience-settings__header p,
+.experience-settings__field-description { font-size: 14px; line-height: 1.5; }
+
+@media (max-width: 1180px) {
+  :root { --kr-premium-sidebar-width: 288px; }
+  #app-shell .experience-workspace__action kbd { display: none; }
+  .mainbar-container .ns-input { width: min(470px, 40vw); }
+  #app-shell .experience-data-disclaimer { bottom: 76px; }
+}
+@media (max-width: 880px) {
+  :root { --kr-premium-sidebar-width: 280px; --kr-panel-top: 148px; --kr-workspace-gap: 12px; }
+  .mainbar-container .ns-input { width: 45vw; }
+  #app-shell .experience-workspace { left: 84px; max-width: calc(100vw - 172px); }
+  #app-shell .experience-workspace__status-group { display: none; }
+  #app-shell .common-query-window,
+  #app-shell .kr-lazy-window { left: 84px; width: calc(100vw - 172px); inline-size: calc(100vw - 172px); max-width: none; max-inline-size: none; }
+  #app-shell .common-query-window-right { left: 84px; right: 88px; inset-inline-start: 84px; }
+  #app-shell .experience-data-disclaimer { left: 50%; bottom: 76px; max-width: min(360px, calc(100vw - 32px)); }
+}
+@media (max-width: 680px) {
+  :root { --mainbar-height: 64px; --exp-header-height: 64px; --kr-panel-top: 132px; --kr-panel-bottom: 148px; }
+  .mainbar-container { padding: 8px; }
+  .mainbar-container .mainbar-logo { width: 44px; height: 44px; flex-basis: 44px; }
+  .mainbar-container .mainbar-logo img { max-height: 32px; }
+  .mainbar-container .ns-input { position: static; transform: none; flex: 1; width: auto; }
+  .mainbar-container .ns-input-group input { padding-inline: 12px 48px; font-size: 16px; }
+  #app-shell .experience-workspace { left: 8px; right: 8px; top: 72px; max-width: none; width: auto; justify-content: space-between; gap: 4px; }
+  #app-shell .experience-workspace__actions { width: 100%; justify-content: space-between; gap: 4px; }
+  #app-shell .experience-workspace__action { width: 44px; min-width: 44px; padding: 0; font-size: 0; }
+  #app-shell .experience-workspace__action::before { content: '⌘'; font-size: 20px; }
+  #app-shell .experience-workspace__action:last-child::before { content: '⚙'; }
+  .experience-workspace .map-mode-transition-control { min-width: 160px; }
+  #app-shell .sidebar-container.kr-sidebar { top: 132px; height: calc(100dvh - 132px); width: min(320px, calc(100vw - 72px)); }
+  #app-shell .sidebar-container.kr-sidebar.is-collapsed { width: 64px; }
+  #app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 64px; }
+  .kr-sidebar .kr-sidebar__topline { padding: 8px; min-height: 56px; }
+  #app-shell .toolbarwidget { top: 132px; right: 8px; max-height: calc(100dvh - 296px); width: 54px; }
+  #app-shell .common-query-window,
+  #app-shell .common-query-window-right,
+  #app-shell .kr-lazy-window { left: 8px; right: 8px; inset-inline: 8px; width: auto; inline-size: auto; max-width: none; max-inline-size: none; }
+  #app-shell .common-query-window-header { padding: 10px 12px; flex-wrap: wrap; }
+  #app-shell .common-query-window-body { padding: 12px; }
+  #app-shell .experience-utility { bottom: 76px; left: auto; right: 8px !important; }
+  #app-shell .experience-utility__button { min-width: 44px; min-height: 44px; }
+  #app-shell .map-shortcut-help__launcher { right: 8px; bottom: 16px; }
+  .workspace-accessibility-center { right: 68px; bottom: 16px; }
+  .workspace-accessibility-center__launcher { min-width: 152px; }
+  #app-shell .experience-data-disclaimer { inset-inline: 8px; top: auto; bottom: 136px; width: auto; max-width: none; transform: none; }
+  #app-shell .map-workspace-shell-overlay { bottom: 16px; max-width: calc(100vw - 240px); }
+  #app-shell .map-workspace-shell-overlay__status-copy { display: none; }
+  #app-shell .map-workspace-shell-overlay__collapse { font-size: 0; min-width: 44px; padding: 0; }
+  #app-shell .map-workspace-shell-overlay__collapse::before { content: '↗'; font-size: 20px; }
+  #app-shell .map-workspace-shell-overlay[data-collapsed='false'] { bottom: 200px; width: calc(100vw - 16px); max-width: none; }
+  #app-shell .map-workspace-shell-overlay[data-collapsed='false'] .map-workspace-shell-overlay__status-copy { display: grid; }
+  #app-shell .esri-ui-top-left { left: 84px !important; top: 140px !important; }
+  [data-experience-dialog-backdrop='true'] { padding: 8px; }
+  [data-experience-dialog='true'] { max-width: calc(100dvw - 16px); max-height: calc(100dvh - 16px); border-radius: 12px; }
+}
+@media (max-height: 540px) {
+  :root { --kr-panel-bottom: 64px; }
+  #app-shell .experience-utility { bottom: 12px; }
+  #app-shell .experience-data-disclaimer { bottom: 12px; max-width: 320px; }
+  #app-shell .toolbarwidget { max-height: calc(100dvh - 160px); }
+}
+@media (pointer: coarse) {
+  :root { --kr-control-size: 48px; }
+  #app-shell .experience-workspace__action,
+  #app-shell .map-mode-transition-control__segment,
+  #app-shell .toolbarwidget .experience-toolbar__button { min-height: 48px; }
+}
+@media (forced-colors: active) {
+  #app-shell :is(.experience-workspace, .kr-sidebar, .toolbarwidget, .common-query-window, .map-workspace-shell-overlay),
+  [data-experience-dialog='true'] { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; }
+  [data-experience-dialog-backdrop='true'] { background: Canvas; }
+}
+@media print {
+  #app-shell :is(.experience-workspace, .map-workspace-shell-overlay, .toolbarwidget, .experience-utility, .map-shortcut-help__launcher) { display: none; }
+  [data-experience-dialog-backdrop='true'] { position: static; background: transparent; padding: 0; }
+}
+
+/* Reserve the lower map edge for the collapsed navigator; keep the advisory on
+ * the row above it so neither surface covers the service list or a launcher. */
+@media (min-width: 881px) {
+  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] {
+    inset-inline-start: calc(var(--kr-premium-sidebar-width) + 16px);
+    inset-inline-end: auto;
+    transform: none;
+  }
+  #app-shell .experience-data-disclaimer {
+    inset-inline-start: calc(var(--kr-premium-sidebar-width) + 16px);
+    inset-inline-end: auto;
+    bottom: 76px;
+    transform: none;
+  }
+}
+.experience-settings .experience-setting-row__copy p { font-size: 13px; line-height: 1.5; }
+
+/* Fast-access results replace the service sidebar, with the same typography and
+ * a clear recovery action. They never share the map-tools rail. */
+#app-shell .sidebar-container.kr-fast-query {
+  top: var(--mainbar-height); left: 0; right: auto; inset-inline-start: 0;
+  width: var(--kr-premium-sidebar-width); height: calc(100dvh - var(--mainbar-height));
+  max-width: none; padding: 0; align-items: stretch; z-index: 100;
+  background: var(--exp-surface); color: var(--exp-text);
+}
+#app-shell .kr-fast-query__header { padding: 12px; grid-template-columns: 34px minmax(0, 1fr) 44px; gap: 8px; }
+#app-shell .kr-fast-query__header h2 { white-space: normal; font-size: 17px; line-height: 1.35; }
+#app-shell .kr-fast-query__count { font-size: 13px; }
+#app-shell .kr-fast-query__status { font-size: 14px; padding: 12px; }
+#app-shell .kr-fast-query__error { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--exp-border); border-radius: 10px; color: var(--exp-danger); background: var(--exp-danger-soft); }
+#app-shell .kr-fast-query__error button { min-height: 44px; border: 1px solid var(--exp-border-strong); border-radius: 8px; color: var(--exp-text); background: var(--exp-surface); font: inherit; font-weight: 600; }
+#app-shell .kr-fast-query__results { max-height: none; flex: 1; }
+#app-shell .kr-fast-query__copy h3 { font-size: 15px; }
+#app-shell .kr-fast-query__copy :is(p, a) { font-size: 13px; }
+@media (max-width: 680px) {
+  #app-shell .sidebar-container.kr-fast-query { top: 132px; width: calc(100vw - 72px); height: calc(100dvh - 280px); border-radius: 0 12px 12px 0; }
+  #app-shell .experience-utility { width: auto; }
+  #app-shell .experience-utility__actions { display: flex; flex-direction: row; }
+}
+@media (max-width: 880px) and (min-width: 681px) {
+  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] { inset-inline-start: 84px; inset-inline-end: auto; transform: none; }
+  #app-shell .experience-data-disclaimer { inset-inline-start: 84px; inset-inline-end: auto; bottom: 144px; transform: none; }
+}
+@media (max-width: 680px) {
+  .workspace-accessibility-center { inset-inline: auto 68px; width: auto; inline-size: auto; max-width: calc(100vw - 172px); }
+  .workspace-accessibility-center__launcher { width: auto; min-width: 0; }
+  #app-shell .toolbarwidget { max-height: calc(100dvh - 352px); max-block-size: calc(100dvh - 352px); }
+}
+@media (max-height: 540px) and (min-width: 681px) {
+  #app-shell .experience-data-disclaimer { bottom: 84px; }
+  #app-shell .experience-utility { bottom: 16px; }
+  #app-shell .map-shortcut-help__launcher { bottom: 84px; }
+  .workspace-accessibility-center { bottom: 84px; }
+}
+#app-shell .sidebar-container { position: absolute; }
+#app-shell .sidebar-container.kr-fast-query { position: absolute; }
+.experience-settings__body { grid-auto-rows: max-content; align-content: start; }
