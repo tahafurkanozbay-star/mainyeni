@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  FastAccessQuery,
   QueryExecutionControl,
 } from '../../../Business/contracts';
 import type {
