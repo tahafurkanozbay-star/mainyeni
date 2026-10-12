@@ -27,6 +27,7 @@ export interface MapWidgetSurfaceProps {
   readonly title: string;
   readonly iconSrc?: string;
   readonly iconAlt?: string;
+  readonly icon?: ReactNode;
   readonly windowManager: MapWidgetManagerLike;
   readonly children: ReactNode;
   readonly bodyClassName?: string;
@@ -34,6 +35,7 @@ export interface MapWidgetSurfaceProps {
   readonly labelledBy?: string;
   readonly describedBy?: string;
   readonly busy?: boolean;
+  readonly busyLabel?: string;
   readonly status?: string | null;
   readonly statusTone?: MapWidgetTone;
   readonly error?: string | null;
@@ -135,12 +137,22 @@ export const MapWidgetSection = ({
   </section>
 );
 
+const DefaultMapWidgetIcon = (): ReactNode => (
+  <span className="map-widget-surface__icon-fallback" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="m4 7 5-3 6 3 5-3v13l-5 3-6-3-5 3V7Z" />
+      <path d="M9 4v13M15 7v13" />
+    </svg>
+  </span>
+);
+
 export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
   {
     id,
     title,
     iconSrc,
     iconAlt = '',
+    icon,
     windowManager,
     children,
     bodyClassName,
@@ -148,6 +160,7 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
     labelledBy,
     describedBy,
     busy = false,
+    busyLabel = 'İşleniyor',
     status = null,
     statusTone = 'neutral',
     error = null,
@@ -184,7 +197,7 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
     >
       <header className="common-query-window-header map-widget-surface__header">
         <div className="map-widget-surface__identity">
-          {iconSrc ? (
+          {icon ?? (iconSrc ? (
             <img
               className="common-query-window-header-icon map-widget-surface__icon"
               src={iconSrc}
@@ -192,17 +205,10 @@ export const MapWidgetSurface = forwardRef(function MapWidgetSurface(
               aria-hidden={iconAlt ? undefined : true}
               decoding="async"
             />
-          ) : (
-            <span className="map-widget-surface__icon-fallback" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="m4 7 5-3 6 3 5-3v13l-5 3-6-3-5 3V7Z" />
-                <path d="M9 4v13M15 7v13" />
-              </svg>
-            </span>
-          )}
+          ) : <DefaultMapWidgetIcon />)}
           <div className="map-widget-surface__title-wrap">
             <h2 id={titleId} className="map-widget-surface__title">{title}</h2>
-            {busy ? <span className="map-widget-surface__busy-label">İşleniyor</span> : null}
+            {busy ? <span className="map-widget-surface__busy-label">{busyLabel}</span> : null}
           </div>
         </div>
         {showWindowTools ? (
