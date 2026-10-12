@@ -199,3 +199,13 @@
 
 - CI ONARIMI: İlk exact-head Release QA denetimi tarihsel `.btn:focus-visible` kuralındaki `outline: 0` ve `box-shadow: none` baskılamasını yeni bulgu olarak işaretledi. Ortak modern focus authority zaten aktif olduğundan bu eski baskılayıcı override kaldırıldı; klavye odak görünürlüğü korunur. Yeni exact-head CI yeniden doğrulanmalıdır.
 - PRODUCTION STARTUP ONARIMI: Derlenmiş paket tarayıcı smoke testi `INVALID_IDEMPOTENCY_POLICY` başlangıç hatasını ortaya çıkardı. Coordinator'ın normalleştirdiği `none` değeri fetch katmanında ikinci doğrulamada reddediliyordu. Canonical `none` tekrar normalleştirmede korunur; server-enforced proof ve unsafe mutation retry kuralları değişmez. Gerçek coordinator -> fetch GET/POST integration regression testleri eklendi; build-browser startup yeniden doğrulanmalıdır.
+
+
+## Experience / governed layer-list workspace — 2026-10-12
+- PR: #479 `feat(experience): modernize governed layer-list workspace`.
+- CURRENT MAIN / MERGE BASE: `21abc8325e1e6a2d9d23e7845d0893270e8360ce`; branch is 23 ahead / 0 behind and merge-base is exact current main.
+- PRODUCT SCOPE: strict-TypeScript LayerList interaction authority; Turkish-aware search; single keyboard tree tab stop with aria-activedescendant and Home/End/Page/Arrow navigation; governed Katmanlar/Lejant tablist; bounded layer creation coordinator with cancellation, progress and late-result disposal; catalog integrity audit; responsive 44px/48px targets; reduced-motion and forced-colors support.
+- SAFETY: no WMS/WFS UI, new endpoint, telemetry/analytics, remote font/CDN, secret, heavy asset, or second icon resolver. Existing LayerBusiness/CommonBusiness/MapManager and SharedGISIcon remain authoritative.
+- SIZE / QUALITY: base...head before this documentation update is 4,342 meaningful additions / 497 deletions / 12 files. Product head `5be145fe9b8382dd5734dcfca9dda4815f615790` completed Webclient Quality, Release QA, Typed Source Boundary, Platform Architecture Audit and Platform Dependency Governance successfully.
+- SECOND REVIEW: fixed undersized fine-pointer targets and stale ArcGIS layer leakage after cancelled CreateLayer promises; no critical release/UX risk remains in the reviewed scope.
+- MERGE GATE: this progress append creates a new exact head; require additions >=4,000, behind=0, mergeable=true, no blocking reviews and all required exact-head workflows completed+success before squash merge.
