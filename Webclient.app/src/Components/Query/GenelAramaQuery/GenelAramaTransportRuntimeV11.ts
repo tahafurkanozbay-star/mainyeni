@@ -15,6 +15,10 @@ import {
   stableSerialize,
 } from '../../../data-search/normalization';
 import {
+  auditGeneralSearchResponseIntegrityV11,
+  summarizeGeneralSearchIntegrityV11,
+} from './GenelAramaResponseIntegrityV11';
+import {
   GENERAL_SEARCH_TRANSPORT_VERSION_V11,
   GeneralSearchTransportErrorV11,
   type GeneralSearchDetailTaskInputV11,
@@ -670,6 +674,18 @@ export class GeneralSearchTransportRuntimeV11 {
           throw new GeneralSearchTransportErrorV11(
             'GENERAL_SEARCH_SERVICE_ERROR',
             retryableServiceMessage(admitted),
+            operation,
+            requestId,
+            plan.identity.requestFingerprint,
+            true,
+          );
+        }
+
+        const integrity = auditGeneralSearchResponseIntegrityV11(admitted.data);
+        if (!integrity.accepted) {
+          throw new GeneralSearchTransportErrorV11(
+            'GENERAL_SEARCH_RESPONSE_INVALID',
+            `Genel arama yanıtı veri bütünlüğü bütçesini aştı: ${summarizeGeneralSearchIntegrityV11(integrity)}`,
             operation,
             requestId,
             plan.identity.requestFingerprint,
