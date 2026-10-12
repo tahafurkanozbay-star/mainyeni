@@ -57,6 +57,7 @@ jobs:
             src/lib/gis/ArcGisQueryRequestRegistry.test.ts \
             src/lib/gis/ArcGisQueryRequestRegistry.integrity.test.ts \
             src/lib/gis/ArcGisQueryCoordinator.ts \
+            src/lib/gis/ArcGisQueryCoordinator.cancellation-integrity.test.ts \
             src/lib/gis/ArcGisQueryPagePlanner.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.snapshot.test.ts \
