@@ -39,8 +39,6 @@ const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_ATTEMPTS_LIMIT = 5;
 const DEFAULT_MAX_OBSERVERS = 24;
 const MAX_OBSERVERS_LIMIT = 64;
-const MAX_ERROR_MESSAGE_LENGTH = 160;
-
 const clampInteger = (value: number | undefined, fallback: number, min: number, max: number): number => {
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(value ?? fallback)));
@@ -55,17 +53,6 @@ const classifyFailure = (error: unknown): string => {
   if (error instanceof Error) return error.name || 'Error';
   if (error === null) return 'null';
   return typeof error;
-};
-
-const isControlCode = (codePoint: number): boolean => codePoint < 32 || codePoint === 127;
-
-const stripControlCharacters = (value: string): string => {
-  let result = '';
-  for (const character of value) {
-    const point = character.codePointAt(0);
-    result += point !== undefined && isControlCode(point) ? ' ' : character;
-  }
-  return result;
 };
 
 const sanitizeDiagnosticCode = (value: unknown): string | null => {
@@ -266,9 +253,8 @@ export class MapWorkspaceRecoveryModel {
       || (this.#snapshot.phase !== 'booting' && this.#snapshot.phase !== 'delayed')
     ) return;
     const kind = classifyErrorKind(error);
-    const publicMessage = error instanceof Error ? sanitizePublicMessage(error.message) : null;
     const safeCode = sanitizeDiagnosticCode(diagnosticCode);
-    const base = publicMessage ?? genericErrorMessage(kind);
+    const base = genericErrorMessage(kind);
     const errorMessage = safeCode ? `${base} Hata kodu: ${safeCode}.` : base;
     const canRetry = this.#snapshot.attempt < this.#maxAttempts;
     this.#emit(createSnapshot({
