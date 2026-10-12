@@ -151,3 +151,36 @@
 - MERGE SHA: `146f8bd4554376a0c9b253ec7c0333978af16668`; post-merge `main` was verified at the same SHA before this progress-only documentation update.
 - NEXT EXPERIENCE TURN: start from the then-current `main` on a new unique Experience branch; do not reuse PR #474 branch.
 
+## Deep Data/Search / usable general-search workspace v10 merge closure — PR #472 — 2026-10-12
+- TUR / GÖREV: Deep Data/Search / Search UX / Whole-Code Modernization; gerçek Genel Arama sonuç ekranını strict-TypeScript, bounded local refinement, kategori/tür facetleri, deterministic sorting, klavye navigasyonu, responsive rendering ve usability integrity denetimiyle modernize etme.
+- KANONİK PR / BRANCH: PR #472 `feat(search): modernize usable general-search workspace v10`; branch `agent/data-search-general-search-v10-20261005-1257-a6e1be0`. Eski v7 branch yeni iş için kullanılmadı; açık kanonik Data/Search PR #472 önceliklendirildi.
+- CURRENT MAIN / LINEAGE: final merge öncesi current main/base/merge-base `a757cc4d9e1047f2ee1b6809a46654143a84226d`; final tested head `92c3a2ef8d5fc4d1a1cd8a1824bd8fbe86085e21`; compare 18 ahead / 0 behind. QA + Experience main değişiklikleri General Search dosyalarıyla çakışmadığı doğrulanıp current-main tree üzerine force kullanmadan iki-parent reconciliation ile taşındı.
+- KAPSAM / GATE: 10 General Search dosyası, 4,097 meaningful additions / 74 deletions; mandatory >=4,000 additions gate sağlandı. PR mergeable=true, draft kaldırıldı ve unresolved review thread=0.
+- MODERNİZASYON: production `GenelAramaQeryWindow.tsx` yeni v10 runtime/presentation/audit katmanına bağlandı. Türkçe-aware local refinement, category/type facet selection, deterministic sort, active-result/roving keyboard state, bounded render window, duplicate identity normalization, responsive/mobile/coarse-pointer/forced-colors/reduced-motion sözleşmeleri ve integrity auditor eklendi. Mevcut server/detail/map/directions transportları authoritative kaldı.
+- CI / TEST: exact head `92c3a2ef...` üzerinde Webclient Quality `38209270134`, Release QA `38209270152`, Platform Architecture Audit `38209270090` ve Typed Source Boundary `38209270093` tamamı `completed+success`. Webclient strict changed-source lint, exact-base TypeScript, full/strict/exact-base Vitest, native tooling, production Vite build/integrity ve build budgets success. Release QA typed TypeScript 7/exact-base risk gate ve .NET 10 restore/audit/build/xUnit/User+Admin publish success.
+- SECOND REVIEW / SECURITY / PERFORMANCE: production diff'te yeni browser network carrier, WMS/WFS/WMTS, telemetry, unsafe HTML/eval, local/session storage veya recurring timer eklenmedi. DOM render window ve local result processing bounded; 10K/50K result/adversarial test kapsamı mevcut; shared query normalization ve icon/map authorities korunuyor.
+- MERGE: expected-head kilitli squash merge `merged=true`; merge SHA `b37a2572f72de3ca018bf97c6882a7772fec6b25`. GitHub PR #472'yi `closed+merged` olarak doğruladı ve merge sonrası `main` aynı SHA'da doğrulandı.
+- SONRAKİ DATA/SEARCH TURU: merged #472 branch yeniden kullanılmamalı. Yeni tur then-current main'den fresh benzersiz branch ile başlamalı; önce rules/progress + açık role PR ownership kontrol edilmeli. Adres/koordinat ve search execution modernizasyonu yalnız hâlâ eksik gerçek production sınırlarına uygulanmalı; duplicate authority veya yeni endpoint yaratılmamalı.
+- POST-MERGE NOTE: bu progress commit'i documentation-only'dir; ürün kodu PASS'i merge edilmiş `b37a2572...` commit'ine aittir.
+
+
+
+## Deep Platform / dependency supply-chain governance — PR #473 current-main merge admission — 2026-10-12
+- TUR / GÖREV: Deep Platform / Whole-Code Modernization; deterministic dependency supply-chain governance and CI enforcement.
+- BRANCH / PR: `agent/platform-wholecode-20261005-1329-07d197bc`; PR #473 canonical Platform PR.
+- CURRENT MAIN / LINEAGE: reconciled onto `9a17df3b9aadd725056bc6613ea2e2c20088a814`; Search v10 merge and its canonical progress closure are preserved from current main. Only Platform/CI blobs are overlaid; no stale whole-tree transplant and no force-push.
+- SCOPE / GATE: substantive Platform scope remains above mandatory 4,000 meaningful additions. Runtime dependency versions remain unchanged; no blind language/framework rewrite.
+- MODERNİZASYON: lock graph/provenance, direct/transitive dependency surface policy, peer/install-script/deprecation governance, owner/reason/expiry exception contracts, removal planning and command-position npm/runtime mutation/evaluation guards.
+- SECURITY / NETWORK: no new runtime dependency, endpoint, secret, browser transport, remote asset, WMS/WFS, GIS service or second icon authority.
+- MERGE GATE: this reconciliation creates a new exact head. Require behind=0, merge-base=current main, additions>=4,000, mergeable=true, no blocking reviews and all six required workflows completed+success before squash merge.
+- SONRAKİ: if exact-head gates remain green, squash merge and verify merged=true, merge SHA and current main SHA. Keep automation enabled.
+
+
+## Deep Experience / workspace-help merge verification — 2026-10-12
+- MERGE İSTEĞİ: Son Experience workspace-help geliştirmelerinin merge durumu yeniden doğrulandı.
+- CURRENT MAIN: `24e1f71408e88012719f3929165876db34092b42`.
+- DOĞRULANAN ÜRÜN COMMIT: `13d65108f441553186b7bb4c61dbc2b0f436ba5a` (`feat(experience): modernize workspace help center`) current main'in atasıdır; compare current main yönünde 68 ahead / 0 behind.
+- DOSYA KANITI: eski `agent/experience-help-20260930-0950-7ffe202` branch'indeki 15 Experience ürün dosyasının blob SHA'ları current main ile birebir aynıdır. Eski branch 27 ahead / 68 behind ve diverged olduğundan branch-lifecycle kuralı gereği yeniden merge edilmedi.
+- OPEN PR OWNERSHIP: açık PR'larda Experience rolüne ait kanonik PR yok; GIS #477, Platform #473 ve eski Admin #266 başka rollere aittir ve merge edilmedi.
+- MERGE SONUCU: yeni ürün merge'i gerekmiyor; workspace-help değişiklikleri zaten main'de. Stale branch'i merge etmek duplicate history/no-op olacağı için güvenli biçimde reddedildi.
+- NEXT EXPERIENCE TURN: current main'den benzersiz fresh Experience branch ile yeni gerçek UX/UI kapsamı başlat; merged/stale branch'i yeniden kullanma. 4,000 meaningful additions + exact-head CI + mergeable gate korunmalıdır.
