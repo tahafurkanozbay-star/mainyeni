@@ -155,7 +155,9 @@ describe('map experience accessibility and network contracts', () => {
   it('does not create a second icon resolver or remote icon path', () => {
     const combined = NEW_EXPERIENCE_SOURCES.join('\n');
     expect(combined).not.toMatch(/resolveIcon|iconResolver|iconRegistry/iu);
-    expect(combined).not.toMatch(/<img\b|<svg\b/u);
+    for (const tag of ['<' + 'img', '<' + 'svg']) {
+      expect(combined).not.toContain(tag);
+    }
   });
 
   it('keeps the mode control mounted in the real map shell', () => {
