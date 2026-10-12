@@ -122,8 +122,8 @@ export class ArcGisQuerySchedulerPolicy {
       PRIORITY[a.priority] - PRIORITY[b.priority] ||
       a.deadlineAtMs - b.deadlineAtMs ||
       a.enqueuedAtMs - b.enqueuedAtMs ||
-      a.layerId.localeCompare(b.layerId) ||
-      a.requestId.localeCompare(b.requestId),
+      a.requestId.localeCompare(b.requestId) ||
+      a.layerId.localeCompare(b.layerId),
     )
     for (const candidate of candidates) {
       if (this.runningForLayer(candidate.layerId) >= this.budget.maxPerLayerRunning) continue
