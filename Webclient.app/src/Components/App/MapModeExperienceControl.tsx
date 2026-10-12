@@ -249,7 +249,7 @@ export function MapModeExperienceControl({
 
       {snapshot.phase === 'error' ? (
         <div className="map-mode-experience__recovery">
-          {presentation.retryVisible && snapshot.requestedMode ? (
+          {presentation.recoveryActionVisible && snapshot.requestedMode ? (
             <button
               type="button"
               className="map-mode-experience__retry"
