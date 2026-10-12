@@ -115,6 +115,7 @@ export class LayerListLoadCoordinator<TSource, TResult> {
   async load(
     items: readonly LayerListLoadItem<TSource>[],
     worker: (item: LayerListLoadItem<TSource>) => Promise<TResult>,
+    disposeResult?: (result: TResult) => void,
   ): Promise<Readonly<{
     successes: readonly LayerListLoadSuccess<TSource, TResult>[];
     failures: readonly LayerListLoadFailure<TSource>[];
@@ -173,7 +174,16 @@ export class LayerListLoadCoordinator<TSource, TResult> {
 
         try {
           const result = await worker(item);
-          if (this.#disposed || generation !== this.#generation) return;
+          if (this.#disposed || generation !== this.#generation) {
+            if (disposeResult) {
+              try {
+                disposeResult(result);
+              } catch (error) {
+                globalThis.reportError?.(error);
+              }
+            }
+            return;
+          }
           successes.push(Object.freeze({ key: item.key, source: item.source, result }));
         } catch (error) {
           if (this.#disposed || generation !== this.#generation) return;
