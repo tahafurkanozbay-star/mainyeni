@@ -1,5 +1,6 @@
 import type { LatestOperationContext } from '../_shared/MapWidgetRuntime';
 import { withTimeout } from '../../../platform/runtime/resilience';
+import { runtimeDiagnostics } from '../../../platform/runtime/runtimeDiagnostics';
 
 export interface SelectableBasemap {
   readonly id?: string;
@@ -16,7 +17,9 @@ export const applySelectedBasemap = async (candidate: SelectableBasemap, map: Ba
   const cancel = (): void => {
     if (cancelled) return;
     cancelled = true;
-    try { candidate.cancelLoad?.(); } catch { /* Keep cancellation authoritative. */ }
+    try { candidate.cancelLoad?.(); } catch (error) {
+      runtimeDiagnostics.captureError(error, { source: 'experience.basemap.cancel' }, 'warn');
+    }
   };
   operation.signal.addEventListener('abort', cancel, { once: true });
   try {
@@ -31,7 +34,9 @@ export const applySelectedBasemap = async (candidate: SelectableBasemap, map: Ba
     operation.signal.removeEventListener('abort', cancel);
     if (!attached) {
       cancel();
-      try { candidate.destroy?.(); } catch { /* Preserve the original load error. */ }
+      try { candidate.destroy?.(); } catch (error) {
+        runtimeDiagnostics.captureError(error, { source: 'experience.basemap.dispose' }, 'warn');
+      }
     }
   }
 };

@@ -1,4 +1,5 @@
 import { withTimeout } from '../platform/runtime/resilience';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 import { watchArcgisProperty, type ArcgisAccessorWatch, type ArcgisReactiveHandle } from './arcgisReactiveRuntime';
 
 export interface ReadyArcgisView {
@@ -29,7 +30,9 @@ export const waitForArcgisView = async (
     let handle: ArcgisReactiveHandle | null = null;
     const cleanup = (): void => {
       signal.removeEventListener('abort', onAbort);
-      try { handle?.remove?.(); } catch { /* Cleanup must not mask readiness failure. */ }
+      try { handle?.remove?.(); } catch (error) {
+        runtimeDiagnostics.captureError(error, { source: 'gis.view-readiness.cleanup' }, 'warn');
+      }
     };
     const finish = (error?: unknown): void => {
       if (finished) return;
