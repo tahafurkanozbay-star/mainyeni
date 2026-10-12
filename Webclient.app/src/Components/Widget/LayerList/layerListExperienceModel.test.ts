@@ -102,7 +102,7 @@ describe('LayerListExperienceModel', () => {
   it('forces matching groups open while search is active', () => {
     const model = new LayerListExperienceModel();
     model.replace(GROUPS);
-    model.setQuery('park');
+    model.setQuery('yesil');
     expect(model.getSnapshot().rows.map((row) => row.key)).toEqual([
       'group:base',
       'layer:base:parks',
