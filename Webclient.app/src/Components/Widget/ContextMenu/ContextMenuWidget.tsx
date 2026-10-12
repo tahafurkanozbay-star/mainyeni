@@ -82,7 +82,8 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       const point = getClickedPoint();
       if (!point) return;
       windowManager.ShowWindow('vicinity-query-window', { selectionEvent: selectionRef.current });
-      close();
+      // The destination window owns initial focus; do not restore the menu trigger.
+      close(false);
       GisGraphicsHelper.ZoomToGeometry(MapManager.GetMapView(), point, 14);
     }, [close, getClickedPoint, windowManager]);
 
@@ -90,7 +91,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       const point = getClickedPoint();
       if (!point) return;
       windowManager.ShowWindow('global-identify-widget', { selectionEvent: selectionRef.current });
-      close();
+      close(false);
     }, [close, getClickedPoint, windowManager]);
 
     const showRoute = useCallback((): void => {
@@ -168,8 +169,17 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
         selectionRef.current = null;
         focusOriginRef.current = null;
         const clickEvent = MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null;
-        if (!clickEvent) return;
+        if (!clickEvent?.mapPoint) {
+          windowManager.HideWindow(id);
+          setFocusRequestKey((current) => current + 1);
+          return;
+        }
         selectionRef.current = snapshotMapSelection(clickEvent);
+        if (!selectionRef.current?.mapPoint) {
+          windowManager.HideWindow(id);
+          setFocusRequestKey((current) => current + 1);
+          return;
+        }
         const activeElement = document.activeElement;
         focusOriginRef.current = isRestorableFocusTarget(activeElement) ? activeElement : null;
         const nextRequested = {

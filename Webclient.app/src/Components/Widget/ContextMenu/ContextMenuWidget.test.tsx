@@ -175,15 +175,15 @@ describe('ContextMenuWidget', () => {
     expect(openExternalUrl).toHaveBeenCalledWith('https://maps.example/street-view');
   });
 
-  it('does not open point actions when no map point exists', async () => {
+  it('dismisses a map menu without a selected point instead of exposing dead actions', () => {
     vi.mocked(MapManager.GetMapClickEvent).mockReturnValue({ x: 100, y: 100, mapPoint: null } as never);
     const { manager, show } = createManager();
     const ref = createRef<ManagedWindowHandle>();
     render(<ContextMenuWidget ref={ref} id="context-menu" windowManager={manager as never} />);
     show();
     act(() => ref.current?.OnShow?.());
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Bilgi Al' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Yol Tarifi Al' }));
+    expect(manager.HideWindow).toHaveBeenCalledWith('context-menu');
+    expect(screen.getByRole('menu', { hidden: true })).toHaveAttribute('aria-hidden', 'true');
     expect(manager.ShowWindow).not.toHaveBeenCalled();
     expect(openExternalUrl).not.toHaveBeenCalled();
   });
@@ -212,8 +212,38 @@ describe('ContextMenuWidget', () => {
     act(() => ref.current?.OnShow?.());
     vi.mocked(MapManager.GetMapClickEvent).mockReturnValue(null as never);
     act(() => ref.current?.OnShow?.());
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Bilgi Al' }));
+    expect(manager.HideWindow).toHaveBeenCalledWith('context-menu');
+    expect(screen.getByRole('menu', { hidden: true })).toHaveAttribute('aria-hidden', 'true');
     expect(manager.ShowWindow).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Bilgi Al', 'global-identify-widget'],
+    ['Yakınımda Ara', 'vicinity-query-window'],
+  ])('hands focus to the destination when opening %s', async (action, destinationId) => {
+    const origin = document.createElement('button');
+    const destination = document.createElement('button');
+    origin.textContent = 'Harita aracı';
+    destination.textContent = 'Sorgu başlığı';
+    document.body.append(origin, destination);
+    try {
+      origin.focus();
+      const { manager, show } = createManager();
+      manager.ShowWindow.mockImplementation(() => destination.focus());
+      const ref = createRef<ManagedWindowHandle>();
+      render(<ContextMenuWidget ref={ref} id="context-menu" windowManager={manager as never} />);
+      show();
+      act(() => ref.current?.OnShow?.());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Bilgi Al' })));
+      fireEvent.click(screen.getByRole('menuitem', { name: action }));
+      expect(manager.ShowWindow).toHaveBeenCalledWith(destinationId, expect.objectContaining({
+        selectionEvent: expect.any(Object),
+      }));
+      await waitFor(() => expect(document.activeElement).toBe(destination));
+    } finally {
+      origin.remove();
+      destination.remove();
+    }
   });
 
   it('unregisters the managed window on unmount', () => {
