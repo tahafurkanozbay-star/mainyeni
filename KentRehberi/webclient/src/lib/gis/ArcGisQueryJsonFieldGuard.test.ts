@@ -48,7 +48,8 @@ describe('ArcGIS JSON descriptor boundary', () => {
     source[0] = 99
     expect(copy[0]).toBe(1)
     expect(() => captureArcGisJsonArray([1, 2], 1)).toThrow('budget')
-    const sparse = new Array<number>(2)
+    const sparse: number[] = []
+    sparse.length = 2
     sparse[0] = 1
     expect(() => captureArcGisJsonArray(sparse, 3)).toThrow('sparse')
     const extra = [1]
