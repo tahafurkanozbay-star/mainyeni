@@ -363,7 +363,7 @@ export function evaluateReleaseAdmissionSnapshot(
       runs: workflowRuns,
       maxEvidenceAgeMs: input.maxEvidenceAgeMs,
       observedAt: input.observedAt,
-    }, { required: options.requiredWorkflows });
+    }, options.requiredWorkflows === undefined ? {} : { required: options.requiredWorkflows });
     for (const item of workflow.findings) {
       findings.push(finding(`workflow-${item.code}`, `workflow.${item.field}`, item.message));
     }
@@ -382,7 +382,7 @@ export function evaluateReleaseAdmissionSnapshot(
       mergeable: pullRequest.mergeable,
       draft: pullRequest.draft,
       checks: candidateChecks(workflowRuns, pullRequest.headSha),
-    }, { requiredChecks: options.requiredChecks });
+    }, options.requiredChecks === undefined ? {} : { requiredChecks: options.requiredChecks });
     for (const item of candidate.findings) {
       findings.push(finding(`candidate-${item.code}`, `candidate.${item.field}`, item.message));
     }
