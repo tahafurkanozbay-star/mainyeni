@@ -376,3 +376,10 @@
 
 - FOLLOW-UP PLATFORM / DEV RUNTIME: Vite `optimizeDeps.include` still referenced removed `react-redux`, `@fortawesome/react-fontawesome` and `crypto-js` after dependency retirement; its manual chunk rules also retained retired package branches. These were removed while preserving React, Redux, React Icons and ArcGIS chunk ownership. Native dependency-contract regression now scans the actual Vite prebundle inventory against `RETIRED_RUNTIME_PACKAGES`. Exact-head CI must validate both source and test; no local Node 24/npm 11 or .NET SDK claim.
 - FINAL CURRENT GATE: Same canonical draft PR #483; previous temporary malformed crypto edit was fully reverted, so no crypto fix is claimed. GitHub additions remain below 4,000; keep open/draft and await fresh exact-head CI. No WMS/WFS or new browser network calls.
+
+## Deep Platform / exact-head CI and envelope security review — 2026-10-12
+- TUR / GÖREV: Platform Architecture PR #483. Main/merge-base 70f2ffb229c526e586deaf62b1a3249d0af2b271; head 8946c8434a99e183159dd1dd13bb92630293d9d0; 38 ahead / 0 behind, 2,366 additions / 621 deletions, open/draft and mergeable=true.
+- EXACT-HEAD CI: Seven workflows completed+success (Platform Architecture Audit, Dependency Governance, Typed Test Validation, Backend Validation, Webclient Quality, Release QA, Release Evidence Contract).
+- SECURITY REVIEW: AuthenticatedEncryptionUtils currently calls ParseEnvelope/DeriveKey outside Decrypt cleanup; unbounded Split can allocate proportional to attacker delimiters; Encrypt derives key before its cleanup boundary. Prepared bounded parsing, early UTF8 byte-count checks, and fail-path buffer cleanup; production change NOT committed or tested.
+- WRITE STATUS: GitHub update_file mutation rejected by safety checks. Do not claim source hardening, tests, or progress write landed. No WMS/WFS, external endpoint, telemetry, dependency, or icon authority added.
+- MERGE GATE / NEXT: >=4,000 additions still unmet (1,634 short). Keep PR draft/open; apply verified source+adversarial tests when writes permitted, rerun exact-head CI, extend substantive Platform scope, then refresh main/reviews/mergeability before merge.
