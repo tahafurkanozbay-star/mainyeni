@@ -42,6 +42,35 @@ const finding = (
   layerId: string | null,
 ): LayerListCatalogFinding => Object.freeze({ code, severity, groupId, layerId });
 
+const auditGroupLayers = (
+  group: LayerListGroupInput,
+  groupId: string,
+  layerKeys: Set<string>,
+  findings: LayerListCatalogFinding[],
+): number => {
+  let layerCount = 0;
+  for (const layer of group.layers) {
+    layerCount += 1;
+    const layerId = layer.id.trim();
+    const key = `${groupId}::${layerId}`;
+
+    if (layerKeys.has(key)) {
+      findings.push(finding('duplicate-layer-id', 'error', groupId || null, layerId || null));
+    } else {
+      layerKeys.add(key);
+    }
+
+    if (!layer.title.trim()) {
+      findings.push(finding('empty-layer-title', 'warning', groupId || null, layerId || null));
+    }
+
+    if (!Number.isFinite(layer.opacity) || layer.opacity < 0 || layer.opacity > 100) {
+      findings.push(finding('invalid-opacity', 'warning', groupId || null, layerId || null));
+    }
+  }
+  return layerCount;
+};
+
 export const auditLayerListCatalog = (
   groups: readonly LayerListGroupInput[],
   options: LayerListCatalogAuditOptions = {},
@@ -70,25 +99,7 @@ export const auditLayerListCatalog = (
       findings.push(finding('empty-group-title', 'warning', groupId || null, null));
     }
 
-    for (const layer of group.layers) {
-      layerCount += 1;
-      const layerId = layer.id.trim();
-      const key = `${groupId}::${layerId}`;
-
-      if (layerKeys.has(key)) {
-        findings.push(finding('duplicate-layer-id', 'error', groupId || null, layerId || null));
-      } else {
-        layerKeys.add(key);
-      }
-
-      if (!layer.title.trim()) {
-        findings.push(finding('empty-layer-title', 'warning', groupId || null, layerId || null));
-      }
-
-      if (!Number.isFinite(layer.opacity) || layer.opacity < 0 || layer.opacity > 100) {
-        findings.push(finding('invalid-opacity', 'warning', groupId || null, layerId || null));
-      }
-    }
+    layerCount += auditGroupLayers(group, groupId, layerKeys, findings);
   }
 
   if (layerCount > maxLayers) {
