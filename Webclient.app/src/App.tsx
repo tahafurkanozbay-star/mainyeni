@@ -196,8 +196,8 @@ function App() {
             <ExperienceConnectivityNotice notificationModel={notificationCenter} />
             <ExperienceDataDisclaimer />
           </ExperienceStartupBoundary>
+          <WorkspaceAccessibilityCenter />
         </div>
-        <WorkspaceAccessibilityCenter />
       </WorkspaceAccessibilityProvider>
     </ExperienceThemeProvider>
   );

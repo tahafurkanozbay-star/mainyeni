@@ -468,6 +468,7 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
             })}
             aria-label={`Komut merkezini aç${commandPalette?.shortcut ? `, ${commandPalette.shortcut.join(' artı ')}` : ''}`}
           >
+            <svg className="experience-workspace__action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>
             <span aria-hidden="true">Komutlar</span>
             <kbd aria-hidden="true">Ctrl K</kbd>
           </button>
@@ -479,7 +480,8 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
             aria-expanded={settingsOpen}
             onClick={() => setSettingsOpen(true)}
           >
-            Deneyim ayarları
+            <svg className="experience-workspace__action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="3" fill="var(--exp-surface)" /><circle cx="15" cy="17" r="3" fill="var(--exp-surface)" /></svg>
+            <span>Ayarlar</span>
           </button>
         </div>
 
