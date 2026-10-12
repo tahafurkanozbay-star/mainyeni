@@ -8,6 +8,13 @@ const extractBlock = (pattern: RegExp): string => {
   return match?.[0] ?? '';
 };
 
+const extractMediaBlock = (marker: string): string => {
+  const start = css.indexOf(marker);
+  if (start < 0) return '';
+  const next = css.indexOf('@media ', start + marker.length);
+  return css.slice(start, next < 0 ? css.length : next);
+};
+
 describe('LayerListWidget presentation contract', () => {
   it('keeps a desktop interactive target baseline at or above 40px', () => {
     const root = extractBlock(/\.layer-list-modern\s*\{[^}]+\}/u);
@@ -16,19 +23,19 @@ describe('LayerListWidget presentation contract', () => {
   });
 
   it('upgrades coarse-pointer actions to 48px targets', () => {
-    const coarse = extractBlock(/@media \(pointer: coarse\)\s*\{[\s\S]*?\n\}/u);
+    const coarse = extractMediaBlock('@media (pointer: coarse)');
     expect(coarse).toContain('--layer-list-action-size: 48px');
     expect(coarse).toContain('min-block-size: 48px');
   });
 
   it('keeps mobile tabs at a 48px target height', () => {
-    const mobile = extractBlock(/@media \(max-width: 560px\)\s*\{[\s\S]*?\n\}/u);
+    const mobile = extractMediaBlock('@media (max-width: 560px)');
     expect(mobile).toContain('.layer-list-tab');
     expect(mobile).toContain('min-block-size: 48px');
   });
 
   it('does not hide opacity sliders on mobile', () => {
-    const mobile = extractBlock(/@media \(max-width: 560px\)\s*\{[\s\S]*?\n\}/u);
+    const mobile = extractMediaBlock('@media (max-width: 560px)');
     expect(mobile).not.toMatch(/\.layer-list-opacity[^}]*display\s*:\s*none/iu);
     expect(css).not.toMatch(/\.layer-list-opacity\s+input[^}]*display\s*:\s*none/iu);
   });
