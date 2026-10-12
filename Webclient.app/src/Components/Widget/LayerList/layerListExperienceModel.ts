@@ -159,6 +159,35 @@ export const normalizeLayerListText = (value: string): string => {
     .trim();
 };
 
+const normalizeGroupLayers = (
+  source: LayerListGroupInput,
+  groupId: string,
+  seenLayerIds: Set<string>,
+  remainingBudget: number,
+): Readonly<{ layers: readonly InternalLayer[]; consumed: number }> => {
+  const layers: InternalLayer[] = [];
+  const limit = Math.min(source.layers.length, remainingBudget);
+  for (let layerIndex = 0; layerIndex < limit; layerIndex += 1) {
+    const layer = source.layers[layerIndex];
+    if (!layer) continue;
+    const layerId = safeId(layer.id, `${groupId}-layer-${layerIndex + 1}`);
+    const compoundKey = `${groupId}::${layerId}`;
+    if (seenLayerIds.has(compoundKey)) continue;
+    seenLayerIds.add(compoundKey);
+    const title = safeTitle(layer.title, 'Katman');
+    layers.push(Object.freeze({
+      ...layer,
+      id: layerId,
+      title,
+      visible: Boolean(layer.visible),
+      opacity: safeOpacity(layer.opacity),
+      disabled: Boolean(layer.disabled),
+      normalizedTitle: normalizeLayerListText(title),
+    }));
+  }
+  return Object.freeze({ layers: Object.freeze(layers), consumed: layers.length });
+};
+
 const normalizeCatalog = (
   groups: readonly LayerListGroupInput[],
   maxGroups: number,
@@ -169,40 +198,21 @@ const normalizeCatalog = (
   const normalized: InternalGroup[] = [];
   let layerBudget = maxLayers;
 
-  for (let groupIndex = 0; groupIndex < groups.length && normalized.length < maxGroups; groupIndex += 1) {
+  for (let groupIndex = 0; groupIndex < groups.length && normalized.length < maxGroups && layerBudget > 0; groupIndex += 1) {
     const source = groups[groupIndex];
     if (!source) continue;
     const id = safeId(source.id, `group-${groupIndex + 1}`);
     if (seenGroupIds.has(id)) continue;
     seenGroupIds.add(id);
 
-    const layers: InternalLayer[] = [];
-    for (let layerIndex = 0; layerIndex < source.layers.length && layerBudget > 0; layerIndex += 1) {
-      const layer = source.layers[layerIndex];
-      if (!layer) continue;
-      const layerId = safeId(layer.id, `${id}-layer-${layerIndex + 1}`);
-      const compoundKey = `${id}::${layerId}`;
-      if (seenLayerIds.has(compoundKey)) continue;
-      seenLayerIds.add(compoundKey);
-      const title = safeTitle(layer.title, 'Katman');
-      layers.push(Object.freeze({
-        ...layer,
-        id: layerId,
-        title,
-        visible: Boolean(layer.visible),
-        opacity: safeOpacity(layer.opacity),
-        disabled: Boolean(layer.disabled),
-        normalizedTitle: normalizeLayerListText(title),
-      }));
-      layerBudget -= 1;
-    }
-
+    const normalizedLayers = normalizeGroupLayers(source, id, seenLayerIds, layerBudget);
+    layerBudget -= normalizedLayers.consumed;
     const title = safeTitle(source.title, 'Katman grubu');
     normalized.push(Object.freeze({
       id,
       title,
       normalizedTitle: normalizeLayerListText(title),
-      layers: Object.freeze(layers),
+      layers: normalizedLayers.layers,
     }));
   }
 
@@ -215,6 +225,34 @@ const groupVisibility = (group: InternalGroup): Readonly<{ visible: boolean; mix
   return Object.freeze({
     visible: enabled.length > 0 && visibleCount === enabled.length,
     mixed: visibleCount > 0 && visibleCount < enabled.length,
+  });
+};
+
+const appendLayerRows = (
+  rows: LayerListVisibleRow[],
+  group: InternalGroup,
+  layers: readonly InternalLayer[],
+  activeKey: string | null,
+): void => {
+  const setSize = layers.length;
+  layers.forEach((layer, index) => {
+    const key = `layer:${group.id}:${layer.id}`;
+    rows.push(Object.freeze({
+      key,
+      kind: 'layer',
+      groupId: group.id,
+      layerId: layer.id,
+      title: layer.title,
+      level: 2,
+      position: index + 1,
+      setSize,
+      expanded: null,
+      visible: layer.visible,
+      mixed: false,
+      disabled: Boolean(layer.disabled),
+      opacity: layer.opacity,
+      active: activeKey === key,
+    }));
   });
 };
 
@@ -255,27 +293,7 @@ const createRows = (
     }));
 
     if (!expanded) continue;
-    const layersToRender = groupMatches ? group.layers : matchingLayers;
-    const setSize = layersToRender.length;
-    layersToRender.forEach((layer, index) => {
-      const key = `layer:${group.id}:${layer.id}`;
-      rows.push(Object.freeze({
-        key,
-        kind: 'layer',
-        groupId: group.id,
-        layerId: layer.id,
-        title: layer.title,
-        level: 2,
-        position: index + 1,
-        setSize,
-        expanded: null,
-        visible: layer.visible,
-        mixed: false,
-        disabled: Boolean(layer.disabled),
-        opacity: layer.opacity,
-        active: activeKey === key,
-      }));
-    });
+    appendLayerRows(rows, group, groupMatches ? group.layers : matchingLayers, activeKey);
   }
 
   return Object.freeze(rows);
@@ -461,17 +479,20 @@ export class LayerListExperienceModel {
 
   setGroupVisibility(groupId: string, visible: boolean): void {
     if (this.#disposed) return;
+    const groupIndex = this.#groups.findIndex((group) => group.id === groupId);
+    const source = this.#groups[groupIndex];
+    if (!source) return;
     let changed = false;
-    this.#groups = Object.freeze(this.#groups.map((group) => {
-      if (group.id !== groupId) return group;
-      const layers = Object.freeze(group.layers.map((layer) => {
-        if (layer.disabled || layer.visible === visible) return layer;
-        changed = true;
-        return Object.freeze({ ...layer, visible });
-      }));
-      return changed ? Object.freeze({ ...group, layers }) : group;
-    }));
-    if (changed) this.#rebuild();
+    const layers = source.layers.map((layer) => {
+      if (layer.disabled || layer.visible === visible) return layer;
+      changed = true;
+      return Object.freeze({ ...layer, visible });
+    });
+    if (!changed) return;
+    const groups = [...this.#groups];
+    groups[groupIndex] = Object.freeze({ ...source, layers: Object.freeze(layers) });
+    this.#groups = Object.freeze(groups);
+    this.#rebuild();
   }
 
   setLayerOpacity(groupId: string, layerId: string, opacity: number): void {
@@ -493,18 +514,20 @@ export class LayerListExperienceModel {
 
   #updateLayer(groupId: string, layerId: string, update: (layer: InternalLayer) => InternalLayer): void {
     if (this.#disposed) return;
-    let changed = false;
-    this.#groups = Object.freeze(this.#groups.map((group) => {
-      if (group.id !== groupId) return group;
-      const layers = Object.freeze(group.layers.map((layer) => {
-        if (layer.id !== layerId) return layer;
-        const next = update(layer);
-        if (next !== layer) changed = true;
-        return next;
-      }));
-      return changed ? Object.freeze({ ...group, layers }) : group;
-    }));
-    if (changed) this.#rebuild();
+    const groupIndex = this.#groups.findIndex((group) => group.id === groupId);
+    const source = this.#groups[groupIndex];
+    if (!source) return;
+    const layerIndex = source.layers.findIndex((layer) => layer.id === layerId);
+    const layer = source.layers[layerIndex];
+    if (!layer) return;
+    const nextLayer = update(layer);
+    if (nextLayer === layer) return;
+    const layers = [...source.layers];
+    layers[layerIndex] = nextLayer;
+    const groups = [...this.#groups];
+    groups[groupIndex] = Object.freeze({ ...source, layers: Object.freeze(layers) });
+    this.#groups = Object.freeze(groups);
+    this.#rebuild();
   }
 
   #rebuild(overrides: Partial<Pick<LayerListExperienceSnapshot, 'status' | 'query' | 'activeKey' | 'errorMessage'>> = {}): void {
