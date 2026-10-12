@@ -292,7 +292,7 @@ function importFindings(signal: ModuleImportSignal, byPath: ReadonlyMap<string, 
     ));
   }
 
-  if (signal.relative && signal.resolved === null) {
+  if (signal.relative && signal.resolved === null && !NON_SCRIPT_ASSET.test(signal.specifier)) {
     findings.push(finding(
       signal,
       'module-graph-relative-import-unresolved',
