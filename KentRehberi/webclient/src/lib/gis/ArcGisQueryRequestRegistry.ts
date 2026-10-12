@@ -254,8 +254,15 @@ export class ArcGisQueryRequestRegistry {
     }
     if (this.#inFlight.get(entry.key) !== entry) return
     this.#inFlight.delete(entry.key)
-    if (!this.#disposed && result.kind === 'completed' && !entry.controller.signal.aborted) {
-      this.#store(entry.key, result)
+    if (!this.#disposed && !entry.controller.signal.aborted) {
+      try {
+        const snapshot = this.#snapshotCompleted(result, entry.key)
+        if (snapshot !== undefined) this.#store(entry.key, snapshot)
+      } catch {
+        // A malformed executor result must not reject #run and strand subscribers.
+        // Do not reflect SDK exception text or attacker-controlled payloads.
+        result = { kind: 'failed', code: 'integrity-error' }
+      }
     }
     this.#settleSubscribers(entry, result)
   }
@@ -270,26 +277,63 @@ export class ArcGisQueryRequestRegistry {
     entry.subscribers.clear()
   }
 
+  /**
+   * Verify an injectable executor's success shape using own data descriptors.
+   * Do not execute accessor properties while choosing objects for retention.
+   * The canonical ArcGIS response inspector remains responsible for the
+   * nested attribute and geometry validation of individual features.
+   */
+  #snapshotCompleted(
+    raw: unknown,
+    requestedKey: string,
+  ): Extract<ArcGisQueryExecutionResult, { kind: 'completed' }> | undefined {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+    const own = (key: string): unknown => {
+      const property = Object.getOwnPropertyDescriptor(raw, key)
+      return property !== undefined && 'value' in property ? property.value : undefined
+    }
+    if (own('kind') !== 'completed' || own('key') !== requestedKey) return undefined
+    const features = own('features')
+    const ids = own('objectIds')
+    const pagesCompleted = own('pagesCompleted')
+    if (!Array.isArray(features) || !Array.isArray(ids) ||
+        features.length !== ids.length ||
+        features.length > this.#options.maxFeaturesPerEntry ||
+        features.length > this.#options.maxCachedFeatures ||
+        !Number.isSafeInteger(pagesCompleted) || (pagesCompleted as number) < 0) return undefined
+
+    const featureCopy: unknown[] = []
+    const idCopy: number[] = []
+    const seen = new Set<number>()
+    for (let index = 0; index < ids.length; index += 1) {
+      const feature = Object.getOwnPropertyDescriptor(features, String(index))
+      const identity = Object.getOwnPropertyDescriptor(ids, String(index))
+      if (feature === undefined || !('value' in feature) ||
+          identity === undefined || !('value' in identity) ||
+          !Number.isSafeInteger(identity.value) || identity.value <= 0 ||
+          seen.has(identity.value as number)) return undefined
+      const id = identity.value as number
+      seen.add(id)
+      idCopy.push(id)
+      featureCopy.push(feature.value)
+    }
+    return Object.freeze({
+      kind: 'completed',
+      key: requestedKey,
+      pagesCompleted: pagesCompleted as number,
+      objectIds: Object.freeze(idCopy),
+      features: Object.freeze(featureCopy),
+    })
+  }
+
   #store(key: string, result: Extract<ArcGisQueryExecutionResult, { kind: 'completed' }>): void {
-    if (!Array.isArray(result.features) || !Array.isArray(result.objectIds) ||
-        result.features.length !== result.objectIds.length ||
-        result.features.length > this.#options.maxFeaturesPerEntry ||
-        result.features.length > this.#options.maxCachedFeatures ||
-        result.objectIds.some(id => !Number.isSafeInteger(id) || id <= 0)) return
     const features = result.features.length
     const now = this.#clock()
     if (now > Number.MAX_SAFE_INTEGER - this.#options.successTtlMs) return
-    const stableResult = Object.freeze({
-      kind: 'completed' as const,
-      key: result.key,
-      pagesCompleted: result.pagesCompleted,
-      features: Object.freeze([...result.features]),
-      objectIds: Object.freeze([...result.objectIds]),
-    })
     this.#deleteCache(key)
     this.#cache.set(key, {
       key,
-      result: stableResult,
+      result,
       features,
       expiresAt: now + this.#options.successTtlMs,
       lastAccessSequence: ++this.#accessSequence,
