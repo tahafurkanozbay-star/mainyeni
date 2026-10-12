@@ -13,6 +13,45 @@
 }
 
 html { font-size: 100%; }
+
+/* Keep the governed 2B/3B authority in the shared workspace row. */
+.experience-workspace .map-mode-experience {
+  position: relative;
+  inset: auto;
+  min-inline-size: 108px;
+  max-inline-size: none;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  backdrop-filter: none;
+  contain: none;
+}
+.experience-workspace .map-mode-experience__header,
+.experience-workspace .map-mode-experience__mode small { display: none; }
+.experience-workspace .map-mode-experience__switcher { padding: 0; gap: 4px; border: 0; background: transparent; }
+.experience-workspace .map-mode-experience__mode { min-block-size: 44px; padding: 8px 12px; }
+.experience-workspace .map-mode-experience__status {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 100px));
+  padding: 8px 12px;
+  border: 1px solid var(--exp-border);
+  border-radius: 10px;
+  background: var(--exp-surface);
+}
+.experience-workspace .map-mode-experience[data-phase="ready"] .map-mode-experience__status {
+  width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); border: 0;
+}
+.experience-workspace .map-mode-experience__recovery {
+  position: absolute; top: calc(100% + 58px); left: 0; width: 240px;
+  padding: 10px; border-radius: 10px; background: var(--exp-surface);
+}
 body, #root, #app-shell {
   font-size: 14px;
   font-family: var(--exp-font-sans);
@@ -383,11 +422,23 @@ body { margin: 0; user-select: text; }
 #app-shell .kr-fast-query__status { font-size: 14px; padding: 12px; }
 #app-shell .kr-fast-query__error { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--exp-border); border-radius: 10px; color: var(--exp-danger); background: var(--exp-danger-soft); }
 #app-shell .kr-fast-query__error button { min-height: 44px; border: 1px solid var(--exp-border-strong); border-radius: 8px; color: var(--exp-text); background: var(--exp-surface); font: inherit; font-weight: 600; }
-#app-shell .kr-fast-query__results { max-height: none; flex: 1; }
+#app-shell .kr-fast-query__results { max-height: none; flex: 1; align-content: start; grid-auto-rows: max-content; }
+#app-shell .kr-fast-query__item { align-content: start; background: var(--exp-surface); color: var(--exp-text); }
+#app-shell .kr-fast-query__item:is(:hover, :focus-within) { background: var(--exp-surface-2); color: var(--exp-text); }
+#app-shell .kr-fast-query__copy .result-item-info-title { font-size: 15px; color: var(--exp-text); }
+#app-shell .kr-fast-query__copy .result-item-info-address { font-size: 13px; color: var(--exp-text-muted); }
 #app-shell .kr-fast-query__copy h3 { font-size: 15px; }
 #app-shell .kr-fast-query__copy :is(p, a) { font-size: 13px; }
 @media (max-width: 680px) {
-  #app-shell .sidebar-container.kr-fast-query { top: 132px; width: calc(100vw - 72px); height: calc(100dvh - 280px); border-radius: 0 12px 12px 0; }
+  #app-shell .sidebar-container.kr-fast-query,
+  #app-shell .sidebar-container.kr-sidebar { top: 132px; width: calc(100vw - 72px); height: calc(100dvh - 344px); border-radius: 0 12px 12px 0; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__groups { grid-template-columns: repeat(4, minmax(0, 1fr)); height: auto; min-height: 64px; max-height: none; flex: 0 0 auto; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__group { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; min-height: 56px; padding: 4px; overflow: hidden; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__group img { max-width: 40px; max-height: 28px; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__panel { overflow-y: auto; overscroll-behavior: contain; display: block; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__items { overflow: visible; height: auto; max-height: none; }
+  #app-shell .kr-sidebar .kr-sidebar__layer-load[data-phase="ready"] { padding: 4px 8px; border: 0; background: transparent; }
+  #app-shell .kr-sidebar .kr-sidebar__layer-load[data-phase="ready"] strong { display: none; }
   #app-shell .experience-utility { width: auto; }
   #app-shell .experience-utility__actions { display: flex; flex-direction: row; }
 }

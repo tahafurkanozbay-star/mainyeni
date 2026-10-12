@@ -37,7 +37,9 @@ export interface SidebarLayerLoadDiagnostics {
 export interface SidebarLayerLoadControllerOptions<TLayer> {
   readonly serviceKeys: readonly string[];
   readonly concurrency?: number;
-  readonly loadLayer: (serviceKey: string) => Promise<TLayer | null>;
+  readonly timeoutMs?: number;
+  readonly loadLayer: (serviceKey: string, options: { readonly signal: AbortSignal }) => Promise<TLayer | null>;
+  readonly disposeLayer?: (layer: TLayer) => void;
 }
 
 export interface SidebarLayerLoadController<TLayer> {
@@ -47,11 +49,20 @@ export interface SidebarLayerLoadController<TLayer> {
   readonly start: () => Promise<void>;
   readonly retryFailed: () => Promise<void>;
   readonly cancel: () => void;
+  readonly reset: () => void;
 }
 
 const MAX_SERVICE_KEYS = 128;
 const MAX_CONCURRENCY = 8;
 const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+interface LoadRun {
+  readonly attempt: number;
+  readonly controller: AbortController;
+  readonly queue: string[];
+  activeCount: number;
+}
 
 const freezeArray = <T>(values: readonly T[]): readonly T[] => Object.freeze([...values]);
 
@@ -95,16 +106,18 @@ export const createSidebarLayerLoadController = <TLayer>(
 
   const serviceKeys = normalizeServiceKeys(options.serviceKeys);
   const concurrency = resolveConcurrency(options.concurrency);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+    throw new RangeError('Sidebar layer timeout must be between 1 and 60000 milliseconds.');
+  }
   const loaded = new Map<string, TLayer>();
   const failures = new Map<string, SidebarLayerLoadFailure>();
   const listeners = new Set<() => void>();
   let phase: SidebarLayerLoadPhase = 'idle';
-  let activeCount = 0;
   let attempt = 0;
   let revision = 0;
-  let cancelled = false;
+  let activeRun: LoadRun | null = null;
   let currentRun: Promise<void> | null = null;
-  let queue: string[] = [];
   let diagnostics: SidebarLayerLoadDiagnostics = Object.freeze({
     loaderFailureCount: 0,
     observerFailureCount: 0,
@@ -157,6 +170,7 @@ export const createSidebarLayerLoadController = <TLayer>(
     const loadedLayers = freezeArray(loadedLayerEntries);
     const failureList = freezeArray(failureEntries);
     const completedCount = loaded.size + failures.size;
+    const activeCount = activeRun?.activeCount ?? 0;
     const pendingCount = Math.max(0, serviceKeys.length - completedCount - activeCount);
     return Object.freeze({
       phase,
@@ -200,14 +214,57 @@ export const createSidebarLayerLoadController = <TLayer>(
     };
   };
 
-  const loadOne = async (serviceKey: string, runAttempt: number): Promise<void> => {
-    activeCount += 1;
+  const disposeLayer = (layer: TLayer): void => {
+    try { options.disposeLayer?.(layer); } catch (error) { recordLoaderFailure(classifyFailure(error)); }
+  };
+
+  // Race the adapter with a bounded lifetime. Adapters that ignore AbortSignal
+  // cannot block the queue, and their eventual layer is still released.
+  const loadWithLifetime = (serviceKey: string, run: LoadRun): Promise<TLayer | null> => {
+    const controller = new AbortController();
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error: unknown, layer: TLayer | null, rejected = false): void => {
+        if (settled) {
+          if (layer !== null) disposeLayer(layer);
+          return;
+        }
+        settled = true;
+        globalThis.clearTimeout(timer);
+        run.controller.signal.removeEventListener('abort', abort);
+        if (error !== null || rejected) reject(error);
+        else resolve(layer);
+      };
+      const abort = (): void => {
+        const reason = run.controller.signal.reason ?? new DOMException('Layer load cancelled.', 'AbortError');
+        controller.abort(reason);
+        finish(reason, null);
+      };
+      const timer = globalThis.setTimeout(() => {
+        const reason = new DOMException('Layer load timed out.', 'TimeoutError');
+        controller.abort(reason);
+        finish(reason, null);
+      }, timeoutMs);
+      run.controller.signal.addEventListener('abort', abort, { once: true });
+      if (run.controller.signal.aborted) { abort(); return; }
+      Promise.resolve().then(() => {
+        if (controller.signal.aborted) throw controller.signal.reason;
+        return options.loadLayer(serviceKey, { signal: controller.signal });
+      }).then((layer) => finish(null, layer), (error: unknown) => finish(error, null, true));
+    });
+  };
+
+  const loadOne = async (serviceKey: string, run: LoadRun): Promise<void> => {
+    run.activeCount += 1;
     publish();
     try {
-      const layer = await options.loadLayer(serviceKey);
-      if (cancelled || runAttempt !== attempt) return;
+      const layer = await loadWithLifetime(serviceKey, run);
+      if (activeRun !== run || run.controller.signal.aborted) {
+        if (layer !== null) disposeLayer(layer);
+        return;
+      }
       if (layer === null) {
-        const failure = Object.freeze({ serviceKey, kind: 'empty-result', attempt: runAttempt });
+        const failure = Object.freeze({ serviceKey, kind: 'empty-result', attempt: run.attempt });
         failures.set(serviceKey, failure);
         recordLoaderFailure('empty-result');
         return;
@@ -215,21 +272,21 @@ export const createSidebarLayerLoadController = <TLayer>(
       loaded.set(serviceKey, layer);
       failures.delete(serviceKey);
     } catch (error) {
-      if (cancelled || runAttempt !== attempt) return;
+      if (activeRun !== run || run.controller.signal.aborted) return;
       const kind = classifyFailure(error);
-      failures.set(serviceKey, Object.freeze({ serviceKey, kind, attempt: runAttempt }));
+      failures.set(serviceKey, Object.freeze({ serviceKey, kind, attempt: run.attempt }));
       recordLoaderFailure(kind);
     } finally {
-      activeCount = Math.max(0, activeCount - 1);
-      if (!cancelled && runAttempt === attempt) publish();
+      run.activeCount = Math.max(0, run.activeCount - 1);
+      if (activeRun === run && !run.controller.signal.aborted) publish();
     }
   };
 
-  const worker = async (runAttempt: number): Promise<void> => {
-    while (!cancelled && runAttempt === attempt) {
-      const serviceKey = queue.shift();
+  const worker = async (run: LoadRun): Promise<void> => {
+    while (activeRun === run && !run.controller.signal.aborted) {
+      const serviceKey = run.queue.shift();
       if (serviceKey === undefined) return;
-      await loadOne(serviceKey, runAttempt);
+      await loadOne(serviceKey, run);
     }
   };
 
@@ -240,18 +297,18 @@ export const createSidebarLayerLoadController = <TLayer>(
       return;
     }
 
-    cancelled = false;
     attempt += 1;
-    const runAttempt = attempt;
-    queue = [...keys];
+    const context: LoadRun = { attempt, controller: new AbortController(), queue: [...keys], activeCount: 0 };
+    activeRun = context;
     for (const key of keys) failures.delete(key);
     phase = 'loading';
     publish();
 
-    const workerCount = Math.min(concurrency, queue.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker(runAttempt)));
+    const workerCount = Math.min(concurrency, context.queue.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker(context)));
 
-    if (cancelled || runAttempt !== attempt) return;
+    if (activeRun !== context || context.controller.signal.aborted) return;
+    activeRun = null;
     phase = failures.size > 0 ? 'degraded' : 'ready';
     publish();
   };
@@ -280,9 +337,20 @@ export const createSidebarLayerLoadController = <TLayer>(
 
   const cancel = (): void => {
     if (phase !== 'loading') return;
-    cancelled = true;
-    queue = [];
+    const context = activeRun;
+    activeRun = null;
+    currentRun = null;
+    context?.controller.abort(new DOMException('Layer load cancelled.', 'AbortError'));
     phase = 'cancelled';
+    publish();
+  };
+
+  const reset = (): void => {
+    cancel();
+    for (const layer of loaded.values()) disposeLayer(layer);
+    loaded.clear();
+    failures.clear();
+    phase = 'idle';
     publish();
   };
 
@@ -293,5 +361,6 @@ export const createSidebarLayerLoadController = <TLayer>(
     start,
     retryFailed,
     cancel,
+    reset,
   });
 };

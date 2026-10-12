@@ -86,6 +86,7 @@ interface FeatureLayerLike {
 
 interface GenericLayerLike {
   load?: () => Promise<unknown>;
+  destroy?: () => void;
 }
 
 type LayerConstructor<TLayer> = new (properties: Readonly<Record<string, unknown>>) => TLayer;
@@ -333,20 +334,18 @@ const readNestedArray = (root: unknown, path: readonly string[]): readonly unkno
 const createLayer = async (layerItemInput: unknown): Promise<unknown | null> => {
   if (!isRecord(layerItemInput)) return null;
   const layerItem = layerItemInput;
+  const moduleId = layerItem.layerType === Constants_LayerType.FeatureLayer
+    ? 'esri/layers/FeatureLayer'
+    : layerItem.layerType === Constants_LayerType.MapImageLayer
+      ? 'esri/layers/MapImageLayer'
+      : layerItem.layerType === Constants_LayerType.GeoJSONLayer
+        ? 'esri/layers/GeoJSONLayer'
+        : null;
+  if (!moduleId) return null;
   const url = generateUrl(layerItem);
   if (url) await addProxyRule(url);
 
-  const [FeatureLayer, MapImageLayer, GeoJSONLayer] = await loadArcgisModules<
-    readonly [
-      LayerConstructor<FeatureLayerLike>,
-      LayerConstructor<GenericLayerLike>,
-      LayerConstructor<GenericLayerLike>
-    ]
-  >([
-    'esri/layers/FeatureLayer',
-    'esri/layers/MapImageLayer',
-    'esri/layers/GeoJSONLayer',
-  ]);
+  const [Layer] = await loadArcgisModules<readonly [LayerConstructor<GenericLayerLike>]>([moduleId]);
 
   const opacityValue = Number(layerItem.opacity);
   const common = Object.freeze({
@@ -358,11 +357,11 @@ const createLayer = async (layerItemInput: unknown): Promise<unknown | null> => 
   });
 
   if (layerItem.layerType === Constants_LayerType.MapImageLayer) {
-    return new MapImageLayer(common);
+    return new Layer(common);
   }
 
   if (layerItem.layerType === Constants_LayerType.FeatureLayer) {
-    return new FeatureLayer({
+    return new Layer({
       ...common,
       renderer: layerItem.renderer ?? null,
       featureReduction: layerItem.featureReduction ?? null,
@@ -373,15 +372,22 @@ const createLayer = async (layerItemInput: unknown): Promise<unknown | null> => 
   if (layerItem.layerType === Constants_LayerType.GeoJSONLayer) {
     const blob = new Blob([JSON.stringify(layerItem)], { type: 'application/json' });
     const objectUrl = URL.createObjectURL(blob);
-    const layer = new GeoJSONLayer({
+    const layer = new Layer({
       renderer: layerItem.renderer ?? null,
       featureReduction: layerItem.featureReduction ?? null,
       url: objectUrl,
       popupTemplate: layerItem.popupTemplate ?? null,
       title: layerItem.title,
     });
-    Promise.resolve(layer.load?.()).finally(() => URL.revokeObjectURL(objectUrl));
-    return layer;
+    try {
+      await layer.load?.();
+      return layer;
+    } catch (error) {
+      layer.destroy?.();
+      throw error;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   }
 
   return null;

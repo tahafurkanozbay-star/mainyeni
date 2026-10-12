@@ -36,6 +36,36 @@ const demoGeoJson: KentRehberiGeoJsonFeatureCollection = {
 };
 
 describe('kentRehberiGeoJsonLayer', () => {
+  test('cancels a stalled SDK load and releases the layer and Blob URL immediately', async () => {
+    const abort = new AbortController();
+    const revoke = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: () => 'blob:cancelled' });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revoke });
+    const layer = { load: vi.fn(() => new Promise(() => undefined)), cancelLoad: vi.fn(), destroy: vi.fn() };
+    const Layer = vi.fn(function () { return layer; });
+    const loading = createKentRehberiGeoJsonLayer(demoGeoJson, (async () => Layer) as never, {}, abort.signal);
+    const rejected = expect(loading).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(layer.load).toHaveBeenCalledOnce());
+    abort.abort();
+    await rejected;
+    expect(layer.cancelLoad).toHaveBeenCalledOnce();
+    expect(layer.destroy).toHaveBeenCalledOnce();
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:cancelled');
+  });
+
+  test('does not leave a loaded layer resident if attaching it to the map fails', async () => {
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: () => 'blob:attach-failed' });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    const layer = { load: vi.fn(async () => undefined), destroy: vi.fn() };
+    const Layer = vi.fn(function () { return layer; });
+    const error = new Error('map disposed');
+    await expect(attachKentRehberiGeoJsonLayer({
+      map: { add: () => { throw error; }, remove: vi.fn() },
+      moduleLoader: (async () => Layer) as never,
+      fetchImpl: (async () => new Response(JSON.stringify(demoGeoJson), { headers: { 'content-type': 'application/geo+json' } })) as typeof fetch,
+    })).rejects.toBe(error);
+    expect(layer.destroy).toHaveBeenCalledOnce();
+  });
   afterEach(() => {
     vi.restoreAllMocks();
   });

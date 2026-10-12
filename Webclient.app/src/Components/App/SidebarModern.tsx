@@ -50,6 +50,16 @@ interface MapViewLike {
   readonly map?: MapLike;
 }
 
+interface OperationalLayer {
+  load?: (options: { readonly signal: AbortSignal }) => Promise<unknown>;
+  cancelLoad?: () => void;
+  destroy?: () => void;
+}
+
+const disposeOperationalLayer = (layer: OperationalLayer): void => {
+  try { layer.cancelLoad?.(); } finally { layer.destroy?.(); }
+};
+
 const GROUPS = SIDEBAR_GROUPS as readonly SidebarGroup[];
 const ITEMS = SIDEBAR_ITEMS as readonly SidebarItem[];
 const SERVICE_KEYS = INITIAL_CITY_LAYER_SERVICE_KEYS as readonly string[];
@@ -62,19 +72,37 @@ const ITEM_IDS = Object.freeze(ITEMS.map((item) => item.windowId));
 const createInitialOperationalLayer = async (
   mapView: MapViewLike,
   serviceKey: string,
-): Promise<unknown | null> => {
+  signal: AbortSignal,
+): Promise<OperationalLayer | null> => {
+  const item = ITEMS.find((entry) => entry.serviceKey === serviceKey);
   const symbol = createPictureMarkerSymbol(
-    { type: serviceKey, title: serviceKey },
+    { type: item?.iconType ?? serviceKey, title: item?.label ?? serviceKey },
     mapView.zoom,
     { minSize: 25, maxSize: 25 },
   );
   const result = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
     serviceKey,
-    'Kent Rehberi',
+    item?.label ?? 'Kent Rehberi',
     {},
     symbol,
   );
-  return result?.layerObj ?? null;
+  const layer = result?.layerObj as OperationalLayer | null;
+  if (!layer) return null;
+  const cancelLoad = (): void => {
+    try { layer.cancelLoad?.(); } catch (error) { DebugHelper.Log(error); }
+  };
+  signal.addEventListener('abort', cancelLoad, { once: true });
+  try {
+    signal.throwIfAborted();
+    await layer.load?.({ signal });
+    signal.throwIfAborted();
+    return layer;
+  } catch (error) {
+    disposeOperationalLayer(layer);
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', cancelLoad);
+  }
 };
 
 const addLayerSafely = (map: MapLike, layer: unknown): boolean => {
@@ -161,15 +189,23 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   const mapViewRef = useRef<MapViewLike | null>(null);
   const mountedOperationalLayers = useRef<unknown[]>([]);
   const layerRetryAttemptsRef = useRef(0);
-  const layerLoadController = useMemo(() => createSidebarLayerLoadController<unknown>({
-    serviceKeys: SERVICE_KEYS,
+  const configuredServiceKeys = useMemo(() => {
+    const services = MapManager.GetConfigurationServices?.();
+    if (!services) return SERVICE_KEYS;
+    const titles = new Set(services.map((service) => service.title ?? service.Title));
+    return SERVICE_KEYS.filter((serviceKey) => titles.has(serviceKey));
+  }, []);
+  const layerLoadController = useMemo(() => createSidebarLayerLoadController<OperationalLayer>({
+    serviceKeys: configuredServiceKeys,
     concurrency: LAYER_LOAD_CONCURRENCY,
-    loadLayer: async (serviceKey) => {
+    timeoutMs: 15_000,
+    disposeLayer: disposeOperationalLayer,
+    loadLayer: async (serviceKey, { signal }) => {
       const mapView = mapViewRef.current;
       if (!mapView?.map) return null;
-      return createInitialOperationalLayer(mapView, serviceKey);
+      return createInitialOperationalLayer(mapView, serviceKey, signal);
     },
-  }), []);
+  }), [configuredServiceKeys]);
   const layerLoad = useSyncExternalStore(
     layerLoadController.subscribe,
     layerLoadController.getSnapshot,
@@ -219,6 +255,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
       layerLoadController.cancel();
       for (const layer of mountedOperationalLayers.current) removeLayerSafely(map, layer);
       mountedOperationalLayers.current = [];
+      layerLoadController.reset();
       mapViewRef.current = null;
     };
   }, [layerLoadController]);
@@ -320,7 +357,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
         ? `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} yeniden denenebilir`
         : `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} katman için yeniden deneme sınırına ulaşıldı`
       : `${layerLoad.loadedCount} katman kullanıma hazır`;
-  const showLayerStatus = layerLoad.phase !== 'idle' && layerLoad.phase !== 'cancelled';
+  const showLayerStatus = layerLoad.totalCount > 0 && layerLoad.phase !== 'idle' && layerLoad.phase !== 'cancelled';
 
   return (
     <aside

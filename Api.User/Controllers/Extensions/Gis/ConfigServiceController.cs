@@ -4,6 +4,7 @@ using Business.Core.Context;
 using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Threading.Tasks;
 
 namespace Api.User.Extensions.Controllers
 {
@@ -23,11 +24,11 @@ namespace Api.User.Extensions.Controllers
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/ConfigService/List")]
-        public IActionResult List()
+        public async Task<IActionResult> List()
         {
             try
             {
-                return new JsonResult(operations.GetAllForPublic());
+                return new JsonResult(await operations.GetAllForPublicAsync(HttpContext.RequestAborted));
             }
             catch (Exception ex)
             {

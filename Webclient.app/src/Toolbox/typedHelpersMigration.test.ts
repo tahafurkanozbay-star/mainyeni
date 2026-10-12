@@ -120,6 +120,14 @@ describe('TextHelper typed compatibility', () => {
 });
 
 describe('ArrayHelper generic behavior', () => {
+  test('finds frozen configuration records without adding index metadata to them', () => {
+    const service = Object.freeze({ title: 'YeniParklarQeryUrl', eg: 'https://public.gissrv.org' });
+    const services = Object.freeze([service]);
+    expect(ArrayHelper.Find(services, 'title', 'YeniParklarQeryUrl')).toBe(service);
+    expect(service).not.toHaveProperty('_INDEX');
+    expect(ArrayHelper.Filter(services, 'title', 'YeniParklarQeryUrl')).toEqual([{ ...service, _INDEX: 0 }]);
+    expect(service).not.toHaveProperty('_INDEX');
+  });
   test('filters and preserves legacy _INDEX metadata', () => {
     const values = [{ id: 1 }, { id: 2 }, { id: 1 }];
     const found = ArrayHelper.Filter(values, 'id', 1);
