@@ -113,9 +113,6 @@
   font-size: 0.78rem;
 }
 
-.layer-list-search-shell input[type='search']:focus {
-  outline: none;
-}
 
 .layer-list-search-shell input[type='search']::placeholder {
   color: color-mix(in srgb, var(--exp-text-soft) 78%, transparent);
