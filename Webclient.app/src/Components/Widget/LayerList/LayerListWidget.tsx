@@ -620,7 +620,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                   aria-atomic="true"
                   data-tone={snapshot.status === 'error' ? 'danger' : loading ? 'busy' : 'neutral'}
                 >
-                  <span>{snapshot.announcement}</span>
+                  <span>{loading && loadSnapshot.total > 0 ? loadSnapshot.announcement : snapshot.announcement}</span>
                   {loading && loadSnapshot.total > 0 ? (
                     <span aria-hidden="true">%{loadSnapshot.progressPercent}</span>
                   ) : null}
