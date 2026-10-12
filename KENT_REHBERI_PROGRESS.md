@@ -277,3 +277,13 @@
 - PERF / SECURITY / DATA-INTEGRITY: scalar/payload-free lifecycle korunur; yeni endpoint, WMS/WFS, telemetry, secret, remote font/asset, yeni ikon resolver veya bağımlılık eklenmedi; integer deadline fail-closed. Diğer ekiplerin main değişiklikleri korunarak GIS dosyaları current-main tree'ye seçici taşınır.
 - MERGE GATE: mevcut PR base...head additions >4,000 olarak doğrulandı; main refresh, merge-base, review, exact-head CI ve squash merge SHA doğrulaması tamamlanmadan merged iddia edilmez.
 - SONRAKİ TUR: CI başarısızsa nedenlerini düzeltip exact-head yeniden doğrula; draft-to-ready işlemi desteklenirse expected-head korumalı squash merge yap ve merge SHA/main SHA'yı doğrula.
+
+## Deep GIS / PR #477 final squash merge closure — 2026-10-12
+- TUR / GÖREV: Deep GIS / Whole-Code Modernization; bounded ArcGIS geometry/query lifecycle, deterministic scheduling, cache/cancellation, response integrity and safe monotonic deadline admission.
+- PR / COMMIT: #477 canonical GIS PR, final head `0e66b9ecfc7689214132b937ce0febfaca7bdaed`; expected-head protected squash merge `6030606a55ece1f14fffb57904df43e20148e28b`; GitHub `merged=true`, PR `closed`. İlk merge sonrası main birebir aynı SHA'dır.
+- CURRENT-MAIN RECONCILIATION: merge öncesi `455eca8116b853906a9876815eab3659d19c6355`; compare 65 ahead / 0 behind; merge-base exact main; mergeable=true; draft=false; review submissions 0, unresolved review threads 0; no force push.
+- SCOPE / GATE: base...head 4,176 meaningful additions / 87 deletions / 52 changed files. 4,000 additions eşiği gerçek GIS production ve adversarial tests ile sağlandı; boilerplate/satır doldurma yapılmadı.
+- FINAL EXACT-HEAD CI: GIS Core Quality `38236368785`, Platform Architecture Audit `38236368523`, Platform Dependency Governance `38236368849`, Release QA `38236368597`: tamamı completed+success. Release QA frontend, backend ve typed release jobs success.
+- DATA-INTEGRITY FIXES: gelecek tarihli dedupe işleri erken başlatılmaz; TTL/lease/cache deadline değerleri safe integer overflow'da fail-closed; clock rollback expiry'yi geriye almaz; detached/expired lease yenilemesi ve stale observation reddedilir; overflow state'i kısmen mutate etmez; bunlara adversarial Vitest senaryoları eklendi.
+- SECURITY / NETWORK / ICON: doğrulanmamış endpoint, WMS/WFS, browser telemetry, secret, remote asset veya ikinci ikon resolver eklenmedi. Scalar/payload-free GIS authority, existing REST config ve shared resolver korundu.
+- SONRAKİ TUR: #477 branch'i artık merge edilmiştir; yeniden kullanılmaz. Sonraki GIS paketi yeni current main üzerinden benzersiz branch ile başlar. UI/QA/Platform/Search açık PR'leri bağımsız değerlendirilmeli; eski GIS commit zinciri tekrar taşınmamalıdır.
