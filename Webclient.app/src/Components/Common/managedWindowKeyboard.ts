@@ -13,13 +13,16 @@ export const installManagedWindowKeyboard = (
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest('.esri-view-surface, .esri-sketch, [role="combobox"][aria-expanded="true"]')) return;
     const active = Store.getState().Common.WindowList.find((item) => item.visible && item.id !== 'sidebar');
+    const focus = documentPort.activeElement;
+    const focusWasWithin = focus instanceof HTMLElement && Boolean(focus.closest('.common-query-window, .kr-lazy-window, .kr-fast-query'));
     if (!active || !manager.HideWindow(active.id)) return;
     event.preventDefault();
-    const focus = documentPort.activeElement;
-    if (focus instanceof HTMLElement && focus.closest('.common-query-window, .kr-lazy-window')) {
+    if (focusWasWithin) {
       queueMicrotask(() => {
         const map = documentPort.getElementById('esri-map-container');
         if (!map || documentPort.querySelector('[aria-modal="true"]')) return;
+        const current = documentPort.activeElement;
+        if (current !== documentPort.body && current !== focus && current instanceof HTMLElement && current.isConnected) return;
         map.focus({ preventScroll: true });
       });
     }
