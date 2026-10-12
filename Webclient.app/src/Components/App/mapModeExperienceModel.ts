@@ -153,7 +153,7 @@ export class MapModeExperienceModel {
   readonly #maxAttempts: number;
   readonly #maxObservers: number;
   readonly #now: () => number;
-  readonly #onObserverError?: (error: unknown) => void;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   #snapshot: MapModeExperienceSnapshot;
   #diagnostics: MapModeExperienceDiagnostics;
   #disposed = false;
