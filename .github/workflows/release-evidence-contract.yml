@@ -7,6 +7,15 @@ on:
       - 'Webclient.app/package-lock.json'
       - 'Webclient.app/scripts/release-evidence-audit.mjs'
       - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.test.mjs'
+      - 'Webclient.app/scripts/release-evidence-quorum.mjs'
+      - 'Webclient.app/scripts/release-evidence-quorum.test.mjs'
+      - 'Webclient.app/scripts/release-admission-snapshot.mjs'
+      - 'Webclient.app/scripts/release-admission-snapshot.test.mjs'
+      - 'quality/release/release-candidate-gate.mts'
+      - 'quality/release/release-evidence-quorum.mts'
+      - 'quality/release/release-admission-snapshot.mts'
       - 'Webclient.app/scripts/verify-chain-security.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
@@ -25,6 +34,15 @@ on:
       - 'Webclient.app/package-lock.json'
       - 'Webclient.app/scripts/release-evidence-audit.mjs'
       - 'Webclient.app/scripts/release-evidence-audit.test.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.mjs'
+      - 'Webclient.app/scripts/release-candidate-gate.test.mjs'
+      - 'Webclient.app/scripts/release-evidence-quorum.mjs'
+      - 'Webclient.app/scripts/release-evidence-quorum.test.mjs'
+      - 'Webclient.app/scripts/release-admission-snapshot.mjs'
+      - 'Webclient.app/scripts/release-admission-snapshot.test.mjs'
+      - 'quality/release/release-candidate-gate.mts'
+      - 'quality/release/release-evidence-quorum.mts'
+      - 'quality/release/release-admission-snapshot.mts'
       - 'Webclient.app/scripts/verify-chain-security.test.mjs'
       - 'Webclient.app/scripts/workflow-security-contract.test.mjs'
       - 'Webclient.app/scripts/workflow-action-allowlist-contract.test.mjs'
@@ -40,7 +58,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-evidence-${{ github.event.pull_request.number || github.ref }}
+  group: release-evidence-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -67,6 +85,9 @@ jobs:
 
       - name: Audit adversarial fixture suite
         run: node --test scripts/release-evidence-audit.test.mjs
+
+      - name: Verify typed release admission compatibility
+        run: node --test scripts/release-candidate-gate.test.mjs scripts/release-evidence-quorum.test.mjs
 
       - name: Verify-chain bypass security contract
         run: node --test scripts/verify-chain-security.test.mjs
