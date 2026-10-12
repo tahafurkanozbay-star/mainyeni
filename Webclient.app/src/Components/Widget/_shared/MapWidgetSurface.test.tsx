@@ -30,6 +30,27 @@ const createManager = (
 });
 
 describe('MapWidgetSurface', () => {
+  it('minimizes the body and footer while retaining form state for expansion', () => {
+    let minimized = false;
+    const manager = createManager({ IsMinimized: vi.fn(() => minimized) });
+    const surface = () => <MapWidgetSurface id="minimize-widget" title="Ölçüm" windowManager={manager} status="Hazır" footer={<button type="button">Kaydet</button>}>
+      <input aria-label="Ölçüm adı" defaultValue="Park alanı" />
+    </MapWidgetSurface>;
+    const view = render(surface());
+    const input = screen.getByRole('textbox', { name: 'Ölçüm adı' });
+    expect(input).toBeVisible();
+    minimized = true;
+    view.rerender(surface());
+    expect(input).not.toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Kaydet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pencereyi genişlet' })).toHaveAttribute('aria-expanded', 'false');
+    minimized = false;
+    view.rerender(surface());
+    expect(input).toBeVisible();
+    expect(input).toHaveValue('Park alanı');
+    expect(screen.getByRole('button', { name: 'Kaydet' })).toBeVisible();
+  });
   it('exposes title, busy state and status through semantic attributes', () => {
     const manager = createManager();
 

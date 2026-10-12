@@ -147,8 +147,10 @@ export class RequestScheduler {
       120000
     );
     this.clock = typeof options.clock === 'function' ? options.clock : () => Date.now();
-    this.setTimer = options.setTimeout || setTimeout;
-    this.clearTimer = options.clearTimeout || clearTimeout;
+    // Browser timer functions require their Window receiver when stored on a
+    // scheduler instance. Preserve injected timers and bind native defaults.
+    this.setTimer = options.setTimeout || globalThis.setTimeout.bind(globalThis);
+    this.clearTimer = options.clearTimeout || globalThis.clearTimeout.bind(globalThis);
     this.onEvent = typeof options.onEvent === 'function' ? options.onEvent : null;
   }
 

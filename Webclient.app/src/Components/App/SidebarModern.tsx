@@ -141,6 +141,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
       items: ITEMS,
       initialFavoriteIds: preferences.favoriteIds,
       initialRecentIds: preferences.recentIds,
+      initialCollapsed: typeof window !== 'undefined' && window.innerWidth <= 880,
       limits: { maxRecentIds: MAX_RECENT_SERVICES },
     });
   }, [preferenceStore]);
