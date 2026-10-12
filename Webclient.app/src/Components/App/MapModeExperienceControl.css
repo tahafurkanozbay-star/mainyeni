@@ -55,7 +55,7 @@
 .map-mode-experience__mode {
   display: grid;
   min-inline-size: 0;
-  min-block-size: 48px;
+  min-block-size: 44px;
   place-items: center;
   gap: 2px;
   padding: 7px 10px;
