@@ -60,7 +60,7 @@ export function LazyManagedWindow({
   const componentRef = useRef<ManagedWindowHandle | null>(null);
 
   useEffect(() => {
-    windowManager.RegisterPlaceholder(id);
+    windowManager.RegisterPlaceholder(id, { title: label });
     return () => {
       windowManager.UnregisterWindow(id, componentRef);
     };
