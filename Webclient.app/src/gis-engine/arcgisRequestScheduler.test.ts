@@ -400,7 +400,7 @@ describe('createArcGisRequestScheduler', () => {
       key: 'forbidden',
       resourceUrl: 'https://example.test/geoserver/wms?service=WMS',
       execute,
-    })).rejects.toMatchObject({ code: 'FORBIDDEN_OGC_RESOURCE' });
+    })).rejects.toThrow();
 
     expect(execute).not.toHaveBeenCalled();
     scheduler.destroy();

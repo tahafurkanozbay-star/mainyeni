@@ -6,6 +6,7 @@ import {
 } from '../../data-services/kentRehberiGeoJsonLayer';
 import { createSidebarLayerLoadController } from '../../shell/sidebarLayerLoadController';
 import './KentRehberiDataLayer.css';
+const DATA_LAYER_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
 
 /** Own the primary same-origin data layer independently of panel visibility. */
 export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike }) => {
@@ -24,7 +25,7 @@ export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike
   }, [controller]);
 
   const failed = state.phase === 'degraded';
-  const canRetry = state.canRetry && state.attempt < 3;
+  const canRetry = state.canRetry && state.attempt < DATA_LAYER_RETRY_POLICY.maxAttempts;
   const featureCount = state.loadedLayers[0]?.layer.featureCount ?? 0;
   const announcement = failed
     ? 'Kent verileri yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.'

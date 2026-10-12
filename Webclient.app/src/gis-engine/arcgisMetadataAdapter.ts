@@ -4,6 +4,7 @@ import type {
   ArcGisQueryCapability,
   ArcGisSpatialReference,
 } from './arcgisQueryContract';
+import { assertAllowedArcGisResourceUrl } from './serviceCapabilityRuntime';
 
 export type ArcGisFieldType =
   | 'oid'
@@ -178,13 +179,14 @@ const normalizeResourceUrl = (value: unknown): string => {
     throw new ArcGisMetadataContractError('ArcGIS metadata requires a concrete resource URL.', 'MISSING_RESOURCE_URL');
   }
   const normalized = url.replace(/\/+$/, '');
-  if (!/\/(?:FeatureServer|MapServer)\/\d+$/i.test(normalized) || /(?:^|\/)(?:wms|wfs)(?:\/|$)/i.test(normalized)) {
+  if (!/\/(?:FeatureServer|MapServer)\/\d+$/i.test(normalized)) {
     throw new ArcGisMetadataContractError(
       'ArcGIS metadata adapter accepts only concrete FeatureServer/MapServer layer resources.',
       'INVALID_RESOURCE_URL',
       normalized,
     );
   }
+  assertAllowedArcGisResourceUrl(normalized);
   return normalized;
 };
 

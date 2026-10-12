@@ -1,4 +1,5 @@
 import { createModernGisKernel } from './modernGisKernel';
+import { createServiceHealthRuntime } from './serviceHealthRuntime';
 
 const FEATURE_URL = 'https://example.test/arcgis/rest/services/Places/FeatureServer/0';
 const SCENE_URL = 'https://example.test/arcgis/rest/services/Buildings/SceneServer';
@@ -218,7 +219,7 @@ describe('modernGisKernel', () => {
   });
 
   test('opens service circuit after a real request failure and rejects the next request', async () => {
-    const kernel = createKernel();
+    const kernel = createKernel({ serviceHealth: createServiceHealthRuntime({ policy: { consecutiveFailureLimit: 1 } }) });
     registerPlaces(kernel);
     await expect(kernel.executeQuery({
       serviceId: 'places',

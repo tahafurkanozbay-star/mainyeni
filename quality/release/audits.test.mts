@@ -63,6 +63,21 @@ test('WMS/WFS runtime drift is blocked only in active GIS code', () => {
   assert.equal(section.findings.filter(item => item.id === 'forbidden-wms-wfs').length, 1);
 });
 
+test('GIS protocol audit separates rejection fixtures from active runtime integrations', () => {
+  const inventory = fixtureInventory([
+    { path: 'Webclient.app/src/gis-engine/runtime.ts', text: "const layer = new WMSLayer({ url: '/wms?service=WMS' });" },
+    { path: 'Webclient.app/src/Business/testSupport.ts', text: "const url = '/wfs?service=WFS';" },
+    { path: 'Webclient.app/src/gis-engine/runtime.test.ts', text: "await expect(load('/wms?service=WMS')).rejects.toThrow();" },
+    { path: 'Webclient.app/src/gis-engine/runtime.spec.cjs', text: "expect(() => load('/wfs?service=WFS')).toThrow();" },
+    { path: 'Webclient.app/src/Components/__tests__/query.tsx', text: "const fixture = new WMSLayer({});" },
+  ]);
+  const findings = auditGis(inventory).findings.filter(item => item.id.startsWith('gis-forbidden-protocol-'));
+  assert.deepEqual(new Set(findings.map(item => item.location?.file)), new Set([
+    'Webclient.app/src/gis-engine/runtime.ts', 'Webclient.app/src/Business/testSupport.ts',
+  ]));
+  assert.ok(findings.every(item => item.severity === 'critical' && item.blocking === true));
+});
+
 test('unsafe HTML sink is high severity but not implicitly blocking', () => {
   const file = fixtureFile({ path: 'Webclient.app/src/x.js', text: 'node.innerHTML = html;' });
   const rule = SOURCE_RULES.find(item => item.id === 'unsafe-html-sink');
