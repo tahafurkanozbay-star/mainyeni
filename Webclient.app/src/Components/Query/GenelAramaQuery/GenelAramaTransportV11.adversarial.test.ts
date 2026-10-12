@@ -173,7 +173,7 @@ describe('Genel Arama transport v11 adversarial lifecycle', () => {
     const detailTask = runtime.startDetail({ objectId: 1 });
 
     expect(runtime.cancelAll()).toBe(2);
-    expect(runtime.cancelAll()).toBe(2);
+    expect(runtime.cancelAll()).toBe(0);
 
     search.resolve(success([{ id: 'search' }]));
     detail.resolve(success([{ id: 'detail' }]));
