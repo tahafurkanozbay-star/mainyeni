@@ -255,6 +255,9 @@ const normalizeValue = (
       return reject(context, 'QUERY_TOO_MANY_FIELDS');
     }
     if (key.length > 128) return reject(context, 'QUERY_TOO_LARGE');
+    if (key === '__proto__' || key === 'prototype' || key === 'constructor') {
+      return reject(context, 'QUERY_UNSUPPORTED_VALUE');
+    }
     const normalized = normalizeValue(value[key], depth + 1, context);
     if (context.code) return undefined;
     if (normalized !== undefined) output[key] = normalized;
