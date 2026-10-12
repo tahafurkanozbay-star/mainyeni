@@ -92,6 +92,19 @@ describe('real fast-access window presentation and resource ownership', () => {
     expect(screen.getByRole('region')).toHaveAttribute('aria-busy', 'false');
   });
 
+  it('does not send query values or record addresses to client logging', async () => {
+    const view = setup();
+    view.manager.GetQueryParams = () => ({ search: 'PRIVATE_TEST_VALUE' });
+    await view.open();
+    fireEvent.click(screen.getByRole('button', { name: 'Işık Parkı — Haritada göster' }));
+    await waitFor(() => expect(ports.log).toHaveBeenCalledTimes(2));
+    const logged = JSON.stringify(ports.log.mock.calls);
+    expect(logged).toContain('query-fields:1');
+    expect(logged).toContain('record-detail-opened');
+    expect(logged).not.toContain('PRIVATE_TEST_VALUE');
+    expect(logged).not.toContain('Çankaya');
+  });
+
   it('destroys a superseded layer without replacing the newer query layer', async () => {
     const first = deferred<{ layerObj: ReturnType<typeof makeLayer> }>();
     const stale = makeLayer(); const current = makeLayer();

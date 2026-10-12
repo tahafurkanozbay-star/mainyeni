@@ -433,7 +433,7 @@ export function createManagedFastAccessQueryWindow({
       setActiveActionKey('');
       clearOwnedLayer();
 
-      void safeClientLog(LoggingBusiness, logName + '/Sorgu', JSON.stringify(query), DebugHelper.Log);
+      void safeClientLog(LoggingBusiness, logName + '/Sorgu', `query-fields:${Math.min(Object.keys(query).length, 99)}`, DebugHelper.Log);
 
       try {
         const result = await business.Query(query, false, { signal: controller.signal });
@@ -519,7 +519,7 @@ export function createManagedFastAccessQueryWindow({
         void safeClientLog(
           LoggingBusiness,
           logName + '/Detay Göster',
-          String(item.objectId ?? '') + '/' + item.address,
+          'record-detail-opened',
         );
 
         if (window.matchMedia?.('(max-width: 959px)').matches) {
@@ -544,7 +544,7 @@ export function createManagedFastAccessQueryWindow({
         void safeClientLog(
           LoggingBusiness,
           logName + '/Yol Tarifi',
-          String(item.objectId ?? '') + '/' + item.address,
+          'external-route-requested',
         );
         return true;
       },
