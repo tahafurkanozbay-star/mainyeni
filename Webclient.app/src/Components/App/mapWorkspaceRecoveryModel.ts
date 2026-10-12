@@ -185,7 +185,9 @@ export class MapWorkspaceRecoveryModel {
   };
 
   beginAttempt(): number | null {
-    if (this.#disposed || this.#snapshot.attempt >= this.#maxAttempts) return null;
+    if (this.#disposed) return null;
+    if (this.#snapshot.phase === 'booting' || this.#snapshot.phase === 'delayed') return this.#snapshot.attemptId;
+    if (this.#snapshot.attempt >= this.#maxAttempts) return null;
     const attempt = this.#snapshot.attempt + 1;
     const attemptId = this.#snapshot.attemptId + 1;
     this.#emit(createSnapshot({
