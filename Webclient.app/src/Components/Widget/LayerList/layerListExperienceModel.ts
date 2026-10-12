@@ -135,6 +135,7 @@ const classifyFailure = (error: unknown): string => {
 const TURKISH_FOLD: Readonly<Record<string, string>> = Object.freeze({
   ı: 'i',
   İ: 'i',
+  I: 'i',
   ş: 's',
   Ş: 's',
   ğ: 'g',
@@ -153,7 +154,7 @@ export const normalizeLayerListText = (value: string): string => {
   return folded
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/gu, '')
-    .toLocaleLowerCase('tr-TR')
+    .toLowerCase()
     .replace(/[^a-z0-9\s_-]/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
