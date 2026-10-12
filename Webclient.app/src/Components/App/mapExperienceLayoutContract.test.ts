@@ -9,7 +9,7 @@ const mapCss = read('MapComponent.css');
 const mapComponent = read('MapComponent.tsx');
 
 const mobileModeBlock = (): string => {
-  const mediaStart = modeCss.indexOf('@media (max-width: 720px)');
+  const mediaStart = modeCss.indexOf('@media (max-width: 45rem)');
   expect(mediaStart).toBeGreaterThanOrEqual(0);
   const nextMedia = modeCss.indexOf('@media (pointer: coarse)', mediaStart);
   expect(nextMedia).toBeGreaterThan(mediaStart);
@@ -89,7 +89,7 @@ describe('map experience layout collision contract', () => {
 
   it('uses a full-width retry action on narrow recovery surfaces', () => {
     expect(recoveryCss).toMatch(
-      /@media\(max-width:640px\)[\s\S]*?\.map-workspace-recovery__retry\{inline-size:100%\}/u,
+      /@media\(max-width:40rem\)[\s\S]*?\.map-workspace-recovery__retry\{inline-size:100%\}/u,
     );
   });
 
