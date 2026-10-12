@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
@@ -16,6 +17,7 @@ import {
   MapModeExperienceModel,
   type MapModeExperienceSnapshot,
 } from './mapModeExperienceModel';
+import { MapModeFocusModel, type MapModeFocusMove } from './mapModeFocusModel';
 import './MapModeExperienceControl.css';
 
 export interface MapModeExperienceControlProps {
@@ -90,12 +92,29 @@ export function MapModeExperienceControl({
   }), [suppliedModel]);
   const model = ownedModel;
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const focusModel = useMemo(() => new MapModeFocusModel({
+    initialMode: model.getSnapshot().currentMode,
+    onObserverError(error) {
+      runtimeDiagnostics.captureError(error, {
+        source: 'experience.map-mode-control.focus-observer',
+      }, 'warn');
+    },
+  }), [model]);
+  const focusSnapshot = useSyncExternalStore(focusModel.subscribe, focusModel.getSnapshot, focusModel.getSnapshot);
+  const mode2DRef = useRef<HTMLButtonElement | null>(null);
+  const mode3DRef = useRef<HTMLButtonElement | null>(null);
   const timeoutMs = normalizeTimeout(requestTimeoutMs);
 
   useEffect(() => {
     if (suppliedModel) return undefined;
     return () => model.dispose();
   }, [model, suppliedModel]);
+
+  useEffect(() => () => focusModel.dispose(), [focusModel]);
+
+  useEffect(() => {
+    focusModel.sync(snapshot.currentMode, snapshot.phase === 'requesting');
+  }, [focusModel, snapshot.currentMode, snapshot.phase]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -135,6 +154,24 @@ export function MapModeExperienceControl({
   const interactionDisabled = snapshot.phase === 'requesting';
   const statusRole = snapshot.phase === 'error' ? 'alert' : 'status';
 
+  const focusModeButton = (mode: ExperienceMapMode): void => {
+    const target = mode === '2d' ? mode2DRef.current : mode3DRef.current;
+    target?.focus({ preventScroll: true });
+  };
+
+  const handleModeKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    let move: MapModeFocusMove | null = null;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') move = 'next';
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') move = 'previous';
+    if (event.key === 'Home') move = 'first';
+    if (event.key === 'End') move = 'last';
+    if (!move) return;
+    event.preventDefault();
+    const next = focusModel.move(move);
+    focusModeButton(next);
+    if (next !== snapshot.currentMode) requestMode(model, next);
+  };
+
   return (
     <section
       className="map-mode-experience"
@@ -160,26 +197,34 @@ export function MapModeExperienceControl({
         aria-busy={interactionDisabled}
       >
         <button
+          ref={mode2DRef}
           type="button"
           role="radio"
           className="map-mode-experience__mode"
-          aria-checked={snapshot.currentMode === '2d' && snapshot.phase !== 'requesting'}
+          aria-checked={snapshot.currentMode === '2d'}
           aria-label="2B harita görünümüne geç"
           disabled={interactionDisabled}
-          data-active={snapshot.currentMode === '2d' && snapshot.phase !== 'requesting' ? 'true' : 'false'}
+          tabIndex={focusSnapshot.tabIndex2D}
+          data-active={snapshot.currentMode === '2d' ? 'true' : 'false'}
+          onFocus={() => focusModel.setFocused('2d')}
+          onKeyDown={handleModeKeyDown}
           onClick={() => requestMode(model, '2d')}
         >
           <span aria-hidden="true">2B</span>
           <small>Harita</small>
         </button>
         <button
+          ref={mode3DRef}
           type="button"
           role="radio"
           className="map-mode-experience__mode"
-          aria-checked={snapshot.currentMode === '3d' && snapshot.phase !== 'requesting'}
+          aria-checked={snapshot.currentMode === '3d'}
           aria-label="3B sahne görünümüne geç"
           disabled={interactionDisabled}
-          data-active={snapshot.currentMode === '3d' && snapshot.phase !== 'requesting' ? 'true' : 'false'}
+          tabIndex={focusSnapshot.tabIndex3D}
+          data-active={snapshot.currentMode === '3d' ? 'true' : 'false'}
+          onFocus={() => focusModel.setFocused('3d')}
+          onKeyDown={handleModeKeyDown}
           onClick={() => requestMode(model, '3d')}
         >
           <span aria-hidden="true">3B</span>
