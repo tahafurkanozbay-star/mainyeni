@@ -10,6 +10,8 @@ export interface ArcGisQuerySchedulerBudget {
   readonly maxRunMs: number
   readonly maxLayerIdLength: number
   readonly maxRequestIdLength: number
+  /** Maximum retained layer revision floors (default 4,096). */
+  readonly maxTrackedRevisionLayers?: number
 }
 
 export interface ArcGisQueryAdmission {
@@ -64,6 +66,8 @@ function priority(value: ArcGisQueryPriority): ArcGisQueryPriority {
  */
 export class ArcGisQuerySchedulerPolicy {
   private readonly budget: Readonly<ArcGisQuerySchedulerBudget>
+  private readonly revisionFloors = new Map<string, number>()
+  private readonly maxTrackedRevisionLayers: number
   private readonly queued = new Map<string, ArcGisQueryAdmission>()
   private readonly running = new Map<string, ArcGisQueryLease>()
   private runningBytes = 0
@@ -72,6 +76,9 @@ export class ArcGisQuerySchedulerPolicy {
   private disposed = false
 
   constructor(budget: ArcGisQuerySchedulerBudget) {
+    this.maxTrackedRevisionLayers = integer(
+      budget.maxTrackedRevisionLayers ?? 4_096, 'maxTrackedRevisionLayers', 1, 100_000,
+    )
     this.budget = Object.freeze({
       maxQueued: integer(budget.maxQueued, 'maxQueued', 1, 100_000),
       maxRunning: integer(budget.maxRunning, 'maxRunning', 1, 10_000),
@@ -104,6 +111,7 @@ export class ArcGisQuerySchedulerPolicy {
     const nowMs = integer(input.nowMs, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
     const waitMs = integer(input.waitMs, 'waitMs', 1, this.budget.maxWaitMs)
     if (nowMs > Number.MAX_SAFE_INTEGER - waitMs) throw new Error('query-deadline-overflow')
+    if (revision < (this.revisionFloors.get(layerId) ?? 0)) throw new Error('stale-query-revision')
     if (this.queued.has(requestId) || this.running.has(requestId)) throw new Error('duplicate-query-request')
     if (this.queued.size >= this.budget.maxQueued) throw new Error('query-queue-budget-exceeded')
     const admission = Object.freeze({ requestId, layerId, revision, priority: priority(input.priority), estimatedResponseBytes, enqueuedAtMs: nowMs, deadlineAtMs: nowMs + waitMs })
@@ -170,16 +178,41 @@ export class ArcGisQuerySchedulerPolicy {
     this.assertLive()
     const layerId = text(layerIdInput, 'layer-id', this.budget.maxLayerIdLength)
     const minimumRevision = integer(minimumRevisionInput, 'minimumRevision', 0, Number.MAX_SAFE_INTEGER)
+    const floor = Math.max(minimumRevision, this.revisionFloors.get(layerId) ?? 0)
+    if (floor > 0 && !this.revisionFloors.has(layerId)) {
+      if (this.revisionFloors.size >= this.maxTrackedRevisionLayers) {
+        throw new Error('query-revision-layer-budget-exceeded')
+      }
+    }
+    if (floor > 0) this.revisionFloors.set(layerId, floor)
     let removed = 0
     for (const admission of [...this.queued.values()]) {
-      if (admission.layerId === layerId && admission.revision < minimumRevision && this.queued.delete(admission.requestId)) removed += 1
+      if (admission.layerId === layerId && admission.revision < floor && this.queued.delete(admission.requestId)) removed += 1
     }
     for (const lease of [...this.running.values()]) {
-      if (lease.layerId === layerId && lease.revision < minimumRevision) {
+      if (lease.layerId === layerId && lease.revision < floor) {
         this.release(lease)
         removed += 1
       }
     }
+    return removed
+  }
+
+  /** Release all transport-independent bookkeeping for a removed layer. */
+  releaseLayer(layerIdInput: string): number {
+    this.assertLive()
+    const layerId = text(layerIdInput, 'layer-id', this.budget.maxLayerIdLength)
+    let removed = 0
+    for (const admission of [...this.queued.values()]) {
+      if (admission.layerId === layerId && this.queued.delete(admission.requestId)) removed += 1
+    }
+    for (const lease of [...this.running.values()]) {
+      if (lease.layerId === layerId) {
+        this.release(lease)
+        removed += 1
+      }
+    }
+    this.revisionFloors.delete(layerId)
     return removed
   }
 
@@ -201,6 +234,7 @@ export class ArcGisQuerySchedulerPolicy {
     this.disposed = true
     this.queued.clear()
     this.running.clear()
+    this.revisionFloors.clear()
     this.runningBytes = 0
     this.lastObservedMs = 0
   }
