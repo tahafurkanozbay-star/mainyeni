@@ -83,11 +83,36 @@ describe('MapModeExperienceControl', () => {
       source: 'map-mode-experience-control',
     });
     expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-busy', 'true');
-    expect(get2D()).toBeDisabled();
-    expect(get3D()).toBeDisabled();
+    expect(get2D()).toHaveAttribute('aria-disabled', 'true');
+    expect(get3D()).toHaveAttribute('aria-disabled', 'true');
+    expect(get2D()).not.toBeDisabled();
+    expect(get3D()).not.toBeDisabled();
     expect(screen.getByText(/3B görünüm hazırlanıyor/, { selector: 'strong' })).toBeInTheDocument();
 
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand as EventListener);
+  });
+
+  it('preserves keyboard focus and blocks duplicate mode requests while a transition is pending', () => {
+    const onCommand = vi.fn();
+    window.addEventListener(EXPERIENCE_COMMAND_EVENT, onCommand);
+
+    render(<MapModeExperienceControl />);
+    get2D().focus();
+    fireEvent.keyDown(get2D(), { key: 'ArrowRight' });
+
+    expect(document.activeElement).toBe(get3D());
+    expect(get3D()).toHaveAttribute('aria-disabled', 'true');
+    expect(get3D()).not.toBeDisabled();
+    expect(onCommand).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(get2D());
+    fireEvent.click(get3D());
+    fireEvent.keyDown(get3D(), { key: 'ArrowLeft' });
+
+    expect(document.activeElement).toBe(get3D());
+    expect(onCommand).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, onCommand);
   });
 
   it('does not dispatch when the already-active 2B option is clicked', () => {
