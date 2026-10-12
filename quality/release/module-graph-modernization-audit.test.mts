@@ -269,3 +269,8 @@ test('result remains deterministic across repeated audits', () => {
     second.findings.map(item => ({ id: item.id, severity: item.severity, file: item.location?.file })),
   );
 });
+
+test('allows stylesheet and static asset imports outside the script graph', () => {
+  const result = audit([{ path: 'Webclient.app/src/App.tsx', text: \"import './App.css'; import icon from './icon.svg'; export const App = () => <main data-icon={icon} />;\" }]);
+  assert.ok(!result.findings.some(item => item.id === 'module-graph-relative-import-unresolved'));
+});
