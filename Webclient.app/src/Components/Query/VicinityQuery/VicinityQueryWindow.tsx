@@ -273,6 +273,10 @@ export const VicinityQueryWindow = forwardRef<
   const bufferDistanceChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const value = Number.parseInt(event.target.value, 10);
     if (!Number.isFinite(value) || value < 1 || value > 100) return;
+    requestGateRef.current.invalidate();
+    setLoading(false);
+    setFilteredOptions(null);
+    setErrorMessage('');
     setBufferDistance(value);
     void drawBuffer(value);
   };
@@ -429,7 +433,7 @@ export const VicinityQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Yakınımda Ara/Sorgu',
-      `${String(mapEvent.mapPoint.latitude ?? '')}/${String(mapEvent.mapPoint.longitude ?? '')}/${bufferDistance}`,
+      `mesafe=${bufferDistance * 100}m`,
     );
 
     try {
