@@ -3,11 +3,16 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["vitest/globals"],
+    "types": [
+      "vitest/globals"
+    ],
     "esModuleInterop": true
   },
   "include": [
@@ -19,7 +24,10 @@
     "src/lib/gis/ArcGisQueryExecutionCoordinator*.ts",
     "src/lib/gis/ArcGisGeometryProjectionLifecyclePolicy.ts",
     "src/lib/gis/__tests__/ArcGisGeometryProjectionLifecyclePolicy*.test.ts",
-    "src/lib/gis/ArcGisQueryLifecycleClock.integrity.test.ts"
+    "src/lib/gis/ArcGisQueryLifecycleClock.integrity.test.ts",
+    "src/lib/gis/ArcGisQuerySchedulerPolicy*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
