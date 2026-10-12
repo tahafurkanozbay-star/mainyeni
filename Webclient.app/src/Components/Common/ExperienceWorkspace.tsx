@@ -5,11 +5,12 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type MouseEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
 import { ExperienceDialog } from './ExperienceDialog';
+import { ExperienceWindowDock } from './ExperienceWindowDock';
+import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import {
   getCommandByName,
   mapModeAnnouncement,
@@ -63,30 +64,6 @@ const StatusItem = ({ label, value, tone = 'neutral' }: StatusItemProps): ReactN
     <strong>{value}</strong>
   </span>
 );
-
-const ExperienceSkipLinks = (): ReactNode => {
-  const focusTarget = useCallback((event: MouseEvent<HTMLAnchorElement>, selector: string): void => {
-    event.preventDefault();
-    focusExperienceTarget(selector);
-  }, []);
-
-  return (
-    <nav className="experience-skip-links" aria-label="Hızlı atlama bağlantıları">
-      <a href="#esri-map-container" onClick={(event) => focusTarget(event, '#esri-map-container')}>
-        Haritaya geç
-      </a>
-      <a href="#sidebar" onClick={(event) => focusTarget(event, '#sidebar')}>
-        Araç paneline geç
-      </a>
-      <a
-        href="#experience-workspace-controls"
-        onClick={(event) => focusTarget(event, '#experience-workspace-controls')}
-      >
-        Görünüm kontrollerine geç
-      </a>
-    </nav>
-  );
-};
 
 interface MapModeControlProps {
   readonly mode: ExperienceMapMode;
@@ -359,9 +336,13 @@ const ExperienceSettingsDialog = ({
 
 export interface ExperienceWorkspaceProps {
   readonly mapModeControl?: ReactNode;
+  readonly windowManager?: WindowManagerApi;
 }
 
-export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps = {}): ReactNode => {
+export const ExperienceWorkspace = ({
+  mapModeControl,
+  windowManager,
+}: ExperienceWorkspaceProps = {}): ReactNode => {
   const preferences = useExperiencePreferences();
   const viewport = useExperienceViewport();
   const online = useExperienceConnectivity();
@@ -432,7 +413,6 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
 
   return (
     <>
-      <ExperienceSkipLinks />
       <aside
         id="experience-workspace-controls"
         className="experience-workspace"
@@ -458,6 +438,7 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
             pendingMode={transition.pending}
             onChange={requestMapMode}
           />}
+          {windowManager ? <ExperienceWindowDock windowManager={windowManager} /> : null}
           <button
             type="button"
             className="experience-workspace__action"
