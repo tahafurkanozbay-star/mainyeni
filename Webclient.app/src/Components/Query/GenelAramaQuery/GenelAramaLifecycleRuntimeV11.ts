@@ -41,7 +41,7 @@ interface LaneRuntimeV11 {
   sequence: number;
   state: GeneralSearchLaneStateV11;
   activeController: AbortController | null;
-  activeFingerprint: string | null;
+  activeKey: string | null;
   activePromise: Promise<GeneralSearchExecutionEnvelopeV11> | null;
   scheduledTimer: ReturnType<typeof globalThis.setTimeout> | null;
   scheduledReject: ((reason: unknown) => void) | null;
@@ -98,7 +98,7 @@ const createLane = (lane: GeneralSearchLaneV11): LaneRuntimeV11 => ({
   sequence: 0,
   state: initialLaneState(lane),
   activeController: null,
-  activeFingerprint: null,
+  activeKey: null,
   activePromise: null,
   scheduledTimer: null,
   scheduledReject: null,
@@ -194,6 +194,20 @@ const historyFingerprint = (
   entry.stale,
   entry.errorCode,
 ])));
+
+const coalesceKey = (
+  fingerprint: string,
+  returnGeometry: boolean,
+  options: NormalizedExecutionV11,
+): string => hashFingerprint(stableSerialize({
+  fingerprint,
+  returnGeometry,
+  timeoutMs: options.timeoutMs,
+  cacheTtlMs: options.cacheTtlMs,
+  cacheEnabled: options.cacheEnabled,
+  deduplicateEnabled: options.deduplicateEnabled,
+  bypassRetry: options.bypassRetry,
+}));
 
 export class GeneralSearchLifecycleRuntimeV11 {
   readonly #transport: GeneralSearchLifecycleDependenciesV11['transport'];
@@ -476,9 +490,11 @@ export class GeneralSearchLifecycleRuntimeV11 {
     returnGeometry: boolean,
     options: NormalizedExecutionV11,
   ): Promise<GeneralSearchExecutionEnvelopeV11> {
+    const activeKey = coalesceKey(fingerprint, returnGeometry, options);
     if (
-      lane.activePromise
-      && lane.activeFingerprint === fingerprint
+      options.signal === null
+      && lane.activePromise
+      && lane.activeKey === activeKey
       && lane.state.status === 'running'
     ) {
       this.#counters.coalesced += 1;
@@ -495,12 +511,12 @@ export class GeneralSearchLifecycleRuntimeV11 {
       options,
       requestId,
     });
-    lane.activeFingerprint = fingerprint;
+    lane.activeKey = activeKey;
     lane.activePromise = promise;
     void promise.finally(() => {
       if (lane.activePromise === promise) {
         lane.activePromise = null;
-        lane.activeFingerprint = null;
+        lane.activeKey = null;
       }
     }).catch(() => undefined);
     return promise;
