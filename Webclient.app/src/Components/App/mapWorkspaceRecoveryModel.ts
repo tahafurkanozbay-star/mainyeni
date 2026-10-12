@@ -71,21 +71,6 @@ const sanitizeDiagnosticCode = (value: unknown): string | null => {
   return normalized;
 };
 
-const sanitizePublicMessage = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const normalized = stripControlCharacters(value).replace(/\s+/gu, ' ').trim();
-  if (!normalized) return null;
-  const looksSensitive = (
-    normalized.includes('http://')
-    || normalized.includes('https://')
-    || normalized.includes('Bearer ')
-    || normalized.includes('token=')
-    || normalized.includes('apikey')
-  );
-  if (looksSensitive) return null;
-  return normalized.slice(0, MAX_ERROR_MESSAGE_LENGTH);
-};
-
 const classifyErrorKind = (error: unknown): MapWorkspaceRecoveryErrorKind => {
   if (!(error instanceof Error)) return 'unknown';
   const name = error.name.toLocaleLowerCase('en-US');
