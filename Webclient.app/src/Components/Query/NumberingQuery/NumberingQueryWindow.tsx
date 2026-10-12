@@ -31,11 +31,9 @@ import {
 } from '../_Common/QueryInteractionRuntime';
 import {
   NUMBERING_LEVELS_V11,
-  errorMessageV11,
   normalizeNumberingOptionsV11,
   numberingPathLabelV11,
   readNumberingOptionV11,
-  type NumberingFeatureV11,
   type NumberingLevelV11,
   type NumberingPathV11,
   type NumberingRuntimeEffectsV11,
