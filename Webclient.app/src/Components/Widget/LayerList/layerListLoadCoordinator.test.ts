@@ -206,6 +206,42 @@ describe('LayerListLoadCoordinator', () => {
     expect(result.successes).toHaveLength(0);
   });
 
+  it('disposes late results after cancellation', async () => {
+    const disposeResult = vi.fn();
+    const coordinator = new LayerListLoadCoordinator<number, { destroy: () => void }>({ concurrency: 1 });
+    const gate = deferred<{ destroy: () => void }>();
+    const lateRuntime = { destroy: vi.fn() };
+    const loading = coordinator.load(
+      [{ key: 'late', source: 1 }],
+      async () => gate.promise,
+      disposeResult,
+    );
+    await vi.waitFor(() => expect(coordinator.getSnapshot().active).toBe(1));
+    coordinator.cancel();
+    gate.resolve(lateRuntime);
+    const result = await loading;
+    expect(result.cancelled).toBe(true);
+    expect(result.successes).toHaveLength(0);
+    expect(disposeResult).toHaveBeenCalledTimes(1);
+    expect(disposeResult).toHaveBeenCalledWith(lateRuntime);
+  });
+
+  it('disposes stale results when a newer generation wins', async () => {
+    const disposeResult = vi.fn();
+    const coordinator = new LayerListLoadCoordinator<number, number>({ concurrency: 1 });
+    const oldGate = deferred<number>();
+    const oldLoad = coordinator.load(
+      [{ key: 'old', source: 1 }],
+      async () => oldGate.promise,
+      disposeResult,
+    );
+    await vi.waitFor(() => expect(coordinator.getSnapshot().active).toBe(1));
+    await coordinator.load([{ key: 'new', source: 2 }], async (item) => item.source);
+    oldGate.resolve(10);
+    await oldLoad;
+    expect(disposeResult).toHaveBeenCalledWith(10);
+  });
+
   it('a new load invalidates an older in-flight generation', async () => {
     const coordinator = new LayerListLoadCoordinator<number, number>({ concurrency: 1 });
     const oldGate = deferred<number>();
