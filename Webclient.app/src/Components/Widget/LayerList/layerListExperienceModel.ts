@@ -111,9 +111,18 @@ const safeTitle = (value: string, fallback: string): string => {
 const safeOpacity = (value: number): number =>
   Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 100;
 
+const stripControlCharacters = (value: string): string => {
+  let sanitized = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    sanitized += codePoint !== undefined && (codePoint < 32 || codePoint === 127) ? ' ' : character;
+  }
+  return sanitized;
+};
+
 const safeErrorMessage = (error: unknown): string | null => {
   const value = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-  const normalized = value.replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim();
+  const normalized = stripControlCharacters(value).replace(/\s+/gu, ' ').trim();
   return normalized ? normalized.slice(0, MAX_ERROR_LENGTH) : null;
 };
 
