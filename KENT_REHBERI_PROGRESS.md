@@ -261,3 +261,10 @@
 - NETWORK / SECURITY / GIS / ICON: yeni endpoint, browser network carrier, WMS/WFS/WMTS UI, telemetry/analytics, remote font/CDN, secret, ağır asset veya ikinci icon resolver eklenmedi. Mevcut ArcGIS 2D/3D bridge, GIS transport, WindowManager ve shared icon/runtime authority'leri korunur.
 - MERGE DURUMU: bu progress append yeni exact head oluşturur; merge henüz yapılmış sayılmaz. Yeni head üzerinde mandatory CI completed+success, current-main refresh, behind=0, exact merge-base, additions>=4,000, mergeable=true ve review/thread temizliği yeniden doğrulanmalıdır.
 - SONRAKİ ADIM: progress head green ise PR draft'tan çıkarılır ve expected-head korumalı squash merge uygulanır; GitHub `merged=true`, merge SHA ve güncel main SHA doğrulanır. Merge sonrası bu branch yeniden kullanılmaz.
+
+
+## Deep Experience / map mode + recovery merged — PR #486 — 2026-10-12
+- FINAL EXACT HEAD: `e5a8123c921701831cb26f50255a008b1aee6fa2`; 19 changed files, 4,134 additions / 5 deletions; 5 ahead / 0 behind; merge-base exact `6df312d6d5dc4b954807d0fa90ed5a9d1338273c`; mergeable=true; review/thread=0.
+- FINAL CI: Platform Architecture Audit `38235199639`, Typed Source Boundary `38235199600`, Platform Dependency Governance `38235199589`, Release QA `38235199703`, Webclient Quality `38235199606`: tamamı completed+success. Full+exact-base TypeScript/Vitest, native tooling, Vite production build/integrity/budgets, typed release audit ve backend Release build/xUnit/publish başarılı.
+- MERGE: draft kaldırıldı; expected-head korumalı squash merge `merged=true`; merge SHA `88e935476598895b3b30a789ceec8d0cb929736f`. Merge sonrası main aynı SHA olarak doğrulandı.
+- SONRAKİ EXPERIENCE TURU: #486 branch'i yeniden kullanılmamalı. Yeni Experience işi o turdaki current main üzerinden fresh branch/PR ile başlamalı; önce rules/progress/open-role ownership ve merge-base yeniden doğrulanmalıdır.
