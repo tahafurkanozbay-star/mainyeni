@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Store from '../../Store/Store';
 import { MapReducer_ActionTypes } from '../../Store/Reducers/MapReducer';
 import { NavigationBar } from './NavigationBar';
@@ -18,6 +18,9 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
+import { MapModeExperienceControl } from './MapModeExperienceControl';
+import { MapWorkspaceRecoverySurface } from './MapWorkspaceRecoverySurface';
+import { MapWorkspaceRecoveryModel } from './mapWorkspaceRecoveryModel';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
 import { MapWorkspaceShortcutHelpLauncher } from './MapWorkspaceShortcutHelp';
 import { handleMapWorkspaceKeyDown } from './mapWorkspaceShortcuts';
@@ -85,6 +88,14 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   if (!accessibilityModelRef.current) accessibilityModelRef.current = new MapWorkspaceAccessibilityModel();
   const accessibilityModel = accessibilityModelRef.current;
   const accessibilitySnapshot = useSyncExternalStore(accessibilityModel.subscribe, accessibilityModel.getSnapshot, accessibilityModel.getSnapshot);
+  const recoveryModelRef = useRef<MapWorkspaceRecoveryModel | null>(null);
+  if (!recoveryModelRef.current) {
+    recoveryModelRef.current = new MapWorkspaceRecoveryModel({
+      onObserverError: (error) => DebugHelper.Log(error),
+    });
+  }
+  const recoveryModel = recoveryModelRef.current;
+  const [mapGeneration, setMapGeneration] = useState(0);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const sidebarRef = useRef<unknown>(null);
   const basemapWidgetRef = useRef<ManagedWindowHandle | null>(null);
@@ -118,6 +129,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     const kentRehberiAbortController = new AbortController();
     const handles: RemovableHandle[] = [];
     accessibilityModel.reset();
+    const recoveryAttemptId = recoveryModel.beginAttempt();
 
     const initializeMap = async (): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
@@ -159,13 +171,20 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       window.addEventListener('resize', updatePadding, { passive: true });
       handles.push({ remove: () => window.removeEventListener('resize', updatePadding) });
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: view });
-      setMapView(view); accessibilityModel.markReady();
+      setMapView(view);
+      accessibilityModel.markReady();
+      if (recoveryAttemptId !== null) recoveryModel.succeed(recoveryAttemptId);
       if (view.updating) accessibilityModel.markUpdating(true);
       void attachKentRehberiGeoJsonLayer({ map: map as KentRehberiMapLike, signal: kentRehberiAbortController.signal })
         .then((handle) => { if (disposed) { handle.dispose(); return; } kentRehberiLayerHandle = handle; })
         .catch((error: unknown) => { if (!isKentRehberiAbortError(error)) DebugHelper.Log(error); });
     };
-    void initializeMap().catch((error: unknown) => { if (!disposed) { accessibilityModel.markError(error); DebugHelper.Log(error); } });
+    void initializeMap().catch((error: unknown) => {
+      if (disposed) return;
+      accessibilityModel.markError(error);
+      if (recoveryAttemptId !== null) recoveryModel.fail(recoveryAttemptId, error);
+      DebugHelper.Log(error);
+    });
     return () => {
       disposed = true; activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
       kentRehberiAbortController.abort(); kentRehberiLayerHandle?.dispose(); kentRehberiLayerHandle = null;
@@ -174,14 +193,24 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
     };
-  }, [accessibilityModel, windowManager]);
+  }, [accessibilityModel, mapGeneration, recoveryModel, windowManager]);
 
-  useEffect(() => () => accessibilityModel.dispose(), [accessibilityModel]);
+  const restartMapWorkspace = useCallback((): void => {
+    if (!recoveryModel.canRetry()) return;
+    setMapGeneration((generation) => generation + 1);
+  }, [recoveryModel]);
+
+  useEffect(() => () => {
+    accessibilityModel.dispose();
+    recoveryModel.dispose();
+  }, [accessibilityModel, recoveryModel]);
 
   return (
     <div className="esri-map" id="esri-map-container" ref={mapDiv} tabIndex={-1} aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-workspace-phase={accessibilitySnapshot.phase}>
       <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
+      <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>
+        <MapModeExperienceControl />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
         <MapWorkspaceShortcutHelpLauncher />
