@@ -246,6 +246,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     const sourceGroupsRef = useRef<readonly LayerGroup[]>(Object.freeze([]));
     const searchRef = useRef<HTMLInputElement | null>(null);
     const treeRef = useRef<HTMLDivElement | null>(null);
+    const layersTabRef = useRef<HTMLButtonElement | null>(null);
+    const legendTabRef = useRef<HTMLButtonElement | null>(null);
 
     const getOwner = useCallback((): LayerOwner<LayerRuntime> | null => {
       const view = asMapView(MapManager.GetMapView());
@@ -432,6 +434,29 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       else disposeLegend();
     }, [disposeLegend, refreshLegend]);
 
+    const focusTab = useCallback((tab: LayerListTab): void => {
+      switchTab(tab);
+      const target = tab === 'layers' ? layersTabRef.current : legendTabRef.current;
+      target?.focus({ preventScroll: true });
+    }, [switchTab]);
+
+    const handleTabKeyDown = useCallback((
+      event: ReactKeyboardEvent<HTMLButtonElement>,
+      tab: LayerListTab,
+    ): void => {
+      let next: LayerListTab | null = null;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        next = tab === 'layers' ? 'legend' : 'layers';
+      } else if (event.key === 'Home') {
+        next = 'layers';
+      } else if (event.key === 'End') {
+        next = 'legend';
+      }
+      if (!next) return;
+      event.preventDefault();
+      focusTab(next);
+    }, [focusTab]);
+
     const toggleVisibility = useCallback((row: LayerListVisibleRow): void => {
       if (row.kind === 'group') {
         const nextVisible = !(row.visible || row.mixed);
@@ -526,24 +551,30 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
             <>
               <div className="layer-list-tabs" role="tablist" aria-label="Katman yönetimi görünümleri">
                 <button
+                  ref={layersTabRef}
                   type="button"
                   id={`${treeId}-layers-tab`}
                   role="tab"
                   aria-selected={activeTab === 'layers'}
                   aria-controls={`${treeId}-layers-panel`}
                   className="layer-list-tab"
+                  tabIndex={activeTab === 'layers' ? 0 : -1}
                   onClick={() => switchTab('layers')}
+                  onKeyDown={(event) => handleTabKeyDown(event, 'layers')}
                 >
                   Katmanlar
                 </button>
                 <button
+                  ref={legendTabRef}
                   type="button"
                   id={`${treeId}-legend-tab`}
                   role="tab"
                   aria-selected={activeTab === 'legend'}
                   aria-controls={`${treeId}-legend-panel`}
                   className="layer-list-tab"
+                  tabIndex={activeTab === 'legend' ? 0 : -1}
                   onClick={() => switchTab('legend')}
+                  onKeyDown={(event) => handleTabKeyDown(event, 'legend')}
                 >
                   Lejant
                 </button>
