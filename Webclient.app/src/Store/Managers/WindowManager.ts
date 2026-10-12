@@ -9,6 +9,7 @@ import type { MessageState, WindowRegistration } from '../contracts';
 
 export interface ManagedWindowHandle {
   readonly id: string;
+  readonly title?: string;
   readonly visible?: boolean;
   readonly minimized?: boolean;
   readonly OnShow?: () => void;
@@ -21,9 +22,32 @@ export interface ManagedWindowRef {
 }
 
 export interface RegisterPlaceholderDefaults {
+  readonly title?: string;
   readonly visible?: boolean;
   readonly minimized?: boolean;
   readonly query?: UnknownRecord | null;
+}
+
+export interface ManagedWindowSnapshotRecord {
+  readonly id: string;
+  readonly title: string | null;
+  readonly visible: boolean;
+  readonly minimized: boolean;
+  readonly lazy: boolean;
+}
+
+export interface WindowManagerSnapshot {
+  readonly revision: number;
+  readonly activeWindowId: string | null;
+  readonly visibleCount: number;
+  readonly minimizedCount: number;
+  readonly windows: readonly ManagedWindowSnapshotRecord[];
+}
+
+export interface WindowManagerObserverDiagnostics {
+  readonly activeListenerCount: number;
+  readonly listenerFailureCount: number;
+  readonly disposed: boolean;
 }
 
 export interface WindowManagerApi {
@@ -42,6 +66,9 @@ export interface WindowManagerApi {
   readonly RemoveMessage: () => void;
   readonly SetMapUpdating: (value: boolean) => void;
   readonly GetMapUpdating: () => boolean;
+  readonly GetWindowSnapshot: () => WindowManagerSnapshot;
+  readonly SubscribeWindows: (listener: () => void) => () => void;
+  readonly GetWindowObserverDiagnostics: () => WindowManagerObserverDiagnostics;
   readonly Dispose: () => void;
 }
 
@@ -76,11 +103,82 @@ const sanitizeDuration = (value: number): number => {
   return Math.min(3600, Math.max(0, value));
 };
 
+const sanitizeWindowTitle = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/\\s+/gu, ' ').trim();
+  return normalized ? normalized.slice(0, 180) : null;
+};
+
+const snapshotSignature = (windows: readonly WindowRegistration[]): string =>
+  windows.map((item) => [
+    String(item.id ?? ''),
+    sanitizeWindowTitle(item.title) ?? '',
+    item.visible === true ? '1' : '0',
+    item.minimized === true ? '1' : '0',
+    item.lazy === true ? '1' : '0',
+  ].join(':')).join('|');
+
+const createWindowSnapshot = (
+  revision: number,
+  windows: readonly WindowRegistration[],
+): WindowManagerSnapshot => {
+  const records = Object.freeze(windows.map((item) => Object.freeze({
+    id: String(item.id ?? '').trim(),
+    title: sanitizeWindowTitle(item.title),
+    visible: item.visible === true,
+    minimized: item.minimized === true,
+    lazy: item.lazy === true,
+  })));
+  const active = records.find((item) => item.visible && !item.minimized) ?? null;
+  return Object.freeze({
+    revision,
+    activeWindowId: active?.id ?? null,
+    visibleCount: records.filter((item) => item.visible).length,
+    minimizedCount: records.filter((item) => item.visible && item.minimized).length,
+    windows: records,
+  });
+};
+
 export const createWindowManager = (requestRender: () => void = noop): WindowManagerApi => {
   let messageTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   let disposed = false;
+  let windowSnapshotRevision = 0;
+  let windowSnapshotSignature = '';
+  let windowSnapshot = createWindowSnapshot(0, Store.getState().Common.WindowList ?? []);
+  let storeUnsubscribe: (() => void) | null = null;
+  let windowListenerFailures = 0;
+  const windowListeners = new Set<() => void>();
 
   const getWindowList = (): readonly WindowRegistration[] => Store.getState().Common.WindowList ?? [];
+
+  const refreshWindowSnapshot = (notify = true): void => {
+    const windows = getWindowList();
+    const signature = snapshotSignature(windows);
+    if (signature === windowSnapshotSignature) return;
+    windowSnapshotSignature = signature;
+    windowSnapshotRevision += 1;
+    windowSnapshot = createWindowSnapshot(windowSnapshotRevision, windows);
+    if (!notify) return;
+    for (const listener of Array.from(windowListeners)) {
+      try {
+        listener();
+      } catch (error) {
+        windowListenerFailures += 1;
+        DebugHelper.Log(error);
+      }
+    }
+  };
+
+  const ensureStoreSubscription = (): void => {
+    if (storeUnsubscribe || disposed || windowListeners.size === 0) return;
+    storeUnsubscribe = Store.subscribe(() => refreshWindowSnapshot(true));
+  };
+
+  const releaseStoreSubscriptionIfIdle = (): void => {
+    if (windowListeners.size > 0 || !storeUnsubscribe) return;
+    storeUnsubscribe();
+    storeUnsubscribe = null;
+  };
   const getWindow = (windowid: string): WindowRegistration | undefined =>
     getWindowList().find((item) => item.id === windowid);
   const refresh = (): void => {
@@ -96,6 +194,7 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
         type: CommonReducer_ActionTypes.RegisterWindow,
         payload: {
           id: normalizedId,
+          title: sanitizeWindowTitle(defaults.title),
           ref: null,
           visible: Boolean(defaults.visible),
           minimized: Boolean(defaults.minimized),
@@ -116,6 +215,7 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
         type: CommonReducer_ActionTypes.RegisterWindow,
         payload: {
           id,
+          title: existing?.title ?? sanitizeWindowTitle(current?.title),
           ref: windowRef,
           visible: existing?.visible ?? Boolean(current?.visible),
           minimized: existing?.minimized ?? Boolean(current?.minimized),
@@ -237,10 +337,39 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
 
     GetMapUpdating: () => Boolean(Store.getState().Map.IsUpdating),
 
+    GetWindowSnapshot: () => {
+      refreshWindowSnapshot(false);
+      return windowSnapshot;
+    },
+
+    SubscribeWindows: (listener) => {
+      if (disposed || typeof listener !== 'function') return () => undefined;
+      windowListeners.add(listener);
+      refreshWindowSnapshot(false);
+      ensureStoreSubscription();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        windowListeners.delete(listener);
+        releaseStoreSubscriptionIfIdle();
+      };
+    },
+
+    GetWindowObserverDiagnostics: () => Object.freeze({
+      activeListenerCount: windowListeners.size,
+      listenerFailureCount: windowListenerFailures,
+      disposed,
+    }),
+
     Dispose: () => {
+      if (disposed) return;
       disposed = true;
       if (messageTimer !== null) globalThis.clearTimeout(messageTimer);
       messageTimer = null;
+      storeUnsubscribe?.();
+      storeUnsubscribe = null;
+      windowListeners.clear();
     },
   };
 
