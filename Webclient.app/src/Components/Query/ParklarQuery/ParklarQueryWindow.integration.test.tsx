@@ -23,7 +23,7 @@ const makeResponse = (count = 1) => ({
 const setup = () => {
   const map = { add: vi.fn(), remove: vi.fn() };
   vi.mocked(MapManager.GetMapView).mockReturnValue({ map, zoom: 12 });
-  const manager = { RegisterWindow: vi.fn(), IsVisible: () => true, ShowMessage: vi.fn(), ToggleMinimiseWindow: vi.fn(), ShowWindow: vi.fn() };
+  const manager = { RegisterWindow: vi.fn(), IsVisible: () => true, ShowMessage: vi.fn(), ToggleMinimiseWindow: vi.fn(), ShowWindow: vi.fn(), HideWindow: vi.fn() };
   const ref = createRef<ParkWindowHandle>();
   const view = render(<ParklarQueryWindow id="park-window" windowManager={manager} ref={ref} />);
   return { ...view, ref, map, manager };
@@ -32,6 +32,12 @@ const setup = () => {
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('Parklar service window', () => {
+  it('closes the park window when returning to services', () => {
+    const { manager } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Hizmetlere dön' }));
+    expect(manager.HideWindow).toHaveBeenCalledExactlyOnceWith('park-window');
+    expect(manager.ShowWindow).toHaveBeenCalledExactlyOnceWith('sidebar');
+  });
   it('renders the same-origin data layer through the shared window presentation and releases it on close', async () => {
     const layer = { destroy: vi.fn() };
     vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse() as never);
