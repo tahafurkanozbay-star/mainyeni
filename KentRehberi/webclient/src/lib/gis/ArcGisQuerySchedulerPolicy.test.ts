@@ -167,4 +167,76 @@ describe('ArcGisQuerySchedulerPolicy', () => {
     expect(() => policy.snapshot()).toThrow('arcgis-query-scheduler-disposed')
     expect(() => enqueue(policy, 'b')).toThrow('arcgis-query-scheduler-disposed')
   })
+  it('never starts a future-dated interactive query ahead of eligible background work', () => {
+    const policy = scheduler()
+    enqueue(policy, 'future', 'future-layer', 'interactive', 20, 1, 500)
+    enqueue(policy, 'ready', 'ready-layer', 'background', 20, 1, 10)
+    expect(policy.startNext(20)?.requestId).toBe('ready')
+    expect(policy.startNext(499)).toBeUndefined()
+    expect(policy.snapshot().queued.map(entry => entry.requestId)).toEqual(['future'])
+    expect(policy.startNext(500)?.requestId).toBe('future')
+  })
+
+  it('keeps a clock rollback from resurrecting work already expired', () => {
+    const policy = scheduler()
+    enqueue(policy, 'expired', 'a', 'foreground', 20, 1, 10)
+    expect(policy.tick(110)).toEqual({ queuedExpired: 1, runningExpired: 0 })
+    expect(policy.startNext(15)).toBeUndefined()
+    expect(policy.snapshot().queued).toHaveLength(0)
+    enqueue(policy, 'new', 'b', 'foreground', 20, 1, 20)
+    // Enqueued at 20 with a deadline of 120: the monotonic scheduler
+    // must not treat 30 as if the clock returned to the beginning.
+    expect(policy.startNext(30)?.startedAtMs).toBe(110)
+  })
+
+  it('enforces a monotonically observed lease start time after a forward tick', () => {
+    const policy = scheduler()
+    policy.tick(500)
+    enqueue(policy, 'late', 'layer-x', 'interactive', 20, 1, 10)
+    const lease = policy.startNext(11)
+    expect(lease?.startedAtMs).toBeUndefined() // enqueuedAt=10, deadline=110 already expired
+    enqueue(policy, 'new', 'layer-y', 'interactive', 20, 1, 450)
+    const active = policy.startNext(480)
+    expect(active?.startedAtMs).toBe(500)
+    expect(active?.expiresAtMs).toBe(1000)
+    expect(policy.tick(950).runningExpired).toBe(0)
+    expect(policy.tick(900).runningExpired).toBe(0)
+    expect(policy.tick(1000).runningExpired).toBe(1)
+    expect(policy.snapshot().runningBytes).toBe(0)
+  })
+
+  it('rejects invalid control characters before normalization instead of aliasing identifiers', () => {
+    const policy = scheduler()
+    for (const character of ['\n', '\r', '\t', '\u0000', '\u007f', '\u001f']) {
+      expect(() => enqueue(policy, `${character}a`)).toThrow('invalid-request-id')
+      expect(() => enqueue(policy, `a${character}`)).toThrow('invalid-request-id')
+      expect(() => enqueue(policy, 'safe', `${character}layer`)).toThrow('invalid-layer-id')
+      expect(() => policy.cancel(`a${character}`)).toThrow('invalid-request-id')
+    }
+    expect(policy.snapshot()).toMatchObject({ queued: [], running: [], runningBytes: 0 })
+  })
+
+  it('fails without draining live metadata when the next lease deadline overflows', () => {
+    const policy = scheduler()
+    enqueue(policy, 'queued', 'layer-a', 'foreground', 20, 1, 10)
+    const before = policy.snapshot()
+    expect(() => policy.startNext(Number.MAX_SAFE_INTEGER)).toThrow('query-lease-overflow')
+    const after = policy.snapshot()
+    expect(after).toEqual(before)
+    expect(policy.cancel('queued')).toBe(true)
+    expect(policy.snapshot().runningBytes).toBe(0)
+  })
+
+  it('retains deterministic priority after a future-dated query becomes eligible', () => {
+    const policy = scheduler({ maxRunning: 2, maxPerLayerRunning: 1 })
+    enqueue(policy, 'later', 'future', 'interactive', 20, 1, 200)
+    enqueue(policy, 'visible', 'visible', 'foreground', 20, 1, 150)
+    enqueue(policy, 'background', 'bg', 'background', 20, 1, 100)
+    expect(policy.startNext(101)?.requestId).toBe('background')
+    expect(policy.startNext(151)?.requestId).toBe('visible')
+    expect(policy.startNext(201)).toBeUndefined() // two physical reservations remain
+    expect(policy.complete('background', 1)).toBe(true)
+    expect(policy.startNext(202)?.requestId).toBe('later')
+  })
+
 })
