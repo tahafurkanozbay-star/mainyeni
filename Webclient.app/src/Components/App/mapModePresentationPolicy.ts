@@ -15,7 +15,7 @@ export interface MapModePresentationFacts {
   readonly livePoliteness: 'polite' | 'assertive';
   readonly interactionState: MapModeInteractionState;
   readonly transitionSpeed: MapModeTransitionSpeed;
-  readonly retryVisible: boolean;
+  readonly recoveryActionVisible: boolean;
   readonly controlsDisabled: boolean;
   readonly activeModeLabel: '2B' | '3B';
   readonly requestedModeLabel: '2B' | '3B' | null;
@@ -46,7 +46,7 @@ export const resolveMapModePresentation = (
   livePoliteness: snapshot.phase === 'error' ? 'assertive' : 'polite',
   interactionState: interactionState(snapshot),
   transitionSpeed: transitionSpeed(snapshot.lastTransitionMs),
-  retryVisible: snapshot.phase === 'error' && snapshot.canRetry && snapshot.requestedMode !== null,
+  recoveryActionVisible: snapshot.phase === 'error' && snapshot.canRetry && snapshot.requestedMode !== null,
   controlsDisabled: snapshot.phase === 'requesting',
   activeModeLabel: snapshot.currentMode === '3d' ? '3B' : '2B',
   requestedModeLabel: snapshot.requestedMode === null ? null : snapshot.requestedMode === '3d' ? '3B' : '2B',
