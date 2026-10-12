@@ -84,13 +84,13 @@
   font-weight: 720;
 }
 
-.map-mode-experience__mode:hover:not(:disabled) {
+.map-mode-experience__mode:hover:not([aria-disabled='true']) {
   border-color: color-mix(in srgb, var(--exp-accent, #155eef) 34%, transparent);
   color: var(--exp-text, #0f172a);
   background: color-mix(in srgb, var(--exp-accent, #155eef) 7%, var(--exp-surface, #fff));
 }
 
-.map-mode-experience__mode:active:not(:disabled) {
+.map-mode-experience__mode:active:not([aria-disabled='true']) {
   transform: translateY(1px) scale(0.985);
 }
 
@@ -107,7 +107,7 @@
   outline-offset: 2px;
 }
 
-.map-mode-experience__mode:disabled {
+.map-mode-experience__mode[aria-disabled='true'] {
   cursor: wait;
   opacity: 0.58;
 }
