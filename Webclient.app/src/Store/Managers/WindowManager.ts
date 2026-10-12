@@ -176,6 +176,22 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
       }
 
       callSafely(() => LoggingBusiness.CreateClientLog('Pencere Aç', windowid));
+      // Navigation is a persistent workspace surface. Query OnShow hooks may
+      // reveal it after lazy registration; exclusive activation here would
+      // immediately close the query that requested the navigation panel.
+      if (windowid === 'sidebar') {
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.SetWindowVisibility,
+          payload: { windowid, visible: true, query: query ?? {} },
+        });
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.SetWindowMinimized,
+          payload: { windowid, minimized: false },
+        });
+        callSafely(readWindowHandle(target)?.OnShow);
+        refresh();
+        return true;
+      }
       getWindowList().forEach((item) => {
         if (item.id === windowid || !item.visible) return;
         callSafely(readWindowHandle(item)?.OnClose);

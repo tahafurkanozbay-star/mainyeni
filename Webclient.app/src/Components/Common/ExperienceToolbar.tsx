@@ -140,6 +140,7 @@ export function ExperienceToolbar({
               data-roving-focus-id={item.id}
               data-toolbar-group={item.group}
               data-tooltip={item.tooltip}
+              title={item.tooltip ?? item.label}
               tabIndex={tabIndices[index] ?? -1}
               disabled={disabled}
               aria-label={item.label}

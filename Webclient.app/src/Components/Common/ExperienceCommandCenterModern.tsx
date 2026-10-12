@@ -58,7 +58,7 @@ interface ExperienceCommandEventDetail {
 }
 
 const CORE_COMMANDS: readonly ExperienceCommand[] = Object.freeze([
-  { id: 'search', label: 'Genel arama', group: 'Arama', description: 'Adres, yer ve katmanlarda arayın', shortcut: 'Ctrl K', glyph: 'search', target: 'genelarama-query-window', scopes: ['map'] },
+  { id: 'search', label: 'Genel arama', group: 'Arama', description: 'Adres, yer ve katmanlarda arayın', glyph: 'search', target: 'genelarama-query-window', scopes: ['map'] },
   { id: 'layers', label: 'Katman yönetimini aç', group: 'Harita', description: 'Harita katmanlarını yönetin', shortcut: 'L', glyph: 'layers', event: 'layers', scopes: ['map'] },
   { id: 'legend', label: 'Lejandı aç', group: 'Harita', description: 'Harita sembollerini inceleyin', shortcut: 'G', glyph: 'legend', event: 'legend', scopes: ['map'] },
   { id: 'basemap', label: 'Altlık haritayı değiştir', group: 'Harita', description: 'Alternatif harita görünümü seçin', glyph: 'basemap', target: 'basemap-widget', scopes: ['map'] },

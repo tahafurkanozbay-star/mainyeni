@@ -386,8 +386,9 @@ describe('QueryLifecycleCoordinator', () => {
         },
       });
 
+      const rejected = expect(result).rejects.toMatchObject({ code: 'timeout' });
       await vi.advanceTimersByTimeAsync(26);
-      await expect(result).rejects.toMatchObject({ code: 'timeout' });
+      await rejected;
       expect(observedSignal?.aborted).toBe(true);
       expect(coordinator.snapshot()).toMatchObject({
         timedOut: 1,
