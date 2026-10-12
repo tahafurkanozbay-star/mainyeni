@@ -189,4 +189,70 @@ describe('ArcGIS query request registry physical transport and cache integrity',
       now.mockRestore()
     }
   })
+  it('rejects accessor-backed cache fields without executing malicious accessors', async () => {
+    let accessed = 0
+    const malformed = {
+      kind: 'completed', key: 'safe', pagesCompleted: 1,
+      features: [{ attributes: { OBJECTID: 1 } }],
+      get objectIds(): number[] {
+        accessed += 1
+        throw new Error('must-not-read')
+      },
+    } as ArcGisQueryExecutionResult
+    const executor = vi.fn(async () => malformed)
+    const registry = new ArcGisQueryRequestRegistry(executor)
+    await expect(registry.request('safe')).resolves.toBe(malformed)
+    expect(accessed).toBe(0)
+    expect(registry.snapshot()).toMatchObject({ cached: 0, physical: 0, subscribers: 0 })
+    await registry.request('safe')
+    expect(executor).toHaveBeenCalledTimes(2)
+  })
+
+  it('never strands subscribers when a malicious proxy throws during snapshot inspection', async () => {
+    const dangerous = new Proxy({ kind: 'completed' }, {
+      getOwnPropertyDescriptor() {
+        throw new Error('malicious-own-descriptor')
+      },
+    }) as ArcGisQueryExecutionResult
+    const executor = vi.fn(async () => dangerous)
+    const registry = new ArcGisQueryRequestRegistry(executor)
+    await expect(registry.request('proxy')).resolves.toMatchObject({
+      kind: 'failed', code: 'integrity-error',
+    })
+    expect(registry.snapshot()).toMatchObject({
+      inFlight: 0, physical: 0, subscribers: 0, cached: 0,
+    })
+  })
+
+  it('rejects duplicate object ids and sparse result arrays before cache admission', async () => {
+    const malformedIds = complete('duplicate', [1, 1])
+    const sparse = {
+      kind: 'completed', key: 'sparse', pagesCompleted: 1,
+      objectIds: [1, 2], features: new Array(2),
+    } as ArcGisQueryExecutionResult
+    const registry = new ArcGisQueryRequestRegistry(
+      async ({ key }) => key === 'duplicate' ? malformedIds : sparse,
+    )
+    await registry.request('duplicate')
+    await registry.request('sparse')
+    expect(registry.snapshot()).toMatchObject({ cached: 0, cachedFeatures: 0 })
+  })
+
+  it('protects cached feature and ID arrays from transport-side array mutation', async () => {
+    const source = complete('owned', [3, 4])
+    const registry = new ArcGisQueryRequestRegistry(async () => source)
+    await registry.request('owned')
+    if (source.kind !== 'completed') throw new Error('invalid test fixture')
+    const sourceIds = source.objectIds as number[]
+    const sourceFeatures = source.features as unknown[]
+    sourceIds[0] = 999
+    sourceFeatures.splice(0, 1)
+    const cached = await registry.request('owned')
+    expect(cached.kind).toBe('completed')
+    if (cached.kind === 'completed') {
+      expect(cached.objectIds).toEqual([3, 4])
+      expect(cached.features).toHaveLength(2)
+    }
+  })
+
 })
