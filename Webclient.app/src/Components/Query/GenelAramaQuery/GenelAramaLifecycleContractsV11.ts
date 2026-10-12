@@ -229,6 +229,7 @@ export interface GeneralSearchMutableCountersV11 {
   failed: number;
   cancelled: number;
   stale: number;
+  coalesced: number;
   rejected: number;
   retries: number;
   admittedSearchRecords: number;
