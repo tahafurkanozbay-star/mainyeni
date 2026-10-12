@@ -94,7 +94,7 @@ export class ArcGisQueryDedupeLifecyclePolicy {
     this.#live(); const sig=id('signature',signature); const layer=id('layerId',layerId); integer('revision',revision); time('now',now); this.expire(now)
     const requestId=this.#signatures.get(this.#signatureKey(layer,revision,sig)); if(!requestId) return null
     const e=this.#entries.get(requestId); if(!e||e.phase!=='cached'||this.#revisions.get(layer)!==revision||now<e.touchedAt) return null
-    const at=this.#lastObservedAt; e.touchedAt=at; e.expiresAt=deadline('cache',at,this.#budget.cacheTtlMs); return this.#view(e)
+    const at=this.#lastObservedAt; const expiresAt=deadline('cache',at,this.#budget.cacheTtlMs); e.touchedAt=at; e.expiresAt=expiresAt; return this.#view(e)
   }
 
   admit(request:QueryDedupeRequest):'admitted'|'duplicate'|'rejected' {
@@ -108,8 +108,9 @@ export class ArcGisQueryDedupeLifecyclePolicy {
     const key=this.#signatureKey(layerId,request.revision,signature)
     if(this.#signatures.has(key)) return 'duplicate'
     if(this.#entries.size>=this.#budget.maxEntries||this.#layerCount(layerId)>=this.#budget.maxEntriesPerLayer) return 'rejected'
+    const expiresAt=deadline('pending',request.requestedAt,this.#budget.pendingTtlMs)
     const sequence=++this.#sequence
-    const entry:Entry={...request,requestId,signature,layerId,phase:'pending',sequence,touchedAt:request.requestedAt,expiresAt:deadline('pending',request.requestedAt,this.#budget.pendingTtlMs),features:request.estimatedFeatures,bytes:request.estimatedBytes}
+    const entry:Entry={...request,requestId,signature,layerId,phase:'pending',sequence,touchedAt:request.requestedAt,expiresAt,features:request.estimatedFeatures,bytes:request.estimatedBytes}
     this.#entries.set(requestId,entry); this.#signatures.set(key,requestId); return 'admitted'
   }
 
