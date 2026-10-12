@@ -174,3 +174,13 @@
 - SECURITY / NETWORK: no new runtime dependency, endpoint, secret, browser transport, remote asset, WMS/WFS, GIS service or second icon authority.
 - MERGE GATE: this reconciliation creates a new exact head. Require behind=0, merge-base=current main, additions>=4,000, mergeable=true, no blocking reviews and all six required workflows completed+success before squash merge.
 - SONRAKİ: if exact-head gates remain green, squash merge and verify merged=true, merge SHA and current main SHA. Keep automation enabled.
+
+
+## Deep Experience / workspace-help merge verification — 2026-10-12
+- MERGE İSTEĞİ: Son Experience workspace-help geliştirmelerinin merge durumu yeniden doğrulandı.
+- CURRENT MAIN: `24e1f71408e88012719f3929165876db34092b42`.
+- DOĞRULANAN ÜRÜN COMMIT: `13d65108f441553186b7bb4c61dbc2b0f436ba5a` (`feat(experience): modernize workspace help center`) current main'in atasıdır; compare current main yönünde 68 ahead / 0 behind.
+- DOSYA KANITI: eski `agent/experience-help-20260930-0950-7ffe202` branch'indeki 15 Experience ürün dosyasının blob SHA'ları current main ile birebir aynıdır. Eski branch 27 ahead / 68 behind ve diverged olduğundan branch-lifecycle kuralı gereği yeniden merge edilmedi.
+- OPEN PR OWNERSHIP: açık PR'larda Experience rolüne ait kanonik PR yok; GIS #477, Platform #473 ve eski Admin #266 başka rollere aittir ve merge edilmedi.
+- MERGE SONUCU: yeni ürün merge'i gerekmiyor; workspace-help değişiklikleri zaten main'de. Stale branch'i merge etmek duplicate history/no-op olacağı için güvenli biçimde reddedildi.
+- NEXT EXPERIENCE TURN: current main'den benzersiz fresh Experience branch ile yeni gerçek UX/UI kapsamı başlat; merged/stale branch'i yeniden kullanma. 4,000 meaningful additions + exact-head CI + mergeable gate korunmalıdır.
