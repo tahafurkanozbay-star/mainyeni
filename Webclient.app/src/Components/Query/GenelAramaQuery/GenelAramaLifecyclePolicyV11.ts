@@ -568,7 +568,7 @@ export const auditGeneralSearchLifecycleV11 = (
       'Detail lane is running without a start timestamp.',
     ));
   }
-  if (snapshot.succeeded + snapshot.failed + snapshot.cancelled + snapshot.stale > snapshot.started) {
+  if (snapshot.succeeded + snapshot.failed + snapshot.cancelled + snapshot.stale > snapshot.started + snapshot.scheduled) {
     findings.push(finding(
       'terminal-count-exceeds-started',
       'error',
