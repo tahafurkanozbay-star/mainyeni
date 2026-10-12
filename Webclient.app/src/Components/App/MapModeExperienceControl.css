@@ -204,9 +204,9 @@
 
 @media (max-width: 720px) {
   .map-mode-experience {
-    top: auto;
+    top: max(76px, calc(env(safe-area-inset-top) + 70px));
     right: max(10px, env(safe-area-inset-right));
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: auto;
     min-inline-size: 0;
     inline-size: min(252px, calc(100vw - 20px));
     padding: 10px;
