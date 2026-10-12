@@ -42,7 +42,6 @@ export const StreetViewWidget = forwardRef<ManagedWindowHandle, StreetViewWidget
         if (!normalized || !mapPoint) {
           setUrl(null);
           setStatus('Sokak görünümü için önce haritada geçerli bir konum seçin.');
-          windowManager.ShowWindow('sidebar');
           return;
         }
 
@@ -54,7 +53,6 @@ export const StreetViewWidget = forwardRef<ManagedWindowHandle, StreetViewWidget
             ? `Sokak görünümü ${normalized.latitude.toFixed(5)}, ${normalized.longitude.toFixed(5)} konumu için hazır.`
             : 'Sokak görünümü bağlantısı güvenli biçimde oluşturulamadı.',
         );
-        windowManager.ShowWindow('sidebar');
       },
       OnClose: () => {
         setUrl(null);

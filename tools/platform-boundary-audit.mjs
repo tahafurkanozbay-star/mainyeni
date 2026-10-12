@@ -6,7 +6,7 @@ import {
   buildPlatformModuleGraph,
 } from './platform-module-graph.mjs';
 
-const DEFAULT_ROOT = path.resolve(process.cwd());
+const DEFAULT_ROOT = path.resolve(import.meta.dirname, '..');
 const PLATFORM_PREFIX = 'Webclient.app/src/platform/';
 const ADAPTER_PATH = 'Webclient.app/src/platform/bootstrap/bootstrapApplication.ts';
 

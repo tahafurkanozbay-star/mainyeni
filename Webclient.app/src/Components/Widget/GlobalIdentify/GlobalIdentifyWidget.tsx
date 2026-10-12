@@ -85,6 +85,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     const [selectedByGroup, setSelectedByGroup] = useState<Record<string, number>>({});
     const sessionRef = useRef(createIdentifySession() as unknown as IdentifySessionLike);
     const mountedRef = useRef(true);
+    const identifyGenerationRef = useRef(0);
     const highlightGraphicRef = useRef<unknown>(null);
 
     const clearHighlight = useCallback((): void => {
@@ -96,11 +97,13 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     }, [mapView]);
 
     const cancelIdentify = useCallback((): void => {
+      identifyGenerationRef.current += 1;
       sessionRef.current.cancel();
       if (mountedRef.current) setLoading(false);
     }, []);
 
     const executeIdentify = useCallback(async (event: unknown): Promise<void> => {
+      const generation = ++identifyGenerationRef.current;
       const view = MapManager.GetMapView() ?? mapView;
       const eventWithPoint = event as { mapPoint?: unknown } | null;
       if (!view || !eventWithPoint?.mapPoint) {
@@ -124,14 +127,14 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
           concurrency: 4,
           returnGeometry: true,
         });
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || generation !== identifyGenerationRef.current) return;
         setResults(Array.isArray(response.groups) ? response.groups : []);
       } catch (caught) {
-        if (!mountedRef.current || isAbortLikeError(caught)) return;
+        if (!mountedRef.current || generation !== identifyGenerationRef.current || isAbortLikeError(caught)) return;
         setResults([]);
         setError(normalizeWidgetError(caught, 'Seçilen konum için bilgi alınamadı.'));
       } finally {
-        if (mountedRef.current) setLoading(false);
+        if (mountedRef.current && generation === identifyGenerationRef.current) setLoading(false);
       }
     }, [mapView]);
 
@@ -140,7 +143,6 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
       visible: false,
       minimized: false,
       OnShow: () => {
-        windowManager.ShowWindow('sidebar');
         void executeIdentify(MapManager.GetMapClickEvent());
       },
       OnClose: () => {
@@ -160,6 +162,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
 
       return () => {
         mountedRef.current = false;
+        identifyGenerationRef.current += 1;
         session.cancel();
         const view = MapManager.GetMapView();
         if (view && highlightGraphicRef.current) {

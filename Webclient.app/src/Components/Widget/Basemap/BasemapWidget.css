@@ -1,0 +1,22 @@
+.basemap-picker__intro { margin: 0 0 16px; color: var(--experience-text-muted, #526174); font-size: 14px; line-height: 1.55; }
+.basemap-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.basemap-picker__option { display: flex; align-items: center; gap: 10px; min-height: 76px; padding: 12px; border: 1px solid var(--experience-border, #cbd5e1); border-radius: 12px; background: var(--experience-surface, white); color: var(--experience-text, #142033); text-align: left; cursor: pointer; }
+.basemap-picker__option:hover { background: var(--experience-surface-alt, #f1f5f9); }
+.basemap-picker__option[aria-pressed="true"] { border-color: var(--experience-accent, #0284c7); box-shadow: inset 0 0 0 1px var(--experience-accent, #0284c7); }
+.basemap-picker__option:focus-visible { outline: 3px solid var(--experience-accent, #0284c7); outline-offset: 3px; }
+.basemap-picker__option > span:not(.basemap-picker__selection) { display: grid; gap: 4px; min-width: 0; }
+.basemap-picker__option strong { font-size: 14px; line-height: 1.4; }
+.basemap-picker__option span span { color: var(--experience-text-muted, #526174); font-size: 12px; line-height: 1.4; }
+.basemap-picker__symbol { width: 54px; height: 38px; flex: 0 0 54px; border-radius: 6px; }
+.basemap-picker__land { fill: #e1e9d9; }
+.basemap-picker__road { fill: none; stroke: #fff; stroke-width: 4; }
+.basemap-picker__water { fill: none; stroke: #71b5da; stroke-width: 3; }
+.basemap-picker__option--dark .basemap-picker__land { fill: #344451; }
+.basemap-picker__option--dark .basemap-picker__road { stroke: #7b919f; }
+.basemap-picker__option--gray .basemap-picker__land { fill: #d7dce1; }
+.basemap-picker__option--imagery .basemap-picker__land { fill: #416942; }
+.basemap-picker__option--terrain .basemap-picker__land { fill: #d2c6a6; }
+.basemap-picker__option--water .basemap-picker__land { fill: #a4cbe1; }
+.basemap-picker__selection { flex: 0 0 18px; margin-left: auto; color: var(--experience-accent, #0284c7); font-weight: 700; font-size: 20px; }
+@media (max-width: 45rem) { .basemap-picker { grid-template-columns: 1fr; } }
+@media (forced-colors: active) { .basemap-picker__option[aria-pressed="true"] { outline: 2px solid Highlight; } }

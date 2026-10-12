@@ -303,3 +303,42 @@ describe('typed WindowManager minimized/message/map state', () => {
     manager.RemoveMessage();
   });
 });
+
+describe('lazy placeholder ownership and current activation', () => {
+  test('activates the latest React handle when callbacks change before its scheduled opening', async () => {
+    const id = uniqueId('latest-handle'); const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id, { visible: true }); manager.RegisterWindow(ref);
+    const latestShow = vi.fn(); ref.current = { ...ref.current, OnShow: latestShow };
+    await Promise.resolve(); expect(latestShow).toHaveBeenCalledTimes(1);
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+  test('does not run a scheduled OnShow after the user closes the tool', async () => {
+    const id = uniqueId('late-show'); const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id, { visible: true }); manager.RegisterWindow(ref);
+    manager.HideWindow(id); await Promise.resolve();
+    expect(ref.current.OnShow).not.toHaveBeenCalled();
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+  test('does not run a scheduled OnShow after another tool is selected', async () => {
+    const id = uniqueId('superseded-show'); const other = uniqueId('other-tool');
+    const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id, { visible: true }); manager.RegisterWindow(ref); manager.RegisterPlaceholder(other);
+    manager.ShowWindow(other); await Promise.resolve();
+    expect(ref.current.OnShow).not.toHaveBeenCalled();
+    manager.UnregisterWindow(id); manager.UnregisterWindow(other); manager.Dispose();
+  });
+  test('retains the host placeholder when the mounted component unregisters', () => {
+    const id = uniqueId('retained-placeholder'); const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id); manager.RegisterWindow(ref); manager.ShowWindow(id, { mode: 'legend' });
+    manager.UnregisterWindow(id, ref);
+    expect(Store.getState().Common.WindowList.find(item => item.id === id)).toMatchObject({ ref: null, lazy: true, visible: true, query: { mode: 'legend' } });
+    expect(manager.ShowWindow(id)).toBe(true);
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+  test('reopening expands a previously minimized tool', () => {
+    const id = uniqueId('reopen-minimized'); const manager = createWindowManager();
+    manager.RegisterPlaceholder(id); manager.ShowWindow(id); manager.ToggleMinimiseWindow(id); manager.HideWindow(id); manager.ShowWindow(id);
+    expect(manager.IsVisible(id)).toBe(true); expect(manager.IsMinimized(id)).toBe(false);
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+});

@@ -52,7 +52,7 @@ const announcementFor = (
     case 'loading':
       return `Altlık haritalar hazırlanıyor. Deneme ${attempt}/${maxAttempts}.`;
     case 'ready':
-      return `${readyCount} altlık harita kullanıma hazır.`;
+      return `${readyCount} altlık harita seçeneği.`;
     case 'error':
       return error
         ? `Altlık harita galerisi açılamadı. ${error}`

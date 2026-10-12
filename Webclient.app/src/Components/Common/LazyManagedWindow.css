@@ -21,12 +21,12 @@
 }
 
 .kr-lazy-window strong {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.35;
 }
 
 .kr-lazy-window span:not(.kr-lazy-window__spinner) {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
   color: var(--experience-text-muted, #526174);
 }
@@ -48,15 +48,33 @@
 @media (max-width: 780px) {
   .kr-lazy-window {
     position: fixed;
-    inset: auto 12px 12px 12px;
+    inset: 148px 12px auto 12px;
     min-width: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .kr-lazy-window__spinner {
-    animation-duration: 1400ms;
+    animation: none;
   }
+}
+
+.kr-lazy-window__close,
+.kr-lazy-window__retry {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--experience-border, #cbd5e1);
+  border-radius: 10px;
+  background: var(--experience-surface-alt, #f1f5f9);
+  color: inherit;
+  cursor: pointer;
+}
+.kr-lazy-window__close { margin-left: auto; font-size: 22px; }
+.kr-lazy-window__retry { margin-top: 10px; font-weight: 600; }
+.kr-lazy-window button:focus-visible { outline: 3px solid var(--experience-accent, #2563eb); outline-offset: 3px; }
+@media (pointer: coarse) {
+  .kr-lazy-window button { min-width: 48px; min-height: 48px; }
 }
 
 @media (forced-colors: active) {

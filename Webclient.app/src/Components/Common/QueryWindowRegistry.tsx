@@ -1,36 +1,6 @@
-import React, { type ComponentType, type LazyExoticComponent } from 'react';
+import { defineManagedWindow as defineWindow, type ManagedWindowDefinition } from './managedWindowLoading';
 
-export interface QueryWindowDefinition {
-  readonly id: string;
-  readonly label: string;
-  readonly component: LazyExoticComponent<ComponentType<Record<string, unknown>>>;
-}
-type QueryWindowModule = Readonly<Record<string, unknown>>;
-type QueryWindowLoader = () => Promise<QueryWindowModule>;
-
-const lazyNamed = (
-  loader: QueryWindowLoader,
-  exportName: string,
-): LazyExoticComponent<ComponentType<Record<string, unknown>>> =>
-  React.lazy(async () => {
-    const module = await loader();
-    const Component = module[exportName];
-    if (typeof Component !== 'function' && typeof Component !== 'object') {
-      throw new Error(`Lazy window export not found: ${exportName}`);
-    }
-    return { default: Component as ComponentType<Record<string, unknown>> };
-  });
-
-const defineWindow = (
-  id: string,
-  label: string,
-  loader: QueryWindowLoader,
-  exportName: string,
-): QueryWindowDefinition => Object.freeze({
-  id,
-  label,
-  component: lazyNamed(loader, exportName),
-});
+export type QueryWindowDefinition = ManagedWindowDefinition;
 
 export const QUERY_WINDOW_DEFINITIONS: readonly QueryWindowDefinition[] = Object.freeze([
   defineWindow('assemblyarea-query-window', 'Toplanma alanları', () => import('../Query/AAQuery/AAQueryWindow'), 'AssemblyAreaQueryWindow'),

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { runPlatformContracts } from './platform-contracts.mjs';
 
 async function fixture(overrides = {}) {
@@ -199,4 +201,19 @@ test('requires module graph and language ratchet scripts in the web quality surf
   assert.ok(codes.includes('quality:platform-boundaries'));
   assert.ok(codes.includes('quality:browser-runtime'));
   assert.equal(report.summary.passed, false);
+});
+
+
+test('package quality commands inspect the actual repository when invoked from Webclient.app', async () => {
+  const run = promisify(execFile);
+  const root = path.resolve(import.meta.dirname, '..');
+  for (const name of ['platform-language-ratchet', 'platform-module-graph', 'platform-boundary-audit', 'browser-runtime-boundary']) {
+    const { stdout } = await run(process.execPath, [path.join(root, 'tools', name + '.mjs'), '--strict'], { cwd: path.join(root, 'Webclient.app'), maxBuffer: 2 * 1024 * 1024 });
+    const summary = JSON.parse(stdout);
+    assert.equal(summary.passed, true, name);
+    if (name === 'platform-module-graph') assert.ok(summary.productionFiles > 100, 'empty module inventory must not pass');
+    if (name === 'platform-language-ratchet') assert.ok(summary.productionTypescriptFiles > 100, 'empty language inventory must not pass');
+    if (name === 'browser-runtime-boundary') assert.ok(summary.productionFiles > 100, 'empty browser inventory must not pass');
+    if (name === 'platform-boundary-audit') assert.ok(summary.platformProductionEdges > 0, 'empty platform inventory must not pass');
+  }
 });

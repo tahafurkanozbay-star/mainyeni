@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_ROOT = path.resolve(process.cwd());
+const DEFAULT_ROOT = path.resolve(import.meta.dirname, '..');
 const SOURCE_ROOT = 'Webclient.app/src';
 const DEFAULT_BASELINE = 'tools/platform-language-baseline.json';
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx', '.mts']);
