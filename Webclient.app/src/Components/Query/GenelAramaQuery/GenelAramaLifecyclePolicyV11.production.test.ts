@@ -68,6 +68,7 @@ const baseSnapshot = (): GeneralSearchLifecycleSnapshotV11 => Object.freeze({
   failed: 0,
   cancelled: 0,
   stale: 0,
+  coalesced: 0,
   rejected: 0,
   retries: 0,
   admittedSearchRecords: 0,
