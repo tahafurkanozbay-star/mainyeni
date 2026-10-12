@@ -25,7 +25,6 @@ import {
   type GeneralSearchNormalizedLifecyclePolicyV11,
   type GeneralSearchRuntimeClockV11,
   type GeneralSearchScheduleOptionsV11,
-  type GeneralSearchServiceResultV11,
 } from './GenelAramaLifecycleContractsV11';
 import {
   GeneralSearchAdmissionErrorV11,
@@ -636,14 +635,14 @@ export class GeneralSearchLifecycleRuntimeV11 {
         || lane.activeController !== controller;
       const normalized = normalizeGeneralSearchErrorV11(error);
       const aborted = controller.signal.aborted || isAbortError(error);
-      const outcome = stale
-        ? 'stale'
-        : aborted
-          ? 'cancelled'
+      const outcome = aborted
+        ? 'cancelled'
+        : stale
+          ? 'stale'
           : 'failure';
 
-      if (stale) this.#counters.stale += 1;
-      else if (aborted) this.#counters.cancelled += 1;
+      if (aborted) this.#counters.cancelled += 1;
+      else if (stale) this.#counters.stale += 1;
       else this.#counters.failed += 1;
 
       if (!stale) {
