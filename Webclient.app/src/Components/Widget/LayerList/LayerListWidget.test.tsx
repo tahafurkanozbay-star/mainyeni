@@ -128,7 +128,10 @@ const resolveCatalog = (): void => {
 };
 
 const waitForLayerTree = async (): Promise<HTMLElement> => {
-  await screen.findByText('Temel Katmanlar');
+  await waitFor(() => {
+    expect(runtime.getLayers).toHaveBeenCalled();
+    expect(screen.getByText('Temel Katmanlar')).toBeVisible();
+  }, { timeout: 5_000 });
   return screen.getByRole('tree', { name: 'Harita katmanları' });
 };
 
@@ -377,12 +380,13 @@ describe('LayerListWidget modern workspace', () => {
 
   it('contains legend module failures and keeps the panel usable', async () => {
     runtime.loadModules.mockRejectedValueOnce(new Error('legend failure'));
-    const report = vi.spyOn(globalThis, 'reportError').mockImplementation(() => undefined);
+    const report = vi.fn();
+    vi.stubGlobal('reportError', report);
     await waitForLayerTree();
     fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
     await waitFor(() => expect(report).toHaveBeenCalled());
     expect(screen.getByText('Lejant hazırlanıyor…')).toBeVisible();
-    report.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it('opens the sidebar and refreshes on managed OnShow', async () => {
