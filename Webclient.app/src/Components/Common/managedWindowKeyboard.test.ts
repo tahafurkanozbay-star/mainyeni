@@ -38,4 +38,24 @@ describe('shared modeless window keyboard ownership', () => {
   it('removes the listener when the owning app disconnects', () => {
     const { manager, id } = setup(); cleanups[0]?.(); escape(); expect(manager.IsVisible(id)).toBe(true);
   });
+  it('restores map focus even when closing immediately removes the focused service window', async () => {
+    const { manager } = setup();
+    cleanups[0]?.();
+    document.body.innerHTML = '<div id="esri-map-container" tabindex="-1"></div><section class="kr-fast-query"><button>Sonuç</button></section>';
+    const target = document.querySelector('button')!;
+    target.focus();
+    cleanups.push(installManagedWindowKeyboard({ HideWindow: (id) => { document.querySelector('section')!.remove(); return manager.HideWindow(id); } }));
+    escape(target); await Promise.resolve();
+    expect(document.getElementById('esri-map-container')).toHaveFocus();
+  });
+  it('keeps focus deliberately restored by the closing window', async () => {
+    const { manager } = setup();
+    cleanups[0]?.();
+    document.body.innerHTML = '<div id="esri-map-container" tabindex="-1"></div><button id="opener">Hizmetler</button><section class="kr-fast-query"><button>Sonuç</button></section>';
+    const target = document.querySelector('section button') as HTMLButtonElement;
+    target.focus();
+    cleanups.push(installManagedWindowKeyboard({ HideWindow: (id) => { document.getElementById('opener')!.focus(); return manager.HideWindow(id); } }));
+    escape(target); await Promise.resolve();
+    expect(document.getElementById('opener')).toHaveFocus();
+  });
 });
