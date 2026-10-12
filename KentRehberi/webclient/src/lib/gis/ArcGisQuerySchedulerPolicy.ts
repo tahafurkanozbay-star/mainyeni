@@ -133,7 +133,7 @@ export class ArcGisQuerySchedulerPolicy {
     this.pruneExpiredQueued(nowMs)
     this.expireRunning(nowMs)
     if (this.running.size >= this.budget.maxRunning) return undefined
-    const candidates = this.queued.values().sort((a, b) =>
+    const candidates = Array.from(this.queued.values()).sort((a, b) =>
       PRIORITY[a.priority] - PRIORITY[b.priority] ||
       a.deadlineAtMs - b.deadlineAtMs ||
       a.enqueuedAtMs - b.enqueuedAtMs ||
@@ -224,8 +224,8 @@ export class ArcGisQuerySchedulerPolicy {
 
   snapshot(): ArcGisQuerySchedulerSnapshot {
     this.assertLive()
-    const queued = this.queued.values().sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority] || a.deadlineAtMs - b.deadlineAtMs || a.requestId.localeCompare(b.requestId))
-    const running = this.running.values().sort((a, b) => a.startedAtMs - b.startedAtMs || a.requestId.localeCompare(b.requestId))
+    const queued = Array.from(this.queued.values()).sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority] || a.deadlineAtMs - b.deadlineAtMs || a.requestId.localeCompare(b.requestId))
+    const running = Array.from(this.running.values()).sort((a, b) => a.startedAtMs - b.startedAtMs || a.requestId.localeCompare(b.requestId))
     return Object.freeze({ queued: Object.freeze(queued), running: Object.freeze(running), runningBytes: this.runningBytes })
   }
 
