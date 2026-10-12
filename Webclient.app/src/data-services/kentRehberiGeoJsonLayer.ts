@@ -63,7 +63,8 @@ export interface KentRehberiMapLike {
 export interface KentRehberiGeoJsonLayerLike {
   readonly id?: string;
   readonly title?: string;
-  load?: () => Promise<unknown>;
+  load?: (options?: { readonly signal?: AbortSignal }) => Promise<unknown>;
+  cancelLoad?: () => void;
   destroy?: () => void;
 }
 
@@ -552,15 +553,19 @@ export const createKentRehberiGeoJsonLayer = async (
   geojson: KentRehberiGeoJsonFeatureCollection,
   moduleLoader: typeof loadArcgisModule = loadArcgisModule,
   presentation: KentRehberiLayerPresentationOptions = {},
+  signal?: AbortSignal,
 ): Promise<KentRehberiGeoJsonLayerLike> => {
+  signal?.throwIfAborted();
   if (typeof URL.createObjectURL !== 'function' || typeof URL.revokeObjectURL !== 'function') {
     throw new Error('Blob URL support is unavailable for the Kent Rehberi layer.');
   }
 
   const GeoJSONLayer = await moduleLoader<GeoJsonLayerConstructor>('esri/layers/GeoJSONLayer');
+  signal?.throwIfAborted();
   const blob = new Blob([JSON.stringify(geojson)], { type: 'application/geo+json' });
   const objectUrl = URL.createObjectURL(blob);
   let layer: KentRehberiGeoJsonLayerLike | null = null;
+  let abortLoad: (() => void) | undefined;
 
   try {
     layer = new GeoJSONLayer({
@@ -578,12 +583,30 @@ export const createKentRehberiGeoJsonLayer = async (
       },
       ...(presentation.renderer ? { renderer: presentation.renderer } : {}),
     });
-    await layer.load?.();
+    const loading = layer.load?.(signal ? { signal } : {});
+    if (signal) {
+      await Promise.race([
+        loading,
+        new Promise<never>((_resolve, reject) => {
+          abortLoad = () => {
+            try { layer?.cancelLoad?.(); }
+            catch (error) { reject(signal.reason ?? error); return; }
+            reject(signal.reason ?? createAbortError());
+          };
+          signal.addEventListener('abort', abortLoad, { once: true });
+          if (signal.aborted) abortLoad();
+        }),
+      ]);
+      signal.throwIfAborted();
+    } else {
+      await loading;
+    }
     return layer;
   } catch (error) {
     layer?.destroy?.();
     throw error;
   } finally {
+    if (abortLoad) signal?.removeEventListener('abort', abortLoad);
     URL.revokeObjectURL(objectUrl);
   }
 };
@@ -601,13 +624,20 @@ export const attachKentRehberiGeoJsonLayer = async (
   const layer = await createKentRehberiGeoJsonLayer(
     geojson,
     options.moduleLoader ?? loadArcgisModule,
+    {},
+    options.signal,
   );
   if (options.signal?.aborted) {
     layer.destroy?.();
     throw createAbortError();
   }
 
-  options.map.add(layer);
+  try {
+    options.map.add(layer);
+  } catch (error) {
+    layer.destroy?.();
+    throw error;
+  }
   let disposed = false;
   return Object.freeze({
     layer,

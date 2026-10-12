@@ -23,6 +23,84 @@ const flush = async (): Promise<void> => {
 };
 
 describe('createSidebarLayerLoadController', () => {
+  it('times out a stalled adapter and frees its worker for the next service', async () => {
+    vi.useFakeTimers();
+    try {
+      const late = deferred<object | null>();
+      const disposeLayer = vi.fn();
+      const signals: AbortSignal[] = [];
+      const controller = createSidebarLayerLoadController({
+        serviceKeys: ['stalled', 'healthy'], concurrency: 1, timeoutMs: 100,
+        disposeLayer,
+        loadLayer: async (key, { signal }) => {
+          signals.push(signal);
+          return key === 'stalled' ? late.promise : { key };
+        },
+      });
+      const run = controller.start();
+      await vi.advanceTimersByTimeAsync(101);
+      await run;
+      expect(controller.getSnapshot()).toMatchObject({ phase: 'degraded', loadedCount: 1, failedCount: 1, activeCount: 0 });
+      expect(controller.getSnapshot().failures[0]?.kind).toBe('TimeoutError');
+      expect(signals[0]?.aborted).toBe(true);
+      const staleLayer = { stale: true };
+      late.resolve(staleLayer);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(disposeLayer).toHaveBeenCalledExactlyOnceWith(staleLayer);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('restarts immediately after cancellation without accepting or leaking old results', async () => {
+    const old = deferred<object | null>();
+    const current = { current: true };
+    const disposeLayer = vi.fn();
+    let firstSignal: AbortSignal | undefined;
+    const loadLayer = vi.fn((_key: string, { signal }: { signal: AbortSignal }) => {
+      if (!firstSignal) { firstSignal = signal; return old.promise; }
+      return Promise.resolve(current);
+    });
+    const controller = createSidebarLayerLoadController({ serviceKeys: ['a'], loadLayer, disposeLayer });
+    const initial = controller.start();
+    await flush();
+    controller.cancel();
+    expect(firstSignal?.aborted).toBe(true);
+    await controller.start();
+    await initial;
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'ready', attempt: 2, activeCount: 0 });
+    const stale = { stale: true };
+    old.resolve(stale);
+    await vi.waitFor(() => expect(disposeLayer).toHaveBeenCalledExactlyOnceWith(stale));
+    expect(controller.getSnapshot().loadedLayers[0]?.layer).toBe(current);
+  });
+
+  it('releases owned layers on reset and remains reusable across effect lifetimes', async () => {
+    const layer = { id: 'a' };
+    const disposeLayer = vi.fn();
+    const loadLayer = vi.fn(async () => layer);
+    const controller = createSidebarLayerLoadController({ serviceKeys: ['a'], loadLayer, disposeLayer });
+    await controller.start();
+    controller.reset();
+    controller.reset();
+    expect(disposeLayer).toHaveBeenCalledExactlyOnceWith(layer);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'idle', loadedCount: 0 });
+    await controller.start();
+    expect(loadLayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not invoke work cancelled before the adapter starts', async () => {
+    const loadLayer = vi.fn(async () => ({}));
+    const controller = createSidebarLayerLoadController({ serviceKeys: ['a'], loadLayer });
+    const run = controller.start();
+    controller.cancel();
+    await run;
+    expect(loadLayer).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().activeCount).toBe(0);
+  });
+
+  it.each([0, -1, 60_001, NaN, Infinity, 1.5])('rejects an invalid timeout budget: %s', (timeoutMs) => {
+    expect(() => createSidebarLayerLoadController({ serviceKeys: [], timeoutMs, loadLayer: async () => null })).toThrow(RangeError);
+  });
   it('starts with an immutable idle snapshot', () => {
     const controller = createSidebarLayerLoadController({
       serviceKeys: ['a', 'b'],
@@ -135,10 +213,10 @@ describe('createSidebarLayerLoadController', () => {
     const run = controller.start();
     await flush();
     expect(peak).toBe(8);
-    while (gates.length > 0) {
+    while (controller.getSnapshot().phase === 'loading') {
       const batch = gates.splice(0, gates.length);
       batch.forEach((gate) => gate.resolve({}));
-      await flush();
+      await vi.waitFor(() => expect(gates.length > 0 || controller.getSnapshot().phase !== 'loading').toBe(true));
     }
     await run;
   });

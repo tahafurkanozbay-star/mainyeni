@@ -22,8 +22,8 @@ on:
       - 'tools/platform-contracts.test.mjs'
       - 'tools/package-lock-integrity.mjs'
       - 'tools/package-lock-integrity.test.mjs'
-      - 'tools/dotnet-package-governance.mjs'
-      - 'tools/dotnet-package-governance.test.mjs'
+      - 'tools/dotnet-package-governance.mts'
+      - 'tools/dotnet-package-governance.test.mts'
   workflow_dispatch:
 
 permissions:
@@ -59,7 +59,7 @@ jobs:
           tools/browser-runtime-boundary.test.mjs
           tools/platform-ts-cutover.test.mjs
           tools/package-lock-integrity.test.mjs
-          tools/dotnet-package-governance.test.mjs
+          tools/dotnet-package-governance.test.mts
 
       - name: Enforce modernization contracts
         run: node tools/platform-contracts.mjs
@@ -80,7 +80,7 @@ jobs:
         run: node tools/platform-audit.mjs
 
       - name: Enforce .NET central package governance
-        run: node tools/dotnet-package-governance.mjs
+        run: node tools/dotnet-package-governance.mts
 
       - name: Audit package lock integrity
         run: node tools/package-lock-integrity.mjs

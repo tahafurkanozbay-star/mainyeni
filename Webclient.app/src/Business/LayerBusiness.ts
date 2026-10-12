@@ -10,7 +10,7 @@ const reportLayerFailure = (error: unknown): void => {
 export const LayerBusiness = Object.freeze({
   GetLayers: async (): Promise<unknown | null> => {
     try {
-      return await apiClient.get('/Gis/Layer/ListGrouped');
+      return await apiClient.get('/Gis/Layer/ListGrouped', { cache: true, dedupe: true, cacheTtlMs: 60_000 });
     } catch (error) {
       reportLayerFailure(error);
       return null;

@@ -18,7 +18,6 @@ import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
-import { MapModeExperienceControl } from './MapModeExperienceControl';
 import { MapWorkspaceRecoverySurface } from './MapWorkspaceRecoverySurface';
 import { MapWorkspaceRecoveryModel } from './mapWorkspaceRecoveryModel';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
@@ -37,12 +36,8 @@ import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { ManagedWindowHandle } from '../../experience/contracts';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { openExternalUrl } from '../Widget/_shared/MapWidgetRuntime';
-import {
-  attachKentRehberiGeoJsonLayer,
-  isKentRehberiAbortError,
-  type KentRehberiLayerHandle,
-  type KentRehberiMapLike,
-} from '../../data-services/kentRehberiGeoJsonLayer';
+import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
+import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
 import '../Widget/_shared/ExperienceWidgetModernization.css';
 
@@ -125,8 +120,6 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     let bridge: ReturnType<typeof createViewStateBridge> | null = null;
     let performanceMonitor: ReturnType<typeof createViewPerformanceMonitor> | null = null;
     let unbindViewState: () => void = () => undefined;
-    let kentRehberiLayerHandle: KentRehberiLayerHandle | null = null;
-    const kentRehberiAbortController = new AbortController();
     const handles: RemovableHandle[] = [];
     accessibilityModel.reset();
     const recoveryAttemptId = recoveryModel.beginAttempt();
@@ -175,9 +168,6 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       accessibilityModel.markReady();
       if (recoveryAttemptId !== null) recoveryModel.succeed(recoveryAttemptId);
       if (view.updating) accessibilityModel.markUpdating(true);
-      void attachKentRehberiGeoJsonLayer({ map: map as KentRehberiMapLike, signal: kentRehberiAbortController.signal })
-        .then((handle) => { if (disposed) { handle.dispose(); return; } kentRehberiLayerHandle = handle; })
-        .catch((error: unknown) => { if (!isKentRehberiAbortError(error)) DebugHelper.Log(error); });
     };
     void initializeMap().catch((error: unknown) => {
       if (disposed) return;
@@ -187,10 +177,10 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     });
     return () => {
       disposed = true; activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
-      kentRehberiAbortController.abort(); kentRehberiLayerHandle?.dispose(); kentRehberiLayerHandle = null;
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
+      setMapView(null);
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
     };
   }, [accessibilityModel, mapGeneration, recoveryModel, windowManager]);
@@ -210,7 +200,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
       <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>
-        <MapModeExperienceControl />
+        <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
         <MapWorkspaceShortcutHelpLauncher />

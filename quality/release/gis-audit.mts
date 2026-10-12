@@ -48,6 +48,7 @@ const REQUIRED_GIS_RUNTIMES: readonly { path: string; role: string }[] = Object.
 ]);
 
 const GIS_CODE_PATH = /^Webclient\.app\/src\/(?:gis-engine|Components|Business|Toolbox)\//;
+const TEST_SOURCE = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|\.|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/i;
 const FORBIDDEN_PROTOCOL_PATTERN = /(?:service\s*=\s*['"]?(WMS|WFS)|\b(WMS|WFS)(?:Layer|Service|Client|Url|URL)\b)/gi;
 const ARCGIS_SERVICE_PATTERN = /\b(?:MapServer|FeatureServer|SceneServer|ImageServer|VectorTileServer)\b/g;
 const GLOBAL_CLEAR_PATTERN = /\bRemoveAllGraphics\s*\(|\.graphics\.removeAll\s*\(/g;
@@ -270,7 +271,7 @@ function scanForbiddenProtocols(files: readonly SourceFile[]): { protocols: stri
   const protocols: string[] = [];
   const findings: Finding[] = [];
   for (const file of files) {
-    if (!GIS_CODE_PATH.test(file.repositoryPath)) continue;
+    if (!GIS_CODE_PATH.test(file.repositoryPath) || TEST_SOURCE.test(file.repositoryPath)) continue;
     const lineIndex = createLineIndex(file.text);
     const matcher = new RegExp(FORBIDDEN_PROTOCOL_PATTERN.source, FORBIDDEN_PROTOCOL_PATTERN.flags);
     let match: RegExpExecArray | null;

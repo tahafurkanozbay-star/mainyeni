@@ -15,7 +15,7 @@ import {
   parseCentralPackageCatalog,
   parseProjectFile,
   renderDotnetPackageGovernanceMarkdown,
-} from './dotnet-package-governance.mjs';
+} from './dotnet-package-governance.mts';
 
 const central = entries => `<Project>
   <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>
@@ -24,7 +24,7 @@ const central = entries => `<Project>
 
 const project = ({ packages = [], projectReferences = [], body = '' } = {}) => `<Project>
   <ItemGroup>
-    ${packages.map(value => typeof value === 'string' ? `<PackageReference Include="${value}" />` : value).join('')}
+    ${packages.map(value => typeof value === 'string' && value.trimStart().startsWith('<PackageReference') ? value : `<PackageReference Include="${value}" />`).join('')}
     ${projectReferences.map(value => `<ProjectReference Include="${value}" />`).join('')}
   </ItemGroup>
   ${body}

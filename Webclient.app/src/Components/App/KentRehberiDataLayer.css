@@ -1,0 +1,43 @@
+.kr-map-data-status {
+  position: absolute;
+  z-index: 12;
+  top: calc(var(--kr-header-height, 72px) + 82px);
+  right: 80px;
+  width: min(300px, calc(100% - 176px));
+  padding: 14px 16px;
+  border: 1px solid var(--exp-border, #ccd8e5);
+  border-radius: 14px;
+  background: var(--exp-surface, #fff);
+  color: var(--exp-text, #18334d);
+  box-shadow: 0 8px 24px rgb(17 39 64 / 12%);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.kr-map-data-status p { margin: 0; }
+.kr-map-data-status small { display: block; margin-top: 8px; font-size: 12px; }
+.kr-map-data-status button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--exp-border, #ccd8e5);
+  border-radius: 10px;
+  background: var(--exp-surface, #fff);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+.kr-map-data-status button:hover { background: var(--exp-surface-2, #edf4fa); }
+.kr-map-data-status button:focus-visible { outline: 3px solid #187bb9; outline-offset: 3px; }
+
+@media (max-width: 880px) {
+  .kr-map-data-status { top: 148px; right: 76px; width: min(280px, calc(100% - 152px)); padding: 10px 12px; }
+}
+@media (pointer: coarse) {
+  .kr-map-data-status button { min-height: 48px; }
+}
+@media (forced-colors: active) {
+  .kr-map-data-status { border-color: CanvasText; background: Canvas; color: CanvasText; box-shadow: none; }
+  .kr-map-data-status button { border-color: ButtonText; background: ButtonFace; color: ButtonText; }
+}

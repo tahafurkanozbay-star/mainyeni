@@ -35,11 +35,15 @@ import {
 } from '../_Common/QueryInteractionRuntime';
 import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
+import { createKentRehberiGeoJsonLayer, type KentRehberiGeoJsonFeatureCollection } from '../../../data-services/kentRehberiGeoJsonLayer';
+import '../_Common/ManagedFastAccessQueryWindow.css';
+import './ParklarQueryWindow.css';
 
 const OWNER_ID = 'parklar-query-window';
 const MAX_EXTENT_HISTORY = 30;
 const PARK_SERVICE_KEY = 'YeniParklarQeryUrl';
 const PARK_ICON_TYPE = 'parklar';
+const PAGE_SIZE = 60;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -62,6 +66,8 @@ interface ServiceResult {
   readonly data?: readonly ParkFeature[] | null;
   readonly message?: unknown;
   readonly errorMessage?: unknown;
+  readonly source?: unknown;
+  readonly featureCollection?: KentRehberiGeoJsonFeatureCollection | null;
 }
 
 interface ExtentLike {
@@ -102,6 +108,7 @@ interface MapViewLike {
 }
 
 interface WatchUtilsLike {
+  watch(target: unknown, property: string, callback: (value: unknown) => void): RemovableHandle;
   when(
     target: unknown,
     property: string,
@@ -238,6 +245,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const [resultList, setResultList] = useState<readonly ParkRecord[]>([]);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const layerAbortRef = useRef<AbortController | null>(null);
 
     const mountedRef = useRef(false);
     const mapViewRef = useRef<MapViewLike | null>(null);
@@ -260,6 +269,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
     const removeLastClusterLayer = useCallback((): void => {
       getOwner()?.clear();
+      clusterLayerRef.current?.layerObj?.destroy?.();
       clusterLayerRef.current = null;
     }, [getOwner]);
 
@@ -299,8 +309,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           }));
         }));
 
-        if (typeof view.watch === 'function') {
-          lifecycleRef.current.add(view.watch('zoom', (newZoomLevel) => {
+        if (typeof watchUtils.watch === 'function') {
+          lifecycleRef.current.add(watchUtils.watch(view, 'zoom', (newZoomLevel) => {
             const layer = clusterLayerRef.current?.layerObj;
             if (!layer?.renderer) return;
             layer.renderer.symbol = createParkMarkerSymbol(newZoomLevel);
@@ -313,11 +323,13 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, [rememberExtent]);
 
     const reset = useCallback((): void => {
+      layerAbortRef.current?.abort();
       requestGateRef.current.invalidate();
       setQuery(defaultQuery);
       setResultList([]);
       setLoading(false);
       setErrorMessage('');
+      setVisibleCount(PAGE_SIZE);
       removeLastClusterLayer();
       allowExtentHistoryRef.current = true;
     }, [removeLastClusterLayer]);
@@ -331,11 +343,15 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
       mapViewRef.current = view;
       const requestId = requestGateRef.current.next();
+      layerAbortRef.current?.abort();
+      const layerAbort = new AbortController();
+      layerAbortRef.current = layerAbort;
       const latestQuery = windowManager.GetQueryParams?.(id) ?? query;
 
       setQuery(latestQuery);
       setLoading(true);
       setErrorMessage('');
+      setVisibleCount(PAGE_SIZE);
 
       await safeClientLog(
         LoggingBusiness,
@@ -349,7 +365,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       );
 
       try {
-        const result = await ParklarQeryBusiness.Query(latestQuery, false) as ServiceResult;
+        const result = await ParklarQeryBusiness.Query(latestQuery, false, { signal: layerAbort.signal }) as ServiceResult;
 
         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
         if (result?.type !== Constants_ServiceResultType.Success) {
@@ -378,12 +394,14 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
 
-        const clusterLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
-          PARK_SERVICE_KEY,
-          windowTitle,
-          latestQuery,
-          createParkMarkerSymbol(view.zoom),
-        ) as LayerEnvelope | null;
+        const clusterLayer: LayerEnvelope | null = result.source === 'kent-rehberi' && result.featureCollection
+          ? { layerObj: await createKentRehberiGeoJsonLayer(result.featureCollection, undefined, {
+            id: `${id}-parks`, title: windowTitle,
+            renderer: { type: 'simple', symbol: createParkMarkerSymbol(view.zoom) },
+          }, layerAbort.signal) as ParkLayerLike }
+          : await CommonBusiness.Clustering.CreateLayerWithoutClustering(
+            PARK_SERVICE_KEY, windowTitle, latestQuery, createParkMarkerSymbol(view.zoom),
+          ) as LayerEnvelope | null;
 
         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) {
           clusterLayer?.layerObj?.destroy?.();
@@ -539,9 +557,11 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       const lifecycle = lifecycleRef.current;
       return () => {
         mountedRef.current = false;
+        layerAbortRef.current?.abort();
         requestGateRef.current.invalidate();
         lifecycle.dispose();
         ownerRef.current?.clear();
+        clusterLayerRef.current?.layerObj?.destroy?.();
         ownerRef.current = null;
         clusterLayerRef.current = null;
       };
@@ -573,31 +593,32 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
     return (
       <section
-        className="sidebar-container kr-park-query"
+        className="sidebar-container kr-fast-query kr-park-query"
         aria-labelledby={id + '-title'}
         aria-busy={loading}
         aria-hidden={!visible}
         style={{ visibility: visible ? 'visible' : 'hidden' }}
       >
-        <header className="common-query-window-header">
+        <header className="common-query-window-header kr-fast-query__header">
           <SharedGISIcon
             record={{ type: PARK_ICON_TYPE, category: 'Parklar', title: windowTitle }}
             size={34}
             className="common-query-window-header-icon"
           />
           <h2 id={id + '-title'}>{windowTitle}</h2>
+          <button type="button" className="kr-fast-query__close" aria-label={windowTitle + ' penceresini kapat'} onClick={() => { void returnToServices(); }}>×</button>
         </header>
 
-        <div className="results-container-toolbar">
+        <div className="results-container-toolbar kr-fast-query__toolbar">
           <button
             type="button"
-            className="results-container-back-button"
+            className="results-container-back-button kr-fast-query__back"
             onClick={() => { void returnToServices(); }}
           >
             <span aria-hidden="true">←</span>
             <span>Hizmetlere dön</span>
           </button>
-          <div className="results-container-count" aria-live="polite">
+          <div className="results-container-count kr-fast-query__count" aria-live="polite">
             <strong>{resultList.length}</strong> adet sonuç
           </div>
         </div>
@@ -621,22 +642,22 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           </button>
         ) : null}
 
-        <ul className="results-container kr-park-query__results" aria-label="Park sonuçları">
-          {resultList.map((item, index) => {
+        <ul className="results-container kr-fast-query__results kr-park-query__results" aria-label="Park sonuçları">
+          {resultList.slice(0, visibleCount).map((item, index) => {
             const itemKey = item.objectId !== null && item.objectId !== undefined
               ? String(item.objectId)
               : item.title + '-' + String(index);
 
             return (
-              <li className="result-item-container kr-park-query__item" key={itemKey}>
+              <li className="result-item-container kr-fast-query__item kr-park-query__item" key={itemKey}>
                 <SharedGISIcon
                   record={{ type: PARK_ICON_TYPE, category: 'Parklar', title: item.title }}
                   size={30}
-                  className="kr-park-query__item-icon"
+                  className="kr-fast-query__item-icon kr-park-query__item-icon"
                 />
                 <button
                   type="button"
-                  className="result-item-info kr-park-query__primary"
+                  className="result-item-info kr-fast-query__copy kr-park-query__primary"
                   onClick={() => { void showItem(item); }}
                   onKeyDown={(event) => {
                     if (!isActivationKey(event)) return;
@@ -649,7 +670,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
                   <span className="result-item-info-address">{item.address}</span>
                   {item.phone ? <span>{item.phone}</span> : null}
                 </button>
-                <div className="kr-park-query__actions" aria-label={item.title + ' işlemleri'}>
+                <div className="kr-fast-query__actions kr-park-query__actions" aria-label={item.title + ' işlemleri'}>
                   <button type="button" onClick={() => { void showItem(item); }}>
                     Haritada göster
                   </button>
@@ -661,6 +682,11 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
             );
           })}
         </ul>
+        {visibleCount < resultList.length ? (
+          <button type="button" className="kr-fast-query__more" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
+            Daha fazla park göster ({resultList.length - visibleCount} kaldı)
+          </button>
+        ) : null}
       </section>
     );
   },

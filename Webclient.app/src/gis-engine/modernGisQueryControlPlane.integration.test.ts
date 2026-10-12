@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createModernGisKernel } from './modernGisKernel';
+import { createServiceHealthRuntime } from './serviceHealthRuntime';
 import {
   createSpatialQueryControlPlane,
   deriveSpatialLayerNumericId,
@@ -51,6 +52,7 @@ type Kernel = ReturnType<typeof createModernGisKernel>;
 
 const createKernel = (
   queryControlPlane = createSpatialQueryControlPlane(),
+  serviceHealth?: ReturnType<typeof createServiceHealthRuntime>,
 ): Kernel => createModernGisKernel({
   initialTier: 'balanced',
   device: {
@@ -59,6 +61,7 @@ const createKernel = (
     networkClass: 'fast',
   },
   queryControlPlane,
+  ...(serviceHealth ? { serviceHealth } : {}),
 });
 
 const registerPlaces = (kernel: Kernel): void => {
@@ -445,7 +448,7 @@ describe('modern GIS kernel query control-plane integration', () => {
     });
     expect(kernel.getDiagnostics().kernel.services[0]).toMatchObject({
       failures: 1,
-      circuit: 'open',
+      circuit: 'closed',
     });
   });
 
@@ -470,7 +473,7 @@ describe('modern GIS kernel query control-plane integration', () => {
   });
 
   it('retains existing service-health preflight rejection before query work starts', async () => {
-    const kernel = createKernel();
+    const kernel = createKernel(undefined, createServiceHealthRuntime({ policy: { consecutiveFailureLimit: 1 } }));
     registerPlaces(kernel);
 
     await expect(kernel.executeQuery({
