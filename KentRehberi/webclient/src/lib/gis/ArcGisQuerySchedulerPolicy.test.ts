@@ -239,4 +239,68 @@ describe('ArcGisQuerySchedulerPolicy', () => {
     expect(policy.startNext(202)?.requestId).toBe('later')
   })
 
+  it('rejects stale revisions even when invalidation removed every running and queued request', () => {
+    const policy = scheduler()
+    enqueue(policy, 'running', 'parcels', 'foreground', 30, 1)
+    expect(policy.startNext(20)?.requestId).toBe('running')
+    enqueue(policy, 'queued', 'parcels', 'foreground', 30, 2)
+    expect(policy.invalidateLayerRevision('parcels', 3)).toBe(2)
+    expect(policy.snapshot().runningBytes).toBe(0)
+    expect(() => enqueue(policy, 'stale', 'parcels', 'foreground', 20, 2)).toThrow('stale-query-revision')
+    enqueue(policy, 'current', 'parcels', 'foreground', 20, 3)
+    expect(policy.startNext(30)?.requestId).toBe('current')
+  })
+
+  it('does not decrease a retained revision floor on an older invalidation', () => {
+    const policy = scheduler()
+    policy.invalidateLayerRevision('buildings', 12)
+    expect(policy.invalidateLayerRevision('buildings', 4)).toBe(0)
+    expect(() => enqueue(policy, 'old', 'buildings', 'interactive', 20, 11)).toThrow('stale-query-revision')
+    enqueue(policy, 'new', 'buildings', 'interactive', 20, 12)
+    expect(policy.startNext(20)?.requestId).toBe('new')
+  })
+
+  it('bounds retained revision floors with a non-mutating capacity failure', () => {
+    const policy = scheduler({ maxTrackedRevisionLayers: 1 })
+    expect(policy.invalidateLayerRevision('a', 2)).toBe(0)
+    enqueue(policy, 'pending-b', 'b', 'foreground', 20, 1)
+    expect(() => policy.invalidateLayerRevision('b', 2)).toThrow('query-revision-layer-budget-exceeded')
+    expect(policy.snapshot().queued.map(entry => entry.requestId)).toEqual(['pending-b'])
+    expect(() => enqueue(policy, 'stale-a', 'a', 'foreground', 20, 1)).toThrow('stale-query-revision')
+    expect(policy.releaseLayer('a')).toBe(0)
+    expect(policy.invalidateLayerRevision('b', 2)).toBe(1)
+    expect(policy.snapshot().queued).toHaveLength(0)
+  })
+
+  it('releases all queued, running and revision state for a removed ArcGIS layer', () => {
+    const policy = scheduler({ maxRunning: 2, maxPerLayerRunning: 1 })
+    policy.invalidateLayerRevision('roads', 5)
+    enqueue(policy, 'running', 'roads', 'foreground', 70, 5)
+    enqueue(policy, 'queued', 'roads', 'foreground', 30, 5)
+    enqueue(policy, 'unrelated', 'parcels', 'background', 20, 1)
+    expect(policy.startNext(20)?.requestId).toBe('running')
+    expect(policy.snapshot().runningBytes).toBe(70)
+    expect(policy.releaseLayer('roads')).toBe(2)
+    expect(policy.snapshot()).toMatchObject({ runningBytes: 0 })
+    expect(policy.snapshot().queued.map(entry => entry.requestId)).toEqual(['unrelated'])
+    expect(policy.complete('running', 5)).toBe(false)
+    expect(policy.releaseLayer('roads')).toBe(0)
+    // Removing a layer intentionally frees its revision floor for a fresh instance.
+    enqueue(policy, 'reused', 'roads', 'foreground', 10, 1)
+    expect(policy.startNext(21)?.requestId).toBe('reused')
+  })
+
+  it('rejects invalid revision layer retention budgets', () => {
+    expect(() => scheduler({ maxTrackedRevisionLayers: 0 })).toThrow('maxTrackedRevisionLayers')
+    expect(() => scheduler({ maxTrackedRevisionLayers: 0.5 })).toThrow('maxTrackedRevisionLayers')
+    expect(() => scheduler({ maxTrackedRevisionLayers: Number.POSITIVE_INFINITY })).toThrow('maxTrackedRevisionLayers')
+  })
+
+  it('does not retain a revision floor for a zero minimum revision', () => {
+    const policy = scheduler({ maxTrackedRevisionLayers: 1 })
+    expect(policy.invalidateLayerRevision('unrestricted', 0)).toBe(0)
+    expect(policy.invalidateLayerRevision('actual', 5)).toBe(0)
+    expect(() => enqueue(policy, 'stale', 'actual', 'foreground', 1, 4)).toThrow('stale-query-revision')
+  })
+
 })
