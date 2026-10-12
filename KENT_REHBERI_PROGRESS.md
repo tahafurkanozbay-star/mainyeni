@@ -142,3 +142,12 @@
 - REVIEW: Bookmark combobox collection-visibility ARIA, deterministic keyboard/focus/delete behavior, Basemap bounded lifecycle, shared busy semantics, mobile/coarse-pointer target sizes, focus-visible, reduced-motion and forced-colors reviewed in source. No new real-browser visual regression executed.
 - WRITE STATUS: PR description correction and expected-head squash merge attempted after fresh gate verification; both rejected by OpenAI safety checks. No merge or new source commit. Do not claim main changed.
 - NEXT: verify current main/head, exact-head CI, behind=0, merge-base, >=4,000 additions, mergeable and review state; update stale PR description if permitted, then expected-head squash merge. Confirm merged=true, merge SHA and updated main. Any progress commit creates a new exact head requiring new CI. Keep scheduled Experience task enabled.
+
+## Deep Experience / map-tool workspace merged — PR #474 — 2026-10-12
+- MERGE: PR #474 `feat(experience): modernize map tools workspace` squash-merged successfully.
+- FINAL EXACT HEAD: `73fe17a205efb159875f6c5c44624115ee365180`; 4,238 additions / 196 deletions / 15 files; current-main merge-base `d364f991b88a0668a1337490227af4936eac232f`; 60 ahead / 0 behind; `mergeable=true`.
+- REQUIRED CI: Webclient Quality `38199456689`, Release QA `38199456675`, Typed Source Boundary `38199456683`, Platform Architecture Audit `38199456685`: all `completed+success` on the exact merged head.
+- REVIEW / RISK: no PR comments/reviews/threads at final gate; no new WMS/WFS UI, remote font/CDN, telemetry/analytics, external transport, secret, heavy asset, or second GIS icon resolver introduced.
+- MERGE SHA: `146f8bd4554376a0c9b253ec7c0333978af16668`; post-merge `main` was verified at the same SHA before this progress-only documentation update.
+- NEXT EXPERIENCE TURN: start from the then-current `main` on a new unique Experience branch; do not reuse PR #474 branch.
+
