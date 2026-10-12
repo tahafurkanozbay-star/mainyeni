@@ -50,6 +50,39 @@ test('extractElements returns paired and self-closing elements in source order',
   assert.deepEqual(extractElements(xml,'PackageReference').map(item=>item.attributes.Include), ['A','B']);
 });
 
+test('self-closing PackageReference before a paired sibling is counted once', () => {
+  const xml = '<Project><PackageReference Include="A" /><PackageReference Include="Tools"><PrivateAssets>all</PrivateAssets></PackageReference></Project>';
+  const parsed = extractElements(xml, 'PackageReference');
+  assert.deepEqual(parsed.map(item => item.attributes.Include), ['A', 'Tools']);
+  assert.equal(parsed[0].body, '');
+  assert.match(parsed[1].body, /PrivateAssets/);
+});
+
+test('self-closing siblings do not consume a later paired PackageReference', () => {
+  const xml = '<Project><PackageReference Include="A" /><PackageReference Include="B" /><PackageReference Include="C"><Version>1.0</Version></PackageReference></Project>';
+  const parsed = parseProjectFile(xml, 'App.csproj');
+  assert.deepEqual(parsed.packageReferences.map(item => item.id), ['A', 'B', 'C']);
+  assert.equal(parsed.findings.filter(item => item.code === 'package-reference-inline-version').length, 1);
+});
+
+test('quote-aware XML scanning preserves greater-than characters inside attributes', () => {
+  const xml = `<Project><PackageReference Include="A" Condition="'$(TargetFramework)' > 'net9.0'" /><PackageReference Include="B" /></Project>`;
+  const parsed = extractElements(xml, 'PackageReference');
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].attributes.Condition, "'$(TargetFramework)' > 'net9.0'");
+});
+
+test('CDATA is not treated as a package declaration', () => {
+  const xml = '<Project><![CDATA[<PackageReference Include="Ghost" />]]><PackageReference Include="A" /></Project>';
+  assert.deepEqual(extractElements(xml, 'PackageReference').map(item => item.attributes.Include), ['A']);
+});
+
+test('mixed real-world PackageReference syntax has no false duplicate or stale package', () => {
+  const xml = project({ packages: ['EFCore.NamingConventions', '<PackageReference Include="Microsoft.EntityFrameworkCore.Tools"><PrivateAssets>all</PrivateAssets></PackageReference>'] });
+  const report = evaluate({ catalog: [['EFCore.NamingConventions','10.0.1'],['Microsoft.EntityFrameworkCore.Tools','10.0.12']], projects: [{path:'App/App.csproj',xml}] });
+  assert.equal(report.ok, true, JSON.stringify(report.findings));
+  assert.equal(report.summary.referencedPackages, 2);
+});
 test('extractElements ignores commented package declarations', () => {
   const xml = `<Project><!-- <PackageReference Include="Ghost" /> --><PackageReference Include="A" /></Project>`;
   assert.deepEqual(extractElements(xml,'PackageReference').map(item=>item.attributes.Include), ['A']);

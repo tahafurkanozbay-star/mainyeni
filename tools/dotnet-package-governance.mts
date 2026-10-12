@@ -33,19 +33,51 @@ export const parseAttributes = source => {
   return freeze(attributes);
 };
 
-const stripComments = source => String(source ?? '').replace(/<!--(?:.|\r|\n)*?-->/g, '');
+const stripComments = source => String(source ?? '')
+  .replace(/<!--(?:.|\r|\n)*?-->/g, '')
+  .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '');
 
+// MSBuild projects may mix self-closing and paired PackageReference elements.
+// A paired-element regex can accidentally treat a preceding <PackageReference />
+// as the opening tag for a later </PackageReference>, double-counting packages.
+// Scan quote-aware start tags instead; quoted '>' must not terminate attributes.
 export const extractElements = (xml, tagName) => {
+  if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(String(tagName))) throw new Error('invalid XML element name');
   const source = stripComments(xml);
-  const escaped = String(tagName);
-  const paired = new RegExp('<' + escaped + '\\b([^>]*)>([\\s\\S]*?)<\\/' + escaped + '\\s*>', 'gi');
-  const selfClosing = new RegExp('<' + escaped + '\\b([^>]*)\\/\\s*>', 'gi');
+  const needle = '<' + tagName;
+  const closing = new RegExp('</' + tagName + '\\s*>', 'gi');
   const result = [];
-  for (const match of source.matchAll(paired)) result.push(freeze({ attributes: parseAttributes(match[1]), body: match[2], index: match.index ?? 0 }));
-  for (const match of source.matchAll(selfClosing)) result.push(freeze({ attributes: parseAttributes(match[1]), body: '', index: match.index ?? 0 }));
-  return freeze(result.sort((a,b)=>a.index-b.index));
+  let cursor = 0;
+  while (cursor < source.length) {
+    const index = source.indexOf(needle, cursor);
+    if (index < 0) break;
+    const boundary = source[index + needle.length];
+    if (boundary && !/[\s/>]/.test(boundary)) { cursor = index + needle.length; continue; }
+    let quote = null;
+    let end = index + needle.length;
+    for (; end < source.length; end++) {
+      const character = source[end];
+      if (quote) { if (character === quote) quote = null; }
+      else if (character === '"' || character === "'") quote = character;
+      else if (character === '>') break;
+    }
+    if (end >= source.length) throw new Error('unterminated XML start tag ' + tagName);
+    const rawAttributes = source.slice(index + needle.length, end).trimEnd();
+    const selfClosing = rawAttributes.endsWith('/');
+    const attributes = parseAttributes(selfClosing ? rawAttributes.slice(0, -1) : rawAttributes);
+    if (selfClosing) {
+      result.push(freeze({ attributes, body: '', index }));
+      cursor = end + 1;
+      continue;
+    }
+    closing.lastIndex = end + 1;
+    const match = closing.exec(source);
+    if (!match) throw new Error('missing closing XML tag ' + tagName);
+    result.push(freeze({ attributes, body: source.slice(end + 1, match.index), index }));
+    cursor = closing.lastIndex;
+  }
+  return freeze(result);
 };
-
 export const extractPropertyValues = (xml, propertyName) => {
   const source = stripComments(xml);
   const escaped = String(propertyName);
