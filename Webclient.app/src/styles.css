@@ -659,13 +659,7 @@ canvas::after {
 
 
 /*overrides*/
-.btn:focus-visible{
-  color: white !important;
-  background-color: var(--primary-button-background-hover) !important;
-  border-color: transparent !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-}
+
 
 
 .radio-group{

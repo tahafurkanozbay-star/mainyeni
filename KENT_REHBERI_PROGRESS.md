@@ -196,3 +196,5 @@
 - NETWORK / GÜVENLİK / İKON: Yeni endpoint, transport, telemetry, dependency, font/CDN veya ikinci ikon resolver eklenmedi. Eski Google Fonts import'u kaldırıldı; mevcut ikon registry ve API/BFF akışı korundu.
 - FULL SUITE: Yerel full Vitest denemesi runtime kaynak sınırına takıldı; ilgili testler ve tooling tamamlandı. Tam repo ve exact-base regression gate GitHub Actions'ta başarılı tamamlanmadan merge yapılmaz.
 - MERGE DURUMU: Bu kayıt commit'e dahildir. PR exact head için zorunlu CI, güncel main/merge-base, mergeability ve review durumu doğrulanmalıdır; merge henüz gerçekleşmiş sayılmaz.
+
+- CI ONARIMI: İlk exact-head Release QA denetimi tarihsel `.btn:focus-visible` kuralındaki `outline: 0` ve `box-shadow: none` baskılamasını yeni bulgu olarak işaretledi. Ortak modern focus authority zaten aktif olduğundan bu eski baskılayıcı override kaldırıldı; klavye odak görünürlüğü korunur. Yeni exact-head CI yeniden doğrulanmalıdır.
