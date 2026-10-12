@@ -226,11 +226,21 @@ export class MapModeExperienceModel {
       && next.forcedColors === current.forcedColors
       && next.coarsePointer === current.coarsePointer
     ) return;
-    this.#replace({
-      ...this.#snapshot,
+    this.#replace(createSnapshot({
       revision: this.#snapshot.revision + 1,
+      phase: this.#snapshot.phase,
+      currentMode: this.#snapshot.currentMode,
+      requestedMode: this.#snapshot.requestedMode,
+      requestId: this.#snapshot.requestId,
+      attempt: this.#snapshot.attempt,
+      maxAttempts: this.#maxAttempts,
+      announcement: this.#snapshot.announcement,
+      errorKind: this.#snapshot.errorKind,
+      transitionStartedAt: this.#snapshot.transitionStartedAt,
+      lastTransitionMs: this.#snapshot.lastTransitionMs,
+      lastSource: this.#snapshot.lastSource,
       environment: next,
-    });
+    }));
   }
 
   requestMode(mode: ExperienceMapMode): number | null {
