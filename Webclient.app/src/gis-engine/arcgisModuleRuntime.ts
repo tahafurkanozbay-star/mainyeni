@@ -1,5 +1,10 @@
+import { abortError, throwIfAborted } from '../platform/runtime/contracts';
 import { invokeArcgisModuleTransportBatch } from './arcgisModuleTransport';
 import { createDefaultArcgisEsmTransport } from './arcgisEsmTransport';
+
+export interface ArcgisModuleLoadOptions {
+  readonly signal?: AbortSignal;
+}
 
 export interface ArcgisModuleRuntimeConfiguration {
   version?: string;
@@ -62,6 +67,7 @@ const loadMissingModules = (moduleIds: readonly string[]): void => {
 
   loadRequests += 1;
   const transportAtRequestTime = activeTransport;
+  const ownedPromises = new Map<string, Promise<unknown>>();
   const batchPromise = invokeArcgisModuleTransportBatch(transportAtRequestTime, missing)
     .then((modules) => {
       if (!Array.isArray(modules)) {
@@ -76,12 +82,17 @@ const loadMissingModules = (moduleIds: readonly string[]): void => {
     })
     .catch((error: unknown) => {
       failures += 1;
-      for (const moduleId of missing) moduleCache.delete(moduleId);
+      for (const moduleId of missing) {
+        // An older failed batch must not evict a newly acquired batch or transport.
+        if (moduleCache.get(moduleId) === ownedPromises.get(moduleId)) moduleCache.delete(moduleId);
+      }
       throw error;
     });
 
   for (const [index, moduleId] of missing.entries()) {
-    moduleCache.set(moduleId, batchPromise.then((modules) => modules[index]));
+    const promise = batchPromise.then((modules) => modules[index]);
+    ownedPromises.set(moduleId, promise);
+    moduleCache.set(moduleId, promise);
   }
 };
 
@@ -138,7 +149,9 @@ export const evictArcgisModules = (moduleIds: readonly string[]): number => {
 
 export const loadArcgisModules = async <TModules extends readonly unknown[] = readonly unknown[]>(
   moduleIdsInput: readonly string[],
+  options: ArcgisModuleLoadOptions = {},
 ): Promise<TModules> => {
+  throwIfAborted(options.signal);
   const moduleIds = moduleIdsInput.map(normalizeModuleId);
   if (moduleIds.length === 0) return [] as unknown as TModules;
 
@@ -146,18 +159,42 @@ export const loadArcgisModules = async <TModules extends readonly unknown[] = re
   cacheHits += cachedAtStart.size;
   loadMissingModules(moduleIds);
 
-  const modules = await Promise.all(moduleIds.map((moduleId) => {
+  const ownedPromises = moduleIds.map((moduleId) => {
     const cached = moduleCache.get(moduleId);
-    if (!cached) {
-      throw new Error(`ArcGIS module ${moduleId} was not cached after scheduling.`);
-    }
+    if (!cached) throw new Error(`ArcGIS module ${moduleId} was not cached after scheduling.`);
     return cached;
-  }));
-  return modules as unknown as TModules;
+  });
+  const pending = Promise.all(ownedPromises);
+  const signal = options.signal;
+  if (!signal) return await pending as unknown as TModules;
+
+  return await new Promise<unknown[]>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      callback();
+    };
+    const onAbort = (): void => finish(() => {
+      // Native imports keep running. Release only this request's cache slots
+      // so a subsequent acquisition does not inherit a permanently stuck batch.
+      moduleIds.forEach((moduleId, index) => {
+        if (moduleCache.get(moduleId) === ownedPromises[index]) moduleCache.delete(moduleId);
+      });
+      reject(signal.reason ?? abortError());
+    });
+    signal.addEventListener('abort', onAbort, { once: true });
+    pending.then((modules) => finish(() => resolve(modules)), (error: unknown) => finish(() => reject(error)));
+    if (signal.aborted) onAbort();
+  }) as unknown as TModules;
 };
 
-export const loadArcgisModule = async <T = unknown>(moduleIdInput: string): Promise<T> => {
-  const [module] = await loadArcgisModules<readonly [T]>([moduleIdInput]);
+export const loadArcgisModule = async <T = unknown>(
+  moduleIdInput: string,
+  options: ArcgisModuleLoadOptions = {},
+): Promise<T> => {
+  const [module] = await loadArcgisModules<readonly [T]>([moduleIdInput], options);
   return module;
 };
 

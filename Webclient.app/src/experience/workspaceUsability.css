@@ -612,3 +612,145 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
   color: inherit;
   font-size: 24px;
 }
+
+/* One scrolling surface keeps short screens usable. Sticky window identity and
+ * close controls remain available while the user reads long tool contents. */
+#app-shell .common-query-window-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  border-block-end: 1px solid var(--exp-border);
+  scroll-margin-block-start: 12px;
+}
+#app-shell .common-query-window {
+  scroll-padding-block-start: 84px;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+#app-shell .common-query-window-header > :is(span, h2),
+#app-shell .map-widget-surface__title-wrap {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+#app-shell .map-widget-surface__identity { flex-basis: 160px; }
+#app-shell .map-widget-surface__window-tools { margin-inline-start: auto; }
+#app-shell .sidebar-container.kr-fast-query {
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-padding-block: 84px;
+  scrollbar-gutter: stable;
+}
+#app-shell .kr-fast-query__results {
+  overflow: visible;
+  block-size: auto;
+  max-block-size: none;
+  min-block-size: 0;
+  padding-block-end: 12px;
+}
+#app-shell .kr-fast-query__status:empty { display: none; }
+#app-shell .kr-fast-query__filter label { font-size: 13px; }
+#app-shell .kr-fast-query__filter input { font-size: 16px; }
+#app-shell .kr-fast-query__clear {
+  justify-self: start;
+  min-block-size: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--exp-border-strong);
+  border-radius: 8px;
+  color: var(--exp-text);
+  background: var(--exp-surface-2);
+  font: inherit;
+  cursor: pointer;
+}
+#app-shell .kr-fast-query__empty {
+  margin: 12px;
+  padding: 12px;
+  border: 1px solid var(--exp-border);
+  border-radius: 10px;
+  color: var(--exp-text-muted);
+  background: var(--exp-surface-2);
+  line-height: 1.5;
+}
+#app-shell .kr-fast-query__pagination {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 4;
+  padding: 10px 12px;
+  border-block-start: 1px solid var(--exp-border);
+  background: var(--exp-surface);
+}
+#app-shell .kr-fast-query__pagination p { margin: 0 0 6px; font-size: 12px; color: var(--exp-text-muted); }
+#app-shell .kr-fast-query__pagination > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#app-shell .kr-fast-query__pagination button {
+  min-block-size: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--exp-border-strong);
+  border-radius: 8px;
+  color: var(--exp-text);
+  background: var(--exp-surface-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+#app-shell .kr-fast-query__pagination button:disabled { opacity: .55; cursor: default; }
+#app-shell .kr-fast-query :is(button, a, input):focus-visible,
+#app-shell .kr-fast-query__results:focus-visible {
+  outline: 3px solid var(--exp-accent);
+  outline-offset: -3px;
+}
+@media (max-height: 540px) {
+  /* Landscape phones need a result viewport as well as the fixed header. */
+  #app-shell .sidebar-container.kr-fast-query,
+  #app-shell .sidebar-container.kr-sidebar {
+    block-size: calc(100dvh - 148px);
+    height: calc(100dvh - 148px);
+  }
+  #app-shell .common-query-window,
+  #app-shell .kr-lazy-window {
+    max-block-size: calc(100dvh - var(--kr-panel-top) - 16px);
+    max-height: calc(100dvh - var(--kr-panel-top) - 16px);
+  }
+}
+@media (pointer: coarse) {
+  #app-shell .kr-fast-query :is(button, input),
+  #app-shell .common-query-window-tool-button { min-block-size: 48px; }
+}
+@media (forced-colors: active) {
+  #app-shell :is(.common-query-window-header, .kr-fast-query__pagination, .kr-fast-query__clear, .kr-fast-query__empty) {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
+  #app-shell .kr-fast-query__pagination button:disabled { color: GrayText; opacity: 1; }
+}
+
+@media (max-height: 540px) {
+  /* Keep the footer rail from presenting controls underneath an expanded
+   * tool surface in a short viewport. */
+  #app-shell:has(.common-query-window[aria-hidden='false']) .experience-utility {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (min-width: 681px) and (max-width: 880px) {
+  #app-shell .sidebar-container.kr-fast-query {
+    top: var(--kr-panel-top);
+    height: calc(100dvh - var(--kr-panel-top) - 8px);
+    block-size: calc(100dvh - var(--kr-panel-top) - 8px);
+    z-index: 1300;
+  }
+}
+@media (max-height: 540px) {
+  #app-shell:has(.kr-fast-query:not([aria-hidden='true'])) :is(.experience-utility, .experience-data-disclaimer, .map-shortcut-help__launcher, .workspace-accessibility-center, .map-workspace-shell-overlay) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+#app-shell .kr-fast-query :is(button, input, a) {
+  scroll-margin-block-start: 84px;
+  scroll-margin-block-end: 100px;
+}

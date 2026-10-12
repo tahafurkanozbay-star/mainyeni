@@ -7,6 +7,7 @@ import {
 
 export interface MapModeTransitionExecutionContext {
   readonly request: MapModeTransitionRequest;
+  readonly signal?: AbortSignal;
   readonly isCurrent: () => boolean;
 }
 
@@ -38,6 +39,7 @@ export class MapModeTransitionCoordinator {
   #latest: MapModeTransitionRequest | null = null;
   #running = false;
   #disposed = false;
+  #activeController: AbortController | null = null;
   #drainPromise: Promise<void> = Promise.resolve();
   #diagnostics: MapModeTransitionCoordinatorDiagnostics = Object.freeze({
     acceptedRequestCount: 0,
@@ -107,6 +109,8 @@ export class MapModeTransitionCoordinator {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#activeController?.abort();
+    this.#activeController = null;
     this.#latest = null;
     this.#patch({ disposed: true });
   }
@@ -123,8 +127,11 @@ export class MapModeTransitionCoordinator {
         }
 
         this.#patch({ executionCount: this.#diagnostics.executionCount + 1 });
+        const controller = new AbortController();
+        this.#activeController = controller;
         const context: MapModeTransitionExecutionContext = Object.freeze({
           request,
+          signal: controller.signal,
           isCurrent: () => !this.#disposed && this.#model.getSnapshot().requestId === request.requestId,
         });
 
@@ -145,6 +152,7 @@ export class MapModeTransitionCoordinator {
         }
       }
     } finally {
+      this.#activeController = null;
       this.#running = false;
       this.#patch({ running: false });
       if (!this.#disposed && this.#latest) {

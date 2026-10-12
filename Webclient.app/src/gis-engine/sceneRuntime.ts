@@ -1,3 +1,4 @@
+import { throwIfAborted } from '../platform/runtime/contracts';
 import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveRuntime';
 import { loadArcgisModule, resetArcgisModuleRuntimeCache } from './arcgisModuleRuntime';
 import { createViewState, updateSelection } from './viewState';
@@ -18,7 +19,7 @@ const safeRemove = (
 
 export interface SceneViewLike {
   camera?: any; extent?: any; scale?: number; container?: any;
-  map?: { add?: (layer: ArcGisLayerLike, index?: number) => unknown; ground?: any; basemap?: any };
+  map?: { add?: (layer: ArcGisLayerLike, index?: number) => unknown; ground?: any; basemap?: any } | null;
   hitTest?: (point: unknown, options?: any) => Promise<any>;
   goTo?: (target: any, options?: any) => Promise<any>;
   watch?: (property: string, callback: (...args: any[]) => void) => { remove?: () => void };
@@ -33,7 +34,7 @@ export interface SceneViewLike {
 const sceneCenter = (view: SceneViewLike): [number, number] | null => { const position = view?.camera?.position; const longitude = finite(position?.longitude); const latitude = finite(position?.latitude); if (longitude !== null && latitude !== null) return [longitude, latitude]; const x = finite(position?.x); const y = finite(position?.y); return x !== null && y !== null ? [x, y] : null; };
 const sceneExtent = (view: SceneViewLike) => { const extent = view?.extent; if (!extent) return null; const xmin = finite(extent.xmin); const ymin = finite(extent.ymin); const xmax = finite(extent.xmax); const ymax = finite(extent.ymax); if ([xmin, ymin, xmax, ymax].some((value) => value === null) || xmin === null || ymin === null || xmax === null || ymax === null) return null; return { xmin, ymin, xmax, ymax, wkid: finite(extent.spatialReference?.wkid) }; };
 
-export interface SceneCreateOptions { map?: any; basemap?: any; ground?: any; camera?: any; qualityProfile?: string; environment?: any; constraints?: any; padding?: any; }
+export interface SceneCreateOptions { signal?: AbortSignal; map?: any; basemap?: any; ground?: any; camera?: any; qualityProfile?: string; environment?: any; constraints?: any; padding?: any; }
 
 export interface SceneContainerLike {
   clientWidth?: number;
@@ -89,21 +90,59 @@ export const synchronizeSceneViewSize = (view: SceneViewLike | null | undefined)
   view.resize();
   return true;
 };
-const createOwnedSceneMap = async (options: SceneCreateOptions = {}): Promise<any> => { const MapCtor = await loadArcgisModule<any>('esri/Map'); const mapOptions: Record<string, any> = {}; if (options.basemap !== undefined) mapOptions.basemap = options.basemap; if (options.ground !== undefined) mapOptions.ground = options.ground; return new MapCtor(mapOptions); };
+const createOwnedSceneMap = async (options: SceneCreateOptions = {}): Promise<any> => { const MapCtor = await loadArcgisModule<any>('esri/Map', options.signal ? { signal: options.signal } : {}); throwIfAborted(options.signal); const mapOptions: Record<string, any> = {}; if (options.basemap !== undefined) mapOptions.basemap = options.basemap; if (options.ground !== undefined) mapOptions.ground = options.ground; return new MapCtor(mapOptions); };
 export const resetSceneRuntimeModuleCache = (): void => { resetArcgisModuleRuntimeCache(); };
-export const createSceneView = async (container: unknown, options: SceneCreateOptions = {}): Promise<{ map: any; view: SceneViewLike; ownsMap: boolean }> => {
-  const SceneViewCtor = await loadArcgisModule<any>('esri/views/SceneView'); const ownsMap = !options.map; const map = options.map || await createOwnedSceneMap(options); const viewOptions: Record<string, any> = { container, map, ui: { components: [] } };
-  if (options.camera !== undefined) viewOptions.camera = options.camera; viewOptions.qualityProfile = options.qualityProfile !== undefined ? options.qualityProfile : 'medium'; if (options.environment !== undefined) viewOptions.environment = options.environment; if (options.constraints !== undefined) viewOptions.constraints = options.constraints; if (options.padding !== undefined) viewOptions.padding = options.padding;
-  const view = new SceneViewCtor(viewOptions) as SceneViewLike; return { map, view, ownsMap };
+export const createSceneView = async (
+  container: unknown,
+  options: SceneCreateOptions = {},
+): Promise<{ map: any; view: SceneViewLike; ownsMap: boolean }> => {
+  throwIfAborted(options.signal);
+  const SceneViewCtor = await loadArcgisModule<any>('esri/views/SceneView', options.signal ? { signal: options.signal } : {});
+  // An import cannot be physically cancelled; prevent its late continuation
+  // from attaching a new SDK view to a reused React host.
+  throwIfAborted(options.signal);
+  const ownsMap = !options.map;
+  const map = options.map || await createOwnedSceneMap(options);
+  try {
+    throwIfAborted(options.signal);
+    const viewOptions: Record<string, any> = {
+      container, map, ui: { components: [] },
+      qualityProfile: options.qualityProfile ?? 'medium',
+    };
+    for (const key of ['camera', 'environment', 'constraints', 'padding'] as const) {
+      if (options[key] !== undefined) viewOptions[key] = options[key];
+    }
+    const view = new SceneViewCtor(viewOptions) as SceneViewLike;
+    return { map, view, ownsMap };
+  } catch (error) {
+    if (ownsMap) map.destroy?.();
+    throw error;
+  }
 };
+
 export const destroySceneView = (
-  scene: SceneViewLike | { view?: SceneViewLike } | null | undefined,
+  scene: SceneViewLike | { view?: SceneViewLike; ownsMap?: boolean } | null | undefined,
   onError?: (error: unknown) => void,
 ): void => {
-  const view = (scene as { view?: SceneViewLike })?.view || scene as SceneViewLike;
-  if (!view) return;
+  const envelope = scene as { view?: SceneViewLike; ownsMap?: boolean } | null;
+  const view = envelope?.view || scene as SceneViewLike;
+  if (!view || view.destroyed) return;
+  // SDK View.destroy also destroys its attached map. A SceneView that shares
+  // the live MapView's map must detach it first, even after failed readiness.
+  if (envelope?.view && envelope.ownsMap === false) {
+    try {
+      view.map = null;
+    } catch (error) {
+      onError?.(error);
+      return; // Never destroy the caller's map if detachment fails.
+    }
+  }
   try {
     view.container = null;
+  } catch (error) {
+    onError?.(error);
+  }
+  try {
     view.destroy?.();
   } catch (error) {
     onError?.(error);

@@ -76,7 +76,7 @@ const dispatchModeCommand = (mode: ExperienceMapMode): boolean => {
   }));
 };
 
-const waitForMode = (targetMode: ExperienceMapMode, timeoutMs: number): Promise<ExperienceMapMode> => (
+const waitForMode = (targetMode: ExperienceMapMode, timeoutMs: number, signal?: AbortSignal): Promise<ExperienceMapMode> => (
   new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
       reject(new Error('MapModeWindowUnavailable'));
@@ -88,6 +88,7 @@ const waitForMode = (targetMode: ExperienceMapMode, timeoutMs: number): Promise<
     const cleanup = (): void => {
       window.clearTimeout(timeoutId);
       window.removeEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChange as EventListener);
+      signal?.removeEventListener('abort', onAbort);
     };
     const finish = (mode: ExperienceMapMode): void => {
       if (settled) return;
@@ -101,14 +102,29 @@ const waitForMode = (targetMode: ExperienceMapMode, timeoutMs: number): Promise<
       cleanup();
       reject(new Error('MapModeTransitionTimeout'));
     };
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new DOMException('MapModeTransitionCancelled', 'AbortError'));
+    };
     const onModeChange = (event: Event): void => {
       const detail = (event as CustomEvent<ModeChangeDetail>).detail;
+      if (detail?.source === 'map-runtime-recovery' || detail?.source === 'map-runtime-unavailable') {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error('MapModeRuntimeUnavailable'));
+        return;
+      }
       if (!isExperienceMode(detail?.mode) || detail.mode !== targetMode) return;
       finish(detail.mode);
     };
 
     window.addEventListener(EXPERIENCE_MAP_MODE_EVENT, onModeChange as EventListener);
     timeoutId = window.setTimeout(fail, timeoutMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
   })
 );
 
@@ -128,7 +144,7 @@ export const ExperienceMapModeGovernedOverlay = ({
   if (!coordinatorRef.current) {
     coordinatorRef.current = createMapModeTransitionCoordinator(model, async (targetMode, context) => {
       const sourceState = currentViewState();
-      const completion = waitForMode(targetMode, timeoutMs);
+      const completion = waitForMode(targetMode, timeoutMs, context.signal);
       if (!dispatchModeCommand(targetMode)) throw new Error('MapModeCommandDispatchFailed');
       const activeMode = await completion;
       const targetState = currentViewState();
@@ -145,7 +161,7 @@ export const ExperienceMapModeGovernedOverlay = ({
   useEffect(() => {
     coordinator.setExecutor(async (targetMode, context) => {
       const sourceState = currentViewState();
-      const completion = waitForMode(targetMode, timeoutMs);
+      const completion = waitForMode(targetMode, timeoutMs, context.signal);
       if (!dispatchModeCommand(targetMode)) throw new Error('MapModeCommandDispatchFailed');
       const activeMode = await completion;
       const targetState = currentViewState();

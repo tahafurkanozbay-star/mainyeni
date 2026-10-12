@@ -99,9 +99,9 @@ export const viewStateApproximatelyEqual = (left: ViewStateInput | ViewState, ri
   return a.mode === b.mode && centerEqual && numericEqual(a.zoom, b.zoom, zoomTolerance) && numericEqual(a.scale, b.scale, scaleTolerance) && numericEqual(a.heading, b.heading, angleTolerance) && a.basemapId === b.basemapId && a.selectedLayerId === b.selectedLayerId && a.selectedObjectId === b.selectedObjectId && a.time === b.time;
 };
 
-export interface ApplyViewOptions { allowCrossMode?: boolean; duration?: unknown; animate?: boolean; }
+export interface ApplyViewOptions { signal?: AbortSignal; allowCrossMode?: boolean; duration?: unknown; animate?: boolean; }
 export const applyViewStateToMapView = async (view: MapViewLike, inputState: ViewStateInput | ViewState = {}, options: ApplyViewOptions = {}): Promise<boolean> => {
-  if (!view?.goTo) return false;
+  if (!view?.goTo || options.signal?.aborted) return false;
   const state = createViewState(inputState);
   if (state.mode !== '2d' && options.allowCrossMode !== true) return false;
   const target: Record<string, unknown> = {};
@@ -115,8 +115,17 @@ export const applyViewStateToMapView = async (view: MapViewLike, inputState: Vie
   if (hasHeading && Number.isFinite(state.heading)) target.rotation = state.heading;
   if (!Object.keys(target).length && state.extent) target.extent = { xmin: state.extent.xmin, ymin: state.extent.ymin, xmax: state.extent.xmax, ymax: state.extent.ymax, ...(state.extent.wkid ? { spatialReference: { wkid: state.extent.wkid } } : {}) };
   if (!Object.keys(target).length) return false;
-  await view.goTo(target, { duration: Math.max(0, finite(options.duration, 0) as number), animate: options.animate === true });
-  return true;
+  try {
+    await view.goTo(target, {
+      duration: Math.max(0, finite(options.duration, 0) as number),
+      animate: options.animate === true,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    return !options.signal?.aborted;
+  } catch (error) {
+    if (options.signal?.aborted || (error as { name?: unknown })?.name === 'AbortError') return false;
+    throw error;
+  }
 };
 
 export interface BindMapViewOptions {
