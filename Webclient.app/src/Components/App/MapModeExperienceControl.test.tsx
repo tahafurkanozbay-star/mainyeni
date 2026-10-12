@@ -193,7 +193,7 @@ describe('MapModeExperienceControl', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Güvenli görünüm korundu');
     expect(screen.getByRole('button', { name: '3B görünümü yeniden dene' })).toBeInTheDocument();
-    expect(get2D()).toHaveAttribute('aria-checked', 'false');
+    expect(get2D()).toHaveAttribute('aria-checked', 'true');
   });
 
   it('accepts a late success event after the timeout alert was shown', () => {
@@ -281,6 +281,53 @@ describe('MapModeExperienceControl', () => {
     model.dispose();
   });
 
+
+  it('exposes a single roving tab stop across the mode radiogroup', () => {
+    render(<MapModeExperienceControl />);
+
+    expect(get2D()).toHaveAttribute('tabindex', '0');
+    expect(get3D()).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('moves focus and selection intent to 3B with ArrowRight', () => {
+    const modes: string[] = [];
+    const listener = (event: Event): void => {
+      const detail = (event as CustomEvent<ExperienceCommandDetail>).detail;
+      if (detail.mode) modes.push(detail.mode);
+    };
+    window.addEventListener(EXPERIENCE_COMMAND_EVENT, listener as EventListener);
+
+    render(<MapModeExperienceControl />);
+    get2D().focus();
+    fireEvent.keyDown(get2D(), { key: 'ArrowRight' });
+
+    expect(document.activeElement).toBe(get3D());
+    expect(modes).toEqual(['3d']);
+    expect(get2D()).toHaveAttribute('aria-checked', 'true');
+
+    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener as EventListener);
+  });
+
+  it('syncs the roving tab stop to the runtime-confirmed active mode', () => {
+    render(<MapModeExperienceControl />);
+    fireEvent.click(get3D());
+    dispatchModeChanged('3d');
+
+    expect(get3D()).toHaveAttribute('tabindex', '0');
+    expect(get2D()).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('uses Home and End for deterministic mode focus movement', () => {
+    render(<MapModeExperienceControl />);
+    get2D().focus();
+    fireEvent.keyDown(get2D(), { key: 'End' });
+    expect(document.activeElement).toBe(get3D());
+
+    dispatchModeChanged('3d');
+    fireEvent.keyDown(get3D(), { key: 'Home' });
+    expect(document.activeElement).toBe(get2D());
+  });
+
   it('keeps retry controls at button semantics instead of links or custom click targets', () => {
     vi.useFakeTimers();
     render(<MapModeExperienceControl requestTimeoutMs={2_000} />);
@@ -299,7 +346,7 @@ describe('MapModeExperienceControl', () => {
     fireEvent.click(get3D());
 
     expect(screen.getByText('2B harita')).toBeInTheDocument();
-    expect(get2D()).toHaveAttribute('aria-checked', 'false');
+    expect(get2D()).toHaveAttribute('aria-checked', 'true');
     expect(get3D()).toHaveAttribute('aria-checked', 'false');
   });
 });
