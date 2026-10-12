@@ -3,6 +3,7 @@ import type {
   ArcGisQueryExecutionResult,
 } from './ArcGisQueryExecutionCoordinator'
 import type { ArcGisQueryIntegrityIssueCode } from './ArcGisQueryResponseIntegrity'
+import { captureArcGisJsonArray, captureArcGisJsonFields } from './ArcGisQueryJsonFieldGuard'
 
 /** Bounded, immutable trust boundary between an injectable executor and subscribers. */
 export interface ArcGisQueryResultSnapshotLimits {
@@ -83,6 +84,7 @@ function cloneJson(value: unknown, depth: number, budget: Budget): unknown {
   budget.seen.add(value)
   if (Array.isArray(value)) {
     spend(budget, 16)
+    captureArcGisJsonArray(value, budget.maxNodes - budget.nodes)
     if (value.length > budget.maxNodes - budget.nodes) throw new Error('ArcGIS result array budget exceeded')
     const copy: unknown[] = []
     for (let index = 0; index < value.length; index += 1) {
@@ -96,6 +98,7 @@ function cloneJson(value: unknown, depth: number, budget: Budget): unknown {
   }
   if (!plainRecord(value)) throw new Error('ArcGIS result non-JSON object')
   spend(budget, 24)
+  captureArcGisJsonFields(value, budget.maxNodes - budget.nodes, 256)
   const copy: Record<string, unknown> = {}
   for (const key in value) {
     if (!Object.prototype.hasOwnProperty.call(value, key)) continue

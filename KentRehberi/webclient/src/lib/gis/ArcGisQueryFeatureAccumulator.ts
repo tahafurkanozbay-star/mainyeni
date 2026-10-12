@@ -1,4 +1,5 @@
 import { hasAsciiControl } from './ArcGisScalarValidation'
+import { captureArcGisJsonArray, captureArcGisJsonFields } from './ArcGisQueryJsonFieldGuard'
 
 export interface ArcGisFeatureAccumulatorOptions {
   readonly maxFeatures: number
@@ -105,6 +106,7 @@ function snapshotValue(value: unknown, depth: number, state: SnapshotBudget): un
 
   if (Array.isArray(value)) {
     consumeBudget(state, 8)
+    captureArcGisJsonArray(value, state.maxNodes - state.nodes)
     if (value.length > state.maxNodes - state.nodes) {
       throw new Error('ArcGIS accumulator value node budget exceeded')
     }
@@ -120,6 +122,7 @@ function snapshotValue(value: unknown, depth: number, state: SnapshotBudget): un
   }
 
   consumeBudget(state, 16)
+  captureArcGisJsonFields(value, state.maxNodes - state.nodes)
   const snapshot: Record<string, unknown> = {}
   for (const key in value) {
     if (!Object.prototype.hasOwnProperty.call(value, key)) continue
