@@ -282,7 +282,7 @@
 
 .layer-list-tree {
   display: grid;
-  max-block-size: min(54vh, 620px);
+  max-block-size: 54vh;
   overflow: auto;
   border: 1px solid var(--exp-border);
   border-radius: var(--layer-list-radius);
@@ -483,7 +483,7 @@
 
 .legend-container {
   min-block-size: 140px;
-  max-block-size: min(58vh, 640px);
+  max-block-size: 58vh;
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--exp-border);
