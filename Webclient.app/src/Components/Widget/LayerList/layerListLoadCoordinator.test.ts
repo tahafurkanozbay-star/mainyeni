@@ -276,7 +276,46 @@ describe('LayerListLoadCoordinator', () => {
       cancelled: false,
     });
     expect(report).toHaveBeenCalled();
+    expect(coordinator.getObserverDiagnostics()).toMatchObject({
+      failureCount: expect.any(Number),
+      lastFailureKind: 'Error',
+      activeObserverCount: 1,
+    });
     vi.unstubAllGlobals();
+  });
+
+  it('keeps healthy observers running when the observer reporter also throws', async () => {
+    const healthy = vi.fn();
+    const coordinator = new LayerListLoadCoordinator<number, number>({
+      onObserverError: () => { throw new TypeError('reporter'); },
+    });
+    coordinator.subscribe(() => { throw new Error('observer'); });
+    coordinator.subscribe(healthy);
+    await coordinator.load(items.slice(0, 1), async (item) => item.source);
+    expect(healthy).toHaveBeenCalled();
+    expect(coordinator.getObserverDiagnostics()).toMatchObject({
+      activeObserverCount: 2,
+      lastFailureKind: 'TypeError',
+      disposed: false,
+    });
+    expect(coordinator.getObserverDiagnostics().failureCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('tracks rejected subscriptions and terminal observer state', () => {
+    const coordinator = new LayerListLoadCoordinator<number, number>({ maxObservers: 1 });
+    coordinator.subscribe(vi.fn());
+    coordinator.subscribe(vi.fn());
+    expect(coordinator.getObserverDiagnostics()).toMatchObject({
+      activeObserverCount: 1,
+      rejectedObserverCount: 1,
+      disposed: false,
+    });
+    coordinator.dispose();
+    expect(coordinator.getObserverDiagnostics()).toMatchObject({
+      activeObserverCount: 0,
+      rejectedObserverCount: 1,
+      disposed: true,
+    });
   });
 
   it('caps observer subscriptions', () => {

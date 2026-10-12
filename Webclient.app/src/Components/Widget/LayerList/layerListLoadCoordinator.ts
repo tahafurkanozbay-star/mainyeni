@@ -30,10 +30,20 @@ export interface LayerListLoadSnapshot {
   readonly announcement: string;
 }
 
+export interface LayerListLoadObserverDiagnostics {
+  readonly activeObserverCount: number;
+  readonly rejectedObserverCount: number;
+  readonly failureCount: number;
+  readonly lastFailureKind: string | null;
+  readonly lastFailureRevision: number | null;
+  readonly disposed: boolean;
+}
+
 export interface LayerListLoadCoordinatorOptions {
   readonly concurrency?: number;
   readonly maxItems?: number;
   readonly maxObservers?: number;
+  readonly onObserverError?: (error: unknown) => void;
 }
 
 const DEFAULT_CONCURRENCY = 4;
@@ -69,9 +79,18 @@ export class LayerListLoadCoordinator<TSource, TResult> {
   readonly #concurrency: number;
   readonly #maxItems: number;
   readonly #maxObservers: number;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   readonly #listeners = new Set<() => void>();
   #generation = 0;
   #disposed = false;
+  #diagnostics: LayerListLoadObserverDiagnostics = Object.freeze({
+    activeObserverCount: 0,
+    rejectedObserverCount: 0,
+    failureCount: 0,
+    lastFailureKind: null,
+    lastFailureRevision: null,
+    disposed: false,
+  });
   #snapshot: LayerListLoadSnapshot = Object.freeze({
     revision: 0,
     generation: 0,
@@ -89,14 +108,33 @@ export class LayerListLoadCoordinator<TSource, TResult> {
     this.#concurrency = clampInteger(options.concurrency, DEFAULT_CONCURRENCY, 1, 12);
     this.#maxItems = clampInteger(options.maxItems, DEFAULT_MAX_ITEMS, 1, 2048);
     this.#maxObservers = clampInteger(options.maxObservers, DEFAULT_MAX_OBSERVERS, 1, 128);
+    this.#onObserverError = options.onObserverError;
   }
 
   readonly getSnapshot = (): LayerListLoadSnapshot => this.#snapshot;
+  readonly getObserverDiagnostics = (): LayerListLoadObserverDiagnostics => this.#diagnostics;
 
   readonly subscribe = (listener: () => void): (() => void) => {
-    if (this.#disposed || this.#listeners.size >= this.#maxObservers) return () => undefined;
+    if (this.#disposed) {
+      this.#recordRejectedObserver();
+      return () => undefined;
+    }
+    if (this.#listeners.has(listener)) {
+      return () => {
+        this.#listeners.delete(listener);
+        this.#refreshObserverCount();
+      };
+    }
+    if (this.#listeners.size >= this.#maxObservers) {
+      this.#recordRejectedObserver();
+      return () => undefined;
+    }
     this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
+    this.#refreshObserverCount();
+    return () => {
+      this.#listeners.delete(listener);
+      this.#refreshObserverCount();
+    };
   };
 
   cancel(): void {
@@ -223,6 +261,11 @@ export class LayerListLoadCoordinator<TSource, TResult> {
     this.#disposed = true;
     this.#generation += 1;
     this.#listeners.clear();
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      activeObserverCount: 0,
+      disposed: true,
+    });
     this.#snapshot = Object.freeze({
       ...this.#snapshot,
       revision: this.#snapshot.revision + 1,
@@ -266,8 +309,42 @@ export class LayerListLoadCoordinator<TSource, TResult> {
       try {
         listener();
       } catch (error) {
-        globalThis.reportError?.(error);
+        this.#reportObserverError(error);
       }
     }
+  }
+
+  #reportObserverError(error: unknown): void {
+    this.#recordObserverFailure(error);
+    try {
+      if (this.#onObserverError) this.#onObserverError(error);
+      else globalThis.reportError?.(error);
+    } catch (reporterError) {
+      this.#recordObserverFailure(reporterError);
+      globalThis.console?.warn?.('LayerListLoadCoordinator observer reporter failed.');
+    }
+  }
+
+  #recordObserverFailure(error: unknown): void {
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      failureCount: this.#diagnostics.failureCount + 1,
+      lastFailureKind: failureKind(error),
+      lastFailureRevision: this.#snapshot.revision,
+    });
+  }
+
+  #recordRejectedObserver(): void {
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      rejectedObserverCount: this.#diagnostics.rejectedObserverCount + 1,
+    });
+  }
+
+  #refreshObserverCount(): void {
+    this.#diagnostics = Object.freeze({
+      ...this.#diagnostics,
+      activeObserverCount: this.#listeners.size,
+    });
   }
 }

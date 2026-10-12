@@ -375,12 +375,50 @@ describe('LayerListWidget modern workspace', () => {
     await waitFor(() => expect(screen.getByText('3 katman hazır.')).toBeVisible());
   });
 
+  it('keeps successful layers usable while announcing partial load degradation', async () => {
+    runtime.createLayer.mockImplementation(async (definition: { title?: string; visible?: boolean; opacity?: number }) => {
+      if (definition.title === 'Yeşil Alanlar') throw new TypeError('layer failed');
+      return makeRuntimeLayer(Boolean(definition.visible), Number(definition.opacity ?? 100) / 100);
+    });
+    renderWidget();
+    await waitFor(() => {
+      expect(screen.getByText('Bazı katmanlar yüklenemedi')).toBeVisible();
+      expect(screen.getByText('1 katman hazır, 1 katman yüklenemedi.')).toBeVisible();
+    });
+    expect(screen.getByRole('tree', { name: 'Harita katmanları' })).toBeVisible();
+    expect(screen.getByText(/1 katman kullanılabilir durumda; 1 katman yüklenemedi/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Katmanları yeniden yükle' })).toBeVisible();
+  });
+
+  it('recovers to the normal catalog after the user reloads a degraded layer set', async () => {
+    let shouldFail = true;
+    runtime.createLayer.mockImplementation(async (definition: { title?: string; visible?: boolean; opacity?: number }) => {
+      if (shouldFail && definition.title === 'Yeşil Alanlar') throw new TypeError('layer failed');
+      return makeRuntimeLayer(Boolean(definition.visible), Number(definition.opacity ?? 100) / 100);
+    });
+    renderWidget();
+    expect(await screen.findByText('Bazı katmanlar yüklenemedi')).toBeVisible();
+    shouldFail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Katmanları yeniden yükle' }));
+    await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Bazı katmanlar yüklenemedi')).not.toBeInTheDocument());
+    expect(screen.getByText('3 katman hazır.')).toBeVisible();
+  });
+
   it('shows a manual retry action when the catalog service fails', async () => {
     runtime.getLayers.mockRejectedValueOnce(new Error('  servis   kullanılamıyor  '));
     renderWidget();
     expect(await screen.findByText('Katmanlar kullanılamıyor')).toBeVisible();
     expect(screen.getByText('servis kullanılamıyor')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Tekrar dene' })).toBeVisible();
+  });
+
+  it('still renders the recovery surface when the global error reporter throws', async () => {
+    vi.stubGlobal('reportError', vi.fn(() => { throw new Error('reporter failed'); }));
+    runtime.getLayers.mockRejectedValueOnce(new Error('catalog failure'));
+    renderWidget();
+    expect(await screen.findByText('Katmanlar kullanılamıyor')).toBeVisible();
+    expect(screen.getByText('catalog failure')).toBeVisible();
   });
 
   it('retries only after explicit user action', async () => {

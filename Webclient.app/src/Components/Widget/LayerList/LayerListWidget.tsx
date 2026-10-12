@@ -162,6 +162,14 @@ const safeOpacity = (value: unknown): number => {
   return Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : 100;
 };
 
+const reportLayerListError = (error: unknown, context: 'catalog' | 'legend'): void => {
+  try {
+    globalThis.reportError?.(error);
+  } catch {
+    globalThis.console?.warn?.(`LayerList ${context} error reporter failed.`);
+  }
+};
+
 const groupIdFor = (group: LayerGroup, index: number): string =>
   safeId(group.id, `group-${index + 1}`);
 
@@ -381,7 +389,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
 
         applyPresentationCatalog();
       } catch (error) {
-        globalThis.reportError?.(error);
+        reportLayerListError(error, 'catalog');
         if (mountedRef.current && requestVersion === requestVersionRef.current) {
           sourceGroupsRef.current = Object.freeze([]);
           runtimeByKeyRef.current.clear();
@@ -470,11 +478,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
         legendViewRef.current = null;
         setLegendReady(false);
         setLegendError(true);
-        try {
-          globalThis.reportError?.(error);
-        } catch {
-          globalThis.console?.warn?.('LayerList legend error reporter failed.');
-        }
+        reportLayerListError(error, 'legend');
       }
     }, [disposeLegend, legendContainerId, mapView]);
 
@@ -576,6 +580,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       ? `${treeId}-${snapshot.activeKey.replace(/[^a-z0-9_-]/giu, '-')}`
       : undefined;
     const loading = snapshot.status === 'loading' || loadSnapshot.status === 'loading';
+    const degraded = loadSnapshot.status === 'partial';
 
     return (
       <section
@@ -678,13 +683,29 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"
-                  data-tone={snapshot.status === 'error' ? 'danger' : loading ? 'busy' : 'neutral'}
+                  data-tone={snapshot.status === 'error' ? 'danger' : degraded ? 'warning' : loading ? 'busy' : 'neutral'}
                 >
-                  <span>{loading && loadSnapshot.total > 0 ? loadSnapshot.announcement : snapshot.announcement}</span>
+                  <span>{loading && loadSnapshot.total > 0
+                    ? loadSnapshot.announcement
+                    : degraded
+                      ? loadSnapshot.announcement
+                      : snapshot.announcement}</span>
                   {loading && loadSnapshot.total > 0 ? (
                     <span aria-hidden="true">%{loadSnapshot.progressPercent}</span>
                   ) : null}
                 </div>
+
+                {degraded ? (
+                  <div className="layer-list-degraded" role="note" aria-label="Kısmi katman yükleme durumu">
+                    <div>
+                      <strong>Bazı katmanlar yüklenemedi</strong>
+                      <span>
+                        {loadSnapshot.completed} katman kullanılabilir durumda; {loadSnapshot.failed} katman yüklenemedi.
+                      </span>
+                    </div>
+                    <button type="button" onClick={retryLoad}>Katmanları yeniden yükle</button>
+                  </div>
+                ) : null}
 
                 {snapshot.status === 'error' ? (
                   <div className="layer-list-recovery" role="alert">
