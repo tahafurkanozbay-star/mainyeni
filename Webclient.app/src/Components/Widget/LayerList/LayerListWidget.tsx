@@ -471,12 +471,10 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     }, [keyboardController, snapshot.activeKey, snapshot.query, snapshot.rows]);
 
     useEffect(() => {
-      if (!snapshot.activeKey || !treeRef.current) return;
-      const target = treeRef.current.querySelector<HTMLElement>(
-        `[data-layer-row-key="${CSS.escape(snapshot.activeKey)}"]`,
-      );
-      target?.scrollIntoView?.({ block: 'nearest' });
-    }, [snapshot.activeKey]);
+      if (!snapshot.activeKey) return;
+      const rowId = `${treeId}-${snapshot.activeKey.replace(/[^a-z0-9_-]/giu, '-')}`;
+      document.getElementById(rowId)?.scrollIntoView?.({ block: 'nearest' });
+    }, [snapshot.activeKey, treeId]);
 
     const retryLoad = useCallback((): void => {
       setReloadGeneration((generation) => generation + 1);
