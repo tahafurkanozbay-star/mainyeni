@@ -182,7 +182,10 @@ function App() {
             <MapComponent windowManager={windowManager} />
             <MapWorkspaceShellOverlay initialCollapsed />
             <ExperienceMapInteractionGuide />
-            <ExperienceWorkspace mapModeControl={<ExperienceMapModeGovernedOverlay />} />
+            <ExperienceWorkspace
+              mapModeControl={<ExperienceMapModeGovernedOverlay />}
+              windowManager={windowManager}
+            />
             <ExperienceUXLayer
               windowManager={windowManager}
               notificationModel={notificationCenter}
