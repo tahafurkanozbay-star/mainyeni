@@ -2,15 +2,16 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ChangeEvent,
-  type MouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
-import { Accordion, Form, Tab, Tabs } from 'react-bootstrap';
-import { BiCheckCircle, BiCircle, BiMinusCircle } from 'react-icons/bi';
 import { CommonBusiness } from '../../../Business/CommonBusiness';
 import { LayerBusiness } from '../../../Business/LayerBusiness';
 import { Constants_ServiceResultType } from '../../../Core/Constants';
@@ -20,9 +21,8 @@ import {
   type LayerOwner,
   type LayerViewLike,
 } from '../../../gis-engine/layerOwnership';
-import MapManager from '../../../Store/Managers/MapManager';
 import DynamicLayerManager from '../../../Store/Managers/DynamicLayerManager';
-import { ContainerLoading, NoResultsFound } from '../../Common/Loading';
+import MapManager from '../../../Store/Managers/MapManager';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { CommonQueryWindowTools } from '../../Query/_Common/CommonQueryWindowTools';
 import type {
@@ -30,9 +30,18 @@ import type {
   ManagedQueryWindowManager,
   UnknownRecord,
 } from '../../Query/_Common/QuerySurfaceContracts';
+import {
+  LayerListExperienceModel,
+  type LayerListGroupInput,
+  type LayerListVisibleRow,
+} from './layerListExperienceModel';
+import { createLayerListKeyboardController } from './layerListKeyboardController';
+import { LayerListLoadCoordinator } from './layerListLoadCoordinator';
 import './LayerListWidget.css';
 
 const OWNER_ID = 'layer-list-widget';
+const MAX_RUNTIME_GROUPS = 64;
+const MAX_RUNTIME_LAYERS = 512;
 
 interface LayerRuntime {
   visible: boolean;
@@ -53,8 +62,6 @@ interface LayerGroup extends UnknownRecord {
   readonly id?: string | number;
   readonly title?: string;
   readonly layers?: readonly LayerDefinition[];
-  readonly visible?: boolean;
-  readonly semiVisible?: boolean;
 }
 
 interface LayerServiceResult {
@@ -84,6 +91,22 @@ interface LayerListWidgetProps {
   readonly windowManager: ManagedQueryWindowManager;
 }
 
+interface RuntimeLayerRecord {
+  readonly groupId: string;
+  readonly layerId: string;
+  readonly source: LayerDefinition;
+  readonly runtime: LayerRuntime;
+}
+
+interface LayerLoadSource {
+  readonly groupId: string;
+  readonly layerId: string;
+  readonly source: LayerDefinition;
+  readonly priority: number;
+}
+
+type LayerListTab = 'layers' | 'legend';
+
 const isRecord = (value: unknown): value is UnknownRecord =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -100,23 +123,13 @@ const asGroup = (value: unknown): LayerGroup | null => {
 
 const readGroups = (value: unknown): LayerGroup[] => {
   if (!Array.isArray(value)) return [];
-  return value.map(asGroup).filter((item): item is LayerGroup => item !== null);
+  return value
+    .map(asGroup)
+    .filter((item): item is LayerGroup => item !== null)
+    .slice(0, MAX_RUNTIME_GROUPS);
 };
 
-const evaluateGroupVisibility = (layerGroup: LayerGroup): LayerGroup => {
-  const layers = Array.isArray(layerGroup.layers) ? layerGroup.layers : [];
-  const visibleLayersCount = layers.filter((layer) => layer.visible).length;
-  return {
-    ...layerGroup,
-    layers,
-    visible: layers.length > 0 && visibleLayersCount === layers.length,
-    semiVisible: visibleLayersCount > 0 && visibleLayersCount < layers.length,
-  };
-};
-
-const getConfiguredOperationalGroup = (
-  groups: readonly LayerGroup[],
-): LayerGroup | null => {
+const getConfiguredOperationalGroup = (groups: readonly LayerGroup[]): LayerGroup | null => {
   const configured = groups[2];
   if (configured?.layers?.length) return configured;
   return groups.find((group) => Boolean(group.layers?.length)) ?? null;
@@ -129,497 +142,623 @@ const asMapView = (value: unknown): MapViewLike | null => {
   return value as unknown as MapViewLike;
 };
 
-const readDynamicLayer = (value: unknown): LayerDefinition | null =>
-  asLayer(value);
+const readDynamicLayer = (value: unknown): LayerDefinition | null => asLayer(value);
 
 const safeTitle = (value: unknown, fallback: string): string => {
   if (typeof value !== 'string' && typeof value !== 'number') return fallback;
-  const normalized = String(value).trim();
+  const normalized = String(value).replace(/\s+/gu, ' ').trim().slice(0, 180);
   return normalized || fallback;
 };
 
-export const LayerListWidget = forwardRef<
-  ManagedQueryWindowHandle,
-  LayerListWidgetProps
->(({ id, windowManager }, ref): ReactNode => {
-  const [layerGroups, setLayerGroups] = useState<LayerGroup[] | null>(null);
-  const [mapView, setMapView] = useState<MapViewLike | null>(null);
-  const [activeGroup, setActiveGroup] = useState<string | null>(null);
-  const [, setLegend] = useState<LegendLike | null>(null);
+const safeId = (value: unknown, fallback: string): string => {
+  if (typeof value !== 'string' && typeof value !== 'number') return fallback;
+  const normalized = String(value).trim().slice(0, 96);
+  return normalized || fallback;
+};
 
-  const ownerRef = useRef<LayerOwner<LayerRuntime> | null>(null);
-  const legendRef = useRef<LegendLike | null>(null);
-  const requestVersionRef = useRef(0);
-  const mountedRef = useRef(true);
+const safeOpacity = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : 100;
+};
 
-  const getOwner = useCallback((): LayerOwner<LayerRuntime> | null => {
-    const view = asMapView(MapManager.GetMapView());
-    if (!view) return null;
-    if (!ownerRef.current) {
-      ownerRef.current = createLayerOwner<LayerRuntime>(view, OWNER_ID);
-    }
-    return ownerRef.current;
-  }, []);
+const groupIdFor = (group: LayerGroup, index: number): string =>
+  safeId(group.id, `group-${index + 1}`);
 
-  const disposeLegend = useCallback((): void => {
-    try {
-      legendRef.current?.destroy?.();
-    } finally {
-      legendRef.current = null;
-      if (mountedRef.current) setLegend(null);
-    }
-  }, []);
+const layerIdFor = (layer: LayerDefinition, groupId: string, index: number): string =>
+  safeId(layer.id, `${groupId}-layer-${index + 1}`);
 
-  const fetchQueryResults = useCallback(async (): Promise<void> => {
-    const view = asMapView(MapManager.GetMapView());
-    if (!view) {
-      if (mountedRef.current) {
-        setLayerGroups([]);
-        setMapView(null);
-      }
-      return;
-    }
+const runtimeKey = (groupId: string, layerId: string): string => `${groupId}::${layerId}`;
 
-    setMapView(view);
-    const owner = getOwner();
-    owner?.clear();
-    const requestVersion = ++requestVersionRef.current;
-
-    try {
-      const result: unknown = await LayerBusiness.GetLayers();
-      if (!mountedRef.current || requestVersion !== requestVersionRef.current) return;
-
-      const envelope = isRecord(result) ? result as LayerServiceResult : null;
-      if (envelope?.type !== Constants_ServiceResultType.Success) {
-        setLayerGroups([]);
-        return;
-      }
-
-      const groups = readGroups(envelope.data);
-      const operationalGroup = getConfiguredOperationalGroup(groups);
-      const layerItems = operationalGroup?.layers ?? [];
-      const layerCount = layerItems.length;
-
-      const creations = layerItems.map(async (layerItem, layerIndex) => {
-        try {
-          const created: unknown = await CommonBusiness.CreateLayer(layerItem);
-          const layerObject = isRecord(created)
-            ? created as unknown as LayerRuntime
-            : null;
-
-          if (!mountedRef.current || requestVersion !== requestVersionRef.current) {
-            layerObject?.destroy?.();
-            return null;
-          }
-          if (!layerObject) return null;
-
-          const requestedPriority = Number.parseInt(String(layerItem.priority ?? ''), 10);
-          const normalizedPriority = Number.isFinite(requestedPriority)
-            ? Math.max(0, layerCount - requestedPriority)
-            : layerIndex;
-          owner?.add(layerObject, normalizedPriority);
-          return { source: layerItem, layerObject, priority: normalizedPriority };
-        } catch (error) {
-          globalThis.reportError?.(error);
-          return null;
-        }
+const buildPresentationGroups = (
+  groups: readonly LayerGroup[],
+  runtimeByKey: ReadonlyMap<string, RuntimeLayerRecord>,
+): readonly LayerListGroupInput[] => Object.freeze(
+  groups.slice(0, MAX_RUNTIME_GROUPS).map((group, groupIndex) => {
+    const groupId = groupIdFor(group, groupIndex);
+    const layers = (group.layers ?? []).slice(0, MAX_RUNTIME_LAYERS).map((layer, layerIndex) => {
+      const layerId = layerIdFor(layer, groupId, layerIndex);
+      const runtime = runtimeByKey.get(runtimeKey(groupId, layerId))?.runtime ?? layer.layerObj ?? null;
+      return Object.freeze({
+        id: layerId,
+        title: safeTitle(layer.title, 'Katman'),
+        visible: runtime?.visible ?? Boolean(layer.visible),
+        opacity: runtime ? safeOpacity(runtime.opacity * 100) : safeOpacity(layer.opacity),
+        disabled: !runtime,
       });
+    });
+    return Object.freeze({
+      id: groupId,
+      title: safeTitle(group.title, 'Katman grubu'),
+      layers: Object.freeze(layers),
+    });
+  }),
+);
 
-      const createdLayers = await Promise.all(creations);
-      if (!mountedRef.current || requestVersion !== requestVersionRef.current) return;
+const VisibilityMark = ({ visible, mixed = false }: Readonly<{ visible: boolean; mixed?: boolean }>) => (
+  <span
+    className="kr-layer-visibility-mark"
+    data-visible={String(visible)}
+    data-mixed={String(mixed)}
+    aria-hidden="true"
+  />
+);
 
-      const layerObjectBySource = new Map<
-        LayerDefinition,
-        { readonly layerObject: LayerRuntime; readonly priority: number }
-      >();
+export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWidgetProps>(
+  ({ id, windowManager }, ref): ReactNode => {
+    const treeId = useId();
+    const statusId = useId();
+    const searchId = useId();
+    const legendContainerId = useMemo(
+      () => `layer-list-legend-${id.replace(/[^a-z0-9_-]/giu, '-')}`,
+      [id],
+    );
+    const [mapView, setMapView] = useState<MapViewLike | null>(null);
+    const [activeTab, setActiveTab] = useState<LayerListTab>('layers');
+    const [legendReady, setLegendReady] = useState(false);
+    const [reloadGeneration, setReloadGeneration] = useState(0);
 
-      for (const entry of createdLayers) {
-        if (!entry) continue;
-        layerObjectBySource.set(entry.source, {
-          layerObject: entry.layerObject,
-          priority: entry.priority,
-        });
-      }
-
-      const hydratedGroups = groups.map((group) => {
-        const hydratedLayers = (group.layers ?? []).map((layerItem) => {
-          const created = layerObjectBySource.get(layerItem);
-          return created
-            ? {
-                ...layerItem,
-                priority: created.priority,
-                layerObj: created.layerObject,
-                visible: created.layerObject.visible,
-                opacity: Math.round(created.layerObject.opacity * 100),
-              }
-            : {
-                ...layerItem,
-                layerObj: layerItem.layerObj ?? null,
-              };
-        });
-        return evaluateGroupVisibility({ ...group, layers: hydratedLayers });
+    const modelRef = useRef<LayerListExperienceModel | null>(null);
+    if (!modelRef.current) {
+      modelRef.current = new LayerListExperienceModel({
+        maxGroups: MAX_RUNTIME_GROUPS,
+        maxLayers: MAX_RUNTIME_LAYERS,
       });
-
-      setLayerGroups(hydratedGroups);
-    } catch (error) {
-      globalThis.reportError?.(error);
-      if (mountedRef.current && requestVersion === requestVersionRef.current) {
-        setLayerGroups([]);
-      }
     }
-  }, [getOwner]);
+    const model = modelRef.current;
+    const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
 
-  useImperativeHandle(ref, () => ({
-    id,
-    visible: windowManager.IsVisible(id),
-    minimized: windowManager.IsMinimized(id),
-    OnShow: () => {
-      windowManager.ShowWindow('sidebar');
-      void fetchQueryResults();
-    },
-    OnClose: () => {
-      requestVersionRef.current += 1;
-      disposeLegend();
-    },
-  }), [disposeLegend, fetchQueryResults, id, windowManager]);
+    const loaderRef = useRef<LayerListLoadCoordinator<LayerLoadSource, LayerRuntime> | null>(null);
+    if (!loaderRef.current) {
+      loaderRef.current = new LayerListLoadCoordinator<LayerLoadSource, LayerRuntime>({
+        concurrency: 4,
+        maxItems: MAX_RUNTIME_LAYERS,
+      });
+    }
+    const loader = loaderRef.current;
+    const loadSnapshot = useSyncExternalStore(loader.subscribe, loader.getSnapshot, loader.getSnapshot);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    windowManager.RegisterWindow(ref);
-    void fetchQueryResults();
+    const ownerRef = useRef<LayerOwner<LayerRuntime> | null>(null);
+    const legendRef = useRef<LegendLike | null>(null);
+    const mountedRef = useRef(true);
+    const requestVersionRef = useRef(0);
+    const runtimeByKeyRef = useRef(new Map<string, RuntimeLayerRecord>());
+    const sourceGroupsRef = useRef<readonly LayerGroup[]>(Object.freeze([]));
+    const searchRef = useRef<HTMLInputElement | null>(null);
+    const treeRef = useRef<HTMLDivElement | null>(null);
 
-    return () => {
-      mountedRef.current = false;
-      requestVersionRef.current += 1;
-      ownerRef.current?.clear();
-      ownerRef.current = null;
+    const getOwner = useCallback((): LayerOwner<LayerRuntime> | null => {
+      const view = asMapView(MapManager.GetMapView());
+      if (!view) return null;
+      if (!ownerRef.current) ownerRef.current = createLayerOwner<LayerRuntime>(view, OWNER_ID);
+      return ownerRef.current;
+    }, []);
+
+    const disposeLegend = useCallback((): void => {
       try {
         legendRef.current?.destroy?.();
       } finally {
         legendRef.current = null;
+        if (mountedRef.current) setLegendReady(false);
       }
-      windowManager.UnregisterWindow?.(id, ref);
-    };
-  }, [fetchQueryResults, id, ref, windowManager]);
+    }, []);
 
-  const toggleGroupVisibility = (
-    event: MouseEvent<HTMLButtonElement>,
-    groupIndex: number,
-  ): void => {
-    event.stopPropagation();
-    setLayerGroups((current) => {
-      if (!current?.[groupIndex]) return current;
-      const groups = [...current];
-      const source = groups[groupIndex];
-      if (!source) return current;
-      const visible = !source.visible;
-      const layers = (source.layers ?? []).map((layer) => {
-        if (layer.layerObj) layer.layerObj.visible = visible;
-        return { ...layer, visible };
-      });
-      groups[groupIndex] = {
-        ...source,
-        layers,
-        visible,
-        semiVisible: false,
+    const applyPresentationCatalog = useCallback((): void => {
+      model.replace(buildPresentationGroups(sourceGroupsRef.current, runtimeByKeyRef.current));
+    }, [model]);
+
+    const fetchQueryResults = useCallback(async (): Promise<void> => {
+      const view = asMapView(MapManager.GetMapView());
+      if (!view) {
+        sourceGroupsRef.current = Object.freeze([]);
+        runtimeByKeyRef.current.clear();
+        model.replace([]);
+        model.markError('Harita görünümü hazır değil.');
+        setMapView(null);
+        return;
+      }
+
+      setMapView(view);
+      model.markLoading();
+      loader.cancel();
+      const owner = getOwner();
+      owner?.clear();
+      runtimeByKeyRef.current.clear();
+      const requestVersion = ++requestVersionRef.current;
+
+      try {
+        const result: unknown = await LayerBusiness.GetLayers();
+        if (!mountedRef.current || requestVersion !== requestVersionRef.current) return;
+
+        const envelope = isRecord(result) ? result as LayerServiceResult : null;
+        if (envelope?.type !== Constants_ServiceResultType.Success) {
+          sourceGroupsRef.current = Object.freeze([]);
+          model.replace([]);
+          model.markError('Katman kataloğu alınamadı.');
+          return;
+        }
+
+        const groups = Object.freeze(readGroups(envelope.data));
+        sourceGroupsRef.current = groups;
+        const operationalGroup = getConfiguredOperationalGroup(groups);
+        const operationalGroupIndex = operationalGroup ? groups.indexOf(operationalGroup) : -1;
+        const groupId = operationalGroup && operationalGroupIndex >= 0
+          ? groupIdFor(operationalGroup, operationalGroupIndex)
+          : null;
+        const layerItems = operationalGroup?.layers?.slice(0, MAX_RUNTIME_LAYERS) ?? [];
+        const layerCount = layerItems.length;
+
+        const work: readonly { key: string; source: LayerLoadSource }[] = groupId
+          ? Object.freeze(layerItems.map((layer, layerIndex) => {
+              const layerId = layerIdFor(layer, groupId, layerIndex);
+              const requestedPriority = Number.parseInt(String(layer.priority ?? ''), 10);
+              const priority = Number.isFinite(requestedPriority)
+                ? Math.max(0, layerCount - requestedPriority)
+                : layerIndex;
+              return Object.freeze({
+                key: runtimeKey(groupId, layerId),
+                source: Object.freeze({ groupId, layerId, source: layer, priority }),
+              });
+            }))
+          : Object.freeze([]);
+
+        const loaded = await loader.load(work, async (item) => {
+          const created: unknown = await CommonBusiness.CreateLayer(item.source.source);
+          if (!isRecord(created)) throw new TypeError('Katman çalışma zamanı oluşturulamadı.');
+          return created as unknown as LayerRuntime;
+        });
+
+        if (!mountedRef.current || requestVersion !== requestVersionRef.current || loaded.cancelled) {
+          for (const success of loaded.successes) success.result.destroy?.();
+          return;
+        }
+
+        for (const success of loaded.successes) {
+          const { groupId: loadedGroupId, layerId, source, priority } = success.source;
+          owner?.add(success.result, priority);
+          runtimeByKeyRef.current.set(runtimeKey(loadedGroupId, layerId), Object.freeze({
+            groupId: loadedGroupId,
+            layerId,
+            source,
+            runtime: success.result,
+          }));
+        }
+
+        applyPresentationCatalog();
+      } catch (error) {
+        globalThis.reportError?.(error);
+        if (mountedRef.current && requestVersion === requestVersionRef.current) {
+          sourceGroupsRef.current = Object.freeze([]);
+          runtimeByKeyRef.current.clear();
+          model.replace([]);
+          model.markError(error);
+        }
+      }
+    }, [applyPresentationCatalog, getOwner, loader, model]);
+
+    useImperativeHandle(ref, () => ({
+      id,
+      visible: windowManager.IsVisible(id),
+      minimized: windowManager.IsMinimized(id),
+      OnShow: () => {
+        windowManager.ShowWindow('sidebar');
+        void fetchQueryResults();
+      },
+      OnClose: () => {
+        requestVersionRef.current += 1;
+        loader.cancel();
+        disposeLegend();
+      },
+    }), [disposeLegend, fetchQueryResults, id, loader, windowManager]);
+
+    useEffect(() => {
+      mountedRef.current = true;
+      windowManager.RegisterWindow(ref);
+      void fetchQueryResults();
+
+      return () => {
+        mountedRef.current = false;
+        requestVersionRef.current += 1;
+        loader.dispose();
+        model.dispose();
+        ownerRef.current?.clear();
+        ownerRef.current = null;
+        runtimeByKeyRef.current.clear();
+        sourceGroupsRef.current = Object.freeze([]);
+        try {
+          legendRef.current?.destroy?.();
+        } finally {
+          legendRef.current = null;
+        }
+        windowManager.UnregisterWindow?.(id, ref);
       };
-      return groups;
-    });
-  };
+    }, [fetchQueryResults, id, loader, model, ref, reloadGeneration, windowManager]);
 
-  const toggleLayerVisibility = (
-    event: MouseEvent<HTMLButtonElement>,
-    layer: LayerDefinition,
-    groupIndex: number,
-    layerIndex: number,
-  ): void => {
-    event.stopPropagation();
-    const layerObject = layer.layerObj;
-    if (!layerObject) return;
+    const refreshLegend = useCallback(async (): Promise<void> => {
+      if (legendRef.current || !mapView) return;
+      try {
+        const [Legend] = await loadArcgisModules<readonly [LegendConstructor]>(['esri/widgets/Legend']);
+        if (!mountedRef.current || legendRef.current) return;
+        const nextLegend = new Legend({ view: mapView, container: legendContainerId });
+        legendRef.current = nextLegend;
+        setLegendReady(true);
+      } catch (error) {
+        globalThis.reportError?.(error);
+        disposeLegend();
+      }
+    }, [disposeLegend, legendContainerId, mapView]);
 
-    layerObject.visible = !layerObject.visible;
-    setLayerGroups((current) => {
-      if (!current?.[groupIndex]) return current;
-      const groups = [...current];
-      const source = groups[groupIndex];
-      if (!source) return current;
-      const layers = [...(source.layers ?? [])];
-      const currentLayer = layers[layerIndex];
-      if (!currentLayer) return current;
-      layers[layerIndex] = {
-        ...currentLayer,
-        visible: layerObject.visible,
-      };
-      groups[groupIndex] = evaluateGroupVisibility({ ...source, layers });
-      return groups;
-    });
-  };
+    const switchTab = useCallback((tab: LayerListTab): void => {
+      setActiveTab(tab);
+      if (tab === 'legend') void refreshLegend();
+      else disposeLegend();
+    }, [disposeLegend, refreshLegend]);
 
-  const changeLayerOpacity = (
-    event: ChangeEvent<HTMLInputElement>,
-    layer: LayerDefinition,
-    groupIndex: number,
-    layerIndex: number,
-  ): void => {
-    const opacity = Math.min(100, Math.max(0, Number(event.target.value) || 0));
-    if (layer.layerObj) layer.layerObj.opacity = opacity / 100;
+    const toggleVisibility = useCallback((row: LayerListVisibleRow): void => {
+      if (row.kind === 'group') {
+        const nextVisible = !(row.visible || row.mixed);
+        for (const runtimeRecord of runtimeByKeyRef.current.values()) {
+          if (runtimeRecord.groupId !== row.groupId) continue;
+          runtimeRecord.runtime.visible = nextVisible;
+        }
+        model.setGroupVisibility(row.groupId, nextVisible);
+        return;
+      }
 
-    setLayerGroups((current) => {
-      if (!current?.[groupIndex]) return current;
-      const groups = [...current];
-      const source = groups[groupIndex];
-      if (!source) return current;
-      const layers = [...(source.layers ?? [])];
-      const currentLayer = layers[layerIndex];
-      if (!currentLayer) return current;
-      layers[layerIndex] = { ...currentLayer, opacity };
-      groups[groupIndex] = { ...source, layers };
-      return groups;
-    });
-  };
+      if (!row.layerId) return;
+      const record = runtimeByKeyRef.current.get(runtimeKey(row.groupId, row.layerId));
+      if (!record) return;
+      const nextVisible = !record.runtime.visible;
+      record.runtime.visible = nextVisible;
+      model.setLayerVisibility(row.groupId, row.layerId, nextVisible);
+    }, [model]);
 
-  const refreshLegend = useCallback(async (): Promise<void> => {
-    if (legendRef.current || !mapView) return;
-    try {
-      const [Legend] = await loadArcgisModules<readonly [LegendConstructor]>([
-        'esri/widgets/Legend',
-      ]);
-      if (!mountedRef.current || legendRef.current) return;
-      const nextLegend = new Legend({ view: mapView, container: 'legendDiv' });
-      legendRef.current = nextLegend;
-      setLegend(nextLegend);
-    } catch (error) {
-      globalThis.reportError?.(error);
-      disposeLegend();
-    }
-  }, [disposeLegend, mapView]);
+    const changeOpacity = useCallback((
+      event: ChangeEvent<HTMLInputElement>,
+      row: LayerListVisibleRow,
+    ): void => {
+      if (!row.layerId) return;
+      const opacity = Math.max(0, Math.min(100, Number(event.currentTarget.value) || 0));
+      const record = runtimeByKeyRef.current.get(runtimeKey(row.groupId, row.layerId));
+      if (!record) return;
+      record.runtime.opacity = opacity / 100;
+      model.setLayerOpacity(row.groupId, row.layerId, opacity);
+    }, [model]);
 
-  const dynamicLayers = DynamicLayerManager
-    .GetLayers()
-    .map(readDynamicLayer)
-    .filter((item): item is LayerDefinition => item !== null);
+    const keyboardController = useMemo(() => createLayerListKeyboardController(
+      model,
+      () => searchRef.current?.focus({ preventScroll: true }),
+      toggleVisibility,
+    ), [model, toggleVisibility]);
 
-  const visible = windowManager.IsVisible(id);
-  const minimized = windowManager.IsMinimized(id);
+    const handleTreeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>): void => {
+      const active = snapshot.rows.find((row) => row.key === snapshot.activeKey) ?? null;
+      keyboardController.handleKeyDown(event.nativeEvent, active, Boolean(snapshot.query));
+    }, [keyboardController, snapshot.activeKey, snapshot.query, snapshot.rows]);
 
-  return (
-    <section
-      className="common-query-window common-query-window-right"
-      aria-label="Katman ve lejand yönetimi"
-      aria-hidden={!visible}
-      style={{ visibility: visible ? 'visible' : 'hidden' }}
-    >
-      <header className="common-query-window-header">
-        <img
-          className="common-query-window-header-icon"
-          src="images/icons/toolbar/katmanyonetimi.png"
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-        />
-        <span>Katmanlar</span>
-        <CommonQueryWindowTools
-          windowManager={windowManager}
-          windowId={id}
-          showNearbySearch={false}
-          showMapSelect={false}
-        />
-      </header>
+    useEffect(() => {
+      if (!snapshot.activeKey || !treeRef.current) return;
+      const target = treeRef.current.querySelector<HTMLElement>(
+        `[data-layer-row-key="${CSS.escape(snapshot.activeKey)}"]`,
+      );
+      target?.scrollIntoView?.({ block: 'nearest' });
+    }, [snapshot.activeKey]);
 
-      <div className="common-query-window-body layer-list-window-body">
-        {layerGroups === null ? (
-          <ContainerLoading message="Katmanlar hazırlanıyor…" />
-        ) : minimized ? (
-          <div aria-hidden="true" />
-        ) : (
-          <Tabs
-            defaultActiveKey="layers"
-            onSelect={(key) => {
-              if (key === 'legend') {
-                void refreshLegend();
-              } else {
-                disposeLegend();
-              }
-            }}
-            aria-label="Katman yönetimi görünümleri"
-          >
-            <Tab eventKey="layers" title="Katmanlar">
-              <div>
-                {dynamicLayers.length > 0 ? (
-                  <Accordion defaultActiveKey="dynamiclayers">
-                    <Accordion.Item eventKey="dynamiclayers">
-                      <Accordion.Header>
-                        <span className="row w-100 align-items-center">
-                          <span className="col-1">
-                            <SharedGISIcon record={{ category: 'default' }} size={24} />
-                          </span>
-                          <span className="col-11 layer-list-group-title">
-                            Özel Katmanlar
-                          </span>
-                        </span>
-                      </Accordion.Header>
-                      <Accordion.Body>
-                        {dynamicLayers.map((layer, index) => {
-                          const title = safeTitle(layer.title, 'Özel katman');
-                          const key = layer.id ?? `${title}-${index}`;
-                          return (
-                            <div className="layer-list-item" key={String(key)}>
-                              <div className="col-1">
-                                <SharedGISIcon record={layer} size={24} />
-                              </div>
-                              <span className="col-8 layer-list-item-title" title={title}>
-                                {title}
-                              </span>
-                              <div className="col-3" />
-                            </div>
-                          );
-                        })}
-                      </Accordion.Body>
-                    </Accordion.Item>
-                  </Accordion>
-                ) : null}
+    const retryLoad = useCallback((): void => {
+      setReloadGeneration((generation) => generation + 1);
+    }, []);
 
-                <Accordion
-                  activeKey={activeGroup ?? undefined}
-                  onSelect={(eventKey) => setActiveGroup(
-                    typeof eventKey === 'string' ? eventKey : null,
-                  )}
+    const dynamicLayers = DynamicLayerManager
+      .GetLayers()
+      .map(readDynamicLayer)
+      .filter((item): item is LayerDefinition => item !== null)
+      .slice(0, MAX_RUNTIME_LAYERS);
+
+    const visible = windowManager.IsVisible(id);
+    const minimized = windowManager.IsMinimized(id);
+    const activeDescendantId = snapshot.activeKey
+      ? `${treeId}-${snapshot.activeKey.replace(/[^a-z0-9_-]/giu, '-')}`
+      : undefined;
+    const loading = snapshot.status === 'loading' || loadSnapshot.status === 'loading';
+
+    return (
+      <section
+        className="common-query-window common-query-window-right layer-list-modern"
+        aria-label="Katman ve lejand yönetimi"
+        aria-hidden={!visible}
+        style={{ visibility: visible ? 'visible' : 'hidden' }}
+      >
+        <header className="common-query-window-header">
+          <img
+            className="common-query-window-header-icon"
+            src="images/icons/toolbar/katmanyonetimi.png"
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+          />
+          <span>Katmanlar</span>
+          <CommonQueryWindowTools
+            windowManager={windowManager}
+            windowId={id}
+            showNearbySearch={false}
+            showMapSelect={false}
+          />
+        </header>
+
+        <div className="common-query-window-body layer-list-window-body">
+          {minimized ? <div aria-hidden="true" /> : (
+            <>
+              <div className="layer-list-tabs" role="tablist" aria-label="Katman yönetimi görünümleri">
+                <button
+                  type="button"
+                  id={`${treeId}-layers-tab`}
+                  role="tab"
+                  aria-selected={activeTab === 'layers'}
+                  aria-controls={`${treeId}-layers-panel`}
+                  className="layer-list-tab"
+                  onClick={() => switchTab('layers')}
                 >
-                  {layerGroups.length === 0 ? (
-                    <NoResultsFound message="Gösterilecek katman bulunmuyor" />
-                  ) : layerGroups.map((group, groupIndex) => {
-                    const groupKey = String(group.id ?? `group-${groupIndex}`);
-                    const groupTitle = safeTitle(group.title, 'Katman grubu');
-                    return (
-                      <Accordion.Item
-                        key={groupKey}
-                        eventKey={groupKey}
-                        className="layer-list-group-accordion-item"
-                      >
-                        <Accordion.Header className="layer-list-group-accordion-item-header">
-                          <span className="layer-list-group-title">
-                            <SharedGISIcon record={group} size={24} />
-                            <span>{groupTitle}</span>
-                          </span>
-                        </Accordion.Header>
+                  Katmanlar
+                </button>
+                <button
+                  type="button"
+                  id={`${treeId}-legend-tab`}
+                  role="tab"
+                  aria-selected={activeTab === 'legend'}
+                  aria-controls={`${treeId}-legend-panel`}
+                  className="layer-list-tab"
+                  onClick={() => switchTab('legend')}
+                >
+                  Lejant
+                </button>
+              </div>
 
-                        <Accordion.Body>
-                          <div className="layer-list-group-actions">
-                            <button
-                              type="button"
-                              className="kr-layer-toggle"
-                              onClick={(event) => toggleGroupVisibility(event, groupIndex)}
-                              aria-label={`${groupTitle} grubunu ${group.visible ? 'gizle' : 'göster'}`}
-                              aria-pressed={Boolean(group.visible)}
-                            >
-                              {group.visible ? (
-                                <BiCheckCircle aria-hidden="true" />
-                              ) : group.semiVisible ? (
-                                <BiMinusCircle aria-hidden="true" />
-                              ) : (
-                                <BiCircle aria-hidden="true" />
-                              )}
-                              <span>{group.visible ? 'Grubu gizle' : 'Grubu göster'}</span>
-                            </button>
-                          </div>
+              <section
+                id={`${treeId}-layers-panel`}
+                role="tabpanel"
+                aria-labelledby={`${treeId}-layers-tab`}
+                hidden={activeTab !== 'layers'}
+                className="layer-list-panel"
+              >
+                <div className="layer-list-search-region">
+                  <label htmlFor={searchId}>Katman ara</label>
+                  <div className="layer-list-search-shell">
+                    <span className="layer-list-search-glyph" aria-hidden="true">⌕</span>
+                    <input
+                      ref={searchRef}
+                      id={searchId}
+                      type="search"
+                      value={snapshot.query}
+                      placeholder="Örn. imar, park, kadastro"
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-controls={treeId}
+                      aria-describedby={statusId}
+                      onChange={(event) => model.setQuery(event.currentTarget.value)}
+                    />
+                    {snapshot.query ? (
+                      <button type="button" onClick={() => model.clearQuery()} aria-label="Katman aramasını temizle">
+                        Temizle
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
 
-                          {(group.layers ?? []).map((layer, layerIndex) => {
-                            const layerTitle = safeTitle(layer.title, 'Katman');
-                            const layerKey = String(
-                              layer.id ?? `${groupKey}-${layerIndex}`,
-                            );
-                            const opacity = Math.min(
-                              100,
-                              Math.max(0, Number(layer.opacity ?? 100) || 0),
-                            );
-                            const opacityId = `layer-opacity-${groupKey}-${layerKey}`;
+                <div
+                  id={statusId}
+                  className="layer-list-status"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  data-tone={snapshot.status === 'error' ? 'danger' : loading ? 'busy' : 'neutral'}
+                >
+                  <span>{snapshot.announcement}</span>
+                  {loading && loadSnapshot.total > 0 ? (
+                    <span aria-hidden="true">%{loadSnapshot.progressPercent}</span>
+                  ) : null}
+                </div>
+
+                {snapshot.status === 'error' ? (
+                  <div className="layer-list-recovery" role="alert">
+                    <strong>Katmanlar kullanılamıyor</strong>
+                    <span>{snapshot.errorMessage ?? 'Katman kataloğu yüklenemedi.'}</span>
+                    <button type="button" onClick={retryLoad}>Tekrar dene</button>
+                  </div>
+                ) : (
+                  <>
+                    {dynamicLayers.length > 0 ? (
+                      <section className="layer-list-dynamic" aria-labelledby={`${treeId}-dynamic-title`}>
+                        <div className="layer-list-section-heading">
+                          <span id={`${treeId}-dynamic-title`}>Özel Katmanlar</span>
+                          <span aria-label={`${dynamicLayers.length} özel katman`}>{dynamicLayers.length}</span>
+                        </div>
+                        <div className="layer-list-dynamic-grid">
+                          {dynamicLayers.map((layer, index) => {
+                            const title = safeTitle(layer.title, 'Özel katman');
                             return (
-                              <div
-                                className="layer-list-item row"
-                                key={layerKey}
-                                aria-disabled={!layer.layerObj}
-                              >
-                                <div className="col-1">
-                                  <button
-                                    type="button"
-                                    className="kr-layer-toggle"
-                                    onClick={(event) => toggleLayerVisibility(
-                                      event,
-                                      layer,
-                                      groupIndex,
-                                      layerIndex,
-                                    )}
-                                    aria-label={`${layerTitle} katmanını ${layer.visible ? 'gizle' : 'göster'}`}
-                                    aria-pressed={Boolean(layer.visible)}
-                                    disabled={!layer.layerObj}
-                                  >
-                                    {layer.visible ? (
-                                      <BiCheckCircle aria-hidden="true" />
-                                    ) : (
-                                      <BiCircle aria-hidden="true" />
-                                    )}
-                                  </button>
-                                </div>
-                                <div className="col-1 kr-layer-item-icon">
-                                  <SharedGISIcon record={layer} size={24} />
-                                </div>
-                                <button
-                                  type="button"
-                                  className="col-7 layer-list-item-title"
-                                  onClick={(event) => toggleLayerVisibility(
-                                    event,
-                                    layer,
-                                    groupIndex,
-                                    layerIndex,
-                                  )}
-                                  title={layerTitle}
-                                  disabled={!layer.layerObj}
-                                >
-                                  {layerTitle}
-                                </button>
-                                <div className="col-3">
-                                  <label
-                                    className="experience-sr-only"
-                                    htmlFor={opacityId}
-                                  >
-                                    Katman opaklığı: {layerTitle}
-                                  </label>
-                                  <Form.Range
-                                    id={opacityId}
-                                    min={0}
-                                    max={100}
-                                    value={opacity}
-                                    onChange={(event) => changeLayerOpacity(
-                                      event,
-                                      layer,
-                                      groupIndex,
-                                      layerIndex,
-                                    )}
-                                    aria-valuetext={`Yüzde ${opacity}`}
-                                    disabled={!layer.layerObj}
-                                  />
-                                </div>
+                              <div className="layer-list-dynamic-item" key={safeId(layer.id, `${title}-${index}`)}>
+                                <SharedGISIcon record={layer} size={24} />
+                                <span title={title}>{title}</span>
                               </div>
                             );
                           })}
-                        </Accordion.Body>
-                      </Accordion.Item>
-                    );
-                  })}
-                </Accordion>
-              </div>
-            </Tab>
+                        </div>
+                      </section>
+                    ) : null}
 
-            <Tab eventKey="legend" title="Lejant">
-              <div className="legend-container">
-                <div id="legendDiv" aria-label="Harita lejantı" />
-              </div>
-            </Tab>
-          </Tabs>
-        )}
-      </div>
-    </section>
-  );
-});
+                    {snapshot.rows.length === 0 && !loading ? (
+                      <div className="layer-list-empty" role="note">
+                        <strong>{snapshot.query ? 'Eşleşme bulunamadı' : 'Gösterilecek katman yok'}</strong>
+                        <span>{snapshot.query ? 'Arama ifadesini değiştirin veya temizleyin.' : 'Katman kataloğu şu anda boş.'}</span>
+                        {snapshot.query ? <button type="button" onClick={() => model.clearQuery()}>Tüm katmanları göster</button> : null}
+                      </div>
+                    ) : (
+                      <div
+                        ref={treeRef}
+                        id={treeId}
+                        className="layer-list-tree"
+                        role="tree"
+                        aria-label="Harita katmanları"
+                        aria-busy={loading || undefined}
+                        aria-activedescendant={activeDescendantId}
+                        tabIndex={0}
+                        onKeyDown={handleTreeKeyDown}
+                      >
+                        {snapshot.rows.map((row) => {
+                          const rowId = `${treeId}-${row.key.replace(/[^a-z0-9_-]/giu, '-')}`;
+                          const opacityId = `${rowId}-opacity`;
+                          if (row.kind === 'group') {
+                            return (
+                              <div
+                                id={rowId}
+                                key={row.key}
+                                data-layer-row-key={row.key}
+                                className="layer-list-tree-row layer-list-tree-group"
+                                role="treeitem"
+                                aria-level={1}
+                                aria-expanded={Boolean(row.expanded)}
+                                aria-selected={row.active}
+                                data-active={row.active || undefined}
+                                onMouseMove={() => model.setActive(row.key)}
+                              >
+                                <button
+                                  type="button"
+                                  className="layer-list-expand"
+                                  onClick={() => model.toggleGroup(row.groupId)}
+                                  aria-label={`${row.title} grubunu ${row.expanded ? 'daralt' : 'genişlet'}`}
+                                  tabIndex={-1}
+                                >
+                                  <span aria-hidden="true">{row.expanded ? '▾' : '▸'}</span>
+                                </button>
+                                <SharedGISIcon record={{ category: 'default' }} size={24} />
+                                <button
+                                  type="button"
+                                  className="layer-list-row-title"
+                                  onClick={() => model.toggleGroup(row.groupId)}
+                                  tabIndex={-1}
+                                >
+                                  {row.title}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="layer-list-visibility"
+                                  onClick={() => toggleVisibility(row)}
+                                  aria-label={`${row.title} grubunu ${row.visible || row.mixed ? 'gizle' : 'göster'}`}
+                                  aria-pressed={row.mixed ? 'mixed' : row.visible}
+                                  disabled={row.disabled}
+                                  tabIndex={-1}
+                                >
+                                  <VisibilityMark visible={row.visible} mixed={row.mixed} />
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div
+                              id={rowId}
+                              key={row.key}
+                              data-layer-row-key={row.key}
+                              className="layer-list-tree-row layer-list-tree-layer"
+                              role="treeitem"
+                              aria-level={2}
+                              aria-posinset={row.position}
+                              aria-setsize={row.setSize}
+                              aria-selected={row.active}
+                              aria-disabled={row.disabled || undefined}
+                              data-active={row.active || undefined}
+                              onMouseMove={() => model.setActive(row.key)}
+                            >
+                              <span className="layer-list-tree-indent" aria-hidden="true" />
+                              <SharedGISIcon record={{ category: 'default' }} size={24} />
+                              <button
+                                type="button"
+                                className="layer-list-row-title"
+                                onClick={() => toggleVisibility(row)}
+                                disabled={row.disabled}
+                                tabIndex={-1}
+                                title={row.title}
+                              >
+                                {row.title}
+                              </button>
+                              <button
+                                type="button"
+                                className="layer-list-visibility"
+                                onClick={() => toggleVisibility(row)}
+                                aria-label={`${row.title} katmanını ${row.visible ? 'gizle' : 'göster'}`}
+                                aria-pressed={row.visible}
+                                disabled={row.disabled}
+                                tabIndex={-1}
+                              >
+                                <VisibilityMark visible={row.visible} />
+                              </button>
+                              <div className="layer-list-opacity">
+                                <label htmlFor={opacityId}>
+                                  <span className="experience-sr-only">Katman opaklığı: {row.title}</span>
+                                  <span aria-hidden="true">{row.opacity ?? 100}%</span>
+                                </label>
+                                <input
+                                  id={opacityId}
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  step={5}
+                                  value={row.opacity ?? 100}
+                                  onChange={(event) => changeOpacity(event, row)}
+                                  aria-valuetext={`Yüzde ${row.opacity ?? 100}`}
+                                  disabled={row.disabled}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <p className="layer-list-keyboard-help">
+                      <kbd>/</kbd> arama · <kbd>↑</kbd><kbd>↓</kbd> gezinme · <kbd>←</kbd><kbd>→</kbd> grup · <kbd>Enter</kbd> veya <kbd>Boşluk</kbd> eylem
+                    </p>
+                  </>
+                )}
+              </section>
+
+              <section
+                id={`${treeId}-legend-panel`}
+                role="tabpanel"
+                aria-labelledby={`${treeId}-legend-tab`}
+                hidden={activeTab !== 'legend'}
+                className="layer-list-panel"
+              >
+                <div className="legend-container">
+                  {!legendReady ? <p className="layer-list-legend-status">Lejant hazırlanıyor…</p> : null}
+                  <div id={legendContainerId} aria-label="Harita lejantı" />
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  },
+);
 
 LayerListWidget.displayName = 'LayerListWidget';
