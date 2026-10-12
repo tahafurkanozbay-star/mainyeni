@@ -259,7 +259,7 @@ export function ExperienceUXLayer({
       }
 
       if (name === 'layers' || name === 'legend') {
-        layerListRef.current?.OnShow?.(name);
+        windowManager.ShowWindow('layerlist-widget', { mode: name });
         return;
       }
 

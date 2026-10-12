@@ -1,4 +1,5 @@
 import { evictArcgisModule, loadArcgisModule } from './arcgisModuleRuntime';
+import { withTimeout } from '../platform/runtime/resilience';
 
 const MEASUREMENT_MODULE_ID = 'esri/widgets/Measurement';
 const DEFAULT_MAX_LISTENERS = 64;
@@ -46,13 +47,13 @@ export const createMeasurementState = (input: MeasurementStateInput = {}): Measu
 });
 
 export interface MeasurementWidgetLike {
-  activeTool: MeasurementTool;
+  activeTool: MeasurementTool | null;
   view?: unknown;
   container?: unknown;
   clear?: () => unknown;
   destroy?: () => unknown;
 }
-type MeasurementWidgetCtor = new (options: { view: unknown; container: unknown; activeTool: MeasurementTool }) => MeasurementWidgetLike;
+type MeasurementWidgetCtor = new (options: { view: unknown; container: unknown; activeTool: MeasurementTool | null }) => MeasurementWidgetLike;
 export type MeasurementListener = (state: MeasurementState) => void;
 export type MeasurementDiagnosticPhase = 'load' | 'tool' | 'clear' | 'destroy' | 'listener';
 export interface MeasurementDiagnostic {
@@ -152,6 +153,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
   let widget: MeasurementWidgetLike | null = null;
   let creationPromise: Promise<MeasurementWidgetLike | null> | null = null;
   let destroyed = false;
+  const lifetime = new AbortController();
   let state = createMeasurementState();
   const listeners = new Set<MeasurementListener>();
   const maxListeners = clampListenerLimit(options.maxListeners);
@@ -226,14 +228,15 @@ export const createMeasurementController = (options: MeasurementControllerOption
     if (widget) return widget;
     if (creationPromise) return creationPromise;
     setState({ status: 'loading', error: null });
-    creationPromise = loadArcgisModule<MeasurementWidgetCtor>(MEASUREMENT_MODULE_ID)
+    creationPromise = withTimeout(() => loadArcgisModule<MeasurementWidgetCtor>(MEASUREMENT_MODULE_ID), 20_000, lifetime.signal)
       .then((Measurement) => {
         if (destroyed) return null;
-        widget = new Measurement({ view, container, activeTool: state.activeTool });
+        widget = new Measurement({ view, container, activeTool: state.activeTool === MEASUREMENT_TOOLS.NONE ? null : state.activeTool });
         setState({ status: 'ready', createdAt: new Date().toISOString(), error: null });
         return widget;
       })
       .catch((error: unknown) => {
+        if (destroyed) throw error;
         creationPromise = null;
         const normalized = errorRecord(error);
         report('load', error);
@@ -263,7 +266,8 @@ export const createMeasurementController = (options: MeasurementControllerOption
     }
     const currentWidget = await ensureWidget();
     if (!currentWidget || destroyed) return null;
-    currentWidget.activeTool = normalized;
+    if (normalized === MEASUREMENT_TOOLS.NONE) currentWidget.clear?.();
+    currentWidget.activeTool = normalized === MEASUREMENT_TOOLS.NONE ? null : normalized;
     setState({ activeTool: normalized, status: 'ready', error: null });
     return currentWidget;
   };
@@ -272,7 +276,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
     if (destroyed) return false;
     try {
       widget?.clear?.();
-      if (widget) widget.activeTool = MEASUREMENT_TOOLS.NONE;
+      if (widget) widget.activeTool = null;
     } catch (error) {
       report('clear', error);
     }
@@ -317,6 +321,7 @@ export const createMeasurementController = (options: MeasurementControllerOption
   const destroy = (): void => {
     if (destroyed) return;
     destroyed = true;
+    lifetime.abort();
     try {
       widget?.clear?.();
       widget?.destroy?.();

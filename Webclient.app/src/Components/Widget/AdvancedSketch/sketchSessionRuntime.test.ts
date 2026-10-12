@@ -206,8 +206,9 @@ describe('sketchSessionRuntime', () => {
       adapter.beginCreate = vi.fn(() => new Promise<void>(() => undefined));
       const runtime = createSketchSessionRuntime(adapter, { budget: { operationTimeoutMs: 1_000 } });
       const pending = runtime.selectTool('point');
+      const rejected = expect(pending).rejects.toThrow('exceeded 1000ms');
       await vi.advanceTimersByTimeAsync(1_000);
-      await expect(pending).rejects.toThrow('exceeded 1000ms');
+      await rejected;
       expect(runtime.snapshot().errors).toBe(1);
       expect(runtime.snapshot().state).toBe('error');
     } finally { vi.useRealTimers(); }

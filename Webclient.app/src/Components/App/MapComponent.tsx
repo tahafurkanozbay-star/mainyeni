@@ -5,18 +5,13 @@ import { NavigationBar } from './NavigationBar';
 import { SidebarModern } from './SidebarModern';
 import MapManager from '../../Store/Managers/MapManager';
 import { ToolbarWidgetModern } from '../Widget/Toolbar/ToolbarWidgetModern';
-import { BasemapWidget } from '../Widget/Basemap/BasemapWidget';
-import { MeasurementWidget } from '../Widget/Measurement/MeasurementWidget';
-import { SketchWidget } from '../Widget/Sketch/SketchWidget';
-import { GlobalIdentifyWidget } from '../Widget/GlobalIdentify/GlobalIdentifyWidget';
-import { StreetViewWidget } from '../Widget/StreetView/StreetViewWidget';
-import { BookmarkWidget } from '../Widget/Bookmark/BookmarkWidget';
-import { FeedbackWidget } from '../Widget/Feedback/FeedbackWidget';
-import { ContextMenuWidget } from '../Widget/ContextMenu/ContextMenuWidget';
 import { GoogleMapsBusiness } from '../../Business/GoogleMapsBusiness';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
+import { WIDGET_WINDOW_DEFINITIONS } from '../Common/WidgetWindowRegistry';
+import { waitForArcgisView } from '../../gis-engine/viewReadiness';
+import { withTimeout } from '../../platform/runtime/resilience';
 import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
 import { MapWorkspaceRecoverySurface } from './MapWorkspaceRecoverySurface';
 import { MapWorkspaceRecoveryModel } from './mapWorkspaceRecoveryModel';
@@ -33,7 +28,6 @@ import {
   createViewPerformanceMonitor,
 } from '../../gis-engine/viewRuntime';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
-import type { ManagedWindowHandle } from '../../experience/contracts';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { openExternalUrl } from '../Widget/_shared/MapWidgetRuntime';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
@@ -49,6 +43,9 @@ interface PopupLike {
   on?: (eventName: string, callback: (event: { action?: { id?: string } }) => void) => RemovableHandle;
 }
 interface MapViewLike {
+  readonly ready?: boolean;
+  readonly readyState?: string;
+  readonly when?: () => PromiseLike<unknown>;
   destroyed?: boolean;
   container?: HTMLElement | null;
   map?: unknown;
@@ -69,7 +66,6 @@ type ArcgisMapViewConstructor = new (options: unknown) => MapViewLike;
 
 const LegacySidebar = SidebarModern as React.ElementType;
 const ModernToolbarWidget = ToolbarWidgetModern as React.ElementType;
-const LegacyMeasurementWidget = MeasurementWidget as React.ElementType;
 const safeRemove = (handle: RemovableHandle | null | undefined): void => {
   try { handle?.remove?.(); } catch (error) { DebugHelper.Log(error); }
 };
@@ -93,14 +89,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [mapGeneration, setMapGeneration] = useState(0);
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const sidebarRef = useRef<unknown>(null);
-  const basemapWidgetRef = useRef<ManagedWindowHandle | null>(null);
-  const bookmarkWidgetRef = useRef<ManagedWindowHandle | null>(null);
-  const contextMenuWidgetRef = useRef<ManagedWindowHandle | null>(null);
-  const feedbackWidgetRef = useRef<ManagedWindowHandle | null>(null);
-  const globalIdentifyWidgetRef = useRef<ManagedWindowHandle | null>(null);
-  const measurementWidgetRef = useRef<unknown>(null);
-  const sketchWidgetRef = useRef<ManagedWindowHandle | null>(null);
-  const streetViewWidgetRef = useRef<ManagedWindowHandle | null>(null);
+
 
   useEffect(() => {
     const onWorkspaceKeyDown = (event: KeyboardEvent): void => {
@@ -116,6 +105,8 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
 
   useEffect(() => {
     let disposed = false;
+    let cleaned = false;
+    const lifetime = new AbortController();
     let view: MapViewLike | null = null;
     let bridge: ReturnType<typeof createViewStateBridge> | null = null;
     let performanceMonitor: ReturnType<typeof createViewPerformanceMonitor> | null = null;
@@ -124,15 +115,17 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     accessibilityModel.reset();
     const recoveryAttemptId = recoveryModel.beginAttempt();
 
-    const initializeMap = async (): Promise<void> => {
+    const initializeMap = async (signal: AbortSignal): Promise<void> => {
       const mapConfig = MapManager.GetMapConfiguration?.() ?? {};
       const [MapCtor, MapViewCtor, watchUtils] = await loadArcgisModules<[ArcgisMapConstructor, ArcgisMapViewConstructor, WatchUtilsLike]>([
         'esri/Map', 'esri/views/MapView', 'esri/core/watchUtils',
       ]);
-      if (disposed || !mapDiv.current) return;
+      if (disposed || signal.aborted || !mapDiv.current) return;
       accessorWatchRef.current = watchUtils.watch;
       const map = new MapCtor({ basemap: 'osm' });
       view = new MapViewCtor(createMapViewOptions({ container: mapDiv.current, map, configuration: mapConfig, viewportWidth: window.innerWidth }));
+      await waitForArcgisView(view, { signal, accessorWatch: watchUtils.watch });
+      if (disposed || signal.aborted) return;
       bridge = createViewStateBridge({ mode: '2d' }, { onListenerError: (error: unknown) => DebugHelper.Log(error) });
       MapManager.SetViewStateBridge?.(bridge as never);
       unbindViewState = bindMapViewState(view as never, bridge, {
@@ -169,19 +162,27 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       if (recoveryAttemptId !== null) recoveryModel.succeed(recoveryAttemptId);
       if (view.updating) accessibilityModel.markUpdating(true);
     };
-    void initializeMap().catch((error: unknown) => {
-      if (disposed) return;
-      accessibilityModel.markError(error);
-      if (recoveryAttemptId !== null) recoveryModel.fail(recoveryAttemptId, error);
-      DebugHelper.Log(error);
-    });
-    return () => {
-      disposed = true; activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
+    const cleanupResources = (): void => {
+      if (cleaned) return;
+      cleaned = true;
+      activeViewModeRef.current = '2d'; accessorWatchRef.current = null;
       unbindViewState(); performanceMonitor?.dispose?.(); MapManager.ClearViewPerformanceMonitor?.(performanceMonitor);
       MapManager.ClearViewStateBridge?.(bridge as never); bridge?.destroy?.(); handles.forEach(safeRemove); windowManager.SetMapUpdating(false);
       Store.dispatch({ type: MapReducer_ActionTypes.SetMapView, payload: null });
       setMapView(null);
       if (view) { try { view.container = null; view.destroy?.(); } catch (error) { DebugHelper.Log(error); } }
+    };
+    void withTimeout(initializeMap, 20_000, lifetime.signal).catch((error: unknown) => {
+      if (disposed) return;
+      cleanupResources();
+      accessibilityModel.markError('Harita çalışma alanı başlatılamadı. Yeniden deneyebilirsiniz.');
+      if (recoveryAttemptId !== null) recoveryModel.fail(recoveryAttemptId, error);
+      DebugHelper.Log(error);
+    });
+    return () => {
+      disposed = true;
+      lifetime.abort();
+      cleanupResources();
     };
   }, [accessibilityModel, mapGeneration, recoveryModel, windowManager]);
 
@@ -190,9 +191,17 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     setMapGeneration((generation) => generation + 1);
   }, [recoveryModel]);
 
-  useEffect(() => () => {
-    accessibilityModel.dispose();
-    recoveryModel.dispose();
+  const modelsMountedRef = useRef(false);
+  useEffect(() => {
+    modelsMountedRef.current = true;
+    return () => {
+      modelsMountedRef.current = false;
+      queueMicrotask(() => {
+        if (modelsMountedRef.current) return;
+        accessibilityModel.dispose();
+        recoveryModel.dispose();
+      });
+    };
   }, [accessibilityModel, recoveryModel]);
 
   return (
@@ -205,16 +214,9 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
         <MapWorkspaceShortcutHelpLauncher />
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
-        <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} />
-        <BasemapWidget id="basemap-widget" windowManager={windowManager} ref={basemapWidgetRef} />
-        <BookmarkWidget id="bookmark-widget" windowManager={windowManager} ref={bookmarkWidgetRef} />
-        <ContextMenuWidget id="context-menu-widget" windowManager={windowManager} ref={contextMenuWidgetRef} />
-        <FeedbackWidget id="feedback-widget" windowManager={windowManager} ref={feedbackWidgetRef} />
-        <GlobalIdentifyWidget id="global-identify-widget" windowManager={windowManager} ref={globalIdentifyWidgetRef} />
-        <LegacyMeasurementWidget id="measurement-widget" windowManager={windowManager} ref={measurementWidgetRef} />
-        <SketchWidget id="sketch-widget" windowManager={windowManager} ref={sketchWidgetRef} />
-        <StreetViewWidget id="streetview-widget" windowManager={windowManager} ref={streetViewWidgetRef} />
-        {QUERY_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} id={definition.id} label={definition.label} component={definition.component} componentProps={{}} windowManager={windowManager} />)}
+        <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} accessorWatch={accessorWatchRef.current ?? undefined} />
+        {WIDGET_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} keepMounted windowManager={windowManager} />)}
+        {QUERY_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} windowManager={windowManager} />)}
       </>}
     </div>
   );
