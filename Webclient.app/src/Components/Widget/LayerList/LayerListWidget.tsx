@@ -216,6 +216,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     const [mapView, setMapView] = useState<MapViewLike | null>(null);
     const [activeTab, setActiveTab] = useState<LayerListTab>('layers');
     const [legendReady, setLegendReady] = useState(false);
+    const [legendError, setLegendError] = useState(false);
     const [reloadGeneration, setReloadGeneration] = useState(0);
 
     const modelRef = useRef<LayerListExperienceModel | null>(null);
@@ -240,6 +241,10 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
 
     const ownerRef = useRef<LayerOwner<LayerRuntime> | null>(null);
     const legendRef = useRef<LegendLike | null>(null);
+    const legendRequestRef = useRef(0);
+    const legendLoadingRef = useRef(false);
+    const legendViewRef = useRef<MapViewLike | null>(null);
+    const activeTabRef = useRef<LayerListTab>('layers');
     const mountedRef = useRef(true);
     const requestVersionRef = useRef(0);
     const runtimeByKeyRef = useRef(new Map<string, RuntimeLayerRecord>());
@@ -257,11 +262,20 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     }, []);
 
     const disposeLegend = useCallback((): void => {
+      legendRequestRef.current += 1;
+      legendLoadingRef.current = false;
+      legendViewRef.current = null;
+      const legend = legendRef.current;
+      legendRef.current = null;
       try {
-        legendRef.current?.destroy?.();
+        legend?.destroy?.();
+      } catch (error) {
+        globalThis.console?.warn?.('LayerList legend cleanup failed.', error);
       } finally {
-        legendRef.current = null;
-        if (mountedRef.current) setLegendReady(false);
+        if (mountedRef.current) {
+          setLegendReady(false);
+          setLegendError(false);
+        }
       }
     }, []);
 
@@ -286,6 +300,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     const fetchQueryResults = useCallback(async (): Promise<void> => {
       const view = asMapView(MapManager.GetMapView());
       if (!view) {
+        disposeLegend();
         sourceGroupsRef.current = Object.freeze([]);
         runtimeByKeyRef.current.clear();
         model.replace([]);
@@ -374,7 +389,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
           model.markError(error);
         }
       }
-    }, [applyPresentationCatalog, getOwner, loader, model]);
+    }, [applyPresentationCatalog, disposeLegend, getOwner, loader, model]);
 
     useImperativeHandle(ref, () => ({
       id,
@@ -387,6 +402,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       OnClose: () => {
         requestVersionRef.current += 1;
         loader.cancel();
+        activeTabRef.current = 'layers';
+        setActiveTab('layers');
         disposeLegend();
       },
     }), [disposeLegend, fetchQueryResults, id, loader, windowManager]);
@@ -404,8 +421,13 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
         ownerRef.current = null;
         runtimeByKeyRef.current.clear();
         sourceGroupsRef.current = Object.freeze([]);
+        legendRequestRef.current += 1;
+        legendLoadingRef.current = false;
+        legendViewRef.current = null;
         try {
           legendRef.current?.destroy?.();
+        } catch (error) {
+          globalThis.console?.warn?.('LayerList legend cleanup failed.', error);
         } finally {
           legendRef.current = null;
         }
@@ -423,24 +445,49 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     }, [fetchQueryResults, loader, reloadGeneration]);
 
     const refreshLegend = useCallback(async (): Promise<void> => {
-      if (legendRef.current || !mapView) return;
+      if (!mountedRef.current || activeTabRef.current !== 'legend' || !mapView) return;
+      if (legendViewRef.current === mapView && (legendRef.current || legendLoadingRef.current)) return;
+      if (legendRef.current || legendLoadingRef.current) disposeLegend();
+      const request = ++legendRequestRef.current;
+      legendLoadingRef.current = true;
+      legendViewRef.current = mapView;
+      setLegendReady(false);
+      setLegendError(false);
       try {
         const [Legend] = await loadArcgisModules<readonly [LegendConstructor]>(['esri/widgets/Legend']);
-        if (!mountedRef.current || legendRef.current) return;
-        const nextLegend = new Legend({ view: mapView, container: legendContainerId });
-        legendRef.current = nextLegend;
+        if (
+          !mountedRef.current
+          || activeTabRef.current !== 'legend'
+          || legendRequestRef.current !== request
+          || legendViewRef.current !== mapView
+        ) return;
+        legendRef.current = new Legend({ view: mapView, container: legendContainerId });
+        legendLoadingRef.current = false;
         setLegendReady(true);
       } catch (error) {
-        globalThis.reportError?.(error);
-        disposeLegend();
+        if (!mountedRef.current || activeTabRef.current !== 'legend' || legendRequestRef.current !== request) return;
+        legendLoadingRef.current = false;
+        legendViewRef.current = null;
+        setLegendReady(false);
+        setLegendError(true);
+        try {
+          globalThis.reportError?.(error);
+        } catch {
+          globalThis.console?.warn?.('LayerList legend error reporter failed.');
+        }
       }
     }, [disposeLegend, legendContainerId, mapView]);
 
     const switchTab = useCallback((tab: LayerListTab): void => {
+      activeTabRef.current = tab;
       setActiveTab(tab);
       if (tab === 'legend') void refreshLegend();
       else disposeLegend();
     }, [disposeLegend, refreshLegend]);
+
+    useEffect(() => {
+      if (activeTab === 'legend' && mapView) void refreshLegend();
+    }, [activeTab, mapView, refreshLegend]);
 
     const focusTab = useCallback((tab: LayerListTab): void => {
       switchTab(tab);
@@ -812,7 +859,14 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                 className="layer-list-panel"
               >
                 <div className="legend-container">
-                  {!legendReady ? <p className="layer-list-legend-status">Lejant hazırlanıyor…</p> : null}
+                  {legendError ? (
+                    <div className="layer-list-recovery" role="alert">
+                      <strong>Lejant yüklenemedi</strong>
+                      <button type="button" onClick={() => { void refreshLegend(); }}>Tekrar dene</button>
+                    </div>
+                  ) : !legendReady ? (
+                    <p className="layer-list-legend-status" role="status">Lejant hazırlanıyor…</p>
+                  ) : null}
                   <div id={legendContainerId} aria-label="Harita lejantı" />
                 </div>
               </section>

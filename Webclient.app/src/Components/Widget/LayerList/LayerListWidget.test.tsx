@@ -417,6 +417,80 @@ describe('LayerListWidget modern workspace', () => {
     expect(screen.getByRole('tabpanel', { name: 'Lejant' })).toBeVisible();
   });
 
+  it('ignores a late legend import after returning to layers', async () => {
+    let resolveImport: (value: unknown) => void = () => undefined;
+    runtime.loadModules.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveImport = resolve;
+    }));
+    await waitForLayerTree();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    expect(runtime.loadModules).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('tab', { name: 'Katmanlar' }));
+    await act(async () => {
+      resolveImport([LegendMock]);
+      await Promise.resolve();
+    });
+    expect(runtime.legendConstruct).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    await waitFor(() => expect(runtime.legendConstruct).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the newest legend when an older import resolves later', async () => {
+    let resolveOld: (value: unknown) => void = () => undefined;
+    runtime.loadModules.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveOld = resolve;
+    }));
+    await waitForLayerTree();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Katmanlar' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    await waitFor(() => expect(runtime.legendConstruct).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveOld([LegendMock]);
+      await Promise.resolve();
+    });
+    expect(runtime.legendConstruct).toHaveBeenCalledTimes(1);
+    expect(runtime.legendDestroy).not.toHaveBeenCalled();
+  });
+
+  it('does not report a stale import rejection over a newer legend', async () => {
+    let rejectOld: (reason: Error) => void = () => undefined;
+    runtime.loadModules.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectOld = reject;
+    }));
+    const report = vi.fn();
+    vi.stubGlobal('reportError', report);
+    await waitForLayerTree();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Katmanlar' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    await waitFor(() => expect(runtime.legendConstruct).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      rejectOld(new Error('obsolete import'));
+      await Promise.resolve();
+    });
+    expect(report).not.toHaveBeenCalled();
+    expect(runtime.legendDestroy).not.toHaveBeenCalled();
+    expect(screen.queryByText('Lejant yüklenemedi')).not.toBeInTheDocument();
+  });
+
+  it('does not construct a legend after managed close during import', async () => {
+    let resolveImport: (value: unknown) => void = () => undefined;
+    runtime.loadModules.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveImport = resolve;
+    }));
+    const { ref } = renderWidget();
+    await waitForLayerTree();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    act(() => ref.current?.OnClose?.());
+    await act(async () => {
+      resolveImport([LegendMock]);
+      await Promise.resolve();
+    });
+    expect(runtime.legendConstruct).not.toHaveBeenCalled();
+    expect(screen.getByRole('tab', { name: 'Katmanlar' })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('destroys the legend when returning to layers', async () => {
     await waitForLayerTree();
     fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
@@ -432,7 +506,10 @@ describe('LayerListWidget modern workspace', () => {
     await waitForLayerTree();
     fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
     await waitFor(() => expect(report).toHaveBeenCalled());
-    expect(screen.getByText('Lejant hazırlanıyor…')).toBeVisible();
+    expect(screen.getByText('Lejant yüklenemedi')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Tekrar dene' }));
+    await waitFor(() => expect(runtime.legendConstruct).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Lejant yüklenemedi')).not.toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 
