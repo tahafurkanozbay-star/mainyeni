@@ -362,8 +362,9 @@ export const GenelAramaQeryWindow = forwardRef<
     detailGateRef.current.invalidate();
     setDetailLoadingKey(null);
     setErrorMessage('');
+    windowManager.HideWindow(id);
     windowManager.ShowWindow('sidebar');
-  }, [windowManager]);
+  }, [id, windowManager]);
 
   const clearLocalFilters = useCallback((): void => {
     applyPresentation(runtime.clearFilters());

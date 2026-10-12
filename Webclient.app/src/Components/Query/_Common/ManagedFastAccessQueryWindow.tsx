@@ -17,11 +17,14 @@ import MapManager from '../../../Store/Managers/MapManager';
 import { DebugHelper } from '../../../Toolbox/DebugHelper';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { createPictureMarkerSymbol } from '../../../gis-engine/iconPresentation';
+import { OperationTimeoutError, withTimeout } from '../../../platform/runtime/resilience';
 import {
   createKentRehberiGeoJsonLayer,
   type KentRehberiGeoJsonFeatureCollection,
 } from '../../../data-services/kentRehberiGeoJsonLayer';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
+import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
+import { ServiceWindowActions } from './ServiceWindowActions';
 import {
   buildGoogleDirectionsUrl,
   createLatestRequestGate,
@@ -33,6 +36,7 @@ import {
 import './ManagedFastAccessQueryWindow.css';
 
 const DEFAULT_PAGE_SIZE = 60;
+const SERVICE_WINDOW_POLICY = Object.freeze({ layerTimeoutMs: 15_000, actionTimeoutMs: 15_000 });
 const DEFAULT_QUERY: Readonly<Record<string, unknown>> = Object.freeze({});
 
 const ATTRIBUTE_CANDIDATES = Object.freeze({
@@ -74,6 +78,7 @@ export interface FastAccessBusiness {
   readonly Query: (
     query: Readonly<Record<string, unknown>>,
     single: boolean,
+    options?: { readonly signal?: AbortSignal },
   ) => Promise<FastAccessServiceResult>;
 }
 
@@ -116,6 +121,10 @@ export interface FastAccessWindowManager {
   readonly ToggleMinimiseWindow?: (id: string) => void;
   readonly RegisterWindow?: (ref: Ref<ManagedWindowHandle>) => void;
   readonly ShowWindow?: (id: string) => void;
+  readonly HideWindow?: (id: string) => void;
+  readonly IsVisible?: (id: string) => boolean;
+  readonly IsMinimized?: (id: string) => boolean;
+  readonly UnregisterWindow?: (id: string, ref: Ref<ManagedWindowHandle>) => void;
 }
 
 export interface ManagedFastAccessQueryWindowProps {
@@ -235,6 +244,7 @@ const safeRemoveLayer = (
   mapView: MapViewLike | null,
   layer: LayerLike | null | undefined,
 ): void => {
+  if (!layer) return;
   try {
     mapView?.map?.remove?.(layer);
   } catch (error) {
@@ -277,7 +287,13 @@ export function createManagedFastAccessQueryWindow({
     const mapViewRef = useRef<MapViewLike | null>(null);
     const layerRef = useRef<LayerEnvelope | LayerLike | null>(null);
     const requestGateRef = useRef(createLatestRequestGate());
+    const actionGateRef = useRef(createLatestRequestGate());
+    const queryAbortRef = useRef<AbortController | null>(null);
+    const actionAbortRef = useRef<AbortController | null>(null);
+    const rootRef = useRef<HTMLElement | null>(null);
     const initialExtentRef = useRef<unknown>(null);
+    const visible = windowManager.IsVisible?.(id) ?? true;
+    const minimized = windowManager.IsMinimized?.(id) ?? false;
 
     const [records, setRecords] = useState<readonly FastAccessRecord[]>([]);
     const [filterText, setFilterText] = useState('');
@@ -295,6 +311,9 @@ export function createManagedFastAccessQueryWindow({
 
     const resetSurface = useCallback((): void => {
       requestGateRef.current.invalidate();
+      actionGateRef.current.invalidate();
+      queryAbortRef.current?.abort();
+      actionAbortRef.current?.abort();
       clearOwnedLayer();
       setRecords([]);
       setFilterText('');
@@ -309,8 +328,12 @@ export function createManagedFastAccessQueryWindow({
         error,
         'Sorgu tamamlanamadı. Lütfen tekrar deneyin.',
       );
-      const message = /HTTP\s[45]\d\d|Failed to fetch|Network request failed/i.test(detail)
+      const message = error instanceof OperationTimeoutError
+        ? 'İşlem beklenenden uzun sürdü. Lütfen tekrar deneyin.'
+        : /HTTP\s[45]\d\d|Failed to fetch|Network request failed/i.test(detail)
         ? 'Hizmet verisi alınamadı. Bağlantınızı kontrol edip tekrar deneyin.'
+        : /Servis bulunamadı|service.*(?:not found|not configured)/i.test(detail)
+          ? 'Bu hizmet şu anda kullanılamıyor. Daha sonra tekrar deneyebilirsiniz.'
         : detail;
       setErrorMessage(message);
       windowManager.ShowMessage?.(Constants_MessageType.Error, message);
@@ -320,6 +343,8 @@ export function createManagedFastAccessQueryWindow({
     const renderLayer = useCallback(async (
       query: Readonly<Record<string, unknown>>,
       result: FastAccessServiceResult,
+      requestId: number,
+      signal: AbortSignal,
     ): Promise<void> => {
       const mapView = mapViewRef.current;
       if (!mapView?.map) return;
@@ -343,6 +368,7 @@ export function createManagedFastAccessQueryWindow({
               symbol,
             }),
           },
+          signal,
         );
         nextLayer = Object.freeze({ layerObj: layer as LayerLike });
       } else {
@@ -354,19 +380,24 @@ export function createManagedFastAccessQueryWindow({
         ) as LayerEnvelope | null;
       }
 
-      if (!mountedRef.current || !nextLayer?.layerObj) {
-        nextLayer?.layerObj?.destroy?.();
+      if (!mountedRef.current || signal.aborted || !requestGateRef.current.isCurrent(requestId) || !nextLayer?.layerObj) {
+        safeRemoveLayer(null, nextLayer?.layerObj);
         return;
       }
 
       clearOwnedLayer();
       layerRef.current = nextLayer;
-      mapView.map.add?.(nextLayer.layerObj);
+      try {
+        mapView.map.add?.(nextLayer.layerObj);
+      } catch (error) {
+        clearOwnedLayer();
+        throw error;
+      }
 
       try {
         const extentResult = await nextLayer.layerObj.queryExtent?.();
         const extent = extentResult?.extent;
-        if (extent && mountedRef.current && mapView.goTo) {
+        if (extent && mountedRef.current && !signal.aborted && requestGateRef.current.isCurrent(requestId) && layerRef.current === nextLayer && mapView.goTo) {
           const target = typeof extent.expand === 'function' ? extent.expand(1.12) : extent;
           await mapView.goTo(target, { animate: false });
         }
@@ -377,17 +408,25 @@ export function createManagedFastAccessQueryWindow({
 
     const fetchQueryResults = useCallback(async (): Promise<void> => {
       const requestId = requestGateRef.current.next();
+      queryAbortRef.current?.abort();
+      actionAbortRef.current?.abort();
+      actionGateRef.current.invalidate();
+      const controller = new AbortController();
+      queryAbortRef.current = controller;
       const query = windowManager.GetQueryParams?.(id) ?? DEFAULT_QUERY;
 
       setLoading(true);
       setErrorMessage('');
       setFilterText('');
       setVisibleCount(pageSize);
+      setRecords([]);
+      setActiveActionKey('');
+      clearOwnedLayer();
 
-      await safeClientLog(LoggingBusiness, logName + '/Sorgu', JSON.stringify(query));
+      void safeClientLog(LoggingBusiness, logName + '/Sorgu', JSON.stringify(query), DebugHelper.Log);
 
       try {
-        const result = await business.Query(query, false);
+        const result = await business.Query(query, false, { signal: controller.signal });
         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
 
         if (result?.type !== Constants_ServiceResultType.Success) {
@@ -400,7 +439,7 @@ export function createManagedFastAccessQueryWindow({
           : [];
 
         setRecords(nextRecords);
-        await renderLayer(query, result);
+        await withTimeout((signal) => renderLayer(query, result, requestId, signal), SERVICE_WINDOW_POLICY.layerTimeoutMs, controller.signal);
       } catch (error) {
         if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
           showError(error);
@@ -410,16 +449,17 @@ export function createManagedFastAccessQueryWindow({
           setLoading(false);
         }
       }
-    }, [business, id, logName, pageSize, renderLayer, showError, windowManager]);
+    }, [business, clearOwnedLayer, id, logName, pageSize, renderLayer, showError, windowManager]);
 
     const getItemDetails = useCallback(async (
       item: FastAccessRecord,
+      signal: AbortSignal,
     ): Promise<FastAccessFeature | null> => {
       if (item.objectId === null || item.objectId === undefined || item.objectId === '') {
         return item.raw;
       }
 
-      const result = await business.Query({ ObjectId: item.objectId }, true);
+      const result = await business.Query({ ObjectId: item.objectId }, true, { signal });
       if (
         result?.type !== Constants_ServiceResultType.Success
         || !Array.isArray(result.data)
@@ -432,33 +472,41 @@ export function createManagedFastAccessQueryWindow({
     const runItemAction = useCallback(async <Result,>(
       item: FastAccessRecord,
       action: string,
-      callback: () => Promise<Result>,
+      callback: (signal: AbortSignal, isCurrent: () => boolean) => Promise<Result | null>,
     ): Promise<Result | null> => {
+      if (actionAbortRef.current && !actionAbortRef.current.signal.aborted) return null;
+      const actionId = actionGateRef.current.next();
+      const controller = new AbortController();
+      actionAbortRef.current = controller;
+      const isCurrent = (): boolean => mountedRef.current && !controller.signal.aborted && actionGateRef.current.isCurrent(actionId);
       const key = getFastAccessRecordKey(item) + '-' + action;
       setActiveActionKey(key);
       setErrorMessage('');
       try {
-        return await callback();
+        return await withTimeout((signal) => callback(signal, () => isCurrent() && !signal.aborted), SERVICE_WINDOW_POLICY.actionTimeoutMs, controller.signal);
       } catch (error) {
-        showError(error);
+        if (isCurrent()) showError(error);
         return null;
       } finally {
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setActiveActionKey((current) => current === key ? '' : current);
         }
+        if (actionAbortRef.current === controller) actionAbortRef.current = null;
       }
     }, [showError]);
 
     const zoomToItem = useCallback((item: FastAccessRecord) => runItemAction(
       item,
       'zoom',
-      async () => {
-        const detail = await getItemDetails(item);
+      async (signal, isCurrent) => {
+        const detail = await getItemDetails(item, signal);
+        if (!isCurrent()) return null;
         const geometry = getFeatureGeometry(detail);
         if (!geometry) throw new Error('Konum bilgisi bulunamadı.');
 
-        GisGraphicsHelper.ZoomToGeometry(mapViewRef.current, geometry, 18);
-        await safeClientLog(
+        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapViewRef.current, geometry, 18));
+        if (!isCurrent()) return null;
+        void safeClientLog(
           LoggingBusiness,
           logName + '/Detay Göster',
           String(item.objectId ?? '') + '/' + item.address,
@@ -474,15 +522,16 @@ export function createManagedFastAccessQueryWindow({
     const showRoute = useCallback((item: FastAccessRecord) => runItemAction(
       item,
       'route',
-      async () => {
-        const detail = await getItemDetails(item);
+      async (signal, isCurrent) => {
+        const detail = await getItemDetails(item, signal);
+        if (!isCurrent()) return null;
         const routeUrl = buildGoogleDirectionsUrl(getFeatureGeometry(detail));
         if (!routeUrl) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
         if (!openExternalSafely(routeUrl)) {
           throw new Error('Yol tarifi penceresi açılamadı.');
         }
 
-        await safeClientLog(
+        void safeClientLog(
           LoggingBusiness,
           logName + '/Yol Tarifi',
           String(item.objectId ?? '') + '/' + item.address,
@@ -493,11 +542,11 @@ export function createManagedFastAccessQueryWindow({
 
     useImperativeHandle(ref, () => ({
       id,
-      visible: false,
-      minimized: false,
+      visible,
+      minimized,
       OnShow: fetchQueryResults,
       OnClose: resetSurface,
-    }), [fetchQueryResults, id, resetSurface]);
+    }), [fetchQueryResults, id, minimized, resetSurface, visible]);
 
     useEffect(() => {
       mountedRef.current = true;
@@ -509,9 +558,20 @@ export function createManagedFastAccessQueryWindow({
       return () => {
         mountedRef.current = false;
         requestGateRef.current.invalidate();
+        actionGateRef.current.invalidate();
+        queryAbortRef.current?.abort();
+        actionAbortRef.current?.abort();
         clearOwnedLayer();
+        windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [clearOwnedLayer, ref, windowManager]);
+    }, [clearOwnedLayer, id, ref, windowManager]);
+
+    useEffect(() => {
+      if (!visible) return;
+      const focus = createManagedWindowFocusLifecycle();
+      focus.open({ root: rootRef.current, initialFocusSelector: 'input[type="search"], .kr-fast-query__back' });
+      return () => { focus.close(); focus.dispose(); };
+    }, [visible]);
 
     const filteredRecords = useMemo(
       () => filterFastAccessRecords(records, filterText),
@@ -524,17 +584,15 @@ export function createManagedFastAccessQueryWindow({
     );
 
     const returnToServices = useCallback((): void => {
-      requestGateRef.current.invalidate();
-      clearOwnedLayer();
-
       const initialExtent = initialExtentRef.current;
       const mapView = mapViewRef.current;
+      resetSurface();
+      windowManager.HideWindow?.(id);
+      windowManager.ShowWindow?.('sidebar');
       if (initialExtent && mapView?.goTo) {
         Promise.resolve(mapView.goTo(initialExtent, { animate: false })).catch(DebugHelper.Log);
       }
-
-      windowManager.ShowWindow?.('sidebar');
-    }, [clearOwnedLayer, windowManager]);
+    }, [id, resetSurface, windowManager]);
 
     const retry = useCallback((): void => {
       if (!loading) void fetchQueryResults();
@@ -542,7 +600,11 @@ export function createManagedFastAccessQueryWindow({
 
     return (
       <section
+        ref={rootRef}
         className="sidebar-container kr-fast-query"
+        data-minimized={minimized || undefined}
+        aria-hidden={!visible}
+        style={{ visibility: visible ? 'visible' : 'hidden' }}
         aria-labelledby={id + '-title'}
         aria-busy={loading}
       >
@@ -553,14 +615,7 @@ export function createManagedFastAccessQueryWindow({
             className="common-query-window-header-icon"
           />
           <h2 id={id + '-title'}>{title}</h2>
-          <button
-            type="button"
-            className="kr-fast-query__close"
-            onClick={returnToServices}
-            aria-label={title + ' penceresini kapat'}
-          >
-            ×
-          </button>
+          <ServiceWindowActions title={title} minimized={minimized} onMinimize={() => windowManager.ToggleMinimiseWindow?.(id)} onClose={returnToServices} />
         </header>
 
         <div className="kr-fast-query__toolbar">
@@ -568,7 +623,7 @@ export function createManagedFastAccessQueryWindow({
             <span aria-hidden="true">←</span><span>Hizmetlere dön</span>
           </button>
           <span className="kr-fast-query__count" aria-live="polite">
-            <strong>{filteredRecords.length}</strong> sonuç
+            {loading ? 'Yükleniyor…' : <><strong>{filteredRecords.length.toLocaleString('tr-TR')}</strong> sonuç</>}
           </span>
         </div>
 
@@ -585,6 +640,8 @@ export function createManagedFastAccessQueryWindow({
               }}
               placeholder="Ad, adres veya telefon…"
               autoComplete="off"
+              disabled={loading}
+              aria-controls={id + '-results'}
             />
           </div>
         ) : null}
@@ -600,9 +657,16 @@ export function createManagedFastAccessQueryWindow({
           {!loading && !errorMessage && records.length === 0
             ? <span>Gösterilecek kayıt bulunamadı.</span>
             : null}
+          {!loading && !errorMessage && records.length > 0 && filteredRecords.length === 0 ? (
+            <div className="kr-fast-query__empty">
+              <strong>Aramanızla eşleşen sonuç yok.</strong>
+              <span>Başka bir ad, adres veya telefon deneyin.</span>
+              <button type="button" onClick={() => { setFilterText(''); setVisibleCount(pageSize); rootRef.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); }}>Filtreyi temizle</button>
+            </div>
+          ) : null}
         </div>
 
-        <ul className="results-container kr-fast-query__results" aria-label={title + ' sonuçları'}>
+        <ul id={id + '-results'} className="results-container kr-fast-query__results" aria-label={title + ' sonuçları'}>
           {visibleRecords.map((item, index) => {
             const recordKey = getFastAccessRecordKey(item, index);
             const zoomKey = recordKey + '-zoom';
@@ -626,14 +690,16 @@ export function createManagedFastAccessQueryWindow({
                   <button
                     type="button"
                     onClick={() => { void zoomToItem(item); }}
-                    disabled={activeActionKey === zoomKey}
+                    disabled={loading || Boolean(activeActionKey)}
+                    aria-label={item.title + ' — Haritada göster'}
                   >
                     {activeActionKey === zoomKey ? 'Açılıyor…' : 'Haritada göster'}
                   </button>
                   <button
                     type="button"
                     onClick={() => { void showRoute(item); }}
-                    disabled={activeActionKey === routeKey}
+                    disabled={loading || Boolean(activeActionKey)}
+                    aria-label={item.title + ' — Yol tarifi (yeni pencere)'}
                   >
                     {activeActionKey === routeKey ? 'Açılıyor…' : 'Yol tarifi'}
                   </button>
@@ -643,15 +709,22 @@ export function createManagedFastAccessQueryWindow({
           })}
         </ul>
 
-        {visibleCount < filteredRecords.length ? (
+        {!loading && visibleCount < filteredRecords.length ? (
           <button
             type="button"
             className="kr-fast-query__more"
-            onClick={() => {
+            onClick={(event) => {
+              const button = event.currentTarget;
+              const requestId = requestGateRef.current.current();
               setVisibleCount((count) => Math.min(count + pageSize, filteredRecords.length));
+              requestAnimationFrame(() => {
+                if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+                if (document.activeElement !== button && document.activeElement !== document.body) return;
+                rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
+              });
             }}
           >
-            Daha fazla sonuç göster
+            Daha fazla sonuç göster ({filteredRecords.length - visibleCount} kaldı)
           </button>
         ) : null}
       </section>

@@ -35,7 +35,8 @@ body { margin: 0; user-select: text; }
 /* Map windows and footer controls share the shell stacking context. A second
  * isolated context around the map would trap a mobile query below utilities. */
 #app-shell .esri-map { height: 100dvh; isolation: auto; }
-#app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 72px; }
+#app-shell:has(.kr-sidebar.is-collapsed):not(:has(.kr-fast-query[aria-hidden='false'])) { --kr-premium-sidebar-width: 72px; }
+#app-shell:has(.kr-fast-query[aria-hidden='false']) { --kr-premium-sidebar-width: 320px; }
 
 /* Grid reserves real space for the brand and portal; the search can shrink
  * without painting over either link at intermediate widths or text zoom. */
@@ -345,7 +346,7 @@ html[data-experience-panel='bottom'] #app-shell .common-query-window {
   background: var(--exp-surface);
   color: var(--exp-text);
 }
-#app-shell .kr-fast-query__header { padding: 12px; grid-template-columns: 34px minmax(0, 1fr) 44px; gap: 8px; }
+#app-shell .kr-fast-query__header { padding: 12px; grid-template-columns: 34px minmax(0, 1fr) 44px 44px; gap: 8px; }
 #app-shell .kr-fast-query__header h2 { white-space: normal; font-size: 17px; line-height: 1.35; }
 #app-shell .kr-fast-query__count { font-size: 13px; }
 #app-shell .kr-fast-query__status { font-size: 14px; padding: 12px; }
@@ -358,6 +359,38 @@ html[data-experience-panel='bottom'] #app-shell .common-query-window {
 #app-shell .kr-fast-query__copy h3 { font-size: 15px; color: var(--exp-text); }
 #app-shell .kr-fast-query__copy .result-item-info-address,
 #app-shell .kr-fast-query__copy :is(p, a) { font-size: 13px; }
+/* Keep a single scroll surface on short screens. Fixed header/filter rows
+ * must not consume the result viewport or lose their close action. */
+#app-shell .kr-fast-query { border-inline-end: 1px solid var(--exp-border); }
+#app-shell .kr-fast-query > :not(.kr-fast-query__results) { flex-shrink: 0; }
+#app-shell .kr-fast-query__toolbar { flex-wrap: wrap; }
+#app-shell .kr-fast-query__filter { padding: 10px 12px; }
+#app-shell .kr-fast-query__filter label { font-size: 13px; }
+#app-shell .kr-fast-query__count { white-space: normal; margin-inline-start: auto; }
+#app-shell .kr-fast-query__status:empty { display: none; }
+#app-shell .kr-fast-query__empty { display: grid; gap: 8px; padding: 16px; border: 1px dashed var(--exp-border-strong); border-radius: 12px; background: var(--exp-surface-2); color: var(--exp-text-soft); }
+#app-shell .kr-fast-query__empty strong { color: var(--exp-text); }
+#app-shell .kr-fast-query__empty button { min-height: 44px; border: 1px solid var(--exp-border-strong); border-radius: 8px; background: var(--exp-surface); color: var(--exp-text); font: inherit; font-weight: 600; }
+#app-shell .kr-fast-query__actions button:disabled { opacity: .65; cursor: progress; }
+#app-shell .kr-fast-query__more { flex: 0 0 auto; margin-bottom: max(12px, env(safe-area-inset-bottom)); }
+#app-shell .kr-fast-query__results { scrollbar-gutter: stable; }
+#app-shell .sidebar-container.kr-fast-query[data-minimized='true'] { bottom: auto; inset-block-end: auto; height: auto; block-size: auto; }
+#app-shell .kr-fast-query[data-minimized='true'] > :not(.kr-fast-query__header) { display: none; }
+@media (max-height: 600px) {
+  #app-shell .sidebar-container.kr-fast-query { overflow-y: auto; }
+  #app-shell .kr-fast-query__results { flex: 0 0 auto; overflow: visible; }
+  #app-shell .kr-fast-query__header { position: sticky; flex: 0 0 auto; }
+}
+@media (pointer: coarse) {
+  #app-shell .kr-fast-query :is(button, input, a[href]) { min-height: 48px; }
+  #app-shell .kr-fast-query__copy a { display: inline-flex; align-items: center; }
+}
+@media (forced-colors: active) {
+  #app-shell .kr-fast-query__empty { border-color: CanvasText; background: Canvas; color: CanvasText; }
+  #app-shell .kr-fast-query__empty :is(strong, button) { color: CanvasText; }
+  #app-shell .kr-fast-query__empty button { border-color: ButtonText; background: ButtonFace; }
+  #app-shell .kr-fast-query button:disabled { color: GrayText; opacity: 1; }
+}
 
 /* Footer rows have reserved positions. Their widths are explicitly bounded
  * by the map area, rather than competing for the same bottom-right corner. */
@@ -488,6 +521,14 @@ html[data-experience-theme='dark'] .experience-settings .experience-btn--primary
   #app-shell .experience-data-disclaimer { inset-inline-start: 84px; width: min(420px, calc(100dvw - 172px)); inline-size: min(420px, calc(100dvw - 172px)); }
   #app-shell .common-query-window-right,
   html[data-experience-panel='right'] #app-shell .common-query-window { left: auto; inset-inline-start: auto; }
+  #app-shell .sidebar-container.kr-fast-query {
+    top: var(--kr-panel-top);
+    left: 8px;
+    inset-inline-start: 8px;
+    height: calc(100dvh - var(--kr-panel-top) - 8px);
+    border-radius: 12px;
+    z-index: 1300;
+  }
 }
 @media (max-width: 680px) {
   :root {

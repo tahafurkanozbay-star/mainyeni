@@ -35,6 +35,7 @@ import {
 } from '../_Common/QueryInteractionRuntime';
 import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
+import { ServiceWindowActions } from '../_Common/ServiceWindowActions';
 import { createKentRehberiGeoJsonLayer, type KentRehberiGeoJsonFeatureCollection } from '../../../data-services/kentRehberiGeoJsonLayer';
 import '../_Common/ManagedFastAccessQueryWindow.css';
 import './ParklarQueryWindow.css';
@@ -137,9 +138,12 @@ export interface ParkWindowHandle {
 export interface ParkWindowManager {
   RegisterWindow(ref: Ref<ParkWindowHandle>): void;
   IsVisible(id: string): boolean;
+  IsMinimized?: (id: string) => boolean;
   ShowMessage(type: string, message: string): void;
   ToggleMinimiseWindow(id: string): void;
   ShowWindow(id: string): void;
+  HideWindow?: (id: string) => void;
+  UnregisterWindow?: (id: string, ref: Ref<ParkWindowHandle>) => void;
   GetQueryParams?: (id: string) => Readonly<Record<string, unknown>> | null | undefined;
 }
 
@@ -256,6 +260,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const ownerRef = useRef<Readonly<LayerOwner<ParkLayerLike>> | null>(null);
     const lifecycleRef = useRef<DisposableBag>(createDisposableBag());
     const requestGateRef = useRef(createLatestRequestGate());
+    const visible = windowManager.IsVisible(id);
+    const minimized = windowManager.IsMinimized?.(id) ?? false;
 
     const getOwner = useCallback((
       view = mapViewRef.current ?? asMapView(MapManager.GetMapView()),
@@ -521,12 +527,11 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, [getItemDetailsById, reportError]);
 
     const returnToServices = useCallback(async (): Promise<void> => {
-      requestGateRef.current.invalidate();
-      removeLastClusterLayer();
-      allowExtentHistoryRef.current = false;
-
       const targetExtent = extentHistoryRef.current[0];
       const view = mapViewRef.current;
+      reset();
+      windowManager.HideWindow?.(id);
+      windowManager.ShowWindow('sidebar');
       if (view?.goTo && targetExtent) {
         try {
           await view.goTo(targetExtent, { animate: false });
@@ -535,16 +540,15 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
         }
       }
 
-      windowManager.ShowWindow('sidebar');
-    }, [removeLastClusterLayer, windowManager]);
+    }, [id, reset, windowManager]);
 
     useImperativeHandle(ref, () => ({
       id,
-      visible: false,
-      minimized: false,
+      visible,
+      minimized,
       OnShow: fetchQueryResults,
       OnClose: reset,
-    }), [fetchQueryResults, id, reset]);
+    }), [fetchQueryResults, id, minimized, reset, visible]);
 
     useEffect(() => {
       mountedRef.current = true;
@@ -564,10 +568,9 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
         clusterLayerRef.current?.layerObj?.destroy?.();
         ownerRef.current = null;
         clusterLayerRef.current = null;
+        windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [installViewWatchers, ref, windowManager]);
-
-    const visible = windowManager.IsVisible(id);
+    }, [id, installViewWatchers, ref, windowManager]);
     const status = useMemo(() => {
       if (loading) return {
         tone: 'info' as const,
@@ -594,6 +597,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     return (
       <section
         className="sidebar-container kr-fast-query kr-park-query"
+        data-minimized={minimized || undefined}
         aria-labelledby={id + '-title'}
         aria-busy={loading}
         aria-hidden={!visible}
@@ -606,7 +610,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
             className="common-query-window-header-icon"
           />
           <h2 id={id + '-title'}>{windowTitle}</h2>
-          <button type="button" className="kr-fast-query__close" aria-label={windowTitle + ' penceresini kapat'} onClick={() => { void returnToServices(); }}>×</button>
+          <ServiceWindowActions title={windowTitle} minimized={minimized} onMinimize={() => windowManager.ToggleMinimiseWindow(id)} onClose={() => { void returnToServices(); }} />
         </header>
 
         <div className="results-container-toolbar kr-fast-query__toolbar">
