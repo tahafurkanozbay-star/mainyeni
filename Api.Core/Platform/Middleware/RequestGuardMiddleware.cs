@@ -1,3 +1,4 @@
+using Api.Core.Platform.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
@@ -39,10 +40,11 @@ namespace Api.Core.Platform.Middleware
                 context.Request.ContentLength.Value > _options.MaxRequestBodyBytes)
             {
                 _logger.LogWarning(
-                    "Rejected request body with declared length {ContentLength}; limit is {Limit}. Path: {Path}",
+                    "Rejected request body with declared length {ContentLength}; limit is {Limit}. Method: {Method}; Route: {Route}",
                     context.Request.ContentLength.Value,
                     _options.MaxRequestBodyBytes,
-                    context.Request.Path);
+                    ApiRuntimeMetrics.NormalizeMethod(context.Request.Method),
+                    RequestMetricsMiddleware.ResolveRoute(context));
                 await WriteTooLarge(context);
                 return;
             }
