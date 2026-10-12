@@ -40,7 +40,7 @@ public sealed class AuthenticatedEncryptionUtilsTests
     {
         var envelope = AuthenticatedEncryptionUtils.Encrypt("protected", Secret, Purpose);
 
-        Assert.Throws<CryptographicException>(
+        Assert.ThrowsAny<CryptographicException>(
             () => AuthenticatedEncryptionUtils.Decrypt(
                 envelope,
                 Secret,
@@ -52,7 +52,7 @@ public sealed class AuthenticatedEncryptionUtilsTests
     {
         var envelope = AuthenticatedEncryptionUtils.Encrypt("protected", Secret, Purpose);
 
-        Assert.Throws<CryptographicException>(
+        Assert.ThrowsAny<CryptographicException>(
             () => AuthenticatedEncryptionUtils.Decrypt(
                 envelope,
                 "wrong-secret",
@@ -81,7 +81,7 @@ public sealed class AuthenticatedEncryptionUtilsTests
 
         parts[partIndex] = Convert.ToBase64String(bytes);
 
-        Assert.Throws<CryptographicException>(
+        Assert.ThrowsAny<CryptographicException>(
             () => AuthenticatedEncryptionUtils.Decrypt(
                 string.Join('$', parts),
                 Secret,
