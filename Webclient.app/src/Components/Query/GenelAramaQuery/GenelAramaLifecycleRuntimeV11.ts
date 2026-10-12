@@ -41,6 +41,8 @@ interface LaneRuntimeV11 {
   sequence: number;
   state: GeneralSearchLaneStateV11;
   activeController: AbortController | null;
+  activeFingerprint: string | null;
+  activePromise: Promise<GeneralSearchExecutionEnvelopeV11> | null;
   scheduledTimer: ReturnType<typeof globalThis.setTimeout> | null;
   scheduledReject: ((reason: unknown) => void) | null;
   scheduledRequestId: number | null;
@@ -96,6 +98,8 @@ const createLane = (lane: GeneralSearchLaneV11): LaneRuntimeV11 => ({
   sequence: 0,
   state: initialLaneState(lane),
   activeController: null,
+  activeFingerprint: null,
+  activePromise: null,
   scheduledTimer: null,
   scheduledReject: null,
   scheduledRequestId: null,
@@ -108,6 +112,7 @@ const initialCounters = (): GeneralSearchMutableCountersV11 => ({
   failed: 0,
   cancelled: 0,
   stale: 0,
+  coalesced: 0,
   rejected: 0,
   retries: 0,
   admittedSearchRecords: 0,
@@ -471,10 +476,18 @@ export class GeneralSearchLifecycleRuntimeV11 {
     returnGeometry: boolean,
     options: NormalizedExecutionV11,
   ): Promise<GeneralSearchExecutionEnvelopeV11> {
+    if (
+      lane.activePromise
+      && lane.activeFingerprint === fingerprint
+      && lane.state.status === 'running'
+    ) {
+      this.#counters.coalesced += 1;
+      return lane.activePromise;
+    }
     this.#cancelScheduled(lane, 'Request superseded before execution.');
     this.#abortActive(lane);
     const requestId = this.#nextRequestId(lane);
-    return this.#execute({
+    const promise = this.#execute({
       lane: lane.lane,
       query,
       fingerprint,
@@ -482,6 +495,15 @@ export class GeneralSearchLifecycleRuntimeV11 {
       options,
       requestId,
     });
+    lane.activeFingerprint = fingerprint;
+    lane.activePromise = promise;
+    void promise.finally(() => {
+      if (lane.activePromise === promise) {
+        lane.activePromise = null;
+        lane.activeFingerprint = null;
+      }
+    }).catch(() => undefined);
+    return promise;
   }
 
   async #execute(input: ExecuteInputV11): Promise<GeneralSearchExecutionEnvelopeV11> {
