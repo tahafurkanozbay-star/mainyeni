@@ -1,5 +1,6 @@
 import type { ArcGisQueryExecutionResult } from './ArcGisQueryExecutionCoordinator'
 import { hasAsciiControl } from './ArcGisScalarValidation'
+import { ArcGisCacheExpiryIndex } from './ArcGisQueryCacheExpiryIndex'
 import { snapshotArcGisQueryResult } from './ArcGisQueryResultSnapshot'
 
 export interface ArcGisQueryRequestRegistryOptions {
@@ -111,6 +112,7 @@ export class ArcGisQueryRequestRegistry {
   readonly #inFlight = new Map<string, InFlightEntry>()
   readonly #physical = new Set<InFlightEntry>()
   readonly #cache = new Map<string, CachedEntry>()
+  readonly #expiries: ArcGisCacheExpiryIndex
   #cachedFeatures = 0
   #cachedBytes = 0
   #subscriberId = 0
@@ -120,6 +122,7 @@ export class ArcGisQueryRequestRegistry {
   constructor(executor: ArcGisQueryRequestExecutor, options: Partial<ArcGisQueryRequestRegistryOptions> = {}) {
     this.#executor = executor
     this.#options = normalizeOptions(options)
+    this.#expiries = new ArcGisCacheExpiryIndex(this.#options.maxEntries + 1)
   }
 
   get inFlightCount(): number {
@@ -209,6 +212,7 @@ export class ArcGisQueryRequestRegistry {
 
   /** Legacy cache-only clearing; active queries may still populate the cache. */
   clear(): void {
+    this.#expiries.clear()
     this.#cache.clear()
     this.#cachedFeatures = 0
     this.#cachedBytes = 0
@@ -306,12 +310,9 @@ export class ArcGisQueryRequestRegistry {
     const now = this.#clock()
     if (now > Number.MAX_SAFE_INTEGER - this.#options.successTtlMs) return
     this.#deleteCache(key)
-    this.#cache.set(key, {
-      result,
-      features,
-      bytes,
-      expiresAt: now + this.#options.successTtlMs,
-    })
+    const expiresAt = now + this.#options.successTtlMs
+    this.#cache.set(key, { result, features, bytes, expiresAt })
+    this.#expiries.set(key, expiresAt)
     this.#cachedFeatures += features
     this.#cachedBytes += bytes
     while (this.#cache.size > this.#options.maxEntries ||
@@ -328,14 +329,17 @@ export class ArcGisQueryRequestRegistry {
     const entry = this.#cache.get(key)
     if (entry === undefined) return false
     this.#cache.delete(key)
+    this.#expiries.delete(key)
     this.#cachedFeatures -= entry.features
     this.#cachedBytes -= entry.bytes
     return true
   }
 
   #pruneExpired(now: number): void {
-    for (const [key, entry] of this.#cache) {
-      if (entry.expiresAt <= now) this.#deleteCache(key)
+    let expired = this.#expiries.popExpired(now)
+    while (expired !== undefined) {
+      this.#deleteCache(expired)
+      expired = this.#expiries.popExpired(now)
     }
   }
 }

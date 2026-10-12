@@ -27,6 +27,7 @@
     "src/lib/gis/ArcGisQueryLifecycleClock.integrity.test.ts",
     "src/lib/gis/ArcGisQuerySchedulerPolicy*.ts",
     "src/lib/gis/ArcGisQueryRequestRegistry*.ts",
+    "src/lib/gis/ArcGisQueryCacheExpiryIndex*.ts",
     "src/lib/gis/ArcGisQueryResultSnapshot*.ts",
     "src/lib/gis/ArcGisQueryPlanSnapshot*.ts",
     "src/lib/gis/ArcGisQueryFeatureAccumulator*.ts"
