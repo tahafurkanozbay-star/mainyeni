@@ -36,6 +36,7 @@ import {
   type LayerListVisibleRow,
 } from './layerListExperienceModel';
 import { createLayerListKeyboardController } from './layerListKeyboardController';
+import { auditLayerListCatalog, summarizeLayerListCatalogAudit } from './layerListCatalogAudit';
 import { LayerListLoadCoordinator } from './layerListLoadCoordinator';
 import './LayerListWidget.css';
 
@@ -263,7 +264,21 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     }, []);
 
     const applyPresentationCatalog = useCallback((): void => {
-      model.replace(buildPresentationGroups(sourceGroupsRef.current, runtimeByKeyRef.current));
+      const catalog = buildPresentationGroups(sourceGroupsRef.current, runtimeByKeyRef.current);
+      const audit = auditLayerListCatalog(catalog, {
+        maxGroups: MAX_RUNTIME_GROUPS,
+        maxLayers: MAX_RUNTIME_LAYERS,
+      });
+      if (!audit.valid) {
+        globalThis.console?.warn?.('LayerList catalog integrity rejected.', summarizeLayerListCatalogAudit(audit));
+        model.replace([]);
+        model.markError('Katman kataloğu doğrulanamadı.');
+        return;
+      }
+      if (audit.warningCount > 0) {
+        globalThis.console?.warn?.('LayerList catalog integrity warnings.', summarizeLayerListCatalogAudit(audit));
+      }
+      model.replace(catalog);
     }, [model]);
 
     const fetchQueryResults = useCallback(async (): Promise<void> => {
