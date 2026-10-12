@@ -163,3 +163,14 @@
 - SONRAKİ DATA/SEARCH TURU: merged #472 branch yeniden kullanılmamalı. Yeni tur then-current main'den fresh benzersiz branch ile başlamalı; önce rules/progress + açık role PR ownership kontrol edilmeli. Adres/koordinat ve search execution modernizasyonu yalnız hâlâ eksik gerçek production sınırlarına uygulanmalı; duplicate authority veya yeni endpoint yaratılmamalı.
 - POST-MERGE NOTE: bu progress commit'i documentation-only'dir; ürün kodu PASS'i merge edilmiş `b37a2572...` commit'ine aittir.
 
+
+
+## Deep Platform / dependency supply-chain governance — PR #473 current-main merge admission — 2026-10-12
+- TUR / GÖREV: Deep Platform / Whole-Code Modernization; deterministic dependency supply-chain governance and CI enforcement.
+- BRANCH / PR: `agent/platform-wholecode-20261005-1329-07d197bc`; PR #473 canonical Platform PR.
+- CURRENT MAIN / LINEAGE: reconciled onto `9a17df3b9aadd725056bc6613ea2e2c20088a814`; Search v10 merge and its canonical progress closure are preserved from current main. Only Platform/CI blobs are overlaid; no stale whole-tree transplant and no force-push.
+- SCOPE / GATE: substantive Platform scope remains above mandatory 4,000 meaningful additions. Runtime dependency versions remain unchanged; no blind language/framework rewrite.
+- MODERNİZASYON: lock graph/provenance, direct/transitive dependency surface policy, peer/install-script/deprecation governance, owner/reason/expiry exception contracts, removal planning and command-position npm/runtime mutation/evaluation guards.
+- SECURITY / NETWORK: no new runtime dependency, endpoint, secret, browser transport, remote asset, WMS/WFS, GIS service or second icon authority.
+- MERGE GATE: this reconciliation creates a new exact head. Require behind=0, merge-base=current main, additions>=4,000, mergeable=true, no blocking reviews and all six required workflows completed+success before squash merge.
+- SONRAKİ: if exact-head gates remain green, squash merge and verify merged=true, merge SHA and current main SHA. Keep automation enabled.
