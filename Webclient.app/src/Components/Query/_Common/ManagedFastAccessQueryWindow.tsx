@@ -584,9 +584,26 @@ export function createManagedFastAccessQueryWindow({
       return () => { focus.close(); focus.dispose(); };
     }, [visible]);
 
-    const filteredRecords = useMemo(
-      () => filterFastAccessRecords(records, filterText),
-      [filterText, records],
+    // Normalize large service result sets once per query, not on every filter keystroke.
+    const searchIndex = useMemo(
+      () => records.map((record) => ({
+        record,
+        searchText: normalizeText(record.title + ' ' + record.address + ' ' + record.phone),
+      })),
+      [records],
+    );
+
+    const filteredRecords = useMemo(() => {
+      const needle = normalizeText(filterText);
+      return needle
+        ? searchIndex.filter(({ searchText }) => searchText.includes(needle)).map(({ record }) => record)
+        : records;
+    }, [filterText, records, searchIndex]);
+
+    // The display index changes after filtering; fallback React keys must not.
+    const sourceIndices = useMemo(
+      () => new Map(records.map((record, index) => [record, index] as const)),
+      [records],
     );
 
     const visibleRecords = useMemo(
@@ -680,7 +697,7 @@ export function createManagedFastAccessQueryWindow({
 
         <ul id={id + '-results'} className="results-container kr-fast-query__results" aria-label={title + ' sonuçları'}>
           {visibleRecords.map((item, index) => {
-            const recordKey = getFastAccessRecordKey(item, index);
+            const recordKey = getFastAccessRecordKey(item, sourceIndices.get(item) ?? index);
             const zoomKey = recordKey + '-zoom';
             const routeKey = recordKey + '-route';
 
