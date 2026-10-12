@@ -35,6 +35,53 @@ const createHarness = (overrides = {}) => {
 };
 
 describe('serviceHealthRuntime', () => {
+  test('keeps the circuit available after a single transient failure', () => {
+    const { runtime } = createHarness();
+    runtime.completeRequest(runtime.beginRequest('places'), { ok: false, status: 503 });
+    expect(runtime.getAvailability('places')).toMatchObject({ allowed: true, circuit: 'closed' });
+  });
+
+  test('refunds cancelled recovery probes so a healthy retry can complete recovery', () => {
+    const { runtime, advance } = createHarness();
+    for (let index = 0; index < 2; index += 1) {
+      runtime.completeRequest(runtime.beginRequest('places'), { ok: false, status: 503 });
+    }
+    advance(100);
+    const cancelled = runtime.beginRequest('places');
+    runtime.completeRequest(cancelled, { cancelled: true });
+    expect(runtime.getAvailability('places').allowed).toBe(true);
+    for (let index = 0; index < 2; index += 1) {
+      runtime.completeRequest(runtime.beginRequest('places'), { ok: true, status: 200 });
+    }
+    expect(runtime.getSnapshot('places').circuit).toBe('closed');
+  });
+
+  test('does not close an open circuit when an older in-flight request succeeds', () => {
+    const { runtime } = createHarness();
+    const old = runtime.beginRequest('places');
+    for (let index = 0; index < 2; index += 1) {
+      runtime.completeRequest(runtime.beginRequest('places'), { ok: false, status: 503 });
+    }
+    runtime.completeRequest(old, { ok: true, status: 200 });
+    expect(runtime.getSnapshot('places').circuit).toBe('open');
+  });
+
+  test('ignores old recovery probes after the circuit opens again', () => {
+    const { runtime, advance } = createHarness();
+    for (let index = 0; index < 2; index += 1) {
+      runtime.completeRequest(runtime.beginRequest('places'), { ok: false, status: 503 });
+    }
+    advance(100);
+    const old = runtime.beginRequest('places');
+    runtime.completeRequest(runtime.beginRequest('places'), { ok: false, status: 503 });
+    advance(200);
+    const fresh = runtime.beginRequest('places');
+    runtime.completeRequest(old, { ok: true, status: 200 });
+    runtime.completeRequest(fresh, { ok: true, status: 200 });
+    expect(runtime.getSnapshot('places').circuit).toBe('half-open');
+    runtime.completeRequest(runtime.beginRequest('places'), { ok: true, status: 200 });
+    expect(runtime.getSnapshot('places').circuit).toBe('closed');
+  });
   test('registers a verified ArcGIS REST service', () => {
     const { runtime } = createHarness();
     const snapshot = runtime.getSnapshot('places');

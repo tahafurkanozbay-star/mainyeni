@@ -9,6 +9,7 @@ const modeCss = read('MapModeExperienceControl.css');
 const recoveryCss = read('MapWorkspaceRecoverySurface.css');
 const mapCss = read('MapComponent.css');
 const mapComponent = read('MapComponent.tsx');
+const application = readFileSync(resolve(webclientRoot, 'src', 'App.tsx'), 'utf8');
 
 const mobileModeBlock = (): string => {
   const mediaStart = modeCss.indexOf('@media (max-width: 45rem)');
@@ -66,20 +67,15 @@ describe('map experience layout collision contract', () => {
   });
 
   it('mounts the 2B/3B mode switcher only after a map view exists', () => {
-    const dependentIndex = mapComponent.indexOf('{mapView && <>');
-    const modeIndex = mapComponent.indexOf('<MapModeExperienceControl />');
-
-    expect(dependentIndex).toBeGreaterThan(0);
-    expect(modeIndex).toBeGreaterThan(dependentIndex);
+    expect(application).toContain('mapModeControl={mapViewAvailable ? <MapModeExperienceControl />');
+    expect(application).toContain('Boolean(Store.getState().Map.MapView)');
   });
 
-  it('keeps the actual ArcGIS 2B/3B bridge adjacent to the governed mode control', () => {
-    const modeIndex = mapComponent.indexOf('<MapModeExperienceControl />');
+  it('keeps the actual ArcGIS bridge in the map and the control in its workspace row', () => {
     const bridgeIndex = mapComponent.indexOf('<ExperienceMapModeBridge');
-
-    expect(modeIndex).toBeGreaterThan(0);
-    expect(bridgeIndex).toBeGreaterThan(modeIndex);
-    expect(bridgeIndex - modeIndex).toBeLessThan(300);
+    expect(bridgeIndex).toBeGreaterThan(mapComponent.indexOf('{mapView && <>'));
+    expect(mapComponent).not.toContain('<MapModeExperienceControl />');
+    expect(application).toContain('<ExperienceWorkspace mapModeControl=');
   });
 
   it('does not move recovery into the scene-only control layer', () => {

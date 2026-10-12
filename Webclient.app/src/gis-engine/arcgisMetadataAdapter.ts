@@ -4,6 +4,7 @@ import type {
   ArcGisQueryCapability,
   ArcGisSpatialReference,
 } from './arcgisQueryContract';
+import { assertAllowedArcGisResourceUrl } from './serviceCapabilityRuntime';
 
 export type ArcGisFieldType =
   | 'oid'
@@ -185,6 +186,7 @@ const normalizeResourceUrl = (value: unknown): string => {
       normalized,
     );
   }
+  assertAllowedArcGisResourceUrl(normalized);
   return normalized;
 };
 

@@ -23,8 +23,9 @@ export const ArrayHelper = Object.freeze({
     for (let index = 0; index < array.length; index += 1) {
       const item = array[index];
       if (!item || item[prop] !== value) continue;
-      (item as TValue & { _INDEX?: number })._INDEX = index;
-      foundArray.push(item);
+      // Configuration records can be frozen by bootstrap and Redux. Keep
+      // legacy index metadata on the returned value without mutating input.
+      foundArray.push({ ...item, _INDEX: index });
     }
     return foundArray;
   },
@@ -34,8 +35,8 @@ export const ArrayHelper = Object.freeze({
     prop: PropertyKeyOf<TValue>,
     value: unknown,
   ): TValue | null => {
-    const matches = ArrayHelper.Filter(array, prop, value);
-    return matches[0] ?? null;
+    if (!Array.isArray(array)) return null;
+    return array.find((item) => item && item[prop] === value) ?? null;
   },
 
   OrderByTurkish: <TValue extends Record<string, unknown>>(

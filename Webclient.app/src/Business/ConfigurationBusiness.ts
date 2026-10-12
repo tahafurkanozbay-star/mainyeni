@@ -34,6 +34,7 @@ const publicBootstrapOptions = (
   cache: true,
   dedupe: !options.signal,
   cacheTtlMs: options.cacheTtlMs ?? 120_000,
+  ...(localBootstrapPreviewEnabled ? { timeout: options.timeout ?? 3_000, maxRetries: 0 } : {}),
 });
 
 export const resolveLocalBootstrapPreviewEnabled = (
@@ -67,32 +68,36 @@ const localPreviewMapConfiguration = Object.freeze({
 const getMapConfiguration = async (
   options: ConfigurationRequestOptions = {},
 ): Promise<ServiceResult<MapConfigurationPayload>> => {
-  if (localBootstrapPreviewEnabled) {
+  try {
+    const result = ensureServiceResult<MapConfigurationPayload>(await apiClient.get<unknown>('/AppSettings/List', {
+      ...publicBootstrapOptions(options),
+      params: { key: 'GisMapConfig' },
+    }));
+    if (!result.isSuccess && localBootstrapPreviewEnabled) throw new Error('Map configuration unavailable.');
+    return result;
+  } catch (error) {
+    if (!localBootstrapPreviewEnabled || options.signal?.aborted) throw error;
     return {
       isSuccess: true,
       data: { configValue: JSON.stringify(localPreviewMapConfiguration) },
     };
   }
-
-  const result = await apiClient.get<unknown>('/AppSettings/List', {
-    ...publicBootstrapOptions(options),
-    params: { key: 'GisMapConfig' },
-  });
-  return ensureServiceResult<MapConfigurationPayload>(result);
 };
 
 const getConfigServices = async (
   options: ConfigurationRequestOptions = {},
 ): Promise<ServiceResult<readonly unknown[]>> => {
-  if (localBootstrapPreviewEnabled) {
+  try {
+    const result = ensureServiceResult<readonly unknown[]>(await apiClient.get<unknown>(
+      '/Gis/ConfigService/List',
+      publicBootstrapOptions(options),
+    ));
+    if (!result.isSuccess && localBootstrapPreviewEnabled) throw new Error('Service configuration unavailable.');
+    return result;
+  } catch (error) {
+    if (!localBootstrapPreviewEnabled || options.signal?.aborted) throw error;
     return { isSuccess: true, data: [] };
   }
-
-  const result = await apiClient.get<unknown>(
-    '/Gis/ConfigService/List',
-    publicBootstrapOptions(options),
-  );
-  return ensureServiceResult<readonly unknown[]>(result);
 };
 
 export const ConfigurationBusiness = Object.freeze({
