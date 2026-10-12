@@ -17,9 +17,9 @@ const extractMediaBlock = (marker: string): string => {
 };
 
 describe('LayerListWidget presentation contract', () => {
-  it('keeps a desktop interactive target baseline at or above 40px', () => {
+  it('keeps a desktop interactive target baseline at or above 44px', () => {
     const root = extractBlock(/\.layer-list-modern\s*\{[^}]+\}/u);
-    expect(root).toContain('--layer-list-action-size: 40px');
+    expect(root).toContain('--layer-list-action-size: 44px');
     expect(root).toContain('--layer-list-row-min: 46px');
   });
 
@@ -90,14 +90,14 @@ describe('LayerListWidget presentation contract', () => {
 
   it('uses bounded scroll containers for large layer trees', () => {
     const tree = extractBlock(/\.layer-list-tree\s*\{[^}]+\}/u);
-    expect(tree).toContain('max-block-size: min(54vh, 620px)');
+    expect(tree).toContain('max-block-size: 54vh');
     expect(tree).toContain('overflow: auto');
     expect(tree).toContain('overscroll-behavior: contain');
   });
 
   it('keeps the legend bounded and scrollable', () => {
     const legend = extractBlock(/\.legend-container\s*\{[^}]+\}/u);
-    expect(legend).toContain('max-block-size: min(58vh, 640px)');
+    expect(legend).toContain('max-block-size: 58vh');
     expect(legend).toContain('overflow: auto');
   });
 
