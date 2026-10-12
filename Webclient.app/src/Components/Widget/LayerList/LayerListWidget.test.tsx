@@ -138,7 +138,17 @@ const waitForLayerTree = async (): Promise<HTMLElement> => {
 
 describe('LayerListWidget modern workspace', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    runtime.getLayers.mockReset();
+    runtime.createLayer.mockReset();
+    runtime.getMapView.mockReset();
+    runtime.dynamicLayers.mockReset();
+    runtime.loadModules.mockReset();
+    runtime.ownerAdd.mockReset();
+    runtime.ownerClear.mockReset();
+    runtime.ownerDestroy.mockReset();
+    runtime.legendConstruct.mockReset();
+    runtime.legendDestroy.mockReset();
     runtime.getMapView.mockReturnValue({
       map: {
         add: vi.fn(),
