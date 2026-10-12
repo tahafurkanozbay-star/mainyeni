@@ -101,6 +101,7 @@ describe('NavigationBar', () => {
     expect(cbsLink?.getAttribute('aria-label')).toBe('CBS Başkent portalını yeni sekmede aç');
     expect(cbsLink?.getAttribute('href')).toBe('https://cbsbaskent.ankara.bel.tr/');
     expect(cbsLink?.getAttribute('target')).toBe('_blank');
+    expect(screen.getAllByRole('link', { name: 'CBS Başkent portalını yeni sekmede aç' })).toHaveLength(1);
     expect(new Set(cbsLink?.getAttribute('rel')?.trim().split(/\s+/))).toEqual(new Set(['noopener', 'noreferrer']));
   });
 });

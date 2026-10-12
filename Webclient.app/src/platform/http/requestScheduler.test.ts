@@ -28,6 +28,27 @@ const flushMicrotasks = async (): Promise<void> => {
 };
 
 describe('RequestScheduler configuration', () => {
+  test('retains the native browser timer receiver when scheduling a timed request', async () => {
+    const nativeSetTimeout = globalThis.setTimeout.bind(globalThis);
+    const nativeClearTimeout = globalThis.clearTimeout.bind(globalThis);
+    const checkedSetTimeout = function(this: typeof globalThis, ...args: Parameters<typeof setTimeout>) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return nativeSetTimeout(...args);
+    };
+    const checkedClearTimeout = function(this: typeof globalThis, ...args: Parameters<typeof clearTimeout>) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return nativeClearTimeout(...args);
+    };
+    vi.stubGlobal('setTimeout', checkedSetTimeout);
+    vi.stubGlobal('clearTimeout', checkedClearTimeout);
+    try {
+      const scheduler = createRequestScheduler();
+      await expect(scheduler.schedule(() => 42, { queueTimeoutMs: 100 })).resolves.toBe(42);
+      expect(scheduler.snapshot().running).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   test('creates bounded defaults', () => {
     const scheduler = createRequestScheduler();
     const snapshot = scheduler.snapshot();

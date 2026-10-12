@@ -5,8 +5,10 @@ vi.mock('../../Business/LoggingBusiness', () => ({
     CreateClientLog: vi.fn(async () => ({ ok: true })),
   },
 }));
+vi.mock('../../Toolbox/DebugHelper', () => ({ DebugHelper: { Log: vi.fn() } }));
 
 import { LoggingBusiness } from '../../Business/LoggingBusiness';
+import { DebugHelper } from '../../Toolbox/DebugHelper';
 import Store from '../Store';
 import { createWindowManager } from './WindowManager';
 
@@ -42,6 +44,24 @@ afterEach(() => {
 });
 
 describe('typed WindowManager registration lifecycle', () => {
+  test('keeps window activation usable when async logging and OnShow callbacks reject', async () => {
+    const id = uniqueId('async-failure');
+    const manager = createWindowManager();
+    const ref = createRef(id);
+    const logFailure = new Error('Logging unavailable');
+    const showFailure = new Error('Content unavailable');
+    vi.mocked(LoggingBusiness.CreateClientLog).mockRejectedValueOnce(logFailure);
+    ref.current.OnShow = vi.fn(async () => { throw showFailure; });
+    manager.RegisterWindow(ref);
+    expect(manager.ShowWindow(id)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(manager.IsVisible(id)).toBe(true);
+    expect(DebugHelper.Log).toHaveBeenCalledWith(logFailure);
+    expect(DebugHelper.Log).toHaveBeenCalledWith(showFailure);
+    cleanupWindow(id);
+    manager.Dispose();
+  });
   test('registers a placeholder only once', () => {
     const id = uniqueId('placeholder');
     const manager = createWindowManager();

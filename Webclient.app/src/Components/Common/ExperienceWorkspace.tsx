@@ -357,7 +357,11 @@ const ExperienceSettingsDialog = ({
   );
 };
 
-export const ExperienceWorkspace = (): ReactNode => {
+export interface ExperienceWorkspaceProps {
+  readonly mapModeControl?: ReactNode;
+}
+
+export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps = {}): ReactNode => {
   const preferences = useExperiencePreferences();
   const viewport = useExperienceViewport();
   const online = useExperienceConnectivity();
@@ -423,7 +427,8 @@ export const ExperienceWorkspace = (): ReactNode => {
   }, [announce, setTransitionState]);
 
   const commandPalette = useMemo(() => getCommandByName('command-palette'), []);
-  const statuses = useMemo(() => workspaceStatusDescriptors(presentation), [presentation]);
+  const statuses = useMemo(() => workspaceStatusDescriptors(presentation)
+    .filter((status) => !mapModeControl || status.key !== 'view'), [mapModeControl, presentation]);
 
   return (
     <>
@@ -448,11 +453,11 @@ export const ExperienceWorkspace = (): ReactNode => {
         </div>
 
         <div className="experience-workspace__actions">
-          <MapModeControl
+          {mapModeControl ?? <MapModeControl
             mode={transition.committed}
             pendingMode={transition.pending}
             onChange={requestMapMode}
-          />
+          />}
           <button
             type="button"
             className="experience-workspace__action"
@@ -469,6 +474,7 @@ export const ExperienceWorkspace = (): ReactNode => {
           <button
             type="button"
             className="experience-workspace__action"
+            aria-label="Deneyim ayarları"
             aria-haspopup="dialog"
             aria-expanded={settingsOpen}
             onClick={() => setSettingsOpen(true)}
