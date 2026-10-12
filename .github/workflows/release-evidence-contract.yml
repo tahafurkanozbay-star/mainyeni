@@ -58,7 +58,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-evidence-${{ github.event.pull_request.number || github.ref }}
+  group: release-evidence-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
