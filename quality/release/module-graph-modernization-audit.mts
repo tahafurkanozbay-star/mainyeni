@@ -1,4 +1,3 @@
-import { posix as path } from 'node:path';
 import {
   stableSortFindings,
   type AuditSection,
@@ -60,6 +59,7 @@ const DYNAMIC_LITERAL = /\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g;
 const DYNAMIC_ANY = /\bimport\s*\(\s*([^\n\r)]{1,240})\s*\)/g;
 const NODE_BUILTIN = /^node:/i;
 const URL_IMPORT = /^(?:https?:)?\/\//i;
+const NON_SCRIPT_ASSET = /\.(?:css|scss|sass|less|styl|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|wasm|json)(?:[?#].*)?$/i;
 const SOURCE_CANDIDATES = [
   '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs',
   '/index.ts', '/index.tsx', '/index.mts', '/index.js', '/index.jsx', '/index.mjs',
@@ -123,6 +123,19 @@ function withoutQuery(specifier: string): string {
   return specifier.split(/[?#]/, 1)[0] ?? specifier;
 }
 
+function normalizeRepositoryRelative(source: string, specifier: string): string {
+  const stack = source.split('/').slice(0, -1);
+  for (const segment of specifier.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      stack.pop();
+      continue;
+    }
+    stack.push(segment);
+  }
+  return stack.join('/');
+}
+
 function resolveRelative(
   source: string,
   specifier: string,
@@ -130,7 +143,7 @@ function resolveRelative(
 ): string | null {
   if (!specifier.startsWith('.')) return null;
   const clean = withoutQuery(specifier);
-  const base = path.normalize(path.join(path.dirname(source), clean));
+  const base = normalizeRepositoryRelative(source, clean);
   if (byPath.has(base)) return base;
   if (SCRIPT_EXTENSION.test(base)) return byPath.has(base) ? base : null;
   for (const suffix of SOURCE_CANDIDATES) {
