@@ -93,7 +93,7 @@ export class ArcGisQueryDedupeLifecyclePolicy {
   lookup(signature:string,layerId:string,revision:number,now:number):QueryDedupeView|null {
     this.#live(); const sig=id('signature',signature); const layer=id('layerId',layerId); integer('revision',revision); time('now',now); this.expire(now)
     const requestId=this.#signatures.get(this.#signatureKey(layer,revision,sig)); if(!requestId) return null
-    const e=this.#entries.get(requestId); if(!e||e.phase!=='cached'||this.#revisions.get(layer)!==revision) return null
+    const e=this.#entries.get(requestId); if(!e||e.phase!=='cached'||this.#revisions.get(layer)!==revision||now<e.touchedAt) return null
     const at=this.#lastObservedAt; e.touchedAt=at; e.expiresAt=deadline('cache',at,this.#budget.cacheTtlMs); return this.#view(e)
   }
 
