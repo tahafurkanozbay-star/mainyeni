@@ -26,7 +26,8 @@
     "src/lib/gis/__tests__/ArcGisGeometryProjectionLifecyclePolicy*.test.ts",
     "src/lib/gis/ArcGisQueryLifecycleClock.integrity.test.ts",
     "src/lib/gis/ArcGisQuerySchedulerPolicy*.ts",
-    "src/lib/gis/ArcGisQueryRequestRegistry*.ts"
+    "src/lib/gis/ArcGisQueryRequestRegistry*.ts",
+    "src/lib/gis/ArcGisQueryFeatureAccumulator*.ts"
   ],
   "exclude": [
     "node_modules"
