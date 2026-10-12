@@ -366,7 +366,7 @@ describe('LayerListWidget modern workspace', () => {
     }));
     renderWidget();
     await waitFor(() => expect(runtime.createLayer).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('status')).toHaveTextContent(/Katmanlar hazırlanıyor/);
+    expect(screen.getByRole('status')).toHaveTextContent(/Katmanlar yükleniyor: yüzde 0/);
     expect(screen.getByRole('status')).toHaveTextContent(/%0/);
     await act(async () => {
       releases.forEach((release) => release());
