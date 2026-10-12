@@ -258,6 +258,9 @@ export const normalizeIdempotencyPolicy = (
 ): 'none' | 'server-enforced' => {
   if (value === undefined || value === null || value === '') return 'none';
   const normalized = String(value).trim().toLowerCase();
+  // Coordinators pass an already normalized config to the fetch boundary.
+  // The canonical no-idempotency value must survive that second validation.
+  if (normalized === 'none') return 'none';
   if (normalized !== 'server-enforced') {
     throw new AppError('Idempotency policy is invalid.', {
       code: 'INVALID_IDEMPOTENCY_POLICY',
