@@ -89,13 +89,13 @@ export function resolveNavigationShortcut(event: NavigationShortcutEvent): Navig
   }
 
   const key = event.key.toLocaleLowerCase('tr-TR');
-  const primaryModifier = Boolean(event.ctrlKey || event.metaKey);
-
-  if (key === 'k') {
-    if (!primaryModifier || event.altKey || event.shiftKey || (event.ctrlKey && event.metaKey)) {
+  // Ctrl/Meta+K belongs to the command center. Search gets an independent
+  // printable shortcut, which must never intercept typing or an active dialog.
+  if (key === '/') {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
       return { intent: 'none', preventDefault: false, reason: 'unsupported-modifier' };
     }
-    if (isEditableTarget(event.target)) {
+    if (isEditableTarget(event.target) || (isElement(event.target) && event.target.closest('[role="dialog"], [aria-modal="true"]'))) {
       return { intent: 'none', preventDefault: false, reason: 'editable-target' };
     }
     return { intent: 'focus-search', preventDefault: true, reason: 'accepted' };

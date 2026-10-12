@@ -1,3 +1,5 @@
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
+
 export type WorkspaceViewport = 'compact' | 'medium' | 'wide';
 export type WorkspacePanel = 'none' | 'layers' | 'legend' | 'search' | 'details' | 'tools';
 export type WorkspacePlacement = 'overlay' | 'bottom-sheet' | 'side';
@@ -31,7 +33,15 @@ export function workspacePolicyEquals(l: WorkspacePolicy,r: WorkspacePolicy): bo
 export function workspaceStateEquals(l: WorkspaceState,r: WorkspaceState): boolean { return l.activePanel===r.activePanel&&l.panelPinned===r.panelPinned&&l.utilityExpanded===r.utilityExpanded&&l.mapMode===r.mapMode; }
 export function createResponsiveWorkspaceRuntime(options: WorkspaceRuntimeOptions): WorkspaceRuntime {
  let disposed=false; let policy=createWorkspacePolicy(options.initialMetrics); let state=normalizeWorkspaceState(options.initialState,policy); let snapshot:WorkspaceSnapshot=Object.freeze({policy,state}); const listeners=new Set<(value:WorkspaceSnapshot)=>void>();
- const reportError=(error:unknown):void=>{ if (!options.onError) { queueMicrotask(()=>{ throw error; }); return; } try { options.onError(error); } catch (reportingError) { queueMicrotask(()=>{ throw reportingError; }); } };
+ const reportError = (error: unknown): void => {
+  const capture = (failure: unknown): void => {
+   try { runtimeDiagnostics.captureError(failure, { source: 'experience.responsive-workspace.observer' }, 'warn'); }
+   catch { console.warn('Responsive workspace diagnostic reporting failed.'); }
+  };
+  if (!options.onError) { capture(error); return; }
+  try { options.onError(error); }
+  catch (reportingError) { capture(error); capture(reportingError); }
+ };
  const notify=():void=>{ if(disposed)return; for(const listener of listeners){try{listener(snapshot);}catch(error){reportError(error);}} try{options.onChange?.(snapshot);}catch(error){reportError(error);} };
  const commit=(nextPolicy:WorkspacePolicy,nextState:WorkspaceState):WorkspaceSnapshot=>{if(disposed)return snapshot;if(workspacePolicyEquals(policy,nextPolicy)&&workspaceStateEquals(state,nextState))return snapshot;policy=nextPolicy;state=nextState;snapshot=Object.freeze({policy,state});notify();return snapshot;};
  const setState=(patch:Partial<WorkspaceState>):WorkspaceSnapshot=>commit(policy,normalizeWorkspaceState({...state,...patch},policy));

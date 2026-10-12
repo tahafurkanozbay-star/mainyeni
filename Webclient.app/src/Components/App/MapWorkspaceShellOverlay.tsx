@@ -177,9 +177,10 @@ export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false }: Ma
           className="map-workspace-shell-overlay__collapse"
           aria-expanded={density.showActions}
           aria-controls="map-workspace-shell-actions"
+          aria-label={snapshot.utilityCollapsed ? 'Hızlı gezinmeyi aç' : 'Daralt'}
           onClick={() => model.toggleUtilityCollapsed()}
         >
-          {snapshot.utilityCollapsed ? 'Hızlı gezinmeyi aç' : 'Daralt'}
+          {snapshot.utilityCollapsed ? 'Gezin' : 'Daralt'}
         </button>
       </div>
 

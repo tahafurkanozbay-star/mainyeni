@@ -50,7 +50,7 @@ describe('NavigationBar', () => {
     expect(screen.getByText('Metin girişi sürüyor.')).toBeInTheDocument();
   });
 
-  it('focuses and selects global search with Control+K from the shell', async () => {
+  it('focuses and selects global search with / from the shell', async () => {
     const user = userEvent.setup();
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
     const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
@@ -59,15 +59,15 @@ describe('NavigationBar', () => {
     search.blur();
     expect(search).not.toHaveFocus();
 
-    await user.keyboard('{Control>}k{/Control}');
+    await user.keyboard('/');
 
     expect(search).toHaveFocus();
     expect(search.selectionStart).toBe(0);
     expect(search.selectionEnd).toBe(search.value.length);
-    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
+    expect(search).toHaveAttribute('aria-keyshortcuts', '/');
   });
 
-  it('does not steal Control+K while another text field is being edited', async () => {
+  it('does not steal / while another text field is being edited', async () => {
     const user = userEvent.setup();
     const auxiliary = document.createElement('input');
     auxiliary.setAttribute('aria-label', 'Yardımcı alan');
@@ -76,7 +76,7 @@ describe('NavigationBar', () => {
       render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
       const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
       auxiliary.focus();
-      await user.keyboard('{Control>}k{/Control}');
+      await user.keyboard('/');
       expect(auxiliary).toHaveFocus();
       expect(search).not.toHaveFocus();
     } finally {
@@ -89,7 +89,7 @@ describe('NavigationBar', () => {
     const view = render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
     const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
     view.unmount();
-    await user.keyboard('{Control>}k{/Control}');
+    await user.keyboard('/');
     expect(search).not.toHaveFocus();
   });
 

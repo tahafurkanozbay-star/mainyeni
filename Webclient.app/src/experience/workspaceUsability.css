@@ -1,81 +1,82 @@
-/* Final presentation contract for the active GIS workspace. Keep the browser's
- * text scale, give each control a distinct place, and share surfaces across
- * legacy query windows, map tools and modal dialogs. */
+/* Active workspace presentation. This is the shared geometry authority for
+ * eager and lazy screens; local styles own component internals. Keep logical
+ * and physical inset aliases together where historical styles use both. */
 :root {
   --mainbar-height: 72px;
-  --exp-header-height: 72px;
+  --exp-header-height: var(--mainbar-height);
   --kr-premium-sidebar-width: 320px;
   --sidebar-width: var(--kr-premium-sidebar-width);
   --kr-workspace-gap: 16px;
-  --kr-panel-top: 148px;
+  --kr-panel-top: calc(var(--mainbar-height) + 76px);
   --kr-panel-bottom: 148px;
   --kr-control-size: 44px;
+  --kr-edge: max(16px, env(safe-area-inset-right));
+  --kr-footer-edge: max(16px, env(safe-area-inset-bottom));
+  --kr-content-left: calc(var(--kr-premium-sidebar-width) + var(--kr-workspace-gap));
+  --kr-content-width: calc(100dvw - var(--kr-content-left) - 88px);
+  --kr-action-ink: #fff;
 }
+html[data-experience-theme='dark'] { --kr-action-ink: #101722; }
 
 html { font-size: 100%; }
-
-/* Keep the governed 2B/3B authority in the shared workspace row. */
-.experience-workspace .map-mode-experience {
-  position: relative;
-  inset: auto;
-  min-inline-size: 108px;
-  max-inline-size: none;
-  gap: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
-  backdrop-filter: none;
-  contain: none;
-}
-.experience-workspace .map-mode-experience__header,
-.experience-workspace .map-mode-experience__mode small { display: none; }
-.experience-workspace .map-mode-experience__switcher { padding: 0; gap: 4px; border: 0; background: transparent; }
-.experience-workspace .map-mode-experience__mode { min-block-size: 44px; padding: 8px 12px; }
-.experience-workspace .map-mode-experience__status {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 0;
-  width: max-content;
-  max-width: min(280px, calc(100vw - 100px));
-  padding: 8px 12px;
-  border: 1px solid var(--exp-border);
-  border-radius: 10px;
-  background: var(--exp-surface);
-}
-.experience-workspace .map-mode-experience[data-phase="ready"] .map-mode-experience__status {
-  width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
-  clip-path: inset(50%); border: 0;
-}
-.experience-workspace .map-mode-experience__recovery {
-  position: absolute; top: calc(100% + 58px); left: 0; width: 240px;
-  padding: 10px; border-radius: 10px; background: var(--exp-surface);
-}
 body, #root, #app-shell {
-  font-size: 14px;
-  font-family: var(--exp-font-sans);
-  line-height: 1.5;
+  font: 14px/1.5 var(--exp-font-sans);
+  color: var(--exp-text);
 }
 body { margin: 0; user-select: text; }
-#app-shell { position: relative; width: 100%; height: 100dvh; overflow: hidden; }
+#app-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--exp-bg);
+  isolation: isolate;
+}
+/* Map windows and footer controls share the shell stacking context. A second
+ * isolated context around the map would trap a mobile query below utilities. */
+#app-shell .esri-map { height: 100dvh; isolation: auto; }
 #app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 72px; }
 
-/* The navigation and the workspace bar are separate rows. */
-.mainbar-container {
+/* Grid reserves real space for the brand and portal; the search can shrink
+ * without painting over either link at intermediate widths or text zoom. */
+#app-shell .mainbar-container {
   height: var(--mainbar-height);
   min-height: var(--mainbar-height);
   padding: 10px 16px;
   background: var(--exp-surface);
   backdrop-filter: none;
 }
-.mainbar-text { font-size: 18px; letter-spacing: .02em; }
-.mainbar-text::before { font-size: 10px; }
-.mainbar-container .ns-input { width: min(560px, 42vw); }
-.mainbar-container .ns-input-group { width: 100%; display: block; position: relative; }
-.mainbar-container .ns-input-group,
-.mainbar-container .ns-input-group input { height: 48px; }
-.mainbar-container .ns-input-group input { padding-inline: 16px 100px; font-size: 15px; }
+.mainbar-container .mainbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 560px) minmax(116px, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+.mainbar-container .mainbar-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mainbar-brand > a { text-decoration: none; }
+.mainbar-container .mainbar-text { font-size: 18px; letter-spacing: .02em; }
+.mainbar-container .mainbar-text::before { font-size: 10px; }
+.mainbar-container .ns-input {
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.mainbar-container .ns-input-group {
+  width: 100%;
+  display: block;
+  position: relative;
+  height: 48px;
+}
+.mainbar-container .ns-input-group input {
+  height: 48px;
+  padding-inline: 16px 92px;
+  font-size: 15px;
+  border-radius: 12px;
+  background: var(--exp-surface-2);
+}
 .mainbar-container .kr-search-submit {
   width: 44px;
   height: 44px;
@@ -83,14 +84,18 @@ body { margin: 0; user-select: text; }
   right: 2px;
   border-radius: 10px;
 }
-.mainbar-container .kr-search-hint { position: absolute; right: 56px; top: 16px; }
-.mainbar-container .kr-search-hint kbd { font-size: 11px; }
+.mainbar-container .kr-search-submit:disabled { opacity: .65; box-shadow: none; transform: none; }
+.mainbar-container .kr-search-hint { right: 58px; top: 14px; }
+.mainbar-container .kr-search-hint kbd { font-size: 12px; min-width: 20px; text-align: center; }
+.mainbar-container .mainbar-right { margin: 0; justify-content: flex-end; }
 .mainbar-container .kr-header-portal { min-height: 44px; font-size: 12px; }
 
+/* One small row of named controls; mobile keeps labels instead of replacing
+ * unrelated actions with CSS-generated glyphs. */
 #app-shell .experience-workspace {
-  inset: calc(var(--mainbar-height) + 12px) auto auto calc(var(--kr-premium-sidebar-width) + var(--kr-workspace-gap));
+  inset: calc(var(--mainbar-height) + 12px) auto auto var(--kr-content-left);
   width: max-content;
-  max-width: calc(100vw - var(--kr-premium-sidebar-width) - 100px);
+  max-width: var(--kr-content-width);
   padding: 4px;
   gap: 8px;
   background: var(--exp-surface);
@@ -107,88 +112,134 @@ body { margin: 0; user-select: text; }
   padding-inline: 12px;
   border-radius: 8px;
   font-size: 13px;
+  transform: none;
 }
 .experience-workspace .experience-workspace__action::before { content: none; }
+.experience-workspace .experience-workspace__action > span:not(.experience-sr-only) { display: inline; }
+.experience-workspace .experience-workspace__action-icon { flex: 0 0 18px; }
 .experience-workspace .experience-workspace__action kbd { font-size: 11px; }
-
-/* The governed switch is the sole production 2B/3B control. Its error recovery
- * remains in place; successful transitions do not need a second floating card. */
+.experience-workspace .map-mode-experience,
 .experience-workspace .map-mode-transition-control {
   position: relative;
   inset: auto;
   width: auto;
   inline-size: auto;
-  min-width: 176px;
-  padding: 0;
+  min-inline-size: 108px;
+  max-inline-size: none;
   gap: 0;
-  background: transparent;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   box-shadow: none;
+  background: transparent;
   backdrop-filter: none;
+  contain: none;
 }
+.experience-workspace .map-mode-experience__header,
+.experience-workspace .map-mode-experience__mode small,
 .experience-workspace .map-mode-transition-control__header,
 .experience-workspace .map-mode-transition-control__meta { display: none; }
-.experience-workspace .map-mode-transition-control__segments { padding: 0; gap: 2px; border: 0; }
-.experience-workspace .map-mode-transition-control__segment { min-height: 44px; padding: 6px 10px; gap: 6px; }
+.experience-workspace .map-mode-experience__switcher,
+.experience-workspace .map-mode-transition-control__segments { padding: 0; gap: 4px; border: 0; background: transparent; }
+.experience-workspace .map-mode-experience__mode,
+.experience-workspace .map-mode-transition-control__segment { min-block-size: 44px; padding: 8px 12px; }
 .experience-workspace .map-mode-transition-control__mode { width: auto; padding: 0; font-size: 13px; }
 .experience-workspace .map-mode-transition-control__mode-label { font-size: 13px; }
+.experience-workspace .map-mode-experience__status,
+.experience-workspace .map-mode-experience__recovery,
 .experience-workspace .map-mode-transition-control__recovery {
   position: absolute;
-  top: calc(100% + 12px);
+  top: calc(100% + 10px);
   left: 0;
-  width: min(320px, calc(100vw - 32px));
-  padding: 12px;
+  width: max-content;
+  max-width: min(320px, calc(100dvw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--exp-border);
+  border-radius: 10px;
   background: var(--exp-surface);
-  border: 1px solid var(--exp-danger);
-  border-radius: 12px;
-  box-shadow: var(--exp-shadow-md);
+  box-shadow: var(--exp-shadow-sm);
   font-size: 13px;
 }
+.experience-workspace .map-mode-experience__recovery { top: calc(100% + 58px); }
+.experience-workspace .map-mode-experience[data-phase='ready'] .map-mode-experience__status {
+  width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); border: 0;
+}
 
-/* Service discovery: readable labels, restrained decoration and an independently
- * scrolling list. Favorites remain separate from the service activation button. */
+/* Discovery fills the sidebar while the service list scrolls independently.
+ * A collapsed sidebar remains a useful institution rail. */
+#app-shell .sidebar-container { position: absolute; }
 #app-shell .sidebar-container.kr-sidebar {
   top: var(--mainbar-height);
   width: var(--kr-premium-sidebar-width);
   height: calc(100dvh - var(--mainbar-height));
+  gap: 0;
   border-radius: 0;
   background: var(--exp-surface);
   backdrop-filter: none;
   box-shadow: 4px 0 16px rgb(17 36 59 / 6%);
+  overflow: hidden;
 }
-.kr-sidebar .kr-sidebar__topline { padding: 12px 16px; min-height: 68px; }
+.kr-sidebar .kr-sidebar__topline { padding: 12px 16px; min-height: 68px; flex: 0 0 auto; }
 .kr-sidebar .kr-sidebar__title span { font-size: 11px; letter-spacing: .1em; }
 .kr-sidebar .kr-sidebar__title strong { font-size: 19px; }
-.kr-sidebar .kr-sidebar__groups { padding: 12px; gap: 4px; background: var(--exp-surface-2); }
+.kr-sidebar .kr-sidebar__groups { padding: 12px; gap: 4px; background: var(--exp-surface-2); flex: 0 0 auto; }
 .kr-sidebar .kr-sidebar__group { min-height: 64px; border-radius: 10px; }
-.kr-sidebar .kr-sidebar__group-label,
-.kr-sidebar.is-collapsed .kr-sidebar__group-label { font-size: 11px; }
-.kr-sidebar .kr-sidebar__panel { padding: 12px; padding-bottom: 28px; }
+.kr-sidebar .kr-sidebar__group-label { font-size: 11px; }
+.kr-sidebar .kr-sidebar__panel { padding: 12px 12px 28px; min-height: 0; flex: 1; }
 .kr-sidebar .kr-sidebar__search input { font-size: 14px; }
 .kr-sidebar .kr-sidebar__views button { font-size: 12px; }
-.kr-sidebar .kr-sidebar__panel-eyebrow { font-size: 10px; }
-.kr-sidebar .kr-sidebar__panel-head h2 { font-size: 16px; }
+.kr-sidebar .kr-sidebar__context { font-size: 10px; }
+.kr-sidebar .kr-sidebar__panel-head h2 { font-size: 16px; overflow-wrap: anywhere; }
 .kr-sidebar .kr-sidebar__panel-head > span { font-size: 11px; }
 .kr-sidebar .kr-sidebar__item.ns-card { min-height: 64px; padding: 10px 52px 10px 10px; border-radius: 10px; box-shadow: none; }
 .kr-sidebar .kr-sidebar__item-copy { font-size: 14px; line-height: 1.4; }
 .kr-sidebar .kr-sidebar__item-copy strong { white-space: normal; overflow-wrap: anywhere; }
 .kr-sidebar .kr-sidebar__item-copy small { font-size: 11px; }
 .kr-sidebar .kr-sidebar__items { gap: 8px; }
+#app-shell .kr-sidebar .kr-sidebar__item.ns-card { color: var(--exp-text); background: var(--exp-surface); border-color: var(--exp-border); }
+#app-shell .kr-sidebar .kr-sidebar__item.ns-card:is(:hover, :focus-visible) { background: var(--exp-surface-2); border-color: var(--exp-border-strong); }
+#app-shell .kr-sidebar .kr-sidebar__service[data-active='true'] .kr-sidebar__item.ns-card { background: var(--exp-accent-soft); border-color: var(--exp-accent); }
+#app-shell .kr-sidebar .kr-sidebar__search,
+#app-shell .kr-sidebar .kr-sidebar__views { color: var(--exp-text); background: var(--exp-surface-2); border-color: var(--exp-border); }
+#app-shell .kr-sidebar .kr-sidebar__search input { color: var(--exp-text); background: transparent; }
+#app-shell .kr-sidebar .kr-sidebar__search input::placeholder { color: var(--exp-text-muted); opacity: 1; }
+#app-shell .kr-sidebar .kr-sidebar__views button { color: var(--exp-text-soft); }
+#app-shell .kr-sidebar .kr-sidebar__views button.is-active { color: var(--exp-text); background: var(--exp-surface); border-color: var(--exp-border-strong); }
+#app-shell .kr-sidebar .kr-sidebar__group { color: var(--exp-text-soft); background: transparent; }
+#app-shell .kr-sidebar .kr-sidebar__group[aria-pressed='true'] { color: var(--exp-text); background: var(--exp-accent-soft); border-color: var(--exp-accent); }
 .kr-sidebar .kr-sidebar__favorite { border-radius: 8px; }
 .kr-sidebar .kr-sidebar__layer-load { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .kr-sidebar .kr-sidebar__layer-load-copy strong { font-size: 12px; white-space: normal; }
 .kr-sidebar .kr-sidebar__layer-load-copy small { font-size: 11px; white-space: normal; }
 .kr-sidebar .kr-sidebar__layer-retry { min-height: 44px; width: 100%; font-size: 12px; }
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__topline { padding: 12px; justify-content: center; }
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__title,
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__panel { display: none; }
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__groups {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  visibility: visible;
+  pointer-events: auto;
+  padding: 8px;
+  gap: 8px;
+  height: auto;
+  max-height: calc(100% - 68px);
+  overflow-y: auto;
+}
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__group { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 44px; min-height: 64px; padding: 4px; }
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__group-label { display: block; font-size: 10px; }
+#app-shell .kr-sidebar.is-collapsed .kr-sidebar__group img { width: 40px; height: 26px; }
 
-/* Every map tool shares one rail and every managed query window starts beneath
- * the workspace controls. Widths use the actual sidebar state. */
+/* Map tools and query panels share bounds. Headers remain reachable while long
+ * forms/results scroll; the hidden body contract still owns minimization. */
 #app-shell .toolbarwidget {
   top: calc(var(--mainbar-height) + 12px);
-  right: 16px;
+  right: var(--kr-edge);
   bottom: auto;
   width: 56px;
-  max-height: calc(100dvh - var(--mainbar-height) - 108px);
+  max-height: calc(100dvh - var(--mainbar-height) - 160px);
   padding: 5px;
   border-radius: 12px;
   background: var(--exp-surface);
@@ -199,91 +250,164 @@ body { margin: 0; user-select: text; }
 #app-shell .toolbarwidget .experience-toolbar__button { min-width: 44px; min-height: 44px; }
 #app-shell .common-query-window,
 #app-shell .kr-lazy-window {
-  top: var(--kr-panel-top);
-  left: calc(var(--kr-premium-sidebar-width) + var(--kr-workspace-gap));
-  right: auto;
-  width: min(560px, calc(100vw - var(--kr-premium-sidebar-width) - 112px));
-  inline-size: min(560px, calc(100vw - var(--kr-premium-sidebar-width) - 112px));
+  inset: var(--kr-panel-top) auto auto var(--kr-content-left);
+  inset-inline: var(--kr-content-left) auto;
+  width: min(560px, var(--kr-content-width));
+  inline-size: min(560px, var(--kr-content-width));
   min-width: 0;
   min-inline-size: 0;
-  max-width: calc(100vw - var(--kr-premium-sidebar-width) - 112px);
-  max-inline-size: calc(100vw - var(--kr-premium-sidebar-width) - 112px);
+  max-width: var(--kr-content-width);
+  max-inline-size: var(--kr-content-width);
   max-height: calc(100dvh - var(--kr-panel-top) - var(--kr-panel-bottom));
   max-block-size: calc(100dvh - var(--kr-panel-top) - var(--kr-panel-bottom));
   border: 1px solid var(--exp-border);
   border-radius: 14px;
+  color: var(--exp-text);
   background: var(--exp-surface);
   box-shadow: var(--exp-shadow-md);
   z-index: 110;
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--exp-border-strong) transparent;
 }
-#app-shell .common-query-window-right {
+#app-shell .common-query-window-right,
+html[data-experience-panel='right'] #app-shell .common-query-window {
   left: auto;
-  inset-inline-start: auto;
   right: 88px;
-  inset-inline-end: 88px;
+  inset-inline: auto 88px;
 }
-#app-shell .common-query-window-header { min-height: 64px; padding: 12px 16px; gap: 8px; background: var(--exp-surface-2); }
-#app-shell .common-query-window-header > span { font-size: 17px; line-height: 1.3; }
+html[data-experience-panel='bottom'] #app-shell .common-query-window {
+  top: auto;
+  bottom: var(--kr-panel-bottom);
+  max-height: min(60dvh, calc(100dvh - var(--kr-panel-top) - var(--kr-panel-bottom)));
+  max-block-size: min(60dvh, calc(100dvh - var(--kr-panel-top) - var(--kr-panel-bottom)));
+}
+#app-shell .common-query-window-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 64px;
+  padding: 12px 16px;
+  gap: 8px;
+  background: var(--exp-surface-2);
+  border-bottom: 1px solid var(--exp-border);
+  flex-wrap: wrap;
+}
+#app-shell .common-query-window-header > span { font-size: 17px; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
+#app-shell .common-query-window-header > :is(h2, h3) { font-size: 17px; line-height: 1.3; min-width: 0; margin: 0; color: var(--exp-text); overflow-wrap: anywhere; }
 #app-shell .common-query-window-header-icon { margin: 0; flex: 0 0 36px; width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
 #app-shell .common-query-window-body { padding: 16px; height: auto; max-height: none; max-block-size: none; font-size: 14px; }
 #app-shell .common-query-window-body[hidden],
 #app-shell .map-widget-surface__footer[hidden] { display: none; }
 #app-shell .map-widget-surface__title { font: 700 17px/1.3 var(--exp-font-sans); }
-#app-shell .common-query-window-tool-button { min-width: 44px; min-height: 44px; border-radius: 8px; }
+#app-shell .common-query-window-tool-button { min-width: 44px; min-height: 44px; border-radius: 8px; color: var(--exp-text-soft); }
+#app-shell .common-query-window-tool-button:hover { background: var(--exp-surface-3); color: var(--exp-text); }
+#app-shell .common-query-window-tool-minimise-button { display: block; width: 24px; height: 24px; }
+#app-shell .common-query-window-tool-close-button { width: 24px; height: 24px; border: 0; border-radius: 0; background: transparent; color: currentColor; }
 #app-shell .common-query-window-tools,
 #app-shell .results-container-toolbar { flex-wrap: wrap; gap: 8px; }
+#app-shell .common-query-window-tool { flex-direction: row; padding: 10px 12px; border: 1px solid var(--exp-border); background: var(--exp-surface); color: var(--exp-text); }
+#app-shell .common-query-window-tool:hover:not(:disabled) { background: var(--exp-surface-3); color: var(--exp-text); border-color: var(--exp-border-strong); }
+#app-shell .common-query-window-tool:hover:not(:disabled) > img { filter: none; }
+#app-shell .common-query-window-tool.danger { color: var(--exp-danger); background: var(--exp-danger-soft); border-color: var(--exp-danger); }
 #app-shell .results-container { height: auto; max-height: 54dvh; }
 #app-shell .result-item-info,
 #app-shell .result-item-info-title { font-size: 14px; line-height: 1.5; text-transform: none; }
 #app-shell .result-item-info-date { font-size: 13px; }
-#app-shell .form-label,
-#app-shell .form-control,
-#app-shell .form-select,
-#app-shell .btn,
-#app-shell .form-button { font-size: 14px; }
-#app-shell .form-control,
-#app-shell .form-select,
-#app-shell .btn,
+#app-shell .result-item-container:hover { color: var(--exp-text); background: var(--exp-surface-2); }
+#app-shell .result-item-container:hover .result-item-info-title { color: var(--exp-text); }
+#app-shell .result-item-container:hover .result-item-info-date { color: var(--exp-danger); }
+#app-shell .form-label, #app-shell .form-control, #app-shell .form-select,
+#app-shell .btn, #app-shell .form-button { font-size: 14px; }
+#app-shell .form-control, #app-shell .form-select, #app-shell .btn,
 #app-shell .form-button { min-height: 44px; }
-#app-shell :is(input[type='checkbox'], input[type='radio']) { min-height: 20px; min-width: 20px; }
+#app-shell :is(input[type='checkbox'], input[type='radio']) { min-height: 20px; min-width: 20px; accent-color: var(--exp-accent); }
 #app-shell :is(input, select, textarea) { max-width: 100%; }
 #app-shell .common-query-window :is(th, td) { padding: 10px 12px; font-size: 13px; }
 #app-shell .common-query-window :is(.table-responsive, .experience-data-table__scroll) { overflow: auto; }
+#app-shell .common-query-window :is(.table, table) { color: var(--exp-text); --bs-table-color: var(--exp-text); --bs-table-bg: var(--exp-surface); --bs-table-border-color: var(--exp-border); }
 
-/* Compact quick navigation opens only on demand in the production app. */
+/* Fast-access results reuse the service sidebar slot, including its actual
+ * collapsed width. Cards remain readable without the old hover inversion. */
+#app-shell .sidebar-container.kr-fast-query {
+  position: absolute;
+  top: var(--mainbar-height);
+  left: 0;
+  right: auto;
+  inset-inline-start: 0;
+  width: var(--kr-premium-sidebar-width);
+  height: calc(100dvh - var(--mainbar-height));
+  max-width: none;
+  padding: 0;
+  align-items: stretch;
+  z-index: 100;
+  background: var(--exp-surface);
+  color: var(--exp-text);
+}
+#app-shell .kr-fast-query__header { padding: 12px; grid-template-columns: 34px minmax(0, 1fr) 44px; gap: 8px; }
+#app-shell .kr-fast-query__header h2 { white-space: normal; font-size: 17px; line-height: 1.35; }
+#app-shell .kr-fast-query__count { font-size: 13px; }
+#app-shell .kr-fast-query__status { font-size: 14px; padding: 12px; }
+#app-shell .kr-fast-query__error { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--exp-border); border-radius: 10px; color: var(--exp-danger); background: var(--exp-danger-soft); }
+#app-shell .kr-fast-query__error button { min-height: 44px; border: 1px solid var(--exp-border-strong); border-radius: 8px; color: var(--exp-text); background: var(--exp-surface); font: inherit; font-weight: 600; }
+#app-shell .kr-fast-query__results { max-height: none; flex: 1; align-content: start; grid-auto-rows: max-content; }
+#app-shell .kr-fast-query__item { align-content: start; background: var(--exp-surface); color: var(--exp-text); }
+#app-shell .kr-fast-query__item:is(:hover, :focus-within) { background: var(--exp-surface-2); color: var(--exp-text); }
+#app-shell .kr-fast-query__copy .result-item-info-title,
+#app-shell .kr-fast-query__copy h3 { font-size: 15px; color: var(--exp-text); }
+#app-shell .kr-fast-query__copy .result-item-info-address,
+#app-shell .kr-fast-query__copy :is(p, a) { font-size: 13px; }
+
+/* Footer rows have reserved positions. Their widths are explicitly bounded
+ * by the map area, rather than competing for the same bottom-right corner. */
 #app-shell .map-workspace-shell-overlay {
-  width: min(420px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  bottom: 16px;
+  inset-inline: var(--kr-content-left) auto;
+  transform: none;
+  bottom: var(--kr-footer-edge);
+  width: min(420px, var(--kr-content-width));
+  max-width: var(--kr-content-width);
+  max-height: calc(100dvh - var(--kr-panel-top) - 16px);
+  overflow-y: auto;
   border-radius: 12px;
   background: var(--exp-surface);
   box-shadow: var(--exp-shadow-sm);
   backdrop-filter: none;
 }
-#app-shell .map-workspace-shell-overlay[data-collapsed='true'] { width: max-content; max-width: min(420px, calc(100vw - 32px)); }
-#app-shell .map-workspace-shell-overlay[data-collapsed='true'] .map-workspace-shell-overlay__status-copy > span { display: none; }
+#app-shell .map-workspace-shell-overlay[data-collapsed='true'] { width: max-content; max-width: max(80px, calc(100dvw - var(--kr-content-left) - 356px)); }
 #app-shell .map-workspace-shell-overlay__status { min-height: 44px; gap: 8px; padding: 4px 6px 4px 12px; }
 #app-shell .map-workspace-shell-overlay__status-copy strong { font-size: 13px; }
 #app-shell .map-workspace-shell-overlay__status-copy span { font-size: 12px; }
+#app-shell .map-workspace-shell-overlay[data-collapsed='true'] .map-workspace-shell-overlay__status-copy,
 #app-shell .map-workspace-shell-overlay__count { display: none; }
 #app-shell .map-workspace-shell-overlay__collapse,
 #app-shell .map-workspace-shell-overlay__action { font-size: 13px; min-height: 44px; }
 #app-shell .map-workspace-shell-overlay__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-#app-shell .map-workspace-shell-overlay__shortcut-hint { font-size: 11px; }
+#app-shell .map-workspace-shell-overlay__shortcut-hint,
 #app-shell .map-workspace-shell-overlay__shortcut-hint kbd { font-size: 11px; }
-
-/* Footer utilities have separate rows so accessibility, help and notifications
- * cannot mask each other. The data disclaimer keeps its full wording. */
-#app-shell .experience-utility { bottom: 76px; right: 16px !important; border-radius: 12px; background: var(--exp-surface); }
-#app-shell .map-shortcut-help__launcher { bottom: 16px; right: 224px; font-size: 13px; }
+#app-shell .experience-utility { bottom: calc(var(--kr-footer-edge) + 60px); right: var(--kr-edge) !important; border-radius: 12px; background: var(--exp-surface); }
+#app-shell .map-shortcut-help__launcher { bottom: var(--kr-footer-edge); right: calc(var(--kr-edge) + 208px); font-size: 13px; }
+.workspace-accessibility-center { right: var(--kr-edge); bottom: var(--kr-footer-edge); }
 .workspace-accessibility-center__launcher-copy strong { font-size: 13px; }
 .workspace-accessibility-center__launcher-copy span { font-size: 12px; }
-#app-shell .experience-data-disclaimer { top: auto; bottom: 16px; min-height: 44px; font-size: 12px; max-width: min(420px, calc(100vw - 32px)); }
-#app-shell .esri-ui-top-left { top: var(--kr-panel-top) !important; left: calc(var(--kr-premium-sidebar-width) + 16px) !important; }
+#app-shell .experience-data-disclaimer {
+  inset: auto auto calc(var(--kr-footer-edge) + 60px) var(--kr-content-left);
+  inset-inline: var(--kr-content-left) auto;
+  width: min(420px, calc(100dvw - var(--kr-content-left) - 312px));
+  inline-size: min(420px, calc(100dvw - var(--kr-content-left) - 312px));
+  max-width: none;
+  max-inline-size: none;
+  min-height: 44px;
+  font-size: 12px;
+  transform: none;
+  box-shadow: var(--exp-shadow-sm);
+  background: var(--exp-surface);
+  backdrop-filter: none;
+}
+#app-shell .esri-ui-top-left { top: var(--kr-panel-top) !important; left: var(--kr-content-left) !important; }
 
-/* Modal dialogs are portalled to the body, outside map stacking contexts. */
+/* Portal dialogs share the same visual vocabulary without inheriting map
+ * positioning. The historic Bootstrap 40px offsets must never move a modal. */
 [data-experience-dialog-backdrop='true'] {
   position: fixed;
   inset: 0;
@@ -303,166 +427,177 @@ body { margin: 0; user-select: text; }
   border: 1px solid var(--exp-border);
   border-radius: 16px;
   box-shadow: 0 24px 72px rgb(15 23 42 / 24%);
-  font-family: var(--exp-font-sans);
-  font-size: 14px;
+  font: 14px/1.5 var(--exp-font-sans);
 }
 [data-experience-dialog='true'] :is(button, input, select, textarea) { min-height: 44px; font-size: 14px; }
 [data-experience-dialog='true'] :is(h2, h3) { line-height: 1.3; }
-.experience-settings__body { overflow: auto; min-height: 0; }
+.experience-settings__body { overflow: auto; min-height: 0; grid-auto-rows: max-content; align-content: start; }
 .experience-settings__group { min-width: 0; }
 .experience-settings__header h2 { font-size: 22px; }
 .experience-settings__header p,
 .experience-settings__field-description { font-size: 14px; line-height: 1.5; }
+.experience-settings .experience-setting-row__copy :is(label, .experience-setting-row__label) { font-size: 14px; font-weight: 650; }
+.experience-settings .experience-setting-row__copy p { font-size: 13px; line-height: 1.5; color: var(--exp-text-soft); }
+.experience-settings .experience-settings__group legend { font-size: 15px; }
+.experience-settings .experience-settings__summary :is(span, strong) { font-size: 12px; }
+.experience-settings .experience-settings__footer .experience-btn { font-size: 14px; }
+.modal .modal-content { inset: auto; top: auto; left: auto; max-width: 100%; color: var(--exp-text); background: var(--exp-surface); border: 1px solid var(--exp-border); box-shadow: var(--exp-shadow-md); }
+.modal .modal-title { font-size: 20px; color: var(--exp-text); }
+.modal .modal-header, .modal .modal-footer { border-color: var(--exp-border); }
+.modal .modal-body { overflow: auto; overscroll-behavior: contain; }
+.modal .modal-dialog { max-width: calc(100dvw - 32px); margin-inline: auto; }
+#app-shell .esri-widget { color: var(--exp-text); background-color: var(--exp-surface); font-family: var(--exp-font-sans); }
+#app-shell .esri-popup__main-container { border: 1px solid var(--exp-border); border-radius: 12px; box-shadow: var(--exp-shadow-md); }
+#app-shell .popup-title, #app-shell .popup-header { font-size: 18px; }
+#app-shell .popup-section { border-color: var(--exp-border); }
+#app-shell .attachments-image { object-fit: contain; border-radius: 8px; }
+#app-shell .map-widget-surface { --widget-danger: var(--exp-danger); --widget-warning: var(--exp-warning); --widget-success: var(--exp-success); }
+html[data-experience-theme='dark'] #app-shell :is(.btn-primary, .form-button, .kr-search-submit, .map-workspace-recovery__retry),
+html[data-experience-theme='dark'] .experience-settings .experience-btn--primary { color: var(--kr-action-ink); background: var(--exp-accent); border-color: var(--exp-accent); }
+#app-shell .map-workspace-recovery {
+  top: var(--kr-panel-top);
+  bottom: auto;
+  left: var(--kr-content-left);
+  width: min(520px, var(--kr-content-width));
+  inline-size: min(520px, var(--kr-content-width));
+  max-height: calc(100dvh - var(--kr-panel-top) - 8px);
+  overflow-y: auto;
+  transform: none;
+  background: var(--exp-surface);
+}
 
 @media (max-width: 1180px) {
   :root { --kr-premium-sidebar-width: 288px; }
+  .mainbar-container .mainbar { grid-template-columns: minmax(200px, auto) minmax(180px, 1fr) auto; gap: 16px; }
   #app-shell .experience-workspace__action kbd { display: none; }
-  .mainbar-container .ns-input { width: min(470px, 40vw); }
-  #app-shell .experience-data-disclaimer { bottom: 76px; }
+  #app-shell .experience-workspace__status-group { display: none; }
+  #app-shell .experience-data-disclaimer {
+    bottom: calc(var(--kr-footer-edge) + 120px);
+    width: min(420px, var(--kr-content-width));
+    inline-size: min(420px, var(--kr-content-width));
+  }
 }
 @media (max-width: 880px) {
-  :root { --kr-premium-sidebar-width: 280px; --kr-panel-top: 148px; --kr-workspace-gap: 12px; }
-  .mainbar-container .ns-input { width: 45vw; }
-  #app-shell .experience-workspace { left: 84px; max-width: calc(100vw - 172px); }
-  #app-shell .experience-workspace__status-group { display: none; }
+  :root { --kr-premium-sidebar-width: 280px; --kr-workspace-gap: 12px; }
+  .mainbar-container .mainbar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; }
+  .mainbar-container .mainbar-text { font-size: 15px; padding-left: 10px; }
+  #app-shell .experience-workspace,
   #app-shell .common-query-window,
-  #app-shell .kr-lazy-window { left: 84px; width: calc(100vw - 172px); inline-size: calc(100vw - 172px); max-width: none; max-inline-size: none; }
-  #app-shell .common-query-window-right { left: 84px; right: 88px; inset-inline-start: 84px; }
-  #app-shell .experience-data-disclaimer { left: 50%; bottom: 76px; max-width: min(360px, calc(100vw - 32px)); }
+  #app-shell .kr-lazy-window { left: 84px; inset-inline-start: 84px; --kr-content-width: calc(100dvw - 172px); }
+  #app-shell .map-workspace-shell-overlay { inset-inline-start: 84px; max-width: calc(100dvw - 100px); }
+  #app-shell .experience-data-disclaimer { inset-inline-start: 84px; width: min(420px, calc(100dvw - 172px)); inline-size: min(420px, calc(100dvw - 172px)); }
+  #app-shell .common-query-window-right,
+  html[data-experience-panel='right'] #app-shell .common-query-window { left: auto; inset-inline-start: auto; }
 }
 @media (max-width: 680px) {
-  :root { --mainbar-height: 64px; --exp-header-height: 64px; --kr-panel-top: 132px; --kr-panel-bottom: 224px; }
-  .mainbar-container { padding: 8px; }
+  :root {
+    --mainbar-height: 64px;
+    --kr-premium-sidebar-width: 280px;
+    --kr-panel-top: 132px;
+    --kr-panel-bottom: 8px;
+    --kr-workspace-gap: 8px;
+    --kr-edge: max(8px, env(safe-area-inset-right));
+    --kr-footer-edge: max(8px, env(safe-area-inset-bottom));
+  }
+  #app-shell .mainbar-container { padding: 8px; }
+  .mainbar-container .mainbar { grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
   .mainbar-container .mainbar-logo { width: 44px; height: 44px; flex-basis: 44px; }
   .mainbar-container .mainbar-logo img { max-height: 32px; }
-  .mainbar-container .ns-input { position: static; transform: none; flex: 1; width: auto; }
+  .mainbar-container .mainbar-text, .mainbar-container .mainbar-right { display: none; }
   .mainbar-container .ns-input-group input { padding-inline: 12px 48px; font-size: 16px; }
-  #app-shell .experience-workspace { left: 8px; right: 8px; top: 72px; max-width: none; width: auto; justify-content: space-between; gap: 4px; }
+  .mainbar-container .kr-search-hint { display: none; }
+  #app-shell .experience-workspace {
+    inset: 72px 8px auto;
+    width: auto;
+    max-width: none;
+    justify-content: center;
+    gap: 4px;
+  }
   #app-shell .experience-workspace__actions { width: 100%; justify-content: space-between; gap: 4px; }
-  #app-shell .experience-workspace__action { width: 44px; min-width: 44px; padding: 0; font-size: 0; }
-  #app-shell .experience-workspace__action::before { content: '⌘'; font-size: 20px; }
-  #app-shell .experience-workspace__action:last-child::before { content: '⚙'; }
-  .experience-workspace .map-mode-transition-control { min-width: 160px; }
-  #app-shell .sidebar-container.kr-sidebar { top: 132px; height: calc(100dvh - 132px); width: min(320px, calc(100vw - 72px)); }
-  #app-shell .sidebar-container.kr-sidebar.is-collapsed { width: 64px; }
+  #app-shell .experience-workspace__action { min-width: 44px; width: auto; inline-size: auto; padding-inline: 8px; font-size: 12px; gap: 5px; }
+  #app-shell .experience-workspace__action-icon { display: none; }
+  #app-shell .experience-workspace__action > span:not(.experience-sr-only) { display: inline; }
+  #app-shell .experience-workspace__action::before { content: none; }
+  #app-shell .sidebar-container.kr-sidebar {
+    top: 132px;
+    width: min(320px, calc(100dvw - 72px));
+    height: calc(100dvh - 340px);
+    border-radius: 0 12px 12px 0;
+  }
+  #app-shell .sidebar-container.kr-sidebar.is-collapsed { width: 64px; height: calc(100dvh - 276px); }
   #app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 64px; }
-  .kr-sidebar .kr-sidebar__topline { padding: 8px; min-height: 56px; }
-  #app-shell .toolbarwidget { top: 132px; right: 8px; max-height: calc(100dvh - 296px); width: 54px; }
+  #app-shell .kr-sidebar .kr-sidebar__topline { padding: 8px; min-height: 56px; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__groups { grid-template-columns: repeat(4, minmax(0, 1fr)); height: auto; min-height: 64px; max-height: none; padding: 8px; }
+  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__group { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; min-height: 56px; padding: 4px; overflow: hidden; }
+  #app-shell .kr-sidebar .kr-sidebar__group img { max-width: 40px; max-height: 28px; }
+  #app-shell .kr-sidebar .kr-sidebar__panel { overflow-y: auto; display: block; }
+  #app-shell .kr-sidebar .kr-sidebar__items { overflow: visible; height: auto; max-height: none; }
+  #app-shell .kr-sidebar.is-collapsed .kr-sidebar__groups { max-height: calc(100% - 56px); padding: 8px; gap: 4px; }
+  #app-shell .kr-sidebar.is-collapsed .kr-sidebar__group { min-height: 56px; }
+  #app-shell .toolbarwidget { top: 132px; right: 8px; width: 54px; max-height: calc(100dvh - 276px); max-block-size: calc(100dvh - 276px); }
   #app-shell .common-query-window,
   #app-shell .common-query-window-right,
-  #app-shell .kr-lazy-window { left: 8px; right: 8px; inset-inline: 8px; width: auto; inline-size: auto; max-width: none; max-inline-size: none; }
-  #app-shell .common-query-window-header { padding: 10px 12px; flex-wrap: wrap; }
+  #app-shell .kr-lazy-window,
+  html[data-experience-panel='right'] #app-shell .common-query-window,
+  html[data-experience-panel='bottom'] #app-shell .common-query-window {
+    inset: 132px 8px auto;
+    inset-inline: 8px;
+    width: auto;
+    inline-size: auto;
+    max-width: none;
+    max-inline-size: none;
+    max-height: calc(100dvh - 140px);
+    max-block-size: calc(100dvh - 140px);
+    z-index: 1300;
+  }
+  #app-shell .common-query-window-header { padding: 10px 12px; }
   #app-shell .common-query-window-body { padding: 12px; }
-  #app-shell .experience-utility { bottom: 76px; left: auto; right: 8px !important; }
+  #app-shell .map-workspace-recovery { left: 8px; width: calc(100dvw - 16px); inline-size: calc(100dvw - 16px); }
+  #app-shell .sidebar-container.kr-fast-query { top: 132px; width: calc(100dvw - 16px); height: calc(100dvh - 140px); left: 8px; inset-inline-start: 8px; border-radius: 12px; z-index: 1300; }
+  #app-shell .experience-utility { inset-inline: 8px; left: 8px; right: 8px !important; bottom: calc(var(--kr-footer-edge) + 60px); width: calc(100dvw - 16px); inline-size: calc(100dvw - 16px); max-width: none; max-inline-size: none; transform: none; }
+  #app-shell .experience-utility__actions { display: flex; flex-direction: row; justify-content: space-between; width: 100%; gap: 0; }
   #app-shell .experience-utility__button { min-width: 44px; min-height: 44px; }
-  #app-shell .map-shortcut-help__launcher { right: 8px; bottom: 16px; }
-  .workspace-accessibility-center { right: 68px; bottom: 16px; }
-  .workspace-accessibility-center__launcher { min-width: 152px; }
-  #app-shell .experience-data-disclaimer { inset-inline: 8px; top: auto; bottom: 136px; width: auto; max-width: none; transform: none; }
-  #app-shell .map-workspace-shell-overlay { bottom: 16px; max-width: calc(100vw - 240px); }
-  #app-shell .map-workspace-shell-overlay__status-copy { display: none; }
-  #app-shell .map-workspace-shell-overlay__collapse { font-size: 0; min-width: 44px; padding: 0; }
-  #app-shell .map-workspace-shell-overlay__collapse::before { content: '↗'; font-size: 20px; }
-  #app-shell .map-workspace-shell-overlay[data-collapsed='false'] { bottom: 200px; width: calc(100vw - 16px); max-width: none; }
-  #app-shell .map-workspace-shell-overlay[data-collapsed='false'] .map-workspace-shell-overlay__status-copy { display: grid; }
-  #app-shell .esri-ui-top-left { left: 84px !important; top: 140px !important; }
-  [data-experience-dialog-backdrop='true'] { padding: 8px; }
-  [data-experience-dialog='true'] { max-width: calc(100dvw - 16px); max-height: calc(100dvh - 16px); border-radius: 12px; }
+  #app-shell .map-shortcut-help__launcher { inset-inline: 80px auto; bottom: var(--kr-footer-edge); width: 96px; min-width: 0; padding: 6px; gap: 4px; font-size: 12px; }
+  #app-shell .map-shortcut-help__launcher-label { position: static; inline-size: auto; block-size: auto; clip-path: none; overflow: visible; font-size: 11px; }
+  .workspace-accessibility-center { inset-inline: auto 8px; bottom: var(--kr-footer-edge); width: 128px; inline-size: 128px; max-width: none; }
+  .workspace-accessibility-center__launcher { width: 128px; min-width: 0; min-inline-size: 0; padding: 8px; gap: 4px; }
+  .workspace-accessibility-center__launcher-copy strong { font-size: 12px; }
+  .workspace-accessibility-center__launcher-copy span { display: none; }
+  .workspace-accessibility-center__panel { position: fixed; inset: auto 8px 68px; width: auto; inline-size: auto; max-width: none; max-inline-size: none; max-height: calc(100dvh - 148px); }
+  #app-shell .experience-data-disclaimer { inset: auto 8px calc(var(--kr-footer-edge) + 120px); inset-inline: 8px; width: auto; inline-size: auto; max-width: none; max-inline-size: none; }
+  #app-shell .map-workspace-shell-overlay { inset-inline: 8px; width: auto; max-width: none; bottom: var(--kr-footer-edge); }
+  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] { inset-inline: 8px auto; width: 64px; max-width: 64px; }
+  #app-shell .map-workspace-shell-overlay[data-collapsed='false'] { z-index: 1250; }
+  #app-shell .map-workspace-shell-overlay__status { padding: 4px; }
+  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] .map-workspace-shell-overlay__collapse { padding-inline: 4px; font-size: 12px; min-width: 54px; }
+  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] .map-workspace-shell-overlay__status > span { display: none; }
+  .experience-settings .experience-setting-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .experience-settings .experience-setting-row select { width: 100%; max-inline-size: none; }
+  .experience-settings .experience-setting-row:has(.experience-switch) { grid-template-columns: minmax(0, 1fr) auto; }
+  .modal .modal-dialog { max-width: calc(100dvw - 16px); }
 }
-@media (max-height: 540px) {
-  :root { --kr-panel-bottom: 108px; }
-  #app-shell .experience-utility { bottom: 12px; }
-  #app-shell .experience-data-disclaimer { bottom: 12px; max-width: 320px; }
-  #app-shell .toolbarwidget { max-height: calc(100dvh - 160px); }
+@media (max-height: 560px) {
+  #app-shell .common-query-window, #app-shell .kr-lazy-window { max-height: calc(100dvh - var(--kr-panel-top) - 8px); max-block-size: calc(100dvh - var(--kr-panel-top) - 8px); z-index: 1300; }
+  html[data-experience-panel='bottom'] #app-shell .common-query-window { bottom: 8px; }
+  #app-shell .kr-sidebar { overflow-y: auto; }
+  #app-shell .sidebar-container.kr-sidebar { height: calc(100dvh - var(--kr-panel-top) - 8px); }
+  #app-shell .toolbarwidget { max-height: calc(100dvh - var(--kr-panel-top) - 8px); max-block-size: calc(100dvh - var(--kr-panel-top) - 8px); z-index: 1015; }
+  .experience-settings .experience-settings__header { padding: 12px 16px; }
+  .experience-settings .experience-settings__header h2 { font-size: 18px; margin-block: 2px 4px; }
 }
-@media (pointer: coarse) {
-  :root { --kr-control-size: 48px; }
-  #app-shell .experience-workspace__action,
-  #app-shell .map-mode-transition-control__segment,
-  #app-shell .toolbarwidget .experience-toolbar__button { min-height: 48px; }
+html[data-experience-density='compact'] #app-shell .kr-sidebar__item.ns-card { min-height: 56px; padding-block: 8px; }
+html[data-experience-contrast='high'] #app-shell :is(.common-query-window, .kr-sidebar__item.ns-card, .experience-workspace, .toolbarwidget) { border-color: currentColor; }
+html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__action, .kr-sidebar__item, .kr-search-submit) { transition: none; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  #app-shell :is(.experience-workspace__action, .kr-sidebar__item, .kr-search-submit) { transition: none; transform: none; }
 }
 @media (forced-colors: active) {
-  #app-shell :is(.experience-workspace, .kr-sidebar, .toolbarwidget, .common-query-window, .map-workspace-shell-overlay),
-  [data-experience-dialog='true'] { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; }
-  [data-experience-dialog-backdrop='true'] { background: Canvas; }
+  #app-shell :is(.common-query-window, .experience-workspace, .toolbarwidget, .experience-data-disclaimer),
+  [data-experience-dialog='true'] { color: CanvasText; background: Canvas; border-color: CanvasText; box-shadow: none; }
+  #app-shell :is(.common-query-window-tool, .common-query-window-tool-button, .kr-search-submit) { forced-color-adjust: auto; }
+  #app-shell .common-query-window-tool-button:focus-visible { outline: 2px solid Highlight; }
 }
-@media print {
-  #app-shell :is(.experience-workspace, .map-workspace-shell-overlay, .toolbarwidget, .experience-utility, .map-shortcut-help__launcher) { display: none; }
-  [data-experience-dialog-backdrop='true'] { position: static; background: transparent; padding: 0; }
-}
-
-/* Reserve the lower map edge for the collapsed navigator; keep the advisory on
- * the row above it so neither surface covers the service list or a launcher. */
-@media (min-width: 881px) {
-  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] {
-    inset-inline-start: calc(var(--kr-premium-sidebar-width) + 16px);
-    inset-inline-end: auto;
-    transform: none;
-  }
-  #app-shell .experience-data-disclaimer {
-    inset-inline-start: calc(var(--kr-premium-sidebar-width) + 16px);
-    inset-inline-end: auto;
-    bottom: 76px;
-    transform: none;
-  }
-}
-.experience-settings .experience-setting-row__copy p { font-size: 13px; line-height: 1.5; }
-
-/* Fast-access results replace the service sidebar, with the same typography and
- * a clear recovery action. They never share the map-tools rail. */
-#app-shell .sidebar-container.kr-fast-query {
-  top: var(--mainbar-height); left: 0; right: auto; inset-inline-start: 0;
-  width: var(--kr-premium-sidebar-width); height: calc(100dvh - var(--mainbar-height));
-  max-width: none; padding: 0; align-items: stretch; z-index: 100;
-  background: var(--exp-surface); color: var(--exp-text);
-}
-#app-shell .kr-fast-query__header { padding: 12px; grid-template-columns: 34px minmax(0, 1fr) 44px; gap: 8px; }
-#app-shell .kr-fast-query__header h2 { white-space: normal; font-size: 17px; line-height: 1.35; }
-#app-shell .kr-fast-query__count { font-size: 13px; }
-#app-shell .kr-fast-query__status { font-size: 14px; padding: 12px; }
-#app-shell .kr-fast-query__error { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--exp-border); border-radius: 10px; color: var(--exp-danger); background: var(--exp-danger-soft); }
-#app-shell .kr-fast-query__error button { min-height: 44px; border: 1px solid var(--exp-border-strong); border-radius: 8px; color: var(--exp-text); background: var(--exp-surface); font: inherit; font-weight: 600; }
-#app-shell .kr-fast-query__results { max-height: none; flex: 1; align-content: start; grid-auto-rows: max-content; }
-#app-shell .kr-fast-query__item { align-content: start; background: var(--exp-surface); color: var(--exp-text); }
-#app-shell .kr-fast-query__item:is(:hover, :focus-within) { background: var(--exp-surface-2); color: var(--exp-text); }
-#app-shell .kr-fast-query__copy .result-item-info-title { font-size: 15px; color: var(--exp-text); }
-#app-shell .kr-fast-query__copy .result-item-info-address { font-size: 13px; color: var(--exp-text-muted); }
-#app-shell .kr-fast-query__copy h3 { font-size: 15px; }
-#app-shell .kr-fast-query__copy :is(p, a) { font-size: 13px; }
-@media (max-width: 680px) {
-  #app-shell .sidebar-container.kr-fast-query,
-  #app-shell .sidebar-container.kr-sidebar { top: 132px; width: calc(100vw - 72px); height: calc(100dvh - 344px); border-radius: 0 12px 12px 0; }
-  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__groups { grid-template-columns: repeat(4, minmax(0, 1fr)); height: auto; min-height: 64px; max-height: none; flex: 0 0 auto; }
-  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__group { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; min-height: 56px; padding: 4px; overflow: hidden; }
-  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__group img { max-width: 40px; max-height: 28px; }
-  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__panel { overflow-y: auto; overscroll-behavior: contain; display: block; }
-  #app-shell .kr-sidebar:not(.is-collapsed) .kr-sidebar__items { overflow: visible; height: auto; max-height: none; }
-  #app-shell .kr-sidebar .kr-sidebar__layer-load[data-phase="ready"] { padding: 4px 8px; border: 0; background: transparent; }
-  #app-shell .kr-sidebar .kr-sidebar__layer-load[data-phase="ready"] strong { display: none; }
-  #app-shell .experience-utility { width: auto; }
-  #app-shell .experience-utility__actions { display: flex; flex-direction: row; }
-}
-@media (max-width: 880px) and (min-width: 681px) {
-  #app-shell .map-workspace-shell-overlay[data-collapsed='true'] { inset-inline-start: 84px; inset-inline-end: auto; transform: none; }
-  #app-shell .experience-data-disclaimer { inset-inline-start: 84px; inset-inline-end: auto; bottom: 144px; transform: none; }
-}
-@media (max-width: 680px) {
-  .workspace-accessibility-center { inset-inline: auto 68px; width: auto; inline-size: auto; max-width: calc(100vw - 172px); }
-  .workspace-accessibility-center__launcher { width: auto; min-width: 0; }
-  #app-shell .toolbarwidget { max-height: calc(100dvh - 352px); max-block-size: calc(100dvh - 352px); }
-}
-@media (max-height: 540px) and (min-width: 681px) {
-  #app-shell .experience-data-disclaimer { bottom: 84px; }
-  #app-shell .experience-utility { bottom: 16px; }
-  #app-shell .map-shortcut-help__launcher { bottom: 84px; }
-  .workspace-accessibility-center { bottom: 84px; }
-}
-#app-shell .sidebar-container { position: absolute; }
-#app-shell .sidebar-container.kr-fast-query { position: absolute; }
-.experience-settings__body { grid-auto-rows: max-content; align-content: start; }
-
-/* Keep the minimize glyph inside its button; legacy mobile CSS positioned the
- * SVG over the window title and left desktop buttons without a visible icon. */
+/* Retain current-main's fix for SVG positioning in historical mobile queries. */
 #app-shell .common-query-window-tool-minimise-button {
   display: block !important;
   position: static;
