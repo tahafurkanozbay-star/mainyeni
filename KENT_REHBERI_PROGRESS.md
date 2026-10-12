@@ -287,3 +287,11 @@
 - DATA-INTEGRITY FIXES: gelecek tarihli dedupe işleri erken başlatılmaz; TTL/lease/cache deadline değerleri safe integer overflow'da fail-closed; clock rollback expiry'yi geriye almaz; detached/expired lease yenilemesi ve stale observation reddedilir; overflow state'i kısmen mutate etmez; bunlara adversarial Vitest senaryoları eklendi.
 - SECURITY / NETWORK / ICON: doğrulanmamış endpoint, WMS/WFS, browser telemetry, secret, remote asset veya ikinci ikon resolver eklenmedi. Scalar/payload-free GIS authority, existing REST config ve shared resolver korundu.
 - SONRAKİ TUR: #477 branch'i artık merge edilmiştir; yeniden kullanılmaz. Sonraki GIS paketi yeni current main üzerinden benzersiz branch ile başlar. UI/QA/Platform/Search açık PR'leri bağımsız değerlendirilmeli; eski GIS commit zinciri tekrar taşınmamalıdır.
+
+
+## Deep Experience / context-vicinity review checkpoint — 2026-10-12
+- TUR / GÖREV: Experience; ContextMenu action-selection consistency and VicinityQueryWindow async graphics lifecycle.
+- CURRENT MAIN / BRANCH: `529f90e40be6e32854fa37dc67758c8c97a4a467`; fresh branch `agent/experience-context-vicinity-20261012-1422-529f90e` created from exact main, no product commit yet, no PR.
+- ANALYSIS: ContextMenu currently reads mutable global MapManager.GetMapClickEvent() again on action activation; OnShow should snapshot ArcGIS Point (clone) or bounded coordinate values. Vicinity drawBuffer and showItemOnMap await operations without a dedicated generation guard, allowing late graphics/error after close or a superseding selection.
+- STATUS: ContextMenu code update attempted but connector safety checks blocked the write. No source changes or tests are claimed. New branch has zero additions, so mandatory >=4,000 meaningful additions gate is not met; do not merge.
+- NEXT: apply snapshot-and-clear lifecycle with tests; add independent draw/selection generation invalidation and stale completion regressions; verify exact-head Webclient Quality/Release QA/typed checks and real-screen accessibility. Do not add WMS/WFS, remote assets, or a second icon resolver. Continue on this branch unless current main advances, then reconcile safely.
