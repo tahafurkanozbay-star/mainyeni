@@ -31,7 +31,7 @@ import {
 } from './QueryInteractionRuntime';
 import { withTimeout } from '../../../platform/runtime/resilience';
 import { throwIfAborted, isAbortLike } from '../../../platform/runtime/contracts';
-import { normalizeQueryResultText as normalizeText, QueryResultPagination, useQueryResultPage } from './QueryResultPaging';
+import { normalizeQueryResultText as normalizeText, normalizeQueryResultPageSize, QueryResultPagination, useQueryResultPage } from './QueryResultPaging';
 import './ManagedFastAccessQueryWindow.css';
 
 const DEFAULT_PAGE_SIZE = 60;
@@ -252,10 +252,7 @@ const getMapView = (): MapViewLike | null => {
   return value && typeof value === 'object' ? value as MapViewLike : null;
 };
 
-const normalizePageSize = (value: number | undefined): number => {
-  if (!Number.isFinite(value)) return DEFAULT_PAGE_SIZE;
-  return Math.min(200, Math.max(10, Math.trunc(Number(value))));
-};
+const normalizePageSize = (value: number | undefined): number => normalizeQueryResultPageSize(value ?? DEFAULT_PAGE_SIZE);
 
 export function createManagedFastAccessQueryWindow({
   title,
@@ -613,7 +610,7 @@ export function createManagedFastAccessQueryWindow({
             <input
               ref={filterRef}
               id={id + '-filter'}
-              type="search"
+              type="search" aria-label="Sonuçlarda filtrele"
               value={filterText}
               onChange={(event) => {
                 setFilterText(event.target.value);
@@ -685,7 +682,7 @@ export function createManagedFastAccessQueryWindow({
         </ul>
 
         <QueryResultPagination title={title} listId={id + '-results'} page={currentPage} pageCount={pageCount}
-          start={pageStart} shown={visibleRecords.length} total={filteredRecords.length} onPageChange={changePage} />
+          firstRecordIndex={pageStart} shown={visibleRecords.length} total={filteredRecords.length} onPageChange={changePage} />
       </section>
     );
   });

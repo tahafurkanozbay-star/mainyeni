@@ -13,6 +13,7 @@ import {
   snapshotSceneState,
   synchronizeSceneViewSize,
   waitForSceneContainer,
+  waitForSceneFrame,
   type SceneViewLike,
 } from '../../gis-engine/sceneRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
@@ -166,14 +167,6 @@ const sceneControlOptions = (reason: string): SceneNavigateOptions => ({
   animate: !prefersReducedMotion(),
   durationMs: prefersReducedMotion() ? 0 : 220,
   reason,
-});
-
-const nextBrowserFrame = (): Promise<void> => new Promise((resolve) => {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => resolve());
-    return;
-  }
-  queueMicrotask(resolve);
 });
 
 /**
@@ -332,8 +325,8 @@ export function ExperienceMapModeBridge({
     try {
       await withTimeout(async (signal) => {
         setSceneHostActive(true);
-        await nextBrowserFrame();
-        await waitForSceneContainer(sceneHostRef.current);
+        await waitForSceneFrame(signal);
+        await waitForSceneContainer(sceneHostRef.current, { signal });
 
         throwIfAborted(signal);
         const scene = await ensureScene(signal);

@@ -1,3 +1,4 @@
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 import { throwIfAborted } from '../platform/runtime/contracts';
 import { watchArcgisProperty, type ArcgisAccessorWatch } from './arcgisReactiveRuntime';
 import { loadArcgisModule, resetArcgisModuleRuntimeCache } from './arcgisModuleRuntime';
@@ -43,6 +44,7 @@ export interface SceneContainerLike {
 }
 
 export interface SceneContainerWaitOptions {
+  signal?: AbortSignal;
   maxFrames?: number;
   nextFrame?: () => Promise<void>;
 }
@@ -62,24 +64,49 @@ export const isSceneContainerRenderable = (container: SceneContainerLike | null 
   return width >= 2 && height >= 2;
 };
 
-const nextSceneFrame = (): Promise<void> => new Promise((resolve) => {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => resolve());
-    return;
-  }
-  queueMicrotask(resolve);
-});
+export const waitForSceneFrame = async (signal?: AbortSignal): Promise<void> => {
+  throwIfAborted(signal);
+  return new Promise<void>((resolve, reject) => {
+    let frame: number | null = null;
+    let settled = false;
+    const finish = (error?: unknown): void => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onAbort);
+      if (error !== undefined) reject(error);
+      else resolve();
+    };
+    const onAbort = (): void => {
+      try {
+        if (frame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame);
+      } catch (error) {
+        runtimeDiagnostics.captureError(error, { source: 'gis.scene-frame.cleanup' }, 'warn');
+      }
+      finish(signal?.reason ?? new DOMException('Scene frame cancelled', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) { onAbort(); return; }
+    try {
+      if (typeof requestAnimationFrame === 'function') frame = requestAnimationFrame(() => finish());
+      else queueMicrotask(() => finish());
+    } catch (error) {
+      finish(error);
+    }
+  });
+};
 
 export const waitForSceneContainer = async (
   container: SceneContainerLike | null | undefined,
   options: SceneContainerWaitOptions = {},
 ): Promise<void> => {
   const maxFrames = Math.max(1, Math.min(12, Math.floor(finite(options.maxFrames, 6) ?? 6)));
-  const nextFrame = options.nextFrame ?? nextSceneFrame;
+  const nextFrame = options.nextFrame ?? (() => waitForSceneFrame(options.signal));
   for (let frame = 0; frame < maxFrames; frame += 1) {
+    throwIfAborted(options.signal);
     if (isSceneContainerRenderable(container)) return;
     await nextFrame();
   }
+  throwIfAborted(options.signal);
   if (!isSceneContainerRenderable(container)) {
     throw new Error('SceneView container has no renderable layout.');
   }

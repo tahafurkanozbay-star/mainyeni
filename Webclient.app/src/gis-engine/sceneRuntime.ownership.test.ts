@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSceneView, destroySceneView } from './sceneRuntime';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSceneView, destroySceneView, waitForSceneFrame } from './sceneRuntime';
 
 const ports = vi.hoisted(() => ({ load: vi.fn() }));
 vi.mock('./arcgisModuleRuntime', () => ({ loadArcgisModule: ports.load, resetArcgisModuleRuntimeCache: vi.fn() }));
 beforeEach(() => vi.clearAllMocks());
+afterEach(() => vi.restoreAllMocks());
 
 describe('scene map ownership and cancelled construction', () => {
   it('detaches a shared map before SDK destroy can destroy its layers', () => {
@@ -68,5 +69,31 @@ describe('scene map ownership and cancelled construction', () => {
     map.destroy.mockClear();
     await expect(createSceneView({}, { map })).rejects.toThrow('GPU unavailable');
     expect(map.destroy).not.toHaveBeenCalled();
+  });  it('physically cancels a pending browser frame when the owning transition aborts', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(49);
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    const lifetime = new AbortController();
+    const pending = waitForSceneFrame(lifetime.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    lifetime.abort(); await rejected;
+    expect(cancel).toHaveBeenCalledExactlyOnceWith(49);
   });
+
+  it('releases the frame abort listener after successful delivery', async () => {
+    let callback!: FrameRequestCallback;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((next) => { callback = next; return 50; });
+    const lifetime = new AbortController();
+    const remove = vi.spyOn(lifetime.signal, 'removeEventListener');
+    const pending = waitForSceneFrame(lifetime.signal);
+    callback(0); await pending;
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+
+  it('does not schedule a frame for an already cancelled transition', async () => {
+    const request = vi.spyOn(window, 'requestAnimationFrame');
+    const lifetime = new AbortController(); lifetime.abort();
+    await expect(waitForSceneFrame(lifetime.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(request).not.toHaveBeenCalled();
+  });
+
 });

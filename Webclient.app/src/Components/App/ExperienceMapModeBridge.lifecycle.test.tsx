@@ -12,7 +12,7 @@ vi.mock('../../gis-engine/viewRuntime', () => ({ snapshotMapViewState: () => sta
 vi.mock('../../gis-engine/sceneRuntime', () => ({
   createSceneView: ports.create, destroySceneView: ports.destroy,
   applyViewStateToSceneView: ports.applyScene, snapshotSceneState: () => ({ ...state, mode: '3d', tilt: 48 }),
-  bindSceneState: () => vi.fn(), synchronizeSceneViewSize: vi.fn(), waitForSceneContainer: vi.fn(async () => undefined),
+  waitForSceneFrame: vi.fn(async () => undefined), bindSceneState: () => vi.fn(), synchronizeSceneViewSize: vi.fn(), waitForSceneContainer: vi.fn(async () => undefined),
 }));
 vi.mock('../../gis-engine/sceneExperienceRuntime', () => ({ createSceneExperienceRuntime: () => ({
   dispose: vi.fn(), setActive: vi.fn(), subscribe: () => vi.fn(),

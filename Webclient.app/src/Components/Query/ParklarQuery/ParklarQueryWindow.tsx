@@ -671,7 +671,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
         {resultList.length > 12 ? <div className="kr-fast-query__filter">
           <label htmlFor={id + '-filter'}>Sonuçlarda filtrele</label>
-          <input ref={filterRef} id={id + '-filter'} type="search" value={filterText} autoComplete="off"
+          <input ref={filterRef} id={id + '-filter'} type="search" aria-label="Sonuçlarda filtrele" value={filterText} autoComplete="off"
             aria-controls={id + '-results'} placeholder="Ad, adres veya telefon…"
             onChange={(event) => { setFilterText(event.target.value); setPage(0); }} />
           {filterText ? <button type="button" className="kr-fast-query__clear"
@@ -721,7 +721,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           })}
         </ul>
         <QueryResultPagination title={windowTitle} listId={id + '-results'} page={currentPage} pageCount={pageCount}
-          start={pageStart} shown={visibleRecords.length} total={filteredRecords.length} onPageChange={(next) => {
+          firstRecordIndex={pageStart} shown={visibleRecords.length} total={filteredRecords.length} onPageChange={(next) => {
             setPage(Math.max(0, Math.min(pageCount - 1, next)));
             surfaceRef.current?.scrollTo?.({ top: 0, behavior: 'instant' });
             resultsRef.current?.focus({ preventScroll: true });

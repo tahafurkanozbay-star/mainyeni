@@ -700,7 +700,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
   outline: 3px solid var(--exp-accent);
   outline-offset: -3px;
 }
-@media (max-height: 540px) {
+@media (height <= 540px) {
   /* Landscape phones need a result viewport as well as the fixed header. */
   #app-shell .sidebar-container.kr-fast-query,
   #app-shell .sidebar-container.kr-sidebar {
@@ -726,7 +726,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
   #app-shell .kr-fast-query__pagination button:disabled { color: GrayText; opacity: 1; }
 }
 
-@media (max-height: 540px) {
+@media (height <= 540px) {
   /* Keep the footer rail from presenting controls underneath an expanded
    * tool surface in a short viewport. */
   #app-shell:has(.common-query-window[aria-hidden='false']) .experience-utility {
@@ -735,7 +735,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
   }
 }
 
-@media (min-width: 681px) and (max-width: 880px) {
+@media (681px <= width <= 880px) {
   #app-shell .sidebar-container.kr-fast-query {
     top: var(--kr-panel-top);
     height: calc(100dvh - var(--kr-panel-top) - 8px);
@@ -743,7 +743,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
     z-index: 1300;
   }
 }
-@media (max-height: 540px) {
+@media (height <= 540px) {
   #app-shell:has(.kr-fast-query:not([aria-hidden='true'])) :is(.experience-utility, .experience-data-disclaimer, .map-shortcut-help__launcher, .workspace-accessibility-center, .map-workspace-shell-overlay) {
     visibility: hidden;
     pointer-events: none;
@@ -757,7 +757,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
 
 /* Result drawers keep a readable width even when service navigation was
  * collapsed before a command opened them. */
-@media (min-width: 681px) {
+@media (width >= 681px) {
   #app-shell .sidebar-container.kr-fast-query {
     width: 320px;
     inline-size: 320px;
@@ -765,7 +765,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
     max-inline-size: calc(100dvw - 88px);
   }
 }
-@media (min-width: 881px), (min-width: 800px) and (max-height: 540px) {
+@media (width >= 881px), (width >= 800px) and (height <= 540px) {
   #app-shell:has(.kr-fast-query:not([aria-hidden='true'])) .experience-workspace {
     left: 336px;
     inset-inline-start: 336px;
@@ -773,7 +773,7 @@ html[data-experience-motion='reduced'] #app-shell :is(.experience-workspace__act
     max-inline-size: calc(100dvw - 424px);
   }
 }
-@media (min-width: 800px) and (max-height: 540px) {
+@media (width >= 800px) and (height <= 540px) {
   #app-shell .sidebar-container.kr-fast-query {
     top: var(--mainbar-height);
     height: calc(100dvh - var(--mainbar-height) - 8px);
