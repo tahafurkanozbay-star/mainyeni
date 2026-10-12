@@ -232,14 +232,15 @@ describe('LayerListLoadCoordinator', () => {
   });
 
   it('contains observer errors so loading can continue', async () => {
-    const report = vi.spyOn(globalThis, 'reportError').mockImplementation(() => undefined);
+    const report = vi.fn();
+    vi.stubGlobal('reportError', report);
     const coordinator = new LayerListLoadCoordinator<number, number>();
     coordinator.subscribe(() => { throw new Error('observer'); });
     await expect(coordinator.load(items.slice(0, 1), async (item) => item.source)).resolves.toMatchObject({
       cancelled: false,
     });
     expect(report).toHaveBeenCalled();
-    report.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it('caps observer subscriptions', () => {
