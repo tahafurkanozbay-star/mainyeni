@@ -325,7 +325,7 @@ export const buildRemovalPlan = (manifest, lockfile, candidates, options = {}) =
     exclusivePackages: inspected.reduce((sum, item) => sum + item.closure.length, 0),
   });
   const payload = inspected.map((item) => [item.name, item.kind, item.status, item.rootPath, item.closure, item.sharedDependents]);
-  return freeze({ ok: issues.length === 0, issues: freeze(issues.sort()), candidates: freeze(inspected), summary, fingerprint: hash(payload) });
+  return freeze({ ok: issues.length === 0 && summary.plannable === normalized.length, issues: freeze(issues.sort()), candidates: freeze(inspected), summary, fingerprint: hash(payload) });
 };
 
 export const diffRemovalPlans = (baseline, candidate) => {

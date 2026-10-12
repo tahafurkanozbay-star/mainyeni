@@ -223,7 +223,30 @@ const escapeMd = value => String(value ?? '').replaceAll('|','\\|').replaceAll('
 export const renderDotnetPackageGovernanceMarkdown = report => {
   const findingRows = report.findings.length ? report.findings.map(item=>'| '+item.severity+' | '+item.code+' | '+escapeMd(item.file)+' | '+escapeMd(item.package)+' | '+escapeMd(item.message)+' |').join('\n') : '| _none_ | | | | |';
   const catalogRows = report.catalog.length ? report.catalog.map(item=>'| '+escapeMd(item.id)+' | '+escapeMd(item.version)+' | '+(report.usage.find(use=>lower(use.id)===lower(item.id))?.projects.length ?? 0)+' |').join('\n') : '| _none_ | | |';
-  return '# .NET Package Governance\\n\\n- Gate: **'+(report.ok?'PASS':'FAIL')+'**\\n- Fingerprint: `'+report.fingerprint+'`\\n- Projects: **'+report.summary.projects+'**\\n- Central packages: **'+report.summary.centralPackages+'**\\n- Referenced packages: **'+report.summary.referencedPackages+'**\\n- Errors: **'+report.summary.errors+'**\\n- Warnings: **'+report.summary.warnings+'**\\n\\n## Findings\\n\\n| Severity | Code | File | Package | Message |\\n| --- | --- | --- | --- | --- |\\n'+findingRows+'\\n\\n## Central catalog\\n\\n| Package | Version | Referencing projects |\\n| --- | --- | ---: |\\n'+catalogRows+'\\n';
+  return [
+    '# .NET Package Governance',
+    '',
+    '- Gate: **'+(report.ok?'PASS':'FAIL')+'**',
+    '- Fingerprint: `'+report.fingerprint+'`',
+    '- Projects: **'+report.summary.projects+'**',
+    '- Central packages: **'+report.summary.centralPackages+'**',
+    '- Referenced packages: **'+report.summary.referencedPackages+'**',
+    '- Errors: **'+report.summary.errors+'**',
+    '- Warnings: **'+report.summary.warnings+'**',
+    '',
+    '## Findings',
+    '',
+    '| Severity | Code | File | Package | Message |',
+    '| --- | --- | --- | --- | --- |',
+    findingRows,
+    '',
+    '## Central catalog',
+    '',
+    '| Package | Version | Referencing projects |',
+    '| --- | --- | ---: |',
+    catalogRows,
+    '',
+  ].join('\n');
 };
 
 export const runDotnetPackageGovernance = async (root = REPOSITORY_ROOT) => evaluateDotnetPackageGovernance(await loadDotnetPackageInventory(root));
@@ -233,7 +256,7 @@ const main = async () => {
   const out = path.join(REPOSITORY_ROOT,'artifacts','platform-audit');
   await mkdir(out,{recursive:true});
   await Promise.all([
-    writeFile(path.join(out,'dotnet-package-governance.json'),JSON.stringify(report,null,2)+'\\n','utf8'),
+    writeFile(path.join(out,'dotnet-package-governance.json'),JSON.stringify(report,null,2)+'\n','utf8'),
     writeFile(path.join(out,'dotnet-package-governance.md'),renderDotnetPackageGovernanceMarkdown(report),'utf8'),
   ]);
   console.log(JSON.stringify(report.summary,null,2));

@@ -264,6 +264,21 @@ test('markdown report contains gate, fingerprint, findings and catalog', () => {
   assert.match(markdown,/\| A \| 1\.0\.0 \| 1 \|/);
 });
 
+test('markdown artifact uses real line breaks for headings, summary and tables', () => {
+  const markdown=renderDotnetPackageGovernanceMarkdown(evaluate());
+  assert.ok(markdown.startsWith('# .NET Package Governance\n\n- Gate: **PASS**\n'));
+  assert.match(markdown,/\n\n## Findings\n\n\| Severity \| Code \| File \| Package \| Message \|\n/);
+  assert.match(markdown,/\n\n## Central catalog\n\n\| Package \| Version \| Referencing projects \|\n/);
+  assert.match(markdown,/\| A \| 1\.0\.0 \| 1 \|\n$/);
+  assert.equal(markdown.includes('\\n'),false,'literal backslash-n must not be emitted');
+});
+
+test('markdown finding rows remain separate lines for multiple diagnostics', () => {
+  const report=evaluate({catalog:[['Unused','1.0.0']],projects:[{path:'App/App.csproj',xml:project({packages:['Missing','Missing']})}]});
+  const markdown=renderDotnetPackageGovernanceMarkdown(report);
+  assert.equal(markdown.split('\n').filter(line=>line.startsWith('| error |')).length,report.findings.length);
+  assert.equal(markdown.includes('\\n'),false);
+});
 test('markdown escapes pipe characters in finding messages', () => {
   const report=evaluate({projects:[{path:'App/App.csproj',xml:'<Project><ItemGroup><ProjectReference Include="Missing|Pipe.csproj" /></ItemGroup></Project>'}],catalog:[]});
   const markdown=renderDotnetPackageGovernanceMarkdown(report);

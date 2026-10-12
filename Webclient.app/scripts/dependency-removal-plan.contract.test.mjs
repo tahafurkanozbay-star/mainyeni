@@ -59,9 +59,28 @@ test('empty candidate plan is valid and deterministic', () => {
 test('unknown candidate is evidence, not a mutation instruction', () => {
   const plan = buildRemovalPlan({}, { packages: { '': {} } }, ['unknown'], { graph: mkGraph() });
   assert.equal(plan.candidates[0].status, 'not-direct');
+  assert.equal(plan.ok, false);
   assert.equal(plan.summary.exclusivePackages, 0);
 });
 
+test('legacy plan rejects direct candidate missing from lockfile', () => {
+  const manifest = { dependencies: { ghost: '1.0.0' } };
+  const lock = { packages: { '': { dependencies: { ghost: '1.0.0' } } } };
+  const plan = buildRemovalPlan(manifest, lock, ['ghost'], { graph: mkGraph() });
+  assert.equal(plan.candidates[0].status, 'lock-missing');
+  assert.equal(plan.ok, false);
+});
+
+test('legacy plan rejects a candidate with external installed dependents', () => {
+  const names = ['a'];
+  const graph = mkGraph({
+    children: { '': ['node_modules/a'], 'node_modules/host': ['node_modules/a'], 'node_modules/a': [] },
+    parents: { 'node_modules/a': ['', 'node_modules/host'] },
+  });
+  const plan = buildRemovalPlan(mkManifest(names), mkLock(names), names, { graph });
+  assert.equal(plan.candidates[0].status, 'review');
+  assert.equal(plan.ok, false);
+});
 test('multiple graph errors are sorted in policy output', () => {
   const plan = buildRemovalPlan({}, { packages: { '': {} } }, [], { graph: mkGraph({ ok: false, errors: ['z', 'a'] }) });
   assert.deepEqual(plan.issues, ['lock graph: a', 'lock graph: z']);
