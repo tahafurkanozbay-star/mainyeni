@@ -16,6 +16,7 @@ import {
   type SceneViewLike,
 } from '../../gis-engine/sceneRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
+import { waitForArcgisView } from '../../gis-engine/viewReadiness';
 import {
   createSceneExperienceRuntime,
   type SceneExperienceRuntime,
@@ -185,6 +186,8 @@ export function ExperienceMapModeBridge({
 }: ExperienceMapModeBridgeProps) {
   const sceneHostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
+  const pendingSceneRef = useRef<SceneHandle | null>(null);
+  const sceneLifetimeRef = useRef(new AbortController());
   const sceneExperienceRef = useRef<SceneExperienceRuntime | null>(null);
   const sceneNavigationRef = useRef<SceneNavigationRuntime | null>(null);
   const sceneNavigationHomeSetRef = useRef(false);
@@ -256,6 +259,7 @@ export function ExperienceMapModeBridge({
     sceneNavigationRef.current = null;
     sceneNavigationHomeSetRef.current = false;
 
+    const lifetime = sceneLifetimeRef.current;
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
       qualityProfile: 'medium',
@@ -273,12 +277,23 @@ export function ExperienceMapModeBridge({
       },
     } as never) as SceneHandle;
 
-    synchronizeSceneViewSize(scene.view);
-    await scene.view.when?.();
-    synchronizeSceneViewSize(scene.view);
-
-    if (disposedRef.current) {
+    if (disposedRef.current || lifetime.signal.aborted) {
       destroySceneView(scene, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
+      return null;
+    }
+    pendingSceneRef.current = scene;
+    try {
+      synchronizeSceneViewSize(scene.view);
+      await waitForArcgisView(scene.view, { signal: lifetime.signal, ...(accessorWatch ? { accessorWatch } : {}) });
+      synchronizeSceneViewSize(scene.view);
+    } catch (error) {
+      if (!scene.view.destroyed) destroySceneView(scene, (caught) => DebugHelper.Log({ context: 'scene-destroy', error: caught }));
+      throw error;
+    } finally {
+      if (pendingSceneRef.current === scene) pendingSceneRef.current = null;
+    }
+    if (disposedRef.current || lifetime.signal.aborted) {
+      if (!scene.view.destroyed) destroySceneView(scene, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
       return null;
     }
 
@@ -287,7 +302,7 @@ export function ExperienceMapModeBridge({
     bindSceneNavigation(scene.view);
     setSceneReady(true);
     return scene;
-  }, [bindSceneExperience, bindSceneNavigation, mapView]);
+  }, [accessorWatch, bindSceneExperience, bindSceneNavigation, mapView]);
 
   const activate3D = useCallback(async (): Promise<void> => {
     if (!mapView || activeModeRef.current === '3d') {
@@ -476,6 +491,7 @@ export function ExperienceMapModeBridge({
   useEffect(() => {
     if (!mapView) return undefined;
     disposedRef.current = false;
+    if (sceneLifetimeRef.current.signal.aborted) sceneLifetimeRef.current = new AbortController();
     activeModeRef.current = '2d';
     if (modeRef) modeRef.current = '2d';
     publishMode('2d', 'map-runtime-ready');
@@ -509,6 +525,9 @@ export function ExperienceMapModeBridge({
 
   useEffect(() => () => {
     disposedRef.current = true;
+    sceneLifetimeRef.current.abort();
+    if (pendingSceneRef.current) destroySceneView(pendingSceneRef.current, (error) => DebugHelper.Log({ context: 'pending-scene-destroy', error }));
+    pendingSceneRef.current = null;
     unbindSceneRef.current?.();
     unbindSceneRef.current = () => undefined;
     unsubscribeExperienceRef.current?.();

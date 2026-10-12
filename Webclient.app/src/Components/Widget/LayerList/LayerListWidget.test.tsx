@@ -551,14 +551,14 @@ describe('LayerListWidget modern workspace', () => {
     vi.unstubAllGlobals();
   });
 
-  it('opens the sidebar and refreshes on managed OnShow', async () => {
+  it('refreshes the managed surface without closing it on OnShow', async () => {
     const { ref, windowManager } = renderWidget(false);
     await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(1));
     await act(async () => {
       ref.current?.OnShow?.();
       await Promise.resolve();
     });
-    expect(windowManager.ShowWindow).toHaveBeenCalledWith('sidebar');
+    expect(windowManager.ShowWindow).not.toHaveBeenCalledWith('sidebar');
     await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(2));
   });
 
@@ -591,4 +591,19 @@ describe('LayerListWidget modern workspace', () => {
     expect(section).toHaveAttribute('aria-hidden', 'true');
     expect(section).toHaveStyle({ visibility: 'hidden' });
   });
+
+it('protects React-owned legend DOM when the SDK removes its container during destruction', async () => {
+  const { ref } = renderWidget();
+  await waitForLayerTree();
+  fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+  await waitFor(() => expect(runtime.legendConstruct).toHaveBeenCalledTimes(1));
+  const container = runtime.legendConstruct.mock.calls[0]?.[0].container as HTMLElement;
+  const parent = screen.getByLabelText('Harita lejantı');
+  expect(container).not.toBe(parent); expect(parent).toContainElement(container);
+  runtime.legendDestroy.mockImplementationOnce(() => container.remove());
+  act(() => { ref.current?.OnClose?.(); });
+  expect(parent).toBeInTheDocument(); expect(container).not.toBeInTheDocument();
+  expect(screen.getByRole('tabpanel', { name: 'Katmanlar' })).toBeVisible();
+});
+
 });

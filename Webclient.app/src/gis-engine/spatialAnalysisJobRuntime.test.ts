@@ -103,8 +103,9 @@ describe('spatialAnalysisJobRuntime', () => {
       const result = runtime.submit(({ signal }) => new Promise<number>((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       }));
+      const rejected = expect(result).rejects.toMatchObject({ code: 'TIMEOUT' });
       await vi.advanceTimersByTimeAsync(11);
-      await expect(result).rejects.toMatchObject({ code: 'TIMEOUT' });
+      await rejected;
       expect(runtime.snapshot()).toMatchObject({ timedOut: 1, retainedHistory: 1 });
       expect(runtime.listHistory()[0]).toMatchObject({ status: 'timed-out', errorCode: 'TIMEOUT' });
     } finally {

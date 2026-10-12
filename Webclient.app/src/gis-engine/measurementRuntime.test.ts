@@ -58,7 +58,7 @@ describe('measurementRuntime', () => {
     expect(Measurement).toHaveBeenCalledWith({
       view,
       container: 'measurementDiv',
-      activeTool: '',
+      activeTool: null,
     });
     expect(second).toBe(first);
     expect(controller.getState().status).toBe('ready');
@@ -103,7 +103,7 @@ describe('measurementRuntime', () => {
     expect(controller.clear()).toBe(true);
 
     expect(widget.clear).toHaveBeenCalledTimes(1);
-    expect(widget.activeTool).toBe('');
+    expect(widget.activeTool).toBeNull();
     expect(controller.getState().activeTool).toBe('');
     expect(controller.getState().clearedAt).toEqual(expect.any(String));
   });
@@ -121,7 +121,7 @@ describe('measurementRuntime', () => {
     expect(Measurement).toHaveBeenCalledWith({
       view: nextView,
       container: 'new-container',
-      activeTool: '',
+      activeTool: null,
     });
   });
 

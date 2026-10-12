@@ -303,3 +303,113 @@ describe('typed WindowManager minimized/message/map state', () => {
     manager.RemoveMessage();
   });
 });
+
+describe('lazy placeholder ownership and current activation', () => {
+  test('activates the latest React handle when callbacks change before its scheduled opening', async () => {
+    const id = uniqueId('latest-handle'); const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id, { visible: true }); manager.RegisterWindow(ref);
+    const latestShow = vi.fn(); ref.current = { ...ref.current, OnShow: latestShow };
+    await Promise.resolve(); expect(latestShow).toHaveBeenCalledTimes(1);
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+  test('does not run a scheduled OnShow after the user closes the tool', async () => {
+    const id = uniqueId('late-show'); const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id, { visible: true }); manager.RegisterWindow(ref);
+    manager.HideWindow(id); await Promise.resolve();
+    expect(ref.current.OnShow).not.toHaveBeenCalled();
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+  test('does not run a scheduled OnShow after another tool is selected', async () => {
+    const id = uniqueId('superseded-show'); const other = uniqueId('other-tool');
+    const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id, { visible: true }); manager.RegisterWindow(ref); manager.RegisterPlaceholder(other);
+    manager.ShowWindow(other); await Promise.resolve();
+    expect(ref.current.OnShow).not.toHaveBeenCalled();
+    manager.UnregisterWindow(id); manager.UnregisterWindow(other); manager.Dispose();
+  });
+  test('retains the host placeholder when the mounted component unregisters', () => {
+    const id = uniqueId('retained-placeholder'); const manager = createWindowManager(); const ref = createRef(id);
+    manager.RegisterPlaceholder(id); manager.RegisterWindow(ref); manager.ShowWindow(id, { mode: 'legend' });
+    manager.UnregisterWindow(id, ref);
+    expect(Store.getState().Common.WindowList.find(item => item.id === id)).toMatchObject({ ref: null, lazy: true, visible: true, query: { mode: 'legend' } });
+    expect(manager.ShowWindow(id)).toBe(true);
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+  test('reopening expands a previously minimized tool', () => {
+    const id = uniqueId('reopen-minimized'); const manager = createWindowManager();
+    manager.RegisterPlaceholder(id); manager.ShowWindow(id); manager.ToggleMinimiseWindow(id); manager.HideWindow(id); manager.ShowWindow(id);
+    expect(manager.IsVisible(id)).toBe(true); expect(manager.IsMinimized(id)).toBe(false);
+    manager.UnregisterWindow(id); manager.Dispose();
+  });
+});
+
+describe('navigation and query coexistence', () => {
+  test('keeps a lazy query active when its OnShow reveals the sidebar', async () => {
+    const manager = createWindowManager();
+    const id = uniqueId('lazy-with-navigation');
+    const sidebar = createRef('sidebar');
+    const query = createRef(id);
+    query.current.OnShow = vi.fn(() => manager.ShowWindow('sidebar'));
+    try {
+      manager.RegisterWindow(sidebar);
+      manager.RegisterPlaceholder(id);
+      manager.ShowWindow(id, { objectId: 0, name: 'Kızılay' });
+      manager.RegisterWindow(query);
+      await Promise.resolve();
+      expect(manager.IsVisible(id)).toBe(true);
+      expect(manager.IsVisible('sidebar')).toBe(true);
+      expect(manager.GetQueryParams(id)).toEqual({ objectId: 0, name: 'Kızılay' });
+      expect(query.current.OnShow).toHaveBeenCalledOnce();
+      expect(query.current.OnClose).not.toHaveBeenCalled();
+      expect(sidebar.current.OnShow).toHaveBeenCalledOnce();
+    } finally {
+      manager.UnregisterWindow(id);
+      manager.UnregisterWindow('sidebar');
+      manager.Dispose();
+    }
+  });
+
+  test('restores navigation without changing the active query minimization or payload', () => {
+    const manager = createWindowManager();
+    const id = uniqueId('preserved-query');
+    const query = createRef(id);
+    try {
+      manager.RegisterWindow(createRef('sidebar'));
+      manager.RegisterWindow(query);
+      manager.ShowWindow(id, { name: 'Çankaya' });
+      manager.ToggleMinimiseWindow(id);
+      manager.ToggleMinimiseWindow('sidebar');
+      manager.ShowWindow('sidebar');
+      expect(manager.IsVisible(id)).toBe(true);
+      expect(manager.IsMinimized(id)).toBe(true);
+      expect(manager.IsMinimized('sidebar')).toBe(false);
+      expect(manager.GetQueryParams(id)).toEqual({ name: 'Çankaya' });
+      expect(query.current.OnClose).not.toHaveBeenCalled();
+    } finally {
+      manager.UnregisterWindow(id);
+      manager.UnregisterWindow('sidebar');
+      manager.Dispose();
+    }
+  });
+
+  test('still switches exclusively between query windows after revealing navigation', () => {
+    const manager = createWindowManager();
+    const first = uniqueId('first-query');
+    const second = uniqueId('second-query');
+    try {
+      manager.RegisterWindow(createRef('sidebar'));
+      manager.RegisterWindow(createRef(first));
+      manager.RegisterWindow(createRef(second));
+      manager.ShowWindow(first);
+      manager.ShowWindow('sidebar');
+      manager.ShowWindow(second);
+      expect(manager.IsVisible(first)).toBe(false);
+      expect(manager.IsVisible(second)).toBe(true);
+    } finally {
+      manager.UnregisterWindow(first);
+      manager.UnregisterWindow(second);
+      manager.UnregisterWindow('sidebar');
+      manager.Dispose();
+    }
+  });
+});

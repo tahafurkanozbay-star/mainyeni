@@ -200,7 +200,7 @@ export const upsertWindowRegistration = (
   const next = normalizeWindowRegistration({
     ...current,
     ...incoming,
-    ref: incoming.ref ?? current.ref ?? null,
+    ref: incoming.ref === undefined ? (current.ref ?? null) : incoming.ref,
     visible: incoming.visible ?? current.visible ?? false,
     minimized: incoming.minimized ?? current.minimized ?? false,
     query: incoming.query === undefined ? (current.query ?? null) : incoming.query,

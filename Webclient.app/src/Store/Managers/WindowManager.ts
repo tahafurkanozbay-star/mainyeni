@@ -79,6 +79,7 @@ const sanitizeDuration = (value: number): number => {
 export const createWindowManager = (requestRender: () => void = noop): WindowManagerApi => {
   let messageTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   let disposed = false;
+  const placeholderIds = new Set<string>();
 
   const getWindowList = (): readonly WindowRegistration[] => Store.getState().Common.WindowList ?? [];
   const getWindow = (windowid: string): WindowRegistration | undefined =>
@@ -91,6 +92,7 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
     RegisterPlaceholder: (windowid, defaults = {}) => {
       const normalizedId = String(windowid ?? '').trim();
       if (!normalizedId || getWindow(normalizedId)) return false;
+      placeholderIds.add(normalizedId);
 
       Store.dispatch({
         type: CommonReducer_ActionTypes.RegisterWindow,
@@ -125,7 +127,11 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
       });
 
       if (existing?.visible && existing.ref !== windowRef && current?.OnShow) {
-        schedule(() => callSafely(current.OnShow));
+        schedule(() => {
+          const latest = getWindow(id);
+          if (disposed || !latest?.visible || latest.ref !== windowRef || windowRef?.current?.id !== id) return;
+          callSafely(windowRef.current.OnShow);
+        });
       }
       return true;
     },
@@ -135,6 +141,18 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
       const existing = getWindow(targetId);
       if (!existing) return false;
       if (windowRef && existing.ref && existing.ref !== windowRef) return false;
+
+      // The host owns the placeholder; the mounted tool owns only its ref.
+      // Preserve visibility/query when that tool unloads or an error boundary
+      // replaces it, so a later opening can mount a new instance.
+      if (windowRef && placeholderIds.has(targetId)) {
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.RegisterWindow,
+          payload: { ...existing, ref: null, lazy: true },
+        });
+        return true;
+      }
+      placeholderIds.delete(targetId);
 
       Store.dispatch({
         type: CommonReducer_ActionTypes.RemoveWindow,
@@ -150,6 +168,7 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
     },
 
     ShowWindow: (windowid, query = {}) => {
+      if (disposed) return false;
       const target = getWindow(windowid);
       if (!target) {
         DebugHelper.Log(`Window not registered: ${windowid}`);
@@ -157,6 +176,22 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
       }
 
       callSafely(() => LoggingBusiness.CreateClientLog('Pencere Aç', windowid));
+      // Navigation is a persistent workspace surface. Query OnShow hooks may
+      // reveal it after lazy registration; exclusive activation here would
+      // immediately close the query that requested the navigation panel.
+      if (windowid === 'sidebar') {
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.SetWindowVisibility,
+          payload: { windowid, visible: true, query: query ?? {} },
+        });
+        Store.dispatch({
+          type: CommonReducer_ActionTypes.SetWindowMinimized,
+          payload: { windowid, minimized: false },
+        });
+        callSafely(readWindowHandle(target)?.OnShow);
+        refresh();
+        return true;
+      }
       getWindowList().forEach((item) => {
         if (item.id === windowid || !item.visible) return;
         callSafely(readWindowHandle(item)?.OnClose);
@@ -239,6 +274,7 @@ export const createWindowManager = (requestRender: () => void = noop): WindowMan
 
     Dispose: () => {
       disposed = true;
+      placeholderIds.clear();
       if (messageTimer !== null) globalThis.clearTimeout(messageTimer);
       messageTimer = null;
     },

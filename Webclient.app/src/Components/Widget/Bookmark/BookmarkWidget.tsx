@@ -89,7 +89,6 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
       minimized: false,
       OnShow: () => {
         refreshBookmarks();
-        windowManager.ShowWindow('sidebar');
       },
       OnClose: () => {
         setTitle('');

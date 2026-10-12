@@ -5,6 +5,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import MapManager from '../../../Store/Managers/MapManager';
+import { watchArcgisProperty, type ArcgisAccessorWatch } from '../../../gis-engine/arcgisReactiveRuntime';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import type { WindowManagerLike } from '../../../experience/contracts';
 import {
@@ -23,6 +24,7 @@ import './ToolbarWidget.css';
 
 interface ToolbarWidgetModernProps {
   readonly id?: string;
+  readonly accessorWatch?: ArcgisAccessorWatch;
   readonly windowManager: Pick<WindowManagerLike, 'ShowWindow'>;
 }
 
@@ -94,7 +96,7 @@ const requestCurrentPosition = (): Promise<MapToolbarPoint> => new Promise((reso
   );
 });
 
-export const ToolbarWidgetModern = ({ id, windowManager }: ToolbarWidgetModernProps) => {
+export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: ToolbarWidgetModernProps) => {
   const initialExtentRef = useRef<ExtentLike | null>(null);
   const generatedId = useId();
   const modelRef = useRef<MapToolbarModel | null>(null);
@@ -115,12 +117,12 @@ export const ToolbarWidgetModern = ({ id, windowManager }: ToolbarWidgetModernPr
     };
 
     captureInitialExtent();
-    const readyHandle = mapView.watch?.('ready', (ready) => {
+    const readyHandle = watchArcgisProperty(mapView, 'ready', (ready) => {
       if (ready) captureInitialExtent();
-    });
+    }, accessorWatch);
 
     return () => readyHandle?.remove?.();
-  }, []);
+  }, [accessorWatch]);
 
   useEffect(() => () => model.dispose(), [model]);
 

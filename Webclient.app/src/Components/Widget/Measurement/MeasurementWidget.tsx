@@ -32,6 +32,7 @@ import {
   type MeasurementExperienceController,
 } from './measurementExperienceController';
 import './MeasurementWidget.css';
+import { createArcgisWidgetHost } from '../../../gis-engine/arcgisWidgetHost';
 
 interface WindowManagerLike extends QueryWindowManagerLike {
   readonly RegisterWindow: (ref: unknown) => void;
@@ -67,6 +68,7 @@ export const MeasurementWidget = forwardRef<
   MeasurementWidgetProps
 >(({ id, windowManager }, ref): ReactNode => {
   const rootRef = useRef<HTMLElement>(null);
+  const sdkHostParentRef = useRef<HTMLDivElement | null>(null);
   const focusLifecycleRef = useRef<ManagedWindowFocusLifecycle | null>(null);
   const controller = useMemo<MeasurementExperienceController>(() => createMeasurementExperienceController({
     getView: () => MapManager.GetMapView?.() ?? null,
@@ -117,7 +119,6 @@ export const MeasurementWidget = forwardRef<
     visible: false,
     minimized: false,
     OnShow: () => {
-      windowManager.ShowWindow('sidebar');
       const lifecycle = getFocusLifecycle();
       lifecycle?.open({
         root: rootRef.current,
@@ -133,11 +134,13 @@ export const MeasurementWidget = forwardRef<
   }), [controller, getFocusLifecycle, id, windowManager]);
 
   useEffect(() => {
+    const host = sdkHostParentRef.current ? createArcgisWidgetHost(sdkHostParentRef.current, 'measurementDiv') : null;
     windowManager.RegisterWindow(ref);
     controller.refreshView();
 
     return () => {
       controller.dispose();
+      host?.dispose();
       focusLifecycleRef.current?.dispose();
       focusLifecycleRef.current = null;
     };
@@ -216,7 +219,7 @@ export const MeasurementWidget = forwardRef<
         />
 
         <div
-          id="measurementDiv"
+          ref={sdkHostParentRef}
           className="measurement-widget__canvas"
           aria-label="ArcGIS ölçüm denetimi"
           aria-busy={snapshot.busy || undefined}

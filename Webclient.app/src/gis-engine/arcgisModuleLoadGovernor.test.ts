@@ -135,8 +135,9 @@ describe('arcgisModuleLoadGovernor', () => {
         }),
       );
       const result = governor.submit(['slow']);
+      const rejected = expect(result).rejects.toMatchObject({ code: 'TIMEOUT' });
       await vi.advanceTimersByTimeAsync(21);
-      await expect(result).rejects.toMatchObject({ code: 'TIMEOUT' });
+      await rejected;
       expect(governor.snapshot()).toMatchObject({ timedOut: 1, retainedHistory: 1 });
       expect(governor.listHistory()[0]).toMatchObject({
         status: 'timed-out',
