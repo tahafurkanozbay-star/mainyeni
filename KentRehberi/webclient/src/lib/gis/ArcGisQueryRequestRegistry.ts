@@ -300,7 +300,7 @@ export class ArcGisQueryRequestRegistry {
         features.length !== ids.length ||
         features.length > this.#options.maxFeaturesPerEntry ||
         features.length > this.#options.maxCachedFeatures ||
-        !Number.isSafeInteger(pagesCompleted) || (pagesCompleted as number) < 0) return undefined
+        typeof pagesCompleted !== 'number' || !Number.isSafeInteger(pagesCompleted) || pagesCompleted < 0) return undefined
 
     const featureCopy: unknown[] = []
     const idCopy: number[] = []
