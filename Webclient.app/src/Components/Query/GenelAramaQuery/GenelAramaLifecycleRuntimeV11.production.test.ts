@@ -153,6 +153,92 @@ describe('GeneralSearchLifecycleRuntimeV11', () => {
     expect(runtime.detailState().status).toBe('success');
   });
 
+  it('coalesces identical in-flight searches without aborting the shared transport', async () => {
+    const pending = deferred<unknown>();
+    const controls: QueryExecutionControl[] = [];
+    const transport: GeneralSearchTransportV11 = {
+      Query: (_query = {}, _geometry = false, control) => {
+        if (control) controls.push(control);
+        return pending.promise;
+      },
+    };
+    const runtime = createGeneralSearchLifecycleRuntimeV11({ transport }, { maxRetries: 0 });
+
+    const first = runtime.executeSearch({ searchText: 'park', page: 1 });
+    const second = runtime.executeSearch({ page: 1, searchText: 'park' });
+
+    expect(first).toBe(second);
+    expect(controls).toHaveLength(1);
+    expect(controls[0]?.signal?.aborted).toBe(false);
+    expect(runtime.snapshot().coalesced).toBe(1);
+
+    pending.resolve(success([{ id: 1 }]));
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult.requestId).toBe(secondResult.requestId);
+    expect(runtime.snapshot().succeeded).toBe(1);
+  });
+
+  it('does not coalesce identical queries with different execution controls', async () => {
+    const first = deferred<unknown>();
+    const second = deferred<unknown>();
+    let calls = 0;
+    const transport: GeneralSearchTransportV11 = {
+      Query: () => {
+        calls += 1;
+        return calls === 1 ? first.promise : second.promise;
+      },
+    };
+    const runtime = createGeneralSearchLifecycleRuntimeV11({ transport }, { maxRetries: 0 });
+
+    const firstPromise = runtime.executeSearch(
+      { searchText: 'park' },
+      { timeoutMs: 1_000 },
+    );
+    const secondPromise = runtime.executeSearch(
+      { searchText: 'park' },
+      { timeoutMs: 2_000 },
+    );
+
+    expect(firstPromise).not.toBe(secondPromise);
+    expect(calls).toBe(2);
+    second.resolve(success([{ id: 2 }]));
+    await secondPromise;
+    first.reject(new BusinessAbortError());
+    await expect(firstPromise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(runtime.snapshot().coalesced).toBe(0);
+  });
+
+  it('does not lifecycle-coalesce subscriber-specific external abort signals', async () => {
+    const first = deferred<unknown>();
+    const second = deferred<unknown>();
+    let calls = 0;
+    const transport: GeneralSearchTransportV11 = {
+      Query: () => {
+        calls += 1;
+        return calls === 1 ? first.promise : second.promise;
+      },
+    };
+    const runtime = createGeneralSearchLifecycleRuntimeV11({ transport }, { maxRetries: 0 });
+    const one = new AbortController();
+    const two = new AbortController();
+
+    const firstPromise = runtime.executeSearch(
+      { searchText: 'park' },
+      { signal: one.signal },
+    );
+    const secondPromise = runtime.executeSearch(
+      { searchText: 'park' },
+      { signal: two.signal },
+    );
+
+    expect(calls).toBe(2);
+    second.resolve(success([{ id: 2 }]));
+    await secondPromise;
+    first.reject(new BusinessAbortError());
+    await expect(firstPromise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(runtime.snapshot().coalesced).toBe(0);
+  });
+
   it('aborts a previous search when a newer search starts', async () => {
     const first = deferred<unknown>();
     const second = deferred<unknown>();
