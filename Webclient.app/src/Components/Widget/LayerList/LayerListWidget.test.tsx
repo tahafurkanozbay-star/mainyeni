@@ -128,6 +128,7 @@ const resolveCatalog = (): void => {
 };
 
 const waitForLayerTree = async (): Promise<HTMLElement> => {
+  if (!screen.queryByLabelText('Katman ve lejand yönetimi')) renderWidget();
   await waitFor(() => {
     expect(runtime.getLayers).toHaveBeenCalled();
     expect(screen.getByText('Temel Katmanlar')).toBeVisible();
@@ -349,14 +350,19 @@ describe('LayerListWidget modern workspace', () => {
   });
 
   it('announces bounded loading progress while layer creation is pending', async () => {
-    let release!: () => void;
+    const releases: Array<() => void> = [];
     runtime.createLayer.mockImplementation(() => new Promise((resolve) => {
-      release = () => resolve(makeRuntimeLayer(true, 1));
+      releases.push(() => resolve(makeRuntimeLayer(true, 1)));
     }));
     renderWidget();
-    await waitFor(() => expect(runtime.createLayer).toHaveBeenCalled());
-    expect(screen.getByRole('status')).toHaveTextContent(/Katmanlar yükleniyor/);
-    act(() => release());
+    await waitFor(() => expect(runtime.createLayer).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('status')).toHaveTextContent(/Katmanlar hazırlanıyor/);
+    expect(screen.getByRole('status')).toHaveTextContent(/%0/);
+    await act(async () => {
+      releases.forEach((release) => release());
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('3 katman hazır.')).toBeVisible());
   });
 
   it('shows a manual retry action when the catalog service fails', async () => {
