@@ -195,7 +195,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
     };
   }, [accessibilityModel, mapGeneration, recoveryModel, windowManager]);
 
-  const retryMapWorkspace = useCallback((): void => {
+  const restartMapWorkspace = useCallback((): void => {
     if (!recoveryModel.canRetry()) return;
     setMapGeneration((generation) => generation + 1);
   }, [recoveryModel]);
@@ -208,7 +208,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   return (
     <div className="esri-map" id="esri-map-container" ref={mapDiv} tabIndex={-1} aria-label="Kent Rehberi ana harita çalışma alanı" aria-busy={accessibilitySnapshot.isBusy} data-workspace-phase={accessibilitySnapshot.phase}>
       <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
-      <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={retryMapWorkspace} />
+      <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>
         <MapModeExperienceControl />
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
