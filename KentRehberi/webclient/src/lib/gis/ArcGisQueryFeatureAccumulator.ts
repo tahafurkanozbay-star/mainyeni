@@ -96,7 +96,7 @@ function snapshotValue(value: unknown, depth: number, state: SnapshotBudget): un
     return value
   }
   if (typeof value === 'string') {
-    consumeBudget(state, Math.min(value.length * 2 + 8, 1_000_008))
+    consumeBudget(state, value.length * 2 + 8)
     return value
   }
   if (typeof value !== 'object') throw new Error('ArcGIS accumulator encountered unsupported value type')
@@ -186,6 +186,9 @@ export class ArcGisQueryFeatureAccumulator {
 
   append(page: ArcGisFeaturePage): ArcGisFeatureAccumulatorSnapshot {
     if (this.sealed) throw new Error('ArcGIS accumulator is sealed')
+    if (page === null || typeof page !== 'object' || !Array.isArray(page.features)) {
+      throw new Error('ArcGIS accumulator page features are invalid')
+    }
     if (!Number.isSafeInteger(page.pageIndex) || page.pageIndex < 0) throw new Error('ArcGIS accumulator pageIndex must be a non-negative safe integer')
     if (page.pageIndex !== this.nextPageIndex) throw new Error(`ArcGIS accumulator expected page ${this.nextPageIndex}`)
     if (this.pages + 1 > this.options.maxPages) throw new Error('ArcGIS accumulator page budget exceeded')
