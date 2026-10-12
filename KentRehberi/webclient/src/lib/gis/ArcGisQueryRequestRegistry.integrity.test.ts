@@ -226,9 +226,11 @@ describe('ArcGIS query request registry physical transport and cache integrity',
 
   it('rejects duplicate object ids and sparse result arrays before cache admission', async () => {
     const malformedIds = complete('duplicate', [1, 1])
+    const absentElements: unknown[] = []
+    absentElements.length = 2
     const sparse = {
       kind: 'completed', key: 'sparse', pagesCompleted: 1,
-      objectIds: [1, 2], features: new Array(2),
+      objectIds: [1, 2], features: absentElements,
     } as ArcGisQueryExecutionResult
     const registry = new ArcGisQueryRequestRegistry(
       async ({ key }) => key === 'duplicate' ? malformedIds : sparse,
