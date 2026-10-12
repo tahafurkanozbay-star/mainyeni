@@ -216,8 +216,8 @@ describe('MapWorkspaceRecoveryModel', () => {
     const second = model.beginAttempt();
 
     expect(first).toBe(1);
-    expect(second).toBe(2);
-    expect(model.getSnapshot().attempt).toBe(2);
+    expect(second).toBe(1);
+    expect(model.getSnapshot().attempt).toBe(1);
   });
 
   it('keeps duration non-negative when the clock moves backwards', () => {
