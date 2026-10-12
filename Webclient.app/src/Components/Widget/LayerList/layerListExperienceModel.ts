@@ -314,7 +314,7 @@ export class LayerListExperienceModel {
   readonly #maxQueryLength: number;
   readonly #maxObservers: number;
   readonly #pageSize: number;
-  readonly #onObserverError?: (error: unknown) => void;
+  readonly #onObserverError: ((error: unknown) => void) | undefined;
   #groups: readonly InternalGroup[] = Object.freeze([]);
   #expandedGroups = new Set<string>();
   #snapshot: LayerListExperienceSnapshot;
