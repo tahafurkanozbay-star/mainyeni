@@ -199,3 +199,27 @@
 
 - CI ONARIMI: İlk exact-head Release QA denetimi tarihsel `.btn:focus-visible` kuralındaki `outline: 0` ve `box-shadow: none` baskılamasını yeni bulgu olarak işaretledi. Ortak modern focus authority zaten aktif olduğundan bu eski baskılayıcı override kaldırıldı; klavye odak görünürlüğü korunur. Yeni exact-head CI yeniden doğrulanmalıdır.
 - PRODUCTION STARTUP ONARIMI: Derlenmiş paket tarayıcı smoke testi `INVALID_IDEMPOTENCY_POLICY` başlangıç hatasını ortaya çıkardı. Coordinator'ın normalleştirdiği `none` değeri fetch katmanında ikinci doğrulamada reddediliyordu. Canonical `none` tekrar normalleştirmede korunur; server-enforced proof ve unsafe mutation retry kuralları değişmez. Gerçek coordinator -> fetch GET/POST integration regression testleri eklendi; build-browser startup yeniden doğrulanmalıdır.
+
+
+## Experience / governed layer-list workspace — 2026-10-12
+- PR: #479 `feat(experience): modernize governed layer-list workspace`.
+- CURRENT MAIN / MERGE BASE: `21abc8325e1e6a2d9d23e7845d0893270e8360ce`; branch is 23 ahead / 0 behind and merge-base is exact current main.
+- PRODUCT SCOPE: strict-TypeScript LayerList interaction authority; Turkish-aware search; single keyboard tree tab stop with aria-activedescendant and Home/End/Page/Arrow navigation; governed Katmanlar/Lejant tablist; bounded layer creation coordinator with cancellation, progress and late-result disposal; catalog integrity audit; responsive 44px/48px targets; reduced-motion and forced-colors support.
+- SAFETY: no WMS/WFS UI, new endpoint, telemetry/analytics, remote font/CDN, secret, heavy asset, or second icon resolver. Existing LayerBusiness/CommonBusiness/MapManager and SharedGISIcon remain authoritative.
+- SIZE / QUALITY: base...head before this documentation update is 4,342 meaningful additions / 497 deletions / 12 files. Product head `5be145fe9b8382dd5734dcfca9dda4815f615790` completed Webclient Quality, Release QA, Typed Source Boundary, Platform Architecture Audit and Platform Dependency Governance successfully.
+- SECOND REVIEW: fixed undersized fine-pointer targets and stale ArcGIS layer leakage after cancelled CreateLayer promises; no critical release/UX risk remains in the reviewed scope.
+- LATE HARDENING: partial layer creation failures now keep successful layers usable, expose a responsive degraded-state/reload action, isolate global/observer reporter failures, and publish bounded observer diagnostics; corresponding render/coordinator regressions were added.
+- MERGE GATE: this progress append creates a new exact head; require additions >=4,000, behind=0, mergeable=true, no blocking reviews and all required exact-head workflows completed+success before squash merge.
+
+
+## Deep Experience / governed LayerList merged — PR #479 — 2026-10-12
+- TUR / GÖREV: Deep Experience / Whole-Code Modernization; aktif LayerList/Legend çalışma alanını strict-TypeScript, bounded yükleme, keyboard-first erişilebilirlik, responsive/coarse-pointer sunum ve dayanıklı async lifecycle ile modernize etme.
+- BRANCH / PR: `agent/experience-layerlist-20261012-0858-85b80a5`; PR #479 canonical Experience PR olarak tamamlandı. Stale/diverged Experience PR #481 superseded notuyla kapatıldı ve merge kaynağı olarak kullanılmadı.
+- FINAL EXACT HEAD / GATE: `f49a7097ff8665b2ae97a1bd0bfa318139d7f4d1`; base/merge-base `21abc8325e1e6a2d9d23e7845d0893270e8360ce`; 26 ahead / 0 behind; 13 dosya, 4,613 meaningful additions / 497 deletions; `mergeable=true`.
+- UX / ACCESSIBILITY: searchable ARIA tree, roving active-descendant keyboard model, semantic tablist/tabpanel, layer/group visibility, labelled opacity sliders, loading/empty/error states, 44/48px recovery controls, reduced/forced-color/coarse-pointer presentation ve shared GIS icon authority korunur. Legend import generation guard'ları stale resolve/reject sonuçlarını ve close/tab-switch yarışlarını izole eder.
+- RESILIENCE: bounded LayerListLoadCoordinator concurrency/cancellation sürdürülür; partial layer creation artık başarılı katmanları kullanılabilir bırakırken degraded status + manuel reload yüzeyi sunar. Observer/reporter failures bounded diagnostics ile izole edilir; bir observer/reporter hatası diğer observer bildirimlerini kesmez. Catalog reporter failure UI recovery state'ini artık engellemez.
+- EXACT-HEAD CI: Platform Architecture Audit `38230649740`, Typed Source Boundary `38230649935`, Platform Dependency Governance `38230649734`, Release QA `38230649821`, Webclient Quality `38230649754`: tamamı `completed+success`. Exact-base TypeScript/Vitest, strict changed-source lint, native tooling, Vite production build/integrity/bundle budgets ve backend build/xUnit/publish başarılı.
+- SECURITY / NETWORK / ICON: yeni endpoint, WMS/WFS UI, telemetry/analytics, remote font/CDN, secret, heavy asset veya ikinci icon resolver eklenmedi. Hata diagnostics raw servis payload'ı retain etmez.
+- SECOND REVIEW: partial-load görünürlüğü, Legend stale-import lifecycle, keyboard/focus semantics, mobile/coarse-pointer target ve forced-colors source/regression düzeyinde tekrar incelendi. Bu turda yeni gerçek-browser visual regression koşusu yapılmadı; CI ve source/test kanıtı esas alındı.
+- MERGE: expected-head kilitli squash merge `merged=true`; merge SHA `bacbaf6e5c48eecb80733f971d3bbf7a8618524b`. Merge sonrası `main` aynı SHA olarak doğrulandı.
+- NEXT EXPERIENCE TURN: merged #479 branch'i yeniden kullanılmamalı. Yeni Experience işi o turdaki güncel `main` üzerinden benzersiz fresh branch ile başlamalı; önce açık role PR ownership + merge-base kontrolü yapılmalı.
