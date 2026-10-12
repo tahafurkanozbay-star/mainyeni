@@ -18,6 +18,7 @@ import { ExperienceMapModeFocusBridge } from './Components/App/ExperienceMapMode
 import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { AppConfig } from './Core/AppConfig';
 import Store from './Store/Store';
+import { installManagedWindowKeyboard } from './Components/Common/managedWindowKeyboard';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
@@ -63,6 +64,7 @@ const describeBootstrapError = (error: unknown): string => {
 function App() {
   const mapViewAvailable = useSyncExternalStore(Store.subscribe, () => Boolean(Store.getState().Map.MapView), () => false);
   const windowManager = useWindowManager();
+  useEffect(() => installManagedWindowKeyboard(windowManager), [windowManager]);
   const [bootstrapGeneration, setBootstrapGeneration] = useState(0);
   const notificationCenter = useMemo(() => new NotificationCenterModel({
     capacity: 96,

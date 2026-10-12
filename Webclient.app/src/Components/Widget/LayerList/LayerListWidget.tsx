@@ -39,6 +39,7 @@ import { createLayerListKeyboardController } from './layerListKeyboardController
 import { auditLayerListCatalog, summarizeLayerListCatalogAudit } from './layerListCatalogAudit';
 import { LayerListLoadCoordinator } from './layerListLoadCoordinator';
 import './LayerListWidget.css';
+import { createArcgisWidgetHost, type OwnedArcgisWidgetHost } from '../../../gis-engine/arcgisWidgetHost';
 
 const OWNER_ID = 'layer-list-widget';
 const MAX_RUNTIME_GROUPS = 64;
@@ -84,7 +85,7 @@ interface LegendLike {
 }
 
 interface LegendConstructor {
-  new(options: Readonly<{ view: MapViewLike; container: string }>): LegendLike;
+  new(options: Readonly<{ view: MapViewLike; container: HTMLElement }>): LegendLike;
 }
 
 interface LayerListWidgetProps {
@@ -249,6 +250,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
 
     const ownerRef = useRef<LayerOwner<LayerRuntime> | null>(null);
     const legendRef = useRef<LegendLike | null>(null);
+    const legendHostParentRef = useRef<HTMLDivElement | null>(null);
+    const legendHostRef = useRef<OwnedArcgisWidgetHost | null>(null);
     const legendRequestRef = useRef(0);
     const legendLoadingRef = useRef(false);
     const legendViewRef = useRef<MapViewLike | null>(null);
@@ -280,6 +283,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       } catch (error) {
         globalThis.console?.warn?.('LayerList legend cleanup failed.', error);
       } finally {
+        legendHostRef.current?.dispose();
+        legendHostRef.current = null;
         if (mountedRef.current) {
           setLegendReady(false);
           setLegendError(false);
@@ -404,7 +409,9 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       visible: windowManager.IsVisible(id),
       minimized: windowManager.IsMinimized(id),
       OnShow: () => {
-        windowManager.ShowWindow('sidebar');
+        const mode = windowManager.GetQueryParams?.(id)?.mode === 'legend' ? 'legend' : 'layers';
+        activeTabRef.current = mode;
+        setActiveTab(mode);
         void fetchQueryResults();
       },
       OnClose: () => {
@@ -438,6 +445,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
           globalThis.console?.warn?.('LayerList legend cleanup failed.', error);
         } finally {
           legendRef.current = null;
+          legendHostRef.current?.dispose();
+          legendHostRef.current = null;
         }
         windowManager.UnregisterWindow?.(id, ref);
       };
@@ -469,13 +478,18 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
           || legendRequestRef.current !== request
           || legendViewRef.current !== mapView
         ) return;
-        legendRef.current = new Legend({ view: mapView, container: legendContainerId });
+        const parent = legendHostParentRef.current;
+        if (!parent) return;
+        legendHostRef.current = createArcgisWidgetHost(parent);
+        legendRef.current = new Legend({ view: mapView, container: legendHostRef.current.container });
         legendLoadingRef.current = false;
         setLegendReady(true);
       } catch (error) {
         if (!mountedRef.current || activeTabRef.current !== 'legend' || legendRequestRef.current !== request) return;
         legendLoadingRef.current = false;
         legendViewRef.current = null;
+        legendHostRef.current?.dispose();
+        legendHostRef.current = null;
         setLegendReady(false);
         setLegendError(true);
         reportLayerListError(error, 'legend');
@@ -888,7 +902,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                   ) : !legendReady ? (
                     <p className="layer-list-legend-status" role="status">Lejant hazırlanıyor…</p>
                   ) : null}
-                  <div id={legendContainerId} aria-label="Harita lejantı" />
+                  <div ref={legendHostParentRef} id={legendContainerId} aria-label="Harita lejantı" />
                 </div>
               </section>
             </>

@@ -4,7 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { builtinModules } from 'node:module';
 
-const DEFAULT_ROOT = path.resolve(process.cwd());
+const DEFAULT_ROOT = path.resolve(import.meta.dirname, '..');
 const WEB_ROOT = 'Webclient.app';
 const SOURCE_ROOT = 'Webclient.app/src';
 const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/iu;

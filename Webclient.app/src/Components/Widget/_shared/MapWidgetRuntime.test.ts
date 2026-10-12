@@ -296,9 +296,11 @@ describe('MapWidgetRuntime', () => {
         { timeoutMs: 250 },
       );
 
+      const rejected = expect(operation).rejects.toMatchObject({ name: 'TimeoutError' });
       await vi.advanceTimersByTimeAsync(251);
-      await expect(operation).rejects.toMatchObject({ name: 'AbortError' });
-      expect(gate.snapshot().phase).toBe('cancelled');
+      await rejected;
+      expect(gate.snapshot().phase).toBe('error');
+      expect(gate.snapshot().error).toContain('süresi aşıldı');
     });
 
     it('records normalized failures without converting them into cancellation', async () => {

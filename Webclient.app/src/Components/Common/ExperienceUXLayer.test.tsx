@@ -126,8 +126,8 @@ describe('ExperienceUXLayer', () => {
       name: 'Lejandı aç',
     }));
 
-    expect(mocks.layerOnShow).toHaveBeenNthCalledWith(1, 'layers');
-    expect(mocks.layerOnShow).toHaveBeenNthCalledWith(2, 'legend');
+    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'layers' });
+    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'legend' });
   });
 
   test('responds to externally dispatched Experience commands', () => {
@@ -141,8 +141,8 @@ describe('ExperienceUXLayer', () => {
     expect(manager.ShowWindow).toHaveBeenCalledWith(
       'genelarama-query-window',
     );
-    expect(mocks.layerOnShow).toHaveBeenCalledWith('layers');
-    expect(mocks.layerOnShow).toHaveBeenCalledWith('legend');
+    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'layers' });
+    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'legend' });
   });
 
   test('collapses and expands utility copy without removing controls', () => {
@@ -365,7 +365,7 @@ describe('ExperienceUXLayer', () => {
     expect(screen.queryByRole('dialog', {
       name: 'Hızlı kullanım',
     })).not.toBeInTheDocument();
-    expect(mocks.layerOnShow).toHaveBeenCalledWith('layers');
+    expect(manager.ShowWindow).toHaveBeenCalledWith('layerlist-widget', { mode: 'layers' });
   });
 
   test('theme control exposes the next action, delegates to the provider, and emits bounded feedback', () => {

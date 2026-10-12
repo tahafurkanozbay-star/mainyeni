@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_ROOT = path.resolve(process.cwd());
+const DEFAULT_ROOT = path.resolve(import.meta.dirname, '..');
 const WEB_ROOT = 'Webclient.app';
 const SOURCE_ROOT = 'Webclient.app/src';
 const PLATFORM_ROOT = 'Webclient.app/src/platform';

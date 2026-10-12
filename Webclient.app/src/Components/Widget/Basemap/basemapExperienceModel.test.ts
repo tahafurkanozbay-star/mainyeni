@@ -40,7 +40,7 @@ describe('BasemapExperienceModel lifecycle', () => {
       error: null,
       busy: false,
     });
-    expect(model.getSnapshot().announcement).toBe('17 altlık harita kullanıma hazır.');
+    expect(model.getSnapshot().announcement).toBe('17 altlık harita seçeneği.');
   });
 
   it('clamps invalid ready counts to zero', () => {

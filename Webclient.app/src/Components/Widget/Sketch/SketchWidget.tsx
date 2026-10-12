@@ -21,12 +21,15 @@ import {
 import {
   createLatestOperationGate,
   normalizeWidgetError,
+  isAbortLikeError,
   type LatestOperationGate,
 } from '../_shared/MapWidgetRuntime';
 import './SketchWidget.css';
+import { createArcgisWidgetHost, type OwnedArcgisWidgetHost } from '../../../gis-engine/arcgisWidgetHost';
 
 interface GraphicsLayerLike {
   removeAll?: () => void;
+  destroy?: () => void;
 }
 
 interface MapLike {
@@ -62,7 +65,9 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
   ({ id, windowManager }, ref): ReactNode => {
     const sketchRef = useRef<SketchLike | null>(null);
     const sketchLayerRef = useRef<GraphicsLayerLike | null>(null);
+    const attachedMapRef = useRef<MapLike | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const hostRef = useRef<OwnedArcgisWidgetHost | null>(null);
     const gateRef = useRef<LatestOperationGate | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -75,18 +80,22 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
     }
 
     const clearSketch = useCallback((): void => {
-      sketchRef.current?.cancel?.();
-      sketchLayerRef.current?.removeAll?.();
+      try { sketchRef.current?.cancel?.(); } catch (error) { DebugHelper.Log(error); }
+      try { sketchLayerRef.current?.removeAll?.(); } catch (error) { DebugHelper.Log(error); }
     }, []);
 
     const disposeSketch = useCallback((): void => {
       const layer = sketchLayerRef.current;
-      const map = (MapManager.GetMapView() as MapViewLike | null)?.map;
+      const map = attachedMapRef.current;
       clearSketch();
       try {
         sketchRef.current?.destroy?.();
+      } catch (error) {
+        DebugHelper.Log(error);
       } finally {
         sketchRef.current = null;
+        hostRef.current?.dispose();
+        hostRef.current = null;
       }
       if (layer && map) {
         try {
@@ -96,6 +105,8 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
         }
       }
       sketchLayerRef.current = null;
+      attachedMapRef.current = null;
+      try { layer?.destroy?.(); } catch (error) { DebugHelper.Log(error); }
       setReady(false);
     }, [clearSketch]);
 
@@ -120,26 +131,28 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
           if (!operation.isCurrent() || !containerRef.current) return;
 
           const layer = new GraphicsLayer({ title: 'Kullanıcı çizimleri' });
+          sketchLayerRef.current = layer;
+          attachedMapRef.current = mapView.map ?? null;
           mapView.map?.add(layer);
           if (!operation.isCurrent() || !containerRef.current) {
-            mapView.map?.remove(layer);
+            disposeSketch();
             return;
           }
 
+          hostRef.current = createArcgisWidgetHost(containerRef.current);
           const sketch = new Sketch({
             layer,
             view: mapView,
-            container: containerRef.current,
+            container: hostRef.current.container,
             activeTool: null,
             iconClass: 'sketch-icon',
           });
 
-          sketchLayerRef.current = layer;
           sketchRef.current = sketch;
           setReady(true);
         });
       } catch (caught) {
-        if (gateRef.current?.snapshot().phase === 'cancelled') return;
+        if (gateRef.current?.snapshot().phase === 'cancelled' || isAbortLikeError(caught)) return;
         disposeSketch();
         setError(normalizeWidgetError(caught, 'Çizim araçları başlatılamadı.'));
       }
@@ -150,7 +163,6 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
       visible: false,
       minimized: false,
       OnShow: () => {
-        windowManager.ShowWindow('sidebar');
         void initialize();
       },
       OnClose: () => {

@@ -248,7 +248,7 @@ describe('MeasurementWidget', () => {
     }));
   });
 
-  it('shows the sidebar, opens governed focus and starts the measurement session on OnShow', async () => {
+  it('keeps measurement active, opens governed focus and starts the session on OnShow', async () => {
     const { windowManager, ref } = renderWidget();
 
     await act(async () => {
@@ -256,7 +256,7 @@ describe('MeasurementWidget', () => {
       await Promise.resolve();
     });
 
-    expect(windowManager.ShowWindow).toHaveBeenCalledWith('sidebar');
+    expect(windowManager.ShowWindow).not.toHaveBeenCalledWith('sidebar');
     expect(focusOpen).toHaveBeenCalledWith(expect.objectContaining({
       root: expect.any(HTMLElement),
       initialFocusSelector: '[data-roving-focus-id]',

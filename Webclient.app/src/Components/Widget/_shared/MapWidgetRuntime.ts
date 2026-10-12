@@ -371,7 +371,9 @@ export const createLatestOperationGate = (
     active = controller;
     const startedAt = now();
     const timeoutMs = normalizeTimeout(options.timeoutMs);
-    const timeout = window.setTimeout(() => controller.abort('timeout'), timeoutMs);
+    const timeoutError = new Error('Araç yükleme süresi aşıldı. Yeniden deneyebilirsiniz.');
+    timeoutError.name = 'TimeoutError';
+    const timeout = window.setTimeout(() => controller.abort(timeoutError), timeoutMs);
     publish({
       generation: currentGeneration,
       phase: 'running',
@@ -392,16 +394,18 @@ export const createLatestOperationGate = (
       ),
     });
 
+    let onAbort: (() => void) | null = null;
     try {
       const operationPromise = Promise.resolve().then(() => operation(context));
       const abortPromise = new Promise<never>((_resolve, reject) => {
         if (controller.signal.aborted) {
-          reject(new DOMException('Operation cancelled.', 'AbortError'));
+          reject(controller.signal.reason === timeoutError ? timeoutError : new DOMException('Operation cancelled.', 'AbortError'));
           return;
         }
-        controller.signal.addEventListener('abort', () => {
-          reject(new DOMException('Operation cancelled.', 'AbortError'));
-        }, { once: true });
+        onAbort = () => {
+          reject(controller.signal.reason === timeoutError ? timeoutError : new DOMException('Operation cancelled.', 'AbortError'));
+        };
+        controller.signal.addEventListener('abort', onAbort, { once: true });
       });
       const result = await Promise.race([operationPromise, abortPromise]);
       if (!context.isCurrent()) {
@@ -419,7 +423,7 @@ export const createLatestOperationGate = (
     } catch (error) {
       const current = generation === currentGeneration && active === controller;
       if (current) active = null;
-      if (controller.signal.aborted || isAbortLikeError(error)) {
+      if ((controller.signal.aborted && controller.signal.reason !== timeoutError) || isAbortLikeError(error)) {
         if (current) {
           publish({
             generation: currentGeneration,
@@ -443,6 +447,7 @@ export const createLatestOperationGate = (
       throw error;
     } finally {
       window.clearTimeout(timeout);
+      if (onAbort) controller.signal.removeEventListener('abort', onAbort);
     }
   };
 
