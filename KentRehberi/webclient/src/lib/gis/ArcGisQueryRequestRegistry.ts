@@ -1,8 +1,15 @@
 import type { ArcGisQueryExecutionResult } from './ArcGisQueryExecutionCoordinator'
+import { hasAsciiControl } from './ArcGisScalarValidation'
 
 export interface ArcGisQueryRequestRegistryOptions {
   readonly maxEntries: number
   readonly successTtlMs: number
+  /** Physical promises still occupy capacity after logical cancellation. */
+  readonly maxPhysicalInFlight?: number
+  readonly maxSubscribersPerQuery?: number
+  readonly maxKeyLength?: number
+  readonly maxCachedFeatures?: number
+  readonly maxFeaturesPerEntry?: number
 }
 
 export interface ArcGisQueryRequestContext {
@@ -23,50 +30,80 @@ interface InFlightEntry {
   readonly key: string
   readonly controller: AbortController
   readonly subscribers: Map<number, Subscriber>
-  startedAt: number
 }
 
 interface CachedEntry {
   readonly key: string
-  readonly result: ArcGisQueryExecutionResult
+  readonly result: Extract<ArcGisQueryExecutionResult, { kind: 'completed' }>
+  readonly features: number
   readonly expiresAt: number
-  lastAccessedAt: number
   lastAccessSequence: number
 }
 
-const DEFAULTS: ArcGisQueryRequestRegistryOptions = {
+type RegistryBudget = Required<ArcGisQueryRequestRegistryOptions>
+
+const DEFAULTS: RegistryBudget = {
   maxEntries: 128,
   successTtlMs: 15_000,
+  maxPhysicalInFlight: 8,
+  maxSubscribersPerQuery: 64,
+  maxKeyLength: 8_192,
+  maxCachedFeatures: 100_000,
+  maxFeaturesPerEntry: 25_000,
 }
 
-function normalizeOptions(input: Partial<ArcGisQueryRequestRegistryOptions>): ArcGisQueryRequestRegistryOptions {
+function boundedInteger(name: keyof RegistryBudget, value: number, maximum: number): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    throw new Error(`Invalid ArcGIS request registry ${name}`)
+  }
+  return value
+}
+
+function normalizeOptions(input: Partial<ArcGisQueryRequestRegistryOptions>): RegistryBudget {
   const options = { ...DEFAULTS, ...input }
-  if (!Number.isSafeInteger(options.maxEntries) || options.maxEntries <= 0) throw new Error('Invalid ArcGIS request registry maxEntries')
-  if (!Number.isSafeInteger(options.successTtlMs) || options.successTtlMs <= 0) throw new Error('Invalid ArcGIS request registry successTtlMs')
-  return Object.freeze(options)
+  const normalized: RegistryBudget = {
+    maxEntries: boundedInteger('maxEntries', options.maxEntries, 100_000),
+    successTtlMs: boundedInteger('successTtlMs', options.successTtlMs, 86_400_000),
+    maxPhysicalInFlight: boundedInteger('maxPhysicalInFlight', options.maxPhysicalInFlight, 10_000),
+    maxSubscribersPerQuery: boundedInteger('maxSubscribersPerQuery', options.maxSubscribersPerQuery, 100_000),
+    maxKeyLength: boundedInteger('maxKeyLength', options.maxKeyLength, 65_536),
+    maxCachedFeatures: boundedInteger('maxCachedFeatures', options.maxCachedFeatures, 1_000_000),
+    maxFeaturesPerEntry: boundedInteger('maxFeaturesPerEntry', options.maxFeaturesPerEntry, 1_000_000),
+  }
+  if (normalized.maxFeaturesPerEntry > normalized.maxCachedFeatures) {
+    throw new Error('Invalid ArcGIS request registry maxFeaturesPerEntry')
+  }
+  return Object.freeze(normalized)
 }
 
 function abortedResult(): ArcGisQueryExecutionResult {
-  return { kind: 'failed', code: 'aborted' }
+  return Object.freeze({ kind: 'failed', code: 'aborted' })
+}
+
+function capacityResult(): ArcGisQueryExecutionResult {
+  return Object.freeze({ kind: 'failed', code: 'transport-capacity' })
 }
 
 /**
- * Bounded single-flight registry for ArcGIS query plans.
+ * Single-flight request registry for the existing ArcGIS query executor.
  *
- * The registry deliberately owns no network transport. Callers inject an executor,
- * keeping same-origin/service governance outside this cache. Concurrent callers for
- * the same stable plan key share one execution while retaining independent
- * cancellation. The underlying request is aborted only after its last subscriber
- * leaves. Only successful results are cached, so transient failures cannot poison a
- * later request. Cache capacity and TTL are hard bounded.
+ * A physical transport is not freed by abandoning its logical wait. Aborted
+ * transports which ignore their AbortSignal occupy physical capacity until
+ * their actual promises settle. New callers never attach to cancelled work.
+ * The registry stores only bounded metadata and successful bounded results;
+ * it does not own or introduce a network endpoint, fetch carrier or SDK.
  */
 export class ArcGisQueryRequestRegistry {
-  readonly #options: ArcGisQueryRequestRegistryOptions
+  readonly #options: RegistryBudget
   readonly #executor: ArcGisQueryRequestExecutor
   readonly #inFlight = new Map<string, InFlightEntry>()
+  readonly #physical = new Set<InFlightEntry>()
   readonly #cache = new Map<string, CachedEntry>()
+  #cachedFeatures = 0
   #subscriberId = 0
   #accessSequence = 0
+  #observedNow = 0
+  #disposed = false
 
   constructor(executor: ArcGisQueryRequestExecutor, options: Partial<ArcGisQueryRequestRegistryOptions> = {}) {
     this.#executor = executor
@@ -77,70 +114,133 @@ export class ArcGisQueryRequestRegistry {
     return this.#inFlight.size
   }
 
+  /** Physical network reservations include cancelled but unsettled adapters. */
+  get physicalInFlightCount(): number {
+    return this.#physical.size
+  }
+
   get cachedCount(): number {
     return this.#cache.size
   }
 
-  request(key: string, signal?: AbortSignal): Promise<ArcGisQueryExecutionResult> {
-    const normalizedKey = key.trim()
-    if (normalizedKey.length === 0) return Promise.resolve({ kind: 'failed', code: 'invalid-plan' })
-    if (signal?.aborted === true) return Promise.resolve(abortedResult())
+  get cachedFeatureCount(): number {
+    return this.#cachedFeatures
+  }
 
-    const now = Date.now()
+  snapshot(): Readonly<{ inFlight: number; physical: number; subscribers: number; cached: number; cachedFeatures: number; disposed: boolean }> {
+    let subscribers = 0
+    for (const entry of this.#inFlight.values()) subscribers += entry.subscribers.size
+    return Object.freeze({
+      inFlight: this.#inFlight.size,
+      physical: this.#physical.size,
+      subscribers,
+      cached: this.#cache.size,
+      cachedFeatures: this.#cachedFeatures,
+      disposed: this.#disposed,
+    })
+  }
+
+  request(key: string, signal?: AbortSignal): Promise<ArcGisQueryExecutionResult> {
+    if (this.#disposed || signal?.aborted === true) return Promise.resolve(abortedResult())
+    const normalizedKey = this.#key(key)
+    if (normalizedKey === null) return Promise.resolve({ kind: 'failed', code: 'invalid-plan' })
+
+    const now = this.#clock()
     this.#pruneExpired(now)
     const cached = this.#cache.get(normalizedKey)
     if (cached !== undefined) {
-      cached.lastAccessedAt = now
       cached.lastAccessSequence = ++this.#accessSequence
       return Promise.resolve(cached.result)
     }
 
     let entry = this.#inFlight.get(normalizedKey)
+    if (entry !== undefined && entry.controller.signal.aborted) {
+      // Never deliver a late response from an abandoned request to a new caller.
+      this.#inFlight.delete(normalizedKey)
+      entry = undefined
+    }
     if (entry === undefined) {
-      entry = {
-        key: normalizedKey,
-        controller: new AbortController(),
-        subscribers: new Map(),
-        startedAt: now,
+      if (this.#physical.size >= this.#options.maxPhysicalInFlight) {
+        return Promise.resolve(capacityResult())
       }
+      entry = { key: normalizedKey, controller: new AbortController(), subscribers: new Map() }
       this.#inFlight.set(normalizedKey, entry)
+      this.#physical.add(entry)
+      // Register the initial subscriber before an executor can settle.
+      const pending = this.#subscribe(entry, signal)
       void this.#run(entry)
+      return pending
+    }
+    if (entry.subscribers.size >= this.#options.maxSubscribersPerQuery) {
+      return Promise.resolve(capacityResult())
     }
     return this.#subscribe(entry, signal)
   }
 
+  /** Invalidate both resident and active data of a changed ArcGIS query key. */
   invalidate(key: string): boolean {
-    return this.#cache.delete(key.trim())
+    const normalizedKey = this.#key(key)
+    if (normalizedKey === null || this.#disposed) return false
+    const removed = this.#deleteCache(normalizedKey)
+    const entry = this.#inFlight.get(normalizedKey)
+    if (entry === undefined) return removed
+    this.#abandon(entry)
+    return true
   }
 
+  /** Legacy cache-only clearing; active queries may still populate the cache. */
   clear(): void {
     this.#cache.clear()
+    this.#cachedFeatures = 0
+  }
+
+  /** Revision or service invalidation: prevent all active results being cached. */
+  invalidateAll(): void {
+    this.clear()
+    for (const entry of this.#inFlight.values()) this.#abandon(entry)
   }
 
   dispose(): void {
-    this.#cache.clear()
-    for (const entry of this.#inFlight.values()) {
-      entry.controller.abort(new Error('ArcGIS request registry disposed'))
-      this.#settleSubscribers(entry, abortedResult())
-    }
-    this.#inFlight.clear()
+    if (this.#disposed) return
+    this.#disposed = true
+    this.invalidateAll()
+  }
+
+  #key(key: string): string | null {
+    if (typeof key !== 'string' || hasAsciiControl(key) || key.length > this.#options.maxKeyLength) return null
+    const normalized = key.trim()
+    return normalized.length > 0 && normalized.length <= this.#options.maxKeyLength ? normalized : null
+  }
+
+  #clock(): number {
+    // Clock rollback cannot resurrect an already-expired cached feature page.
+    const now = Date.now()
+    this.#observedNow = Math.max(this.#observedNow, now)
+    return this.#observedNow
   }
 
   #subscribe(entry: InFlightEntry, signal?: AbortSignal): Promise<ArcGisQueryExecutionResult> {
     return new Promise((resolve) => {
       const id = ++this.#subscriberId
       const onAbort = signal === undefined ? undefined : (): void => {
-        const current = entry.subscribers.get(id)
-        if (current === undefined) return
-        entry.subscribers.delete(id)
+        if (!entry.subscribers.delete(id)) return
         signal.removeEventListener('abort', onAbort)
         resolve(abortedResult())
-        if (entry.subscribers.size === 0) entry.controller.abort(signal.reason)
+        if (entry.subscribers.size === 0) this.#abandon(entry)
       }
       const subscriber: Subscriber = { id, resolve, ...(signal === undefined ? {} : { signal, onAbort }) }
       entry.subscribers.set(id, subscriber)
       signal?.addEventListener('abort', onAbort as () => void, { once: true })
+      // Handle cancellation between request()'s first check and subscription.
+      if (signal?.aborted) onAbort?.()
     })
+  }
+
+  #abandon(entry: InFlightEntry): void {
+    if (this.#inFlight.get(entry.key) === entry) this.#inFlight.delete(entry.key)
+    entry.controller.abort()
+    this.#settleSubscribers(entry, abortedResult())
+    // #physical deliberately holds this lease until #run has really settled.
   }
 
   async #run(entry: InFlightEntry): Promise<void> {
@@ -149,11 +249,14 @@ export class ArcGisQueryRequestRegistry {
       result = await this.#executor({ key: entry.key, signal: entry.controller.signal })
     } catch {
       result = entry.controller.signal.aborted ? abortedResult() : { kind: 'failed', code: 'transport-error' }
+    } finally {
+      this.#physical.delete(entry)
     }
-
     if (this.#inFlight.get(entry.key) !== entry) return
     this.#inFlight.delete(entry.key)
-    if (result.kind === 'completed' && !entry.controller.signal.aborted) this.#store(entry.key, result)
+    if (!this.#disposed && result.kind === 'completed' && !entry.controller.signal.aborted) {
+      this.#store(entry.key, result)
+    }
     this.#settleSubscribers(entry, result)
   }
 
@@ -167,22 +270,53 @@ export class ArcGisQueryRequestRegistry {
     entry.subscribers.clear()
   }
 
-  #store(key: string, result: ArcGisQueryExecutionResult): void {
-    const now = Date.now()
-    this.#cache.set(key, { key, result, expiresAt: now + this.#options.successTtlMs, lastAccessedAt: now, lastAccessSequence: ++this.#accessSequence })
-    while (this.#cache.size > this.#options.maxEntries) {
+  #store(key: string, result: Extract<ArcGisQueryExecutionResult, { kind: 'completed' }>): void {
+    if (!Array.isArray(result.features) || !Array.isArray(result.objectIds) ||
+        result.features.length !== result.objectIds.length ||
+        result.features.length > this.#options.maxFeaturesPerEntry ||
+        result.features.length > this.#options.maxCachedFeatures ||
+        result.objectIds.some(id => !Number.isSafeInteger(id) || id <= 0)) return
+    const features = result.features.length
+    const now = this.#clock()
+    if (now > Number.MAX_SAFE_INTEGER - this.#options.successTtlMs) return
+    const stableResult = Object.freeze({
+      kind: 'completed' as const,
+      key: result.key,
+      pagesCompleted: result.pagesCompleted,
+      features: Object.freeze([...result.features]),
+      objectIds: Object.freeze([...result.objectIds]),
+    })
+    this.#deleteCache(key)
+    this.#cache.set(key, {
+      key,
+      result: stableResult,
+      features,
+      expiresAt: now + this.#options.successTtlMs,
+      lastAccessSequence: ++this.#accessSequence,
+    })
+    this.#cachedFeatures += features
+    while (this.#cache.size > this.#options.maxEntries ||
+           this.#cachedFeatures > this.#options.maxCachedFeatures) {
       let oldest: CachedEntry | undefined
       for (const candidate of this.#cache.values()) {
         if (oldest === undefined || candidate.lastAccessSequence < oldest.lastAccessSequence) oldest = candidate
       }
       if (oldest === undefined) break
-      this.#cache.delete(oldest.key)
+      this.#deleteCache(oldest.key)
     }
+  }
+
+  #deleteCache(key: string): boolean {
+    const entry = this.#cache.get(key)
+    if (entry === undefined) return false
+    this.#cache.delete(key)
+    this.#cachedFeatures -= entry.features
+    return true
   }
 
   #pruneExpired(now: number): void {
     for (const [key, entry] of this.#cache) {
-      if (entry.expiresAt <= now) this.#cache.delete(key)
+      if (entry.expiresAt <= now) this.#deleteCache(key)
     }
   }
 }
