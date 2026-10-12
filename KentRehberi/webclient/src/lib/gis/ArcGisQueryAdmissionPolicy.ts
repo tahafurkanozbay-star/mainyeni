@@ -197,7 +197,7 @@ export class ArcGisQueryAdmissionPolicy {
 
   #normalize(source: ArcGisQueryIntent): ArcGisQueryIntent {
     const id=safeId('id',source.id), serviceId=safeId('serviceId',source.serviceId), layerId=safeId('layerId',source.layerId)
-    nonNegativeInteger('revision',source.revision); nonNegativeInteger('geometryVertices',source.geometryVertices); positiveInteger('resultRecordCount',source.resultRecordCount); nonNegativeInteger('resultOffset',source.resultOffset); nonNegativeInteger('whereLength',source.whereLength); positiveInteger('estimatedResponseBytes',source.estimatedResponseBytes); finiteTime('createdAt',source.createdAt)
+    nonNegativeInteger('revision',source.revision); nonNegativeInteger('geometryVertices',source.geometryVertices); positiveInteger('resultRecordCount',source.resultRecordCount); nonNegativeInteger('offset',source.resultOffset); nonNegativeInteger('whereLength',source.whereLength); positiveInteger('estimatedResponseBytes',source.estimatedResponseBytes); finiteTime('createdAt',source.createdAt)
     if (source.resultRecordCount>this.#budget.maxResultRecords) return this.#reject('result record count exceeds budget')
     if (source.resultOffset>this.#budget.maxOffset) return this.#reject('result offset exceeds budget')
     if (source.whereLength>this.#budget.maxWhereLength) return this.#reject('where length exceeds budget')

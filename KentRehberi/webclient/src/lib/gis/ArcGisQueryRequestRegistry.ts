@@ -31,6 +31,7 @@ interface CachedEntry {
   readonly result: ArcGisQueryExecutionResult
   readonly expiresAt: number
   lastAccessedAt: number
+  lastAccessSequence: number
 }
 
 const DEFAULTS: ArcGisQueryRequestRegistryOptions = {
@@ -65,6 +66,7 @@ export class ArcGisQueryRequestRegistry {
   readonly #inFlight = new Map<string, InFlightEntry>()
   readonly #cache = new Map<string, CachedEntry>()
   #subscriberId = 0
+  #accessSequence = 0
 
   constructor(executor: ArcGisQueryRequestExecutor, options: Partial<ArcGisQueryRequestRegistryOptions> = {}) {
     this.#executor = executor
@@ -89,6 +91,7 @@ export class ArcGisQueryRequestRegistry {
     const cached = this.#cache.get(normalizedKey)
     if (cached !== undefined) {
       cached.lastAccessedAt = now
+      cached.lastAccessSequence = ++this.#accessSequence
       return Promise.resolve(cached.result)
     }
 
@@ -166,11 +169,11 @@ export class ArcGisQueryRequestRegistry {
 
   #store(key: string, result: ArcGisQueryExecutionResult): void {
     const now = Date.now()
-    this.#cache.set(key, { key, result, expiresAt: now + this.#options.successTtlMs, lastAccessedAt: now })
+    this.#cache.set(key, { key, result, expiresAt: now + this.#options.successTtlMs, lastAccessedAt: now, lastAccessSequence: ++this.#accessSequence })
     while (this.#cache.size > this.#options.maxEntries) {
       let oldest: CachedEntry | undefined
       for (const candidate of this.#cache.values()) {
-        if (oldest === undefined || candidate.lastAccessedAt < oldest.lastAccessedAt) oldest = candidate
+        if (oldest === undefined || candidate.lastAccessSequence < oldest.lastAccessSequence) oldest = candidate
       }
       if (oldest === undefined) break
       this.#cache.delete(oldest.key)
