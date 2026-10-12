@@ -163,6 +163,7 @@ export function MapModeExperienceControl({
   };
 
   const handleModeKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>): void => {
+    if (interactionDisabled) return;
     let move: MapModeFocusMove | null = null;
     if (event.key === 'ArrowRight' || event.key === 'ArrowDown') move = 'next';
     if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') move = 'previous';
@@ -210,12 +211,12 @@ export function MapModeExperienceControl({
           className="map-mode-experience__mode"
           aria-checked={snapshot.currentMode === '2d'}
           aria-label="2B harita görünümüne geç"
-          disabled={interactionDisabled}
+          aria-disabled={interactionDisabled}
           tabIndex={focusSnapshot.tabIndex2D}
           data-active={snapshot.currentMode === '2d' ? 'true' : 'false'}
           onFocus={() => focusModel.setFocused('2d')}
           onKeyDown={handleModeKeyDown}
-          onClick={() => requestMode(model, '2d')}
+          onClick={() => { if (!interactionDisabled) requestMode(model, '2d'); }}
         >
           <span aria-hidden="true">2B</span>
           <small>Harita</small>
@@ -227,12 +228,12 @@ export function MapModeExperienceControl({
           className="map-mode-experience__mode"
           aria-checked={snapshot.currentMode === '3d'}
           aria-label="3B sahne görünümüne geç"
-          disabled={interactionDisabled}
+          aria-disabled={interactionDisabled}
           tabIndex={focusSnapshot.tabIndex3D}
           data-active={snapshot.currentMode === '3d' ? 'true' : 'false'}
           onFocus={() => focusModel.setFocused('3d')}
           onKeyDown={handleModeKeyDown}
-          onClick={() => requestMode(model, '3d')}
+          onClick={() => { if (!interactionDisabled) requestMode(model, '3d'); }}
         >
           <span aria-hidden="true">3B</span>
           <small>Sahne</small>
