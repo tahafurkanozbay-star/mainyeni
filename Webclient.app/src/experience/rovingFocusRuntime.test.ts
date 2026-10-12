@@ -6,6 +6,7 @@ import {
   getInitialRovingIndex,
   reconcileRovingIndex,
   resolveRovingFocusMove,
+  resolveRovingTypeaheadMove,
 } from './rovingFocusRuntime';
 
 const items = [
@@ -100,6 +101,28 @@ describe('rovingFocusRuntime', () => {
       { id: 'last' },
     ];
     expect(reconcileRovingIndex(items, next, 2)).toBe(1);
+  });
+
+  it('normalizes Turkish labels for typeahead and skips unavailable entries', () => {
+    const entries = [
+      { id: 'a', label: 'Işık Parkı' },
+      { id: 'disabled', label: 'İzmir', disabled: true },
+      { id: 'b', label: 'Çevre' },
+    ];
+    expect(resolveRovingTypeaheadMove(entries, 2, 'isik')).toEqual({ index: 0, id: 'a' });
+    expect(resolveRovingTypeaheadMove(entries, 0, 'ce')).toEqual({ index: 2, id: 'b' });
+    expect(resolveRovingTypeaheadMove(entries, 0, 'iz')).toBeNull();
+  });
+
+  it('cycles repeated letters and safely ignores empty lists', () => {
+    const entries = [
+      { id: 'a', label: 'Bilgi' },
+      { id: 'b', label: 'Bölge' },
+      { id: 'c', label: 'Başlangıç' },
+    ];
+    expect(resolveRovingTypeaheadMove(entries, 0, 'b')).toEqual({ index: 1, id: 'b' });
+    expect(resolveRovingTypeaheadMove(entries, 1, 'bb')).toEqual({ index: 2, id: 'c' });
+    expect(resolveRovingTypeaheadMove([], 0, 'b')).toBeNull();
   });
 
   it('focuses a matching available target without selector interpolation', () => {

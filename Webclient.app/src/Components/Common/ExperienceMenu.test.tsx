@@ -214,6 +214,51 @@ describe('ExperienceMenu', () => {
     expect(document.getElementById(secondId ?? '')).toHaveTextContent('İkinci menü açıklaması');
   });
 
+  it('supports Turkish menu typeahead without activating actions', () => {
+    const onActivate = vi.fn();
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'identify', label: 'Bilgi Al', onActivate },
+      { id: 'nearby', label: 'Yakınımda Ara', onActivate },
+      { id: 'route', label: 'Yol Tarifi Al', onActivate },
+    ]} />);
+    const menu = screen.getByRole('menu');
+    screen.getByRole('menuitem', { name: 'Bilgi Al' }).focus();
+    fireEvent.keyDown(menu, { key: 'y' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Yakınımda Ara' }));
+    fireEvent.keyDown(menu, { key: 'y' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Yol Tarifi Al' }));
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('cycles same-letter matches while skipping disabled actions', () => {
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'one', label: 'Bilgi' },
+      { id: 'disabled', label: 'Bina', disabled: true },
+      { id: 'two', label: 'Bölge' },
+      { id: 'three', label: 'Başlangıç' },
+    ]} />);
+    const menu = screen.getByRole('menu');
+    screen.getByRole('menuitem', { name: 'Bilgi' }).focus();
+    fireEvent.keyDown(menu, { key: 'b' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Bölge' }));
+    fireEvent.keyDown(menu, { key: 'b' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Başlangıç' }));
+  });
+
+  it('preserves Space, Tab and modified shortcut ownership', () => {
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'one', label: 'Bilgi' },
+      { id: 'two', label: 'Yol' },
+    ]} />);
+    const menu = screen.getByRole('menu');
+    const first = screen.getByRole('menuitem', { name: 'Bilgi' });
+    first.focus();
+    fireEvent.keyDown(menu, { key: 'y', ctrlKey: true });
+    fireEvent.keyDown(menu, { key: ' ' });
+    fireEvent.keyDown(menu, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+  });
+
   it('supports non-looping menus', () => {
     render(
       <ExperienceMenu

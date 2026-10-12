@@ -14,6 +14,7 @@ import {
   getInitialRovingIndex,
   reconcileRovingIndex,
   resolveRovingFocusMove,
+  resolveRovingTypeaheadMove,
   type RovingFocusItem,
 } from '../../experience/rovingFocusRuntime';
 import './ExperiencePrimitives.css';
@@ -79,6 +80,7 @@ export function ExperienceMenu({
   const descriptionIdPrefix = id ?? `experience-menu-${generatedId}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const previousItemsRef = useRef<readonly RovingFocusItem[]>([]);
+  const typeaheadRef = useRef({ sequence: '', timestamp: 0 });
   const rovingItems = useMemo(() => toRovingItems(items), [items]);
   const [activeIndex, setActiveIndex] = useState(() => getInitialRovingIndex(rovingItems));
 
@@ -109,9 +111,14 @@ export function ExperienceMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocusWhenVisible, focusRequestKey, visible]);
 
+  useEffect(() => {
+    typeaheadRef.current = { sequence: '', timestamp: 0 };
+  }, [visible, focusRequestKey]);
+
   const tabIndices = createRovingTabIndex(rovingItems, activeIndex);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (!visible) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       onDismiss?.('escape');
@@ -127,10 +134,36 @@ export function ExperienceMenu({
       direction: 'ltr',
       loop,
     });
-    if (!move) return;
+    if (move) {
+      typeaheadRef.current = { sequence: '', timestamp: 0 };
+      event.preventDefault();
+      setActiveIndex(move.index);
+      focusRovingTarget(rootRef.current, move.id);
+      return;
+    }
+
+    // Keep printable-character navigation separate from native Space/Enter
+    // activation, editor shortcuts and in-progress IME composition.
+    if (event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing
+      || event.key.length !== 1 || event.key.trim() === '') return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable]')) return;
+
+    const timestamp = Date.now();
+    const previous = typeaheadRef.current;
+    const sequence = timestamp - previous.timestamp < 700
+      ? previous.sequence + event.key
+      : event.key;
+    const match = resolveRovingTypeaheadMove(items, activeIndex, sequence);
+    const resolved = match ?? resolveRovingTypeaheadMove(items, activeIndex, event.key);
+    typeaheadRef.current = {
+      sequence: match ? sequence : event.key,
+      timestamp,
+    };
+    if (!resolved) return;
     event.preventDefault();
-    setActiveIndex(move.index);
-    focusRovingTarget(rootRef.current, move.id);
+    setActiveIndex(resolved.index);
+    focusRovingTarget(rootRef.current, resolved.id);
   };
 
   return (
