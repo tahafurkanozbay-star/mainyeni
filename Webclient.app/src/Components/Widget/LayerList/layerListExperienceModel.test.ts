@@ -29,6 +29,7 @@ describe('normalizeLayerListText', () => {
   it('folds Turkish-specific letters and accents deterministically', () => {
     expect(normalizeLayerListText('ÖLÇÜM ŞİŞLİ')).toBe('olcum sisli');
     expect(normalizeLayerListText('İmar   Planı')).toBe('imar plani');
+    expect(normalizeLayerListText('YESIL IMAR')).toBe('yesil imar');
   });
 
   it('removes punctuation while preserving searchable word boundaries', () => {
