@@ -177,6 +177,7 @@ const readAttribute = (
 const normalizeText = (value: unknown): string => String(value ?? '')
   .trim()
   .toLocaleLowerCase('tr-TR')
+  .replace(/ı/g, 'i')
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '');
 
@@ -432,7 +433,7 @@ export function createManagedFastAccessQueryWindow({
       setActiveActionKey('');
       clearOwnedLayer();
 
-      void safeClientLog(LoggingBusiness, logName + '/Sorgu', JSON.stringify(query), DebugHelper.Log);
+      void safeClientLog(LoggingBusiness, logName + '/Sorgu', serviceKey, DebugHelper.Log);
 
       try {
         const result = await business.Query(query, false, { signal: controller.signal });
@@ -458,7 +459,7 @@ export function createManagedFastAccessQueryWindow({
           setLoading(false);
         }
       }
-    }, [business, cancelPageFocus, clearOwnedLayer, id, logName, pageSize, renderLayer, showError, windowManager]);
+    }, [business, cancelPageFocus, clearOwnedLayer, id, logName, pageSize, renderLayer, serviceKey, showError, windowManager]);
 
     const getItemDetails = useCallback(async (
       item: FastAccessRecord,
@@ -518,7 +519,7 @@ export function createManagedFastAccessQueryWindow({
         void safeClientLog(
           LoggingBusiness,
           logName + '/Detay Göster',
-          String(item.objectId ?? '') + '/' + item.address,
+          serviceKey,
         );
 
         if (window.matchMedia?.('(max-width: 959px)').matches) {
@@ -526,7 +527,7 @@ export function createManagedFastAccessQueryWindow({
         }
         return detail;
       },
-    ), [getItemDetails, id, logName, runItemAction, windowManager]);
+    ), [getItemDetails, id, logName, runItemAction, serviceKey, windowManager]);
 
     const showRoute = useCallback((item: FastAccessRecord) => runItemAction(
       item,
@@ -543,11 +544,11 @@ export function createManagedFastAccessQueryWindow({
         void safeClientLog(
           LoggingBusiness,
           logName + '/Yol Tarifi',
-          String(item.objectId ?? '') + '/' + item.address,
+          serviceKey,
         );
         return true;
       },
-    ), [getItemDetails, logName, runItemAction]);
+    ), [getItemDetails, logName, runItemAction, serviceKey]);
 
     useImperativeHandle(ref, () => ({
       id,
