@@ -482,19 +482,17 @@ export class GeneralSearchTransportRuntimeV11 {
     message: string,
   ): boolean {
     const active = this.#active(operation);
-    if (!active) return false;
+    if (!active || active.controller.signal.aborted) return false;
     active.superseded = superseded;
-    if (!active.controller.signal.aborted) {
-      const code = superseded ? 'GENERAL_SEARCH_SUPERSEDED' : 'GENERAL_SEARCH_ABORTED';
-      active.controller.abort(new GeneralSearchTransportErrorV11(
-        code,
-        message,
-        operation,
-        active.requestId,
-        active.requestFingerprint,
-        false,
-      ));
-    }
+    const code = superseded ? 'GENERAL_SEARCH_SUPERSEDED' : 'GENERAL_SEARCH_ABORTED';
+    active.controller.abort(new GeneralSearchTransportErrorV11(
+      code,
+      message,
+      operation,
+      active.requestId,
+      active.requestFingerprint,
+      false,
+    ));
     return true;
   }
 
