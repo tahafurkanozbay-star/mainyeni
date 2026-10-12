@@ -22,7 +22,7 @@ describe('LayerBusiness', () => {
 
     await expect(LayerBusiness.GetLayers()).resolves.toBe(payload);
     expect(apiClient.get).toHaveBeenCalledTimes(1);
-    expect(apiClient.get).toHaveBeenCalledWith('/Gis/Layer/ListGrouped');
+    expect(apiClient.get).toHaveBeenCalledWith('/Gis/Layer/ListGrouped', { cache: true, dedupe: true, cacheTtlMs: 60_000 });
   });
 
   test('preserves the legacy null contract and reports transport failure', async () => {

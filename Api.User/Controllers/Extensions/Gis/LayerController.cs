@@ -6,6 +6,7 @@ using Business.Extensions.Gis.Model;
 using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Threading.Tasks;
 
 namespace Api.User.Extensions.Controllers
 {
@@ -13,7 +14,7 @@ namespace Api.User.Extensions.Controllers
     // NOTE: In order to launch WCF Test Client for testing this service, please select LayerGroups.svc or LayerGroups.svc.cs at the Solution Explorer and start debugging.
     public class LayerController : _BaseUserApiController
     {
-        private GisLayerGroupOperations ops;
+        private readonly GisLayerGroupOperations ops;
 
         public LayerController(BusinessContext context)
         {
@@ -27,7 +28,7 @@ namespace Api.User.Extensions.Controllers
         [HttpGet]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("Gis/[controller]/ListGrouped")]
-        public IActionResult ListGrouped()
+        public async Task<IActionResult> ListGrouped()
         {
             try
             {
@@ -37,7 +38,7 @@ namespace Api.User.Extensions.Controllers
                   return UnAuthorizedResult();
                 }
 
-                var result = ops.GetAllWithLayersForUser();
+                var result = await ops.GetAllWithLayersForUserAsync(HttpContext.RequestAborted);
                 return new JsonResult(result);
             }
             catch (Exception ex)

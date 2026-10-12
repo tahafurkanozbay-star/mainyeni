@@ -92,6 +92,7 @@ interface ServiceState {
   metadataRevision: string | number | null;
   state: GisHealthState;
   circuit: GisCircuitState;
+  circuitEpoch: number;
   samples: Sample[];
   successes: number;
   failures: number;
@@ -185,6 +186,7 @@ const createState = (registration: GisServiceRegistration): ServiceState => {
     metadataRevision: registration.metadataRevision ?? null,
     state: 'unknown',
     circuit: 'closed',
+    circuitEpoch: 0,
     samples: [],
     successes: 0,
     failures: 0,
@@ -211,7 +213,7 @@ const weightedFailureRatio = (state: ServiceState, policy: Required<GisServiceHe
     if (sample.success || sample.cancelled) return sum;
     return sum + (sample.timeout ? policy.timeoutFailureWeight : 1);
   }, 0);
-  return weightedFailures / state.samples.length;
+  return weightedFailures / Math.max(1, state.samples.filter((sample) => !sample.cancelled).length);
 };
 
 const latencyPenalty = (state: ServiceState, policy: Required<GisServiceHealthPolicy>): number => {
@@ -300,7 +302,7 @@ export const createServiceHealthRuntime = (
   const listeners = new Set<(event: GisServiceHealthEvent) => void>();
   const nextSequence = createMonotonicSequence();
   const ticketSequence = createMonotonicSequence();
-  const tickets = new Map<string, GisRequestTicket>();
+  const tickets = new Map<string, GisRequestTicket & { readonly circuitEpoch: number }>();
   let destroyed = false;
 
   const assertActive = (): void => {
@@ -331,7 +333,8 @@ export const createServiceHealthRuntime = (
       ...details,
       snapshot: snapshotState(state, policy),
     });
-    for (const listener of [...listeners]) {
+    const subscribedListeners = [...listeners];
+    for (const listener of subscribedListeners) {
       try { listener(event); } catch (error) { configuration.onListenerError?.(error, event); }
     }
     try { configuration.onEvent?.(event); } catch (error) { configuration.onListenerError?.(error, event); }
@@ -351,6 +354,7 @@ export const createServiceHealthRuntime = (
     const previousCircuit = state.circuit;
     if (previousCircuit === 'open') return;
     state.circuit = 'open';
+    state.circuitEpoch += 1;
     state.circuitOpenedAt = clock();
     state.currentOpenDurationMs = state.currentOpenDurationMs > 0
       ? Math.min(policy.maxOpenCircuitMs, state.currentOpenDurationMs * 2)
@@ -364,6 +368,7 @@ export const createServiceHealthRuntime = (
   const closeCircuit = (state: ServiceState, reason: string): void => {
     const previousCircuit = state.circuit;
     state.circuit = 'closed';
+    state.circuitEpoch += 1;
     state.circuitOpenedAt = null;
     state.nextProbeAt = null;
     state.currentOpenDurationMs = 0;
@@ -379,6 +384,7 @@ export const createServiceHealthRuntime = (
     if (state.nextProbeAt === null || clock() < state.nextProbeAt) return;
     const previousCircuit = state.circuit;
     state.circuit = 'half-open';
+    state.circuitEpoch += 1;
     state.halfOpenProbes = 0;
     state.halfOpenSuccesses = 0;
     emit(state, 'service-circuit-transition', {
@@ -388,9 +394,11 @@ export const createServiceHealthRuntime = (
     });
   };
 
-  const evaluateCircuit = (state: ServiceState, sample: Sample): void => {
+  const evaluateCircuit = (state: ServiceState, sample: Sample, probeEpoch?: number): void => {
     if (sample.cancelled) return;
+    if (state.circuit === 'open') return;
     if (state.circuit === 'half-open') {
+      if (probeEpoch !== state.circuitEpoch) return;
       if (!sample.success) {
         openCircuit(state, 'half-open-probe-failed');
         return;
@@ -400,17 +408,17 @@ export const createServiceHealthRuntime = (
       return;
     }
     if (sample.success) {
-      if (state.circuit !== 'closed') closeCircuit(state, 'request-succeeded');
       return;
     }
     const failureRatio = weightedFailureRatio(state, policy);
     if (
       state.consecutiveFailures >= policy.consecutiveFailureLimit
-      || failureRatio >= policy.unavailableFailureRatio
+      || (state.samples.filter((entry) => !entry.cancelled).length >= policy.consecutiveFailureLimit
+        && failureRatio >= policy.unavailableFailureRatio)
     ) openCircuit(state, 'failure-threshold-exceeded');
   };
 
-  const pushSample = (state: ServiceState, sample: Sample): void => {
+  const pushSample = (state: ServiceState, sample: Sample, probeEpoch?: number): void => {
     state.samples.push(sample);
     if (state.samples.length > policy.sampleWindow) state.samples.shift();
     if (sample.cancelled) {
@@ -432,7 +440,7 @@ export const createServiceHealthRuntime = (
         ? sample.durationMs
         : ((state.latencyEwmaMs * 0.82) + (sample.durationMs * 0.18));
     }
-    evaluateCircuit(state, sample);
+    evaluateCircuit(state, sample, probeEpoch);
     transitionHealth(state, sample.success ? 'request-success' : sample.cancelled ? 'request-cancelled' : 'request-failure');
   };
 
@@ -457,7 +465,7 @@ export const createServiceHealthRuntime = (
   const unregisterService = (serviceId: unknown): boolean => {
     assertActive();
     const state = requireState(serviceId);
-    if (state.inFlight > 0) throw new Error(`Service ${state.serviceId} still has ${state.inFlight} tracked request(s).`);
+    if (state.inFlight > 0) throw new Error(`Service ${state.serviceId} still has ${state.inFlight} tracked request(s) in flight.`);
     const removed = states.delete(state.serviceId);
     if (removed) emit(state, 'service-unregistered', { reason: 'unregistration' });
     return removed;
@@ -514,7 +522,7 @@ export const createServiceHealthRuntime = (
       startedAt: clock(),
       probe,
     });
-    tickets.set(ticket.ticketId, ticket);
+    tickets.set(ticket.ticketId, { ...ticket, circuitEpoch: state.circuitEpoch });
     emit(state, 'service-request-started', { reason: probe ? 'half-open-probe' : 'request' });
     return ticket;
   };
@@ -534,6 +542,9 @@ export const createServiceHealthRuntime = (
     const timestamp = clock();
     const durationMs = normalizeDuration(result.durationMs ?? Math.max(0, timestamp - tracked.startedAt));
     const cancelled = result.cancelled === true;
+    if (cancelled && tracked.probe && state.circuit === 'half-open' && tracked.circuitEpoch === state.circuitEpoch) {
+      state.halfOpenProbes = Math.max(0, state.halfOpenProbes - 1);
+    }
     const timeout = !cancelled && result.timeout === true;
     const status = normalizeStatus(result.status);
     const ok = cancelled
@@ -550,7 +561,7 @@ export const createServiceHealthRuntime = (
       bytes: normalizeBytes(result.bytes),
       errorCode: result.errorCode == null ? null : String(result.errorCode).slice(0, 128),
     });
-    pushSample(state, sample);
+    pushSample(state, sample, tracked.probe ? tracked.circuitEpoch : undefined);
     emit(state, 'service-request-completed', {
       reason: cancelled
         ? 'cancelled'

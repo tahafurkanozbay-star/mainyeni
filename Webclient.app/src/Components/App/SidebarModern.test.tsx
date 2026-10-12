@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { SidebarModern } from './SidebarModern';
+import MapManager from '../../Store/Managers/MapManager';
+import { CommonBusiness } from '../../Business/CommonBusiness';
 
 vi.mock('../../Store/Managers/MapManager', () => ({
-  default: { GetMapView: vi.fn(() => null) },
+  default: { GetMapView: vi.fn(() => null), GetConfigurationServices: vi.fn(() => []) },
 }));
 
 vi.mock('../../Business/CommonBusiness', () => ({
@@ -67,9 +69,39 @@ const favoriteButton = (name: string): HTMLButtonElement =>
 
 beforeEach(() => {
   window.localStorage.clear();
+  vi.mocked(MapManager.GetMapView).mockReturnValue(null);
+  vi.mocked(MapManager.GetConfigurationServices).mockReturnValue([]);
+  vi.mocked(CommonBusiness.Clustering.CreateLayerWithoutClustering).mockReset();
 });
 
 describe('SidebarModern governed interaction integration', () => {
+  it('waits for real layer metadata before marking a configured service ready', async () => {
+    let finishLoad!: () => void;
+    const layer = { load: vi.fn(() => new Promise<void>((resolve) => { finishLoad = resolve; })), destroy: vi.fn(), cancelLoad: vi.fn() };
+    const map = { add: vi.fn(), remove: vi.fn() };
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ zoom: 12, map });
+    vi.mocked(MapManager.GetConfigurationServices).mockReturnValue([{ title: 'YeniParklarQeryUrl' }]);
+    vi.mocked(CommonBusiness.Clustering.CreateLayerWithoutClustering).mockResolvedValue({ layerObj: layer } as never);
+    const { unmount } = renderSidebar();
+    await vi.waitFor(() => expect(layer.load).toHaveBeenCalledOnce());
+    expect(screen.getByText('Harita katmanları hazırlanıyor')).toBeInTheDocument();
+    expect(map.add).not.toHaveBeenCalled();
+    expect(CommonBusiness.Clustering.CreateLayerWithoutClustering).toHaveBeenCalledWith('YeniParklarQeryUrl', 'Parklar', {}, expect.any(Object));
+    await act(async () => { finishLoad(); });
+    expect(screen.getByText('1 katman kullanıma hazır')).toBeInTheDocument();
+    expect(map.add).toHaveBeenCalledExactlyOnceWith(layer);
+    unmount();
+    expect(map.remove).toHaveBeenCalledExactlyOnceWith(layer);
+    expect(layer.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('does not falsely report missing legacy service configuration as seventeen failed layers', async () => {
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ zoom: 12, map: { add: vi.fn(), remove: vi.fn() } });
+    renderSidebar();
+    await act(async () => { await Promise.resolve(); });
+    expect(CommonBusiness.Clustering.CreateLayerWithoutClustering).not.toHaveBeenCalled();
+    expect(screen.queryByText('Bazı harita katmanları hazırlanamadı')).not.toBeInTheDocument();
+  });
   it('registers a managed window handle on mount and unregisters on unmount', () => {
     const { RegisterWindow, UnregisterWindow, unmount } = renderSidebar();
     expect(RegisterWindow).toHaveBeenCalledTimes(1);

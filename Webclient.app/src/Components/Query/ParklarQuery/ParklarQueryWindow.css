@@ -1,0 +1,13 @@
+.kr-park-query__primary {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.kr-park-query__primary:focus-visible { outline: 3px solid var(--exp-accent, #187bb9); outline-offset: 4px; border-radius: 4px; }
+.kr-park-query__status { flex: 0 0 auto; margin: 8px 12px; font-size: 14px; }

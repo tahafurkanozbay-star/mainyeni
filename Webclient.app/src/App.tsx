@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './bootstrap-overrides.css';
 import './styles.responsive.css';
@@ -12,11 +12,12 @@ import './Components/App/MapModeTransitionContinuity.css';
 import './Components/App/MapWorkspaceShellPlacement.css';
 import './Components/App/MapWorkspaceShellDensity.css';
 import { MapComponent } from './Components/App/MapComponent';
-import { ExperienceMapModeGovernedOverlay } from './Components/App/ExperienceMapModeGovernedOverlay';
+import { MapModeExperienceControl } from './Components/App/MapModeExperienceControl';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
 import { ExperienceMapModeFocusBridge } from './Components/App/ExperienceMapModeFocusBridge';
 import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { AppConfig } from './Core/AppConfig';
+import Store from './Store/Store';
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
@@ -60,6 +61,7 @@ const describeBootstrapError = (error: unknown): string => {
 };
 
 function App() {
+  const mapViewAvailable = useSyncExternalStore(Store.subscribe, () => Boolean(Store.getState().Map.MapView), () => false);
   const windowManager = useWindowManager();
   const [bootstrapGeneration, setBootstrapGeneration] = useState(0);
   const notificationCenter = useMemo(() => new NotificationCenterModel({
@@ -182,7 +184,7 @@ function App() {
             <MapComponent windowManager={windowManager} />
             <MapWorkspaceShellOverlay initialCollapsed />
             <ExperienceMapInteractionGuide />
-            <ExperienceWorkspace mapModeControl={<ExperienceMapModeGovernedOverlay />} />
+            <ExperienceWorkspace mapModeControl={mapViewAvailable ? <MapModeExperienceControl /> : <span className="experience-sr-only">Harita hazırlanıyor</span>} />
             <ExperienceUXLayer
               windowManager={windowManager}
               notificationModel={notificationCenter}
