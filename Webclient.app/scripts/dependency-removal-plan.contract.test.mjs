@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildRemovalPlan, collectExclusiveClosure, collectSharedDependents, diffRemovalPlans, normalizeRemovalCandidates, renderRemovalPlan } from './dependency-removal-plan.mjs';
+import { applyBatchRemovalPlan, buildBatchRemovalPlan, buildRemovalPlan, collectBatchExternalDependents, collectExclusiveBatchClosure, collectExclusiveClosure, collectSharedDependents, diffRemovalPlans, normalizeRemovalCandidates, renderBatchRemovalPlan, renderRemovalPlan, validateBatchRemovalResult } from './dependency-removal-plan.mjs';
 
 const mkGraph = ({ children = {}, parents = {}, ok = true, errors = [] } = {}) => ({ ok, errors, children, parents, reachable: Object.keys(parents).sort() });
 const mkLock = (names) => ({ lockfileVersion: 3, packages: Object.fromEntries([['', { dependencies: Object.fromEntries(names.map((n) => [n, '1.0.0'])) }], ...names.map((n) => [`node_modules/${n}`, { version: '1.0.0' }])]) });
@@ -253,4 +253,298 @@ test('root filtering does not mutate graph parent evidence', () => {
   collectSharedDependents(g, ['node_modules/a']);
   assert.equal(JSON.stringify(g), before);
   assert.deepEqual(parents['node_modules/a'], ['', 'node_modules/host']);
+});
+
+
+test('batch closure admits a shared child when every real package parent is being retired', () => {
+  const graph = mkGraph({
+    children: {
+      'node_modules/a': ['node_modules/shared'],
+      'node_modules/b': ['node_modules/shared'],
+      'node_modules/shared': [],
+    },
+    parents: {
+      'node_modules/a': [''],
+      'node_modules/b': [''],
+      'node_modules/shared': ['node_modules/a', 'node_modules/b'],
+    },
+  });
+  assert.deepEqual(
+    collectExclusiveBatchClosure(graph, ['node_modules/a', 'node_modules/b']),
+    ['node_modules/a', 'node_modules/b', 'node_modules/shared'],
+  );
+});
+
+test('batch closure keeps shared child when one package parent remains outside retirement set', () => {
+  const graph = mkGraph({
+    children: {
+      'node_modules/a': ['node_modules/shared'],
+      'node_modules/host': ['node_modules/shared'],
+      'node_modules/shared': [],
+    },
+    parents: {
+      'node_modules/a': [''],
+      'node_modules/host': [''],
+      'node_modules/shared': ['node_modules/a', 'node_modules/host'],
+    },
+  });
+  assert.deepEqual(collectExclusiveBatchClosure(graph, ['node_modules/a']), ['node_modules/a']);
+});
+
+test('batch external dependents ignores manifest root but reports real package parents', () => {
+  const graph = mkGraph({
+    parents: {
+      'node_modules/a': ['', 'node_modules/host'],
+      'node_modules/b': ['node_modules/a'],
+    },
+  });
+  assert.deepEqual(
+    collectBatchExternalDependents(graph, ['node_modules/a', 'node_modules/b']),
+    ['node_modules/host'],
+  );
+});
+
+test('batch plan removes false shared-dependent blocker across jointly retired roots', () => {
+  const manifest = mkManifest(['a', 'b']);
+  const lock = {
+    lockfileVersion: 3,
+    packages: {
+      '': { dependencies: { a: '^1.0.0', b: '^1.0.0' } },
+      'node_modules/a': { version: '1.0.0' },
+      'node_modules/b': { version: '1.0.0' },
+      'node_modules/shared': { version: '1.0.0' },
+    },
+  };
+  const graph = mkGraph({
+    children: {
+      '': ['node_modules/a', 'node_modules/b'],
+      'node_modules/a': ['node_modules/shared'],
+      'node_modules/b': ['node_modules/shared'],
+      'node_modules/shared': [],
+    },
+    parents: {
+      'node_modules/a': [''],
+      'node_modules/b': [''],
+      'node_modules/shared': ['node_modules/a', 'node_modules/b'],
+    },
+  });
+  const plan = buildBatchRemovalPlan(manifest, lock, ['a', 'b'], { graph });
+  assert.equal(plan.ok, true);
+  assert.equal(plan.summary.plannable, 2);
+  assert.equal(plan.summary.exclusivePackages, 3);
+  assert.deepEqual(plan.sharedDependents, []);
+});
+
+test('batch plan blocks retirement when any closure root has a real external package dependent', () => {
+  const manifest = mkManifest(['a']);
+  const lock = mkLock(['a']);
+  const graph = mkGraph({
+    children: { '': ['node_modules/a'], 'node_modules/host': ['node_modules/a'], 'node_modules/a': [] },
+    parents: { 'node_modules/a': ['', 'node_modules/host'] },
+  });
+  const plan = buildBatchRemovalPlan(manifest, lock, ['a'], { graph });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.summary.review, 1);
+  assert.deepEqual(plan.sharedDependents, ['node_modules/host']);
+  assert.match(plan.issues.join('\n'), /external dependent path/);
+});
+
+test('batch plan reports non-direct candidates without mutating identity', () => {
+  const plan = buildBatchRemovalPlan({}, { lockfileVersion: 3, packages: { '': {} } }, ['ghost'], { graph: mkGraph() });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.candidates[0].status, 'not-direct');
+  assert.equal(plan.candidates[0].name, 'ghost');
+});
+
+test('batch plan reports direct dependency missing from lockfile', () => {
+  const plan = buildBatchRemovalPlan(
+    { dependencies: { ghost: '^1.0.0' } },
+    { lockfileVersion: 3, packages: { '': { dependencies: { ghost: '^1.0.0' } } } },
+    ['ghost'],
+    { graph: mkGraph() },
+  );
+  assert.equal(plan.ok, false);
+  assert.equal(plan.candidates[0].status, 'lock-missing');
+});
+
+test('batch plan candidate budget is fail-closed', () => {
+  const names = ['a', 'b'];
+  const plan = buildBatchRemovalPlan(mkManifest(names), mkLock(names), names, {
+    graph: independentGraph(names),
+    maxCandidates: 1,
+  });
+  assert.equal(plan.ok, false);
+  assert.match(plan.issues.join('\n'), /candidate count 2 exceeds safety budget 1/);
+});
+
+test('batch plan fingerprint is independent of candidate input order', () => {
+  const names = ['a', 'b'];
+  const options = { graph: independentGraph(names) };
+  const left = buildBatchRemovalPlan(mkManifest(names), mkLock(names), ['a', 'b'], options);
+  const right = buildBatchRemovalPlan(mkManifest(names), mkLock(names), ['b', 'a'], options);
+  assert.equal(left.fingerprint, right.fingerprint);
+});
+
+test('batch plan summary counts dependency kinds independently', () => {
+  const manifest = {
+    dependencies: { runtime: '^1.0.0' },
+    devDependencies: { development: '^1.0.0' },
+    optionalDependencies: { optional: '^1.0.0' },
+    peerDependencies: { peer: '^1.0.0' },
+  };
+  const names = ['runtime', 'development', 'optional', 'peer'];
+  const lock = {
+    lockfileVersion: 3,
+    packages: {
+      '': {
+        dependencies: { runtime: '^1.0.0' },
+        devDependencies: { development: '^1.0.0' },
+        optionalDependencies: { optional: '^1.0.0' },
+        peerDependencies: { peer: '^1.0.0' },
+      },
+      ...Object.fromEntries(names.map((name) => [`node_modules/${name}`, { version: '1.0.0' }])),
+    },
+  };
+  const graph = independentGraph(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph });
+  assert.deepEqual(
+    { runtime: plan.summary.runtime, development: plan.summary.development, optional: plan.summary.optional, peer: plan.summary.peer },
+    { runtime: 1, development: 1, optional: 1, peer: 1 },
+  );
+});
+
+test('applyBatchRemovalPlan rejects non-plannable plan', () => {
+  assert.throws(
+    () => applyBatchRemovalPlan({}, { packages: { '': {} } }, { ok: false }),
+    /not plannable/,
+  );
+});
+
+test('applyBatchRemovalPlan removes manifest declarations, lock root declarations and closure nodes', () => {
+  const names = ['a', 'b'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  assert.deepEqual(result.manifest.dependencies, {});
+  assert.deepEqual(result.lockfile.packages[''].dependencies, {});
+  assert.equal('node_modules/a' in result.lockfile.packages, false);
+  assert.equal('node_modules/b' in result.lockfile.packages, false);
+});
+
+test('applyBatchRemovalPlan never mutates source manifest or lockfile', () => {
+  const names = ['a'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const beforeManifest = JSON.stringify(manifest);
+  const beforeLock = JSON.stringify(lock);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  applyBatchRemovalPlan(manifest, lock, plan);
+  assert.equal(JSON.stringify(manifest), beforeManifest);
+  assert.equal(JSON.stringify(lock), beforeLock);
+});
+
+test('applyBatchRemovalPlan supports development, optional and peer dependency sections', () => {
+  const manifest = {
+    devDependencies: { dev: '^1.0.0' },
+    optionalDependencies: { optional: '^1.0.0' },
+    peerDependencies: { peer: '^1.0.0' },
+  };
+  const names = ['dev', 'optional', 'peer'];
+  const lock = {
+    lockfileVersion: 3,
+    packages: {
+      '': {
+        devDependencies: { dev: '^1.0.0' },
+        optionalDependencies: { optional: '^1.0.0' },
+        peerDependencies: { peer: '^1.0.0' },
+      },
+      ...Object.fromEntries(names.map((name) => [`node_modules/${name}`, { version: '1.0.0' }])),
+    },
+  };
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  assert.deepEqual(result.manifest.devDependencies, {});
+  assert.deepEqual(result.manifest.optionalDependencies, {});
+  assert.deepEqual(result.manifest.peerDependencies, {});
+});
+
+test('validateBatchRemovalResult accepts exact deterministic retirement output', () => {
+  const names = ['a', 'b'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  assert.deepEqual(validateBatchRemovalResult(manifest, lock, result, plan), []);
+});
+
+test('validateBatchRemovalResult detects residual manifest declaration', () => {
+  const names = ['a'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  result.manifest.dependencies = { a: '^1.0.0' };
+  assert.match(validateBatchRemovalResult(manifest, lock, result, plan).join('\n'), /manifest still declares retired dependency a/);
+});
+
+test('validateBatchRemovalResult detects residual closure node', () => {
+  const names = ['a'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  result.lockfile.packages['node_modules/a'] = { version: '1.0.0' };
+  const errors = validateBatchRemovalResult(manifest, lock, result, plan).join('\n');
+  assert.match(errors, /still contains retired root node_modules\/a|still contains retired closure node node_modules\/a/);
+});
+
+test('validateBatchRemovalResult detects manifest and lock root section drift', () => {
+  const names = ['a'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  result.lockfile.packages[''].dependencies.extra = '^1.0.0';
+  assert.match(validateBatchRemovalResult(manifest, lock, result, plan).join('\n'), /manifest\/lock root names differ/);
+});
+
+test('validateBatchRemovalResult detects unexpected package-count mutations', () => {
+  const names = ['a'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  result.lockfile.packages['node_modules/unrelated'] = { version: '1.0.0' };
+  assert.match(validateBatchRemovalResult(manifest, lock, result, plan).join('\n'), /package count/);
+});
+
+test('renderBatchRemovalPlan is stable, bounded and newline terminated', () => {
+  const names = ['a', 'b'];
+  const plan = buildBatchRemovalPlan(mkManifest(names), mkLock(names), names, { graph: independentGraph(names) });
+  const rendered = renderBatchRemovalPlan(plan);
+  assert.match(rendered, /Dependency batch removal plan/);
+  assert.match(rendered, /exclusivePackages=2 externalDependents=0/);
+  assert.equal(rendered.endsWith('\n'), true);
+  assert.equal(rendered.endsWith('\n\n'), false);
+});
+
+test('batch plan arrays and summary are immutable observations', () => {
+  const names = ['a'];
+  const plan = buildBatchRemovalPlan(mkManifest(names), mkLock(names), names, { graph: independentGraph(names) });
+  assert.ok(Object.isFrozen(plan.candidates));
+  assert.ok(Object.isFrozen(plan.closure));
+  assert.ok(Object.isFrozen(plan.sharedDependents));
+  assert.ok(Object.isFrozen(plan.summary));
+  assert.throws(() => plan.closure.push('x'), TypeError);
+});
+
+test('batch apply result can be validated without exposing dependency version payloads in plan', () => {
+  const names = ['a'];
+  const manifest = mkManifest(names);
+  const lock = mkLock(names);
+  const plan = buildBatchRemovalPlan(manifest, lock, names, { graph: independentGraph(names) });
+  assert.equal(JSON.stringify(plan).includes('^1.0.0'), false);
+  const result = applyBatchRemovalPlan(manifest, lock, plan);
+  assert.deepEqual(validateBatchRemovalResult(manifest, lock, result, plan), []);
 });
