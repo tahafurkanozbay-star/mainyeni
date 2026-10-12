@@ -1,3 +1,4 @@
+using Api.Core.Platform.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -45,9 +46,9 @@ namespace Api.Core.Platform.Middleware
                 if (requestOptions.RejectTraceHeaderWithInvalidCharacters)
                 {
                     _logger.LogWarning(
-                        "Rejected malformed correlation id on {Method} {Path}.",
-                        context.Request.Method,
-                        context.Request.Path);
+                        "Rejected malformed correlation id on {Method} {Route}.",
+                        ApiRuntimeMetrics.NormalizeMethod(context.Request.Method),
+                        RequestMetricsMiddleware.ResolveRoute(context));
                     await WriteInvalidCorrelationResponse(context);
                     return;
                 }
