@@ -1,4 +1,4 @@
-import { useId, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type {
   MapModeTransitionModel,
@@ -32,6 +32,9 @@ export const MapModeTransitionControl = ({
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const statusId = useId();
   const recoveryId = useId();
+  const mode2DRef = useRef<HTMLButtonElement>(null);
+  const mode3DRef = useRef<HTMLButtonElement>(null);
+  const [focusedMode, setFocusedMode] = useState<ExperienceMapMode | null>(null);
   const classNames = ['map-mode-transition-control', className].filter(Boolean).join(' ');
   const canRecover = snapshot.phase === 'error' && snapshot.activeMode !== snapshot.desiredMode;
 
@@ -41,10 +44,16 @@ export const MapModeTransitionControl = ({
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const next = event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'Home'
+      ? '2d'
+      : event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'End'
+        ? '3d' : null;
+    if (!next) return;
     event.preventDefault();
-    if (event.key === 'ArrowLeft' || event.key === 'Home') request('2d');
-    else request('3d');
+    setFocusedMode(next);
+    (next === '2d' ? mode2DRef : mode3DRef).current?.focus({ preventScroll: true });
+    request(next);
   };
 
   return (
@@ -80,13 +89,16 @@ export const MapModeTransitionControl = ({
           return (
             <button
               key={mode}
+              ref={mode === '2d' ? mode2DRef : mode3DRef}
               type="button"
               className="map-mode-transition-control__segment"
               aria-pressed={active}
+              tabIndex={(focusedMode ?? snapshot.activeMode) === mode ? 0 : -1}
               aria-label={modeDescription(mode)}
               aria-describedby={pending ? statusId : undefined}
               data-active={active || undefined}
               data-pending={pending || undefined}
+              onFocus={() => setFocusedMode(mode)}
               onClick={() => request(mode)}
             >
               <span className="map-mode-transition-control__mode" aria-hidden="true">

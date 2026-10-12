@@ -65,6 +65,33 @@ describe('MapModeTransitionControl', () => {
     expect(onRequest).not.toHaveBeenCalled();
   });
 
+  it('keeps one tab stop and moves focus with horizontal arrow keys', () => {
+    const { onRequest } = renderControl();
+    const group = screen.getByRole('group', { name: '2B ve 3B görünüm seçimi' });
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    const scene = screen.getByRole('button', { name: '3B sahne görünümüne geç' });
+    expect(map.tabIndex).toBe(0);
+    expect(scene.tabIndex).toBe(-1);
+    map.focus();
+    fireEvent.keyDown(group, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(scene);
+    expect(scene.tabIndex).toBe(0);
+    expect(onRequest).toHaveBeenCalledWith('3d', 'control');
+    fireEvent.keyDown(group, { key: 'Home' });
+    expect(document.activeElement).toBe(map);
+  });
+
+  it('does not capture modified shortcuts or Tab navigation', () => {
+    const { onRequest } = renderControl();
+    const group = screen.getByRole('group', { name: '2B ve 3B görünüm seçimi' });
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    map.focus();
+    fireEvent.keyDown(group, { key: 'ArrowRight', ctrlKey: true });
+    fireEvent.keyDown(group, { key: 'Tab' });
+    expect(document.activeElement).toBe(map);
+    expect(onRequest).not.toHaveBeenCalled();
+  });
+
   it('announces queued and transitioning states through the live region', () => {
     const { model } = renderControl();
     let request: ReturnType<typeof model.request> = null;
