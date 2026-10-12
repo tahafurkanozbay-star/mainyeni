@@ -121,7 +121,7 @@ export const parseProjectFile = (xml, file) => {
     const { action, value } = actionFromAttributes(element.attributes);
     if (action === 'Remove') continue;
     if (action !== 'Include' || !String(value ?? '').trim()) { findings.push(finding('project-reference-invalid', file, 'ProjectReference requires a non-empty Include path.')); continue; }
-    projectReferences.push(freeze({ path: String(value).trim().replaceAll('\\\\','/'), condition: element.attributes.Condition?.trim() || null }));
+    projectReferences.push(freeze({ path: String(value).trim().replace(/\\\\/g,'/'), condition: element.attributes.Condition?.trim() || null }));
   }
   return freeze({ packageReferences: freeze(packageReferences), projectReferences: freeze(projectReferences), findings: freeze(findings) });
 };
