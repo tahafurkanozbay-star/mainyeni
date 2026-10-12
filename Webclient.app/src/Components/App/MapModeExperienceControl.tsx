@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -161,7 +162,7 @@ export function MapModeExperienceControl({
     target?.focus({ preventScroll: true });
   };
 
-  const handleModeKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+  const handleModeKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>): void => {
     let move: MapModeFocusMove | null = null;
     if (event.key === 'ArrowRight' || event.key === 'ArrowDown') move = 'next';
     if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') move = 'previous';
