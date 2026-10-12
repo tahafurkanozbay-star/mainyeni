@@ -23,11 +23,13 @@ import {
 } from './contracts.mts';
 import { auditAccessibility } from './accessibility-audit.mts';
 import { auditArtifactProvenance } from './artifact-provenance-audit.mts';
+import { auditAsyncResourceLifecycle } from './async-resource-lifecycle-audit.mts';
 import { auditBackendSecurity } from './backend-security-audit.mts';
 import { auditCacheBoundaries } from './cache-boundary-audit.mts';
 import { auditCiIntegrity } from './ci-integrity-audit.mts';
 import { auditCompositeActions } from './composite-action-audit.mts';
 import { auditContainerBoundaries } from './container-boundary-audit.mts';
+import { auditCSharpModernizationContracts } from './csharp-modernization-contract-audit.mts';
 import { auditDataIntegrity } from './data-integrity-audit.mts';
 import { auditDependencies } from './dependency-audit.mts';
 import { auditDeploymentBoundaries } from './deployment-boundary-audit.mts';
@@ -35,6 +37,7 @@ import { auditGisReleaseContracts } from './gis-release-contract-audit.mts';
 import { auditLanguageModernization } from './language-modernization-audit.mts';
 import { auditGis } from './gis-audit.mts';
 import { auditMatrixTrust } from './matrix-trust-audit.mts';
+import { auditModuleGraphModernization } from './module-graph-modernization-audit.mts';
 import { auditModernization } from './modernization-audit.mts';
 import { auditNetwork } from './network-audit.mts';
 import { auditObservability } from './observability-audit.mts';
@@ -48,6 +51,7 @@ import { auditRunnerBoundaries } from './runner-boundary-audit.mts';
 import { auditRuntimeResilience } from './runtime-resilience-audit.mts';
 import { auditSecurity } from './security-audit.mts';
 import { auditToolingLanguageContracts } from './tooling-language-contract-audit.mts';
+import { auditToolingLanguageRatchet } from './tooling-language-ratchet-audit.mts';
 import { auditValidationIntegrity } from './validation-integrity-audit.mts';
 import { auditWholePageExperience } from './whole-page-experience-audit.mts';
 import { auditWorkflowEvidence } from './workflow-evidence-audit.mts';
@@ -250,9 +254,12 @@ export async function runReleaseEngine(
     auditModernization(inventory),
     auditLanguageModernization(inventory),
     auditToolingLanguageContracts(inventory),
+    auditToolingLanguageRatchet(inventory),
+    auditModuleGraphModernization(inventory),
     scanSource(inventory),
     auditSecurity(inventory),
     auditBackendSecurity(inventory),
+    auditCSharpModernizationContracts(inventory),
     auditDependencies(inventory),
     auditCiIntegrity(inventory),
     auditWorkflowExpressions(inventory),
@@ -279,6 +286,7 @@ export async function runReleaseEngine(
     auditPerformance(inventory),
     auditDataIntegrity(inventory),
     auditRuntimeResilience(inventory),
+    auditAsyncResourceLifecycle(inventory),
     auditObservability(inventory),
     auditTestContracts(inventory),
   ];
