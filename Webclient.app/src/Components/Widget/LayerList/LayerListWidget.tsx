@@ -564,6 +564,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                       placeholder="Örn. imar, park, kadastro"
                       autoComplete="off"
                       spellCheck={false}
+                      aria-label="Katman ara"
                       aria-controls={treeId}
                       aria-describedby={statusId}
                       onChange={(event) => model.setQuery(event.currentTarget.value)}
@@ -737,6 +738,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                                   step={5}
                                   value={row.opacity ?? 100}
                                   onChange={(event) => changeOpacity(event, row)}
+                                  aria-label={`Katman opaklığı: ${row.title}`}
                                   aria-valuetext={`Yüzde ${row.opacity ?? 100}`}
                                   disabled={row.disabled}
                                 />
