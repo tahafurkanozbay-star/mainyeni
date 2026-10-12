@@ -64,6 +64,7 @@ export interface MapWorkspaceShellModelOptions {
   readonly listenerLimit?: number;
   readonly onListenerError?: (error: unknown) => void;
   readonly initialPhase?: MapWorkspaceShellPhase;
+  readonly initialUtilityCollapsed?: boolean;
   readonly initialEnvironment?: Partial<MapWorkspaceShellEnvironment>;
 }
 
@@ -213,7 +214,7 @@ export class MapWorkspaceShellModel {
       'unknown',
       null,
       this.#availability,
-      false,
+      options.initialUtilityCollapsed === true,
     );
   }
 

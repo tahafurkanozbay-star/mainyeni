@@ -32,12 +32,13 @@
   transition:
     transform var(--exp-adaptive-motion-duration, 160ms) ease,
     opacity var(--exp-adaptive-motion-duration, 160ms) ease;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .experience-skip-navigation__link:focus,
 .experience-skip-navigation__link:focus-visible {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
   outline: 3px solid #facc15;
   outline-offset: 3px;

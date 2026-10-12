@@ -1,5 +1,5 @@
 :root {
-  --exp-font-sans: 'Ankara', 'Ankara Display', 'Segoe UI', Arial, sans-serif;
+  --exp-font-sans: "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
   --exp-font-mono: 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
   --exp-bg: #f4f7fb;
   --exp-surface: #ffffff;
@@ -753,7 +753,8 @@ label { color: var(--exp-text-soft); font-size: 12px; font-weight: 650; }
 
 @media (max-width: 576px) {
   :root { --exp-header-height: 52px; }
-  html, body, #root, #app, #app > div { font-size: 12px; }
+  html { font-size: 100%; }
+  body, #root, #app, #app > div { font-size: inherit; }
   .mainbar-container { min-height: 52px; height: 52px; padding: 5px 7px; }
   .mainbar { gap: 6px; }
   .mainbar-logo { width: 45px; }

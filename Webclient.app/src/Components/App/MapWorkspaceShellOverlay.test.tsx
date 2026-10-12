@@ -43,6 +43,15 @@ const flushFrame = async (): Promise<void> => {
 };
 
 describe('MapWorkspaceShellOverlay', () => {
+  it('starts compact when requested and allows explicit quick-navigation expansion', async () => {
+    installDefaultLandmarks();
+    render(<MapWorkspaceShellOverlay phase="ready" initialCollapsed />);
+    const expand = screen.getByRole('button', { name: 'Hızlı gezinmeyi aç' });
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Harita yüzeyine odaklan' })).not.toBeInTheDocument();
+    fireEvent.click(expand);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Harita yüzeyine odaklan' })).toBeVisible());
+  });
   beforeEach(() => {
     document.body.innerHTML = '';
     sessionStorage.clear();

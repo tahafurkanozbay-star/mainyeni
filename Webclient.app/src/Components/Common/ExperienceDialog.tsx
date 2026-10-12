@@ -1,11 +1,14 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
+  useState,
   type AriaRole,
   type MouseEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FOCUSABLE_SELECTOR,
   createFocusTrap,
@@ -68,6 +71,15 @@ export const ExperienceDialog = ({
   testId,
 }: ExperienceDialogProps): ReactNode => {
   const dialogRef = useRef<HTMLElement | null>(null);
+  const [portalRoot] = useState(() => typeof document === 'undefined' ? null : document.createElement('div'));
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useLayoutEffect(() => {
+    if (!open || !portalRoot) return undefined;
+    document.body.appendChild(portalRoot);
+    return () => portalRoot.remove();
+  }, [open, portalRoot]);
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') return undefined;
@@ -78,7 +90,7 @@ export const ExperienceDialog = ({
     const trap = createFocusTrap(container, {
       initialFocus: initialFocusRef?.current ?? null,
       closeOnEscape: true,
-      onEscape: () => onClose?.('escape'),
+      onEscape: () => onCloseRef.current?.('escape'),
     });
     trap.activate();
 
@@ -86,16 +98,16 @@ export const ExperienceDialog = ({
       trap.deactivate({ restore: restoreFocus });
       releaseScrollLock();
     };
-  }, [initialFocusRef, onClose, open, restoreFocus]);
+  }, [initialFocusRef, open, restoreFocus]);
 
-  if (!open) return null;
+  if (!open || !portalRoot) return null;
 
   const handleBackdropMouseDown = (event: MouseEvent<HTMLDivElement>): void => {
     if (!closeOnBackdrop || event.target !== event.currentTarget) return;
     onClose?.('backdrop');
   };
 
-  return (
+  return createPortal(
     <div
       className={backdropClassName}
       role="presentation"
@@ -115,7 +127,8 @@ export const ExperienceDialog = ({
       >
         {children}
       </section>
-    </div>
+    </div>,
+    portalRoot,
   );
 };
 

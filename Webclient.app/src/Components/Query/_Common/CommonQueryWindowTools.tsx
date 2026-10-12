@@ -234,8 +234,8 @@ export const CommonQueryWindowTools = forwardRef<
 
   return (
     <>
-      <button type="button" className="common-query-window-tool-button" onClick={() => windowManager.ToggleMinimiseWindow(windowId)} title="Pencereyi küçült" aria-label="Pencereyi küçült" aria-expanded={!minimized}>
-        <BiChevronUp className="common-query-window-tool-minimise-button" aria-hidden="true" />
+      <button type="button" className="common-query-window-tool-button" onClick={() => windowManager.ToggleMinimiseWindow(windowId)} title={minimized ? 'Pencereyi genişlet' : 'Pencereyi küçült'} aria-label={minimized ? 'Pencereyi genişlet' : 'Pencereyi küçült'} aria-expanded={!minimized}>
+        <BiChevronUp className="common-query-window-tool-minimise-button" aria-hidden="true" style={{ transform: minimized ? 'rotate(180deg)' : undefined }} />
       </button>
       <button type="button" className="common-query-window-tool-button" onClick={() => windowManager.HideWindow(windowId)} title="Pencereyi kapat" aria-label="Pencereyi kapat">
         <RiCloseCircleFill className="common-query-window-tool-close-button" aria-hidden="true" />
