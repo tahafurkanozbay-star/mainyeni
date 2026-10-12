@@ -143,13 +143,21 @@
 - WRITE STATUS: PR description correction and expected-head squash merge attempted after fresh gate verification; both rejected by OpenAI safety checks. No merge or new source commit. Do not claim main changed.
 - NEXT: verify current main/head, exact-head CI, behind=0, merge-base, >=4,000 additions, mergeable and review state; update stale PR description if permitted, then expected-head squash merge. Confirm merged=true, merge SHA and updated main. Any progress commit creates a new exact head requiring new CI. Keep scheduled Experience task enabled.
 
+## Deep Experience / map-tool workspace merged — PR #474 — 2026-10-12
+- MERGE: PR #474 `feat(experience): modernize map tools workspace` squash-merged successfully.
+- FINAL EXACT HEAD: `73fe17a205efb159875f6c5c44624115ee365180`; 4,238 additions / 196 deletions / 15 files; current-main merge-base `d364f991b88a0668a1337490227af4936eac232f`; 60 ahead / 0 behind; `mergeable=true`.
+- REQUIRED CI: Webclient Quality `38199456689`, Release QA `38199456675`, Typed Source Boundary `38199456683`, Platform Architecture Audit `38199456685`: all `completed+success` on the exact merged head.
+- REVIEW / RISK: no PR comments/reviews/threads at final gate; no new WMS/WFS UI, remote font/CDN, telemetry/analytics, external transport, secret, heavy asset, or second GIS icon resolver introduced.
+- MERGE SHA: `146f8bd4554376a0c9b253ec7c0333978af16668`; post-merge `main` was verified at the same SHA before this progress-only documentation update.
+- NEXT EXPERIENCE TURN: start from the then-current `main` on a new unique Experience branch; do not reuse PR #474 branch.
 
-## Deep Platform / dependency supply-chain governance — PR #473 current-main reconciliation — 2026-10-12
-- TUR / GÖREV: Deep Platform / Whole-Code Modernization; deterministic dependency supply-chain governance, lockfile provenance, transitive dependency policy, package-script execution safety and CI enforcement.
+
+
+## Deep Platform / dependency supply-chain governance — PR #473 merge admission — 2026-10-12
+- TUR / GÖREV: Deep Platform / Whole-Code Modernization; deterministic dependency supply-chain governance and CI enforcement.
 - BRANCH / PR: `agent/platform-wholecode-20261005-1329-07d197bc`; PR #473 canonical Platform PR.
-- CURRENT MAIN / LINEAGE: reconciled onto `146f8bd4554376a0c9b253ec7c0333978af16668`; prior product head `1f852dfd3c34d2363f4715e7c49e30c93c00191f` had 5,296 additions / 95 deletions and six exact-head required workflows completed+success before main advanced.
-- RECONCILIATION: current-main Experience tree is authoritative. Only #473 Platform/CI blobs are overlaid; shared progress starts from current main and this role-scoped checkpoint is appended. No stale whole-tree transplant and no force-push.
-- MODERNİZASYON: lock-graph inventory, direct/transitive surface policy, HTTPS/integrity/version provenance, bounded peer/install-script/deprecation governance, owner/reason/expiry exceptions, removal planning and npm/runtime mutation/evaluation command guards.
-- SECURITY / NETWORK: no new runtime dependency, endpoint, secret, browser transport, remote asset, WMS/WFS, GIS runtime service or second icon authority. Runtime dependency versions remain unchanged; no blind language/framework rewrite.
-- MERGE GATE: reconciliation creates a new exact head. Require current-main merge-base, behind=0, additions>=4,000, mergeable=true, no blocking reviews and Platform Dependency Governance + Release Evidence Contract + Platform Architecture Audit + Release QA + Platform Typed Test Validation + Webclient Quality all completed+success before squash merge.
-- SONRAKİ: verify reconciled exact-head CI and final security/performance/regression review; if every gate remains green, expected-head squash merge and verify merged=true, merge SHA and current main SHA. Keep automation enabled.
+- CURRENT MAIN / LINEAGE: reconciled onto `a757cc4d9e1047f2ee1b6809a46654143a84226d`; current-main Experience/progress tree preserved. Platform/CI files are selectively overlaid; no stale whole-tree transplant or force-push.
+- SCOPE: substantive dependency-governance source/tests remain above the mandatory 4,000-addition threshold; runtime dependency versions are unchanged.
+- SECURITY / PERFORMANCE: lock provenance, transitive policy, peer/install-script/deprecation governance, exception expiry/ownership, removal planning and npm/runtime mutation/evaluation guards are bounded/deterministic. No new endpoint, secret, browser transport, WMS/WFS, GIS service, remote asset or second icon authority.
+- MERGE GATE: this reconciliation creates a new exact head. Require behind=0, merge-base=current main, additions>=4,000, mergeable=true, no blocking reviews and all six required workflows completed+success before squash merge.
+- SONRAKİ: if exact-head gates remain green, squash merge and verify merged=true, merge SHA and current main SHA. Keep automation enabled.
