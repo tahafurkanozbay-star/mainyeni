@@ -35,7 +35,7 @@ const ABORT = /\b(?:AbortController|AbortSignal|signal\s*:|\.abort\s*\()/g;
 // not only as standalone prose. Keep the trailing word boundary so unrelated words
 // such as "retrystyle" do not become release findings while still recognizing the
 // executable retry helpers that matter for boundedness review.
-const RETRY = /\b(?:retry(?:[A-Z_]\w*)?|retries|backoff|attempts?|maxAttempts)\b/gi;
+const RETRY = /\b(?:[Rr]etry(?:[A-Z_]\w*)?|retries|[Bb]ackoff|[Aa]ttempts?|[Mm]axAttempts)\b/g;
 const BOUNDED_RETRY = /\b(?:maxRetries|maxAttempts|retryLimit|attemptLimit|Math\.min|backoff|maxDelay|deadline|timeout)\b/i;
 const STORAGE = /\b(?:localStorage|sessionStorage)\b/g;
 const PROMISE_CONSTRUCTOR = /new\s+Promise\s*\(/g;
