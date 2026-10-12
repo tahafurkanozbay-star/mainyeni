@@ -18,6 +18,7 @@ import {
   type MapModeExperienceSnapshot,
 } from './mapModeExperienceModel';
 import { MapModeFocusModel, type MapModeFocusMove } from './mapModeFocusModel';
+import { resolveMapModePresentation } from './mapModePresentationPolicy';
 import './MapModeExperienceControl.css';
 
 export interface MapModeExperienceControlProps {
@@ -151,8 +152,9 @@ export function MapModeExperienceControl({
     return () => window.clearTimeout(timer);
   }, [model, snapshot.phase, snapshot.requestId, timeoutMs]);
 
-  const interactionDisabled = snapshot.phase === 'requesting';
-  const statusRole = snapshot.phase === 'error' ? 'alert' : 'status';
+  const presentation = resolveMapModePresentation(snapshot);
+  const interactionDisabled = presentation.controlsDisabled;
+  const statusRole = presentation.statusRole;
 
   const focusModeButton = (mode: ExperienceMapMode): void => {
     const target = mode === '2d' ? mode2DRef.current : mode3DRef.current;
@@ -179,6 +181,10 @@ export function MapModeExperienceControl({
       data-phase={snapshot.phase}
       data-current-mode={snapshot.currentMode}
       data-viewport={snapshot.environment.viewport}
+      data-layout={presentation.layout}
+      data-target-size={presentation.targetSizePx}
+      data-transition-speed={presentation.transitionSpeed}
+      data-interaction-state={presentation.interactionState}
       data-coarse-pointer={String(snapshot.environment.coarsePointer)}
       data-reduced-motion={String(snapshot.environment.reducedMotion)}
       data-forced-colors={String(snapshot.environment.forcedColors)}
@@ -232,7 +238,7 @@ export function MapModeExperienceControl({
         </button>
       </div>
 
-      <div className="map-mode-experience__status" role={statusRole} aria-live={snapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">
+      <div className="map-mode-experience__status" role={statusRole} aria-live={presentation.livePoliteness} aria-atomic="true">
         <span className="map-mode-experience__status-dot" aria-hidden="true" />
         <span className="map-mode-experience__status-copy">
           <strong>{transitionDetail(snapshot)}</strong>
@@ -242,7 +248,7 @@ export function MapModeExperienceControl({
 
       {snapshot.phase === 'error' ? (
         <div className="map-mode-experience__recovery">
-          {snapshot.canRetry && snapshot.requestedMode ? (
+          {presentation.retryVisible && snapshot.requestedMode ? (
             <button
               type="button"
               className="map-mode-experience__retry"
