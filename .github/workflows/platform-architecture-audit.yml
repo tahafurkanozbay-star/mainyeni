@@ -63,6 +63,7 @@ jobs:
           tools/package-lock-integrity.test.mjs
           tools/dotnet-package-governance.test.mts
           tools/dotnet-project-graph.test.mts
+          tools/dotnet-layer-policy.test.mts
           tools/platform-backend-trigger-contract.test.mts
 
       - name: Enforce modernization contracts
@@ -86,6 +87,9 @@ jobs:
       - name: Enforce .NET central package governance
         run: node tools/dotnet-package-governance.mts
 
+      - name: Enforce .NET architectural layer boundaries
+        run: node tools/dotnet-layer-policy.mts
+
       - name: Audit package lock integrity
         run: node tools/package-lock-integrity.mjs
 
@@ -100,7 +104,8 @@ jobs:
             artifacts/platform-audit/platform-boundaries.md \
             artifacts/platform-audit/browser-runtime-boundary.md \
             artifacts/platform-audit/package-lock-integrity.md \
-            artifacts/platform-audit/dotnet-package-governance.md
+            artifacts/platform-audit/dotnet-package-governance.md \
+            artifacts/platform-audit/dotnet-layer-policy.md
           do
             if [ -f "$report" ]; then
               if [ -s "$GITHUB_STEP_SUMMARY" ]; then
