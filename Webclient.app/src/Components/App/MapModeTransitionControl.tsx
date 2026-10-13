@@ -31,6 +31,7 @@ export const MapModeTransitionControl = ({
 }: MapModeTransitionControlProps): ReactNode => {
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const statusId = useId();
+  const keyboardHelpId = useId();
   const recoveryId = useId();
   const mode2DRef = useRef<HTMLButtonElement>(null);
   const mode3DRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +48,7 @@ export const MapModeTransitionControl = ({
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const next = event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'Home'
       ? '2d'
       : event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'End'
@@ -82,7 +83,8 @@ export const MapModeTransitionControl = ({
         className="map-mode-transition-control__segments"
         role="group"
         aria-label="2B ve 3B görünüm seçimi"
-        aria-describedby={statusId}
+        aria-describedby={statusId + ' ' + keyboardHelpId}
+        aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
         onKeyDown={handleKeyDown}
       >
         {(['2d', '3d'] as const).map((mode) => {
@@ -117,6 +119,10 @@ export const MapModeTransitionControl = ({
           );
         })}
       </div>
+
+      <p id={keyboardHelpId} className="map-mode-transition-control__announcement">
+        Sol veya yukarı okla 2B haritaya, sağ veya aşağı okla 3B sahneye geçin. Home ve End tuşları da kullanılabilir.
+      </p>
 
       <p
         id={statusId}

@@ -102,6 +102,28 @@ describe('MapModeTransitionControl', () => {
     expect(onRequest).not.toHaveBeenCalled();
   });
 
+
+  it('describes the roving keyboard controls for assistive technology', () => {
+    renderControl();
+    const group = screen.getByRole('group', { name: '2B ve 3B görünüm seçimi' });
+    const ids = group.getAttribute('aria-describedby')?.split(' ') ?? [];
+    expect(ids).toHaveLength(2);
+    expect(document.getElementById(ids[1]!)).toHaveTextContent('Sol veya yukarı okla 2B haritaya');
+    expect(group).toHaveAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Home End');
+  });
+
+  it('does not consume Shift+Arrow modified keyboard gestures', () => {
+    const { onRequest } = renderControl();
+    const group = screen.getByRole('group', { name: '2B ve 3B görünüm seçimi' });
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    map.focus();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true, cancelable: true });
+    act(() => group.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(false);
+    expect(map).toHaveFocus();
+    expect(onRequest).not.toHaveBeenCalled();
+  });
+
   it('announces queued and transitioning states through the live region', () => {
     const { model } = renderControl();
     let request: ReturnType<typeof model.request> = null;
