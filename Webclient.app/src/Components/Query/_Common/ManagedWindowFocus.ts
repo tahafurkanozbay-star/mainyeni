@@ -30,6 +30,7 @@ const hasUnavailableAncestor = (element: HTMLElement): boolean => {
     if (current.hidden || current.hasAttribute('hidden')) return true;
     if (current.hasAttribute('inert')) return true;
     if (current.getAttribute('aria-hidden') === 'true') return true;
+    if (current.getAttribute('aria-disabled') === 'true') return true;
     current = current.parentElement;
   }
   return false;

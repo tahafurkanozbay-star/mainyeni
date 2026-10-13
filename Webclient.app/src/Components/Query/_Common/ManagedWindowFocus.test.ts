@@ -120,6 +120,20 @@ describe('ManagedWindowFocus', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('rejects aria-disabled ancestor groups for focus and opener restoration', () => {
+    const root = document.createElement('section');
+    const disabledGroup = document.createElement('div');
+    disabledGroup.setAttribute('aria-disabled', 'true');
+    const unavailable = document.createElement('button');
+    disabledGroup.append(unavailable);
+    const enabled = document.createElement('button');
+    root.append(disabledGroup, enabled);
+    document.body.append(root);
+    expect(focusManagedWindow({ root })).toBe(enabled);
+    expect(restoreManagedWindowFocus(unavailable)).toBe(false);
+    expect(document.activeElement).toBe(enabled);
+  });
+
   it('fails safely for invalid feature-owned selectors', () => {
     const root = document.createElement('section');
     document.body.append(root);
