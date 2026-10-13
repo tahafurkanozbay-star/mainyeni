@@ -36,7 +36,14 @@ const hasUnavailableAncestor = (element: HTMLElement): boolean => {
     // Never move keyboard focus into a non-rendered ancestor.
     const style = view?.getComputedStyle(current);
     if (style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse') return true;
-    current = current.parentElement;
+    // Continue through ShadowRoot hosts; a hidden/inert web component is not focusable.
+    if (current.parentElement) {
+      current = current.parentElement;
+    } else {
+      const root = current.getRootNode();
+      const host = 'host' in root ? root.host : null;
+      current = host instanceof HTMLElement ? host : null;
+    }
   }
   return false;
 };
