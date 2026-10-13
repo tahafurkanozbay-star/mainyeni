@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ParklarQueryWindow, type ParkWindowHandle } from './ParklarQueryWindow';
 import { ParklarQeryBusiness } from '../../../Business/ParklarQeryBusiness';
@@ -7,7 +7,9 @@ import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { CommonBusiness } from '../../../Business/CommonBusiness';
 import MapManager from '../../../Store/Managers/MapManager';
 import { createKentRehberiGeoJsonLayer } from '../../../data-services/kentRehberiGeoJsonLayer';
+import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 
+vi.mock('../../../Toolbox/GisGraphicsHelper', () => ({ GisGraphicsHelper: { ZoomToGeometry: vi.fn() } }));
 vi.mock('../../../Business/ParklarQeryBusiness', () => ({ ParklarQeryBusiness: { Query: vi.fn() } }));
 vi.mock('../../../Business/CommonBusiness', () => ({ CommonBusiness: { Clustering: { CreateLayerWithoutClustering: vi.fn() } } }));
 vi.mock('../../../Business/LoggingBusiness', () => ({ LoggingBusiness: { CreateClientLog: vi.fn(async () => undefined) } }));
@@ -113,6 +115,53 @@ describe('Parklar service window', () => {
     expect(screen.getByText('Park 201')).toBeVisible();
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+  });
+
+
+  it('aborts a pending detail on close and ignores a late response', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse() as never)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref, manager } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    await waitFor(() => expect(ParklarQeryBusiness.Query).toHaveBeenCalledTimes(2));
+    const signal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    act(() => { ref.current?.OnClose(); });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => {
+      finish({ ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }] } as never);
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    expect(manager.ToggleMinimiseWindow).not.toHaveBeenCalled();
+    expect(manager.ShowMessage).not.toHaveBeenCalled();
+  });
+
+  it('prevents a superseded detail from moving the map', async () => {
+    let finishFirst!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    let finishSecond!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse(2) as never)
+      .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishSecond = resolve; }));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Park 2 konumunu haritada göster' }));
+    const firstSignal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
+    expect(firstSignal?.aborted).toBe(true);
+    await act(async () => {
+      finishSecond({ ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }] } as never);
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce();
+    await act(async () => {
+      finishFirst({ ...makeResponse(), data: [{ geometry: { x: 30, y: 40 } }] } as never);
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce();
   });
 
 });

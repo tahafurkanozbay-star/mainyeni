@@ -253,6 +253,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
     const [pageStart, setPageStart] = useState(0);
     const layerAbortRef = useRef<AbortController | null>(null);
+    const detailAbortRef = useRef<AbortController | null>(null);
 
     const mountedRef = useRef(false);
     const mapViewRef = useRef<MapViewLike | null>(null);
@@ -262,6 +263,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const ownerRef = useRef<Readonly<LayerOwner<ParkLayerLike>> | null>(null);
     const lifecycleRef = useRef<DisposableBag>(createDisposableBag());
     const requestGateRef = useRef(createLatestRequestGate());
+    const detailGateRef = useRef(createLatestRequestGate());
     const visible = windowManager.IsVisible(id);
     const minimized = windowManager.IsMinimized?.(id) ?? false;
 
@@ -332,6 +334,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
     const reset = useCallback((): void => {
       layerAbortRef.current?.abort();
+      detailAbortRef.current?.abort();
+      detailGateRef.current.invalidate();
       requestGateRef.current.invalidate();
       setQuery(defaultQuery);
       setResultList([]);
@@ -352,6 +356,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
       mapViewRef.current = view;
       const requestId = requestGateRef.current.next();
+      detailAbortRef.current?.abort();
+      detailGateRef.current.invalidate();
       layerAbortRef.current?.abort();
       const layerAbort = new AbortController();
       layerAbortRef.current = layerAbort;
@@ -440,8 +446,25 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       }
     }, [getOwner, id, query, removeLastClusterLayer, reportError, windowManager, windowTitle]);
 
+    // The latest detail action owns the response and its transport.
+    const beginDetailAction = useCallback(() => {
+      detailAbortRef.current?.abort();
+      const controller = new AbortController();
+      detailAbortRef.current = controller;
+      const detailId = detailGateRef.current.next();
+      const queryId = requestGateRef.current.current();
+      return {
+        signal: controller.signal,
+        isCurrent: () => mountedRef.current
+          && !controller.signal.aborted
+          && detailGateRef.current.isCurrent(detailId)
+          && requestGateRef.current.isCurrent(queryId),
+      };
+    }, []);
+
     const getItemDetailsById = useCallback(async (
       item: ParkRecord,
+      signal: AbortSignal,
     ): Promise<ParkFeature> => {
       const objectIdCandidate = item.objectId;
       const objectId: string | number | null = (
@@ -460,6 +483,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       const result = await ParklarQeryBusiness.Query(
         { ObjectId: objectId },
         true,
+        { signal },
       ) as ServiceResult;
 
       if (
@@ -473,12 +497,12 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, []);
 
     const showItem = useCallback(async (item: ParkRecord): Promise<void> => {
-      const requestId = requestGateRef.current.current();
+      const action = beginDetailAction();
       void safeClientLog(LoggingBusiness, 'Parklar/Detay Göster', 'record-detail-opened', DebugHelper.Log);
 
       try {
-        const itemDetails = await getItemDetailsById(item);
-        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+        const itemDetails = await getItemDetailsById(item, action.signal);
+        if (!action.isCurrent()) return;
         const view = mapViewRef.current;
         if (!view || !itemDetails.geometry) {
           throw new Error('Konum bilgisi bulunamadı.');
@@ -490,22 +514,22 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           18,
         ));
 
-        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+        if (!action.isCurrent()) return;
         if (window.matchMedia?.('(max-width: 959px)').matches) {
           windowManager.ToggleMinimiseWindow(id);
         }
       } catch (error) {
-        if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
+        if (action.isCurrent()) {
           reportError(error, 'Park konumu gösterilemedi.');
         }
       }
-    }, [getItemDetailsById, id, reportError, windowManager]);
+    }, [beginDetailAction, getItemDetailsById, id, reportError, windowManager]);
 
     const showRoute = useCallback(async (item: ParkRecord): Promise<void> => {
-      const requestId = requestGateRef.current.current();
+      const action = beginDetailAction();
       try {
-        const itemDetails = await getItemDetailsById(item);
-        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+        const itemDetails = await getItemDetailsById(item, action.signal);
+        if (!action.isCurrent()) return;
         const routeUrl = createParkDirectionsUrl(itemDetails.geometry);
         if (!routeUrl) throw new Error('Koordinat bilgisi bulunamadı.');
         if (!openExternalSafely(routeUrl)) {
@@ -514,11 +538,11 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
         void safeClientLog(LoggingBusiness, 'Parklar/Yol Tarifi', 'external-route-requested', DebugHelper.Log);
       } catch (error) {
-        if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
+        if (action.isCurrent()) {
           reportError(error, 'Yol tarifi alınamadı.');
         }
       }
-    }, [getItemDetailsById, reportError]);
+    }, [beginDetailAction, getItemDetailsById, reportError]);
 
     const returnToServices = useCallback(async (): Promise<void> => {
       const targetExtent = extentHistoryRef.current[0];
@@ -556,6 +580,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       return () => {
         mountedRef.current = false;
         layerAbortRef.current?.abort();
+        detailAbortRef.current?.abort();
+        detailGateRef.current.invalidate();
         requestGateRef.current.invalidate();
         lifecycle.dispose();
         ownerRef.current?.clear();
