@@ -323,7 +323,7 @@ export const VicinityQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Yakınımda Ara/Tıklama',
-      `${String(item.Id ?? '')}/${item.Title}`,
+      'vicinity-item-action',
     );
 
     try {
@@ -378,7 +378,7 @@ export const VicinityQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Yakınımda Ara/Yol Tarifi',
-      `${String(item.Id ?? '')}/${item.Title}`,
+      'vicinity-item-action',
     );
 
     const candidate: unknown = GoogleMapsBusiness.CreateRoutesUrlFromPoint(geometry);
@@ -410,7 +410,7 @@ export const VicinityQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Yakınımda Ara/Sorgu',
-      `${String(mapEvent.mapPoint.latitude ?? '')}/${String(mapEvent.mapPoint.longitude ?? '')}/${bufferDistance}`,
+      'vicinity-search-started',
     );
 
     try {
