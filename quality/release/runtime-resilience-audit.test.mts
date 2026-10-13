@@ -64,3 +64,32 @@ test('reports resilience signal inventory', () => {
   assert.equal(result.summary.listenerFiles, 1);
   assert.equal(result.summary.abortAwareFiles, 1);
 });
+
+
+test('does not classify retryable metadata as executable retry logic', () => {
+  for (const fragment of [
+    'const retryable = false;',
+    'const retryable = true;',
+    'const Retryable = Boolean(error);',
+    'type Result = { retryable: boolean };',
+    'const payload = { retryable: false, data: [] };',
+  ]) {
+    assert.ok(!ids(source('Webclient.app/src/runtime/Result.ts', fragment)).includes('runtime-retry-without-bound'), fragment);
+  }
+});
+
+test('continues to identify real unbounded retry helpers and uppercase signals', () => {
+  for (const fragment of [
+    'async function retryRequest(){ return fetch("/api/x").catch(retryRequest); }',
+    'async function retryFetch(){ return fetch("/api/x").catch(retryFetch); }',
+    'const RETRY_COUNT = 1; function retryRequest(){ return request(); }',
+    'const retries = 3; function retryRequest(){ return request(); }',
+  ]) {
+    assert.ok(ids(source('Webclient.app/src/runtime/RetryTransport.ts', fragment)).includes('runtime-retry-without-bound'), fragment);
+  }
+});
+
+test('retains attempt-bound exemptions for real retry helpers', () => {
+  const text = 'const maxAttempts = 3; async function retryRequest(){ return fetch("/api/x").catch(retryRequest); }';
+  assert.ok(!ids(source('Webclient.app/src/runtime/BoundedTransport.ts', text)).includes('runtime-retry-without-bound'));
+});
