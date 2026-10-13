@@ -174,3 +174,50 @@ test('finding line numbers refer to source lines', () => {
   assert.ok(item.line > 0);
   assert.equal(workflow().split('\n')[item.line - 1].includes('uses:'), true);
 });
+
+test('shell interpolation of untrusted PR title is rejected', () => {
+  const source = workflow().replace('run: node --test',
+    'run: echo "${{ github.event.pull_request.title }}"');
+  assert.ok(codes(evaluate(source)).includes('workflow-shell-expression'));
+});
+test('shell interpolation of untrusted branch name is rejected', () => {
+  const source = workflow().replace('run: node --test',
+    'run: echo "${{ github.head_ref }}"');
+  assert.ok(codes(evaluate(source)).includes('workflow-shell-expression'));
+});
+test('multi-line shell expression is rejected even under a block scalar', () => {
+  const source = workflow().replace('run: node --test',
+    'run: |\n          echo safe\n          echo "${{ github.event.issue.title }}"');
+  assert.ok(codes(evaluate(source)).includes('workflow-shell-expression'));
+});
+test('safe environment variable use is permitted in a shell command', () => {
+  const source = workflow().replace('run: node --test',
+    'env:\n          BASE_SHA: ${{ github.event.pull_request.base.sha }}\n        run: echo "$BASE_SHA"');
+  assert.equal(evaluate(source).ok, true);
+});
+test('a shell comment containing a GitHub expression is also rejected', () => {
+  const source = workflow().replace('run: node --test',
+    'run: |\n          # do not interpolate ${{ github.event.pull_request.title }}\n          node --test');
+  assert.ok(codes(evaluate(source)).includes('workflow-shell-expression'));
+});
+test('each job must have its own bounded timeout', () => {
+  const source = workflow() + '  extra-job:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Test\n        run: echo ok\n';
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('timeout above two hours is rejected for every job', () => {
+  const source = workflow().replace('timeout-minutes: 10', 'timeout-minutes: 180');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('zero job timeout is rejected', () => {
+  const source = workflow().replace('timeout-minutes: 10', 'timeout-minutes: 0');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('multiple timeouts in one job are rejected', () => {
+  const source = workflow().replace('timeout-minutes: 10',
+    'timeout-minutes: 10\n    timeout-minutes: 20');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('multiple independently bounded jobs are accepted', () => {
+  const source = workflow() + '  extra-job:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n      - name: Test\n        run: echo ok\n';
+  assert.equal(evaluate(source).ok, true);
+});
