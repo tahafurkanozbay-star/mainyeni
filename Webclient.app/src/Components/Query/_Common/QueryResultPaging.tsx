@@ -37,7 +37,12 @@ export const useQueryResultPage = <RecordType extends QuerySearchableRecord,>(
   })), [records]);
   const filteredRecords = useMemo(() => {
     const needle = normalizeQueryResultText(filterText);
-    return needle ? searchIndex.filter((entry) => entry.text.includes(needle)).map((entry) => entry.record) : records;
+    if (!needle) return records;
+    // Treat a multiword query as an AND search regardless of title/address
+    // order. The normalized index is still computed only when data changes.
+    const terms = needle.split(/\s+/).filter(Boolean);
+    return searchIndex.filter((entry) => terms.every((term) => entry.text.includes(term)))
+      .map((entry) => entry.record);
   }, [filterText, records, searchIndex]);
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / normalizedPageSize));
   const currentPage = Math.min(Math.max(0, Math.trunc(page) || 0), pageCount - 1);

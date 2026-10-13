@@ -17,3 +17,43 @@
     outline-color: Highlight;
   }
 }
+
+/* Park actions remain operable at phone widths and with touch exploration. */
+.kr-park-query .kr-park-query__primary,
+.kr-park-query .kr-park-query__actions button,
+.kr-park-query .kr-fast-query__paging-actions button {
+  min-height: 44px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kr-park-query .kr-fast-query__paging-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+@media (pointer: coarse) {
+  .kr-park-query .kr-park-query__primary,
+  .kr-park-query .kr-park-query__actions button,
+  .kr-park-query .kr-fast-query__paging-actions button {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 360px) {
+  .kr-park-query .kr-fast-query__paging-actions button {
+    flex-basis: 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  .kr-park-query .kr-fast-query__paging-actions button:disabled {
+    color: GrayText;
+    border-color: GrayText;
+    opacity: 1;
+  }
+  .kr-park-query .kr-fast-query__paging-actions button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

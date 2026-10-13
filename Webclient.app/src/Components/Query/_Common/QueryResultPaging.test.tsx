@@ -31,4 +31,15 @@ describe('shared result page admission', () => {
     expect(result.current.currentPage).toBe(0);
     expect(result.current.visibleRecords[0]?.title).toBe('Park 0');
   });
+
+  it('matches unordered Turkish words across title and address without fetching another page', () => {
+    const { result } = renderHook(() => useQueryResultPage(records, 60));
+    act(() => result.current.setPage(8));
+    act(() => result.current.setFilterText('cankaya park 999'));
+    expect(result.current.currentPage).toBe(0);
+    expect(result.current.filteredRecords).toEqual([records[999]]);
+    act(() => result.current.setFilterText('park olmayan'));
+    expect(result.current.filteredRecords).toHaveLength(0);
+    expect(result.current.visibleRecords).toHaveLength(0);
+  });
 });
