@@ -259,6 +259,25 @@ describe('ExperienceMenu', () => {
     expect(document.activeElement).toBe(first);
   });
 
+
+  it.each([
+    { key: 'ArrowDown', ctrlKey: true },
+    { key: 'ArrowUp', metaKey: true },
+    { key: 'Home', shiftKey: true },
+    { key: 'End', altKey: true },
+  ])('does not hijack modified menu navigation: $key', (modifiers) => {
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'one', label: 'Bir' },
+      { id: 'two', label: 'İki' },
+    ]} />);
+    const first = screen.getByRole('menuitem', { name: 'Bir' });
+    first.focus();
+    const event = new KeyboardEvent('keydown', { ...modifiers, bubbles: true, cancelable: true });
+    screen.getByRole('menu').dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(first).toHaveFocus();
+  });
+
   it('supports non-looping menus', () => {
     render(
       <ExperienceMenu

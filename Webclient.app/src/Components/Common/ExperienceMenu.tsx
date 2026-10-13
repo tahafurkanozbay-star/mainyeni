@@ -138,6 +138,8 @@ export function ExperienceMenu({
       return;
     }
 
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent.isComposing) return;
+
     const move = resolveRovingFocusMove(rovingItems, activeIndex, event.key, {
       orientation: 'vertical',
       direction: 'ltr',
