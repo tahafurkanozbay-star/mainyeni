@@ -194,7 +194,11 @@ describe('shared service result window ownership and usability', () => {
     const schedule = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(77);
     const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
     try {
-      fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (10 kaldı)' }));
+      const reveal = screen.getByRole('button', { name: 'Daha fazla sonuç göster (10 kaldı)' });
+      // A keyboard-owned action must schedule the paging frame before cleanup.
+      reveal.focus();
+      fireEvent.click(reveal, { detail: 0 });
+      expect(schedule).toHaveBeenCalledWith(expect.any(Function));
       unmount();
       expect(cancel).toHaveBeenCalledWith(77);
     } finally { schedule.mockRestore(); cancel.mockRestore(); }
