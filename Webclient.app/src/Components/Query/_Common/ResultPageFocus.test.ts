@@ -36,6 +36,67 @@ describe('owned result paging focus', () => {
     cancel();
   });
 
+  it('transfers keyboard-owned focus through nested open shadow roots', () => {
+    const fixture = setup();
+    const outer = document.createElement('div');
+    const outerRoot = outer.attachShadow({ mode: 'open' });
+    const inner = document.createElement('div');
+    outerRoot.append(inner);
+    const innerRoot = inner.attachShadow({ mode: 'open' });
+    const shadowTrigger = document.createElement('button');
+    innerRoot.append(shadowTrigger);
+    document.body.append(outer);
+    shadowTrigger.focus();
+    expect(document.activeElement).toBe(outer);
+    expect(outerRoot.activeElement).toBe(inner);
+    expect(innerRoot.activeElement).toBe(shadowTrigger);
+
+    scheduleOwnedResultFocus({
+      trigger: shadowTrigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    expect(fixture.callbacks).toHaveLength(1);
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(fixture.target);
+  });
+
+  it('preserves deliberate focus changes within the same shadow root', () => {
+    const fixture = setup();
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    const shadowTrigger = document.createElement('button');
+    const sibling = document.createElement('button');
+    root.append(shadowTrigger, sibling);
+    document.body.append(host);
+    shadowTrigger.focus();
+
+    scheduleOwnedResultFocus({
+      trigger: shadowTrigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    sibling.focus();
+    fixture.callbacks[0]?.(0);
+    expect(root.activeElement).toBe(sibling);
+    expect(document.activeElement).toBe(host);
+  });
+
+  it('does not guess focus ownership inside a closed shadow root', () => {
+    const fixture = setup();
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'closed' });
+    const shadowTrigger = document.createElement('button');
+    root.append(shadowTrigger);
+    document.body.append(host);
+    shadowTrigger.focus();
+
+    scheduleOwnedResultFocus({
+      trigger: shadowTrigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    expect(fixture.callbacks).toHaveLength(0);
+    expect(document.activeElement).toBe(host);
+  });
+
   it('does not schedule focus for a pointer activation', () => {
     const fixture = setup();
     fixture.trigger.focus();

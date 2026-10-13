@@ -111,12 +111,40 @@ describe('Parklar service window', () => {
     vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
     const { ref } = setup();
     await act(async () => { await ref.current?.OnShow(); });
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }));
+    }
+    expect(screen.getByText('Park 200')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
     expect(screen.getByText('Park 201')).toBeVisible();
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
   });
 
+
+  it('does not skip parks across multiple 200-record groups', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(401) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    expect(screen.getAllByRole('listitem')).toHaveLength(60);
+    expect(screen.queryByRole('button', { name: 'Önceki park grubuna dön' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }));
+    }
+    expect(screen.getByText('Park 200')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
+    expect(screen.getByText('Park 201')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(60);
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki park grubuna dön' }));
+    expect(screen.getByText('Park 200')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+  });
 
   it('aborts a pending detail on close and ignores a late response', async () => {
     let finish!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
@@ -188,6 +216,10 @@ describe('Parklar service window', () => {
     vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
     const { ref } = setup();
     await act(async () => { await ref.current?.OnShow(); });
+    // Reveal the first complete group before keyboard paging is offered.
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }), { detail: 1 });
+    }
     const callbacks: FrameRequestCallback[] = [];
     const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       callbacks.push(callback);

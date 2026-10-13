@@ -779,11 +779,9 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
               {pageStart + 1}–{pageStart + Math.min(visibleCount, resultList.length - pageStart)} / {resultList.length} park
             </p>
             <div className="kr-fast-query__paging-actions">
-              {resultList.length > QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
+              {pageStart > 0 ? (
                 <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
-                  aria-disabled={pageStart === 0}
                   onClick={(event) => {
-                    if (pageStart === 0) return;
                     const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
                     schedulePageFocus(event, 0);
                     setPageStart(previousStart);
@@ -801,11 +799,10 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
                   Daha fazla park göster ({resultList.length - pageStart - visibleCount} kaldı)
                 </button>
               ) : null}
-              {resultList.length > QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
+              {visibleCount >= Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart)
+                && pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize < resultList.length ? (
                 <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
-                  aria-disabled={pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize >= resultList.length}
                   onClick={(event) => {
-                    if (pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize >= resultList.length) return;
                     schedulePageFocus(event, 0);
                     setPageStart(pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize);
                     setVisibleCount(Math.min(PAGE_SIZE, resultList.length - pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize));
