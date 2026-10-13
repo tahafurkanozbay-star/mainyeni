@@ -40,6 +40,9 @@ export const MapModeTransitionControl = ({
 
   const request = (mode: ExperienceMapMode, source: MapModeTransitionSource = 'control'): void => {
     if (snapshot.busy && snapshot.desiredMode === mode) return;
+    // An already active, settled view needs no new GIS transition.
+    // Recovery stays explicit and is never suppressed by this guard.
+    if (source === 'control' && !snapshot.busy && snapshot.activeMode === mode && snapshot.phase !== 'error') return;
     onRequest(mode, source);
   };
 

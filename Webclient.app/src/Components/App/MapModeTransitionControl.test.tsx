@@ -36,6 +36,16 @@ describe('MapModeTransitionControl', () => {
     expect(onRequest).toHaveBeenCalledTimes(1);
   });
 
+  it('does not restart an already settled 2B view from a redundant key or click', () => {
+    const { onRequest } = renderControl();
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    map.focus();
+    fireEvent.click(map);
+    fireEvent.keyDown(map, { key: 'Home' });
+    expect(onRequest).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(map);
+  });
+
   it('keeps the opposite segment available as a latest-intent override', () => {
     const { onRequest } = renderControl();
     fireEvent.click(screen.getByRole('button', { name: '3B sahne görünümüne geç' }));
