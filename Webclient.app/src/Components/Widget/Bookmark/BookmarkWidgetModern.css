@@ -5,9 +5,9 @@
   --bookmark-accent: var(--exp-accent, #0b6fcb);
   --bookmark-border: var(--exp-border, #d7dde6);
   --bookmark-surface: var(--exp-surface, #fff);
-  --bookmark-surface-muted: var(--exp-surface-muted, #f6f8fb);
+  --bookmark-surface-muted: var(--exp-surface-2, #f6f8fb);
   --bookmark-text: var(--exp-text, #172033);
-  --bookmark-muted: var(--exp-text-muted, #667085);
+  --bookmark-muted: var(--exp-text-soft, #667085);
   display: grid;
   gap: 18px;
   min-inline-size: 0;

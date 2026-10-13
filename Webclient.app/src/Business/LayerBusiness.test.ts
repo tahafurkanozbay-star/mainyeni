@@ -1,5 +1,8 @@
 import { apiClient } from '../platform/http/httpClient';
 import { LayerBusiness } from './LayerBusiness';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
+
+vi.mock('../platform/runtime/runtimeDiagnostics', () => ({ runtimeDiagnostics: { captureError: vi.fn() } }));
 
 vi.mock('../platform/http/httpClient', () => ({
   apiClient: {
@@ -32,7 +35,16 @@ describe('LayerBusiness', () => {
     apiClient.get.mockRejectedValue(error);
 
     await expect(LayerBusiness.GetLayers()).resolves.toBeNull();
-    expect(reportError).toHaveBeenCalledTimes(1);
-    expect(reportError).toHaveBeenCalledWith(error);
+    expect(runtimeDiagnostics.captureError).toHaveBeenCalledWith(error, { source: 'layer-business.catalog' }, 'warn');
+    expect(reportError).not.toHaveBeenCalled();
+  });
+  test('keeps a transport failure recoverable even when diagnostic reporting fails', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(runtimeDiagnostics.captureError).mockImplementationOnce(() => { throw new Error('reporter failure'); });
+    apiClient.get.mockRejectedValue(new Error('internal transport detail'));
+    try {
+      await expect(LayerBusiness.GetLayers()).resolves.toBeNull();
+      expect(warning).toHaveBeenCalledWith('Layer catalog diagnostic reporting failed.');
+    } finally { warning.mockRestore(); }
   });
 });

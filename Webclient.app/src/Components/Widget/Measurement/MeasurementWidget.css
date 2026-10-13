@@ -16,7 +16,7 @@
 .measurement-widget__intro {
   max-inline-size: 62ch;
   margin: 0;
-  color: var(--exp-text-muted, #667085);
+  color: var(--exp-text-soft, #667085);
   font-size: 0.76rem;
   line-height: 1.5;
 }
@@ -104,7 +104,7 @@
 
 .measurement-widget__canvas-help {
   margin: -0.25rem 0 0;
-  color: var(--exp-text-muted, #667085);
+  color: var(--exp-text-soft, #667085);
   font-size: 0.7rem;
   line-height: 1.45;
 }
@@ -214,4 +214,14 @@
   .measurement-widget__canvas-help {
     color: var(--exp-text, #172033);
   }
+}
+
+.measurement-widget > .common-query-window-header > span { flex: 1 1 0; }
+.measurement-widget__window-tools { display: flex; align-items: center; flex: 0 0 auto; gap: 4px; }
+.measurement-widget__body[hidden] { display: none; }
+#app-shell .measurement-widget[data-measurement-minimized='true'] {
+  bottom: auto;
+  inset-block-end: auto;
+  height: auto;
+  block-size: auto;
 }

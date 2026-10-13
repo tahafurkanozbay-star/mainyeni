@@ -9,8 +9,9 @@ import {
   type RefObject,
 } from 'react';
 import { loadArcgisModules } from '../../../gis-engine/arcgisModuleRuntime';
-import { DebugHelper } from '../../../Toolbox/DebugHelper';
+import { runtimeDiagnostics } from '../../../platform/runtime/runtimeDiagnostics';
 import MapManager from '../../../Store/Managers/MapManager';
+import { useMapWidgetFocus } from '../_shared/useMapWidgetFocus';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import {
   MapWidgetEmptyState,
@@ -20,7 +21,6 @@ import {
 } from '../_shared/MapWidgetSurface';
 import {
   createLatestOperationGate,
-  normalizeWidgetError,
   isAbortLikeError,
   type LatestOperationGate,
 } from '../_shared/MapWidgetRuntime';
@@ -61,11 +61,20 @@ export interface SketchWidgetProps {
   readonly windowManager: MapWidgetManagerLike;
 }
 
+const reportSketchError = (error: unknown): void => {
+  try { runtimeDiagnostics.captureError(error, { source: 'experience.sketch' }, 'warn'); }
+  catch { console.warn('Sketch diagnostic reporting failed.'); }
+};
+
 export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
   ({ id, windowManager }, ref): ReactNode => {
+    useMapWidgetFocus(id, windowManager.IsVisible(id));
     const sketchRef = useRef<SketchLike | null>(null);
     const sketchLayerRef = useRef<GraphicsLayerLike | null>(null);
     const attachedMapRef = useRef<MapLike | null>(null);
+    const boundViewRef = useRef<MapViewLike | null>(null);
+    const mountedRef = useRef(false);
+    const operationRevisionRef = useRef(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const hostRef = useRef<OwnedArcgisWidgetHost | null>(null);
     const gateRef = useRef<LatestOperationGate | null>(null);
@@ -80,8 +89,8 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
     }
 
     const clearSketch = useCallback((): void => {
-      try { sketchRef.current?.cancel?.(); } catch (error) { DebugHelper.Log(error); }
-      try { sketchLayerRef.current?.removeAll?.(); } catch (error) { DebugHelper.Log(error); }
+      try { sketchRef.current?.cancel?.(); } catch (error) { reportSketchError(error); }
+      try { sketchLayerRef.current?.removeAll?.(); } catch (error) { reportSketchError(error); }
     }, []);
 
     const disposeSketch = useCallback((): void => {
@@ -91,7 +100,7 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
       try {
         sketchRef.current?.destroy?.();
       } catch (error) {
-        DebugHelper.Log(error);
+        reportSketchError(error);
       } finally {
         sketchRef.current = null;
         hostRef.current?.dispose();
@@ -101,24 +110,33 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
         try {
           map.remove(layer);
         } catch (error) {
-          DebugHelper.Log(error);
+          reportSketchError(error);
         }
       }
       sketchLayerRef.current = null;
       attachedMapRef.current = null;
-      try { layer?.destroy?.(); } catch (error) { DebugHelper.Log(error); }
-      setReady(false);
+      boundViewRef.current = null;
+      try { layer?.destroy?.(); } catch (error) { reportSketchError(error); }
+      if (mountedRef.current) setReady(false);
     }, [clearSketch]);
 
     const initialize = useCallback(async (): Promise<void> => {
-      if (sketchRef.current || !containerRef.current) return;
       const mapView = MapManager.GetMapView() as MapViewLike | null;
+      if (!containerRef.current) return;
+      if (boundViewRef.current === mapView && (sketchRef.current || gateRef.current?.snapshot().phase === 'running')) return;
+      if (boundViewRef.current !== mapView) {
+        operationRevisionRef.current += 1;
+        gateRef.current?.cancel('map-view-changed');
+        disposeSketch();
+      }
       if (!mapView?.map) {
         setError('Çizim araçları için harita görünümü henüz hazır değil.');
         return;
       }
 
       setError(null);
+      boundViewRef.current = mapView;
+      const revision = ++operationRevisionRef.current;
       try {
         await gateRef.current?.run(async (operation) => {
           const [Sketch, GraphicsLayer] = await loadArcgisModules<[
@@ -129,6 +147,7 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
             'esri/layers/GraphicsLayer',
           ]);
           if (!operation.isCurrent() || !containerRef.current) return;
+          if (MapManager.GetMapView() !== mapView) throw new Error('Map view changed before sketch admission.');
 
           const layer = new GraphicsLayer({ title: 'Kullanıcı çizimleri' });
           sketchLayerRef.current = layer;
@@ -152,9 +171,10 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
           setReady(true);
         });
       } catch (caught) {
-        if (gateRef.current?.snapshot().phase === 'cancelled' || isAbortLikeError(caught)) return;
+        if (!mountedRef.current || revision !== operationRevisionRef.current || isAbortLikeError(caught)) return;
         disposeSketch();
-        setError(normalizeWidgetError(caught, 'Çizim araçları başlatılamadı.'));
+        reportSketchError(caught);
+        setError('Çizim araçları başlatılamadı. Harita hazır olduğunda yeniden deneyin.');
       }
     }, [disposeSketch]);
 
@@ -166,17 +186,24 @@ export const SketchWidget = forwardRef<ManagedWindowHandle, SketchWidgetProps>(
         void initialize();
       },
       OnClose: () => {
+        operationRevisionRef.current += 1;
         gateRef.current?.cancel('widget-closed');
         clearSketch();
       },
     }), [clearSketch, id, initialize, windowManager]);
 
     useEffect(() => {
+      mountedRef.current = true;
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
       return () => {
-        gateRef.current?.dispose();
+        mountedRef.current = false;
+        operationRevisionRef.current += 1;
+        gateRef.current?.cancel('widget-unmounted');
         disposeSketch();
         windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
+        queueMicrotask(() => {
+          if (!mountedRef.current) gateRef.current?.dispose();
+        });
       };
     }, [disposeSketch, id, ref, windowManager]);
 

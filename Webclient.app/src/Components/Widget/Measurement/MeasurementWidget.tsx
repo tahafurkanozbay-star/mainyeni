@@ -32,10 +32,11 @@ import {
   type MeasurementExperienceController,
 } from './measurementExperienceController';
 import './MeasurementWidget.css';
-import { createArcgisWidgetHost } from '../../../gis-engine/arcgisWidgetHost';
+import { createArcgisWidgetHost, type OwnedArcgisWidgetHost } from '../../../gis-engine/arcgisWidgetHost';
 
 interface WindowManagerLike extends QueryWindowManagerLike {
   readonly RegisterWindow: (ref: unknown) => void;
+  readonly UnregisterWindow?: (id: string, ref: unknown) => void;
   readonly ShowWindow: (id: string) => void;
   readonly IsVisible: (id: string) => boolean;
 }
@@ -54,13 +55,18 @@ export interface MeasurementWindowHandle {
 }
 
 const ToolGlyph = ({ kind }: { readonly kind: 'area' | 'distance' | 'clear' }): ReactNode => {
-  if (kind === 'area') {
-    return <span className="measurement-widget__tool-glyph" aria-hidden="true">▱</span>;
-  }
-  if (kind === 'distance') {
-    return <span className="measurement-widget__tool-glyph" aria-hidden="true">↔</span>;
-  }
-  return <span className="measurement-widget__tool-glyph" aria-hidden="true">⌫</span>;
+  const path = kind === 'area'
+    ? 'm4 17 4-11 12 3-3 11-13-3Z M8 6l9 14'
+    : kind === 'distance'
+      ? 'M4 12h16 M8 8l-4 4 4 4 M16 8l4 4-4 4'
+      : 'M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v5 M14 11v5';
+  return (
+    <span className="measurement-widget__tool-glyph" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+        <path d={path} />
+      </svg>
+    </span>
+  );
 };
 
 export const MeasurementWidget = forwardRef<
@@ -69,10 +75,12 @@ export const MeasurementWidget = forwardRef<
 >(({ id, windowManager }, ref): ReactNode => {
   const rootRef = useRef<HTMLElement>(null);
   const sdkHostParentRef = useRef<HTMLDivElement | null>(null);
+  const sdkHostRef = useRef<OwnedArcgisWidgetHost | null>(null);
+  const mountedRef = useRef(false);
   const focusLifecycleRef = useRef<ManagedWindowFocusLifecycle | null>(null);
   const controller = useMemo<MeasurementExperienceController>(() => createMeasurementExperienceController({
     getView: () => MapManager.GetMapView?.() ?? null,
-    container: 'measurementDiv',
+    container: `${id}-measurement-sdk`,
     modelOptions: {
       maxRetries: 3,
       historyLimit: 12,
@@ -89,7 +97,9 @@ export const MeasurementWidget = forwardRef<
         failureKind: diagnostic.failureKind,
       });
     },
-  }), []);
+  }), [id]);
+  const currentControllerRef = useRef(controller);
+  currentControllerRef.current = controller;
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -134,17 +144,34 @@ export const MeasurementWidget = forwardRef<
   }), [controller, getFocusLifecycle, id, windowManager]);
 
   useEffect(() => {
-    const host = sdkHostParentRef.current ? createArcgisWidgetHost(sdkHostParentRef.current, 'measurementDiv') : null;
+    mountedRef.current = true;
+    if (sdkHostRef.current?.container.id !== `${id}-measurement-sdk`) {
+      sdkHostRef.current?.dispose();
+      sdkHostRef.current = null;
+    }
+    if (!sdkHostRef.current && sdkHostParentRef.current) {
+      sdkHostRef.current = createArcgisWidgetHost(sdkHostParentRef.current, `${id}-measurement-sdk`);
+    }
     windowManager.RegisterWindow(ref);
     controller.refreshView();
+    const host = sdkHostRef.current;
 
     return () => {
-      controller.dispose();
-      host?.dispose();
+      mountedRef.current = false;
+      controller.close();
+      windowManager.UnregisterWindow?.(id, ref);
       focusLifecycleRef.current?.dispose();
       focusLifecycleRef.current = null;
+      // Effect replay must not permanently retire the shared observable model
+      // or replace the SDK host underneath an existing measurement instance.
+      queueMicrotask(() => {
+        if (mountedRef.current && currentControllerRef.current === controller) return;
+        controller.dispose();
+        host?.dispose();
+        if (sdkHostRef.current === host) sdkHostRef.current = null;
+      });
     };
-  }, [controller, ref, windowManager]);
+  }, [controller, id, ref, windowManager]);
 
   const unavailable = snapshot.busy || !snapshot.viewReady || snapshot.phase === 'destroyed';
   const toolbarItems: readonly ExperienceToolbarItem[] = [
@@ -178,14 +205,16 @@ export const MeasurementWidget = forwardRef<
       ref={rootRef}
       className="common-query-window common-query-window-right measurement-widget"
       style={{ visibility: windowManager.IsVisible(id) ? 'visible' : 'hidden' }}
+      aria-hidden={!windowManager.IsVisible(id)}
       aria-labelledby={`${id}-title`}
       aria-busy={snapshot.busy || undefined}
       data-measurement-phase={snapshot.phase}
       data-measurement-tool={snapshot.activeTool || 'none'}
+      data-measurement-minimized={String(windowManager.IsMinimized(id))}
       onKeyDownCapture={() => controller.recordInputModality('keyboard')}
       onPointerDownCapture={() => controller.recordInputModality('pointer')}
     >
-      <div className="common-query-window-header">
+      <header className="common-query-window-header">
         <img
           className="common-query-window-header-icon"
           src="images/icons/toolbar/olcumaraci.png"
@@ -193,18 +222,18 @@ export const MeasurementWidget = forwardRef<
           aria-hidden="true"
         />
         <span id={`${id}-title`}>Ölçüm Araçları</span>
-        <CommonQueryWindowTools
+        <div className="measurement-widget__window-tools"><CommonQueryWindowTools
           windowManager={windowManager}
           windowId={id}
           showNearbySearch={false}
           showMapSelect={false}
           setQueryField={() => undefined}
-        />
-      </div>
+        /></div>
+      </header>
 
-      <div className="measurement-widget__body">
+      <div className="measurement-widget__body" hidden={windowManager.IsMinimized(id)}>
         <p className="measurement-widget__intro">
-          Harita üzerinde alan ve mesafe ölçün. Araç seçimi, yükleme ve hata durumu klavye ve ekran okuyucu kullanıcılarına canlı olarak bildirilir.
+          Alan veya mesafe aracını seçin, ardından haritada ölçmek istediğiniz noktaları işaretleyin.
         </p>
 
         <ExperienceToolbar
@@ -223,9 +252,9 @@ export const MeasurementWidget = forwardRef<
           className="measurement-widget__canvas"
           aria-label="ArcGIS ölçüm denetimi"
           aria-busy={snapshot.busy || undefined}
-          aria-describedby="measurement-widget-canvas-help"
+          aria-describedby={`${id}-canvas-help`}
         />
-        <p id="measurement-widget-canvas-help" className="measurement-widget__canvas-help">
+        <p id={`${id}-canvas-help`} className="measurement-widget__canvas-help">
           Ölçüm aracını seçtikten sonra harita üzerinde gerekli noktaları işaretleyin. Sonuçlar ArcGIS ölçüm denetiminde gösterilir.
         </p>
       </div>
