@@ -430,3 +430,9 @@
 - Webclient Quality run 38337071597 failed one 1,000-record paging Vitest due to 10-second timeout. Release QA, typed boundary, architecture and dependency governance succeeded.
 - Prepared lower-cost DOM-cap regression and abort-owned Parklar detail cancellation, but GitHub source/blob writes were rejected by safety checks. Changes remain uncommitted and untested. No merge.
 - Next: apply the same-branch repair, rerun exact-head checks, continue meaningful accessibility/responsive UI work and review before any merge.
+
+## 2026-10-13 — Experience #492 latest checkpoint
+- Same canonical draft PR #492; base/merge-base main 70f2ffb2. Source commits 1c9a807c (reduce 1,000-result regression traversal cost), 3d7a612f (prevent stretched result cards), 3c256ccb (Parklar forced-colors focus).
+- The preceding db37cb01 exact-head five CI checks completed-success; current head requires fresh exact-head checks. Local npm/build/browser visual tests not run.
+- Parklar detail AbortController/ownership update attempted but GitHub safety rejected it; no cancellation fix or detail regression test committed. No network/dependency/icon changes.
+- PR additions below 4,000; do not merge. Next: exact-head CI, Parklar detail cancellation, landscape/keyboard UX regression, further substantive experience work.
