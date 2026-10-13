@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { auditClientLogPrivacy } from './client-log-privacy-audit.mts';
 import { fixtureInventory } from './test-helpers.mts';
 
@@ -11,7 +12,7 @@ for (const [path, minimumCalls] of [
   ['Webclient.app/src/Components/Query/GenelAramaQuery/GenelAramaQeryWindow.tsx', 1],
 ] as const) {
   test(`production client log privacy: ${path}`, () => {
-    const text = readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+    const text = readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), 'utf8');
     const audit = auditClientLogPrivacy(fixtureInventory([{ path, text }]));
     assert.equal(audit.summary.runtimeFiles, 1);
     assert.ok(audit.summary.clientLogCalls >= minimumCalls, 'logging contract unexpectedly removed');
