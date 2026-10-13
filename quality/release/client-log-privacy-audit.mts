@@ -122,6 +122,8 @@ function findClientLogCalls(text: string): readonly ClientLogCall[] {
 }
 
 function riskReason(argument: string): string | null {
+  const value = argument.trim();
+  if (/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)$/.test(value) && !value.includes('${')) return null;
   if (SENSITIVE_DIRECT_IDENTIFIER.test(argument.trim())) return 'raw-record-or-query';
   if (SENSITIVE_PATH.test(argument)) return 'address-path-label';
   if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';

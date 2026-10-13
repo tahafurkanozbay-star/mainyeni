@@ -42,3 +42,11 @@ test('explicit location keys in nested metadata cannot bypass the audit', () => 
     '{ meta: { mahalle: value } }',
   ]) assert.equal(findings(payload), 1, payload);
 });
+
+test('static literal field examples do not disclose record values', () => {
+  for (const payload of [
+    '"row.address"',
+    "'result.coordinates'",
+    '`record.address`',
+  ]) assert.equal(findings(payload), 0, payload);
+});
