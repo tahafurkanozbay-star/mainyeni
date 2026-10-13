@@ -52,29 +52,29 @@ export const auditWorkflowSource = (file, source) => {
   // hazard when any part of the expression can be influenced by a PR author.
   // Values must cross into scripts through environment variables instead.
   for (let i = 0; i < lines.length; i++) {
-    const run = lines[i].match(/^\\s{8}run:\\s*(.*)$/);
+    const run = lines[i].match(/^\s{8}run:\s*(.*)$/);
     if (!run) continue;
     if (run[1].includes('${{')) findings.push(find('workflow-shell-expression', file, i + 1,
       'Pass GitHub expressions through env instead of interpolating shell commands.'));
-    if (!/^[|>][-+]?\\s*(?:#.*)?$/.test(run[1])) continue;
-    for (let j = i + 1; j < lines.length && (/^\\s{10}/.test(lines[j]) || !lines[j].trim()); j++) {
+    if (!/^[|>][-+]?\s*(?:#.*)?$/.test(run[1])) continue;
+    for (let j = i + 1; j < lines.length && (/^\s{10}/.test(lines[j]) || !lines[j].trim()); j++) {
       if (lines[j].includes('${{')) findings.push(find('workflow-shell-expression', file, j + 1,
         'Pass GitHub expressions through env instead of interpolating shell commands.'));
     }
   }
   // Check each job independently. A timeout on one job must not hide an
   // unbounded job elsewhere in the same workflow.
-  const jobsStart = lines.findIndex(line => /^jobs:\\s*$/.test(line));
+  const jobsStart = lines.findIndex(line => /^jobs:\s*$/.test(line));
   if (jobsStart >= 0) {
     for (let i = jobsStart + 1; i < lines.length; i++) {
-      if (lines[i] && !/^\\s/.test(lines[i])) break;
-      const job = lines[i].match(/^  ([A-Za-z0-9_-]+):\\s*$/);
+      if (lines[i] && !/^\s/.test(lines[i])) break;
+      const job = lines[i].match(/^  ([A-Za-z0-9_-]+):\s*$/);
       if (!job) continue;
       let end = i + 1;
-      while (end < lines.length && !/^  [A-Za-z0-9_-]+:\\s*$/.test(lines[end]) &&
-        (!lines[end] || /^\\s/.test(lines[end]))) end++;
+      while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end]) &&
+        (!lines[end] || /^\s/.test(lines[end]))) end++;
       const timeouts = lines.slice(i + 1, end).filter(line =>
-        /^    timeout-minutes:\\s*(?:[1-9][0-9]*)\\s*$/.test(line));
+        /^    timeout-minutes:\s*(?:[1-9][0-9]*)\s*$/.test(line));
       if (timeouts.length !== 1 || Number(timeouts[0].trim().split(':')[1]) > 120) {
         findings.push(find('workflow-job-timeout-invalid', file, i + 1,
           'Every job requires exactly one positive timeout of at most 120 minutes.'));
