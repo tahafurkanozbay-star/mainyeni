@@ -40,14 +40,20 @@ import { auditLayerListCatalog, summarizeLayerListCatalogAudit } from './layerLi
 import { LayerListLoadCoordinator } from './layerListLoadCoordinator';
 import './LayerListWidget.css';
 import { createArcgisWidgetHost, type OwnedArcgisWidgetHost } from '../../../gis-engine/arcgisWidgetHost';
+import { runtimeDiagnostics } from '../../../platform/runtime/runtimeDiagnostics';
+import { withTimeout } from '../../../platform/runtime/resilience';
+import { createManagedWindowFocusLifecycle } from '../../Query/_Common/ManagedWindowFocus';
 
 const OWNER_ID = 'layer-list-widget';
 const MAX_RUNTIME_GROUPS = 64;
 const MAX_RUNTIME_LAYERS = 512;
+const LAYER_PANEL_POLICY = Object.freeze({ catalogTimeoutMs: 15_000, legendTimeoutMs: 15_000, layerTimeoutMs: 15_000 });
 
 interface LayerRuntime {
   visible: boolean;
   opacity: number;
+  load?: (options: { signal: AbortSignal }) => Promise<unknown>;
+  cancelLoad?: () => void;
   destroy?: () => void;
 }
 
@@ -163,12 +169,49 @@ const safeOpacity = (value: unknown): number => {
   return Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : 100;
 };
 
-const reportLayerListError = (error: unknown, context: 'catalog' | 'legend'): void => {
+const reportLayerListError = (error: unknown, context: 'catalog' | 'legend' | 'cleanup'): void => {
   try {
-    globalThis.reportError?.(error);
+    runtimeDiagnostics.captureError(error, { source: `experience.layer-list.${context}` }, 'warn');
   } catch {
     globalThis.console?.warn?.(`LayerList ${context} error reporter failed.`);
   }
+};
+
+// Preserve every code point in a key; replacing punctuation with a dash can
+// make distinct configured layers share the same aria-activedescendant ID.
+const rowDomId = (treeId: string, key: string): string =>
+  `${treeId}-row-${Array.from(key, (character) => character.codePointAt(0)?.toString(16)).join('-')}`;
+
+const disposePanelLayer = (layer: LayerRuntime | null): void => {
+  try { layer?.cancelLoad?.(); }
+  catch (error) { reportLayerListError(error, 'cleanup'); }
+  try { layer?.destroy?.(); }
+  catch (error) { reportLayerListError(error, 'cleanup'); }
+};
+
+const loadPanelLayer = async (source: LayerDefinition, parentSignal: AbortSignal): Promise<LayerRuntime> => {
+  let candidate: LayerRuntime | null = null;
+  const dispose = (): void => {
+    const layer = candidate;
+    candidate = null;
+    disposePanelLayer(layer);
+  };
+  try {
+    const layer = await withTimeout(async (signal) => {
+      try {
+        const created: unknown = await CommonBusiness.CreateLayer(source);
+        if (!isRecord(created)) throw new TypeError('Katman çalışma zamanı oluşturulamadı.');
+        const runtime = created as unknown as LayerRuntime;
+        candidate = runtime;
+        signal.throwIfAborted();
+        await runtime.load?.({ signal });
+        signal.throwIfAborted();
+        return runtime;
+      } catch (error) { dispose(); throw error; }
+    }, LAYER_PANEL_POLICY.layerTimeoutMs, parentSignal);
+    candidate = null;
+    return layer;
+  } catch (error) { dispose(); throw error; }
 };
 
 const groupIdFor = (group: LayerGroup, index: number): string =>
@@ -249,6 +292,11 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     const loadSnapshot = useSyncExternalStore(loader.subscribe, loader.getSnapshot, loader.getSnapshot);
 
     const ownerRef = useRef<LayerOwner<LayerRuntime> | null>(null);
+    const ownerViewRef = useRef<MapViewLike | null>(null);
+    const catalogViewRef = useRef<MapViewLike | null>(null);
+    const catalogNeedsReloadRef = useRef(true);
+    const catalogAbortRef = useRef<AbortController | null>(null);
+    const rootRef = useRef<HTMLElement | null>(null);
     const legendRef = useRef<LegendLike | null>(null);
     const legendHostParentRef = useRef<HTMLDivElement | null>(null);
     const legendHostRef = useRef<OwnedArcgisWidgetHost | null>(null);
@@ -265,12 +313,23 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     const layersTabRef = useRef<HTMLButtonElement | null>(null);
     const legendTabRef = useRef<HTMLButtonElement | null>(null);
 
-    const getOwner = useCallback((): LayerOwner<LayerRuntime> | null => {
-      const view = asMapView(MapManager.GetMapView());
-      if (!view) return null;
-      if (!ownerRef.current) ownerRef.current = createLayerOwner<LayerRuntime>(view, OWNER_ID);
-      return ownerRef.current;
+    const clearOwnedLayers = useCallback((): void => {
+      try { ownerRef.current?.clear(); }
+      catch (error) { reportLayerListError(error, 'cleanup'); }
+      const layers = new Set(Array.from(runtimeByKeyRef.current.values(), (record) => record.runtime));
+      runtimeByKeyRef.current.clear();
+      for (const layer of layers) disposePanelLayer(layer);
     }, []);
+
+    const getOwner = useCallback((view: MapViewLike): LayerOwner<LayerRuntime> | null => {
+      if (!view) return null;
+      if (ownerViewRef.current !== view) {
+        clearOwnedLayers();
+        ownerRef.current = createLayerOwner<LayerRuntime>(view, OWNER_ID);
+        ownerViewRef.current = view;
+      }
+      return ownerRef.current;
+    }, [clearOwnedLayers]);
 
     const disposeLegend = useCallback((): void => {
       legendRequestRef.current += 1;
@@ -281,7 +340,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       try {
         legend?.destroy?.();
       } catch (error) {
-        globalThis.console?.warn?.('LayerList legend cleanup failed.', error);
+        reportLayerListError(error, 'cleanup');
       } finally {
         legendHostRef.current?.dispose();
         legendHostRef.current = null;
@@ -310,28 +369,39 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       model.replace(catalog);
     }, [model]);
 
-    const fetchQueryResults = useCallback(async (): Promise<void> => {
+    const fetchQueryResults = useCallback(async (force = false): Promise<void> => {
       const view = asMapView(MapManager.GetMapView());
       if (!view) {
+        requestVersionRef.current += 1;
+        catalogAbortRef.current?.abort();
+        loader.cancel();
+        catalogViewRef.current = null;
+        catalogNeedsReloadRef.current = true;
         disposeLegend();
         sourceGroupsRef.current = Object.freeze([]);
-        runtimeByKeyRef.current.clear();
+        clearOwnedLayers();
         model.replace([]);
         model.markError('Harita görünümü hazır değil.');
         setMapView(null);
         return;
       }
 
+      if (!force && catalogViewRef.current === view && !catalogNeedsReloadRef.current) return;
+      catalogViewRef.current = view;
+      catalogNeedsReloadRef.current = false;
+      catalogAbortRef.current?.abort();
+      const lifetime = new AbortController();
+      catalogAbortRef.current = lifetime;
+
       setMapView(view);
       model.markLoading();
       loader.cancel();
-      const owner = getOwner();
-      owner?.clear();
-      runtimeByKeyRef.current.clear();
+      const owner = getOwner(view);
+      clearOwnedLayers();
       const requestVersion = ++requestVersionRef.current;
 
       try {
-        const result: unknown = await LayerBusiness.GetLayers();
+        const result: unknown = await withTimeout(() => LayerBusiness.GetLayers(), LAYER_PANEL_POLICY.catalogTimeoutMs, lifetime.signal);
         if (!mountedRef.current || requestVersion !== requestVersionRef.current) return;
 
         const envelope = isRecord(result) ? result as LayerServiceResult : null;
@@ -368,22 +438,27 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
 
         const loaded = await loader.load(
           work,
-          async (item) => {
-            const created: unknown = await CommonBusiness.CreateLayer(item.source.source);
-            if (!isRecord(created)) throw new TypeError('Katman çalışma zamanı oluşturulamadı.');
-            return created as unknown as LayerRuntime;
-          },
-          (runtime) => runtime.destroy?.(),
+          (item) => loadPanelLayer(item.source.source, lifetime.signal),
+          disposePanelLayer,
         );
 
-        if (!mountedRef.current || requestVersion !== requestVersionRef.current || loaded.cancelled) {
-          for (const success of loaded.successes) success.result.destroy?.();
+        const viewChanged = asMapView(MapManager.GetMapView()) !== view;
+        if (!mountedRef.current || requestVersion !== requestVersionRef.current || loaded.cancelled || viewChanged) {
+          for (const success of loaded.successes) disposePanelLayer(success.result);
+          if (viewChanged && mountedRef.current && requestVersion === requestVersionRef.current) {
+            catalogNeedsReloadRef.current = true;
+            model.replace([]);
+            model.markError('Harita görünümü değişti. Katmanları yeniden yükleyin.');
+            disposeLegend();
+            setMapView(null);
+          }
           return;
         }
 
+        // Track every newly-created runtime before attachment so an admission
+        // failure can release both attached and remaining candidates.
         for (const success of loaded.successes) {
-          const { groupId: loadedGroupId, layerId, source, priority } = success.source;
-          owner?.add(success.result, priority);
+          const { groupId: loadedGroupId, layerId, source } = success.source;
           runtimeByKeyRef.current.set(runtimeKey(loadedGroupId, layerId), Object.freeze({
             groupId: loadedGroupId,
             layerId,
@@ -391,18 +466,23 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
             runtime: success.result,
           }));
         }
+        for (const success of loaded.successes) {
+          if (owner?.add(success.result, success.source.priority) === null) {
+            throw new Error('Katman haritaya eklenemedi.');
+          }
+        }
 
         applyPresentationCatalog();
       } catch (error) {
-        reportLayerListError(error, 'catalog');
         if (mountedRef.current && requestVersion === requestVersionRef.current) {
+          reportLayerListError(error, 'catalog');
           sourceGroupsRef.current = Object.freeze([]);
-          runtimeByKeyRef.current.clear();
+          clearOwnedLayers();
           model.replace([]);
-          model.markError(error);
+          model.markError('Katman kataloğu yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.');
         }
       }
-    }, [applyPresentationCatalog, disposeLegend, getOwner, loader, model]);
+    }, [applyPresentationCatalog, clearOwnedLayers, disposeLegend, getOwner, loader, model]);
 
     useImperativeHandle(ref, () => ({
       id,
@@ -415,13 +495,15 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
         void fetchQueryResults();
       },
       OnClose: () => {
+        catalogNeedsReloadRef.current = model.getSnapshot().status === 'loading' || loader.getSnapshot().status === 'loading';
         requestVersionRef.current += 1;
+        catalogAbortRef.current?.abort();
         loader.cancel();
         activeTabRef.current = 'layers';
         setActiveTab('layers');
         disposeLegend();
       },
-    }), [disposeLegend, fetchQueryResults, id, loader, windowManager]);
+    }), [disposeLegend, fetchQueryResults, id, loader, model, windowManager]);
 
     useEffect(() => {
       mountedRef.current = true;
@@ -429,12 +511,21 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
 
       return () => {
         mountedRef.current = false;
+        catalogAbortRef.current?.abort();
         requestVersionRef.current += 1;
-        loader.dispose();
-        model.dispose();
-        ownerRef.current?.clear();
+        loader.cancel();
+        clearOwnedLayers();
         ownerRef.current = null;
-        runtimeByKeyRef.current.clear();
+        ownerViewRef.current = null;
+        catalogViewRef.current = null;
+        catalogNeedsReloadRef.current = true;
+        // StrictMode replays effects synchronously. Retire the observable
+        // models only after a real unmount, keeping that replay usable.
+        queueMicrotask(() => {
+          if (mountedRef.current) return;
+          loader.dispose();
+          model.dispose();
+        });
         sourceGroupsRef.current = Object.freeze([]);
         legendRequestRef.current += 1;
         legendLoadingRef.current = false;
@@ -442,7 +533,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
         try {
           legendRef.current?.destroy?.();
         } catch (error) {
-          globalThis.console?.warn?.('LayerList legend cleanup failed.', error);
+          reportLayerListError(error, 'cleanup');
         } finally {
           legendRef.current = null;
           legendHostRef.current?.dispose();
@@ -450,16 +541,16 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
         }
         windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [id, loader, model, ref, windowManager]);
+    }, [clearOwnedLayers, id, loader, model, ref, windowManager]);
 
     useEffect(() => {
       mountedRef.current = true;
-      void fetchQueryResults();
+      if (windowManager.IsVisible(id) || reloadGeneration > 0) void fetchQueryResults(reloadGeneration > 0);
       return () => {
         requestVersionRef.current += 1;
         loader.cancel();
       };
-    }, [fetchQueryResults, loader, reloadGeneration]);
+    }, [fetchQueryResults, id, loader, reloadGeneration, windowManager]);
 
     const refreshLegend = useCallback(async (): Promise<void> => {
       if (!mountedRef.current || activeTabRef.current !== 'legend' || !mapView) return;
@@ -471,7 +562,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
       setLegendReady(false);
       setLegendError(false);
       try {
-        const [Legend] = await loadArcgisModules<readonly [LegendConstructor]>(['esri/widgets/Legend']);
+        const [Legend] = await withTimeout(() => loadArcgisModules<readonly [LegendConstructor]>(['esri/widgets/Legend']), LAYER_PANEL_POLICY.legendTimeoutMs);
         if (
           !mountedRef.current
           || activeTabRef.current !== 'legend'
@@ -568,13 +659,14 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
     ), [model, toggleVisibility]);
 
     const handleTreeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>): void => {
+      if (event.target !== event.currentTarget) return;
       const active = snapshot.rows.find((row) => row.key === snapshot.activeKey) ?? null;
       keyboardController.handleKeyDown(event.nativeEvent, active, Boolean(snapshot.query));
     }, [keyboardController, snapshot.activeKey, snapshot.query, snapshot.rows]);
 
     useEffect(() => {
       if (!snapshot.activeKey) return;
-      const rowId = `${treeId}-${snapshot.activeKey.replace(/[^a-z0-9_-]/giu, '-')}`;
+      const rowId = rowDomId(treeId, snapshot.activeKey);
       document.getElementById(rowId)?.scrollIntoView?.({ block: 'nearest' });
     }, [snapshot.activeKey, treeId]);
 
@@ -590,14 +682,21 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
 
     const visible = windowManager.IsVisible(id);
     const minimized = windowManager.IsMinimized(id);
+    useEffect(() => {
+      if (!visible) return;
+      const focus = createManagedWindowFocusLifecycle();
+      focus.open({ root: rootRef.current, initialFocusSelector: '.layer-list-tab[aria-selected="true"], .common-query-window-tool-button' });
+      return () => { focus.close(); focus.dispose(); };
+    }, [visible]);
     const activeDescendantId = snapshot.activeKey
-      ? `${treeId}-${snapshot.activeKey.replace(/[^a-z0-9_-]/giu, '-')}`
+      ? rowDomId(treeId, snapshot.activeKey)
       : undefined;
     const loading = snapshot.status === 'loading' || loadSnapshot.status === 'loading';
     const degraded = loadSnapshot.status === 'partial';
 
     return (
       <section
+        ref={rootRef}
         className="common-query-window common-query-window-right layer-list-modern"
         aria-label="Katman ve lejand yönetimi"
         aria-hidden={!visible}
@@ -620,8 +719,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
           />
         </header>
 
-        <div className="common-query-window-body layer-list-window-body">
-          {minimized ? <div aria-hidden="true" /> : (
+        <div className="common-query-window-body layer-list-window-body" hidden={minimized}>
             <>
               <div className="layer-list-tabs" role="tablist" aria-label="Katman yönetimi görünümleri">
                 <button
@@ -684,7 +782,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                       }}
                     />
                     {snapshot.query ? (
-                      <button type="button" onClick={() => model.clearQuery()} aria-label="Katman aramasını temizle">
+                      <button type="button" onClick={() => { model.clearQuery(); searchRef.current?.focus({ preventScroll: true }); }} aria-label="Katman aramasını temizle">
                         Temizle
                       </button>
                     ) : null}
@@ -768,7 +866,7 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                         onKeyDown={handleTreeKeyDown}
                       >
                         {snapshot.rows.map((row) => {
-                          const rowId = `${treeId}-${row.key.replace(/[^a-z0-9_-]/giu, '-')}`;
+                          const rowId = rowDomId(treeId, row.key);
                           const opacityId = `${rowId}-opacity`;
                           if (row.kind === 'group') {
                             return (
@@ -782,7 +880,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                                 aria-expanded={Boolean(row.expanded)}
                                 aria-selected={row.active}
                                 data-active={row.active || undefined}
-                                onMouseMove={() => model.setActive(row.key)}
+                                onFocus={() => model.setActive(row.key)}
+                                onPointerDown={() => model.setActive(row.key)}
                               >
                                 <button
                                   type="button"
@@ -830,7 +929,8 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                               aria-selected={row.active}
                               aria-disabled={row.disabled || undefined}
                               data-active={row.active || undefined}
-                              onMouseMove={() => model.setActive(row.key)}
+                              onFocus={() => model.setActive(row.key)}
+                              onPointerDown={() => model.setActive(row.key)}
                             >
                               <span className="layer-list-tree-indent" aria-hidden="true" />
                               <SharedGISIcon record={{ category: 'default' }} size={24} />
@@ -906,7 +1006,6 @@ export const LayerListWidget = forwardRef<ManagedQueryWindowHandle, LayerListWid
                 </div>
               </section>
             </>
-          )}
         </div>
       </section>
     );
