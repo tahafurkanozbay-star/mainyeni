@@ -174,6 +174,51 @@ describe('shared service result window ownership and usability', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(70);
   });
 
+
+  it('keeps duplicate service identifiers distinct in React and pending-action UI', async () => {
+    const { ref, Query } = setup();
+    const repeated = response(3);
+    repeated.data?.forEach((feature) => {
+      if (feature.attr) feature.attr.objectid = 7;
+    });
+    Query.mockResolvedValue(repeated);
+    await act(async () => { await ref.current!.OnShow(); });
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.getAttribute('aria-posinset'))).toEqual(['1', '2', '3']);
+    expect(items.every((item) => item.getAttribute('aria-setsize') === '3')).toBe(true);
+
+    const late = deferred<FastAccessServiceResult>();
+    Query.mockReturnValueOnce(late.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' }));
+    expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toHaveTextContent('Açılıyor…');
+    expect(screen.getByRole('button', { name: 'Merkez 2 — Haritada göster' })).toHaveTextContent('Haritada göster');
+    expect(screen.getByRole('button', { name: 'Merkez 2 — Haritada göster' })).toBeDisabled();
+    await act(async () => { late.resolve({ type: 10, data: [{ geometry: { latitude: 39.9, longitude: 32.8 } }] }); });
+    expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toBeEnabled();
+  });
+
+  it('reports the remaining count inside the current 200-record group', async () => {
+    const { ref, Query } = setup();
+    Query.mockResolvedValue(response(401));
+    await act(async () => { await ref.current!.OnShow(); });
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (140 kaldı)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (140 kaldı)' }));
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (80 kaldı)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (80 kaldı)' }));
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (20 kaldı)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (20 kaldı)' }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    expect(screen.getByRole('button', { name: 'Sonraki sonuçlara geç' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki sonuçlara geç' }));
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(60);
+    expect(items[0]).toHaveAttribute('aria-posinset', '201');
+    expect(items[0]).toHaveAttribute('aria-setsize', '401');
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (140 kaldı)' })).toBeInTheDocument();
+    expect(Query).toHaveBeenCalledOnce();
+  });
+
   it('presents missing configuration without exposing the internal service key', async () => {
     const { ref, Query } = setup();
     Query.mockRejectedValue(new Error('Servis bulunamadı (YeniMerkezQueryUrl)'));

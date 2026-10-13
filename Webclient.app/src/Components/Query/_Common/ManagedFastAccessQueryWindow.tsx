@@ -304,7 +304,7 @@ export function createManagedFastAccessQueryWindow({
     const [pageStart, setPageStart] = useState(0);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
-    const [activeActionKey, setActiveActionKey] = useState('');
+    const [activeAction, setActiveAction] = useState<{ item: FastAccessRecord; action: string } | null>(null);
 
     const cancelPageFocus = useCallback((): void => {
       pageFocusCancelRef.current?.();
@@ -347,7 +347,7 @@ export function createManagedFastAccessQueryWindow({
       setPageStart(0);
       setLoading(false);
       setErrorMessage('');
-      setActiveActionKey('');
+      setActiveAction(null);
     }, [cancelPageFocus, clearOwnedLayer, pageSize]);
 
     const showError = useCallback((error: unknown): string => {
@@ -449,7 +449,7 @@ export function createManagedFastAccessQueryWindow({
       setVisibleCount(pageSize);
       setPageStart(0);
       setRecords([]);
-      setActiveActionKey('');
+      setActiveAction(null);
       clearOwnedLayer();
 
       void safeClientLog(LoggingBusiness, logName + '/Sorgu', `query-fields:${Math.min(Object.keys(query).length, 99)}`, DebugHelper.Log);
@@ -508,8 +508,7 @@ export function createManagedFastAccessQueryWindow({
       const controller = new AbortController();
       actionAbortRef.current = controller;
       const isCurrent = (): boolean => mountedRef.current && !controller.signal.aborted && actionGateRef.current.isCurrent(actionId);
-      const key = getFastAccessRecordKey(item) + '-' + action;
-      setActiveActionKey(key);
+      setActiveAction({ item, action });
       setErrorMessage('');
       try {
         return await withTimeout((signal) => callback(signal, () => isCurrent() && !signal.aborted), SERVICE_WINDOW_POLICY.actionTimeoutMs, controller.signal);
@@ -518,7 +517,7 @@ export function createManagedFastAccessQueryWindow({
         return null;
       } finally {
         if (isCurrent()) {
-          setActiveActionKey((current) => current === key ? '' : current);
+          setActiveAction((current) => current?.item === item && current.action === action ? null : current);
         }
         if (actionAbortRef.current === controller) actionAbortRef.current = null;
       }
@@ -718,12 +717,11 @@ export function createManagedFastAccessQueryWindow({
 
         <ul id={id + '-results'} className="results-container kr-fast-query__results" aria-label={title + ' sonuçları'}>
           {visibleRecords.map((item, index) => {
-            const recordKey = getFastAccessRecordKey(item, sourceIndices.get(item) ?? index);
-            const zoomKey = recordKey + '-zoom';
-            const routeKey = recordKey + '-route';
+            const sourceIndex = sourceIndices.get(item) ?? pageStart + index;
+            const recordKey = getFastAccessRecordKey(item, sourceIndex) + ':' + sourceIndex;
 
             return (
-              <li className="result-item-container kr-fast-query__item" key={recordKey}>
+              <li className="result-item-container kr-fast-query__item" key={recordKey} aria-posinset={pageStart + index + 1} aria-setsize={filteredRecords.length}>
                 <SharedGISIcon
                   record={{ type: iconType ?? serviceKey, title: item.title, category: title }}
                   size={30}
@@ -740,18 +738,18 @@ export function createManagedFastAccessQueryWindow({
                   <button
                     type="button"
                     onClick={() => { void zoomToItem(item); }}
-                    disabled={loading || Boolean(activeActionKey)}
+                    disabled={loading || Boolean(activeAction)}
                     aria-label={item.title + ' — Haritada göster'}
                   >
-                    {activeActionKey === zoomKey ? 'Açılıyor…' : 'Haritada göster'}
+                    {activeAction?.item === item && activeAction.action === 'zoom' ? 'Açılıyor…' : 'Haritada göster'}
                   </button>
                   <button
                     type="button"
                     onClick={() => { void showRoute(item); }}
-                    disabled={loading || Boolean(activeActionKey)}
+                    disabled={loading || Boolean(activeAction)}
                     aria-label={item.title + ' — Yol tarifi (yeni pencere)'}
                   >
-                    {activeActionKey === routeKey ? 'Açılıyor…' : 'Yol tarifi'}
+                    {activeAction?.item === item && activeAction.action === 'route' ? 'Açılıyor…' : 'Yol tarifi'}
                   </button>
                 </div>
               </li>
@@ -795,7 +793,7 @@ export function createManagedFastAccessQueryWindow({
                       schedulePageFocus(event, visibleCount);
                     }}
                   >
-                    Daha fazla sonuç göster ({filteredRecords.length - pageStart - visibleCount} kaldı)
+                    Daha fazla sonuç göster ({Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, filteredRecords.length - pageStart) - visibleCount} kaldı)
                   </button>
                 ) : (
                   <button
