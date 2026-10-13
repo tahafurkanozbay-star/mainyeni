@@ -739,12 +739,18 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
         <ul id={id + '-results'} className="results-container kr-fast-query__results kr-park-query__results" aria-label="Park sonuçları">
           {resultList.slice(pageStart, pageStart + visibleCount).map((item, index) => {
-            const itemKey = item.objectId !== null && item.objectId !== undefined
-              ? String(item.objectId)
-              : item.title + '-' + String(pageStart + index);
+            // The record's list position is unique even when service OBJECTIDs repeat.
+            // Keep the service ID intact for the existing detail-query contract.
+            const sourceIndex = pageStart + index;
+            const itemKey = `${sourceIndex}:${String(item.objectId ?? '')}`;
 
             return (
-              <li className="result-item-container kr-fast-query__item kr-park-query__item" key={itemKey}>
+              <li
+                className="result-item-container kr-fast-query__item kr-park-query__item"
+                key={itemKey}
+                aria-posinset={sourceIndex + 1}
+                aria-setsize={resultList.length}
+              >
                 <SharedGISIcon
                   record={{ type: PARK_ICON_TYPE, category: 'Parklar', title: item.title }}
                   size={30}

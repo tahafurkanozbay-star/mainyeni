@@ -69,6 +69,40 @@ describe('Parklar service window', () => {
     expect(screen.getByText('1–100 / 100 park')).toBeVisible();
   });
 
+  it('keeps duplicate service IDs as distinct accessible rows and action owners', async () => {
+    const response = makeResponse(2);
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValueOnce({
+      ...response,
+      data: [
+        { attr: { objectid: 7, adi: 'Birinci Park', adres: 'Ankara' } },
+        { attr: { objectid: 7, adi: 'İkinci Park', adres: 'Ankara' } },
+      ],
+    } as never).mockImplementationOnce(() => new Promise(() => undefined));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    const errorSpy = vi.spyOn(console, 'error');
+    try {
+      await act(async () => { await ref.current?.OnShow(); });
+      expect(errorSpy.mock.calls.some(([message]) => /same key|unique.*key/i.test(String(message)))).toBe(false);
+    } finally {
+      errorSpy.mockRestore();
+    }
+    const list = screen.getByRole('list', { name: 'Park sonuçları' });
+    const rows = Array.from(list.querySelectorAll(':scope > li'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute('aria-posinset', '1');
+    expect(rows[1]).toHaveAttribute('aria-posinset', '2');
+    expect(rows[0]).toHaveAttribute('aria-setsize', '2');
+    expect(rows[1]).toHaveAttribute('aria-setsize', '2');
+    const first = screen.getByRole('button', { name: 'Birinci Park konumunu haritada göster' });
+    const second = screen.getByRole('button', { name: 'İkinci Park konumunu haritada göster' });
+    fireEvent.click(second);
+    expect(second).toHaveAttribute('aria-busy', 'true');
+    expect(first).not.toHaveAttribute('aria-busy', 'true');
+    await waitFor(() => expect(vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[0]).toEqual({ ObjectId: 7 }));
+    await act(async () => { ref.current?.OnClose(); });
+  });
+
   it('cancels a pending layer on close and disposes its late result', async () => {
     let finish!: (layer: { destroy: ReturnType<typeof vi.fn> }) => void;
     vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse() as never);
@@ -138,6 +172,9 @@ describe('Parklar service window', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(200);
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
     expect(screen.getByText('Park 201')).toBeVisible();
+    const firstOfSecondGroup = screen.getByRole('button', { name: 'Park 201 konumunu haritada göster' }).closest('li');
+    expect(firstOfSecondGroup).toHaveAttribute('aria-posinset', '201');
+    expect(firstOfSecondGroup).toHaveAttribute('aria-setsize', '401');
     expect(screen.getAllByRole('listitem')).toHaveLength(60);
     expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Daha fazla park göster (140 kaldı)' })).toBeVisible();
@@ -147,6 +184,9 @@ describe('Parklar service window', () => {
     expect(screen.getByText('Park 400')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
     expect(screen.getByText('Park 401')).toBeVisible();
+    const lastPark = screen.getByRole('button', { name: 'Park 401 konumunu haritada göster' }).closest('li');
+    expect(lastPark).toHaveAttribute('aria-posinset', '401');
+    expect(lastPark).toHaveAttribute('aria-setsize', '401');
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Önceki park grubuna dön' }));

@@ -54,12 +54,15 @@ describe('real fast-access window presentation and resource ownership', () => {
     await view.open();
     const list = screen.getByRole('list', { name: 'Parklar sonuçları' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(10);
-    expect(screen.getByRole('button', { name: /Daha fazla sonuç göster \(990 kaldı\)/ })).toBeVisible();
+    expect(within(list).getAllByRole('listitem')[0]).toHaveAttribute('aria-posinset', '1');
+    expect(within(list).getAllByRole('listitem')[0]).toHaveAttribute('aria-setsize', '1000');
+    expect(screen.getByRole('button', { name: /Daha fazla sonuç göster \(190 kaldı\)/ })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(20);
+    expect(within(list).getAllByRole('listitem')[19]).toHaveAttribute('aria-posinset', '20');
     expect(within(list).getByText('Işık Parkı')).toBeVisible();
     expect(within(list).getByText('Park 10')).toBeVisible();
-    expect(screen.getByRole('button', { name: /Daha fazla sonuç göster \(980 kaldı\)/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Daha fazla sonuç göster \(180 kaldı\)/ })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(30);
     expect(within(list).getByText('Park 20')).toBeVisible();
