@@ -246,4 +246,62 @@ describe('ManagedWindowFocus', () => {
     lifecycle.open({ root, opener: null, restorePolicy: 'always' });
     expect(lifecycle.close()).toBe(false);
   });
+  it('captures and restores an opener inside nested open shadow roots', () => {
+    const outer = document.createElement('div');
+    const outerRoot = outer.attachShadow({ mode: 'open' });
+    const inner = document.createElement('div');
+    outerRoot.append(inner);
+    const innerRoot = inner.attachShadow({ mode: 'open' });
+    const opener = document.createElement('button');
+    innerRoot.append(opener);
+    document.body.append(outer);
+    opener.focus();
+    expect(document.activeElement).toBe(outer);
+    expect(captureManagedWindowOpener(document)).toBe(opener);
+    expect(restoreManagedWindowFocus(opener)).toBe(true);
+    expect(innerRoot.activeElement).toBe(opener);
+  });
+
+  it('does not steal focus after a deliberate change inside the same shadow root', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const first = document.createElement('button');
+    const second = document.createElement('button');
+    shadow.append(first, second);
+    const root = document.createElement('section');
+    const target = document.createElement('button');
+    root.append(target);
+    document.body.append(host, root);
+    first.focus();
+    const cancel = scheduleManagedWindowFocus({ root });
+    second.focus();
+    expect(document.activeElement).toBe(host);
+    frames[0]?.(0);
+    expect(shadow.activeElement).toBe(second);
+    expect(target).not.toHaveFocus();
+    cancel();
+  });
+
+  it('restores the opener when the managed window is inside an open shadow root', () => {
+    const opener = document.createElement('button');
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const root = document.createElement('section');
+    const child = document.createElement('button');
+    root.append(child);
+    shadow.append(root);
+    document.body.append(opener, host);
+    opener.focus();
+    const lifecycle = createManagedWindowFocusLifecycle(document);
+    lifecycle.open({ root });
+    expect(shadow.activeElement).toBe(child);
+    expect(lifecycle.close()).toBe(true);
+    expect(document.activeElement).toBe(opener);
+  });
+
 });

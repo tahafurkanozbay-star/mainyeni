@@ -24,6 +24,13 @@ const DEFAULT_FOCUS_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+/** Resolve the real focused control through inspectable web-component boundaries. */
+const deepActiveElement = (documentRef: Document): Element | null => {
+  let active = documentRef.activeElement;
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+  return active;
+};
+
 const hasUnavailableAncestor = (element: HTMLElement): boolean => {
   const view = element.ownerDocument.defaultView;
   let current: HTMLElement | null = element;
@@ -92,13 +99,13 @@ export const restoreManagedWindowFocus = (
 ): boolean => {
   if (!isManagedFocusCandidate(opener)) return false;
   opener.focus({ preventScroll: true });
-  return opener.ownerDocument.activeElement === opener;
+  return deepActiveElement(opener.ownerDocument) === opener;
 };
 
 export const captureManagedWindowOpener = (
   documentRef: Document = document,
 ): HTMLElement | null => {
-  const active = documentRef.activeElement;
+  const active = deepActiveElement(documentRef);
   if (!(active instanceof HTMLElement)) return null;
   if (active === documentRef.body) return null;
   return isManagedFocusCandidate(active) ? active : null;
@@ -110,11 +117,11 @@ export const scheduleManagedWindowFocus = (
   const windowRef = options.root?.ownerDocument.defaultView;
   if (!windowRef) return () => undefined;
   const documentRef = options.root?.ownerDocument;
-  const initialFocus = documentRef?.activeElement;
+  const initialFocus = documentRef ? deepActiveElement(documentRef) : null;
   let cancelled = false;
   const frame = windowRef.requestAnimationFrame(() => {
     if (cancelled) return;
-    const currentFocus = documentRef?.activeElement;
+    const currentFocus = documentRef ? deepActiveElement(documentRef) : null;
     // A delayed focus request cannot reclaim focus after deliberate navigation.
     // Only the browser's fallback to body after opener removal is exempt.
     if (currentFocus !== initialFocus && !(
@@ -134,7 +141,7 @@ const shouldRestoreFocus = (
   policy: ManagedWindowFocusRestorePolicy,
 ): boolean => {
   if (policy === 'always') return true;
-  const active = documentRef.activeElement;
+  const active = deepActiveElement(documentRef);
   if (!active || active === documentRef.body) return true;
   return Boolean(root && (active === root || root.contains(active)));
 };
