@@ -164,4 +164,86 @@ describe('Parklar service window', () => {
     expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce();
   });
 
+  it('uses native button activation once and gives every secondary action a record name', async () => {
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse(2) as never)
+      .mockResolvedValueOnce({
+        ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }],
+      } as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const primary = screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' });
+    expect(screen.getByRole('button', { name: 'Park 1 — Haritada göster' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Park 2 — Yol tarifi' })).toBeVisible();
+    fireEvent.keyDown(primary, { key: 'Enter' });
+    fireEvent.click(primary, { detail: 0 });
+    await waitFor(() => expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce());
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledTimes(2);
+  });
+
+  it('moves keyboard focus between bounded park groups without a second service query', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(201) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const callbacks: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    try {
+      const next = screen.getByRole('button', { name: 'Sonraki park grubuna geç' });
+      next.focus();
+      fireEvent.click(next, { detail: 0 });
+      act(() => { callbacks.splice(0).forEach((callback) => callback(0)); });
+      expect(screen.getByRole('button', { name: 'Park 201 konumunu haritada göster' })).toHaveFocus();
+      const previous = screen.getByRole('button', { name: 'Önceki park grubuna dön' });
+      previous.focus();
+      fireEvent.click(previous, { detail: 0 });
+      act(() => { callbacks.splice(0).forEach((callback) => callback(0)); });
+      expect(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' })).toHaveFocus();
+      expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+    } finally { frame.mockRestore(); }
+  });
+
+  it('does not reclaim focus from a pointer-triggered park reveal', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(100) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const frame = vi.spyOn(window, 'requestAnimationFrame');
+    try {
+      const back = screen.getByRole('button', { name: 'Hizmetlere dön' });
+      back.focus();
+      fireEvent.click(screen.getByRole('button', { name: 'Daha fazla park göster (40 kaldı)' }), { detail: 1 });
+      expect(back).toHaveFocus();
+      expect(screen.getAllByRole('listitem')).toHaveLength(100);
+      expect(frame).not.toHaveBeenCalled();
+    } finally { frame.mockRestore(); }
+  });
+
+  it('cancels pending keyboard paging focus on close', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(100) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const callbacks: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    try {
+      const more = screen.getByRole('button', { name: 'Daha fazla park göster (40 kaldı)' });
+      more.focus();
+      fireEvent.click(more, { detail: 0 });
+      expect(callbacks).toHaveLength(1);
+      act(() => { ref.current?.OnClose(); });
+      expect(cancel).toHaveBeenCalledWith(1);
+      act(() => { callbacks[0]?.(0); });
+      expect(screen.queryByRole('button', { name: 'Park 61 konumunu haritada göster' })).not.toBeInTheDocument();
+    } finally { frame.mockRestore(); cancel.mockRestore(); }
+  });
+
 });

@@ -6,7 +6,6 @@ import React, {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
   type Ref,
 } from 'react';
 import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
@@ -37,6 +36,7 @@ import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { ServiceWindowActions } from '../_Common/ServiceWindowActions';
 import { QUERY_RESULT_PAGE_POLICY } from '../_Common/QueryResultPaging';
+import { scheduleOwnedResultFocus } from '../_Common/ResultPageFocus';
 import { createKentRehberiGeoJsonLayer, type KentRehberiGeoJsonFeatureCollection } from '../../../data-services/kentRehberiGeoJsonLayer';
 import '../_Common/ManagedFastAccessQueryWindow.css';
 import './ParklarQueryWindow.css';
@@ -241,9 +241,6 @@ const createExpandedExtent = (extent: ExtentLike): ExtentLike => {
   };
 };
 
-const isActivationKey = (event: KeyboardEvent<HTMLElement>): boolean =>
-  event.key === 'Enter' || event.key === ' ';
-
 export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindowProps>(
   ({ id, windowManager, windowTitle = 'Parklar' }, ref) => {
     const [query, setQuery] = useState<Readonly<Record<string, unknown>>>(defaultQuery);
@@ -254,6 +251,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const [pageStart, setPageStart] = useState(0);
     const layerAbortRef = useRef<AbortController | null>(null);
     const detailAbortRef = useRef<AbortController | null>(null);
+    const resultRootRef = useRef<HTMLElement | null>(null);
+    const pageFocusCancelRef = useRef<(() => void) | null>(null);
 
     const mountedRef = useRef(false);
     const mapViewRef = useRef<MapViewLike | null>(null);
@@ -266,6 +265,27 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const detailGateRef = useRef(createLatestRequestGate());
     const visible = windowManager.IsVisible(id);
     const minimized = windowManager.IsMinimized?.(id) ?? false;
+
+    const cancelPageFocus = useCallback((): void => {
+      pageFocusCancelRef.current?.();
+      pageFocusCancelRef.current = null;
+    }, []);
+
+    const schedulePageFocus = (event: React.MouseEvent<HTMLButtonElement>, index: number): void => {
+      cancelPageFocus();
+      const requestId = requestGateRef.current.current();
+      pageFocusCancelRef.current = scheduleOwnedResultFocus({
+        trigger: event.currentTarget,
+        detail: event.detail,
+        isCurrent: () => mountedRef.current
+          && requestGateRef.current.isCurrent(requestId)
+          && resultRootRef.current?.getAttribute('aria-hidden') !== 'true'
+          && !resultRootRef.current?.hasAttribute('data-minimized'),
+        resolveTarget: () => resultRootRef.current
+          ?.querySelectorAll<HTMLElement>('.kr-park-query__item')[index]
+          ?.querySelector<HTMLElement>('.kr-park-query__primary') ?? null,
+      });
+    };
 
     const getOwner = useCallback((
       view = mapViewRef.current ?? asMapView(MapManager.GetMapView()),
@@ -333,6 +353,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, [rememberExtent]);
 
     const reset = useCallback((): void => {
+      cancelPageFocus();
       layerAbortRef.current?.abort();
       detailAbortRef.current?.abort();
       detailGateRef.current.invalidate();
@@ -345,9 +366,10 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       setPageStart(0);
       removeLastClusterLayer();
       allowExtentHistoryRef.current = true;
-    }, [removeLastClusterLayer]);
+    }, [cancelPageFocus, removeLastClusterLayer]);
 
     const fetchQueryResults = useCallback(async (): Promise<void> => {
+      cancelPageFocus();
       const view = mapViewRef.current ?? asMapView(MapManager.GetMapView());
       if (!view?.map) {
         reportError(null, 'Harita hazır olmadığı için park sorgusu başlatılamadı.');
@@ -444,7 +466,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           setLoading(false);
         }
       }
-    }, [getOwner, id, query, removeLastClusterLayer, reportError, windowManager, windowTitle]);
+    }, [cancelPageFocus, getOwner, id, query, removeLastClusterLayer, reportError, windowManager, windowTitle]);
 
     // The latest detail action owns the response and its transport.
     const beginDetailAction = useCallback(() => {
@@ -579,6 +601,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       const lifecycle = lifecycleRef.current;
       return () => {
         mountedRef.current = false;
+        cancelPageFocus();
         layerAbortRef.current?.abort();
         detailAbortRef.current?.abort();
         detailGateRef.current.invalidate();
@@ -590,7 +613,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
         clusterLayerRef.current = null;
         windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [id, installViewWatchers, ref, windowManager]);
+    }, [cancelPageFocus, id, installViewWatchers, ref, windowManager]);
     const status = useMemo(() => {
       if (loading) return {
         tone: 'info' as const,
@@ -616,6 +639,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
     return (
       <section
+        ref={resultRootRef}
         className="sidebar-container kr-fast-query kr-park-query"
         data-minimized={minimized || undefined}
         aria-labelledby={id + '-title'}
@@ -683,11 +707,6 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
                   type="button"
                   className="result-item-info kr-fast-query__copy kr-park-query__primary"
                   onClick={() => { void showItem(item); }}
-                  onKeyDown={(event) => {
-                    if (!isActivationKey(event)) return;
-                    event.preventDefault();
-                    void showItem(item);
-                  }}
                   aria-label={item.title + ' konumunu haritada göster'}
                 >
                   <span className="result-item-info-title">{item.title}</span>
@@ -695,10 +714,10 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
                   {item.phone ? <span>{item.phone}</span> : null}
                 </button>
                 <div className="kr-fast-query__actions kr-park-query__actions" aria-label={item.title + ' işlemleri'}>
-                  <button type="button" onClick={() => { void showItem(item); }}>
+                  <button type="button" aria-label={item.title + ' — Haritada göster'} onClick={() => { void showItem(item); }}>
                     Haritada göster
                   </button>
-                  <button type="button" onClick={() => { void showRoute(item); }}>
+                  <button type="button" aria-label={item.title + ' — Yol tarifi'} onClick={() => { void showRoute(item); }}>
                     Yol tarifi
                   </button>
                 </div>
@@ -715,9 +734,10 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
               {resultList.length > QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
                 <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
                   aria-disabled={pageStart === 0}
-                  onClick={() => {
+                  onClick={(event) => {
                     if (pageStart === 0) return;
                     const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    schedulePageFocus(event, 0);
                     setPageStart(previousStart);
                     setVisibleCount(Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - previousStart));
                   }}>
@@ -726,15 +746,19 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
               ) : null}
               {visibleCount < Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart) ? (
                 <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
-                  onClick={() => setVisibleCount((count) => Math.min(count + PAGE_SIZE, QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart))}>
+                  onClick={(event) => {
+                    schedulePageFocus(event, visibleCount);
+                    setVisibleCount((count) => Math.min(count + PAGE_SIZE, QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart));
+                  }}>
                   Daha fazla park göster ({resultList.length - pageStart - visibleCount} kaldı)
                 </button>
               ) : null}
               {resultList.length > QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
                 <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
                   aria-disabled={pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize >= resultList.length}
-                  onClick={() => {
+                  onClick={(event) => {
                     if (pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize >= resultList.length) return;
+                    schedulePageFocus(event, 0);
                     setPageStart(pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize);
                     setVisibleCount(Math.min(PAGE_SIZE, resultList.length - pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize));
                   }}>
