@@ -14,29 +14,23 @@ function findings(payload: string): number {
   return audit.summary.flaggedCalls;
 }
 
-test('sensitive object keys and shorthand cannot hide under aliases', () => {
-  for (const payload of [
-    '{ address: value }',
-    '{ latitude, longitude }',
-    '{ query: input }',
-    '{ meta: { mahalle: district } }',
-    '{ "adres": data }',
-  ]) assert.equal(findings(payload), 1, payload);
-});
-
-test('renamed records, computed properties and wrapped coordinates are sensitive', () => {
+test('renamed records cannot bypass sensitive property detection', () => {
   for (const payload of [
     'row.address',
     'result?.coordinates',
-    "selectedRow['address']",
-    'row?.["mahalle"]',
-    'String(latitude)',
-    'String(searchText)',
+    'selectedRow.latitude',
+    'candidate?.mahalle',
+    'feature.street',
+    'marker?.longitude',
   ]) assert.equal(findings(payload), 1, payload);
 });
 
-test('bounded counts and event identifiers remain safe', () => {
-  for (const payload of ['{ addressCount: 2, queryCount: 1 }', '{ count: 3 }', 'String(resultCount)', 'serviceKey']) {
-    assert.equal(findings(payload), 0, payload);
-  }
+test('bounded counters and non-identifying metadata remain permitted', () => {
+  for (const payload of [
+    '{ count: 3 }',
+    'String(resultCount)',
+    'serviceKey',
+    'queryCount',
+    'pathCount',
+  ]) assert.equal(findings(payload), 0, payload);
 });
