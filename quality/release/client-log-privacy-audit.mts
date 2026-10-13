@@ -5,7 +5,7 @@ import {
   type RepositoryInventory,
   type SourceFile,
 } from './contracts.mts';
-import { createLineIndex, selectWebSource } from './inventory.mts';
+import { createLineIndex } from './inventory.mts';
 
 export interface ClientLogPrivacySummary {
   readonly runtimeFiles: number;
@@ -13,12 +13,13 @@ export interface ClientLogPrivacySummary {
   readonly flaggedCalls: number;
 }
 
-const RUNTIME_PATH = /^(?:Webclient\.app|Webclient\.Admin)\/src\//;
+const RUNTIME_PATH = /^(?:Webclient\.app|Webclient\.admin)\/src\//;
 const TEST_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?)(?:\/|$)|(?:^|\/)[^/]+\.(?:test|spec|fixture|mock)\.[^/]+$/i;
 const IDENTIFIER = /[A-Za-z0-9_$]/;
+const SENSITIVE_DIRECT_IDENTIFIER = /^(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry)$/i;
 const SENSITIVE_PATH = /\b(?:pathForLog|numberingPathLabelV\d*)\s*\(/;
 const SENSITIVE_SERIALIZATION = /\bJSON\s*\.\s*stringify\s*\(\s*(?:query|path|params|payload|record|item|selection|address|coordinates|location)\b/i;
-const SENSITIVE_PROPERTY = /\b(?:item|record|path|query|selection|geometry|point)\s*(?:\?\.)?\.\s*(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)\b/i;
+const SENSITIVE_PROPERTY = /\b(?:item|record|path|query|selection|geometry|point)\s*(?:\?\.|\.)\s*(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)\b/i;
 const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door)\b[^}]*\}/i;
 
 function isRuntime(file: SourceFile): boolean {
@@ -120,6 +121,7 @@ function findClientLogCalls(text: string): readonly ClientLogCall[] {
 }
 
 function riskReason(argument: string): string | null {
+  if (SENSITIVE_DIRECT_IDENTIFIER.test(argument.trim())) return 'raw-record-or-query';
   if (SENSITIVE_PATH.test(argument)) return 'address-path-label';
   if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';
   if (SENSITIVE_PROPERTY.test(argument)) return 'sensitive-property';
@@ -129,7 +131,7 @@ function riskReason(argument: string): string | null {
 
 export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSection<ClientLogPrivacySummary> {
   const start = performance.now();
-  const files = selectWebSource(inventory).filter(isRuntime);
+  const files = inventory.files.filter(isRuntime);
   const findings: Finding[] = [];
   let clientLogCalls = 0;
   for (const file of files) {
@@ -137,6 +139,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
     let flaggedInFile = 0;
     for (const call of findClientLogCalls(file.text)) {
       clientLogCalls += 1;
+      if (flaggedInFile >= 8) continue;
       // The third argument is the payload, not the logger or event name.
       const reason = call.arguments.length >= 3 ? riskReason(call.arguments[2] ?? '') : null;
       if (!reason) continue;
@@ -152,7 +155,6 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
         tags: ['privacy', 'logging', 'data-minimization'],
       });
       flaggedInFile += 1;
-      if (flaggedInFile >= 8) break;
     }
   }
   return {
