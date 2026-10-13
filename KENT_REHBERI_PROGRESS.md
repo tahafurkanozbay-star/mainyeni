@@ -436,3 +436,10 @@
 - The preceding db37cb01 exact-head five CI checks completed-success; current head requires fresh exact-head checks. Local npm/build/browser visual tests not run.
 - Parklar detail AbortController/ownership update attempted but GitHub safety rejected it; no cancellation fix or detail regression test committed. No network/dependency/icon changes.
 - PR additions below 4,000; do not merge. Next: exact-head CI, Parklar detail cancellation, landscape/keyboard UX regression, further substantive experience work.
+
+## 2026-10-13 — Experience #492 Parklar detail cancellation follow-up
+- TUR / BRANCH / PR: Existing canonical draft PR #492; current main/merge-base `70f2ffb2`. Previous checkpoint's uncommitted Parklar note is superseded by `fdcd218c`.
+- COMMITTED: `fdcd218c` introduces per-detail AbortController and generation ownership for Parklar map-location and route actions, aborts on new selection/query/reset/unmount, and adds late-detail and superseded-selection regression tests. Earlier `1c9a807c`, `3d7a612f`, `3c256ccb` optimize large-result Vitest traversal, compact card layout and forced-colors focus visibility.
+- TEST / BUILD: Previous `db37cb01` had five completed-success CI checks; `fdcd218c` has fresh exact-head CI pending at checkpoint. No local npm or browser visual test executed; do not treat earlier checks as validation of this source change.
+- NETWORK / SECURITY / ICON: Existing same-origin Parklar query now receives an AbortSignal for detail requests; no new provider, dependency, analytics, remote font, WMS/WFS UI or icon resolver. Late detail responses cannot update a closed/superseded window.
+- MERGE / NEXT: PR open/draft and additions still below 4,000. Do not merge. Recheck exact-head Webclient Quality/Release QA/typed/architecture/dependency checks; repair any failures and continue meaningful keyboard/responsive/2B-3B UI modernization on this PR.
