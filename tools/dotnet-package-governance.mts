@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { auditDotnetProjectCycles } from './dotnet-project-graph.mts';
 
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const REPOSITORY_ROOT = path.resolve(path.dirname(CURRENT_FILE), '..');
@@ -192,6 +193,8 @@ export const evaluateDotnetPackageGovernance = ({ centralXml, projects, centralF
       if (target === normalizePath(project.path)) findings.push(finding('project-reference-self', project.path, 'Project must not reference itself.'));
     }
   }
+  // Detect transitive project reference cycles beyond individual edge validation.
+  findings.push(...auditDotnetProjectCycles(projectInventory));
   const stableFindings = freeze(findings.sort(findingOrder));
   const catalog = freeze(central.entries.map(entry=>freeze({id:entry.id,version:entry.version})).sort((a,b)=>a.id.localeCompare(b.id)));
   const usedPackages = freeze([...usage.entries()].map(([id,files])=>freeze({id:centralById.get(id)?.id ?? id,projects:freeze([...files].sort())})).sort((a,b)=>a.id.localeCompare(b.id)));

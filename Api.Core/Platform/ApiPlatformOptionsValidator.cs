@@ -125,9 +125,15 @@ namespace Api.Core.Platform
             {
                 failures.Add("Platform:Cors:AllowedHeaders must contain at least one header.");
             }
-            else if (options.AllowedHeaders.Any(header => string.IsNullOrWhiteSpace(header)))
+            else
             {
-                failures.Add("Platform:Cors:AllowedHeaders cannot contain blank values.");
+                foreach (var header in options.AllowedHeaders)
+                {
+                    if (!IsValidCorsHeaderName(header))
+                    {
+                        failures.Add("Platform:Cors:AllowedHeaders contains an invalid HTTP header name.");
+                    }
+                }
             }
         }
 
@@ -356,7 +362,10 @@ namespace Api.Core.Platform
                         mediaType.Length > 128 ||
                         mediaType.Contains("\r", StringComparison.Ordinal) ||
                         mediaType.Contains("\n", StringComparison.Ordinal) ||
-                        !mediaType.Contains("/", StringComparison.Ordinal))
+                        mediaType.Contains(";", StringComparison.Ordinal) ||
+                        !Governance.RequestContentPolicy.TryNormalizeAllowedMediaTypePattern(mediaType, out var type, out var subtype) ||
+                        type == "*" ||
+                        subtype == "*")
                     {
                         failures.Add($"Invalid request media type '{mediaType ?? "<null>"}'.");
                     }
@@ -448,6 +457,34 @@ namespace Api.Core.Platform
             }
 
             return Uri.TryCreate("https://localhost" + value, UriKind.Absolute, out _);
+        }
+
+        private static bool IsValidCorsHeaderName(string value)
+        {
+            // RFC 9110 field-name = token; wildcard is not a configured header.
+            if (string.IsNullOrEmpty(value) || value.Length > 128 || value == "*")
+            {
+                return false;
+            }
+            foreach (var character in value)
+            {
+                if ((character >= 'a' && character <= 'z') ||
+                    (character >= 'A' && character <= 'Z') ||
+                    (character >= '0' && character <= '9'))
+                {
+                    continue;
+                }
+                switch (character)
+                {
+                    case '!': case '#': case '$': case '%': case '&': case '\'':
+                    case '*': case '+': case '-': case '.': case '^': case '_':
+                    case '`': case '|': case '~':
+                        break;
+                    default:
+                        return false;
+                }
+            }
+            return true;
         }
 
         private static bool IsValidHeaderName(string value)
