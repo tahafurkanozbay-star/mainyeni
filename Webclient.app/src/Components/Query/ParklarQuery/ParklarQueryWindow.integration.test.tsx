@@ -104,4 +104,15 @@ describe('Parklar service window', () => {
     expect(audit).not.toContain('Ankara');
   });
 
+  it('offers a second park result group for large responses', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(201) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
+    expect(screen.getByText('Park 201')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+  });
+
 });
