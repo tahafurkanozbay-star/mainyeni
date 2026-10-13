@@ -70,10 +70,14 @@ describe('real fast-access window presentation and resource ownership', () => {
     const view = setup(vi.fn(async () => success(1_000)));
     await view.open();
     const list = screen.getByRole('list', { name: 'Parklar sonuçları' });
+    // Keep the action reference while mounted. Repeated accessible-name
+    // traversal across an expanding 200-card list is quadratic in jsdom.
+    const reveal = screen.getByRole('button', { name: /Daha fazla sonuç göster/ });
     for (let batch = 0; batch < 19; batch += 1) {
-      fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
-      expect(within(list).getAllByRole('listitem').length).toBeLessThanOrEqual(200);
+      fireEvent.click(reveal);
+      expect(list.querySelectorAll(':scope > li').length).toBeLessThanOrEqual(200);
     }
+    // Retain a semantic assertion at the largest rendered result window.
     expect(within(list).getAllByRole('listitem')).toHaveLength(200);
     expect(screen.getByText('1–200 / 1000 kayıt')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki sonuçlara geç' }));
