@@ -23,6 +23,8 @@ namespace Toolbox.Security.Cryptography
         private const int KeySizeBytes = 32;
         private const int MaxPlaintextBytes = 1024 * 1024;
         private const int MaxPurposeBytes = 512;
+        // Invalid Unicode must never be silently replaced in authenticated values.
+        private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
         // Bound untrusted input before split or Base64 allocations.
         private static readonly int MaxEnvelopeCharacters =
             EnvelopePrefix.Length + 5 + 7 + 24 + 16 + 24 + ((MaxPlaintextBytes + 2) / 3 * 4);
@@ -36,21 +38,20 @@ namespace Toolbox.Security.Cryptography
 
             ValidateSecret(secret);
             var associatedData = GetPurposeBytes(purpose);
-            var plaintextByteCount = Encoding.UTF8.GetByteCount(plaintext);
-
-            if (plaintextByteCount > MaxPlaintextBytes)
-            {
-                CryptographicOperations.ZeroMemory(associatedData);
-                throw new ArgumentOutOfRangeException(
-                    nameof(plaintext),
-                    $"Plaintext exceeds the {MaxPlaintextBytes}-byte encryption budget.");
-            }
-
-            var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
+            byte[] plaintextBytes = null;
             byte[] key = null;
 
             try
             {
+                var plaintextByteCount = StrictUtf8.GetByteCount(plaintext);
+                if (plaintextByteCount > MaxPlaintextBytes)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(plaintext),
+                        $"Plaintext exceeds the {MaxPlaintextBytes}-byte encryption budget.");
+                }
+
+                plaintextBytes = StrictUtf8.GetBytes(plaintext);
                 var salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
                 var nonce = RandomNumberGenerator.GetBytes(NonceSizeBytes);
                 var ciphertext = new byte[plaintextBytes.Length];
@@ -71,7 +72,7 @@ namespace Toolbox.Security.Cryptography
             finally
             {
                 if (key != null) CryptographicOperations.ZeroMemory(key);
-                CryptographicOperations.ZeroMemory(plaintextBytes);
+                if (plaintextBytes != null) CryptographicOperations.ZeroMemory(plaintextBytes);
                 CryptographicOperations.ZeroMemory(associatedData);
             }
         }
@@ -97,7 +98,7 @@ namespace Toolbox.Security.Cryptography
                     plaintext,
                     associatedData);
 
-                return Encoding.UTF8.GetString(plaintext);
+                return StrictUtf8.GetString(plaintext);
             }
             finally
             {
@@ -306,14 +307,14 @@ namespace Toolbox.Security.Cryptography
                     nameof(purpose));
             }
 
-            if (Encoding.UTF8.GetByteCount(purpose) > MaxPurposeBytes)
+            if (StrictUtf8.GetByteCount(purpose) > MaxPurposeBytes)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(purpose),
                     $"Encryption purpose exceeds {MaxPurposeBytes} bytes.");
             }
 
-            return Encoding.UTF8.GetBytes(purpose);
+            return StrictUtf8.GetBytes(purpose);
         }
 
         private sealed class ParsedEnvelope

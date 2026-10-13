@@ -3,7 +3,7 @@ import { CommonReducer_ActionTypes } from '../Reducers/CommonReducer';
 import { MapReducer_ActionTypes } from '../Reducers/MapReducer';
 import Store from '../Store';
 import type { ServiceDescriptor, UnknownRecord } from '../../Business/contracts';
-import type { ViewPerformanceMonitor, ViewStateBridge } from '../contracts';
+import type { MapClickSelection, ViewPerformanceMonitor, ViewStateBridge } from '../contracts';
 
 let viewStateBridge: ViewStateBridge | null = null;
 let viewPerformanceMonitor: ViewPerformanceMonitor | null = null;
@@ -28,9 +28,9 @@ const toGraphicArray = (value: unknown): readonly unknown[] => {
 export const MapManager = Object.freeze({
   GetMapView: (): unknown => Store.getState().Map.MapView,
 
-  GetMapClickEvent: (): ((event: unknown) => void) => Store.getState().Map.MapClick,
+  GetMapClickEvent: (): MapClickSelection | ((event: unknown) => void) => Store.getState().Map.LastMapClickEvent ?? Store.getState().Map.MapClick,
 
-  SetMapClickEvent: (event: (event: unknown) => void): void => {
+  SetMapClickEvent: (event: unknown): void => {
     Store.dispatch({ type: MapReducer_ActionTypes.SetMapClickEvent, payload: event });
   },
 

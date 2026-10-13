@@ -1,24 +1,10 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState, type ReactNode, type RefObject } from 'react';
 import { GoogleMapsBusiness } from '../../../Business/GoogleMapsBusiness';
 import MapManager from '../../../Store/Managers/MapManager';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
-import {
-  MapWidgetEmptyState,
-  MapWidgetSurface,
-  type MapWidgetManagerLike,
-} from '../_shared/MapWidgetSurface';
-import {
-  normalizeMapPoint,
-  sanitizeExternalUrl,
-} from '../_shared/MapWidgetRuntime';
+import { MapWidgetEmptyState, MapWidgetSurface, type MapWidgetManagerLike } from '../_shared/MapWidgetSurface';
+import { normalizeMapPoint, type NormalizedMapPoint } from '../_shared/MapWidgetRuntime';
+import { useMapWidgetFocus } from '../_shared/useMapWidgetFocus';
 import './StreetViewWidget.css';
 
 export interface StreetViewWidgetProps {
@@ -28,81 +14,49 @@ export interface StreetViewWidgetProps {
 
 export const StreetViewWidget = forwardRef<ManagedWindowHandle, StreetViewWidgetProps>(
   ({ id, windowManager }, ref): ReactNode => {
-    const [url, setUrl] = useState<string | null>(null);
-    const [status, setStatus] = useState('Haritada bir konum seçildiğinde sokak görünümü burada açılır.');
+    useMapWidgetFocus(id, windowManager.IsVisible(id));
+    const [point, setPoint] = useState<NormalizedMapPoint | null>(null);
+    const url = point ? GoogleMapsBusiness.CreateStreetViewUrlFromPoint(point) : null;
 
     useImperativeHandle(ref, () => ({
-      id,
-      visible: false,
-      minimized: false,
+      id, visible: false, minimized: false,
       OnShow: () => {
-        const clickEvent = MapManager.GetMapClickEvent() as unknown as { readonly mapPoint?: unknown } | null;
-        const mapPoint = clickEvent?.mapPoint;
-        const normalized = normalizeMapPoint(mapPoint);
-        if (!normalized || !mapPoint) {
-          setUrl(null);
-          setStatus('Sokak görünümü için önce haritada geçerli bir konum seçin.');
-          return;
-        }
-
-        const candidate = GoogleMapsBusiness.CreateStreetViewUrlFromPoint(mapPoint);
-        const safeUrl = sanitizeExternalUrl(candidate);
-        setUrl(safeUrl);
-        setStatus(
-          safeUrl
-            ? `Sokak görünümü ${normalized.latitude.toFixed(5)}, ${normalized.longitude.toFixed(5)} konumu için hazır.`
-            : 'Sokak görünümü bağlantısı güvenli biçimde oluşturulamadı.',
-        );
+        const event = MapManager.GetMapClickEvent() as { readonly mapPoint?: unknown } | null;
+        setPoint(normalizeMapPoint(event?.mapPoint));
       },
-      OnClose: () => {
-        setUrl(null);
-        setStatus('Haritada bir konum seçildiğinde sokak görünümü burada açılır.');
-      },
-    }), [id, windowManager]);
+      OnClose: () => setPoint(null),
+    }), [id]);
 
     useEffect(() => {
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
       return () => windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
     }, [id, ref, windowManager]);
 
-    const iframePolicy = useMemo(() => ({
-      allow: 'fullscreen',
-      referrerPolicy: 'strict-origin-when-cross-origin' as const,
-      sandbox: 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox',
-    }), []);
-
     return (
-      <MapWidgetSurface
-        id={id}
-        title="Sokak Görüntüsü"
-        iconSrc="images/icons/toolbar/sokakgoruntusu.png"
-        windowManager={windowManager}
-        status={status}
-        statusTone={url ? 'success' : 'info'}
-        bodyClassName="layer-list-window-body"
-      >
-        {url ? (
-          <div className="streetview-frame-shell">
-            <iframe
-              src={url}
-              width="100%"
-              height="320"
-              title="Seçilen konumun sokak görüntüsü"
-              loading="lazy"
-              allow={iframePolicy.allow}
-              sandbox={iframePolicy.sandbox}
-              referrerPolicy={iframePolicy.referrerPolicy}
-            />
-          </div>
+      <MapWidgetSurface id={id} title="Sokak Görüntüsü" iconSrc="images/icons/toolbar/sokakgoruntusu.png" windowManager={windowManager}>
+        {point && url ? (
+          <section className="streetview-location" aria-labelledby={`${id}-location-title`}>
+            <svg className="streetview-location__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" focusable="false">
+              <path d="M6 36V16l12-4 12 4 12-4v20l-12 4-12-4-12 4Z M18 12v20 M30 16v20" />
+              <circle cx="24" cy="14" r="7" fill="var(--exp-surface)" /><path d="m20 14 4 4 4-4" />
+            </svg>
+            <h3 id={`${id}-location-title`}>Seçilen konum</h3>
+            <dl className="streetview-location__coordinates">
+              <div><dt>Enlem</dt><dd>{point.latitude.toFixed(5)}</dd></div>
+              <div><dt>Boylam</dt><dd>{point.longitude.toFixed(5)}</dd></div>
+            </dl>
+            <p>Sokak görüntüsünü Google Haritalar’da açın. Görüntü bulunabilirliği seçilen konuma bağlıdır.</p>
+            <a className="map-widget-action map-widget-action--primary streetview-location__open" href={url} target="_blank" rel="noopener noreferrer">
+              <span>Sokak görüntüsünü aç</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false"><path d="M14 3h7v7 M10 14 21 3 M10 3H3v18h18v-7" /></svg>
+              <span className="experience-sr-only"> — yeni sekmede</span>
+            </a>
+            <small>Yeni sekmede açılır; çalışma alanınız burada kalır.</small>
+          </section>
         ) : (
-          <MapWidgetEmptyState
-            title="Konum bekleniyor"
-            description="Haritada sağ tıklayıp Sokak Görünümü seçin veya ilgili araçtan bir nokta belirleyin."
-          />
+          <MapWidgetEmptyState title="Konum seçin" description="Haritada bir noktayı seçtikten sonra Sokak Görüntüsü aracını açın. Sağ tık menüsünden de sokak görünümüne ulaşabilirsiniz." />
         )}
       </MapWidgetSurface>
     );
   },
 );
-
 StreetViewWidget.displayName = 'StreetViewWidget';

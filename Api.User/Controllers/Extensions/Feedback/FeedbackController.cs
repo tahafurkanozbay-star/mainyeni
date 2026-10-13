@@ -28,7 +28,7 @@ namespace Api.User.Extensions.Controllers
         [HttpPost]
         [ServiceFilter(typeof(AppRequestFilterAttribute))]
         [Route("[controller]/Save")]
-        public async Task<IActionResult> Save([FromQuery] FeedbackViewModel viewModel, CancellationToken cancellationToken)
+        public async Task<IActionResult> Save([FromBody] FeedbackViewModel viewModel, CancellationToken cancellationToken)
         {
             try
             {
