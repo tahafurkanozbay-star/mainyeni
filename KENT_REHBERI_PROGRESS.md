@@ -479,3 +479,11 @@
 ## Deep Platform / backend CI compile repair — 2026-10-13
 - Exact-head backend CI run `38360544857` identified C# CS1010/CS1011 from a malformed generated split expression and duplicated trailing source in AuthenticatedEncryptionUtils. Repaired to a single bounded split expression and removed duplicate tail. Previous head is NOT build-valid; rerun backend xUnit and all seven exact-head checks on the repair commit.
 - PR #483 remains draft and below mandatory 4,000 additions. No WMS/WFS or new external network change.
+
+
+## Deep Platform / project-graph admission review — 2026-10-13
+- PR #483 remains open/draft; main/merge-base `ec46772d98e767026525b54551b0dbcc552b8e50`, exact head `0296d8c16baa0cf2bcf2a072b8026a8f7c830644`, 53 ahead / 0 behind, mergeable=true. GitHub base...head additions 2,683 / deletions 623 (1,317 below mandatory 4,000).
+- Exact-head seven workflows completed+success: Platform Architecture Audit, Platform Dependency Governance, Platform Typed Test Validation, Platform Backend Validation, Webclient Quality, Release QA and Release Evidence Contract. Submitted reviews and inline review threads: 0.
+- Reviewed pending CORS HTTP token validation, strict configured body media-type admission and .NET ProjectReference cycle detection. Prepared six-file patch remains NOT committed; local Node 22 `--experimental-strip-types` graph test slice 12/12 passed, but no .NET compiler available and no new exact-head CI applies to that patch.
+- GitHub `create_file` for the graph audit was rejected by tool safety checks. No source changes or new CI success claimed. Preserve other teams' source and progress; no new WMS/WFS, endpoint, secret, telemetry or dependency.
+- NEXT: apply reviewed patch on this same PR if writes are permitted, run backend xUnit and all exact-head workflows, extend substantive Platform scope to >=4,000 additions; only merge when fresh main/merge-base, conflict-free PR and all release gates pass. Do not disable automation.
