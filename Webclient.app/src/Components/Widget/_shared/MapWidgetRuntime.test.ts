@@ -127,6 +127,11 @@ describe('MapWidgetRuntime', () => {
       expect(normalizeMapPoint(null)).toBeNull();
     });
 
+    it.each([true, false, [], {}, '   '])('does not coerce malformed coordinate values into a geographic point: %j', value => {
+      expect(normalizeMapPoint({ latitude: value, longitude: 32 })).toBeNull();
+      expect(normalizeMapPoint({ latitude: 39, longitude: value })).toBeNull();
+    });
+
     it('keeps a context menu inside the viewport', () => {
       expect(clampContextMenuPosition(
         { x: 980, y: 780 },

@@ -53,3 +53,10 @@
     flex-basis: 70%;
     text-align: left;
 }
+/* Current typed identify surface: preserve shared layout, improve readable detail. */
+.map-widget-surface .identify-modern-tab { min-block-size: 44px; font-size: 14px; color: var(--exp-text-soft); }
+.map-widget-surface .identify-modern-tab[aria-selected='true'] { color: var(--exp-accent); }
+.map-widget-surface .identify-modern-attribute dt,
+.map-widget-surface .identify-modern-attribute dd { font-size: 13px; line-height: 1.55; padding: 10px 12px; }
+.map-widget-surface .identify-modern-attribute dd { color: var(--exp-text-soft); }
+@media (pointer: coarse) { .map-widget-surface .identify-modern-tab { min-block-size: 48px; } }

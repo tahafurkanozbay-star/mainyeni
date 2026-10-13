@@ -149,7 +149,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       if (popupHandle) handles.push(popupHandle);
       const clickHandle = view.on?.('click', (event) => {
         if (event.button === 2 || MapManager.GetMobileRightClick?.()) {
-          MapManager.SetMapClickEvent?.(event as never); windowManager.ShowWindow('context-menu-widget');
+          MapManager.SetMapClickEvent?.(event); windowManager.ShowWindow('context-menu-widget');
         } else windowManager.HideWindow('context-menu-widget');
       });
       if (clickHandle) handles.push(clickHandle);
