@@ -40,8 +40,8 @@ const hasUnavailableAncestor = (element: HTMLElement): boolean => {
     if (current.parentElement) {
       current = current.parentElement;
     } else {
-      const root = current.getRootNode();
-      const host = 'host' in root ? root.host : null;
+      const root: Node = current.getRootNode();
+      const host: unknown = 'host' in root ? root.host : null;
       current = host instanceof HTMLElement ? host : null;
     }
   }
