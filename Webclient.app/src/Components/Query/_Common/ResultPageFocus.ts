@@ -34,7 +34,8 @@ export const scheduleOwnedResultFocus = ({
 
     const target = resolveTarget();
     if (!isManagedFocusCandidate(target)) return;
-    target.focus({ preventScroll: true });
+    // Keyboard paging must bring the newly focused result into the scroll viewport.
+    target.focus();
   });
 
   return () => {

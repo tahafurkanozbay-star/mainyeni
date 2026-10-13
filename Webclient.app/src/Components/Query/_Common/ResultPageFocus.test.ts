@@ -24,12 +24,15 @@ describe('owned result paging focus', () => {
   it('moves focus to the new result for keyboard-owned activation', () => {
     const fixture = setup();
     fixture.trigger.focus();
+    const focusSpy = vi.spyOn(fixture.target, 'focus');
     const cancel = scheduleOwnedResultFocus({
       trigger: fixture.trigger, detail: 0,
       resolveTarget: () => fixture.target, isCurrent: () => true,
     });
     fixture.callbacks[0]?.(0);
     expect(document.activeElement).toBe(fixture.target);
+    // The browser should scroll the focused card into view for keyboard users.
+    expect(focusSpy).toHaveBeenCalledWith();
     cancel();
   });
 
