@@ -1,3 +1,5 @@
+import { getDeepActiveElement, isManagedFocusCandidate } from './focusCandidate';
+
 export type RovingFocusOrientation = 'horizontal' | 'vertical' | 'both';
 export type RovingFocusDirection = 'ltr' | 'rtl';
 
@@ -208,12 +210,9 @@ export const focusRovingTarget = (
     if (target.dataset.rovingFocusId !== id) continue;
     // A menu may be hidden or retired between a queued focus request
     // and its microtask; ancestor visibility and inert ownership win.
-    if (!target.isConnected || target.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
-    if (target.matches(':disabled') || target.getAttribute('aria-disabled') === 'true') {
-      return false;
-    }
+    if (!isManagedFocusCandidate(target)) return false;
     target.focus({ preventScroll: true });
-    return target.ownerDocument.activeElement === target;
+    return getDeepActiveElement(target.ownerDocument) === target;
   }
   return false;
 };

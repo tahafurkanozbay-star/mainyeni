@@ -137,6 +137,46 @@ describe('rovingFocusRuntime', () => {
     root.remove();
   });
 
+
+  it('focuses an enabled menu target through nested open ShadowRoots', () => {
+    const host = document.createElement('div');
+    const outer = host.attachShadow({ mode: 'open' });
+    const innerHost = document.createElement('div');
+    const inner = innerHost.attachShadow({ mode: 'open' });
+    const button = document.createElement('button');
+    button.dataset.rovingFocusId = 'nested-menu';
+    inner.append(button);
+    outer.append(innerHost);
+    document.body.append(host);
+    try {
+      expect(focusRovingTarget(inner, 'nested-menu')).toBe(true);
+      expect(document.activeElement).toBe(host);
+      expect(outer.activeElement).toBe(innerHost);
+      expect(inner.activeElement).toBe(button);
+    } finally { host.remove(); }
+  });
+
+  it('rejects hidden and aria-disabled shadow hosts without stealing focus', () => {
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    const button = document.createElement('button');
+    button.dataset.rovingFocusId = 'nested-menu';
+    root.append(button);
+    const outside = document.createElement('button');
+    document.body.append(host, outside);
+    try {
+      outside.focus();
+      host.style.display = 'none';
+      expect(focusRovingTarget(root, 'nested-menu')).toBe(false);
+      host.style.display = '';
+      host.setAttribute('aria-disabled', 'true');
+      expect(focusRovingTarget(root, 'nested-menu')).toBe(false);
+      host.removeAttribute('aria-disabled');
+      expect(outside).toHaveFocus();
+      expect(focusRovingTarget(root, 'nested-menu')).toBe(true);
+    } finally { host.remove(); outside.remove(); }
+  });
+
   it('does not focus disabled targets', () => {
     const root = document.createElement('div');
     const button = document.createElement('button');

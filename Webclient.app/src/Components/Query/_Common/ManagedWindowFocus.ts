@@ -1,3 +1,6 @@
+import { getDeepActiveElement, isManagedFocusCandidate } from '../../../experience/focusCandidate';
+export { isManagedFocusCandidate } from '../../../experience/focusCandidate';
+
 export type ManagedWindowFocusRestorePolicy = 'always' | 'if-focus-within';
 
 export interface ManagedWindowFocusOptions {
@@ -23,47 +26,6 @@ const DEFAULT_FOCUS_SELECTOR = [
   'a[href]',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
-
-/** Resolve the real focused control through inspectable web-component boundaries. */
-const deepActiveElement = (documentRef: Document): Element | null => {
-  let active = documentRef.activeElement;
-  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-  return active;
-};
-
-const hasUnavailableAncestor = (element: HTMLElement): boolean => {
-  const view = element.ownerDocument.defaultView;
-  let current: HTMLElement | null = element;
-  while (current) {
-    if (current.hidden || current.hasAttribute('hidden')) return true;
-    if (current.hasAttribute('inert')) return true;
-    if (current.getAttribute('aria-hidden') === 'true') return true;
-    if (current.getAttribute('aria-disabled') === 'true') return true;
-    // CSS-hidden surfaces can remain connected without an ARIA/hidden attribute.
-    // Never move keyboard focus into a non-rendered ancestor.
-    const style = view?.getComputedStyle(current);
-    if (style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse') return true;
-    // Continue through ShadowRoot hosts; a hidden/inert web component is not focusable.
-    if (current.parentElement) {
-      current = current.parentElement;
-    } else {
-      const root: Node = current.getRootNode();
-      const host: unknown = 'host' in root ? root.host : null;
-      current = host instanceof HTMLElement ? host : null;
-    }
-  }
-  return false;
-};
-
-export const isManagedFocusCandidate = (
-  element: HTMLElement | null | undefined,
-): element is HTMLElement => {
-  if (!element?.isConnected) return false;
-  if (hasUnavailableAncestor(element)) return false;
-  if (element.hasAttribute('disabled') || element.matches(':disabled')) return false;
-  if (element.getAttribute('aria-disabled') === 'true') return false;
-  return true;
-};
 
 const findInitialFocusTarget = (
   root: HTMLElement,
@@ -99,13 +61,13 @@ export const restoreManagedWindowFocus = (
 ): boolean => {
   if (!isManagedFocusCandidate(opener)) return false;
   opener.focus({ preventScroll: true });
-  return deepActiveElement(opener.ownerDocument) === opener;
+  return getDeepActiveElement(opener.ownerDocument) === opener;
 };
 
 export const captureManagedWindowOpener = (
   documentRef: Document = document,
 ): HTMLElement | null => {
-  const active = deepActiveElement(documentRef);
+  const active = getDeepActiveElement(documentRef);
   if (!(active instanceof HTMLElement)) return null;
   if (active === documentRef.body) return null;
   return isManagedFocusCandidate(active) ? active : null;
@@ -117,11 +79,11 @@ export const scheduleManagedWindowFocus = (
   const windowRef = options.root?.ownerDocument.defaultView;
   if (!windowRef) return () => undefined;
   const documentRef = options.root?.ownerDocument;
-  const initialFocus = documentRef ? deepActiveElement(documentRef) : null;
+  const initialFocus = documentRef ? getDeepActiveElement(documentRef) : null;
   let cancelled = false;
   const frame = windowRef.requestAnimationFrame(() => {
     if (cancelled) return;
-    const currentFocus = documentRef ? deepActiveElement(documentRef) : null;
+    const currentFocus = documentRef ? getDeepActiveElement(documentRef) : null;
     // A delayed focus request cannot reclaim focus after deliberate navigation.
     // Only the browser's fallback to body after opener removal is exempt.
     if (currentFocus !== initialFocus && !(
@@ -141,7 +103,7 @@ const shouldRestoreFocus = (
   policy: ManagedWindowFocusRestorePolicy,
 ): boolean => {
   if (policy === 'always') return true;
-  const active = deepActiveElement(documentRef);
+  const active = getDeepActiveElement(documentRef);
   if (!active || active === documentRef.body) return true;
   return Boolean(root && (active === root || root.contains(active)));
 };

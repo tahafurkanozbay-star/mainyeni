@@ -1,4 +1,4 @@
-import { isManagedFocusCandidate } from './ManagedWindowFocus';
+import { getDeepActiveElement, isManagedFocusCandidate } from '../../../experience/focusCandidate';
 
 /**
  * Transfers focus only for an actual keyboard-owned paging action.
@@ -12,15 +12,6 @@ export interface OwnedResultFocusOptions {
   readonly isCurrent: () => boolean;
 }
 
-/** Walk only open shadow roots; closed roots cannot be inspected safely. */
-const activeFocusElement = (documentRef: Document): Element | null => {
-  let active = documentRef.activeElement;
-  while (active?.shadowRoot?.activeElement) {
-    active = active.shadowRoot.activeElement;
-  }
-  return active;
-};
-
 export const scheduleOwnedResultFocus = ({
   trigger,
   detail,
@@ -29,7 +20,7 @@ export const scheduleOwnedResultFocus = ({
 }: OwnedResultFocusOptions): (() => void) => {
   const documentRef = trigger.ownerDocument;
   const view = documentRef.defaultView;
-  if (!view || detail !== 0 || activeFocusElement(documentRef) !== trigger) {
+  if (!view || detail !== 0 || getDeepActiveElement(documentRef) !== trigger) {
     return () => undefined;
   }
 
@@ -60,7 +51,7 @@ export const scheduleOwnedResultFocus = ({
   frame = view.requestAnimationFrame(() => {
     removeListeners();
     if (cancelled || documentRef.visibilityState === 'hidden' || !isCurrent()) return;
-    const currentFocus = activeFocusElement(documentRef);
+    const currentFocus = getDeepActiveElement(documentRef);
     const stillOwned = currentFocus === trigger
       || (!trigger.isConnected && currentFocus === documentRef.body);
     if (!stillOwned) return;
