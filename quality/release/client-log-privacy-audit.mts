@@ -20,6 +20,7 @@ const SENSITIVE_DIRECT_IDENTIFIER = /^(?:query|path|params|payload|record|item|s
 const SENSITIVE_PATH = /\b(?:pathForLog|numberingPathLabelV\d*)\s*\(/;
 const SENSITIVE_SERIALIZATION = /\bJSON\s*\.\s*stringify\s*\(\s*(?:query|path|params|payload|record|item|selection|address|coordinates|location)\b/i;
 const SENSITIVE_PROPERTY = /\b(?:item|record|path|query|selection|geometry|point)\s*(?:\?\.|\.)\s*(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)\b/i;
+const SENSITIVE_RUNTIME_SOURCE = /\b(?:latestQuery|mapPoint|mapEvent\s*(?:\?\.|\.)\s*mapPoint|item\s*(?:\?\.|\.)\s*(?:Title|title)|(?:query|params|payload|record|item|selection)\s*(?:\?\.|\.)\s*(?:name|districtName|nbhoodName))\b/i;
 const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door)\b[^}]*\}/i;
 
 function isRuntime(file: SourceFile): boolean {
@@ -126,6 +127,7 @@ function riskReason(argument: string): string | null {
   if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';
   if (SENSITIVE_PROPERTY.test(argument)) return 'sensitive-property';
   if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
+  if (SENSITIVE_RUNTIME_SOURCE.test(argument)) return 'location-or-search-value';
   return null;
 }
 

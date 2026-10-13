@@ -9,6 +9,8 @@ import { fixtureInventory } from './test-helpers.mts';
 for (const [path, minimumCalls] of [
   ['Webclient.app/src/Components/Query/AAQuery/AAQueryWindow.tsx', 2],
   ['Webclient.app/src/Components/Query/GenelAramaQuery/GenelAramaQeryWindow.tsx', 1],
+  ['Webclient.app/src/Components/Query/ParklarQuery/ParklarQueryWindow.tsx', 3],
+  ['Webclient.app/src/Components/Query/VicinityQuery/VicinityQueryWindow.tsx', 3],
 ] as const) {
   test(`production client log privacy: ${path}`, () => {
     const text = readFileSync(decodeURIComponent(new URL(`../../${path}`, import.meta.url).pathname), 'utf8');

@@ -17,7 +17,9 @@ function audit(...files: FixtureFileInput[]) {
 test('flags raw query, address-path and optional-chaining payloads', () => {
   const values = ['query', 'record', 'address', 'pathForLog(path)',
     'numberingPathLabelV11(path)', 'JSON.stringify(query)', 'path?.mahalle',
-    'record.address', 'geometry.longitude', '`x=${latitude}`'];
+    'record.address', 'geometry.longitude', '`x=${latitude}`', 'latestQuery', 'String(latestQuery.districtName ?? "")',
+    'item.Title', 'item?.Title', '`x=${item.Title}`',
+    'mapEvent.mapPoint.latitude', 'mapPoint'];
   for (const value of values) {
     const result = audit(source(`safeClientLog(LoggingBusiness, "Query", ${value});`));
     assert.equal(result.summary.clientLogCalls, 1, value);
