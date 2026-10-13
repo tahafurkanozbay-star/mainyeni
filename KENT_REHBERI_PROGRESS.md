@@ -424,3 +424,9 @@
 - Commits: `056bb661` focus, `65c62f45` focus test (earlier blocked note superseded), `f5082e54` shared paging filter reset/test, `1512cb32` Parklar privacy/nonblocking logging/test, `7181220b` bounded 200-card Parklar navigation, `bff08c3a` park group regression, `de1d283a` stale detail guard.
 - Exact-head Webclient Quality, Release QA, Typed Source Boundary, Architecture and Dependency Governance pending; no local npm/browser/build due GitHub DNS failure. No new endpoint, dependency, WMS/WFS, telemetry, remote font or icon authority.
 - Next: fix exact-head CI, add deferred detail and paging-focus regression, verify mobile/forced colors and continue substantive UI work on the same PR. Do not merge below 4,000 additions or without completed-success checks.
+
+## 2026-10-13 — Experience PR #492 exact-head CI repair checkpoint
+- Base/main `70f2ffb2`, PR head `9718b963`, merge-base current main, 31 ahead/0 behind; open/draft, mergeable=true, additions 1,796/4,000.
+- Webclient Quality run 38337071597 failed one 1,000-record paging Vitest due to 10-second timeout. Release QA, typed boundary, architecture and dependency governance succeeded.
+- Prepared lower-cost DOM-cap regression and abort-owned Parklar detail cancellation, but GitHub source/blob writes were rejected by safety checks. Changes remain uncommitted and untested. No merge.
+- Next: apply the same-branch repair, rerun exact-head checks, continue meaningful accessibility/responsive UI work and review before any merge.
