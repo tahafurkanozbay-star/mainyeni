@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { loadArcgisModules } from '../../../gis-engine/arcgisModuleRuntime';
 import MapManager from '../../../Store/Managers/MapManager';
+import { useMapWidgetFocus } from '../_shared/useMapWidgetFocus';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import { MapWidgetEmptyState, MapWidgetSkeleton, MapWidgetSurface, type MapWidgetManagerLike } from '../_shared/MapWidgetSurface';
 import { createLatestOperationGate, isAbortLikeError, type LatestOperationGate } from '../_shared/MapWidgetRuntime';
@@ -33,10 +34,13 @@ interface BasemapView { readonly map?: BasemapMap; }
 export interface BasemapWidgetProps { readonly id: string; readonly windowManager: MapWidgetManagerLike; }
 
 export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>(({ id, windowManager }, ref): ReactNode => {
+  useMapWidgetFocus(id, windowManager.IsVisible(id));
   const constructorRef = useRef<BasemapConstructor | null>(null);
   const catalogRef = useRef<readonly BasemapOption[]>([]);
   const gateRef = useRef<LatestOperationGate | null>(null);
   const initialLoadRequestedRef = useRef(false);
+  const mountedRef = useRef(false);
+  const operationRevisionRef = useRef(0);
   const [catalog, setCatalog] = useState<readonly BasemapOption[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -49,6 +53,7 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
     const map = (MapManager.GetMapView() as BasemapView | null)?.map;
     setSelectedId(map?.basemap?.id ?? null);
     if (catalogRef.current.length > 0 || !model.beginLoad()) return;
+    const revision = ++operationRevisionRef.current;
     try {
       await gateRef.current?.run(async (operation) => {
         const [Basemap] = await loadArcgisModules<readonly [BasemapConstructor]>(['esri/Basemap']);
@@ -66,6 +71,7 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
         model.succeed(available.length);
       });
     } catch (error) {
+      if (!mountedRef.current || revision !== operationRevisionRef.current) return;
       if (isAbortLikeError(error)) { model.cancel(); return; }
       model.fail(error);
     }
@@ -73,34 +79,50 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
 
   const selectBasemap = useCallback(async (option: BasemapOption): Promise<void> => {
     const map = (MapManager.GetMapView() as BasemapView | null)?.map;
-    if (!map || !constructorRef.current || map.basemap?.id === option.id) return;
+    if (!map) { setSelectionError('Altlık seçmek için harita görünümünün hazır olmasını bekleyin.'); return; }
+    if (!constructorRef.current || map.basemap?.id === option.id) return;
+    const revision = ++operationRevisionRef.current;
     setPendingId(option.id);
     setSelectionError(null);
     try {
       await gateRef.current?.run(async (operation) => {
         const candidate = constructorRef.current?.fromId(option.id);
         if (!candidate) throw new Error('Altlık harita seçeneği kullanılamıyor.');
-        await applySelectedBasemap(candidate, map, operation);
+        await applySelectedBasemap(candidate, map, {
+          ...operation,
+          isCurrent: () => operation.isCurrent() && (MapManager.GetMapView() as BasemapView | null)?.map === map,
+        });
         if (operation.isCurrent()) setSelectedId(option.id);
       });
     } catch (error) {
+      if (!mountedRef.current || revision !== operationRevisionRef.current) return;
       if (isAbortLikeError(error)) return;
       setSelectionError('Seçilen altlık yüklenemedi. Mevcut haritanız korunuyor; yeniden seçebilir veya başka bir altlık deneyebilirsiniz.');
     } finally {
-      if (gateRef.current?.snapshot().phase !== 'running') setPendingId(null);
+      if (mountedRef.current && revision === operationRevisionRef.current) setPendingId(null);
     }
   }, []);
 
   useImperativeHandle(ref, () => ({
     id, visible: false, minimized: false,
     OnShow: () => { setSelectionError(null); if (model.getSnapshot().phase === 'error' && !model.getSnapshot().canReload) model.resetAttempts(); void initialize(); },
-    OnClose: () => { gateRef.current?.cancel('widget-closed'); setPendingId(null); setSelectionError(null); if (model.getSnapshot().phase === 'loading') model.cancel(); },
+    OnClose: () => { operationRevisionRef.current += 1; gateRef.current?.cancel('widget-closed'); setPendingId(null); setSelectionError(null); if (model.getSnapshot().phase === 'loading') model.cancel(); },
   }), [id, initialize, model]);
   useEffect(() => {
+    mountedRef.current = true;
     windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
     return () => {
-      gateRef.current?.dispose(); model.dispose();
+      mountedRef.current = false;
+      operationRevisionRef.current += 1;
+      gateRef.current?.cancel('widget-unmounted');
+      if (model.getSnapshot().phase === 'loading') model.cancel();
+      if (!catalogRef.current.length) initialLoadRequestedRef.current = false;
       windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
+      queueMicrotask(() => {
+        if (mountedRef.current) return;
+        gateRef.current?.dispose();
+        model.dispose();
+      });
     };
   }, [id, model, ref, windowManager]);
   useEffect(() => {

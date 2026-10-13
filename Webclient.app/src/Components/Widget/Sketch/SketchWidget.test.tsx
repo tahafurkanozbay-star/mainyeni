@@ -1,4 +1,4 @@
-import { createRef } from 'react';
+import { StrictMode, createRef } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
@@ -40,5 +40,67 @@ describe('sketch resource ownership', () => {
     runtime.cancel.mockImplementationOnce(() => { throw new Error('cancel failed'); });
     runtime.sketchDestroy.mockImplementationOnce(() => { throw new Error('destroy failed'); });
     unmount(); expect(runtime.remove).toHaveBeenCalledTimes(1); expect(runtime.layerDestroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sketch reopening and bounded admission', () => {
+  it('coalesces repeated openings while the module is pending', async () => {
+    let finish: (modules: unknown[]) => void = () => undefined;
+    const modules = await runtime.load(); runtime.load.mockClear();
+    runtime.load.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { ref } = setup();
+    await act(async () => { ref.current?.OnShow?.(); ref.current?.OnShow?.(); });
+    expect(runtime.load).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(modules); });
+    expect(runtime.construct).toHaveBeenCalledTimes(1);
+  });
+  it('survives StrictMode replay before the first managed opening', async () => {
+    const ref = createRef<ManagedWindowHandle>(); const windowManager = manager();
+    render(<StrictMode><SketchWidget id="sketch-test" windowManager={windowManager} ref={ref} /></StrictMode>);
+    await act(async () => { ref.current?.OnShow?.(); });
+    expect(runtime.construct).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Çizim katmanı hazır')).toBeVisible();
+  });
+  it('rebinds to the current view and retires the old resources on reopen', async () => {
+    const { ref } = setup(); await act(async () => { ref.current?.OnShow?.(); });
+    const nextAdd = vi.fn(); const nextRemove = vi.fn();
+    runtime.getView.mockReturnValue({ map: { add: nextAdd, remove: nextRemove } });
+    await act(async () => { ref.current?.OnClose?.(); ref.current?.OnShow?.(); });
+    expect(runtime.remove).toHaveBeenCalledTimes(1);
+    expect(runtime.layerDestroy).toHaveBeenCalledTimes(1);
+    expect(nextAdd).toHaveBeenCalledTimes(1);
+    expect(nextRemove).not.toHaveBeenCalled();
+    expect(runtime.construct).toHaveBeenCalledTimes(2);
+  });
+  it('ignores old module failure after closing and reopening into a ready tool', async () => {
+    let rejectOld: (error: Error) => void = () => undefined;
+    runtime.load.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
+    const { ref } = setup(); await act(async () => { ref.current?.OnShow?.(); });
+    await act(async () => { ref.current?.OnClose?.(); ref.current?.OnShow?.(); });
+    await waitFor(() => expect(runtime.construct).toHaveBeenCalledTimes(1));
+    await act(async () => { rejectOld(new Error('obsolete failure')); });
+    expect(screen.getByText('Çizim katmanı hazır')).toBeVisible();
+    expect(runtime.sketchDestroy).not.toHaveBeenCalled();
+  });
+  it('refuses admission to a superseded map before constructing the SDK tool', async () => {
+    const modules = await runtime.load(); runtime.load.mockClear();
+    let finish: (modules: unknown[]) => void = () => undefined;
+    runtime.load.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { ref } = setup(); await act(async () => { ref.current?.OnShow?.(); });
+    runtime.getView.mockReturnValue({ map: { add: vi.fn(), remove: vi.fn() } });
+    await act(async () => { finish(modules); });
+    expect(runtime.construct).not.toHaveBeenCalled();
+    expect(runtime.add).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Harita hazır olduğunda yeniden deneyin.');
+  });
+  it('bounds stalled SDK admission and permits an explicit retry', async () => {
+    runtime.load.mockImplementationOnce(() => new Promise(() => undefined));
+    const { ref } = setup(); vi.useFakeTimers();
+    try {
+      await act(async () => { ref.current?.OnShow?.(); await vi.advanceTimersByTimeAsync(15_001); });
+      expect(screen.getByRole('button', { name: 'Yeniden dene' })).toBeVisible();
+    } finally { vi.useRealTimers(); }
+    fireEvent.click(screen.getByRole('button', { name: 'Yeniden dene' }));
+    await waitFor(() => expect(runtime.construct).toHaveBeenCalledTimes(1));
   });
 });

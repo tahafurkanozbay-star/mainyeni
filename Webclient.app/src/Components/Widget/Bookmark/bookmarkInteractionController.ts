@@ -69,6 +69,7 @@ export interface BookmarkInteractionController {
   readonly remove: (key: string) => boolean;
   readonly navigate: (key: string) => Promise<boolean>;
   readonly clearNotice: () => void;
+  readonly cancelNavigation: () => void;
   readonly dispose: () => void;
 }
 
@@ -333,6 +334,11 @@ export const createBookmarkInteractionController = (
     saveCurrentView,
     remove,
     navigate,
+    cancelNavigation() {
+      if (disposed) return;
+      operationGate.cancel('bookmark-window-closed');
+      publish('idle', null, null);
+    },
     clearNotice() {
       if (disposed || !snapshot.lastNotice) return;
       publish(snapshot.phase === 'error' ? 'idle' : snapshot.phase, snapshot.pendingBookmarkKey, null);

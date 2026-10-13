@@ -1,10 +1,11 @@
-import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import React, { createRef } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Constants_ConfigKeys } from '../../../Core/Constants';
 import { LocalStorageHelper } from '../../../Toolbox/LocalStorageHelper';
 import type { BookmarkRecord } from '../_shared/MapWidgetRuntime';
 import { BookmarkWidget } from './BookmarkWidget';
+import type { ManagedWindowHandle } from '../../../experience/contracts';
 
 const mapRuntime = vi.hoisted(() => ({
   getMapView: vi.fn(),
@@ -589,4 +590,55 @@ describe('BookmarkWidget modern screen', () => {
     expect(searchInput()).toHaveAttribute('aria-activedescendant', rows()[1].id);
   });
 
+});
+
+describe('bookmark lifecycle replay and navigation cancellation', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    LocalStorageHelper.Set(Constants_ConfigKeys.BOOKMARKS, INITIAL);
+    mapRuntime.getMapView.mockReturnValue({ center: { latitude: 39.93, longitude: 32.85 }, zoom: 13, goTo: vi.fn().mockResolvedValue(undefined) });
+  });
+  it('keeps saving and filtering usable after StrictMode replay', async () => {
+    render(<React.StrictMode><BookmarkWidget id="bookmark-test" windowManager={createWindowManager()} /></React.StrictMode>);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Yer işareti adı' }), { target: { value: 'Yeni görünüm' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
+    expect(readStored()).toHaveLength(4);
+    fireEvent.change(searchInput(), { target: { value: 'Yeni görünüm' } });
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(collection()).toHaveTextContent('Yeni görünüm');
+  });
+  it('keeps the save field focused without scrolling a different row into view', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    const scroll = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+    try {
+      renderWidget();
+      const title = screen.getByRole('textbox', { name: 'Yer işareti adı' });
+      title.focus(); scroll.mockClear();
+      fireEvent.change(title, { target: { value: 'Yeni görünüm' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Görünümü kaydet' }));
+      expect(title).toHaveFocus();
+      expect(scroll).not.toHaveBeenCalled();
+      collection().focus();
+      fireEvent.keyDown(collection(), { key: 'ArrowDown' });
+      expect(scroll).toHaveBeenCalled();
+    } finally {
+      if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+  it('releases pending navigation on close and ignores its late notice after reopen', async () => {
+    let finish: () => void = () => undefined;
+    const goTo = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    mapRuntime.getMapView.mockReturnValue({ center: { latitude: 39.93, longitude: 32.85 }, zoom: 13, goTo });
+    const ref = createRef<ManagedWindowHandle>();
+    render(<BookmarkWidget id="bookmark-test" windowManager={createWindowManager()} ref={ref} />);
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: /göster/i }));
+    await waitFor(() => expect(goTo).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Görünümü kaydet' })).toBeDisabled();
+    await act(async () => { ref.current?.OnClose?.(); ref.current?.OnShow?.(); });
+    expect(screen.getByRole('button', { name: 'Görünümü kaydet' })).toBeEnabled();
+    await act(async () => { finish(); });
+    expect(screen.queryByText(/görünümüne gidildi/)).toBeNull();
+  });
 });
