@@ -336,7 +336,7 @@ export const GenelAramaQeryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Genel Arama/Yol Tarifi',
-      `${item.id ?? ''}/${item.title}`,
+      'general-search-route-action',
     );
 
     try {
