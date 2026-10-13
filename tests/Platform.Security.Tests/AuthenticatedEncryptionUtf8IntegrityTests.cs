@@ -11,21 +11,26 @@ public sealed class AuthenticatedEncryptionUtf8IntegrityTests
     private const string Secret = "test-secret-with-sufficient-entropy";
     private const string Purpose = "platform-security-test";
 
+    // Construct invalid UTF-16 inside the test: xUnit theory argument serialization
+    // can replace unpaired surrogate literals before the test receives them.
     [Theory]
-    [InlineData("\uD800")]
-    [InlineData("\uDC00")]
-    [InlineData("before\uD800after")]
-    public void Encrypt_RejectsUnpairedSurrogates(string value)
+    [InlineData(0xD800)]
+    [InlineData(0xDC00)]
+    public void Encrypt_RejectsUnpairedSurrogates(int surrogateCodeUnit)
     {
+        var malformed = new string((char)surrogateCodeUnit, 1);
         Assert.Throws<EncoderFallbackException>(() =>
-            AuthenticatedEncryptionUtils.Encrypt(value, Secret, Purpose));
+            AuthenticatedEncryptionUtils.Encrypt(malformed, Secret, Purpose));
+        Assert.Throws<EncoderFallbackException>(() =>
+            AuthenticatedEncryptionUtils.Encrypt("before" + malformed + "after", Secret, Purpose));
     }
 
     [Theory]
-    [InlineData("\uD800")]
-    [InlineData("prefix\uDC00")]
-    public void Purpose_RejectsUnpairedSurrogates(string purpose)
+    [InlineData(0xD800)]
+    [InlineData(0xDC00)]
+    public void Purpose_RejectsUnpairedSurrogates(int surrogateCodeUnit)
     {
+        var purpose = "prefix" + new string((char)surrogateCodeUnit, 1);
         Assert.Throws<EncoderFallbackException>(() =>
             AuthenticatedEncryptionUtils.Encrypt("valid", Secret, purpose));
         Assert.Throws<EncoderFallbackException>(() =>
