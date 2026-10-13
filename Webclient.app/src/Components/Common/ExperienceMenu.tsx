@@ -127,8 +127,9 @@ export function ExperienceMenu({
   const tabIndices = createRovingTabIndex(rovingItems, activeIndex);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (!visible) return;
-    if (event.key === 'Escape') {
+    if (!visible || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // OS/browser modified Escape shortcuts belong to the platform, not the menu.
+    if (event.key === 'Escape' && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       onDismiss?.('escape');
       return;
