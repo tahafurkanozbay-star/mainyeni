@@ -398,3 +398,12 @@
 - REPAIR: Migrate Architecture Audit trigger and unit-test invocation to existing `.mts` test, delete redundant `.mjs` test. Exact Git blob fixtures validated; local Node 22 strip-types run of `.mts` passed 5/5. A two-file patch was generated and `git apply --check` verified, but GitHub source mutations were rejected by safety checks; no code commit and no claim of fixed Release QA.
 - SECURITY / NETWORK: no new dependency, endpoint, telemetry, WMS/WFS, asset or icon authority. AES-GCM and HTTP preflight hardening still pending.
 - NEXT: Apply the two-file migration patch on the same PR when permitted; rerun all seven exact-head CI checks. Then continue substantive Platform changes to >=4,000 additions and recheck main/merge-base/mergeability/reviews before considering merge.
+
+
+## Deep Platform / exact-head release gate follow-up — 2026-10-13
+- TUR / GÖREV: Platform Architecture / Whole-Code Modernization; canonical draft PR #483, head 2c4b054086e3f973a3575f373b9cf8cc7876ce94, main/merge-base 70f2ffb229c526e586deaf62b1a3249d0af2b271; 45 ahead / 0 behind; mergeable=true.
+- CI: exact-head Platform Architecture Audit, Dependency Governance, Typed Test Validation, Backend Validation, Webclient Quality, Release Evidence Contract all completed+success. Release QA run 38330367070 failed in typed-release-audit job 115078506872, step Enforce exact-base PR regression gate; confirmed HIGH tooling-language-new-legacy-test on tools/platform-backend-trigger-contract.test.mjs. Backend and webclient release jobs passed.
+- SCOPE: GitHub PR additions 2,582 / deletions 622, 23 files; 1,418 meaningful additions remain to 4,000 threshold. Do not merge.
+- REPAIR: Existing typed .mts test has five cases; architecture workflow still invokes legacy .mjs and old file remains. Replace both workflow references with .mts and remove redundant .mjs. GitHub update_file and delete_file calls were rejected by safety checks; no source mutation, no new commit, no fixed-CI claim. Existing two-file patch can be applied only when writes permitted.
+- SECURITY: AES-GCM bounded parsing/zeroing and HTTP request-target preflight remain uncommitted; do not claim shipped. No new WMS/WFS, external endpoint, telemetry, dependency or icon authority.
+- NEXT: Commit typed CI migration on same PR, rerun all seven exact-head workflows, apply reviewed security fixes with xUnit regressions, continue substantive Platform work to >=4,000 additions, refresh main/reviews/mergeability before any merge.
