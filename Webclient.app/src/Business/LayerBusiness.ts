@@ -1,10 +1,12 @@
 import { apiClient } from '../platform/http/httpClient';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 const reportLayerFailure = (error: unknown): void => {
-  const reporter = (
-    globalThis as typeof globalThis & { reportError?: (reason: unknown) => void }
-  ).reportError;
-  reporter?.(error);
+  try {
+    runtimeDiagnostics.captureError(error, { source: 'layer-business.catalog' }, 'warn');
+  } catch {
+    console.warn('Layer catalog diagnostic reporting failed.');
+  }
 };
 
 export const LayerBusiness = Object.freeze({

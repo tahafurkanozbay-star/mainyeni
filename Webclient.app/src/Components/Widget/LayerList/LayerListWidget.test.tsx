@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Constants_ServiceResultType } from '../../../Core/Constants';
 import type { ManagedQueryWindowHandle } from '../../Query/_Common/QuerySurfaceContracts';
 import { LayerListWidget } from './LayerListWidget';
+import { createLayerOwner } from '../../../gis-engine/layerOwnership';
 
 const runtime = vi.hoisted(() => ({
   getLayers: vi.fn(),
@@ -16,7 +17,10 @@ const runtime = vi.hoisted(() => ({
   ownerDestroy: vi.fn(),
   legendConstruct: vi.fn(),
   legendDestroy: vi.fn(),
+  reportDiagnostic: vi.fn(),
 }));
+
+vi.mock('../../../platform/runtime/runtimeDiagnostics', () => ({ runtimeDiagnostics: { captureError: runtime.reportDiagnostic } }));
 
 vi.mock('../../../Business/LayerBusiness', () => ({
   LayerBusiness: {
@@ -149,6 +153,7 @@ describe('LayerListWidget modern workspace', () => {
     runtime.ownerDestroy.mockReset();
     runtime.legendConstruct.mockReset();
     runtime.legendDestroy.mockReset();
+    runtime.reportDiagnostic.mockReset();
     runtime.getMapView.mockReturnValue({
       map: {
         add: vi.fn(),
@@ -409,16 +414,18 @@ describe('LayerListWidget modern workspace', () => {
     runtime.getLayers.mockRejectedValueOnce(new Error('  servis   kullanılamıyor  '));
     renderWidget();
     expect(await screen.findByText('Katmanlar kullanılamıyor')).toBeVisible();
-    expect(screen.getByText('servis kullanılamıyor')).toBeVisible();
+    expect(screen.getByText('Katman kataloğu yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.')).toBeVisible();
+    expect(runtime.reportDiagnostic).toHaveBeenCalledWith(expect.any(Error), { source: 'experience.layer-list.catalog' }, 'warn');
     expect(screen.getByRole('button', { name: 'Tekrar dene' })).toBeVisible();
   });
 
-  it('still renders the recovery surface when the global error reporter throws', async () => {
-    vi.stubGlobal('reportError', vi.fn(() => { throw new Error('reporter failed'); }));
+  it('still renders the recovery surface when the diagnostic reporter throws', async () => {
+    runtime.reportDiagnostic.mockImplementation(() => { throw new Error('reporter failed'); });
     runtime.getLayers.mockRejectedValueOnce(new Error('catalog failure'));
     renderWidget();
     expect(await screen.findByText('Katmanlar kullanılamıyor')).toBeVisible();
-    expect(screen.getByText('catalog failure')).toBeVisible();
+    expect(screen.getByText('Katman kataloğu yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.')).toBeVisible();
+    expect(screen.queryByText('catalog failure')).not.toBeInTheDocument();
   });
 
   it('retries only after explicit user action', async () => {
@@ -426,7 +433,7 @@ describe('LayerListWidget modern workspace', () => {
       .mockRejectedValueOnce(new Error('ilk hata'))
       .mockResolvedValueOnce({ type: Constants_ServiceResultType.Success, data: serviceGroups });
     renderWidget();
-    expect(await screen.findByText('ilk hata')).toBeVisible();
+    expect(await screen.findByText('Katmanlar kullanılamıyor')).toBeVisible();
     expect(runtime.getLayers).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Tekrar dene' }));
     await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(2));
@@ -462,7 +469,7 @@ describe('LayerListWidget modern workspace', () => {
     }));
     await waitForLayerTree();
     fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
-    expect(runtime.loadModules).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(runtime.loadModules).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('tab', { name: 'Katmanlar' }));
     await act(async () => {
       resolveImport([LegendMock]);
@@ -496,8 +503,7 @@ describe('LayerListWidget modern workspace', () => {
     runtime.loadModules.mockImplementationOnce(() => new Promise((_resolve, reject) => {
       rejectOld = reject;
     }));
-    const report = vi.fn();
-    vi.stubGlobal('reportError', report);
+    const report = runtime.reportDiagnostic;
     await waitForLayerTree();
     fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Katmanlar' }));
@@ -539,8 +545,7 @@ describe('LayerListWidget modern workspace', () => {
 
   it('contains legend module failures and keeps the panel usable', async () => {
     runtime.loadModules.mockRejectedValueOnce(new Error('legend failure'));
-    const report = vi.fn();
-    vi.stubGlobal('reportError', report);
+    const report = runtime.reportDiagnostic;
     await waitForLayerTree();
     fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
     await waitFor(() => expect(report).toHaveBeenCalled());
@@ -551,15 +556,17 @@ describe('LayerListWidget modern workspace', () => {
     vi.unstubAllGlobals();
   });
 
-  it('refreshes the managed surface without closing it on OnShow', async () => {
+  it('defers a hidden catalog and coalesces subsequent managed openings', async () => {
     const { ref, windowManager } = renderWidget(false);
-    await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(1));
+    expect(runtime.getLayers).not.toHaveBeenCalled();
     await act(async () => {
       ref.current?.OnShow?.();
       await Promise.resolve();
     });
     expect(windowManager.ShowWindow).not.toHaveBeenCalledWith('sidebar');
-    await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledTimes(1));
+    act(() => { ref.current?.OnShow?.(); });
+    expect(runtime.getLayers).toHaveBeenCalledTimes(1);
   });
 
   it('cancels active loading and disposes legend on managed OnClose', async () => {
@@ -590,6 +597,227 @@ describe('LayerListWidget modern workspace', () => {
     const section = container.querySelector('section[aria-label="Katman ve lejand yönetimi"]');
     expect(section).toHaveAttribute('aria-hidden', 'true');
     expect(section).toHaveStyle({ visibility: 'hidden' });
+  });
+
+  it('does not apply tree shortcuts to a focused row button', async () => {
+    await waitForLayerTree();
+    const group = screen.getByRole('button', { name: 'Temel Katmanlar grubunu gizle' });
+    group.focus();
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    fireEvent(group, event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.getByRole('button', { name: 'Temel Katmanlar grubunu genişlet' })).toBeVisible();
+    fireEvent.click(group);
+    expect(screen.getByRole('button', { name: 'Temel Katmanlar grubunu göster' })).toBeVisible();
+  });
+
+  it('does not let pointer hover move the active keyboard row', async () => {
+    const tree = await waitForLayerTree();
+    tree.focus();
+    const active = tree.getAttribute('aria-activedescendant');
+    fireEvent.mouseMove(screen.getByText('İmar ve Planlama'));
+    expect(tree).toHaveAttribute('aria-activedescendant', active);
+  });
+
+  it('restores search focus when the clear button disappears', async () => {
+    await waitForLayerTree();
+    const search = screen.getByRole('searchbox', { name: 'Katman ara' });
+    fireEvent.change(search, { target: { value: 'yollar' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Katman aramasını temizle' }));
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+  });
+
+  it('keeps distinct configured IDs distinct in DOM and active-descendant navigation', async () => {
+    runtime.getLayers.mockResolvedValue({ type: Constants_ServiceResultType.Success, data: [{ id: 'g', title: 'Grup', layers: [
+      { id: 'roads/a', title: 'Birinci Yol', visible: true, opacity: 100 },
+      { id: 'roads:a', title: 'İkinci Yol', visible: true, opacity: 100 },
+    ] }] });
+    renderWidget();
+    const tree = await screen.findByRole('tree');
+    fireEvent.click(await screen.findByRole('button', { name: 'Grup grubunu genişlet' }));
+    const ids = screen.getAllByRole('treeitem').map((row) => row.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    tree.focus(); fireEvent.keyDown(tree, { key: 'ArrowDown' });
+    const first = document.getElementById(tree.getAttribute('aria-activedescendant')!);
+    expect(first).toHaveTextContent('Birinci Yol');
+    fireEvent.keyDown(tree, { key: 'ArrowDown' });
+    expect(document.getElementById(tree.getAttribute('aria-activedescendant')!)).toHaveTextContent('İkinci Yol');
+  });
+
+  it('preserves visibility, opacity and filtering across managed close and reopen', async () => {
+    const { ref } = renderWidget();
+    await waitForLayerTree();
+    fireEvent.click(screen.getByRole('button', { name: 'Temel Katmanlar grubunu genişlet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ana Yollar katmanını gizle' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Katman opaklığı: Ana Yollar' }), { target: { value: '40' } });
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Ana Yollar' } });
+    act(() => { ref.current!.OnClose(); ref.current!.OnShow(); });
+    expect(runtime.getLayers).toHaveBeenCalledOnce();
+    expect(screen.getByRole('searchbox')).toHaveValue('Ana Yollar');
+    expect(screen.getByRole('button', { name: 'Ana Yollar katmanını göster' })).toBeVisible();
+    expect(screen.getByRole('slider', { name: 'Katman opaklığı: Ana Yollar' })).toHaveValue('40');
+  });
+
+  it('coalesces initial mounting and OnShow while the catalog is pending', async () => {
+    let finish!: (value: unknown) => void;
+    runtime.getLayers.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const { ref } = renderWidget();
+    act(() => { ref.current!.OnShow(); });
+    await waitFor(() => expect(runtime.getLayers).toHaveBeenCalledOnce());
+    await act(async () => { finish({ type: Constants_ServiceResultType.Success, data: serviceGroups }); });
+    expect(await screen.findByText('Temel Katmanlar')).toBeVisible();
+    expect(runtime.createLayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('restarts a cancelled catalog on reopen and ignores its obsolete result', async () => {
+    let finish!: (value: unknown) => void;
+    runtime.getLayers.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { ref } = renderWidget();
+    act(() => { ref.current!.OnClose(); ref.current!.OnShow(); });
+    await screen.findByText('Temel Katmanlar');
+    expect(runtime.getLayers).toHaveBeenCalledTimes(2);
+    await act(async () => { finish({ type: Constants_ServiceResultType.Success, data: [{ id: 'old', title: 'Eski Katalog', layers: [] }] }); });
+    expect(screen.queryByText('Eski Katalog')).not.toBeInTheDocument();
+    expect(runtime.createLayer).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases only its previous runtimes and binds a new owner when the map view changes', async () => {
+    const { ref } = renderWidget();
+    await waitForLayerTree();
+    const previous = await Promise.all(runtime.createLayer.mock.results.map((result) => result.value));
+    const nextView = { map: { add: vi.fn(), remove: vi.fn() } };
+    runtime.getMapView.mockReturnValue(nextView);
+    act(() => { ref.current!.OnShow(); });
+    await waitFor(() => expect(runtime.createLayer).toHaveBeenCalledTimes(4));
+    expect(createLayerOwner).toHaveBeenLastCalledWith(nextView, 'layer-list-widget');
+    previous.forEach((layer) => expect(layer.destroy).toHaveBeenCalledOnce());
+  });
+
+  it('keeps the observable panel usable through StrictMode effect replay', async () => {
+    const manager = createWindowManager();
+    render(<React.StrictMode><LayerListWidget id="replay-panel" windowManager={manager} ref={createRef()} /></React.StrictMode>);
+    await screen.findByText('Temel Katmanlar');
+    fireEvent.click(screen.getByRole('button', { name: 'Temel Katmanlar grubunu genişlet' }));
+    expect(screen.getByRole('button', { name: 'Ana Yollar katmanını gizle' })).toBeVisible();
+  });
+
+  it('preserves the SDK legend host when minimizing and expanding', async () => {
+    const { windowManager, ref, rerender } = renderWidget();
+    await waitForLayerTree();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+    await waitFor(() => expect(runtime.legendConstruct).toHaveBeenCalledOnce());
+    const host = screen.getByLabelText('Harita lejantı');
+    windowManager.IsMinimized.mockReturnValue(true);
+    rerender(<LayerListWidget id="layer-list-test" windowManager={windowManager} ref={ref} />);
+    expect(host.isConnected).toBe(true);
+    expect(host).not.toBeVisible();
+    windowManager.IsMinimized.mockReturnValue(false);
+    rerender(<LayerListWidget id="layer-list-test" windowManager={windowManager} ref={ref} />);
+    expect(screen.getByLabelText('Harita lejantı')).toBe(host);
+    expect(host).toBeVisible();
+    expect(runtime.legendConstruct).toHaveBeenCalledOnce();
+    expect(runtime.legendDestroy).not.toHaveBeenCalled();
+  });
+
+  it('bounds a stalled catalog and keeps its late response from constructing layers', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: (value: unknown) => void;
+      runtime.getLayers.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+      renderWidget();
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      expect(screen.getByText('Katmanlar kullanılamıyor')).toBeVisible();
+      await act(async () => { finish({ type: Constants_ServiceResultType.Success, data: serviceGroups }); });
+      expect(runtime.createLayer).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('bounds a stalled legend module and keeps a late constructor unused', async () => {
+    await waitForLayerTree();
+    vi.useFakeTimers();
+    try {
+      let finish!: (value: unknown) => void;
+      runtime.loadModules.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Lejant' }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      expect(screen.getByText('Lejant yüklenemedi')).toBeVisible();
+      await act(async () => { finish([LegendMock]); });
+      expect(runtime.legendConstruct).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('waits for SDK metadata readiness before admitting a layer', async () => {
+    let ready!: () => void;
+    const layer = { visible: true, opacity: 1, destroy: vi.fn(), load: vi.fn(() => new Promise<void>((resolve) => { ready = resolve; })) };
+    runtime.createLayer.mockResolvedValueOnce(layer);
+    renderWidget();
+    await waitFor(() => expect(layer.load).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) }));
+    expect(runtime.ownerAdd).not.toHaveBeenCalledWith(layer, expect.any(Number));
+    await act(async () => { ready(); });
+    await waitFor(() => expect(runtime.ownerAdd).toHaveBeenCalledWith(layer, expect.any(Number)));
+  });
+
+  it('cancels and destroys a pending SDK layer when the managed panel closes', async () => {
+    let ready!: () => void;
+    const layer = { visible: true, opacity: 1, cancelLoad: vi.fn(), destroy: vi.fn(), load: vi.fn(() => new Promise<void>((resolve) => { ready = resolve; })) };
+    runtime.createLayer.mockResolvedValueOnce(layer);
+    const { ref } = renderWidget();
+    await waitFor(() => expect(layer.load).toHaveBeenCalled());
+    act(() => { ref.current!.OnClose(); });
+    await waitFor(() => expect(layer.destroy).toHaveBeenCalledOnce());
+    expect(layer.cancelLoad).toHaveBeenCalledOnce();
+    await act(async () => { ready(); });
+    expect(runtime.ownerAdd).not.toHaveBeenCalledWith(layer, expect.any(Number));
+    expect(layer.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('destroys an ignored constructor result that arrives after the panel closes', async () => {
+    let finish!: (value: unknown) => void;
+    runtime.createLayer.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { ref } = renderWidget();
+    await waitFor(() => expect(runtime.createLayer).toHaveBeenCalledTimes(2));
+    act(() => { ref.current!.OnClose(); });
+    const layer = makeRuntimeLayer();
+    await act(async () => { finish(layer); });
+    expect(layer.destroy).toHaveBeenCalledOnce();
+    expect(runtime.ownerAdd).not.toHaveBeenCalledWith(layer, expect.any(Number));
+  });
+
+  it('bounds stalled SDK loading and reports partial readiness instead of waiting forever', async () => {
+    vi.useFakeTimers();
+    try {
+      const layer = { visible: true, opacity: 1, load: vi.fn(() => new Promise(() => undefined)), cancelLoad: vi.fn(), destroy: vi.fn() };
+      runtime.createLayer.mockResolvedValueOnce(layer);
+      renderWidget();
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      expect(screen.getByText('Bazı katmanlar yüklenemedi')).toBeVisible();
+      expect(layer.destroy).toHaveBeenCalledOnce();
+      expect(layer.cancelLoad).toHaveBeenCalledOnce();
+      expect(runtime.ownerAdd).not.toHaveBeenCalledWith(layer, expect.any(Number));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('rejects layers for a superseded map view before attachment', async () => {
+    let finish!: (layer: unknown) => void;
+    runtime.createLayer.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    renderWidget();
+    await waitFor(() => expect(runtime.createLayer).toHaveBeenCalledTimes(2));
+    runtime.getMapView.mockReturnValue({ map: { add: vi.fn(), remove: vi.fn() } });
+    const layer = makeRuntimeLayer();
+    await act(async () => { finish(layer); });
+    expect(await screen.findByText('Harita görünümü değişti. Katmanları yeniden yükleyin.')).toBeVisible();
+    expect(runtime.ownerAdd).not.toHaveBeenCalled();
+    expect(layer.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('releases all candidates when the owner cannot attach one to the map', async () => {
+    runtime.ownerAdd.mockReturnValueOnce(null);
+    renderWidget();
+    await screen.findByText('Katmanlar kullanılamıyor');
+    const layers = await Promise.all(runtime.createLayer.mock.results.map((result) => result.value));
+    expect(layers).toHaveLength(2);
+    layers.forEach((layer) => expect(layer.destroy).toHaveBeenCalledOnce());
   });
 
 it('protects React-owned legend DOM when the SDK removes its container during destruction', async () => {
