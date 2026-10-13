@@ -25,6 +25,7 @@ import {
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
 import { ServiceWindowActions } from './ServiceWindowActions';
+import { QUERY_RESULT_PAGE_POLICY, normalizeQueryResultPageSize } from './QueryResultPaging';
 import {
   buildGoogleDirectionsUrl,
   createLatestRequestGate,
@@ -35,7 +36,7 @@ import {
 } from './QueryInteractionRuntime';
 import './ManagedFastAccessQueryWindow.css';
 
-const DEFAULT_PAGE_SIZE = 60;
+const DEFAULT_PAGE_SIZE = QUERY_RESULT_PAGE_POLICY.defaultPageSize;
 const SERVICE_WINDOW_POLICY = Object.freeze({ layerTimeoutMs: 15_000, actionTimeoutMs: 15_000 });
 const DEFAULT_QUERY: Readonly<Record<string, unknown>> = Object.freeze({});
 
@@ -263,10 +264,8 @@ const getMapView = (): MapViewLike | null => {
   return value && typeof value === 'object' ? value as MapViewLike : null;
 };
 
-const normalizePageSize = (value: number | undefined): number => {
-  if (!Number.isFinite(value)) return DEFAULT_PAGE_SIZE;
-  return Math.min(200, Math.max(10, Math.trunc(Number(value))));
-};
+const normalizePageSize = (value: number | undefined): number =>
+  normalizeQueryResultPageSize(value ?? DEFAULT_PAGE_SIZE);
 
 export function createManagedFastAccessQueryWindow({
   title,
@@ -300,6 +299,7 @@ export function createManagedFastAccessQueryWindow({
     const [records, setRecords] = useState<readonly FastAccessRecord[]>([]);
     const [filterText, setFilterText] = useState('');
     const [visibleCount, setVisibleCount] = useState(pageSize);
+    const [pageStart, setPageStart] = useState(0);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [activeActionKey, setActiveActionKey] = useState('');
@@ -327,6 +327,7 @@ export function createManagedFastAccessQueryWindow({
       setRecords([]);
       setFilterText('');
       setVisibleCount(pageSize);
+      setPageStart(0);
       setLoading(false);
       setErrorMessage('');
       setActiveActionKey('');
@@ -429,6 +430,7 @@ export function createManagedFastAccessQueryWindow({
       setErrorMessage('');
       setFilterText('');
       setVisibleCount(pageSize);
+      setPageStart(0);
       setRecords([]);
       setActiveActionKey('');
       clearOwnedLayer();
@@ -607,8 +609,8 @@ export function createManagedFastAccessQueryWindow({
     );
 
     const visibleRecords = useMemo(
-      () => filteredRecords.slice(0, visibleCount),
-      [filteredRecords, visibleCount],
+      () => filteredRecords.slice(pageStart, pageStart + visibleCount),
+      [filteredRecords, pageStart, visibleCount],
     );
 
     const returnToServices = useCallback((): void => {
@@ -666,6 +668,8 @@ export function createManagedFastAccessQueryWindow({
               onChange={(event) => {
                 setFilterText(event.target.value);
                 setVisibleCount(pageSize);
+                setPageStart(0);
+                cancelPageFocus();
               }}
               placeholder="Ad, adres veya telefon…"
               autoComplete="off"
@@ -690,7 +694,7 @@ export function createManagedFastAccessQueryWindow({
             <div className="kr-fast-query__empty">
               <strong>Aramanızla eşleşen sonuç yok.</strong>
               <span>Başka bir ad, adres veya telefon deneyin.</span>
-              <button type="button" onClick={() => { setFilterText(''); setVisibleCount(pageSize); rootRef.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); }}>Filtreyi temizle</button>
+              <button type="button" onClick={() => { setFilterText(''); setVisibleCount(pageSize); setPageStart(0); cancelPageFocus(); rootRef.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); }}>Filtreyi temizle</button>
             </div>
           ) : null}
         </div>
@@ -738,25 +742,81 @@ export function createManagedFastAccessQueryWindow({
           })}
         </ul>
 
-        {!loading && visibleCount < filteredRecords.length ? (
-          <button
-            type="button"
-            className="kr-fast-query__more"
-            onClick={(event) => {
-              const button = event.currentTarget;
-              const requestId = requestGateRef.current.current();
-              setVisibleCount((count) => Math.min(count + pageSize, filteredRecords.length));
-              cancelPageFocus();
-              pageFocusFrameRef.current = window.requestAnimationFrame(() => {
-                pageFocusFrameRef.current = null;
-                if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-                if (document.activeElement !== button && document.activeElement !== document.body) return;
-                rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
-              });
-            }}
-          >
-            Daha fazla sonuç göster ({filteredRecords.length - visibleCount} kaldı)
-          </button>
+        {!loading && filteredRecords.length > 0 ? (
+          <nav className="kr-fast-query__paging" aria-label={title + ' sonuç gezinme'}>
+            <p className="kr-fast-query__range" aria-live="polite" aria-atomic="true">
+              {pageStart + 1}–{pageStart + visibleRecords.length} / {filteredRecords.length} kayıt
+            </p>
+            <div className="kr-fast-query__paging-actions">
+              {pageStart > 0 ? (
+                <button
+                  type="button"
+                  className="kr-fast-query__more"
+                  aria-controls={id + '-results'}
+                  onClick={() => {
+                    const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    setPageStart(previousStart);
+                    setVisibleCount(Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, filteredRecords.length - previousStart));
+                    cancelPageFocus();
+                    const requestId = requestGateRef.current.current();
+                    pageFocusFrameRef.current = window.requestAnimationFrame(() => {
+                      pageFocusFrameRef.current = null;
+                      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+                      rootRef.current?.querySelector<HTMLElement>('.kr-fast-query__item button')?.focus();
+                    });
+                  }}
+                >
+                  Önceki sonuçlara dön
+                </button>
+              ) : null}
+              {pageStart + visibleCount < filteredRecords.length ? (
+                visibleCount < QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
+                  <button
+                    type="button"
+                    className="kr-fast-query__more"
+                    aria-controls={id + '-results'}
+                    onClick={(event) => {
+                      const button = event.currentTarget;
+                      const requestId = requestGateRef.current.current();
+                      setVisibleCount((count) => Math.min(
+                        count + pageSize,
+                        QUERY_RESULT_PAGE_POLICY.maxPageSize,
+                        filteredRecords.length - pageStart,
+                      ));
+                      cancelPageFocus();
+                      pageFocusFrameRef.current = window.requestAnimationFrame(() => {
+                        pageFocusFrameRef.current = null;
+                        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+                        if (document.activeElement !== button && document.activeElement !== document.body) return;
+                        rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
+                      });
+                    }}
+                  >
+                    Daha fazla sonuç göster ({filteredRecords.length - pageStart - visibleCount} kaldı)
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="kr-fast-query__more"
+                    aria-controls={id + '-results'}
+                    onClick={() => {
+                      setPageStart(pageStart + visibleCount);
+                      setVisibleCount(pageSize);
+                      cancelPageFocus();
+                      const requestId = requestGateRef.current.current();
+                      pageFocusFrameRef.current = window.requestAnimationFrame(() => {
+                        pageFocusFrameRef.current = null;
+                        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+                        rootRef.current?.querySelector<HTMLElement>('.kr-fast-query__item button')?.focus();
+                      });
+                    }}
+                  >
+                    Sonraki sonuçlara geç
+                  </button>
+                )
+              ) : null}
+            </div>
+          </nav>
         ) : null}
       </section>
     );
