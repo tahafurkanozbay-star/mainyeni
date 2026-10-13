@@ -36,6 +36,7 @@ import {
 import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { ServiceWindowActions } from '../_Common/ServiceWindowActions';
+import { QUERY_RESULT_PAGE_POLICY } from '../_Common/QueryResultPaging';
 import { createKentRehberiGeoJsonLayer, type KentRehberiGeoJsonFeatureCollection } from '../../../data-services/kentRehberiGeoJsonLayer';
 import '../_Common/ManagedFastAccessQueryWindow.css';
 import './ParklarQueryWindow.css';
@@ -250,6 +251,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const [pageStart, setPageStart] = useState(0);
     const layerAbortRef = useRef<AbortController | null>(null);
 
     const mountedRef = useRef(false);
@@ -336,6 +338,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       setLoading(false);
       setErrorMessage('');
       setVisibleCount(PAGE_SIZE);
+      setPageStart(0);
       removeLastClusterLayer();
       allowExtentHistoryRef.current = true;
     }, [removeLastClusterLayer]);
@@ -358,6 +361,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       setLoading(true);
       setErrorMessage('');
       setVisibleCount(PAGE_SIZE);
+      setPageStart(0);
 
       void safeClientLog(LoggingBusiness, 'Parklar/Sorgu', 'query-fields:' + Math.min(Object.keys(latestQuery).length, 99), DebugHelper.Log);
 
@@ -627,11 +631,11 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           </button>
         ) : null}
 
-        <ul className="results-container kr-fast-query__results kr-park-query__results" aria-label="Park sonuçları">
-          {resultList.slice(0, visibleCount).map((item, index) => {
+        <ul id={id + '-results'} className="results-container kr-fast-query__results kr-park-query__results" aria-label="Park sonuçları">
+          {resultList.slice(pageStart, pageStart + visibleCount).map((item, index) => {
             const itemKey = item.objectId !== null && item.objectId !== undefined
               ? String(item.objectId)
-              : item.title + '-' + String(index);
+              : item.title + '-' + String(pageStart + index);
 
             return (
               <li className="result-item-container kr-fast-query__item kr-park-query__item" key={itemKey}>
@@ -667,10 +671,43 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
             );
           })}
         </ul>
-        {visibleCount < resultList.length ? (
-          <button type="button" className="kr-fast-query__more" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
-            Daha fazla park göster ({resultList.length - visibleCount} kaldı)
-          </button>
+        {!loading && resultList.length > 0 ? (
+          <nav className="kr-fast-query__paging" aria-label="Park sonuç gezinme">
+            <p className="kr-fast-query__range" aria-live="polite" aria-atomic="true">
+              {pageStart + 1}–{pageStart + Math.min(visibleCount, resultList.length - pageStart)} / {resultList.length} park
+            </p>
+            <div className="kr-fast-query__paging-actions">
+              {resultList.length > QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
+                <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
+                  aria-disabled={pageStart === 0}
+                  onClick={() => {
+                    if (pageStart === 0) return;
+                    const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    setPageStart(previousStart);
+                    setVisibleCount(Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - previousStart));
+                  }}>
+                  Önceki park grubuna dön
+                </button>
+              ) : null}
+              {visibleCount < Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart) ? (
+                <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
+                  onClick={() => setVisibleCount((count) => Math.min(count + PAGE_SIZE, QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart))}>
+                  Daha fazla park göster ({resultList.length - pageStart - visibleCount} kaldı)
+                </button>
+              ) : null}
+              {resultList.length > QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
+                <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
+                  aria-disabled={pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize >= resultList.length}
+                  onClick={() => {
+                    if (pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize >= resultList.length) return;
+                    setPageStart(pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    setVisibleCount(Math.min(PAGE_SIZE, resultList.length - pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize));
+                  }}>
+                  Sonraki park grubuna geç
+                </button>
+              ) : null}
+            </div>
+          </nav>
         ) : null}
       </section>
     );

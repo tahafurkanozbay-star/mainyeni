@@ -64,6 +64,7 @@ describe('Parklar service window', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Daha fazla park göster (40 kaldı)' }));
     expect(screen.getAllByRole('listitem')).toHaveLength(100);
     expect(screen.queryByRole('button', { name: /Daha fazla park/ })).not.toBeInTheDocument();
+    expect(screen.getByText('1–100 / 100 park')).toBeVisible();
   });
 
   it('cancels a pending layer on close and disposes its late result', async () => {
