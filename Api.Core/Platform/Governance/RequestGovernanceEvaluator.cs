@@ -24,7 +24,14 @@ namespace Api.Core.Platform.Governance
             var methodDecision = EvaluateMethod(request.Method);
             if (!methodDecision.Allowed) return methodDecision;
 
-            var targetDecision = EvaluateTarget(RequestTargetInspector.Inspect(ResolveRawTarget(context)));
+            // Reject oversized targets before allocating decoded path/query representations.
+            var rawTarget = ResolveRawTarget(context);
+            if (rawTarget.Length > governance.MaxRawTargetChars)
+            {
+                return RejectUri("raw-target-too-long", "The request target exceeds the server limit.");
+            }
+
+            var targetDecision = EvaluateTarget(RequestTargetInspector.Inspect(rawTarget));
             if (!targetDecision.Allowed) return targetDecision;
 
             var headers = RequestHeaderInspector.Inspect(request.Headers);

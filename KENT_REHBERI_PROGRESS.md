@@ -470,3 +470,8 @@
 - Current main `ec46772d98e767026525b54551b0dbcc552b8e50` includes Experience #495; previous Platform head `54c5eea4898922399b824a2e3fd7d58ec3439bc8` had seven exact-head workflow successes but diverged 50 ahead / 1 behind. Preserve all #495 changes and append missing Platform-only history from the prior branch.
 - Reconcile the Platform delta through a two-parent commit without force; the new exact head must independently pass all seven CI workflows. PR #483 remains draft/open and below mandatory 4,000 additions; never merge early.
 - Continue reviewed AES-GCM envelope parsing and HTTP request-target admission security fixes with regression coverage. No WMS/WFS or new external network dependency.
+
+## Deep Platform / bounded envelope and HTTP target admission — 2026-10-13
+- IMPLEMENTATION: AES-GCM input envelope/segment length budgets checked before split/Base64 allocation; partially decoded fields and derived key/associated data are zeroed on failures. Plaintext/purpose UTF-8 budgets checked before allocating encoded buffers. HTTP raw target preflight returns the existing 414 decision before expensive percent decoding.
+- REGRESSION: Added adversarial xUnit tests for huge envelopes, ciphertext, fixed fields, delimiters, UTF-8 limits and oversized raw request targets. All seven exact-head workflows must re-run on the source commit; do not claim success until completed.
+- MERGE: PR #483 remains draft and under 4,000 additions; no merge. No WMS/WFS, new endpoint, telemetry, external asset, secret or runtime dependency.

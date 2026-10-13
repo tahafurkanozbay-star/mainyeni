@@ -131,6 +131,17 @@ public sealed class RequestTargetGovernanceRegressionTests
         Assert.Equal(2, snapshot.QueryParameterCount);
     }
 
+    [Theory]
+    [InlineData('x')]
+    [InlineData('%')]
+    public void Evaluate_RejectsOversizedRawTargetBeforeDecoding(char character)
+    {
+        var decision = Evaluate("/api/" + new string(character, 20_000));
+        Assert.False(decision.Allowed);
+        Assert.Equal(StatusCodes.Status414UriTooLong, decision.StatusCode);
+        Assert.Equal("raw-target-too-long", decision.Code);
+    }
+
     private static RequestGovernanceDecision Evaluate(string rawTarget)
     {
         var evaluator = new RequestGovernanceEvaluator(new ApiPlatformOptions());
