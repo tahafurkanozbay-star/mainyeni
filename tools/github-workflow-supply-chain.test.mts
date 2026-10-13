@@ -1,0 +1,176 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  auditWorkflowSource, evaluateWorkflowSupplyChain, renderWorkflowSupplyChainMarkdown,
+} from './github-workflow-supply-chain.mts';
+
+const checkout = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
+const node = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
+const workflow = ({ checkoutRef = checkout, nodeRef = node, persist = true,
+  permissions = 'contents: read', trigger = 'pull_request' } = {}) => `name: Quality
+on:
+  ${trigger}:
+permissions:
+  ${permissions}
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: ${checkoutRef}
+        with:
+${persist ? '          persist-credentials: false\n' : ''}      - name: Setup Node
+        uses: ${nodeRef}
+      - name: Test
+        run: node --test
+`;
+const evaluate = (source = workflow()) =>
+  evaluateWorkflowSupplyChain([{ file: '.github/workflows/test.yml', source }]);
+const codes = report => report.findings.map(item => item.code);
+
+test('immutable checkout and setup actions pass the contract', () => {
+  const report = evaluate();
+  assert.equal(report.ok, true, JSON.stringify(report.findings));
+  assert.deepEqual(report.summary, { workflows: 1, actions: 2, violations: 0 });
+});
+test('unpinned checkout major tag is rejected', () => {
+  assert.ok(codes(evaluate(workflow({ checkoutRef: 'actions/checkout@v7' })))
+    .includes('workflow-action-unpinned'));
+});
+test('unpinned setup-node major tag is rejected', () => {
+  assert.ok(codes(evaluate(workflow({ nodeRef: 'actions/setup-node@v7' })))
+    .includes('workflow-action-unpinned'));
+});
+test('short SHA action references are rejected', () => {
+  assert.ok(codes(evaluate(workflow({ nodeRef: 'actions/setup-node@82076278' })))
+    .includes('workflow-action-unpinned'));
+});
+test('mixed-case SHA is rejected to maintain canonical pinning', () => {
+  assert.ok(codes(evaluate(workflow({ nodeRef: 'actions/setup-node@820762786026740c76f36085b0efc47a31fe502A' })))
+    .includes('workflow-action-unpinned'));
+});
+test('branch and floating latest action references are rejected', () => {
+  for (const ref of ['actions/setup-node@main', 'actions/setup-node@latest']) {
+    assert.ok(codes(evaluate(workflow({ nodeRef: ref }))).includes('workflow-action-unpinned'));
+  }
+});
+test('Docker action reference is rejected without a commit SHA', () => {
+  assert.ok(codes(evaluate(workflow({ nodeRef: 'docker://alpine:latest' })))
+    .includes('workflow-action-unpinned'));
+});
+test('remote reusable action URLs are rejected', () => {
+  assert.ok(codes(evaluate(workflow({ nodeRef: 'https://example.com/action@abc' })))
+    .includes('workflow-action-unpinned'));
+});
+test('checkout must disable persisted credentials', () => {
+  assert.ok(codes(evaluate(workflow({ persist: false })))
+    .includes('workflow-checkout-credentials'));
+});
+test('checkout true cannot satisfy the credential policy', () => {
+  const source = workflow().replace('persist-credentials: false', 'persist-credentials: true');
+  assert.ok(codes(evaluate(source)).includes('workflow-checkout-credentials'));
+});
+test('checkout credential setting cannot be borrowed from a later step', () => {
+  const source = workflow({ persist: false }).replace('        uses: ' + node,
+    '        uses: ' + node + '\n        with:\n          persist-credentials: false');
+  assert.ok(codes(evaluate(source)).includes('workflow-checkout-credentials'));
+});
+test('checkout credential setting cannot be borrowed from an earlier step', () => {
+  const source = workflow().replace('        uses: ' + node,
+    '        uses: ' + checkout);
+  assert.ok(codes(evaluate(source)).includes('workflow-checkout-credentials'));
+});
+test('a commented credential setting does not satisfy the contract', () => {
+  const source = workflow({ persist: false }).replace('      - name: Setup Node',
+    '          # persist-credentials: false\n      - name: Setup Node');
+  assert.ok(codes(evaluate(source)).includes('workflow-checkout-credentials'));
+});
+test('missing permissions block fails closed', () => {
+  const source = workflow().replace('permissions:\n  contents: read\n', '');
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-missing'));
+});
+test('workflow token permissions require read-only contents', () => {
+  assert.ok(codes(evaluate(workflow({ permissions: 'issues: read' })))
+    .includes('workflow-permissions-contents'));
+});
+test('write-all permission is rejected', () => {
+  assert.ok(codes(evaluate(workflow({ permissions: 'contents: read\n  actions: write' })))
+    .includes('workflow-permissions-elevated'));
+});
+test('contents write is rejected', () => {
+  const report = evaluate(workflow({ permissions: 'contents: write' }));
+  assert.ok(codes(report).includes('workflow-permissions-elevated'));
+  assert.ok(codes(report).includes('workflow-permissions-contents'));
+});
+test('pull_request_target trigger is rejected for quality workflows', () => {
+  assert.ok(codes(evaluate(workflow({ trigger: 'pull_request_target' })))
+    .includes('workflow-untrusted-trigger'));
+});
+test('workflow_run trigger is rejected for quality workflows', () => {
+  assert.ok(codes(evaluate(workflow({ trigger: 'workflow_run' })))
+    .includes('workflow-untrusted-trigger'));
+});
+test('ordinary push and pull_request triggers are accepted', () => {
+  for (const trigger of ['push', 'pull_request']) assert.equal(evaluate(workflow({ trigger })).ok, true);
+});
+test('missing bounded job timeout is rejected', () => {
+  assert.ok(codes(evaluate(workflow().replace('    timeout-minutes: 10\n', '')))
+    .includes('workflow-timeout-missing'));
+});
+test('comments cannot supply a missing action', () => {
+  const source = workflow().replace(/        uses: actions\/[^\n]+\n/g, '');
+  assert.ok(codes(evaluate(source)).includes('workflow-actions-missing'));
+});
+test('commented unpinned action is not counted as a real action', () => {
+  const source = workflow() + '        # uses: actions/checkout@v1\n';
+  assert.equal(evaluate(source).ok, true);
+});
+test('action pin with a human-readable version comment remains valid', () => {
+  const source = workflow().replace('uses: ' + checkout, 'uses: ' + checkout + ' # v7');
+  assert.equal(evaluate(source).ok, true);
+});
+test('invalid workflow path cannot be used to bypass policy', () => {
+  const report = evaluateWorkflowSupplyChain([{ file: '../outside.yml', source: workflow() }]);
+  assert.ok(codes(report).includes('workflow-file-invalid'));
+});
+test('duplicate workflow inventory entries fail', () => {
+  const entry = { file: '.github/workflows/test.yml', source: workflow() };
+  assert.ok(codes(evaluateWorkflowSupplyChain([entry, entry])).includes('workflow-file-duplicate'));
+});
+test('empty workflow inventory fails closed', () => {
+  assert.ok(codes(evaluateWorkflowSupplyChain([])).includes('workflow-inventory-empty'));
+});
+test('findings are stable independent of workflow input ordering', () => {
+  const one = { file: '.github/workflows/one.yml', source: workflow({ nodeRef: 'actions/setup-node@v7' }) };
+  const two = { file: '.github/workflows/two.yml', source: workflow({ persist: false }) };
+  const first = evaluateWorkflowSupplyChain([one, two]);
+  const second = evaluateWorkflowSupplyChain([two, one]);
+  assert.deepEqual(first.findings, second.findings);
+  assert.equal(first.fingerprint, second.fingerprint);
+});
+test('workflow report does not retain shell commands or environment secrets', () => {
+  const source = workflow().replace('run: node --test', 'run: echo secret-should-not-be-reported');
+  const report = evaluate(source);
+  assert.equal(JSON.stringify(report).includes('secret-should-not-be-reported'), false);
+});
+test('fingerprint changes when action provenance changes', () => {
+  const before = evaluate().fingerprint;
+  const anotherPinnedNode = 'actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444';
+  assert.notEqual(before, evaluate(workflow({ nodeRef: anotherPinnedNode })).fingerprint);
+});
+test('markdown reports gate, inventory and findings', () => {
+  const passing = renderWorkflowSupplyChainMarkdown(evaluate());
+  assert.match(passing, /Gate: \*\*PASS\*\*/);
+  assert.match(passing, /Workflows: \*\*1\*\*/);
+  const failing = renderWorkflowSupplyChainMarkdown(evaluate(workflow({ persist: false })));
+  assert.match(failing, /Gate: \*\*FAIL\*\*/);
+  assert.match(failing, /workflow-checkout-credentials/);
+});
+test('finding line numbers refer to source lines', () => {
+  const report = auditWorkflowSource('.github/workflows/test.yml',
+    workflow({ checkoutRef: 'actions/checkout@v7' }));
+  const item = report.findings.find(x => x.code === 'workflow-action-unpinned');
+  assert.ok(item.line > 0);
+  assert.equal(workflow().split('\n')[item.line - 1].includes('uses:'), true);
+});
