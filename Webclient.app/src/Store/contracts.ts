@@ -39,11 +39,18 @@ export interface CommonState {
   readonly Message: MessageState | null;
 }
 
+export interface MapClickSelection {
+  readonly x?: number;
+  readonly y?: number;
+  readonly mapPoint: unknown;
+}
+
 export interface MapState {
   readonly MapView: unknown;
   readonly IsUpdating: boolean;
   readonly Graphics: readonly unknown[];
   readonly MapClick: (event: unknown) => void;
+  readonly LastMapClickEvent?: MapClickSelection | null;
   readonly MobileRightClickEnabled: boolean;
 }
 
@@ -112,7 +119,7 @@ export type MapAction =
   | { readonly type: typeof MAP_ACTION_TYPES.SetMapView; readonly payload: unknown }
   | { readonly type: typeof MAP_ACTION_TYPES.SetGraphics; readonly payload: readonly unknown[] }
   | { readonly type: typeof MAP_ACTION_TYPES.SetMapUpdating; readonly payload: boolean }
-  | { readonly type: typeof MAP_ACTION_TYPES.SetMapClickEvent; readonly payload: (event: unknown) => void }
+  | { readonly type: typeof MAP_ACTION_TYPES.SetMapClickEvent; readonly payload: ((event: unknown) => void) | MapClickSelection | null }
   | { readonly type: typeof MAP_ACTION_TYPES.SetMobileRightClick; readonly payload: boolean }
   | { readonly type: string; readonly payload?: unknown };
 
@@ -167,6 +174,7 @@ export const initialMapState: MapState = Object.freeze({
   IsUpdating: false,
   Graphics: Object.freeze([]),
   MapClick: (_event: unknown) => undefined,
+  LastMapClickEvent: null,
   MobileRightClickEnabled: false,
 });
 
