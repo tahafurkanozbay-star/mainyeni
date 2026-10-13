@@ -43,10 +43,12 @@ export const GoogleMapsBusiness = Object.freeze({
 
   CreateStreetViewUrlFromPoint: (geometry: GeographicPointInput): string => {
     const point = normalizePoint(geometry);
-    const url = new URL('https://maps.google.com/maps');
-    url.searchParams.set('q', '');
-    url.searchParams.set('layer', 'c');
-    url.searchParams.set('cbll', `${point.latitude},${point.longitude}`);
+    // Universal Maps URLs launch the provider's panorama UI without an embed key.
+    // https://developers.google.com/maps/documentation/urls/get-started#street-view-action
+    const url = new URL('https://www.google.com/maps/@');
+    url.searchParams.set('api', '1');
+    url.searchParams.set('map_action', 'pano');
+    url.searchParams.set('viewpoint', `${point.latitude},${point.longitude}`);
     return url.toString();
   },
 });
