@@ -34,3 +34,11 @@ test('bounded counters and non-identifying metadata remain permitted', () => {
     'pathCount',
   ]) assert.equal(findings(payload), 0, payload);
 });
+
+test('explicit location keys in nested metadata cannot bypass the audit', () => {
+  for (const payload of [
+    '{ address: alias }',
+    '{ latitude: y, longitude: x }',
+    '{ meta: { mahalle: value } }',
+  ]) assert.equal(findings(payload), 1, payload);
+});
