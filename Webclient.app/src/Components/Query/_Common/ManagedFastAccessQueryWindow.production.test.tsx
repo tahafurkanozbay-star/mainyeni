@@ -66,6 +66,26 @@ describe('real fast-access window presentation and resource ownership', () => {
     expect(within(list).getByRole('button', { name: 'Işık Parkı — Haritada göster' })).toBeEnabled();
   });
 
+  it('bounds mounted cards and keeps later records reachable without refetching', async () => {
+    const view = setup(vi.fn(async () => success(1_000)));
+    await view.open();
+    const list = screen.getByRole('list', { name: 'Parklar sonuçları' });
+    for (let batch = 0; batch < 19; batch += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
+      expect(within(list).getAllByRole('listitem').length).toBeLessThanOrEqual(200);
+    }
+    expect(within(list).getAllByRole('listitem')).toHaveLength(200);
+    expect(screen.getByText('1–200 / 1000 kayıt')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki sonuçlara geç' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    expect(within(list).getByText('Park 200')).toBeVisible();
+    expect(screen.getByText('201–210 / 1000 kayıt')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki sonuçlara dön' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(200);
+    expect(within(list).getByText('Işık Parkı')).toBeVisible();
+    expect(view.query).toHaveBeenCalledOnce();
+  });
+
   it('filters Turkish text, resets visible results and offers an empty-state recovery', async () => {
     const view = setup(); await view.open();
     fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
