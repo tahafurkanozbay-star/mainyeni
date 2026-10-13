@@ -206,8 +206,10 @@ export const focusRovingTarget = (
   const candidates = root.querySelectorAll<HTMLElement>('[data-roving-focus-id]');
   for (const target of candidates) {
     if (target.dataset.rovingFocusId !== id) continue;
-    if (target.hidden || target.getAttribute('aria-hidden') === 'true') return false;
-    if (target.hasAttribute('disabled') || target.getAttribute('aria-disabled') === 'true') {
+    // A menu may be hidden or retired between a queued focus request
+    // and its microtask; ancestor visibility and inert ownership win.
+    if (!target.isConnected || target.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+    if (target.matches(':disabled') || target.getAttribute('aria-disabled') === 'true') {
       return false;
     }
     target.focus({ preventScroll: true });

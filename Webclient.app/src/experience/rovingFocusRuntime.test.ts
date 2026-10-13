@@ -148,4 +148,29 @@ describe('rovingFocusRuntime', () => {
     expect(focusRovingTarget(root, 'disabled')).toBe(false);
     root.remove();
   });
+
+  it('refuses to focus a target inside hidden, inert or disabled ancestors', () => {
+    const root = document.createElement('div');
+    const fieldset = document.createElement('fieldset');
+    const button = document.createElement('button');
+    button.dataset.rovingFocusId = 'map-control';
+    fieldset.append(button);
+    root.append(fieldset);
+    document.body.append(root);
+    try {
+      root.setAttribute('aria-hidden', 'true');
+      expect(focusRovingTarget(root, 'map-control')).toBe(false);
+      root.removeAttribute('aria-hidden');
+      root.setAttribute('inert', '');
+      expect(focusRovingTarget(root, 'map-control')).toBe(false);
+      root.removeAttribute('inert');
+      fieldset.disabled = true;
+      expect(focusRovingTarget(root, 'map-control')).toBe(false);
+      fieldset.disabled = false;
+      expect(focusRovingTarget(root, 'map-control')).toBe(true);
+      expect(document.activeElement).toBe(button);
+    } finally {
+      root.remove();
+    }
+  });
 });
