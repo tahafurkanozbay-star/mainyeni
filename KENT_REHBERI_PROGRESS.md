@@ -418,3 +418,9 @@
 - TEST / BUILD: No local npm, browser visual/regression or production build could run because local GitHub DNS resolution failed. A focused production regression was prepared as a Git blob, but its branch ref update was rejected by the GitHub safety check and it is NOT committed; do not claim it passed.
 - SECURITY / NETWORK / ICON: No dependency, endpoint, WMS/WFS UI, telemetry, remote font/CDN, secret or second icon authority added. GIS runtime and existing service data remain unchanged.
 - GATE / NEXT: PR open/draft, additions 1,661 < 4,000; merge forbidden. Continue on the same PR: land the focused regression if writes succeed; apply the same focus ownership protection to previous/next page transitions, audit the dedicated Parklar result surface for unbounded DOM and payload-bearing client logs, then verify exact-head CI, responsive keyboard/forced-color behavior and fresh main lineage.
+
+## 2026-10-13 — Experience #492 final checkpoint
+- Main `70f2ffb2`; PR #492 draft/open, mergeable=true, 30 ahead/0 behind at `de1d283a`; additions 1,790 / 4,000.
+- Commits: `056bb661` focus, `65c62f45` focus test (earlier blocked note superseded), `f5082e54` shared paging filter reset/test, `1512cb32` Parklar privacy/nonblocking logging/test, `7181220b` bounded 200-card Parklar navigation, `bff08c3a` park group regression, `de1d283a` stale detail guard.
+- Exact-head Webclient Quality, Release QA, Typed Source Boundary, Architecture and Dependency Governance pending; no local npm/browser/build due GitHub DNS failure. No new endpoint, dependency, WMS/WFS, telemetry, remote font or icon authority.
+- Next: fix exact-head CI, add deferred detail and paging-focus regression, verify mobile/forced colors and continue substantive UI work on the same PR. Do not merge below 4,000 additions or without completed-success checks.
