@@ -26,6 +26,7 @@ import { auditArtifactProvenance } from './artifact-provenance-audit.mts';
 import { auditAsyncResourceLifecycle } from './async-resource-lifecycle-audit.mts';
 import { auditBackendSecurity } from './backend-security-audit.mts';
 import { auditCacheBoundaries } from './cache-boundary-audit.mts';
+import { auditClientLogPrivacy } from './client-log-privacy-audit.mts';
 import { auditCiIntegrity } from './ci-integrity-audit.mts';
 import { auditCompositeActions } from './composite-action-audit.mts';
 import { auditContainerBoundaries } from './container-boundary-audit.mts';
@@ -258,6 +259,7 @@ export async function runReleaseEngine(
     auditModuleGraphModernization(inventory),
     scanSource(inventory),
     auditSecurity(inventory),
+    auditClientLogPrivacy(inventory),
     auditBackendSecurity(inventory),
     auditCSharpModernizationContracts(inventory),
     auditDependencies(inventory),

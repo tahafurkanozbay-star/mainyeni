@@ -189,3 +189,48 @@ test('section ordering keeps security and supply-chain gates before runtime UX a
   assert.ok(gis > ci);
   assert.ok(accessibility > gis);
 });
+
+test('client log privacy release section scans both user and admin runtime files', async () => {
+  const execution = await execute([
+    source('Webclient.app/src/QueryWindow.tsx', 'safeClientLog(LoggingBusiness, "query", record.address);'),
+    source('Webclient.admin/src/QueryPanel.ts', 'safeClientLog(LoggingBusiness, "query", JSON.stringify(query));'),
+    source('Webclient.app/src/QueryPanel.test.tsx', 'safeClientLog(LoggingBusiness, "query", record.address);'),
+  ]);
+  const sections = execution.report.sections.filter(section => section.title === 'Client log payload privacy');
+  assert.equal(sections.length, 1, 'privacy scan must run once in the release engine');
+  const findings = sections[0]?.findings ?? [];
+  assert.equal(findings.length, 2);
+  assert.ok(findings.every(finding => finding.severity === 'high'));
+  assert.deepEqual(
+    findings.map(finding => finding.location?.file).sort(),
+    ['Webclient.admin/src/QueryPanel.ts', 'Webclient.app/src/QueryWindow.tsx'],
+  );
+  assert.equal(execution.report.findings.filter(finding => finding.id === 'client-log-sensitive-payload').length, 2);
+});
+
+test('client log privacy release gate preserves bounded non-identifying metadata', async () => {
+  const execution = await execute([
+    source('Webclient.app/src/QueryWindow.tsx', [
+      'safeClientLog(LoggingBusiness, "count", String(resultCount));',
+      'safeClientLog(LoggingBusiness, "service", serviceKey);',
+    ].join('\n')),
+  ]);
+  const section = execution.report.sections.find(item => item.title === 'Client log payload privacy');
+  assert.ok(section, 'release engine must execute privacy audit even with no findings');
+  assert.equal(section.findings.length, 0);
+  assert.equal(execution.report.findings.filter(finding => finding.id === 'client-log-sensitive-payload').length, 0);
+});
+
+test('client log privacy regressions reach the baseline delta and report fingerprint', async () => {
+  const clean = await execute([]);
+  const baseline = createBaseline(clean.report);
+  const unsafe = inventory([
+    source('Webclient.admin/src/AddressPanel.tsx', 'safeClientLog(LoggingBusiness, "address", path?.mahalle);'),
+  ]);
+  const first = await runReleaseEngine(unsafe, context, { thresholds: relaxedThresholds }, baseline);
+  const second = await runReleaseEngine(unsafe, context, { thresholds: relaxedThresholds }, baseline);
+  assert.ok(first.report.findings.some(finding => finding.id === 'client-log-sensitive-payload'));
+  assert.ok(first.regression?.added.some(finding => finding.key.includes('client-log-sensitive-payload')));
+  assert.equal(first.report.fingerprint, second.report.fingerprint);
+  assert.deepEqual(first.regression?.added, second.regression?.added);
+});
