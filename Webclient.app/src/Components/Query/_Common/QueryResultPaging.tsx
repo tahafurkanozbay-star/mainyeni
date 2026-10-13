@@ -21,7 +21,9 @@ export const normalizeQueryResultText = (value: unknown): string => String(value
 
 /** Normalized Turkish terms shared by service result filters. */
 export const queryResultSearchTerms = (value: unknown): readonly string[] => {
-  const normalized = normalizeQueryResultText(value);
+  // Treat punctuation in pasted addresses and search phrases as word boundaries.
+  // Keep the underlying record text intact for partial-name and phone matching.
+  const normalized = normalizeQueryResultText(value).replace(/[\p{P}\p{S}]+/gu, ' ').trim();
   return normalized ? [...new Set(normalized.split(/\s+/).filter(Boolean))] : [];
 };
 

@@ -38,12 +38,14 @@ describe('shared result page admission', () => {
     expect(matchesQueryResultTerms('park 42 cankaya', terms)).toBe(true);
     expect(matchesQueryResultTerms('park 42 kecioren', terms)).toBe(false);
     expect(queryResultSearchTerms('  ')).toEqual([]);
+    expect(queryResultSearchTerms('ÇANKAYA, Park / Kızılay!')).toEqual(['cankaya', 'park', 'kizilay']);
+    expect(queryResultSearchTerms('Park—999; Çankaya')).toEqual(['park', '999', 'cankaya']);
   });
 
   it('matches unordered Turkish words across title and address without fetching another page', () => {
     const { result } = renderHook(() => useQueryResultPage(records, 60));
     act(() => result.current.setPage(8));
-    act(() => result.current.setFilterText('cankaya park 999'));
+    act(() => result.current.setFilterText('Çankaya, Park—999!'));
     expect(result.current.currentPage).toBe(0);
     expect(result.current.filteredRecords).toEqual([records[999]]);
     act(() => result.current.setFilterText('park olmayan'));
