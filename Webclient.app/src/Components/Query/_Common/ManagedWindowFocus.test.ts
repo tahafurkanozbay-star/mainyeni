@@ -115,6 +115,7 @@ describe('ManagedWindowFocus', () => {
     opener.focus();
     const lifecycle = createManagedWindowFocusLifecycle(document);
     lifecycle.open({ root });
+    inside.focus(); // The modeless restore policy requires focus within the window.
     expect(lifecycle.close()).toBe(true);
     frames[0]?.(0);
     expect(document.activeElement).toBe(opener);
