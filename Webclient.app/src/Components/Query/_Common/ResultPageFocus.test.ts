@@ -206,6 +206,48 @@ describe('owned result paging focus', () => {
     expect(fixture.cancel).toHaveBeenCalledWith(1);
   });
 
+
+  it('cancels when Tab follows a removed paging button before the frame', () => {
+    const fixture = setup();
+    fixture.trigger.focus();
+    scheduleOwnedResultFocus({
+      trigger: fixture.trigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    fixture.trigger.remove();
+    expect(document.activeElement).toBe(document.body);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(document.body);
+    expect(fixture.cancel).toHaveBeenCalledWith(1);
+  });
+
+  it.each(['blur', 'pagehide'])('cancels on window %s without reclaiming focus', (type) => {
+    const fixture = setup();
+    fixture.trigger.focus();
+    scheduleOwnedResultFocus({
+      trigger: fixture.trigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    window.dispatchEvent(new Event(type));
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(fixture.trigger);
+    expect(fixture.cancel).toHaveBeenCalledWith(1);
+  });
+
+  it('releases focus ownership immediately when another control receives focus', () => {
+    const fixture = setup();
+    fixture.trigger.focus();
+    scheduleOwnedResultFocus({
+      trigger: fixture.trigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    fixture.outside.focus();
+    expect(fixture.cancel).toHaveBeenCalledWith(1);
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(fixture.outside);
+  });
+
   it('invalidates a queued focus handoff when the tab visibility changes', () => {
     const fixture = setup();
     fixture.trigger.focus();

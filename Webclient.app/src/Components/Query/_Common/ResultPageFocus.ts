@@ -35,19 +35,30 @@ export const scheduleOwnedResultFocus = ({
 
   let cancelled = false;
   let frame = 0;
+  const removeListeners = (): void => {
+    documentRef.removeEventListener('pointerdown', cancel, true);
+    documentRef.removeEventListener('keydown', cancel, true);
+    documentRef.removeEventListener('focusin', cancel, true);
+    documentRef.removeEventListener('visibilitychange', cancel);
+    view.removeEventListener('blur', cancel);
+    view.removeEventListener('pagehide', cancel);
+  };
   const cancel = (): void => {
     if (cancelled) return;
     cancelled = true;
-    documentRef.removeEventListener('pointerdown', cancel, true);
-    documentRef.removeEventListener('visibilitychange', cancel);
+    removeListeners();
     view.cancelAnimationFrame(frame);
   };
-  // A map gesture can leave body focused after the paging button disappears.
+  // Renewed keyboard/pointer intent or window deactivation invalidates the
+  // handoff, even when removal of the trigger has left only body focused.
   documentRef.addEventListener('pointerdown', cancel, true);
+  documentRef.addEventListener('keydown', cancel, true);
+  documentRef.addEventListener('focusin', cancel, true);
   documentRef.addEventListener('visibilitychange', cancel);
+  view.addEventListener('blur', cancel);
+  view.addEventListener('pagehide', cancel);
   frame = view.requestAnimationFrame(() => {
-    documentRef.removeEventListener('pointerdown', cancel, true);
-    documentRef.removeEventListener('visibilitychange', cancel);
+    removeListeners();
     if (cancelled || documentRef.visibilityState === 'hidden' || !isCurrent()) return;
     const currentFocus = activeFocusElement(documentRef);
     const stillOwned = currentFocus === trigger
