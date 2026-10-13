@@ -796,7 +796,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
                     schedulePageFocus(event, visibleCount);
                     setVisibleCount((count) => Math.min(count + PAGE_SIZE, QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart));
                   }}>
-                  Daha fazla park göster ({resultList.length - pageStart - visibleCount} kaldı)
+                  Daha fazla park göster ({Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart) - visibleCount} kaldı)
                 </button>
               ) : null}
               {visibleCount >= Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart)

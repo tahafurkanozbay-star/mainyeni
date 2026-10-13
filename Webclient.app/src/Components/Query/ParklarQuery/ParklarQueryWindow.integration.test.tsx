@@ -140,6 +140,18 @@ describe('Parklar service window', () => {
     expect(screen.getByText('Park 201')).toBeVisible();
     expect(screen.getAllByRole('listitem')).toHaveLength(60);
     expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daha fazla park göster (140 kaldı)' })).toBeVisible();
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }));
+    }
+    expect(screen.getByText('Park 400')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
+    expect(screen.getByText('Park 401')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki park grubuna dön' }));
+    expect(screen.getByText('Park 400')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
     fireEvent.click(screen.getByRole('button', { name: 'Önceki park grubuna dön' }));
     expect(screen.getByText('Park 200')).toBeVisible();
     expect(screen.getAllByRole('listitem')).toHaveLength(200);
