@@ -421,7 +421,7 @@ export const AssemblyAreaQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Acil Toplanma Alanları/Detay Göster',
-      `${item.ObjectId ?? ''}/${item.Address}`,
+      'assembly-area-action',
       globalThis.reportError,
     );
 
@@ -457,7 +457,7 @@ export const AssemblyAreaQueryWindow = forwardRef<
       void safeClientLog(
         LoggingBusiness,
         'Acil Toplanma Alanları/Yol Tarifi',
-        `${item.ObjectId ?? ''}/${item.Address}`,
+        'assembly-area-action',
         globalThis.reportError,
       );
     } catch (error) {

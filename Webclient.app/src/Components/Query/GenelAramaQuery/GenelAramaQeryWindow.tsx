@@ -303,7 +303,7 @@ export const GenelAramaQeryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Genel Arama/Detay Göster',
-      `${item.id ?? ''}/${item.address || item.title}`,
+      'detail-requested',
     );
 
     try {
