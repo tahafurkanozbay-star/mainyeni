@@ -186,4 +186,25 @@ describe('real fast-access window presentation and resource ownership', () => {
     view.unmount(); manager.UnregisterWindow('sidebar'); manager.Dispose();
   });
 
+  it('keeps focus in place when result reveal was activated without keyboard focus', async () => {
+    const view = setup(vi.fn(async () => success(1_000)));
+    await view.open();
+    const callbacks: FrameRequestCallback[] = [];
+    const spy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    try {
+      const filter = screen.getByRole('searchbox');
+      filter.focus();
+      filter.blur();
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla sonuç göster/ }));
+      act(() => { callbacks.forEach((callback) => callback(0)); });
+      expect(document.activeElement).toBe(document.body);
+      expect(view.query).toHaveBeenCalledOnce();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
 });
