@@ -154,6 +154,36 @@ describe('ExperienceMenu', () => {
     expect(onDismiss).toHaveBeenCalledWith('escape');
   });
 
+  it.each([
+    { key: 'Escape', altKey: true },
+    { key: 'Escape', ctrlKey: true },
+    { key: 'Escape', metaKey: true },
+    { key: 'Escape', isComposing: true },
+    { key: 'ArrowDown', isComposing: true },
+  ])('leaves platform and IME keyboard ownership intact: $key', (options) => {
+    const onDismiss = vi.fn();
+    render(<ExperienceMenu label="Menü" onDismiss={onDismiss} items={[
+      { id: 'first', label: 'Bir' },
+      { id: 'second', label: 'İki' },
+    ]} />);
+    const first = screen.getByRole('menuitem', { name: 'Bir' });
+    first.focus();
+    const event = new KeyboardEvent('keydown', { ...options, bubbles: true, cancelable: true });
+    screen.getByRole('menu').dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(first).toHaveFocus();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('respects a previously handled Escape event', () => {
+    const onDismiss = vi.fn();
+    render(<ExperienceMenu label="Menü" onDismiss={onDismiss} items={[{ id: 'first', label: 'Bir' }]} />);
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    event.preventDefault();
+    screen.getByRole('menu').dispatchEvent(event);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it('reports Tab dismissal without trapping focus', () => {
     const onDismiss = vi.fn();
     render(
