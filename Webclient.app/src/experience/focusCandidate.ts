@@ -36,3 +36,27 @@ export const isManagedFocusCandidate = (
   if (element.hasAttribute('disabled') || element.matches(':disabled')) return false;
   return element.getAttribute('aria-disabled') !== 'true';
 };
+
+/**
+ * DOM contains() stops at a ShadowRoot boundary. Follow composed ancestors
+ * when deciding whether focus is still owned by a managed window. Closed
+ * roots remain opaque: their host is the only observable focus owner.
+ */
+export const isWithinComposedSubtree = (
+  root: Node | null | undefined,
+  target: Node | null | undefined,
+): boolean => {
+  if (!root || !target) return false;
+  let current: Node | null = target;
+  while (current) {
+    if (current === root) return true;
+    if (current.parentNode) {
+      current = current.parentNode;
+      continue;
+    }
+    const nodeRoot: Node = current.getRootNode();
+    const host: unknown = 'host' in nodeRoot ? nodeRoot.host : null;
+    current = host instanceof Node ? host : null;
+  }
+  return false;
+};

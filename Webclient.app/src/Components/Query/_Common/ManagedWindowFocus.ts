@@ -1,4 +1,4 @@
-import { getDeepActiveElement, isManagedFocusCandidate } from '../../../experience/focusCandidate';
+import { getDeepActiveElement, isManagedFocusCandidate, isWithinComposedSubtree } from '../../../experience/focusCandidate';
 export { isManagedFocusCandidate } from '../../../experience/focusCandidate';
 
 export type ManagedWindowFocusRestorePolicy = 'always' | 'if-focus-within';
@@ -32,13 +32,28 @@ const findInitialFocusTarget = (
   selector: string,
 ): HTMLElement | null => {
   try {
-    for (const candidate of root.querySelectorAll<HTMLElement>(selector)) {
-      if (isManagedFocusCandidate(candidate)) return candidate;
-    }
+    // QuerySelectorAll does not cross ShadowRoot boundaries. Traverse in
+    // composed reading order so a shadow-hosted first action is discoverable
+    // without privileging a later light-DOM button.
+    const find = (parent: Element | ShadowRoot): HTMLElement | null => {
+      for (const child of parent.children) {
+        if (child instanceof HTMLElement && child.matches(selector) && isManagedFocusCandidate(child)) {
+          return child;
+        }
+        if (child instanceof HTMLElement && child.shadowRoot) {
+          const shadowTarget = find(child.shadowRoot);
+          if (shadowTarget) return shadowTarget;
+        }
+        const descendant = find(child);
+        if (descendant) return descendant;
+      }
+      return null;
+    };
+    return find(root);
   } catch {
+    // Invalid caller selectors must never break opening the managed window.
     return null;
   }
-  return null;
 };
 
 export const focusManagedWindow = ({
@@ -124,7 +139,7 @@ const shouldRestoreFocus = (
   if (policy === 'always') return true;
   const active = getDeepActiveElement(documentRef);
   if (!active || active === documentRef.body) return true;
-  return Boolean(root && (active === root || root.contains(active)));
+  return isWithinComposedSubtree(root, active);
 };
 
 export const createManagedWindowFocusLifecycle = (

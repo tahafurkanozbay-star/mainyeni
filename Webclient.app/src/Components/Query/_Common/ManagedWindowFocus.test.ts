@@ -88,6 +88,90 @@ describe('ManagedWindowFocus', () => {
     expect(document.activeElement).toBe(available);
   });
 
+  it('discovers a first focus target inside an open shadow component', () => {
+    const root = document.createElement('section');
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const shadowButton = document.createElement('button');
+    const laterButton = document.createElement('button');
+    shadow.append(shadowButton);
+    root.append(host, laterButton);
+    document.body.append(root);
+
+    expect(focusManagedWindow({ root })).toBe(shadowButton);
+    expect(shadow.activeElement).toBe(shadowButton);
+    expect(document.activeElement).toBe(host);
+  });
+
+  it('preserves composed reading order when light DOM precedes a shadow host', () => {
+    const root = document.createElement('section');
+    const first = document.createElement('button');
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const shadowButton = document.createElement('button');
+    shadow.append(shadowButton);
+    root.append(first, host);
+    document.body.append(root);
+
+    expect(focusManagedWindow({ root })).toBe(first);
+    expect(document.activeElement).toBe(first);
+    expect(shadow.activeElement).toBeNull();
+  });
+
+  it('skips unavailable shadow hosts without losing later focus targets', () => {
+    const root = document.createElement('section');
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const unavailable = document.createElement('button');
+    shadow.append(unavailable);
+    host.setAttribute('aria-hidden', 'true');
+    const available = document.createElement('button');
+    root.append(host, available);
+    document.body.append(root);
+
+    expect(focusManagedWindow({ root })).toBe(available);
+    expect(document.activeElement).toBe(available);
+  });
+
+  it('restores an opener after focus entered nested shadow controls in a window', () => {
+    const opener = document.createElement('button');
+    const root = document.createElement('section');
+    const outerHost = document.createElement('div');
+    const outer = outerHost.attachShadow({ mode: 'open' });
+    const innerHost = document.createElement('div');
+    const inner = innerHost.attachShadow({ mode: 'open' });
+    const target = document.createElement('button');
+    inner.append(target);
+    outer.append(innerHost);
+    root.append(outerHost);
+    document.body.append(opener, root);
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle(document);
+    lifecycle.open({ root });
+    expect(inner.activeElement).toBe(target);
+    expect(lifecycle.close()).toBe(true);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('does not restore the opener when focus moved to a different shadow host', () => {
+    const opener = document.createElement('button');
+    const root = document.createElement('section');
+    root.append(document.createElement('button'));
+    const outsideHost = document.createElement('div');
+    const outsideShadow = outsideHost.attachShadow({ mode: 'open' });
+    const outsideButton = document.createElement('button');
+    outsideShadow.append(outsideButton);
+    document.body.append(opener, root, outsideHost);
+    opener.focus();
+
+    const lifecycle = createManagedWindowFocusLifecycle(document);
+    lifecycle.open({ root });
+    outsideButton.focus();
+    expect(lifecycle.close()).toBe(false);
+    expect(outsideShadow.activeElement).toBe(outsideButton);
+  });
+
   it('does not focus an entire CSS-hidden window', () => {
     const root = document.createElement('section');
     root.style.visibility = 'hidden';

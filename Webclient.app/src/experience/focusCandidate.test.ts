@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getDeepActiveElement, isManagedFocusCandidate } from './focusCandidate';
+import { getDeepActiveElement, isManagedFocusCandidate, isWithinComposedSubtree } from './focusCandidate';
 
 afterEach(() => { document.body.replaceChildren(); });
 
@@ -26,6 +26,45 @@ describe('shared focus candidate and Shadow DOM ownership', () => {
     document.body.append(host);
     button.focus();
     expect(getDeepActiveElement(document)).toBe(host);
+  });
+
+  it('recognizes ownership through nested open ShadowRoots', () => {
+    const owner = document.createElement('section');
+    const outerHost = document.createElement('div');
+    const outerRoot = outerHost.attachShadow({ mode: 'open' });
+    const innerHost = document.createElement('div');
+    const innerRoot = innerHost.attachShadow({ mode: 'open' });
+    const focused = document.createElement('button');
+    const outside = document.createElement('button');
+    innerRoot.append(focused);
+    outerRoot.append(innerHost);
+    owner.append(outerHost);
+    document.body.append(owner, outside);
+    focused.focus();
+
+    expect(getDeepActiveElement(document)).toBe(focused);
+    expect(owner.contains(focused)).toBe(false);
+    expect(isWithinComposedSubtree(owner, focused)).toBe(true);
+    expect(isWithinComposedSubtree(outerHost, focused)).toBe(true);
+    expect(isWithinComposedSubtree(innerHost, focused)).toBe(true);
+    expect(isWithinComposedSubtree(outside, focused)).toBe(false);
+    expect(isWithinComposedSubtree(owner, outside)).toBe(false);
+  });
+
+  it('treats a closed shadow host as the observable owner', () => {
+    const owner = document.createElement('section');
+    const host = document.createElement('div');
+    const closed = host.attachShadow({ mode: 'closed' });
+    const button = document.createElement('button');
+    closed.append(button);
+    owner.append(host);
+    document.body.append(owner);
+    button.focus();
+
+    expect(getDeepActiveElement(document)).toBe(host);
+    expect(isWithinComposedSubtree(owner, getDeepActiveElement(document))).toBe(true);
+    expect(isWithinComposedSubtree(null, host)).toBe(false);
+    expect(isWithinComposedSubtree(owner, null)).toBe(false);
   });
 
   it('rejects CSS-hidden, inert and aria-disabled hosts across a shadow boundary', () => {
