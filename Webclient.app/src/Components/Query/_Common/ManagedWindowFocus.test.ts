@@ -68,6 +68,35 @@ describe('ManagedWindowFocus', () => {
     expect(focusManagedWindow({ root })).toBe(enabled);
   });
 
+  it('skips CSS-hidden descendants even when connected and not aria-hidden', () => {
+    const root = document.createElement('section');
+    const displayNone = document.createElement('div');
+    displayNone.style.display = 'none';
+    const displayButton = document.createElement('button');
+    displayNone.append(displayButton);
+    const invisible = document.createElement('div');
+    invisible.style.visibility = 'hidden';
+    const invisibleButton = document.createElement('button');
+    invisible.append(invisibleButton);
+    const available = document.createElement('button');
+    root.append(displayNone, invisible, available);
+    document.body.append(root);
+
+    expect(focusManagedWindow({ root })).toBe(available);
+    expect(restoreManagedWindowFocus(displayButton)).toBe(false);
+    expect(restoreManagedWindowFocus(invisibleButton)).toBe(false);
+    expect(document.activeElement).toBe(available);
+  });
+
+  it('does not focus an entire CSS-hidden window', () => {
+    const root = document.createElement('section');
+    root.style.visibility = 'hidden';
+    root.append(document.createElement('button'));
+    document.body.append(root);
+    expect(focusManagedWindow({ root })).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('skips buttons disabled by their containing fieldset', () => {
     const root = document.createElement('section');
     const fieldset = document.createElement('fieldset');

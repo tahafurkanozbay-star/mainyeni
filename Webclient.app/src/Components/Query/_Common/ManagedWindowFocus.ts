@@ -25,12 +25,17 @@ const DEFAULT_FOCUS_SELECTOR = [
 ].join(',');
 
 const hasUnavailableAncestor = (element: HTMLElement): boolean => {
+  const view = element.ownerDocument.defaultView;
   let current: HTMLElement | null = element;
   while (current) {
     if (current.hidden || current.hasAttribute('hidden')) return true;
     if (current.hasAttribute('inert')) return true;
     if (current.getAttribute('aria-hidden') === 'true') return true;
     if (current.getAttribute('aria-disabled') === 'true') return true;
+    // CSS-hidden surfaces can remain connected without an ARIA/hidden attribute.
+    // Never move keyboard focus into a non-rendered ancestor.
+    const style = view?.getComputedStyle(current);
+    if (style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse') return true;
     current = current.parentElement;
   }
   return false;

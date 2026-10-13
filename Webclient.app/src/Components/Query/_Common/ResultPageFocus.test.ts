@@ -107,6 +107,18 @@ describe('owned result paging focus', () => {
     expect(document.activeElement).toBe(fixture.trigger);
   });
 
+  it('does not hand off keyboard focus into a CSS-hidden result card', () => {
+    const fixture = setup();
+    fixture.trigger.focus();
+    fixture.target.style.display = 'none';
+    scheduleOwnedResultFocus({
+      trigger: fixture.trigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(fixture.trigger);
+  });
+
   it('ignores disconnected and disabled result actions', () => {
     const fixture = setup();
     fixture.trigger.focus();
