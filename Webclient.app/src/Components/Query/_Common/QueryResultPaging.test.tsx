@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { useQueryResultPage } from './QueryResultPaging';
+import { matchesQueryResultTerms, queryResultSearchTerms, useQueryResultPage } from './QueryResultPaging';
 
 const records = Array.from({ length: 1_000 }, (_, index) => ({ title: `Park ${index}`, address: 'Çankaya', phone: '' }));
 
@@ -30,6 +30,14 @@ describe('shared result page admission', () => {
     act(() => result.current.setFilterText(''));
     expect(result.current.currentPage).toBe(0);
     expect(result.current.visibleRecords[0]?.title).toBe('Park 0');
+  });
+
+  it('normalizes and deduplicates Turkish search words', () => {
+    const terms = queryResultSearchTerms('  ÇANKAYA Park çankaya ');
+    expect(terms).toEqual(['cankaya', 'park']);
+    expect(matchesQueryResultTerms('park 42 cankaya', terms)).toBe(true);
+    expect(matchesQueryResultTerms('park 42 kecioren', terms)).toBe(false);
+    expect(queryResultSearchTerms('  ')).toEqual([]);
   });
 
   it('matches unordered Turkish words across title and address without fetching another page', () => {

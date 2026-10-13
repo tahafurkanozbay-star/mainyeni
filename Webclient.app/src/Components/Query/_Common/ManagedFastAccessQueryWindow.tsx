@@ -26,7 +26,13 @@ import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
 import { scheduleOwnedResultFocus } from './ResultPageFocus';
 import { ServiceWindowActions } from './ServiceWindowActions';
-import { QUERY_RESULT_PAGE_POLICY, normalizeQueryResultPageSize } from './QueryResultPaging';
+import {
+  QUERY_RESULT_PAGE_POLICY,
+  matchesQueryResultTerms,
+  normalizeQueryResultPageSize,
+  normalizeQueryResultText,
+  queryResultSearchTerms,
+} from './QueryResultPaging';
 import {
   buildGoogleDirectionsUrl,
   createLatestRequestGate,
@@ -176,12 +182,7 @@ const readAttribute = (
   return null;
 };
 
-const normalizeText = (value: unknown): string => String(value ?? '')
-  .trim()
-  .toLocaleLowerCase('tr-TR')
-  .replace(/ı/g, 'i')
-  .normalize('NFKD')
-  .replace(/[\u0300-\u036f]/g, '');
+const normalizeText = normalizeQueryResultText;
 
 const getFeatureGeometry = (feature: FastAccessFeature | null | undefined): GeometryLike | null =>
   feature?.geometry ?? feature?.raw?.geometry ?? null;
@@ -213,11 +214,11 @@ export const filterFastAccessRecords = (
   records: readonly FastAccessRecord[],
   query: unknown,
 ): readonly FastAccessRecord[] => {
-  const needle = normalizeText(query);
-  if (!needle) return records;
-  return records.filter((record) => normalizeText(
+  const terms = queryResultSearchTerms(query);
+  if (!terms.length) return records;
+  return records.filter((record) => matchesQueryResultTerms(normalizeText(
     record.title + ' ' + record.address + ' ' + record.phone,
-  ).includes(needle));
+  ), terms));
 };
 
 export const buildGoogleRouteUrl = (
@@ -612,9 +613,9 @@ export function createManagedFastAccessQueryWindow({
     );
 
     const filteredRecords = useMemo(() => {
-      const needle = normalizeText(filterText);
-      return needle
-        ? searchIndex.filter(({ searchText }) => searchText.includes(needle)).map(({ record }) => record)
+      const terms = queryResultSearchTerms(filterText);
+      return terms.length
+        ? searchIndex.filter(({ searchText }) => matchesQueryResultTerms(searchText, terms)).map(({ record }) => record)
         : records;
     }, [filterText, records, searchIndex]);
 

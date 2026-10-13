@@ -19,6 +19,17 @@ export const normalizeQueryResultText = (value: unknown): string => String(value
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '');
 
+/** Normalized Turkish terms shared by service result filters. */
+export const queryResultSearchTerms = (value: unknown): readonly string[] => {
+  const normalized = normalizeQueryResultText(value);
+  return normalized ? [...new Set(normalized.split(/\s+/).filter(Boolean))] : [];
+};
+
+export const matchesQueryResultTerms = (
+  normalizedRecordText: string,
+  terms: readonly string[],
+): boolean => terms.every((term) => normalizedRecordText.includes(term));
+
 /** Keeps the full response available to the map while bounding list DOM. */
 export const useQueryResultPage = <RecordType extends QuerySearchableRecord,>(
   records: readonly RecordType[],
@@ -36,12 +47,9 @@ export const useQueryResultPage = <RecordType extends QuerySearchableRecord,>(
     text: normalizeQueryResultText(record.title + ' ' + record.address + ' ' + record.phone),
   })), [records]);
   const filteredRecords = useMemo(() => {
-    const needle = normalizeQueryResultText(filterText);
-    if (!needle) return records;
-    // Treat a multiword query as an AND search regardless of title/address
-    // order. The normalized index is still computed only when data changes.
-    const terms = needle.split(/\s+/).filter(Boolean);
-    return searchIndex.filter((entry) => terms.every((term) => entry.text.includes(term)))
+    const terms = queryResultSearchTerms(filterText);
+    if (!terms.length) return records;
+    return searchIndex.filter((entry) => matchesQueryResultTerms(entry.text, terms))
       .map((entry) => entry.record);
   }, [filterText, records, searchIndex]);
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / normalizedPageSize));

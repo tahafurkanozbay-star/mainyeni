@@ -43,6 +43,9 @@ describe('ManagedFastAccessQueryWindow runtime helpers', () => {
 
     expect(filterFastAccessRecords(records, 'cigdem')).toHaveLength(1);
     expect(filterFastAccessRecords(records, 'keci')).toHaveLength(1);
+    expect(filterFastAccessRecords(records, 'cankaya cigdem')).toEqual([records[0]]);
+    expect(filterFastAccessRecords(records, 'cigdem cankaya')).toEqual([records[0]]);
+    expect(filterFastAccessRecords(records, 'cankaya keci')).toEqual([]);
     expect(filterFastAccessRecords(records, '')).toBe(records);
   });
 
