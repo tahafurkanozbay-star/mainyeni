@@ -192,10 +192,12 @@ describe('shared service result window ownership and usability', () => {
     Query.mockReturnValueOnce(late.promise);
     fireEvent.click(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' }));
     expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toHaveTextContent('Açılıyor…');
+    expect(screen.getByRole('status', { name: 'Hizmet işlemi' })).toHaveTextContent('Merkez 1 için harita konumu hazırlanıyor…');
     expect(screen.getByRole('button', { name: 'Merkez 2 — Haritada göster' })).toHaveTextContent('Haritada göster');
     expect(screen.getByRole('button', { name: 'Merkez 2 — Haritada göster' })).toBeDisabled();
     await act(async () => { late.resolve({ type: 10, data: [{ geometry: { latitude: 39.9, longitude: 32.8 } }] }); });
     expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toBeEnabled();
+    expect(screen.getByRole('status', { name: 'Hizmet işlemi' })).toBeEmptyDOMElement();
   });
 
   it('reports the remaining count inside the current 200-record group', async () => {

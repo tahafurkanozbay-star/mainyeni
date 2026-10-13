@@ -757,6 +757,20 @@ export function createManagedFastAccessQueryWindow({
           })}
         </ul>
 
+        <p
+          className="kr-fast-query__action-status"
+          role="status"
+          aria-label="Hizmet işlemi"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {activeAction
+            ? activeAction.item.title + (activeAction.action === 'zoom'
+              ? ' için harita konumu hazırlanıyor…'
+              : ' için yol tarifi hazırlanıyor…')
+            : ''}
+        </p>
+
         {!loading && filteredRecords.length > 0 ? (
           <nav className="kr-fast-query__paging" aria-label={title + ' sonuç gezinme'}>
             <p className="kr-fast-query__range" aria-live="polite" aria-atomic="true">
