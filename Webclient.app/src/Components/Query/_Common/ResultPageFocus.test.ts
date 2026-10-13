@@ -191,4 +191,32 @@ describe('owned result paging focus', () => {
     fixture.callbacks[0]?.(0);
     expect(document.activeElement).toBe(fixture.trigger);
   });
+  it('does not steal focus after a pointer gesture on a non-focusable map', () => {
+    const fixture = setup();
+    fixture.trigger.focus();
+    scheduleOwnedResultFocus({
+      trigger: fixture.trigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    fixture.trigger.remove();
+    // Map canvas interactions need not focus another element.
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(document.body);
+    expect(fixture.cancel).toHaveBeenCalledWith(1);
+  });
+
+  it('invalidates a queued focus handoff when the tab visibility changes', () => {
+    const fixture = setup();
+    fixture.trigger.focus();
+    scheduleOwnedResultFocus({
+      trigger: fixture.trigger, detail: 0,
+      resolveTarget: () => fixture.target, isCurrent: () => true,
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    fixture.callbacks[0]?.(0);
+    expect(document.activeElement).toBe(fixture.trigger);
+    expect(fixture.cancel).toHaveBeenCalledWith(1);
+  });
+
 });

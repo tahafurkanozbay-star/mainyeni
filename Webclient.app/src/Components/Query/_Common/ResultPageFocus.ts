@@ -34,8 +34,21 @@ export const scheduleOwnedResultFocus = ({
   }
 
   let cancelled = false;
-  const frame = view.requestAnimationFrame(() => {
-    if (cancelled || !isCurrent()) return;
+  let frame = 0;
+  const cancel = (): void => {
+    if (cancelled) return;
+    cancelled = true;
+    documentRef.removeEventListener('pointerdown', cancel, true);
+    documentRef.removeEventListener('visibilitychange', cancel);
+    view.cancelAnimationFrame(frame);
+  };
+  // A map gesture can leave body focused after the paging button disappears.
+  documentRef.addEventListener('pointerdown', cancel, true);
+  documentRef.addEventListener('visibilitychange', cancel);
+  frame = view.requestAnimationFrame(() => {
+    documentRef.removeEventListener('pointerdown', cancel, true);
+    documentRef.removeEventListener('visibilitychange', cancel);
+    if (cancelled || documentRef.visibilityState === 'hidden' || !isCurrent()) return;
     const currentFocus = activeFocusElement(documentRef);
     const stillOwned = currentFocus === trigger
       || (!trigger.isConnected && currentFocus === documentRef.body);
@@ -47,8 +60,5 @@ export const scheduleOwnedResultFocus = ({
     target.focus();
   });
 
-  return () => {
-    cancelled = true;
-    view.cancelAnimationFrame(frame);
-  };
+  return cancel;
 };
