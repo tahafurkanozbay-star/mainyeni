@@ -40,7 +40,7 @@ export const isManagedFocusCandidate = (
 ): element is HTMLElement => {
   if (!element?.isConnected) return false;
   if (hasUnavailableAncestor(element)) return false;
-  if (element.hasAttribute('disabled')) return false;
+  if (element.hasAttribute('disabled') || element.matches(':disabled')) return false;
   if (element.getAttribute('aria-disabled') === 'true') return false;
   return true;
 };
@@ -96,10 +96,23 @@ export const scheduleManagedWindowFocus = (
 ): (() => void) => {
   const windowRef = options.root?.ownerDocument.defaultView;
   if (!windowRef) return () => undefined;
+  const documentRef = options.root?.ownerDocument;
+  const initialFocus = documentRef?.activeElement;
+  let cancelled = false;
   const frame = windowRef.requestAnimationFrame(() => {
+    if (cancelled) return;
+    const currentFocus = documentRef?.activeElement;
+    // A delayed focus request cannot reclaim focus after deliberate navigation.
+    // Only the browser's fallback to body after opener removal is exempt.
+    if (currentFocus !== initialFocus && !(
+      currentFocus === documentRef?.body && initialFocus && !initialFocus.isConnected
+    )) return;
     focusManagedWindow(options);
   });
-  return () => windowRef.cancelAnimationFrame(frame);
+  return () => {
+    cancelled = true;
+    windowRef.cancelAnimationFrame(frame);
+  };
 };
 
 const shouldRestoreFocus = (

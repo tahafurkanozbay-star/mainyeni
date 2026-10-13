@@ -4,6 +4,7 @@ import {
   createManagedWindowFocusLifecycle,
   focusManagedWindow,
   restoreManagedWindowFocus,
+  scheduleManagedWindowFocus,
 } from './ManagedWindowFocus';
 
 describe('ManagedWindowFocus', () => {
@@ -65,6 +66,58 @@ describe('ManagedWindowFocus', () => {
     root.append(inert, ariaHidden, enabled);
     document.body.append(root);
     expect(focusManagedWindow({ root })).toBe(enabled);
+  });
+
+  it('skips buttons disabled by their containing fieldset', () => {
+    const root = document.createElement('section');
+    const fieldset = document.createElement('fieldset');
+    fieldset.disabled = true;
+    const unavailable = document.createElement('button');
+    fieldset.append(unavailable);
+    const enabled = document.createElement('button');
+    root.append(fieldset, enabled);
+    document.body.append(root);
+    expect(focusManagedWindow({ root })).toBe(enabled);
+    expect(document.activeElement).toBe(enabled);
+  });
+
+  it('does not steal focus when a delayed open loses ownership to another control', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const opener = document.createElement('button');
+    const outside = document.createElement('button');
+    const root = document.createElement('section');
+    const inside = document.createElement('button');
+    root.append(inside);
+    document.body.append(opener, outside, root);
+    opener.focus();
+    const cancel = scheduleManagedWindowFocus({ root });
+    outside.focus();
+    frames[0]?.(0);
+    expect(document.activeElement).toBe(outside);
+    cancel();
+  });
+
+  it('invalidates an already queued frame after cancellation or close', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const opener = document.createElement('button');
+    const root = document.createElement('section');
+    const inside = document.createElement('button');
+    root.append(inside);
+    document.body.append(opener, root);
+    opener.focus();
+    const lifecycle = createManagedWindowFocusLifecycle(document);
+    lifecycle.open({ root });
+    expect(lifecycle.close()).toBe(true);
+    frames[0]?.(0);
+    expect(document.activeElement).toBe(opener);
   });
 
   it('fails safely for invalid feature-owned selectors', () => {
