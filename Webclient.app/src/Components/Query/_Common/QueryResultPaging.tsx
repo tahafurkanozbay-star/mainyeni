@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 
 export const QUERY_RESULT_PAGE_POLICY = Object.freeze({ minPageSize: 10, defaultPageSize: 60, maxPageSize: 200 });
 
@@ -25,8 +25,12 @@ export const useQueryResultPage = <RecordType extends QuerySearchableRecord,>(
   pageSize: number,
 ) => {
   const normalizedPageSize = normalizeQueryResultPageSize(pageSize);
-  const [filterText, setFilterText] = useState('');
+  const [filterText, setFilterValue] = useState('');
   const [page, setPage] = useState(0);
+  const setFilterText = useCallback<Dispatch<SetStateAction<string>>>((value) => {
+    setFilterValue(value);
+    setPage(0);
+  }, []);
   const searchIndex = useMemo(() => records.map((record) => ({
     record,
     text: normalizeQueryResultText(record.title + ' ' + record.address + ' ' + record.phone),

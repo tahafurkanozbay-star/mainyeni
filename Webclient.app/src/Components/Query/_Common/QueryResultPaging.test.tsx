@@ -27,5 +27,8 @@ describe('shared result page admission', () => {
     act(() => result.current.setFilterText('Park 999'));
     expect(result.current.currentPage).toBe(0);
     expect(result.current.visibleRecords).toEqual([records[999]]);
+    act(() => result.current.setFilterText(''));
+    expect(result.current.currentPage).toBe(0);
+    expect(result.current.visibleRecords[0]?.title).toBe('Park 0');
   });
 });
