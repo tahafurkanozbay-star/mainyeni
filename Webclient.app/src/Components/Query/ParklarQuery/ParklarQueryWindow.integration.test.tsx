@@ -246,4 +246,48 @@ describe('Parklar service window', () => {
     } finally { frame.mockRestore(); cancel.mockRestore(); }
   });
 
+
+  it('announces pending park action and bounds an unresponsive detail transport', async () => {
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse() as never)
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref, manager } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    vi.useFakeTimers();
+    try {
+      const primary = screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' });
+      fireEvent.click(primary);
+      expect(primary).toHaveAttribute('aria-busy', 'true');
+      expect(screen.getByText('Park konumu hazırlanıyor…')).toBeVisible();
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      const signal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
+      expect(signal?.aborted).toBe(true);
+      expect(screen.getByText('Park konumu zaman aşımına uğradı. Tekrar deneyin.')).toBeVisible();
+      expect(primary).not.toHaveAttribute('aria-busy');
+      expect(manager.ShowMessage).not.toHaveBeenCalled();
+      expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not expose stale action feedback after closing the window', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse() as never)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    expect(screen.getByText('Park konumu hazırlanıyor…')).toBeInTheDocument();
+    act(() => { ref.current?.OnClose(); });
+    expect(screen.queryByText('Park konumu hazırlanıyor…')).not.toBeInTheDocument();
+    await act(async () => {
+      finish({ ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }] } as never);
+    });
+    expect(screen.queryByText('Park konumu haritada gösterildi.')).not.toBeInTheDocument();
+  });
+
 });
