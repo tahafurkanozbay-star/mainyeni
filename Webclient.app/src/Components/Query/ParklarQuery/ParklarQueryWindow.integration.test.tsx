@@ -280,7 +280,10 @@ describe('Parklar service window', () => {
     vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
     const { ref } = setup();
     await act(async () => { await ref.current?.OnShow(); });
-    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+      await Promise.resolve(); // Flush the detail operation microtask before closing.
+    });
     expect(screen.getByText('Park konumu hazırlanıyor…')).toBeInTheDocument();
     act(() => { ref.current?.OnClose(); });
     expect(screen.queryByText('Park konumu hazırlanıyor…')).not.toBeInTheDocument();
