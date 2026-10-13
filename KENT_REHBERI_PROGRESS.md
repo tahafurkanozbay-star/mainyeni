@@ -475,3 +475,7 @@
 - IMPLEMENTATION: AES-GCM input envelope/segment length budgets checked before split/Base64 allocation; partially decoded fields and derived key/associated data are zeroed on failures. Plaintext/purpose UTF-8 budgets checked before allocating encoded buffers. HTTP raw target preflight returns the existing 414 decision before expensive percent decoding.
 - REGRESSION: Added adversarial xUnit tests for huge envelopes, ciphertext, fixed fields, delimiters, UTF-8 limits and oversized raw request targets. All seven exact-head workflows must re-run on the source commit; do not claim success until completed.
 - MERGE: PR #483 remains draft and under 4,000 additions; no merge. No WMS/WFS, new endpoint, telemetry, external asset, secret or runtime dependency.
+
+## Deep Platform / backend CI compile repair — 2026-10-13
+- Exact-head backend CI run `38360544857` identified C# CS1010/CS1011 from a malformed generated split expression and duplicated trailing source in AuthenticatedEncryptionUtils. Repaired to a single bounded split expression and removed duplicate tail. Previous head is NOT build-valid; rerun backend xUnit and all seven exact-head checks on the repair commit.
+- PR #483 remains draft and below mandatory 4,000 additions. No WMS/WFS or new external network change.
