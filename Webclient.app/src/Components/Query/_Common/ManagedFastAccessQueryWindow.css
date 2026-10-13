@@ -303,3 +303,63 @@
   .kr-fast-query input:focus-visible,
   .kr-fast-query a:focus-visible { outline-color: Highlight; }
 }
+
+
+/* Long service names and addresses must wrap inside the narrow GIS result rail. */
+.kr-fast-query__copy h3 {
+  overflow-wrap: anywhere;
+}
+.kr-fast-query__error button,
+.kr-fast-query__empty button {
+  min-height: 44px;
+  margin-block-start: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--exp-border, rgb(15 23 42 / 18%));
+  border-radius: 10px;
+  background: var(--experience-surface, #fff);
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.kr-fast-query__error button:focus-visible,
+.kr-fast-query__empty button:focus-visible {
+  outline: 3px solid var(--exp-accent, #187bb9);
+  outline-offset: 2px;
+}
+
+@media (max-width: 360px) {
+  .kr-fast-query__toolbar { flex-wrap: wrap; }
+  .kr-fast-query__count { min-width: 0; margin-inline-start: auto; }
+  .kr-fast-query__paging-actions .kr-fast-query__more { flex-basis: 100%; }
+}
+
+@media (pointer: coarse) {
+  .kr-fast-query__header {
+    grid-template-columns: 38px minmax(0, 1fr) 48px 48px;
+  }
+  .kr-fast-query__close,
+  .kr-fast-query__minimize {
+    width: 48px;
+    min-height: 48px;
+  }
+  .kr-fast-query__back,
+  .kr-fast-query__filter input,
+  .kr-fast-query__error button,
+  .kr-fast-query__empty button {
+    min-height: 48px;
+  }
+}
+
+@media (forced-colors: active) {
+  .kr-fast-query__error button,
+  .kr-fast-query__empty button {
+    border-color: ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .kr-fast-query__error button:focus-visible,
+  .kr-fast-query__empty button:focus-visible {
+    outline-color: Highlight;
+  }
+}
