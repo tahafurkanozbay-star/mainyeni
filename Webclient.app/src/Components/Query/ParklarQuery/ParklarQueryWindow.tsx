@@ -359,16 +359,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       setErrorMessage('');
       setVisibleCount(PAGE_SIZE);
 
-      await safeClientLog(
-        LoggingBusiness,
-        'Parklar/Sorgu',
-        String(latestQuery.districtName ?? '')
-          + '/'
-          + String(latestQuery.nbhoodName ?? '')
-          + '/'
-          + String(latestQuery.name ?? ''),
-        DebugHelper.Log,
-      );
+      void safeClientLog(LoggingBusiness, 'Parklar/Sorgu', 'query-fields:' + Math.min(Object.keys(latestQuery).length, 99), DebugHelper.Log);
 
       try {
         const result = await ParklarQeryBusiness.Query(latestQuery, false, { signal: layerAbort.signal }) as ServiceResult;
@@ -478,12 +469,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, []);
 
     const showItem = useCallback(async (item: ParkRecord): Promise<void> => {
-      await safeClientLog(
-        LoggingBusiness,
-        'Parklar/Detay Göster',
-        String(item.objectId ?? '') + '/' + item.address,
-        DebugHelper.Log,
-      );
+      void safeClientLog(LoggingBusiness, 'Parklar/Detay Göster', 'record-detail-opened', DebugHelper.Log);
 
       try {
         const itemDetails = await getItemDetailsById(item);
@@ -515,12 +501,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           throw new Error('Yol tarifi penceresi açılamadı.');
         }
 
-        await safeClientLog(
-          LoggingBusiness,
-          'Parklar/Yol Tarifi',
-          String(item.objectId ?? '') + '/' + item.address,
-          DebugHelper.Log,
-        );
+        void safeClientLog(LoggingBusiness, 'Parklar/Yol Tarifi', 'external-route-requested', DebugHelper.Log);
       } catch (error) {
         reportError(error, 'Yol tarifi alınamadı.');
       }

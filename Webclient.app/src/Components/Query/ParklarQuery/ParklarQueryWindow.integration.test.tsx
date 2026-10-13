@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ParklarQueryWindow, type ParkWindowHandle } from './ParklarQueryWindow';
 import { ParklarQeryBusiness } from '../../../Business/ParklarQeryBusiness';
+import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { CommonBusiness } from '../../../Business/CommonBusiness';
 import MapManager from '../../../Store/Managers/MapManager';
 import { createKentRehberiGeoJsonLayer } from '../../../data-services/kentRehberiGeoJsonLayer';
@@ -80,4 +81,26 @@ describe('Parklar service window', () => {
     expect(map.add).not.toHaveBeenCalled();
     expect(layer.destroy).toHaveBeenCalledOnce();
   });
+  it('keeps park queries responsive when logging stalls and omits private query details', async () => {
+    const logger = vi.mocked(LoggingBusiness.CreateClientLog);
+    logger.mockReturnValue(new Promise<unknown>(() => undefined));
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse() as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref, manager } = setup();
+    Object.assign(manager, {
+      GetQueryParams: () => ({ name: 'PRIVATE_PARK_QUERY', districtName: 'PRIVATE_DISTRICT' }),
+    });
+    await act(async () => { await ref.current?.OnShow(); });
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+    expect(screen.getByText('Park 1')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    expect(logger).toHaveBeenCalledTimes(2);
+    const audit = JSON.stringify(logger.mock.calls);
+    expect(audit).toContain('query-fields:2');
+    expect(audit).toContain('record-detail-opened');
+    expect(audit).not.toContain('PRIVATE_PARK_QUERY');
+    expect(audit).not.toContain('PRIVATE_DISTRICT');
+    expect(audit).not.toContain('Ankara');
+  });
+
 });
