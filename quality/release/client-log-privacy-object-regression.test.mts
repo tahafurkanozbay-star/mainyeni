@@ -50,3 +50,15 @@ test('static literal field examples do not disclose record values', () => {
     '`record.address`',
   ]) assert.equal(findings(payload), 0, payload);
 });
+
+test('computed location fields and wrapped values remain detectable', () => {
+  for (const payload of [
+    'row["address"]',
+    "selectedRow['coordinates']",
+    'row?.["mahalle"]',
+    'String(latitude)',
+    'Number(lon)',
+    'encodeURIComponent(searchText)',
+    '{ "adres": value }',
+  ]) assert.equal(findings(payload), 1, payload);
+});
