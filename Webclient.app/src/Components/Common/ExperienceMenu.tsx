@@ -99,8 +99,16 @@ export function ExperienceMenu({
     const nextIndex = findEnabledIndex(items, activeIndex);
     if (nextIndex < 0) return undefined;
     setActiveIndex(nextIndex);
+    const focusDocument = rootRef.current?.ownerDocument;
+    const focusBeforeSchedule = focusDocument?.activeElement;
     queueMicrotask(() => {
       if (cancelled) return;
+      // A menu opening must not override a later user-initiated focus move.
+      // A detached opener may legitimately fall back to document.body.
+      const currentFocus = focusDocument?.activeElement;
+      if (currentFocus !== focusBeforeSchedule && !(
+        currentFocus === focusDocument?.body && focusBeforeSchedule && !focusBeforeSchedule.isConnected
+      )) return;
       const targetId = items[nextIndex]?.id;
       if (targetId) focusRovingTarget(rootRef.current, targetId);
     });
