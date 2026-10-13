@@ -81,8 +81,30 @@ export const scheduleManagedWindowFocus = (
   const documentRef = options.root?.ownerDocument;
   const initialFocus = documentRef ? getDeepActiveElement(documentRef) : null;
   let cancelled = false;
-  const frame = windowRef.requestAnimationFrame(() => {
+  let frame = 0;
+  const removeListeners = (): void => {
+    documentRef?.removeEventListener('pointerdown', cancel, true);
+    documentRef?.removeEventListener('keydown', cancel, true);
+    documentRef?.removeEventListener('focusin', cancel, true);
+    documentRef?.removeEventListener('visibilitychange', cancel);
+    windowRef.removeEventListener('blur', cancel);
+    windowRef.removeEventListener('pagehide', cancel);
+  };
+  const cancel = (): void => {
     if (cancelled) return;
+    cancelled = true;
+    removeListeners();
+    windowRef.cancelAnimationFrame(frame);
+  };
+  documentRef?.addEventListener('pointerdown', cancel, true);
+  documentRef?.addEventListener('keydown', cancel, true);
+  documentRef?.addEventListener('focusin', cancel, true);
+  documentRef?.addEventListener('visibilitychange', cancel);
+  windowRef.addEventListener('blur', cancel);
+  windowRef.addEventListener('pagehide', cancel);
+  frame = windowRef.requestAnimationFrame(() => {
+    removeListeners();
+    if (cancelled || documentRef?.visibilityState === 'hidden') return;
     const currentFocus = documentRef ? getDeepActiveElement(documentRef) : null;
     // A delayed focus request cannot reclaim focus after deliberate navigation.
     // Only the browser's fallback to body after opener removal is exempt.
@@ -91,10 +113,7 @@ export const scheduleManagedWindowFocus = (
     )) return;
     focusManagedWindow(options);
   });
-  return () => {
-    cancelled = true;
-    windowRef.cancelAnimationFrame(frame);
-  };
+  return cancel;
 };
 
 const shouldRestoreFocus = (

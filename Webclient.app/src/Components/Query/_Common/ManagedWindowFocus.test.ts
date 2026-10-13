@@ -130,6 +130,77 @@ describe('ManagedWindowFocus', () => {
     cancel();
   });
 
+  it.each([
+    'pointerdown',
+    'keydown',
+    'focusin',
+    'visibilitychange',
+    'blur',
+    'pagehide',
+  ])('yields queued window focus to newer %s intent', (type) => {
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const opener = document.createElement('button');
+    const root = document.createElement('section');
+    const inside = document.createElement('button');
+    root.append(inside);
+    document.body.append(opener, root);
+    opener.focus();
+
+    const cancel = scheduleManagedWindowFocus({ root });
+    const eventTarget = type === 'blur' || type === 'pagehide' ? window : document;
+    eventTarget.dispatchEvent(type === 'keydown'
+      ? new KeyboardEvent(type, { key: 'Tab', bubbles: true })
+      : new Event(type, { bubbles: true }));
+    frames[0]?.(0);
+
+    expect(document.activeElement).toBe(opener);
+    expect(inside).not.toHaveFocus();
+    expect(window.cancelAnimationFrame).toHaveBeenCalledWith(1);
+    cancel();
+  });
+
+  it('still transfers focus when no newer interaction occurs', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const opener = document.createElement('button');
+    const root = document.createElement('section');
+    const inside = document.createElement('button');
+    root.append(inside);
+    document.body.append(opener, root);
+    opener.focus();
+
+    const cancel = scheduleManagedWindowFocus({ root });
+    expect(document.activeElement).toBe(opener);
+    frames[0]?.(0);
+    expect(document.activeElement).toBe(inside);
+    cancel();
+  });
+
+  it('removes intent listeners after a successful frame', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const opener = document.createElement('button');
+    const root = document.createElement('section');
+    root.append(document.createElement('button'));
+    document.body.append(opener, root);
+    opener.focus();
+    scheduleManagedWindowFocus({ root });
+    frames[0]?.(0);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    window.dispatchEvent(new Event('pagehide'));
+    expect(window.cancelAnimationFrame).not.toHaveBeenCalled();
+  });
+
   it('invalidates an already queued frame after cancellation or close', () => {
     const frames: FrameRequestCallback[] = [];
     vi.mocked(window.requestAnimationFrame).mockImplementation((callback) => {
