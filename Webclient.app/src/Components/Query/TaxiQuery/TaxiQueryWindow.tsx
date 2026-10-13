@@ -302,7 +302,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
       void safeClientLog(
         LoggingBusiness,
         'Taksi/Sorgu',
-        `${query.districtName}/${query.nbhoodName}/${query.name}`,
+        'taxi-query-started',
         globalThis.reportError,
       );
 
@@ -408,7 +408,7 @@ export const TaxiQueryWindow = forwardRef<ManagedQueryWindowHandle, TaxiQueryWin
       void safeClientLog(
         LoggingBusiness,
         'Taksi/Detay Göster',
-        `${item.ObjectId ?? ''}/${item.Title}`,
+        'taxi-item-action',
         globalThis.reportError,
       );
 

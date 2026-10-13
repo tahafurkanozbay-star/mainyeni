@@ -11,6 +11,13 @@ for (const [path, minimumCalls] of [
   ['Webclient.app/src/Components/Query/GenelAramaQuery/GenelAramaQeryWindow.tsx', 1],
   ['Webclient.app/src/Components/Query/ParklarQuery/ParklarQueryWindow.tsx', 3],
   ['Webclient.app/src/Components/Query/VicinityQuery/VicinityQueryWindow.tsx', 3],
+  ['Webclient.app/src/Components/Query/EventQuery/EventQueryWindow.tsx', 2],
+  ['Webclient.app/src/Components/Query/FastAccessQuery/FastAccessQueryWindow.tsx', 2],
+  ['Webclient.app/src/Components/Query/NumberingQuery/NumberingQueryWindow.tsx', 1],
+  ['Webclient.app/src/Components/Query/PodQuery/PodQueryWindow.tsx', 4],
+  ['Webclient.app/src/Components/Query/RouteQuery/RouteQueryWindow.tsx', 3],
+  ['Webclient.app/src/Components/Query/TaxiQuery/TaxiQueryWindow.tsx', 2],
+  ['Webclient.app/src/Components/Query/TransitRouteQuery/TransitRouteQueryWindow.tsx', 2],
 ] as const) {
   test(`production client log privacy: ${path}`, () => {
     const text = readFileSync(decodeURIComponent(new URL(`../../${path}`, import.meta.url).pathname), 'utf8');

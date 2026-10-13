@@ -403,7 +403,7 @@ export const FastAccessQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       `Hızlı Erişim/Detay Göster/${windowTitle}`,
-      `${String(item.objectId)}/${item.title}`,
+      'fast-access-item-action',
     );
 
     try {
@@ -445,7 +445,7 @@ export const FastAccessQueryWindow = forwardRef<
       void safeClientLog(
         LoggingBusiness,
         `Hızlı Erişim/Yol Tarifi/${windowTitle}`,
-        `${String(item.objectId)}/${item.title}`,
+        'fast-access-item-action',
       );
     } catch (routeError) {
       if (detailAbortRef.current?.signal.aborted) return;
