@@ -24,6 +24,7 @@ import {
 } from '../../../data-services/kentRehberiGeoJsonLayer';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
+import { scheduleOwnedResultFocus } from './ResultPageFocus';
 import { ServiceWindowActions } from './ServiceWindowActions';
 import { QUERY_RESULT_PAGE_POLICY, normalizeQueryResultPageSize } from './QueryResultPaging';
 import {
@@ -291,7 +292,7 @@ export function createManagedFastAccessQueryWindow({
     const queryAbortRef = useRef<AbortController | null>(null);
     const actionAbortRef = useRef<AbortController | null>(null);
     const rootRef = useRef<HTMLElement | null>(null);
-    const pageFocusFrameRef = useRef<number | null>(null);
+    const pageFocusCancelRef = useRef<(() => void) | null>(null);
     const initialExtentRef = useRef<unknown>(null);
     const visible = windowManager.IsVisible?.(id) ?? true;
     const minimized = windowManager.IsMinimized?.(id) ?? false;
@@ -305,10 +306,25 @@ export function createManagedFastAccessQueryWindow({
     const [activeActionKey, setActiveActionKey] = useState('');
 
     const cancelPageFocus = useCallback((): void => {
-      if (pageFocusFrameRef.current === null) return;
-      window.cancelAnimationFrame(pageFocusFrameRef.current);
-      pageFocusFrameRef.current = null;
+      pageFocusCancelRef.current?.();
+      pageFocusCancelRef.current = null;
     }, []);
+
+    const schedulePageFocus = (event: React.MouseEvent<HTMLButtonElement>, index: number): void => {
+      cancelPageFocus();
+      const requestId = requestGateRef.current.current();
+      pageFocusCancelRef.current = scheduleOwnedResultFocus({
+        trigger: event.currentTarget,
+        detail: event.detail,
+        isCurrent: () => mountedRef.current
+          && requestGateRef.current.isCurrent(requestId)
+          && rootRef.current?.getAttribute('aria-hidden') !== 'true'
+          && !rootRef.current?.hasAttribute('data-minimized'),
+        resolveTarget: () => rootRef.current
+          ?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[index]
+          ?.querySelector<HTMLElement>('button') ?? null,
+      });
+    };
 
     const clearOwnedLayer = useCallback((): void => {
       const envelope = layerRef.current as LayerEnvelope | null;
@@ -753,17 +769,11 @@ export function createManagedFastAccessQueryWindow({
                   type="button"
                   className="kr-fast-query__more"
                   aria-controls={id + '-results'}
-                  onClick={() => {
+                  onClick={(event) => {
                     const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
                     setPageStart(previousStart);
                     setVisibleCount(Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, filteredRecords.length - previousStart));
-                    cancelPageFocus();
-                    const requestId = requestGateRef.current.current();
-                    pageFocusFrameRef.current = window.requestAnimationFrame(() => {
-                      pageFocusFrameRef.current = null;
-                      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-                      rootRef.current?.querySelector<HTMLElement>('.kr-fast-query__item button')?.focus();
-                    });
+                    schedulePageFocus(event, 0);
                   }}
                 >
                   Önceki sonuçlara dön
@@ -776,22 +786,12 @@ export function createManagedFastAccessQueryWindow({
                     className="kr-fast-query__more"
                     aria-controls={id + '-results'}
                     onClick={(event) => {
-                      const requestId = requestGateRef.current.current();
-                      const documentRef = event.currentTarget.ownerDocument;
-                      const trigger = event.currentTarget;
-                      const ownedFocus = documentRef.activeElement === trigger;
                       setVisibleCount((count) => Math.min(
                         count + pageSize,
                         QUERY_RESULT_PAGE_POLICY.maxPageSize,
                         filteredRecords.length - pageStart,
                       ));
-                      cancelPageFocus();
-                      pageFocusFrameRef.current = window.requestAnimationFrame(() => {
-                        pageFocusFrameRef.current = null;
-                        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-                        if (!ownedFocus || (documentRef.activeElement !== trigger && !(!trigger.isConnected && documentRef.activeElement === documentRef.body))) return;
-                        rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
-                      });
+                      schedulePageFocus(event, visibleCount);
                     }}
                   >
                     Daha fazla sonuç göster ({filteredRecords.length - pageStart - visibleCount} kaldı)
@@ -801,16 +801,10 @@ export function createManagedFastAccessQueryWindow({
                     type="button"
                     className="kr-fast-query__more"
                     aria-controls={id + '-results'}
-                    onClick={() => {
+                    onClick={(event) => {
                       setPageStart(pageStart + visibleCount);
                       setVisibleCount(pageSize);
-                      cancelPageFocus();
-                      const requestId = requestGateRef.current.current();
-                      pageFocusFrameRef.current = window.requestAnimationFrame(() => {
-                        pageFocusFrameRef.current = null;
-                        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-                        rootRef.current?.querySelector<HTMLElement>('.kr-fast-query__item button')?.focus();
-                      });
+                      schedulePageFocus(event, 0);
                     }}
                   >
                     Sonraki sonuçlara geç
