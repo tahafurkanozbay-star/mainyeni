@@ -776,8 +776,10 @@ export function createManagedFastAccessQueryWindow({
                     className="kr-fast-query__more"
                     aria-controls={id + '-results'}
                     onClick={(event) => {
-                      const button = event.currentTarget;
                       const requestId = requestGateRef.current.current();
+                      const documentRef = event.currentTarget.ownerDocument;
+                      const trigger = event.currentTarget;
+                      const ownedFocus = documentRef.activeElement === trigger;
                       setVisibleCount((count) => Math.min(
                         count + pageSize,
                         QUERY_RESULT_PAGE_POLICY.maxPageSize,
@@ -787,7 +789,7 @@ export function createManagedFastAccessQueryWindow({
                       pageFocusFrameRef.current = window.requestAnimationFrame(() => {
                         pageFocusFrameRef.current = null;
                         if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-                        if (document.activeElement !== button && document.activeElement !== document.body) return;
+                        if (!ownedFocus || (documentRef.activeElement !== trigger && !(!trigger.isConnected && documentRef.activeElement === documentRef.body))) return;
                         rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
                       });
                     }}
