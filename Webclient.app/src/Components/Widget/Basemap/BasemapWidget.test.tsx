@@ -1,4 +1,4 @@
-import { createRef } from 'react';
+import { StrictMode, createRef } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
@@ -130,4 +130,64 @@ describe('native on-demand basemap selection', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Topoğrafya$/ })); await waitFor(() => expect(map.basemap?.id).toBe('topo'));
     unmount(); expect(runtime.destroyed).toHaveBeenCalledTimes(17); expect(windowManager.UnregisterWindow).toHaveBeenCalledTimes(1);
   });
+  it('keeps the catalog usable through StrictMode replay', async () => {
+    const windowManager = createWindowManager();
+    const ref = createRef<ManagedWindowHandle>();
+    render(<StrictMode><BasemapWidget id="basemap-test" windowManager={windowManager} ref={ref} /></StrictMode>);
+    await optionsReady();
+    fireEvent.click(screen.getByRole('button', { name: /^Topoğrafya$/ }));
+    await waitFor(() => expect(map.basemap?.id).toBe('topo'));
+    expect(screen.getByRole('button', { name: /^Topoğrafya$/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('ignores an obsolete catalog rejection after close and reopen', async () => {
+    let rejectOld: (error: Error) => void = () => undefined;
+    runtime.loadModules.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
+    const { ref } = renderWidget();
+    await waitFor(() => expect(runtime.loadModules).toHaveBeenCalledTimes(1));
+    await act(async () => { ref.current?.OnClose?.(); ref.current?.OnShow?.(); });
+    await optionsReady();
+    await act(async () => { rejectOld(new Error('obsolete private details')); });
+    expect(screen.queryByText('Altlık seçenekleri açılamadı')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Açık gri$/ }));
+    await waitFor(() => expect(map.basemap?.id).toBe('gray'));
+  });
+
+  it('does not apply a late selection to a superseded map', async () => {
+    let finish: () => void = () => undefined;
+    runtime.load.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    renderWidget(); await optionsReady();
+    fireEvent.click(screen.getByRole('button', { name: /^Topoğrafya$/ }));
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledTimes(1));
+    const nextMap = { basemap: { id: 'gray' } };
+    runtime.getMapView.mockReturnValue({ map: nextMap });
+    await act(async () => { finish(); });
+    expect(map.basemap?.id).toBe('osm');
+    expect(nextMap.basemap.id).toBe('gray');
+    expect(runtime.destroyed).toHaveBeenCalledTimes(18);
+    expect(screen.queryByText(/Seçilen altlık yükleniyor/)).toBeNull();
+  });
+
+  it('explains unavailable map readiness instead of silently ignoring selection', async () => {
+    renderWidget(); await optionsReady();
+    runtime.getMapView.mockReturnValue(null);
+    fireEvent.click(screen.getByRole('button', { name: /^Topoğrafya$/ }));
+    expect(screen.getByText(/harita görünümünün hazır olmasını bekleyin/)).toBeVisible();
+    expect(runtime.load).not.toHaveBeenCalled();
+  });
+
+  it('restores modeless opener focus when the real window hides', async () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Altlıkları aç'; document.body.appendChild(opener); opener.focus();
+    const { ref, windowManager, rerender } = renderWidget(false);
+    windowManager.IsVisible.mockReturnValue(true);
+    rerender(<BasemapWidget id="basemap-test" windowManager={windowManager} ref={ref} />);
+    await act(async () => { ref.current?.OnShow?.(); });
+    await optionsReady();
+    screen.getByRole('button', { name: /^Topoğrafya$/ }).focus();
+    windowManager.IsVisible.mockReturnValue(false);
+    rerender(<BasemapWidget id="basemap-test" windowManager={windowManager} ref={ref} />);
+    expect(opener).toHaveFocus(); opener.remove();
+  });
+
 });

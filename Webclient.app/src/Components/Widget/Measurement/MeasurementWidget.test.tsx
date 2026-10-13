@@ -197,8 +197,10 @@ const createFakeController = (
 
 const createWindowManager = (visible = true) => ({
   RegisterWindow: vi.fn(),
+  UnregisterWindow: vi.fn(),
   ShowWindow: vi.fn(),
   IsVisible: vi.fn(() => visible),
+  IsMinimized: vi.fn(() => false),
   CloseWindow: vi.fn(),
   MinimizeWindow: vi.fn(),
   OpenWindow: vi.fn(),
@@ -281,7 +283,7 @@ describe('MeasurementWidget', () => {
       await Promise.resolve();
     });
 
-    unmount();
+    await act(async () => { unmount(); });
 
     expect(currentController.dispose).toHaveBeenCalledTimes(1);
     expect(focusDispose).toHaveBeenCalledTimes(1);
@@ -436,13 +438,13 @@ describe('MeasurementWidget', () => {
   it('renders measurement canvas instructions as an accessible description', () => {
     renderWidget();
     const canvas = screen.getByLabelText('ArcGIS ölçüm denetimi');
-    expect(canvas).toHaveAttribute('aria-describedby', 'measurement-widget-canvas-help');
-    expect(screen.getByText(/Ölçüm aracını seçtikten sonra/)).toHaveAttribute('id', 'measurement-widget-canvas-help');
+    expect(canvas).toHaveAttribute('aria-describedby', 'measurement-window-canvas-help');
+    expect(screen.getByText(/Ölçüm aracını seçtikten sonra/)).toHaveAttribute('id', 'measurement-window-canvas-help');
   });
 
   it('renders user-facing introduction instead of relying on icon-only controls', () => {
     renderWidget();
-    expect(screen.getByText(/Harita üzerinde alan ve mesafe ölçün/)).toBeInTheDocument();
+    expect(screen.getByText('Alan veya mesafe aracını seçin, ardından haritada ölçmek istediğiniz noktaları işaretleyin.')).toBeInTheDocument();
   });
 
   it('routes the recovery action to bounded controller retry', () => {
@@ -529,4 +531,40 @@ describe('MeasurementWidget', () => {
 
     expect(createController).toHaveBeenCalledTimes(1);
   });
+  it('keeps the SDK host and session while minimized content is hidden', () => {
+    const { container, rerender, ref, windowManager } = renderWidget();
+    const host = container.querySelector('#measurement-window-measurement-sdk');
+    const body = container.querySelector('.measurement-widget__body');
+    expect(host).not.toBeNull();
+    windowManager.IsMinimized.mockReturnValue(true);
+    rerender(<MeasurementWidget ref={ref} id="measurement-window" windowManager={windowManager} />);
+    expect(body).toHaveAttribute('hidden');
+    expect(container.querySelector('#measurement-window-measurement-sdk')).toBe(host);
+    expect(currentController.close).not.toHaveBeenCalled();
+    windowManager.IsMinimized.mockReturnValue(false);
+    rerender(<MeasurementWidget ref={ref} id="measurement-window" windowManager={windowManager} />);
+    expect(body).not.toHaveAttribute('hidden');
+    expect(createController).toHaveBeenCalledTimes(1);
+  });
+
+  it('survives StrictMode replay and disposes only after a real unmount', async () => {
+    currentController = createFakeController();
+    const ref = createRef<MeasurementWindowHandle>();
+    const windowManager = createWindowManager();
+    const view = render(<React.StrictMode><MeasurementWidget ref={ref} id="measurement-window" windowManager={windowManager} /></React.StrictMode>);
+    await act(async () => { ref.current?.OnShow(); });
+    expect(currentController.dispose).not.toHaveBeenCalled();
+    expect(currentController.open).toHaveBeenCalledTimes(1);
+    expect(view.container.querySelectorAll('#measurement-window-measurement-sdk')).toHaveLength(1);
+    await act(async () => { view.unmount(); });
+    expect(currentController.dispose).toHaveBeenCalledTimes(1);
+    expect(windowManager.UnregisterWindow).toHaveBeenCalledTimes(2);
+  });
+
+  it('unregisters the exact owned handle on unmount', async () => {
+    const { ref, windowManager, unmount } = renderWidget();
+    await act(async () => { unmount(); });
+    expect(windowManager.UnregisterWindow).toHaveBeenCalledWith('measurement-window', ref);
+  });
+
 });

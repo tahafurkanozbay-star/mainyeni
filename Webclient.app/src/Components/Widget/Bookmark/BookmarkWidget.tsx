@@ -14,6 +14,7 @@ import {
 } from 'react';
 import { Constants_ConfigKeys } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
+import { useMapWidgetFocus } from '../_shared/useMapWidgetFocus';
 import { LocalStorageHelper } from '../../../Toolbox/LocalStorageHelper';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import {
@@ -37,18 +38,31 @@ export interface BookmarkWidgetProps {
 
 const NoticeGlyph = ({ severity }: { readonly severity: 'info' | 'warning' | 'error' }) => (
   <span className="bookmark-modern__notice-glyph" aria-hidden="true">
-    {severity === 'error' ? '!' : severity === 'warning' ? '△' : '✓'}
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+      <path d={severity === 'warning' ? 'm12 3 10 18H2L12 3Z M12 9v5 M12 17h.01' : severity === 'error' ? 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M12 7v6 M12 17h.01' : 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z m-4 9 3 3 5-6'} />
+    </svg>
   </span>
 );
 
-const ActionGlyph = ({ kind }: { readonly kind: 'save' | 'locate' | 'delete' | 'search' }) => (
+const ActionGlyph = ({ kind }: { readonly kind: 'save' | 'locate' | 'delete' | 'search' | 'grid' | 'list' | 'keyboard' }) => (
   <span className="bookmark-modern__glyph" aria-hidden="true">
-    {kind === 'save' ? '+' : kind === 'locate' ? '↗' : kind === 'delete' ? '×' : '⌕'}
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+      <path d={{
+        save: 'M12 5v14 M5 12h14',
+        locate: 'M6 18 18 6 M7 6h11v11',
+        delete: 'm6 6 12 12 M6 18 18 6',
+        search: 'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z m5 12 6 6',
+        grid: 'M3 3h7v7H3V3Z M14 3h7v7h-7V3Z M3 14h7v7H3v-7Z M14 14h7v7h-7v-7Z',
+        list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
+        keyboard: 'M3 5h18v14H3V5Z M7 9h.01 M12 9h.01 M17 9h.01 M7 13h.01 M12 13h.01 M17 13h.01 M7 16h10',
+      }[kind]} />
+    </svg>
   </span>
 );
 
 export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProps>(
   ({ id, windowManager }, ref): ReactNode => {
+    useMapWidgetFocus(id, windowManager.IsVisible(id));
     const [title, setTitle] = useState('');
     const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
     const searchRef = useRef<HTMLInputElement | null>(null);
@@ -56,6 +70,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
     const collectionRef = useRef<HTMLDivElement | null>(null);
     const confirmDeleteRef = useRef<HTMLButtonElement | null>(null);
     const focusReturnRef = useRef<{ key: string; source: 'collection' | 'action' } | null>(null);
+    const mountedRef = useRef(false);
 
     const model = useMemo(() => createBookmarkExperienceModel({ pageSize: 6 }), []);
     const controller = useMemo(() => createBookmarkInteractionController({
@@ -91,6 +106,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
         refreshBookmarks();
       },
       OnClose: () => {
+        controller.cancelNavigation();
         setTitle('');
         setPendingDeleteKey(null);
         focusReturnRef.current = null;
@@ -100,17 +116,23 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
     }), [controller, id, model, refreshBookmarks, windowManager]);
 
     useEffect(() => {
+      mountedRef.current = true;
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
       refreshBookmarks();
       return () => {
+        mountedRef.current = false;
         windowManager.UnregisterWindow?.(id, ref as RefObject<ManagedWindowHandle | null>);
-        controller.dispose();
-        model.dispose();
+        controller.cancelNavigation();
+        queueMicrotask(() => {
+          if (mountedRef.current) return;
+          controller.dispose();
+          model.dispose();
+        });
       };
     }, [controller, id, model, ref, refreshBookmarks, windowManager]);
 
     useEffect(() => {
-      if (!activeEntry) return;
+      if (!activeEntry || document.activeElement !== collectionRef.current) return;
       const node = document.getElementById(activeEntry.id);
       node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }, [activeEntry]);
@@ -273,7 +295,7 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                   aria-pressed={snapshot.viewMode === 'grid'}
                   onClick={() => model.setViewMode('grid')}
                 >
-                  <span aria-hidden="true">▦</span>
+                  <ActionGlyph kind="grid" />
                   <span>Kart</span>
                 </button>
                 <button
@@ -282,14 +304,14 @@ export const BookmarkWidget = forwardRef<ManagedWindowHandle, BookmarkWidgetProp
                   aria-pressed={snapshot.viewMode === 'list'}
                   onClick={() => model.setViewMode('list')}
                 >
-                  <span aria-hidden="true">☷</span>
+                  <ActionGlyph kind="list" />
                   <span>Liste</span>
                 </button>
               </div>
             </div>
 
             <p id={`${id}-bookmark-keyboard-help`} className="bookmark-modern__keyboard-help">
-              <span aria-hidden="true" className="bookmark-modern__keyboard-key">⌨</span>
+              <span aria-hidden="true" className="bookmark-modern__keyboard-key"><ActionGlyph kind="keyboard" /></span>
               <span>{bookmarkKeyboardHelpText()}</span>
             </p>
 
