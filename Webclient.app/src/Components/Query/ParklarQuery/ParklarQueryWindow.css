@@ -59,3 +59,11 @@
     outline-offset: 2px;
   }
 }
+
+/* Detail feedback is a distinct, readable live status below the query summary. */
+.kr-park-query__detail-status {
+  flex: 0 0 auto;
+  margin: 0 12px 8px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}

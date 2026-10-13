@@ -152,6 +152,7 @@ describe('Parklar service window', () => {
     await act(async () => { await ref.current?.OnShow(); });
     fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
     fireEvent.click(screen.getByRole('button', { name: 'Park 2 konumunu haritada göster' }));
+    await act(async () => { await Promise.resolve(); }); // Flush both deadline-owned transport starts.
     const firstSignal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
     expect(firstSignal?.aborted).toBe(true);
     await act(async () => {
@@ -259,7 +260,10 @@ describe('Parklar service window', () => {
       const primary = screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' });
       fireEvent.click(primary);
       expect(primary).toHaveAttribute('aria-busy', 'true');
-      expect(screen.getByText('Park konumu hazırlanıyor…')).toBeVisible();
+      const pendingStatus = screen.getByText('Park konumu hazırlanıyor…').closest('output');
+      expect(pendingStatus).toBeVisible();
+      expect(pendingStatus).toHaveAttribute('aria-live', 'polite');
+      expect(pendingStatus).not.toHaveAttribute('aria-busy');
       await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
       const signal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
       expect(signal?.aborted).toBe(true);

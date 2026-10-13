@@ -721,7 +721,6 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           <ExperienceStatus
             tone={detailFeedback.tone}
             live={detailFeedback.tone === 'danger' ? 'assertive' : 'polite'}
-            busy={activeDetail !== null}
             className="kr-park-query__detail-status"
           >
             {detailFeedback.message}
