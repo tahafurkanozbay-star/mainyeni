@@ -11,7 +11,7 @@ test('Deno package script sources must be local reviewed files', () => {
   ]) {
     assert.throws(
       () => collectPackageScriptInvocations(command),
-      (error) => error.code === 'unreviewed-runtime-execution-script',
+      (error: unknown) => (error as { code?: string }).code === 'unreviewed-runtime-execution-script',
       command,
     );
   }
