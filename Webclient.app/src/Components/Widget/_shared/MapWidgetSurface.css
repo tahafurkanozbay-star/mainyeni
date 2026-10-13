@@ -2,7 +2,7 @@
   --widget-surface: color-mix(in srgb, var(--exp-surface, #ffffff) 96%, transparent);
   --widget-surface-muted: color-mix(in srgb, var(--exp-surface, #ffffff) 88%, var(--exp-text, #172033));
   --widget-text: var(--exp-text, #172033);
-  --widget-text-muted: var(--exp-text-muted, #5e6878);
+  --widget-text-muted: var(--exp-text-soft, #5e6878);
   --widget-border: var(--exp-border, #d7dde6);
   --widget-accent: var(--exp-accent, #0b6fcb);
   --widget-accent-soft: color-mix(in srgb, var(--widget-accent) 12%, transparent);
@@ -43,6 +43,12 @@
   border-bottom: 1px solid color-mix(in srgb, var(--widget-border) 72%, transparent);
   background: color-mix(in srgb, var(--widget-surface) 94%, transparent);
   gap: 12px;
+}
+
+.map-widget-surface__window-tools {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
 }
 
 .map-widget-surface__identity {
