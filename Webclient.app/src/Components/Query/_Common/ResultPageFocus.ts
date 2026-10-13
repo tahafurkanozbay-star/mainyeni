@@ -12,6 +12,15 @@ export interface OwnedResultFocusOptions {
   readonly isCurrent: () => boolean;
 }
 
+/** Walk only open shadow roots; closed roots cannot be inspected safely. */
+const activeFocusElement = (documentRef: Document): Element | null => {
+  let active = documentRef.activeElement;
+  while (active?.shadowRoot?.activeElement) {
+    active = active.shadowRoot.activeElement;
+  }
+  return active;
+};
+
 export const scheduleOwnedResultFocus = ({
   trigger,
   detail,
@@ -20,14 +29,14 @@ export const scheduleOwnedResultFocus = ({
 }: OwnedResultFocusOptions): (() => void) => {
   const documentRef = trigger.ownerDocument;
   const view = documentRef.defaultView;
-  if (!view || detail !== 0 || documentRef.activeElement !== trigger) {
+  if (!view || detail !== 0 || activeFocusElement(documentRef) !== trigger) {
     return () => undefined;
   }
 
   let cancelled = false;
   const frame = view.requestAnimationFrame(() => {
     if (cancelled || !isCurrent()) return;
-    const currentFocus = documentRef.activeElement;
+    const currentFocus = activeFocusElement(documentRef);
     const stillOwned = currentFocus === trigger
       || (!trigger.isConnected && currentFocus === documentRef.body);
     if (!stillOwned) return;
