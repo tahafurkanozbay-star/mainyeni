@@ -1,6 +1,7 @@
 import { AppConfig } from '../Core/AppConfig';
 import { AuthBusiness } from './AuthBusiness';
 import { HttpBusiness } from './HttpBusiness';
+import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export interface FeedbackType {
   readonly id: number;
@@ -14,16 +15,21 @@ const FEEDBACK_TYPES: readonly FeedbackType[] = Object.freeze([
 ]);
 
 export const FeedbackBusiness = Object.freeze({
-  SendFeedBack: async (formData: unknown): Promise<unknown | null> => {
-    const headers = await AuthBusiness.GetRequestHeaders();
-
+  SendFeedBack: async (formData: unknown, options: Readonly<{ signal?: AbortSignal }> = {}): Promise<unknown | null> => {
     try {
+      options.signal?.throwIfAborted();
+      const headers = await AuthBusiness.GetRequestHeaders();
+      options.signal?.throwIfAborted();
       return await HttpBusiness.Post(
         AppConfig.Api.BaseUrl + '/Feedback/Save',
         formData,
-        { headers },
+        { headers, ...(options.signal ? { signal: options.signal } : {}) },
       );
-    } catch {
+    } catch (error) {
+      if (!options.signal?.aborted) {
+        try { runtimeDiagnostics.captureError(error, { source: 'feedback-business.submit' }, 'warn'); }
+        catch { console.warn('Feedback diagnostic reporting failed.'); }
+      }
       return null;
     }
   },

@@ -195,8 +195,11 @@ export const openExternalUrl = (
 export const normalizeMapPoint = (point: unknown): NormalizedMapPoint | null => {
   if (!point || typeof point !== 'object' || Array.isArray(point)) return null;
   const candidate = point as MapPointLike;
-  const latitude = finiteNumber(candidate.latitude ?? candidate.y);
-  const longitude = finiteNumber(candidate.longitude ?? candidate.x);
+  const coordinate = (value: unknown): number | null => (
+    (typeof value === 'number' || (typeof value === 'string' && value.trim())) ? finiteNumber(value) : null
+  );
+  const latitude = coordinate(candidate.latitude ?? candidate.y);
+  const longitude = coordinate(candidate.longitude ?? candidate.x);
   if (latitude === null || longitude === null) return null;
   if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
   return Object.freeze({ latitude, longitude });

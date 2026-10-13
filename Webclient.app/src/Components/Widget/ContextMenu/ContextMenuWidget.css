@@ -41,7 +41,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   touch-action: manipulation;
   transition:
@@ -109,7 +109,7 @@
 .context-menu-item-text {
   overflow: hidden;
   color: var(--exp-text, #172033);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 760;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -119,8 +119,8 @@
 .context-menu-container .experience-menu__description {
   display: -webkit-box;
   overflow: hidden;
-  color: var(--exp-text-muted, #657184);
-  font-size: 11px;
+  color: var(--exp-text-soft, #657184);
+  font-size: 13px;
   font-weight: 540;
   line-height: 1.25;
   -webkit-box-orient: vertical;
