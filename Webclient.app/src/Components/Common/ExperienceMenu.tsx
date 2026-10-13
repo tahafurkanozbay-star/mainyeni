@@ -17,6 +17,7 @@ import {
   resolveRovingTypeaheadMove,
   type RovingFocusItem,
 } from '../../experience/rovingFocusRuntime';
+import { getDeepActiveElement } from '../../experience/focusCandidate';
 import './ExperiencePrimitives.css';
 
 export type ExperienceMenuDismissReason = 'escape' | 'tab';
@@ -100,12 +101,12 @@ export function ExperienceMenu({
     if (nextIndex < 0) return undefined;
     setActiveIndex(nextIndex);
     const focusDocument = rootRef.current?.ownerDocument;
-    const focusBeforeSchedule = focusDocument?.activeElement;
+    const focusBeforeSchedule = focusDocument ? getDeepActiveElement(focusDocument) : null;
     queueMicrotask(() => {
       if (cancelled) return;
       // A menu opening must not override a later user-initiated focus move.
       // A detached opener may legitimately fall back to document.body.
-      const currentFocus = focusDocument?.activeElement;
+      const currentFocus = focusDocument ? getDeepActiveElement(focusDocument) : null;
       if (currentFocus !== focusBeforeSchedule && !(
         currentFocus === focusDocument?.body && focusBeforeSchedule && !focusBeforeSchedule.isConnected
       )) return;

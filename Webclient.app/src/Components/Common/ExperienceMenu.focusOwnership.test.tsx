@@ -39,6 +39,38 @@ describe('ExperienceMenu pending autofocus ownership', () => {
     }
   });
 
+
+  it('does not steal focus from a sibling inside the same open ShadowRoot', () => {
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const opener = document.createElement('button');
+    const sibling = document.createElement('button');
+    shadow.append(opener, sibling);
+    document.body.append(host);
+    const view = render(
+      <ExperienceMenu label="Harita işlemleri" items={items} visible={false} autoFocusWhenVisible />,
+    );
+    const pending: VoidFunction[] = [];
+    const spy = vi.spyOn(globalThis, 'queueMicrotask').mockImplementation((callback) => {
+      pending.push(callback);
+    });
+    try {
+      opener.focus();
+      view.rerender(
+        <ExperienceMenu label="Harita işlemleri" items={items} visible autoFocusWhenVisible />,
+      );
+      expect(pending.length).toBeGreaterThan(0);
+      sibling.focus();
+      expect(document.activeElement).toBe(host);
+      act(() => { pending.splice(0).forEach((callback) => callback()); });
+      expect(shadow.activeElement).toBe(sibling);
+      expect(screen.getByRole('menuitem', { name: 'Bilgi Al' })).not.toHaveFocus();
+    } finally {
+      spy.mockRestore();
+      view.unmount();
+    }
+  });
+
   it('still moves focus to the first available menu action when ownership is retained', () => {
     const opener = document.createElement('button');
     document.body.append(opener);
