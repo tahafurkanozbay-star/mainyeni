@@ -48,7 +48,7 @@ export const MapModeTransitionControl = ({
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const next = event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'Home'
       ? '2d'
       : event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'End'
@@ -86,6 +86,11 @@ export const MapModeTransitionControl = ({
         aria-describedby={statusId + ' ' + keyboardHelpId}
         aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
         onKeyDown={handleKeyDown}
+        onBlur={(event) => {
+          // Preserve the roving position between segments; after leaving,
+          // the current active view should own the next keyboard tab stop.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusedMode(null);
+        }}
       >
         {(['2d', '3d'] as const).map((mode) => {
           const active = snapshot.activeMode === mode;

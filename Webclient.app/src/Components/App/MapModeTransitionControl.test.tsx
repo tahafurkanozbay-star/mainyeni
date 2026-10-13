@@ -91,6 +91,62 @@ describe('MapModeTransitionControl', () => {
     expect(document.activeElement).toBe(map);
   });
 
+  it('returns the keyboard tab stop to the active view after leaving the group', () => {
+    const { model } = renderControl();
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    const scene = screen.getByRole('button', { name: '3B sahne görünümüne geç' });
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      scene.focus();
+      expect(scene.tabIndex).toBe(0);
+      expect(map.tabIndex).toBe(-1);
+      outside.focus();
+      expect(map.tabIndex).toBe(0);
+      expect(scene.tabIndex).toBe(-1);
+
+      act(() => model.acknowledge('3d', 'runtime'));
+      expect(scene.tabIndex).toBe(0);
+      expect(map.tabIndex).toBe(-1);
+      map.focus();
+      expect(map.tabIndex).toBe(0);
+      outside.focus();
+      expect(scene.tabIndex).toBe(0);
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('retains the focused tab stop when moving between mode segments', () => {
+    renderControl();
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    const scene = screen.getByRole('button', { name: '3B sahne görünümüne geç' });
+    map.focus();
+    scene.focus();
+    expect(scene).toHaveFocus();
+    expect(scene.tabIndex).toBe(0);
+    expect(map.tabIndex).toBe(-1);
+  });
+
+  it('does not hijack composing or previously handled map-mode key events', () => {
+    const { onRequest } = renderControl();
+    const group = screen.getByRole('group', { name: '2B ve 3B görünüm seçimi' });
+    const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
+    map.focus();
+    const composing = new KeyboardEvent('keydown', {
+      key: 'ArrowRight', isComposing: true, bubbles: true, cancelable: true,
+    });
+    group.dispatchEvent(composing);
+    const handled = new KeyboardEvent('keydown', {
+      key: 'ArrowRight', bubbles: true, cancelable: true,
+    });
+    handled.preventDefault();
+    group.dispatchEvent(handled);
+    expect(composing.defaultPrevented).toBe(false);
+    expect(map).toHaveFocus();
+    expect(onRequest).not.toHaveBeenCalled();
+  });
+
   it('does not capture modified shortcuts or Tab navigation', () => {
     const { onRequest } = renderControl();
     const group = screen.getByRole('group', { name: '2B ve 3B görünüm seçimi' });
