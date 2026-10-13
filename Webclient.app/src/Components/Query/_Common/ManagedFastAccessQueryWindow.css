@@ -284,3 +284,22 @@
     color: CanvasText;
   }
 }
+
+/* Shared query action targets are reachable on touch and narrow GIS panes. */
+.kr-fast-query__actions button,
+.kr-fast-query__paging-actions button {
+  min-height: 44px;
+  min-width: 0;
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .kr-fast-query__actions button,
+  .kr-fast-query__paging-actions button { min-height: 48px; }
+}
+
+@media (forced-colors: active) {
+  .kr-fast-query button:focus-visible,
+  .kr-fast-query input:focus-visible,
+  .kr-fast-query a:focus-visible { outline-color: Highlight; }
+}
