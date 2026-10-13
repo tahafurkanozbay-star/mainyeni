@@ -473,10 +473,12 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, []);
 
     const showItem = useCallback(async (item: ParkRecord): Promise<void> => {
+      const requestId = requestGateRef.current.current();
       void safeClientLog(LoggingBusiness, 'Parklar/Detay Göster', 'record-detail-opened', DebugHelper.Log);
 
       try {
         const itemDetails = await getItemDetailsById(item);
+        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
         const view = mapViewRef.current;
         if (!view || !itemDetails.geometry) {
           throw new Error('Konum bilgisi bulunamadı.');
@@ -488,17 +490,22 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           18,
         ));
 
+        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
         if (window.matchMedia?.('(max-width: 959px)').matches) {
           windowManager.ToggleMinimiseWindow(id);
         }
       } catch (error) {
-        reportError(error, 'Park konumu gösterilemedi.');
+        if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
+          reportError(error, 'Park konumu gösterilemedi.');
+        }
       }
     }, [getItemDetailsById, id, reportError, windowManager]);
 
     const showRoute = useCallback(async (item: ParkRecord): Promise<void> => {
+      const requestId = requestGateRef.current.current();
       try {
         const itemDetails = await getItemDetailsById(item);
+        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
         const routeUrl = createParkDirectionsUrl(itemDetails.geometry);
         if (!routeUrl) throw new Error('Koordinat bilgisi bulunamadı.');
         if (!openExternalSafely(routeUrl)) {
@@ -507,7 +514,9 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
         void safeClientLog(LoggingBusiness, 'Parklar/Yol Tarifi', 'external-route-requested', DebugHelper.Log);
       } catch (error) {
-        reportError(error, 'Yol tarifi alınamadı.');
+        if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
+          reportError(error, 'Yol tarifi alınamadı.');
+        }
       }
     }, [getItemDetailsById, reportError]);
 
