@@ -114,6 +114,7 @@
 
 .kr-fast-query__results {
   display: grid;
+  align-content: start;
   gap: 8px;
   min-height: 0;
   margin: 0;
