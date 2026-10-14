@@ -375,29 +375,29 @@ test('quoted reusable job uses cannot bypass job-level provenance', () => {
 });
 
 test('quoted job ID cannot bypass per-job timeout admission', () => {
-  const source = workflow() + '  "shadow":\\n    runs-on: ubuntu-latest\\n    steps:\\n      - run: echo bypass\\n';
+  const source = workflow() + '  "shadow":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo bypass\n';
   assert.ok(codes(evaluate(source)).includes('workflow-job-key-noncanonical'));
 });
 test('whitespace-separated job ID cannot bypass job governance', () => {
-  const source = workflow() + '  shadow :\\n    runs-on: ubuntu-latest\\n    steps:\\n      - run: echo bypass\\n';
+  const source = workflow() + '  shadow :\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo bypass\n';
   assert.ok(codes(evaluate(source)).includes('workflow-job-key-noncanonical'));
 });
 test('YAML job merge alias cannot import an unreviewed job graph', () => {
-  const source = workflow() + '  <<: *shadow_jobs\\n';
+  const source = workflow() + '  <<: *shadow_jobs\n';
   assert.ok(codes(evaluate(source)).includes('workflow-job-key-noncanonical'));
 });
 test('inline run step cannot interpolate untrusted GitHub expressions', () => {
-  const source = workflow().replace('      - name: Test\\n        run: node --test',
+  const source = workflow().replace('      - name: Test\n        run: node --test',
     '      - run: echo "${{ github.event.pull_request.title }}"');
   assert.ok(codes(evaluate(source)).includes('workflow-shell-expression'));
 });
 test('inline run block scalar is scanned for shell expressions', () => {
-  const source = workflow().replace('      - name: Test\\n        run: node --test',
-    '      - run: |\\n          echo "${{ github.event.pull_request.title }}"');
+  const source = workflow().replace('      - name: Test\n        run: node --test',
+    '      - run: |\n          echo "${{ github.event.pull_request.title }}"');
   assert.ok(codes(evaluate(source)).includes('workflow-shell-expression'));
 });
 test('quoted inline run key cannot bypass injection admission', () => {
-  const source = workflow().replace('      - name: Test\\n        run: node --test',
+  const source = workflow().replace('      - name: Test\n        run: node --test',
     '      - "run": echo "${{ github.event.pull_request.title }}"');
   assert.ok(codes(evaluate(source)).includes('workflow-shell-key-noncanonical'));
 });
@@ -407,11 +407,11 @@ test('whitespace-separated mapping run key is rejected', () => {
   assert.ok(codes(evaluate(source)).includes('workflow-shell-key-noncanonical'));
 });
 test('privileged workflow event sequence cannot bypass trigger review', () => {
-  const source = workflow().replace('on:\\n  pull_request:', 'on:\\n  - workflow_run');
+  const source = workflow().replace('on:\n  pull_request:', 'on:\n  - workflow_run');
   assert.ok(codes(evaluate(source)).includes('workflow-untrusted-trigger'));
 });
 test('safe canonical inline run retains a passing workflow baseline', () => {
-  const source = workflow().replace('      - name: Test\\n        run: node --test',
+  const source = workflow().replace('      - name: Test\n        run: node --test',
     '      - run: echo safe');
   assert.equal(evaluate(source).ok, true);
 });
