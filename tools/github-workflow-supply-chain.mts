@@ -231,6 +231,44 @@ export const auditWorkflowSource = (file, source) => {
       i = end - 1;
     }
   }
+  // YAML flow sequences, aliases and merged step mappings can resolve to
+  // executable uses/run keys without exposing a canonical line to the
+  // provenance and shell-injection checks. Fail closed on those structures.
+  if (jobsStart >= 0) {
+    let inJob = false;
+    let stepsSeen = 0;
+    for (let i = jobsStart + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.trim() && !/^\s/.test(line)) break;
+      if (/^  [A-Za-z0-9_-]+:\s*$/.test(line)) {
+        inJob = true;
+        stepsSeen = 0;
+        continue;
+      }
+      if (!inJob || isComment(line)) continue;
+      if (/^    (?:steps|['"]steps['"])\s*:/.test(line)) {
+        stepsSeen++;
+        if (stepsSeen > 1) {
+          findings.push(find('workflow-steps-duplicate', file, i + 1,
+            'Duplicate steps mappings can shadow the reviewed execution sequence.'));
+        }
+        if (!/^    steps:\s*(?:#.*)?$/.test(line)) {
+          findings.push(find('workflow-steps-format', file, i + 1,
+            'Steps must use a canonical block sequence without aliases or flow mappings.'));
+        }
+      }
+      if (/^ {6}-\s*\S/.test(line) &&
+        !/^ {6}-\s+(?:name|id|uses|run|if|env|with|shell|working-directory|continue-on-error|timeout-minutes):/.test(line)) {
+        findings.push(find('workflow-step-structure-unreviewed', file, i + 1,
+          'Step entries must begin with a canonical mapping key, not a flow map or alias.'));
+      }
+      if (/^ {8}<<\s*:/.test(line) ||
+        /^(?: {8}| {6}-\s+)(?:uses|run):\s*[&*][A-Za-z0-9_-]+(?:\s|$)/.test(line)) {
+        findings.push(find('workflow-step-structure-unreviewed', file, i + 1,
+          'Step merge aliases and executable scalar aliases are not reviewed.'));
+      }
+    }
+  }
   // YAML accepts quoted keys and whitespace before colons; these forms must
   // not bypass step-action provenance or reusable-workflow admission.
   for (let i = 0; i < lines.length; i++) {

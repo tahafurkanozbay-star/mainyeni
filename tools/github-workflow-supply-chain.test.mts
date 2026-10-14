@@ -415,3 +415,51 @@ test('safe canonical inline run retains a passing workflow baseline', () => {
     '      - run: echo safe');
   assert.equal(evaluate(source).ok, true);
 });
+
+test('flow-mapping action steps cannot bypass immutable provenance', () => {
+  const source = workflow().replace('      - name: Test\n        run: node --test',
+    '      - { uses: actions/setup-node@main }');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+test('flow-mapping shell steps cannot bypass expression review', () => {
+  const source = workflow().replace('      - name: Test\n        run: node --test',
+    '      - { run: echo "${{ github.event.pull_request.title }}" }');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+test('step sequence aliases cannot inject unreviewed executable actions', () => {
+  const source = workflow().replace('      - name: Test\n        run: node --test',
+    '      - *external_step');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+test('step anchors cannot conceal a noncanonical executable mapping', () => {
+  const source = workflow().replace('      - name: Test\n        run: node --test',
+    '      - &external_step run: echo unsafe');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+test('step YAML merge keys cannot import unreviewed execution fields', () => {
+  const source = workflow().replace('        run: node --test',
+    '        <<: *external_step');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+test('duplicate steps mappings cannot shadow an audited step sequence', () => {
+  const source = workflow().replace('      - name: Test',
+    '    steps:\n      - name: Test');
+  assert.ok(codes(evaluate(source)).includes('workflow-steps-duplicate'));
+});
+test('quoted steps mapping cannot bypass canonical step inspection', () => {
+  const source = workflow().replace('    steps:', "    'steps':");
+  assert.ok(codes(evaluate(source)).includes('workflow-steps-format'));
+});
+test('aliased steps sequence cannot bypass step provenance', () => {
+  const source = workflow().replace('    steps:', '    steps: *shared');
+  assert.ok(codes(evaluate(source)).includes('workflow-steps-format'));
+});
+test('shell scalar aliases are rejected before execution', () => {
+  const source = workflow().replace('        run: node --test', '        run: *shared_script');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+test('canonical inline shell steps retain passing workflow behavior', () => {
+  const source = workflow().replace('      - name: Test\n        run: node --test',
+    '      - run: echo safe');
+  assert.equal(evaluate(source).ok, true);
+});
