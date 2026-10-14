@@ -407,7 +407,14 @@ export function createManagedFastAccessQueryWindow({
         ) as LayerEnvelope | null;
       }
 
-      if (!mountedRef.current || signal.aborted || !requestGateRef.current.isCurrent(requestId) || !nextLayer?.layerObj) {
+      if (
+        !mountedRef.current
+        || signal.aborted
+        || !requestGateRef.current.isCurrent(requestId)
+        || !nextLayer?.layerObj
+        || mapViewRef.current !== mapView
+        || getMapView() !== mapView
+      ) {
         safeRemoveLayer(null, nextLayer?.layerObj);
         return;
       }
@@ -424,7 +431,16 @@ export function createManagedFastAccessQueryWindow({
       try {
         const extentResult = await nextLayer.layerObj.queryExtent?.();
         const extent = extentResult?.extent;
-        if (extent && mountedRef.current && !signal.aborted && requestGateRef.current.isCurrent(requestId) && layerRef.current === nextLayer && mapView.goTo) {
+        if (
+          extent
+          && mountedRef.current
+          && !signal.aborted
+          && requestGateRef.current.isCurrent(requestId)
+          && layerRef.current === nextLayer
+          && mapViewRef.current === mapView
+          && getMapView() === mapView
+          && mapView.goTo
+        ) {
           const target = typeof extent.expand === 'function' ? extent.expand(1.12) : extent;
           await mapView.goTo(target, { animate: false });
         }
@@ -451,6 +467,13 @@ export function createManagedFastAccessQueryWindow({
       setRecords([]);
       setActiveAction(null);
       clearOwnedLayer();
+      // A window can survive a 2D/3D view replacement. A new query must
+      // own the current view, never resurrect a layer on its retired map.
+      const activeMapView = getMapView();
+      if (mapViewRef.current !== activeMapView) {
+        mapViewRef.current = activeMapView;
+        initialExtentRef.current = activeMapView?.extent?.clone?.() ?? activeMapView?.extent ?? null;
+      }
 
       void safeClientLog(LoggingBusiness, logName + '/Sorgu', `query-fields:${Math.min(Object.keys(query).length, 99)}`, DebugHelper.Log);
 
@@ -527,13 +550,15 @@ export function createManagedFastAccessQueryWindow({
       item,
       'zoom',
       async (signal, isCurrent) => {
+        const actionView = mapViewRef.current;
+        if (!actionView || getMapView() !== actionView) return null;
         const detail = await getItemDetails(item, signal);
-        if (!isCurrent()) return null;
+        if (!isCurrent() || getMapView() !== actionView) return null;
         const geometry = getFeatureGeometry(detail);
         if (!geometry) throw new Error('Konum bilgisi bulunamadı.');
 
-        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapViewRef.current, geometry, 18));
-        if (!isCurrent()) return null;
+        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(actionView, geometry, 18));
+        if (!isCurrent() || getMapView() !== actionView) return null;
         void safeClientLog(
           LoggingBusiness,
           logName + '/Detay Göster',
@@ -635,7 +660,7 @@ export function createManagedFastAccessQueryWindow({
       resetSurface();
       windowManager.HideWindow?.(id);
       windowManager.ShowWindow?.('sidebar');
-      if (initialExtent && mapView?.goTo) {
+      if (initialExtent && mapView?.goTo && getMapView() === mapView) {
         Promise.resolve(mapView.goTo(initialExtent, { animate: false })).catch(DebugHelper.Log);
       }
     }, [id, resetSurface, windowManager]);

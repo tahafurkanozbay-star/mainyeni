@@ -281,4 +281,62 @@ describe('shared service result window ownership and usability', () => {
       expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
     } finally { vi.useRealTimers(); }
   });
+  it('disposes a late result layer instead of attaching it to a retired 2D/3D map', async () => {
+    const late = deferred<{ destroy: ReturnType<typeof vi.fn> }>();
+    vi.mocked(createKentRehberiGeoJsonLayer).mockReturnValue(late.promise);
+    const { ref, map, goTo } = setup();
+    let pending!: Promise<void>;
+    await act(async () => { pending = ref.current!.OnShow() as Promise<void>; await Promise.resolve(); });
+    const replacementMap = { add: vi.fn(), remove: vi.fn() };
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: replacementMap, zoom: 12, goTo: vi.fn() });
+    const layer = { destroy: vi.fn() };
+    await act(async () => { late.resolve(layer); await pending; });
+    expect(map.add).not.toHaveBeenCalled();
+    expect(replacementMap.add).not.toHaveBeenCalled();
+    expect(goTo).not.toHaveBeenCalled();
+    expect(layer.destroy).toHaveBeenCalledOnce();
+    expect(screen.getByRole('heading', { name: 'Merkez 1' })).toBeInTheDocument();
+  });
+
+  it('does not move a retired map when its layer extent resolves after view replacement', async () => {
+    const extent = deferred<{ extent: { expand: () => unknown } }>();
+    const layer = { queryExtent: () => extent.promise, destroy: vi.fn() };
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue(layer);
+    const { ref, map, goTo } = setup();
+    let pending!: Promise<void>;
+    await act(async () => { pending = ref.current!.OnShow() as Promise<void>; await Promise.resolve(); await Promise.resolve(); });
+    expect(map.add).toHaveBeenCalledWith(layer);
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: { add: vi.fn(), remove: vi.fn() }, zoom: 12, goTo: vi.fn() });
+    await act(async () => { extent.resolve({ extent: { expand: () => ({}) } }); await pending; });
+    expect(goTo).not.toHaveBeenCalled();
+  });
+
+  it('releases the previous map layer and adopts the current view on a subsequent query', async () => {
+    const previousLayer = { destroy: vi.fn(), queryExtent: vi.fn(async () => ({ extent: null })) };
+    const nextLayer = { destroy: vi.fn(), queryExtent: vi.fn(async () => ({ extent: null })) };
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValueOnce(previousLayer).mockResolvedValueOnce(nextLayer);
+    const { ref, map } = setup();
+    await act(async () => { await ref.current!.OnShow(); });
+    expect(map.add).toHaveBeenCalledWith(previousLayer);
+    const replacementMap = { add: vi.fn(), remove: vi.fn() };
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: replacementMap, zoom: 12, goTo: vi.fn() });
+    await act(async () => { await ref.current!.OnShow(); });
+    expect(map.remove).toHaveBeenCalledWith(previousLayer);
+    expect(previousLayer.destroy).toHaveBeenCalledOnce();
+    expect(replacementMap.add).toHaveBeenCalledWith(nextLayer);
+    expect(nextLayer.destroy).not.toHaveBeenCalled();
+  });
+
+  it('ignores late map detail navigation after a 2D/3D view replacement', async () => {
+    const { ref, Query } = setup();
+    await act(async () => { await ref.current!.OnShow(); });
+    const late = deferred<FastAccessServiceResult>();
+    Query.mockReturnValueOnce(late.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' }));
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: { add: vi.fn(), remove: vi.fn() }, zoom: 12, goTo: vi.fn() });
+    await act(async () => { late.resolve({ type: 10, data: [{ geometry: { latitude: 39.9, longitude: 32.8 } }] }); });
+    expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toBeEnabled();
+  });
+
 });
