@@ -93,3 +93,9 @@ test('retains attempt-bound exemptions for real retry helpers', () => {
   const text = 'const maxAttempts = 3; async function retryRequest(){ return fetch("/api/x").catch(retryRequest); }';
   assert.ok(!ids(source('Webclient.app/src/runtime/BoundedTransport.ts', text)).includes('runtime-retry-without-bound'));
 });
+
+test('includes lowercase admin runtime in lifecycle audit', () => {
+  const file = source('Webclient.admin/src/runtime/AdminRuntime.ts', 'export function mount(){ window.addEventListener("resize", refresh); }');
+  const result = audit(file);
+  assert.ok(result.findings.some(finding => finding.id === 'runtime-listener-without-cleanup' && finding.location?.file === file.path));
+});
