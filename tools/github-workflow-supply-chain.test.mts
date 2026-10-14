@@ -253,14 +253,14 @@ test('top-level scalar permissions are rejected', () => {
 });
 
 test('duplicate top-level permission blocks cannot shadow read-only contents', () => {
-  const source = workflow().replace('jobs:\\n',
-    'permissions:\\n  contents: write\\njobs:\\n');
+  const source = workflow().replace('jobs:\n',
+    'permissions:\n  contents: write\njobs:\n');
   const report = evaluate(source);
   assert.ok(codes(report).includes('workflow-permissions-duplicate'));
 });
 test('duplicate top-level read-only permission blocks also fail closed', () => {
-  const source = workflow().replace('jobs:\\n',
-    'permissions:\\n  contents: read\\njobs:\\n');
+  const source = workflow().replace('jobs:\n',
+    'permissions:\n  contents: read\njobs:\n');
   assert.ok(codes(evaluate(source)).includes('workflow-permissions-duplicate'));
 });
 
