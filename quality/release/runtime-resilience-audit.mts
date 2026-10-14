@@ -24,7 +24,7 @@ export interface RuntimeResilienceSummary {
   readonly findings: readonly Finding[];
 }
 
-const RUNTIME_PATH = /^(?:Webclient\.app\/src|Webclient\.Admin\/src|backend\/|server\/|api\/)/;
+const RUNTIME_PATH = /^(?:Webclient\.app\/src|Webclient\.admin\/src|backend\/|server\/|api\/)/;
 const TEST_PATH = /(?:^|\/)(?:__tests__|test|tests|fixtures)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/i;
 const TIMER = /\b(setInterval|setTimeout)\s*\(/g;
 const TIMER_CLEANUP = /\b(clearInterval|clearTimeout)\s*\(/;
