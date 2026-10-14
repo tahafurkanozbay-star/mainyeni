@@ -1,12 +1,14 @@
 import { StrictMode, createRef } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import type { ArcgisAccessorWatch } from '../../../gis-engine/arcgisReactiveRuntime';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import { BasemapWidget } from './BasemapWidget';
 import type { SelectableBasemap } from './basemapSelection';
 
-const runtime = vi.hoisted(() => ({ loadModules: vi.fn(), getMapView: vi.fn(), fromId: vi.fn(), load: vi.fn(), destroyed: vi.fn(), cancel: vi.fn() }));
+const runtime = vi.hoisted(() => ({ loadModules: vi.fn(), getMapView: vi.fn(), fromId: vi.fn(), load: vi.fn(), destroyed: vi.fn(), cancel: vi.fn(), watch: vi.fn<ArcgisAccessorWatch>(() => ({ remove: vi.fn() })), storeListeners: new Set<() => void>() }));
 vi.mock('../../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: runtime.loadModules }));
+vi.mock('../../../Store/Store', () => ({ default: { subscribe: (listener: () => void) => { runtime.storeListeners.add(listener); return () => runtime.storeListeners.delete(listener); } } }));
 vi.mock('../../../Store/Managers/MapManager', () => ({ default: { GetMapView: runtime.getMapView } }));
 const createWindowManager = (visible = true) => ({
   IsVisible: vi.fn(() => visible), IsMinimized: vi.fn(() => false), ToggleMinimiseWindow: vi.fn(),
@@ -20,9 +22,9 @@ const optionsReady = () => screen.findByRole('button', { name: /^Topoğrafya$/ }
 let map: { basemap: SelectableBasemap | null };
 const candidate = (id: string): SelectableBasemap => ({ id, load: runtime.load, cancelLoad: runtime.cancel, destroy: runtime.destroyed });
 beforeEach(() => {
-  vi.clearAllMocks(); map = { basemap: { id: 'osm' } };
+  vi.clearAllMocks(); runtime.watch.mockReset().mockImplementation(() => ({ remove: vi.fn() })); runtime.storeListeners.clear(); map = { basemap: { id: 'osm' } };
   runtime.getMapView.mockReturnValue({ map }); runtime.fromId.mockImplementation(candidate);
-  runtime.load.mockResolvedValue(undefined); runtime.loadModules.mockResolvedValue([{ fromId: runtime.fromId }]);
+  runtime.load.mockResolvedValue(undefined); runtime.loadModules.mockResolvedValue([{ fromId: runtime.fromId }, { watch: runtime.watch }]);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -43,7 +45,7 @@ describe('native on-demand basemap selection', () => {
   });
   it('loads only the Basemap constructor and presents all existing supported choices', async () => {
     renderWidget(); await optionsReady();
-    expect(runtime.loadModules).toHaveBeenCalledWith(['esri/Basemap']);
+    expect(runtime.loadModules).toHaveBeenCalledWith(['esri/Basemap', 'esri/core/watchUtils']);
     expect(screen.getByRole('group', { name: 'Altlık harita seçenekleri' }).children).toHaveLength(17);
     expect(runtime.load).not.toHaveBeenCalled();
     expect(runtime.destroyed).toHaveBeenCalledTimes(17);
@@ -104,7 +106,7 @@ describe('native on-demand basemap selection', () => {
     expect(runtime.destroyed).toHaveBeenCalledTimes(18);
   });
   it('can reload a failed constructor explicitly without a retry loop', async () => {
-    runtime.loadModules.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValue([{ fromId: runtime.fromId }]);
+    runtime.loadModules.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValue([{ fromId: runtime.fromId }, { watch: runtime.watch }]);
     renderWidget(); await screen.findByText('Altlık seçenekleri açılamadı');
     expect(runtime.loadModules).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Seçenekleri yeniden yükle' }));
@@ -186,6 +188,142 @@ describe('native on-demand basemap selection', () => {
     await optionsReady();
     screen.getByRole('button', { name: /^Topoğrafya$/ }).focus();
     windowManager.IsVisible.mockReturnValue(false);
+    rerender(<BasemapWidget id="basemap-test" windowManager={windowManager} ref={ref} />);
+    expect(opener).toHaveFocus(); opener.remove();
+  });
+
+  it('cancels a pending change when the currently displayed option is selected again', async () => {
+    let finish: () => void = () => undefined;
+    runtime.load.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    renderWidget(); await optionsReady();
+    fireEvent.click(screen.getByRole('button', { name: /^Topoğrafya$/ }));
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: /OpenStreetMap/ }));
+    await act(async () => { finish(); });
+    expect(map.basemap?.id).toBe('osm');
+    expect(runtime.cancel).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Yüklemeyi iptal et' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /OpenStreetMap/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('coalesces repeated pending selections and explicitly cancels without accepting a late result', async () => {
+    let finish: () => void = () => undefined;
+    runtime.load.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    renderWidget(); const option = await optionsReady();
+    fireEvent.click(option); fireEvent.click(option);
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledOnce());
+    const cancel = screen.getByRole('button', { name: 'Yüklemeyi iptal et' });
+    cancel.focus(); fireEvent.click(cancel);
+    await act(async () => { finish(); });
+    expect(map.basemap?.id).toBe('osm');
+    expect(runtime.load).toHaveBeenCalledOnce();
+    expect(option).toHaveFocus();
+  });
+
+  it('hands focused cancellation control back to its option on completion without overriding outside focus', async () => {
+    let finish: () => void = () => undefined;
+    runtime.load.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    renderWidget(); const option = await optionsReady(); fireEvent.click(option);
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledOnce());
+    screen.getByRole('button', { name: 'Yüklemeyi iptal et' }).focus();
+    await act(async () => { finish(); });
+    expect(option).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: /^Açık gri$/ }));
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledTimes(2));
+    screen.getByRole('button', { name: 'Yüklemeyi iptal et' }).focus();
+    const search = screen.getByRole('searchbox', { name: 'Altlık ara' }); search.focus();
+    await act(async () => { finish(); });
+    expect(search).toHaveFocus();
+  });
+
+  it('filters local choices using normalized Turkish words and restores the full catalog without SDK work', async () => {
+    renderWidget(); await optionsReady();
+    const search = screen.getByRole('searchbox', { name: 'Altlık ara' });
+    fireEvent.change(search, { target: { value: 'ACIK GRI' } });
+    expect(screen.getByText('2 / 17 altlık gösteriliyor')).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Açık gri$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Topoğrafya$/ })).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'eşleşmeyen' } });
+    expect(screen.getByText('Eşleşen altlık bulunamadı')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Altlık aramasını temizle' }));
+    expect(search).toHaveFocus();
+    expect(screen.getByRole('group', { name: 'Altlık harita seçenekleri' }).children).toHaveLength(17);
+    expect(runtime.loadModules).toHaveBeenCalledOnce(); expect(runtime.load).not.toHaveBeenCalled();
+  });
+
+  it('returns cancellation focus to search if its option was filtered out', async () => {
+    runtime.load.mockImplementation(() => new Promise(() => undefined));
+    renderWidget(); fireEvent.click(await optionsReady());
+    const search = screen.getByRole('searchbox', { name: 'Altlık ara' });
+    fireEvent.change(search, { target: { value: 'uydu' } });
+    const cancel = screen.getByRole('button', { name: 'Yüklemeyi iptal et' });
+    cancel.focus(); fireEvent.click(cancel);
+    expect(search).toHaveFocus();
+  });
+
+  it('observes a foreign basemap change and cancels stale work without destroying the foreign map', async () => {
+    const callbacks: Array<{ target: unknown; property: string; callback: () => void; remove: ReturnType<typeof vi.fn> }> = [];
+    runtime.watch.mockImplementation((target, property, callback) => {
+      const remove = vi.fn(); callbacks.push({ target, property, callback: () => callback(undefined), remove }); return { remove };
+    });
+    let finish: () => void = () => undefined;
+    runtime.load.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    const { unmount } = renderWidget(); fireEvent.click(await optionsReady());
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledOnce());
+    const foreign = { id: 'gray', destroy: vi.fn() }; map.basemap = foreign;
+    await act(async () => { callbacks.find(c => c.target === map && c.property === 'basemap')!.callback(); finish(); });
+    expect(map.basemap).toBe(foreign); expect(foreign.destroy).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /^Açık gri$/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Yüklemeyi iptal et' })).not.toBeInTheDocument();
+    unmount(); expect(callbacks.every(c => c.remove.mock.calls.length > 0)).toBe(true);
+    expect(runtime.storeListeners.size).toBe(0);
+  });
+
+  it('cancels work immediately when the shared map view is replaced', async () => {
+    runtime.load.mockImplementation(() => new Promise(() => undefined));
+    renderWidget(); fireEvent.click(await optionsReady());
+    await waitFor(() => expect(runtime.load).toHaveBeenCalledOnce());
+    const replacement = { basemap: { id: 'gray' } };
+    await act(async () => {
+      runtime.getMapView.mockReturnValue({ map: replacement });
+      runtime.storeListeners.forEach(listener => listener());
+    });
+    expect(map.basemap?.id).toBe('osm'); expect(replacement.basemap.id).toBe('gray');
+    expect(screen.getByRole('button', { name: /^Açık gri$/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(runtime.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('isolates a failing catalog option and never displays constructor failure details', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    runtime.fromId.mockImplementation((id: string) => { if (id === 'oceans') throw new Error('private-provider-value'); return candidate(id); });
+    renderWidget(); await optionsReady();
+    expect(screen.getByText('16 altlık harita seçeneği')).toBeVisible();
+    expect(screen.queryByText(/private-provider-value/)).not.toBeInTheDocument();
+    warn.mockRestore();
+  });
+
+  it('releases its own detached applied basemap while preserving the original and currently displayed maps', async () => {
+    const created: Array<SelectableBasemap & { destroy: ReturnType<typeof vi.fn> }> = [];
+    runtime.fromId.mockImplementation((id: string) => { const item = { id, load: runtime.load, destroy: vi.fn() }; created.push(item); return item; });
+    const original = { id: 'osm', destroy: vi.fn() }; map.basemap = original;
+    const { unmount } = renderWidget(); await optionsReady();
+    fireEvent.click(screen.getByRole('button', { name: /^Topoğrafya$/ }));
+    await waitFor(() => expect(map.basemap?.id).toBe('topo'));
+    const appliedTopo = map.basemap as typeof created[number];
+    fireEvent.click(screen.getByRole('button', { name: /^Açık gri$/ }));
+    await waitFor(() => expect(map.basemap?.id).toBe('gray'));
+    expect(appliedTopo.destroy).toHaveBeenCalledOnce();
+    expect(original.destroy).not.toHaveBeenCalled();
+    const appliedGray = map.basemap as typeof created[number];
+    unmount(); expect(appliedGray.destroy).not.toHaveBeenCalled();
+  });
+
+  it('does not send focus into the hidden gallery when it closes with Cancel focused', async () => {
+    const opener = document.createElement('button'); document.body.append(opener); opener.focus();
+    runtime.load.mockImplementation(() => new Promise(() => undefined));
+    const { ref, windowManager, rerender } = renderWidget(); fireEvent.click(await optionsReady());
+    screen.getByRole('button', { name: 'Yüklemeyi iptal et' }).focus();
+    act(() => { ref.current?.OnClose?.(); windowManager.IsVisible.mockReturnValue(false); });
     rerender(<BasemapWidget id="basemap-test" windowManager={windowManager} ref={ref} />);
     expect(opener).toHaveFocus(); opener.remove();
   });

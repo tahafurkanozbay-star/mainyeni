@@ -106,7 +106,8 @@ export const auditWorkflowSource = (file, source) => {
     for (let i = triggerHeader + 1; i < lines.length &&
       (!lines[i].trim() || /^\s/.test(lines[i])); i++) {
       if (isComment(lines[i])) continue;
-      if (/^  ['"]?(?:pull_request_target|workflow_run)['"]?\s*:/.test(lines[i])) {
+      if (/^  ['"]?(?:pull_request_target|workflow_run)['"]?\s*:/.test(lines[i]) ||
+        /^  -\s*['"]?(?:pull_request_target|workflow_run)['"]?\s*(?:#.*)?$/.test(lines[i])) {
         untrusted = true;
       }
       if (/^  <<\s*:/.test(lines[i])) {
@@ -119,16 +120,23 @@ export const auditWorkflowSource = (file, source) => {
         'Privileged pull_request_target/workflow_run triggers are not permitted in quality workflows.'));
     }
   }
-  // Direct GitHub expression interpolation inside a shell command is an injection
-  // hazard when any part of the expression can be influenced by a PR author.
-  // Values must cross into scripts through environment variables instead.
+  // Expressions in both mapping-style and inline "- run:" steps execute in
+  // a shell. Restrict run keys to canonical forms before inspecting values.
   for (let i = 0; i < lines.length; i++) {
-    const run = lines[i].match(/^\s{8}run:\s*(.*)$/);
+    if (isComment(lines[i])) continue;
+    if (/^(?: {6}-\s+| {8})(?:['"]run['"]|run\s+)\s*:/.test(lines[i])) {
+      findings.push(find('workflow-shell-key-noncanonical', file, i + 1,
+        'Shell run keys must use canonical unquoted syntax for injection review.'));
+    }
+    const inline = lines[i].match(/^ {6}-\s+run:\s*(.*)$/);
+    const nested = lines[i].match(/^ {8}run:\s*(.*)$/);
+    const run = inline ?? nested;
     if (!run) continue;
     if (run[1].includes('${{')) findings.push(find('workflow-shell-expression', file, i + 1,
       'Pass GitHub expressions through env instead of interpolating shell commands.'));
     if (!/^[|>][-+]?\s*(?:#.*)?$/.test(run[1])) continue;
-    for (let j = i + 1; j < lines.length && (/^\s{10}/.test(lines[j]) || !lines[j].trim()); j++) {
+    const bodyIndent = inline ? /^ {8}/ : /^ {10}/;
+    for (let j = i + 1; j < lines.length && (bodyIndent.test(lines[j]) || !lines[j].trim()); j++) {
       if (lines[j].includes('${{')) findings.push(find('workflow-shell-expression', file, j + 1,
         'Pass GitHub expressions through env instead of interpolating shell commands.'));
     }
@@ -137,6 +145,17 @@ export const auditWorkflowSource = (file, source) => {
   // unbounded job elsewhere in the same workflow.
   const jobsStart = lines.findIndex(line => /^jobs:\s*$/.test(line));
   if (jobsStart >= 0) {
+    // Quoted, merged, aliased or whitespace-separated job IDs must not
+    // bypass the per-job timeout and token checks below.
+    for (let j = jobsStart + 1; j < lines.length; j++) {
+      const line = lines[j];
+      if (line.trim() && !/^\s/.test(line)) break;
+      if (!/^  \S/.test(line) || isComment(line)) continue;
+      if (!/^  [A-Za-z0-9_-]+:\s*$/.test(line)) {
+        findings.push(find('workflow-job-key-noncanonical', file, j + 1,
+          'Jobs require canonical plain IDs and block mappings for timeout and token review.'));
+      }
+    }
     const seenJobNames = new Set();
     for (let i = jobsStart + 1; i < lines.length; i++) {
       if (lines[i] && !/^\s/.test(lines[i])) break;
