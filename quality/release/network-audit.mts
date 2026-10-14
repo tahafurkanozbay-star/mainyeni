@@ -112,7 +112,7 @@ function extractCalls(file: SourceFile): NetworkCallSignal[] {
 }
 
 function isRuntimeFile(path: string): boolean {
-  return /^(?:Webclient\.app\/src|Webclient\.Admin\/src)\//.test(path);
+  return /^(?:Webclient\.app\/src|Webclient\.admin\/src)\//.test(path);
 }
 
 function insecureFinding(reference: ExternalReference): Finding | null {
