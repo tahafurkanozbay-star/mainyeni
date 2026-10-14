@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { ExperienceUXLayer, dispatchExperienceCommand } from './ExperienceUXLayer';
 
@@ -201,11 +201,11 @@ describe('ExperienceUXLayer', () => {
   test('opens the notification center as an accessible drawer using the canonical model', () => {
     const manager = createWindowManager();
     const { notificationModel } = renderLayer(manager);
-    notificationModel.push({
+    act(() => notificationModel.push({
       id: 'shared-notification',
       title: 'Ortak bildirim',
       message: 'Tek notification authority üzerinden geldi.',
-    });
+    }));
 
     const opener = screen.getByRole('button', {
       name: 'Bildirim merkezini aç',
@@ -378,13 +378,6 @@ describe('ExperienceUXLayer', () => {
     fireEvent.click(themeButton);
 
     expect(mocks.toggleTheme).toHaveBeenCalledTimes(1);
-    expect(document.documentElement).toHaveAttribute(
-      'data-experience-theme',
-      'light',
-    );
-    expect(window.localStorage.getItem(
-      'kent-rehberi-experience-theme',
-    )).toBe('light');
     expect(notificationModel.snapshot().items.some((item) => item.title === 'Koyu tema seçildi')).toBe(true);
     expect(screen.getByText('Koyu tema seçildi')).toBeInTheDocument();
   });
@@ -397,27 +390,14 @@ describe('ExperienceUXLayer', () => {
     expect(screen.getByRole('button', {
       name: 'Açık temaya geç',
     })).toBeInTheDocument();
-    expect(document.documentElement).toHaveAttribute(
-      'data-experience-theme',
-      'dark',
-    );
   });
 
-  test('reports local-storage failures instead of silently swallowing them', () => {
-    const setItem = vi.spyOn(Storage.prototype, 'setItem')
-      .mockImplementation(() => {
-        throw new Error('storage unavailable');
-      });
-
-    const manager = createWindowManager();
-    renderLayer(manager);
-
-    expect(mocks.captureError).toHaveBeenCalledWith(
-      expect.any(Error),
-      { source: 'experience.ux-layer.theme-persistence' },
-      'warn',
-    );
-
+  test('leaves theme DOM and persistence to the canonical workspace preference owner', () => {
+    document.documentElement.dataset.experienceTheme = 'dark';
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    renderLayer();
+    expect(document.documentElement.dataset.experienceTheme).toBe('dark');
+    expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
   });
 
@@ -451,4 +431,15 @@ describe('ExperienceUXLayer', () => {
 
     window.removeEventListener('kentrehberi:command', listener);
   });
+  test('opens full notification history from the bounded toast summary and returns keyboard focus', () => {
+    const { notificationModel } = renderLayer();
+    act(() => {
+      for (let index = 0; index < 5; index += 1) notificationModel.push({ id: `n-${index}`, title: `Kayıt ${index}` });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tüm bildirimleri aç' }));
+    expect(screen.getByRole('dialog', { name: 'Bildirim merkezi' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'Bildirim merkezini aç' })).toHaveFocus();
+  });
+
 });

@@ -286,4 +286,17 @@ describe('ExperienceFeedbackCenter', () => {
     expect(within(row).getByText('Hata')).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /okundu işaretle/i })).toBeInTheDocument();
   });
+  it('keeps the detailed digest collapsed until requested and preserves access to the history list', () => {
+    const model = new NotificationCenterModel();
+    model.push({ id: 'visible', title: 'Görünen kayıt' });
+    render(<ExperienceFeedbackCenter model={model} />);
+    const summary = screen.getByText('Ayrıntılı bildirim özeti');
+    const details = summary.closest('details');
+    expect(details).not.toHaveAttribute('open');
+    expect(screen.getByRole('list', { name: 'Bildirim geçmişi' })).toBeInTheDocument();
+    fireEvent.click(summary);
+    expect(details).toHaveAttribute('open');
+    expect(screen.getByLabelText('Bildirim hızlı filtreleri')).toBeInTheDocument();
+  });
+
 });
