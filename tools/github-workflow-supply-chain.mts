@@ -44,6 +44,12 @@ export const auditWorkflowSource = (file, source) => {
       }
     }
   }
+  // Scalar permission declarations cannot establish a read-only token boundary.
+  const scalarPermissionsAt = lines.findIndex(line => /^permissions:\s*\S/.test(line));
+  if (scalarPermissionsAt >= 0) {
+    findings.push(find('workflow-permissions-scalar', file, scalarPermissionsAt + 1,
+      'Workflow permissions must use an explicit read-only contents mapping.'));
+  }
   if (lines.some(line => /^\s{2}(pull_request_target|workflow_run):/.test(line))) {
     findings.push(find('workflow-untrusted-trigger', file, 1,
       'Privileged pull_request_target/workflow_run triggers are not permitted in quality workflows.'));
@@ -78,6 +84,43 @@ export const auditWorkflowSource = (file, source) => {
       if (timeouts.length !== 1 || Number(timeouts[0].trim().split(':')[1]) > 120) {
         findings.push(find('workflow-job-timeout-invalid', file, i + 1,
           'Every job requires exactly one positive timeout of at most 120 minutes.'));
+      }
+      // A job override replaces the top-level token permission map.
+      const jobPermissionAt = lines.findIndex((line, index) =>
+        index > i && index < end && /^    permissions:\s*/.test(line));
+      const jobPermissionDeclarations = lines.slice(i + 1, end).filter(line =>
+        /^    permissions:\s*/.test(line));
+      if (jobPermissionDeclarations.length > 1) {
+        findings.push(find('workflow-job-permissions-duplicate', file, jobPermissionAt + 1,
+          'Duplicate job permission declarations can shadow reviewed token permissions.'));
+      }
+      if (jobPermissionAt >= 0) {
+        const declaration = lines[jobPermissionAt].trim();
+        const block = [];
+        for (let j = jobPermissionAt + 1; j < end; j++) {
+          if (lines[j].trim() && !/^ {6}/.test(lines[j])) break;
+          if (lines[j].trim() && !isComment(lines[j])) {
+            block.push({ line: j + 1, text: lines[j].trim() });
+          }
+        }
+        if (declaration !== 'permissions:') {
+          findings.push(find('workflow-job-permissions-format', file, jobPermissionAt + 1,
+            'Job permissions must use an explicit read-only mapping.'));
+        }
+        if (!block.some(item => item.text === 'contents: read')) {
+          findings.push(find('workflow-job-permissions-contents', file, jobPermissionAt + 1,
+            'Job permission overrides must retain contents: read.'));
+        }
+        if (/\bwrite\b|write-all/i.test(declaration)) {
+          findings.push(find('workflow-job-permissions-elevated', file, jobPermissionAt + 1,
+            'Job-level write permissions are not allowed in quality workflows.'));
+        }
+        for (const item of block) {
+          if (/\bwrite\b|write-all/i.test(item.text)) {
+            findings.push(find('workflow-job-permissions-elevated', file, item.line,
+              'Job-level write permissions are not allowed in quality workflows.'));
+          }
+        }
       }
       i = end - 1;
     }

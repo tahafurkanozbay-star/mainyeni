@@ -221,3 +221,39 @@ test('multiple independently bounded jobs are accepted', () => {
   const source = workflow() + '  extra-job:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n      - name: Test\n        run: echo ok\n';
   assert.equal(evaluate(source).ok, true);
 });
+
+
+test('job-level write permission cannot override workflow read-only token', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: write\n    timeout-minutes: 10');
+  const report = evaluate(source);
+  assert.ok(codes(report).includes('workflow-job-permissions-elevated'));
+  assert.ok(codes(report).includes('workflow-job-permissions-contents'));
+});
+test('job-level id-token write is rejected despite contents read', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n      id-token: write\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-elevated'));
+});
+test('job-level scalar write-all is rejected', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions: write-all\n    timeout-minutes: 10');
+  const report = evaluate(source);
+  assert.ok(codes(report).includes('workflow-job-permissions-format'));
+  assert.ok(codes(report).includes('workflow-job-permissions-elevated'));
+});
+test('job-level read-only permission mapping is permitted', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n    timeout-minutes: 10');
+  assert.equal(evaluate(source).ok, true);
+});
+test('top-level scalar permissions are rejected', () => {
+  const source = workflow().replace('permissions:\n  contents: read', 'permissions: write-all');
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-scalar'));
+});
+
+test('duplicate job permission overrides fail closed', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n    permissions:\n      contents: write\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-duplicate'));
+});
