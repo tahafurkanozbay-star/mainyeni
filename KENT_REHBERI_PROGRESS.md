@@ -595,3 +595,10 @@
 - OTHER PRS: Platform #483 9/9 success, GIS #487 4/4 success but mergeable=false, Search #488 3/5 success and mergeable=false, Numbering #485 3/5 success, Admin #266 4/4 success but mergeable=false. Preserve integration isolation and recheck exact-head after updates.
 - RELEASE / SECURITY / PERFORMANCE: Client log audit still caps findings at 8 per file and skips later classification; overflow fingerprint fix remains uncommitted. Existing 2D/3D GIS, icon JSON/table matching, deployed network and real-browser accessibility/responsive behavior not exercised in this turn. No new endpoint, dependency, credential, runtime transport, telemetry, WMS/WFS or icon authority was added. Exact-head 6/8 failure and 786/4000 additions block QA release.
 - NEXT: first land scoped parser fix with independent property test if permitted; then bounded overflow detection, adversarial false-positive/negative tests, typed release CI and full security/performance regression. Recheck current main, conflicts, exact-head CI, meaningful additions and release risk before any merge. Keep QA PR open/Draft and scheduled automation enabled.
+
+## Deep QA — 2026-10-14 11:51 Istanbul
+- QA PR #496: main/merge-base 747e2f371c467cb0bdd498ee4f489f4fc9af5bf2; head d23b905d3d05e104a59d6966b3411d0b69804f19, 53 ahead/0 behind, Draft/Open, mergeable=true, 801 additions/46 deletions; do not merge below 4000 additions.
+- Commits d338f486 and d23b905d fix the nested-object parser test expectation and independently test direct address-property classification. New exact-head CI pending; previous head 6/8 passed.
+- Scanner overflow and coordinate-alias production fixes were not committed because GitHub write safety checks rejected them. Preserve release artifact fail-closed behavior; investigate remaining absolute release findings and cross-team integration.
+- Platform #483 CI 9/9, Experience #492 CI 5/5, GIS #487 CI 4/4; Search #488 and Numbering #485 CI 3/5. No deployed GIS, JSON-icon or browser E2E in this turn; no network or dependency changes.
+- Next: verify exact-head CI, continue meaningful QA/release work, keep PR open and scheduled task enabled.
