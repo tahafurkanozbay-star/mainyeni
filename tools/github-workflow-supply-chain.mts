@@ -50,6 +50,14 @@ export const auditWorkflowSource = (file, source) => {
     findings.push(find('workflow-permissions-scalar', file, scalarPermissionsAt + 1,
       'Workflow permissions must use an explicit read-only contents mapping.'));
   }
+  // GitHub/YAML loaders may treat the last duplicate mapping as authoritative.
+  // Checking only the first permissions block would miss a later write override.
+  const topLevelPermissionLines = lines.flatMap((line, index) =>
+    /^permissions:\s*/.test(line) ? [index + 1] : []);
+  if (topLevelPermissionLines.length > 1) {
+    findings.push(find('workflow-permissions-duplicate', file, topLevelPermissionLines[1],
+      'Duplicate workflow permissions can shadow the reviewed read-only token policy.'));
+  }
   if (lines.some(line => /^\s{2}(pull_request_target|workflow_run):/.test(line))) {
     findings.push(find('workflow-untrusted-trigger', file, 1,
       'Privileged pull_request_target/workflow_run triggers are not permitted in quality workflows.'));
