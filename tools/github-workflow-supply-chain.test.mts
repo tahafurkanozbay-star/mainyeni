@@ -269,3 +269,25 @@ test('duplicate job permission overrides fail closed', () => {
     '    permissions:\n      contents: read\n    permissions:\n      contents: write\n    timeout-minutes: 10');
   assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-duplicate'));
 });
+
+test('inline privileged workflow trigger list fails closed', () => {
+  const source = workflow().replace('on:\n  pull_request:', 'on: [pull_request, workflow_run]');
+  assert.ok(codes(evaluate(source)).includes('workflow-untrusted-trigger'));
+});
+test('scalar privileged trigger fails closed', () => {
+  const source = workflow().replace('on:\n  pull_request:', 'on: "pull_request_target"');
+  assert.ok(codes(evaluate(source)).includes('workflow-untrusted-trigger'));
+});
+test('quoted nested privileged trigger fails closed', () => {
+  const source = workflow().replace('  pull_request:', '  "workflow_run":');
+  assert.ok(codes(evaluate(source)).includes('workflow-untrusted-trigger'));
+});
+test('reusable workflow job cannot bypass action provenance checks', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    uses: another/repository/.github/workflows/release.yml@main\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-reusable-unreviewed'));
+});
+test('ordinary triggers and step actions retain passing baseline', () => {
+  assert.equal(evaluate(workflow({ trigger: 'push' })).ok, true);
+  assert.equal(evaluate(workflow({ trigger: 'pull_request' })).ok, true);
+});

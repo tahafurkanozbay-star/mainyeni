@@ -58,9 +58,22 @@ export const auditWorkflowSource = (file, source) => {
     findings.push(find('workflow-permissions-duplicate', file, topLevelPermissionLines[1],
       'Duplicate workflow permissions can shadow the reviewed read-only token policy.'));
   }
-  if (lines.some(line => /^\s{2}(pull_request_target|workflow_run):/.test(line))) {
-    findings.push(find('workflow-untrusted-trigger', file, 1,
-      'Privileged pull_request_target/workflow_run triggers are not permitted in quality workflows.'));
+  // YAML permits scalar/list and quoted trigger forms. Checking only the
+  // indented mapping form leaves privileged event admission unreviewed.
+  const triggerHeader = lines.findIndex(line => /^(?:on|'on'|"on"):\s*/.test(line));
+  if (triggerHeader >= 0) {
+    const header = lines[triggerHeader].replace(/\s+#.*$/, '');
+    const privileged = /\b(?:pull_request_target|workflow_run)\b/;
+    let untrusted = privileged.test(header);
+    for (let i = triggerHeader + 1; i < lines.length &&
+      (!lines[i].trim() || /^\s/.test(lines[i])); i++) {
+      if (/^  ['"]?(?:pull_request_target|workflow_run)['"]?\s*:/.test(lines[i]) &&
+        !isComment(lines[i])) untrusted = true;
+    }
+    if (untrusted) {
+      findings.push(find('workflow-untrusted-trigger', file, triggerHeader + 1,
+        'Privileged pull_request_target/workflow_run triggers are not permitted in quality workflows.'));
+    }
   }
   // Direct GitHub expression interpolation inside a shell command is an injection
   // hazard when any part of the expression can be influenced by a PR author.
@@ -92,6 +105,15 @@ export const auditWorkflowSource = (file, source) => {
       if (timeouts.length !== 1 || Number(timeouts[0].trim().split(':')[1]) > 120) {
         findings.push(find('workflow-job-timeout-invalid', file, i + 1,
           'Every job requires exactly one positive timeout of at most 120 minutes.'));
+      }
+      // Reusable workflow jobs bypass step-action pinning and can introduce
+      // an independently privileged execution graph. Require explicit review
+      // before admitting this syntax to quality workflows.
+      const reusableAt = lines.findIndex((line, index) =>
+        index > i && index < end && /^    uses:\s*/.test(line));
+      if (reusableAt >= 0) {
+        findings.push(find('workflow-job-reusable-unreviewed', file, reusableAt + 1,
+          'Reusable workflow jobs require a dedicated provenance and permission policy.'));
       }
       // A job override replaces the top-level token permission map.
       const jobPermissionAt = lines.findIndex((line, index) =>
