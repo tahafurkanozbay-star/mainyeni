@@ -53,10 +53,33 @@ export const auditWorkflowSource = (file, source) => {
   // GitHub/YAML loaders may treat the last duplicate mapping as authoritative.
   // Checking only the first permissions block would miss a later write override.
   const topLevelPermissionLines = lines.flatMap((line, index) =>
-    /^permissions:\s*/.test(line) ? [index + 1] : []);
+    /^(?:permissions|['"]permissions['"])\s*:/.test(line) ? [index + 1] : []);
+  for (const lineNumber of topLevelPermissionLines) {
+    if (!/^permissions:\s*(?:#.*)?$/.test(lines[lineNumber - 1])) {
+      findings.push(find('workflow-permissions-format', file, lineNumber,
+        'Workflow permissions must use an unquoted canonical mapping key.'));
+    }
+  }
   if (topLevelPermissionLines.length > 1) {
     findings.push(find('workflow-permissions-duplicate', file, topLevelPermissionLines[1],
       'Duplicate workflow permissions can shadow the reviewed read-only token policy.'));
+  }
+  // A duplicate or noncanonical jobs key can hide an unreviewed execution graph.
+  const topLevelJobsLines = lines.flatMap((line, index) =>
+    /^(?:jobs|['"]jobs['"])\s*:/.test(line) ? [index + 1] : []);
+  if (topLevelJobsLines.length === 0) {
+    findings.push(find('workflow-jobs-missing', file, 1,
+      'Quality workflows must declare an explicit jobs mapping.'));
+  }
+  if (topLevelJobsLines.length > 1) {
+    findings.push(find('workflow-jobs-duplicate', file, topLevelJobsLines[1],
+      'Duplicate jobs mappings can shadow reviewed job policies.'));
+  }
+  for (const lineNumber of topLevelJobsLines) {
+    if (!/^jobs:\s*$/.test(lines[lineNumber - 1])) {
+      findings.push(find('workflow-jobs-format', file, lineNumber,
+        'Jobs must use a canonical unquoted mapping key.'));
+    }
   }
   // YAML permits scalar/list and quoted trigger forms. Checking only the
   // indented mapping form leaves privileged event admission unreviewed.
@@ -114,10 +137,16 @@ export const auditWorkflowSource = (file, source) => {
   // unbounded job elsewhere in the same workflow.
   const jobsStart = lines.findIndex(line => /^jobs:\s*$/.test(line));
   if (jobsStart >= 0) {
+    const seenJobNames = new Set();
     for (let i = jobsStart + 1; i < lines.length; i++) {
       if (lines[i] && !/^\s/.test(lines[i])) break;
       const job = lines[i].match(/^  ([A-Za-z0-9_-]+):\s*$/);
       if (!job) continue;
+      if (seenJobNames.has(job[1])) {
+        findings.push(find('workflow-job-duplicate', file, i + 1,
+          'Duplicate job names can shadow reviewed timeout and token policies.'));
+      }
+      seenJobNames.add(job[1]);
       let end = i + 1;
       while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end]) &&
         (!lines[end] || /^\s/.test(lines[end]))) end++;
@@ -139,11 +168,18 @@ export const auditWorkflowSource = (file, source) => {
       // A job override replaces the top-level token permission map.
       const jobPermissionAt = lines.findIndex((line, index) =>
         index > i && index < end && /^    permissions:\s*/.test(line));
-      const jobPermissionDeclarations = lines.slice(i + 1, end).filter(line =>
-        /^    permissions:\s*/.test(line));
+      const jobPermissionDeclarations = lines.slice(i + 1, end).flatMap((line, offset) =>
+        /^    (?:permissions|['"]permissions['"])\s*:/.test(line)
+          ? [{ line: i + offset + 2, text: line }] : []);
       if (jobPermissionDeclarations.length > 1) {
-        findings.push(find('workflow-job-permissions-duplicate', file, jobPermissionAt + 1,
+        findings.push(find('workflow-job-permissions-duplicate', file, jobPermissionDeclarations[1].line,
           'Duplicate job permission declarations can shadow reviewed token permissions.'));
+      }
+      for (const declaration of jobPermissionDeclarations) {
+        if (!/^    permissions:\s*(?:#.*)?$/.test(declaration.text)) {
+          findings.push(find('workflow-job-permissions-format', file, declaration.line,
+            'Job permissions require a canonical unquoted read-only mapping.'));
+        }
       }
       if (jobPermissionAt >= 0) {
         const declaration = lines[jobPermissionAt].trim();
@@ -174,6 +210,15 @@ export const auditWorkflowSource = (file, source) => {
         }
       }
       i = end - 1;
+    }
+  }
+  // YAML accepts quoted keys and whitespace before colons; these forms must
+  // not bypass step-action provenance or reusable-workflow admission.
+  for (let i = 0; i < lines.length; i++) {
+    if (isComment(lines[i])) continue;
+    if (/^(?: {4}| {8}| {6}-\s+)(?:['"]uses['"]|uses\s+)\s*:/.test(lines[i])) {
+      findings.push(find('workflow-action-key-noncanonical', file, i + 1,
+        'Action and reusable-workflow uses keys must use canonical unquoted syntax.'));
     }
   }
   const actions = [];

@@ -320,3 +320,56 @@ test('ordinary triggers and step actions retain passing baseline', () => {
   assert.equal(evaluate(workflow({ trigger: 'push' })).ok, true);
   assert.equal(evaluate(workflow({ trigger: 'pull_request' })).ok, true);
 });
+
+
+test('quoted workflow permissions cannot shadow the canonical read-only map', () => {
+  const source = workflow().replace('jobs:\n',
+    '"permissions":\n  contents: write\njobs:\n');
+  const report = evaluate(source);
+  assert.ok(codes(report).includes('workflow-permissions-format'));
+  assert.ok(codes(report).includes('workflow-permissions-duplicate'));
+});
+test('whitespace before workflow permissions colon cannot shadow policy', () => {
+  const source = workflow().replace('jobs:\n',
+    'permissions :\n  contents: write\njobs:\n');
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-duplicate'));
+});
+test('quoted job permissions cannot silently override read-only workflow permissions', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    "permissions":\n      contents: write\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-format'));
+});
+test('whitespace before job permissions colon cannot bypass override audit', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions :\n      contents: write\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-format'));
+});
+test('duplicate job names cannot shadow reviewed timeout and permissions', () => {
+  const source = workflow() +
+    '  audit:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: echo shadow\n';
+  assert.ok(codes(evaluate(source)).includes('workflow-job-duplicate'));
+});
+test('duplicate jobs mappings cannot shadow a reviewed job graph', () => {
+  const source = workflow() +
+    'jobs:\n  shadow:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n';
+  assert.ok(codes(evaluate(source)).includes('workflow-jobs-duplicate'));
+});
+test('quoted jobs key cannot bypass the bounded job audit', () => {
+  const source = workflow().replace('jobs:\n', '"jobs":\n');
+  assert.ok(codes(evaluate(source)).includes('workflow-jobs-format'));
+});
+test('quoted step uses cannot bypass immutable action pinning', () => {
+  const source = workflow().replace('        uses: ' + node,
+    '        "uses": actions/setup-node@main');
+  assert.ok(codes(evaluate(source)).includes('workflow-action-key-noncanonical'));
+});
+test('whitespace before uses colon cannot bypass action pinning', () => {
+  const source = workflow().replace('        uses: ' + node,
+    '        uses : actions/setup-node@main');
+  assert.ok(codes(evaluate(source)).includes('workflow-action-key-noncanonical'));
+});
+test('quoted reusable job uses cannot bypass job-level provenance', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    "uses": another/repo/.github/workflows/release.yml@main\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-action-key-noncanonical'));
+});
