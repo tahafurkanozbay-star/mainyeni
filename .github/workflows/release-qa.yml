@@ -83,7 +83,7 @@ jobs:
         with:
           name: typed-release-qa
           path: qa-artifacts/release
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 21
 
   webclient-release-validation:
