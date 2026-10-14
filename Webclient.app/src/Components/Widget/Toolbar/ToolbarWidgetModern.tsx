@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -146,7 +147,14 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
   const homeOwnerRef = useRef<AbortController | null>(null);
   const locationGraphicRef = useRef<{ view: MapViewLike; graphic: unknown } | null>(null);
   const mountedRef = useRef(false);
-  const pendingFocusRef = useRef<'location' | 'home' | 'cancel' | null>(null);
+  const pendingFocusRef = useRef<'location' | 'home' | 'cancel' | 'notice' | null>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const captureCancelButton = useCallback((node: HTMLButtonElement | null): void => {
+    if (!node && cancelButtonRef.current === document.activeElement && !pendingFocusRef.current) {
+      pendingFocusRef.current = 'notice';
+    }
+    cancelButtonRef.current = node;
+  }, []);
   const [homePhase, setHomePhase] = useState<HomePhase>('idle');
   const generatedId = useId();
   const modelRef = useRef<MapToolbarModel | null>(null);
@@ -323,8 +331,9 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
     if (!pending) return;
     pendingFocusRef.current = null;
     const root = document.getElementById(toolbarId);
-    const target = pending === 'cancel'
-      ? document.getElementById(`${toolbarId}-notice`)?.querySelector<HTMLButtonElement>('[data-notice-action="cancel"]')
+    const target = pending === 'cancel' || pending === 'notice'
+      ? document.getElementById(`${toolbarId}-notice`)?.querySelector<HTMLButtonElement>('button')
+        ?? root?.querySelector<HTMLButtonElement>('[data-roving-focus-id="location"]')
       : root?.querySelector<HTMLButtonElement>(`[data-roving-focus-id="${pending}"]`);
     target?.focus();
   }, [announcement, busy, toolbarId]);
@@ -349,7 +358,7 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
           {busy ? <p className="toolbarwidget-notice__detail">{homePhase === 'restoring' ? 'Harita hazırlanıyor. İşlemi iptal edebilirsiniz.' : 'Tarayıcınız sorarsa konum iznini seçin. Bu işlem biraz zaman alabilir.'}</p> : null}
           {fallback ? <p className="toolbarwidget-notice__detail">Bu nokta cihazınızın konumu değildir. Konum izninizi kontrol edip yeniden deneyebilirsiniz.</p> : null}
           <div className="toolbarwidget-notice__actions">
-            {busy ? <button type="button" data-notice-action="cancel" onClick={() => { dismissNotice(); removeLocationGraphic(); }}>İptal et</button> : <>
+            {busy ? <button ref={captureCancelButton} type="button" data-notice-action="cancel" onClick={() => { dismissNotice(); removeLocationGraphic(); }}>İptal et</button> : <>
               {failure || fallback ? <button type="button" onClick={homePhase === 'error' ? gotoInitialView : locateUser}>Yeniden dene</button> : null}
               <button type="button" onClick={dismissNotice}>Mesajı kapat</button>
             </>}

@@ -1,10 +1,17 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MapManager from '../../../Store/Managers/MapManager';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { openExternalUrl } from '../_shared/MapWidgetRuntime';
 import { ToolbarWidgetModern } from './ToolbarWidgetModern';
+
+// Real portal placement is covered by ExperienceToolbar.hints and browser QA;
+// isolate ownership/keyboard tests from Popper's asynchronous layout lifecycle.
+vi.mock('react-bootstrap', async importOriginal => ({
+  ...await importOriginal<typeof import('react-bootstrap')>(),
+  OverlayTrigger: ({ children }: { children: ReactNode }) => children,
+}));
 
 vi.mock('../../../Store/Managers/MapManager', () => ({
   default: {
@@ -471,6 +478,25 @@ describe('ToolbarWidgetModern', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Görünüm değiştirme durduruldu.'));
     expect(screen.getByRole('status').closest('.toolbarwidget-notice')).toHaveAttribute('data-tone', 'info');
     expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+  });
+
+  it.each(['success', 'fallback'] as const)('keeps keyboard focus in the notice when a pending operation becomes %s', async outcome => {
+    const geolocation = installGeolocationHarness(); render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
+    await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'İptal et' })).toHaveFocus();
+    if (outcome === 'success') geolocation.resolve(32.82, 39.93); else geolocation.reject();
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(outcome === 'success' ? 'Konumunuz haritada gösterildi.' : 'Ankara merkez konumu gösterildi.'));
+    expect(screen.getByRole('button', { name: outcome === 'success' ? 'Mesajı kapat' : 'Yeniden dene' })).toHaveFocus();
+  });
+  it('preserves focus deliberately moved outside the notice before completion', async () => {
+    const geolocation = installGeolocationHarness(); render(<ToolbarWidgetModern windowManager={createWindowManager()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
+    await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
+    const other = screen.getByRole('button', { name: 'Ölçüm Aracı' }); await act(async () => { other.focus(); });
+    geolocation.resolve(32.82, 39.93);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Konumunuz haritada gösterildi.'));
+    expect(other).toHaveFocus();
   });
 
 });
