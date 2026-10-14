@@ -27,7 +27,7 @@ describe('sketch resource ownership', () => {
     expect(runtime.remove).toHaveBeenCalledTimes(1); expect(runtime.layerDestroy).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Yeniden dene' }));
     await waitFor(() => expect(runtime.construct).toHaveBeenCalledTimes(2));
-    expect(screen.getByText('Çizim katmanı hazır')).toBeVisible();
+    await waitFor(() => expect(screen.getByText('Çizim katmanı hazır')).toBeVisible());
   });
   it('disposes against the original map even if the active map changes', async () => {
     const { ref, unmount } = setup(); await act(async () => { ref.current?.OnShow?.(); });
