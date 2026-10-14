@@ -26,6 +26,12 @@ test('balanced nested payload expressions preserve the third logging argument', 
   assert.equal(result.findings[0]?.location?.line, 1);
 });
 
+test('direct address property retains its own privacy classification', () => {
+  const result = audit([{ path: userPath, text: 'safeClientLog(A, "Query", row.address);' }]);
+  assert.equal(result.summary.flaggedCalls, 1);
+  assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'sensitive-property');
+});
+
 test('escaped quotes, template literals and comments are not executable logging calls', () => {
   const text = [
     'const example = "escaped \\"safeClientLog(A, B, record.address)\\"";',
