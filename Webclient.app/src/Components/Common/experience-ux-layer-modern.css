@@ -74,3 +74,23 @@
     display: none !important;
   }
 }
+
+.experience-help__stack-content .experience-shortcut--action {
+  min-height: 48px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.experience-help__stack-content .experience-shortcut--action:hover {
+  border-color: var(--exp-accent);
+  background: var(--exp-accent-soft);
+}
+
+.experience-help__stack-content .experience-shortcut--action strong {
+  color: var(--exp-accent);
+  font-size: 12px;
+}
+
+.experience-help__footer svg { flex: 0 0 auto; }
+.experience-help__stack-content .experience-help__footer { font-size: 12px; }
+.experience-utility__collapse { min-height: 44px; }

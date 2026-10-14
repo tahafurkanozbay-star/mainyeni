@@ -409,11 +409,14 @@ export const ExperienceFeedbackCenter = ({
         </div>
       </header>
 
-      <ExperienceFeedbackDigest
-        history={session.history}
-        selectedFilter={session.history.filter}
-        onSelectFilter={selectFilter}
-      />
+      <details className="experience-feedback-center__digest">
+        <summary>Ayrıntılı bildirim özeti</summary>
+        <ExperienceFeedbackDigest
+          history={session.history}
+          selectedFilter={session.history.filter}
+          onSelectFilter={selectFilter}
+        />
+      </details>
 
       <div
         id={controls.toolbarId}
@@ -593,7 +596,7 @@ export const ExperienceFeedbackCenter = ({
               </p>
 
               <div className="experience-feedback-center__item-actions">
-                {live?.actions.map((action) => (
+                {onAction && live?.actions.map((action) => (
                   <button
                     key={action.id}
                     type="button"
