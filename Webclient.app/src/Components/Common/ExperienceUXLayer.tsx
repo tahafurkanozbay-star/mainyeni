@@ -213,15 +213,6 @@ export function ExperienceUXLayer({
   }, [notificationModel, theme, toggleTheme]);
 
   useEffect(() => {
-    document.documentElement.dataset.experienceTheme = theme;
-    try {
-      window.localStorage.setItem('kent-rehberi-experience-theme', theme);
-    } catch (error) {
-      reportUxRuntimeError(error, 'experience.ux-layer.theme-persistence');
-    }
-  }, [theme]);
-
-  useEffect(() => {
     if (typeof window.matchMedia !== 'function') return undefined;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const forcedColors = window.matchMedia('(forced-colors: active)');
@@ -328,13 +319,13 @@ export function ExperienceUXLayer({
     return (
       <div className="experience-help__stack-content">
         <p className="experience-help__intro">
-          Harita ve veri araçlarına klavye ile hızlı erişin. Odak, Escape kapatma ve
-          arka plan yalıtımı ortak erişilebilir overlay runtime tarafından yönetilir.
+          Adres, katman ve harita araçlarına komut merkezinden ulaşın.
+          Düğmeler arasında Tab ile ilerleyin; seçtiğiniz aracı Enter ile açın.
         </p>
         <div className="experience-help__grid">
           <div className="experience-shortcut">
             <span>Komut merkezi</span>
-            <kbd>Ctrl</kbd><b>+</b><kbd>K</kbd>
+            <kbd>Ctrl / ⌘</kbd><b>+</b><kbd>K</kbd>
           </div>
           <div className="experience-shortcut">
             <span>Yardım</span><kbd>?</kbd>
@@ -372,8 +363,8 @@ export function ExperienceUXLayer({
         <footer className="experience-help__footer">
           <ActionIcon type="info" size={16} />
           <span>
-            Mevcut GIS sorgu, katman ve popup işlevleri korunur; bu yüzey
-            yalnızca keşif, erişilebilirlik ve hızlı erişim sağlar.
+            Katmanlar haritada gösterilen verileri, lejand ise renk ve simgelerin
+            anlamını gösterir. Esc ile bu pencereyi kapatıp haritaya dönebilirsiniz.
           </span>
         </footer>
       </div>
@@ -489,6 +480,8 @@ export function ExperienceUXLayer({
         model={notificationModel}
         mode="toasts"
         label="Anlık bildirimler"
+        returnFocusId={NOTIFICATION_TRIGGER_ID}
+        onOpenCenter={openNotifications}
       />
 
       <ExperienceOverlayStack

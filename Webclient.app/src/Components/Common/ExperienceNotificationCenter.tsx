@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
   NotificationCenterModel,
   type NotificationAction,
@@ -13,6 +13,8 @@ export interface ExperienceNotificationCenterProps {
   readonly mode?: 'toasts' | 'center';
   readonly maxVisibleToasts?: number;
   readonly label?: string;
+  readonly returnFocusId?: string;
+  readonly onOpenCenter?: () => void;
   readonly onAction?: (notification: NotificationItem, action: NotificationAction) => void;
 }
 
@@ -20,6 +22,8 @@ interface ExperienceNotificationToastsProps {
   readonly model: NotificationCenterModel;
   readonly maxVisibleToasts: number;
   readonly label: string;
+  readonly returnFocusId?: string;
+  readonly onOpenCenter?: () => void;
   readonly onAction?: (notification: NotificationItem, action: NotificationAction) => void;
 }
 
@@ -58,16 +62,50 @@ const ExperienceNotificationToasts = ({
   maxVisibleToasts,
   label,
   onAction,
+  returnFocusId,
+  onOpenCenter,
 }: ExperienceNotificationToastsProps): ReactNode => {
   const [snapshot, setSnapshot] = useState<NotificationCenterSnapshot>(() => model.snapshot());
 
   useEffect(() => model.subscribe(setSnapshot), [model]);
 
-  const visibleItems = snapshot.items
-    .filter((item) => !item.read)
-    .slice(0, normalizeVisible(maxVisibleToasts));
+  const instanceId = useId();
+  const listRef = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<number | null>(null);
+  const unreadItems = snapshot.items.filter((item) => !item.read);
+  // Stable sorting keeps source order within each urgency group.
+  unreadItems.sort((a, b) => Number(b.priority === 'urgent' || b.tone === 'error')
+    - Number(a.priority === 'urgent' || a.tone === 'error'));
+  const visibleItems = unreadItems.slice(0, normalizeVisible(maxVisibleToasts));
+  const hiddenCount = unreadItems.length - visibleItems.length;
+
+  useLayoutEffect(() => {
+    const index = pendingFocus.current;
+    if (index === null) return;
+    pendingFocus.current = null;
+    const list = listRef.current;
+    if (!list) return;
+    // Do not override focus deliberately moved by an action callback.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body && active.isConnected) return;
+    const cards = list.querySelectorAll<HTMLElement>('.experience-notification');
+    const next = cards[Math.min(index, cards.length - 1)];
+    const target = next?.querySelector<HTMLElement>('button:not(:disabled)') ?? next;
+    const fallback = returnFocusId ? document.getElementById(returnFocusId) : null;
+    if (target) target.focus();
+    else if (fallback && !fallback.closest('[inert], [aria-hidden="true"]') && !fallback.matches(':disabled')) {
+      fallback.focus();
+    } else list.parentElement?.focus();
+  }, [snapshot.revision, returnFocusId]);
+
+  const prepareFocus = (id: string): void => {
+    const cards = Array.from(listRef.current?.querySelectorAll<HTMLElement>('.experience-notification') ?? []);
+    const index = cards.findIndex((card) => card.dataset.notificationId === id);
+    if (index >= 0 && cards[index]?.contains(document.activeElement)) pendingFocus.current = index;
+  };
 
   const activateAction = (notification: NotificationItem, action: NotificationAction): void => {
+    prepareFocus(notification.id);
     model.markRead(notification.id);
     onAction?.(notification, action);
   };
@@ -76,20 +114,22 @@ const ExperienceNotificationToasts = ({
     <aside
       className="experience-notifications experience-notifications--toasts"
       aria-label={label}
+      tabIndex={-1}
       data-unread-count={snapshot.unreadCount}
       data-urgent-count={snapshot.urgentUnreadCount}
     >
       <ExperienceNotificationLiveRegions snapshot={snapshot} />
 
-      <div className="experience-notifications__list">
+      <div ref={listRef} className="experience-notifications__list">
         {visibleItems.map((item) => (
           <article
             key={item.id}
             className={`experience-notification experience-notification--${item.tone}`}
             data-priority={item.priority}
             data-read={String(item.read)}
-            role={item.tone === 'error' ? 'alert' : 'status'}
-            aria-labelledby={`experience-notification-title-${item.id}`}
+            data-notification-id={item.id}
+            tabIndex={-1}
+            aria-labelledby={`${instanceId}-notification-title-${encodeURIComponent(item.id)}`}
           >
             <div className="experience-notification__tone" aria-hidden="true">
               {item.tone === 'success' ? '✓' : item.tone === 'warning' ? '!' : item.tone === 'error' ? '×' : 'i'}
@@ -100,11 +140,11 @@ const ExperienceNotificationToasts = ({
                 {item.category !== 'general' ? <span>· {item.category}</span> : null}
                 {item.occurrenceCount > 1 ? <span>· {item.occurrenceCount}×</span> : null}
               </div>
-              <h3 id={`experience-notification-title-${item.id}`} className="experience-notification__title">
+              <h3 id={`${instanceId}-notification-title-${encodeURIComponent(item.id)}`} className="experience-notification__title">
                 {item.title}
               </h3>
               {item.message ? <p className="experience-notification__message">{item.message}</p> : null}
-              {item.actions.length > 0 ? (
+              {onAction && item.actions.length > 0 ? (
                 <div className="experience-notification__actions" aria-label={`${item.title} işlemleri`}>
                   {item.actions.map((action) => (
                     <button
@@ -125,7 +165,10 @@ const ExperienceNotificationToasts = ({
                   type="button"
                   className="experience-notification__icon-action"
                   aria-label={`${item.title}: bildirimi kapat`}
-                  onClick={() => model.dismiss(item.id)}
+                  onClick={() => {
+                    prepareFocus(item.id);
+                    model.dismiss(item.id);
+                  }}
                 >
                   <span aria-hidden="true">×</span>
                 </button>
@@ -134,6 +177,16 @@ const ExperienceNotificationToasts = ({
           </article>
         ))}
       </div>
+      {hiddenCount > 0 ? (
+        <div className="experience-notifications__overflow">
+          <span>{hiddenCount} bildirim daha var</span>
+          {onOpenCenter ? (
+            <button type="button" className="experience-notifications__secondary-action" onClick={onOpenCenter}>
+              Tüm bildirimleri aç
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </aside>
   );
 };
@@ -171,6 +224,8 @@ export const ExperienceNotificationCenter = ({
   maxVisibleToasts = 4,
   label = 'Bildirimler',
   onAction,
+  returnFocusId,
+  onOpenCenter,
 }: ExperienceNotificationCenterProps): ReactNode => {
   if (mode === 'center') {
     return (
@@ -187,6 +242,8 @@ export const ExperienceNotificationCenter = ({
       model={model}
       maxVisibleToasts={maxVisibleToasts}
       label={label}
+      {...(returnFocusId ? { returnFocusId } : {})}
+      {...(onOpenCenter ? { onOpenCenter } : {})}
       {...(onAction ? { onAction } : {})}
     />
   );
