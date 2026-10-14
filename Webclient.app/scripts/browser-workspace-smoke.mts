@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+type Viewport = Readonly<{ width: number; height: number; forced?: boolean }>;
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const findBrowser = () => {
   for (const executable of [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser']) {
@@ -38,18 +40,16 @@ let socket;
 try {
   const portFile = join(dir, 'DevToolsActivePort');
   const port = await waitFor(() => existsSync(portFile) && Number(readFileSync(portFile, 'utf8').split('\n')[0]), 'Chromium debugger');
-  const targets = await waitFor(async () => {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/json`);
-      return (await response.json()).find((target) => target.type === 'page');
-    } catch { return null; }
-  }, 'Chromium page');
-  socket = new WebSocket(targets.webSocketDebuggerUrl);
+  // DevToolsActivePort already contains the browser WebSocket path; no HTTP discovery request.
+  const browserPath = readFileSync(portFile, 'utf8').split('\n')[1]?.trim();
+  assert.ok(browserPath?.startsWith('/devtools/browser/'), 'Chromium debugger path');
+  socket = new WebSocket(`ws://127.0.0.1:${port}${browserPath}`);
   await new Promise((resolveOpen, rejectOpen) => {
     socket.addEventListener('open', resolveOpen, { once: true });
     socket.addEventListener('error', rejectOpen, { once: true });
   });
   let id = 0;
+  let sessionId;
   const pending = new Map();
   socket.addEventListener('message', ({ data }) => {
     const message = JSON.parse(data);
@@ -62,28 +62,35 @@ try {
   const command = (method, params = {}) => new Promise((resolveCommand, rejectCommand) => {
     const currentId = ++id;
     pending.set(currentId, { resolve: resolveCommand, reject: rejectCommand });
-    socket.send(JSON.stringify({ id: currentId, method, params }));
+    socket.send(JSON.stringify({ id: currentId, method, params, ...(sessionId ? { sessionId } : {}) }));
   });
   const evaluate = async (expression) => {
     const result = await command('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
     return result.result.value;
   };
+  const { targetInfos } = await command('Target.getTargets');
+  const page = targetInfos.find((target) => target.type === 'page');
+  assert.ok(page?.targetId, 'Chromium page target');
+  ({ sessionId } = await command('Target.attachToTarget', { targetId: page.targetId, flatten: true }));
   await command('Page.enable');
   await command('Runtime.enable');
-  for (const { width, height, forced = false } of [
+  await command('DOM.enable');
+  const viewports: readonly Viewport[] = [
     { width: 320, height: 568 }, { width: 390, height: 844 },
     { width: 568, height: 320 }, { width: 800, height: 450 },
     { width: 1280, height: 800 }, { width: 320, height: 568, forced: true },
-  ]) {
+  ];
+  for (const { width, height, forced = false } of viewports) {
     await command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 800 });
     await command('Emulation.setTouchEmulationEnabled', { enabled: width < 800 });
     await command('Emulation.setEmulatedMedia', { features: [
       { name: 'forced-colors', value: forced ? 'active' : 'none' },
       { name: 'prefers-reduced-motion', value: 'reduce' },
     ] });
-    await command('Page.navigate', { url: 'about:blank' });
-    await evaluate('document.open(); document.write(' + JSON.stringify(html) + '); document.close(); true');
+    // The fixture is a fixed repository-owned document, never a response or user input.
+    const { root: documentNode } = await command('DOM.getDocument');
+    await command('DOM.setOuterHTML', { nodeId: documentNode.nodeId, outerHTML: html });
     await waitFor(async () => evaluate('document.readyState === "complete" && !!document.querySelector(".kr-fast-query__close")'), 'workspace fixture');
     const metrics = await evaluate(`(() => {
       const panel = document.querySelector('.kr-fast-query');
