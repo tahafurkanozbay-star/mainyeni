@@ -4,7 +4,7 @@
   z-index: 1200;
   pointer-events: none;
   font: inherit;
-  color: var(--experience-fg, #172033);
+  color: var(--exp-text, #172033);
 }
 
 .experience-overlay-layer {
@@ -47,10 +47,10 @@
   min-inline-size: 0;
   max-block-size: min(88dvh, 52rem);
   overflow: hidden;
-  border: 1px solid var(--experience-border, #d5dae2);
+  border: 1px solid var(--exp-border, #d5dae2);
   border-radius: 1rem;
-  background: var(--experience-surface, #ffffff);
-  color: var(--experience-fg, #172033);
+  background: var(--exp-surface, #ffffff);
+  color: var(--exp-text, #172033);
   box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 24%);
   transform-origin: center;
   transition:
@@ -59,7 +59,7 @@
 }
 
 .experience-overlay-surface:focus-visible {
-  outline: 3px solid var(--experience-focus, #2563eb);
+  outline: 3px solid var(--exp-accent, #2563eb);
   outline-offset: 3px;
 }
 
@@ -92,8 +92,8 @@
   gap: 0.75rem;
   min-block-size: 3.5rem;
   padding: 0.75rem 0.875rem 0.75rem 1rem;
-  border-block-end: 1px solid var(--experience-border, #d5dae2);
-  background: var(--experience-surface-elevated, #ffffff);
+  border-block-end: 1px solid var(--exp-border, #d5dae2);
+  background: var(--exp-surface-2, #ffffff);
 }
 
 .experience-overlay-surface__title {
@@ -130,7 +130,7 @@
 }
 
 .experience-overlay-surface__close:focus-visible {
-  outline: 3px solid var(--experience-focus, #2563eb);
+  outline: 3px solid var(--exp-accent, #2563eb);
   outline-offset: 2px;
 }
 
@@ -237,3 +237,10 @@
     outline-color: Highlight;
   }
 }
+
+.experience-overlay-surface--drawer > .experience-overlay-surface__body {
+  flex: 1 1 auto;
+  padding: 0;
+}
+
+.experience-overlay-surface__header { flex: 0 0 auto; }

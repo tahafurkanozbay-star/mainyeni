@@ -129,7 +129,8 @@ describe('ExperienceNotificationCenter', () => {
       />,
     );
 
-    expect(screen.getAllByRole('status')).toHaveLength(2);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.getByText('4 bildirim daha var')).toBeInTheDocument();
     expect(model.snapshot().items).toHaveLength(6);
   });
 
@@ -174,4 +175,87 @@ describe('ExperienceNotificationCenter', () => {
     expect(screen.queryByRole('button', { name: 'Bildirim fixed: bildirimi kapat' })).not.toBeInTheDocument();
     expect(screen.getByText('Bildirim fixed')).toBeInTheDocument();
   });
+  it('keeps older urgent feedback visible before newer normal notifications without reordering the model', () => {
+    const model = createModel();
+    push(model, 'urgent', { priority: 'urgent' });
+    push(model, 'error', { tone: 'error' });
+    push(model, 'normal');
+    const onOpenCenter = vi.fn();
+    render(<ExperienceNotificationCenter model={model} maxVisibleToasts={2} onOpenCenter={onOpenCenter} />);
+    expect(screen.getAllByRole('article').map((item) => item.dataset.notificationId)).toEqual(['error', 'urgent']);
+    expect(model.snapshot().items.map((item) => item.id)).toEqual(['normal', 'error', 'urgent']);
+    fireEvent.click(screen.getByRole('button', { name: 'Tüm bildirimleri aç' }));
+    expect(onOpenCenter).toHaveBeenCalledOnce();
+  });
+
+  it('announces each toast through one live channel and keeps card labels instance scoped', () => {
+    const model = createModel();
+    push(model, 'same id', { tone: 'error' });
+    const { container } = render(<><ExperienceNotificationCenter model={model} /><ExperienceNotificationCenter model={model} /></>);
+    const cards = screen.getAllByRole('article');
+    const labels = cards.map((card) => card.getAttribute('aria-labelledby'));
+    expect(new Set(labels).size).toBe(2);
+    for (const label of labels) expect(document.getElementById(label!)).toHaveTextContent('Bildirim same id');
+    expect(container.querySelectorAll('article[role="alert"], article[role="status"]')).toHaveLength(0);
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
+  });
+
+  it('does not display an action that has no registered handler', () => {
+    const model = createModel();
+    push(model, 'action', { action: true });
+    render(<ExperienceNotificationCenter model={model} />);
+    expect(screen.queryByRole('button', { name: 'Aç' })).not.toBeInTheDocument();
+    expect(model.snapshot().unreadCount).toBe(1);
+  });
+
+  it('moves keyboard focus to the next toast, then back to the caller when the last toast is dismissed', () => {
+    const model = createModel();
+    push(model, 'older');
+    push(model, 'newer');
+    render(<><button id="caller">Bildirim geçmişi</button><ExperienceNotificationCenter model={model} returnFocusId="caller" /></>);
+    const newerClose = screen.getByRole('button', { name: 'Bildirim newer: bildirimi kapat' });
+    newerClose.focus();
+    fireEvent.click(newerClose);
+    const olderClose = screen.getByRole('button', { name: 'Bildirim older: bildirimi kapat' });
+    expect(olderClose).toHaveFocus();
+    fireEvent.click(olderClose);
+    expect(screen.getByRole('button', { name: 'Bildirim geçmişi' })).toHaveFocus();
+  });
+
+  it('focuses the surviving card when it has no controls and skips an inert caller', () => {
+    const model = createModel();
+    push(model, 'fixed', { dismissible: false });
+    push(model, 'closing');
+    render(<><div inert><button id="caller">Caller</button></div><ExperienceNotificationCenter model={model} returnFocusId="caller" /></>);
+    const close = screen.getByRole('button', { name: 'Bildirim closing: bildirimi kapat' });
+    close.focus();
+    fireEvent.click(close);
+    expect(screen.getByRole('article')).toHaveFocus();
+  });
+
+  it('preserves focus moved by an action callback and does not steal focus on pointer dismissal', () => {
+    const model = createModel();
+    push(model, 'action', { action: true });
+    const outside = document.createElement('button');
+    outside.textContent = 'Outside';
+    document.body.append(outside);
+    render(<ExperienceNotificationCenter model={model} onAction={() => outside.focus()} />);
+    const action = screen.getByRole('button', { name: 'Aç' });
+    action.focus();
+    fireEvent.click(action);
+    expect(outside).toHaveFocus();
+    act(() => push(model, 'pointer'));
+    fireEvent.click(screen.getByRole('button', { name: 'Bildirim pointer: bildirimi kapat' }));
+    expect(outside).toHaveFocus();
+    outside.remove();
+  });
+
+  it('releases its model subscription after StrictMode replay and unmount', () => {
+    const model = createModel();
+    const { unmount } = render(<React.StrictMode><ExperienceNotificationCenter model={model} /></React.StrictMode>);
+    expect(model.observerDiagnostics().activeObserverCount).toBe(1);
+    unmount();
+    expect(model.observerDiagnostics().activeObserverCount).toBe(0);
+  });
+
 });
