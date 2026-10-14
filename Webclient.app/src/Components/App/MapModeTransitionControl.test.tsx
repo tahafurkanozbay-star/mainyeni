@@ -98,19 +98,19 @@ describe('MapModeTransitionControl', () => {
     const outside = document.createElement('button');
     document.body.append(outside);
     try {
-      scene.focus();
+      act(() => scene.focus());
       expect(scene.tabIndex).toBe(0);
       expect(map.tabIndex).toBe(-1);
-      outside.focus();
+      act(() => outside.focus());
       expect(map.tabIndex).toBe(0);
       expect(scene.tabIndex).toBe(-1);
 
       act(() => model.acknowledge('3d', 'runtime'));
       expect(scene.tabIndex).toBe(0);
       expect(map.tabIndex).toBe(-1);
-      map.focus();
+      act(() => map.focus());
       expect(map.tabIndex).toBe(0);
-      outside.focus();
+      act(() => outside.focus());
       expect(scene.tabIndex).toBe(0);
     } finally {
       outside.remove();
@@ -121,8 +121,7 @@ describe('MapModeTransitionControl', () => {
     renderControl();
     const map = screen.getByRole('button', { name: '2B harita görünümüne geç' });
     const scene = screen.getByRole('button', { name: '3B sahne görünümüne geç' });
-    map.focus();
-    scene.focus();
+    act(() => { map.focus(); scene.focus(); });
     expect(scene).toHaveFocus();
     expect(scene.tabIndex).toBe(0);
     expect(map.tabIndex).toBe(-1);
