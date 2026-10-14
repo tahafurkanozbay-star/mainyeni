@@ -1,12 +1,14 @@
 import {
   Fragment,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import {
   createRovingTabIndex,
   focusRovingTarget,
@@ -44,6 +46,8 @@ export interface ExperienceToolbarProps {
   readonly loop?: boolean;
   readonly className?: string;
   readonly describedBy?: string;
+  /** Portal hints escape scrolling toolbars; the native button keeps its label. */
+  readonly tooltipPlacement?: 'left' | 'right' | 'top' | 'bottom';
 }
 
 const toRovingItems = (
@@ -78,8 +82,10 @@ export function ExperienceToolbar({
   loop = true,
   className = '',
   describedBy,
+  tooltipPlacement,
 }: ExperienceToolbarProps): ReactNode {
   const rootRef = useRef<HTMLDivElement>(null);
+  const tooltipId = useId();
   const previousItemsRef = useRef<readonly RovingFocusItem[]>([]);
   const rovingItems = useMemo(() => toRovingItems(items), [items]);
   const [activeIndex, setActiveIndex] = useState(() => getInitialRovingIndex(rovingItems));
@@ -117,6 +123,7 @@ export function ExperienceToolbar({
       aria-describedby={describedBy}
       aria-orientation={orientation === 'vertical' ? 'vertical' : 'horizontal'}
       data-orientation={orientation}
+      data-portal-tooltips={Boolean(tooltipPlacement)}
       dir={direction}
       onKeyDown={handleKeyDown}
     >
@@ -124,6 +131,27 @@ export function ExperienceToolbar({
         if (item.hidden) return null;
         const disabled = Boolean(item.disabled || item.busy);
         const groupBoundary = hasGroupBoundary(items, index);
+        const button = (
+          <button
+            type="button"
+            className={`experience-toolbar__button ${item.className ?? ''}`.trim()}
+            data-roving-focus-id={item.id}
+            data-toolbar-group={item.group}
+            data-tooltip={item.tooltip}
+            title={tooltipPlacement ? undefined : item.tooltip ?? item.label}
+            tabIndex={tabIndices[index] ?? -1}
+            disabled={disabled}
+            aria-label={item.label}
+            aria-pressed={item.pressed}
+            aria-busy={item.busy || undefined}
+            aria-keyshortcuts={item.ariaKeyShortcuts}
+            onFocus={() => setActiveIndex(index)}
+            onClick={item.onActivate}
+          >
+            {item.icon ? <span className="experience-toolbar__icon" aria-hidden="true">{item.icon}</span> : null}
+            <span className="experience-toolbar__label">{item.label}</span>
+          </button>
+        );
         return (
           <Fragment key={item.id}>
             {groupBoundary ? (
@@ -134,27 +162,11 @@ export function ExperienceToolbar({
                 data-group-start={item.group}
               />
             ) : null}
-            <button
-              type="button"
-              className={`experience-toolbar__button ${item.className ?? ''}`.trim()}
-              data-roving-focus-id={item.id}
-              data-toolbar-group={item.group}
-              data-tooltip={item.tooltip}
-              title={item.tooltip ?? item.label}
-              tabIndex={tabIndices[index] ?? -1}
-              disabled={disabled}
-              aria-label={item.label}
-              aria-pressed={item.pressed}
-              aria-busy={item.busy || undefined}
-              aria-keyshortcuts={item.ariaKeyShortcuts}
-              onFocus={() => setActiveIndex(index)}
-              onClick={item.onActivate}
-            >
-              {item.icon ? (
-                <span className="experience-toolbar__icon" aria-hidden="true">{item.icon}</span>
-              ) : null}
-              <span className="experience-toolbar__label">{item.label}</span>
-            </button>
+            {tooltipPlacement ? (
+              <OverlayTrigger placement={tooltipPlacement} overlay={<Tooltip id={`${tooltipId}-${index}`} className="experience-toolbar-tooltip">{item.tooltip ?? item.label}</Tooltip>}>
+                {button}
+              </OverlayTrigger>
+            ) : button}
             {item.groupLabel ? (
               <span className="experience-sr-only" data-toolbar-group-label={item.group}>
                 {item.groupLabel}
