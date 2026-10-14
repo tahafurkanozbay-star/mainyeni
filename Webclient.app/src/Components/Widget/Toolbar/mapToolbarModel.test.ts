@@ -370,4 +370,18 @@ describe('mapToolbarModel', () => {
     model.resetLocation();
     expect(model.getSnapshot()).toMatchObject({ revision: 3, locationPhase: 'idle' });
   });
+  it('does not navigate to fallback after a user-interrupted requested navigation', async () => {
+    const model = new MapToolbarModel(); const onError = vi.fn();
+    const showLocation = vi.fn(async () => { throw new DOMException('User navigation interrupted.', 'AbortError'); });
+    const sidebar = vi.fn();
+    expect(await model.locate({ requestPosition: async () => ({ x: 32.8, y: 39.9 }), showLocation, showSidebar: sidebar, onError })).toBe('cancelled');
+    expect(showLocation).toHaveBeenCalledTimes(1); expect(sidebar).not.toHaveBeenCalled(); expect(onError).not.toHaveBeenCalled();
+    expect(model.getSnapshot().announcement).toContain('Konum gösterimi durduruldu.');
+  });
+  it('does not report a fallback camera interruption as a rendering error', async () => {
+    const model = new MapToolbarModel(); const onError = vi.fn();
+    expect(await model.locate({ requestPosition: async () => { throw new Error('Location unavailable.'); }, showLocation: async () => { throw new DOMException('User interruption.', 'AbortError'); }, showSidebar: vi.fn(), onError })).toBe('cancelled');
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
 });

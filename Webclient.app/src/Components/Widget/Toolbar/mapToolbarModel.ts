@@ -1,3 +1,5 @@
+import { isAbortLike } from '../../../platform/runtime/contracts';
+
 export type MapToolbarActionId =
   | 'feedback'
   | 'basemap'
@@ -9,7 +11,7 @@ export type MapToolbarActionId =
   | 'home';
 
 export type MapToolbarGroupId = 'municipal' | 'analysis' | 'navigation';
-export type MapToolbarLocationPhase = 'idle' | 'locating' | 'success' | 'fallback' | 'error';
+export type MapToolbarLocationPhase = 'idle' | 'locating' | 'success' | 'fallback' | 'error' | 'cancelled';
 export type MapToolbarActionKind = 'external' | 'window' | 'location' | 'home';
 
 export interface MapToolbarPoint {
@@ -136,6 +138,7 @@ const LOCATION_ANNOUNCEMENTS: Readonly<Record<MapToolbarLocationPhase, string>> 
   success: 'Konumunuz haritada gösterildi.',
   fallback: 'Konum alınamadı. Ankara merkez konumu gösterildi.',
   error: 'Konum gösterilemedi. Harita araçlarını kullanmaya devam edebilirsiniz.',
+  cancelled: 'Konum gösterimi durduruldu. Haritayı kullanmaya devam edebilirsiniz.',
 });
 
 const DEFAULT_MAX_LISTENERS = 24;
@@ -326,6 +329,10 @@ export class MapToolbarModel {
       return 'success';
     } catch (primaryError) {
       if (this.#disposed || generation !== this.#generation) return this.#snapshot.locationPhase;
+      if (isAbortLike(primaryError)) {
+        this.#publish('cancelled');
+        return 'cancelled';
+      }
       void invokeErrorReporter(dependencies.onError, primaryError);
 
       try {
@@ -340,6 +347,10 @@ export class MapToolbarModel {
         return 'fallback';
       } catch (fallbackError) {
         if (this.#disposed || generation !== this.#generation) return this.#snapshot.locationPhase;
+        if (isAbortLike(fallbackError)) {
+          this.#publish('cancelled');
+          return 'cancelled';
+        }
         void invokeErrorReporter(dependencies.onError, fallbackError);
         this.#publish('error');
         return 'error';
