@@ -114,6 +114,41 @@ try {
       assert.ok(button.height >= 44, `touch target ${button.name} at ${width}x${height}: ${button.height}`);
       assert.ok(button.left >= metrics.panel.left - 1 && button.right <= metrics.panel.right + 1, `button horizontal bounds ${button.name}`);
     }
+    // This fixture checks browser keyboard mechanics and CSS, not the real app's focus manager.
+    const accessibility = await evaluate(`(() => {
+      const input = document.querySelector('#park-filter');
+      const label = document.querySelector('label[for="park-filter"]');
+      const buttons = [...document.querySelectorAll('.kr-fast-query button')];
+      return {
+        namedPanel: !!document.querySelector('section[aria-label="Parklar sonuçları"]'),
+        labeledFilter: !!input && !!label && label.textContent.trim().length > 0,
+        filterHeight: input?.getBoundingClientRect().height ?? 0,
+        namedButtons: buttons.every((button) => (button.getAttribute('aria-label') || button.textContent || '').trim().length > 0),
+      };
+    })()`);
+    assert.equal(accessibility.namedPanel, true, 'query region must have an accessible name');
+    assert.equal(accessibility.labeledFilter, true, 'filter input must have an associated visible label');
+    assert.ok(accessibility.filterHeight >= 44, `filter touch target at ${width}x${height}`);
+    assert.equal(accessibility.namedButtons, true, 'every fixture action must have an accessible name');
+
+    // Real Chromium Tab navigation must reveal a visible focus indicator, including forced colors.
+    await evaluate("document.querySelector('.kr-fast-query__back').focus()");
+    await command('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+    await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+    const keyboardFocus = await evaluate(`(() => {
+      const active = document.activeElement;
+      const outline = getComputedStyle(active);
+      return {
+        name: active?.getAttribute('aria-label'),
+        focusVisible: active?.matches(':focus-visible'),
+        outlineStyle: outline.outlineStyle,
+        outlineWidth: parseFloat(outline.outlineWidth),
+      };
+    })()`);
+    assert.equal(keyboardFocus.name, 'Küçült', 'Tab follows DOM action order');
+    assert.equal(keyboardFocus.focusVisible, true, 'keyboard focus is visibly distinguished');
+    assert.equal(keyboardFocus.outlineStyle, 'solid', 'keyboard focus has a solid outline');
+    assert.ok(keyboardFocus.outlineWidth >= 2, 'keyboard focus outline is at least 2px');
     console.log(`PASS ${width}x${height} forced=${forced} panel=${Math.round(metrics.panel.width)}x${Math.round(metrics.panel.height)} targets=${metrics.buttons.length}`);
   }
 } finally {
