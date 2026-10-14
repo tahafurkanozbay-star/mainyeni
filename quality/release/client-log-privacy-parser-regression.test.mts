@@ -22,7 +22,7 @@ test('balanced nested payload expressions preserve the third logging argument', 
   const result = audit([{ path: userPath, text }]);
   assert.equal(result.summary.clientLogCalls, 1);
   assert.equal(result.summary.flaggedCalls, 1);
-  assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'sensitive-property');
+  assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'sensitive-object-key');
   assert.equal(result.findings[0]?.location?.line, 1);
 });
 
