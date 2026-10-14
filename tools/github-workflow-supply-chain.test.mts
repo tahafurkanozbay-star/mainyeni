@@ -463,3 +463,29 @@ test('canonical inline shell steps retain passing workflow behavior', () => {
     '      - run: echo safe');
   assert.equal(evaluate(source).ok, true);
 });
+
+test('workflow permission merge alias cannot import elevated token grants', () => {
+  const source = workflow().replace('  contents: read\njobs:',
+    '  contents: read\n  <<: *extra_grants\njobs:');
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-alias'));
+});
+test('workflow permission scalar alias cannot hide a write grant', () => {
+  const source = workflow().replace('  contents: read\njobs:',
+    '  contents: read\n  actions: *hidden_grant\njobs:');
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-alias'));
+});
+test('job permission merge alias cannot import elevated token grants', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n      <<: *extra_grants\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-alias'));
+});
+test('job permission scalar alias cannot hide a write grant', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n      actions: *hidden_grant\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-alias'));
+});
+test('canonical read-only job permissions remain supported', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n    timeout-minutes: 10');
+  assert.equal(evaluate(source).ok, true);
+});

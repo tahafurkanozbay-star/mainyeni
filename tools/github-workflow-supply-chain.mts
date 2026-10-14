@@ -38,6 +38,10 @@ export const auditWorkflowSource = (file, source) => {
         'Workflow requires contents: read and no elevated token permissions.'));
     }
     for (const item of block) {
+      if (/^<<\s*:|^[^\s:]+\s*:\s*(?:&[A-Za-z0-9_-]+\s+)?\*[A-Za-z0-9_-]+(?:\s|$)/.test(item.text)) {
+        findings.push(find('workflow-permissions-alias', file, item.line,
+          'Permission merge keys and scalar aliases cannot import unreviewed token grants.'));
+      }
       if (/\bwrite\b|write-all/i.test(item.text) || item.text === 'contents: write') {
         findings.push(find('workflow-permissions-elevated', file, item.line,
           'Elevated workflow token permissions require a separate reviewed release policy.'));
@@ -222,6 +226,10 @@ export const auditWorkflowSource = (file, source) => {
             'Job-level write permissions are not allowed in quality workflows.'));
         }
         for (const item of block) {
+          if (/^<<\s*:|^[^\s:]+\s*:\s*(?:&[A-Za-z0-9_-]+\s+)?\*[A-Za-z0-9_-]+(?:\s|$)/.test(item.text)) {
+            findings.push(find('workflow-job-permissions-alias', file, item.line,
+              'Job permission merge keys and scalar aliases cannot import unreviewed token grants.'));
+          }
           if (/\bwrite\b|write-all/i.test(item.text)) {
             findings.push(find('workflow-job-permissions-elevated', file, item.line,
               'Job-level write permissions are not allowed in quality workflows.'));
