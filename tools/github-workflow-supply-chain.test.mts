@@ -287,6 +287,35 @@ test('reusable workflow job cannot bypass action provenance checks', () => {
     '    uses: another/repository/.github/workflows/release.yml@main\n    timeout-minutes: 10');
   assert.ok(codes(evaluate(source)).includes('workflow-job-reusable-unreviewed'));
 });
+test('missing workflow trigger is rejected', () => {
+  const source = workflow().replace('on:\n  pull_request:\n', '');
+  assert.ok(codes(evaluate(source)).includes('workflow-trigger-missing'));
+});
+test('duplicate workflow event keys cannot shadow a safe trigger', () => {
+  const source = workflow().replace('permissions:\n',
+    'on:\n  workflow_run:\npermissions:\n');
+  const report = evaluate(source);
+  assert.ok(codes(report).includes('workflow-trigger-duplicate'));
+  assert.ok(codes(report).includes('workflow-untrusted-trigger'));
+});
+test('quoted duplicate workflow event key is rejected', () => {
+  const source = workflow().replace('permissions:\n',
+    '"on":\n  push:\npermissions:\n');
+  assert.ok(codes(evaluate(source)).includes('workflow-trigger-duplicate'));
+});
+test('whitespace before a privileged event colon cannot bypass admission', () => {
+  const source = workflow().replace('  pull_request:', '  workflow_run :');
+  assert.ok(codes(evaluate(source)).includes('workflow-untrusted-trigger'));
+});
+test('scalar workflow event alias is rejected', () => {
+  const source = workflow().replace('on:\n  pull_request:', 'on: *shared_events');
+  assert.ok(codes(evaluate(source)).includes('workflow-trigger-alias'));
+});
+test('merged workflow event alias is rejected', () => {
+  const source = workflow().replace('  pull_request:', '  <<: *shared_events');
+  assert.ok(codes(evaluate(source)).includes('workflow-trigger-merge-alias'));
+});
+
 test('ordinary triggers and step actions retain passing baseline', () => {
   assert.equal(evaluate(workflow({ trigger: 'push' })).ok, true);
   assert.equal(evaluate(workflow({ trigger: 'pull_request' })).ok, true);

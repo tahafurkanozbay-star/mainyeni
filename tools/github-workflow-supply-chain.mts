@@ -60,15 +60,36 @@ export const auditWorkflowSource = (file, source) => {
   }
   // YAML permits scalar/list and quoted trigger forms. Checking only the
   // indented mapping form leaves privileged event admission unreviewed.
-  const triggerHeader = lines.findIndex(line => /^(?:on|'on'|"on"):\s*/.test(line));
-  if (triggerHeader >= 0) {
+  // Treat the workflow event map as a single authority. A second YAML key
+  // can shadow the reviewed trigger map, including with a quoted 'on' key.
+  const triggerHeaders = lines.flatMap((line, index) =>
+    /^(?:on|'on'|"on")\s*:/.test(line) ? [index] : []);
+  if (triggerHeaders.length === 0) {
+    findings.push(find('workflow-trigger-missing', file, 1,
+      'Quality workflows must declare an explicit event trigger.'));
+  }
+  if (triggerHeaders.length > 1) {
+    findings.push(find('workflow-trigger-duplicate', file, triggerHeaders[1] + 1,
+      'Duplicate workflow triggers can shadow the reviewed event policy.'));
+  }
+  for (const triggerHeader of triggerHeaders) {
     const header = lines[triggerHeader].replace(/\s+#.*$/, '');
     const privileged = /\b(?:pull_request_target|workflow_run)\b/;
     let untrusted = privileged.test(header);
+    if (/\s*:\s*[&*]/.test(header)) {
+      findings.push(find('workflow-trigger-alias', file, triggerHeader + 1,
+        'Workflow event aliases and anchors require an explicit reviewed trigger map.'));
+    }
     for (let i = triggerHeader + 1; i < lines.length &&
       (!lines[i].trim() || /^\s/.test(lines[i])); i++) {
-      if (/^  ['"]?(?:pull_request_target|workflow_run)['"]?\s*:/.test(lines[i]) &&
-        !isComment(lines[i])) untrusted = true;
+      if (isComment(lines[i])) continue;
+      if (/^  ['"]?(?:pull_request_target|workflow_run)['"]?\s*:/.test(lines[i])) {
+        untrusted = true;
+      }
+      if (/^  <<\s*:/.test(lines[i])) {
+        findings.push(find('workflow-trigger-merge-alias', file, i + 1,
+          'YAML merge aliases cannot supply reviewed workflow events.'));
+      }
     }
     if (untrusted) {
       findings.push(find('workflow-untrusted-trigger', file, triggerHeader + 1,
