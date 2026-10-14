@@ -625,3 +625,10 @@
 - SOURCE REPAIR: wrap native focus transitions in `act()` before asserting roving tabIndex, including outside-group blur and in-group focus transfer; preserve production keyboard behavior and accessibility semantics. GitHub-native blob/tree/commit on the same branch; final exact-head CI is required before merge.
 - UX / SECURITY: no new dependency, remote font/CDN, endpoint, WMS/WFS UI, telemetry, heavy asset, secret or second icon resolver. Source-only regression review; real 320px/landscape, keyboard, forced-colors, screen-reader and deployed GIS validation not claimed.
 - MERGE GATE / NEXT: base...head 4,057 meaningful additions / 317 deletions before repair; threshold met. DO NOT MERGE until repaired exact-head five mandatory checks completed-success, current main/merge-base and mergeable rechecked, draft/review status resolved and final release UX risk cleared. Keep canonical PR open if any check is pending.
+
+
+### 2026-10-14 — Experience #492 release gate checkpoint (05:25 Europe/Istanbul)
+- PR #492 source head `85b4c60d85e40b80b5a226f93b63fad6edc845d7`, main/merge-base `485ee235a23bc02cce37842c17755fc581b04b00`, 99 ahead / 0 behind, 4,063 additions / 317 deletions, mergeable=true, open/draft, zero review threads.
+- Exact-head five mandatory GitHub Actions checks completed-success: Typed Source Boundary, Platform Architecture Audit, Platform Dependency Governance, Webclient Quality and Release QA. Webclient exact-base TypeScript/Vitest, lint, production Vite build and budget/integrity checks succeeded; backend Release build/test/publish succeeded.
+- Source review covered map mode roving focus, shared focus authority, result paging and menu keyboard behavior; no critical regression identified in this limited inspection. Real browser 320px/landscape, forced-colors, screen-reader and live GIS validation not claimed.
+- Ready-for-review transition rejected by OpenAI safety checks; draft protection remains, no merge. No new dependencies, network/remote fonts, WMS/WFS UI, icon resolver or telemetry. Next turn recheck exact-head/main/mergeability and try authorized ready/squash merge; keep canonical PR and automation active.
