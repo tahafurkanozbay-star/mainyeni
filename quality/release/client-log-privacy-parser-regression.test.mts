@@ -138,7 +138,7 @@ test('the ninth sensitive call changes exact-base evidence without exceeding eig
   const overflow10 = ten.findings.find(f => f.id.endsWith('overflow'));
   assert.equal(overflow9?.evidence?.value, 2);
   assert.equal(overflow10?.evidence?.value, 3);
-  assert.notDeepEqual(overflow9?.evidence, overflow10?.evidence);
+  assert.notEqual(overflow9?.evidence?.value, overflow10?.evidence?.value);
   assert.ok(!JSON.stringify(nine.findings).includes('record.address'));
 });
 
