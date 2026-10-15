@@ -52,3 +52,47 @@ test('Admin test code and generated assets are excluded from runtime network evi
   assert.equal(report.summary.insecureCount, 0);
   assert.equal(report.summary.references.length, 0);
 });
+
+
+test('App test fixtures cannot manufacture production plain-HTTP regressions', () => {
+  const literal = 'const url = "http://user:secret@gis.example.test/arcgis/MapServer";';
+  const report = inspect(
+    { path: 'Webclient.app/src/gis-engine/serviceCatalog.test.ts', text: literal },
+    { path: 'Webclient.app/src/platform/platform.spec.ts', text: literal },
+    { path: 'Webclient.app/src/Toolbox/__tests__/RecordSchemaRuntime.ts', text: literal },
+    { path: 'Webclient.app/src/fixtures/gis/network.ts', text: literal },
+    { path: 'Webclient.app/src/data/mock/mockService.ts', text: literal },
+    { path: 'Webclient.admin/src/gis/network.test.ts', text: literal },
+    { path: 'Webclient.app/src/gis-engine/serviceCatalog.ts', text: 'const url = "/gis/safe";' },
+  );
+  assert.equal(report.summary.insecureCount, 0);
+  assert.equal(report.summary.references.length, 0);
+  assert.equal(report.findings.filter(item => item.id === 'network-insecure-http').length, 0);
+});
+
+test('App and Admin production sources still fail closed on insecure HTTP', () => {
+  const report = inspect(
+    { path: 'Webclient.app/src/gis-engine/serviceCatalog.ts', text: 'const url = "http://gis.example.test/arcgis/MapServer";' },
+    { path: 'Webclient.admin/src/gis/network.ts', text: 'const url = "http://admin.example.test/api";' },
+    { path: 'Webclient.app/src/gis-engine/serviceCatalog.test.ts', text: 'const url = "http://example.test/fake";' },
+  );
+  assert.equal(report.summary.insecureCount, 2);
+  assert.equal(report.summary.references.length, 2);
+  const insecure = report.findings.filter(item => item.id === 'network-insecure-http');
+  assert.equal(insecure.length, 2);
+  assert.deepEqual(insecure.map(item => item.location?.file).sort(), [
+    'Webclient.admin/src/gis/network.ts',
+    'Webclient.app/src/gis-engine/serviceCatalog.ts',
+  ]);
+});
+
+test('App test fixtures cannot inflate fetch or third-party analytics counters', () => {
+  const report = inspect(
+    { path: 'Webclient.app/src/queries/query.test.tsx', text: 'fetch("https://analytics.example.test/collect")' },
+    { path: 'Webclient.app/src/queries/fixture/index.ts', text: 'fetch("https://analytics.example.test/collect")' },
+    { path: 'Webclient.app/src/queries/query.ts', text: 'const safe = () => fetch("/api/search");' },
+  );
+  assert.equal(report.summary.directFetchCalls, 1);
+  assert.equal(report.summary.absoluteFetchCalls, 0);
+  assert.ok(!report.findings.some(item => item.id === 'network-third-party-analytics'));
+});
