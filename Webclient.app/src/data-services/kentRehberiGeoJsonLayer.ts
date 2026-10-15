@@ -1,4 +1,5 @@
 import { loadArcgisModule } from '../gis-engine/arcgisModuleRuntime';
+import { readBoundedResponseText } from './boundedResponseText';
 import { normalizeApiBaseUrl, runtimeConfig } from '../platform/config/runtimeConfig';
 import {
   fetchPlanAskiFeatureDirect,
@@ -388,10 +389,7 @@ const readBoundedJsonResponse = async (
     throw new TypeError('Kent Rehberi endpoint returned an unexpected content type.');
   }
 
-  const body = await response.text();
-  if (new TextEncoder().encode(body).byteLength > maxPayloadBytes) {
-    throw new RangeError('Kent Rehberi response exceeded the payload budget.');
-  }
+  const body = await readBoundedResponseText(response, maxPayloadBytes, 'Kent Rehberi');
 
   try {
     return JSON.parse(body) as unknown;
