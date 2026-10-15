@@ -115,6 +115,80 @@ public sealed class KentRehberiPlanAskiSourceTests
     }
 
     [Theory]
+    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\\nNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
+    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\\r\\nNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
+    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\\rNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
+    public async Task GetType_NormalizesAddressLineBreaksOnly(
+        string payload,
+        string expectedAddress)
+    {
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        var features = await fixture.Source.GetTypeAsync(
+            0,
+            CancellationToken.None);
+
+        Assert.Equal(
+            expectedAddress,
+            Assert.Single(features).Properties.Adres);
+    }
+
+    [Theory]
+    [InlineData("""[{"objectId":201,"adi":"Kurum\\nAdi","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"adres":"Sokak\\tNo:12","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"adres":"Sokak\\u0000No:12","tur":0}]""")]
+    public async Task GetType_StillRejectsOtherTextControlCharacters(
+        string payload)
+    {
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        await Assert.ThrowsAsync<KentRehberiPlanAskiProtocolException>(
+            () => fixture.Source.GetTypeAsync(
+                0,
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetType_RejectsOversizedAddressAfterNormalization()
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(
+            new[]
+            {
+                new
+                {
+                    objectId = 201,
+                    tur = 0,
+                    adres = new string('a', 4096) + "\n" + "extra"
+                }
+            });
+
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        await Assert.ThrowsAsync<KentRehberiPlanAskiProtocolException>(
+            () => fixture.Source.GetTypeAsync(
+                0,
+                CancellationToken.None));
+    }
+
+    [Theory]
     [InlineData("""{"isSuccess":true,"data":null}""")]
     [InlineData("""{"success":true,"results":null}""")]
     public async Task GetType_TreatsExplicitSuccessfulNullEnvelopeAsEmpty(
