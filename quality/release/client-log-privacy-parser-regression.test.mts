@@ -55,7 +55,8 @@ test('per-file finding bounds do not suppress later calls or another file', () =
   const result = audit(files);
   assert.equal(result.summary.runtimeFiles, 2);
   assert.equal(result.summary.clientLogCalls, 22);
-  assert.equal(result.summary.flaggedCalls, 16);
+  assert.equal(result.summary.flaggedCalls, 20);
+  assert.equal(result.summary.retainedFindings, 16);
   assert.equal(result.findings.filter(item => item.location?.file === userPath).length, 8);
   assert.equal(result.findings.filter(item => item.location?.file === adminPath).length, 8);
 });
@@ -131,8 +132,9 @@ test('the ninth sensitive call changes exact-base evidence without exceeding eig
   const nine = inspect(9);
   const ten = inspect(10);
   assert.equal(eight.summary.flaggedCalls, 8);
-  assert.equal(nine.summary.flaggedCalls, 8);
-  assert.equal(ten.summary.flaggedCalls, 8);
+  assert.equal(nine.summary.flaggedCalls, 9);
+  assert.equal(ten.summary.flaggedCalls, 10);
+  assert.equal(ten.summary.retainedFindings, 8);
   assert.ok(!eight.findings.some(f => f.id.endsWith('overflow')));
   const overflow9 = nine.findings.find(f => f.id.endsWith('overflow'));
   const overflow10 = ten.findings.find(f => f.id.endsWith('overflow'));
@@ -151,7 +153,8 @@ test('safe calls between the eighth and ninth sensitive payload cannot mask over
     unsafe,
   ].join('\n') }]);
   assert.equal(report.summary.clientLogCalls, 34);
-  assert.equal(report.summary.flaggedCalls, 8);
+  assert.equal(report.summary.flaggedCalls, 9);
+  assert.equal(report.summary.retainedFindings, 8);
   assert.equal(report.findings.filter(f => f.id.endsWith('overflow')).length, 1);
   assert.equal(report.findings.find(f => f.id.endsWith('overflow'))?.evidence?.value, 2);
 });

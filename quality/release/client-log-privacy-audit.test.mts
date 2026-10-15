@@ -45,7 +45,8 @@ test('bounds findings to eight per file but counts every logger call', () => {
     'safeClientLog(LoggingBusiness, "Map", record.address);').join('\n');
   const result = audit(source(text));
   assert.equal(result.summary.clientLogCalls, 15);
-  assert.equal(result.summary.flaggedCalls, 8);
+  assert.equal(result.summary.flaggedCalls, 15);
+  assert.equal(result.summary.retainedFindings, 8);
   assert.equal(result.findings[0]?.location?.line, 1);
   assert.equal(result.findings.at(-1)?.location?.line, 8);
 });

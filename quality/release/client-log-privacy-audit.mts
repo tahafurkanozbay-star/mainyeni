@@ -11,6 +11,7 @@ export interface ClientLogPrivacySummary {
   readonly runtimeFiles: number;
   readonly clientLogCalls: number;
   readonly flaggedCalls: number;
+  readonly retainedFindings: number;
 }
 
 const RUNTIME_PATH = /^(?:Webclient\.app|Webclient\.admin)\/src\//;
@@ -147,6 +148,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
   const files = inventory.files.filter(isRuntime);
   const findings: Finding[] = [];
   let clientLogCalls = 0;
+  let detectedUnsafeCalls = 0;
   for (const file of files) {
     const index = createLineIndex(file.text);
     const fileFindingStart = findings.length;
@@ -161,6 +163,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
         : call.arguments.length >= 3 ? riskReason(call.arguments[2] ?? '') : null;
       if (!reason) continue;
       flaggedInFile += 1;
+      detectedUnsafeCalls += 1;
       if (flaggedInFile > 8) continue;
       findings.push({
         id: 'client-log-sensitive-payload',
@@ -195,7 +198,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
   return {
     domain: 'security',
     title: 'Client log payload privacy',
-    summary: { runtimeFiles: files.length, clientLogCalls, flaggedCalls: findings.length },
+    summary: { runtimeFiles: files.length, clientLogCalls, flaggedCalls: detectedUnsafeCalls, retainedFindings: findings.length },
     findings: stableSortFindings(findings),
     elapsedMs: performance.now() - start,
   };
