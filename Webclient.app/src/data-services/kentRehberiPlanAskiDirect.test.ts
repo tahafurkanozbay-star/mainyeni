@@ -115,7 +115,7 @@ describe('direct PlanASKI browser transport', () => {
       10: [row(10, 201)],
       13: [row(13, 202, { adi: 'Kadin Danisma', ilce: 'SİNCAN' })],
     });
-    const result = await fetchPlanAskiGeoJsonDirect({ limit: 10, q: 'danisma', ilce: 'sincan', fetchImpl });
+    const result = await fetchPlanAskiGeoJsonDirect({ limit: 10, q: 'kadın danışma', ilce: 'sincan', fetchImpl });
     expect(result.features.map((feature) => feature.id)).toEqual([202]);
     const feature = await fetchPlanAskiFeatureDirect(202, { fetchImpl });
     expect(feature?.properties.tur).toBe(13);
@@ -132,6 +132,7 @@ describe('direct PlanASKI browser transport', () => {
     { objectId: 0 },
     { tur: 42 },
     { x: 181 },
+    { x: '' },
     { x: 32.8, y: null },
     { adi: 'A'.repeat(4097) },
   ])('rejects malformed official records without silently skipping them', async (overrides) => {
