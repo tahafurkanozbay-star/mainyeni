@@ -1,9 +1,9 @@
 import type { AuditSection, Finding, RepositoryInventory, SourceFile } from './contracts.mts';
 export interface ResponsiveAuditSummary { readonly cssFiles: number; readonly componentFiles: number; readonly mediaQueries: number; readonly containerQueries: number; readonly fixedWidthCandidates: number; readonly viewportHeightCandidates: number; readonly touchTargetCandidates: number; readonly findingsByRule: Readonly<Record<string, number>>; }
 interface Located { readonly line: number; readonly excerpt: string; }
-const GENERATED = /(^|\/)(dist|build|coverage|node_modules)(\/|$)/i; const TEST = /(^|\/)(__tests__|tests?|fixtures?)(\/|\.|$)/i;
+const GENERATED = /(^|\/)(dist|build|coverage|node_modules)(\/|$)/i; const TEST = /(^|\/)(__tests__|tests?|fixtures?)(\/|\.|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/i;
 function css(file: SourceFile): boolean { return file.kind === 'css' && !GENERATED.test(file.repositoryPath) && !TEST.test(file.repositoryPath); }
-function component(file: SourceFile): boolean { return ['javascript','typescript'].includes(file.kind) && /Webclient\.(?:app|Admin)\/src\//.test(file.repositoryPath) && !GENERATED.test(file.repositoryPath) && !TEST.test(file.repositoryPath); }
+function component(file: SourceFile): boolean { return ['javascript','typescript'].includes(file.kind) && /Webclient\.(?:app|admin)\/src\//.test(file.repositoryPath) && !GENERATED.test(file.repositoryPath) && !TEST.test(file.repositoryPath); }
 function lineAt(text: string, offset: number): number { let line = 1; for (let i=0;i<offset;i+=1) if (text.charCodeAt(i)===10) line+=1; return line; }
 function locate(text: string, pattern: RegExp): Located[] { const flags=pattern.flags.includes('g')?pattern.flags:`${pattern.flags}g`; return [...text.matchAll(new RegExp(pattern.source,flags))].map(match=>({line:lineAt(text,match.index??0),excerpt:match[0].replace(/\s+/g,' ').trim().slice(0,200)})); }
 function finding(id:string,severity:Finding['severity'],title:string,message:string,file:SourceFile,match:Located,remediation:string,tags:readonly string[]):Finding{return{id,domain:'responsive',severity,title,message,location:{file:file.repositoryPath,line:match.line},evidence:{excerpt:match.excerpt},remediation,tags};}
