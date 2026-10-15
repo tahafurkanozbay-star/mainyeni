@@ -30,8 +30,14 @@ const optionalText = (raw: unknown, lineBreaks = false): string | null => {
   let text = String(raw).trim();
   if (lineBreaks) text = text.replace(/\r\n|\r|\n/gu, ' ');
   if (!text) return null;
-  if (text.length > MAX_TEXT || /[\u0000-\u001f\u007f-\u009f]/u.test(text)) {
-    throw new TypeError('PlanASKI returned an invalid text field.');
+  if (text.length > MAX_TEXT) {
+    throw new TypeError('PlanASKI returned an oversized text field.');
+  }
+  for (const character of text) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || (code >= 127 && code <= 159)) {
+      throw new TypeError('PlanASKI returned a control character.');
+    }
   }
   return text;
 };
