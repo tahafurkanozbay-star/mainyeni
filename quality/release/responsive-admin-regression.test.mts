@@ -95,3 +95,37 @@ test('audits app and Admin components together without double-counting', () => {
     adminComponent,
   ]);
 });
+
+
+test('never mistakes responsive query feature widths for layout declarations', () => {
+  const result = inspect(css(adminCss, [
+    '@media screen and (min-width: 800px) and (max-width: 1200px) {',
+    '  .sidebar { max-width: 100%; }',
+    '}',
+    '@container sidebar (width: 900px) and (min-width: 20px) {',
+    '  .sidebar { min-width: 0; }',
+    '}',
+    '@media (height: 100vh) and (max-height: 30px) {',
+    '  .sidebar { max-height: 100%; }',
+    '}',
+  ].join('\n')));
+  assert.equal(result.summary.mediaQueries, 2);
+  assert.equal(result.summary.containerQueries, 1);
+  assert.equal(result.summary.fixedWidthCandidates, 0);
+  assert.equal(result.summary.viewportHeightCandidates, 0);
+  assert.equal(result.summary.touchTargetCandidates, 0);
+  assert.equal(result.findings.length, 0);
+});
+
+test('real CSS declarations inside query blocks still trigger safety findings', () => {
+  const result = inspect(css(adminCss, [
+    '@media (max-width: 700px) {',
+    '  .sidebar { width: 920px; height: 100vh; min-width: 20px; }',
+    '}',
+  ].join('\n')));
+  assert.deepEqual(result.findings.map(item => item.id), [
+    'responsive-large-fixed-width',
+    'responsive-legacy-viewport-height',
+    'responsive-small-interaction-dimension',
+  ]);
+});
