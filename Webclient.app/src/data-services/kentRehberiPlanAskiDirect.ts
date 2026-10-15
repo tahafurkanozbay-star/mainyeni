@@ -61,6 +61,9 @@ const coordinate = (raw: unknown, bound: number): number | null => {
   if (typeof raw !== 'number' && typeof raw !== 'string') {
     throw new TypeError('PlanASKI returned a nonnumeric coordinate.');
   }
+  if (typeof raw === 'string' && !raw.trim()) {
+    throw new TypeError('PlanASKI returned a blank coordinate.');
+  }
   const numeric = Number(typeof raw === 'string' ? raw.replace(',', '.').trim() : raw);
   if (!Number.isFinite(numeric) || Math.abs(numeric) > bound) {
     throw new TypeError('PlanASKI returned an out-of-range coordinate.');
@@ -72,7 +75,13 @@ const sourceType = (tur: number): number =>
   requiredInteger(tur, MIN_TYPE, MAX_TYPE);
 
 const normalizeName = (raw: unknown): string =>
-  String(raw ?? '').trim().toLocaleLowerCase('tr-TR');
+  String(raw ?? '')
+    .trim()
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/ı/gu, 'i')
+    .replace(/\s+/gu, ' ');
 
 const parseFeature = (raw: unknown, tur: number): KentRehberiGeoJsonFeature => {
   if (!isObject(raw)) throw new TypeError('PlanASKI returned an invalid record.');
