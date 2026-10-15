@@ -200,6 +200,7 @@ interface AliasBinding {
   readonly expression: string;
   readonly position: number;
   readonly scope: readonly number[];
+  readonly mutable: boolean;
 }
 
 function privacyMask(text: string): string {
@@ -241,7 +242,7 @@ function initializerEnd(masked: string, start: number): number {
 }
 
 function localBindings(text: string, masked: string): readonly AliasBinding[] {
-  const declarations = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g;
+  const declarations = /\b(?:(const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=(?!=|>)/g;
   const scopes: number[] = [];
   const bindings: AliasBinding[] = [];
   let cursor = 0;
@@ -252,16 +253,25 @@ function localBindings(text: string, masked: string): readonly AliasBinding[] {
       if (masked[cursor] === '{') scopes.push(cursor);
       else if (masked[cursor] === '}') scopes.pop();
     }
+    const identifier = declaration[2] ?? '';
+    const declarationKind = declaration[1];
+    const preceding = masked[position - 1] ?? '';
+    // Writes through object properties are not local identifier assignments.
+    if (!declarationKind && (preceding === '.' || preceding === '?')) continue;
+    // Reassignment is meaningful only for a visible mutable local. Constants
+    // cannot legitimately be assigned, and a parameter/default assignment does
+    // not establish a local binding for privacy provenance.
+    const earlier = declarationKind ? undefined : visibleBinding(bindings, identifier, position, scopes);
+    if (!declarationKind && (!earlier || !earlier.mutable)) continue;
     const expressionStart = position + declaration[0].length;
     const end = initializerEnd(masked, expressionStart);
-    // Only simple, bounded bindings are inspected. Complex destructuring and
-    // cross-module flow are intentionally left to other security gates.
     if (end > expressionStart && end - expressionStart < 4_096) {
       bindings.push({
-        identifier: declaration[1] ?? '',
+        identifier,
         expression: text.slice(expressionStart, end),
         position,
         scope: [...scopes],
+        mutable: earlier?.mutable ?? declarationKind !== 'const',
       });
     }
   }
