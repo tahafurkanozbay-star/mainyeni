@@ -86,3 +86,39 @@ test('bounded non-identifying metadata is not mistaken for raw query data', () =
   assert.equal(result.summary.clientLogCalls, 4);
   assert.equal(result.summary.flaggedCalls, 0);
 });
+
+
+test('optional calls remain visible and sensitive payloads still block release', () => {
+  const result = audit([{
+    path: userPath,
+    text: [
+      'logger?.safeClientLog?.(A, "Map", record?.address);',
+      'safeClientLog?.(A, "Count", queryCount);',
+    ].join('\n'),
+  }]);
+  assert.equal(result.summary.clientLogCalls, 2);
+  assert.equal(result.summary.flaggedCalls, 1);
+  assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'sensitive-property');
+});
+
+test('oversized logger payloads fail closed without retaining sensitive contents', () => {
+  const sensitivePayload = 'record.address' + ' '.repeat(9_000);
+  const result = audit([{
+    path: adminPath,
+    text: `safeClientLog(A, "Detail", ${sensitivePayload});`,
+  }]);
+  assert.equal(result.summary.clientLogCalls, 1);
+  assert.equal(result.summary.flaggedCalls, 1);
+  assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'unreviewable-client-log-call');
+  assert.ok(!JSON.stringify(result.findings).includes('record.address'));
+});
+
+test('malformed logging arguments cannot silently evade release privacy audit', () => {
+  const result = audit([{
+    path: userPath,
+    text: 'safeClientLog(A, "Map", { location: record.address );',
+  }]);
+  assert.equal(result.summary.clientLogCalls, 1);
+  assert.equal(result.summary.flaggedCalls, 1);
+  assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'unreviewable-client-log-call');
+});
