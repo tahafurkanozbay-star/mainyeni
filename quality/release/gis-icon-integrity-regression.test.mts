@@ -102,3 +102,62 @@ test('missing registry is a blocking finding and not a second icon authority', (
   assert.equal(missing?.blocking, true);
   assert.equal(result.summary.iconRegistry.entries.length, 0);
 });
+
+test('dotted uppercase İ normalizes like lowercase i in production icon resolution', () => {
+  const report = inspect([
+    { id: 'İstasyon', icon: 'images/icon-a.svg' },
+    { id: 'istasyon', icon: 'images/icon-b.svg' },
+    { id: 'default', icon: 'images/default.svg' },
+  ]);
+  assert.ok(report.summary.iconRegistry.duplicateKeys.includes('istasyon'));
+  assert.ok(report.findings.some(item => item.id === 'gis-icon-duplicate-key'));
+});
+
+test('dotless ı aliases collide with ASCII i as in the shared icon resolver', () => {
+  const report = inspect([
+    { id: 'Işık Parkı', icon: 'images/icon-a.svg' },
+    { id: 'isik parki', icon: 'images/icon-b.svg' },
+    { id: 'default', icon: 'images/default.svg' },
+  ]);
+  assert.ok(report.summary.iconRegistry.duplicateKeys.includes('isik parki'));
+});
+
+test('Turkish city labels and ASCII fallbacks share canonical alias ownership', () => {
+  const findings = iconFindings([
+    { id: 'a', aliases: ['Şehir Işığı'], icon: 'images/a.svg' },
+    { id: 'b', aliases: ['Sehir Isigi'], icon: 'images/b.svg' },
+    { id: 'default', icon: 'images/default.svg' },
+  ]);
+  assert.ok(findings.some(item => item.id === 'gis-icon-alias-collision'));
+});
+
+test('case-folded aliases with the same icon asset remain nonconflicting', () => {
+  const findings = iconFindings([
+    { id: 'a', aliases: ['İstasyon'], icon: 'images/stop.svg' },
+    { id: 'b', aliases: ['istasyon'], icon: 'images/stop.svg' },
+    { id: 'default', icon: 'images/default.svg' },
+  ]);
+  assert.ok(!findings.some(item => item.id === 'gis-icon-alias-collision'));
+});
+
+test('punctuation and whitespace canonicalize without manufacturing empty keys', () => {
+  const report = inspect([
+    { id: 'EGO / Kart-Satış', icon: 'images/ego.svg' },
+    { id: 'ego kart satis', icon: 'images/ego2.svg' },
+    { id: 'default', icon: 'images/default.svg' },
+  ]);
+  assert.ok(report.summary.iconRegistry.duplicateKeys.includes('ego kart satis'));
+});
+
+test('the icon audit remains deterministic across repeated Turkish normalization', () => {
+  const rows = [
+    { id: 'Çiçek', aliases: ['İstasyon'], icon: 'images/cicek.svg' },
+    { id: 'CICEK', aliases: ['istasyon'], icon: 'images/cicek2.svg' },
+    { id: 'default', icon: 'images/default.svg' },
+  ];
+  const first = inspect(rows);
+  const second = inspect(rows);
+  assert.deepEqual(first.summary.iconRegistry.duplicateKeys, second.summary.iconRegistry.duplicateKeys);
+  assert.deepEqual(first.summary.iconRegistry.duplicateAliases, second.summary.iconRegistry.duplicateAliases);
+  assert.deepEqual(first.findings.map(item => item.id), second.findings.map(item => item.id));
+});
