@@ -78,10 +78,18 @@ describe('QA: direct PlanASKI transport memory and lifecycle security', () => {
 
   it('rejects a stream as soon as its byte budget is exceeded and cancels consumption', async () => {
     let cancelled = false;
-    const response = streamedResponse([
-      new Uint8Array(MAX_RESPONSE_BYTES / 2),
-      new Uint8Array(MAX_RESPONSE_BYTES / 2 + 1),
-    ], () => { cancelled = true; });
+    // Keep the source open while the second chunk breaches the limit:
+    // cancel() is not guaranteed to notify an already-closed stream.
+    const body = new NodeReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(MAX_RESPONSE_BYTES / 2));
+        controller.enqueue(new Uint8Array(MAX_RESPONSE_BYTES / 2 + 1));
+      },
+      cancel() { cancelled = true; },
+    });
+    const response = new Response(body as unknown as BodyInit, {
+      headers: { 'Content-Type': 'application/json' },
+    });
     const fetchImpl = vi.fn(async () => response) as typeof fetch;
     await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl }))
       .rejects.toThrow('size budget');
