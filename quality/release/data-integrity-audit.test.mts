@@ -14,3 +14,37 @@ test('accepts collection growth with explicit capacity semantics', () => { const
 test('flags identity-heavy code without a dedupe signal', () => { const text = Array.from({ length: 12 }, (_, index) => `const id${index} = row.objectId;`).join('\n'); assert.ok(ids({ path: 'Webclient.app/src/data/features.ts', text, kind: 'typescript' }).includes('data-identity-without-dedupe-signal')); });
 test('accepts identity-heavy code with explicit Map dedupe', () => { const text = `const byId = new Map();\n${Array.from({ length: 12 }, (_, index) => `byId.set(row.objectId, ${index});`).join('\n')}`; assert.ok(!ids({ path: 'Webclient.app/src/data/features.ts', text, kind: 'typescript' }).includes('data-identity-without-dedupe-signal')); });
 test('ignores test fixtures', () => { const text = 'const id = Number(row.globalId); items.push(a); items.push(b); items.push(c); items.push(d);'; assert.equal(ids({ path: 'Webclient.app/src/data/cache.test.ts', text, kind: 'typescript' }).length, 0); });
+
+
+test('accepts UTF-8 BOM-prefixed valid launchSettings JSON without disabling strict parsing', () => {
+  for (const path of [
+    'Api.Admin/Properties/launchSettings.json',
+    'Api.User/Properties/launchSettings.json',
+  ]) {
+    const source = '\uFEFF{"profiles":{"api":{"commandName":"Project","launchBrowser":false}}}';
+    const report = auditDataIntegrity(fixtureInventory([{ path, text: source, kind: 'json' }]));
+    assert.equal(report.summary.parseFailures, 0, path);
+    assert.ok(!report.findings.some(item => item.id === 'data-invalid-json'), path);
+  }
+});
+
+test('rejects genuinely malformed JSON even when it begins with a BOM', () => {
+  const report = auditDataIntegrity(fixtureInventory([{
+    path: 'Api.Admin/Properties/launchSettings.json',
+    text: '\uFEFF{"profiles":}',
+    kind: 'json',
+  }]));
+  assert.equal(report.summary.parseFailures, 1);
+  const invalid = report.findings.find(item => item.id === 'data-invalid-json');
+  assert.equal(invalid?.blocking, true);
+  assert.equal(invalid?.severity, 'critical');
+});
+
+test('a BOM inside a JSON document is not silently stripped', () => {
+  const report = auditDataIntegrity(fixtureInventory([{
+    path: 'Api.User/Properties/launchSettings.json',
+    text: '{"profiles": \uFEFF{}}',
+    kind: 'json',
+  }]));
+  assert.equal(report.summary.parseFailures, 1);
+});
