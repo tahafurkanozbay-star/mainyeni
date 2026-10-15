@@ -90,11 +90,14 @@ test('plan summary separates runtime and development candidates', () => {
   assert.deepEqual(plan.summary, { candidates: 2, runtime: 1, development: 1, plannable: 2, review: 0, missing: 0, exclusivePackages: 4 });
 });
 
-test('plan records missing candidates without making policy execution non-deterministic', () => {
+test('plan records missing candidates deterministically and rejects unsafe removal', () => {
   const plan = buildRemovalPlan(manifest, lock(packages), ['ghost'], { graph: dependencyGraph });
-  assert.equal(plan.ok, true);
+  assert.equal(plan.ok, false);
   assert.equal(plan.summary.missing, 1);
+  assert.equal(plan.summary.plannable, 0);
   assert.equal(plan.candidates[0].status, 'not-direct');
+  assert.equal(plan.candidates[0].blockers.length, 1);
+  assert.equal(plan.fingerprint, buildRemovalPlan(manifest, lock(packages), ['ghost'], { graph: dependencyGraph }).fingerprint);
 });
 
 test('candidate cardinality is fail-closed', () => {

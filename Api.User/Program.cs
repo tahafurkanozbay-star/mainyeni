@@ -27,6 +27,14 @@ public static class Program
             options.AddServerHeader = false;
         });
 
+        // Explicitly enabled public-map-only mode. It does not register
+        // BusinessContext or discover any other user/admin controllers.
+        // The default full API mode remains unchanged.
+        if (PlanAskiStandaloneHosting.TryRun(builder))
+        {
+            return;
+        }
+
         // CORS allowlists are resolved centrally by AddKentRehberiApiPlatform from
         // Platform:Cors:AllowedOrigins and the temporary legacy Cors:AllowedOrigins bridge.
         builder.Services.AddKentRehberiApiPlatform(builder.Configuration);

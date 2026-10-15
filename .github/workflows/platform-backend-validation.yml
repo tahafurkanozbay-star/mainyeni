@@ -10,6 +10,7 @@ on:
       - 'Toolbox/**'
       - 'tests/**'
       - 'Directory.Build.props'
+      - 'Directory.Packages.props'
       - 'global.json'
       - 'CityWorks.NetCore.sln'
       - '.github/workflows/platform-backend-validation.yml'
@@ -24,6 +25,7 @@ on:
       - 'Toolbox/**'
       - 'tests/**'
       - 'Directory.Build.props'
+      - 'Directory.Packages.props'
       - 'global.json'
       - 'CityWorks.NetCore.sln'
       - '.github/workflows/platform-backend-validation.yml'
@@ -32,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: platform-backend-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
