@@ -82,7 +82,11 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: typed-release-qa
-          path: qa-artifacts/release
+          # Publish only sanitized summaries. Raw JSON inventory and full
+          # finding keys stay inside the ephemeral release runner.
+          path: |
+            qa-artifacts/release/release-report.md
+            qa-artifacts/release/pr-regression-gate.md
           if-no-files-found: error
           retention-days: 21
 
