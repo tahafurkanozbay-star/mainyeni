@@ -58,11 +58,14 @@ const QUERY_SIGNAL_PATTERN = /\b(?:queryFeatures|QueryTask|resultOffset|resultRe
 const SERVICE_SIGNAL_PATTERN = /\b(?:GisServiceRegistry|serviceRegistry|timeoutMs|retries|AbortController|health)/gi;
 
 function normalizeLookup(value: string): string {
+  // Match the production iconResolver's Turkish case-folding order:
+  // lowercase BEFORE stripping the combining dot of İ, then fold dotless ı.
   return value
+    .toLocaleLowerCase('tr-TR')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('tr-TR')
-    .replace(/[^a-z0-9çğıöşü]+/gi, ' ')
+    .replace(/ı/g, 'i')
+    .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
 }
