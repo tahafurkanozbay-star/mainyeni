@@ -158,3 +158,36 @@ test('safe calls between the eighth and ninth sensitive payload cannot mask over
   assert.equal(report.findings.filter(f => f.id.endsWith('overflow')).length, 1);
   assert.equal(report.findings.find(f => f.id.endsWith('overflow'))?.evidence?.value, 2);
 });
+
+
+test('scans logger calls executed inside template interpolation, not inert template text', () => {
+  const report = audit([{ path: userPath, text: [
+    'const display = `safeClientLog(A, "Ignored", record.address)`;',
+    'const result = `value ${safeClientLog(A, "Map", record.address)}`;',
+    'const escaped = `\\${safeClientLog(A, "NotExecuted", record.address)}`;',
+  ].join('\n') }]);
+  assert.equal(report.summary.clientLogCalls, 1);
+  assert.equal(report.summary.flaggedCalls, 1);
+  assert.equal(report.findings[0]?.location?.line, 2);
+  assert.equal(report.findings[0]?.evidence?.metadata?.reason, 'sensitive-property');
+});
+
+test('nested template interpolation and object braces preserve executable logger calls', () => {
+  const report = audit([{ path: adminPath, text: [
+    'const message = `outer ${`inner ${safeClientLog(A, "Map", { nested: { address: row.address } })}`}`;',
+    'const neutral = `count ${({ count: 3 }).count}`;',
+  ].join('\n') }]);
+  assert.equal(report.summary.clientLogCalls, 1);
+  assert.equal(report.summary.flaggedCalls, 1);
+  assert.equal(report.findings[0]?.evidence?.metadata?.reason, 'sensitive-object-key');
+});
+
+test('comments and quoted examples inside interpolations are not executable sinks', () => {
+  const report = audit([{ path: userPath, text: [
+    'const source = `before ${"safeClientLog(A, B, row.address)"} after`;',
+    'const inactive = `before ${/* safeClientLog(A, B, row.address) */ 12} after`;',
+    'const active = `before ${safeClientLog(A, "Count", queryCount)} after`;',
+  ].join('\n') }]);
+  assert.equal(report.summary.clientLogCalls, 1);
+  assert.equal(report.summary.flaggedCalls, 0);
+});
