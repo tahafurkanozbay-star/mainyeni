@@ -987,7 +987,8 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
                     NameNames),
                 ReadNullableString(
                     properties,
-                    AddressNames),
+                    AddressNames,
+                    normalizeAddressLineBreaks: true),
                 ReadNullableString(
                     properties,
                     DistrictNames),
@@ -1304,7 +1305,8 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
 
     private static string? ReadNullableString(
         JsonElement source,
-        IEnumerable<string> names)
+        IEnumerable<string> names,
+        bool normalizeAddressLineBreaks = false)
     {
         if (!TryGetProperty(
                 source,
@@ -1335,6 +1337,17 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
 
         var normalized =
             value?.Trim();
+
+        if (normalizeAddressLineBreaks && normalized is not null)
+        {
+            // Official PlanASKI address text can contain embedded line
+            // breaks. Render them as spaces without relaxing the
+            // control-character guard for any other text field.
+            normalized = normalized
+                .Replace("\r\n", " ", StringComparison.Ordinal)
+                .Replace('\r', ' ')
+                .Replace('\n', ' ');
+        }
 
         if (string.IsNullOrEmpty(
                 normalized))
