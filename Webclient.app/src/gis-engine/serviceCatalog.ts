@@ -40,7 +40,7 @@ export const normalizeServiceUrl = (url: unknown): string => {
     parsed.hash = '';
     parsed.search = '';
     return parsed.toString().replace(/\/+$/, '');
-  } catch (_) {
+  } catch {
     return '';
   }
 };
@@ -122,7 +122,7 @@ export const sanitizeService = (service: GisServiceInput = {}): SanitizedGisServ
     visible: service.visible !== false,
     sublayerId: Number.isInteger(service.sublayerId) ? Number(service.sublayerId) : null,
     proxy: service.proxy === true,
-    metadata: { ...(service.metadata || {}) },
+    metadata: { ...service.metadata },
   };
 
   if (!safe.id) throw new Error('GIS service id is required.');
@@ -141,7 +141,7 @@ export const sanitizeCatalog = (services: readonly GisServiceInput[] = []): Sani
         seen.add(safe.id);
         result.push(safe);
       }
-    } catch (_) {
+    } catch {
       // Invalid/unapproved services are deliberately excluded from runtime.
     }
   });
@@ -160,11 +160,11 @@ export const mergeCatalog = (
   sanitizeCatalog(incoming).forEach((service) => {
     const previous = map.get(service.id);
     map.set(service.id, {
-      ...(previous || {}),
+      ...previous,
       ...service,
       metadata: {
-        ...(previous?.metadata || {}),
-        ...(service.metadata || {}),
+        ...previous?.metadata,
+        ...service.metadata,
       },
     });
   });
@@ -182,7 +182,7 @@ export const hasSameOrigin = (url: unknown): boolean => {
   if (!url) return false;
   try {
     return new URL(String(url), browserOrigin()).origin === browserOrigin();
-  } catch (_) {
+  } catch {
     return false;
   }
 };
