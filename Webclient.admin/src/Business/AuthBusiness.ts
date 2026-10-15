@@ -2,11 +2,9 @@ import axios from 'axios';
 import { Constants } from '../Core/Constants';
 import { Global } from '../Core/Global';
 
-export interface AdminSession {
-  readonly accessToken: string;
-  readonly userName?: string;
-  readonly [key: string]: unknown;
-}
+import { isValidAdminSession, type ValidAdminSession } from './AdminSessionValidation';
+
+export type AdminSession = ValidAdminSession;
 
 export interface AdminLoginResult {
   readonly isSuccess: boolean;
@@ -35,12 +33,6 @@ const clearLegacySession = (): void => clearStorageKey(localStorage);
 const clearSession = (): void => {
   clearStorageKey(sessionStorage);
   clearLegacySession();
-};
-
-const isAdminSession = (value: unknown): value is AdminSession => {
-  if (typeof value !== 'object' || value === null) return false;
-  const accessToken = (value as { accessToken?: unknown }).accessToken;
-  return typeof accessToken === 'string' && accessToken.length > 0;
 };
 
 export const AuthBusiness = {
@@ -89,7 +81,7 @@ export const AuthBusiness = {
       if (!serialized) return null;
 
       const session: unknown = JSON.parse(serialized);
-      if (!isAdminSession(session)) {
+      if (!isValidAdminSession(session)) {
         clearSession();
         return null;
       }
@@ -102,7 +94,7 @@ export const AuthBusiness = {
 
   SetSessionInLocalStorage: (session: unknown): boolean => {
     clearLegacySession();
-    if (!isAdminSession(session)) {
+    if (!isValidAdminSession(session)) {
       clearSession();
       return false;
     }
