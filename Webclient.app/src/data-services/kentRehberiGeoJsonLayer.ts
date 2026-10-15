@@ -1,5 +1,11 @@
 import { loadArcgisModule } from '../gis-engine/arcgisModuleRuntime';
 import { normalizeApiBaseUrl, runtimeConfig } from '../platform/config/runtimeConfig';
+import {
+  fetchPlanAskiFeatureDirect,
+  fetchPlanAskiGeoJsonDirect,
+  fetchPlanAskiTypeCatalogDirect,
+  isDirectPlanAskiSource,
+} from './kentRehberiPlanAskiDirect';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
@@ -408,7 +414,7 @@ export const fetchKentRehberiGeoJson = async (
   const limit = normalizeLimit(options.limit);
   const timeoutMs = normalizePositiveInteger(
     options.timeoutMs,
-    Math.min(runtimeConfig.requestTimeoutMs, 10_000),
+    isDirectPlanAskiSource() ? 30_000 : Math.min(runtimeConfig.requestTimeoutMs, 10_000),
     60_000,
   );
   const maxPayloadBytes = normalizePositiveInteger(
@@ -423,6 +429,11 @@ export const fetchKentRehberiGeoJson = async (
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
+    if (isDirectPlanAskiSource()) {
+      return validateKentRehberiFeatureCollection(
+        await fetchPlanAskiGeoJsonDirect({ ...options, limit, signal: request.signal }),
+      );
+    }
     const response = await fetchImpl(
       buildKentRehberiRequestPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, limit, options),
       {
@@ -448,7 +459,7 @@ export const fetchKentRehberiFeature = async (
 ): Promise<KentRehberiGeoJsonFeature | null> => {
   const timeoutMs = normalizePositiveInteger(
     options.timeoutMs,
-    Math.min(runtimeConfig.requestTimeoutMs, 10_000),
+    isDirectPlanAskiSource() ? 30_000 : Math.min(runtimeConfig.requestTimeoutMs, 10_000),
     60_000,
   );
   const maxPayloadBytes = normalizePositiveInteger(
@@ -463,6 +474,10 @@ export const fetchKentRehberiFeature = async (
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
+    if (isDirectPlanAskiSource()) {
+      const feature = await fetchPlanAskiFeatureDirect(objectId, { ...options, signal: request.signal });
+      return feature === null ? null : validateKentRehberiFeature(feature);
+    }
     const response = await fetchImpl(
       buildKentRehberiFeaturePath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, objectId),
       {
@@ -489,7 +504,7 @@ export const fetchKentRehberiTypeCatalog = async (
 ): Promise<KentRehberiTypeCatalog> => {
   const timeoutMs = normalizePositiveInteger(
     options.timeoutMs,
-    Math.min(runtimeConfig.requestTimeoutMs, 10_000),
+    isDirectPlanAskiSource() ? 30_000 : Math.min(runtimeConfig.requestTimeoutMs, 10_000),
     60_000,
   );
   const maxPayloadBytes = normalizePositiveInteger(
@@ -504,6 +519,11 @@ export const fetchKentRehberiTypeCatalog = async (
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
+    if (isDirectPlanAskiSource()) {
+      return validateKentRehberiTypeCatalog(
+        await fetchPlanAskiTypeCatalogDirect({ ...options, signal: request.signal }),
+      );
+    }
     const response = await fetchImpl(
       buildKentRehberiTypeCatalogPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl),
       {
