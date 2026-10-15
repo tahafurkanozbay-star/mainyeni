@@ -46,7 +46,6 @@ import {
 } from '../_Common/QueryInteractionRuntime';
 import {
   DEFAULT_FAST_ACCESS_QUERY,
-  createQueryLogDescription,
   fastAccessResultKey,
   fastAccessResultLabel,
   normalizeFastAccessDetail,
@@ -328,7 +327,7 @@ export const FastAccessQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       `Hızlı Erişim/Sorgu/${windowTitle}`,
-      createQueryLogDescription(submittedQuery),
+      'query-submitted',
     );
 
     try {
