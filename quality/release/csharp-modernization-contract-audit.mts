@@ -54,7 +54,7 @@ const TEST_OR_GENERATED = /(?:^|\/)(?:tests?|bin|obj|generated|migrations)(?:\/|
 const PRODUCTION_CS = /\.cs$/i;
 const EVENT_HANDLER = /\basync\s+void\s+[A-Za-z_$][\w$]*\s*\([^)]*(?:EventArgs|RoutedEventArgs|EventHandler)[^)]*\)/i;
 const ASYNC_VOID = /\basync\s+void\s+[A-Za-z_$][\w$]*\s*\(/g;
-const SYNC_RESULT = /(?:\.Result\b|\.Wait\s*\(\s*\))/g;
+const SYNC_RESULT = /(?:\.Result\b(?!\s*=(?!=))|\.Wait\s*\(\s*\))/g;
 const GET_RESULT = /\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)/g;
 const DIRECT_HTTP = /\bnew\s+HttpClient\s*\(/g;
 const THREAD_SLEEP = /\bThread\.Sleep\s*\(/g;
