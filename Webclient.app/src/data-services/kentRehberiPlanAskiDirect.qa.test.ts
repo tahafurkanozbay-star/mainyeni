@@ -1,3 +1,4 @@
+import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { describe, expect, it, vi } from 'vitest';
 import {
   fetchPlanAskiFeatureDirect,
@@ -45,7 +46,7 @@ function singleTypeFetch(tur: number, entries: readonly unknown[]): typeof fetch
 
 function streamedResponse(chunks: readonly Uint8Array[], cancel?: () => void): Response {
   let cursor = 0;
-  const body = new ReadableStream<Uint8Array>({
+  const body = new NodeReadableStream<Uint8Array>({
     pull(controller) {
       const value = chunks[cursor++];
       if (value) controller.enqueue(value);
@@ -55,7 +56,7 @@ function streamedResponse(chunks: readonly Uint8Array[], cancel?: () => void): R
       cancel?.();
     },
   });
-  return new Response(body, { headers: { 'Content-Type': 'application/json' } });
+  return new Response(body as unknown as BodyInit, { headers: { 'Content-Type': 'application/json' } });
 }
 
 describe('QA: direct PlanASKI transport memory and lifecycle security', () => {
