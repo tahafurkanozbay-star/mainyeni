@@ -6,6 +6,7 @@ on:
       - '**/*.js'
       - '**/*.jsx'
       - '**/*.ts'
+      - '**/*.mts'
       - '**/*.tsx'
       - '**/*.cs'
       - '**/*.csproj'
@@ -22,6 +23,9 @@ on:
       - 'tools/platform-contracts.test.mjs'
       - 'tools/package-lock-integrity.mjs'
       - 'tools/package-lock-integrity.test.mjs'
+      - 'tools/dotnet-package-governance.mts'
+      - 'tools/dotnet-package-governance.test.mts'
+      - 'tools/platform-backend-trigger-contract.test.mts'
   workflow_dispatch:
 
 permissions:
@@ -57,6 +61,12 @@ jobs:
           tools/browser-runtime-boundary.test.mjs
           tools/platform-ts-cutover.test.mjs
           tools/package-lock-integrity.test.mjs
+          tools/dotnet-package-governance.test.mts
+          tools/dotnet-project-graph.test.mts
+          tools/dotnet-layer-policy.test.mts
+          tools/github-workflow-supply-chain.test.mts
+          tools/api-startup-pipeline.test.mts
+          tools/platform-backend-trigger-contract.test.mts
 
       - name: Enforce modernization contracts
         run: node tools/platform-contracts.mjs
@@ -76,6 +86,18 @@ jobs:
       - name: Generate architecture inventory
         run: node tools/platform-audit.mjs
 
+      - name: Enforce .NET central package governance
+        run: node tools/dotnet-package-governance.mts
+
+      - name: Enforce .NET architectural layer boundaries
+        run: node tools/dotnet-layer-policy.mts
+
+      - name: Enforce GitHub Actions supply-chain policy
+        run: node tools/github-workflow-supply-chain.mts
+
+      - name: Enforce API startup middleware order
+        run: node tools/api-startup-pipeline.mts
+
       - name: Audit package lock integrity
         run: node tools/package-lock-integrity.mjs
 
@@ -89,7 +111,11 @@ jobs:
             artifacts/platform-audit/language-modernization.md \
             artifacts/platform-audit/platform-boundaries.md \
             artifacts/platform-audit/browser-runtime-boundary.md \
-            artifacts/platform-audit/package-lock-integrity.md
+            artifacts/platform-audit/package-lock-integrity.md \
+            artifacts/platform-audit/dotnet-package-governance.md \
+            artifacts/platform-audit/dotnet-layer-policy.md \
+            artifacts/platform-audit/workflow-supply-chain.md \
+            artifacts/platform-audit/api-startup-pipeline.md
           do
             if [ -f "$report" ]; then
               if [ -s "$GITHUB_STEP_SUMMARY" ]; then

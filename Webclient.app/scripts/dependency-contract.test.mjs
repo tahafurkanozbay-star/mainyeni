@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
@@ -11,6 +12,8 @@ import {
   validateDependencyPolicy,
   validateLockfile,
   validateModernToolchain,
+  RETIRED_RUNTIME_PACKAGES,
+  validateRetiredRuntimePackages,
   validateSourceDependencies,
   validateVersionSpecifiers,
 } from './dependency-contract.mjs';
@@ -21,7 +24,6 @@ const manifest = {
   dependencies: {
     react: '^19.3.0',
     'react-dom': '^19.3.0',
-    'react-redux': '^9.2.0',
     redux: '^5.0.1',
     bootstrap: '^5.3.8',
   },
@@ -169,6 +171,40 @@ describe('dependency contract', () => {
     });
   }
 
+  test('rejects every retired runtime package across dependency sections', () => {
+    for (const packageName of [
+      '@fortawesome/fontawesome-svg-core',
+      '@fortawesome/free-brands-svg-icons',
+      '@fortawesome/free-regular-svg-icons',
+      '@fortawesome/free-solid-svg-icons',
+      '@fortawesome/react-fontawesome',
+      'axios',
+      'crypto-js',
+      'react-color',
+      'react-redux',
+      'reactcss',
+    ]) {
+      for (const sectionName of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+        const candidate = { [sectionName]: { [packageName]: '^1.0.0' } };
+        assert.deepEqual(
+          validateRetiredRuntimePackages(candidate),
+          [`retired-runtime: ${packageName} must not be declared in ${sectionName}`],
+        );
+      }
+    }
+  });
+
+  test('retired runtime guard allows modern neighboring packages', () => {
+    assert.deepEqual(validateRetiredRuntimePackages({
+      dependencies: {
+        react: '^19.3.0',
+        'react-icons': '^5.5.0',
+        redux: '^5.0.1',
+      },
+      devDependencies: { vite: '^8.3.0' },
+    }), []);
+  });
+
   test('prevents react-scripts from returning after Vite migration', () => {
     assert.match(
       validateVersionSpecifiers({ dependencies: { 'react-scripts': '^5.0.1' } })[0],
@@ -186,7 +222,6 @@ describe('dependency contract', () => {
       dependencies: {
         ...manifest.dependencies,
         react: '^17.0.2',
-        'react-redux': '^7.2.0',
       },
       devDependencies: {
         vite: '^6.0.0',
@@ -197,7 +232,6 @@ describe('dependency contract', () => {
     };
     const errors = validateModernToolchain(legacy).join('\n');
     assert.match(errors, /react major 17/i);
-    assert.match(errors, /react-redux major 7/i);
     assert.match(errors, /vite major 6/i);
     assert.match(errors, /typescript major 5/i);
     assert.match(errors, /Node engine/i);
@@ -495,7 +529,7 @@ describe('dependency hygiene policy', () => {
     integratedLock.packages['node_modules/legacy'].deprecated = 'legacy';
 
     const inventory = [
-      { path: 'src/App.tsx', references: ['react', 'react-dom', 'react-redux', 'redux', 'bootstrap'] },
+      { path: 'src/App.tsx', references: ['react', 'react-dom', 'redux', 'bootstrap'] },
     ];
     const result = analyzeDependencyContract({
       manifest: integratedManifest,
@@ -519,4 +553,14 @@ describe('dependency hygiene policy', () => {
       'unused-runtime': 1,
     });
   });
+});
+
+test('Vite prebundle entries never reference retired runtime dependencies', () => {
+  const config = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
+  const block = config.match(/optimizeDeps:\s*\{\s*include:\s*\[([^\]]*)\]/u);
+  assert.ok(block, 'expected explicit optimizeDeps.include inventory');
+  const declared = new Set([...block[1].matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
+  for (const retired of RETIRED_RUNTIME_PACKAGES) {
+    assert.equal(declared.has(retired), false, `retired package ${retired} must not be prebundled`);
+  }
 });

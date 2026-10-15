@@ -21,6 +21,19 @@ const PACKAGE_SPECIFIER_PATTERNS = [
 ];
 const FORBIDDEN_VERSION_SPECIFIER = /^(?:\*|latest|next|https?:|git(?:\+|:)|github:|file:|link:|workspace:)/i;
 const FORBIDDEN_PACKAGES = new Set(['react-scripts']);
+export const RETIRED_RUNTIME_PACKAGES = Object.freeze([
+  '@fortawesome/fontawesome-svg-core',
+  '@fortawesome/free-brands-svg-icons',
+  '@fortawesome/free-regular-svg-icons',
+  '@fortawesome/free-solid-svg-icons',
+  '@fortawesome/react-fontawesome',
+  'axios',
+  'crypto-js',
+  'react-color',
+  'react-redux',
+  'reactcss',
+]);
+const RETIRED_RUNTIME_PACKAGE_SET = new Set(RETIRED_RUNTIME_PACKAGES);
 const POLICY_ISSUES = Object.freeze([
   'deprecated-direct',
   'install-script-direct',
@@ -107,6 +120,26 @@ const majorFromSpecifier = (specifier) => {
   return match ? Number(match[1]) : null;
 };
 
+export const validateRetiredRuntimePackages = (manifest) => {
+  const errors = [];
+  const sections = [
+    ['dependencies', manifest?.dependencies],
+    ['devDependencies', manifest?.devDependencies],
+    ['optionalDependencies', manifest?.optionalDependencies],
+    ['peerDependencies', manifest?.peerDependencies],
+  ];
+
+  for (const [sectionName, section] of sections) {
+    for (const packageName of Object.keys(section ?? {}).sort()) {
+      if (RETIRED_RUNTIME_PACKAGE_SET.has(packageName)) {
+        errors.push(`retired-runtime: ${packageName} must not be declared in ${sectionName}`);
+      }
+    }
+  }
+
+  return errors;
+};
+
 export const validateModernToolchain = (manifest) => {
   const errors = [];
   const dependencies = manifest.dependencies ?? {};
@@ -115,7 +148,6 @@ export const validateModernToolchain = (manifest) => {
   const contracts = [
     ['react', dependencies.react, 19],
     ['react-dom', dependencies['react-dom'], 19],
-    ['react-redux', dependencies['react-redux'], 9],
     ['redux', dependencies.redux, 5],
     ['vite', devDependencies.vite, 8],
     ['vitest', devDependencies.vitest, 5],
@@ -377,6 +409,7 @@ export const analyzeDependencyContract = ({ manifest, lockfile, inventory, polic
       dependencies: manifest.dependencies,
       devDependencies: manifest.devDependencies,
     }),
+    ...validateRetiredRuntimePackages(manifest),
     ...validateModernToolchain(manifest),
     ...source.errors,
     ...hygiene.errors,

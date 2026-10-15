@@ -20,9 +20,9 @@ const arcgisLeafChunk = (id: string, prefix: string, chunkPrefix: string): strin
 
 const manualChunk = (id: string): string | undefined => {
   if (!id.includes('node_modules')) return undefined;
-  if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-redux/') || id.includes('/redux/')) return 'react-vendor';
+  if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/redux/')) return 'react-vendor';
   if (id.includes('/bootstrap/') || id.includes('/react-bootstrap/')) return 'ui-vendor';
-  if (id.includes('/@fortawesome/') || id.includes('/react-icons/')) return 'icons-vendor';
+  if (id.includes('/react-icons/')) return 'icons-vendor';
 
   // ArcGIS is capability-loaded. Keep cache identities deterministic while
   // splitting the two SDK responsibility buckets that exceed the release
@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
     react({ include: /\.[jt]sx?$/ }),
   ],
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-dom/client', 'react-redux', 'redux', 'bootstrap', 'react-bootstrap', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/views/SceneView.js', 'prop-types', '@fortawesome/react-fontawesome', 'crypto-js'],
+    include: ['react', 'react-dom', 'react-dom/client', 'redux', 'bootstrap', 'react-bootstrap', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/views/SceneView.js', 'prop-types'],
   },
   build: {
     target: 'baseline-widely-available',

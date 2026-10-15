@@ -1,57 +1,110 @@
-using Toolbox;
 using System;
+using System.Security.Cryptography;
 using Toolbox.Text;
 
 namespace Toolbox.Security.Cryptography
 {
     /// <summary>
-    /// Bu sınıf şifreleme işlemleri için çeşitli fonksiyonlar sunar
+    /// Compatibility helpers shared by legacy cryptors. New security-sensitive values should use
+    /// <see cref="AuthenticatedEncryptionUtils"/> instead of reversible legacy transforms.
     /// </summary>
     public static class CryptoUtils
     {
-        public static string EncryptDecrypt(IEncryptDecrypt encryption, CryptoMethod method, string plainText, string salt = "")
+        private const int MaxGeneratedTokenLength = 4096;
+        private const string AlphaNumericCharacters =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+        public static string EncryptDecrypt(
+            IEncryptDecrypt encryption,
+            CryptoMethod method,
+            string plainText,
+            string salt = "")
         {
-            if (TextUtils.IsNullOrEmpty(salt))
-                salt = SaltCreator.CreateRandomSalt();
+            if (encryption == null)
+            {
+                throw new ArgumentNullException(nameof(encryption));
+            }
+
+            if (plainText == null)
+            {
+                throw new ArgumentNullException(nameof(plainText));
+            }
 
             switch (method)
             {
                 case CryptoMethod.ENCRYPT:
+                    if (TextUtils.IsNullOrEmpty(salt))
+                    {
+                        salt = SaltCreator.CreateRandomSalt();
+                    }
                     return encryption.Encrypt(plainText, salt);
-
                 case CryptoMethod.DECRYPT:
+                    if (TextUtils.IsNullOrEmpty(salt))
+                    {
+                        throw new ArgumentException(
+                            "A salt/key is required when decrypting a legacy payload.",
+                            nameof(salt));
+                    }
                     return encryption.Decrypt(plainText, salt);
-
                 default:
-                    throw new Exception("Şifreleme metodu seçilmelidir (Encrypt / Decrypt)");
+                    throw new ArgumentOutOfRangeException(
+                        nameof(method),
+                        method,
+                        "A supported encryption method is required.");
             }
         }
 
-        public static String CreateRandomSalt(int digits=3)
+        public static string CreateRandomSalt(int digits = 3)
         {
-            Random rand = new Random();
             if (digits < 1)
             {
                 digits = 1;
             }
 
-            int coeff= (int)Math.Pow(10, digits-1);
-            return rand.Next(1* coeff, 10* coeff - 1).ToString();
-        }
+            ValidateGeneratedLength(digits, nameof(digits));
 
-        public static String CreateRandomString(int length=8)
-        {
-            var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-            var stringChars = new char[length];
-            var random = new Random();
-
-            for (int i = 0; i < stringChars.Length; i++)
+            var characters = new char[digits];
+            characters[0] = (char)('0' + RandomNumberGenerator.GetInt32(1, 10));
+            for (var index = 1; index < characters.Length; index++)
             {
-                stringChars[i] = chars[random.Next(chars.Length)];
+                characters[index] = (char)('0' + RandomNumberGenerator.GetInt32(0, 10));
             }
 
-            var finalString = new String(stringChars);
-            return finalString;
+            return new string(characters);
+        }
+
+        public static string CreateRandomString(int length = 8)
+        {
+            if (length < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length));
+            }
+
+            ValidateGeneratedLength(length, nameof(length));
+            if (length == 0)
+            {
+                return string.Empty;
+            }
+
+            var characters = new char[length];
+            for (var index = 0; index < characters.Length; index++)
+            {
+                characters[index] =
+                    AlphaNumericCharacters[RandomNumberGenerator.GetInt32(AlphaNumericCharacters.Length)];
+            }
+
+            return new string(characters);
+        }
+
+        private static void ValidateGeneratedLength(int length, string parameterName)
+        {
+            if (length > MaxGeneratedTokenLength)
+            {
+                throw new ArgumentOutOfRangeException(
+                    parameterName,
+                    length,
+                    $"Generated token length cannot exceed {MaxGeneratedTokenLength} characters.");
+            }
         }
     }
 
