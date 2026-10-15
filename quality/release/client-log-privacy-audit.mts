@@ -185,7 +185,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
         severity: 'high',
         title: 'Additional sensitive client logging beyond evidence budget',
         message: 'Sensitive logging continues beyond the seven itemized findings and requires remediation.',
-        location: firstOverflow?.location,
+        ...(firstOverflow?.location ? { location: firstOverflow.location } : {}),
         evidence: { value: flaggedInFile - 7, metadata: { retainedFindings: 7 } },
         remediation: 'Remove raw address, location and query logging. Preserve the per-file evidence cap without suppressing detection of later calls.',
         tags: ['privacy', 'logging', 'data-minimization', 'overflow'],
