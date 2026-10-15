@@ -140,6 +140,20 @@ describe('direct PlanASKI browser transport', () => {
     await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl })).rejects.toThrow();
   });
 
+  it('rejects an oversized official response without buffering the full JSON', async () => {
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1));
+        controller.close();
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(source, {
+      headers: { 'Content-Type': 'application/json' },
+    })) as typeof fetch;
+    await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl }))
+      .rejects.toThrow('payload budget');
+  });
+
   it('fails closed for malformed HTTP payloads and disabled CORS responses', async () => {
     const html = vi.fn(async () => new Response('<html></html>', {
       headers: { 'Content-Type': 'text/html' },
