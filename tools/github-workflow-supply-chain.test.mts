@@ -98,6 +98,18 @@ test('write-all permission is rejected', () => {
   assert.ok(codes(evaluate(workflow({ permissions: 'contents: read\n  actions: write' })))
     .includes('workflow-permissions-elevated'));
 });
+test('blank lines cannot hide elevated workflow permissions', () => {
+  const source = workflow({ permissions: 'contents: read\n\n  actions: write' });
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-elevated'));
+});
+test('unindented comments cannot hide elevated workflow permissions', () => {
+  const source = workflow({ permissions: 'contents: read\n# comment\n  actions: write' });
+  assert.ok(codes(evaluate(source)).includes('workflow-permissions-elevated'));
+});
+test('blank lines within read-only permission mappings remain valid', () => {
+  const source = workflow({ permissions: 'contents: read\n\n  actions: read' });
+  assert.equal(evaluate(source).ok, true);
+});
 test('contents write is rejected', () => {
   const report = evaluate(workflow({ permissions: 'contents: write' }));
   assert.ok(codes(report).includes('workflow-permissions-elevated'));

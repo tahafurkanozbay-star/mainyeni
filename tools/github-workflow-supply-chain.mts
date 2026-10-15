@@ -30,8 +30,11 @@ export const auditWorkflowSource = (file, source) => {
       'Workflow must explicitly restrict the GITHUB_TOKEN permissions.'));
   } else {
     const block = [];
-    for (let i = permissionsAt + 1; i < lines.length && /^\s/.test(lines[i]); i++) {
-      if (!isComment(lines[i]) && lines[i].trim()) block.push({ line: i + 1, text: lines[i].trim() });
+    for (let i = permissionsAt + 1; i < lines.length; i++) {
+      // YAML blank lines and comments cannot terminate the permission mapping.
+      if (!lines[i].trim() || isComment(lines[i])) continue;
+      if (!/^\s/.test(lines[i])) break;
+      block.push({ line: i + 1, text: lines[i].trim() });
     }
     if (!block.some(item => item.text === 'contents: read')) {
       findings.push(find('workflow-permissions-contents', file, permissionsAt + 1,
