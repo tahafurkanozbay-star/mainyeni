@@ -327,3 +327,18 @@
     background: Highlight;
   }
 }
+
+.measurement-experience__guidance h3, .measurement-experience__recovery h3 { font-size: 14px; }
+.measurement-experience__guidance p, .measurement-experience__recovery p, .measurement-experience__waiting { font-size: 13px; overflow-wrap: anywhere; }
+.measurement-experience__activity li, .measurement-experience__activity summary { font-size: 12px; }
+.measurement-experience__error-detail { margin-block-start: 8px; }
+.measurement-experience__error-detail > summary { min-block-size: 44px; padding-block: 12px; color: var(--exp-text-soft); font-size: 12px; cursor: pointer; }
+.measurement-experience__error-code code { overflow-wrap: anywhere; }
+.measurement-experience__retry { border-color: var(--exp-danger); color: var(--exp-text); background: var(--exp-danger-soft); }
+@container measurement-panel (max-width: 30rem) {
+  .measurement-experience__status-row, .measurement-experience__guidance, .measurement-experience__recovery { grid-template-columns: minmax(0, 1fr); }
+  .measurement-experience__phase { justify-self: start; }
+  .measurement-experience__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); inline-size: 100%; }
+  .measurement-experience__facts > span { min-inline-size: 0; }
+  .measurement-experience__retry { inline-size: 100%; }
+}

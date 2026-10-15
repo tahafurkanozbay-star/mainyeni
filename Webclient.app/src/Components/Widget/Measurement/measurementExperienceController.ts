@@ -27,6 +27,7 @@ export interface MeasurementExperienceControllerOptions {
   readonly container: string | HTMLElement;
   readonly runtimeFactory?: MeasurementRuntimeFactory;
   readonly modelOptions?: MeasurementExperienceModelOptions;
+  readonly onRuntimeDetached?: () => void;
   readonly onDiagnostic?: (diagnostic: MeasurementExperienceControllerDiagnostic) => void;
 }
 
@@ -142,6 +143,7 @@ export const createMeasurementExperienceController = (
   let runtime: MeasurementController | null = null;
   let runtimeUnsubscribe: (() => boolean) | null = null;
   let boundView: unknown = null;
+  let runtimeGeneration = 0;
   let operationRevision = 0;
   let disposed = false;
   let diagnostics: MeasurementExperienceControllerDiagnostics = Object.freeze({
@@ -204,11 +206,17 @@ export const createMeasurementExperienceController = (
   };
 
   const detachRuntime = (destroyRuntime: boolean): void => {
-    runtimeUnsubscribe?.();
-    runtimeUnsubscribe = null;
-    if (destroyRuntime) runtime?.destroy();
-    runtime = null;
-    boundView = null;
+    const previous = runtime;
+    const unsubscribe = runtimeUnsubscribe;
+    runtimeGeneration += 1;
+    runtimeUnsubscribe = null; runtime = null; boundView = null;
+    try { unsubscribe?.(); } catch (error) { report('dispose', error, 'MEASUREMENT_UNSUBSCRIBE_ERROR'); }
+    if (destroyRuntime) {
+      try { previous?.destroy(); } catch (error) { report('dispose', error, 'MEASUREMENT_DISPOSE_ERROR'); }
+      if (previous) {
+        try { options.onRuntimeDetached?.(); } catch (error) { report('dispose', error, 'MEASUREMENT_HOST_RESTORE_ERROR'); }
+      }
+    }
   };
 
   const onRuntimeDiagnostic = (diagnostic: MeasurementDiagnostic): void => {
@@ -235,16 +243,19 @@ export const createMeasurementExperienceController = (
       detachRuntime(true);
     }
 
+    const generation = ++runtimeGeneration;
     const nextRuntime = runtimeFactory({
       view,
       container: options.container,
-      onDiagnostic: onRuntimeDiagnostic,
+      onDiagnostic: diagnostic => {
+        if (!disposed && generation === runtimeGeneration && resolveView() === view) onRuntimeDiagnostic(diagnostic);
+      },
     });
     runtime = nextRuntime;
     boundView = view;
     publishDiagnostics({ runtimeCreationCount: diagnostics.runtimeCreationCount + 1 });
     runtimeUnsubscribe = nextRuntime.subscribe((state) => {
-      if (disposed || nextRuntime !== runtime) return;
+      if (disposed || nextRuntime !== runtime || resolveView() !== view) return;
       model.syncRuntime(cloneState(state));
     });
     return nextRuntime;
@@ -253,7 +264,12 @@ export const createMeasurementExperienceController = (
   const resolveView = (): unknown => {
     if (disposed) return null;
     try {
-      return options.getView() ?? null;
+      const view = options.getView() ?? null;
+      if (view && typeof view === 'object') {
+        const state = view as { readonly ready?: boolean; readonly destroyed?: boolean };
+        if (state.ready === false || state.destroyed === true) return null;
+      }
+      return view;
     } catch (error) {
       report('view', error, 'MEASUREMENT_VIEW_LOOKUP_ERROR');
       return null;
@@ -264,17 +280,23 @@ export const createMeasurementExperienceController = (
     if (disposed) return false;
     const view = resolveView();
     const ready = Boolean(view);
+    if (runtime && boundView !== view) {
+      nextOperation();
+      detachRuntime(true);
+      model.syncRuntime({ status: 'idle', activeTool: MEASUREMENT_TOOLS.NONE, error: null,
+        createdAt: null, clearedAt: null, destroyedAt: null });
+    }
     model.setViewReady(ready);
-    if (!ready) {
-      if (runtime) detachRuntime(true);
-      return false;
-    }
-    if (runtime && !runtime.destroyed) {
-      runtime.setView(view);
-      runtime.setContainer(options.container);
-      boundView = view;
-    }
+    if (!ready) return false;
     return true;
+  };
+
+  const ownsCompletion = (revision: number, view: unknown): boolean => {
+    if (!isCurrentOperation(revision)) return false;
+    if (resolveView() === view) return true;
+    publishDiagnostics({ staleCompletionCount: diagnostics.staleCompletionCount + 1 });
+    refreshView();
+    return false;
   };
 
   const initializeRuntime = async (phase: 'initialize' | 'retry'): Promise<boolean> => {
@@ -286,17 +308,16 @@ export const createMeasurementExperienceController = (
     }
     model.setViewReady(true);
     const revision = nextOperation();
-    const controller = attachRuntime(view);
     const requestedTool = model.getSnapshot().requestedTool;
-    model.beginOperation(requestedTool);
-
     try {
+      const controller = attachRuntime(view);
+      model.beginOperation(requestedTool);
       await controller.ensureWidget();
-      if (!isCurrentOperation(revision)) return false;
+      if (!ownsCompletion(revision, view)) return false;
       model.syncRuntime(settleSuccessfulInitializationState(cloneState(controller.getState())));
       return true;
     } catch (error) {
-      if (!isCurrentOperation(revision)) return false;
+      if (!ownsCompletion(revision, view)) return false;
       report(phase, error, phase === 'retry' ? 'MEASUREMENT_RETRY_ERROR' : 'MEASUREMENT_INITIALIZE_ERROR');
       model.recordError(error, diagnosticCode(error, 'MEASUREMENT_LOAD_ERROR'));
       return false;
@@ -334,16 +355,16 @@ export const createMeasurementExperienceController = (
     }
 
     const revision = nextOperation();
-    const controller = attachRuntime(view);
-    model.requestTool(tool);
-    model.beginOperation(tool);
     try {
+      const controller = attachRuntime(view);
+      model.requestTool(tool);
+      model.beginOperation(tool);
       await controller.setTool(tool);
-      if (!isCurrentOperation(revision)) return false;
+      if (!ownsCompletion(revision, view)) return false;
       model.syncRuntime(cloneState(controller.getState()));
       return true;
     } catch (error) {
-      if (!isCurrentOperation(revision)) return false;
+      if (!ownsCompletion(revision, view)) return false;
       report('tool', error, 'MEASUREMENT_TOOL_ERROR');
       model.recordError(error, diagnosticCode(error, 'MEASUREMENT_TOOL_ERROR'));
       return false;
