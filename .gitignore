@@ -22,3 +22,6 @@ Webclient.app/build
 !.env.example
 Webclient.app/.env
 Webclient.admin/.env
+
+# Compiled/downloadable release archives must not be committed to source
+Webclient.app/build*.rar
