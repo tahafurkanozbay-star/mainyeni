@@ -137,10 +137,15 @@ describe('serviceCatalog', () => {
     ]).map((service) => service.id)).toEqual(['roads']);
   });
 
-  test('HTTPS fallback never produces an insecure relative GIS service URL', () => {
-    const url = normalizeServiceUrl('/arcgis/FeatureServer/0');
-    expect(url).toMatch(/^https:\/\//u);
-    expect(url).not.toContain('http://');
+  test('relative GIS URLs follow browser origin but never permit non-loopback cleartext', () => {
+    const raw = normalizeServiceUrl('/arcgis/FeatureServer/0');
+    const normalized = new URL(raw);
+    expect(normalized.pathname).toBe('/arcgis/FeatureServer/0');
+    expect(normalized.origin).toBe(window.location.origin);
+    expect(normalized.protocol === 'https:' || (
+      normalized.protocol === 'http:' &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(normalized.hostname)
+    )).toBe(true);
   });
 
 });
