@@ -24,6 +24,24 @@ public static class PlanAskiStandaloneHosting
 {
     public const string EnabledKey = "KentRehberiData:Standalone";
 
+    /// <summary>
+    /// Start the isolated host only when expressly requested. Kept separate
+    /// from Program.cs so the normal startup security pipeline is unchanged.
+    /// </summary>
+    public static bool TryRun(WebApplicationBuilder builder)
+    {
+        if (!IsEnabled(builder.Configuration))
+        {
+            return false;
+        }
+
+        AddServices(builder.Services, builder.Configuration);
+        var app = builder.Build();
+        Map(app);
+        app.Run();
+        return true;
+    }
+
     public static bool IsEnabled(IConfiguration configuration) =>
         configuration.GetValue<bool>(EnabledKey);
 
