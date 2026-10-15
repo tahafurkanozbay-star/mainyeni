@@ -50,6 +50,24 @@ beforeEach(() => {
 });
 
 describe('shared service result window ownership and usability', () => {
+  it('shows complete long service titles and addresses in the narrow results panel', async () => {
+    const { ref, Query } = setup();
+    const longTitle = 'ABB KAHRAMANKAZAN KADIN DANIŞMA MERKEZİ SOSYAL DESTEK BİRİMİ';
+    const longAddress = 'ANKARA ÇANKAYA MAHALLESİ ÇOK UZUN BULVAR VE SOKAK BİLGİSİ NUMARA 42 KAT 3';
+    Query.mockResolvedValueOnce({
+      type: 10,
+      source: 'kent-rehberi',
+      data: [{ attr: { objectid: 501, adi: longTitle, adres: longAddress } }],
+      featureCollection: { type: 'FeatureCollection', features: [] },
+    });
+    await act(async () => { await ref.current!.OnShow(); });
+    const heading = screen.getByRole('heading', { name: longTitle });
+    expect(heading).toHaveAttribute('title', longTitle);
+    expect(heading.closest('.kr-fast-query__copy')).toContainElement(screen.getByText(longAddress));
+    expect(screen.getByText(longAddress)).toHaveAttribute('title', longAddress);
+    expect(screen.getByRole('button', { name: longTitle + ' — Haritada göster' })).toBeEnabled();
+  });
+
   it('preserves results across controlled minimize and expand', async () => {
     const { ref, Window, manager, rerender } = setup();
     await act(async () => { await ref.current!.OnShow(); });
