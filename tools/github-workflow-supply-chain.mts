@@ -173,11 +173,25 @@ export const auditWorkflowSource = (file, source) => {
       let end = i + 1;
       while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end]) &&
         (!lines[end] || /^\s/.test(lines[end]))) end++;
-      const timeouts = lines.slice(i + 1, end).filter(line =>
-        /^    timeout-minutes:\s*(?:[1-9][0-9]*)\s*$/.test(line));
-      if (timeouts.length !== 1 || Number(timeouts[0].trim().split(':')[1]) > 120) {
+      // Count every YAML spelling of the timeout key, including invalid and
+      // duplicate declarations. Counting only valid values lets a later YAML
+      // mapping silently shadow a previously reviewed bounded timeout.
+      const jobLines = lines.slice(i + 1, end);
+      const timeoutDeclarations = jobLines.flatMap((line, offset) =>
+        /^ {4}(?:timeout-minutes|['"]timeout-minutes['"])\s*:/.test(line)
+          ? [{ line: i + offset + 2, text: line }] : []);
+      const timeout = timeoutDeclarations.length === 1
+        ? timeoutDeclarations[0].text.match(/^    timeout-minutes:\s*([1-9][0-9]*)\s*$/)
+        : null;
+      if (!timeout || Number(timeout[1]) > 120) {
         findings.push(find('workflow-job-timeout-invalid', file, i + 1,
-          'Every job requires exactly one positive timeout of at most 120 minutes.'));
+          'Every job requires exactly one canonical positive timeout of at most 120 minutes.'));
+      }
+      for (let offset = 0; offset < jobLines.length; offset++) {
+        if (/^ {4}<<\s*:/.test(jobLines[offset])) {
+          findings.push(find('workflow-job-merge-alias', file, i + offset + 2,
+            'Job merge aliases cannot import unreviewed timeout or execution fields.'));
+        }
       }
       // Reusable workflow jobs bypass step-action pinning and can introduce
       // an independently privileged execution graph. Require explicit review

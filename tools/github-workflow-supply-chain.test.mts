@@ -489,3 +489,32 @@ test('canonical read-only job permissions remain supported', () => {
     '    permissions:\n      contents: read\n    timeout-minutes: 10');
   assert.equal(evaluate(source).ok, true);
 });
+
+test('malformed duplicate timeout cannot shadow a valid bounded declaration', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    timeout-minutes: 10\n    timeout-minutes: *unreviewed');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('quoted duplicate timeout cannot shadow a valid declaration', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    timeout-minutes: 10\n    "timeout-minutes": 200');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('whitespace-separated duplicate timeout cannot shadow a valid declaration', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    timeout-minutes: 10\n    timeout-minutes : 200');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('zero-valued duplicate timeout cannot shadow a valid declaration', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    timeout-minutes: 10\n    timeout-minutes: 0');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+test('job merge aliases cannot import unreviewed execution or timeout fields', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    <<: *job_defaults\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-merge-alias'));
+});
+test('single canonical bounded timeout remains valid', () => {
+  assert.equal(evaluate(workflow()).ok, true);
+});
