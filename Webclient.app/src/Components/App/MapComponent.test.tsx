@@ -20,7 +20,9 @@ vi.mock('./NavigationBar', () => ({ NavigationBar: () => <header>Harita menüsü
 vi.mock('./SidebarModern', () => ({ SidebarModern: () => <aside>Hizmetler hazır</aside> }));
 vi.mock('../Widget/Toolbar/ToolbarWidgetModern', () => ({ ToolbarWidgetModern: () => <div>Araçlar hazır</div> }));
 vi.mock('./ExperienceMapModeBridge', () => ({ ExperienceMapModeBridge: () => null }));
-vi.mock('./KentRehberiDataLayer', () => ({ KentRehberiDataLayer: () => null }));
+vi.mock('./KentRehberiDataLayer', () => ({
+  KentRehberiDataLayer: () => <div data-testid="all-city-overview-layer" />,
+}));
 vi.mock('../Common/QueryWindowRegistry', () => ({ QUERY_WINDOW_DEFINITIONS: [] }));
 vi.mock('../Common/WidgetWindowRegistry', () => ({ WIDGET_WINDOW_DEFINITIONS: [] }));
 const deferred = () => {
@@ -50,7 +52,23 @@ beforeEach(() => {
     { watch: () => ({ remove: runtime.remove }), whenTrue: () => ({ remove: runtime.remove }), whenFalse: () => ({ remove: runtime.remove }) },
   ]);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
+describe('map overview marker opt-in', () => {
+  it('does not load the all-city orange markers on initial map startup', async () => {
+    vi.stubEnv('VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP', 'false');
+    setup();
+    await screen.findByText('Araçlar hazır');
+    expect(screen.queryByTestId('all-city-overview-layer')).not.toBeInTheDocument();
+  });
+
+  it('allows a deliberate opt-in without changing selected-service layers', async () => {
+    vi.stubEnv('VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP', 'true');
+    setup();
+    await screen.findByText('Araçlar hazır');
+    expect(screen.getByTestId('all-city-overview-layer')).toBeInTheDocument();
+  });
+});
+
 describe('real map workspace admission and recovery', () => {
   it('publishes interactive tools only after the SDK view is ready', async () => {
     const ready = deferred(); runtime.create.mockReturnValue({ ready: false, when: () => ready.promise });
