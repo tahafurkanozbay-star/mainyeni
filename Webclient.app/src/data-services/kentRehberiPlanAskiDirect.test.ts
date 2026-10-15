@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import {
   fetchKentRehberiGeoJson,
   fetchKentRehberiTypeCatalog,
@@ -138,6 +139,20 @@ describe('direct PlanASKI browser transport', () => {
   ])('rejects malformed official records without silently skipping them', async (overrides) => {
     const { fetchImpl } = mockTypes({ 13: [row(13, 201, overrides)] });
     await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl })).rejects.toThrow();
+  });
+
+  it('rejects an oversized official response without buffering the full JSON', async () => {
+    const source = new NodeReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1));
+        controller.close();
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(source as unknown as BodyInit, {
+      headers: { 'Content-Type': 'application/json' },
+    })) as typeof fetch;
+    await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl }))
+      .rejects.toThrow('payload budget');
   });
 
   it('fails closed for malformed HTTP payloads and disabled CORS responses', async () => {

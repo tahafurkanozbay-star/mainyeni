@@ -70,6 +70,22 @@ describe('kentRehberiGeoJsonLayer', () => {
     vi.restoreAllMocks();
   });
 
+  test('bounds same-origin GeoJSON streaming before attempting full JSON parsing', async () => {
+    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
+    const fetchImpl = vi.fn(async () => new Response('x'.repeat(1025), {
+      headers: { 'content-type': 'application/geo+json' },
+    })) as typeof fetch;
+    try {
+      await expect(fetchKentRehberiGeoJson({
+        limit: 10,
+        maxPayloadBytes: 1024,
+        fetchImpl,
+      })).rejects.toThrow('payload budget');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   test('builds only canonical same-origin API paths and enforces the public limit', () => {
     expect(buildKentRehberiRequestPath('/api', 500)).toBe('/api/kent-rehberi?limit=500');
     expect(() => buildKentRehberiRequestPath('https://evil.example/api', 500)).toThrow(/same-origin/i);
