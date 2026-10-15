@@ -9,6 +9,7 @@ import {
   type SourceFile,
 } from './contracts.mts';
 import { createLineIndex, selectWebSource, snippetAround } from './inventory.mts';
+import { maskNonExecutableNetworkText } from './network-lexical.mts';
 
 const URL_PATTERN = /\bhttps?:\/\/[^\s'"`<>)}\]]+/gi;
 const REMOTE_STYLE_PATTERN = /@import\s+(?:url\()?\s*['"]?(https?:\/\/[^'"\s)]+)/gi;
@@ -102,7 +103,8 @@ function extractCalls(file: SourceFile): NetworkCallSignal[] {
   const lineIndex = createLineIndex(file.text);
   const matcher = new RegExp(NETWORK_CALL_PATTERN.source, NETWORK_CALL_PATTERN.flags.includes('g') ? NETWORK_CALL_PATTERN.flags : 'g');
   let match: RegExpExecArray | null;
-  while ((match = matcher.exec(file.text)) !== null) {
+  const executable = maskNonExecutableNetworkText(file.text);
+  while ((match = matcher.exec(executable)) !== null) {
     calls.push({
       file: file.repositoryPath,
       line: lineIndex.lineAt(match.index),
@@ -175,7 +177,11 @@ function countPattern(files: readonly SourceFile[], pattern: RegExp): number {
   let count = 0;
   for (const file of files) {
     const matcher = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-    for (const _match of file.text.matchAll(matcher)) count += 1;
+    const masked = maskNonExecutableNetworkText(file.text);
+    const candidate = pattern === ABSOLUTE_FETCH_PATTERN ? file.text : masked;
+    for (const match of candidate.matchAll(matcher)) {
+      if (pattern !== ABSOLUTE_FETCH_PATTERN || masked.slice(match.index, match.index + 5) === 'fetch') count += 1;
+    }
   }
   return count;
 }
@@ -189,7 +195,8 @@ function directTransportFindings(webFiles: readonly SourceFile[]): Finding[] {
     const matcher = new RegExp(DIRECT_FETCH_PATTERN.source, 'g');
     let match: RegExpExecArray | null;
     let emitted = 0;
-    while ((match = matcher.exec(file.text)) !== null) {
+    const executable = maskNonExecutableNetworkText(file.text);
+    while ((match = matcher.exec(executable)) !== null) {
       findings.push({
         id: 'network-direct-fetch-outside-transport',
         domain: 'network',
