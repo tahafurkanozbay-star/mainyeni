@@ -47,3 +47,20 @@ test('accepts bounded optional user metadata without mutating the session', () =
   assert.equal(isValidAdminSession({ accessToken: 'abc', userName: '' }), true);
   assert.equal(isValidAdminSession({ accessToken: 'abc', userName: 'x'.repeat(512) }), true);
 });
+
+test('getter and proxy failures cannot escape the admin session validation boundary', () => {
+  const throwingGetter = Object.defineProperty({}, 'accessToken', {
+    get() { throw new Error('hostile getter'); },
+  });
+  const throwingUserName = Object.defineProperties({}, {
+    accessToken: { value: 'valid-token', enumerable: true },
+    userName: { get() { throw new Error('hostile userName'); } },
+  });
+  const throwingProxy = new Proxy({}, {
+    getOwnPropertyDescriptor() { throw new Error('hostile proxy'); },
+  });
+  for (const candidate of [throwingGetter, throwingUserName, throwingProxy]) {
+    assert.doesNotThrow(() => isValidAdminSession(candidate));
+    assert.equal(isValidAdminSession(candidate), false);
+  }
+});
