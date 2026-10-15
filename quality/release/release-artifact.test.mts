@@ -46,7 +46,8 @@ test('uploaded report never contains scanned source text, raw evidence or audit 
   assert.ok(!json.includes(privateValue));
   assert.ok(!json.includes('rawUrl'));
   assert.ok(!json.includes('absolutePath'));
-  assert.ok(!json.includes('Webclient.admin/src/request.ts\"'));
+  assert.ok(!json.includes('export const token'));
+  assert.equal(artifact.findings[0]?.file, 'Webclient.admin/src/request.ts');
   assert.equal(artifact.inventory.totalFiles, 1);
   assert.equal(artifact.sections[0]?.findingCount, 1);
   assert.ok(!('id' in (artifact.findings[0] ?? {})));
