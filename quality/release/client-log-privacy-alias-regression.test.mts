@@ -97,3 +97,38 @@ test('finding metadata never stores original sensitive expression values', () =>
   assert.equal(result.summary.flaggedCalls, 1);
   assert.ok(!JSON.stringify(result.findings).includes('private-secret-marker'));
 });
+
+test('mutable local aliases are re-evaluated after a safe assignment', () => {
+  safe('let detail = record.address;\ndetail = resultCount;\nsafeClientLog(A, "count", detail);');
+});
+test('a mutable safe counter becomes unsafe when assigned a private source', () => {
+  unsafe('let detail = resultCount;\ndetail = record.address;\nsafeClientLog(A, "map", detail);',
+    'derived-sensitive-property');
+});
+test('a var alias is tracked through a later private assignment', () => {
+  unsafe('var detail = resultCount;\ndetail = selection?.address;\nsafeClientLog(A, "map", detail);',
+    'derived-sensitive-property');
+});
+test('mutable alias chaining retains the latest assigned value', () => {
+  unsafe('let detail = resultCount;\nconst privateValue = record.address;\ndetail = privateValue;\n' +
+    'safeClientLog(A, "map", detail);', 'derived-derived-sensitive-property');
+});
+test('property assignment cannot replace a plain mutable local', () => {
+  unsafe('let detail = record.address;\nsettings.detail = resultCount;\nsafeClientLog(A, "map", detail);',
+    'derived-sensitive-property');
+});
+test('a conditional inner assignment does not prove an outer private value safe', () => {
+  unsafe('let detail = record.address;\nif (flag) { detail = resultCount; }\n' +
+    'safeClientLog(A, "map", detail);', 'derived-sensitive-property');
+});
+test('inside the assignment block, later safe calls see the updated local', () => {
+  safe('let detail = record.address;\nif (flag) { detail = resultCount;\n' +
+    'safeClientLog(A, "count", detail); }');
+});
+test('immutable local values cannot be overridden by a spurious assignment', () => {
+  unsafe('const detail = record.address;\ndetail = resultCount;\nsafeClientLog(A, "map", detail);',
+    'derived-sensitive-property');
+});
+test('a property receiving private data does not invent a local binding', () => {
+  safe('settings.detail = record.address;\nsafeClientLog(A, "count", detail);');
+});
