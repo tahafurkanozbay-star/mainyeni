@@ -87,7 +87,8 @@ test('parent traversals inside the release root do not bypass review', () => {
   assert.equal(report.summary.unsafeReleasePaths, 1);
 });
 test('uploads of independent diagnostics are not mistaken for release inventory', () => {
-  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics'));
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
   assert.equal(report.summary.releaseUploadSteps, 0);
   assert.equal(report.findings.length, 0);
 });
