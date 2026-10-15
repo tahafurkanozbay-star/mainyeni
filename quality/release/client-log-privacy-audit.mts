@@ -91,7 +91,7 @@ function callArguments(text: string, open: number): readonly string[] | null {
 
 interface ClientLogCall {
   readonly offset: number;
-  readonly arguments: readonly string[];
+  readonly arguments: readonly string[] | null;
 }
 
 function findClientLogCalls(text: string): readonly ClientLogCall[] {
@@ -113,9 +113,14 @@ function findClientLogCalls(text: string): readonly ClientLogCall[] {
 
     let open = index + name.length;
     while (/\s/.test(text[open] ?? '') && open < text.length) open += 1;
+    // Optional calls are still executable logging sinks.
+    if (text.startsWith('?.', open)) open += 2;
+    while (/\s/.test(text[open] ?? '') && open < text.length) open += 1;
     if (text[open] !== '(') continue;
     const args = callArguments(text, open);
-    if (args) calls.push({ offset: index, arguments: args });
+    // An over-budget or malformed call must fail closed rather than silently
+    // disappear from the release evidence. The finding never stores payloads.
+    calls.push({ offset: index, arguments: args });
     index = open;
   }
   return calls;
@@ -149,7 +154,9 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
       clientLogCalls += 1;
       if (flaggedInFile >= 8) continue;
       // The third argument is the payload, not the logger or event name.
-      const reason = call.arguments.length >= 3 ? riskReason(call.arguments[2] ?? '') : null;
+      const reason = call.arguments === null
+        ? 'unreviewable-client-log-call'
+        : call.arguments.length >= 3 ? riskReason(call.arguments[2] ?? '') : null;
       if (!reason) continue;
       findings.push({
         id: 'client-log-sensitive-payload',
