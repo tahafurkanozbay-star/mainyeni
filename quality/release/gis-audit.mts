@@ -244,12 +244,19 @@ function parseIconRegistry(inventory: RepositoryInventory): IconRegistrySummary 
   };
 }
 
-function runtimePresence(inventory: RepositoryInventory): GisRuntimePresence[] {
-  return REQUIRED_GIS_RUNTIMES.map(expected => ({
-    expectedPath: expected.path,
-    present: findFile(inventory, expected.path) !== undefined,
-    role: expected.role,
-  }));
+export function runtimePresence(inventory: RepositoryInventory): GisRuntimePresence[] {
+  return REQUIRED_GIS_RUNTIMES.map(expected => {
+    // The GIS engine is migrated incrementally from JavaScript to TypeScript.
+    // Accept either exact module path, without treating tests or backups as runtimes.
+    const candidates = expected.path.endsWith('.js')
+      ? [expected.path.slice(0, -3) + '.ts', expected.path]
+      : [expected.path];
+    return {
+      expectedPath: expected.path,
+      present: candidates.some(path => findFile(inventory, path) !== undefined),
+      role: expected.role,
+    };
+  });
 }
 
 function runtimeFindings(runtimes: readonly GisRuntimePresence[]): Finding[] {
