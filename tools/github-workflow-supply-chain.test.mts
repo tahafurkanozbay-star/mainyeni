@@ -530,3 +530,30 @@ test('job merge aliases cannot import unreviewed execution or timeout fields', (
 test('single canonical bounded timeout remains valid', () => {
   assert.equal(evaluate(workflow()).ok, true);
 });
+
+test('unindented YAML comment cannot hide privileged workflow event', () => {
+  const source = workflow().replace('  pull_request:', '  pull_request:\n# comment\n  workflow_run:');
+  assert.ok(codes(evaluate(source)).includes('workflow-untrusted-trigger'));
+});
+
+test('unindented YAML comment cannot hide elevated job permission', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n# comment\n      id-token: write\n    timeout-minutes: 10');
+  assert.ok(codes(evaluate(source)).includes('workflow-job-permissions-elevated'));
+});
+
+test('unindented YAML comment cannot hide an unbounded second job', () => {
+  const source = workflow() + '# comment\n  extra-job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n';
+  assert.ok(codes(evaluate(source)).includes('workflow-job-timeout-invalid'));
+});
+
+test('unindented YAML comment cannot hide unreviewed step structure', () => {
+  const source = workflow().replace('    steps:', '    steps:\n# comment\n      - { uses: actions/checkout@v1 }');
+  assert.ok(codes(evaluate(source)).includes('workflow-step-structure-unreviewed'));
+});
+
+test('unindented YAML comments preserve valid read-only job permission mappings', () => {
+  const source = workflow().replace('    timeout-minutes: 10',
+    '    permissions:\n      contents: read\n# comment\n      actions: read\n    timeout-minutes: 10');
+  assert.equal(evaluate(source).ok, true);
+});

@@ -111,7 +111,7 @@ export const auditWorkflowSource = (file, source) => {
         'Workflow event aliases and anchors require an explicit reviewed trigger map.'));
     }
     for (let i = triggerHeader + 1; i < lines.length &&
-      (!lines[i].trim() || /^\s/.test(lines[i])); i++) {
+      (!lines[i].trim() || /^\s/.test(lines[i]) || isComment(lines[i])); i++) {
       if (isComment(lines[i])) continue;
       if (/^  ['"]?(?:pull_request_target|workflow_run)['"]?\s*:/.test(lines[i]) ||
         /^  -\s*['"]?(?:pull_request_target|workflow_run)['"]?\s*(?:#.*)?$/.test(lines[i])) {
@@ -156,7 +156,7 @@ export const auditWorkflowSource = (file, source) => {
     // bypass the per-job timeout and token checks below.
     for (let j = jobsStart + 1; j < lines.length; j++) {
       const line = lines[j];
-      if (line.trim() && !/^\s/.test(line)) break;
+      if (line.trim() && !/^\s/.test(line) && !isComment(line)) break;
       if (!/^  \S/.test(line) || isComment(line)) continue;
       if (!/^  [A-Za-z0-9_-]+:\s*$/.test(line)) {
         findings.push(find('workflow-job-key-noncanonical', file, j + 1,
@@ -165,7 +165,7 @@ export const auditWorkflowSource = (file, source) => {
     }
     const seenJobNames = new Set();
     for (let i = jobsStart + 1; i < lines.length; i++) {
-      if (lines[i] && !/^\s/.test(lines[i])) break;
+      if (lines[i].trim() && !/^\s/.test(lines[i]) && !isComment(lines[i])) break;
       const job = lines[i].match(/^  ([A-Za-z0-9_-]+):\s*$/);
       if (!job) continue;
       if (seenJobNames.has(job[1])) {
@@ -175,7 +175,7 @@ export const auditWorkflowSource = (file, source) => {
       seenJobNames.add(job[1]);
       let end = i + 1;
       while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end]) &&
-        (!lines[end] || /^\s/.test(lines[end]))) end++;
+        (!lines[end].trim() || /^\s/.test(lines[end]) || isComment(lines[end]))) end++;
       // Count every YAML spelling of the timeout key, including invalid and
       // duplicate declarations. Counting only valid values lets a later YAML
       // mapping silently shadow a previously reviewed bounded timeout.
@@ -225,6 +225,7 @@ export const auditWorkflowSource = (file, source) => {
         const declaration = lines[jobPermissionAt].trim();
         const block = [];
         for (let j = jobPermissionAt + 1; j < end; j++) {
+          if (isComment(lines[j])) continue;
           if (lines[j].trim() && !/^ {6}/.test(lines[j])) break;
           if (lines[j].trim() && !isComment(lines[j])) {
             block.push({ line: j + 1, text: lines[j].trim() });
@@ -264,7 +265,7 @@ export const auditWorkflowSource = (file, source) => {
     let stepsSeen = 0;
     for (let i = jobsStart + 1; i < lines.length; i++) {
       const line = lines[i];
-      if (line.trim() && !/^\s/.test(line)) break;
+      if (line.trim() && !/^\s/.test(line) && !isComment(line)) break;
       if (/^  [A-Za-z0-9_-]+:\s*$/.test(line)) {
         inJob = true;
         stepsSeen = 0;

@@ -1,3 +1,155 @@
-.sketch-icon{
-    font-size: 2rem !important;
+#app-shell .sketch-widget {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: none;
+}
+.sketch-widget > :is(.map-widget-surface__header, .map-widget-surface__status-row, .map-widget-surface__footer) { flex: 0 0 auto; }
+#app-shell .sketch-widget .map-widget-surface__header { flex-wrap: nowrap; }
+.sketch-widget .map-widget-surface__title { white-space: normal; }
+
+.sketch-widget .sketch-widget__body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  overflow: auto;
+  min-inline-size: 0;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+}
+
+.sketch-widget__summary { display: flex; align-items: start; flex-wrap: wrap; gap: 10px; }
+.sketch-widget__summary p {
+  flex: 1 1 26ch;
+  margin: 0;
+  color: var(--exp-text);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.sketch-widget__count {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--exp-border);
+  border-radius: 999px;
+  color: var(--exp-text);
+  background: var(--exp-surface-2);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.sketch-widget__session-note, .sketch-widget__help p {
+  margin: 0;
+  color: var(--exp-text-soft);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.sketch-widget .sketch-widget__tools {
+  --sketch-action-size: 44px;
+  --calcite-color-foreground-1: var(--exp-surface);
+  --calcite-color-foreground-2: var(--exp-surface-2);
+  --calcite-color-foreground-3: var(--exp-surface-3);
+  --calcite-color-background: var(--exp-surface-2);
+  --calcite-color-text-1: var(--exp-text);
+  --calcite-color-text-2: var(--exp-text-soft);
+  --calcite-color-text-3: var(--exp-text-soft);
+  --calcite-color-border-1: var(--exp-border);
+  --calcite-color-border-2: var(--exp-border);
+  --calcite-color-border-3: var(--exp-border);
+  --calcite-color-brand: var(--exp-accent);
+  --calcite-color-brand-hover: var(--exp-accent);
+  --calcite-color-focus: var(--exp-focus-color, Highlight);
+  min-block-size: 76px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  padding: 8px;
+  background: var(--exp-surface);
+}
+.sketch-widget__tools[hidden] { display: none; }
+.sketch-widget__tools .esri-sketch { inline-size: 100%; max-inline-size: 100%; }
+.sketch-widget__tools calcite-action {
+  --calcite-action-text-color: var(--exp-text);
+  --calcite-action-text-color-press: var(--exp-accent);
+  --calcite-action-background-color: var(--exp-surface);
+  --calcite-action-background-color-hover: var(--exp-surface-2);
+  --calcite-action-background-color-press: var(--exp-surface-3);
+  min-inline-size: var(--sketch-action-size);
+  max-inline-size: none;
+}
+.sketch-widget__tools .esri-responsive-toolbar__bar { max-inline-size: 100%; }
+.sketch-widget__tools .esri-responsive-toolbar__ruler--bar {
+  /* Reserve the two expanded split-menu targets in the SDK's width estimate. */
+  inline-size: calc(100% - 2 * var(--sketch-action-size));
+  inset-inline-end: auto;
+}
+.sketch-widget__tools calcite-action-bar {
+  --calcite-action-bar-items-space: 0px;
+  --calcite-action-bar-background-color: var(--exp-surface);
+}
+.sketch-widget__tools calcite-action[active] {
+  --calcite-action-text-color: var(--exp-accent);
+  --calcite-action-background-color: color-mix(in srgb, var(--exp-accent) 12%, var(--exp-surface));
+  outline: 2px solid var(--exp-accent);
+  outline-offset: -2px;
+}
+.sketch-widget__tools .esri-sketch__popover-wrapper {
+  min-inline-size: 0;
+  max-inline-size: min(400px, calc(100dvw - 48px));
+}
+.sketch-widget__tools :is(.esri-widget, .esri-sketch__panel, .esri-sketch__section, .esri-sketch__settings-panel) {
+  color: var(--exp-text);
+  background-color: var(--exp-surface);
+  border-color: var(--exp-border);
+  font-family: inherit;
+}
+.sketch-widget__tools :is(.esri-widget--button, .esri-sketch__button) {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  color: var(--exp-text);
+  border-radius: 7px;
+}
+.sketch-widget__tools :is(.esri-widget--button, .esri-sketch__button):hover { background: var(--exp-surface-2); }
+.sketch-widget__tools :is(.esri-widget--button, .esri-sketch__button):is([aria-pressed='true'], .esri-sketch__button--selected) {
+  color: var(--exp-accent);
+  background: color-mix(in srgb, var(--exp-accent) 12%, var(--exp-surface));
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.sketch-widget__tools :is(button, [role='button'], input, select):focus-visible,
+.sketch-widget__help summary:focus-visible, .sketch-widget__summary:focus-visible {
+  outline: 3px solid var(--exp-focus-color, Highlight);
+  outline-offset: -3px;
+}
+.sketch-widget__help { border: 1px solid var(--exp-border); border-radius: 10px; background: var(--exp-surface-2); }
+.sketch-widget__help summary {
+  min-block-size: 44px;
+  align-content: center;
+  padding: 10px 12px;
+  color: var(--exp-text);
+  font-size: 0.875rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.sketch-widget__help p { padding: 0 12px 12px; }
+.sketch-widget__actions { display: flex; flex-wrap: wrap; gap: 8px; inline-size: 100%; }
+.sketch-widget__actions .map-widget-action { flex: 1 1 18ch; min-block-size: 44px; white-space: normal; }
+.sketch-widget__confirmation { inline-size: 100%; }
+.sketch-widget__confirmation p { margin: 0 0 10px; color: var(--exp-text); font-size: 0.875rem; line-height: 1.5; }
+.sketch-widget__tools-hint { margin: 0; color: var(--exp-text-soft); font-size: 0.8125rem; line-height: 1.5; }
+
+@media (pointer: coarse) {
+  .sketch-widget__tools :is(.esri-widget--button, .esri-sketch__button),
+  .sketch-widget__actions .map-widget-action, .sketch-widget__help summary { min-block-size: 48px; }
+}
+@media (forced-colors: active) {
+  .sketch-widget__tools calcite-action[active] {
+    --calcite-action-text-color: HighlightText;
+    --calcite-action-background-color: Highlight;
+    outline-color: Highlight;
+  }
+  .sketch-widget__tools :is(.esri-widget--button, .esri-sketch__button):is([aria-pressed='true'], .esri-sketch__button--selected) {
+    color: HighlightText;
+    background: Highlight;
+    border: 2px solid Highlight;
+    box-shadow: none;
+    forced-color-adjust: none;
+  }
 }
