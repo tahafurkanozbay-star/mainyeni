@@ -198,6 +198,25 @@ export const buildKentRehberiTypeCatalogPath = (
   return `${normalizedBase}/kent-rehberi/types`;
 };
 
+// This dataset is an EPSG:4326 point layer, not an arbitrary GeoJSON
+// geometry collection. Reject unexpected geometry before ArcGIS parses it.
+const validateKentRehberiPoint = (geometry: unknown, index: number): JsonObject | null => {
+  if (geometry === null) return null;
+  if (!isJsonObject(geometry) || geometry.type !== 'Point'
+    || !Array.isArray(geometry.coordinates) || geometry.coordinates.length !== 2) {
+    throw new TypeError(`Kent Rehberi feature ${index} has an invalid Point geometry.`);
+  }
+
+  const [longitude, latitude] = geometry.coordinates;
+  if (typeof longitude !== 'number' || typeof latitude !== 'number'
+    || !Number.isFinite(longitude) || !Number.isFinite(latitude)
+    || Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
+    throw new TypeError(`Kent Rehberi feature ${index} has invalid WGS84 coordinates.`);
+  }
+
+  return geometry;
+};
+
 export const validateKentRehberiFeature = (
   candidate: unknown,
   index = 0,
@@ -205,21 +224,27 @@ export const validateKentRehberiFeature = (
   if (!isJsonObject(candidate) || candidate.type !== 'Feature') {
     throw new TypeError(`Kent Rehberi feature ${index} is invalid.`);
   }
-  if (candidate.geometry !== null && !isJsonObject(candidate.geometry)) {
-    throw new TypeError(`Kent Rehberi feature ${index} has an invalid geometry.`);
-  }
+  const geometry = validateKentRehberiPoint(candidate.geometry, index);
   if (!isJsonObject(candidate.properties)) {
     throw new TypeError(`Kent Rehberi feature ${index} has invalid properties.`);
   }
 
   const objectId = candidate.properties.objectid;
-  if (typeof objectId !== 'number' || !Number.isInteger(objectId) || objectId <= 0) {
+  if (typeof objectId !== 'number' || !Number.isSafeInteger(objectId)
+    || objectId <= 0 || objectId > 2_147_483_647) {
     throw new TypeError(`Kent Rehberi feature ${index} is missing a valid objectid.`);
+  }
+
+  // Keep optional GeoJSON id consistent with the canonical object ID.
+  if (candidate.id !== undefined
+    && (typeof candidate.id !== 'string' && typeof candidate.id !== 'number'
+      || String(candidate.id) !== String(objectId))) {
+    throw new TypeError(`Kent Rehberi feature ${index} has a mismatched id.`);
   }
 
   return Object.freeze({
     type: 'Feature',
-    geometry: candidate.geometry as JsonObject | null,
+    geometry,
     properties: candidate.properties,
     ...(candidate.id === undefined ? {} : { id: candidate.id as string | number }),
   });
@@ -236,8 +261,16 @@ export const validateKentRehberiFeatureCollection = (
     throw new RangeError('Kent Rehberi response exceeded the bounded feature limit.');
   }
 
-  const features = value.features.map((candidate, index) =>
-    validateKentRehberiFeature(candidate, index));
+  const seenObjectIds = new Set<number>();
+  const features = value.features.map((candidate, index) => {
+    const feature = validateKentRehberiFeature(candidate, index);
+    const objectId = feature.properties.objectid as number;
+    if (seenObjectIds.has(objectId)) {
+      throw new TypeError(`Kent Rehberi response contains a duplicate objectid: ${objectId}.`);
+    }
+    seenObjectIds.add(objectId);
+    return feature;
+  });
 
   return Object.freeze({
     type: 'FeatureCollection',
@@ -385,7 +418,9 @@ const readBoundedJsonResponse = async (
   }
 
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-  if (contentType && !contentType.includes('application/geo+json') && !contentType.includes('application/json')) {
+  // Match the actual MIME type, not a token hidden inside text/html parameters
+  // or a misleading application/json-suffix.
+  if (contentType && !/^application\/(?:geo\+)?json(?:\s*;|$)/u.test(contentType.trim())) {
     throw new TypeError('Kent Rehberi endpoint returned an unexpected content type.');
   }
 
