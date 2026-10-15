@@ -200,7 +200,7 @@ interface AliasBinding {
 }
 
 function privacyMask(text: string): string {
-  const characters = [...text];
+  const characters = text.split(''); // Preserve UTF-16 offsets for astral symbols.
   const blank = (index: number): void => {
     if (characters[index] !== '\n') characters[index] = ' ';
   };
