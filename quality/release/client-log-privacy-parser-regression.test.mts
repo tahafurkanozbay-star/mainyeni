@@ -122,3 +122,36 @@ test('malformed logging arguments cannot silently evade release privacy audit', 
   assert.equal(result.summary.flaggedCalls, 1);
   assert.equal(result.findings[0]?.evidence?.metadata?.reason, 'unreviewable-client-log-call');
 });
+
+
+test('the ninth sensitive call changes exact-base evidence without exceeding eight findings', () => {
+  const unsafe = 'safeClientLog(A, "Map", record.address);';
+  const inspect = (count: number) => audit([{ path: userPath, text: Array(count).fill(unsafe).join('\n') }]);
+  const eight = inspect(8);
+  const nine = inspect(9);
+  const ten = inspect(10);
+  assert.equal(eight.summary.flaggedCalls, 8);
+  assert.equal(nine.summary.flaggedCalls, 8);
+  assert.equal(ten.summary.flaggedCalls, 8);
+  assert.ok(!eight.findings.some(f => f.id.endsWith('overflow')));
+  const overflow9 = nine.findings.find(f => f.id.endsWith('overflow'));
+  const overflow10 = ten.findings.find(f => f.id.endsWith('overflow'));
+  assert.equal(overflow9?.evidence?.value, 2);
+  assert.equal(overflow10?.evidence?.value, 3);
+  assert.notDeepEqual(overflow9?.evidence, overflow10?.evidence);
+  assert.ok(!JSON.stringify(nine.findings).includes('record.address'));
+});
+
+test('safe calls between the eighth and ninth sensitive payload cannot mask overflow', () => {
+  const unsafe = 'safeClientLog(A, "Map", record.address);';
+  const safe = 'safeClientLog(A, "Count", queryCount);';
+  const report = audit([{ path: adminPath, text: [
+    ...Array(8).fill(unsafe),
+    ...Array(25).fill(safe),
+    unsafe,
+  ].join('\n') }]);
+  assert.equal(report.summary.clientLogCalls, 34);
+  assert.equal(report.summary.flaggedCalls, 8);
+  assert.equal(report.findings.filter(f => f.id.endsWith('overflow')).length, 1);
+  assert.equal(report.findings.find(f => f.id.endsWith('overflow'))?.evidence?.value, 2);
+});
