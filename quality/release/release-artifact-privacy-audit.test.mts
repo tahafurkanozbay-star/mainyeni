@@ -86,11 +86,12 @@ test('parent traversals inside the release root do not bypass review', () => {
   const report = inspect(workflowStep('path: qa-artifacts/release/../secrets.json'));
   assert.equal(report.summary.unsafeReleasePaths, 1);
 });
-test('uploads of independent diagnostics are not mistaken for release inventory', () => {
+test('compiler diagnostic raw directory uploads are denied without revealing data', () => {
   const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics')
     .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
-  assert.equal(report.summary.releaseUploadSteps, 0);
-  assert.equal(report.findings.length, 0);
+  assert.equal(report.summary.releaseUploadSteps, 1);
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+  assert.equal(report.findings.length, 1);
 });
 test('source files and test files cannot impersonate workflow evidence', () => {
   const src = inspect(workflowStep('path: qa-artifacts/release'), 'quality/release/example.ts', 'typescript');
@@ -153,4 +154,48 @@ test('real release uploader remains approved when a reviewed glob is specified',
   const report = inspect(workflowStep('path: qa-artifacts/release/*.md'));
   assert.equal(report.summary.unsafeReleasePaths, 0);
   assert.equal(report.summary.releaseUploadSteps, 1);
+});
+
+test('compiler diagnostic exit status is safe to publish', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/*-exit-code.txt')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.summary.releaseUploadSteps, 1);
+  assert.equal(report.summary.safeReleasePaths, 1);
+  assert.equal(report.findings.length, 0);
+});
+test('explicit TypeScript exit status is safe without source text', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/typecheck-exit-code.txt')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.findings.length, 0);
+});
+test('explicit regression exit status is safe without source text', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/typed-regression-exit-code.txt')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.findings.length, 0);
+});
+test('raw TypeScript compiler log cannot leave the CI runner', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/typecheck.log')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+});
+test('raw typed regression log cannot leave the CI runner', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/typed-regression.log')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+});
+test('dynamic compiler report paths must not be assumed safe', () => {
+  const report = inspect(workflowStep('path: $' + '{{ env.OUTPUT }}')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+});
+test('compile diagnostics and release QA are separate allowlists', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/*-exit-code.txt'));
+  assert.equal(report.findings.length, 0);
+  assert.equal(report.summary.releaseUploadSteps, 1);
+});
+test('raw diagnostic excerpts stay out of findings', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release-diagnostics/private-token-error.log')
+    .replace('name: typed-release-qa', 'name: typed-release-compiler-diagnostics'));
+  assert.equal(report.findings.length, 1);
+  assert.ok(!JSON.stringify(report.findings).includes('private-token'));
 });
