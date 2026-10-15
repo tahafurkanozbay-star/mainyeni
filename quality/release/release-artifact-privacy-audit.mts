@@ -18,11 +18,13 @@ interface UploadStep {
   readonly file: string;
   readonly line: number;
   readonly paths: readonly string[];
+  readonly artifactName: string | null;
 }
 const WORKFLOW = /^\.github\/workflows\/[^/]+\.(?:yaml|yml)$/i;
 const UPLOAD = /^\s*uses:\s*['"]?actions\/upload-artifact@/i;
 const PATH_FIELD = /^(\s*)path:\s*(.*)$/;
-const RELEASE_ROOT = /^qa-artifacts\/release(?:\/|$)/i;
+const RELEASE_ROOT = /(?:^|\/)qa-artifacts\/release(?:\/|$)/i;
+const CANONICAL_RELEASE_ARTIFACT = /^typed-release-qa(?:$|[-_])/i;
 const APPROVED = new Set([
   'qa-artifacts/release/release-report.md',
   'qa-artifacts/release/pr-regression-gate.md',
@@ -79,7 +81,22 @@ function collectUploadSteps(file: SourceFile): readonly UploadStep[] {
     const stepLines = lines.slice(start, end);
     const paths = stepLines.flatMap((line, at) =>
       PATH_FIELD.test(line) ? readPaths(stepLines, at) : []);
-    steps.push({ file: file.repositoryPath, line: index + 1, paths });
+    const withIndex = stepLines.findIndex(line => /^\s*with:\s*$/.test(line));
+    let artifactName: string | null = null;
+    if (withIndex >= 0) {
+      const withIndent = indentation(stepLines[withIndex] ?? '');
+      for (let at = withIndex + 1; at < stepLines.length; at += 1) {
+        const line = stepLines[at] ?? '';
+        if (!line.trim() || line.trim().startsWith('#')) continue;
+        if (indentation(line) <= withIndent) break;
+        const nameMatch = /^\s*name:\s*(.*?)\s*$/.exec(line);
+        if (nameMatch) {
+          artifactName = (nameMatch[1] ?? '').replace(/^['"]|['"]$/g, '');
+          break;
+        }
+      }
+    }
+    steps.push({ file: file.repositoryPath, line: index + 1, paths, artifactName });
   }
   return steps;
 }
@@ -114,12 +131,16 @@ export function auditReleaseArtifactPrivacy(
   let unsafeReleasePaths = 0;
   for (const step of uploads) {
     const releasePaths = step.paths.filter(path => RELEASE_ROOT.test(path));
-    if (!releasePaths.length) continue;
+    const namedReleaseUpload = CANONICAL_RELEASE_ARTIFACT.test(step.artifactName ?? '');
+    if (!releasePaths.length && !namedReleaseUpload) continue;
     releaseUploadSteps += 1;
     const unsafe = releasePaths.filter(isUnsafeReleasePath);
     safeReleasePaths += releasePaths.length - unsafe.length;
-    unsafeReleasePaths += unsafe.length;
-    if (unsafe.length) findings.push(finding(step));
+    // A known release artifact uploader with no literal approved source
+    // must fail closed; a dynamic env/path expression cannot establish safety.
+    const missingApprovedSource = namedReleaseUpload && releasePaths.length === 0;
+    unsafeReleasePaths += unsafe.length + (missingApprovedSource ? 1 : 0);
+    if (unsafe.length || missingApprovedSource) findings.push(finding(step));
   }
   return {
     domain: 'security',
