@@ -10,6 +10,7 @@ import {
 } from './contracts.mts';
 import { createLineIndex, selectWebSource, snippetAround } from './inventory.mts';
 import { maskNonExecutableNetworkText } from './network-lexical.mts';
+import { maskNetworkReferenceComments } from './network-url-lexical.mts';
 
 const URL_PATTERN = /\bhttps?:\/\/[^\s'"`<>)}\]]+/gi;
 const REMOTE_STYLE_PATTERN = /@import\s+(?:url\()?\s*['"]?(https?:\/\/[^'"\s)]+)/gi;
@@ -71,11 +72,12 @@ function extractReferences(file: SourceFile): ExternalReference[] {
   const lineIndex = createLineIndex(file.text);
   const patterns = [URL_PATTERN, REMOTE_STYLE_PATTERN];
   const seen = new Set<string>();
+  const referenceText = maskNetworkReferenceComments(file.text);
 
   for (const pattern of patterns) {
     const matcher = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
     let match: RegExpExecArray | null;
-    while ((match = matcher.exec(file.text)) !== null) {
+    while ((match = matcher.exec(referenceText)) !== null) {
       const raw = String(match[1] ?? match[0]);
       const url = safeUrl(raw);
       if (!url) continue;
