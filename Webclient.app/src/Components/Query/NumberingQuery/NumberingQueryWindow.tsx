@@ -5,17 +5,20 @@ import React, {
   useImperativeHandle,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
   type ChangeEvent,
   type Ref,
 } from 'react';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { NumberingQueryBusiness } from '../../../Business/NumberingQueryBusiness';
-import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
+import { Constants_MessageType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
 import { DebugHelper } from '../../../Toolbox/DebugHelper';
 import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
-import { ExperienceSelect } from '../../Common/ExperienceForm';
+import {
+  ExperienceInput,
+  ExperienceSelect,
+} from '../../Common/ExperienceForm';
 import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import {
@@ -23,10 +26,31 @@ import {
   type QueryWindowManagerLike,
 } from '../_Common/CommonQueryWindowTools';
 import {
-  createLatestRequestGate,
   normalizeErrorMessage,
   safeClientLog,
 } from '../_Common/QueryInteractionRuntime';
+import {
+  NUMBERING_LEVELS_V11,
+  normalizeNumberingOptionsV11,
+  numberingPathLabelV11,
+  readNumberingOptionV11,
+  type NumberingLevelV11,
+  type NumberingPathV11,
+  type NumberingRuntimeEffectsV11,
+  type NumberingTransportV11,
+} from './NumberingQueryContractsV11';
+import {
+  auditNumberingSnapshotV11,
+} from './NumberingQueryAuditV11';
+import {
+  createNumberingWorkspacePresentationV11,
+  numberingFilterDisabledV11,
+  numberingSelectionValueV11,
+  numberingStepDisabledV11,
+} from './NumberingQueryPresentationV11';
+import {
+  createNumberingQueryRuntimeV11,
+} from './NumberingQueryRuntimeV11';
 import './NumberingQueryWindow.css';
 
 type UnknownRecord = Record<string, unknown>;
@@ -34,13 +58,6 @@ type UnknownRecord = Record<string, unknown>;
 export interface NumberingFeature {
   readonly attr?: UnknownRecord | null;
   readonly geometry?: unknown;
-}
-
-interface NumberingServiceResult {
-  readonly type?: unknown;
-  readonly data?: readonly NumberingFeature[] | null;
-  readonly message?: unknown;
-  readonly errorMessage?: unknown;
 }
 
 export interface NumberingQueryState {
@@ -72,8 +89,6 @@ export interface NumberingQueryWindowProps {
   readonly windowManager: NumberingWindowManager;
 }
 
-type AddressLevel = 'district' | 'neighborhood' | 'street' | 'door';
-
 const INITIAL_QUERY: NumberingQueryState = Object.freeze({
   district: '',
   districtName: '',
@@ -88,73 +103,137 @@ export const createInitialNumberingQuery = (): NumberingQueryState => ({
   ...INITIAL_QUERY,
 });
 
-const getAttributes = (item: NumberingFeature): UnknownRecord =>
-  item.attr ?? {};
-
 export const readNumberingOption = (
   item: NumberingFeature,
   valueKey: string,
   labelKey: string,
 ): Readonly<{ value: string; label: string }> | null => {
-  const attributes = getAttributes(item);
-  const rawValue = attributes[valueKey];
-  const rawLabel = attributes[labelKey];
-  if (
-    rawValue === null
-    || rawValue === undefined
-    || String(rawValue).trim() === ''
-  ) {
-    return null;
-  }
-
-  return Object.freeze({
-    value: String(rawValue),
-    label: rawLabel === null || rawLabel === undefined
-      ? String(rawValue)
-      : String(rawLabel).trim(),
-  });
+  const option = readNumberingOptionV11(item, valueKey, labelKey, 0);
+  return option
+    ? Object.freeze({ value: option.value, label: option.label })
+    : null;
 };
 
 export const normalizeNumberingOptions = (
   items: readonly NumberingFeature[] | null | undefined,
   valueKey: string,
   labelKey: string,
-): readonly Readonly<{ value: string; label: string }>[] => {
-  if (!Array.isArray(items)) return [];
+): readonly Readonly<{ value: string; label: string }>[] =>
+  Object.freeze(normalizeNumberingOptionsV11(items, {
+    valueKey,
+    labelKey,
+    maxOptions: 100_000,
+  }).options.map(option => Object.freeze({
+    value: option.value,
+    label: option.label,
+  })));
 
-  const seen = new Set<string>();
-  const result: Array<Readonly<{ value: string; label: string }>> = [];
+const transportAdapter = (): NumberingTransportV11 => Object.freeze({
+  loadDistricts: () => NumberingQueryBusiness.GetDistricts(),
+  loadDistrict: districtId => NumberingQueryBusiness.GetDistrictById(districtId),
+  loadNeighborhoods: districtId => NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId),
+  loadNeighborhood: neighborhoodId => NumberingQueryBusiness.GetNeighborhoodById(neighborhoodId),
+  loadStreets: neighborhoodId => NumberingQueryBusiness.GetStreets(neighborhoodId),
+  loadStreetGeometries: streetId => NumberingQueryBusiness.GetStreetCenterLines(streetId),
+  loadDoors: streetId => NumberingQueryBusiness.GetDoors(streetId),
+  loadDoor: doorId => NumberingQueryBusiness.GetDoorById(doorId),
+});
 
-  for (const item of items) {
-    const option = readNumberingOption(item, valueKey, labelKey);
-    if (!option || seen.has(option.value)) continue;
-    seen.add(option.value);
-    result.push(option);
-  }
-  return result;
+const pathForLog = (path: NumberingPathV11): string =>
+  numberingPathLabelV11(path) || 'Adres seçimi';
+
+interface LevelControlProps {
+  readonly id: string;
+  readonly level: NumberingLevelV11;
+  readonly snapshot: ReturnType<ReturnType<typeof createNumberingQueryRuntimeV11>['snapshot']>;
+  readonly onFilter: (level: NumberingLevelV11, value: string) => void;
+  readonly onSelect: (level: NumberingLevelV11, value: string) => void;
+}
+
+const NumberingLevelControl = ({
+  id,
+  level,
+  snapshot,
+  onFilter,
+  onSelect,
+}: LevelControlProps): React.ReactElement => {
+  const workspace = createNumberingWorkspacePresentationV11(snapshot);
+  const step = workspace.steps.find(item => item.level === level);
+  const state = snapshot.levels[level];
+  const selectedValue = numberingSelectionValueV11(snapshot, level);
+  const selectedIsVisible = state.options.some(option => option.value === selectedValue);
+  const inputId = `${id}-${level}-filter`;
+  const selectId = `${id}-${level}`;
+  const descriptionId = `${id}-${step?.describedByIdSuffix ?? `${level}-description`}`;
+  const showFilter = state.optionCount > 12 || Boolean(state.filter);
+
+  return (
+    <div
+      className={[
+        'numbering-v11-step',
+        step?.complete ? 'is-complete' : '',
+        step?.busy ? 'is-busy' : '',
+        state.error ? 'has-error' : '',
+      ].filter(Boolean).join(' ')}
+      data-level={level}
+    >
+      <div className="numbering-v11-step__heading">
+        <span className="numbering-v11-step__index" aria-hidden="true">{step?.ordinal ?? 1}</span>
+        <div>
+          <h3>{step?.label}</h3>
+          <p id={descriptionId}>{step?.optionSummary}</p>
+        </div>
+      </div>
+
+      {showFilter ? (
+        <ExperienceInput
+          id={inputId}
+          label={step?.filterLabel ?? 'Listede filtrele'}
+          value={state.filter}
+          onChange={(event) => onFilter(level, event.target.value)}
+          placeholder={step?.filterPlaceholder}
+          disabled={numberingFilterDisabledV11(snapshot, level)}
+          autoComplete="off"
+          inputMode={level === 'door' ? 'numeric' : 'search'}
+          aria-describedby={descriptionId}
+        />
+      ) : null}
+
+      <ExperienceSelect
+        id={selectId}
+        label={step?.label ?? level}
+        value={selectedValue}
+        onChange={(event: ChangeEvent<HTMLSelectElement>) => onSelect(level, event.target.value)}
+        disabled={numberingStepDisabledV11(snapshot, level)}
+        hint={step?.selectHint}
+        error={state.error || undefined}
+        aria-describedby={descriptionId}
+      >
+        <option value="">Seçiniz…</option>
+        {!selectedIsVisible && state.selected ? (
+          <option value={state.selected.value}>{state.selected.label}</option>
+        ) : null}
+        {state.options.map(option => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </ExperienceSelect>
+
+      {state.truncated ? (
+        <p className="numbering-v11-step__bounded-note">
+          Performans için görünür seçenekler sınırlandı. Filtre alanı tüm yüklenmiş kayıtlar üzerinde çalışır.
+        </p>
+      ) : null}
+    </div>
+  );
 };
-
-const selectedText = (event: ChangeEvent<HTMLSelectElement>): string =>
-  event.target.value
-    ? event.target.selectedOptions.item(0)?.textContent?.trim() ?? ''
-    : '';
 
 export const NumberingQueryWindow = forwardRef<
   NumberingWindowHandle,
   NumberingQueryWindowProps
 >(({ id, windowManager }, ref) => {
-  const [districtList, setDistrictList] = useState<readonly NumberingFeature[]>([]);
-  const [nbhoodList, setNbhoodList] = useState<readonly NumberingFeature[]>([]);
-  const [streetList, setStreetList] = useState<readonly NumberingFeature[]>([]);
-  const [doorList, setDoorList] = useState<readonly NumberingFeature[]>([]);
-  const [query, setQuery] = useState<NumberingQueryState>(createInitialNumberingQuery);
-  const [loadingLevel, setLoadingLevel] = useState<AddressLevel | null>(null);
-  const [errorMessage, setErrorMessage] = useState('');
-
   const mapViewRef = useRef<unknown>(null);
   const highlightGraphicRef = useRef<readonly unknown[] | null>(null);
-  const requestGateRef = useRef(createLatestRequestGate());
-  const mountedRef = useRef(false);
+  const focusSequenceRef = useRef(0);
 
   const clearHighlight = useCallback((): void => {
     if (highlightGraphicRef.current && mapViewRef.current) {
@@ -169,327 +248,80 @@ export const NumberingQueryWindow = forwardRef<
   const reportError = useCallback((error: unknown, fallback: string): void => {
     const message = normalizeErrorMessage(error, fallback);
     DebugHelper.Log(error);
-    setErrorMessage(message);
     windowManager.ShowMessage(Constants_MessageType.Error, message);
   }, [windowManager]);
 
-  const resetDependentLists = useCallback((level: AddressLevel = 'district'): void => {
-    if (level === 'district') setNbhoodList([]);
-    if (level === 'district' || level === 'neighborhood') setStreetList([]);
-    if (level !== 'door') setDoorList([]);
-  }, []);
+  const transport = useMemo<NumberingTransportV11>(() => transportAdapter(), []);
 
-  const resetWindow = useCallback((): void => {
-    requestGateRef.current.invalidate();
-    clearHighlight();
-    setQuery(createInitialNumberingQuery());
-    resetDependentLists();
-    setLoadingLevel(null);
-    setErrorMessage('');
-  }, [clearHighlight, resetDependentLists]);
-
-  const zoomToObject = useCallback(async (
-    geometries: readonly unknown[],
-    zoomLevel: number | null,
-    requestId: number,
-  ): Promise<void> => {
-    const mapView = mapViewRef.current;
-    if (!mapView || geometries.length === 0) return;
-
-    try {
+  const effects = useMemo<NumberingRuntimeEffectsV11>(() => Object.freeze({
+    focusGeometries: async (geometries, context) => {
+      const mapView = mapViewRef.current;
+      if (!mapView || geometries.length === 0) return;
+      focusSequenceRef.current = context.sequence;
+      const expectedSequence = context.sequence;
       const projected = (await Promise.all(
-        geometries.map((geometry) => GisGraphicsHelper.ProjectGeometry(geometry, '4326')),
+        geometries.map(geometry => GisGraphicsHelper.ProjectGeometry(geometry, '4326')),
       )).filter(Boolean);
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-      if (projected.length === 0) return;
+      if (focusSequenceRef.current !== expectedSequence || projected.length === 0) return;
 
       clearHighlight();
       await Promise.resolve(
-        GisGraphicsHelper.ZoomToGeometry(mapView, projected, zoomLevel),
+        GisGraphicsHelper.ZoomToGeometry(mapView, projected, context.zoomLevel),
       );
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+      if (focusSequenceRef.current !== expectedSequence) return;
 
       const graphics = (await Promise.all(
-        projected.map((geometry: unknown) => GisGraphicsHelper.CreateGraphicFromGeometry(geometry)),
+        projected.map(geometry => GisGraphicsHelper.CreateGraphicFromGeometry(geometry)),
       )).filter(Boolean);
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
+      if (focusSequenceRef.current !== expectedSequence) return;
 
       highlightGraphicRef.current = graphics;
       GisGraphicsHelper.AddGraphics(mapView, graphics);
-    } catch (error) {
-      if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
-        reportError(error, 'Adres konumu haritada gösterilemedi.');
-      }
-    }
-  }, [clearHighlight, reportError]);
+    },
+    logSelection: async path => {
+      await safeClientLog(
+        LoggingBusiness,
+        'Numarataj/Sorgu',
+        pathForLog(path),
+        DebugHelper.Log,
+      );
+    },
+    reportError: (error, context) => {
+      reportError(error, context.fallback);
+    },
+    reportObserverError: DebugHelper.Log,
+  }), [clearHighlight, reportError]);
 
-  const beginRequest = useCallback((level: AddressLevel): number => {
-    const requestId = requestGateRef.current.next();
-    setLoadingLevel(level);
-    setErrorMessage('');
-    return requestId;
-  }, []);
+  const runtime = useMemo(() => createNumberingQueryRuntimeV11(
+    transport,
+    effects,
+    {
+      maxOptionsPerLevel: 25_000,
+      maxVisibleOptions: 240,
+      maxFilterLength: 120,
+      maxHistory: 96,
+      maxObservers: 16,
+      minimumFilterLengthForOverflow: 2,
+    },
+  ), [effects, transport]);
 
-  const finishRequest = useCallback((requestId: number): void => {
-    if (mountedRef.current && requestGateRef.current.isCurrent(requestId)) {
-      setLoadingLevel(null);
-    }
-  }, []);
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => runtime.subscribe(onStoreChange),
+    [runtime],
+  );
+  const getSnapshot = useCallback(() => runtime.snapshot(), [runtime]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const presentation = useMemo(
+    () => createNumberingWorkspacePresentationV11(snapshot),
+    [snapshot],
+  );
+  const audit = useMemo(() => auditNumberingSnapshotV11(snapshot), [snapshot]);
 
-  const onDistrictChange = useCallback(async (
-    event: ChangeEvent<HTMLSelectElement>,
-  ): Promise<void> => {
-    const districtId = event.target.value;
-    const districtName = selectedText(event);
-    const requestId = beginRequest('district');
-
-    setQuery((current) => ({
-      ...current,
-      district: districtId,
-      districtName,
-      nbhood: '',
-      nbhoodName: '',
-      street: '',
-      streetName: '',
-      door: '',
-    }));
-    resetDependentLists('district');
+  const resetWindow = useCallback((): void => {
+    focusSequenceRef.current += 1;
+    runtime.reset();
     clearHighlight();
-
-    if (!districtId) {
-      finishRequest(requestId);
-      return;
-    }
-
-    try {
-      const [districtResult, neighborhoodsResult] = await Promise.all([
-        NumberingQueryBusiness.GetDistrictById(districtId) as Promise<NumberingServiceResult>,
-        NumberingQueryBusiness.GetNeighborhoodsOfDistrict(districtId) as Promise<NumberingServiceResult>,
-      ]);
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-
-      const districtGeometry = districtResult?.data?.[0]?.geometry;
-      if (
-        districtResult?.type === Constants_ServiceResultType.Success
-        && districtGeometry
-      ) {
-        void zoomToObject([districtGeometry], null, requestId);
-      }
-
-      if (neighborhoodsResult?.type === Constants_ServiceResultType.Success) {
-        setNbhoodList(Array.isArray(neighborhoodsResult.data) ? neighborhoodsResult.data : []);
-      } else {
-        setNbhoodList([]);
-        reportError(
-          neighborhoodsResult?.message ?? neighborhoodsResult?.errorMessage,
-          'Mahalle listesi alınamadı.',
-        );
-      }
-    } catch (error) {
-      if (requestGateRef.current.isCurrent(requestId)) {
-        setNbhoodList([]);
-        reportError(error, 'İlçe bilgileri alınamadı.');
-      }
-    } finally {
-      finishRequest(requestId);
-    }
-  }, [
-    beginRequest,
-    clearHighlight,
-    finishRequest,
-    reportError,
-    resetDependentLists,
-    zoomToObject,
-  ]);
-
-  const onNeighborhoodChange = useCallback(async (
-    event: ChangeEvent<HTMLSelectElement>,
-  ): Promise<void> => {
-    const nbhoodId = event.target.value;
-    const nbhoodName = selectedText(event);
-    const requestId = beginRequest('neighborhood');
-
-    setQuery((current) => ({
-      ...current,
-      nbhood: nbhoodId,
-      nbhoodName,
-      street: '',
-      streetName: '',
-      door: '',
-    }));
-    resetDependentLists('neighborhood');
-    clearHighlight();
-
-    if (!nbhoodId) {
-      finishRequest(requestId);
-      return;
-    }
-
-    try {
-      const [neighborhoodResult, streetsResult] = await Promise.all([
-        NumberingQueryBusiness.GetNeighborhoodById(nbhoodId) as Promise<NumberingServiceResult>,
-        NumberingQueryBusiness.GetStreets(nbhoodId) as Promise<NumberingServiceResult>,
-      ]);
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-
-      const neighborhoodGeometry = neighborhoodResult?.data?.[0]?.geometry;
-      if (
-        neighborhoodResult?.type === Constants_ServiceResultType.Success
-        && neighborhoodGeometry
-      ) {
-        void zoomToObject([neighborhoodGeometry], null, requestId);
-      }
-
-      if (streetsResult?.type === Constants_ServiceResultType.Success) {
-        setStreetList(Array.isArray(streetsResult.data) ? streetsResult.data : []);
-      } else {
-        setStreetList([]);
-        reportError(
-          streetsResult?.message ?? streetsResult?.errorMessage,
-          'Cadde ve sokak listesi alınamadı.',
-        );
-      }
-    } catch (error) {
-      if (requestGateRef.current.isCurrent(requestId)) {
-        setStreetList([]);
-        reportError(error, 'Mahalle bilgileri alınamadı.');
-      }
-    } finally {
-      finishRequest(requestId);
-    }
-  }, [
-    beginRequest,
-    clearHighlight,
-    finishRequest,
-    reportError,
-    resetDependentLists,
-    zoomToObject,
-  ]);
-
-  const onStreetChange = useCallback(async (
-    event: ChangeEvent<HTMLSelectElement>,
-  ): Promise<void> => {
-    const streetId = event.target.value;
-    const streetName = selectedText(event);
-    const requestId = beginRequest('street');
-
-    setQuery((current) => ({
-      ...current,
-      street: streetId,
-      streetName,
-      door: '',
-    }));
-    resetDependentLists('street');
-    clearHighlight();
-
-    if (!streetId) {
-      finishRequest(requestId);
-      return;
-    }
-
-    try {
-      const [centerLines, doorsResult] = await Promise.all([
-        NumberingQueryBusiness.GetStreetCenterLines(streetId) as Promise<readonly NumberingFeature[]>,
-        NumberingQueryBusiness.GetDoors(streetId) as Promise<NumberingServiceResult>,
-      ]);
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-
-      const geometries = Array.isArray(centerLines)
-        ? centerLines.map((item) => item.geometry).filter(Boolean)
-        : [];
-      if (geometries.length) void zoomToObject(geometries, null, requestId);
-
-      if (doorsResult?.type === Constants_ServiceResultType.Success) {
-        setDoorList(Array.isArray(doorsResult.data) ? doorsResult.data : []);
-      } else {
-        setDoorList([]);
-        reportError(
-          doorsResult?.message ?? doorsResult?.errorMessage,
-          'Bina numarası listesi alınamadı.',
-        );
-      }
-    } catch (error) {
-      if (requestGateRef.current.isCurrent(requestId)) {
-        setDoorList([]);
-        reportError(error, 'Sokak bilgileri alınamadı.');
-      }
-    } finally {
-      finishRequest(requestId);
-    }
-  }, [
-    beginRequest,
-    clearHighlight,
-    finishRequest,
-    reportError,
-    resetDependentLists,
-    zoomToObject,
-  ]);
-
-  const onDoorChange = useCallback(async (
-    event: ChangeEvent<HTMLSelectElement>,
-  ): Promise<void> => {
-    const doorId = event.target.value;
-    const requestId = beginRequest('door');
-    setQuery((current) => ({ ...current, door: doorId }));
-    clearHighlight();
-
-    if (!doorId) {
-      finishRequest(requestId);
-      return;
-    }
-
-    await safeClientLog(
-      LoggingBusiness,
-      'Numarataj/Sorgu',
-      query.districtName
-        + '/'
-        + query.nbhoodName
-        + '/'
-        + query.streetName
-        + '/'
-        + doorId,
-      DebugHelper.Log,
-    );
-
-    try {
-      const result = await NumberingQueryBusiness.GetDoorById(
-        doorId,
-      ) as NumberingServiceResult;
-
-      if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-
-      const geometry = result?.data?.[0]?.geometry;
-      if (result?.type === Constants_ServiceResultType.Success && geometry) {
-        await zoomToObject([geometry], 18, requestId);
-      } else {
-        reportError(
-          result?.message ?? result?.errorMessage,
-          'Bina konumu bulunamadı.',
-        );
-      }
-    } catch (error) {
-      if (requestGateRef.current.isCurrent(requestId)) {
-        reportError(error, 'Bina bilgisi alınamadı.');
-      }
-    } finally {
-      finishRequest(requestId);
-    }
-  }, [
-    beginRequest,
-    clearHighlight,
-    finishRequest,
-    query.districtName,
-    query.nbhoodName,
-    query.streetName,
-    reportError,
-    zoomToObject,
-  ]);
+  }, [clearHighlight, runtime]);
 
   useImperativeHandle(ref, () => ({
     id,
@@ -500,86 +332,54 @@ export const NumberingQueryWindow = forwardRef<
   }), [id, resetWindow, windowManager]);
 
   useEffect(() => {
-    mountedRef.current = true;
     windowManager.RegisterWindow(ref);
     mapViewRef.current = MapManager.GetMapView();
-
-    const requestId = requestGateRef.current.next();
-    setLoadingLevel('district');
-
-    Promise.resolve(NumberingQueryBusiness.GetDistricts())
-      .then((result: NumberingServiceResult) => {
-        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-        if (result?.type === Constants_ServiceResultType.Success) {
-          setDistrictList(Array.isArray(result.data) ? result.data : []);
-        } else {
-          setDistrictList([]);
-          reportError(
-            result?.message ?? result?.errorMessage,
-            'İlçe listesi alınamadı.',
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-        setDistrictList([]);
-        reportError(error, 'İlçe listesi alınamadı.');
-      })
-      .finally(() => {
-        finishRequest(requestId);
-      });
+    void runtime.initialize().catch(error => {
+      reportError(error, 'Adres arama başlatılamadı.');
+    });
 
     return () => {
-      mountedRef.current = false;
-      requestGateRef.current.invalidate();
+      focusSequenceRef.current += 1;
+      runtime.dispose();
       clearHighlight();
       mapViewRef.current = null;
     };
-  }, [clearHighlight, finishRequest, ref, reportError, windowManager]);
+  }, [clearHighlight, ref, reportError, runtime, windowManager]);
 
-  const districtOptions = useMemo(
-    () => normalizeNumberingOptions(districtList, 'id', 'ad'),
-    [districtList],
-  );
-  const neighborhoodOptions = useMemo(
-    () => normalizeNumberingOptions(nbhoodList, 'id', 'ad'),
-    [nbhoodList],
-  );
-  const streetOptions = useMemo(
-    () => normalizeNumberingOptions(streetList, 'yolid', 'ad'),
-    [streetList],
-  );
-  const doorOptions = useMemo(
-    () => normalizeNumberingOptions(doorList, 'id', 'kapino'),
-    [doorList],
-  );
+  const handleFilter = useCallback((level: NumberingLevelV11, value: string): void => {
+    runtime.setFilter(level, value);
+  }, [runtime]);
+
+  const handleSelect = useCallback((level: NumberingLevelV11, value: string): void => {
+    focusSequenceRef.current += 1;
+    clearHighlight();
+    void runtime.select(level, value).catch(error => {
+      reportError(error, 'Adres seçimi işlenemedi.');
+    });
+  }, [clearHighlight, reportError, runtime]);
 
   const visible = windowManager.IsVisible(id);
-  const loadingMessage = loadingLevel === 'district'
-    ? 'İlçeler yükleniyor…'
-    : loadingLevel === 'neighborhood'
-      ? 'Mahalleler yükleniyor…'
-      : loadingLevel === 'street'
-        ? 'Cadde, sokak ve bina numaraları yükleniyor…'
-        : loadingLevel === 'door'
-          ? 'Bina konumu yükleniyor…'
-          : '';
 
   return (
     <section
-      className="common-query-window common-query-window-right"
+      className="common-query-window common-query-window-right numbering-v11"
       aria-labelledby={id + '-title'}
-      aria-busy={loadingLevel !== null}
+      aria-describedby={id + '-description'}
+      aria-busy={snapshot.busy}
       aria-hidden={!visible}
       style={{ visibility: visible ? 'visible' : 'hidden' }}
+      data-numbering-audit={audit.valid ? 'valid' : 'invalid'}
     >
-      <header className="common-query-window-header">
+      <header className="common-query-window-header numbering-v11__header">
         <SharedGISIcon
           record={{ type: 'adres', category: 'Adres Arama', title: 'Adres Arama' }}
           size={34}
           className="common-query-window-header-icon"
         />
-        <h2 id={id + '-title'}>Adres Arama</h2>
+        <div className="numbering-v11__title-group">
+          <h2 id={id + '-title'}>{presentation.heading}</h2>
+          <p id={id + '-description'}>{presentation.description}</p>
+        </div>
         <CommonQueryWindowTools
           windowManager={windowManager}
           windowId={id}
@@ -588,71 +388,69 @@ export const NumberingQueryWindow = forwardRef<
         />
       </header>
 
-      <div className="common-query-window-body">
-        {loadingMessage ? (
-          <ExperienceStatus tone="info" live="polite" busy>
-            {loadingMessage}
-          </ExperienceStatus>
-        ) : null}
-        {errorMessage ? (
+      <div className="common-query-window-body numbering-v11__body">
+        <div className="numbering-v11__summary" aria-label="Adres seçim özeti">
+          <div>
+            <span className="numbering-v11__eyebrow">Seçili adres</span>
+            <strong>{presentation.pathLabel || presentation.pathFallback}</strong>
+          </div>
+          <button
+            type="button"
+            className="numbering-v11__reset"
+            onClick={resetWindow}
+            disabled={!snapshot.canReset || snapshot.busy}
+          >
+            Temizle
+          </button>
+        </div>
+
+        <div className="numbering-v11__progress" aria-label={presentation.progressLabel}>
+          {NUMBERING_LEVELS_V11.map(level => {
+            const step = presentation.steps.find(item => item.level === level);
+            return (
+              <span
+                key={level}
+                className={step?.complete ? 'is-complete' : step?.busy ? 'is-active' : ''}
+                aria-hidden="true"
+              />
+            );
+          })}
+        </div>
+
+        <p className="numbering-v11__progress-copy">{presentation.progressLabel}</p>
+
+        <div className="numbering-v11__live" aria-live="polite" aria-atomic="true">
+          {presentation.liveStatus}
+        </div>
+
+        {!audit.valid ? (
           <ExperienceStatus tone="danger" live="assertive">
-            {errorMessage}
+            Adres arama durumu bütünlük kontrolünden geçemedi. Lütfen seçimi temizleyip yeniden deneyin.
           </ExperienceStatus>
         ) : null}
 
-        <form aria-label="Adres bileşenleri" onSubmit={(event) => event.preventDefault()}>
-          <ExperienceSelect
-            id={id + '-district'}
-            label="İlçe"
-            value={query.district}
-            onChange={(event) => { void onDistrictChange(event); }}
-            disabled={loadingLevel === 'district'}
-          >
-            <option value="">Seçiniz…</option>
-            {districtOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </ExperienceSelect>
-
-          <ExperienceSelect
-            id={id + '-neighborhood'}
-            label="Mahalle"
-            value={query.nbhood}
-            onChange={(event) => { void onNeighborhoodChange(event); }}
-            disabled={!query.district || loadingLevel === 'neighborhood'}
-          >
-            <option value="">Seçiniz…</option>
-            {neighborhoodOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </ExperienceSelect>
-
-          <ExperienceSelect
-            id={id + '-street'}
-            label="Cadde / Sokak"
-            value={query.street}
-            onChange={(event) => { void onStreetChange(event); }}
-            disabled={!query.nbhood || loadingLevel === 'street'}
-          >
-            <option value="">Seçiniz…</option>
-            {streetOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </ExperienceSelect>
-
-          <ExperienceSelect
-            id={id + '-door'}
-            label="Bina No"
-            value={query.door}
-            onChange={(event) => { void onDoorChange(event); }}
-            disabled={!query.street || loadingLevel === 'door'}
-          >
-            <option value="">Seçiniz…</option>
-            {doorOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </ExperienceSelect>
+        <form
+          className="numbering-v11__form"
+          aria-label="Adres bileşenleri"
+          onSubmit={event => event.preventDefault()}
+        >
+          {NUMBERING_LEVELS_V11.map(level => (
+            <NumberingLevelControl
+              key={level}
+              id={id}
+              level={level}
+              snapshot={snapshot}
+              onFilter={handleFilter}
+              onSelect={handleSelect}
+            />
+          ))}
         </form>
+
+        {snapshot.complete ? (
+          <ExperienceStatus tone="success" live="polite">
+            {presentation.completionLabel}
+          </ExperienceStatus>
+        ) : null}
       </div>
     </section>
   );
