@@ -5,6 +5,7 @@ import {
   inferServiceType,
   normalizeServiceUrl,
   isDisallowedServiceType,
+  auditServiceCatalogAdmission,
   sanitizeCatalog,
   sanitizeService,
 } from './serviceCatalog';
@@ -106,4 +107,27 @@ describe('serviceCatalog', () => {
       url: 'https://remote.example.test/arcgis/FeatureServer/0',
     })).toThrow(/Remote GIS endpoint is blocked/i);
   });
+  test('makes excluded and duplicate GIS records visible as bounded safe counts', () => {
+    const report = auditServiceCatalogAdmission([
+      { id: 'roads', type: 'MapServer', url: '/roads/MapServer' },
+      { id: 'legacy', type: 'WMS', url: '/legacy?token=sensitive' },
+      { id: '', type: 'FeatureServer', url: '/broken/FeatureServer' },
+      { id: 'roads', type: 'FeatureServer', url: '/duplicate/FeatureServer' },
+    ]);
+    expect(report.accepted.map((service) => service.id)).toEqual(['roads']);
+    expect(report.rejected).toBe(2);
+    expect(report.duplicated).toBe(1);
+    expect(JSON.stringify(report)).not.toContain('sensitive');
+    expect(sanitizeCatalog([
+      { id: 'roads', type: 'MapServer', url: '/roads/MapServer' },
+      { id: 'legacy', type: 'WMS', url: '/legacy?token=sensitive' },
+    ]).map((service) => service.id)).toEqual(['roads']);
+  });
+
+  test('HTTPS fallback never produces an insecure relative GIS service URL', () => {
+    const url = normalizeServiceUrl('/arcgis/FeatureServer/0');
+    expect(url).toMatch(/^https:\/\//u);
+    expect(url).not.toContain('http://');
+  });
+
 });
