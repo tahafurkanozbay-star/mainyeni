@@ -9,6 +9,7 @@ import {
   type ReleaseContext,
 } from './contracts.mts';
 import { buildRepositoryInventory } from './inventory.mts';
+import { releaseReportArtifact } from './release-artifact.mts';
 import {
   createBaseline,
   releaseReportMarkdown,
@@ -75,7 +76,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   });
   const execution = await runReleaseEngine(inventory, contextFromEnvironment(), {}, baseline);
   const baselineSnapshot = createBaseline(execution.report);
-  const json = `${JSON.stringify(execution.report, null, 2)}\n`;
+  const json = `${JSON.stringify(releaseReportArtifact(execution.report), null, 2)}\n`;
   const markdown = releaseReportMarkdown(execution);
   const baselineJson = `${JSON.stringify(baselineSnapshot, null, 2)}\n`;
   writeArtifacts(options, json, markdown, baselineJson);
