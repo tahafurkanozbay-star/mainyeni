@@ -69,7 +69,7 @@ export const AuthBusiness = {
   },
 
   // Preserve the public method names for existing callers, but never
-  // serialize a bearer token into localStorage or sessionStorage.
+  // serialize a bearer token into any browser-persistent store.
   GetSessionFromLocalStorage: (): AdminSession | null => {
     purgeLegacyAdminStorage(getSessionKey());
     if (activeSession !== null && !isValidAdminSession(activeSession)) {
