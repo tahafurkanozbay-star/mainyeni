@@ -66,6 +66,10 @@ type ArcgisMapViewConstructor = new (options: unknown) => MapViewLike;
 
 const LegacySidebar = SidebarModern as React.ElementType;
 const ModernToolbarWidget = ToolbarWidgetModern as React.ElementType;
+// Keep the map uncluttered on first load. Selected service query windows
+// own and render their own markers independently from this overview layer.
+const showOverviewPoints = (): boolean =>
+  import.meta.env.VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP === 'true';
 const safeRemove = (handle: RemovableHandle | null | undefined): void => {
   try { handle?.remove?.(); } catch (error) { DebugHelper.Log(error); }
 };
@@ -209,7 +213,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       <div className="map-workspace-status" role={accessibilitySnapshot.phase === 'error' ? 'alert' : 'status'} aria-live={accessibilitySnapshot.phase === 'error' ? 'assertive' : 'polite'} aria-atomic="true">{accessibilitySnapshot.announcement}</div>
       <MapWorkspaceRecoverySurface model={recoveryModel} onRetry={restartMapWorkspace} />
       {mapView && <>
-        <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} />
+        {showOverviewPoints() ? <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} /> : null}
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
         <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
         <MapWorkspaceShortcutHelpLauncher />
