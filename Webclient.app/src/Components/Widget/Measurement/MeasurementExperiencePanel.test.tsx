@@ -237,4 +237,13 @@ describe('MeasurementExperiencePanel', () => {
     expect(root).toHaveAttribute('data-phase', 'error');
     expect(root).toHaveAttribute('data-input-modality', 'keyboard');
   });
+  it('scopes labelled guidance and recovery IDs for multiple panels', () => {
+    const state = snapshot({ phase: 'error', canRetry: true, errorCode: 'SDK_LOAD_FAILED' });
+    const { container } = render(<><MeasurementExperiencePanel snapshot={state} onRetry={vi.fn()} /><MeasurementExperiencePanel snapshot={state} onRetry={vi.fn()} /></>);
+    const labels = Array.from(container.querySelectorAll('[aria-labelledby]')).map(node => node.getAttribute('aria-labelledby')!);
+    expect(new Set(labels).size).toBe(labels.length);
+    labels.forEach(id => expect(document.getElementById(id)).not.toBeNull());
+    expect(screen.getAllByText('Hata ayrıntısı').every(node => !node.closest('details')?.open)).toBe(true);
+  });
+
 });

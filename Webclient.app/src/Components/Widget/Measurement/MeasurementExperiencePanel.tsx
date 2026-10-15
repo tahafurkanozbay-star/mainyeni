@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import type {
   MeasurementActivityEntry,
@@ -45,6 +45,9 @@ const latestActivity = (entries: readonly MeasurementActivityEntry[]): readonly 
 );
 
 export const MeasurementExperiencePanel = ({ snapshot, onRetry }: MeasurementExperiencePanelProps): ReactNode => {
+  const instanceId = useId();
+  const guidanceId = `${instanceId}-measurement-guidance`;
+  const recoveryId = `${instanceId}-measurement-recovery`;
   const recentActivity = latestActivity(snapshot.activity);
   const retryLabel = snapshot.retryCount > 0 ? `Yeniden dene (${snapshot.retryCount}/${snapshot.maxRetries})` : 'Yeniden dene';
 
@@ -56,9 +59,9 @@ export const MeasurementExperiencePanel = ({ snapshot, onRetry }: MeasurementExp
         </ExperienceStatus>
         <span className="measurement-experience__phase" aria-hidden="true">{phaseLabel(snapshot)}</span>
       </div>
-      <section className="measurement-experience__guidance" aria-labelledby="measurement-experience-guidance-title">
+      <section className="measurement-experience__guidance" aria-labelledby={guidanceId}>
         <div className="measurement-experience__guidance-copy">
-          <h3 id="measurement-experience-guidance-title">Ölçüm rehberi</h3><p>{snapshot.guidance}</p>
+          <h3 id={guidanceId}>Ölçüm rehberi</h3><p>{snapshot.guidance}</p>
         </div>
         <div className="measurement-experience__facts" role="group" aria-label="Ölçüm oturumu durumu">
           <span><strong>Harita</strong><span>{snapshot.viewReady ? 'Hazır' : 'Bekleniyor'}</span></span>
@@ -66,9 +69,9 @@ export const MeasurementExperiencePanel = ({ snapshot, onRetry }: MeasurementExp
         </div>
       </section>
       {snapshot.phase === 'error' && (
-        <section className="measurement-experience__recovery" role="alert" aria-labelledby="measurement-recovery-title">
-          <div><h3 id="measurement-recovery-title">Ölçüm aracı kullanılamıyor</h3><p>{snapshot.errorMessage ?? 'Ölçüm aracı başlatılamadı.'}</p>
-            {snapshot.errorCode && <p className="measurement-experience__error-code"><span>Tanı kodu</span><code>{snapshot.errorCode}</code></p>}
+        <section className="measurement-experience__recovery" role="alert" aria-labelledby={recoveryId}>
+          <div><h3 id={recoveryId}>Ölçüm aracı kullanılamıyor</h3><p>{snapshot.errorMessage ?? 'Ölçüm aracı başlatılamadı.'}</p>
+            {snapshot.errorCode && <details className="measurement-experience__error-detail"><summary>Hata ayrıntısı</summary><p className="measurement-experience__error-code"><span>Tanı kodu</span><code>{snapshot.errorCode}</code></p></details>}
           </div>
           {snapshot.canRetry ? <button type="button" className="measurement-experience__retry" onClick={onRetry}>{retryLabel}</button> : <p className="measurement-experience__retry-limit">Yeniden deneme sınırına ulaşıldı. Pencereyi kapatıp harita hazır olduğunda yeniden açın.</p>}
         </section>

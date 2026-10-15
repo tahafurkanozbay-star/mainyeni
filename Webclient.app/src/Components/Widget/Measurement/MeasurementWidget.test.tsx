@@ -74,6 +74,9 @@ vi.mock('../../../platform/runtime/runtimeDiagnostics', () => ({
   },
 }));
 
+const viewSignals = vi.hoisted(() => ({ listeners: new Set<() => void>(), watch: vi.fn(() => ({ remove: vi.fn() })) }));
+vi.mock('../../../Store/Store', () => ({ default: { subscribe: (listener: () => void) => { viewSignals.listeners.add(listener); return () => viewSignals.listeners.delete(listener); } } }));
+vi.mock('../../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModules: vi.fn(async () => [{ watch: viewSignals.watch }]) }));
 const mapView = { id: 'map-view' };
 vi.mock('../../../Store/Managers/MapManager', () => ({
   default: {
@@ -225,7 +228,7 @@ const renderWidget = (options: {
 
 describe('MeasurementWidget', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.clearAllMocks(); viewSignals.listeners.clear();
     getMapView.mockReturnValue(mapView);
     createController.mockImplementation(() => currentController.controller);
   });
@@ -393,7 +396,7 @@ describe('MeasurementWidget', () => {
     });
 
     expect(container.querySelector('section.measurement-widget')).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByLabelText('ArcGIS ölçüm denetimi')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByLabelText('Ölçüm sonucu ve birimler')).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('button', { name: 'Alan ölç' })).toBeDisabled();
   });
 
@@ -437,7 +440,7 @@ describe('MeasurementWidget', () => {
 
   it('renders measurement canvas instructions as an accessible description', () => {
     renderWidget();
-    const canvas = screen.getByLabelText('ArcGIS ölçüm denetimi');
+    const canvas = screen.getByLabelText('Ölçüm sonucu ve birimler');
     expect(canvas).toHaveAttribute('aria-describedby', 'measurement-window-canvas-help');
     expect(screen.getByText(/Ölçüm aracını seçtikten sonra/)).toHaveAttribute('id', 'measurement-window-canvas-help');
   });
@@ -565,6 +568,52 @@ describe('MeasurementWidget', () => {
     const { ref, windowManager, unmount } = renderWidget();
     await act(async () => { unmount(); });
     expect(windowManager.UnregisterWindow).toHaveBeenCalledWith('measurement-window', ref);
+  });
+
+  it('refreshes readiness on shared view changes and releases the subscription on unmount', async () => {
+    const { unmount } = renderWidget();
+    await act(async () => { await Promise.resolve(); });
+    currentController.refreshView.mockClear();
+    act(() => { getMapView.mockReturnValue({ id: 'replacement' }); viewSignals.listeners.forEach(listener => listener()); });
+    expect(currentController.refreshView).toHaveBeenCalledOnce();
+    expect(viewSignals.listeners.size).toBe(1);
+    unmount(); expect(viewSignals.listeners.size).toBe(0);
+  });
+
+  it('restores the owned SDK host after runtime destruction removed its container', () => {
+    renderWidget();
+    const original = document.getElementById('measurement-window-measurement-sdk')!;
+    original.remove();
+    const options = createController.mock.calls[0]![0] as { onRuntimeDetached: () => void };
+    act(() => options.onRuntimeDetached());
+    const replacement = document.getElementById('measurement-window-measurement-sdk');
+    expect(replacement).not.toBe(original); expect(replacement).toBeInTheDocument();
+  });
+
+  it('returns keyboard focus to an available tool after successful retry', () => {
+    renderWidget({ snapshot: createSnapshot({ phase: 'error', canRetry: true, errorMessage: 'Ölçüm başlatılamadı.' }) });
+    const retry = screen.getByRole('button', { name: 'Yeniden dene' }); retry.focus(); fireEvent.click(retry);
+    act(() => currentController.update(createSnapshot({ revision: 2, phase: 'loading', busy: true })));
+    act(() => currentController.update(createSnapshot({ revision: 3 })));
+    expect(screen.getByRole('button', { name: 'Alan ölç' })).toHaveFocus();
+  });
+
+  it('keeps deliberately moved focus outside the panel while retry completes', () => {
+    renderWidget({ snapshot: createSnapshot({ phase: 'error', canRetry: true, errorMessage: 'Ölçüm başlatılamadı.' }) });
+    const outside = document.createElement('button'); document.body.append(outside);
+    const retry = screen.getByRole('button', { name: 'Yeniden dene' }); retry.focus(); fireEvent.click(retry);
+    act(() => currentController.update(createSnapshot({ revision: 2, phase: 'loading', busy: true })));
+    outside.focus();
+    act(() => currentController.update(createSnapshot({ revision: 3 })));
+    expect(outside).toHaveFocus(); outside.remove();
+  });
+
+  it('keeps focus on the visible panel when retry has no remaining action', () => {
+    renderWidget({ snapshot: createSnapshot({ phase: 'error', canRetry: true, errorMessage: 'Ölçüm başlatılamadı.' }) });
+    const retry = screen.getByRole('button', { name: 'Yeniden dene' }); retry.focus(); fireEvent.click(retry);
+    act(() => currentController.update(createSnapshot({ revision: 2, phase: 'loading', busy: true })));
+    act(() => currentController.update(createSnapshot({ revision: 3, phase: 'error', canRetry: false, errorMessage: 'Ölçüm başlatılamadı.' })));
+    expect(screen.getByRole('region', { name: 'Ölçüm Araçları' })).toHaveFocus();
   });
 
 });
