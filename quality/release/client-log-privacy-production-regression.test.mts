@@ -40,3 +40,19 @@ test('FastAccess search submission logs only a non-identifying event marker', ()
   // free-text name back into the log even when result statistics are safe.
   assert.ok(!/createQueryLogDescription\s*\(\s*submittedQuery\s*\)/.test(text));
 });
+
+
+test('CityBlock parcel audit never logs district, neighborhood or parcel identifiers', () => {
+  const path = 'Webclient.app/src/Components/Query/CityBlockParcelQuery/CityBlockParcelQueryWindow.tsx';
+  const source = readFileSync(
+    decodeURIComponent(new URL('../../' + path, import.meta.url).pathname),
+    'utf8',
+  );
+  const audit = auditClientLogPrivacy(fixtureInventory([{ path, text: source }]));
+  assert.equal(audit.summary.runtimeFiles, 1);
+  assert.ok(audit.summary.clientLogCalls >= 2, 'parcel log events unexpectedly missing');
+  assert.equal(audit.summary.flaggedCalls, 0, JSON.stringify(audit.findings));
+  assert.match(source, /'Ada Parsel\/Sorgu',\s*'query-submitted'/u);
+  assert.match(source, /'Ada Parsel\/Detay Göster',\s*'parcel-displayed'/u);
+  assert.equal(source.includes('const logPayload ='), false);
+});
