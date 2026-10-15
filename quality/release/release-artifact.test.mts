@@ -49,7 +49,7 @@ test('uploaded report never contains scanned source text, raw evidence or audit 
   assert.ok(!json.includes('Webclient.admin/src/request.ts\"'));
   assert.equal(artifact.inventory.totalFiles, 1);
   assert.equal(artifact.sections[0]?.findingCount, 1);
-  assert.equal(artifact.findings[0]?.id, undefined);
+  assert.ok(!('id' in (artifact.findings[0] ?? {})));
   assert.equal(artifact.findings[0]?.severity, 'high');
   assert.match(artifact.findings[0]?.key ?? '', /sha256:[a-f0-9]{64}/);
 });
