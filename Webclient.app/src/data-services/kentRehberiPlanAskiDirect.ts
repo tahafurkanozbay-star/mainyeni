@@ -94,7 +94,7 @@ const requestFilter = (raw: unknown, field: string, maximum: number, minimum: nu
   if (value.length < minimum || value.length > maximum) {
     throw new RangeError(`PlanASKI ${field} filter exceeds its length bounds.`);
   }
-  if (/[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+  if (/\p{Cc}/u.test(value)) {
     throw new TypeError(`PlanASKI ${field} filter contains control characters.`);
   }
   return normalizeName(value);
