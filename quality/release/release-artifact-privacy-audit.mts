@@ -25,6 +25,13 @@ const UPLOAD = /^\s*uses:\s*['"]?actions\/upload-artifact@/i;
 const PATH_FIELD = /^(\s*)path:\s*(.*)$/;
 const RELEASE_ROOT = /(?:^|\/)qa-artifacts\/release(?:\/|$)/i;
 const CANONICAL_RELEASE_ARTIFACT = /^typed-release-qa(?:$|[-_])/i;
+const DIAGNOSTICS_ROOT = /(?:^|\/)qa-artifacts\/release-diagnostics(?:\/|$)/i;
+const CANONICAL_DIAGNOSTICS_ARTIFACT = /^typed-release-compiler-diagnostics$/i;
+const APPROVED_DIAGNOSTIC = new Set([
+  'qa-artifacts/release-diagnostics/typecheck-exit-code.txt',
+  'qa-artifacts/release-diagnostics/typed-regression-exit-code.txt',
+  'qa-artifacts/release-diagnostics/*-exit-code.txt',
+]);
 const APPROVED = new Set([
   'qa-artifacts/release/release-report.md',
   'qa-artifacts/release/pr-regression-gate.md',
@@ -101,8 +108,9 @@ function collectUploadSteps(file: SourceFile): readonly UploadStep[] {
   return steps;
 }
 function isUnsafeReleasePath(path: string): boolean {
-  if (!RELEASE_ROOT.test(path)) return false;
+  if (!RELEASE_ROOT.test(path) && !DIAGNOSTICS_ROOT.test(path)) return false;
   if (path.split('/').includes('..')) return true;
+  if (DIAGNOSTICS_ROOT.test(path)) return !APPROVED_DIAGNOSTIC.has(path);
   return !APPROVED.has(path);
 }
 function finding(step: UploadStep): Finding {
@@ -130,8 +138,10 @@ export function auditReleaseArtifactPrivacy(
   let safeReleasePaths = 0;
   let unsafeReleasePaths = 0;
   for (const step of uploads) {
-    const releasePaths = step.paths.filter(path => RELEASE_ROOT.test(path));
-    const namedReleaseUpload = CANONICAL_RELEASE_ARTIFACT.test(step.artifactName ?? '');
+    const releasePaths = step.paths.filter(path =>
+      RELEASE_ROOT.test(path) || DIAGNOSTICS_ROOT.test(path));
+    const namedReleaseUpload = CANONICAL_RELEASE_ARTIFACT.test(step.artifactName ?? '')
+      || CANONICAL_DIAGNOSTICS_ARTIFACT.test(step.artifactName ?? '');
     if (!releasePaths.length && !namedReleaseUpload) continue;
     releaseUploadSteps += 1;
     const unsafe = releasePaths.filter(isUnsafeReleasePath);
