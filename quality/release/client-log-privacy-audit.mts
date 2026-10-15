@@ -149,15 +149,19 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
   let clientLogCalls = 0;
   for (const file of files) {
     const index = createLineIndex(file.text);
+    const fileFindingStart = findings.length;
     let flaggedInFile = 0;
     for (const call of findClientLogCalls(file.text)) {
       clientLogCalls += 1;
-      if (flaggedInFile >= 8) continue;
+      // Continue inspecting all calls even after the per-file evidence cap:
+      // otherwise the ninth unsafe payload is invisible to exact-base QA.
       // The third argument is the payload, not the logger or event name.
       const reason = call.arguments === null
         ? 'unreviewable-client-log-call'
         : call.arguments.length >= 3 ? riskReason(call.arguments[2] ?? '') : null;
       if (!reason) continue;
+      flaggedInFile += 1;
+      if (flaggedInFile > 8) continue;
       findings.push({
         id: 'client-log-sensitive-payload',
         domain: 'security',
@@ -169,7 +173,23 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
         remediation: 'Log a constant event marker or bounded non-identifying count and verify that raw address/query values never reach the logger.',
         tags: ['privacy', 'logging', 'data-minimization'],
       });
-      flaggedInFile += 1;
+    }
+    if (flaggedInFile > 8) {
+      // Reserve one of the eight evidence slots for the aggregate overflow.
+      // evidence.value contributes to findingKey()/exact-base regression; it
+      // contains only a numeric count, never raw query or address material.
+      const firstOverflow = findings[fileFindingStart + 7];
+      findings[fileFindingStart + 7] = {
+        id: 'client-log-sensitive-payload-overflow',
+        domain: 'security',
+        severity: 'high',
+        title: 'Additional sensitive client logging beyond evidence budget',
+        message: 'Sensitive logging continues beyond the seven itemized findings and requires remediation.',
+        location: firstOverflow?.location,
+        evidence: { value: flaggedInFile - 7, metadata: { retainedFindings: 7 } },
+        remediation: 'Remove raw address, location and query logging. Preserve the per-file evidence cap without suppressing detection of later calls.',
+        tags: ['privacy', 'logging', 'data-minimization', 'overflow'],
+      };
     }
   }
   return {
