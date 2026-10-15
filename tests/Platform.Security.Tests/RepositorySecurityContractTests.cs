@@ -80,6 +80,21 @@ public sealed class RepositorySecurityContractTests
         Assert.DoesNotContain("Pk:", constants, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AdminViteBuild_DoesNotRequireTrackedLegacyEnvironmentFile()
+    {
+        var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.admin", ".env");
+        var samplePath = Path.Combine(RepositoryRoot.Value, "Webclient.admin", ".env.example");
+        var viteConfig = Read("Webclient.admin/vite.config.ts");
+
+        Assert.False(File.Exists(localEnvPath),
+            "Admin .env must be ignored and provisioned locally, not committed.");
+        Assert.True(File.Exists(samplePath),
+            "Keep a documented Vite environment example for development.");
+        Assert.Contains("envPrefix: ['VITE_']", viteConfig, StringComparison.Ordinal);
+        Assert.DoesNotContain("REACT_APP_", Read("Webclient.admin/.env.example"), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("Api.Admin/Program.cs")]
     [InlineData("Api.User/Program.cs")]
