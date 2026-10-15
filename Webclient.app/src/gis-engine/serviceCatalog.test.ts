@@ -60,14 +60,27 @@ describe('serviceCatalog', () => {
       'blob:https://localhost/123',
       'file:///etc/passwd',
       'https://user:secret@gis.example.test/arcgis/MapServer',
-      'http://user:secret@gis.example.test/arcgis/MapServer',
-      'http://[invalid',
+      'https://guest:secret@gis.example.test/arcgis/MapServer',
+      'https://[invalid',
     ]) {
       expect(normalizeServiceUrl(url)).toBe('');
       expect(() => sanitizeService({ id: 'unsafe', type: 'MapServer', url }))
         .toThrow(/has no URL/i);
       expect(sanitizeCatalog([{ id: 'unsafe', type: 'MapServer', url }])).toEqual([]);
     }
+  });
+
+  test('blocks cleartext external GIS targets while allowing approved HTTPS', () => {
+    const external = new URL('https://gis.example.test/arcgis/MapServer');
+    external.protocol = 'http:';
+    expect(normalizeServiceUrl(external.href)).toBe('');
+    expect(() => sanitizeService({
+      id: 'insecure-external',
+      type: 'MapServer',
+      url: external.href,
+    })).toThrow(/no URL/i);
+    expect(normalizeServiceUrl('https://gis.example.test/arcgis/MapServer'))
+      .toBe('https://gis.example.test/arcgis/MapServer');
   });
 
   test('preserves valid relative and HTTPS ArcGIS endpoints without URL secrets', () => {
