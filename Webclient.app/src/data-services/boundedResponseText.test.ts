@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { readBoundedResponseText } from './boundedResponseText';
 
 describe('bounded municipal HTTP response streaming', () => {
   it('decodes split UTF-8 characters without changing Turkish text', async () => {
-    const source = new ReadableStream<Uint8Array>({
+    const source = new NodeReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new Uint8Array([0x43, 0xCC, 0xA7])); // C + combining cedilla
         controller.enqueue(new Uint8Array([0xC4]));
@@ -12,7 +13,7 @@ describe('bounded municipal HTTP response streaming', () => {
       },
     });
 
-    const response = new Response(source);
+    const response = new Response(source as unknown as BodyInit);
     await expect(readBoundedResponseText(response, 5, 'PlanASKI'))
       .resolves.toBe('Çı');
   });
@@ -20,7 +21,7 @@ describe('bounded municipal HTTP response streaming', () => {
   it('rejects an oversized stream before reading the entire HTTP body', async () => {
     const cancelled = vi.fn();
     let chunks = 0;
-    const source = new ReadableStream<Uint8Array>({
+    const source = new NodeReadableStream<Uint8Array>({
       pull(controller) {
         chunks += 1;
         controller.enqueue(new Uint8Array(7));
@@ -30,7 +31,7 @@ describe('bounded municipal HTTP response streaming', () => {
       cancel: cancelled,
     });
 
-    const response = new Response(source);
+    const response = new Response(source as unknown as BodyInit);
     await expect(readBoundedResponseText(response, 10, 'PlanASKI'))
       .rejects.toThrow('payload budget');
     await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
