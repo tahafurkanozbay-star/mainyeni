@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type AuditDomain =
   | 'architecture'
@@ -409,7 +411,10 @@ export function normalizeRepositoryPath(input: string): string {
 export function findingKey(finding: Finding): string {
   const location = finding.location ? `${normalizeRepositoryPath(finding.location.file)}:${finding.location.line}` : '-';
   const evidence = finding.evidence?.value ?? finding.evidence?.excerpt ?? '';
-  return `${finding.domain}|${finding.id}|${location}|${String(evidence)}`;
+  // Stable baseline identity must never embed raw source snippets, URLs or user data.
+  // Hashing preserves distinct evidence (including overflow counts) without exporting it.
+  const signature = evidence === '' ? '' : `sha256:${createHash('sha256').update(String(evidence)).digest('hex')}`;
+  return `${finding.domain}|${finding.id}|${location}|${signature}`;
 }
 
 export function snapshotFinding(finding: Finding): FindingSnapshot {
