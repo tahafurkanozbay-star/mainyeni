@@ -183,6 +183,140 @@ function riskReason(argument: string): string | null {
   return null;
 }
 
+
+/**
+ * The direct argument scanner cannot see identifiers whose values came from
+ * private map/address data. Review bounded local aliases without retaining
+ * payload values in audit evidence or following imports/network references.
+ *
+ * Scopes are tracked lexically. Declarations in a sibling function must never
+ * taint a separate function's safe diagnostic counter.
+ */
+interface AliasBinding {
+  readonly identifier: string;
+  readonly expression: string;
+  readonly position: number;
+  readonly scope: readonly number[];
+}
+
+function privacyMask(text: string): string {
+  const characters = [...text];
+  const blank = (index: number): void => {
+    if (characters[index] !== '\n') characters[index] = ' ';
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const current = text[index];
+    if (current === "'" || current === '"' || current === '\x60') {
+      const end = skipLiteral(text, index);
+      for (let cursor = index; cursor < end; cursor += 1) blank(cursor);
+      index = end - 1;
+    } else if (current === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
+      const end = skipComment(text, index);
+      for (let cursor = index; cursor < end; cursor += 1) blank(cursor);
+      index = end - 1;
+    }
+  }
+  return characters.join('');
+}
+
+function initializerEnd(masked: string, start: number): number {
+  const limit = Math.min(masked.length, start + 4_096);
+  const openers: string[] = [];
+  for (let position = start; position < limit; position += 1) {
+    const character = masked[position];
+    if (character === '(' || character === '[' || character === '{') {
+      openers.push(character);
+    } else if (character === ')' || character === ']' || character === '}') {
+      const expected = character === ')' ? '(' : character === ']' ? '[' : '{';
+      if (openers.at(-1) !== expected) return position;
+      openers.pop();
+    } else if (openers.length === 0 && (character === ';' || character === ',' || character === '\n')) {
+      return position;
+    }
+  }
+  return limit;
+}
+
+function localBindings(text: string, masked: string): readonly AliasBinding[] {
+  const declarations = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g;
+  const scopes: number[] = [];
+  const bindings: AliasBinding[] = [];
+  let cursor = 0;
+  let declaration: RegExpExecArray | null;
+  while ((declaration = declarations.exec(masked)) !== null && bindings.length < 1_024) {
+    const position = declaration.index;
+    for (; cursor < position; cursor += 1) {
+      if (masked[cursor] === '{') scopes.push(cursor);
+      else if (masked[cursor] === '}') scopes.pop();
+    }
+    const expressionStart = position + declaration[0].length;
+    const end = initializerEnd(masked, expressionStart);
+    // Only simple, bounded bindings are inspected. Complex destructuring and
+    // cross-module flow are intentionally left to other security gates.
+    if (end > expressionStart && end - expressionStart < 4_096) {
+      bindings.push({
+        identifier: declaration[1] ?? '',
+        expression: text.slice(expressionStart, end),
+        position,
+        scope: [...scopes],
+      });
+    }
+  }
+  return bindings;
+}
+
+function scopeAt(masked: string, position: number): readonly number[] {
+  const scopes: number[] = [];
+  for (let cursor = 0; cursor < Math.min(position, masked.length); cursor += 1) {
+    if (masked[cursor] === '{') scopes.push(cursor);
+    else if (masked[cursor] === '}') scopes.pop();
+  }
+  return scopes;
+}
+
+function visibleBinding(
+  bindings: readonly AliasBinding[],
+  identifier: string,
+  before: number,
+  scopes: readonly number[],
+): AliasBinding | undefined {
+  for (let index = bindings.length - 1; index >= 0; index -= 1) {
+    const binding = bindings[index];
+    if (!binding || binding.identifier !== identifier || binding.position >= before) continue;
+    if (binding.scope.length > scopes.length) continue;
+    if (!binding.scope.every((scope, depth) => scopes[depth] === scope)) continue;
+    return binding;
+  }
+  return undefined;
+}
+
+function aliasPrivacyReason(
+  argument: string,
+  position: number,
+  masked: string,
+  bindings: readonly AliasBinding[],
+): string | null {
+  const context = scopeAt(masked, position);
+  const observed = new Set<string>();
+  const search = (expression: string, limit: number, prior: number): string | null => {
+    const direct = riskReason(expression);
+    if (direct) return direct;
+    if (limit === 0 || observed.size >= 32) return null;
+    // Ignore quoted literals so a harmless label naming a private field does
+    // not become a false positive. The direct scanner handles interpolations.
+    const tokens = privacyMask(expression).match(/[A-Za-z_$][\w$]*/g) ?? [];
+    for (const token of tokens.slice(0, 64)) {
+      const binding = visibleBinding(bindings, token, prior, context);
+      if (!binding || observed.has(token)) continue;
+      observed.add(token);
+      const reason = search(binding.expression, limit - 1, binding.position);
+      if (reason) return 'derived-' + reason;
+    }
+    return null;
+  };
+  return search(argument, 8, position);
+}
+
 export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSection<ClientLogPrivacySummary> {
   const start = performance.now();
   const files = inventory.files.filter(isRuntime);
@@ -191,6 +325,8 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
   let detectedUnsafeCalls = 0;
   for (const file of files) {
     const index = createLineIndex(file.text);
+    const masked = privacyMask(file.text);
+    const bindings = localBindings(file.text, masked);
     const fileFindingStart = findings.length;
     let flaggedInFile = 0;
     for (const call of findClientLogCalls(file.text)) {
@@ -200,7 +336,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
       // The third argument is the payload, not the logger or event name.
       const reason = call.arguments === null
         ? 'unreviewable-client-log-call'
-        : call.arguments.length >= 3 ? riskReason(call.arguments[2] ?? '') : null;
+        : call.arguments.length >= 3 ? aliasPrivacyReason(call.arguments[2] ?? '', call.offset, masked, bindings) : null;
       if (!reason) continue;
       flaggedInFile += 1;
       detectedUnsafeCalls += 1;
