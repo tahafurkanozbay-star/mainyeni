@@ -24,7 +24,7 @@ const TYPE_ALIASES = new Map<string, GisServiceType>([
 const browserOrigin = (): string => (
   typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin
-    : 'http://localhost'
+    : 'https://localhost'
 );
 
 export const normalizeServiceUrl = (url: unknown): string => {
@@ -32,11 +32,22 @@ export const normalizeServiceUrl = (url: unknown): string => {
   const raw = String(url).trim();
   try {
     const parsed = new URL(raw, browserOrigin());
+    // Reject opaque/non-network schemes and credentials before a GIS service
+    // URL can reach any runtime loader, including callers of sanitizeService.
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+      return '';
+    }
+    // Never send operational GIS traffic in cleartext to external hosts.
+    // Loopback HTTP remains available only for explicit local development.
+    const loopback = parsed.hostname === 'localhost'
+      || parsed.hostname === '127.0.0.1'
+      || parsed.hostname === '[::1]';
+    if (parsed.protocol === 'http:' && !loopback) return '';
     parsed.hash = '';
     parsed.search = '';
     return parsed.toString().replace(/\/+$/, '');
-  } catch (_) {
-    return raw.replace(/\/+$/, '');
+  } catch {
+    return '';
   }
 };
 
@@ -117,7 +128,7 @@ export const sanitizeService = (service: GisServiceInput = {}): SanitizedGisServ
     visible: service.visible !== false,
     sublayerId: Number.isInteger(service.sublayerId) ? Number(service.sublayerId) : null,
     proxy: service.proxy === true,
-    metadata: { ...(service.metadata || {}) },
+    metadata: { ...service.metadata },
   };
 
   if (!safe.id) throw new Error('GIS service id is required.');
@@ -125,23 +136,42 @@ export const sanitizeService = (service: GisServiceInput = {}): SanitizedGisServ
   return safe;
 };
 
-export const sanitizeCatalog = (services: readonly GisServiceInput[] = []): SanitizedGisService[] => {
-  const seen = new Set<string>();
-  const result: SanitizedGisService[] = [];
+export interface GisCatalogAdmissionReport {
+  readonly accepted: readonly SanitizedGisService[];
+  readonly rejected: number;
+  readonly duplicated: number;
+}
 
-  (Array.isArray(services) ? services : []).forEach((service) => {
+// Report admission losses without exposing service URLs, tokens or free-form
+// error messages. Consumers can surface counts in local bounded diagnostics.
+export const auditServiceCatalogAdmission = (
+  services: readonly GisServiceInput[] = [],
+): GisCatalogAdmissionReport => {
+  const seen = new Set<string>();
+  const accepted: SanitizedGisService[] = [];
+  let rejected = 0;
+  let duplicated = 0;
+
+  for (const service of Array.isArray(services) ? services : []) {
     try {
       const safe = sanitizeService(service);
-      if (!seen.has(safe.id)) {
+      if (seen.has(safe.id)) {
+        duplicated += 1;
+      } else {
         seen.add(safe.id);
-        result.push(safe);
+        accepted.push(safe);
       }
-    } catch (_) {
-      // Invalid/unapproved services are deliberately excluded from runtime.
+    } catch {
+      // Invalid network configurations are rejected and counted instead of
+      // disappearing without any available diagnostic evidence.
+      rejected += 1;
     }
-  });
-  return result;
+  }
+  return Object.freeze({ accepted, rejected, duplicated });
 };
+
+export const sanitizeCatalog = (services: readonly GisServiceInput[] = []): SanitizedGisService[] =>
+  [...auditServiceCatalogAdmission(services).accepted];
 
 export const indexCatalog = (services: readonly GisServiceInput[] = []): Map<string, SanitizedGisService> => new Map(
   sanitizeCatalog(services).map((service) => [service.id, service]),
@@ -155,11 +185,11 @@ export const mergeCatalog = (
   sanitizeCatalog(incoming).forEach((service) => {
     const previous = map.get(service.id);
     map.set(service.id, {
-      ...(previous || {}),
+      ...previous,
       ...service,
       metadata: {
-        ...(previous?.metadata || {}),
-        ...(service.metadata || {}),
+        ...previous?.metadata,
+        ...service.metadata,
       },
     });
   });
@@ -177,7 +207,7 @@ export const hasSameOrigin = (url: unknown): boolean => {
   if (!url) return false;
   try {
     return new URL(String(url), browserOrigin()).origin === browserOrigin();
-  } catch (_) {
+  } catch {
     return false;
   }
 };

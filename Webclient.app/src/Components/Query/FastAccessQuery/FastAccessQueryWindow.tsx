@@ -46,7 +46,6 @@ import {
 } from '../_Common/QueryInteractionRuntime';
 import {
   DEFAULT_FAST_ACCESS_QUERY,
-  createQueryLogDescription,
   fastAccessResultKey,
   fastAccessResultLabel,
   normalizeFastAccessDetail,
@@ -328,7 +327,7 @@ export const FastAccessQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       `Hızlı Erişim/Sorgu/${windowTitle}`,
-      createQueryLogDescription(submittedQuery),
+      'query-submitted',
     );
 
     try {
@@ -403,7 +402,7 @@ export const FastAccessQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       `Hızlı Erişim/Detay Göster/${windowTitle}`,
-      `${String(item.objectId)}/${item.title}`,
+      'fast-access-item-action',
     );
 
     try {
@@ -445,7 +444,7 @@ export const FastAccessQueryWindow = forwardRef<
       void safeClientLog(
         LoggingBusiness,
         `Hızlı Erişim/Yol Tarifi/${windowTitle}`,
-        `${String(item.objectId)}/${item.title}`,
+        'fast-access-item-action',
       );
     } catch (routeError) {
       if (detailAbortRef.current?.signal.aborted) return;

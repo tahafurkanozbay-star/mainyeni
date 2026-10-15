@@ -37,6 +37,24 @@ test('reports Task.Result sync-over-async', () => {
   assert.ok(result.findings.some(item => item.id === 'csharp-sync-over-async'));
 });
 
+test('does not classify MVC action result assignment as Task.Result blocking', () => {
+  const result = audit([{
+    path: 'Api.Admin/Filters/AdminRequestFilterAttribute.cs',
+    text: 'public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next) { context.Result = new UnauthorizedResult(); await next(); }',
+  }]);
+  assert.equal(result.summary.syncOverAsync, 0);
+  assert.ok(!result.findings.some(item => item.id === 'csharp-sync-over-async'));
+});
+
+test('does not suppress real Task.Result reads alongside MVC result assignments', () => {
+  const result = audit([{
+    path: 'Api.Admin/Filters/AdminRequestFilterAttribute.cs',
+    text: 'context.Result = new UnauthorizedResult(); var blocked = authenticationTask.Result; authenticationTask.Wait();',
+  }]);
+  assert.equal(result.summary.syncOverAsync, 2);
+  assert.equal(result.findings.filter(item => item.id === 'csharp-sync-over-async').length, 2);
+});
+
 test('reports Task.Wait sync-over-async', () => {
   const result = audit([{ path: 'Business/QueryService.cs', text: 'task.Wait();' }]);
   assert.equal(result.summary.syncOverAsync, 1);
@@ -230,4 +248,42 @@ test('summary remains stable across repeated audits', () => {
   const second = auditCSharpModernizationContracts(inventory);
   assert.deepEqual(first.summary.compiler, second.summary.compiler);
   assert.deepEqual(first.summary.signals, second.summary.signals);
+});
+
+test('MVC ActionExecutingContext.Result response assignment is not Task.Result blocking', () => {
+  const result = audit([{
+    path: 'Api.Admin/Filters/AdminRequestFilterAttribute.cs',
+    text: [
+      'public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next) {',
+      '  context.Result = new ObjectResult(new { message = "Unauthorized" }) { StatusCode = 401 };',
+      '  await next().ConfigureAwait(false);',
+      '}',
+    ].join('\n'),
+  }]);
+  assert.equal(result.summary.syncOverAsync, 0);
+  assert.ok(!result.findings.some(item => item.id === 'csharp-sync-over-async'));
+});
+
+test('ordinary property assignment does not fabricate a blocked async result', () => {
+  const result = audit([{ path: 'Business/QueryService.cs', text: 'response.Result = 42;' }]);
+  assert.equal(result.summary.syncOverAsync, 0);
+});
+
+test('Task.Result reads remain detected after excluding assignment syntax', () => {
+  const result = audit([{
+    path: 'Api.Admin/Filters/AdminRequestFilterAttribute.cs',
+    text: 'context.Result = new ObjectResult(); var blocked = task.Result;',
+  }]);
+  assert.equal(result.summary.syncOverAsync, 1);
+});
+
+test('Task.Result comparison is still a read, not a response assignment', () => {
+  const result = audit([{ path: 'Business/QueryService.cs', text: 'if (task.Result == 42) return;' }]);
+  assert.equal(result.summary.syncOverAsync, 1);
+});
+
+test('Task.Wait synchronous blocking remains a high severity finding', () => {
+  const result = audit([{ path: 'Business/QueryService.cs', text: 'task.Wait();' }]);
+  assert.equal(result.summary.syncOverAsync, 1);
+  assert.ok(result.findings.some(item => item.id === 'csharp-sync-over-async' && item.severity === 'high'));
 });

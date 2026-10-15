@@ -8,7 +8,7 @@ import { MessageToast } from '../../Components/MessageToast';
 import { Global } from '../../Core/Global';
 import './LoginPage.css';
 
-export const LoginPage = () => {
+export const LoginPage = ({ onAuthenticated }: { readonly onAuthenticated: () => void }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setLoggingIn] = useState(false);
@@ -40,7 +40,8 @@ export const LoginPage = () => {
     setLoggingIn(true);
     const authResult = await AuthBusiness.LoginUser(username.trim(), password);
     if (authResult?.isSuccess && authResult.data && AuthBusiness.SetSessionInLocalStorage(authResult.data)) {
-      window.location.reload();
+      setLoggingIn(false);
+      onAuthenticated();
       return;
     }
 

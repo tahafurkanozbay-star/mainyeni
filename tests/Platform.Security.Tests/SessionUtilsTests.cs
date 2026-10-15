@@ -3,6 +3,8 @@ using Business.Core.Context;
 using Business.Core.Model;
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Toolbox.Security.Jwt;
 using Toolbox.Security.Url;
 using Xunit;
@@ -140,6 +142,50 @@ public sealed class SessionUtilsTests
     public void Constructor_RejectsNullDbContext()
     {
         Assert.Throws<ArgumentNullException>(() => new SessionUtils(null!));
+    }
+
+    [Fact]
+    public async Task GetUserAccountFromTokenAsync_ReturnsActiveAccount_ForValidBearerToken()
+    {
+        using var environment = new TestEnvironment();
+        using var db = environment.CreateDbContext();
+        var account = AddAccount(db, isActive: true, isDeleted: false);
+        var encryptedGuid = ParameterEncryptionUtils.EncryptGuid(Guid.Parse(account.Guid));
+        var token = JwtUtils.GenerateToken(encryptedGuid);
+        var sessionUtils = new SessionUtils(db);
+
+        var resolved = await sessionUtils.GetUserAccountFromTokenAsync(
+            "Bearer " + token, CancellationToken.None);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(account.Id, resolved!.Id);
+        Assert.Equal(account.Guid, resolved.Guid);
+    }
+
+    [Fact]
+    public async Task GetUserAccountFromTokenAsync_RejectsInactiveAndTamperedAccountTokens()
+    {
+        using var environment = new TestEnvironment();
+        using var db = environment.CreateDbContext();
+        var account = AddAccount(db, isActive: false, isDeleted: false);
+        var token = JwtUtils.GenerateToken(
+            ParameterEncryptionUtils.EncryptGuid(Guid.Parse(account.Guid)));
+        var utils = new SessionUtils(db);
+        Assert.Null(await utils.GetUserAccountFromTokenAsync("Bearer " + token));
+        Assert.Null(await utils.GetUserAccountFromTokenAsync("Bearer not-a-jwt"));
+    }
+
+    [Fact]
+    public async Task GetUserAccountFromTokenAsync_PreservesRequestCancellation()
+    {
+        using var environment = new TestEnvironment();
+        using var db = environment.CreateDbContext();
+        var utils = new SessionUtils(db);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await utils.GetUserAccountFromTokenAsync("Bearer invalid", cancellation.Token));
     }
 
     private static UserAccount AddAccount(BusinessContext db, bool isActive, bool isDeleted)

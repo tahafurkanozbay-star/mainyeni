@@ -26,7 +26,9 @@ function jsonFindings(files: readonly SourceFile[]): { findings: Finding[]; fail
   let failures = 0;
   for (const file of files) {
     if (file.kind !== 'json') continue;
-    try { JSON.parse(file.text); }
+    // .NET launchSettings.json commonly includes a UTF-8 BOM. Strip only
+    // that leading encoding marker; keep strict JSON syntax validation intact.
+    try { JSON.parse(file.text.replace(/^\uFEFF/u, '')); }
     catch (error) {
       failures += 1;
       findings.push({ id: 'data-invalid-json', domain: 'data', severity: 'critical', blocking: true, title: 'Invalid runtime JSON', message: 'Runtime JSON must parse deterministically before release.', location: { file: file.repositoryPath, line: 1 }, evidence: { value: error instanceof Error ? error.message : String(error) }, remediation: 'Repair the JSON document and add a schema/fixture regression test.', tags: ['json', 'schema', 'release'] });

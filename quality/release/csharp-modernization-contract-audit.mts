@@ -54,7 +54,7 @@ const TEST_OR_GENERATED = /(?:^|\/)(?:tests?|bin|obj|generated|migrations)(?:\/|
 const PRODUCTION_CS = /\.cs$/i;
 const EVENT_HANDLER = /\basync\s+void\s+[A-Za-z_$][\w$]*\s*\([^)]*(?:EventArgs|RoutedEventArgs|EventHandler)[^)]*\)/i;
 const ASYNC_VOID = /\basync\s+void\s+[A-Za-z_$][\w$]*\s*\(/g;
-const SYNC_RESULT = /(?:\.Result\b|\.Wait\s*\(\s*\))/g;
+const SYNC_RESULT = /(?:\.Result\b(?!\s*=(?!=))|\.Wait\s*\(\s*\))/g;
 const GET_RESULT = /\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)/g;
 const DIRECT_HTTP = /\bnew\s+HttpClient\s*\(/g;
 const THREAD_SLEEP = /\bThread\.Sleep\s*\(/g;
@@ -153,6 +153,12 @@ function signalsFor(file: SourceFile): CSharpModernizationSignal[] {
     let match: RegExpExecArray | null;
     let emitted = 0;
     while ((match = matcher.exec(file.text)) !== null) {
+      // Task.Result is a read-only property. A writable '.Result = ...'
+      // target is MVC/action metadata, not a synchronous Task wait.
+      // Keep every actual Task.Result read and Task.Wait() reportable.
+      if (rule.id === 'csharp-sync-over-async'
+        && match[0] === '.Result'
+        && /^\s*=(?!=|>)/u.test(file.text.slice(match.index + match[0].length))) continue;
       if (rule.id === 'csharp-throw-variable' && /\bthrow\s+new\b/.test(match[0])) continue;
       result.push({
         file: file.repositoryPath,
