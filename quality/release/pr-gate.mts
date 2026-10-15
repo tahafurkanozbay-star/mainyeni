@@ -157,6 +157,60 @@ export function reconcileLanguageMigrationDelta(delta: RegressionDelta): Regress
   };
 }
 
+
+/**
+ * The GIS audit now uses the same Turkish normalization as the production
+ * icon resolver. A pre-existing collision such as "askı: a, b" must not be
+ * misclassified as a new collision solely because its evidence spelling has
+ * changed to "aski: a, b". Only one-for-one identical owners, source and
+ * severity can be paired; new or expanded collisions remain regressions.
+ */
+function iconCollisionIdentity(snapshot: FindingSnapshot): string | null {
+  if (snapshot.domain !== 'icons' || findingId(snapshot) !== 'gis-icon-alias-collision') return null;
+  const evidence = snapshot.key.split('|').slice(3).join('|');
+  const separator = evidence.indexOf(': ');
+  if (separator < 1) return null;
+  const alias = evidence.slice(0, separator)
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+  const owners = evidence.slice(separator + 2).trim();
+  if (!alias || !owners) return null;
+  return [snapshot.severity, snapshot.file ?? '', String(snapshot.line ?? 0), alias, owners].join('|');
+}
+
+export function reconcileTurkishIconAliasDelta(delta: RegressionDelta): RegressionDelta {
+  if (!delta.added.length || !delta.removed.length) return delta;
+  const removed = [...delta.removed];
+  const added: FindingSnapshot[] = [];
+  const migrated: FindingSnapshot[] = [];
+  for (const current of delta.added) {
+    const identity = iconCollisionIdentity(current);
+    if (!identity) {
+      added.push(current);
+      continue;
+    }
+    const index = removed.findIndex(previous => iconCollisionIdentity(previous) === identity);
+    if (index < 0) {
+      added.push(current);
+      continue;
+    }
+    removed.splice(index, 1);
+    migrated.push(current);
+  }
+  if (!migrated.length) return delta;
+  return {
+    ...delta,
+    added,
+    removed,
+    unchanged: [...delta.unchanged, ...migrated],
+  };
+}
+
 export function decidePullRequestRegression(delta: RegressionDelta): {
   readonly findings: readonly Finding[];
   readonly decision: ReleaseGateDecision;
@@ -227,7 +281,7 @@ export async function runPullRequestGate(options: {
     environmentContext(options.currentCommit, options.baselineCommit),
   );
   const rawDelta = compareBaseline(currentExecution.report, baseline);
-  const delta = reconcileLanguageMigrationDelta(rawDelta);
+  const delta = reconcileTurkishIconAliasDelta(reconcileLanguageMigrationDelta(rawDelta));
   const gate = decidePullRequestRegression(delta);
   const result: PullRequestGateResult = {
     baselineCommit: options.baselineCommit,
