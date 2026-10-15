@@ -116,3 +116,40 @@ test('two uploads are evaluated independently in source order', () => {
   assert.equal(report.summary.unsafeReleasePaths, 1);
   assert.equal(report.findings.length, 1);
 });
+
+test('absolute runner paths cannot impersonate an approved release summary', () => {
+  const report = inspect(workflowStep('path: /home/runner/work/project/qa-artifacts/release/release-report.md'));
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+  assert.equal(report.findings.length, 1);
+});
+test('relative parent prefixes cannot impersonate approved summaries', () => {
+  const report = inspect(workflowStep('path: ../../qa-artifacts/release/release-report.md'));
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+});
+test('environment-variable artifact path is never assumed safe', () => {
+  const report = inspect(workflowStep('path: $' + '{{ env.RELEASE_ARTIFACTS }}'));
+  assert.equal(report.summary.releaseUploadSteps, 1);
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+  assert.equal(report.findings.length, 1);
+});
+test('a known release artifact uploader with no path fails closed', () => {
+  const report = inspect(workflowStep('retention-days: 7'));
+  assert.equal(report.summary.releaseUploadSteps, 1);
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+});
+test('an unrelated dynamic artifact upload is not misidentified as release QA', () => {
+  const workflow = workflowStep('path: $' + '{{ env.OUTPUT }}')
+    .replace('name: typed-release-qa', 'name: standalone-browser-report');
+  const report = inspect(workflow);
+  assert.equal(report.summary.releaseUploadSteps, 0);
+  assert.equal(report.findings.length, 0);
+});
+test('a dynamic path inside the release root is not approved by the glob allowlist', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release/$' + '{{ env.FILE }}'));
+  assert.equal(report.summary.unsafeReleasePaths, 1);
+});
+test('real release uploader remains approved when a reviewed glob is specified', () => {
+  const report = inspect(workflowStep('path: qa-artifacts/release/*.md'));
+  assert.equal(report.summary.unsafeReleasePaths, 0);
+  assert.equal(report.summary.releaseUploadSteps, 1);
+});
