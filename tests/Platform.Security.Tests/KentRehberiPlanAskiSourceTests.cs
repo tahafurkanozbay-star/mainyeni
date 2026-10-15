@@ -115,9 +115,9 @@ public sealed class KentRehberiPlanAskiSourceTests
     }
 
     [Theory]
-    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\\nNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
-    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\\r\\nNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
-    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\\rNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
+    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\nNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
+    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\r\nNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
+    [InlineData("""[{"objectId":201,"adres":"Ataturk Bulvari\rNo: 12","tur":0}]""", "Ataturk Bulvari No: 12")]
     public async Task GetType_NormalizesAddressLineBreaksOnly(
         string payload,
         string expectedAddress)
@@ -140,9 +140,9 @@ public sealed class KentRehberiPlanAskiSourceTests
     }
 
     [Theory]
-    [InlineData("""[{"objectId":201,"adi":"Kurum\\nAdi","tur":0}]""")]
-    [InlineData("""[{"objectId":201,"adres":"Sokak\\tNo:12","tur":0}]""")]
-    [InlineData("""[{"objectId":201,"adres":"Sokak\\u0000No:12","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"adi":"Kurum\nAdi","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"adres":"Sokak\tNo:12","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"adres":"Sokak\u0000No:12","tur":0}]""")]
     public async Task GetType_StillRejectsOtherTextControlCharacters(
         string payload)
     {
