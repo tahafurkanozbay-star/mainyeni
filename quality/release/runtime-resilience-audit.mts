@@ -24,7 +24,7 @@ export interface RuntimeResilienceSummary {
   readonly findings: readonly Finding[];
 }
 
-const RUNTIME_PATH = /^(?:Webclient\.app\/src|Webclient\.Admin\/src|backend\/|server\/|api\/)/;
+const RUNTIME_PATH = /^(?:Webclient\.app\/src|Webclient\.admin\/src|backend\/|server\/|api\/)/;
 const TEST_PATH = /(?:^|\/)(?:__tests__|test|tests|fixtures)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/i;
 const TIMER = /\b(setInterval|setTimeout)\s*\(/g;
 const TIMER_CLEANUP = /\b(clearInterval|clearTimeout)\s*\(/;
@@ -35,7 +35,7 @@ const ABORT = /\b(?:AbortController|AbortSignal|signal\s*:|\.abort\s*\()/g;
 // not only as standalone prose. Keep the trailing word boundary so unrelated words
 // such as "retrystyle" do not become release findings while still recognizing the
 // executable retry helpers that matter for boundedness review.
-const RETRY = /\b(?:retry(?:[A-Z_]\w*)?|retries|backoff|attempts?|maxAttempts)\b/gi;
+const RETRY = /\b(?:[Rr]etry(?![Aa]ble)(?:[A-Z_]\w*)?|RETRY(?:_[A-Z0-9_]+)?|[Rr]etries|RETRIES|[Bb]ackoff|BACKOFF|[Aa]ttempts?|ATTEMPTS?|[Mm]axAttempts|MAXATTEMPTS)\b/g;
 const BOUNDED_RETRY = /\b(?:maxRetries|maxAttempts|retryLimit|attemptLimit|Math\.min|backoff|maxDelay|deadline|timeout)\b/i;
 const STORAGE = /\b(?:localStorage|sessionStorage)\b/g;
 const PROMISE_CONSTRUCTOR = /new\s+Promise\s*\(/g;

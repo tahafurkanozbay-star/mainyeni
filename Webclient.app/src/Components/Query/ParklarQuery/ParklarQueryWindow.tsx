@@ -362,11 +362,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       await safeClientLog(
         LoggingBusiness,
         'Parklar/Sorgu',
-        String(latestQuery.districtName ?? '')
-          + '/'
-          + String(latestQuery.nbhoodName ?? '')
-          + '/'
-          + String(latestQuery.name ?? ''),
+        'parks-query-started',
         DebugHelper.Log,
       );
 
@@ -481,7 +477,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       await safeClientLog(
         LoggingBusiness,
         'Parklar/Detay Göster',
-        String(item.objectId ?? '') + '/' + item.address,
+        'park-item-action',
         DebugHelper.Log,
       );
 
@@ -518,7 +514,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
         await safeClientLog(
           LoggingBusiness,
           'Parklar/Yol Tarifi',
-          String(item.objectId ?? '') + '/' + item.address,
+          'park-item-action',
           DebugHelper.Log,
         );
       } catch (error) {

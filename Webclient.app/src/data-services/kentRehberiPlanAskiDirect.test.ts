@@ -152,7 +152,7 @@ describe('direct PlanASKI browser transport', () => {
       headers: { 'Content-Type': 'application/json' },
     })) as typeof fetch;
     await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl }))
-      .rejects.toThrow('payload budget');
+      .rejects.toThrow('size budget');
   });
 
   it('fails closed for malformed HTTP payloads and disabled CORS responses', async () => {

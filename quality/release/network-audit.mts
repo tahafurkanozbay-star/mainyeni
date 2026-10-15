@@ -9,12 +9,17 @@ import {
   type SourceFile,
 } from './contracts.mts';
 import { createLineIndex, selectWebSource, snippetAround } from './inventory.mts';
+import { maskNonExecutableNetworkText } from './network-lexical.mts';
+import { maskNetworkReferenceComments } from './network-url-lexical.mts';
 
 const URL_PATTERN = /\bhttps?:\/\/[^\s'"`<>)}\]]+/gi;
 const REMOTE_STYLE_PATTERN = /@import\s+(?:url\()?\s*['"]?(https?:\/\/[^'"\s)]+)/gi;
 const NETWORK_CALL_PATTERN = /\b(?:fetch|axios\.(?:get|post|put|patch|delete)|XMLHttpRequest|QueryTask)\b/g;
 const DIRECT_FETCH_PATTERN = /\bfetch\s*\(/g;
 const ABSOLUTE_FETCH_PATTERN = /\bfetch\s*\(\s*['"`]https?:\/\//gi;
+const ADMIN_RUNTIME_PATH = /^Webclient\.admin\/src\//;
+const RUNTIME_EXCLUDED_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?|coverage|dist|build)(?:\/|$)|\.(?:test|spec|fixture|mock)\.[cm]?[jt]sx?$/i;
+const WEB_SOURCE_KINDS = new Set(['javascript', 'typescript', 'css', 'html', 'json']);
 
 const ALLOWED_DOCUMENTATION_HOSTS = new Set([
   'github.com',
@@ -67,11 +72,12 @@ function extractReferences(file: SourceFile): ExternalReference[] {
   const lineIndex = createLineIndex(file.text);
   const patterns = [URL_PATTERN, REMOTE_STYLE_PATTERN];
   const seen = new Set<string>();
+  const referenceText = maskNetworkReferenceComments(file.text);
 
   for (const pattern of patterns) {
     const matcher = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
     let match: RegExpExecArray | null;
-    while ((match = matcher.exec(file.text)) !== null) {
+    while ((match = matcher.exec(referenceText)) !== null) {
       const raw = String(match[1] ?? match[0]);
       const url = safeUrl(raw);
       if (!url) continue;
@@ -99,7 +105,8 @@ function extractCalls(file: SourceFile): NetworkCallSignal[] {
   const lineIndex = createLineIndex(file.text);
   const matcher = new RegExp(NETWORK_CALL_PATTERN.source, NETWORK_CALL_PATTERN.flags.includes('g') ? NETWORK_CALL_PATTERN.flags : 'g');
   let match: RegExpExecArray | null;
-  while ((match = matcher.exec(file.text)) !== null) {
+  const executable = maskNonExecutableNetworkText(file.text);
+  while ((match = matcher.exec(executable)) !== null) {
     calls.push({
       file: file.repositoryPath,
       line: lineIndex.lineAt(match.index),
@@ -112,7 +119,7 @@ function extractCalls(file: SourceFile): NetworkCallSignal[] {
 }
 
 function isRuntimeFile(path: string): boolean {
-  return /^(?:Webclient\.app\/src|Webclient\.Admin\/src)\//.test(path);
+  return /^(?:Webclient\.app\/src|Webclient\.admin\/src)\//.test(path);
 }
 
 function insecureFinding(reference: ExternalReference): Finding | null {
@@ -172,7 +179,11 @@ function countPattern(files: readonly SourceFile[], pattern: RegExp): number {
   let count = 0;
   for (const file of files) {
     const matcher = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-    for (const _match of file.text.matchAll(matcher)) count += 1;
+    const masked = maskNonExecutableNetworkText(file.text);
+    const candidate = pattern === ABSOLUTE_FETCH_PATTERN ? file.text : masked;
+    for (const match of candidate.matchAll(matcher)) {
+      if (pattern !== ABSOLUTE_FETCH_PATTERN || masked.slice(match.index, match.index + 5) === 'fetch') count += 1;
+    }
   }
   return count;
 }
@@ -186,7 +197,8 @@ function directTransportFindings(webFiles: readonly SourceFile[]): Finding[] {
     const matcher = new RegExp(DIRECT_FETCH_PATTERN.source, 'g');
     let match: RegExpExecArray | null;
     let emitted = 0;
-    while ((match = matcher.exec(file.text)) !== null) {
+    const executable = maskNonExecutableNetworkText(file.text);
+    while ((match = matcher.exec(executable)) !== null) {
       findings.push({
         id: 'network-direct-fetch-outside-transport',
         domain: 'network',
@@ -207,7 +219,15 @@ function directTransportFindings(webFiles: readonly SourceFile[]): Finding[] {
 
 export function auditNetwork(inventory: RepositoryInventory): AuditSection<NetworkAuditDetails> {
   const start = performance.now();
-  const webFiles = selectWebSource(inventory).filter(file => !file.repositoryPath.startsWith('quality/release/'));
+  // Shared web-client selection historically omits the separate Admin SPA.
+  // Include real Admin runtime sources without counting generated/test fixtures.
+  const webFiles = [
+    ...selectWebSource(inventory).filter(file =>
+      !RUNTIME_EXCLUDED_PATH.test(file.repositoryPath)),
+    ...inventory.files.filter(file => ADMIN_RUNTIME_PATH.test(file.repositoryPath)
+      && WEB_SOURCE_KINDS.has(file.kind)
+      && !RUNTIME_EXCLUDED_PATH.test(file.repositoryPath)),
+  ];
   const references = webFiles.flatMap(extractReferences);
   const calls = webFiles.flatMap(extractCalls);
   const findings: Finding[] = [];

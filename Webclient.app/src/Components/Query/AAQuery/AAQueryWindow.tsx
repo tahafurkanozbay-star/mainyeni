@@ -316,7 +316,7 @@ export const AssemblyAreaQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Acil Toplanma Alanları/Sorgu',
-      `${query.districtName}/${query.nbhoodName}/${query.name}`,
+      'assembly-area-query-started',
       globalThis.reportError,
     );
 
@@ -421,7 +421,7 @@ export const AssemblyAreaQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Acil Toplanma Alanları/Detay Göster',
-      `${item.ObjectId ?? ''}/${item.Address}`,
+      'assembly-area-action',
       globalThis.reportError,
     );
 
@@ -457,7 +457,7 @@ export const AssemblyAreaQueryWindow = forwardRef<
       void safeClientLog(
         LoggingBusiness,
         'Acil Toplanma Alanları/Yol Tarifi',
-        `${item.ObjectId ?? ''}/${item.Address}`,
+        'assembly-area-action',
         globalThis.reportError,
       );
     } catch (error) {

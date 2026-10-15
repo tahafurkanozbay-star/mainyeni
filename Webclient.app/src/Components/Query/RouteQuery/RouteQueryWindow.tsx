@@ -347,7 +347,7 @@ export const RouteQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Rota/Sorgu',
-      `${query.districtName}/${query.routeLevel}/${query.showCultureWalkingRoute}/${query.showNatureWalkingRoute}`,
+      'route-query-started',
     );
 
     try {
@@ -404,7 +404,7 @@ export const RouteQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Rota/Detay Göster',
-      `${item.Id ?? ''}/${item.Title}`,
+      'route-item-action',
     );
 
     try {
@@ -452,7 +452,7 @@ export const RouteQueryWindow = forwardRef<
       void safeClientLog(
         LoggingBusiness,
         'Rota/Yol Tarifi',
-        `${item.Id ?? ''}/${item.Title}`,
+        'route-item-action',
       );
 
       if (!openExternalSafely(url)) {

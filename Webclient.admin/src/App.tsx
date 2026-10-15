@@ -84,7 +84,7 @@ function App() {
   }
 
   if (sessionStatus === Constants.SessionStatus.NOT_EXISTS) {
-    return <LoginPage />;
+    return <LoginPage onAuthenticated={() => setSessionStatus(Constants.SessionStatus.EXISTS)} />;
   }
 
   return <AdminRoutes />;

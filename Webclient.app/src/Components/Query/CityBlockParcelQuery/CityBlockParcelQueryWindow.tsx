@@ -274,14 +274,13 @@ export const CityBlockParcelQueryWindow = forwardRef<
     }
 
     const requestId = parcelGateRef.current.next();
-    const logPayload = `${query.districtName}/${query.nbhoodName}/${query.cityblock}/${query.parcel}`;
     setLoading(true);
     setErrorMessage('');
 
     void safeClientLog(
       LoggingBusiness,
       'Ada Parsel/Sorgu',
-      logPayload,
+      'query-submitted',
       globalThis.reportError,
     );
 
@@ -301,7 +300,7 @@ export const CityBlockParcelQueryWindow = forwardRef<
       void safeClientLog(
         LoggingBusiness,
         'Ada Parsel/Detay Göster',
-        logPayload,
+        'parcel-displayed',
         globalThis.reportError,
       );
       await showParcel(result);

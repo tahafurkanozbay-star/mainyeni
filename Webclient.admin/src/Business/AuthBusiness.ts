@@ -2,11 +2,10 @@ import axios from 'axios';
 import { Constants } from '../Core/Constants';
 import { Global } from '../Core/Global';
 
-export interface AdminSession {
-  readonly accessToken: string;
-  readonly userName?: string;
-  readonly [key: string]: unknown;
-}
+import { isValidAdminSession, type ValidAdminSession } from './AdminSessionValidation';
+import { purgeLegacyAdminStorage } from './AdminLegacyStorageCleanup';
+
+export type AdminSession = ValidAdminSession;
 
 export interface AdminLoginResult {
   readonly isSuccess: boolean;
@@ -22,25 +21,14 @@ interface AxiosLikeError {
 
 const getSessionKey = (): string => Constants.Session.SessionObjectTitle;
 
-const clearStorageKey = (storage: Storage): void => {
-  try {
-    storage.removeItem(getSessionKey());
-  } catch {
-    // Storage can be unavailable in privacy-restricted contexts.
-  }
-};
-
-const clearLegacySession = (): void => clearStorageKey(localStorage);
+// Bearer material is held only in this module's volatile memory. A reload
+// ends the Admin login rather than allowing arbitrary same-origin scripts to
+// recover the token from Web Storage.
+let activeSession: AdminSession | null = null;
 
 const clearSession = (): void => {
-  clearStorageKey(sessionStorage);
-  clearLegacySession();
-};
-
-const isAdminSession = (value: unknown): value is AdminSession => {
-  if (typeof value !== 'object' || value === null) return false;
-  const accessToken = (value as { accessToken?: unknown }).accessToken;
-  return typeof accessToken === 'string' && accessToken.length > 0;
+  activeSession = null;
+  purgeLegacyAdminStorage(getSessionKey());
 };
 
 export const AuthBusiness = {
@@ -80,40 +68,29 @@ export const AuthBusiness = {
     });
   },
 
-  // Historical method names remain for caller compatibility. Session data is
-  // deliberately browser-session scoped and legacy persistent copies are purged.
+  // Preserve the public method names for existing callers, but never
+  // serialize a bearer token into any browser-persistent store.
   GetSessionFromLocalStorage: (): AdminSession | null => {
-    clearLegacySession();
-    try {
-      const serialized = sessionStorage.getItem(getSessionKey());
-      if (!serialized) return null;
-
-      const session: unknown = JSON.parse(serialized);
-      if (!isAdminSession(session)) {
-        clearSession();
-        return null;
-      }
-      return session;
-    } catch {
-      clearSession();
-      return null;
+    purgeLegacyAdminStorage(getSessionKey());
+    if (activeSession !== null && !isValidAdminSession(activeSession)) {
+      activeSession = null;
     }
+    return activeSession;
   },
 
   SetSessionInLocalStorage: (session: unknown): boolean => {
-    clearLegacySession();
-    if (!isAdminSession(session)) {
+    purgeLegacyAdminStorage(getSessionKey());
+    if (!isValidAdminSession(session)) {
       clearSession();
       return false;
     }
-
-    try {
-      sessionStorage.setItem(getSessionKey(), JSON.stringify(session));
-      return true;
-    } catch {
-      clearSession();
-      return false;
-    }
+    // Only approved fields survive a login response. Do not keep arbitrary
+    // API payload objects, secrets or callbacks in the active session.
+    activeSession = Object.freeze({
+      accessToken: session.accessToken,
+      ...(session.userName === undefined ? {} : { userName: session.userName }),
+    });
+    return true;
   },
 
   HandleRejection: async (error: AxiosLikeError): Promise<never> => {

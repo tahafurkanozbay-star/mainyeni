@@ -399,7 +399,7 @@ export const PodQueryWindow = forwardRef<
         void safeClientLog(
           LoggingBusiness,
           'Eczaneler/Sorgu (Nöbetçi)',
-          query.name,
+          'pharmacy-query-started',
           globalThis.reportError,
         );
 
@@ -426,7 +426,7 @@ export const PodQueryWindow = forwardRef<
         void safeClientLog(
           LoggingBusiness,
           'Eczaneler/Sorgu (Tüm)',
-          `${query.districtName}/${query.nbhoodName}/${query.name}`,
+          'pharmacy-query-started',
           globalThis.reportError,
         );
 
@@ -530,7 +530,7 @@ export const PodQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Eczaneler/Detay Göster',
-      `${item.ObjectId ?? ''}/${item.Title}`,
+      'pharmacy-item-action',
       globalThis.reportError,
     );
 
@@ -569,7 +569,7 @@ export const PodQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Eczaneler/Yol Tarifi',
-      `${item.ObjectId ?? ''}/${item.Title}`,
+      'pharmacy-item-action',
       globalThis.reportError,
     );
 

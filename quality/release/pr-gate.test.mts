@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { FindingSnapshot, RegressionDelta, Severity } from './contracts.mts';
 import {
   decidePullRequestRegression,
+  pullRequestGateMarkdown,
   reconcileLanguageMigrationDelta,
 } from './pr-gate.mts';
 
@@ -133,4 +134,29 @@ test('language reconciliation requires matching id domain severity and source st
   assert.equal(migrated.added.length, 1);
   assert.equal(migrated.removed.length, 3);
   assert.equal(migrated.unchanged.length, 0);
+});
+
+test('CI regression Markdown never echoes raw sensitive finding keys', () => {
+  const unsafeUrl = 'https://internal.example.test/search?token=private-value&address=secret';
+  const rawKey = `network|network-insecure-http|src/search.ts:12|${unsafeUrl}`;
+  const regression = delta({
+    added: [snapshot(rawKey, 'high', 'src/search.ts', 12)],
+    riskScoreDelta: 40,
+    severityDelta: { critical: 0, high: 1, medium: 0, low: 0, info: 0 },
+  });
+  const gate = decidePullRequestRegression(regression);
+  const output = pullRequestGateMarkdown({
+    baselineCommit: 'base-sha',
+    currentCommit: 'head-sha',
+    baselineRiskScore: 0,
+    currentRiskScore: 40,
+    delta: regression,
+    regressionFindings: gate.findings,
+    decision: gate.decision,
+  });
+  assert.match(output, /network-insecure-http/);
+  assert.match(output, /Gate: \*\*BLOCK\*\*/);
+  assert.ok(!output.includes(unsafeUrl));
+  assert.ok(!output.includes('private-value'));
+  assert.ok(!output.includes('address=secret'));
 });

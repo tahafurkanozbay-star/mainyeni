@@ -449,7 +449,7 @@ export const TransitRouteQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Ulaşım Ağları/Detay Göster',
-      `${item.id ?? ''}/${item.title}`,
+      'transit-route-item-action',
     );
 
     try {
@@ -477,7 +477,7 @@ export const TransitRouteQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Ulaşım Ağları/Yol Tarifi',
-      `${item.id ?? ''}/${item.title}`,
+      'transit-route-item-action',
     );
 
     try {

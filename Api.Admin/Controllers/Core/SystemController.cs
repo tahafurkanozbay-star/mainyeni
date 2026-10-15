@@ -1,8 +1,12 @@
 using System;
+using Api.Admin.Filters;
 using Api.Core.Base;
 using Business.Core.Context;
 using Business.Core.Operations;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CityWorks.AdminApi.SystemService
 {
@@ -24,20 +28,25 @@ namespace CityWorks.AdminApi.SystemService
         /// Returns status of the system components (db etc.) 
         /// </summary>
         [HttpGet]
+        [ServiceFilter(typeof(AdminRequestFilterAttribute))]
         [Route("[controller]/Check")]
-        public IActionResult Check(string key)
+        public async Task<IActionResult> Check(string key, CancellationToken cancellationToken)
         {
             try
             {
                 string resultText = "";
                 
-                using (dbContext)
-                {
-                    string canConnect=dbContext.Database.CanConnect() ? "Evet" : "Hayır";
-                    resultText += "Veritabanı bağlantısı: ["+canConnect+"]";
-                }
+                // The request's pooled DbContext belongs to DI and must never
+                // be disposed by this action. The authorization filter runs first.
+                bool canConnect = await dbContext.Database.CanConnectAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                resultText += "Veritabanı bağlantısı: [" + (canConnect ? "Evet" : "Hayır") + "]";
                 
                 return new JsonResult(resultText);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

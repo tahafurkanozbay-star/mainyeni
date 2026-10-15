@@ -319,7 +319,7 @@ export const EventQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Etkinlikler/Sorgu',
-      `${query.districtName}/${query.nbhoodName}/${query.name}`,
+      'events-query-started',
       globalThis.reportError,
     );
 
@@ -424,7 +424,7 @@ export const EventQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Etkinlikler/Detay Göster',
-      `${item.ObjectId ?? ''}/${item.Title}`,
+      'event-item-action',
       globalThis.reportError,
     );
 

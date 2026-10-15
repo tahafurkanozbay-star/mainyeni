@@ -58,11 +58,14 @@ const QUERY_SIGNAL_PATTERN = /\b(?:queryFeatures|QueryTask|resultOffset|resultRe
 const SERVICE_SIGNAL_PATTERN = /\b(?:GisServiceRegistry|serviceRegistry|timeoutMs|retries|AbortController|health)/gi;
 
 function normalizeLookup(value: string): string {
+  // Match the production iconResolver's Turkish case-folding order:
+  // lowercase BEFORE stripping the combining dot of İ, then fold dotless ı.
   return value
+    .toLocaleLowerCase('tr-TR')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('tr-TR')
-    .replace(/[^a-z0-9çğıöşü]+/gi, ' ')
+    .replace(/ı/g, 'i')
+    .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
 }
@@ -244,12 +247,19 @@ function parseIconRegistry(inventory: RepositoryInventory): IconRegistrySummary 
   };
 }
 
-function runtimePresence(inventory: RepositoryInventory): GisRuntimePresence[] {
-  return REQUIRED_GIS_RUNTIMES.map(expected => ({
-    expectedPath: expected.path,
-    present: findFile(inventory, expected.path) !== undefined,
-    role: expected.role,
-  }));
+export function runtimePresence(inventory: RepositoryInventory): GisRuntimePresence[] {
+  return REQUIRED_GIS_RUNTIMES.map(expected => {
+    // The GIS engine is migrated incrementally from JavaScript to TypeScript.
+    // Accept either exact module path, without treating tests or backups as runtimes.
+    const candidates = expected.path.endsWith('.js')
+      ? [expected.path.slice(0, -3) + '.ts', expected.path]
+      : [expected.path];
+    return {
+      expectedPath: expected.path,
+      present: candidates.some(path => findFile(inventory, path) !== undefined),
+      role: expected.role,
+    };
+  });
 }
 
 function runtimeFindings(runtimes: readonly GisRuntimePresence[]): Finding[] {

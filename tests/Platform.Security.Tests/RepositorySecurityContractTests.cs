@@ -65,13 +65,34 @@ public sealed class RepositorySecurityContractTests
         var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.ts");
         var constants = Read("Webclient.admin/src/Core/Constants.ts");
 
-        Assert.Contains("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
-        Assert.Contains("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
+        // Stronger admission: the Admin bearer is volatile and is never
+        // serialized into either session or persistent browser storage.
+        Assert.Contains("activeSession", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("localStorage.getItem", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("localStorage.setItem", authBusiness, StringComparison.Ordinal);
+        var cleanup = Read("Webclient.admin/src/Business/AdminLegacyStorageCleanup.ts");
+        Assert.Contains("sessionStorage.removeItem", cleanup, StringComparison.Ordinal);
+        Assert.Contains("localStorage.removeItem", cleanup, StringComparison.Ordinal);
         Assert.DoesNotContain("CryptoJS.AES", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Session.Pk", authBusiness, StringComparison.Ordinal);
         Assert.DoesNotContain("Pk:", constants, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AdminViteBuild_DoesNotRequireTrackedLegacyEnvironmentFile()
+    {
+        var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.admin", ".env");
+        var samplePath = Path.Combine(RepositoryRoot.Value, "Webclient.admin", ".env.example");
+        var viteConfig = Read("Webclient.admin/vite.config.ts");
+
+        Assert.False(File.Exists(localEnvPath),
+            "Admin .env must be ignored and provisioned locally, not committed.");
+        Assert.True(File.Exists(samplePath),
+            "Keep a documented Vite environment example for development.");
+        Assert.Contains("envPrefix: ['VITE_']", viteConfig, StringComparison.Ordinal);
+        Assert.DoesNotContain("REACT_APP_", Read("Webclient.admin/.env.example"), StringComparison.Ordinal);
     }
 
     [Theory]

@@ -3,6 +3,9 @@ using Business.Core.Model;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Toolbox.Security.Jwt;
 using Toolbox.Security.Url;
@@ -19,6 +22,31 @@ namespace Api.Core.Base
         }
 
         public UserAccount getUserAccountFromToken(string authorizationHeader)
+        {
+            var guidText = ValidatedAccountGuid(authorizationHeader);
+            return guidText == null
+                ? null
+                : dbContext.UserAccounts.FirstOrDefault(x => !x.IsDeleted && x.IsActive && x.Guid == guidText);
+        }
+
+        /// <summary>
+        /// Nonblocking account lookup for the HTTP authorization pipeline.
+        /// The token signature and lifetime are verified before querying.
+        /// </summary>
+        public async Task<UserAccount> GetUserAccountFromTokenAsync(
+            string authorizationHeader,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var guidText = ValidatedAccountGuid(authorizationHeader);
+            if (guidText == null) return null;
+
+            return await dbContext.UserAccounts.FirstOrDefaultAsync(
+                x => !x.IsDeleted && x.IsActive && x.Guid == guidText,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        private static string ValidatedAccountGuid(string authorizationHeader)
         {
             if (!JwtUtils.TryGetBearerToken(authorizationHeader, out var token))
             {
@@ -49,8 +77,7 @@ namespace Api.Core.Base
                 return null;
             }
 
-            var guidText = guid.ToString();
-            return dbContext.UserAccounts.FirstOrDefault(x => !x.IsDeleted && x.IsActive && x.Guid == guidText);
+            return guid.ToString();
         }
 
         // Kept for source compatibility with legacy callers. Do not use this method for authorization;

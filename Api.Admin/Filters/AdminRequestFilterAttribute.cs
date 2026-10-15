@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
+using System.Threading.Tasks;
 
 namespace Api.Admin.Filters
 {
@@ -13,7 +14,7 @@ namespace Api.Admin.Filters
     /// Validates the signed bearer token and resolves the active account before an admin action runs.
     /// Fine-grained action/role authorization remains a separate policy layer and must not be inferred here.
     /// </summary>
-    public class AdminRequestFilterAttribute : IActionFilter
+    public class AdminRequestFilterAttribute : IAsyncActionFilter
     {
         public const string UserAccountItemKey = "KentRehberi.UserAccount";
 
@@ -24,13 +25,11 @@ namespace Api.Admin.Filters
             sessionUtils = new SessionUtils(dbContext ?? throw new ArgumentNullException(nameof(dbContext)));
         }
 
-        public void OnActionExecuted(ActionExecutedContext context)
+        public async Task OnActionExecutionAsync(
+            ActionExecutingContext context,
+            ActionExecutionDelegate next)
         {
-        }
-
-        public void OnActionExecuting(ActionExecutingContext context)
-        {
-            var result = ValidateRequest(context);
+            var result = await ValidateRequestAsync(context).ConfigureAwait(false);
             if (!result.IsSuccess)
             {
                 context.Result = new ObjectResult(new { message = "Unauthorized" })
@@ -41,12 +40,14 @@ namespace Api.Admin.Filters
             }
 
             context.HttpContext.Items[UserAccountItemKey] = result.Data;
+            await next().ConfigureAwait(false);
         }
 
-        private ServiceResult<UserAccount> ValidateRequest(ActionExecutingContext context)
+        private async Task<ServiceResult<UserAccount>> ValidateRequestAsync(ActionExecutingContext context)
         {
             var authorization = context.HttpContext.Request.Headers.Authorization.ToString();
-            var userAccount = sessionUtils.getUserAccountFromToken(authorization);
+            var userAccount = await sessionUtils.GetUserAccountFromTokenAsync(
+                authorization, context.HttpContext.RequestAborted).ConfigureAwait(false);
 
             if (userAccount == null)
             {

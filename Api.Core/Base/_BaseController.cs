@@ -9,7 +9,6 @@ using System.IdentityModel.Tokens.Jwt;
 using Business.Core.Model;
 using Toolbox.Security.Jwt;
 using Business.Core.Operations;
-using System.Linq;
 using Toolbox.Serialization;
 using UAParser;
 using Microsoft.Extensions.Primitives;
@@ -45,18 +44,12 @@ namespace Api.Core.Base
             var uaParser = Parser.GetDefault();
 
             var request = HttpContext.Request;
-            //var ip = request.HttpContext.Connection.RemoteIpAddress;
-            StringValues ipVals = StringValues.Empty;
-            request.Headers.TryGetValue("X-Forwarded-For", out ipVals);
-
-            string ip = "";
-            if (!StringValues.IsNullOrEmpty(ipVals))
-            {
-                ip = ipVals.ToString().TrimEnd(',').Split(',').AsEnumerable<string>().Select(s => s.Trim()).ToList().FirstOrDefault();
-            }
-
-
-            var iplocal = request.HttpContext.Connection.LocalIpAddress;
+            // ForwardedHeadersMiddleware applies only explicitly trusted proxies.
+            // Reading X-Forwarded-For directly would let arbitrary clients forge audit IPs.
+            var verifiedClientIp = request.HttpContext.Connection.RemoteIpAddress?.ToString()
+                ?? string.Empty;
+            var localIp = request.HttpContext.Connection.LocalIpAddress?.ToString()
+                ?? string.Empty;
 
             string ua = request.Headers["User-Agent"].ToString();
             var clientInfo = uaParser.Parse(ua);
@@ -70,8 +63,8 @@ namespace Api.Core.Base
                 Os = os,
                 Device = device,
                 Browser = browser,
-                Ip = ip.ToString(),
-                IpLocal = iplocal.ToString()
+                Ip = verifiedClientIp,
+                IpLocal = localIp
             };
         }
 

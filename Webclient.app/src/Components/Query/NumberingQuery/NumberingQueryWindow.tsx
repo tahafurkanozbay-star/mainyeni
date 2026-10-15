@@ -447,13 +447,7 @@ export const NumberingQueryWindow = forwardRef<
     await safeClientLog(
       LoggingBusiness,
       'Numarataj/Sorgu',
-      query.districtName
-        + '/'
-        + query.nbhoodName
-        + '/'
-        + query.streetName
-        + '/'
-        + doorId,
+      'numbering-query-started',
       DebugHelper.Log,
     );
 

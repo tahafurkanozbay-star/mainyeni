@@ -3,7 +3,9 @@ import {
   enforceNetworkPolicy,
   hasSameOrigin,
   inferServiceType,
+  normalizeServiceUrl,
   isDisallowedServiceType,
+  auditServiceCatalogAdmission,
   sanitizeCatalog,
   sanitizeService,
 } from './serviceCatalog';
@@ -51,6 +53,50 @@ describe('serviceCatalog', () => {
     expect(safe.url).not.toContain('#');
   });
 
+  test('rejects non-network service URL schemes, malformed URLs and embedded credentials', () => {
+    for (const url of [
+      'javascript:alert(1)',
+      'data:text/plain,not-a-service',
+      'blob:https://localhost/123',
+      'file:///etc/passwd',
+      'https://user:secret@gis.example.test/arcgis/MapServer',
+      'https://guest:secret@gis.example.test/arcgis/MapServer',
+      'https://[invalid',
+    ]) {
+      expect(normalizeServiceUrl(url)).toBe('');
+      expect(() => sanitizeService({ id: 'unsafe', type: 'MapServer', url }))
+        .toThrow(/has no URL/i);
+      expect(sanitizeCatalog([{ id: 'unsafe', type: 'MapServer', url }])).toEqual([]);
+    }
+  });
+
+  test('blocks cleartext external GIS targets while allowing approved HTTPS', () => {
+    const external = new URL('https://gis.example.test/arcgis/MapServer');
+    external.protocol = 'http:';
+    expect(normalizeServiceUrl(external.href)).toBe('');
+    expect(() => sanitizeService({
+      id: 'insecure-external',
+      type: 'MapServer',
+      url: external.href,
+    })).toThrow(/no URL/i);
+    expect(normalizeServiceUrl('https://gis.example.test/arcgis/MapServer'))
+      .toBe('https://gis.example.test/arcgis/MapServer');
+  });
+
+  test('preserves valid relative and HTTPS ArcGIS endpoints without URL secrets', () => {
+    const relative = normalizeServiceUrl('/arcgis/MapServer?token=secret#fragment');
+    expect(relative).not.toContain('token=');
+    expect(relative).not.toContain('#');
+    expect(relative).toContain('/arcgis/MapServer');
+    expect(normalizeServiceUrl('https://maps.example.test/arcgis/FeatureServer/0'))
+      .toBe('https://maps.example.test/arcgis/FeatureServer/0');
+    expect(sanitizeService({
+      id: 'arcgis',
+      type: 'FeatureServer',
+      url: 'https://maps.example.test/arcgis/FeatureServer/0',
+    }).id).toBe('arcgis');
+  });
+
   test('drops invalid and disallowed services from runtime catalogs', () => {
     expect(sanitizeCatalog([
       { id: 'roads', type: 'MapServer', url: '/roads/MapServer' },
@@ -74,4 +120,32 @@ describe('serviceCatalog', () => {
       url: 'https://remote.example.test/arcgis/FeatureServer/0',
     })).toThrow(/Remote GIS endpoint is blocked/i);
   });
+  test('makes excluded and duplicate GIS records visible as bounded safe counts', () => {
+    const report = auditServiceCatalogAdmission([
+      { id: 'roads', type: 'MapServer', url: '/roads/MapServer' },
+      { id: 'legacy', type: 'WMS', url: '/legacy?token=sensitive' },
+      { id: '', type: 'FeatureServer', url: '/broken/FeatureServer' },
+      { id: 'roads', type: 'FeatureServer', url: '/duplicate/FeatureServer' },
+    ]);
+    expect(report.accepted.map((service) => service.id)).toEqual(['roads']);
+    expect(report.rejected).toBe(2);
+    expect(report.duplicated).toBe(1);
+    expect(JSON.stringify(report)).not.toContain('sensitive');
+    expect(sanitizeCatalog([
+      { id: 'roads', type: 'MapServer', url: '/roads/MapServer' },
+      { id: 'legacy', type: 'WMS', url: '/legacy?token=sensitive' },
+    ]).map((service) => service.id)).toEqual(['roads']);
+  });
+
+  test('relative GIS URLs follow browser origin but never permit non-loopback cleartext', () => {
+    const raw = normalizeServiceUrl('/arcgis/FeatureServer/0');
+    const normalized = new URL(raw);
+    expect(normalized.pathname).toBe('/arcgis/FeatureServer/0');
+    expect(normalized.origin).toBe(window.location.origin);
+    expect(normalized.protocol === 'https:' || (
+      normalized.protocol === 'http:' &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(normalized.hostname)
+    )).toBe(true);
+  });
+
 });

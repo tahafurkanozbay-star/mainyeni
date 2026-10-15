@@ -109,6 +109,63 @@ describe('kentRehberiGeoJsonLayer', () => {
     })) })).toThrow(/bounded feature limit/i);
   });
 
+  test.each([
+    { label: 'polygon geometry', geometry: { type: 'Polygon', coordinates: [] } },
+    { label: 'missing point coordinates', geometry: { type: 'Point' } },
+    { label: 'three-dimensional point', geometry: { type: 'Point', coordinates: [32.854, 39.92, 100] } },
+    { label: 'string longitude', geometry: { type: 'Point', coordinates: ['32.854', 39.92] } },
+    { label: 'out-of-range longitude', geometry: { type: 'Point', coordinates: [181, 39.92] } },
+    { label: 'out-of-range latitude', geometry: { type: 'Point', coordinates: [32.854, -91] } },
+    { label: 'invalid object geometry', geometry: {} },
+    { label: 'missing geometry property', geometry: undefined },
+  ])('rejects $label before loading a map layer', ({ geometry }) => {
+    expect(() => validateKentRehberiFeatureCollection({
+      type: 'FeatureCollection',
+      features: [{ ...demoGeoJson.features[0], geometry }],
+    })).toThrow(/geometry|coordinates/i);
+  });
+
+  test('accepts valid point/null geometries but rejects inconsistent GeoJSON identities', () => {
+    const feature = demoGeoJson.features[0]!;
+    expect(() => validateKentRehberiFeatureCollection({
+      type: 'FeatureCollection',
+      features: [{ ...feature, geometry: null, id: '101' }],
+    })).not.toThrow();
+
+    expect(() => validateKentRehberiFeatureCollection({
+      type: 'FeatureCollection',
+      features: [{ ...feature, id: 102 }],
+    })).toThrow(/mismatched id/i);
+
+    expect(() => validateKentRehberiFeatureCollection({
+      type: 'FeatureCollection',
+      features: [{ ...feature, id: { unexpected: true } }],
+    })).toThrow(/mismatched id/i);
+
+    expect(() => validateKentRehberiFeatureCollection({
+      type: 'FeatureCollection',
+      features: [{ ...feature, properties: { objectid: Number.MAX_SAFE_INTEGER + 1 } }],
+    })).toThrow(/valid objectid/i);
+
+    expect(() => validateKentRehberiFeatureCollection({
+      type: 'FeatureCollection',
+      features: [feature, { ...feature, id: 101 }],
+    })).toThrow(/duplicate objectid/i);
+  });
+
+  test('rejects misleading MIME types even if the response body looks like GeoJSON', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(demoGeoJson), {
+      headers: { 'content-type': 'text/plain; note=application/json' },
+    })) as typeof fetch;
+
+    await expect(fetchKentRehberiGeoJson({
+      apiBaseUrl: '/api',
+      limit: 10,
+      fetchImpl,
+    })).rejects.toThrow(/unexpected content type/i);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
   test('fetches the same-origin endpoint with the GeoJSON accept contract', async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(input).toBe('/api/kent-rehberi?limit=250');

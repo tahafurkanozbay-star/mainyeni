@@ -426,6 +426,51 @@ const RUNTIME_VALUE_OPTIONS = new Set([
   '--test-shard', '--test-concurrency', '--watch-path', '--diagnostic-dir',
 ]);
 
+// Deno can execute remote modules directly. A package-script audit must not
+// mistake an option operand or a remote specifier for a reviewed local entrypoint.
+const DENO_ENTRYPOINT_VALUE_OPTIONS = new Set([
+  '--config', '-c', '--import-map', '--lock', '--cert', '--location', '--filter', '--jobs', '--seed',
+]);
+const DENO_ENTRYPOINT_FLAGS = new Set([
+  '-A', '-q', '--allow-all', '--no-check', '--no-prompt', '--cached-only',
+  '--reload', '--quiet', '--unstable', '--watch', '--check', '--lock-write',
+  '--no-remote', '--no-npm',
+]);
+
+function assertReviewedDenoEntrypoint(words) {
+  let index = 0;
+  while (index < words.length) {
+    const option = words[index];
+    if (option === '--') {
+      index += 1;
+      break;
+    }
+    if (!isOptionWord(option)) break;
+    if (DENO_ENTRYPOINT_VALUE_OPTIONS.has(option)) {
+      if (!words[index + 1] || words[index + 1] === '--' || isOptionWord(words[index + 1])) {
+        throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'Deno option requires a reviewed operand');
+      }
+      index += 2;
+      continue;
+    }
+    if (DENO_ENTRYPOINT_FLAGS.has(option) ||
+        /^--(?:allow|deny)-(?:read|write|net|env|run|ffi|sys|hrtime)(?:=.+)?$/.test(option) ||
+        /^--(?:config|import-map|lock|cert|location|filter|jobs|seed)=.+$/.test(option)) {
+      index += 1;
+      continue;
+    }
+    throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'Deno option is outside the reviewed command grammar');
+  }
+  const entrypoint = words[index];
+  if (!entrypoint || entrypoint === '-' || entrypoint.includes('\\') ||
+      entrypoint.startsWith('/') || entrypoint.startsWith('~') ||
+      /^[a-z][a-z\d+.-]*:/i.test(entrypoint) ||
+      entrypoint.split('/').includes('..') ||
+      !/^(?:\.\/)?[A-Za-z0-9_./-]+\.(?:[cm]?[jt]sx?)$/.test(entrypoint)) {
+    throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'Deno requires an explicit reviewed local source file');
+  }
+}
+
 // Only inspect interpreter switches before the first script/module operand.
 // Arguments after that operand are data owned by the reviewed entrypoint.
 function assertReviewedRuntimeInvocation(tokens, invocation) {
@@ -460,6 +505,7 @@ function assertReviewedRuntimeInvocation(tokens, invocation) {
         if (!remaining.some((word) => word !== '--' && word !== '-' && !isOptionWord(word))) {
           throw new DependencySurfacePolicyError('unreviewed-runtime-execution-script', 'runtime subcommand has no reviewed entrypoint');
         }
+        if (runtime === 'deno') assertReviewedDenoEntrypoint(remaining);
       }
       return;
     }

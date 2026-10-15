@@ -11,19 +11,26 @@ import { Constants } from './Core/Constants';
 
 describe('admin authentication storage contract', () => {
   beforeEach(() => {
+    AuthBusiness.SetSessionInLocalStorage(null);
     sessionStorage.clear();
     localStorage.clear();
     axiosPost.mockReset();
   });
 
-  test('stores valid bearer sessions only for the browser session', () => {
+  test('keeps a validated bearer only in volatile memory, not Web Storage', async () => {
     const session = { accessToken: 'signed-token', userName: 'operator' };
 
     expect(AuthBusiness.SetSessionInLocalStorage(session)).toBe(true);
     expect(localStorage.getItem(Constants.Session.SessionObjectTitle)).toBeNull();
-    expect(JSON.parse(sessionStorage.getItem(Constants.Session.SessionObjectTitle) ?? 'null'))
-      .toEqual(session);
+    expect(sessionStorage.getItem(Constants.Session.SessionObjectTitle)).toBeNull();
     expect(AuthBusiness.GetSessionFromLocalStorage()).toEqual(session);
+    expect(await AuthBusiness.GetRequestHeaders()).toEqual({
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer signed-token',
+    });
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
   });
 
   test('removes invalid session payloads', () => {
@@ -42,6 +49,48 @@ describe('admin authentication storage contract', () => {
     AuthBusiness.GetSessionFromLocalStorage();
 
     expect(localStorage.getItem(Constants.Session.SessionObjectTitle)).toBeNull();
+  });
+
+
+  test('never retains unrelated login response properties in the in-memory session', () => {
+    const data = {
+      accessToken: 'signed-token', userName: 'operator',
+      password: 'must-not-be-preserved',
+      profile: { address: 'sensitive' },
+    };
+    expect(AuthBusiness.SetSessionInLocalStorage(data)).toBe(true);
+    expect(AuthBusiness.GetSessionFromLocalStorage()).toEqual({
+      accessToken: 'signed-token',
+      userName: 'operator',
+    });
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
+  });
+
+  test('invalid bearer does not enter memory or browser persistence', async () => {
+    for (const invalid of [
+      { accessToken: '' },
+      { accessToken: 'has spaces' },
+      { accessToken: 'line\nbreak' },
+      { accessToken: 'a'.repeat(8193) },
+      { accessToken: null },
+      { accessToken: 'okay', userName: 'a'.repeat(513) },
+    ]) {
+      expect(AuthBusiness.SetSessionInLocalStorage(invalid)).toBe(false);
+      expect(AuthBusiness.GetSessionFromLocalStorage()).toBeNull();
+      expect(await AuthBusiness.GetRequestHeaders()).toBeNull();
+    }
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
+  });
+
+  test('purges formerly persisted valid-looking sessions without rehydrating them', () => {
+    const legacy = JSON.stringify({ accessToken: 'old-bearer', userName: 'old' });
+    localStorage.setItem(Constants.Session.SessionObjectTitle, legacy);
+    sessionStorage.setItem(Constants.Session.SessionObjectTitle, legacy);
+    expect(AuthBusiness.GetSessionFromLocalStorage()).toBeNull();
+    expect(localStorage.getItem(Constants.Session.SessionObjectTitle)).toBeNull();
+    expect(sessionStorage.getItem(Constants.Session.SessionObjectTitle)).toBeNull();
   });
 
   test('login posts credentials with a bounded timeout and returns response data', async () => {
