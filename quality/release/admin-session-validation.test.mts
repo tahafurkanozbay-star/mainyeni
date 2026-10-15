@@ -60,7 +60,8 @@ test('getter and proxy failures cannot escape the admin session validation bound
     getOwnPropertyDescriptor() { throw new Error('hostile proxy'); },
   });
   for (const candidate of [throwingGetter, throwingUserName, throwingProxy]) {
-    assert.doesNotThrow(() => isValidAdminSession(candidate));
+    // The single assertion fails if validation throws, while proving the
+    // incoming object cannot be admitted as a usable bearer session.
     assert.equal(isValidAdminSession(candidate), false);
   }
 });
