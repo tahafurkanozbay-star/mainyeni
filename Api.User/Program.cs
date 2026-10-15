@@ -30,15 +30,8 @@ public static class Program
         // Explicitly enabled public-map-only mode. It does not register
         // BusinessContext or discover any other user/admin controllers.
         // The default full API mode remains unchanged.
-        if (PlanAskiStandaloneHosting.IsEnabled(builder.Configuration))
+        if (PlanAskiStandaloneHosting.TryRun(builder))
         {
-            PlanAskiStandaloneHosting.AddServices(
-                builder.Services,
-                builder.Configuration);
-
-            var planAskiApp = builder.Build();
-            PlanAskiStandaloneHosting.Map(planAskiApp);
-            planAskiApp.Run();
             return;
         }
 
