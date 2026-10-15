@@ -172,12 +172,15 @@ function riskReason(argument: string): string | null {
   if (SENSITIVE_DIRECT_IDENTIFIER.test(argument.trim())) return 'raw-record-or-query';
   if (SENSITIVE_PATH.test(argument)) return 'address-path-label';
   if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';
+  // Interpolated template payloads are expressions, not object-literal keys.
+  // Prefer their privacy classification over static label text such as
+  // `coordinates: ${mapPoint}` before inspecting object-key syntax.
+  if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
   if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(argument)) return 'sensitive-object-key';
   if (/\[\s*['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*\]/.test(argument)) return 'sensitive-bracket-property';
   if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(argument)) return 'wrapped-location-value';
   if (/['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*:/.test(argument)) return 'sensitive-object-key';
   if (SENSITIVE_PROPERTY.test(argument)) return 'sensitive-property';
-  if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
   if (SENSITIVE_NESTED_VALUE.test(argument)) return 'nested-sensitive-value';
   if (SENSITIVE_RUNTIME_SOURCE.test(argument)) return 'location-or-search-value';
   return null;
