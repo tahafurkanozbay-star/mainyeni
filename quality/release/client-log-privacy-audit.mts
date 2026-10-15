@@ -99,32 +99,70 @@ interface ClientLogCall {
 function findClientLogCalls(text: string): readonly ClientLogCall[] {
   const calls: ClientLogCall[] = [];
   const name = 'safeClientLog';
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (character === "'" || character === '"' || character === '`') {
-      index = skipLiteral(text, index) - 1;
-      continue;
-    }
-    if (character === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
-      index = skipComment(text, index) - 1;
-      continue;
-    }
-    if (!text.startsWith(name, index) ||
-        (index > 0 && IDENTIFIER.test(text[index - 1] ?? '')) ||
-        IDENTIFIER.test(text[index + name.length] ?? '')) continue;
+  const maxTemplateDepth = 32;
 
-    let open = index + name.length;
-    while (/\s/.test(text[open] ?? '') && open < text.length) open += 1;
-    // Optional calls are still executable logging sinks.
-    if (text.startsWith('?.', open)) open += 2;
-    while (/\s/.test(text[open] ?? '') && open < text.length) open += 1;
-    if (text[open] !== '(') continue;
-    const args = callArguments(text, open);
-    // An over-budget or malformed call must fail closed rather than silently
-    // disappear from the release evidence. The finding never stores payloads.
-    calls.push({ offset: index, arguments: args });
-    index = open;
+  // A template's ordinary text is inert, but ${...} is executable
+  // JavaScript. Skipping the entire backtick literal loses privacy violations
+  // inside interpolations (including nested templates in TSX components).
+  function scanTemplate(start: number, depth: number): number {
+    if (depth > maxTemplateDepth) return skipLiteral(text, start);
+    for (let index = start + 1; index < text.length; index += 1) {
+      if (text[index] === '\\') {
+        index += 1;
+        continue;
+      }
+      if (text[index] === '`') return index + 1;
+      if (text[index] === '$' && text[index + 1] === '{') {
+        index = scanCode(index + 2, true, depth + 1) - 1;
+      }
+    }
+    return text.length;
   }
+
+  function scanCode(start: number, inInterpolation: boolean, depth: number): number {
+    let braces = 0;
+    for (let index = start; index < text.length; index += 1) {
+      const character = text[index];
+      if (character === "'" || character === '"') {
+        index = skipLiteral(text, index) - 1;
+        continue;
+      }
+      if (character === '`') {
+        index = scanTemplate(index, depth + 1) - 1;
+        continue;
+      }
+      if (character === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
+        index = skipComment(text, index) - 1;
+        continue;
+      }
+      if (inInterpolation && character === '{') {
+        braces += 1;
+        continue;
+      }
+      if (inInterpolation && character === '}') {
+        if (braces === 0) return index + 1;
+        braces -= 1;
+        continue;
+      }
+      if (!text.startsWith(name, index) ||
+          (index > 0 && IDENTIFIER.test(text[index - 1] ?? '')) ||
+          IDENTIFIER.test(text[index + name.length] ?? '')) continue;
+
+      let open = index + name.length;
+      while (open < text.length && /\s/.test(text[open] ?? '')) open += 1;
+      if (text.startsWith('?.', open)) open += 2;
+      while (open < text.length && /\s/.test(text[open] ?? '')) open += 1;
+      if (text[open] !== '(') continue;
+      const args = callArguments(text, open);
+      // Keep fail-closed malformed/oversized call behavior and never record
+      // the source argument text in findings or serialized audit evidence.
+      calls.push({ offset: index, arguments: args });
+      index = open;
+    }
+    return text.length;
+  }
+
+  scanCode(0, false, 0);
   return calls;
 }
 
