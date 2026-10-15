@@ -24,7 +24,7 @@ const TYPE_ALIASES = new Map<string, GisServiceType>([
 const browserOrigin = (): string => (
   typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin
-    : 'http://localhost'
+    : 'https://localhost'
 );
 
 export const normalizeServiceUrl = (url: unknown): string => {
@@ -130,23 +130,42 @@ export const sanitizeService = (service: GisServiceInput = {}): SanitizedGisServ
   return safe;
 };
 
-export const sanitizeCatalog = (services: readonly GisServiceInput[] = []): SanitizedGisService[] => {
-  const seen = new Set<string>();
-  const result: SanitizedGisService[] = [];
+export interface GisCatalogAdmissionReport {
+  readonly accepted: readonly SanitizedGisService[];
+  readonly rejected: number;
+  readonly duplicated: number;
+}
 
-  (Array.isArray(services) ? services : []).forEach((service) => {
+// Report admission losses without exposing service URLs, tokens or free-form
+// error messages. Consumers can surface counts in local bounded diagnostics.
+export const auditServiceCatalogAdmission = (
+  services: readonly GisServiceInput[] = [],
+): GisCatalogAdmissionReport => {
+  const seen = new Set<string>();
+  const accepted: SanitizedGisService[] = [];
+  let rejected = 0;
+  let duplicated = 0;
+
+  for (const service of Array.isArray(services) ? services : []) {
     try {
       const safe = sanitizeService(service);
-      if (!seen.has(safe.id)) {
+      if (seen.has(safe.id)) {
+        duplicated += 1;
+      } else {
         seen.add(safe.id);
-        result.push(safe);
+        accepted.push(safe);
       }
     } catch {
-      // Invalid/unapproved services are deliberately excluded from runtime.
+      // Invalid network configurations are rejected and counted instead of
+      // disappearing without any available diagnostic evidence.
+      rejected += 1;
     }
-  });
-  return result;
+  }
+  return Object.freeze({ accepted, rejected, duplicated });
 };
+
+export const sanitizeCatalog = (services: readonly GisServiceInput[] = []): SanitizedGisService[] =>
+  [...auditServiceCatalogAdmission(services).accepted];
 
 export const indexCatalog = (services: readonly GisServiceInput[] = []): Map<string, SanitizedGisService> => new Map(
   sanitizeCatalog(services).map((service) => [service.id, service]),
