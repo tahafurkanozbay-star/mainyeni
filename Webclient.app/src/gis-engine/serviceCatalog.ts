@@ -32,11 +32,16 @@ export const normalizeServiceUrl = (url: unknown): string => {
   const raw = String(url).trim();
   try {
     const parsed = new URL(raw, browserOrigin());
+    // Reject opaque/non-network schemes and credentials before a GIS service
+    // URL can reach any runtime loader, including callers of sanitizeService.
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+      return '';
+    }
     parsed.hash = '';
     parsed.search = '';
     return parsed.toString().replace(/\/+$/, '');
   } catch (_) {
-    return raw.replace(/\/+$/, '');
+    return '';
   }
 };
 
