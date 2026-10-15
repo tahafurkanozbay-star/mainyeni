@@ -15,6 +15,9 @@ const REMOTE_STYLE_PATTERN = /@import\s+(?:url\()?\s*['"]?(https?:\/\/[^'"\s)]+)
 const NETWORK_CALL_PATTERN = /\b(?:fetch|axios\.(?:get|post|put|patch|delete)|XMLHttpRequest|QueryTask)\b/g;
 const DIRECT_FETCH_PATTERN = /\bfetch\s*\(/g;
 const ABSOLUTE_FETCH_PATTERN = /\bfetch\s*\(\s*['"`]https?:\/\//gi;
+const ADMIN_RUNTIME_PATH = /^Webclient\.admin\/src\//;
+const ADMIN_EXCLUDED_PATH = /(?:^|\/)(?:__tests__|tests?|fixtures?|mocks?|coverage|dist|build)(?:\/|$)|\.(?:test|spec|fixture|mock)\.[cm]?[jt]sx?$/i;
+const WEB_SOURCE_KINDS = new Set(['javascript', 'typescript', 'css', 'html', 'json']);
 
 const ALLOWED_DOCUMENTATION_HOSTS = new Set([
   'github.com',
@@ -207,7 +210,14 @@ function directTransportFindings(webFiles: readonly SourceFile[]): Finding[] {
 
 export function auditNetwork(inventory: RepositoryInventory): AuditSection<NetworkAuditDetails> {
   const start = performance.now();
-  const webFiles = selectWebSource(inventory).filter(file => !file.repositoryPath.startsWith('quality/release/'));
+  // Shared web-client selection historically omits the separate Admin SPA.
+  // Include real Admin runtime sources without counting generated/test fixtures.
+  const webFiles = [
+    ...selectWebSource(inventory),
+    ...inventory.files.filter(file => ADMIN_RUNTIME_PATH.test(file.repositoryPath)
+      && WEB_SOURCE_KINDS.has(file.kind)
+      && !ADMIN_EXCLUDED_PATH.test(file.repositoryPath)),
+  ];
   const references = webFiles.flatMap(extractReferences);
   const calls = webFiles.flatMap(extractCalls);
   const findings: Finding[] = [];
