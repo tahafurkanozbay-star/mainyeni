@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const controller = readFileSync(
-  new URL('../../Api.Admin/Controllers/Core/SystemController.cs', import.meta.url),
+  new URL('../../Api.Admin/Controllers/Core/SystemController.cs', import.meta.url).pathname,
   'utf8',
 );
 const filter = readFileSync(
-  new URL('../../Api.Admin/Filters/AdminRequestFilterAttribute.cs', import.meta.url),
+  new URL('../../Api.Admin/Filters/AdminRequestFilterAttribute.cs', import.meta.url).pathname,
   'utf8',
 );
 
@@ -17,8 +17,8 @@ test('admin database status endpoint requires the registered authentication filt
 });
 
 test('admin database status preserves DI-owned pooled context lifecycle', () => {
-  assert.doesNotMatch(controller, /using\s*\(\s*dbContext\s*\)/u);
-  assert.doesNotMatch(controller, /dbContext\.Dispose\s*\(/u);
+  assert.equal(/using\s*\(\s*dbContext\s*\)/u.test(controller), false);
+  assert.equal(/dbContext\.Dispose\s*\(/u.test(controller), false);
   assert.match(controller, /await\s+dbContext\.Database\.CanConnectAsync\(cancellationToken\)/u);
 });
 
