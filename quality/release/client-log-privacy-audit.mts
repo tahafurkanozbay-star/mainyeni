@@ -25,7 +25,7 @@ const SENSITIVE_RUNTIME_SOURCE = /\b(?:latestQuery|mapPoint|mapEvent\s*(?:\?\.|\
 const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door|query|path|params|payload|record|item|selection|coordinates|location|geometry|mapPoint|searchText|queryText|latestQuery)\b[^}]*\}/i;
 const SENSITIVE_NESTED_VALUE = /(?:[,:\[]\s*|\.\.\.\s*)(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}\]]|$)/i;
 
-function isRuntime(file: SourceFile): boolean {
+export function isClientRuntimeSource(file: SourceFile): boolean {
   return RUNTIME_PATH.test(file.repositoryPath)
     && (file.kind === 'typescript' || file.kind === 'javascript')
     && !TEST_PATH.test(file.repositoryPath);
@@ -54,7 +54,7 @@ function skipComment(text: string, start: number): number {
   return end === -1 ? text.length : end + 2;
 }
 
-function callArguments(text: string, open: number): readonly string[] | null {
+export function callArguments(text: string, open: number): readonly string[] | null {
   const args: string[] = [];
   let depth = 0;
   let start = open + 1;
@@ -401,16 +401,23 @@ function aliasPrivacyReason(
   return search(argument, 8, position);
 }
 
+export function createClientPrivacyClassifier(
+  source: string,
+): (argument: string, position: number) => string | null {
+  const masked = privacyMask(source);
+  const bindings = localBindings(source, masked);
+  return (argument, position) => aliasPrivacyReason(argument, position, masked, bindings);
+}
+
 export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSection<ClientLogPrivacySummary> {
   const start = performance.now();
-  const files = inventory.files.filter(isRuntime);
+  const files = inventory.files.filter(isClientRuntimeSource);
   const findings: Finding[] = [];
   let clientLogCalls = 0;
   let detectedUnsafeCalls = 0;
   for (const file of files) {
     const index = createLineIndex(file.text);
-    const masked = privacyMask(file.text);
-    const bindings = localBindings(file.text, masked);
+    const classify = createClientPrivacyClassifier(file.text);
     const fileFindingStart = findings.length;
     let flaggedInFile = 0;
     for (const call of findClientLogCalls(file.text)) {
@@ -420,7 +427,7 @@ export function auditClientLogPrivacy(inventory: RepositoryInventory): AuditSect
       // The third argument is the payload, not the logger or event name.
       const reason = call.arguments === null
         ? 'unreviewable-client-log-call'
-        : call.arguments.length >= 3 ? aliasPrivacyReason(call.arguments[2] ?? '', call.offset, masked, bindings) : null;
+        : call.arguments.length >= 3 ? classify(call.arguments[2] ?? '', call.offset) : null;
       if (!reason) continue;
       flaggedInFile += 1;
       detectedUnsafeCalls += 1;
