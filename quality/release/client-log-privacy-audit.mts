@@ -241,6 +241,71 @@ function initializerEnd(masked: string, start: number): number {
   return limit;
 }
 
+
+const PRIVATE_DESTRUCTURED_FIELD = /^(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)$/i;
+
+/**
+ * Track explicitly private fields renamed by shallow destructuring. Without
+ * this step, address: locationLabel is invisible at the logging call because
+ * the payload is passed under a harmless-looking local name.
+ *
+ * Only bounded local declarations are considered; imported and nested object
+ * destructuring are not inferred without a trustworthy AST.
+ */
+function destructuredBindings(text: string, masked: string): readonly AliasBinding[] {
+  const bindings: AliasBinding[] = [];
+  const objectPattern =
+    /\b(const|let|var)\s*\{([^{}]{1,768})\}\s*=\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g;
+  const arrays =
+    /\b(const|let|var)\s*\[([A-Za-z_$][\w$\s,]{0,192})\]\s*=\s*(coordinates|location|geometry|query|record)\b/g;
+  for (const declaration of masked.matchAll(objectPattern)) {
+    const statement = text.slice(declaration.index, declaration.index + declaration[0].length);
+    const parts = /\{([^{}]+)\}/.exec(statement)?.[1] ?? '';
+    const source = declaration[3] ?? '';
+    if (!source) continue;
+    const scope = scopeAt(masked, declaration.index);
+    for (const item of parts.split(',').slice(0, 24)) {
+      const field = /^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*(?:=.*)?$/.exec(item);
+      if (!field || !PRIVATE_DESTRUCTURED_FIELD.test(field[1] ?? '')) continue;
+      bindings.push({
+        identifier: field[2] ?? '',
+        expression: source + '.' + (field[1] ?? ''),
+        position: declaration.index,
+        scope,
+        mutable: declaration[1] !== 'const',
+      });
+      if (bindings.length >= 256) return bindings;
+    }
+    // A rest binding retains original source fields, not just safe counters.
+    const rest = /\.{3}\s*([A-Za-z_$][\w$]*)\s*$/.exec(parts);
+    if (rest && /^(?:query|record|payload|selection|params)$/i.test(source)) {
+      bindings.push({
+        identifier: rest[1] ?? '',
+        expression: source,
+        position: declaration.index,
+        scope,
+        mutable: declaration[1] !== 'const',
+      });
+    }
+  }
+  for (const declaration of masked.matchAll(arrays)) {
+    const values = (declaration[2] ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const source = declaration[3] ?? '';
+    const scope = scopeAt(masked, declaration.index);
+    for (const value of values.slice(0, 12)) {
+      bindings.push({
+        identifier: value,
+        expression: source,
+        position: declaration.index,
+        scope,
+        mutable: declaration[1] !== 'const',
+      });
+      if (bindings.length >= 256) return bindings;
+    }
+  }
+  return bindings;
+}
+
 function localBindings(text: string, masked: string): readonly AliasBinding[] {
   const declarations = /\b(?:(const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=(?!=|>)/g;
   const scopes: number[] = [];
@@ -275,7 +340,8 @@ function localBindings(text: string, masked: string): readonly AliasBinding[] {
       });
     }
   }
-  return bindings;
+  return [...bindings, ...destructuredBindings(text, masked)]
+    .sort((left, right) => left.position - right.position);
 }
 
 function scopeAt(masked: string, position: number): readonly number[] {
