@@ -37,6 +37,12 @@ export const normalizeServiceUrl = (url: unknown): string => {
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
       return '';
     }
+    // Never send operational GIS traffic in cleartext to external hosts.
+    // Loopback HTTP remains available only for explicit local development.
+    const loopback = parsed.hostname === 'localhost'
+      || parsed.hostname === '127.0.0.1'
+      || parsed.hostname === '[::1]';
+    if (parsed.protocol === 'http:' && !loopback) return '';
     parsed.hash = '';
     parsed.search = '';
     return parsed.toString().replace(/\/+$/, '');
