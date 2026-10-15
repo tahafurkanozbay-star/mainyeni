@@ -713,3 +713,12 @@
 - Current main 03d7f0de58ef1a59561596f053f4fc933dbfb778 Sketch SDK UX changes preserved with exact main blob SHAs; QA branch previous head 03ae8dd103e532e9e04c43ebe295d9c3cef3ac67 remains first parent, main second parent. No force push.
 - QA PR #496 remains draft, additions below 4000; do not merge. Fresh exact-head CI is mandatory; unresolved release artifact privacy, Admin network/responsive, privacy overflow, and GIS runtime-presence false positives are next priorities.
 - No new GIS provider, endpoint, dependency, telemetry, icon authority, or WMS/WFS integration from reconciliation.
+
+## 2026-10-15 — Deep QA / exact-head CI and privacy overflow checkpoint (13:48 Europe/Istanbul)
+- QA PR #496 remains OPEN/DRAFT at head `66758080f6ef316a1553d6f76a8e4f6085753c88`; main/merge-base `03d7f0de58ef1a59561596f053f4fc933dbfb778`, ahead 67 / behind 0, mergeable=true. GitHub base...head additions 948 / required 4000; DO NOT MERGE.
+- Eight exact-head workflow runs are completed+success, including Webclient Quality and Release QA. These results cover the existing head only, not any proposed fixes.
+- Privacy audit `quality/release/client-log-privacy-audit.mts` caps findings at eight per source file and sets `flaggedCalls` to emitted finding count, silently undercounting further sensitive calls. Proposed fix counts all unsafe calls while emitting at most eight detailed findings plus one payload-free overflow summary per file; source write was blocked by safety checks and is NOT committed.
+- Admin responsive regression tests for real Admin components, test/fixture exclusions and CSS classification were prepared, but GitHub source write was blocked. Existing source change is present; dedicated tests are not committed.
+- Release QA workflow still uploads the whole `qa-artifacts/release` directory including JSON reports; the CLI writes full JSON report and baseline. Treat artifact data minimization as open P1 until actual safe publication is committed and tested.
+- No new endpoint, provider, WMS/WFS, remote asset, dependency, credential, telemetry or icon resolver was added; no live 2D/3D GIS, JSON icon mapping, or browser accessibility verification in this round.
+- NEXT: apply privacy overflow and responsive regression fixes when write checks permit, audit artifact and PR-gate evidence publication, verify new exact-head CI, expand substantive QA scope; preserve current main lineage and other teams' changes. Never merge below 4000 meaningful additions or with critical release risks.
