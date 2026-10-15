@@ -222,9 +222,9 @@ export const fetchPlanAskiTypeCatalogDirect = async (
     count: features.length,
     samples: features.slice(0, 8).map((feature) => ({
       objectid: feature.properties.objectid as number,
-      adi: feature.properties.adi as string | null,
-      adres: feature.properties.adres as string | null,
-      durakNo: feature.properties.durakNo as string | null,
+      adi: (feature.properties.adi as string | null)?.slice(0, 240) ?? null,
+      adres: (feature.properties.adres as string | null)?.slice(0, 240) ?? null,
+      durakNo: (feature.properties.durakNo as string | null)?.slice(0, 240) ?? null,
     })),
   }));
   return { types };
