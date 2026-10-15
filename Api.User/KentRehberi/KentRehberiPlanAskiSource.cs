@@ -984,11 +984,12 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
                 objectId,
                 ReadNullableString(
                     properties,
-                    NameNames),
+                    NameNames,
+                    normalizeLineBreaks: true),
                 ReadNullableString(
                     properties,
                     AddressNames,
-                    normalizeAddressLineBreaks: true),
+                    normalizeLineBreaks: true),
                 ReadNullableString(
                     properties,
                     DistrictNames),
@@ -1306,7 +1307,7 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
     private static string? ReadNullableString(
         JsonElement source,
         IEnumerable<string> names,
-        bool normalizeAddressLineBreaks = false)
+        bool normalizeLineBreaks = false)
     {
         if (!TryGetProperty(
                 source,
@@ -1338,11 +1339,11 @@ public sealed class KentRehberiPlanAskiSource : IDisposable
         var normalized =
             value?.Trim();
 
-        if (normalizeAddressLineBreaks && normalized is not null)
+        if (normalizeLineBreaks && normalized is not null)
         {
-            // Official PlanASKI address text can contain embedded line
-            // breaks. Render them as spaces without relaxing the
-            // control-character guard for any other text field.
+            // Official PlanASKI names and addresses can contain embedded
+            // line breaks. Normalize only these two trusted field shapes;
+            // all other controls and other text fields stay fail-closed.
             normalized = normalized
                 .Replace("\r\n", " ", StringComparison.Ordinal)
                 .Replace('\r', ' ')

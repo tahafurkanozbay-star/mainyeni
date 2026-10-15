@@ -140,7 +140,77 @@ public sealed class KentRehberiPlanAskiSourceTests
     }
 
     [Theory]
-    [InlineData("""[{"objectId":201,"adi":"Kurum\nAdi","tur":0}]""")]
+    [InlineData(10, "\n")]
+    [InlineData(11, "\r\n")]
+    [InlineData(29, "\n")]
+    [InlineData(30, "\r")]
+    public async Task GetType_NormalizesNameLineBreaksForAffectedCategories(
+        int tur,
+        string lineBreak)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(
+            new[]
+            {
+                new
+                {
+                    objectId = 201,
+                    tur,
+                    adi = $"Kadin{lineBreak}Danisma",
+                    adres = "Merkez\nNo: 8"
+                }
+            });
+
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        var features = await fixture.Source.GetTypeAsync(
+            (short)tur,
+            CancellationToken.None);
+
+        var feature = Assert.Single(features);
+        Assert.Equal("Kadin Danisma", feature.Properties.Adi);
+        Assert.Equal("Merkez No: 8", feature.Properties.Adres);
+        Assert.Equal((short)tur, feature.Properties.Tur);
+    }
+
+    [Fact]
+    public async Task GetType_RejectsOversizedNameAfterNormalization()
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(
+            new[]
+            {
+                new
+                {
+                    objectId = 201,
+                    tur = 10,
+                    adi = new string('a', 4096) + "\n" + "extra"
+                }
+            });
+
+        using var fixture =
+            KentRehberiPlanAskiTestSupport
+                .CreateFixture(
+                    (_, _) =>
+                        Task.FromResult(
+                            KentRehberiPlanAskiTestSupport
+                                .JsonResponse(payload)));
+
+        await Assert.ThrowsAsync<KentRehberiPlanAskiProtocolException>(
+            () => fixture.Source.GetTypeAsync(
+                10,
+                CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("""[{"objectId":201,"adi":"Kurum\tAdi","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"adi":"Kurum\u0000Adi","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"ilce":"Ilce\nAdi","tur":0}]""")]
+    [InlineData("""[{"objectId":201,"mahalle":"Mahalle\nAdi","tur":0}]""")]
     [InlineData("""[{"objectId":201,"adres":"Sokak\tNo:12","tur":0}]""")]
     [InlineData("""[{"objectId":201,"adres":"Sokak\u0000No:12","tur":0}]""")]
     public async Task GetType_StillRejectsOtherTextControlCharacters(
