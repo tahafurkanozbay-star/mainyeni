@@ -3,6 +3,7 @@ import {
   enforceNetworkPolicy,
   hasSameOrigin,
   inferServiceType,
+  normalizeServiceUrl,
   isDisallowedServiceType,
   sanitizeCatalog,
   sanitizeService,
@@ -49,6 +50,37 @@ describe('serviceCatalog', () => {
     expect(safe.maxScale).toBe(0);
     expect(safe.url).not.toContain('token=');
     expect(safe.url).not.toContain('#');
+  });
+
+  test('rejects non-network service URL schemes, malformed URLs and embedded credentials', () => {
+    for (const url of [
+      'javascript:alert(1)',
+      'data:text/plain,not-a-service',
+      'blob:https://localhost/123',
+      'file:///etc/passwd',
+      'https://user:secret@gis.example.test/arcgis/MapServer',
+      'http://user:secret@gis.example.test/arcgis/MapServer',
+      'http://[invalid',
+    ]) {
+      expect(normalizeServiceUrl(url)).toBe('');
+      expect(() => sanitizeService({ id: 'unsafe', type: 'MapServer', url }))
+        .toThrow(/has no URL/i);
+      expect(sanitizeCatalog([{ id: 'unsafe', type: 'MapServer', url }])).toEqual([]);
+    }
+  });
+
+  test('preserves valid relative and HTTPS ArcGIS endpoints without URL secrets', () => {
+    const relative = normalizeServiceUrl('/arcgis/MapServer?token=secret#fragment');
+    expect(relative).not.toContain('token=');
+    expect(relative).not.toContain('#');
+    expect(relative).toContain('/arcgis/MapServer');
+    expect(normalizeServiceUrl('https://maps.example.test/arcgis/FeatureServer/0'))
+      .toBe('https://maps.example.test/arcgis/FeatureServer/0');
+    expect(sanitizeService({
+      id: 'arcgis',
+      type: 'FeatureServer',
+      url: 'https://maps.example.test/arcgis/FeatureServer/0',
+    }).id).toBe('arcgis');
   });
 
   test('drops invalid and disallowed services from runtime catalogs', () => {
