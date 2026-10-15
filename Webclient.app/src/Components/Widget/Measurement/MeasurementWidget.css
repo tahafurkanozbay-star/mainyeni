@@ -225,3 +225,43 @@
   height: auto;
   block-size: auto;
 }
+
+.measurement-widget__body { container: measurement-panel / inline-size; }
+.measurement-widget .experience-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.measurement-widget .experience-toolbar__button {
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 80px;
+  padding: 8px;
+  border-color: var(--exp-border);
+  color: var(--exp-text);
+  background: var(--exp-surface);
+}
+.measurement-widget .experience-toolbar__label {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.measurement-widget .experience-toolbar__button[aria-pressed='true'] {
+  border-color: var(--exp-accent);
+  color: var(--exp-accent);
+  background: var(--exp-accent-soft);
+}
+.measurement-widget__intro { font-size: 14px; }
+.measurement-widget__canvas-help { font-size: 12px; }
+.measurement-widget__canvas :is(.esri-widget, .esri-widget__heading, select, input) {
+  color: var(--exp-text);
+  background-color: var(--exp-surface);
+}
+.measurement-widget__canvas select { min-block-size: 44px; max-inline-size: 100%; border-color: var(--exp-border-strong); }
+@media (forced-colors: active) {
+  .measurement-widget .experience-toolbar__button[aria-pressed='true'] { color: HighlightText; background: Highlight; border-color: Highlight; }
+}
+.measurement-widget .experience-toolbar { align-items: stretch; }
+.measurement-experience .experience-status::before { display: none; }

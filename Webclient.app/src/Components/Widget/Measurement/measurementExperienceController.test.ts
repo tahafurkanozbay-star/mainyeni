@@ -13,6 +13,8 @@ import {
   type MeasurementRuntimeFactory,
 } from './measurementExperienceController';
 
+const stableTestView = { id: 'view' };
+
 const createState = (overrides: Partial<MeasurementState> = {}): MeasurementState => ({
   status: 'idle',
   activeTool: MEASUREMENT_TOOLS.NONE,
@@ -184,7 +186,7 @@ describe('measurementExperienceController', () => {
   it('toggles an already-active tool by clearing instead of reactivating it', async () => {
     const fake = createFakeRuntime();
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -202,7 +204,7 @@ describe('measurementExperienceController', () => {
   it('clears a measurement and synchronizes the runtime state', async () => {
     const fake = createFakeRuntime();
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -222,7 +224,7 @@ describe('measurementExperienceController', () => {
     const fake = createFakeRuntime();
     fake.clear.mockReturnValue(false);
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -253,20 +255,18 @@ describe('measurementExperienceController', () => {
     expect(runtimeFactory).not.toHaveBeenCalled();
   });
 
-  it('updates the runtime view and container when the current runtime remains usable', async () => {
+  it('refreshes the same runtime without rebinding it to a foreign view', async () => {
     let view: unknown = { id: 'first' };
     const fake = createFakeRuntime();
-    const controller = createMeasurementExperienceController({
-      getView: () => view,
-      container: 'measurementDiv',
-      runtimeFactory: () => fake.runtime,
-    });
+    const controller = createMeasurementExperienceController({ getView: () => view, container: 'measurementDiv', runtimeFactory: () => fake.runtime });
     await controller.open();
-
+    expect(controller.refreshView()).toBe(true);
+    expect(fake.setContainer).not.toHaveBeenCalled();
     view = { id: 'second' };
     expect(controller.refreshView()).toBe(true);
-    expect(fake.setView).toHaveBeenLastCalledWith(view);
-    expect(fake.setContainer).toHaveBeenLastCalledWith('measurementDiv');
+    expect(fake.destroy).toHaveBeenCalledOnce();
+    expect(fake.setView).not.toHaveBeenCalledWith(view);
+    expect(controller.getSnapshot()).toMatchObject({ activeTool: MEASUREMENT_TOOLS.NONE, phase: 'idle', viewReady: true });
   });
 
   it('destroys and replaces a runtime when a different view reaches an operation', async () => {
@@ -302,7 +302,7 @@ describe('measurementExperienceController', () => {
       .mockImplementationOnce(() => firstOperation.promise)
       .mockImplementationOnce(() => secondOperation.promise);
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -325,7 +325,7 @@ describe('measurementExperienceController', () => {
     const fake = createFakeRuntime();
     fake.setTool.mockImplementationOnce(() => operation.promise);
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -345,7 +345,7 @@ describe('measurementExperienceController', () => {
     fake.ensureWidget.mockRejectedValueOnce(Object.assign(new Error('sdk failed'), { code: 'SDK_LOAD_FAILED' }));
     const diagnostics = vi.fn();
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
       onDiagnostic: diagnostics,
@@ -378,7 +378,7 @@ describe('measurementExperienceController', () => {
         return { activeTool: MEASUREMENT_TOOLS.NONE };
       });
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
       modelOptions: { maxRetries: 2 },
@@ -397,7 +397,7 @@ describe('measurementExperienceController', () => {
     const fake = createFakeRuntime();
     fake.ensureWidget.mockRejectedValue(new Error('always fails'));
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
       modelOptions: { maxRetries: 1 },
@@ -418,7 +418,7 @@ describe('measurementExperienceController', () => {
       return fake.runtime;
     };
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory,
     });
@@ -441,7 +441,7 @@ describe('measurementExperienceController', () => {
   it('contains a failing diagnostic reporter', async () => {
     const fake = createFakeRuntime();
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
       onDiagnostic() {
@@ -493,7 +493,7 @@ describe('measurementExperienceController', () => {
     const fake = createFakeRuntime();
     const observer = vi.fn();
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -513,7 +513,7 @@ describe('measurementExperienceController', () => {
   it('disposes runtime, observers and future operations deterministically', async () => {
     const fake = createFakeRuntime();
     const controller = createMeasurementExperienceController({
-      getView: () => ({ id: 'view' }),
+      getView: () => stableTestView,
       container: 'measurementDiv',
       runtimeFactory: () => fake.runtime,
     });
@@ -531,4 +531,50 @@ describe('measurementExperienceController', () => {
     expect(controller.clear()).toBe(false);
     expect(controller.getSnapshot().revision).toBe(revision);
   });
+  it('treats an unready or destroyed SDK view as unavailable', async () => {
+    const view = { ready: false, destroyed: false };
+    const factory = vi.fn<MeasurementRuntimeFactory>();
+    const controller = createMeasurementExperienceController({ getView: () => view, container: 'host', runtimeFactory: factory });
+    expect(await controller.open()).toBe(false); expect(factory).not.toHaveBeenCalled();
+    view.ready = true; expect(controller.refreshView()).toBe(true);
+    view.destroyed = true; expect(controller.refreshView()).toBe(false);
+  });
+
+  it('invalidates an initializing runtime when its map disappears and ignores its late completion', async () => {
+    let view: unknown = { id: 'first' }; const pending = deferred<MeasurementWidgetLike | null>();
+    const first = createFakeRuntime(); first.ensureWidget.mockReturnValue(pending.promise);
+    const controller = createMeasurementExperienceController({ getView: () => view, container: 'host', runtimeFactory: () => first.runtime });
+    const opening = controller.open(); view = null; controller.refreshView();
+    pending.resolve({}); expect(await opening).toBe(false);
+    expect(first.destroy).toHaveBeenCalledOnce();
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'waiting-map', busy: false, activeTool: MEASUREMENT_TOOLS.NONE });
+  });
+
+  it('rejects stale view completion even before a refresh notification arrives', async () => {
+    let view: unknown = { id: 'first' }; const pending = deferred<MeasurementWidgetLike | null>();
+    const first = createFakeRuntime(); first.setTool.mockReturnValue(pending.promise);
+    const controller = createMeasurementExperienceController({ getView: () => view, container: 'host', runtimeFactory: () => first.runtime });
+    const selecting = controller.selectTool(MEASUREMENT_TOOLS.AREA); view = { id: 'second' };
+    first.emit(createState({ status: 'ready', activeTool: MEASUREMENT_TOOLS.AREA })); pending.resolve({});
+    expect(await selecting).toBe(false); expect(first.destroy).toHaveBeenCalledOnce();
+    expect(controller.getSnapshot()).toMatchObject({ activeTool: MEASUREMENT_TOOLS.NONE, phase: 'idle' });
+  });
+
+  it('contains synchronous runtime factory failures in the recoverable session', async () => {
+    const view = { id: 'map' };
+    const stable = createMeasurementExperienceController({ getView: () => view, container: 'host', runtimeFactory: () => { throw new Error('constructor unavailable'); } });
+    expect(await stable.open()).toBe(false);
+    expect(stable.getSnapshot()).toMatchObject({ phase: 'error', canRetry: true });
+  });
+
+  it('finishes detaching an old runtime even when its destruction fails', async () => {
+    let view: unknown = { id: 'first' }; const first = createFakeRuntime();
+    first.destroy.mockImplementation(() => { throw new Error('cleanup failed'); });
+    const controller = createMeasurementExperienceController({ getView: () => view, container: 'host', runtimeFactory: () => first.runtime });
+    await controller.open(); view = { id: 'second' };
+    expect(controller.refreshView()).toBe(true);
+    expect(controller.getSnapshot()).toMatchObject({ activeTool: MEASUREMENT_TOOLS.NONE, phase: 'idle' });
+    expect(controller.getDiagnostics().lastFailurePhase).toBe('dispose');
+  });
+
 });

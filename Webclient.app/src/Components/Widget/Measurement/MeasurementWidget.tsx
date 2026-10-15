@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -21,6 +22,9 @@ import {
   type ExperienceToolbarItem,
 } from '../../Common/ExperienceToolbar';
 import MapManager from '../../../Store/Managers/MapManager';
+import Store from '../../../Store/Store';
+import { loadArcgisModules } from '../../../gis-engine/arcgisModuleRuntime';
+import type { ArcgisAccessorWatch, ArcgisReactiveHandle } from '../../../gis-engine/arcgisReactiveRuntime';
 import {
   MEASUREMENT_TOOLS,
   type MeasurementTool,
@@ -73,14 +77,27 @@ export const MeasurementWidget = forwardRef<
   MeasurementWindowHandle,
   MeasurementWidgetProps
 >(({ id, windowManager }, ref): ReactNode => {
+  const visible = windowManager.IsVisible(id);
   const rootRef = useRef<HTMLElement>(null);
   const sdkHostParentRef = useRef<HTMLDivElement | null>(null);
   const sdkHostRef = useRef<OwnedArcgisWidgetHost | null>(null);
   const mountedRef = useRef(false);
+  const retryFocusRef = useRef(false);
   const focusLifecycleRef = useRef<ManagedWindowFocusLifecycle | null>(null);
+  const ensureSdkHost = useCallback((): void => {
+    const parent = sdkHostParentRef.current;
+    if (!parent) return;
+    const host = sdkHostRef.current;
+    if (host?.container.id === `${id}-measurement-sdk` && host.container.parentElement === parent) return;
+    host?.dispose();
+    sdkHostRef.current = createArcgisWidgetHost(parent, `${id}-measurement-sdk`);
+  }, [id]);
   const controller = useMemo<MeasurementExperienceController>(() => createMeasurementExperienceController({
     getView: () => MapManager.GetMapView?.() ?? null,
     container: `${id}-measurement-sdk`,
+    onRuntimeDetached: () => {
+      if (mountedRef.current && currentControllerRef.current === controller) ensureSdkHost();
+    },
     modelOptions: {
       maxRetries: 3,
       historyLimit: 12,
@@ -97,7 +114,7 @@ export const MeasurementWidget = forwardRef<
         failureKind: diagnostic.failureKind,
       });
     },
-  }), [id]);
+  }), [ensureSdkHost, id]);
   const currentControllerRef = useRef(controller);
   currentControllerRef.current = controller;
   const snapshot = useSyncExternalStore(
@@ -121,6 +138,9 @@ export const MeasurementWidget = forwardRef<
   }, [controller]);
 
   const retryMeasurement = useCallback((): void => {
+    const active = document.activeElement;
+    retryFocusRef.current = active instanceof HTMLElement && Boolean(rootRef.current?.contains(active))
+      && active.matches('.measurement-experience__retry');
     void controller.retry();
   }, [controller]);
 
@@ -138,6 +158,7 @@ export const MeasurementWidget = forwardRef<
       void controller.open();
     },
     OnClose: () => {
+      retryFocusRef.current = false;
       controller.close();
       getFocusLifecycle()?.close();
     },
@@ -145,13 +166,7 @@ export const MeasurementWidget = forwardRef<
 
   useEffect(() => {
     mountedRef.current = true;
-    if (sdkHostRef.current?.container.id !== `${id}-measurement-sdk`) {
-      sdkHostRef.current?.dispose();
-      sdkHostRef.current = null;
-    }
-    if (!sdkHostRef.current && sdkHostParentRef.current) {
-      sdkHostRef.current = createArcgisWidgetHost(sdkHostParentRef.current, `${id}-measurement-sdk`);
-    }
+    ensureSdkHost();
     windowManager.RegisterWindow(ref);
     controller.refreshView();
     const host = sdkHostRef.current;
@@ -167,11 +182,55 @@ export const MeasurementWidget = forwardRef<
       queueMicrotask(() => {
         if (mountedRef.current && currentControllerRef.current === controller) return;
         controller.dispose();
-        host?.dispose();
-        if (sdkHostRef.current === host) sdkHostRef.current = null;
+        const ownedHost = currentControllerRef.current === controller ? sdkHostRef.current : host;
+        ownedHost?.dispose();
+        if (sdkHostRef.current === ownedHost) sdkHostRef.current = null;
       });
     };
-  }, [controller, id, ref, windowManager]);
+  }, [controller, ensureSdkHost, id, ref, windowManager]);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    let disposed = false;
+    let observedView: unknown;
+    let watcher: ArcgisAccessorWatch | null = null;
+    let handles: ArcgisReactiveHandle[] = [];
+    const release = (): void => { handles.forEach(handle => handle.remove?.()); handles = []; };
+    const synchronize = (): void => {
+      if (disposed) return;
+      const view = MapManager.GetMapView?.() ?? null;
+      if (view !== observedView) {
+        release(); observedView = view;
+        if (view && watcher) {
+          handles.push(watcher(view, 'ready', synchronize), watcher(view, 'destroyed', synchronize));
+        }
+      }
+      controller.refreshView();
+    };
+    const unsubscribe = Store.subscribe(synchronize);
+    void loadArcgisModules<readonly [{ watch: ArcgisAccessorWatch }]>(['esri/core/watchUtils']).then(([reactive]) => {
+      if (disposed) return;
+      watcher = reactive.watch; observedView = undefined; synchronize();
+    }).catch(() => {
+      if (disposed) return;
+      // Store-based view replacement still works if the optional watcher fails.
+      try { runtimeDiagnostics.record('experience.measurement.diagnostic', { phase: 'view', code: 'MEASUREMENT_VIEW_WATCH_UNAVAILABLE', failureKind: 'LoadError' }); }
+      catch { console.warn('Ölçüm görünüm izleyicisi raporlanamadı.'); }
+    });
+    return () => { disposed = true; unsubscribe(); release(); };
+  }, [controller, visible]);
+
+  useLayoutEffect(() => {
+    if (!retryFocusRef.current || snapshot.busy) return;
+    retryFocusRef.current = false;
+    if (!visible || windowManager.IsMinimized(id)) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body && active.isConnected) return;
+    const target = rootRef.current?.querySelector<HTMLButtonElement>(
+      snapshot.phase === 'error' ? '.measurement-experience__retry' : '[data-roving-focus-id]:not(:disabled)',
+    );
+    (target ?? rootRef.current)?.focus();
+  }, [id, snapshot.busy, snapshot.phase, visible, windowManager]);
 
   const unavailable = snapshot.busy || !snapshot.viewReady || snapshot.phase === 'destroyed';
   const toolbarItems: readonly ExperienceToolbarItem[] = [
@@ -204,9 +263,11 @@ export const MeasurementWidget = forwardRef<
     <section
       ref={rootRef}
       className="common-query-window common-query-window-right measurement-widget"
-      style={{ visibility: windowManager.IsVisible(id) ? 'visible' : 'hidden' }}
-      aria-hidden={!windowManager.IsVisible(id)}
+      style={{ visibility: visible ? 'visible' : 'hidden' }}
+      aria-hidden={!visible}
       aria-labelledby={`${id}-title`}
+      role="region"
+      tabIndex={-1}
       aria-busy={snapshot.busy || undefined}
       data-measurement-phase={snapshot.phase}
       data-measurement-tool={snapshot.activeTool || 'none'}
@@ -250,12 +311,12 @@ export const MeasurementWidget = forwardRef<
         <div
           ref={sdkHostParentRef}
           className="measurement-widget__canvas"
-          aria-label="ArcGIS ölçüm denetimi"
+          aria-label="Ölçüm sonucu ve birimler"
           aria-busy={snapshot.busy || undefined}
           aria-describedby={`${id}-canvas-help`}
         />
         <p id={`${id}-canvas-help`} className="measurement-widget__canvas-help">
-          Ölçüm aracını seçtikten sonra harita üzerinde gerekli noktaları işaretleyin. Sonuçlar ArcGIS ölçüm denetiminde gösterilir.
+          Ölçüm aracını seçtikten sonra harita üzerinde gerekli noktaları işaretleyin. Sonucu ve ölçü birimini ölçüm alanından takip edebilirsiniz.
         </p>
       </div>
     </section>
