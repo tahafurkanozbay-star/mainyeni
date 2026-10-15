@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -13,8 +14,10 @@ import {
   getInitialRovingIndex,
   reconcileRovingIndex,
   resolveRovingFocusMove,
+  resolveRovingTypeaheadMove,
   type RovingFocusItem,
 } from '../../experience/rovingFocusRuntime';
+import { getDeepActiveElement } from '../../experience/focusCandidate';
 import './ExperiencePrimitives.css';
 
 export type ExperienceMenuDismissReason = 'escape' | 'tab';
@@ -74,8 +77,11 @@ export function ExperienceMenu({
   loop = true,
   onDismiss,
 }: ExperienceMenuProps): ReactNode {
+  const generatedId = useId();
+  const descriptionIdPrefix = id ?? `experience-menu-${generatedId}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const previousItemsRef = useRef<readonly RovingFocusItem[]>([]);
+  const typeaheadRef = useRef({ sequence: '', timestamp: 0 });
   const rovingItems = useMemo(() => toRovingItems(items), [items]);
   const [activeIndex, setActiveIndex] = useState(() => getInitialRovingIndex(rovingItems));
 
@@ -94,8 +100,16 @@ export function ExperienceMenu({
     const nextIndex = findEnabledIndex(items, activeIndex);
     if (nextIndex < 0) return undefined;
     setActiveIndex(nextIndex);
+    const focusDocument = rootRef.current?.ownerDocument;
+    const focusBeforeSchedule = focusDocument ? getDeepActiveElement(focusDocument) : null;
     queueMicrotask(() => {
       if (cancelled) return;
+      // A menu opening must not override a later user-initiated focus move.
+      // A detached opener may legitimately fall back to document.body.
+      const currentFocus = focusDocument ? getDeepActiveElement(focusDocument) : null;
+      if (currentFocus !== focusBeforeSchedule && !(
+        currentFocus === focusDocument?.body && focusBeforeSchedule && !focusBeforeSchedule.isConnected
+      )) return;
       const targetId = items[nextIndex]?.id;
       if (targetId) focusRovingTarget(rootRef.current, targetId);
     });
@@ -106,10 +120,16 @@ export function ExperienceMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocusWhenVisible, focusRequestKey, visible]);
 
+  useEffect(() => {
+    typeaheadRef.current = { sequence: '', timestamp: 0 };
+  }, [visible, focusRequestKey]);
+
   const tabIndices = createRovingTabIndex(rovingItems, activeIndex);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Escape') {
+    if (!visible || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // OS/browser modified Escape shortcuts belong to the platform, not the menu.
+    if (event.key === 'Escape' && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       onDismiss?.('escape');
       return;
@@ -119,15 +139,43 @@ export function ExperienceMenu({
       return;
     }
 
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent.isComposing) return;
+
     const move = resolveRovingFocusMove(rovingItems, activeIndex, event.key, {
       orientation: 'vertical',
       direction: 'ltr',
       loop,
     });
-    if (!move) return;
+    if (move) {
+      typeaheadRef.current = { sequence: '', timestamp: 0 };
+      event.preventDefault();
+      setActiveIndex(move.index);
+      focusRovingTarget(rootRef.current, move.id);
+      return;
+    }
+
+    // Keep printable-character navigation separate from native Space/Enter
+    // activation, editor shortcuts and in-progress IME composition.
+    if (event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing
+      || event.key.length !== 1 || event.key.trim() === '') return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable]')) return;
+
+    const timestamp = Date.now();
+    const previous = typeaheadRef.current;
+    const sequence = timestamp - previous.timestamp < 700
+      ? previous.sequence + event.key
+      : event.key;
+    const match = resolveRovingTypeaheadMove(items, activeIndex, sequence);
+    const resolved = match ?? resolveRovingTypeaheadMove(items, activeIndex, event.key);
+    typeaheadRef.current = {
+      sequence: match ? sequence : event.key,
+      timestamp,
+    };
+    if (!resolved) return;
     event.preventDefault();
-    setActiveIndex(move.index);
-    focusRovingTarget(rootRef.current, move.id);
+    setActiveIndex(resolved.index);
+    focusRovingTarget(rootRef.current, resolved.id);
   };
 
   return (
@@ -155,7 +203,7 @@ export function ExperienceMenu({
             tabIndex={visible ? (tabIndices[index] ?? -1) : -1}
             disabled={item.disabled}
             aria-label={item.label}
-            aria-describedby={item.description ? `${id ?? 'experience-menu'}-${item.id}-description` : undefined}
+            aria-describedby={item.description ? `${descriptionIdPrefix}-${item.id}-description` : undefined}
             onFocus={() => setActiveIndex(index)}
             onClick={item.onActivate}
           >
@@ -166,7 +214,7 @@ export function ExperienceMenu({
               <span className="experience-menu__label">{item.label}</span>
               {item.description ? (
                 <span
-                  id={`${id ?? 'experience-menu'}-${item.id}-description`}
+                  id={`${descriptionIdPrefix}-${item.id}-description`}
                   className="experience-menu__description"
                 >
                   {item.description}

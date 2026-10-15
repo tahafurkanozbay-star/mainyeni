@@ -174,6 +174,53 @@ describe('shared service result window ownership and usability', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(70);
   });
 
+
+  it('keeps duplicate service identifiers distinct in React and pending-action UI', async () => {
+    const { ref, Query } = setup();
+    const repeated = response(3);
+    repeated.data?.forEach((feature) => {
+      if (feature.attr) feature.attr.objectid = 7;
+    });
+    Query.mockResolvedValue(repeated);
+    await act(async () => { await ref.current!.OnShow(); });
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.getAttribute('aria-posinset'))).toEqual(['1', '2', '3']);
+    expect(items.every((item) => item.getAttribute('aria-setsize') === '3')).toBe(true);
+
+    const late = deferred<FastAccessServiceResult>();
+    Query.mockReturnValueOnce(late.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' }));
+    expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toHaveTextContent('Açılıyor…');
+    expect(screen.getByRole('status', { name: 'Hizmet işlemi' })).toHaveTextContent('Merkez 1 için harita konumu hazırlanıyor…');
+    expect(screen.getByRole('button', { name: 'Merkez 2 — Haritada göster' })).toHaveTextContent('Haritada göster');
+    expect(screen.getByRole('button', { name: 'Merkez 2 — Haritada göster' })).toBeDisabled();
+    await act(async () => { late.resolve({ type: 10, data: [{ geometry: { latitude: 39.9, longitude: 32.8 } }] }); });
+    expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toBeEnabled();
+    expect(screen.getByRole('status', { name: 'Hizmet işlemi' })).toBeEmptyDOMElement();
+  });
+
+  it('reports the remaining count inside the current 200-record group', async () => {
+    const { ref, Query } = setup();
+    Query.mockResolvedValue(response(401));
+    await act(async () => { await ref.current!.OnShow(); });
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (140 kaldı)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (140 kaldı)' }));
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (80 kaldı)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (80 kaldı)' }));
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (20 kaldı)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (20 kaldı)' }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    expect(screen.getByRole('button', { name: 'Sonraki sonuçlara geç' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki sonuçlara geç' }));
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(60);
+    expect(items[0]).toHaveAttribute('aria-posinset', '201');
+    expect(items[0]).toHaveAttribute('aria-setsize', '401');
+    expect(screen.getByRole('button', { name: 'Daha fazla sonuç göster (140 kaldı)' })).toBeInTheDocument();
+    expect(Query).toHaveBeenCalledOnce();
+  });
+
   it('presents missing configuration without exposing the internal service key', async () => {
     const { ref, Query } = setup();
     Query.mockRejectedValue(new Error('Servis bulunamadı (YeniMerkezQueryUrl)'));
@@ -194,7 +241,11 @@ describe('shared service result window ownership and usability', () => {
     const schedule = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(77);
     const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
     try {
-      fireEvent.click(screen.getByRole('button', { name: 'Daha fazla sonuç göster (10 kaldı)' }));
+      const reveal = screen.getByRole('button', { name: 'Daha fazla sonuç göster (10 kaldı)' });
+      // A keyboard-owned action must schedule the paging frame before cleanup.
+      reveal.focus();
+      fireEvent.click(reveal, { detail: 0 });
+      expect(schedule).toHaveBeenCalledWith(expect.any(Function));
       unmount();
       expect(cancel).toHaveBeenCalledWith(77);
     } finally { schedule.mockRestore(); cancel.mockRestore(); }
@@ -230,4 +281,62 @@ describe('shared service result window ownership and usability', () => {
       expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
     } finally { vi.useRealTimers(); }
   });
+  it('disposes a late result layer instead of attaching it to a retired 2D/3D map', async () => {
+    const late = deferred<{ destroy: ReturnType<typeof vi.fn> }>();
+    vi.mocked(createKentRehberiGeoJsonLayer).mockReturnValue(late.promise);
+    const { ref, map, goTo } = setup();
+    let pending!: Promise<void>;
+    await act(async () => { pending = ref.current!.OnShow() as Promise<void>; await Promise.resolve(); });
+    const replacementMap = { add: vi.fn(), remove: vi.fn() };
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: replacementMap, zoom: 12, goTo: vi.fn() });
+    const layer = { destroy: vi.fn() };
+    await act(async () => { late.resolve(layer); await pending; });
+    expect(map.add).not.toHaveBeenCalled();
+    expect(replacementMap.add).not.toHaveBeenCalled();
+    expect(goTo).not.toHaveBeenCalled();
+    expect(layer.destroy).toHaveBeenCalledOnce();
+    expect(screen.getByRole('heading', { name: 'Merkez 1' })).toBeInTheDocument();
+  });
+
+  it('does not move a retired map when its layer extent resolves after view replacement', async () => {
+    const extent = deferred<{ extent: { expand: () => unknown } }>();
+    const layer = { queryExtent: () => extent.promise, destroy: vi.fn() };
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue(layer);
+    const { ref, map, goTo } = setup();
+    let pending!: Promise<void>;
+    await act(async () => { pending = ref.current!.OnShow() as Promise<void>; await Promise.resolve(); await Promise.resolve(); });
+    expect(map.add).toHaveBeenCalledWith(layer);
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: { add: vi.fn(), remove: vi.fn() }, zoom: 12, goTo: vi.fn() });
+    await act(async () => { extent.resolve({ extent: { expand: () => ({}) } }); await pending; });
+    expect(goTo).not.toHaveBeenCalled();
+  });
+
+  it('releases the previous map layer and adopts the current view on a subsequent query', async () => {
+    const previousLayer = { destroy: vi.fn(), queryExtent: vi.fn(async () => ({ extent: null })) };
+    const nextLayer = { destroy: vi.fn(), queryExtent: vi.fn(async () => ({ extent: null })) };
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValueOnce(previousLayer).mockResolvedValueOnce(nextLayer);
+    const { ref, map } = setup();
+    await act(async () => { await ref.current!.OnShow(); });
+    expect(map.add).toHaveBeenCalledWith(previousLayer);
+    const replacementMap = { add: vi.fn(), remove: vi.fn() };
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: replacementMap, zoom: 12, goTo: vi.fn() });
+    await act(async () => { await ref.current!.OnShow(); });
+    expect(map.remove).toHaveBeenCalledWith(previousLayer);
+    expect(previousLayer.destroy).toHaveBeenCalledOnce();
+    expect(replacementMap.add).toHaveBeenCalledWith(nextLayer);
+    expect(nextLayer.destroy).not.toHaveBeenCalled();
+  });
+
+  it('ignores late map detail navigation after a 2D/3D view replacement', async () => {
+    const { ref, Query } = setup();
+    await act(async () => { await ref.current!.OnShow(); });
+    const late = deferred<FastAccessServiceResult>();
+    Query.mockReturnValueOnce(late.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' }));
+    vi.mocked(MapManager.GetMapView).mockReturnValue({ map: { add: vi.fn(), remove: vi.fn() }, zoom: 12, goTo: vi.fn() });
+    await act(async () => { late.resolve({ type: 10, data: [{ geometry: { latitude: 39.9, longitude: 32.8 } }] }); });
+    expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Merkez 1 — Haritada göster' })).toBeEnabled();
+  });
+
 });

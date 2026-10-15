@@ -79,3 +79,57 @@ describe('arcgisModuleRuntime', () => {
       .toThrow('ArcGIS module transport must provide a module batch loader.');
   });
 });
+
+describe('cancelled module batches retain cache ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); resetArcgisModuleRuntimeCache(); setArcgisModuleTransport(testTransport);
+  });
+
+  it('releases a stalled cache slot on cancellation and allows retry', async () => {
+    loadModulesMock.mockReturnValueOnce(new Promise(() => undefined)).mockResolvedValueOnce(['ready']);
+    const lifetime = new AbortController();
+    const pending = loadArcgisModule('esri/views/SceneView', { signal: lifetime.signal });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    lifetime.abort(); await rejected;
+    await expect(loadArcgisModule('esri/views/SceneView')).resolves.toBe('ready');
+    expect(loadModulesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a failed abandoned batch evict a successful retry', async () => {
+    let reject!: (reason: unknown) => void;
+    loadModulesMock.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; })).mockResolvedValueOnce(['ready']);
+    const lifetime = new AbortController();
+    const pending = loadArcgisModule('esri/views/SceneView', { signal: lifetime.signal });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    lifetime.abort(); await rejected;
+    await expect(loadArcgisModule('esri/views/SceneView')).resolves.toBe('ready');
+    reject(new Error('abandoned transport failed'));
+    await Promise.resolve(); await Promise.resolve();
+    await expect(loadArcgisModule('esri/views/SceneView')).resolves.toBe('ready');
+    expect(loadModulesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a second cancelled subscriber evict the newer cache slot', async () => {
+    loadModulesMock.mockReturnValueOnce(new Promise(() => undefined)).mockResolvedValueOnce(['ready']);
+    const first = new AbortController(); const second = new AbortController();
+    const a = loadArcgisModule('esri/views/SceneView', { signal: first.signal });
+    const b = loadArcgisModule('esri/views/SceneView', { signal: second.signal });
+    const rejectedA = expect(a).rejects.toMatchObject({ name: 'AbortError' });
+    const rejectedB = expect(b).rejects.toMatchObject({ name: 'AbortError' });
+    first.abort(); await rejectedA;
+    await expect(loadArcgisModule('esri/views/SceneView')).resolves.toBe('ready');
+    second.abort(); await rejectedB;
+    await expect(loadArcgisModule('esri/views/SceneView')).resolves.toBe('ready');
+    expect(loadModulesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('cleans its abort listener after success and leaves the ready cache reusable', async () => {
+    loadModulesMock.mockResolvedValue(['ready']);
+    const lifetime = new AbortController(); const remove = vi.spyOn(lifetime.signal, 'removeEventListener');
+    await expect(loadArcgisModule('esri/views/SceneView', { signal: lifetime.signal })).resolves.toBe('ready');
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    lifetime.abort();
+    await expect(loadArcgisModule('esri/views/SceneView')).resolves.toBe('ready');
+    expect(loadModulesMock).toHaveBeenCalledOnce();
+  });
+});

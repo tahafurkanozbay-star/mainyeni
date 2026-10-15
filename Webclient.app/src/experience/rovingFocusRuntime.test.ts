@@ -6,6 +6,7 @@ import {
   getInitialRovingIndex,
   reconcileRovingIndex,
   resolveRovingFocusMove,
+  resolveRovingTypeaheadMove,
 } from './rovingFocusRuntime';
 
 const items = [
@@ -102,6 +103,28 @@ describe('rovingFocusRuntime', () => {
     expect(reconcileRovingIndex(items, next, 2)).toBe(1);
   });
 
+  it('normalizes Turkish labels for typeahead and skips unavailable entries', () => {
+    const entries = [
+      { id: 'a', label: 'Işık Parkı' },
+      { id: 'disabled', label: 'İzmir', disabled: true },
+      { id: 'b', label: 'Çevre' },
+    ];
+    expect(resolveRovingTypeaheadMove(entries, 2, 'isik')).toEqual({ index: 0, id: 'a' });
+    expect(resolveRovingTypeaheadMove(entries, 0, 'ce')).toEqual({ index: 2, id: 'b' });
+    expect(resolveRovingTypeaheadMove(entries, 0, 'iz')).toBeNull();
+  });
+
+  it('cycles repeated letters and safely ignores empty lists', () => {
+    const entries = [
+      { id: 'a', label: 'Bilgi' },
+      { id: 'b', label: 'Bölge' },
+      { id: 'c', label: 'Başlangıç' },
+    ];
+    expect(resolveRovingTypeaheadMove(entries, 0, 'b')).toEqual({ index: 1, id: 'b' });
+    expect(resolveRovingTypeaheadMove(entries, 1, 'bb')).toEqual({ index: 2, id: 'c' });
+    expect(resolveRovingTypeaheadMove([], 0, 'b')).toBeNull();
+  });
+
   it('focuses a matching available target without selector interpolation', () => {
     const root = document.createElement('div');
     const button = document.createElement('button');
@@ -114,6 +137,46 @@ describe('rovingFocusRuntime', () => {
     root.remove();
   });
 
+
+  it('focuses an enabled menu target through nested open ShadowRoots', () => {
+    const host = document.createElement('div');
+    const outer = host.attachShadow({ mode: 'open' });
+    const innerHost = document.createElement('div');
+    const inner = innerHost.attachShadow({ mode: 'open' });
+    const button = document.createElement('button');
+    button.dataset.rovingFocusId = 'nested-menu';
+    inner.append(button);
+    outer.append(innerHost);
+    document.body.append(host);
+    try {
+      expect(focusRovingTarget(inner, 'nested-menu')).toBe(true);
+      expect(document.activeElement).toBe(host);
+      expect(outer.activeElement).toBe(innerHost);
+      expect(inner.activeElement).toBe(button);
+    } finally { host.remove(); }
+  });
+
+  it('rejects hidden and aria-disabled shadow hosts without stealing focus', () => {
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    const button = document.createElement('button');
+    button.dataset.rovingFocusId = 'nested-menu';
+    root.append(button);
+    const outside = document.createElement('button');
+    document.body.append(host, outside);
+    try {
+      outside.focus();
+      host.style.display = 'none';
+      expect(focusRovingTarget(root, 'nested-menu')).toBe(false);
+      host.style.display = '';
+      host.setAttribute('aria-disabled', 'true');
+      expect(focusRovingTarget(root, 'nested-menu')).toBe(false);
+      host.removeAttribute('aria-disabled');
+      expect(outside).toHaveFocus();
+      expect(focusRovingTarget(root, 'nested-menu')).toBe(true);
+    } finally { host.remove(); outside.remove(); }
+  });
+
   it('does not focus disabled targets', () => {
     const root = document.createElement('div');
     const button = document.createElement('button');
@@ -124,5 +187,30 @@ describe('rovingFocusRuntime', () => {
 
     expect(focusRovingTarget(root, 'disabled')).toBe(false);
     root.remove();
+  });
+
+  it('refuses to focus a target inside hidden, inert or disabled ancestors', () => {
+    const root = document.createElement('div');
+    const fieldset = document.createElement('fieldset');
+    const button = document.createElement('button');
+    button.dataset.rovingFocusId = 'map-control';
+    fieldset.append(button);
+    root.append(fieldset);
+    document.body.append(root);
+    try {
+      root.setAttribute('aria-hidden', 'true');
+      expect(focusRovingTarget(root, 'map-control')).toBe(false);
+      root.removeAttribute('aria-hidden');
+      root.setAttribute('inert', '');
+      expect(focusRovingTarget(root, 'map-control')).toBe(false);
+      root.removeAttribute('inert');
+      fieldset.disabled = true;
+      expect(focusRovingTarget(root, 'map-control')).toBe(false);
+      fieldset.disabled = false;
+      expect(focusRovingTarget(root, 'map-control')).toBe(true);
+      expect(document.activeElement).toBe(button);
+    } finally {
+      root.remove();
+    }
   });
 });

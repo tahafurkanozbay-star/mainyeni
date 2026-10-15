@@ -24,7 +24,15 @@ import {
 } from '../../../data-services/kentRehberiGeoJsonLayer';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
+import { scheduleOwnedResultFocus } from './ResultPageFocus';
 import { ServiceWindowActions } from './ServiceWindowActions';
+import {
+  QUERY_RESULT_PAGE_POLICY,
+  matchesQueryResultTerms,
+  normalizeQueryResultPageSize,
+  normalizeQueryResultText,
+  queryResultSearchTerms,
+} from './QueryResultPaging';
 import {
   buildGoogleDirectionsUrl,
   createLatestRequestGate,
@@ -35,7 +43,7 @@ import {
 } from './QueryInteractionRuntime';
 import './ManagedFastAccessQueryWindow.css';
 
-const DEFAULT_PAGE_SIZE = 60;
+const DEFAULT_PAGE_SIZE = QUERY_RESULT_PAGE_POLICY.defaultPageSize;
 const SERVICE_WINDOW_POLICY = Object.freeze({ layerTimeoutMs: 15_000, actionTimeoutMs: 15_000 });
 const DEFAULT_QUERY: Readonly<Record<string, unknown>> = Object.freeze({});
 
@@ -174,11 +182,7 @@ const readAttribute = (
   return null;
 };
 
-const normalizeText = (value: unknown): string => String(value ?? '')
-  .trim()
-  .toLocaleLowerCase('tr-TR')
-  .normalize('NFKD')
-  .replace(/[\u0300-\u036f]/g, '');
+const normalizeText = normalizeQueryResultText;
 
 const getFeatureGeometry = (feature: FastAccessFeature | null | undefined): GeometryLike | null =>
   feature?.geometry ?? feature?.raw?.geometry ?? null;
@@ -210,11 +214,11 @@ export const filterFastAccessRecords = (
   records: readonly FastAccessRecord[],
   query: unknown,
 ): readonly FastAccessRecord[] => {
-  const needle = normalizeText(query);
-  if (!needle) return records;
-  return records.filter((record) => normalizeText(
+  const terms = queryResultSearchTerms(query);
+  if (!terms.length) return records;
+  return records.filter((record) => matchesQueryResultTerms(normalizeText(
     record.title + ' ' + record.address + ' ' + record.phone,
-  ).includes(needle));
+  ), terms));
 };
 
 export const buildGoogleRouteUrl = (
@@ -262,10 +266,8 @@ const getMapView = (): MapViewLike | null => {
   return value && typeof value === 'object' ? value as MapViewLike : null;
 };
 
-const normalizePageSize = (value: number | undefined): number => {
-  if (!Number.isFinite(value)) return DEFAULT_PAGE_SIZE;
-  return Math.min(200, Math.max(10, Math.trunc(Number(value))));
-};
+const normalizePageSize = (value: number | undefined): number =>
+  normalizeQueryResultPageSize(value ?? DEFAULT_PAGE_SIZE);
 
 export function createManagedFastAccessQueryWindow({
   title,
@@ -291,7 +293,7 @@ export function createManagedFastAccessQueryWindow({
     const queryAbortRef = useRef<AbortController | null>(null);
     const actionAbortRef = useRef<AbortController | null>(null);
     const rootRef = useRef<HTMLElement | null>(null);
-    const pageFocusFrameRef = useRef<number | null>(null);
+    const pageFocusCancelRef = useRef<(() => void) | null>(null);
     const initialExtentRef = useRef<unknown>(null);
     const visible = windowManager.IsVisible?.(id) ?? true;
     const minimized = windowManager.IsMinimized?.(id) ?? false;
@@ -299,15 +301,31 @@ export function createManagedFastAccessQueryWindow({
     const [records, setRecords] = useState<readonly FastAccessRecord[]>([]);
     const [filterText, setFilterText] = useState('');
     const [visibleCount, setVisibleCount] = useState(pageSize);
+    const [pageStart, setPageStart] = useState(0);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
-    const [activeActionKey, setActiveActionKey] = useState('');
+    const [activeAction, setActiveAction] = useState<{ item: FastAccessRecord; action: string } | null>(null);
 
     const cancelPageFocus = useCallback((): void => {
-      if (pageFocusFrameRef.current === null) return;
-      window.cancelAnimationFrame(pageFocusFrameRef.current);
-      pageFocusFrameRef.current = null;
+      pageFocusCancelRef.current?.();
+      pageFocusCancelRef.current = null;
     }, []);
+
+    const schedulePageFocus = (event: React.MouseEvent<HTMLButtonElement>, index: number): void => {
+      cancelPageFocus();
+      const requestId = requestGateRef.current.current();
+      pageFocusCancelRef.current = scheduleOwnedResultFocus({
+        trigger: event.currentTarget,
+        detail: event.detail,
+        isCurrent: () => mountedRef.current
+          && requestGateRef.current.isCurrent(requestId)
+          && rootRef.current?.getAttribute('aria-hidden') !== 'true'
+          && !rootRef.current?.hasAttribute('data-minimized'),
+        resolveTarget: () => rootRef.current
+          ?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[index]
+          ?.querySelector<HTMLElement>('button') ?? null,
+      });
+    };
 
     const clearOwnedLayer = useCallback((): void => {
       const envelope = layerRef.current as LayerEnvelope | null;
@@ -326,9 +344,10 @@ export function createManagedFastAccessQueryWindow({
       setRecords([]);
       setFilterText('');
       setVisibleCount(pageSize);
+      setPageStart(0);
       setLoading(false);
       setErrorMessage('');
-      setActiveActionKey('');
+      setActiveAction(null);
     }, [cancelPageFocus, clearOwnedLayer, pageSize]);
 
     const showError = useCallback((error: unknown): string => {
@@ -388,7 +407,14 @@ export function createManagedFastAccessQueryWindow({
         ) as LayerEnvelope | null;
       }
 
-      if (!mountedRef.current || signal.aborted || !requestGateRef.current.isCurrent(requestId) || !nextLayer?.layerObj) {
+      if (
+        !mountedRef.current
+        || signal.aborted
+        || !requestGateRef.current.isCurrent(requestId)
+        || !nextLayer?.layerObj
+        || mapViewRef.current !== mapView
+        || getMapView() !== mapView
+      ) {
         safeRemoveLayer(null, nextLayer?.layerObj);
         return;
       }
@@ -405,7 +431,16 @@ export function createManagedFastAccessQueryWindow({
       try {
         const extentResult = await nextLayer.layerObj.queryExtent?.();
         const extent = extentResult?.extent;
-        if (extent && mountedRef.current && !signal.aborted && requestGateRef.current.isCurrent(requestId) && layerRef.current === nextLayer && mapView.goTo) {
+        if (
+          extent
+          && mountedRef.current
+          && !signal.aborted
+          && requestGateRef.current.isCurrent(requestId)
+          && layerRef.current === nextLayer
+          && mapViewRef.current === mapView
+          && getMapView() === mapView
+          && mapView.goTo
+        ) {
           const target = typeof extent.expand === 'function' ? extent.expand(1.12) : extent;
           await mapView.goTo(target, { animate: false });
         }
@@ -428,11 +463,19 @@ export function createManagedFastAccessQueryWindow({
       setErrorMessage('');
       setFilterText('');
       setVisibleCount(pageSize);
+      setPageStart(0);
       setRecords([]);
-      setActiveActionKey('');
+      setActiveAction(null);
       clearOwnedLayer();
+      // A window can survive a 2D/3D view replacement. A new query must
+      // own the current view, never resurrect a layer on its retired map.
+      const activeMapView = getMapView();
+      if (mapViewRef.current !== activeMapView) {
+        mapViewRef.current = activeMapView;
+        initialExtentRef.current = activeMapView?.extent?.clone?.() ?? activeMapView?.extent ?? null;
+      }
 
-      void safeClientLog(LoggingBusiness, logName + '/Sorgu', JSON.stringify(query), DebugHelper.Log);
+      void safeClientLog(LoggingBusiness, logName + '/Sorgu', `query-fields:${Math.min(Object.keys(query).length, 99)}`, DebugHelper.Log);
 
       try {
         const result = await business.Query(query, false, { signal: controller.signal });
@@ -488,8 +531,7 @@ export function createManagedFastAccessQueryWindow({
       const controller = new AbortController();
       actionAbortRef.current = controller;
       const isCurrent = (): boolean => mountedRef.current && !controller.signal.aborted && actionGateRef.current.isCurrent(actionId);
-      const key = getFastAccessRecordKey(item) + '-' + action;
-      setActiveActionKey(key);
+      setActiveAction({ item, action });
       setErrorMessage('');
       try {
         return await withTimeout((signal) => callback(signal, () => isCurrent() && !signal.aborted), SERVICE_WINDOW_POLICY.actionTimeoutMs, controller.signal);
@@ -498,7 +540,7 @@ export function createManagedFastAccessQueryWindow({
         return null;
       } finally {
         if (isCurrent()) {
-          setActiveActionKey((current) => current === key ? '' : current);
+          setActiveAction((current) => current?.item === item && current.action === action ? null : current);
         }
         if (actionAbortRef.current === controller) actionAbortRef.current = null;
       }
@@ -508,17 +550,19 @@ export function createManagedFastAccessQueryWindow({
       item,
       'zoom',
       async (signal, isCurrent) => {
+        const actionView = mapViewRef.current;
+        if (!actionView || getMapView() !== actionView) return null;
         const detail = await getItemDetails(item, signal);
-        if (!isCurrent()) return null;
+        if (!isCurrent() || getMapView() !== actionView) return null;
         const geometry = getFeatureGeometry(detail);
         if (!geometry) throw new Error('Konum bilgisi bulunamadı.');
 
-        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(mapViewRef.current, geometry, 18));
-        if (!isCurrent()) return null;
+        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(actionView, geometry, 18));
+        if (!isCurrent() || getMapView() !== actionView) return null;
         void safeClientLog(
           LoggingBusiness,
           logName + '/Detay Göster',
-          String(item.objectId ?? '') + '/' + item.address,
+          'record-detail-opened',
         );
 
         if (window.matchMedia?.('(max-width: 959px)').matches) {
@@ -543,7 +587,7 @@ export function createManagedFastAccessQueryWindow({
         void safeClientLog(
           LoggingBusiness,
           logName + '/Yol Tarifi',
-          String(item.objectId ?? '') + '/' + item.address,
+          'external-route-requested',
         );
         return true;
       },
@@ -583,14 +627,31 @@ export function createManagedFastAccessQueryWindow({
       return () => { focus.close(); focus.dispose(); };
     }, [visible]);
 
-    const filteredRecords = useMemo(
-      () => filterFastAccessRecords(records, filterText),
-      [filterText, records],
+    // Normalize large service result sets once per query, not on every filter keystroke.
+    const searchIndex = useMemo(
+      () => records.map((record) => ({
+        record,
+        searchText: normalizeText(record.title + ' ' + record.address + ' ' + record.phone),
+      })),
+      [records],
+    );
+
+    const filteredRecords = useMemo(() => {
+      const terms = queryResultSearchTerms(filterText);
+      return terms.length
+        ? searchIndex.filter(({ searchText }) => matchesQueryResultTerms(searchText, terms)).map(({ record }) => record)
+        : records;
+    }, [filterText, records, searchIndex]);
+
+    // The display index changes after filtering; fallback React keys must not.
+    const sourceIndices = useMemo(
+      () => new Map(records.map((record, index) => [record, index] as const)),
+      [records],
     );
 
     const visibleRecords = useMemo(
-      () => filteredRecords.slice(0, visibleCount),
-      [filteredRecords, visibleCount],
+      () => filteredRecords.slice(pageStart, pageStart + visibleCount),
+      [filteredRecords, pageStart, visibleCount],
     );
 
     const returnToServices = useCallback((): void => {
@@ -599,7 +660,7 @@ export function createManagedFastAccessQueryWindow({
       resetSurface();
       windowManager.HideWindow?.(id);
       windowManager.ShowWindow?.('sidebar');
-      if (initialExtent && mapView?.goTo) {
+      if (initialExtent && mapView?.goTo && getMapView() === mapView) {
         Promise.resolve(mapView.goTo(initialExtent, { animate: false })).catch(DebugHelper.Log);
       }
     }, [id, resetSurface, windowManager]);
@@ -648,6 +709,8 @@ export function createManagedFastAccessQueryWindow({
               onChange={(event) => {
                 setFilterText(event.target.value);
                 setVisibleCount(pageSize);
+                setPageStart(0);
+                cancelPageFocus();
               }}
               placeholder="Ad, adres veya telefon…"
               autoComplete="off"
@@ -672,19 +735,18 @@ export function createManagedFastAccessQueryWindow({
             <div className="kr-fast-query__empty">
               <strong>Aramanızla eşleşen sonuç yok.</strong>
               <span>Başka bir ad, adres veya telefon deneyin.</span>
-              <button type="button" onClick={() => { setFilterText(''); setVisibleCount(pageSize); rootRef.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); }}>Filtreyi temizle</button>
+              <button type="button" onClick={() => { setFilterText(''); setVisibleCount(pageSize); setPageStart(0); cancelPageFocus(); rootRef.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); }}>Filtreyi temizle</button>
             </div>
           ) : null}
         </div>
 
         <ul id={id + '-results'} className="results-container kr-fast-query__results" aria-label={title + ' sonuçları'}>
           {visibleRecords.map((item, index) => {
-            const recordKey = getFastAccessRecordKey(item, index);
-            const zoomKey = recordKey + '-zoom';
-            const routeKey = recordKey + '-route';
+            const sourceIndex = sourceIndices.get(item) ?? pageStart + index;
+            const recordKey = getFastAccessRecordKey(item, sourceIndex) + ':' + sourceIndex;
 
             return (
-              <li className="result-item-container kr-fast-query__item" key={recordKey}>
+              <li className="result-item-container kr-fast-query__item" key={recordKey} aria-posinset={pageStart + index + 1} aria-setsize={filteredRecords.length}>
                 <SharedGISIcon
                   record={{ type: iconType ?? serviceKey, title: item.title, category: title }}
                   size={30}
@@ -701,18 +763,18 @@ export function createManagedFastAccessQueryWindow({
                   <button
                     type="button"
                     onClick={() => { void zoomToItem(item); }}
-                    disabled={loading || Boolean(activeActionKey)}
+                    disabled={loading || Boolean(activeAction)}
                     aria-label={item.title + ' — Haritada göster'}
                   >
-                    {activeActionKey === zoomKey ? 'Açılıyor…' : 'Haritada göster'}
+                    {activeAction?.item === item && activeAction.action === 'zoom' ? 'Açılıyor…' : 'Haritada göster'}
                   </button>
                   <button
                     type="button"
                     onClick={() => { void showRoute(item); }}
-                    disabled={loading || Boolean(activeActionKey)}
+                    disabled={loading || Boolean(activeAction)}
                     aria-label={item.title + ' — Yol tarifi (yeni pencere)'}
                   >
-                    {activeActionKey === routeKey ? 'Açılıyor…' : 'Yol tarifi'}
+                    {activeAction?.item === item && activeAction.action === 'route' ? 'Açılıyor…' : 'Yol tarifi'}
                   </button>
                 </div>
               </li>
@@ -720,25 +782,75 @@ export function createManagedFastAccessQueryWindow({
           })}
         </ul>
 
-        {!loading && visibleCount < filteredRecords.length ? (
-          <button
-            type="button"
-            className="kr-fast-query__more"
-            onClick={(event) => {
-              const button = event.currentTarget;
-              const requestId = requestGateRef.current.current();
-              setVisibleCount((count) => Math.min(count + pageSize, filteredRecords.length));
-              cancelPageFocus();
-              pageFocusFrameRef.current = window.requestAnimationFrame(() => {
-                pageFocusFrameRef.current = null;
-                if (!mountedRef.current || !requestGateRef.current.isCurrent(requestId)) return;
-                if (document.activeElement !== button && document.activeElement !== document.body) return;
-                rootRef.current?.querySelectorAll<HTMLElement>('.kr-fast-query__item')[visibleCount]?.querySelector<HTMLElement>('button')?.focus();
-              });
-            }}
-          >
-            Daha fazla sonuç göster ({filteredRecords.length - visibleCount} kaldı)
-          </button>
+        <p
+          className="kr-fast-query__action-status"
+          role="status"
+          aria-label="Hizmet işlemi"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {activeAction
+            ? activeAction.item.title + (activeAction.action === 'zoom'
+              ? ' için harita konumu hazırlanıyor…'
+              : ' için yol tarifi hazırlanıyor…')
+            : ''}
+        </p>
+
+        {!loading && filteredRecords.length > 0 ? (
+          <nav className="kr-fast-query__paging" aria-label={title + ' sonuç gezinme'}>
+            <p className="kr-fast-query__range" aria-live="polite" aria-atomic="true">
+              {pageStart + 1}–{pageStart + visibleRecords.length} / {filteredRecords.length} kayıt
+            </p>
+            <div className="kr-fast-query__paging-actions">
+              {pageStart > 0 ? (
+                <button
+                  type="button"
+                  className="kr-fast-query__more"
+                  aria-controls={id + '-results'}
+                  onClick={(event) => {
+                    const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    setPageStart(previousStart);
+                    setVisibleCount(Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, filteredRecords.length - previousStart));
+                    schedulePageFocus(event, 0);
+                  }}
+                >
+                  Önceki sonuçlara dön
+                </button>
+              ) : null}
+              {pageStart + visibleCount < filteredRecords.length ? (
+                visibleCount < QUERY_RESULT_PAGE_POLICY.maxPageSize ? (
+                  <button
+                    type="button"
+                    className="kr-fast-query__more"
+                    aria-controls={id + '-results'}
+                    onClick={(event) => {
+                      setVisibleCount((count) => Math.min(
+                        count + pageSize,
+                        QUERY_RESULT_PAGE_POLICY.maxPageSize,
+                        filteredRecords.length - pageStart,
+                      ));
+                      schedulePageFocus(event, visibleCount);
+                    }}
+                  >
+                    Daha fazla sonuç göster ({Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, filteredRecords.length - pageStart) - visibleCount} kaldı)
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="kr-fast-query__more"
+                    aria-controls={id + '-results'}
+                    onClick={(event) => {
+                      setPageStart(pageStart + visibleCount);
+                      setVisibleCount(pageSize);
+                      schedulePageFocus(event, 0);
+                    }}
+                  >
+                    Sonraki sonuçlara geç
+                  </button>
+                )
+              ) : null}
+            </div>
+          </nav>
         ) : null}
       </section>
     );

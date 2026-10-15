@@ -1,3 +1,6 @@
+import { getDeepActiveElement, isManagedFocusCandidate, isWithinComposedSubtree } from '../../../experience/focusCandidate';
+export { isManagedFocusCandidate } from '../../../experience/focusCandidate';
+
 export type ManagedWindowFocusRestorePolicy = 'always' | 'if-focus-within';
 
 export interface ManagedWindowFocusOptions {
@@ -24,39 +27,33 @@ const DEFAULT_FOCUS_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-const hasUnavailableAncestor = (element: HTMLElement): boolean => {
-  let current: HTMLElement | null = element;
-  while (current) {
-    if (current.hidden || current.hasAttribute('hidden')) return true;
-    if (current.hasAttribute('inert')) return true;
-    if (current.getAttribute('aria-hidden') === 'true') return true;
-    current = current.parentElement;
-  }
-  return false;
-};
-
-export const isManagedFocusCandidate = (
-  element: HTMLElement | null | undefined,
-): element is HTMLElement => {
-  if (!element?.isConnected) return false;
-  if (hasUnavailableAncestor(element)) return false;
-  if (element.hasAttribute('disabled')) return false;
-  if (element.getAttribute('aria-disabled') === 'true') return false;
-  return true;
-};
-
 const findInitialFocusTarget = (
   root: HTMLElement,
   selector: string,
 ): HTMLElement | null => {
   try {
-    for (const candidate of root.querySelectorAll<HTMLElement>(selector)) {
-      if (isManagedFocusCandidate(candidate)) return candidate;
-    }
+    // QuerySelectorAll does not cross ShadowRoot boundaries. Traverse in
+    // composed reading order so a shadow-hosted first action is discoverable
+    // without privileging a later light-DOM button.
+    const find = (parent: Element | ShadowRoot): HTMLElement | null => {
+      for (const child of parent.children) {
+        if (child instanceof HTMLElement && child.matches(selector) && isManagedFocusCandidate(child)) {
+          return child;
+        }
+        if (child instanceof HTMLElement && child.shadowRoot) {
+          const shadowTarget = find(child.shadowRoot);
+          if (shadowTarget) return shadowTarget;
+        }
+        const descendant = find(child);
+        if (descendant) return descendant;
+      }
+      return null;
+    };
+    return find(root);
   } catch {
+    // Invalid caller selectors must never break opening the managed window.
     return null;
   }
-  return null;
 };
 
 export const focusManagedWindow = ({
@@ -79,13 +76,13 @@ export const restoreManagedWindowFocus = (
 ): boolean => {
   if (!isManagedFocusCandidate(opener)) return false;
   opener.focus({ preventScroll: true });
-  return opener.ownerDocument.activeElement === opener;
+  return getDeepActiveElement(opener.ownerDocument) === opener;
 };
 
 export const captureManagedWindowOpener = (
   documentRef: Document = document,
 ): HTMLElement | null => {
-  const active = documentRef.activeElement;
+  const active = getDeepActiveElement(documentRef);
   if (!(active instanceof HTMLElement)) return null;
   if (active === documentRef.body) return null;
   return isManagedFocusCandidate(active) ? active : null;
@@ -96,10 +93,42 @@ export const scheduleManagedWindowFocus = (
 ): (() => void) => {
   const windowRef = options.root?.ownerDocument.defaultView;
   if (!windowRef) return () => undefined;
-  const frame = windowRef.requestAnimationFrame(() => {
+  const documentRef = options.root?.ownerDocument;
+  const initialFocus = documentRef ? getDeepActiveElement(documentRef) : null;
+  let cancelled = false;
+  let frame = 0;
+  const removeListeners = (): void => {
+    documentRef?.removeEventListener('pointerdown', cancel, true);
+    documentRef?.removeEventListener('keydown', cancel, true);
+    documentRef?.removeEventListener('focusin', cancel, true);
+    documentRef?.removeEventListener('visibilitychange', cancel);
+    windowRef.removeEventListener('blur', cancel);
+    windowRef.removeEventListener('pagehide', cancel);
+  };
+  const cancel = (): void => {
+    if (cancelled) return;
+    cancelled = true;
+    removeListeners();
+    windowRef.cancelAnimationFrame(frame);
+  };
+  documentRef?.addEventListener('pointerdown', cancel, true);
+  documentRef?.addEventListener('keydown', cancel, true);
+  documentRef?.addEventListener('focusin', cancel, true);
+  documentRef?.addEventListener('visibilitychange', cancel);
+  windowRef.addEventListener('blur', cancel);
+  windowRef.addEventListener('pagehide', cancel);
+  frame = windowRef.requestAnimationFrame(() => {
+    removeListeners();
+    if (cancelled || documentRef?.visibilityState === 'hidden') return;
+    const currentFocus = documentRef ? getDeepActiveElement(documentRef) : null;
+    // A delayed focus request cannot reclaim focus after deliberate navigation.
+    // Only the browser's fallback to body after opener removal is exempt.
+    if (currentFocus !== initialFocus && !(
+      currentFocus === documentRef?.body && initialFocus && !initialFocus.isConnected
+    )) return;
     focusManagedWindow(options);
   });
-  return () => windowRef.cancelAnimationFrame(frame);
+  return cancel;
 };
 
 const shouldRestoreFocus = (
@@ -108,9 +137,9 @@ const shouldRestoreFocus = (
   policy: ManagedWindowFocusRestorePolicy,
 ): boolean => {
   if (policy === 'always') return true;
-  const active = documentRef.activeElement;
+  const active = getDeepActiveElement(documentRef);
   if (!active || active === documentRef.body) return true;
-  return Boolean(root && (active === root || root.contains(active)));
+  return isWithinComposedSubtree(root, active);
 };
 
 export const createManagedWindowFocusLifecycle = (

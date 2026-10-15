@@ -43,7 +43,19 @@ describe('ManagedFastAccessQueryWindow runtime helpers', () => {
 
     expect(filterFastAccessRecords(records, 'cigdem')).toHaveLength(1);
     expect(filterFastAccessRecords(records, 'keci')).toHaveLength(1);
+    expect(filterFastAccessRecords(records, 'cankaya cigdem')).toEqual([records[0]]);
+    expect(filterFastAccessRecords(records, 'cigdem cankaya')).toEqual([records[0]]);
+    expect(filterFastAccessRecords(records, 'cankaya keci')).toEqual([]);
     expect(filterFastAccessRecords(records, '')).toBe(records);
+  });
+
+  it('matches dotted and dotless Turkish I consistently in service names', () => {
+    const records = [
+      normalizeFastAccessRecord({ attr: { id: 1, adi: 'Işık Parkı', adres: 'Çankaya' } }),
+      normalizeFastAccessRecord({ attr: { id: 2, adi: 'İzmir Parkı', adres: 'Keçiören' } }),
+    ];
+    expect(filterFastAccessRecords(records, 'isik parki')).toEqual([records[0]]);
+    expect(filterFastAccessRecords(records, 'izmir')).toEqual([records[1]]);
   });
 
   it('prefers server identity and keeps zero as a valid id', () => {

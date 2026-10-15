@@ -157,6 +157,25 @@ describe('ExperienceMapModeGovernedOverlay', () => {
     expect(screen.getByRole('button', { name: '3B geçişini yeniden dene' })).toBeInTheDocument();
   });
 
+  it('reports a failed runtime immediately instead of waiting for the UI deadline', async () => {
+    const listener = (): void => dispatchMode('2d', 'map-runtime-recovery');
+    window.addEventListener(EXPERIENCE_COMMAND_EVENT, listener);
+    render(<ExperienceMapModeGovernedOverlay />);
+    fireEvent.click(screen.getByRole('button', { name: '3B sahne görünümüne geç' }));
+    await screen.findByRole('alert');
+    expect(screen.getByRole('region', { name: 'Harita görünüm modu' })).toHaveAttribute('aria-busy', 'false');
+    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener);
+  });
+
+  it('releases a pending acknowledgement timer when unmounted', async () => {
+    vi.useFakeTimers();
+    const view = render(<ExperienceMapModeGovernedOverlay />);
+    fireEvent.click(screen.getByRole('button', { name: '3B sahne görünümüne geç' }));
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    await act(async () => view.unmount());
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('clamps tiny timeout requests to the safe minimum', async () => {
     vi.useFakeTimers();
     render(<ExperienceMapModeGovernedOverlay transitionTimeoutMs={1} />);

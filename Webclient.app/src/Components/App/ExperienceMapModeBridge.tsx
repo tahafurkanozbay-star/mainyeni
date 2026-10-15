@@ -13,6 +13,7 @@ import {
   snapshotSceneState,
   synchronizeSceneViewSize,
   waitForSceneContainer,
+  waitForSceneFrame,
   type SceneViewLike,
 } from '../../gis-engine/sceneRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
@@ -38,6 +39,11 @@ import {
 } from '../../experience/experienceRuntime';
 import { executeSceneCommand as executeSceneRuntimeCommand } from '../../experience/sceneCommandRuntime';
 
+import { withTimeout } from '../../platform/runtime/resilience';
+import { throwIfAborted } from '../../platform/runtime/contracts';
+
+// Completes before the production control's 8s acknowledgement deadline.
+const SCENE_TRANSITION_TIMEOUT_MS = 7_000;
 const DEFAULT_SCENE_TILT = 48;
 const SCENE_TRANSITION_DURATION_MS = 320;
 
@@ -163,14 +169,6 @@ const sceneControlOptions = (reason: string): SceneNavigateOptions => ({
   reason,
 });
 
-const nextBrowserFrame = (): Promise<void> => new Promise((resolve) => {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => resolve());
-    return;
-  }
-  queueMicrotask(resolve);
-});
-
 /**
  * Type-safe ownership boundary for the application's 2D/3D transition.
  *
@@ -250,7 +248,8 @@ export function ExperienceMapModeBridge({
     return runtime;
   }, []);
 
-  const ensureScene = useCallback(async (): Promise<SceneHandle | null> => {
+  const ensureScene = useCallback(async (signal: AbortSignal): Promise<SceneHandle | null> => {
+    throwIfAborted(signal);
     const current = sceneRef.current;
     if (current?.view && !current.view.destroyed) return current;
     if (!mapView || !sceneHostRef.current) return null;
@@ -262,6 +261,7 @@ export function ExperienceMapModeBridge({
     const lifetime = sceneLifetimeRef.current;
     const scene = await createSceneView(sceneHostRef.current, {
       map: mapView.map,
+      signal,
       qualityProfile: 'medium',
       padding: mapView.padding,
       environment: {
@@ -277,14 +277,14 @@ export function ExperienceMapModeBridge({
       },
     } as never) as SceneHandle;
 
-    if (disposedRef.current || lifetime.signal.aborted) {
+    if (disposedRef.current || lifetime.signal.aborted || signal.aborted) {
       destroySceneView(scene, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
       return null;
     }
     pendingSceneRef.current = scene;
     try {
       synchronizeSceneViewSize(scene.view);
-      await waitForArcgisView(scene.view, { signal: lifetime.signal, ...(accessorWatch ? { accessorWatch } : {}) });
+      await waitForArcgisView(scene.view, { signal, ...(accessorWatch ? { accessorWatch } : {}) });
       synchronizeSceneViewSize(scene.view);
     } catch (error) {
       if (!scene.view.destroyed) destroySceneView(scene, (caught) => DebugHelper.Log({ context: 'scene-destroy', error: caught }));
@@ -292,7 +292,7 @@ export function ExperienceMapModeBridge({
     } finally {
       if (pendingSceneRef.current === scene) pendingSceneRef.current = null;
     }
-    if (disposedRef.current || lifetime.signal.aborted) {
+    if (disposedRef.current || lifetime.signal.aborted || signal.aborted) {
       if (!scene.view.destroyed) destroySceneView(scene, (error) => DebugHelper.Log({ context: 'scene-destroy', error }));
       return null;
     }
@@ -321,49 +321,58 @@ export function ExperienceMapModeBridge({
       return;
     }
 
+    const previousState = bridge.getState();
     try {
-      setSceneHostActive(true);
-      await nextBrowserFrame();
-      await waitForSceneContainer(sceneHostRef.current);
+      await withTimeout(async (signal) => {
+        setSceneHostActive(true);
+        await waitForSceneFrame(signal);
+        await waitForSceneContainer(sceneHostRef.current, { signal });
 
-      const scene = await ensureScene();
-      if (!scene?.view || disposedRef.current) return;
+        throwIfAborted(signal);
+        const scene = await ensureScene(signal);
+        if (!scene?.view || disposedRef.current) return;
 
-      scene.view.padding = mapView.padding;
-      synchronizeSceneViewSize(scene.view);
-      const sceneState = normalizeSceneStateFromMap(mapView, bridge);
-      if (modeRef) modeRef.current = '3d';
-      activeModeRef.current = '3d';
-      bridge.setState(sceneState);
+        scene.view.padding = mapView.padding;
+        synchronizeSceneViewSize(scene.view);
+        const sceneState = normalizeSceneStateFromMap(mapView, bridge);
+        if (modeRef) modeRef.current = '3d';
+        activeModeRef.current = '3d';
+        bridge.setState(sceneState);
 
-      await applyViewStateToSceneView(scene.view, sceneState, {
-        allowCrossMode: true,
-        duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
-        animate: !prefersReducedMotion(),
-      });
-
-      if (!sceneNavigationHomeSetRef.current) {
-        sceneNavigationRef.current?.setHome();
-        sceneNavigationHomeSetRef.current = true;
-      }
-
-      unbindSceneRef.current?.();
-      unbindSceneRef.current = bindSceneState(scene.view, bridge as never, undefined, {
-        applyIncoming: true,
-        goToOptions: {
-          duration: prefersReducedMotion() ? 0 : 180,
+        const applied = await applyViewStateToSceneView(scene.view, sceneState, {
+          signal,
+          allowCrossMode: true,
+          duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
           animate: !prefersReducedMotion(),
-        },
-        onApplyError: (error: unknown) => DebugHelper.Log(error),
-        accessorWatch,
-      });
+        });
 
-      sceneExperienceRef.current?.setActive(true);
-      if (disposedRef.current) return;
-      setMode('3d');
-      publishMode('3d');
-      announce('3B görünüm etkinleştirildi.');
+        throwIfAborted(signal);
+        if (!applied) throw new Error('SceneTransitionNotApplied');
+        if (!sceneNavigationHomeSetRef.current) {
+          sceneNavigationRef.current?.setHome();
+          sceneNavigationHomeSetRef.current = true;
+        }
+
+        unbindSceneRef.current?.();
+        unbindSceneRef.current = bindSceneState(scene.view, bridge as never, undefined, {
+          applyIncoming: true,
+          goToOptions: {
+            duration: prefersReducedMotion() ? 0 : 180,
+            animate: !prefersReducedMotion(),
+          },
+          onApplyError: (error: unknown) => DebugHelper.Log(error),
+          accessorWatch,
+        });
+
+        sceneExperienceRef.current?.setActive(true);
+        if (disposedRef.current) return;
+        setMode('3d');
+        publishMode('3d');
+        announce('3B görünüm etkinleştirildi.');
+      }, SCENE_TRANSITION_TIMEOUT_MS, sceneLifetimeRef.current.signal);
     } catch (error) {
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      bridge.setState(previousState);
       DebugHelper.Log(error);
       sceneExperienceRef.current?.setActive(false);
       setSceneHostActive(false);
@@ -383,34 +392,42 @@ export function ExperienceMapModeBridge({
     }
 
     const bridge = MapManager.GetViewStateBridge?.() as ViewStateBridgeLike | null;
+    const previousState = bridge?.getState();
     try {
-      const sceneView = sceneRef.current?.view;
-      const fallbackMapState = bridge?.getState?.();
-      const mapState = sceneView && bridge
-        ? normalizeMapStateFromScene(sceneView, bridge)
-        : createViewState(fallbackMapState
-          ? Object.assign({}, fallbackMapState, { mode: '2d', tilt: 0 })
-          : { mode: '2d', tilt: 0 });
+      await withTimeout(async (signal) => {
+        const sceneView = sceneRef.current?.view;
+        const fallbackMapState = bridge?.getState?.();
+        const mapState = sceneView && bridge
+          ? normalizeMapStateFromScene(sceneView, bridge)
+          : createViewState(fallbackMapState
+            ? Object.assign({}, fallbackMapState, { mode: '2d', tilt: 0 })
+            : { mode: '2d', tilt: 0 });
 
-      unbindSceneRef.current?.();
-      unbindSceneRef.current = () => undefined;
-      sceneExperienceRef.current?.setActive(false);
-      activeModeRef.current = '2d';
-      if (modeRef) modeRef.current = '2d';
-      bridge?.setState?.(mapState);
+        unbindSceneRef.current?.();
+        unbindSceneRef.current = () => undefined;
+        sceneExperienceRef.current?.setActive(false);
+        activeModeRef.current = '2d';
+        if (modeRef) modeRef.current = '2d';
+        bridge?.setState?.(mapState);
 
-      await applyViewStateToMapView(mapView as never, mapState, {
-        allowCrossMode: true,
-        duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
-        animate: !prefersReducedMotion(),
-      });
+        const applied = await applyViewStateToMapView(mapView as never, mapState, {
+          signal,
+          allowCrossMode: true,
+          duration: prefersReducedMotion() ? 0 : SCENE_TRANSITION_DURATION_MS,
+          animate: !prefersReducedMotion(),
+        });
 
-      if (disposedRef.current) return;
-      setSceneHostActive(false);
-      setMode('2d');
-      publishMode('2d');
-      announce('2B görünüm etkinleştirildi.');
+        throwIfAborted(signal);
+        if (!applied) throw new Error('MapTransitionNotApplied');
+        if (disposedRef.current) return;
+        setSceneHostActive(false);
+        setMode('2d');
+        publishMode('2d');
+        announce('2B görünüm etkinleştirildi.');
+      }, SCENE_TRANSITION_TIMEOUT_MS, sceneLifetimeRef.current.signal);
     } catch (error) {
+      if (disposedRef.current || sceneLifetimeRef.current.signal.aborted) return;
+      if (previousState) bridge?.setState(previousState);
       DebugHelper.Log(error);
       sceneExperienceRef.current?.setActive(true);
       setSceneHostActive(true);
@@ -423,9 +440,13 @@ export function ExperienceMapModeBridge({
   }, [mapView, modeRef, setMode]);
 
   const queueTransition = useCallback((mode: ExperienceMapMode): Promise<void> => {
+    const lifetime = sceneLifetimeRef.current;
     transitionRef.current = transitionRef.current
       .catch(() => undefined)
-      .then(() => (mode === '3d' ? activate3D() : activate2D()));
+      .then(() => {
+        if (disposedRef.current || lifetime.signal.aborted) return;
+        return mode === '3d' ? activate3D() : activate2D();
+      });
     return transitionRef.current;
   }, [activate2D, activate3D]);
 

@@ -11,3 +11,59 @@
 }
 .kr-park-query__primary:focus-visible { outline: 3px solid var(--exp-accent, #187bb9); outline-offset: 4px; border-radius: 4px; }
 .kr-park-query__status { flex: 0 0 auto; margin: 8px 12px; font-size: 14px; }
+
+@media (forced-colors: active) {
+  .kr-park-query__primary:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+/* Park actions remain operable at phone widths and with touch exploration. */
+.kr-park-query .kr-park-query__primary,
+.kr-park-query .kr-park-query__actions button,
+.kr-park-query .kr-fast-query__paging-actions button {
+  min-height: 44px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kr-park-query .kr-fast-query__paging-actions button:disabled,
+.kr-park-query .kr-fast-query__paging-actions button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+@media (pointer: coarse) {
+  .kr-park-query .kr-park-query__primary,
+  .kr-park-query .kr-park-query__actions button,
+  .kr-park-query .kr-fast-query__paging-actions button {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 360px) {
+  .kr-park-query .kr-fast-query__paging-actions button {
+    flex-basis: 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  .kr-park-query .kr-fast-query__paging-actions button:disabled,
+  .kr-park-query .kr-fast-query__paging-actions button[aria-disabled='true'] {
+    color: GrayText;
+    border-color: GrayText;
+    opacity: 1;
+  }
+  .kr-park-query .kr-fast-query__paging-actions button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+/* Detail feedback is a distinct, readable live status below the query summary. */
+.kr-park-query__detail-status {
+  flex: 0 0 auto;
+  margin: 0 12px 8px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}

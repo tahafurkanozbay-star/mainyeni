@@ -6,7 +6,6 @@ import React, {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
   type Ref,
 } from 'react';
 import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
@@ -35,7 +34,10 @@ import {
 } from '../_Common/QueryInteractionRuntime';
 import { ExperienceStatus } from '../../Common/ExperienceStatus';
 import { SharedGISIcon } from '../../Common/SharedGISIcon';
+import { OperationTimeoutError, withTimeout } from '../../../platform/runtime/resilience';
 import { ServiceWindowActions } from '../_Common/ServiceWindowActions';
+import { QUERY_RESULT_PAGE_POLICY } from '../_Common/QueryResultPaging';
+import { scheduleOwnedResultFocus } from '../_Common/ResultPageFocus';
 import { createKentRehberiGeoJsonLayer, type KentRehberiGeoJsonFeatureCollection } from '../../../data-services/kentRehberiGeoJsonLayer';
 import '../_Common/ManagedFastAccessQueryWindow.css';
 import './ParklarQueryWindow.css';
@@ -45,6 +47,7 @@ const MAX_EXTENT_HISTORY = 30;
 const PARK_SERVICE_KEY = 'YeniParklarQeryUrl';
 const PARK_ICON_TYPE = 'parklar';
 const PAGE_SIZE = 60;
+const DETAIL_ACTION_TIMEOUT_MS = 15_000;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -240,8 +243,15 @@ const createExpandedExtent = (extent: ExtentLike): ExtentLike => {
   };
 };
 
-const isActivationKey = (event: KeyboardEvent<HTMLElement>): boolean =>
-  event.key === 'Enter' || event.key === ' ';
+type ParkDetailKind = 'zoom' | 'route';
+interface ActiveParkDetail {
+  readonly item: ParkRecord;
+  readonly kind: ParkDetailKind;
+}
+interface ParkDetailFeedback {
+  readonly tone: 'info' | 'success' | 'danger';
+  readonly message: string;
+}
 
 export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindowProps>(
   ({ id, windowManager, windowTitle = 'Parklar' }, ref) => {
@@ -249,8 +259,14 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const [resultList, setResultList] = useState<readonly ParkRecord[]>([]);
     const [loading, setLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [activeDetail, setActiveDetail] = useState<ActiveParkDetail | null>(null);
+    const [detailFeedback, setDetailFeedback] = useState<ParkDetailFeedback | null>(null);
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const [pageStart, setPageStart] = useState(0);
     const layerAbortRef = useRef<AbortController | null>(null);
+    const detailAbortRef = useRef<AbortController | null>(null);
+    const resultRootRef = useRef<HTMLElement | null>(null);
+    const pageFocusCancelRef = useRef<(() => void) | null>(null);
 
     const mountedRef = useRef(false);
     const mapViewRef = useRef<MapViewLike | null>(null);
@@ -260,8 +276,30 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     const ownerRef = useRef<Readonly<LayerOwner<ParkLayerLike>> | null>(null);
     const lifecycleRef = useRef<DisposableBag>(createDisposableBag());
     const requestGateRef = useRef(createLatestRequestGate());
+    const detailGateRef = useRef(createLatestRequestGate());
     const visible = windowManager.IsVisible(id);
     const minimized = windowManager.IsMinimized?.(id) ?? false;
+
+    const cancelPageFocus = useCallback((): void => {
+      pageFocusCancelRef.current?.();
+      pageFocusCancelRef.current = null;
+    }, []);
+
+    const schedulePageFocus = (event: React.MouseEvent<HTMLButtonElement>, index: number): void => {
+      cancelPageFocus();
+      const requestId = requestGateRef.current.current();
+      pageFocusCancelRef.current = scheduleOwnedResultFocus({
+        trigger: event.currentTarget,
+        detail: event.detail,
+        isCurrent: () => mountedRef.current
+          && requestGateRef.current.isCurrent(requestId)
+          && resultRootRef.current?.getAttribute('aria-hidden') !== 'true'
+          && !resultRootRef.current?.hasAttribute('data-minimized'),
+        resolveTarget: () => resultRootRef.current
+          ?.querySelectorAll<HTMLElement>('.kr-park-query__item')[index]
+          ?.querySelector<HTMLElement>('.kr-park-query__primary') ?? null,
+      });
+    };
 
     const getOwner = useCallback((
       view = mapViewRef.current ?? asMapView(MapManager.GetMapView()),
@@ -329,18 +367,25 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, [rememberExtent]);
 
     const reset = useCallback((): void => {
+      cancelPageFocus();
       layerAbortRef.current?.abort();
+      detailAbortRef.current?.abort();
+      detailGateRef.current.invalidate();
       requestGateRef.current.invalidate();
       setQuery(defaultQuery);
       setResultList([]);
       setLoading(false);
       setErrorMessage('');
+      setActiveDetail(null);
+      setDetailFeedback(null);
       setVisibleCount(PAGE_SIZE);
+      setPageStart(0);
       removeLastClusterLayer();
       allowExtentHistoryRef.current = true;
-    }, [removeLastClusterLayer]);
+    }, [cancelPageFocus, removeLastClusterLayer]);
 
     const fetchQueryResults = useCallback(async (): Promise<void> => {
+      cancelPageFocus();
       const view = mapViewRef.current ?? asMapView(MapManager.GetMapView());
       if (!view?.map) {
         reportError(null, 'Harita hazır olmadığı için park sorgusu başlatılamadı.');
@@ -349,6 +394,8 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
       mapViewRef.current = view;
       const requestId = requestGateRef.current.next();
+      detailAbortRef.current?.abort();
+      detailGateRef.current.invalidate();
       layerAbortRef.current?.abort();
       const layerAbort = new AbortController();
       layerAbortRef.current = layerAbort;
@@ -357,18 +404,12 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       setQuery(latestQuery);
       setLoading(true);
       setErrorMessage('');
+      setActiveDetail(null);
+      setDetailFeedback(null);
       setVisibleCount(PAGE_SIZE);
+      setPageStart(0);
 
-      await safeClientLog(
-        LoggingBusiness,
-        'Parklar/Sorgu',
-        String(latestQuery.districtName ?? '')
-          + '/'
-          + String(latestQuery.nbhoodName ?? '')
-          + '/'
-          + String(latestQuery.name ?? ''),
-        DebugHelper.Log,
-      );
+      void safeClientLog(LoggingBusiness, 'Parklar/Sorgu', 'query-fields:' + Math.min(Object.keys(latestQuery).length, 99), DebugHelper.Log);
 
       try {
         const result = await ParklarQeryBusiness.Query(latestQuery, false, { signal: layerAbort.signal }) as ServiceResult;
@@ -443,10 +484,32 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           setLoading(false);
         }
       }
-    }, [getOwner, id, query, removeLastClusterLayer, reportError, windowManager, windowTitle]);
+    }, [cancelPageFocus, getOwner, id, query, removeLastClusterLayer, reportError, windowManager, windowTitle]);
+
+    // The latest detail action owns the response and its transport.
+    const beginDetailAction = useCallback((item: ParkRecord, kind: ParkDetailKind) => {
+      detailAbortRef.current?.abort();
+      const controller = new AbortController();
+      detailAbortRef.current = controller;
+      const detailId = detailGateRef.current.next();
+      const queryId = requestGateRef.current.current();
+      setActiveDetail({ item, kind });
+      setDetailFeedback({
+        tone: 'info',
+        message: kind === 'zoom' ? 'Park konumu hazırlanıyor…' : 'Yol tarifi hazırlanıyor…',
+      });
+      return {
+        signal: controller.signal,
+        isCurrent: () => mountedRef.current
+          && !controller.signal.aborted
+          && detailGateRef.current.isCurrent(detailId)
+          && requestGateRef.current.isCurrent(queryId),
+      };
+    }, []);
 
     const getItemDetailsById = useCallback(async (
       item: ParkRecord,
+      signal: AbortSignal,
     ): Promise<ParkFeature> => {
       const objectIdCandidate = item.objectId;
       const objectId: string | number | null = (
@@ -465,6 +528,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       const result = await ParklarQeryBusiness.Query(
         { ObjectId: objectId },
         true,
+        { signal },
       ) as ServiceResult;
 
       if (
@@ -478,53 +542,66 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
     }, []);
 
     const showItem = useCallback(async (item: ParkRecord): Promise<void> => {
-      await safeClientLog(
-        LoggingBusiness,
-        'Parklar/Detay Göster',
-        String(item.objectId ?? '') + '/' + item.address,
-        DebugHelper.Log,
-      );
-
+      const action = beginDetailAction(item, 'zoom');
+      void safeClientLog(LoggingBusiness, 'Parklar/Detay Göster', 'record-detail-opened', DebugHelper.Log);
       try {
-        const itemDetails = await getItemDetailsById(item);
-        const view = mapViewRef.current;
-        if (!view || !itemDetails.geometry) {
-          throw new Error('Konum bilgisi bulunamadı.');
-        }
-
-        await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(
-          view,
-          itemDetails.geometry,
-          18,
-        ));
-
-        if (window.matchMedia?.('(max-width: 959px)').matches) {
-          windowManager.ToggleMinimiseWindow(id);
+        await withTimeout(async (signal) => {
+          const itemDetails = await getItemDetailsById(item, signal);
+          if (!action.isCurrent() || signal.aborted) return;
+          const view = mapViewRef.current;
+          if (!view || !itemDetails.geometry) throw new Error('Konum bilgisi bulunamadı.');
+          await Promise.resolve(GisGraphicsHelper.ZoomToGeometry(view, itemDetails.geometry, 18));
+          if (!action.isCurrent() || signal.aborted) return;
+          if (window.matchMedia?.('(max-width: 959px)').matches) {
+            windowManager.ToggleMinimiseWindow(id);
+          }
+        }, DETAIL_ACTION_TIMEOUT_MS, action.signal);
+        if (action.isCurrent()) {
+          setDetailFeedback({ tone: 'success', message: 'Park konumu haritada gösterildi.' });
         }
       } catch (error) {
-        reportError(error, 'Park konumu gösterilemedi.');
+        if (action.isCurrent()) {
+          setDetailFeedback({
+            tone: 'danger',
+            message: error instanceof OperationTimeoutError
+              ? 'Park konumu zaman aşımına uğradı. Tekrar deneyin.'
+              : 'Park konumu gösterilemedi. Lütfen tekrar deneyin.',
+          });
+        }
+      } finally {
+        if (action.isCurrent()) setActiveDetail(null);
+        if (detailAbortRef.current?.signal === action.signal) detailAbortRef.current = null;
       }
-    }, [getItemDetailsById, id, reportError, windowManager]);
+    }, [beginDetailAction, getItemDetailsById, id, windowManager]);
 
     const showRoute = useCallback(async (item: ParkRecord): Promise<void> => {
+      const action = beginDetailAction(item, 'route');
       try {
-        const itemDetails = await getItemDetailsById(item);
-        const routeUrl = createParkDirectionsUrl(itemDetails.geometry);
-        if (!routeUrl) throw new Error('Koordinat bilgisi bulunamadı.');
-        if (!openExternalSafely(routeUrl)) {
-          throw new Error('Yol tarifi penceresi açılamadı.');
+        await withTimeout(async (signal) => {
+          const itemDetails = await getItemDetailsById(item, signal);
+          if (!action.isCurrent() || signal.aborted) return;
+          const routeUrl = createParkDirectionsUrl(itemDetails.geometry);
+          if (!routeUrl) throw new Error('Koordinat bilgisi bulunamadı.');
+          if (!openExternalSafely(routeUrl)) throw new Error('Yol tarifi penceresi açılamadı.');
+          void safeClientLog(LoggingBusiness, 'Parklar/Yol Tarifi', 'external-route-requested', DebugHelper.Log);
+        }, DETAIL_ACTION_TIMEOUT_MS, action.signal);
+        if (action.isCurrent()) {
+          setDetailFeedback({ tone: 'success', message: 'Yol tarifi yeni sekmede açıldı.' });
         }
-
-        await safeClientLog(
-          LoggingBusiness,
-          'Parklar/Yol Tarifi',
-          String(item.objectId ?? '') + '/' + item.address,
-          DebugHelper.Log,
-        );
       } catch (error) {
-        reportError(error, 'Yol tarifi alınamadı.');
+        if (action.isCurrent()) {
+          setDetailFeedback({
+            tone: 'danger',
+            message: error instanceof OperationTimeoutError
+              ? 'Yol tarifi zaman aşımına uğradı. Tekrar deneyin.'
+              : 'Yol tarifi açılamadı. Lütfen tekrar deneyin.',
+          });
+        }
+      } finally {
+        if (action.isCurrent()) setActiveDetail(null);
+        if (detailAbortRef.current?.signal === action.signal) detailAbortRef.current = null;
       }
-    }, [getItemDetailsById, reportError]);
+    }, [beginDetailAction, getItemDetailsById]);
 
     const returnToServices = useCallback(async (): Promise<void> => {
       const targetExtent = extentHistoryRef.current[0];
@@ -561,7 +638,10 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
       const lifecycle = lifecycleRef.current;
       return () => {
         mountedRef.current = false;
+        cancelPageFocus();
         layerAbortRef.current?.abort();
+        detailAbortRef.current?.abort();
+        detailGateRef.current.invalidate();
         requestGateRef.current.invalidate();
         lifecycle.dispose();
         ownerRef.current?.clear();
@@ -570,7 +650,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
         clusterLayerRef.current = null;
         windowManager.UnregisterWindow?.(id, ref);
       };
-    }, [id, installViewWatchers, ref, windowManager]);
+    }, [cancelPageFocus, id, installViewWatchers, ref, windowManager]);
     const status = useMemo(() => {
       if (loading) return {
         tone: 'info' as const,
@@ -596,6 +676,7 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
 
     return (
       <section
+        ref={resultRootRef}
         className="sidebar-container kr-fast-query kr-park-query"
         data-minimized={minimized || undefined}
         aria-labelledby={id + '-title'}
@@ -636,6 +717,16 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           {status.message}
         </ExperienceStatus>
 
+        {detailFeedback ? (
+          <ExperienceStatus
+            tone={detailFeedback.tone}
+            live={detailFeedback.tone === 'danger' ? 'assertive' : 'polite'}
+            className="kr-park-query__detail-status"
+          >
+            {detailFeedback.message}
+          </ExperienceStatus>
+        ) : null}
+
         {!loading && errorMessage ? (
           <button
             type="button"
@@ -646,14 +737,20 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
           </button>
         ) : null}
 
-        <ul className="results-container kr-fast-query__results kr-park-query__results" aria-label="Park sonuçları">
-          {resultList.slice(0, visibleCount).map((item, index) => {
-            const itemKey = item.objectId !== null && item.objectId !== undefined
-              ? String(item.objectId)
-              : item.title + '-' + String(index);
+        <ul id={id + '-results'} className="results-container kr-fast-query__results kr-park-query__results" aria-label="Park sonuçları">
+          {resultList.slice(pageStart, pageStart + visibleCount).map((item, index) => {
+            // The record's list position is unique even when service OBJECTIDs repeat.
+            // Keep the service ID intact for the existing detail-query contract.
+            const sourceIndex = pageStart + index;
+            const itemKey = `${sourceIndex}:${String(item.objectId ?? '')}`;
 
             return (
-              <li className="result-item-container kr-fast-query__item kr-park-query__item" key={itemKey}>
+              <li
+                className="result-item-container kr-fast-query__item kr-park-query__item"
+                key={itemKey}
+                aria-posinset={sourceIndex + 1}
+                aria-setsize={resultList.length}
+              >
                 <SharedGISIcon
                   record={{ type: PARK_ICON_TYPE, category: 'Parklar', title: item.title }}
                   size={30}
@@ -663,22 +760,18 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
                   type="button"
                   className="result-item-info kr-fast-query__copy kr-park-query__primary"
                   onClick={() => { void showItem(item); }}
-                  onKeyDown={(event) => {
-                    if (!isActivationKey(event)) return;
-                    event.preventDefault();
-                    void showItem(item);
-                  }}
                   aria-label={item.title + ' konumunu haritada göster'}
+                  aria-busy={(activeDetail?.item === item && activeDetail.kind === 'zoom') || undefined}
                 >
                   <span className="result-item-info-title">{item.title}</span>
                   <span className="result-item-info-address">{item.address}</span>
                   {item.phone ? <span>{item.phone}</span> : null}
                 </button>
                 <div className="kr-fast-query__actions kr-park-query__actions" aria-label={item.title + ' işlemleri'}>
-                  <button type="button" onClick={() => { void showItem(item); }}>
+                  <button type="button" aria-label={item.title + ' — Haritada göster'} aria-busy={(activeDetail?.item === item && activeDetail.kind === 'zoom') || undefined} onClick={() => { void showItem(item); }}>
                     Haritada göster
                   </button>
-                  <button type="button" onClick={() => { void showRoute(item); }}>
+                  <button type="button" aria-label={item.title + ' — Yol tarifi'} aria-busy={(activeDetail?.item === item && activeDetail.kind === 'route') || undefined} onClick={() => { void showRoute(item); }}>
                     Yol tarifi
                   </button>
                 </div>
@@ -686,10 +779,45 @@ export const ParklarQueryWindow = forwardRef<ParkWindowHandle, ParklarQueryWindo
             );
           })}
         </ul>
-        {visibleCount < resultList.length ? (
-          <button type="button" className="kr-fast-query__more" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
-            Daha fazla park göster ({resultList.length - visibleCount} kaldı)
-          </button>
+        {!loading && resultList.length > 0 ? (
+          <nav className="kr-fast-query__paging" aria-label="Park sonuç gezinme">
+            <p className="kr-fast-query__range" aria-live="polite" aria-atomic="true">
+              {pageStart + 1}–{pageStart + Math.min(visibleCount, resultList.length - pageStart)} / {resultList.length} park
+            </p>
+            <div className="kr-fast-query__paging-actions">
+              {pageStart > 0 ? (
+                <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
+                  onClick={(event) => {
+                    const previousStart = Math.max(0, pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    schedulePageFocus(event, 0);
+                    setPageStart(previousStart);
+                    setVisibleCount(Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - previousStart));
+                  }}>
+                  Önceki park grubuna dön
+                </button>
+              ) : null}
+              {visibleCount < Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart) ? (
+                <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
+                  onClick={(event) => {
+                    schedulePageFocus(event, visibleCount);
+                    setVisibleCount((count) => Math.min(count + PAGE_SIZE, QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart));
+                  }}>
+                  Daha fazla park göster ({Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart) - visibleCount} kaldı)
+                </button>
+              ) : null}
+              {visibleCount >= Math.min(QUERY_RESULT_PAGE_POLICY.maxPageSize, resultList.length - pageStart)
+                && pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize < resultList.length ? (
+                <button type="button" className="kr-fast-query__more" aria-controls={id + '-results'}
+                  onClick={(event) => {
+                    schedulePageFocus(event, 0);
+                    setPageStart(pageStart + QUERY_RESULT_PAGE_POLICY.maxPageSize);
+                    setVisibleCount(Math.min(PAGE_SIZE, resultList.length - pageStart - QUERY_RESULT_PAGE_POLICY.maxPageSize));
+                  }}>
+                  Sonraki park grubuna geç
+                </button>
+              ) : null}
+            </div>
+          </nav>
         ) : null}
       </section>
     );

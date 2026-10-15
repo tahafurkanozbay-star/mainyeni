@@ -14,7 +14,8 @@ import './MapWidgetSurface.css';
 
 export interface MapWidgetManagerLike extends QueryWindowManagerLike {
   readonly IsVisible: (id: string) => boolean;
-  readonly ShowWindow: (id: string) => void;
+  readonly ShowWindow: (id: string, query?: unknown) => void;
+  readonly GetQueryParams?: (id: string) => unknown;
   readonly RegisterWindow: (ref: RefObject<ManagedWindowHandle | null>) => void;
   readonly UnregisterWindow?: (id: string, ref: RefObject<ManagedWindowHandle | null>) => void;
   readonly HideWindow: (id: string) => void;

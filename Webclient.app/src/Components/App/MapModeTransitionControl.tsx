@@ -1,4 +1,4 @@
-import { useId, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type {
   MapModeTransitionModel,
@@ -31,20 +31,33 @@ export const MapModeTransitionControl = ({
 }: MapModeTransitionControlProps): ReactNode => {
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const statusId = useId();
+  const keyboardHelpId = useId();
   const recoveryId = useId();
+  const mode2DRef = useRef<HTMLButtonElement>(null);
+  const mode3DRef = useRef<HTMLButtonElement>(null);
+  const [focusedMode, setFocusedMode] = useState<ExperienceMapMode | null>(null);
   const classNames = ['map-mode-transition-control', className].filter(Boolean).join(' ');
   const canRecover = snapshot.phase === 'error' && snapshot.activeMode !== snapshot.desiredMode;
 
   const request = (mode: ExperienceMapMode, source: MapModeTransitionSource = 'control'): void => {
     if (snapshot.busy && snapshot.desiredMode === mode) return;
+    // An already active, settled view needs no new GIS transition.
+    // Recovery stays explicit and is never suppressed by this guard.
+    if (source === 'control' && !snapshot.busy && snapshot.activeMode === mode && snapshot.phase !== 'error') return;
     onRequest(mode, source);
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const next = event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'Home'
+      ? '2d'
+      : event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'End'
+        ? '3d' : null;
+    if (!next) return;
     event.preventDefault();
-    if (event.key === 'ArrowLeft' || event.key === 'Home') request('2d');
-    else request('3d');
+    setFocusedMode(next);
+    (next === '2d' ? mode2DRef : mode3DRef).current?.focus({ preventScroll: true });
+    request(next);
   };
 
   return (
@@ -70,8 +83,14 @@ export const MapModeTransitionControl = ({
         className="map-mode-transition-control__segments"
         role="group"
         aria-label="2B ve 3B görünüm seçimi"
-        aria-describedby={statusId}
+        aria-describedby={statusId + ' ' + keyboardHelpId}
+        aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
         onKeyDown={handleKeyDown}
+        onBlur={(event) => {
+          // Preserve the roving position between segments; after leaving,
+          // the current active view should own the next keyboard tab stop.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusedMode(null);
+        }}
       >
         {(['2d', '3d'] as const).map((mode) => {
           const active = snapshot.activeMode === mode;
@@ -80,13 +99,16 @@ export const MapModeTransitionControl = ({
           return (
             <button
               key={mode}
+              ref={mode === '2d' ? mode2DRef : mode3DRef}
               type="button"
               className="map-mode-transition-control__segment"
               aria-pressed={active}
+              tabIndex={(focusedMode ?? snapshot.activeMode) === mode ? 0 : -1}
               aria-label={modeDescription(mode)}
               aria-describedby={pending ? statusId : undefined}
               data-active={active || undefined}
               data-pending={pending || undefined}
+              onFocus={() => setFocusedMode(mode)}
               onClick={() => request(mode)}
             >
               <span className="map-mode-transition-control__mode" aria-hidden="true">
@@ -102,6 +124,10 @@ export const MapModeTransitionControl = ({
           );
         })}
       </div>
+
+      <p id={keyboardHelpId} className="map-mode-transition-control__announcement">
+        Sol veya yukarı okla 2B haritaya, sağ veya aşağı okla 3B sahneye geçin. Home ve End tuşları da kullanılabilir.
+      </p>
 
       <p
         id={statusId}

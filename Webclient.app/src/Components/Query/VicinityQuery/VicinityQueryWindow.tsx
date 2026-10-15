@@ -36,6 +36,7 @@ import type {
   ManagedQueryWindowManager,
   UnknownRecord,
 } from '../_Common/QuerySurfaceContracts';
+import { selectionFromWindowQuery, snapshotMapSelection, type MapSelectionEvent } from '../../Widget/_shared/MapSelectionSnapshot';
 import './VicinityQueryWindow.css';
 
 const DEFAULT_BUFFER_DISTANCE = 20;
@@ -139,6 +140,9 @@ export const VicinityQueryWindow = forwardRef<
   const selectedGraphicRef = useRef<unknown>(null);
   const mountedRef = useRef(true);
   const requestGateRef = useRef(createLatestRequestGate());
+  const selectionRef = useRef<MapSelectionEvent | null>(null);
+  const bufferGenerationRef = useRef(0);
+  const itemGenerationRef = useRef(0);
   const resourceRegistryRef = useRef(createOwnedResourceRegistry<never, unknown>({
     removeGraphic: (graphic) => {
       MapManager.RemoveGraphics(graphic);
@@ -162,6 +166,9 @@ export const VicinityQueryWindow = forwardRef<
 
   const resetWindow = useCallback((): void => {
     requestGateRef.current.invalidate();
+    bufferGenerationRef.current += 1;
+    itemGenerationRef.current += 1;
+    selectionRef.current = null;
     clearOwnedGraphics();
     setFilteredOptions(null);
     setBufferDistance(DEFAULT_BUFFER_DISTANCE);
@@ -170,8 +177,9 @@ export const VicinityQueryWindow = forwardRef<
   }, [clearOwnedGraphics]);
 
   const drawBuffer = useCallback(async (distance: number): Promise<void> => {
-    const event = readMapClickEvent();
-    if (!event?.mapPoint) return;
+    const point = selectionRef.current?.mapPoint;
+    const generation = ++bufferGenerationRef.current;
+    if (!point) return;
 
     try {
       const [Circle, Graphic] = await loadArcgisModules<
@@ -182,7 +190,7 @@ export const VicinityQueryWindow = forwardRef<
       ]);
 
       const circleGeometry = new Circle({
-        center: event.mapPoint,
+        center: point,
         geodesic: true,
         numberOfPoints: 100,
         radius: distance * 100,
@@ -197,6 +205,7 @@ export const VicinityQueryWindow = forwardRef<
         },
       });
 
+      if (!mountedRef.current || generation !== bufferGenerationRef.current) return;
       removeGraphic(bufferGraphicRef);
       bufferGraphicRef.current = graphic;
       resourceRegistryRef.current.trackGraphic(graphic);
@@ -206,7 +215,7 @@ export const VicinityQueryWindow = forwardRef<
         error,
         'Arama alanı haritada çizilemedi.',
       );
-      if (mountedRef.current) setErrorMessage(message);
+      if (mountedRef.current && generation === bufferGenerationRef.current) setErrorMessage(message);
     }
   }, [removeGraphic]);
 
@@ -215,7 +224,10 @@ export const VicinityQueryWindow = forwardRef<
     visible: windowManager.IsVisible(id),
     minimized: windowManager.IsMinimized(id),
     OnShow: () => {
-      setBufferDistance(DEFAULT_BUFFER_DISTANCE);
+      const selected = selectionFromWindowQuery(windowManager.GetQueryParams(id))
+        ?? snapshotMapSelection(readMapClickEvent());
+      resetWindow();
+      selectionRef.current = selected;
       void drawBuffer(DEFAULT_BUFFER_DISTANCE);
     },
     OnClose: resetWindow,
@@ -249,6 +261,9 @@ export const VicinityQueryWindow = forwardRef<
       active = false;
       mountedRef.current = false;
       requestGateRef.current.invalidate();
+      bufferGenerationRef.current += 1;
+      itemGenerationRef.current += 1;
+      selectionRef.current = null;
       clearOwnedGraphics();
       mapViewRef.current = null;
       windowManager.UnregisterWindow?.(id, ref);
@@ -258,6 +273,10 @@ export const VicinityQueryWindow = forwardRef<
   const bufferDistanceChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const value = Number.parseInt(event.target.value, 10);
     if (!Number.isFinite(value) || value < 1 || value > 100) return;
+    requestGateRef.current.invalidate();
+    setLoading(false);
+    setFilteredOptions(null);
+    setErrorMessage('');
     setBufferDistance(value);
     void drawBuffer(value);
   };
@@ -326,6 +345,7 @@ export const VicinityQueryWindow = forwardRef<
       `${String(item.Id ?? '')}/${item.Title}`,
     );
 
+    const generation = ++itemGenerationRef.current;
     try {
       const sourceGeometry = item.geometry ?? item.Geometry;
       if (!sourceGeometry) throw new Error('Sonuç konumu bulunamadı.');
@@ -334,9 +354,11 @@ export const VicinityQueryWindow = forwardRef<
         sourceGeometry,
         '4326',
       );
+      if (!mountedRef.current || generation !== itemGenerationRef.current) return;
       const graphic = await GisGraphicsHelper.CreateGraphicFromGeometry(
         projectedGeometry,
       );
+      if (!mountedRef.current || generation !== itemGenerationRef.current) return;
 
       removeGraphic(selectedGraphicRef);
       selectedGraphicRef.current = graphic;
@@ -352,6 +374,7 @@ export const VicinityQueryWindow = forwardRef<
         windowManager.ToggleMinimiseWindow(id);
       }
     } catch (error) {
+      if (!mountedRef.current || generation !== itemGenerationRef.current) return;
       windowManager.ShowMessage(
         Constants_MessageType.Error,
         normalizeErrorMessage(error, 'Sonuç haritada gösterilemedi.'),
@@ -396,7 +419,7 @@ export const VicinityQueryWindow = forwardRef<
   ): Promise<void> => {
     event.preventDefault();
 
-    const mapEvent = readMapClickEvent();
+    const mapEvent = selectionRef.current;
     if (!mapEvent?.mapPoint) {
       const message = 'Yakın çevre araması için önce haritada bir konum seçin.';
       setErrorMessage(message);
@@ -410,7 +433,7 @@ export const VicinityQueryWindow = forwardRef<
     void safeClientLog(
       LoggingBusiness,
       'Yakınımda Ara/Sorgu',
-      `${String(mapEvent.mapPoint.latitude ?? '')}/${String(mapEvent.mapPoint.longitude ?? '')}/${bufferDistance}`,
+      `mesafe=${bufferDistance * 100}m`,
     );
 
     try {

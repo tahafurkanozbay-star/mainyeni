@@ -1,12 +1,15 @@
 import { createRef } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ParklarQueryWindow, type ParkWindowHandle } from './ParklarQueryWindow';
 import { ParklarQeryBusiness } from '../../../Business/ParklarQeryBusiness';
+import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { CommonBusiness } from '../../../Business/CommonBusiness';
 import MapManager from '../../../Store/Managers/MapManager';
 import { createKentRehberiGeoJsonLayer } from '../../../data-services/kentRehberiGeoJsonLayer';
+import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 
+vi.mock('../../../Toolbox/GisGraphicsHelper', () => ({ GisGraphicsHelper: { ZoomToGeometry: vi.fn() } }));
 vi.mock('../../../Business/ParklarQeryBusiness', () => ({ ParklarQeryBusiness: { Query: vi.fn() } }));
 vi.mock('../../../Business/CommonBusiness', () => ({ CommonBusiness: { Clustering: { CreateLayerWithoutClustering: vi.fn() } } }));
 vi.mock('../../../Business/LoggingBusiness', () => ({ LoggingBusiness: { CreateClientLog: vi.fn(async () => undefined) } }));
@@ -63,6 +66,41 @@ describe('Parklar service window', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Daha fazla park göster (40 kaldı)' }));
     expect(screen.getAllByRole('listitem')).toHaveLength(100);
     expect(screen.queryByRole('button', { name: /Daha fazla park/ })).not.toBeInTheDocument();
+    expect(screen.getByText('1–100 / 100 park')).toBeVisible();
+  });
+
+  it('keeps duplicate service IDs as distinct accessible rows and action owners', async () => {
+    const response = makeResponse(2);
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValueOnce({
+      ...response,
+      data: [
+        { attr: { objectid: 7, adi: 'Birinci Park', adres: 'Ankara' } },
+        { attr: { objectid: 7, adi: 'İkinci Park', adres: 'Ankara' } },
+      ],
+    } as never).mockImplementationOnce(() => new Promise(() => undefined));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    const errorSpy = vi.spyOn(console, 'error');
+    try {
+      await act(async () => { await ref.current?.OnShow(); });
+      expect(errorSpy.mock.calls.some(([message]) => /same key|unique.*key/i.test(String(message)))).toBe(false);
+    } finally {
+      errorSpy.mockRestore();
+    }
+    const list = screen.getByRole('list', { name: 'Park sonuçları' });
+    const rows = Array.from(list.querySelectorAll(':scope > li'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute('aria-posinset', '1');
+    expect(rows[1]).toHaveAttribute('aria-posinset', '2');
+    expect(rows[0]).toHaveAttribute('aria-setsize', '2');
+    expect(rows[1]).toHaveAttribute('aria-setsize', '2');
+    const first = screen.getByRole('button', { name: 'Birinci Park konumunu haritada göster' });
+    const second = screen.getByRole('button', { name: 'İkinci Park konumunu haritada göster' });
+    fireEvent.click(second);
+    expect(second).toHaveAttribute('aria-busy', 'true');
+    expect(first).not.toHaveAttribute('aria-busy', 'true');
+    await waitFor(() => expect(vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[0]).toEqual({ ObjectId: 7 }));
+    await act(async () => { ref.current?.OnClose(); });
   });
 
   it('cancels a pending layer on close and disposes its late result', async () => {
@@ -80,4 +118,267 @@ describe('Parklar service window', () => {
     expect(map.add).not.toHaveBeenCalled();
     expect(layer.destroy).toHaveBeenCalledOnce();
   });
+  it('keeps park queries responsive when logging stalls and omits private query details', async () => {
+    const logger = vi.mocked(LoggingBusiness.CreateClientLog);
+    logger.mockReturnValue(new Promise<unknown>(() => undefined));
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse() as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref, manager } = setup();
+    Object.assign(manager, {
+      GetQueryParams: () => ({ name: 'PRIVATE_PARK_QUERY', districtName: 'PRIVATE_DISTRICT' }),
+    });
+    await act(async () => { await ref.current?.OnShow(); });
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+    expect(screen.getByText('Park 1')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    expect(logger).toHaveBeenCalledTimes(2);
+    const audit = JSON.stringify(logger.mock.calls);
+    expect(audit).toContain('query-fields:2');
+    expect(audit).toContain('record-detail-opened');
+    expect(audit).not.toContain('PRIVATE_PARK_QUERY');
+    expect(audit).not.toContain('PRIVATE_DISTRICT');
+    expect(audit).not.toContain('Ankara');
+  });
+
+  it('offers a second park result group for large responses', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(201) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }));
+    }
+    expect(screen.getByText('Park 200')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
+    expect(screen.getByText('Park 201')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+  });
+
+
+  it('does not skip parks across multiple 200-record groups', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(401) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    expect(screen.getAllByRole('listitem')).toHaveLength(60);
+    expect(screen.queryByRole('button', { name: 'Önceki park grubuna dön' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }));
+    }
+    expect(screen.getByText('Park 200')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
+    expect(screen.getByText('Park 201')).toBeVisible();
+    const firstOfSecondGroup = screen.getByRole('button', { name: 'Park 201 konumunu haritada göster' }).closest('li');
+    expect(firstOfSecondGroup).toHaveAttribute('aria-posinset', '201');
+    expect(firstOfSecondGroup).toHaveAttribute('aria-setsize', '401');
+    expect(screen.getAllByRole('listitem')).toHaveLength(60);
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daha fazla park göster (140 kaldı)' })).toBeVisible();
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }));
+    }
+    expect(screen.getByText('Park 400')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki park grubuna geç' }));
+    expect(screen.getByText('Park 401')).toBeVisible();
+    const lastPark = screen.getByRole('button', { name: 'Park 401 konumunu haritada göster' }).closest('li');
+    expect(lastPark).toHaveAttribute('aria-posinset', '401');
+    expect(lastPark).toHaveAttribute('aria-setsize', '401');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Sonraki park grubuna geç' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki park grubuna dön' }));
+    expect(screen.getByText('Park 400')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki park grubuna dön' }));
+    expect(screen.getByText('Park 200')).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(200);
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+  });
+
+  it('aborts a pending detail on close and ignores a late response', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse() as never)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref, manager } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    await waitFor(() => expect(ParklarQeryBusiness.Query).toHaveBeenCalledTimes(2));
+    const signal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    act(() => { ref.current?.OnClose(); });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => {
+      finish({ ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }] } as never);
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    expect(manager.ToggleMinimiseWindow).not.toHaveBeenCalled();
+    expect(manager.ShowMessage).not.toHaveBeenCalled();
+  });
+
+  it('prevents a superseded detail from moving the map', async () => {
+    let finishFirst!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    let finishSecond!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse(2) as never)
+      .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishSecond = resolve; }));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Park 2 konumunu haritada göster' }));
+    await act(async () => { await Promise.resolve(); }); // Flush both deadline-owned transport starts.
+    const firstSignal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
+    expect(firstSignal?.aborted).toBe(true);
+    await act(async () => {
+      finishSecond({ ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }] } as never);
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce();
+    await act(async () => {
+      finishFirst({ ...makeResponse(), data: [{ geometry: { x: 30, y: 40 } }] } as never);
+    });
+    expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce();
+  });
+
+  it('uses native button activation once and gives every secondary action a record name', async () => {
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse(2) as never)
+      .mockResolvedValueOnce({
+        ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }],
+      } as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const primary = screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' });
+    expect(screen.getByRole('button', { name: 'Park 1 — Haritada göster' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Park 2 — Yol tarifi' })).toBeVisible();
+    fireEvent.keyDown(primary, { key: 'Enter' });
+    fireEvent.click(primary, { detail: 0 });
+    await waitFor(() => expect(GisGraphicsHelper.ZoomToGeometry).toHaveBeenCalledOnce());
+    expect(ParklarQeryBusiness.Query).toHaveBeenCalledTimes(2);
+  });
+
+  it('moves keyboard focus between bounded park groups without a second service query', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(201) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    // Reveal the first complete group before keyboard paging is offered.
+    for (let reveal = 0; reveal < 3; reveal += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Daha fazla park göster/ }), { detail: 1 });
+    }
+    const callbacks: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    try {
+      const next = screen.getByRole('button', { name: 'Sonraki park grubuna geç' });
+      next.focus();
+      fireEvent.click(next, { detail: 0 });
+      act(() => { callbacks.splice(0).forEach((callback) => callback(0)); });
+      expect(screen.getByRole('button', { name: 'Park 201 konumunu haritada göster' })).toHaveFocus();
+      const previous = screen.getByRole('button', { name: 'Önceki park grubuna dön' });
+      previous.focus();
+      fireEvent.click(previous, { detail: 0 });
+      act(() => { callbacks.splice(0).forEach((callback) => callback(0)); });
+      expect(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' })).toHaveFocus();
+      expect(ParklarQeryBusiness.Query).toHaveBeenCalledOnce();
+    } finally { frame.mockRestore(); }
+  });
+
+  it('does not reclaim focus from a pointer-triggered park reveal', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(100) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const frame = vi.spyOn(window, 'requestAnimationFrame');
+    try {
+      const back = screen.getByRole('button', { name: 'Hizmetlere dön' });
+      back.focus();
+      fireEvent.click(screen.getByRole('button', { name: 'Daha fazla park göster (40 kaldı)' }), { detail: 1 });
+      expect(back).toHaveFocus();
+      expect(screen.getAllByRole('listitem')).toHaveLength(100);
+      expect(frame).not.toHaveBeenCalled();
+    } finally { frame.mockRestore(); }
+  });
+
+  it('cancels pending keyboard paging focus on close', async () => {
+    vi.mocked(ParklarQeryBusiness.Query).mockResolvedValue(makeResponse(100) as never);
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    const callbacks: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    try {
+      const more = screen.getByRole('button', { name: 'Daha fazla park göster (40 kaldı)' });
+      more.focus();
+      fireEvent.click(more, { detail: 0 });
+      expect(callbacks).toHaveLength(1);
+      act(() => { ref.current?.OnClose(); });
+      expect(cancel).toHaveBeenCalledWith(1);
+      act(() => { callbacks[0]?.(0); });
+      expect(screen.queryByRole('button', { name: 'Park 61 konumunu haritada göster' })).not.toBeInTheDocument();
+    } finally { frame.mockRestore(); cancel.mockRestore(); }
+  });
+
+
+  it('announces pending park action and bounds an unresponsive detail transport', async () => {
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse() as never)
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref, manager } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    vi.useFakeTimers();
+    try {
+      const primary = screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' });
+      fireEvent.click(primary);
+      expect(primary).toHaveAttribute('aria-busy', 'true');
+      const pendingStatus = screen.getByText('Park konumu hazırlanıyor…').closest('output');
+      expect(pendingStatus).toBeVisible();
+      expect(pendingStatus).toHaveAttribute('aria-live', 'polite');
+      expect(pendingStatus).not.toHaveAttribute('aria-busy');
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      const signal = vi.mocked(ParklarQeryBusiness.Query).mock.calls[1]?.[2]?.signal;
+      expect(signal?.aborted).toBe(true);
+      expect(screen.getByText('Park konumu zaman aşımına uğradı. Tekrar deneyin.')).toBeVisible();
+      expect(primary).not.toHaveAttribute('aria-busy');
+      expect(manager.ShowMessage).not.toHaveBeenCalled();
+      expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not expose stale action feedback after closing the window', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof ParklarQeryBusiness.Query>>) => void;
+    vi.mocked(ParklarQeryBusiness.Query)
+      .mockResolvedValueOnce(makeResponse() as never)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(createKentRehberiGeoJsonLayer).mockResolvedValue({});
+    const { ref } = setup();
+    await act(async () => { await ref.current?.OnShow(); });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Park 1 konumunu haritada göster' }));
+      await Promise.resolve(); // Flush the detail operation microtask before closing.
+    });
+    expect(screen.getByText('Park konumu hazırlanıyor…')).toBeInTheDocument();
+    act(() => { ref.current?.OnClose(); });
+    expect(screen.queryByText('Park konumu hazırlanıyor…')).not.toBeInTheDocument();
+    await act(async () => {
+      finish({ ...makeResponse(), data: [{ geometry: { x: 32.85, y: 39.92 } }] } as never);
+    });
+    expect(screen.queryByText('Park konumu haritada gösterildi.')).not.toBeInTheDocument();
+  });
+
 });

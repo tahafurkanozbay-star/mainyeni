@@ -154,6 +154,36 @@ describe('ExperienceMenu', () => {
     expect(onDismiss).toHaveBeenCalledWith('escape');
   });
 
+  it.each([
+    { key: 'Escape', altKey: true },
+    { key: 'Escape', ctrlKey: true },
+    { key: 'Escape', metaKey: true },
+    { key: 'Escape', isComposing: true },
+    { key: 'ArrowDown', isComposing: true },
+  ])('leaves platform and IME keyboard ownership intact: $key', (options) => {
+    const onDismiss = vi.fn();
+    render(<ExperienceMenu label="Menü" onDismiss={onDismiss} items={[
+      { id: 'first', label: 'Bir' },
+      { id: 'second', label: 'İki' },
+    ]} />);
+    const first = screen.getByRole('menuitem', { name: 'Bir' });
+    first.focus();
+    const event = new KeyboardEvent('keydown', { ...options, bubbles: true, cancelable: true });
+    screen.getByRole('menu').dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(first).toHaveFocus();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('respects a previously handled Escape event', () => {
+    const onDismiss = vi.fn();
+    render(<ExperienceMenu label="Menü" onDismiss={onDismiss} items={[{ id: 'first', label: 'Bir' }]} />);
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    event.preventDefault();
+    screen.getByRole('menu').dispatchEvent(event);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it('reports Tab dismissal without trapping focus', () => {
     const onDismiss = vi.fn();
     render(
@@ -195,6 +225,87 @@ describe('ExperienceMenu', () => {
     const describedBy = item.getAttribute('aria-describedby');
     expect(describedBy).toBe('described-menu-identify-description');
     expect(document.getElementById(describedBy ?? '')?.textContent).toBe('Noktadaki harita detaylarını açar.');
+  });
+
+  it('keeps descriptions associated with their own menu when ids are omitted', () => {
+    render(
+      <>
+        <ExperienceMenu label="İlk menü" items={[{ id: 'open', label: 'Aç', description: 'Birinci menü açıklaması' }]} />
+        <ExperienceMenu label="İkinci menü" items={[{ id: 'open', label: 'Aç', description: 'İkinci menü açıklaması' }]} />
+      </>,
+    );
+    const [first, second] = screen.getAllByRole('menuitem', { name: 'Aç' });
+    const firstId = first?.getAttribute('aria-describedby');
+    const secondId = second?.getAttribute('aria-describedby');
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(firstId).not.toBe(secondId);
+    expect(document.getElementById(firstId ?? '')).toHaveTextContent('Birinci menü açıklaması');
+    expect(document.getElementById(secondId ?? '')).toHaveTextContent('İkinci menü açıklaması');
+  });
+
+  it('supports Turkish menu typeahead without activating actions', () => {
+    const onActivate = vi.fn();
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'identify', label: 'Bilgi Al', onActivate },
+      { id: 'nearby', label: 'Yakınımda Ara', onActivate },
+      { id: 'route', label: 'Yol Tarifi Al', onActivate },
+    ]} />);
+    const menu = screen.getByRole('menu');
+    screen.getByRole('menuitem', { name: 'Bilgi Al' }).focus();
+    fireEvent.keyDown(menu, { key: 'y' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Yakınımda Ara' }));
+    fireEvent.keyDown(menu, { key: 'y' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Yol Tarifi Al' }));
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('cycles same-letter matches while skipping disabled actions', () => {
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'one', label: 'Bilgi' },
+      { id: 'disabled', label: 'Bina', disabled: true },
+      { id: 'two', label: 'Bölge' },
+      { id: 'three', label: 'Başlangıç' },
+    ]} />);
+    const menu = screen.getByRole('menu');
+    screen.getByRole('menuitem', { name: 'Bilgi' }).focus();
+    fireEvent.keyDown(menu, { key: 'b' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Bölge' }));
+    fireEvent.keyDown(menu, { key: 'b' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Başlangıç' }));
+  });
+
+  it('preserves Space, Tab and modified shortcut ownership', () => {
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'one', label: 'Bilgi' },
+      { id: 'two', label: 'Yol' },
+    ]} />);
+    const menu = screen.getByRole('menu');
+    const first = screen.getByRole('menuitem', { name: 'Bilgi' });
+    first.focus();
+    fireEvent.keyDown(menu, { key: 'y', ctrlKey: true });
+    fireEvent.keyDown(menu, { key: ' ' });
+    fireEvent.keyDown(menu, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+  });
+
+
+  it.each([
+    { key: 'ArrowDown', ctrlKey: true },
+    { key: 'ArrowUp', metaKey: true },
+    { key: 'Home', shiftKey: true },
+    { key: 'End', altKey: true },
+  ])('does not hijack modified menu navigation: $key', (modifiers) => {
+    render(<ExperienceMenu label="Menü" items={[
+      { id: 'one', label: 'Bir' },
+      { id: 'two', label: 'İki' },
+    ]} />);
+    const first = screen.getByRole('menuitem', { name: 'Bir' });
+    first.focus();
+    const event = new KeyboardEvent('keydown', { ...modifiers, bubbles: true, cancelable: true });
+    screen.getByRole('menu').dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(first).toHaveFocus();
   });
 
   it('supports non-looping menus', () => {
