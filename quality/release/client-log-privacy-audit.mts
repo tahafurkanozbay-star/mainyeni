@@ -22,7 +22,8 @@ const SENSITIVE_PATH = /\b(?:pathForLog|numberingPathLabelV\d*)\s*\(/;
 const SENSITIVE_SERIALIZATION = /\bJSON\s*\.\s*stringify\s*\(\s*(?:query|path|params|payload|record|item|selection|address|coordinates|location)\b/i;
 const SENSITIVE_PROPERTY = /\b[A-Za-z_$][A-Za-z0-9_$]*\s*(?:\?\.|\.)\s*(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)\b/i;
 const SENSITIVE_RUNTIME_SOURCE = /\b(?:latestQuery|mapPoint|mapEvent\s*(?:\?\.|\.)\s*mapPoint|item\s*(?:\?\.|\.)\s*(?:Title|title)|(?:query|params|payload|record|item|selection)\s*(?:\?\.|\.)\s*(?:name|districtName|nbhoodName))\b/i;
-const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door)\b[^}]*\}/i;
+const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door|query|path|params|payload|record|item|selection|coordinates|location|geometry|mapPoint|searchText|queryText|latestQuery)\b[^}]*\}/i;
+const SENSITIVE_NESTED_VALUE = /(?:[,:\[]\s*|\.\.\.\s*)(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}\]]|$)/i;
 
 function isRuntime(file: SourceFile): boolean {
   return RUNTIME_PATH.test(file.repositoryPath)
@@ -135,10 +136,11 @@ function riskReason(argument: string): string | null {
   if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';
   if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(argument)) return 'sensitive-object-key';
   if (/\[\s*['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*\]/.test(argument)) return 'sensitive-bracket-property';
-  if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText)\b/.test(argument)) return 'wrapped-location-value';
+  if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(argument)) return 'wrapped-location-value';
   if (/['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*:/.test(argument)) return 'sensitive-object-key';
   if (SENSITIVE_PROPERTY.test(argument)) return 'sensitive-property';
   if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
+  if (SENSITIVE_NESTED_VALUE.test(argument)) return 'nested-sensitive-value';
   if (SENSITIVE_RUNTIME_SOURCE.test(argument)) return 'location-or-search-value';
   return null;
 }
