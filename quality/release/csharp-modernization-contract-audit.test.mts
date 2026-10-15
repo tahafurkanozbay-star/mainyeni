@@ -37,6 +37,24 @@ test('reports Task.Result sync-over-async', () => {
   assert.ok(result.findings.some(item => item.id === 'csharp-sync-over-async'));
 });
 
+test('does not classify MVC action result assignment as Task.Result blocking', () => {
+  const result = audit([{
+    path: 'Api.Admin/Filters/AdminRequestFilterAttribute.cs',
+    text: 'public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next) { context.Result = new UnauthorizedResult(); await next(); }',
+  }]);
+  assert.equal(result.summary.syncOverAsync, 0);
+  assert.ok(!result.findings.some(item => item.id === 'csharp-sync-over-async'));
+});
+
+test('does not suppress real Task.Result reads alongside MVC result assignments', () => {
+  const result = audit([{
+    path: 'Api.Admin/Filters/AdminRequestFilterAttribute.cs',
+    text: 'context.Result = new UnauthorizedResult(); var blocked = authenticationTask.Result; authenticationTask.Wait();',
+  }]);
+  assert.equal(result.summary.syncOverAsync, 2);
+  assert.equal(result.findings.filter(item => item.id === 'csharp-sync-over-async').length, 2);
+});
+
 test('reports Task.Wait sync-over-async', () => {
   const result = audit([{ path: 'Business/QueryService.cs', text: 'task.Wait();' }]);
   assert.equal(result.summary.syncOverAsync, 1);
