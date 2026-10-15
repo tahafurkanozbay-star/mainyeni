@@ -83,6 +83,23 @@ const normalizeName = (raw: unknown): string =>
     .replace(/ı/gu, 'i')
     .replace(/\s+/gu, ' ');
 
+// Direct mode must honor the same input contract as the same-origin API.
+// Validate *before* dispatching any of the 43 category requests so hostile,
+// oversized, or malformed search terms do not trigger a costly upstream sweep.
+const requestFilter = (raw: unknown, field: string, maximum: number, minimum: number): string => {
+  if (raw === null || raw === undefined || raw === '') return '';
+  if (typeof raw !== 'string') throw new TypeError(`Invalid PlanASKI ${field} filter.`);
+  const value = raw.trim();
+  if (!value) return '';
+  if (value.length < minimum || value.length > maximum) {
+    throw new RangeError(`PlanASKI ${field} filter exceeds its length bounds.`);
+  }
+  if (/[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+    throw new TypeError(`PlanASKI ${field} filter contains control characters.`);
+  }
+  return normalizeName(value);
+};
+
 const parseFeature = (raw: unknown, tur: number): KentRehberiGeoJsonFeature => {
   if (!isObject(raw)) throw new TypeError('PlanASKI returned an invalid record.');
   const objectid = requiredInteger(raw.objectId ?? raw.objectid, 1, 2147483647);
@@ -269,10 +286,10 @@ export const fetchPlanAskiGeoJsonDirect = async (
     throw new RangeError('Invalid PlanASKI result limit.');
   }
   const category = options.tur === undefined ? undefined : sourceType(options.tur);
+  const q = requestFilter(options.q, 'q', 120, 2);
+  const ilce = requestFilter(options.ilce, 'ilce', 50, 1);
+  const mahalle = requestFilter(options.mahalle, 'mahalle', 50, 1);
   const all = fullSet(await fetchCategories(options, category));
-  const q = normalizeName(options.q);
-  const ilce = normalizeName(options.ilce);
-  const mahalle = normalizeName(options.mahalle);
   const filtered = all.filter((item) => {
     const p = item.properties;
     return (!ilce || normalizeName(p.ilce) === ilce)
