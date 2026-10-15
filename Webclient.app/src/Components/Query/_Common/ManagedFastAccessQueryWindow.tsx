@@ -691,8 +691,8 @@ export function createManagedFastAccessQueryWindow({
                   className="kr-fast-query__item-icon"
                 />
                 <div className="result-item-info kr-fast-query__copy">
-                  <h3 className="result-item-info-title">{item.title}</h3>
-                  <p className="result-item-info-address">{item.address}</p>
+                  <h3 className="result-item-info-title" title={item.title}>{item.title}</h3>
+                  <p className="result-item-info-address" title={item.address}>{item.address}</p>
                   {item.phone ? (
                     <a href={'tel:' + item.phone.replace(/[^+\d]/g, '')}>{item.phone}</a>
                   ) : null}

@@ -22,9 +22,10 @@
 .kr-fast-query__header h2 {
   min-width: 0;
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: clip;
   font-size: 1.55rem;
   line-height: 1.25;
   font-weight: 700;
@@ -143,6 +144,8 @@
 
 .kr-fast-query__copy {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   display: block;
   text-align: start;
   padding: 0;
@@ -153,9 +156,27 @@
   margin: 0;
 }
 
-.kr-fast-query__copy h3 {
+/* Override generic result-card single-line and ellipsis rules. Full
+   facility names must remain legible in the narrow left-hand panel. */
+.kr-fast-query .kr-fast-query__item .kr-fast-query__copy h3 {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+  text-overflow: clip;
   font-size: 1.3rem;
   line-height: 1.35;
+}
+
+.kr-fast-query .kr-fast-query__item .kr-fast-query__copy p {
+  max-width: 100%;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: clip;
 }
 
 .kr-fast-query__copy p,
