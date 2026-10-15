@@ -170,7 +170,7 @@ export function decidePullRequestRegression(delta: RegressionDelta): {
   return { findings, decision };
 }
 
-function markdown(result: PullRequestGateResult): string {
+export function pullRequestGateMarkdown(result: PullRequestGateResult): string {
   const { delta, decision } = result;
   const lines = [
     '# Kent Rehberi — PR Regression Gate',
@@ -197,7 +197,12 @@ function markdown(result: PullRequestGateResult): string {
   lines.push('## New critical/high findings', '');
   const severe = delta.added.filter(item => item.severity === 'critical' || item.severity === 'high');
   if (severe.length === 0) lines.push('No new critical/high static findings relative to the exact base SHA.');
-  else for (const item of severe) lines.push(`- **${item.severity.toUpperCase()}** \`${item.key}\``);
+  else for (const item of severe) {
+      // Finding keys can contain raw URL/query/source evidence. Do not emit
+      // those keys to CI stdout or downloadable Markdown artifacts.
+      const safeRuleId = findingId(item).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96) || 'unknown-rule';
+      lines.push(`- **${item.severity.toUpperCase()}** \`${safeRuleId}\` (${item.domain})`);
+    }
   lines.push('');
   return `${lines.join('\n')}\n`;
 }
@@ -236,7 +241,7 @@ export async function runPullRequestGate(options: {
 
   mkdirSync(options.outputDirectory, { recursive: true });
   writeFileSync(resolve(options.outputDirectory, 'pr-regression-gate.json'), `${JSON.stringify(result, null, 2)}\n`, 'utf8');
-  writeFileSync(resolve(options.outputDirectory, 'pr-regression-gate.md'), markdown(result), 'utf8');
+  writeFileSync(resolve(options.outputDirectory, 'pr-regression-gate.md'), pullRequestGateMarkdown(result), 'utf8');
   return result;
 }
 
@@ -249,7 +254,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   const currentCommit = valueAfter(args, '--current-commit') ?? process.env.GITHUB_SHA ?? 'unknown-current';
   const baselineCommit = valueAfter(args, '--baseline-commit') ?? process.env.GITHUB_BASE_SHA ?? 'unknown-baseline';
   const result = await runPullRequestGate({ currentRoot, baselineRoot, currentCommit, baselineCommit, outputDirectory });
-  process.stdout.write(markdown(result));
+  process.stdout.write(pullRequestGateMarkdown(result));
   if (result.decision.state === 'block') {
     process.stderr.write('PR regression gate blocked by new critical/high or material risk regression.\n');
     return 1;
