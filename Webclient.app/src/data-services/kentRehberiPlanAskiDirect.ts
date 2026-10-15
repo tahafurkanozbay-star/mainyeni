@@ -1,3 +1,4 @@
+import { readBoundedResponseText } from './boundedResponseText';
 import type {
   KentRehberiFetchOptions,
   KentRehberiGeoJsonFeature,
@@ -139,10 +140,7 @@ const fetchType = async (
   if (Number.isFinite(statedBytes) && statedBytes > MAX_BYTES_PER_TYPE) {
     throw new RangeError('PlanASKI category response exceeded its size budget.');
   }
-  const body = await response.text();
-  if (new TextEncoder().encode(body).byteLength > MAX_BYTES_PER_TYPE) {
-    throw new RangeError('PlanASKI category response exceeded its size budget.');
-  }
+  const body = await readBoundedResponseText(response, MAX_BYTES_PER_TYPE, 'PlanASKI category');
   let parsed: unknown;
   try {
     parsed = JSON.parse(body) as unknown;
