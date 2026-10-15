@@ -74,9 +74,25 @@ test('normalizeRepositoryPath normalizes separators and repeated slashes', () =>
   assert.equal(normalizeRepositoryPath('.\\src\\foo//bar.js'), 'src/foo/bar.js');
 });
 
-test('findingKey incorporates location and evidence', () => {
-  const key = findingKey(sample({ evidence: { value: 'abc' } }));
-  assert.match(key, /release\|sample\|src\/sample\.js:2\|abc/);
+test('findingKey incorporates location and hashes evidence without exposing source data', () => {
+  const raw = 'https://example.test/api?token=top-secret&address=location';
+  const item = sample({ evidence: { value: raw } });
+  const key = findingKey(item);
+  assert.match(key, /^release\|sample\|src\/sample\.js:2\|sha256:[a-f0-9]{64}$/);
+  assert.equal(key, findingKey(item));
+  assert.ok(!key.includes('top-secret'));
+  assert.ok(!key.includes('location'));
+  assert.notEqual(key, findingKey(sample({ evidence: { value: raw + '-changed' } })));
+});
+
+test('evidence excerpt and overflow count keys remain unique and redacted', () => {
+  const first = findingKey(sample({ evidence: { excerpt: 'record.address=secret' } }));
+  const second = findingKey(sample({ evidence: { excerpt: 'record.address=another' } }));
+  assert.notEqual(first, second);
+  assert.ok(!first.includes('record.address'));
+  const eight = findingKey(sample({ evidence: { value: 8 } }));
+  const nine = findingKey(sample({ evidence: { value: 9 } }));
+  assert.notEqual(eight, nine);
 });
 
 test('dedupeFindings keeps only identical first finding key', () => {
