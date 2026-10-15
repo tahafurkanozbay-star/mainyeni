@@ -23,10 +23,16 @@ export function isSafeBearerToken(token: unknown): token is string {
 
 /** Reject inherited accessors and array-like payloads at the login boundary. */
 export function isValidAdminSession(value: unknown): value is ValidAdminSession {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  if (!Object.prototype.hasOwnProperty.call(value, 'accessToken')) return false;
-  const token = (value as { readonly accessToken?: unknown }).accessToken;
-  if (!isSafeBearerToken(token)) return false;
-  const name = (value as { readonly userName?: unknown }).userName;
-  return name === undefined || (typeof name === 'string' && name.length <= 512);
+  // Session setters receive unknown values; a Proxy or accessor may throw.
+  // Fail closed without allowing a hostile object to interrupt logout/login.
+  try {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    if (!Object.prototype.hasOwnProperty.call(value, 'accessToken')) return false;
+    const token = (value as { readonly accessToken?: unknown }).accessToken;
+    if (!isSafeBearerToken(token)) return false;
+    const name = (value as { readonly userName?: unknown }).userName;
+    return name === undefined || (typeof name === 'string' && name.length <= 512);
+  } catch {
+    return false;
+  }
 }
