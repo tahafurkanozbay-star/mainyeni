@@ -23,6 +23,7 @@ import {
 } from './contracts.mts';
 import { auditAccessibility } from './accessibility-audit.mts';
 import { auditArtifactProvenance } from './artifact-provenance-audit.mts';
+import { auditReleaseArtifactPrivacy } from './release-artifact-privacy-audit.mts';
 import { auditAsyncResourceLifecycle } from './async-resource-lifecycle-audit.mts';
 import { auditBackendSecurity } from './backend-security-audit.mts';
 import { auditCacheBoundaries } from './cache-boundary-audit.mts';
@@ -268,6 +269,7 @@ export async function runReleaseEngine(
     auditCompositeActions(inventory),
     auditReusableWorkflows(inventory),
     auditArtifactProvenance(inventory),
+    auditReleaseArtifactPrivacy(inventory),
     auditOidcTrust(inventory),
     auditDeploymentBoundaries(inventory),
     auditCacheBoundaries(inventory),
