@@ -1,6 +1,6 @@
 /**
- * Enforce the RFC 6750 bearer-token alphabet before a value can enter browser
- * session storage or become an Authorization header.
+ * Enforce the RFC 6750 bearer-token alphabet before a value can enter volatile
+ * Admin session memory or become an Authorization header.
  *
  * This is a syntactic boundary only: the API must still verify signatures,
  * issuer, audience, lifetime and access permissions on every request.
@@ -23,15 +23,16 @@ export function isSafeBearerToken(token: unknown): token is string {
 
 /** Reject inherited accessors and array-like payloads at the login boundary. */
 export function isValidAdminSession(value: unknown): value is ValidAdminSession {
-  // Session setters receive unknown values; a Proxy or accessor may throw.
-  // Fail closed without allowing a hostile object to interrupt logout/login.
+  // Inspect only data descriptors: hostile accessors must never execute.
+  // A proxy may throw from descriptor traps, so fail closed.
   try {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-    if (!Object.prototype.hasOwnProperty.call(value, 'accessToken')) return false;
-    const token = (value as { readonly accessToken?: unknown }).accessToken;
-    if (!isSafeBearerToken(token)) return false;
-    const name = (value as { readonly userName?: unknown }).userName;
-    return name === undefined || (typeof name === 'string' && name.length <= 512);
+    const bearer = Object.getOwnPropertyDescriptor(value, 'accessToken');
+    if (!bearer || !('value' in bearer) || !isSafeBearerToken(bearer.value)) return false;
+    const name = Object.getOwnPropertyDescriptor(value, 'userName');
+    if (name && !('value' in name)) return false;
+    return name === undefined || name.value === undefined
+      || (typeof name.value === 'string' && name.value.length <= 512);
   } catch {
     return false;
   }
