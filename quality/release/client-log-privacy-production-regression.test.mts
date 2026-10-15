@@ -38,5 +38,5 @@ test('FastAccess search submission logs only a non-identifying event marker', ()
   );
   // Reusing the old helper here would serialize district, neighborhood and
   // free-text name back into the log even when result statistics are safe.
-  assert.doesNotMatch(text, /createQueryLogDescription\s*\(\s*submittedQuery\s*\)/);
+  assert.ok(!/createQueryLogDescription\s*\(\s*submittedQuery\s*\)/.test(text));
 });
