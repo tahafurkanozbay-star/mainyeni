@@ -27,3 +27,16 @@ for (const [path, minimumCalls] of [
     assert.equal(audit.summary.flaggedCalls, 0, JSON.stringify(audit.findings));
   });
 }
+
+
+test('FastAccess search submission logs only a non-identifying event marker', () => {
+  const path = 'Webclient.app/src/Components/Query/FastAccessQuery/FastAccessQueryWindow.tsx';
+  const text = readFileSync(decodeURIComponent(new URL(`../../${path}`, import.meta.url).pathname), 'utf8');
+  assert.match(
+    text,
+    /void\s+safeClientLog\(\s*LoggingBusiness,\s*`Hızlı Erişim\/Sorgu\/\$\{windowTitle\}`,\s*'query-submitted',/s,
+  );
+  // Reusing the old helper here would serialize district, neighborhood and
+  // free-text name back into the log even when result statistics are safe.
+  assert.doesNotMatch(text, /createQueryLogDescription\s*\(\s*submittedQuery\s*\)/);
+});
