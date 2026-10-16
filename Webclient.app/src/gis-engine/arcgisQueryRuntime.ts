@@ -273,9 +273,46 @@ const retryableArcgisError = (error: unknown): boolean => {
   return code === 429 || code === 500 || code === 502 || code === 503 || code === 504;
 };
 
-const requestKey = (metadata: ArcGisMetadataContract, plan: QueryExecutionPlan): string => (
-  `${metadata.resourceUrl}|${plan.signature}|${plan.strategy}|${plan.maxFeatures}|${plan.maxPages}`
-);
+const stableSerialize = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : `number:${String(value)}`;
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(String(value));
+};
+
+const policyFingerprint = (value: unknown): string => {
+  const serialized = stableSerialize(value);
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${serialized.length.toString(36)}-${(first >>> 0).toString(16).padStart(8, '0')}${(second >>> 0).toString(16).padStart(8, '0')}`;
+};
+
+const requestKey = (
+  metadata: ArcGisMetadataContract,
+  plan: QueryExecutionPlan,
+  options: ExecuteArcGisQueryOptions,
+  geometryBudget: GeometryBudget,
+  featureSnapshotBudget: NormalizedArcGisFeatureSnapshotBudget,
+): string => {
+  const policy = policyFingerprint({
+    validateGeometry: options.validateGeometry !== false,
+    strictGeometry: options.strictGeometry === true,
+    geometryBudget,
+    featureSnapshotBudget,
+  });
+  return `${metadata.resourceUrl}|${plan.signature}|${plan.strategy}|${plan.maxFeatures}|${plan.maxPages}|policy:${policy}`;
+};
 
 const featureIdentity = <TFeature extends ArcGisFeature>(
   feature: TFeature,
@@ -403,7 +440,13 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
     this.coordinator = options.coordinator ?? createRequestCoordinator(options.coordinatorOptions);
     this.ownsCoordinator = !options.coordinator;
     this.queryLimits = Object.freeze({ ...options.queryLimits });
-    this.geometryBudget = Object.freeze({ ...options.geometryBudget });
+    const suppliedGeometryBudget = options.geometryBudget ?? {};
+    this.geometryBudget = Object.freeze({
+      ...suppliedGeometryBudget,
+      ...(suppliedGeometryBudget.allowedWkids !== undefined
+        ? { allowedWkids: Object.freeze([...suppliedGeometryBudget.allowedWkids]) }
+        : {}),
+    });
     this.featureSnapshotBudget = normalizeArcGisFeatureSnapshotBudget(options.featureSnapshotBudget ?? {});
     this.cacheTtlMs = positiveInteger(options.cacheTtlMs, 15_000, 600_000);
     this.maxRetries = positiveInteger(options.maxRetries, 2, 5);
@@ -419,7 +462,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
       throw new ArcGisQueryRuntimeError('ArcGIS query runtime is destroyed.', 'RUNTIME_DESTROYED', metadata.resourceUrl);
     }
     const executionPlan = createQueryExecutionPlan(metadata, options, this.queryLimits);
-    const key = requestKey(metadata, executionPlan);
+    const key = requestKey(metadata, executionPlan, options, this.geometryBudget, this.featureSnapshotBudget);
     const startedAt = Date.now();
     const cacheEligible = options.cache !== false && options.purpose !== 'export';
     const namespace = options.namespace ?? metadata.resourceUrl;
