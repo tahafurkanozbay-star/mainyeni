@@ -21,19 +21,35 @@ export function isSafeBearerToken(token: unknown): token is string {
     && BEARER_TOKEN.test(token);
 }
 
-/** Reject inherited accessors and array-like payloads at the login boundary. */
-export function isValidAdminSession(value: unknown): value is ValidAdminSession {
-  // Inspect only data descriptors: hostile accessors must never execute.
-  // A proxy may throw from descriptor traps, so fail closed.
+/**
+ * Read untrusted response properties only through own data descriptors.
+ * A Proxy can return a validated descriptor yet return a different value from
+ * ordinary property access. Return an immutable, validated snapshot rather than
+ * reading the source object again after validation.
+ */
+export function snapshotValidAdminSession(value: unknown): ValidAdminSession | null {
   try {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
     const bearer = Object.getOwnPropertyDescriptor(value, 'accessToken');
-    if (!bearer || !('value' in bearer) || !isSafeBearerToken(bearer.value)) return false;
+    if (!bearer || !('value' in bearer) || !isSafeBearerToken(bearer.value)) return null;
     const name = Object.getOwnPropertyDescriptor(value, 'userName');
-    if (name && !('value' in name)) return false;
-    return name === undefined || name.value === undefined
-      || (typeof name.value === 'string' && name.value.length <= 512);
+    if (name && !('value' in name)) return null;
+    const userName = name?.value;
+    if (userName !== undefined && (typeof userName !== 'string' || userName.length > 512)) {
+      return null;
+    }
+    return Object.freeze({
+      accessToken: bearer.value,
+      ...(userName === undefined ? {} : { userName }),
+    });
   } catch {
-    return false;
+    // Proxy traps and revoked proxies must fail closed without throwing out of
+    // the authentication boundary.
+    return null;
   }
+}
+
+/** Boolean compatibility check; consumers must use the validated snapshot. */
+export function isValidAdminSession(value: unknown): value is ValidAdminSession {
+  return snapshotValidAdminSession(value) !== null;
 }
