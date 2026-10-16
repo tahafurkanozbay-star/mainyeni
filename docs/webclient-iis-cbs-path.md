@@ -7,7 +7,7 @@
 - API uygulama fiziksel yolu: `C:\inetpub\wwwroot\kentrehberiumit\user`
 - Frontend fiziksel yolu: `C:\inetpub\wwwroot\kentrehberiumit`
 
-Bu yayın, yeni bir DNS adı gerektirmez. Vite zaten göreli asset tabanı (`base: './'`) kullanır; derlenmiş JS/CSS/font/resim dosyaları `/kentrehberiumit/` altındaki yoldan yüklenir. Kent Rehberi istekleri tarayıcıdan PlanASKI'ye doğrudan gitmek yerine aynı kökendeki IIS API üzerinden yapılır; böylece production origin için upstream CORS iznine bağımlı kalınmaz.
+Bu yayın, yeni bir DNS adı gerektirmez. Vite zaten göreli asset tabanı (`base: './'`) kullanır; derlenmiş JS/CSS/font/resim dosyaları `/kentrehberiumit/` altındaki yoldan yüklenir. Kent Rehberi verileri tarayıcıdan doğrudan `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=` uç noktasından alınır. Bu nedenle PlanASKI sunucusunun `https://cbs.ankara.bel.tr` kaynağına CORS izni vermesi gerekir. `/kentrehberiumit/api` IIS API uygulaması yayımlanmaya devam eder; ancak Kent Rehberi veri katmanının kaynağı olarak seçilmez.
 
 ## Tasarım ve işlev sınırı
 
@@ -28,7 +28,7 @@ Betiği deponun kökündeki `Operations` klasöründen çalıştırın. Betik `n
 
 `Webclient.app\build\`
 
-Derleme başlamadan önce test/kalite kapıları, production-only mod kapalıyken çalışır. Son derlemede `VITE_API_URL=/kentrehberiumit/api`, `VITE_KENT_REHBERI_SOURCE=api` ve `VITE_PUBLIC_MAP_ONLY_MODE=true` kullanılır.
+Derleme başlamadan önce test/kalite kapıları, production-only mod kapalıyken çalışır. Son derlemede `VITE_API_URL=/kentrehberiumit/api`, `VITE_KENT_REHBERI_SOURCE=planaski` ve `VITE_PUBLIC_MAP_ONLY_MODE=true` kullanılır. Böylece Kent Rehberi veri katmanı doğrudan sabitlenmiş PlanASKI kaynağını çağırır; genel uygulama API tabanı ise diğer uç noktalar için göreli kalır.
 
 ## 2. IIS'e yayınla
 
@@ -49,7 +49,7 @@ Yol veya havuz mevcut ama beklenen değerlerden farklıysa betik otomatik üzeri
 
 ## 3. Yayın sonrası kontrol
 
-Yönetici olmayan bir PowerShell oturumundan:
+Yönetici olmayan bir PowerShell oturumundan, web/API sağlık kontrollerini ve doğrudan PlanASKI kaynağını test edin:
 
 ```powershell
 $base = "https://cbs.ankara.bel.tr/kentrehberiumit"
@@ -61,12 +61,18 @@ $page = Invoke-WebRequest "$base/" -UseBasicParsing -TimeoutSec 20
 $health = Invoke-RestMethod "$base/api/health/live" -TimeoutSec 15
 "API sağlık: $($health.status)"
 
-$data = Invoke-RestMethod "$base/api/kent-rehberi?tur=42&limit=5" -TimeoutSec 30
-"Kayıt sayısı: $($data.features.Count)"
-$data.features | Select-Object -First 5 -ExpandProperty properties | Select-Object objectid, adi
+$source = "https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=42"
+$sourceResponse = Invoke-WebRequest $source -UseBasicParsing -Headers @{ Origin = "https://cbs.ankara.bel.tr" } -TimeoutSec 30
+"PlanASKI HTTP: $([int]$sourceResponse.StatusCode)"
+"PlanASKI CORS izni: $($sourceResponse.Headers['Access-Control-Allow-Origin'])"
+$records = @($sourceResponse.Content | ConvertFrom-Json)
+"PlanASKI kategori 42 kayıt sayısı: $($records.Count)"
+if (-not $sourceResponse.Headers['Access-Control-Allow-Origin']) {
+    Write-Warning "Tarayıcıdan doğrudan veri yükleme için CORS izni henüz yanıtlanmıyor."
+}
 ```
 
-Beklenen: Webclient HTTP 200; API sağlık `healthy`; Kent Rehberi sorgusunda `features` içinde kayıtlar. Sonra tarayıcıda tam hedefi açın: `https://cbs.ankara.bel.tr/kentrehberiumit/`.
+Beklenen: Webclient HTTP 200; API sağlık `healthy`; PlanASKI kategori 42 isteği HTTP 200 ve JSON dizi döndürür. Tarayıcıya doğrudan veri göstermek için yanıtta `Access-Control-Allow-Origin: https://cbs.ankara.bel.tr` veya `*` bulunmalıdır. Sonra tarayıcıda `https://cbs.ankara.bel.tr/kentrehberiumit/` adresini açıp Kent Rehberi katmanının yüklenmesini doğrulayın.
 
 ## Geri dönüş
 

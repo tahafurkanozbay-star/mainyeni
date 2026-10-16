@@ -67,10 +67,11 @@ try {
     Invoke-NpmChecked -Arguments @("run", "verify")
 
     # Build the actual IIS release only after the complete normal-mode checks pass.
-    # The API is mounted under the same public origin, avoiding browser CORS
-    # calls to the upstream PlanASKI host.
+    # Kent Rehberi data is fetched directly from the official PlanASKI endpoint
+    # by the browser. The upstream must allow CORS from the deployed CBS origin.
+    # Keep the same-origin API base for other application endpoints.
     $env:VITE_API_URL = "/kentrehberiumit/api"
-    $env:VITE_KENT_REHBERI_SOURCE = "api"
+    $env:VITE_KENT_REHBERI_SOURCE = "planaski"
     $env:VITE_PUBLIC_MAP_ONLY_MODE = "true"
     $env:VITE_LOCAL_BOOTSTRAP_PREVIEW = "false"
     $env:VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP = "false"
@@ -103,7 +104,7 @@ try {
     Write-Host $buildRoot
     Write-Host "Hedef URL: https://cbs.ankara.bel.tr/kentrehberiumit/"
     Write-Host "API tabanı: /kentrehberiumit/api"
-    Write-Host "Kent Rehberi veri kaynağı: aynı-kökenli IIS API"
+    Write-Host "Kent Rehberi veri kaynağı: doğrudan resmi PlanASKI API (tarayıcı CORS izni gerektirir)"
 }
 finally {
     foreach ($key in $keys) {
