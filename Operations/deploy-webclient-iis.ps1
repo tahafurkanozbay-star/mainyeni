@@ -40,6 +40,32 @@ if ($bindings.Count -eq 0) {
     throw "Default Web Site üzerinde https *:443:cbs.ankara.bel.tr bağlaması doğrulanamadı. IIS bağlamasını otomatik değiştirmedim."
 }
 
+$frontPoolName = "kentrehberiumit-webclient"
+$apps = @(Get-WebApplication -Site $SiteName)
+$front = $apps | Where-Object { $_.Path -eq "/kentrehberiumit" } | Select-Object -First 1
+$apiApp = $apps | Where-Object { $_.Path -eq "/kentrehberiumit/api" } | Select-Object -First 1
+
+# Validate all existing mappings before creating pools, changing environment variables,
+# or replacing the current client files.
+if ($null -ne $front) {
+    $frontPhysical = [Environment]::ExpandEnvironmentVariables([string]$front.PhysicalPath).TrimEnd("\")
+    if (-not [string]::Equals($frontPhysical, $destinationRoot.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "IIS /kentrehberiumit uygulaması başka bir fiziksel yola işaret ediyor ($frontPhysical). Üzerine yazmadım."
+    }
+    if ($front.ApplicationPool -ne $frontPoolName) {
+        throw "IIS /kentrehberiumit mevcut uygulama havuzu '$($front.ApplicationPool)'. Otomatik değiştirmedim; önce bu eşleşmeyi inceleyin."
+    }
+}
+if ($null -ne $apiApp) {
+    $apiPhysical = [Environment]::ExpandEnvironmentVariables([string]$apiApp.PhysicalPath).TrimEnd("\")
+    if (-not [string]::Equals($apiPhysical, $apiRoot.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "IIS /kentrehberiumit/api başka bir fiziksel yola işaret ediyor ($apiPhysical). Otomatik değiştirmedim."
+    }
+    if ($apiApp.ApplicationPool -ne $ApiApplicationPool) {
+        throw "IIS /kentrehberiumit/api havuzu '$($apiApp.ApplicationPool)'. Otomatik değiştirmedim."
+    }
+}
+
 $apiPoolPath = "IIS:\AppPools\$ApiApplicationPool"
 $apiPoolCreated = $false
 if (-not (Test-Path -LiteralPath $apiPoolPath)) {
@@ -48,6 +74,12 @@ if (-not (Test-Path -LiteralPath $apiPoolPath)) {
     Set-ItemProperty -LiteralPath $apiPoolPath -Name managedPipelineMode -Value "Integrated"
     Set-ItemProperty -LiteralPath $apiPoolPath -Name enable32BitAppOnWin64 -Value $false
     $apiPoolCreated = $true
+}
+else {
+    $configuredApiPool = Get-Item -LiteralPath $apiPoolPath
+    if ([string]$configuredApiPool.managedRuntimeVersion -ne "" -or $configuredApiPool.enable32BitAppOnWin64) {
+        throw "API havuzu $ApiApplicationPool, .NET CLR=No Managed Code ve 64-bit yapılandırmasına sahip değil. Otomatik değiştirmedim."
+    }
 }
 
 # Use a new pool for the CBS subpath mapping. The existing working
@@ -58,7 +90,7 @@ $standaloneBase = "system.applicationHost/applicationPools/add[@name='$ApiApplic
 $standaloneFilter = "$standaloneBase/add[@name='$standaloneKey']"
 $existingStandalone = Get-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneFilter -Name "value" -ErrorAction SilentlyContinue
 $standaloneChanged = $false
-if ($null -eq $existingStandalone) {
+if ($null -eq $existingStandalone -or "$existingStandalone" -eq "") {
     Add-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneBase -Name "." -Value @{ name = $standaloneKey; value = "true" }
     $standaloneChanged = $true
 }
@@ -77,13 +109,18 @@ if (-not (Test-Path -LiteralPath $destinationRoot -PathType Container)) {
     New-Item -ItemType Directory -Path $destinationRoot -Force | Out-Null
 }
 
-$frontPoolName = "kentrehberiumit-webclient"
 $frontPoolPath = "IIS:\AppPools\$frontPoolName"
 if (-not (Test-Path -LiteralPath $frontPoolPath)) {
     New-WebAppPool -Name $frontPoolName | Out-Null
     Set-ItemProperty -LiteralPath $frontPoolPath -Name managedRuntimeVersion -Value ""
     Set-ItemProperty -LiteralPath $frontPoolPath -Name managedPipelineMode -Value "Integrated"
     Set-ItemProperty -LiteralPath $frontPoolPath -Name enable32BitAppOnWin64 -Value $false
+}
+else {
+    $configuredFrontPool = Get-Item -LiteralPath $frontPoolPath
+    if ([string]$configuredFrontPool.managedRuntimeVersion -ne "" -or $configuredFrontPool.enable32BitAppOnWin64) {
+        throw "Frontend havuzu $frontPoolName, .NET CLR=No Managed Code ve 64-bit yapılandırmasına sahip değil. Otomatik değiştirmedim."
+    }
 }
 
 $backupBase = "C:\inetpub\backups\kentrehberiumit"
@@ -113,36 +150,13 @@ if ($copyCode -ge 8) {
     throw "Robocopy dağıtımı başarısız oldu (kod $copyCode). API klasörüne /MIR veya /PURGE uygulanmadı."
 }
 
-$apps = @(Get-WebApplication -Site $SiteName)
-$front = $apps | Where-Object { $_.Path -eq "/kentrehberiumit" } | Select-Object -First 1
 if ($null -eq $front) {
     New-WebApplication -Site $SiteName -Name "kentrehberiumit" -PhysicalPath $destinationRoot -ApplicationPool $frontPoolName | Out-Null
     Write-Host "IIS uygulaması eklendi: /kentrehberiumit -> $destinationRoot"
 }
-else {
-    $frontPhysical = [Environment]::ExpandEnvironmentVariables([string]$front.PhysicalPath).TrimEnd("\")
-    if (-not [string]::Equals($frontPhysical, $destinationRoot.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "IIS /kentrehberiumit uygulaması başka bir fiziksel yola işaret ediyor ($frontPhysical). Üzerine yazmadım."
-    }
-    if ($front.ApplicationPool -ne $frontPoolName) {
-        throw "IIS /kentrehberiumit mevcut uygulama havuzu '$($front.ApplicationPool)'. Otomatik değiştirmedim; önce bu eşleşmeyi inceleyin."
-    }
-}
-
-$apps = @(Get-WebApplication -Site $SiteName)
-$apiApp = $apps | Where-Object { $_.Path -eq "/kentrehberiumit/api" } | Select-Object -First 1
 if ($null -eq $apiApp) {
     New-WebApplication -Site $SiteName -Name "kentrehberiumit/api" -PhysicalPath $apiRoot -ApplicationPool $ApiApplicationPool | Out-Null
     Write-Host "IIS API uygulaması eklendi: /kentrehberiumit/api -> $apiRoot"
-}
-else {
-    $apiPhysical = [Environment]::ExpandEnvironmentVariables([string]$apiApp.PhysicalPath).TrimEnd("\")
-    if (-not [string]::Equals($apiPhysical, $apiRoot.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "IIS /kentrehberiumit/api başka bir fiziksel yola işaret ediyor ($apiPhysical). Otomatik değiştirmedim."
-    }
-    if ($apiApp.ApplicationPool -ne $ApiApplicationPool) {
-        throw "IIS /kentrehberiumit/api havuzu '$($apiApp.ApplicationPool)'. Otomatik değiştirmedim."
-    }
 }
 
 if ((Get-WebAppPoolState -Name $frontPoolName).Value -ne "Started") {
