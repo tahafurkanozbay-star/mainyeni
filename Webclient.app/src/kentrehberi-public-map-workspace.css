@@ -223,7 +223,8 @@ body {
 #app-shell .mainbar-container .ns-input-group input:focus-visible {
   border-color: var(--exp-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--exp-accent) 16%, transparent);
-  outline: none;
+  outline: 2px solid var(--exp-accent);
+  outline-offset: 2px;
 }
 
 #app-shell .mainbar-container .kr-search-submit {
