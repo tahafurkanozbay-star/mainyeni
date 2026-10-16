@@ -304,4 +304,35 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect(added.every((listener) => removed.includes(listener))).toBe(true);
     runtime.destroy();
   });
+
+  it.each([
+    ['missing', { attributes: { NAME: 'Park' } }],
+    ['undefined', { attributes: { OBJECTID: undefined, NAME: 'Park' } }],
+    ['fractional', { attributes: { OBJECTID: 1.5, NAME: 'Park' } }],
+    ['negative', { attributes: { OBJECTID: -1, NAME: 'Park' } }],
+    ['blank string', { attributes: { OBJECTID: '   ', NAME: 'Park' } }],
+    ['control-bearing string', { attributes: { OBJECTID: 'bad\nid', NAME: 'Park' } }],
+    ['oversized string', { attributes: { OBJECTID: 'x'.repeat(257), NAME: 'Park' } }],
+  ])('rejects unstable paged identity: %s', async (_label, item) => {
+    const runtime = createArcGisQueryRuntime(async () => response([item]), {
+      queryLimits: { maxFeatures: 4, maxPages: 2, preferredPageSize: 2, maxPageSize: 2 },
+    });
+    await expect(runtime.execute(metadata(true), request)).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError',
+      code: 'INVALID_FEATURE_IDENTITY',
+    });
+    runtime.destroy();
+  });
+
+  it('normalizes bounded string identities for stable pagination without rewriting attributes', async () => {
+    const runtime = createArcGisQueryRuntime(async () => response([
+      { attributes: { OBJECTID: '  guid-like-id  ', NAME: 'Park' } },
+    ]), {
+      queryLimits: { maxFeatures: 4, maxPages: 2, preferredPageSize: 2, maxPageSize: 2 },
+    });
+    const result = await runtime.execute(metadata(true), request);
+    expect(result.features[0]?.attributes?.OBJECTID).toBe('  guid-like-id  ');
+    expect(result.diagnostics.complete).toBe(true);
+    runtime.destroy();
+  });
 });
