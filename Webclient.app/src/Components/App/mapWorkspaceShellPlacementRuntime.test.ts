@@ -16,6 +16,14 @@ const setRect = (element: HTMLElement, values: Partial<DOMRect>): void => {
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect);
 };
 
+const addOccluder = (className: string, values: Partial<DOMRect>): HTMLElement => {
+  const element = document.createElement('div');
+  element.className = className;
+  document.body.appendChild(element);
+  setRect(element, values);
+  return element;
+};
+
 const flushFrame = async (): Promise<void> => {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 };
@@ -35,6 +43,55 @@ describe('MapWorkspaceShellPlacementRuntime', () => {
     runtime.start();
     expect(root.dataset.anchor).toBe('bottom-left');
     expect(runtime.getDiagnostics()).toMatchObject({ started: true, refreshCount: 1, anchorChangeCount: 1, currentAnchor: 'bottom-left' });
+    runtime.dispose();
+  });
+
+  it('moves the quick-navigation dock away from a visible query window', () => {
+    const root = document.createElement('aside');
+    document.body.appendChild(root);
+    setRect(root, { left: 14, top: 760, width: 600, height: 126 });
+    addOccluder('common-query-window', { left: 82, top: 620, width: 650, height: 280 });
+
+    const runtime = new MapWorkspaceShellPlacementRuntime(root);
+    runtime.start();
+    expect(root.dataset.anchor).toBe('bottom-right');
+    runtime.dispose();
+  });
+
+  it('moves the quick-navigation dock away from the fixed utility controls', () => {
+    const root = document.createElement('aside');
+    document.body.appendChild(root);
+    setRect(root, { left: 14, top: 760, width: 600, height: 126 });
+    addOccluder('experience-utility', { left: 1300, top: 730, width: 286, height: 170 });
+
+    const runtime = new MapWorkspaceShellPlacementRuntime(root);
+    runtime.start();
+    expect(root.dataset.anchor).toBe('bottom-left');
+    runtime.dispose();
+  });
+
+  it('accounts for lazy windows as collision surfaces', () => {
+    const root = document.createElement('aside');
+    document.body.appendChild(root);
+    setRect(root, { left: 14, top: 760, width: 600, height: 126 });
+    addOccluder('kr-lazy-window', { left: 24, top: 620, width: 690, height: 280 });
+
+    const runtime = new MapWorkspaceShellPlacementRuntime(root);
+    runtime.start();
+    expect(root.dataset.anchor).toBe('bottom-right');
+    runtime.dispose();
+  });
+
+  it('avoids both ArcGIS popups and the map workspace when choosing a dock anchor', () => {
+    const root = document.createElement('aside');
+    document.body.appendChild(root);
+    setRect(root, { left: 14, top: 760, width: 600, height: 126 });
+    addOccluder('esri-popup', { left: 10, top: 650, width: 700, height: 250 });
+    addOccluder('experience-workspace', { left: 1300, top: 730, width: 280, height: 170 });
+
+    const runtime = new MapWorkspaceShellPlacementRuntime(root);
+    runtime.start();
+    expect(root.dataset.anchor).toBe('bottom-center');
     runtime.dispose();
   });
 
