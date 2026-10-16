@@ -218,6 +218,7 @@ const arcgisErrorMessage = (value: unknown): string | null => {
       }
     } catch {
       // Malformed optional details are omitted; never invoke hostile array methods.
+      detailMessages.push('Additional ArcGIS error details were omitted because the response was malformed.');
     }
     return [message, detailMessages.join(' ')].filter(Boolean).join(' ') || 'ArcGIS service returned an error object.';
   } catch {
@@ -262,6 +263,7 @@ const safeTransportErrorMessage = (value: unknown): string => {
     }
   } catch {
     // Do not expose property/prototype trap details from arbitrary thrown values.
+    return 'ArcGIS transport failed with an unreadable error value.';
   }
   return 'ArcGIS transport failed.';
 };
