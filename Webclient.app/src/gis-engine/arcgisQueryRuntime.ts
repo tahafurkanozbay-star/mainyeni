@@ -396,7 +396,8 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
         ttlMs: options.cacheTtlMs ?? this.cacheTtlMs,
         namespace,
         cacheWhen: (value: unknown) => isRecord(value) && isRecord(value.diagnostics) &&
-          value.diagnostics.complete === true && value.diagnostics.truncated === false,
+          value.diagnostics.complete === true && value.diagnostics.truncated === false &&
+          value.diagnostics.invalidGeometryCount === 0 && value.diagnostics.droppedInvalidGeometryCount === 0,
         ...(options.generation !== undefined ? { generation: options.generation } : {}),
       },
     );
@@ -409,7 +410,8 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
         requestKey: key,
         strategy: executionPlan.strategy,
         durationMs: Date.now() - startedAt,
-        cacheEligible: cacheEligible && result.diagnostics.complete && !result.diagnostics.truncated,
+        cacheEligible: cacheEligible && result.diagnostics.complete && !result.diagnostics.truncated &&
+          result.diagnostics.invalidGeometryCount === 0 && result.diagnostics.droppedInvalidGeometryCount === 0,
       }),
     });
   }
