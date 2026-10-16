@@ -28,3 +28,6 @@ Webclient.app/build*.rar
 
 # Historical exception dumps and generated documentation artifacts
 /Api.User/_docs/
+
+# Build, publish, and validation outputs generated locally or by CI
+/artifacts/

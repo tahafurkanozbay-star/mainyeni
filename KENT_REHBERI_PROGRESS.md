@@ -1227,3 +1227,11 @@
 - CLEANUP: replace the empty root README and outdated Create React App boilerplate in the admin README with current project layout, app purpose, and verification commands; ignore the retired `Api.User/_docs/` artifact directory to prevent reintroducing generated logs.
 - PRESERVED: progress archives, data/config inputs, backend projects, both active web clients, and standalone GIS sources whose future intent could not be ruled out by build/reference evidence alone.
 - VALIDATION: run exact-head admin, backend, Webclient, repository architecture and release checks before merge. No application/API behavior, endpoints, GIS data, database or deployment settings are changed.
+
+
+## Deployment preparation / Api.User-only IIS package — 2026-10-16
+- GOAL: prepare a publishable IIS artifact for the backend consumed by Webclient.app without publishing the frontend or any Admin components.
+- DECISION: target Api.User/Api.User.csproj only; shared project references are brought in by dotnet publish. A dedicated PowerShell script produces an expanded output and ZIP beneath the ignored repository artifacts/ folder, then validates the User assembly and generated IIS web.config and rejects an unexpected Admin assembly.
+- RUNTIME MODE: the full client uses more than the anonymous PlanASKI GeoJSON endpoint; for example, it calls AppSettings and GIS configuration routes. Therefore the deployment guide explicitly warns against setting KentRehberiData__Standalone=true for the full frontend. Normal Api.User mode requires a secure ConnectionStrings__Primary value for database-backed application configuration while PlanASKI remains the Kent Rehberi source.
+- HOSTNAME/CORS: no DNS, TLS, production database connection, IIS site or wildcard CORS is created. The current frontend runtime only accepts same-origin API paths. After frontend hostname is known, prefer an IIS reverse proxy from frontend-origin /api/* (stripping the prefix) to the API subdomain so no cross-origin runtime-policy relaxation is needed.
+- VALIDATION: the dedicated API.User IIS Bundle workflow runs the publisher on Windows CI and uploads the ZIP artifact for 14 days after successful packaging. Live IIS deployment remains separate and requires host access, secure database settings, and the eventual hostname.
