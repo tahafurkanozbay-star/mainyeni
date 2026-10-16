@@ -63,6 +63,9 @@ public sealed class GisProxyPayloadPolicyTests
     [InlineData("text/tab-separated-values", "text/tab-separated-values")]
     [InlineData("application/jsonp", "application/octet-stream")]
     [InlineData("application/jsonx", "application/octet-stream")]
+    [InlineData("application/pdf", "application/octet-stream")]
+    [InlineData("text/html+json", "application/octet-stream")]
+    [InlineData("image/svg+xml+json", "application/octet-stream")]
     [InlineData("text/html", "application/octet-stream")]
     [InlineData("text/javascript", "application/octet-stream")]
     [InlineData("application/xml", "application/octet-stream")]
@@ -74,19 +77,6 @@ public sealed class GisProxyPayloadPolicyTests
         Assert.Equal(expected, GisProxyPayloadPolicy.NormalizeResponseContentType(input));
     }
 
-    [Theory]
-    [InlineData("application/json", "application/json")]
-    [InlineData("application/problem+json", "application/problem+json")]
-    [InlineData("text/plain; charset=utf-8", "text/plain; charset=utf-8")]
-    [InlineData("application/jsonp", "application/octet-stream")]
-    [InlineData("application/pdf", "application/octet-stream")]
-    [InlineData("text/html", "application/octet-stream")]
-    public void NormalizeResponseContentType_PassesOnlyInertStructuredContent(
-        string contentType, string expected)
-    {
-        Assert.Equal(expected, GisProxyPayloadPolicy.NormalizeResponseContentType(contentType));
-    }
-
     [Fact]
     public void ControllerReturnsUnknownMediaAsRawByteDownload()
     {
@@ -95,7 +85,7 @@ public sealed class GisProxyPayloadPolicyTests
             Path.Combine(root, "Api.User", "Controllers", "Extensions", "Gis", "GisProxyController.cs"));
         Assert.Contains("GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType)", controller);
         Assert.Contains("File(bytes, responseType)", controller);
-        Assert.DoesNotContain("return Content(response.Content ?? string.Empty, responseType);\\n            }\\n        }", controller);
+        Assert.Contains("if (string.Equals(responseType, \"application/octet-stream\"", controller);
     }
 
     [Fact]
