@@ -6,7 +6,7 @@ import {
 
 describe('ExperienceCommandCenterModern catalog', () => {
   it('combines core tools and the complete city service catalog', () => {
-    expect(EXPERIENCE_COMMANDS).toHaveLength(49);
+    expect(EXPERIENCE_COMMANDS).toHaveLength(51);
     expect(EXPERIENCE_COMMANDS.filter(command => command.id.startsWith('service-'))).toHaveLength(40);
   });
 
@@ -24,6 +24,13 @@ describe('ExperienceCommandCenterModern catalog', () => {
   it('keeps map analysis commands discoverable', () => {
     const results = filterExperienceCommands(EXPERIENCE_COMMANDS, 'ölçüm alan');
     expect(results.map(command => command.id)).toContain('measure');
+  });
+
+  it('keeps settings and accessibility discoverable without utility buttons', () => {
+    expect(filterExperienceCommands(EXPERIENCE_COMMANDS, 'çalışma alanı ayarları').map(command => command.id))
+      .toContain('workspace-settings');
+    expect(filterExperienceCommands(EXPERIENCE_COMMANDS, 'erişilebilirlik merkezi').map(command => command.id))
+      .toContain('accessibility-center');
   });
 });
 
