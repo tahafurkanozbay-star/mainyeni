@@ -11,6 +11,15 @@ const ruleBlock = (sheet: string, marker: string, nextMarker: string): string =>
   return sheet.slice(start, end);
 };
 
+const zIndexFor = (sheet: string, selector: string): number => {
+  const start = sheet.indexOf(selector);
+  const end = sheet.indexOf('}', start + selector.length);
+  if (start < 0 || end < 0) throw new Error(`Missing CSS rule: ${selector}`);
+  const match = sheet.slice(start, end).match(/z-index:\s*(\d+)\s*;/u);
+  if (!match?.[1]) throw new Error(`Missing numeric z-index: ${selector}`);
+  return Number(match[1]);
+};
+
 describe('map tool, bottom dock and fixed panel collision contracts', () => {
   it('docks the vertical toolbar beneath the header, not over the bottom navigation, on phones', () => {
     const toolbar = css('../Widget/Toolbar/ToolbarWidget.css');
@@ -96,5 +105,24 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(favorites).toContain('overflow-wrap: anywhere;');
     expect(sidebar).toContain('padding-right: 49px;');
     expect(sidebar).toContain('.kr-sidebar__favorite {');
+  });
+
+  it('keeps the notification triage modal above map controls while preserving settings priority', () => {
+    const triage = css('../Common/experience-notification-triage-modal.css');
+    const overlays = css('../Common/experience-overlay-stack.css');
+    const workspace = css('../Common/experience-workspace.css');
+    const notifications = css('../Common/experience-notification-center.css');
+    const toolbar = css('../Widget/Toolbar/ToolbarWidget.css');
+
+    const modalZ = zIndexFor(
+      triage,
+      ".experience-notification-triage[data-modal='true'][data-expanded='true'] {",
+    );
+    expect(modalZ).toBe(1250);
+    expect(modalZ).toBeGreaterThan(zIndexFor(overlays, '.experience-overlay-stack {'));
+    expect(modalZ).toBeGreaterThan(zIndexFor(workspace, '.experience-workspace {'));
+    expect(modalZ).toBeGreaterThan(zIndexFor(notifications, '.experience-notifications--toasts {'));
+    expect(modalZ).toBeGreaterThan(zIndexFor(toolbar, '.toolbarwidget {'));
+    expect(modalZ).toBeLessThan(zIndexFor(workspace, '.experience-settings-backdrop {'));
   });
 });
