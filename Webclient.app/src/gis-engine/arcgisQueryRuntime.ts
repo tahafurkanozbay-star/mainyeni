@@ -169,9 +169,13 @@ const wait = (ms: number, signal: AbortSignal): Promise<void> => new Promise((re
   if (signal.aborted) abort();
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-);
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  try {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  } catch {
+    return false;
+  }
+};
 
 const ownDataValue = (value: unknown, key: string): unknown => {
   try {
@@ -197,11 +201,24 @@ const arcgisErrorMessage = (value: unknown): string | null => {
     const rawMessage = ownDataValue(value, 'message');
     const message = typeof rawMessage === 'string' ? sanitizeArcGisDiagnosticText(rawMessage.trim()) : '';
     const rawDetails = ownDataValue(value, 'details');
-    const details = Array.isArray(rawDetails)
-      ? rawDetails.filter((entry): entry is string => typeof entry === 'string').slice(0, 16)
-        .map((entry) => sanitizeArcGisDiagnosticText(entry.slice(0, 1024))).join(' ')
-      : '';
-    return [message, details].filter(Boolean).join(' ') || 'ArcGIS service returned an error object.';
+    const detailMessages: string[] = [];
+    try {
+      if (Array.isArray(rawDetails)) {
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(rawDetails, 'length');
+        const length = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : 0;
+        if (typeof length === 'number' && Number.isSafeInteger(length) && length > 0) {
+          for (let index = 0; index < Math.min(length, 16); index += 1) {
+            const descriptor = Object.getOwnPropertyDescriptor(rawDetails, String(index));
+            if (descriptor && descriptor.enumerable && 'value' in descriptor && typeof descriptor.value === 'string') {
+              detailMessages.push(sanitizeArcGisDiagnosticText(descriptor.value.slice(0, 1024)));
+            }
+          }
+        }
+      }
+    } catch {
+      // Malformed optional details are omitted; never invoke hostile array methods.
+    }
+    return [message, detailMessages.join(' ')].filter(Boolean).join(' ') || 'ArcGIS service returned an error object.';
   } catch {
     return 'ArcGIS service returned an invalid error object.';
   }
@@ -219,8 +236,33 @@ const arcgisErrorCode = (value: unknown): number | null => {
 };
 
 const retryableStatus = (value: unknown): boolean => {
-  const status = isRecord(value) ? Number(value.status ?? value.code) : Number.NaN;
+  const rawStatus = ownDataValue(value, 'status') ?? ownDataValue(value, 'code');
+  const status = typeof rawStatus === 'number' || typeof rawStatus === 'string'
+    ? Number(rawStatus)
+    : Number.NaN;
   return status === 408 || status === 429 || status >= 500;
+};
+
+const isRuntimeError = (value: unknown): value is ArcGisQueryRuntimeError => {
+  try {
+    return value instanceof ArcGisQueryRuntimeError;
+  } catch {
+    return false;
+  }
+};
+
+const safeTransportErrorMessage = (value: unknown): string => {
+  try {
+    if (value instanceof Error) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, 'message');
+      if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
+        return sanitizeArcGisDiagnosticText(descriptor.value);
+      }
+    }
+  } catch {
+    // Do not expose property/prototype trap details from arbitrary thrown values.
+  }
+  return 'ArcGIS transport failed.';
 };
 
 const retryableArcgisError = (error: unknown): boolean => {
@@ -607,7 +649,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
           exceededTransferLimit: transferLimit === true,
         });
       } catch (error) {
-        if (error instanceof ArcGisQueryRuntimeError) throw error;
+        if (isRuntimeError(error)) throw error;
         if (signal.aborted) throw signal.reason ?? error;
         if (attempt < this.maxRetries && retryableStatus(error)) {
           attempt += 1;
@@ -616,7 +658,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
           continue;
         }
         throw new ArcGisQueryRuntimeError(
-          sanitizeArcGisDiagnosticText(error instanceof Error ? error.message : 'ArcGIS transport failed.'),
+          safeTransportErrorMessage(error),
           'TRANSPORT_ERROR',
           metadata.resourceUrl,
           { pageIndex },
