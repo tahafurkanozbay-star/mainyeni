@@ -50,6 +50,6 @@ export function snapshotValidAdminSession(value: unknown): ValidAdminSession | n
 }
 
 /** Boolean compatibility check; consumers must use the validated snapshot. */
-export function isValidAdminSession(value: unknown): value is ValidAdminSession {
+export function isValidAdminSession(value: unknown): boolean {
   return snapshotValidAdminSession(value) !== null;
 }
