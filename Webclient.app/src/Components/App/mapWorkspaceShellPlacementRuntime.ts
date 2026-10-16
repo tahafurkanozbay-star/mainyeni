@@ -55,6 +55,7 @@ export class MapWorkspaceShellPlacementRuntime {
   #disposed = false;
   #frame = 0;
   #resizeObserver: ResizeObserver | null = null;
+  #observedResizeTargets = new Set<HTMLElement>();
   #mutationObserver: MutationObserver | null = null;
   #refreshCount = 0;
   #resizeCount = 0;
@@ -88,8 +89,7 @@ export class MapWorkspaceShellPlacementRuntime {
 
     if (typeof ResizeObserver !== 'undefined') {
       this.#resizeObserver = new ResizeObserver(this.#handleObservedResize);
-      this.#resizeObserver.observe(this.#root);
-      for (const element of this.#collectOccluderElements()) this.#resizeObserver.observe(element);
+      this.#syncResizeObserverTargets();
     }
 
     if (typeof MutationObserver !== 'undefined' && this.#document.body) {
@@ -108,6 +108,7 @@ export class MapWorkspaceShellPlacementRuntime {
   refreshNow(): void {
     if (this.#disposed) return;
     this.#cancelFrame();
+    this.#syncResizeObserverTargets();
     this.#refreshCount += 1;
     const rootRect = this.#root.getBoundingClientRect();
     const occluders = this.#collectOccluderElements()
@@ -138,6 +139,7 @@ export class MapWorkspaceShellPlacementRuntime {
     this.#window.removeEventListener('resize', this.#handleResize);
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
+    this.#observedResizeTargets.clear();
     this.#mutationObserver?.disconnect();
     this.#mutationObserver = null;
   }
@@ -156,6 +158,29 @@ export class MapWorkspaceShellPlacementRuntime {
     this.#mutationCount += 1;
     this.#scheduleRefresh();
   };
+
+  #syncResizeObserverTargets(): void {
+    const observer = this.#resizeObserver;
+    if (!observer) return;
+
+    const targets = new Set<HTMLElement>([this.#root]);
+    for (const element of this.#collectOccluderElements()) {
+      if (element === this.#root || this.#root.contains(element)) continue;
+      targets.add(element);
+    }
+
+    for (const element of this.#observedResizeTargets) {
+      if (targets.has(element)) continue;
+      observer.unobserve(element);
+      this.#observedResizeTargets.delete(element);
+    }
+
+    for (const element of targets) {
+      if (this.#observedResizeTargets.has(element)) continue;
+      observer.observe(element);
+      this.#observedResizeTargets.add(element);
+    }
+  }
 
   #collectOccluderElements(): HTMLElement[] {
     const values: HTMLElement[] = [];

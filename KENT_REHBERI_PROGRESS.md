@@ -1211,3 +1211,10 @@
 - FIX: include these existing live surfaces in the bounded occluder registry. The dock now re-evaluates its three anchor candidates against visible query, lazy-window, utility/workspace and ArcGIS popup rectangles.
 - REGRESSION COVERAGE: add runtime tests for query-window, lazy-window, utility-bar, popup and workspace collisions while preserving the current adaptive anchor policy.
 - SAFETY / SCOPE: placement/runtime and its tests plus progress note only. No map services, GIS data, API, database, authentication or deployment settings changed; browser screenshot verification remains a separate acceptance step.
+
+
+## Deep Experience / dynamic overlay resize tracking — 2026-10-16
+- FINDING: the placement runtime recalculated after DOM mutations, but its ResizeObserver subscribed only to surfaces present at startup. Later-opened windows could be detected once but would not trigger recalculation for subsequent content or size changes; removed surfaces also remained observed.
+- FIX: reconcile ResizeObserver targets on each scheduled placement refresh. Newly added occluders are observed, removed ones are unobserved, and dispose clears all tracked targets.
+- REGRESSION COVERAGE: add a deterministic observer test proving late query-window registration, resize-triggered refresh, removal cleanup and dispose cleanup.
+- SAFETY / SCOPE: placement runtime, its focused tests and this progress note only. No GIS endpoints, spatial data, API, database, authentication or deployment configuration changed.
