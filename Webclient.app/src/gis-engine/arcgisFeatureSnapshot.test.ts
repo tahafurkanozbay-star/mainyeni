@@ -309,4 +309,40 @@ describe('ArcGIS bounded feature snapshot session', () => {
     expect(page.truncated).toBe(true);
     expect(ownKeysCalls).toBe(0);
   });
+
+  it('accepts exact feature and query resource-budget boundaries deterministically', () => {
+    const source = [{ attributes: { OBJECTID: 1 } }];
+    const baseline = new ArcGisFeatureSnapshotSession().capturePage(source);
+    const exact = new ArcGisFeatureSnapshotSession({
+      maxFeatures: 1,
+      maxPages: 1,
+      maxNodesPerFeature: baseline.nodes,
+      maxNodesPerQuery: baseline.nodes,
+      maxBytesPerFeature: baseline.estimatedBytes,
+      maxBytesPerQuery: baseline.estimatedBytes,
+    });
+    expect(exact.capturePage(source)).toMatchObject({
+      nodes: baseline.nodes,
+      estimatedBytes: baseline.estimatedBytes,
+      featureCount: 1,
+      truncated: false,
+    });
+    const tooSmall = new ArcGisFeatureSnapshotSession({
+      maxFeatures: 1,
+      maxPages: 1,
+      maxNodesPerFeature: baseline.nodes - 1,
+      maxNodesPerQuery: baseline.nodes,
+      maxBytesPerFeature: baseline.estimatedBytes,
+      maxBytesPerQuery: baseline.estimatedBytes,
+    });
+    expect(() => tooSmall.capturePage(source)).toThrow(/node budget/);
+  });
+
+  it('returns immutable query snapshot diagnostics', () => {
+    const session = new ArcGisFeatureSnapshotSession();
+    session.capturePage([{ attributes: { OBJECTID: 1 } }]);
+    const diagnostics = session.snapshot();
+    expect(Object.isFrozen(diagnostics)).toBe(true);
+    expect(diagnostics).toMatchObject({ pages: 1, features: 1 });
+  });
 });
