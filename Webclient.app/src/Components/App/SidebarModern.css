@@ -2,9 +2,8 @@
    height:100%, extending beneath the viewport and hiding its last buttons. */
 .kr-sidebar.sidebar-container {
   box-sizing: border-box;
-  width: min(var(--sidebar-hover-width, 470px), 100dvw);
-  height: calc(100dvh - var(--mainbar-height, 64px));
-  max-height: calc(100dvh - var(--mainbar-height, 64px));
+  max-width: 100dvw;
+  max-height: 100dvh;
   overflow: hidden;
 }
 
