@@ -262,4 +262,35 @@ describe('ArcGIS bounded feature snapshot session', () => {
     const withSymbol = { attributes: { OBJECTID: 1 }, [Symbol('hidden')]: true };
     expect(() => snapshotArcGisFeatures([withSymbol])).toThrow(/invalid property key/);
   });
+
+  it('does not execute accessor-backed runtime budget options', () => {
+    let calls = 0;
+    const budget: Record<string, unknown> = {};
+    Object.defineProperty(budget, 'maxFeatures', {
+      enumerable: true,
+      get() { calls += 1; throw new Error('budget getter must not execute'); },
+    });
+    expect(() => new ArcGisFeatureSnapshotSession(budget)).toThrow(/plain data properties/);
+    expect(calls).toBe(0);
+  });
+
+  it('rejects misspelled budget fields instead of silently ignoring configuration', () => {
+    expect(() => new ArcGisFeatureSnapshotSession({
+      maxFeature: 5,
+    } as unknown as { maxFeatures?: number })).toThrow(/known plain data properties/);
+  });
+
+  it('sanitizes proxy failures when reading response envelope fields directly', () => {
+    const response = new Proxy({ features: [] }, {
+      getOwnPropertyDescriptor() { throw new Error('secret proxy payload'); },
+    });
+    let thrown: unknown;
+    try {
+      readArcGisOwnDataProperty(response, 'features');
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toMatchObject({ name: 'ArcGisFeatureSnapshotError', code: 'UNSAFE_OBJECT' });
+    expect((thrown as Error).message).not.toContain('secret proxy payload');
+  });
 });
