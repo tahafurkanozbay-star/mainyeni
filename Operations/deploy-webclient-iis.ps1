@@ -145,8 +145,12 @@ else {
     }
 }
 
-Start-WebAppPool -Name $frontPoolName
-Start-WebAppPool -Name $ApiApplicationPool
+if ((Get-WebAppPoolState -Name $frontPoolName).Value -ne "Started") {
+    Start-WebAppPool -Name $frontPoolName
+}
+if ((Get-WebAppPoolState -Name $ApiApplicationPool).Value -ne "Started") {
+    Start-WebAppPool -Name $ApiApplicationPool
+}
 Write-Host ""
 Write-Host "Dosyalar kopyalandı; API klasörü silinmedi." -ForegroundColor Green
 Write-Host "Webclient URL: https://cbs.ankara.bel.tr/kentrehberiumit/"
