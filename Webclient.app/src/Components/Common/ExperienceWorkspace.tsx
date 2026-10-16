@@ -445,6 +445,7 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
         <div
           id="experience-workspace-controls"
           className="experience-map-mode-anchor"
+          role="group"
           aria-label="Harita görünüm kontrolleri"
           tabIndex={-1}
           data-viewport={viewport}
