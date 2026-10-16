@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import test from 'node:test';
 import { fixtureFile } from './test-helpers.mts';
 import {
@@ -68,4 +70,20 @@ test('block scalar continuation preserves CRLF behavior', () => {
   const lf = fieldWithContinuation(job(source), 'runs-on');
   const crlf = fieldWithContinuation(job(source.replace(/\n/g, '\r\n')), 'runs-on');
   assert.equal(lf, crlf);
+});
+
+test('first-push strict lint baseline is ancestry-aware and fails closed to full validation', () => {
+  const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-qa.yml'), 'utf8');
+  const start = workflow.indexOf('name: Strict lint on changed Webclient sources');
+  const end = workflow.indexOf('name: Full TypeScript diagnostic visibility', start);
+  assert.ok(start >= 0 && end > start, 'strict lint workflow step must remain present');
+  const step = workflow.slice(start, end);
+
+  assert.match(workflow, /Checkout with ancestry for exact changed-file lint[\\s\\S]*?fetch-depth: 0/u);
+  assert.match(step, /GITHUB_EVENT_NAME/u);
+  assert.match(step, /git -C \.\. fetch --no-tags origin main/u);
+  assert.match(step, /git -C \.\. merge-base "\\$MAIN_SHA" HEAD/u);
+  assert.match(step, /git -C \.\. diff --name-only "\\$BASE_SHA" HEAD/u);
+  assert.match(step, /npm run lint:strict --if-present/u);
+  assert.match(step, /No trustworthy ancestry baseline; running full strict lint/u);
 });
