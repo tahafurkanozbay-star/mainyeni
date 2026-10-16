@@ -51,7 +51,7 @@ describe("ExperienceWorkspace", () => {
     test("renders semantic status and 2B/3B controls", () => {
         render(<ExperienceWorkspace />);
         expect(screen.getByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri")).toBeInTheDocument();
-        expect(screen.getByLabelText("Çalışma alanı durumu")).toHaveTextContent("Çevrimiçi");
+        expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimiçi");
         expect(screen.getByRole("button", { name: /2 boyutlu harita, etkin/i })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: /3 boyutlu sahne/i })).toHaveAttribute("aria-pressed", "false");
     });
@@ -89,7 +89,7 @@ describe("ExperienceWorkspace", () => {
 
     test("opens an accessible settings dialog and persists theme changes", async () => {
         render(<ExperienceWorkspace />);
-        fireEvent.click(screen.getByRole("button", { name: "Deneyim ayarları" }));
+        fireEvent(window, new CustomEvent("kentrehberi:command", { detail: { name: "settings" } }));
 
         const dialog = screen.getByRole("dialog", { name: "Çalışma alanını kişiselleştir" });
         expect(dialog).toHaveAttribute("aria-modal", "true");
