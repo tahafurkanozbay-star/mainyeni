@@ -266,6 +266,47 @@ describe('SidebarModern governed interaction integration', () => {
     }
   });
 
+  it('collapses the expanded tablet service rail before opening a query window', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const { ShowWindow } = renderSidebar();
+      const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+      expect(aside).toHaveClass('is-collapsed');
+
+      await user.click(screen.getByRole('button', { name: 'Hizmet panelini genişlet' }));
+      expect(aside).not.toHaveClass('is-collapsed');
+      await user.click(serviceButton('Parklar'));
+
+      expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
+      expect(aside).toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+    }
+  });
+
+  it('preserves rail focus when a tablet service is activated with Enter', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 768 });
+    try {
+      const user = userEvent.setup();
+      const { ShowWindow } = renderSidebar();
+      const aside = screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' });
+      await user.click(screen.getByRole('button', { name: 'Hizmet panelini genişlet' }));
+      const park = serviceButton('Parklar');
+      park.focus();
+      await user.keyboard('{Enter}');
+
+      expect(ShowWindow).toHaveBeenCalledWith('park-query-window');
+      expect(aside).toHaveClass('is-collapsed');
+      expect(screen.getByRole('button', { name: 'Hizmet panelini genişlet' })).toHaveFocus();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+    }
+  });
+
   it('adds a favorite and persists only the canonical window id', async () => {
     const user = userEvent.setup();
     renderSidebar();

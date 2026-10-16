@@ -1200,3 +1200,9 @@
 - New .NET and Node regression tests cover token expiry boundaries, malformed responses, exception redaction, byte-preserving downloads, credential sink matrices, alias tracing and safe false-positive cases.
 - CI must be re-run against the exact final head after this batch; these static/unit tests do not substitute for live 2D/3D GIS smoke testing.
 
+## Deep Experience / tablet and compact overlay collision repair — 2026-10-16
+- SCOPE: responsive Kent Rehberi map shell; fixed quick-navigation dock, toolbar, service sidebar, managed query windows and ArcGIS popup coexistence.
+- FINDING: viewport widths 720–880px kept query windows anchored on the left under an expanded service drawer; the shared sidebar-width token could still represent the expanded tablet width after collapse. On compact viewports a visible query also competed with the top-right toolbar and floating map surfaces.
+- FIX: service activation on constrained widths (<=880px) collapses the service drawer before opening the query and restores focus to the visible rail toggle for pointer and keyboard activation. A responsive CSS contract sets the real 82px tablet rail width, excludes overlays behind an expanded drawer, positions queries to the right of the collapsed rail, and temporarily hides competing dock/utility/toolbar/pop-up surfaces while a query is foregrounded.
+- REGRESSION COVERAGE: added tablet pointer and Enter-activation tests plus CSS-contract checks for expanded-drawer exclusion, rail geometry and query foreground ownership.
+- SAFETY / SCOPE: no GIS endpoints, spatial data, API, database, authentication or deployment configuration changed. CSS contract tests do not substitute for real-device screenshot/E2E acceptance; inspect portrait/landscape and browser zoom before production rollout.
