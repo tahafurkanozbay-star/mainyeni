@@ -397,4 +397,49 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect(calls).toBe(2);
     runtime.destroy();
   });
+
+  it('does not execute accessor-backed ArcGIS error details arrays', async () => {
+    let calls = 0;
+    const details: string[] = [];
+    Object.defineProperty(details, '0', {
+      enumerable: true,
+      configurable: true,
+      get() { calls += 1; throw new Error('secret detail getter'); },
+    });
+    details.length = 1;
+    const runtime = createArcGisQueryRuntime(async () => ({
+      error: { code: 400, message: 'Invalid query', details },
+      features: [],
+    } as unknown as ArcGisQueryResponse), { queryLimits: limits });
+    let thrown: unknown;
+    try {
+      await runtime.execute(metadata(), request);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toMatchObject({ name: 'ArcGisQueryRuntimeError', code: 'ARCGIS_SERVICE_ERROR' });
+    expect((thrown as Error).message).toContain('Invalid query');
+    expect((thrown as Error).message).not.toContain('secret detail getter');
+    expect(calls).toBe(0);
+    runtime.destroy();
+  });
+
+  it('normalizes hostile thrown proxy values without leaking trap messages', async () => {
+    const hostile = new Proxy({}, {
+      getPrototypeOf() { throw new Error('secret prototype trap'); },
+      get() { throw new Error('secret property trap'); },
+    });
+    const runtime = createArcGisQueryRuntime(async () => { throw hostile; }, { queryLimits: limits, maxRetries: 1 });
+    let thrown: unknown;
+    try {
+      await runtime.execute(metadata(), request);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toMatchObject({ name: 'ArcGisQueryRuntimeError', code: 'TRANSPORT_ERROR' });
+    expect((thrown as Error).message).toBe('ArcGIS transport failed.');
+    expect((thrown as Error).message).not.toContain('secret');
+    expect((thrown as { cause?: unknown }).cause).toBeUndefined();
+    runtime.destroy();
+  });
 });
