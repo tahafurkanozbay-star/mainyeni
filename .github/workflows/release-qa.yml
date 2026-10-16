@@ -22,7 +22,6 @@ jobs:
       - name: Checkout with baseline history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node 24
@@ -93,7 +92,7 @@ jobs:
       run:
         working-directory: Webclient.app
     steps:
-      - name: Checkout with ancestry for exact changed-file lint
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
@@ -135,24 +134,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-              # Initial push events use an all-zero before SHA. Resolve the
-              # merge-base against main so canceled earlier push runs cannot
-              # leave previous commits outside the strict-lint target set.
-              git -C .. fetch --no-tags origin main
-              MAIN_SHA="$(git -C .. rev-parse FETCH_HEAD)"
-              BASE_SHA="$(git -C .. merge-base "$MAIN_SHA" HEAD || true)"
-              if [ -z "$BASE_SHA" ] || ! git -C .. merge-base --is-ancestor "$BASE_SHA" HEAD; then
-                echo "No trustworthy ancestry baseline; running full strict lint."
-                npm run lint:strict --if-present
-                exit 0
-              fi
-              echo "Resolved first-push lint baseline: $BASE_SHA"
-            else
-              echo "No trustworthy lint baseline; running full strict lint."
-              npm run lint:strict --if-present
-              exit 0
-            fi
+            BASE_SHA="$(bash scripts/resolve-changed-lint-baseline.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF")"
+            test -n "$BASE_SHA"
           fi
           git -C .. fetch --no-tags --depth=1 origin "$BASE_SHA"
           mapfile -t changed_files < <(
