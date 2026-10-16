@@ -187,8 +187,10 @@ function riskReason(argument: string): string | null {
   // Object shorthand ({ query }) is equivalent to { query: query }.
   // Mask inert comments/strings first so examples do not cause false findings.
   if (SENSITIVE_OBJECT_SHORTHAND.test(executable)) return 'shorthand-sensitive-value';
-  if (SENSITIVE_OBJECT_FIELD.test(argument)) return 'sensitive-object-key';
+  // Preserve the established value-origin reason when an object key is also
+  // sensitive; key-only classification is a fallback for nonliteral fields.
   if (SENSITIVE_NESTED_VALUE.test(executable)) return 'nested-sensitive-value';
+  if (SENSITIVE_OBJECT_FIELD.test(argument)) return 'sensitive-object-key';
   if (SENSITIVE_RUNTIME_SOURCE.test(executable)) return 'location-or-search-value';
   return null;
 }
