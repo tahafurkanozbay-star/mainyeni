@@ -121,6 +121,10 @@ test('Release QA resolves all-zero first-push lint baselines from an ancestry-sa
   assert.ok(start >= 0 && end > start, 'strict-lint step must remain explicitly identifiable');
   const lintStep = workflow.slice(start, end);
   const resolver = readWorkflow('Webclient.app/scripts/resolve-changed-lint-baseline.sh');
+  const webclientStart = workflow.indexOf('webclient-release-validation:');
+  const backendStart = workflow.indexOf('backend-release-validation:', webclientStart);
+  assert.ok(webclientStart >= 0 && backendStart > webclientStart, 'Webclient job must remain identifiable');
+  assert.ok(workflow.slice(webclientStart, backendStart).includes('fetch-depth: 0'), 'strict-lint checkout must fetch complete ancestry');
   assert.ok(lintStep.includes('bash scripts/resolve-changed-lint-baseline.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF"'));
   assert.ok(lintStep.includes('test -n "$BASE_SHA"'));
   assert.ok(resolver.includes('set -euo pipefail'));
