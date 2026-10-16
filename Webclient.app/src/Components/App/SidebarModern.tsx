@@ -214,6 +214,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
 
   const registrationRef = useRef<ManagedWindowHandle | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const groupButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const serviceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -282,9 +283,21 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     serviceButtonRefs.current.get(target.windowId)?.focus({ preventScroll: true });
   };
 
+  const isCompactViewport = (): boolean =>
+    typeof window !== 'undefined' && window.innerWidth <= 719;
+
   const openWindow = (windowId: string): void => {
     navigationModel.recordRecent(windowId);
     preferenceStore.saveRecents(navigationModel.getSnapshot().recentIds);
+
+    // A full-width drawer and a query window cannot be used side-by-side on a
+    // phone. Keep the sidebar's rail, then let the query occupy the remaining
+    // width; the responsive CSS restores the query when the rail is collapsed.
+    if (isCompactViewport()) {
+      navigationModel.setCollapsed(true);
+      sidebarToggleRef.current?.focus({ preventScroll: true });
+    }
+
     windowManager.ShowWindow(windowId);
   };
 
@@ -297,7 +310,13 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     const result = keyboardController.handleServiceKey(event);
     if (!result.handled) return;
     event.preventDefault();
-    if (result.activateWindowId !== null) openWindow(result.activateWindowId);
+    if (result.activateWindowId !== null) {
+      openWindow(result.activateWindowId);
+      // On compact screens openWindow moves focus to the visible sidebar rail
+      // because the selected service button is hidden by the collapsed panel.
+      if (!isCompactViewport()) focusKeyboardTarget(result.focus);
+      return;
+    }
     focusKeyboardTarget(result.focus);
   };
 
@@ -372,6 +391,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
         </div>
         <button
           type="button"
+          ref={sidebarToggleRef}
           className="kr-sidebar__toggle"
           onClick={() => navigationModel.toggleCollapsed()}
           aria-expanded={!navigation.collapsed}
