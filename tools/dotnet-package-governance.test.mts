@@ -18,13 +18,13 @@ import {
 } from './dotnet-package-governance.mts';
 
 const central = entries => `<Project>
-  <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>
+  <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled></PropertyGroup>
   <ItemGroup>${entries.map(([id,version])=>`<PackageVersion Include="${id}" Version="${version}" />`).join('')}</ItemGroup>
 </Project>`;
 
 const project = ({ packages = [], projectReferences = [], body = '' } = {}) => `<Project>
   <ItemGroup>
-    ${packages.map(value => typeof value === 'string' && value.trimStart().startsWith('<PackageReference') ? value : `<PackageReference Include="${value}" />`).join('')}
+    ${packages.map(value => typeof value === 'string' && /^<PackageReference(?=[\s/>])/i.test(value.trimStart()) ? value : `<PackageReference Include="${value}" />`).join('')}
     ${projectReferences.map(value => `<ProjectReference Include="${value}" />`).join('')}
   </ItemGroup>
   ${body}
@@ -125,7 +125,7 @@ test('central catalog rejects duplicate ids case-insensitively', () => {
 });
 
 test('central catalog rejects missing package version', () => {
-  const xml = `<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup><ItemGroup><PackageVersion Include="A" /></ItemGroup></Project>`;
+  const xml = `<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled></PropertyGroup><ItemGroup><PackageVersion Include="A" /></ItemGroup></Project>`;
   assert.ok(parseCentralPackageCatalog(xml).findings.some(item=>item.code==='central-version-missing'));
 });
 
@@ -137,14 +137,14 @@ test('central catalog rejects prerelease and property-based versions', () => {
 });
 
 test('central catalog supports child Version syntax', () => {
-  const xml = `<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup><ItemGroup><PackageVersion Include="A"><Version>1.2.3</Version></PackageVersion></ItemGroup></Project>`;
+  const xml = `<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled></PropertyGroup><ItemGroup><PackageVersion Include="A"><Version>1.2.3</Version></PackageVersion></ItemGroup></Project>`;
   const parsed = parseCentralPackageCatalog(xml);
   assert.equal(parsed.findings.length,0);
   assert.equal(parsed.entries[0].version,'1.2.3');
 });
 
 test('central catalog rejects attribute plus child version ambiguity', () => {
-  const xml = `<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup><ItemGroup><PackageVersion Include="A" Version="1.0.0"><Version>1.0.1</Version></PackageVersion></ItemGroup></Project>`;
+  const xml = `<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled></PropertyGroup><ItemGroup><PackageVersion Include="A" Version="1.0.0"><Version>1.0.1</Version></PackageVersion></ItemGroup></Project>`;
   assert.ok(parseCentralPackageCatalog(xml).findings.some(item=>item.code==='central-version-ambiguous'));
 });
 
@@ -314,7 +314,7 @@ test('inventory loader supports nested project topology', async () => {
 });
 
 test('catalog parser does not interpret commented central versions', () => {
-  const xml=`<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup><ItemGroup><!-- <PackageVersion Include="Ghost" Version="1.0.0" /> --><PackageVersion Include="A" Version="1.0.0" /></ItemGroup></Project>`;
+  const xml=`<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled></PropertyGroup><ItemGroup><!-- <PackageVersion Include="Ghost" Version="1.0.0" /> --><PackageVersion Include="A" Version="1.0.0" /></ItemGroup></Project>`;
   assert.deepEqual(parseCentralPackageCatalog(xml).entries.map(item=>item.id),['A']);
 });
 
@@ -340,7 +340,7 @@ test('conditioned Include remains a governed package reference', () => {
 });
 
 test('catalog rejects invalid package id before stale-package evaluation', () => {
-  const xml=`<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup><ItemGroup><PackageVersion Include="Bad/Id" Version="1.0.0" /></ItemGroup></Project>`;
+  const xml=`<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled></PropertyGroup><ItemGroup><PackageVersion Include="Bad/Id" Version="1.0.0" /></ItemGroup></Project>`;
   const report=evaluateDotnetPackageGovernance({centralXml:xml,projects:[]});
   assert.ok(report.findings.some(item=>item.code==='central-package-id-invalid'));
 });
@@ -350,4 +350,81 @@ test('report objects expose bounded structured observations instead of source XM
   const serialized=JSON.stringify(report);
   assert.equal(serialized.includes('<Project>'),false);
   assert.equal(serialized.includes('<PackageReference'),false);
+});
+
+
+test('central override policy is mandatory, false and unconditional', () => {
+  const baseline = central([['A','1.0.0']]);
+  for (const invalid of [
+    '',
+    '<CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>',
+    '<CentralPackageVersionOverrideEnabled />',
+    '<CentralPackageVersionOverrideEnabled Condition="true">false</CentralPackageVersionOverrideEnabled>',
+    '<CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled><CentralPackageVersionOverrideEnabled />',
+  ]) {
+    const xml = baseline.replace('<CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>', invalid);
+    assert.ok(parseCentralPackageCatalog(xml).findings.some(x => x.code === 'central-version-override-enabled'), invalid);
+  }
+  const conditionedGroup = baseline.replace('<PropertyGroup>', '<PropertyGroup Condition="true">');
+  assert.ok(parseCentralPackageCatalog(conditionedGroup).findings.some(x => x.code === 'central-version-override-enabled'));
+});
+
+test('project-local central policy declarations are rejected even when conditional', () => {
+  for (const tag of [
+    '<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>',
+    '<CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>',
+    '<centralpackageversionoverrideenabled Condition="true">true</centralpackageversionoverrideenabled>',
+  ]) {
+    const parsed = parseProjectFile(project({body:'<PropertyGroup>'+tag+'</PropertyGroup>'}), 'App.csproj');
+    assert.ok(parsed.findings.some(x => x.code === 'project-central-policy-override'), tag);
+  }
+});
+
+test('nested, empty and case-varied VersionOverride cannot bypass governance', () => {
+  for (const reference of [
+    '<PackageReference Include="A" VersionOverride="" />',
+    '<PackageReference Include="A" versionoverride="9.9.9" />',
+    '<PackageReference Include="A"><VersionOverride /></PackageReference>',
+    '<PackageReference Include="A"><VersionOverride Condition="true">9.9.9</VersionOverride></PackageReference>',
+    '<PackageReference Remove="A"><VersionOverride>9.9.9</VersionOverride></PackageReference>',
+    '<packagereference include="A"><versionoverride>9.9.9</versionoverride></packagereference>',
+  ]) {
+    const parsed = parseProjectFile(project({packages:[reference]}), 'App.csproj');
+    assert.ok(parsed.findings.some(x => x.code === 'package-reference-version-override'), reference);
+  }
+});
+
+test('empty or case-varied inline Version metadata is rejected', () => {
+  for (const reference of [
+    '<PackageReference Include="A" version="" />',
+    '<PackageReference Include="A"><Version /></PackageReference>',
+    '<packagereference include="A"><version>1.0.0</version></packagereference>',
+  ]) {
+    const parsed = parseProjectFile(project({packages:[reference]}), 'App.csproj');
+    assert.ok(parsed.findings.some(x => x.code === 'package-reference-inline-version'), reference);
+  }
+});
+
+test('scanner preserves UTF-16 offsets across Unicode, comments and CDATA', () => {
+  const xml = '<Project><Label>İ</Label><!-- <PackageReference Include="Ghost" /> -->'
+    + '<![CDATA[<PackageReference Include="Phantom" />]]>'
+    + '<packagereference include="A" /><PackageReference Include="B" /></Project>';
+  const elements = extractElements(xml, 'PackageReference');
+  assert.deepEqual(elements.map(x => x.attributes.include ?? x.attributes.Include), ['A','B']);
+  assert.equal(elements[0].index, xml.indexOf('<packagereference'));
+  assert.equal(elements[1].index, xml.indexOf('<PackageReference Include="B"'));
+});
+
+test('case-varied attributes are recognized and duplicates are rejected', () => {
+  const parsed = parseCentralPackageCatalog(central([]).replace('</ItemGroup>', '<packageversion include="A" version="1.2.3" /></ItemGroup>'));
+  assert.deepEqual(parsed.entries.map(x => [x.id,x.version]), [['A','1.2.3']]);
+  assert.throws(() => parseAttributes('Include="A" include="B"'), /duplicate XML attribute/);
+});
+
+test('comment-only override examples are ignored', () => {
+  const xml = project({
+    packages:['<PackageReference Include="A"><!-- <VersionOverride>9.9.9</VersionOverride> --><PrivateAssets>all</PrivateAssets></PackageReference>'],
+    body:'<!-- <CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled> -->',
+  });
+  assert.equal(parseProjectFile(xml,'App.csproj').findings.length,0);
 });
