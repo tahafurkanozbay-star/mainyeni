@@ -474,4 +474,89 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect(runtime.snapshot().cacheHits).toBe(1);
     runtime.destroy();
   });
+
+  it('does not cache strict geometry validation failures', async () => {
+    let calls = 0;
+    const transport = vi.fn(async () => {
+      calls += 1;
+      return response([{
+        attributes: { OBJECTID: 1, NAME: 'Park' },
+        geometry: calls === 1 ? { unsupported: 'opaque' } : {
+          x: 32.8, y: 39.9, spatialReference: { wkid: 4326 },
+        },
+      }]);
+    });
+    const runtime = createArcGisQueryRuntime(transport, { queryLimits: limits });
+    await expect(runtime.execute(metadata(), {
+      ...request, returnGeometry: true, strictGeometry: true,
+    })).rejects.toMatchObject({ code: 'INVALID_FEATURE_GEOMETRY' });
+    const recovered = await runtime.execute(metadata(), { ...request, returnGeometry: true });
+    expect(recovered.diagnostics.cacheEligible).toBe(true);
+    await runtime.execute(metadata(), { ...request, returnGeometry: true });
+    expect(calls).toBe(2);
+    runtime.destroy();
+  });
+
+  it('does not cache a response that exceeds the snapshot string budget', async () => {
+    let calls = 0;
+    const transport = vi.fn(async () => response([feature(1, calls++ === 0 ? 'x'.repeat(9) : 'Park')]));
+    const runtime = createArcGisQueryRuntime(transport, {
+      queryLimits: limits,
+      featureSnapshotBudget: { maxStringLength: 8 },
+    });
+    await expect(runtime.execute(metadata(), request)).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError', code: 'STRING_BUDGET',
+    });
+    await expect(runtime.execute(metadata(), request)).resolves.toMatchObject({
+      diagnostics: { complete: true, cacheEligible: true },
+    });
+    await runtime.execute(metadata(), request);
+    expect(transport).toHaveBeenCalledTimes(2);
+    runtime.destroy();
+  });
+
+  it('rejects inherited response fields without invoking inherited getters', async () => {
+    let calls = 0;
+    const payload = Object.create({
+      get features() { calls += 1; throw new Error('inherited response getter'); },
+    }) as ArcGisQueryResponse;
+    Object.defineProperty(payload, 'exceededTransferLimit', { value: false, enumerable: true });
+    const runtime = createArcGisQueryRuntime(async () => payload, { queryLimits: limits });
+    await expect(runtime.execute(metadata(), request)).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError', code: 'INVALID_QUERY_RESPONSE',
+    });
+    expect(calls).toBe(0);
+    runtime.destroy();
+  });
+
+  it('rejects non-finite coordinates even when display geometry validation is disabled', async () => {
+    const runtime = createArcGisQueryRuntime(async () => response([{
+      attributes: { OBJECTID: 1, NAME: 'Park' },
+      geometry: { x: Number.NaN, y: 39.9 },
+    }]), { queryLimits: limits });
+    await expect(runtime.execute(metadata(), {
+      ...request, returnGeometry: true, validateGeometry: false,
+    })).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError', code: 'NON_FINITE_NUMBER',
+    });
+    expect(runtime.snapshot().cacheEntries).toBe(0);
+    runtime.destroy();
+  });
+
+  it('fails closed on accessor-backed object IDs before pagination can deduplicate them', async () => {
+    let calls = 0;
+    const attributes: Record<string, unknown> = { NAME: 'Park' };
+    Object.defineProperty(attributes, 'OBJECTID', {
+      enumerable: true,
+      get() { calls += 1; throw new Error('object ID getter'); },
+    });
+    const runtime = createArcGisQueryRuntime(async () => response([{ attributes }]), {
+      queryLimits: { maxFeatures: 4, maxPages: 2, preferredPageSize: 2, maxPageSize: 2 },
+    });
+    await expect(runtime.execute(metadata(true), request)).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError', code: 'ACCESSOR_PROPERTY',
+    });
+    expect(calls).toBe(0);
+    runtime.destroy();
+  });
 });
