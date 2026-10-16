@@ -186,7 +186,7 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     });
     const runtime = createArcGisQueryRuntime(transport, {
       queryLimits: { maxFeatures: 4, maxPages: 2, preferredPageSize: 2, maxPageSize: 2 },
-      featureSnapshotBudget: { maxBytesPerFeature: 128, maxBytesPerQuery: 200 },
+      featureSnapshotBudget: { maxBytesPerFeature: 128, maxBytesPerQuery: 260 },
     });
     await expect(runtime.execute(metadata(true), request)).rejects.toMatchObject({
       name: 'ArcGisQueryRuntimeError',
