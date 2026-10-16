@@ -227,4 +227,81 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect(Object.isFrozen(result.features[0]?.attributes)).toBe(true);
     runtime.destroy();
   });
+
+  it('removes the retry abort listener after the backoff timer resolves', async () => {
+    const added: EventListener[] = [];
+    const removed: EventListener[] = [];
+    let attempts = 0;
+    const transport = vi.fn(async (_plan: unknown, context: { signal: AbortSignal }) => {
+      if (attempts++ === 0) {
+        const signal = context.signal;
+        const originalAdd = signal.addEventListener.bind(signal);
+        const originalRemove = signal.removeEventListener.bind(signal);
+        Object.defineProperty(signal, 'addEventListener', {
+          configurable: true,
+          value: (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
+            if (type === 'abort' && typeof listener === 'function') added.push(listener);
+            originalAdd(type, listener as EventListener, options);
+          },
+        });
+        Object.defineProperty(signal, 'removeEventListener', {
+          configurable: true,
+          value: (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions) => {
+            if (type === 'abort' && typeof listener === 'function') removed.push(listener);
+            originalRemove(type, listener as EventListener, options);
+          },
+        });
+        throw Object.assign(new Error('temporary upstream response'), { status: 503 });
+      }
+      return response([feature(1)]);
+    });
+    const runtime = createArcGisQueryRuntime(transport, {
+      queryLimits: limits, maxRetries: 1, retryBaseDelayMs: 1, retryMaxDelayMs: 1,
+    });
+    await expect(runtime.execute(metadata(), request)).resolves.toMatchObject({
+      diagnostics: { retries: 1, complete: true, cacheEligible: true },
+    });
+    expect(added.length).toBeGreaterThan(0);
+    expect(added.every((listener) => removed.includes(listener))).toBe(true);
+    runtime.destroy();
+  });
+
+  it('removes retry listeners and cancels the backoff promptly when the caller aborts', async () => {
+    const added: EventListener[] = [];
+    const removed: EventListener[] = [];
+    const controller = new AbortController();
+    let transportSignal: AbortSignal | undefined;
+    const transport = vi.fn(async (_plan: unknown, context: { signal: AbortSignal }) => {
+      transportSignal = context.signal;
+      const originalAdd = context.signal.addEventListener.bind(context.signal);
+      const originalRemove = context.signal.removeEventListener.bind(context.signal);
+      Object.defineProperty(context.signal, 'addEventListener', {
+        configurable: true,
+        value: (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
+          if (type === 'abort' && typeof listener === 'function') added.push(listener);
+          originalAdd(type, listener as EventListener, options);
+        },
+      });
+      Object.defineProperty(context.signal, 'removeEventListener', {
+        configurable: true,
+        value: (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions) => {
+          if (type === 'abort' && typeof listener === 'function') removed.push(listener);
+          originalRemove(type, listener as EventListener, options);
+        },
+      });
+      throw Object.assign(new Error('temporary upstream response'), { status: 503 });
+    });
+    const runtime = createArcGisQueryRuntime(transport, {
+      queryLimits: limits, maxRetries: 1, retryBaseDelayMs: 5000, retryMaxDelayMs: 5000,
+    });
+    const pending = runtime.execute(metadata(), { ...request, signal: controller.signal });
+    await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(transportSignal?.aborted).toBe(true);
+    expect(added.length).toBeGreaterThan(0);
+    expect(added.every((listener) => removed.includes(listener))).toBe(true);
+    runtime.destroy();
+  });
 });
