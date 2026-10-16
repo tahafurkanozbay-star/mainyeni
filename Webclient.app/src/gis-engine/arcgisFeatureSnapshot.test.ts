@@ -93,7 +93,7 @@ describe('ArcGIS bounded feature snapshot session', () => {
   it('ignores inherited fields and accepts null-prototype JSON-like records', () => {
     const attributes = Object.assign(Object.create(null) as Record<string, unknown>, { OBJECTID: 7 });
     const source = Object.assign(Object.create(null) as Record<string, unknown>, { attributes });
-    const [captured] = snapshotArcGisFeatures<Record<string, unknown>>([source]);
+    const captured = snapshotArcGisFeatures<Record<string, unknown>>([source]).features[0];
     expect(captured?.attributes).toEqual({ OBJECTID: 7 });
     const inherited = Object.create({ attributes: { OBJECTID: 8 } }) as object;
     expect(() => snapshotArcGisFeatures([inherited])).toThrow(/non-plain object/);
