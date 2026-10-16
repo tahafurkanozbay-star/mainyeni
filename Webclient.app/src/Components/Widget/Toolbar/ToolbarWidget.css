@@ -216,7 +216,7 @@
   .toolbarwidget {
     top: calc(var(--mainbar-height) + max(8px, env(safe-area-inset-top)));
     bottom: auto;
-    max-height: max(48px, min(48dvh, calc(100dvh - var(--mainbar-height) - 12rem - env(safe-area-inset-bottom))));
+    max-height: max(48px, min(48dvh, calc(100dvh - var(--mainbar-height) - 14rem - env(safe-area-inset-bottom))));
   }
 }
 
