@@ -167,4 +167,140 @@ describe('ArcGisQuerySchedulerPolicy', () => {
     expect(() => policy.snapshot()).toThrow('arcgis-query-scheduler-disposed')
     expect(() => enqueue(policy, 'b')).toThrow('arcgis-query-scheduler-disposed')
   })
+  it('never starts a future-dated interactive query ahead of eligible background work', () => {
+    const policy = scheduler()
+    enqueue(policy, 'future', 'future-layer', 'interactive', 20, 1, 500)
+    enqueue(policy, 'ready', 'ready-layer', 'background', 20, 1, 10)
+    expect(policy.startNext(20)?.requestId).toBe('ready')
+    expect(policy.startNext(499)).toBeUndefined()
+    expect(policy.snapshot().queued.map(entry => entry.requestId)).toEqual(['future'])
+    expect(policy.startNext(500)?.requestId).toBe('future')
+  })
+
+  it('keeps a clock rollback from resurrecting work already expired', () => {
+    const policy = scheduler()
+    enqueue(policy, 'expired', 'a', 'foreground', 20, 1, 10)
+    expect(policy.tick(110)).toEqual({ queuedExpired: 1, runningExpired: 0 })
+    expect(policy.startNext(15)).toBeUndefined()
+    expect(policy.snapshot().queued).toHaveLength(0)
+    enqueue(policy, 'new', 'b', 'foreground', 20, 1, 20)
+    // Enqueued at 20 with a deadline of 120: the monotonic scheduler
+    // must not treat 30 as if the clock returned to the beginning.
+    expect(policy.startNext(30)?.startedAtMs).toBe(110)
+  })
+
+  it('enforces a monotonically observed lease start time after a forward tick', () => {
+    const policy = scheduler()
+    policy.tick(500)
+    enqueue(policy, 'late', 'layer-x', 'interactive', 20, 1, 10)
+    const lease = policy.startNext(11)
+    expect(lease?.startedAtMs).toBeUndefined() // enqueuedAt=10, deadline=110 already expired
+    enqueue(policy, 'new', 'layer-y', 'interactive', 20, 1, 450)
+    const active = policy.startNext(480)
+    expect(active?.startedAtMs).toBe(500)
+    expect(active?.expiresAtMs).toBe(1000)
+    expect(policy.tick(950).runningExpired).toBe(0)
+    expect(policy.tick(900).runningExpired).toBe(0)
+    expect(policy.tick(1000).runningExpired).toBe(1)
+    expect(policy.snapshot().runningBytes).toBe(0)
+  })
+
+  it('rejects invalid control characters before normalization instead of aliasing identifiers', () => {
+    const policy = scheduler()
+    for (const character of ['\n', '\r', '\t', '\u0000', '\u007f', '\u001f']) {
+      expect(() => enqueue(policy, `${character}a`)).toThrow('invalid-request-id')
+      expect(() => enqueue(policy, `a${character}`)).toThrow('invalid-request-id')
+      expect(() => enqueue(policy, 'safe', `${character}layer`)).toThrow('invalid-layer-id')
+      expect(() => policy.cancel(`a${character}`)).toThrow('invalid-request-id')
+    }
+    expect(policy.snapshot()).toMatchObject({ queued: [], running: [], runningBytes: 0 })
+  })
+
+  it('fails without draining live metadata when the next lease deadline overflows', () => {
+    const policy = scheduler()
+    enqueue(policy, 'queued', 'layer-a', 'foreground', 20, 1, 10)
+    const before = policy.snapshot()
+    expect(() => policy.startNext(Number.MAX_SAFE_INTEGER)).toThrow('query-lease-overflow')
+    const after = policy.snapshot()
+    expect(after).toEqual(before)
+    expect(policy.cancel('queued')).toBe(true)
+    expect(policy.snapshot().runningBytes).toBe(0)
+  })
+
+  it('retains deterministic priority after a future-dated query becomes eligible', () => {
+    const policy = scheduler({ maxRunning: 2, maxPerLayerRunning: 1 })
+    enqueue(policy, 'later', 'future', 'interactive', 20, 1, 200)
+    enqueue(policy, 'visible', 'visible', 'foreground', 20, 1, 150)
+    enqueue(policy, 'background', 'bg', 'background', 20, 1, 100)
+    expect(policy.startNext(101)?.requestId).toBe('background')
+    expect(policy.startNext(151)?.requestId).toBe('visible')
+    expect(policy.startNext(201)).toBeUndefined() // two physical reservations remain
+    expect(policy.complete('background', 1)).toBe(true)
+    expect(policy.startNext(202)?.requestId).toBe('later')
+  })
+
+  it('rejects stale revisions even when invalidation removed every running and queued request', () => {
+    const policy = scheduler()
+    enqueue(policy, 'running', 'parcels', 'foreground', 30, 1)
+    expect(policy.startNext(20)?.requestId).toBe('running')
+    enqueue(policy, 'queued', 'parcels', 'foreground', 30, 2)
+    expect(policy.invalidateLayerRevision('parcels', 3)).toBe(2)
+    expect(policy.snapshot().runningBytes).toBe(0)
+    expect(() => enqueue(policy, 'stale', 'parcels', 'foreground', 20, 2)).toThrow('stale-query-revision')
+    enqueue(policy, 'current', 'parcels', 'foreground', 20, 3)
+    expect(policy.startNext(30)?.requestId).toBe('current')
+  })
+
+  it('does not decrease a retained revision floor on an older invalidation', () => {
+    const policy = scheduler()
+    policy.invalidateLayerRevision('buildings', 12)
+    expect(policy.invalidateLayerRevision('buildings', 4)).toBe(0)
+    expect(() => enqueue(policy, 'old', 'buildings', 'interactive', 20, 11)).toThrow('stale-query-revision')
+    enqueue(policy, 'new', 'buildings', 'interactive', 20, 12)
+    expect(policy.startNext(20)?.requestId).toBe('new')
+  })
+
+  it('bounds retained revision floors with a non-mutating capacity failure', () => {
+    const policy = scheduler({ maxTrackedRevisionLayers: 1 })
+    expect(policy.invalidateLayerRevision('a', 2)).toBe(0)
+    enqueue(policy, 'pending-b', 'b', 'foreground', 20, 1)
+    expect(() => policy.invalidateLayerRevision('b', 2)).toThrow('query-revision-layer-budget-exceeded')
+    expect(policy.snapshot().queued.map(entry => entry.requestId)).toEqual(['pending-b'])
+    expect(() => enqueue(policy, 'stale-a', 'a', 'foreground', 20, 1)).toThrow('stale-query-revision')
+    expect(policy.releaseLayer('a')).toBe(0)
+    expect(policy.invalidateLayerRevision('b', 2)).toBe(1)
+    expect(policy.snapshot().queued).toHaveLength(0)
+  })
+
+  it('releases all queued, running and revision state for a removed ArcGIS layer', () => {
+    const policy = scheduler({ maxRunning: 2, maxPerLayerRunning: 1 })
+    policy.invalidateLayerRevision('roads', 5)
+    enqueue(policy, 'running', 'roads', 'foreground', 70, 5)
+    expect(policy.startNext(20)?.requestId).toBe('running')
+    enqueue(policy, 'queued', 'roads', 'foreground', 30, 5)
+    enqueue(policy, 'unrelated', 'parcels', 'background', 20, 1)
+    expect(policy.snapshot().runningBytes).toBe(70)
+    expect(policy.releaseLayer('roads')).toBe(2)
+    expect(policy.snapshot()).toMatchObject({ runningBytes: 0 })
+    expect(policy.snapshot().queued.map(entry => entry.requestId)).toEqual(['unrelated'])
+    expect(policy.complete('running', 5)).toBe(false)
+    expect(policy.releaseLayer('roads')).toBe(0)
+    // Removing a layer intentionally frees its revision floor for a fresh instance.
+    enqueue(policy, 'reused', 'roads', 'foreground', 10, 1)
+    expect(policy.startNext(21)?.requestId).toBe('reused')
+  })
+
+  it('rejects invalid revision layer retention budgets', () => {
+    expect(() => scheduler({ maxTrackedRevisionLayers: 0 })).toThrow('maxTrackedRevisionLayers')
+    expect(() => scheduler({ maxTrackedRevisionLayers: 0.5 })).toThrow('maxTrackedRevisionLayers')
+    expect(() => scheduler({ maxTrackedRevisionLayers: Number.POSITIVE_INFINITY })).toThrow('maxTrackedRevisionLayers')
+  })
+
+  it('does not retain a revision floor for a zero minimum revision', () => {
+    const policy = scheduler({ maxTrackedRevisionLayers: 1 })
+    expect(policy.invalidateLayerRevision('unrestricted', 0)).toBe(0)
+    expect(policy.invalidateLayerRevision('actual', 5)).toBe(0)
+    expect(() => enqueue(policy, 'stale', 'actual', 'foreground', 1, 4)).toThrow('stale-query-revision')
+  })
+
 })
