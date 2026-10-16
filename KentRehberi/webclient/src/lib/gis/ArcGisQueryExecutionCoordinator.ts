@@ -1,5 +1,6 @@
 import type { ArcGisQueryPage, ArcGisQueryPlan } from './ArcGisQueryPagePlanner'
 import type { ArcGisQueryIntegrityResult } from './ArcGisQueryResponseIntegrity'
+import { captureArcGisQueryPlan } from './ArcGisQueryPlanSnapshot'
 
 export interface ArcGisQueryExecutionOptions {
   readonly maxConcurrentPages: number
@@ -49,71 +50,6 @@ export interface ArcGisQueryExecutionSuccess {
 
 export type ArcGisQueryExecutionResult = ArcGisQueryExecutionSuccess | ArcGisQueryExecutionFailure
 
-// Reject malformed caller-supplied plans before any network work or worker allocation.
-const MAX_EXECUTION_PAGES = 4096
-
-function validPlan(plan: ArcGisQueryPlan): plan is Extract<ArcGisQueryPlan, { kind: 'planned' }> {
-  if (plan === null || typeof plan !== 'object' || plan.kind !== 'planned' ||
-      typeof plan.key !== 'string' || !plan.key.trim() ||
-      plan.key.length > 8192 || !positiveInteger(plan.pageSize) ||
-      !Array.isArray(plan.pages) || plan.pages.length === 0 || plan.pages.length > MAX_EXECUTION_PAGES) return false
-  const seenPages = new Set<number>()
-  const seenObjectIds = new Set<number>()
-  const first = plan.pages[0]
-  if (first === undefined || first === null || typeof first !== 'object') return false
-  for (const entry of plan.pages) {
-    if (entry === null || typeof entry !== 'object' || entry.kind !== first.kind) return false
-    if (!Number.isSafeInteger(entry.page) || entry.page < 0 ||
-        entry.page >= plan.pages.length || seenPages.has(entry.page)) return false
-    seenPages.add(entry.page)
-    if (entry.kind === 'objectIds') {
-      if (!Array.isArray(entry.objectIds) || entry.objectIds.length === 0 ||
-          entry.objectIds.length > plan.pageSize ||
-          entry.objectIds.some((id: number) => !positiveInteger(id)) ||
-          new Set(entry.objectIds).size !== entry.objectIds.length) return false
-      for (const id of entry.objectIds) {
-        if (seenObjectIds.has(id)) return false
-        seenObjectIds.add(id)
-      }
-    } else if (entry.kind === 'offset') {
-      if (!Number.isSafeInteger(entry.resultOffset) || entry.resultOffset < 0 ||
-          !positiveInteger(entry.resultRecordCount) || entry.resultRecordCount > plan.pageSize ||
-          !Array.isArray(entry.orderByFields) ||
-          entry.orderByFields.some((field: string) => typeof field !== 'string' || field.length > 256 ||
-            !/^[A-Za-z_][A-Za-z0-9_.]* (asc|desc)$/iu.test(field)) ||
-          entry.resultOffset !== entry.page * plan.pageSize ||
-          entry.orderByFields.length > 8 ||
-          (plan.pages.length > 1 && entry.orderByFields.length === 0) ||
-          (first.kind === 'offset' && entry.orderByFields.join('\u0000') !== first.orderByFields.join('\u0000'))) return false
-    } else return false
-  }
-  return true
-}
-
-// Caller-owned plans are mutable even when their TypeScript type is readonly.
-// Capture a bounded, frozen execution snapshot before yielding to transports,
-// which may otherwise mutate page identities or arrays between awaits.
-function snapshotPlan(plan: Extract<ArcGisQueryPlan, { kind: 'planned' }>):
-  Extract<ArcGisQueryPlan, { kind: 'planned' }> {
-  const pages: ArcGisQueryPage[] = plan.pages.map(page => page.kind === 'objectIds'
-    ? Object.freeze({
-      kind: 'objectIds' as const,
-      page: page.page,
-      objectIds: Object.freeze([...page.objectIds]),
-    })
-    : Object.freeze({
-      kind: 'offset' as const,
-      page: page.page,
-      resultOffset: page.resultOffset,
-      resultRecordCount: page.resultRecordCount,
-      orderByFields: Object.freeze([...page.orderByFields]),
-    }))
-  return Object.freeze({
-    kind: 'planned', key: plan.key, pageSize: plan.pageSize,
-    pages: Object.freeze(pages),
-  })
-}
-
 const DEFAULTS: ArcGisQueryExecutionOptions = {
   maxConcurrentPages: 4,
   maxFeatures: 100_000,
@@ -157,9 +93,9 @@ export class ArcGisQueryExecutionCoordinator {
   }
 
   async execute(plan: ArcGisQueryPlan, signal?: AbortSignal): Promise<ArcGisQueryExecutionResult> {
-    if (!validPlan(plan)) return { kind: 'failed', code: 'invalid-plan' }
     if (signal?.aborted === true) return { kind: 'failed', code: 'aborted' }
-    const stablePlan = snapshotPlan(plan)
+    const stablePlan = captureArcGisQueryPlan(plan)
+    if (stablePlan === null) return { kind: 'failed', code: 'invalid-plan' }
 
     const root = new AbortController()
     const onAbort = (): void => root.abort(signal?.reason)

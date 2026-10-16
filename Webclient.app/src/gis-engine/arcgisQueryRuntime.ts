@@ -8,6 +8,16 @@ import type { ArcGisMetadataContract } from './arcgisMetadataAdapter';
 import { readArcgisFeatureWindow, type FeatureWindowResult } from './arcgisFeatureWindow';
 import { inspectGeometry, type GeometryBudget } from './geometryGuard';
 import {
+  ArcGisFeatureSnapshotError,
+  ArcGisFeatureSnapshotSession,
+  hasAsciiControlCharacters,
+  normalizeArcGisFeatureSnapshotBudget,
+  readArcGisOwnDataProperty,
+  type ArcGisFeatureSnapshotBudget,
+  type ArcGisFeatureSnapshotPage,
+  type NormalizedArcGisFeatureSnapshotBudget,
+} from './arcgisFeatureSnapshot';
+import {
   createQueryExecutionPlan,
   type QueryExecutionLimits,
   type QueryExecutionRequest,
@@ -61,6 +71,7 @@ export interface ArcGisQueryRuntimeOptions {
   readonly coordinatorOptions?: RequestCoordinatorOptions;
   readonly queryLimits?: QueryExecutionLimits;
   readonly geometryBudget?: GeometryBudget;
+  readonly featureSnapshotBudget?: Partial<ArcGisFeatureSnapshotBudget>;
   readonly cacheTtlMs?: number;
   readonly maxRetries?: number;
   readonly retryBaseDelayMs?: number;
@@ -136,66 +147,221 @@ const wait = (ms: number, signal: AbortSignal): Promise<void> => new Promise((re
     reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
     return;
   }
-  const timer = setTimeout(resolve, ms);
+  let settled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cleanup = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    signal.removeEventListener('abort', abort);
+  };
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    resolve();
+  };
   const abort = () => {
-    clearTimeout(timer);
+    if (settled) return;
+    settled = true;
+    cleanup();
     reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
   };
+  timer = setTimeout(finish, ms);
   signal.addEventListener('abort', abort, { once: true });
+  if (signal.aborted) abort();
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-);
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  try {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  } catch {
+    return false;
+  }
+};
+
+const ownDataValue = (value: unknown, key: string): unknown => {
+  try {
+    if (!isRecord(value)) return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && descriptor.enumerable && 'value' in descriptor
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const sanitizeArcGisDiagnosticText = (value: string): string => value
+  .replace(/(^|[?&\s,{;])(["']?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|apikey|client[_-]?secret|password|authorization|cookie)["']?\s*[:=]\s*["']?)[^"'&,\s}\]]+/giu, '$1$2[redacted]')
+  .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}/giu, 'Bearer [redacted]')
+  .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/gu, '[redacted-token]')
+  .slice(0, 2048);
 
 const arcgisErrorMessage = (value: unknown): string | null => {
-  if (!isRecord(value)) return null;
-  const message = typeof value.message === 'string' ? value.message.trim() : '';
-  const details = Array.isArray(value.details)
-    ? value.details.filter((entry): entry is string => typeof entry === 'string').join(' ')
-    : '';
-  return [message, details].filter(Boolean).join(' ') || 'ArcGIS service returned an error object.';
+  try {
+    if (!isRecord(value)) return null;
+    const rawMessage = ownDataValue(value, 'message');
+    const message = typeof rawMessage === 'string' ? sanitizeArcGisDiagnosticText(rawMessage.trim()) : '';
+    const rawDetails = ownDataValue(value, 'details');
+    const detailMessages: string[] = [];
+    try {
+      if (Array.isArray(rawDetails)) {
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(rawDetails, 'length');
+        const length = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : 0;
+        if (typeof length === 'number' && Number.isSafeInteger(length) && length > 0) {
+          for (let index = 0; index < Math.min(length, 16); index += 1) {
+            const descriptor = Object.getOwnPropertyDescriptor(rawDetails, String(index));
+            if (descriptor && descriptor.enumerable && 'value' in descriptor && typeof descriptor.value === 'string') {
+              detailMessages.push(sanitizeArcGisDiagnosticText(descriptor.value.slice(0, 1024)));
+            }
+          }
+        }
+      }
+    } catch {
+      // Malformed optional details are omitted; never invoke hostile array methods.
+      detailMessages.push('Additional ArcGIS error details were omitted because the response was malformed.');
+    }
+    return [message, detailMessages.join(' ')].filter(Boolean).join(' ') || 'ArcGIS service returned an error object.';
+  } catch {
+    return 'ArcGIS service returned an invalid error object.';
+  }
 };
 
 const arcgisErrorCode = (value: unknown): number | null => {
-  if (!isRecord(value)) return null;
-  const code = Number(value.code);
-  return Number.isFinite(code) ? code : null;
+  try {
+    if (!isRecord(value)) return null;
+    const rawCode = ownDataValue(value, 'code');
+    const code = typeof rawCode === 'number' || typeof rawCode === 'string' ? Number(rawCode) : Number.NaN;
+    return Number.isSafeInteger(code) ? code : null;
+  } catch {
+    return null;
+  }
 };
 
 const retryableStatus = (value: unknown): boolean => {
-  const status = isRecord(value) ? Number(value.status ?? value.code) : Number.NaN;
+  const rawStatus = ownDataValue(value, 'status') ?? ownDataValue(value, 'code');
+  const status = typeof rawStatus === 'number' || typeof rawStatus === 'string'
+    ? Number(rawStatus)
+    : Number.NaN;
   return status === 408 || status === 429 || status >= 500;
 };
 
-const retryableArcgisError = (response: ArcGisQueryResponse): boolean => {
-  const code = arcgisErrorCode(response.error);
+const isRuntimeError = (value: unknown): value is ArcGisQueryRuntimeError => {
+  try {
+    return value instanceof ArcGisQueryRuntimeError;
+  } catch {
+    return false;
+  }
+};
+
+const safeTransportErrorMessage = (value: unknown): string => {
+  try {
+    if (value instanceof Error) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, 'message');
+      if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
+        return sanitizeArcGisDiagnosticText(descriptor.value);
+      }
+    }
+  } catch {
+    // Do not expose property/prototype trap details from arbitrary thrown values.
+    return 'ArcGIS transport failed with an unreadable error value.';
+  }
+  return 'ArcGIS transport failed.';
+};
+
+const retryableArcgisError = (error: unknown): boolean => {
+  const code = arcgisErrorCode(error);
   return code === 429 || code === 500 || code === 502 || code === 503 || code === 504;
 };
 
-const requestKey = (metadata: ArcGisMetadataContract, plan: QueryExecutionPlan): string => (
-  `${metadata.resourceUrl}|${plan.signature}|${plan.strategy}|${plan.maxFeatures}|${plan.maxPages}`
-);
+const stableSerialize = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') return JSON.stringify(value) ?? '""';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : `number:${String(value)}`;
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(String(value)) ?? '""';
+};
+
+const policyFingerprint = (value: unknown): string => {
+  const serialized = stableSerialize(value);
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${serialized.length.toString(36)}-${(first >>> 0).toString(16).padStart(8, '0')}${(second >>> 0).toString(16).padStart(8, '0')}`;
+};
+
+const requestKey = (
+  metadata: ArcGisMetadataContract,
+  plan: QueryExecutionPlan,
+  options: ExecuteArcGisQueryOptions,
+  geometryBudget: GeometryBudget,
+  featureSnapshotBudget: NormalizedArcGisFeatureSnapshotBudget,
+): string => {
+  const policy = policyFingerprint({
+    validateGeometry: options.validateGeometry !== false,
+    strictGeometry: options.strictGeometry === true,
+    geometryBudget,
+    featureSnapshotBudget,
+  });
+  return `${metadata.resourceUrl}|${plan.signature}|${plan.strategy}|${plan.maxFeatures}|${plan.maxPages}|policy:${policy}`;
+};
 
 const featureIdentity = <TFeature extends ArcGisFeature>(
   feature: TFeature,
   objectIdField: string | null,
+  resourceUrl: string,
 ): string | number | undefined => {
-  if (!objectIdField || !feature.attributes) return undefined;
-  const value = feature.attributes[objectIdField];
-  return typeof value === 'string' || typeof value === 'number' ? value : undefined;
+  if (!objectIdField) return undefined;
+  const attributes = feature.attributes;
+  if (!attributes || typeof attributes !== 'object') {
+    throw new ArcGisQueryRuntimeError(
+      'ArcGIS paged response is missing its verified object identity.',
+      'INVALID_FEATURE_IDENTITY',
+      resourceUrl,
+    );
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(attributes, objectIdField);
+  if (!descriptor || !('value' in descriptor)) {
+    throw new ArcGisQueryRuntimeError(
+      'ArcGIS paged response is missing its verified object identity.',
+      'INVALID_FEATURE_IDENTITY',
+      resourceUrl,
+    );
+  }
+  const value: unknown = descriptor.value;
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (normalized.length > 0 && normalized.length <= 256 && !hasAsciiControlCharacters(normalized)) {
+      return normalized;
+    }
+  }
+  throw new ArcGisQueryRuntimeError(
+    'ArcGIS paged response contains an invalid object identity.',
+    'INVALID_FEATURE_IDENTITY',
+    resourceUrl,
+  );
 };
 
 const cloneFeatureWithGeometry = <TFeature extends ArcGisFeature>(
   feature: TFeature,
   geometry: unknown,
-): TFeature => ({ ...feature, geometry } as TFeature);
+): TFeature => Object.freeze({ ...feature, geometry }) as TFeature;
 
 const validateFeatureGeometry = <TFeature extends ArcGisFeature>(
   features: readonly TFeature[],
   geometryBudget: GeometryBudget,
   strict: boolean,
   state: RuntimeState,
+  resourceUrl: string,
 ): readonly TFeature[] => {
   const output: TFeature[] = [];
   for (const feature of features) {
@@ -214,7 +380,7 @@ const validateFeatureGeometry = <TFeature extends ArcGisFeature>(
       throw new ArcGisQueryRuntimeError(
         first?.message ?? 'ArcGIS feature geometry failed integrity validation.',
         'INVALID_FEATURE_GEOMETRY',
-        '',
+        resourceUrl,
       );
     }
     state.droppedInvalidGeometryCount += 1;
@@ -223,22 +389,33 @@ const validateFeatureGeometry = <TFeature extends ArcGisFeature>(
   return Object.freeze(output);
 };
 
-const mergeSignals = (external: AbortSignal | undefined, internal: AbortSignal): AbortSignal => {
-  if (!external) return internal;
+const mergeSignals = (
+  external: AbortSignal | undefined,
+  internal: AbortSignal,
+): { readonly signal: AbortSignal; readonly dispose: () => void } => {
+  if (!external) return { signal: internal, dispose: () => undefined };
   if (external.aborted) {
     const controller = new AbortController();
     controller.abort(external.reason);
-    return controller.signal;
+    return { signal: controller.signal, dispose: () => undefined };
   }
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
-    return AbortSignal.any([external, internal]);
+    return { signal: AbortSignal.any([external, internal]), dispose: () => undefined };
   }
   const controller = new AbortController();
   const abortFromExternal = () => controller.abort(external.reason);
   const abortFromInternal = () => controller.abort(internal.reason);
   external.addEventListener('abort', abortFromExternal, { once: true });
   internal.addEventListener('abort', abortFromInternal, { once: true });
-  return controller.signal;
+  if (external.aborted) abortFromExternal();
+  if (internal.aborted) abortFromInternal();
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      external.removeEventListener('abort', abortFromExternal);
+      internal.removeEventListener('abort', abortFromInternal);
+    },
+  };
 };
 
 export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> {
@@ -246,6 +423,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
   private readonly ownsCoordinator: boolean;
   private readonly queryLimits: QueryExecutionLimits;
   private readonly geometryBudget: GeometryBudget;
+  private readonly featureSnapshotBudget: NormalizedArcGisFeatureSnapshotBudget;
   private readonly cacheTtlMs: number;
   private readonly maxRetries: number;
   private readonly retryBaseDelayMs: number;
@@ -261,8 +439,15 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
     }
     this.coordinator = options.coordinator ?? createRequestCoordinator(options.coordinatorOptions);
     this.ownsCoordinator = !options.coordinator;
-    this.queryLimits = Object.freeze({ ...(options.queryLimits ?? {}) });
-    this.geometryBudget = Object.freeze({ ...(options.geometryBudget ?? {}) });
+    this.queryLimits = Object.freeze({ ...options.queryLimits });
+    const suppliedGeometryBudget = options.geometryBudget ?? {};
+    this.geometryBudget = Object.freeze({
+      ...suppliedGeometryBudget,
+      ...(suppliedGeometryBudget.allowedWkids !== undefined
+        ? { allowedWkids: Object.freeze([...suppliedGeometryBudget.allowedWkids]) }
+        : {}),
+    });
+    this.featureSnapshotBudget = normalizeArcGisFeatureSnapshotBudget(options.featureSnapshotBudget ?? {});
     this.cacheTtlMs = positiveInteger(options.cacheTtlMs, 15_000, 600_000);
     this.maxRetries = positiveInteger(options.maxRetries, 2, 5);
     this.retryBaseDelayMs = positiveInteger(options.retryBaseDelayMs, 250, 10_000);
@@ -277,22 +462,31 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
       throw new ArcGisQueryRuntimeError('ArcGIS query runtime is destroyed.', 'RUNTIME_DESTROYED', metadata.resourceUrl);
     }
     const executionPlan = createQueryExecutionPlan(metadata, options, this.queryLimits);
-    const key = requestKey(metadata, executionPlan);
+    const key = requestKey(metadata, executionPlan, options, this.geometryBudget, this.featureSnapshotBudget);
     const startedAt = Date.now();
     const cacheEligible = options.cache !== false && options.purpose !== 'export';
+    const namespace = options.namespace ?? metadata.resourceUrl;
 
     const result = await this.coordinator.run(
       key,
       async ({ signal: internalSignal }) => {
-        const signal = mergeSignals(options.signal, internalSignal);
-        return this.executePlan(metadata, executionPlan, signal, options);
+        const merged = mergeSignals(options.signal, internalSignal);
+        try {
+          return await this.executePlan(metadata, executionPlan, merged.signal, options);
+        } finally {
+          merged.dispose();
+        }
       },
       {
         ...(options.signal ? { signal: options.signal } : {}),
         priority: options.priority ?? (options.purpose === 'analysis' ? 'background' : 'interactive'),
         cache: cacheEligible,
         ttlMs: options.cacheTtlMs ?? this.cacheTtlMs,
-        namespace: options.namespace ?? metadata.resourceUrl,
+        namespace,
+        cacheWhen: (value: unknown) => isRecord(value) && isRecord(value.diagnostics) &&
+          value.diagnostics.complete === true && value.diagnostics.truncated === false &&
+          value.diagnostics.invalidGeometryCount === 0 && value.diagnostics.droppedInvalidGeometryCount === 0 &&
+          value.diagnostics.duplicateCount === 0,
         ...(options.generation !== undefined ? { generation: options.generation } : {}),
       },
     );
@@ -305,7 +499,9 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
         requestKey: key,
         strategy: executionPlan.strategy,
         durationMs: Date.now() - startedAt,
-        cacheEligible,
+        cacheEligible: cacheEligible && result.diagnostics.complete && !result.diagnostics.truncated &&
+          result.diagnostics.invalidGeometryCount === 0 && result.diagnostics.droppedInvalidGeometryCount === 0 &&
+          result.diagnostics.duplicateCount === 0,
       }),
     });
   }
@@ -351,14 +547,21 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
     };
     const validateGeometry = options.validateGeometry !== false && executionPlan.query.returnGeometry;
     const strictGeometry = options.strictGeometry === true;
+    const snapshotSession = new ArcGisFeatureSnapshotSession({
+      ...this.featureSnapshotBudget,
+      maxFeatures: Math.min(this.featureSnapshotBudget.maxFeatures ?? 100_000, executionPlan.maxFeatures),
+      maxPages: Math.min(this.featureSnapshotBudget.maxPages ?? 10_000, executionPlan.maxPages),
+    });
 
     if (executionPlan.strategy !== 'offset-pagination') {
       const response = await this.fetchPage(metadata, executionPlan, 0, signal, state);
-      const rawFeatures = Object.freeze([...(response.features ?? [])]);
+      const pageSnapshot = this.captureFeatures(snapshotSession, response.features, executionPlan.maxFeatures, true, metadata.resourceUrl, 0);
+      const rawFeatures = pageSnapshot.features;
       const features = validateGeometry
-        ? validateFeatureGeometry(rawFeatures, this.geometryBudget, strictGeometry, state)
+        ? validateFeatureGeometry(rawFeatures, this.geometryBudget, strictGeometry, state, metadata.resourceUrl)
         : rawFeatures;
-      const truncated = response.exceededTransferLimit === true || features.length >= executionPlan.maxFeatures;
+      const truncated = response.exceededTransferLimit === true || pageSnapshot.truncated ||
+        features.length >= executionPlan.maxFeatures;
       return Object.freeze({
         features: Object.freeze(features.slice(0, executionPlan.maxFeatures)),
         diagnostics: Object.freeze({
@@ -377,7 +580,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
       pageSize: executionPlan.pageSize,
       maxFeatures: executionPlan.maxFeatures,
       maxPages: executionPlan.maxPages,
-      identity: (feature) => featureIdentity(feature, metadata.objectIdField),
+      identity: (feature) => featureIdentity(feature, metadata.objectIdField, metadata.resourceUrl),
       fetchPage: async (offset, limit, pageSignal) => {
         const pageIndex = Math.max(0, Math.floor((offset - executionPlan.initialOffset) / executionPlan.pageSize));
         const spec: ArcGisQuerySpec = Object.freeze({
@@ -385,9 +588,10 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
           window: Object.freeze({ resultOffset: offset, resultRecordCount: limit }),
         });
         const response = await this.fetchSpec(metadata, executionPlan, spec, pageIndex, pageSignal, state);
-        const rawFeatures = Object.freeze([...(response.features ?? [])]);
+        const pageSnapshot = this.captureFeatures(snapshotSession, response.features, limit, false, metadata.resourceUrl, pageIndex);
+        const rawFeatures = pageSnapshot.features;
         const features = validateGeometry
-          ? validateFeatureGeometry(rawFeatures, this.geometryBudget, strictGeometry, state)
+          ? validateFeatureGeometry(rawFeatures, this.geometryBudget, strictGeometry, state, metadata.resourceUrl)
           : rawFeatures;
         return Object.freeze({
           features,
@@ -450,9 +654,37 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
           pageIndex,
           attempt: attemptNumber,
         });
-        const message = arcgisErrorMessage(response.error);
+        let responseError: unknown;
+        let responseFeatures: unknown;
+        let transferLimit: unknown;
+        try {
+          const errorField = readArcGisOwnDataProperty(response, 'error');
+          responseError = errorField.value;
+          if (errorField.found && responseError !== null && responseError !== undefined) {
+            // A non-null ArcGIS error must itself be a plain data object.
+            readArcGisOwnDataProperty(responseError, 'message');
+          }
+          const featureField = readArcGisOwnDataProperty(response, 'features');
+          if (!featureField.found || !Array.isArray(featureField.value)) {
+            throw new ArcGisFeatureSnapshotError('INVALID_FEATURES', 'ArcGIS response features must be an array.');
+          }
+          responseFeatures = featureField.value;
+          const transferField = readArcGisOwnDataProperty(response, 'exceededTransferLimit');
+          transferLimit = transferField.value;
+          if (transferField.found && typeof transferLimit !== 'boolean') {
+            throw new ArcGisFeatureSnapshotError('INVALID_TRANSFER_LIMIT', 'ArcGIS transfer-limit flag must be boolean.');
+          }
+        } catch {
+          throw new ArcGisQueryRuntimeError(
+            'ArcGIS query response contains invalid or unsafe properties.',
+            'INVALID_QUERY_RESPONSE',
+            metadata.resourceUrl,
+            { pageIndex },
+          );
+        }
+        const message = arcgisErrorMessage(responseError);
         if (message) {
-          if (attempt < this.maxRetries && retryableArcgisError(response)) {
+          if (attempt < this.maxRetries && retryableArcgisError(responseError)) {
             attempt += 1;
             state.retries += 1;
             await wait(this.backoff(attempt), signal);
@@ -465,17 +697,12 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
             { pageIndex },
           );
         }
-        if (!Array.isArray(response.features)) {
-          throw new ArcGisQueryRuntimeError(
-            'ArcGIS query response does not contain a features array.',
-            'INVALID_QUERY_RESPONSE',
-            metadata.resourceUrl,
-            { pageIndex },
-          );
-        }
-        return response;
+        return Object.freeze({
+          features: responseFeatures as readonly TFeature[],
+          exceededTransferLimit: transferLimit === true,
+        });
       } catch (error) {
-        if (error instanceof ArcGisQueryRuntimeError) throw error;
+        if (isRuntimeError(error)) throw error;
         if (signal.aborted) throw signal.reason ?? error;
         if (attempt < this.maxRetries && retryableStatus(error)) {
           attempt += 1;
@@ -484,10 +711,10 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
           continue;
         }
         throw new ArcGisQueryRuntimeError(
-          error instanceof Error ? error.message : 'ArcGIS transport failed.',
+          safeTransportErrorMessage(error),
           'TRANSPORT_ERROR',
           metadata.resourceUrl,
-          { cause: error, pageIndex },
+          { pageIndex },
         );
       }
     }
@@ -497,6 +724,27 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
       metadata.resourceUrl,
       { pageIndex },
     );
+  }
+
+  private captureFeatures(
+    session: ArcGisFeatureSnapshotSession,
+    input: unknown,
+    maxPageFeatures: number,
+    truncateExcess: boolean,
+    resourceUrl: string,
+    pageIndex: number,
+  ): ArcGisFeatureSnapshotPage<TFeature> {
+    try {
+      return session.capturePage<TFeature>(input, maxPageFeatures, truncateExcess);
+    } catch (error) {
+      const code = error instanceof ArcGisFeatureSnapshotError ? error.code : 'UNSAFE_OBJECT';
+      throw new ArcGisQueryRuntimeError(
+        'ArcGIS query response failed bounded feature validation.',
+        code,
+        resourceUrl,
+        { pageIndex },
+      );
+    }
   }
 
   private backoff(attempt: number): number {

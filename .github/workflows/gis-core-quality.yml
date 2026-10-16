@@ -51,7 +51,24 @@ jobs:
         working-directory: KentRehberi/webclient
         run: |
           ../../Webclient.app/node_modules/.bin/oxlint --deny-warnings --allow no-control-regex \
+            src/lib/gis/ArcGisQuerySchedulerPolicy.ts \
+            src/lib/gis/ArcGisQuerySchedulerPolicy.test.ts \
+            src/lib/gis/ArcGisQueryCacheExpiryIndex.ts \
+            src/lib/gis/ArcGisQueryCacheExpiryIndex.test.ts \
+            src/lib/gis/ArcGisQueryJsonFieldGuard.ts \
+            src/lib/gis/ArcGisQueryJsonFieldGuard.test.ts \
+            src/lib/gis/ArcGisQueryRequestRegistry.ts \
+            src/lib/gis/ArcGisQueryRequestRegistry.test.ts \
+            src/lib/gis/ArcGisQueryRequestRegistry.integrity.test.ts \
+            src/lib/gis/ArcGisQueryResultSnapshot.ts \
+            src/lib/gis/ArcGisQueryResultSnapshot.test.ts \
+            src/lib/gis/ArcGisQueryPlanSnapshot.ts \
+            src/lib/gis/ArcGisQueryPlanSnapshot.test.ts \
+            src/lib/gis/ArcGisQueryFeatureAccumulator.ts \
+            src/lib/gis/ArcGisQueryFeatureAccumulator.test.ts \
+            src/lib/gis/ArcGisQueryFeatureAccumulator.integrity.test.ts \
             src/lib/gis/ArcGisQueryCoordinator.ts \
+            src/lib/gis/ArcGisQueryCoordinator.cancellation-integrity.test.ts \
             src/lib/gis/ArcGisQueryPagePlanner.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.ts \
             src/lib/gis/ArcGisQueryResponseIntegrity.snapshot.test.ts \
