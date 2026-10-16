@@ -92,19 +92,6 @@ public static class GisProxyTargetPolicy
         return builder.Uri;
     }
 
-    public static Uri AppendQueryParameter(Uri uri, string name, string value)
-    {
-        if (uri is null) throw new ArgumentNullException(nameof(uri));
-        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Query parameter name is required.", nameof(name));
-        if (value is null) throw new ArgumentNullException(nameof(value));
-
-        var builder = new UriBuilder(uri);
-        var existing = builder.Query.TrimStart('?');
-        var next = Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(value);
-        builder.Query = string.IsNullOrWhiteSpace(existing) ? next : existing + "&" + next;
-        return builder.Uri;
-    }
-
     /// <summary>
     /// Replace all existing instances of a credential parameter before adding
     /// the fresh server-issued value. This avoids ambiguous duplicate token
