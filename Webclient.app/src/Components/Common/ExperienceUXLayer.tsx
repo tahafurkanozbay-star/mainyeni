@@ -368,6 +368,7 @@ export function ExperienceUXLayer({
   return (
     <>
       <aside
+        id="experience-utility"
         className={`experience-utility ${collapsed ? 'is-collapsed' : ''}`}
         aria-label="Kent Rehberi yardımcı araçları"
         tabIndex={-1}
