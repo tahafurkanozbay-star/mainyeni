@@ -229,7 +229,7 @@ describe('ExperienceUXLayer', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  test('does not create a duplicate help dialog for the question-mark shortcut', () => {
+  test('does not open a second help dialog from the question-mark shortcut', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
@@ -237,9 +237,9 @@ describe('ExperienceUXLayer', () => {
       key: '?',
     });
 
-    expect(screen.getByRole('dialog', {
+    expect(screen.queryByRole('dialog', {
       name: 'Hızlı kullanım',
-    })).toBeInTheDocument();
+    })).not.toBeInTheDocument();
   });
 
   test('does not create a duplicate help dialog while typing in an editable field', () => {
