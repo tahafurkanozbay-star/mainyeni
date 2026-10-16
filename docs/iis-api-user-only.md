@@ -19,6 +19,8 @@ Output:
 - **artifacts/iis-api-user/publish/** — expanded publish directory.
 - **artifacts/iis-api-user/api-user-iis.zip** — package to transfer to the IIS host.
 
+A separate **API.User IIS Bundle** GitHub Actions workflow runs this same publisher on relevant pull requests and pushes to main. Its ZIP is uploaded as the **api-user-iis-<commit-sha>** artifact for 14 days, so the built package can be downloaded from the workflow run without checking in generated binaries.
+
 The script checks the required User API assembly, generated IIS web.config, and appsettings.json; it also fails if the Admin API assembly appears in the output. Output cleanup is constrained to a child of this repository's ignored artifacts/ directory.
 
 ## Select the right runtime mode
