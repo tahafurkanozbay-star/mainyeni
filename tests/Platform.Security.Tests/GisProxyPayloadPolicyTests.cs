@@ -74,6 +74,30 @@ public sealed class GisProxyPayloadPolicyTests
         Assert.Equal(expected, GisProxyPayloadPolicy.NormalizeResponseContentType(input));
     }
 
+    [Theory]
+    [InlineData("application/json", "application/json")]
+    [InlineData("application/problem+json", "application/problem+json")]
+    [InlineData("text/plain; charset=utf-8", "text/plain; charset=utf-8")]
+    [InlineData("application/jsonp", "application/octet-stream")]
+    [InlineData("application/pdf", "application/octet-stream")]
+    [InlineData("text/html", "application/octet-stream")]
+    public void NormalizeResponseContentType_PassesOnlyInertStructuredContent(
+        string contentType, string expected)
+    {
+        Assert.Equal(expected, GisProxyPayloadPolicy.NormalizeResponseContentType(contentType));
+    }
+
+    [Fact]
+    public void ControllerReturnsUnknownMediaAsRawByteDownload()
+    {
+        var root = FindRepositoryRoot();
+        var controller = File.ReadAllText(
+            Path.Combine(root, "Api.User", "Controllers", "Extensions", "Gis", "GisProxyController.cs"));
+        Assert.Contains("GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType)", controller);
+        Assert.Contains("File(bytes, responseType)", controller);
+        Assert.DoesNotContain("return Content(response.Content ?? string.Empty, responseType);\\n            }\\n        }", controller);
+    }
+
     [Fact]
     public async Task BoundedReader_PreservesUnicodeAcrossSingleByteChunks()
     {
