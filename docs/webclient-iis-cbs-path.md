@@ -43,7 +43,7 @@ Betik yalnızca `Default Web Site` üzerinde `cbs.ankara.bel.tr:443` HTTPS bağl
 
 Önemli koruma: betik `robocopy /E` kullanır; `/MIR` veya `/PURGE` kullanmaz. Böylece mevcut `user` API klasörünün yanlışlıkla silinmesini önler. Gerekli IIS uygulamaları mevcut değilse:
 - `/kentrehberiumit` → `C:\inetpub\wwwroot\kentrehberiumit`, havuz `kentrehberiumit-webclient` (No Managed Code)
-- `/kentrehberiumit/api` → `C:\inetpub\wwwroot\kentrehberiumit\user`, mevcut havuz `kentrehberiumit`
+- `/kentrehberiumit/api` → `C:\inetpub\wwwroot\kentrehberiumit\user`, ayrı havuz `kentrehberiumit-api` (No Managed Code; `KentRehberiData__Standalone=true`)
 
 Yol veya havuz mevcut ama beklenen değerlerden farklıysa betik otomatik üzerine yazmaz; hata verip durur.
 
@@ -70,7 +70,7 @@ Beklenen: Webclient HTTP 200; API sağlık `healthy`; Kent Rehberi sorgusunda `f
 
 ## Geri dönüş
 
-Yayın öncesindeki `index.html`, `assets`, `images`, `fonts`, `web.config` ve `.vite` öğeleri yedeklenir. Gerekirse ilgili yedek öğeleri aynı IIS klasörüne geri kopyalayın. `user` klasörünün içeriği değiştirilmez; mevcut API yayın dosyaları ve mevcut `kentrehberiumit` havuzunun environment ayarları korunur. Yalnızca alt-yol uygulaması için ayrı `kentrehberiumit-api` havuzu oluşturulur/denetlenir.
+Derlemenin hedefte mevcut olan tüm çakışan üst-düzey dosya ve klasörleri yedeklenir; `user` API klasörü bu kapsama alınmaz. Gerekirse ilgili yedek öğeleri aynı IIS klasörüne geri kopyalayın. `user` klasörünün içeriği değiştirilmez; mevcut API yayın dosyaları ve mevcut `kentrehberiumit` havuzunun environment ayarları korunur. Yalnızca alt-yol uygulaması için ayrı `kentrehberiumit-api` havuzu oluşturulur/denetlenir.
 
 ## Güvenlik notları
 
