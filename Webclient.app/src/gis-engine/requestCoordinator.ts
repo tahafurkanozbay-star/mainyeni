@@ -26,6 +26,8 @@ export interface CoordinatedRequestOptions {
   readonly ttlMs?: number;
   readonly generation?: string | number;
   readonly namespace?: string;
+  /** Decide whether a successful value is safe to retain in cache. Exceptions fail closed. */
+  readonly cacheWhen?: (value: unknown) => boolean;
 }
 
 export interface RequestExecutionContext {
@@ -82,6 +84,7 @@ interface NormalizedOptions {
   readonly ttlMs: number;
   readonly generation: string | number | null;
   readonly namespace: string;
+  readonly cacheWhen: ((value: unknown) => boolean) | undefined;
 }
 
 interface CacheEntry {
@@ -110,6 +113,7 @@ interface SharedRequest<T = unknown> {
   readonly generation: string | number | null;
   readonly cache: boolean;
   readonly ttlMs: number;
+  readonly cacheWhen: ((value: unknown) => boolean) | undefined;
   readonly controller: AbortController;
   readonly work: (context: RequestExecutionContext) => Promise<T> | T;
   readonly consumers: Set<Consumer<T>>;
@@ -277,6 +281,7 @@ export class BoundedRequestCoordinator implements RequestCoordinator {
       generation: normalized.generation,
       cache: normalized.cache,
       ttlMs: normalized.ttlMs,
+      cacheWhen: normalized.cacheWhen,
       controller: new AbortController(),
       work,
       consumers: new Set<Consumer<T>>(),
@@ -380,6 +385,7 @@ export class BoundedRequestCoordinator implements RequestCoordinator {
       ttlMs,
       generation,
       namespace,
+      cacheWhen: typeof options.cacheWhen === 'function' ? options.cacheWhen : undefined,
     });
   }
 
@@ -492,7 +498,16 @@ export class BoundedRequestCoordinator implements RequestCoordinator {
       return;
     }
 
-    if (request.cache && !request.controller.signal.aborted) {
+    let cacheAccepted = request.cache;
+    if (cacheAccepted && request.cacheWhen) {
+      try {
+        // The leader request owns admission for all subscribers deduped to this key.
+        cacheAccepted = request.cacheWhen(value) === true;
+      } catch {
+        cacheAccepted = false;
+      }
+    }
+    if (cacheAccepted && !request.controller.signal.aborted) {
       this.putCache(request, value);
     }
     this.stats.completed += 1;
