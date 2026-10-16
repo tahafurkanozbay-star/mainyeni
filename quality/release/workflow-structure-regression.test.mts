@@ -79,11 +79,11 @@ test('first-push strict lint baseline is ancestry-aware and fails closed to full
   assert.ok(start >= 0 && end > start, 'strict lint workflow step must remain present');
   const step = workflow.slice(start, end);
 
-  assert.match(workflow, /Checkout with ancestry for exact changed-file lint[\\s\\S]*?fetch-depth: 0/u);
+  assert.match(workflow, /Checkout with ancestry for exact changed-file lint[\s\S]*?fetch-depth: 0/u);
   assert.match(step, /GITHUB_EVENT_NAME/u);
   assert.match(step, /git -C \.\. fetch --no-tags origin main/u);
-  assert.match(step, /git -C \.\. merge-base "\\$MAIN_SHA" HEAD/u);
-  assert.match(step, /git -C \.\. diff --name-only "\\$BASE_SHA" HEAD/u);
+  assert.match(step, /git -C \.\. merge-base "\$MAIN_SHA" HEAD/u);
+  assert.match(step, /git -C \.\. diff --name-only "\$BASE_SHA" HEAD/u);
   assert.match(step, /npm run lint:strict --if-present/u);
   assert.match(step, /No trustworthy ancestry baseline; running full strict lint/u);
 });
