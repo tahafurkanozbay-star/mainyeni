@@ -250,7 +250,7 @@ namespace CityWorks.UserApi.Gis
             return builder.Uri;
         }
 
-        private Task<string> ReadBoundedBody()
+        private Task<string?> ReadBoundedBody()
         {
             // Content-Length is optional for chunked requests; limit bytes while
             // consuming rather than materializing an unbounded request first.
