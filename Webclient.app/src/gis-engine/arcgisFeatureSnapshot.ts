@@ -56,6 +56,8 @@ interface TraversalState {
   featureBytes: number;
   pageNodes: number;
   pageBytes: number;
+  readonly baseNodes: number;
+  readonly baseBytes: number;
 }
 
 export class ArcGisFeatureSnapshotError extends Error {
@@ -149,13 +151,13 @@ function consume(state: TraversalState, bytes: number): void {
   if (state.featureNodes > budget.maxNodesPerFeature) {
     throw new ArcGisFeatureSnapshotError('FEATURE_NODE_BUDGET', 'ArcGIS feature exceeds the node budget.');
   }
-  if (state.pageNodes > budget.maxNodesPerQuery - (0)) {
+  if (state.pageNodes > budget.maxNodesPerQuery - state.baseNodes) {
     throw new ArcGisFeatureSnapshotError('QUERY_NODE_BUDGET', 'ArcGIS query exceeds the node budget.');
   }
   if (state.featureBytes > budget.maxBytesPerFeature) {
     throw new ArcGisFeatureSnapshotError('FEATURE_BYTE_BUDGET', 'ArcGIS feature exceeds the byte budget.');
   }
-  if (state.pageBytes > budget.maxBytesPerQuery) {
+  if (state.pageBytes > budget.maxBytesPerQuery - state.baseBytes) {
     throw new ArcGisFeatureSnapshotError('QUERY_BYTE_BUDGET', 'ArcGIS query exceeds the byte budget.');
   }
 }
@@ -296,6 +298,8 @@ export class ArcGisFeatureSnapshotSession {
         featureBytes: 0,
         pageNodes: 0,
         pageBytes: 0,
+        baseNodes: this.nodes,
+        baseBytes: this.estimatedBytes,
       };
       const copies: TFeature[] = [];
       for (let index = 0; index < count; index += 1) {
