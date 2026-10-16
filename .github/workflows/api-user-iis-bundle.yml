@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: api-user-iis-bundle-${{ github.event.pull_request.number || github.ref }}
+  group: api-user-iis-bundle-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -65,7 +65,7 @@ jobs:
         shell: pwsh
         run: .\Operations\publish-webclient-api-iis.ps1 -Configuration Release
 
-      - name: Upload IIS deployment package
+      - name: Upload Api.User IIS ZIP
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: api-user-iis-${{ github.sha }}
