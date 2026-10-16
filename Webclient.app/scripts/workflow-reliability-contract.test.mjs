@@ -7,6 +7,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
 const WORKFLOWS = Object.freeze([
   '.github/workflows/webclient-quality.yml',
   '.github/workflows/release-evidence-contract.yml',
+  '.github/workflows/release-qa.yml',
 ]);
 
 function readWorkflow(relativePath) {
@@ -113,6 +114,23 @@ for (const workflow of WORKFLOWS) {
     assert.deepEqual(result.findings, [], `${workflow} changed runner provenance`);
   });
 }
+test('Release QA resolves all-zero first-push lint baselines from an ancestry-safe main merge-base', () => {
+  const workflow = readWorkflow('.github/workflows/release-qa.yml');
+  const start = workflow.indexOf('- name: Strict lint on changed Webclient sources');
+  const end = workflow.indexOf('- name: Full TypeScript diagnostic visibility', start);
+  assert.ok(start >= 0 && end > start, 'strict-lint step must remain explicitly identifiable');
+  const lintStep = workflow.slice(start, end);
+
+  assert.match(workflow, /name: Checkout with ancestry for exact changed-file lint[\\s\\S]*?fetch-depth:\\s*0/);
+  assert.match(lintStep, /github\\.event\\.pull_request\\.base\\.sha \\|\\| github\\.event\\.before/);
+  assert.match(lintStep, /GITHUB_EVENT_NAME.*push/);
+  assert.match(lintStep, /git -C \.\. fetch --no-tags origin main/);
+  assert.match(lintStep, /git -C \.\. merge-base "\\$MAIN_SHA" HEAD/);
+  assert.match(lintStep, /merge-base --is-ancestor "\\$BASE_SHA" HEAD/);
+  assert.match(lintStep, /npm run lint:strict --if-present/);
+  assert.match(lintStep, /git -C \.\. diff --name-only "\\$BASE_SHA" HEAD/);
+});
+
 test('concurrency contract rejects a workflow without concurrency', () => {
   assert.equal(concurrencyContract('jobs:\n  quality:\n    runs-on: ubuntu-latest\n').reason, 'missing-concurrency');
 });
