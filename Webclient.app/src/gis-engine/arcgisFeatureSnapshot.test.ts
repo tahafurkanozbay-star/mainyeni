@@ -3,6 +3,7 @@ import {
   ArcGisFeatureSnapshotError,
   ArcGisFeatureSnapshotSession,
   readArcGisOwnDataProperty,
+  type ArcGisFeatureSnapshotBudget,
   snapshotArcGisFeatures,
 } from './arcgisFeatureSnapshot';
 
@@ -270,7 +271,7 @@ describe('ArcGIS bounded feature snapshot session', () => {
       enumerable: true,
       get() { calls += 1; throw new Error('budget getter must not execute'); },
     });
-    expect(() => new ArcGisFeatureSnapshotSession(budget)).toThrow(/plain data properties/);
+    expect(() => new ArcGisFeatureSnapshotSession(budget as unknown as Partial<ArcGisFeatureSnapshotBudget>)).toThrow(/plain data properties/);
     expect(calls).toBe(0);
   });
 
