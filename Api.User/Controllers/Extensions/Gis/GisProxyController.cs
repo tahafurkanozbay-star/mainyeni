@@ -311,7 +311,8 @@ namespace CityWorks.UserApi.Gis
                 return null;
             }
 
-            var cacheKey = $"gis-token:{service.Url}";
+            var cacheKey = GisProxyTokenCacheKeyPolicy.Create(
+                service.Url, service.SCUserName, service.SCPassword);
             if (memoryCache.TryGetValue(cacheKey, out string cachedToken))
             {
                 return cachedToken;
