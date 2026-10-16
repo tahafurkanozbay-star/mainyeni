@@ -63,7 +63,7 @@ export const extractElements = (xml, tagName) => {
       else if (character === '>') break;
     }
     if (end >= source.length) throw new Error('unterminated XML start tag ' + tagName);
-    const rawAttributes = source.slice(index + needle.length, end).trimEnd();
+    const rawAttributes = source.slice(index + start[0].length, end).trimEnd();
     const selfClosing = rawAttributes.endsWith('/');
     const attributes = parseAttributes(selfClosing ? rawAttributes.slice(0, -1) : rawAttributes);
     if (selfClosing) {
