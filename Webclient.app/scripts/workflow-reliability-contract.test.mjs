@@ -122,7 +122,7 @@ test('Release QA resolves all-zero first-push lint baselines from an ancestry-sa
   const lintStep = workflow.slice(start, end);
 
   const checkoutStart = workflow.indexOf('name: Checkout with ancestry for exact changed-file lint');
-  const checkoutEnd = workflow.indexOf('\\n      - name:', checkoutStart);
+  const checkoutEnd = workflow.indexOf('\n      - name:', checkoutStart);
   assert.ok(checkoutStart >= 0 && checkoutEnd > checkoutStart, 'checkout ancestry step must remain identifiable');
   assert.ok(
     workflow.slice(checkoutStart, checkoutEnd).includes('fetch-depth: 0'),
