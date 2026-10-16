@@ -127,12 +127,27 @@ public sealed class GisProxyPayloadPolicyTests
     [Fact]
     public void ControllerEnforcesMediaPolicyAndStreamingLimitBeforeForwarding()
     {
-        var root = RepositoryTestRoot.Find();
+        var root = FindRepositoryRoot();
         var controller = File.ReadAllText(
             Path.Combine(root, "Api.User", "Controllers", "Extensions", "Gis", "GisProxyController.cs"));
         Assert.Contains("GisProxyPayloadPolicy.IsActiveContentType(response.ContentType)", controller);
         Assert.Contains("GisProxyPayloadPolicy.ReadBoundedUtf8BodyAsync(", controller);
         Assert.DoesNotContain("ReadToEndAsync()", controller);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "CityWorks.NetCore.sln")) &&
+                File.Exists(Path.Combine(directory.FullName, "KENT_REHBERI_AGENT_RULES.md")))
+            {
+                return directory.FullName;
+            }
+            directory = directory.Parent;
+        }
+        throw new DirectoryNotFoundException("Kent Rehberi source root was not found.");
     }
 
     private sealed class CountingChunkedStream : Stream
