@@ -11,7 +11,6 @@ import {
 } from 'react';
 import { ExperienceDialog } from './ExperienceDialog';
 import {
-  getCommandByName,
   mapModeAnnouncement,
   type ExperienceDensity,
   type ExperienceMapMode,
@@ -426,72 +425,73 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
     if (result.announcement) announce(result.announcement, result.politeness);
   }, [announce, setTransitionState]);
 
-  const commandPalette = useMemo(() => getCommandByName('command-palette'), []);
+  useEffect(() => {
+    const onCommand = (event: Event): void => {
+      const detail = (event as CustomEvent<{ readonly name?: unknown }>).detail;
+      if (detail?.name === 'settings') setSettingsOpen(true);
+    };
+    window.addEventListener('kentrehberi:command', onCommand);
+    return () => window.removeEventListener('kentrehberi:command', onCommand);
+  }, []);
+
   const statuses = useMemo(() => workspaceStatusDescriptors(presentation)
-    .filter((status) => !mapModeControl || status.key !== 'view'), [mapModeControl, presentation]);
+    .filter((status) => status.key !== 'connectivity' && (!mapModeControl || status.key !== 'view')),
+  [mapModeControl, presentation]);
 
   return (
     <>
       <ExperienceSkipLinks />
-      <aside
-        id="experience-workspace-controls"
-        className="experience-workspace"
-        aria-label="Harita çalışma alanı durumu ve görünüm kontrolleri"
-        tabIndex={-1}
-        data-viewport={viewport}
-        data-online={online ? 'true' : 'false'}
-      >
-        <div className="experience-workspace__status-group" aria-label="Çalışma alanı durumu">
-          {statuses.map((status) => (
-            <StatusItem
-              key={status.key}
-              label={status.label}
-              value={status.value}
-              tone={status.tone}
+      {mapModeControl ? (
+        <div
+          id="experience-workspace-controls"
+          className="experience-map-mode-anchor"
+          aria-label="Harita görünüm kontrolleri"
+          tabIndex={-1}
+          data-viewport={viewport}
+          data-online={online ? 'true' : 'false'}
+        >
+          {mapModeControl}
+          {!online ? (
+            <p className="experience-sr-only" role="status">
+              Ağ bağlantısı kesildi. Haritada daha önce yüklenen içerik kullanılabilir; yeni sorgular bağlantı geri geldiğinde çalışacaktır.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <aside
+          id="experience-workspace-controls"
+          className="experience-workspace"
+          aria-label="Harita çalışma alanı durumu ve görünüm kontrolleri"
+          tabIndex={-1}
+          data-viewport={viewport}
+          data-online={online ? 'true' : 'false'}
+        >
+          <div className="experience-workspace__status-group" aria-label="Çalışma alanı durumu">
+            {statuses.map((status) => (
+              <StatusItem
+                key={status.key}
+                label={status.label}
+                value={status.value}
+                tone={status.tone}
+              />
+            ))}
+          </div>
+
+          <div className="experience-workspace__actions">
+            <MapModeControl
+              mode={transition.committed}
+              pendingMode={transition.pending}
+              onChange={requestMapMode}
             />
-          ))}
-        </div>
+          </div>
 
-        <div className="experience-workspace__actions">
-          {mapModeControl ?? <MapModeControl
-            mode={transition.committed}
-            pendingMode={transition.pending}
-            onChange={requestMapMode}
-          />}
-          <button
-            type="button"
-            className="experience-workspace__action"
-            aria-keyshortcuts="Control+K"
-            onClick={() => experienceBus.command({
-              name: 'command-palette',
-              source: 'experience-workspace',
-            })}
-            aria-label={`Komut merkezini aç${commandPalette?.shortcut ? `, ${commandPalette.shortcut.join(' artı ')}` : ''}`}
-          >
-            <svg className="experience-workspace__action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>
-            <span aria-hidden="true">Komutlar</span>
-            <kbd aria-hidden="true">Ctrl K</kbd>
-          </button>
-          <button
-            type="button"
-            className="experience-workspace__action"
-            aria-label="Deneyim ayarları"
-            aria-haspopup="dialog"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen(true)}
-          >
-            <svg className="experience-workspace__action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="3" fill="var(--exp-surface)" /><circle cx="15" cy="17" r="3" fill="var(--exp-surface)" /></svg>
-            <span>Ayarlar</span>
-          </button>
-        </div>
-
-        {!online ? (
-          <p className="experience-sr-only" role="status">
-            Ağ bağlantısı kesildi. Haritada daha önce yüklenen içerik kullanılabilir; yeni sorgular bağlantı geri geldiğinde çalışacaktır.
-          </p>
-        ) : null}
-      </aside>
-
+          {!online ? (
+            <p className="experience-sr-only" role="status">
+              Ağ bağlantısı kesildi. Haritada daha önce yüklenen içerik kullanılabilir; yeni sorgular bağlantı geri geldiğinde çalışacaktır.
+            </p>
+          ) : null}
+        </aside>
+      )}
       <ExperienceSettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
