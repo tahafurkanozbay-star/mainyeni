@@ -279,7 +279,7 @@ function snapshotValue(value: unknown, depth: number, state: TraversalState): un
 }
 
 export class ArcGisFeatureSnapshotSession {
-  private readonly budget: NormalizedBudget;
+  private readonly budget: NormalizedArcGisFeatureSnapshotBudget;
   private readonly seenObjects = new WeakSet<object>();
   private pages = 0;
   private features = 0;
