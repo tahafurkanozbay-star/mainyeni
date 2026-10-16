@@ -82,10 +82,17 @@
   isolation: isolate;
 }
 
-.experience-workspace:focus-visible {
+.experience-workspace:focus-visible,
+.experience-map-mode-anchor:focus-visible {
   outline: 3px solid var(--exp-accent) !important;
   outline-offset: 3px !important;
   box-shadow: var(--exp-shadow-sm), var(--exp-focus) !important;
+}
+
+.experience-map-mode-anchor {
+  position: static;
+  color: var(--exp-text);
+  font-family: var(--exp-font-sans);
 }
 
 .experience-workspace__status-group {
