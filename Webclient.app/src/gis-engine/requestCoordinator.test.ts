@@ -201,4 +201,30 @@ describe('BoundedRequestCoordinator', () => {
     }, { cacheWhen: () => true })).resolves.toEqual({ complete: true });
     expect(executions).toBe(2);
   });
+
+  it('keeps successful work successful when the cache byte estimator throws', async () => {
+    const coordinator = createRequestCoordinator({
+      estimateBytes: () => { throw new Error('cache estimator failed'); },
+    });
+    let executions = 0;
+    const work = async () => ({ sequence: ++executions });
+    await expect(coordinator.run('estimator-throws', work)).resolves.toEqual({ sequence: 1 });
+    await expect(coordinator.run('estimator-throws', work)).resolves.toEqual({ sequence: 2 });
+    expect(executions).toBe(2);
+    expect(coordinator.snapshot().cacheEntries).toBe(0);
+    expect(coordinator.snapshot().completed).toBe(2);
+  });
+
+  it('does not retain cache entries when the estimator returns non-finite or negative sizes', async () => {
+    let estimate = Number.NaN;
+    const coordinator = createRequestCoordinator({ estimateBytes: () => estimate });
+    let executions = 0;
+    const work = async () => ({ sequence: ++executions });
+    await expect(coordinator.run('invalid-estimate', work)).resolves.toEqual({ sequence: 1 });
+    expect(coordinator.snapshot().cacheEntries).toBe(0);
+    estimate = -1;
+    await expect(coordinator.run('invalid-estimate', work)).resolves.toEqual({ sequence: 2 });
+    expect(coordinator.snapshot().cacheEntries).toBe(0);
+    expect(executions).toBe(2);
+  });
 });
