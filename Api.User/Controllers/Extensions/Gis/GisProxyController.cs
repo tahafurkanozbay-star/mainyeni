@@ -6,16 +6,16 @@ using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using RestSharp;
 using System;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace CityWorks.UserApi.Gis
 {
     public class GisProxyController : _BaseUserApiController
     {
-        private const string ServiceHostSuffix = ".gissrv.org";
         private const int RequestTimeoutMs = 15_000;
         private const int TokenLifetimeMinutes = 30;
         private const long MaxRequestBodyBytes = 5 * 1024 * 1024;
@@ -25,10 +25,12 @@ namespace CityWorks.UserApi.Gis
         private readonly GisLayerOperations gisLayerOperations;
         private readonly GisBasemapLayerOperations gisBasemapLayerOperations;
         private readonly IMemoryCache memoryCache;
+        private readonly ILogger<GisProxyController> logger;
 
-        public GisProxyController(IMemoryCache memoryCache, BusinessContext context)
+        public GisProxyController(IMemoryCache memoryCache, BusinessContext context, ILogger<GisProxyController>? logger = null)
         {
             this.memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+            this.logger = logger ?? NullLogger<GisProxyController>.Instance;
             configServiceOperations = new GisConfigServiceOperations(context);
             gisLayerOperations = new GisLayerOperations(context);
             gisBasemapLayerOperations = new GisBasemapLayerOperations(context);
@@ -141,10 +143,18 @@ namespace CityWorks.UserApi.Gis
                 }
 
                 if (!string.IsNullOrWhiteSpace(response.ContentType) &&
-                    (response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-                     response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase)))
+                    response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 {
                     return File(response.RawBytes ?? Array.Empty<byte>(), response.ContentType);
+                }
+
+                if (!string.IsNullOrWhiteSpace(response.ContentType) &&
+                    response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase))
+                {
+                    return File(
+                        response.RawBytes ?? Array.Empty<byte>(),
+                        "application/octet-stream",
+                        "gis-response.bin");
                 }
 
                 var responseType = GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType);
@@ -154,7 +164,7 @@ namespace CityWorks.UserApi.Gis
                     // of re-encoding RestSharp's decoded string representation.
                     var bytes = response.RawBytes ??
                         System.Text.Encoding.UTF8.GetBytes(response.Content ?? string.Empty);
-                    return File(bytes, responseType);
+                    return File(bytes, responseType, "gis-response.bin");
                 }
                 return Content(response.Content ?? string.Empty, responseType);
             }
@@ -164,9 +174,21 @@ namespace CityWorks.UserApi.Gis
             }
             catch (Exception ex)
             {
-                handleExceptionResult(ex);
+                LogSafeFailure("upstream request", ex);
                 return StatusCode(StatusCodes.Status502BadGateway, "GIS service is temporarily unavailable.");
             }
+        }
+
+        private void LogSafeFailure(string operation, Exception exception)
+        {
+            var requestId = ControllerContext?.HttpContext?.TraceIdentifier ?? string.Empty;
+            // Never log the exception object or message: upstream request URIs can
+            // contain short-lived ArcGIS tokens in their query strings.
+            logger.LogError(
+                "GIS proxy {Operation} failed. RequestId={RequestId}; ExceptionType={ExceptionType}",
+                operation,
+                requestId,
+                exception.GetType().Name);
         }
 
         private Task<string?> ReadBoundedBody()
@@ -209,7 +231,7 @@ namespace CityWorks.UserApi.Gis
             }
             catch (Exception ex)
             {
-                handleExceptionResult(ex);
+                LogSafeFailure("service lookup", ex);
                 return null;
             }
         }
@@ -253,22 +275,18 @@ namespace CityWorks.UserApi.Gis
                 return null;
             }
 
-            string token;
-            try
-            {
-                using var document = JsonDocument.Parse(response.Content);
-                token = document.RootElement.TryGetProperty("token", out var tokenElement)
-                    ? tokenElement.GetString()
-                    : null;
-            }
-            catch (JsonException)
+            if (!GisProxyTokenResponsePolicy.TryReadToken(
+                response.Content,
+                DateTimeOffset.UtcNow,
+                TimeSpan.FromMinutes(TokenLifetimeMinutes),
+                TimeSpan.FromMinutes(2),
+                out var token,
+                out var cacheLifetime))
             {
                 return null;
             }
 
-            if (string.IsNullOrWhiteSpace(token)) return null;
-
-            memoryCache.Set(cacheKey, token, TimeSpan.FromMinutes(TokenLifetimeMinutes - 2));
+            memoryCache.Set(cacheKey, token, cacheLifetime);
             return token;
         }
     }

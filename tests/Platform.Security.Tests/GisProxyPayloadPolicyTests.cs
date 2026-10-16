@@ -176,6 +176,12 @@ public sealed class GisProxyPayloadPolicyTests
         Assert.Contains("GisProxyPayloadPolicy.IsActiveContentType(response.ContentType)", controller);
         Assert.Contains("GisProxyPayloadPolicy.ReadBoundedUtf8BodyAsync(", controller);
         Assert.DoesNotContain("ReadToEndAsync()", controller);
+        Assert.Contains("GisProxyTokenResponsePolicy.TryReadToken(", controller);
+        Assert.DoesNotContain("JsonDocument.Parse(response.Content)", controller);
+        Assert.Contains("logger.LogError(", controller);
+        Assert.DoesNotContain("handleExceptionResult(ex)", controller);
+        Assert.Contains("return File(bytes, responseType, \"gis-response.bin\");", controller);
+        Assert.Contains("return File(response.RawBytes ?? Array.Empty<byte>(), \"application/octet-stream\", \"gis-response.bin\");", controller);
     }
 
     private static string FindRepositoryRoot()

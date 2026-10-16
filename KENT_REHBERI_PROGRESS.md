@@ -1191,3 +1191,11 @@
 - LIMITS: No production browser 2D/3D GIS smoke test, live upstream ArcGIS authorization test, deployed exploit reproduction or assistive-technology E2E was performed. Static/unit/CI success is not a security certification.
 - NEXT: Finish exact-head CI; fix genuine failures without weakening gates. If all required checks pass and no new critical/high regression remains, mark PR #512 ready, perform squash merge with expected head SHA, and verify merged=true plus the actual main SHA.
 
+## Deep QA / 2026-10-16 — credential-aware client privacy and GIS token expiry
+
+- GIS token cache lifetime now respects ArcGIS `expires` (epoch milliseconds, or numeric string) and applies a two-minute safety margin. Expired, malformed, error, oversized, whitespace/control-bearing or overlong token responses are rejected; missing expiry uses the requested lifetime minus the same margin.
+- GIS proxy exception logging now records only the operation, request trace ID and exception type. It no longer sends raw exception objects/messages through `handleExceptionResult`, which persists message and stack data and could otherwise capture a token-bearing upstream URL.
+- Unknown/non-text GIS response types are returned from the original response bytes as an explicit `gis-response.bin` attachment. Raster imagery remains inline; HTML/XHTML/SVG/script content is still rejected before response forwarding.
+- Client privacy classification now includes access/auth/bearer/refresh/ID/session tokens, authorization, cookies, passwords, secrets, API keys, client secrets, private keys and JWT fields across logs, console output, template interpolation, JSON serialization, nested objects, bracket access and renamed destructured aliases. Safe counters, inert strings and comments have regression coverage.
+- New .NET and Node regression tests cover token expiry boundaries, malformed responses, exception redaction, byte-preserving downloads, credential sink matrices, alias tracing and safe false-positive cases.
+- CI must be re-run against the exact final head after this batch; these static/unit tests do not substitute for live 2D/3D GIS smoke testing.

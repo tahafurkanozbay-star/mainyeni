@@ -27,6 +27,15 @@ const SENSITIVE_NESTED_VALUE = /(?:[,:\[({]\s*|\.\.\.\s*)(?:query|path|params|pa
 const SENSITIVE_OBJECT_FIELD = /(?:^|[{,])\s*(?:['"])?(?:query|path|params|payload|record|item|selection|address|adres|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)(?:['"])?\s*:/i;
 const SENSITIVE_OBJECT_SHORTHAND = /(?:^|[{,])\s*(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}])/i;
 
+const CREDENTIAL_DIRECT_IDENTIFIER = /^(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)$/i;
+const CREDENTIAL_SERIALIZATION = /\bJSON\s*\.\s*stringify\s*\(\s*(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)\b/i;
+const CREDENTIAL_PROPERTY = /\b[A-Za-z_$][A-Za-z0-9_$]*\s*(?:\?\.|\.)\s*(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)\b/i;
+const CREDENTIAL_TEMPLATE = /\$\{[^}]{0,150}\b(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)\b[^}]*\}/i;
+const CREDENTIAL_NESTED_VALUE = /(?:[,:\[({]\s*|\.\.\.\s*)(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)\s*(?=[,}\])]|$)/i;
+const CREDENTIAL_OBJECT_FIELD = /(?:^|[{,])\s*(?:['"])?(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)(?:['"])?\s*:/i;
+const CREDENTIAL_OBJECT_SHORTHAND = /(?:^|[{,])\s*(?:token|access[_-]?token|auth[_-]?token|bearer[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|cookie|cookies|password|secret|api[_-]?key|client[_-]?secret|private[_-]?key|jwt|session)\s*(?=[,}])/i;
+
+
 export function isClientRuntimeSource(file: SourceFile): boolean {
   return RUNTIME_PATH.test(file.repositoryPath)
     && (file.kind === 'typescript' || file.kind === 'javascript')
@@ -196,7 +205,7 @@ function hasSensitiveQuotedObjectField(text: string): boolean {
         const after = nextNonWhitespace(text, end);
         if ((text[before] === '{' || text[before] === ',')
             && text[after] === ':'
-            && SENSITIVE_OBJECT_FIELD_NAME.test(key)) return true;
+            && (SENSITIVE_OBJECT_FIELD_NAME.test(key) || CREDENTIAL_DIRECT_IDENTIFIER.test(key))) return true;
       }
       index = end - 1;
       continue;
@@ -219,7 +228,7 @@ function hasSensitiveBracketProperty(text: string): boolean {
         const before = previousNonWhitespace(text, index - 1);
         const after = nextNonWhitespace(text, end);
         if (text[before] === '[' && text[after] === ']'
-            && SENSITIVE_BRACKET_FIELD_NAME.test(key)) {
+            && (SENSITIVE_BRACKET_FIELD_NAME.test(key) || CREDENTIAL_DIRECT_IDENTIFIER.test(key))) {
           const receiverEnd = previousNonWhitespace(text, before - 1);
           const receiver = text.slice(0, receiverEnd + 1).trimEnd();
           if (/(?:[A-Za-z_$][\w$]*|[\])}]|\?\.)$/.test(receiver)) return true;
@@ -239,6 +248,13 @@ function riskReason(argument: string): string | null {
   const value = argument.trim();
   const executable = privacyMask(argument);
   if (/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)$/.test(value) && !value.includes('${')) return null;
+  if (CREDENTIAL_DIRECT_IDENTIFIER.test(argument.trim())) return 'credential-value';
+  if (CREDENTIAL_SERIALIZATION.test(executable)) return 'serialized-credential';
+  if (CREDENTIAL_TEMPLATE.test(argument)) return 'credential-template';
+  if (CREDENTIAL_PROPERTY.test(executable)) return 'credential-property';
+  if (CREDENTIAL_OBJECT_SHORTHAND.test(executable)) return 'credential-shorthand';
+  if (CREDENTIAL_NESTED_VALUE.test(executable)) return 'nested-credential-value';
+  if (CREDENTIAL_OBJECT_FIELD.test(executable)) return 'credential-object-key';
   if (SENSITIVE_DIRECT_IDENTIFIER.test(argument.trim())) return 'raw-record-or-query';
   if (SENSITIVE_PATH.test(executable)) return 'address-path-label';
   if (SENSITIVE_SERIALIZATION.test(executable)) return 'serialized-record-or-query';
@@ -341,11 +357,12 @@ function destructuredBindings(text: string, masked: string): readonly AliasBindi
     if (!source) continue;
     const scope = scopeAt(masked, declaration.index);
     for (const item of parts.split(',').slice(0, 24)) {
-      const field = /^\s*([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*(?:=.*)?$/.exec(item);
-      if (!field || !PRIVATE_DESTRUCTURED_FIELD.test(field[1] ?? '')) continue;
+       const field = /^\s*([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?\s*(?:=.*)?$/.exec(item);
+       const fieldName = field?.[1] ?? '';
+       if (!field || !(PRIVATE_DESTRUCTURED_FIELD.test(fieldName) || CREDENTIAL_DIRECT_IDENTIFIER.test(fieldName))) continue;
       bindings.push({
-        identifier: field[2] ?? '',
-        expression: source + '.' + (field[1] ?? ''),
+        identifier: field?.[2] ?? fieldName,
+        expression: source + '.' + (fieldName),
         position: declaration.index,
         scope,
         mutable: declaration[1] !== 'const',
