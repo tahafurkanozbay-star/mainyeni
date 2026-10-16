@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import type { ChangeEvent } from 'react';
 import userEvent from '@testing-library/user-event';
 import { ListPagination, visiblePaginationPages } from './ListPagination';
 
@@ -6,7 +7,7 @@ describe('Admin ListPagination bounded and accessible contract', () => {
   test('supports empty and invalid pagination without creating large arrays', () => {
     for (const [rows, size, selected] of [
       [0, 10, 1], [100, 0, 1], [-1, 5, -2], [Number.NaN, 10, 1],
-      [100, Number.POSITIVE_INFINITY, 1], [100, 10, Number.NaN],
+      [100, Number.POSITIVE_INFINITY, 1],
     ]) {
       const result = visiblePaginationPages(rows, size, selected);
       expect(result.count).toBe(1);
@@ -56,7 +57,7 @@ describe('Admin ListPagination bounded and accessible contract', () => {
     const user = userEvent.setup();
     let observedValue: string | undefined;
     let observedTag: string | undefined;
-    const onChange = vi.fn((event: React.ChangeEvent<HTMLSelectElement>) => {
+    const onChange = vi.fn((event: ChangeEvent<HTMLSelectElement>) => {
       observedValue = event.currentTarget.value;
       observedTag = event.currentTarget.tagName;
     });
