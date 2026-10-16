@@ -2,6 +2,10 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { ExperienceUXLayer, dispatchExperienceCommand } from './ExperienceUXLayer';
 
+const dispatchHelpCommand = (): void => {
+  act(() => dispatchExperienceCommand('help'));
+};
+
 const mocks = vi.hoisted(() => ({
   layerOnShow: vi.fn(),
   toggleTheme: vi.fn(),
@@ -178,7 +182,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    dispatchExperienceCommand('help');
+    dispatchHelpCommand();
 
     const dialog = screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -305,7 +309,7 @@ describe('ExperienceUXLayer', () => {
     const opener = document.querySelector<HTMLElement>('.experience-utility');
     if (!opener) throw new Error('Utility navigation was not rendered');
     opener.focus();
-    dispatchExperienceCommand('help');
+    dispatchHelpCommand();
 
     expect(screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -329,7 +333,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    dispatchExperienceCommand('help');
+    dispatchHelpCommand();
 
     const dialog = screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -354,7 +358,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    dispatchExperienceCommand('help');
+    dispatchHelpCommand();
     fireEvent.click(screen.getByRole('button', {
       name: /Katmanlar\s*Aç/i,
     }));
@@ -405,7 +409,7 @@ describe('ExperienceUXLayer', () => {
 
     const { unmount } = renderLayer(manager);
 
-    dispatchExperienceCommand('help');
+    dispatchHelpCommand();
     expect(document.body.style.overflow).toBe('hidden');
 
     unmount();
