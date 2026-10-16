@@ -529,7 +529,16 @@ export class BoundedRequestCoordinator implements RequestCoordinator {
 
   private putCache<T>(request: SharedRequest<T>, value: T): void {
     if (this.cacheEntriesLimit <= 0 || this.cacheBytesLimit <= 0 || request.ttlMs <= 0) return;
-    const estimated = boundedInteger(this.estimateBytes(value), 1024, 0, this.cacheBytesLimit + 1);
+    let rawEstimate: number;
+    try {
+      rawEstimate = this.estimateBytes(value);
+    } catch {
+      // Cache accounting is an optimization boundary; a broken estimator must
+      // never turn a successful GIS request into a rejected or stranded request.
+      return;
+    }
+    if (typeof rawEstimate !== 'number' || !Number.isFinite(rawEstimate) || rawEstimate < 0) return;
+    const estimated = Math.floor(rawEstimate);
     if (estimated > this.cacheBytesLimit) return;
     const existing = this.cache.get(request.cacheKey);
     if (existing) this.removeCacheEntry(request.cacheKey);
