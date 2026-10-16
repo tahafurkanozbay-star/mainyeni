@@ -72,6 +72,19 @@ describe('MapWorkspaceShellOverlay', () => {
     expect(screen.getByRole('complementary', { name: 'Çalışma alanı durumu ve hızlı gezinme' })).toBeInTheDocument();
   });
 
+  it('keeps F6 navigation active without rendering the visible quick-navigation panel', () => {
+    const landmarks = installDefaultLandmarks();
+    render(<MapWorkspaceShellOverlay phase="ready" headless />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Çalışma alanı durumu ve hızlı gezinme' })).not.toBeInTheDocument();
+
+    const event = new KeyboardEvent('keydown', { key: 'F6', bubbles: true, cancelable: true });
+    act(() => window.dispatchEvent(event));
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(landmarks.map);
+  });
+
   it('renders ready phase as a visible success state', () => {
     render(<MapWorkspaceShellOverlay phase="ready" />);
     expect(screen.getByText('Hazır')).toBeInTheDocument();
