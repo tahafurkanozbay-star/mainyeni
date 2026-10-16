@@ -133,4 +133,72 @@ describe('BoundedRequestCoordinator', () => {
     coordinator.destroy();
     await expect(coordinator.run('x', async () => 1)).rejects.toBeInstanceOf(RequestCoordinatorError);
   });
+
+  it('does not cache incomplete GIS results rejected by request-specific admission', async () => {
+    const coordinator = createRequestCoordinator({ cacheEntries: 8, cacheBytes: 4096 });
+    let executions = 0;
+    const work = async () => ({ complete: false, truncated: true, sequence: ++executions });
+    const options = { cacheWhen: (value: unknown) => (
+      typeof value === 'object' && value !== null &&
+      'complete' in value && value.complete === true &&
+      'truncated' in value && value.truncated === false
+    ) };
+
+    await expect(coordinator.run('partial', work, options)).resolves.toMatchObject({ complete: false });
+    await expect(coordinator.run('partial', work, options)).resolves.toMatchObject({ sequence: 2 });
+    expect(executions).toBe(2);
+    expect(coordinator.snapshot().cacheEntries).toBe(0);
+    expect(coordinator.snapshot().cacheHits).toBe(0);
+  });
+
+  it('caches complete GIS results when the admission predicate explicitly accepts them', async () => {
+    const coordinator = createRequestCoordinator({ cacheEntries: 8, cacheBytes: 4096 });
+    let executions = 0;
+    const work = async () => ({ complete: true, truncated: false, sequence: ++executions });
+    const cacheWhen = (value: unknown) => (
+      typeof value === 'object' && value !== null &&
+      'complete' in value && value.complete === true &&
+      'truncated' in value && value.truncated === false
+    );
+
+    await expect(coordinator.run('complete', work, { cacheWhen })).resolves.toMatchObject({ sequence: 1 });
+    await expect(coordinator.run('complete', work, { cacheWhen })).resolves.toMatchObject({ sequence: 1 });
+    expect(executions).toBe(1);
+    expect(coordinator.snapshot().cacheHits).toBe(1);
+  });
+
+  it('fails closed when cache admission code throws without failing the successful query', async () => {
+    const coordinator = createRequestCoordinator({ cacheEntries: 8, cacheBytes: 4096 });
+    let executions = 0;
+    const work = async () => ({ sequence: ++executions });
+    const cacheWhen = () => { throw new Error('admission callback failure'); };
+
+    await expect(coordinator.run('admission-error', work, { cacheWhen })).resolves.toEqual({ sequence: 1 });
+    await expect(coordinator.run('admission-error', work, { cacheWhen })).resolves.toEqual({ sequence: 2 });
+    expect(executions).toBe(2);
+    expect(coordinator.snapshot().cacheEntries).toBe(0);
+  });
+
+  it('uses the leader request cache decision for deduplicated consumers', async () => {
+    const coordinator = createRequestCoordinator({ cacheEntries: 8, cacheBytes: 4096 });
+    const gate = deferred<{ complete: boolean }>();
+    let executions = 0;
+    const first = coordinator.run('shared-admission', async () => {
+      executions += 1;
+      return gate.promise;
+    }, { cacheWhen: () => false });
+    const second = coordinator.run('shared-admission', async () => {
+      executions += 1;
+      return { complete: true };
+    }, { cacheWhen: () => true });
+
+    gate.resolve({ complete: true });
+    await expect(first).resolves.toEqual({ complete: true });
+    await expect(second).resolves.toEqual({ complete: true });
+    await expect(coordinator.run('shared-admission', async () => {
+      executions += 1;
+      return { complete: true };
+    }, { cacheWhen: () => true })).resolves.toEqual({ complete: true });
+    expect(executions).toBe(2);
+  });
 });
