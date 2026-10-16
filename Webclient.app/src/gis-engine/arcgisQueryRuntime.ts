@@ -252,7 +252,7 @@ const featureIdentity = <TFeature extends ArcGisFeature>(
   if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
   if (typeof value === 'string') {
     const normalized = value.trim();
-    if (normalized.length > 0 && normalized.length <= 256 && !/[\\u0000-\\u001f\\u007f]/u.test(normalized)) {
+    if (normalized.length > 0 && normalized.length <= 256 && !/[\u0000-\u001f\u007f]/u.test(normalized)) {
       return normalized;
     }
   }
