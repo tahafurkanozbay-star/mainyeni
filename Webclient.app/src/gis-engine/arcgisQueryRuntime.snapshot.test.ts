@@ -442,4 +442,36 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect((thrown as { cause?: unknown }).cause).toBeUndefined();
     runtime.destroy();
   });
+
+  it('does not cache a paginated result whose page identities overlap', async () => {
+    let queryNumber = 0;
+    let calls = 0;
+    const transport = vi.fn(async (_plan: unknown, context: { pageIndex: number }) => {
+      calls += 1;
+      if (context.pageIndex === 0) queryNumber += 1;
+      if (queryNumber === 1) {
+        return response(context.pageIndex === 0
+          ? [feature(1), feature(2)]
+          : [feature(2)]);
+      }
+      return response(context.pageIndex === 0
+        ? [feature(1), feature(2)]
+        : [feature(3)]);
+    });
+    const runtime = createArcGisQueryRuntime(transport, {
+      queryLimits: { maxFeatures: 4, maxPages: 2, preferredPageSize: 2, maxPageSize: 2 },
+    });
+    const inconsistent = await runtime.execute(metadata(true), request);
+    expect(inconsistent.diagnostics).toMatchObject({
+      complete: true, duplicateCount: 1, cacheEligible: false,
+    });
+    const consistent = await runtime.execute(metadata(true), request);
+    expect(consistent.diagnostics).toMatchObject({
+      complete: true, duplicateCount: 0, cacheEligible: true,
+    });
+    await runtime.execute(metadata(true), request);
+    expect(calls).toBe(4);
+    expect(runtime.snapshot().cacheHits).toBe(1);
+    runtime.destroy();
+  });
 });
