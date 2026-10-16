@@ -8,8 +8,11 @@
   cursor: default;
 }
 
+/* A modal must cover map controls (99), fixed workspace surfaces (1010),
+   toast notifications (1150), and the shared dialog stack (1200). The
+   dedicated settings backdrop remains higher priority at 3200. */
 .experience-notification-triage[data-modal='true'][data-expanded='true'] {
-  z-index: 64;
+  z-index: 1250;
 }
 
 .experience-notification-triage[data-modal='true'][data-expanded='true'] .experience-notification-triage__panel {
