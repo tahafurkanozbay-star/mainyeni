@@ -146,8 +146,9 @@ try {
     Write-Host "3/4 - IIS alt-yoluna göre üretim paketi derleniyor..." -ForegroundColor Cyan
     Invoke-NpmChecked -Arguments @("run", "build")
 
-    Write-Host "4/4 - Üretim paketi bütünlüğü doğrulanıyor..." -ForegroundColor Cyan
+    Write-Host "4/4 - Üretim paketi bütünlüğü ve derleme bütçesi doğrulanıyor..." -ForegroundColor Cyan
     Invoke-NpmChecked -Arguments @("run", "build:verify")
+    Invoke-NpmChecked -Arguments @("exec", "--", "node", "scripts/web-build-budget.mjs", "build", "--strict")
 
     $buildRoot = Join-Path $webclientRoot "build"
     $required = @(
