@@ -19,6 +19,9 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(compact).toContain('bottom: auto;');
     expect(compact).toContain('max-height: max(48px, min(48dvh,');
     expect(compact).toContain('12rem - env(safe-area-inset-bottom)');
+    const premium = css('../../experience-premium.css');
+    expect(premium).toContain('.toolbarwidget { top: 66px; right: 10px; bottom: auto;');
+    expect(premium).not.toContain('.toolbarwidget { top: auto;');
     const phone = ruleBlock(toolbar, '@media (max-width: 520px) {', '@media (pointer: coarse) {');
     expect(phone).not.toMatch(/bottom:\s*max\(/u);
     expect(phone).not.toMatch(/top:\s*auto/u);
@@ -27,8 +30,12 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
   it('does not let compact expanded service panels sit underneath the floating bottom dock', () => {
     const sidebar = css('./SidebarModern.css');
     const shell = css('./MapWorkspaceShellOverlay.css');
-    expect(sidebar).toContain('width: min(var(--sidebar-hover-width, 470px), 100dvw);');
-    expect(sidebar).toContain('height: calc(100dvh - var(--mainbar-height, 64px));');
+    const premium = css('../../experience-premium.css');
+    expect(sidebar).toContain('max-width: 100dvw;');
+    expect(premium).toContain('height: calc(100dvh - 68px);');
+    expect(premium).toContain('height: calc(100dvh - 62px);');
+    expect(premium).toContain('height: calc(100dvh - 58px);');
+    expect(premium).toContain('.sidebar-container.kr-sidebar.is-collapsed { width: 72px; }');
     const compact = ruleBlock(shell, '@media (max-width: 719px) {', '@media (max-width: 420px) {');
     expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay');
     expect(compact).toContain('visibility: hidden;');
