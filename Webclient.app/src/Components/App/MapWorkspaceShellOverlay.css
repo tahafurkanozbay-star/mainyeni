@@ -240,9 +240,28 @@
      drawing navigation buttons on top of the drawer's own controls. */
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay,
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-workspace,
-  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility {
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility,
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .kr-lazy-window,
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .esri-popup {
     visibility: hidden;
     pointer-events: none;
+  }
+
+  /* Query windows are React-managed and set visibility inline, so the
+     compact-sidebar exclusion must deliberately override that inline value. */
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .common-query-window {
+    visibility: hidden !important;
+    pointer-events: none;
+  }
+
+  /* When a service query is active, keep the collapsed rail visible while
+     giving the query window the remaining viewport instead of hiding its
+     left-side controls underneath the rail. */
+  #app-shell:has(.kr-sidebar.is-collapsed) .common-query-window {
+    left: calc(var(--kr-premium-sidebar-width, 82px) + 12px);
+    right: 8px;
+    width: auto;
+    max-width: none;
   }
 
   .map-workspace-shell-overlay {
