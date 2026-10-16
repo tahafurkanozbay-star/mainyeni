@@ -121,7 +121,13 @@ test('Release QA resolves all-zero first-push lint baselines from an ancestry-sa
   assert.ok(start >= 0 && end > start, 'strict-lint step must remain explicitly identifiable');
   const lintStep = workflow.slice(start, end);
 
-  assert.match(workflow, /name: Checkout with ancestry for exact changed-file lint[\s\S]*?fetch-depth:\s*0/);
+  const checkoutStart = workflow.indexOf('name: Checkout with ancestry for exact changed-file lint');
+  const checkoutEnd = workflow.indexOf('\\n      - name:', checkoutStart);
+  assert.ok(checkoutStart >= 0 && checkoutEnd > checkoutStart, 'checkout ancestry step must remain identifiable');
+  assert.ok(
+    workflow.slice(checkoutStart, checkoutEnd).includes('fetch-depth: 0'),
+    'strict-lint checkout must fetch complete ancestry',
+  );
   assert.match(lintStep, /github\.event\.pull_request\.base\.sha \|\| github\.event\.before/);
   assert.match(lintStep, /GITHUB_EVENT_NAME.*push/);
   assert.match(lintStep, /git -C \.\. fetch --no-tags origin main/);
