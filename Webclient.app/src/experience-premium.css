@@ -537,7 +537,7 @@ html[data-experience-theme='dark'] {
   .kr-sidebar__panel { padding: 16px 10px 14px; }
   /* Keep premium styling aligned with the responsive toolbar: never repin
      tools over the full-width quick-navigation dock on small devices. */
-  .toolbarwidget { top: 66px; right: 10px; bottom: auto; max-height: max(48px, min(48dvh, calc(100dvh - 58px - 12rem - env(safe-area-inset-bottom)))); }
+  .toolbarwidget { top: 66px; right: 10px; bottom: auto; max-height: max(48px, min(48dvh, calc(100dvh - 58px - 14rem - env(safe-area-inset-bottom)))); }
   .toolbarwidget::before { display: none; }
   .experience-workspace { right: 68px; bottom: 8px; max-width: calc(100vw - 136px); }
   .experience-workspace__status-group { display: none; }
