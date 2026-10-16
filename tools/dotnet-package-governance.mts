@@ -28,15 +28,15 @@ export const parseAttributes = source => {
   const pattern = /([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
   for (const match of String(source ?? '').matchAll(pattern)) {
     const name = match[1];
-    if (own(attributes, name)) throw new Error('duplicate XML attribute ' + name);
+    if (Object.keys(attributes).some(key => lower(key) === lower(name))) throw new Error('duplicate XML attribute ' + name);
     attributes[name] = decodeXmlAttribute(match[2] ?? match[3] ?? '');
   }
   return freeze(attributes);
 };
 
+// Mask ignored XML regions instead of deleting them: offsets remain valid with Unicode.
 const stripComments = source => String(source ?? '')
-  .replace(/<!--(?:.|\r|\n)*?-->/g, '')
-  .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '');
+  .replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, match => match.replace(/[^\r\n]/g, ' '));
 
 // MSBuild projects may mix self-closing and paired PackageReference elements.
 // A paired-element regex can accidentally treat a preceding <PackageReference />
@@ -45,17 +45,17 @@ const stripComments = source => String(source ?? '')
 export const extractElements = (xml, tagName) => {
   if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(String(tagName))) throw new Error('invalid XML element name');
   const source = stripComments(xml);
-  const needle = '<' + tagName;
+  const opening = new RegExp('<' + tagName + '(?=[\\s/>])', 'gi');
   const closing = new RegExp('</' + tagName + '\\s*>', 'gi');
   const result = [];
   let cursor = 0;
   while (cursor < source.length) {
-    const index = source.indexOf(needle, cursor);
-    if (index < 0) break;
-    const boundary = source[index + needle.length];
-    if (boundary && !/[\s/>]/.test(boundary)) { cursor = index + needle.length; continue; }
+    opening.lastIndex = cursor;
+    const start = opening.exec(source);
+    if (!start) break;
+    const index = start.index;
     let quote = null;
-    let end = index + needle.length;
+    let end = opening.lastIndex;
     for (; end < source.length; end++) {
       const character = source[end];
       if (quote) { if (character === quote) quote = null; }
@@ -63,7 +63,7 @@ export const extractElements = (xml, tagName) => {
       else if (character === '>') break;
     }
     if (end >= source.length) throw new Error('unterminated XML start tag ' + tagName);
-    const rawAttributes = source.slice(index + needle.length, end).trimEnd();
+    const rawAttributes = source.slice(index + start[0].length, end).trimEnd();
     const selfClosing = rawAttributes.endsWith('/');
     const attributes = parseAttributes(selfClosing ? rawAttributes.slice(0, -1) : rawAttributes);
     if (selfClosing) {
@@ -93,8 +93,11 @@ export const normalizePackageId = value => {
 
 export const isConcreteStableVersion = value => STABLE_VERSION.test(String(value ?? '').trim());
 
+const hasAttribute = (attributes, name) => Object.keys(attributes).some(key => lower(key) === lower(name));
+const attributeValue = (attributes, name) => attributes[Object.keys(attributes).find(key => lower(key) === lower(name))];
+
 const actionFromAttributes = attributes => {
-  for (const action of ['Include','Update','Remove']) if (own(attributes, action)) return freeze({ action, value: attributes[action] });
+  for (const action of ['Include','Update','Remove']) if (hasAttribute(attributes, action)) return freeze({ action, value: attributeValue(attributes, action) });
   return freeze({ action: null, value: null });
 };
 
@@ -109,8 +112,20 @@ const finding = (code, file, message, packageId = null, severity = 'error') => f
 
 export const parseCentralPackageCatalog = (xml, file = CENTRAL_FILE) => {
   const findings = [];
-  const enabled = extractPropertyValues(xml, 'ManagePackageVersionsCentrally');
-  if (enabled.length !== 1 || lower(enabled[0]) !== 'true') findings.push(finding('central-management-disabled', file, 'ManagePackageVersionsCentrally must be declared exactly once with value true.'));
+  // Fail closed on missing, empty, duplicated, conditioned or redefined policy.
+  const groups = extractElements(xml, 'PropertyGroup');
+  for (const [property, expected, code] of [
+    ['ManagePackageVersionsCentrally', 'true', 'central-management-disabled'],
+    ['CentralPackageVersionOverrideEnabled', 'false', 'central-version-override-enabled'],
+  ]) {
+    const declarations = extractElements(xml, property);
+    const conditionedParent = groups.some(group =>
+      hasAttribute(group.attributes, 'Condition') && extractElements(group.body, property).length > 0);
+    if (declarations.length !== 1 || lower(declarations[0].body) !== expected ||
+        Object.keys(declarations[0].attributes).length > 0 || conditionedParent) {
+      findings.push(finding(code, file, property + ' must be declared exactly once, unconditionally, with value ' + expected + '.'));
+    }
+  }
   const entries = [];
   const seen = new Map();
   for (const element of extractElements(xml, 'PackageVersion')) {
@@ -118,11 +133,11 @@ export const parseCentralPackageCatalog = (xml, file = CENTRAL_FILE) => {
     if (action !== 'Include' && action !== 'Update') { findings.push(finding('central-package-action-invalid', file, 'PackageVersion must use Include or Update.')); continue; }
     const id = normalizePackageId(value);
     if (!id) { findings.push(finding('central-package-id-invalid', file, 'PackageVersion contains an invalid package id.', String(value ?? ''))); continue; }
-    const attributeVersion = element.attributes.Version?.trim() || null;
+    const attributeVersion = attributeValue(element.attributes, 'Version')?.trim() || null;
     const child = readChildVersion(element.body);
     const childVersion = child.value;
     if (child.error) findings.push(finding('central-version-multiple', file, 'PackageVersion declares more than one child Version element.', id));
-    if (attributeVersion && childVersion) findings.push(finding('central-version-ambiguous', file, 'PackageVersion must not declare both Version attribute and child Version.', id));
+    if (hasAttribute(element.attributes, 'Version') && extractElements(element.body, 'Version').length > 0) findings.push(finding('central-version-ambiguous', file, 'PackageVersion must not declare both Version attribute and child Version.', id));
     const version = attributeVersion ?? childVersion;
     if (!version) findings.push(finding('central-version-missing', file, 'PackageVersion requires an explicit version.', id));
     else if (!isConcreteStableVersion(version)) findings.push(finding('central-version-nonrelease', file, 'Central version must be a concrete stable release: ' + version, id));
@@ -138,16 +153,27 @@ export const parseProjectFile = (xml, file) => {
   const findings = [];
   const packageReferences = [];
   const projectReferences = [];
+  for (const property of ['ManagePackageVersionsCentrally', 'CentralPackageVersionOverrideEnabled']) {
+    if (extractElements(xml, property).length > 0) {
+      findings.push(finding('project-central-policy-override', file, property + ' must be owned by Directory.Packages.props.'));
+    }
+  }
   for (const element of extractElements(xml, 'PackageReference')) {
     const { action, value } = actionFromAttributes(element.attributes);
+    // Remove and Update must not smuggle an override into another evaluation phase.
+    if (hasAttribute(element.attributes, 'VersionOverride') ||
+        extractElements(element.body, 'VersionOverride').length > 0) {
+      findings.push(finding('package-reference-version-override', file, 'VersionOverride bypasses central package governance and is not allowed.', String(value ?? '')));
+    }
     if (action === 'Remove') continue;
     if (action !== 'Include' && action !== 'Update') { findings.push(finding('package-reference-action-invalid', file, 'PackageReference must use Include, Update, or Remove.')); continue; }
     const id = normalizePackageId(value);
     if (!id) { findings.push(finding('package-reference-id-invalid', file, 'PackageReference contains an invalid package id.', String(value ?? ''))); continue; }
     const child = readChildVersion(element.body);
     if (child.error) findings.push(finding('package-reference-version-multiple', file, 'PackageReference declares more than one child Version element.', id));
-    if (element.attributes.Version?.trim() || child.value) findings.push(finding('package-reference-inline-version', file, 'PackageReference versions must be owned by Directory.Packages.props.', id));
-    if (element.attributes.VersionOverride?.trim()) findings.push(finding('package-reference-version-override', file, 'VersionOverride bypasses central package governance and is not allowed.', id));
+    if (hasAttribute(element.attributes, 'Version') || extractElements(element.body, 'Version').length > 0) {
+      findings.push(finding('package-reference-inline-version', file, 'PackageReference versions must be owned by Directory.Packages.props.', id));
+    }
     packageReferences.push(freeze({ id, normalizedId: lower(id), action, condition: element.attributes.Condition?.trim() || null }));
   }
   for (const element of extractElements(xml, 'ProjectReference')) {
