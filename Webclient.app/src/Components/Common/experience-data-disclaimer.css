@@ -92,6 +92,12 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
   transition: none;
 }
 
+@media (max-width: 780px) {
+  .experience-data-disclaimer {
+    inset-block-end: calc(3.25rem + env(safe-area-inset-bottom));
+  }
+}
+
 @media (max-width: 40rem) {
   .experience-data-disclaimer {
     inset-block-end: calc(3.25rem + env(safe-area-inset-bottom));
