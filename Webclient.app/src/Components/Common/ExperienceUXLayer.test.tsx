@@ -174,9 +174,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchExperienceCommand('help');
 
     const dialog = screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -227,7 +225,7 @@ describe('ExperienceUXLayer', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  test('opens help with the question-mark shortcut outside editable fields', () => {
+  test('does not create a duplicate help dialog for the question-mark shortcut', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
@@ -240,7 +238,7 @@ describe('ExperienceUXLayer', () => {
     })).toBeInTheDocument();
   });
 
-  test('does not open help while a user types in an editable field', () => {
+  test('does not create a duplicate help dialog while typing in an editable field', () => {
     const input = document.createElement('input');
     document.body.appendChild(input);
 
@@ -300,11 +298,10 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    const opener = screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    });
+    const opener = document.querySelector<HTMLElement>('.experience-utility');
+    if (!opener) throw new Error('Utility navigation was not rendered');
     opener.focus();
-    fireEvent.click(opener);
+    dispatchExperienceCommand('help');
 
     expect(screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -328,9 +325,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchExperienceCommand('help');
 
     const dialog = screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -355,9 +350,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchExperienceCommand('help');
     fireEvent.click(screen.getByRole('button', {
       name: /Katmanlar\s*Aç/i,
     }));
@@ -408,9 +401,7 @@ describe('ExperienceUXLayer', () => {
 
     const { unmount } = renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchExperienceCommand('help');
     expect(document.body.style.overflow).toBe('hidden');
 
     unmount();
