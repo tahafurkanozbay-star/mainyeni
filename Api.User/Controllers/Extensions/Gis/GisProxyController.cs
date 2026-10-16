@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using RestSharp;
 using System;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -132,6 +131,16 @@ namespace CityWorks.UserApi.Gis
                         "GIS service request failed.");
                 }
 
+                // External ArcGIS services must never become a same-origin
+                // HTML, SVG or script document via the authenticated proxy.
+                // API security headers intentionally omit their CSP for HTML.
+                if (GisProxyPayloadPolicy.IsActiveContentType(response.ContentType))
+                {
+                    return StatusCode(
+                        StatusCodes.Status502BadGateway,
+                        "GIS service returned an unsupported active content type.");
+                }
+
                 if (!string.IsNullOrWhiteSpace(response.ContentType) &&
                     (response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
                      response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase)))
@@ -241,11 +250,14 @@ namespace CityWorks.UserApi.Gis
             return builder.Uri;
         }
 
-        private async Task<string> ReadBoundedBody()
+        private Task<string> ReadBoundedBody()
         {
-            using var reader = new StreamReader(HttpContext.Request.Body);
-            var body = await reader.ReadToEndAsync();
-            return System.Text.Encoding.UTF8.GetByteCount(body) <= MaxRequestBodyBytes ? body : null;
+            // Content-Length is optional for chunked requests; limit bytes while
+            // consuming rather than materializing an unbounded request first.
+            return GisProxyPayloadPolicy.ReadBoundedUtf8BodyAsync(
+                HttpContext.Request.Body,
+                MaxRequestBodyBytes,
+                HttpContext.RequestAborted);
         }
 
         private static string NormalizeContentType(string contentType)
