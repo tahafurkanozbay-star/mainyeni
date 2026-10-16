@@ -23,7 +23,8 @@ const SENSITIVE_SERIALIZATION = /\bJSON\s*\.\s*stringify\s*\(\s*(?:query|path|pa
 const SENSITIVE_PROPERTY = /\b[A-Za-z_$][A-Za-z0-9_$]*\s*(?:\?\.|\.)\s*(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)\b/i;
 const SENSITIVE_RUNTIME_SOURCE = /\b(?:latestQuery|mapPoint|mapEvent\s*(?:\?\.|\.)\s*mapPoint|item\s*(?:\?\.|\.)\s*(?:Title|title)|(?:query|params|payload|record|item|selection)\s*(?:\?\.|\.)\s*(?:name|districtName|nbhoodName))\b/i;
 const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door|query|path|params|payload|record|item|selection|coordinates|location|geometry|mapPoint|searchText|queryText|latestQuery)\b[^}]*\}/i;
-const SENSITIVE_NESTED_VALUE = /(?:[,:\[]\s*|\.\.\.\s*)(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}\]]|$)/i;
+const SENSITIVE_NESTED_VALUE = /(?:[,:\[({]\s*|\.\.\.\s*)(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}\])]|$)/i;
+const SENSITIVE_OBJECT_FIELD = /(?:^|[{,])\s*(?:['"])?(?:query|path|params|payload|record|item|selection|address|adres|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)(?:['"])?\s*:/i;
 const SENSITIVE_OBJECT_SHORTHAND = /(?:^|[{,])\s*(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}])/i;
 
 export function isClientRuntimeSource(file: SourceFile): boolean {
@@ -185,6 +186,7 @@ function riskReason(argument: string): string | null {
   // Object shorthand ({ query }) is equivalent to { query: query }.
   // Mask inert comments/strings first so examples do not cause false findings.
   if (SENSITIVE_OBJECT_SHORTHAND.test(privacyMask(argument))) return 'shorthand-sensitive-value';
+  if (SENSITIVE_OBJECT_FIELD.test(argument)) return 'sensitive-object-key';
   if (SENSITIVE_NESTED_VALUE.test(argument)) return 'nested-sensitive-value';
   if (SENSITIVE_RUNTIME_SOURCE.test(argument)) return 'location-or-search-value';
   return null;
