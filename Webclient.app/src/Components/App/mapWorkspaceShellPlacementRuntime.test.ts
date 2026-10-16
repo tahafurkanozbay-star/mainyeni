@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MapWorkspaceShellPlacementRuntime } from './mapWorkspaceShellPlacementRuntime';
 
 const setRect = (element: HTMLElement, values: Partial<DOMRect>): void => {
@@ -28,9 +28,46 @@ const flushFrame = async (): Promise<void> => {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 };
 
+class RecordingResizeObserver implements ResizeObserver {
+  static instances: RecordingResizeObserver[] = [];
+  readonly observed = new Set<Element>();
+  readonly unobserved = new Set<Element>();
+
+  constructor(readonly callback: ResizeObserverCallback) {
+    RecordingResizeObserver.instances.push(this);
+  }
+
+  observe(target: Element): void {
+    this.observed.add(target);
+    this.unobserved.delete(target);
+  }
+
+  unobserve(target: Element): void {
+    this.observed.delete(target);
+    this.unobserved.add(target);
+  }
+
+  disconnect(): void {
+    this.observed.clear();
+  }
+
+  takeRecords(): ResizeObserverEntry[] {
+    return [];
+  }
+
+  trigger(): void {
+    this.callback([], this);
+  }
+}
+
 describe('MapWorkspaceShellPlacementRuntime', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     document.body.innerHTML = '';
+    RecordingResizeObserver.instances = [];
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 });
     Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });
   });
@@ -176,6 +213,38 @@ describe('MapWorkspaceShellPlacementRuntime', () => {
     await flushFrame();
     expect(runtime.getDiagnostics().refreshCount).toBe(before + 1);
     runtime.dispose();
+  });
+
+  it('tracks dynamically added and removed occluder resize targets', async () => {
+    vi.stubGlobal('ResizeObserver', RecordingResizeObserver);
+
+    const root = document.createElement('aside');
+    document.body.appendChild(root);
+    setRect(root, { left: 14, top: 760, width: 600, height: 126 });
+    const runtime = new MapWorkspaceShellPlacementRuntime(root);
+    runtime.start();
+
+    const observer = RecordingResizeObserver.instances[0];
+    expect(observer).toBeDefined();
+    expect(observer.observed.has(root)).toBe(true);
+
+    const query = addOccluder('common-query-window', { left: 20, top: 620, width: 650, height: 280 });
+    await flushFrame();
+    expect(observer.observed.has(query)).toBe(true);
+
+    const beforeResize = runtime.getDiagnostics().refreshCount;
+    observer.trigger();
+    await flushFrame();
+    expect(runtime.getDiagnostics().resizeCount).toBeGreaterThan(0);
+    expect(runtime.getDiagnostics().refreshCount).toBe(beforeResize + 1);
+
+    query.remove();
+    await flushFrame();
+    expect(observer.observed.has(query)).toBe(false);
+    expect(observer.unobserved.has(query)).toBe(true);
+
+    runtime.dispose();
+    expect(observer.observed.size).toBe(0);
   });
 
   it('responds to occluder mutations', async () => {
