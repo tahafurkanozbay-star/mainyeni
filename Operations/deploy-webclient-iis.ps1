@@ -5,7 +5,7 @@ param(
     [string]$BuildPath = (Join-Path (Split-Path -Parent $PSScriptRoot) "Webclient.app\build"),
     [string]$Destination = "C:\inetpub\wwwroot\kentrehberiumit",
     [string]$SiteName = "Default Web Site",
-    [string]$ApiApplicationPool = "kentrehberiumit"
+    [string]$ApiApplicationPool = "kentrehberiumit-api"
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,8 +41,36 @@ if ($bindings.Count -eq 0) {
 }
 
 $apiPoolPath = "IIS:\AppPools\$ApiApplicationPool"
+$apiPoolCreated = $false
 if (-not (Test-Path -LiteralPath $apiPoolPath)) {
-    throw "Mevcut API uygulama havuzu bulunamadı: $ApiApplicationPool. API havuzu otomatik değiştirilmedi."
+    New-WebAppPool -Name $ApiApplicationPool | Out-Null
+    Set-ItemProperty -LiteralPath $apiPoolPath -Name managedRuntimeVersion -Value ""
+    Set-ItemProperty -LiteralPath $apiPoolPath -Name managedPipelineMode -Value "Integrated"
+    Set-ItemProperty -LiteralPath $apiPoolPath -Name enable32BitAppOnWin64 -Value $false
+    $apiPoolCreated = $true
+}
+
+# Use a new pool for the CBS subpath mapping. The existing working
+# 'kentrehberiumit' site/pool is deliberately not recycled or repointed.
+$poolEnvPath = "MACHINE/WEBROOT/APPHOST"
+$standaloneKey = "KentRehberiData__Standalone"
+$standaloneBase = "system.applicationHost/applicationPools/add[@name='$ApiApplicationPool']/environmentVariables"
+$standaloneFilter = "$standaloneBase/add[@name='$standaloneKey']"
+$existingStandalone = Get-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneFilter -Name "value" -ErrorAction SilentlyContinue
+$standaloneChanged = $false
+if ($null -eq $existingStandalone) {
+    Add-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneBase -Name "." -Value @{ name = $standaloneKey; value = "true" }
+    $standaloneChanged = $true
+}
+elseif ("$existingStandalone".Trim().ToLowerInvariant() -ne "true") {
+    Set-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneFilter -Name "value" -Value "true"
+    $standaloneChanged = $true
+}
+if ($standaloneChanged -and -not $apiPoolCreated) {
+    $apiPoolState = (Get-WebAppPoolState -Name $ApiApplicationPool).Value
+    if ($apiPoolState -eq "Started") {
+        Restart-WebAppPool -Name $ApiApplicationPool
+    }
 }
 
 if (-not (Test-Path -LiteralPath $destinationRoot -PathType Container)) {
@@ -118,6 +146,7 @@ else {
 }
 
 Start-WebAppPool -Name $frontPoolName
+Start-WebAppPool -Name $ApiApplicationPool
 Write-Host ""
 Write-Host "Dosyalar kopyalandı; API klasörü silinmedi." -ForegroundColor Green
 Write-Host "Webclient URL: https://cbs.ankara.bel.tr/kentrehberiumit/"
