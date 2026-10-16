@@ -66,11 +66,13 @@ public sealed class GisProxyTargetPolicyTests
         Assert.Contains("%252e%252e", query, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void PublicTarget_ResetsOutputsWhenInputIsInvalid()
+    [Theory]
+    [InlineData("?https://not-trusted.example.test/0/query?where=1%3D1")]
+    [InlineData("?https://parks.gissrv.org/0/%252e%252e/admin?where=1%3D1")]
+    public void PublicTarget_ResetsOutputsWhenInputIsInvalid(string raw)
     {
         var accepted = GisProxyTargetPolicy.TryParsePublicTarget(
-            "?https://not-trusted.example.test/0/query",
+            raw,
             out var target,
             out var serviceId,
             out var query);
