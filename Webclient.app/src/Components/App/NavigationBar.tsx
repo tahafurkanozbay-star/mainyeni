@@ -40,7 +40,7 @@ export function NavigationBar({ id, windowManager }: NavigationBarProps) {
       <div className="mainbar">
         <div className="mainbar-brand">
         <div className="mainbar-logo"><a href="https://www.ankara.bel.tr/" target="_blank" rel="noopener noreferrer" aria-label="Ankara Büyükşehir Belediyesi ana sayfası"><img src="images/abblogo.svg" alt="Ankara Büyükşehir Belediyesi" title={`v${AppConfig.App.Version}`} decoding="async" /></a></div>
-        <a href="https://kentrehberi.ankara.bel.tr" target="_blank" rel="noopener noreferrer" aria-label="Kent Rehberi ana sayfası"><span className="mainbar-text">KENT REHBERİ</span></a>
+        <a href="./" aria-label="Kent Rehberi ana sayfası"><span className="mainbar-text">KENT REHBERİ</span></a>
         </div>
         <form className="ns-input" role="search" aria-label="Kent Rehberi genel arama" onSubmit={(event) => { event.preventDefault(); openGlobalSearch(); }}>
           <label className="experience-sr-only" htmlFor="kentrehberi-global-search">Adres, yer veya katman ara</label>
