@@ -38,6 +38,14 @@ public sealed class GisProxyTokenEndpointPolicyTests
     }
 
     [Fact]
+    public void TokenEndpoint_DoesNotMistakeServiceNameForWebGisRoot()
+    {
+        var endpoint = GisProxyTokenEndpointPolicy.Create(
+            new Uri("https://maps.example.test/arcgis/rest/services/webgis/MapServer"));
+        Assert.Equal("/arcgis/tokens/generateToken", endpoint.AbsolutePath);
+    }
+
+    [Fact]
     public void TokenEndpoint_DoesNotMistakeSimilarPathNameForWebGisSegment()
     {
         var endpoint = GisProxyTokenEndpointPolicy.Create(
