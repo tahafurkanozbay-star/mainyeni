@@ -148,7 +148,7 @@ namespace CityWorks.UserApi.Gis
                     return File(response.RawBytes ?? Array.Empty<byte>(), response.ContentType);
                 }
 
-                var responseType = NormalizeResponseContentType(response.ContentType);
+                var responseType = GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType);
                 return Content(response.Content ?? string.Empty, responseType);
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
@@ -273,15 +273,6 @@ namespace CityWorks.UserApi.Gis
             };
         }
 
-        private static string NormalizeResponseContentType(string contentType)
-        {
-            if (string.IsNullOrWhiteSpace(contentType)) return "application/json; charset=utf-8";
-            return contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
-                ? contentType
-                : "application/octet-stream";
-        }
-
         private ProxyGisService GetService(string encryptedServiceId)
         {
             try
@@ -325,10 +316,7 @@ namespace CityWorks.UserApi.Gis
                 return null;
             }
 
-            var tokenHostPrefix = service.Url.Contains("/webgis/", StringComparison.OrdinalIgnoreCase)
-                ? "webgis"
-                : "arcgis";
-            var tokenUrl = $"{serviceUri.Scheme}://{serviceUri.Host}/{tokenHostPrefix}/tokens/generateToken";
+            var tokenUrl = GisProxyTokenEndpointPolicy.Create(serviceUri).ToString();
 
             var tokenClient = new RestClient(new RestClientOptions
             {
