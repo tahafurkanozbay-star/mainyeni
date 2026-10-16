@@ -39,7 +39,7 @@ Set-Location "C:\Users\umit.algan\Downloads\mainyeni-git"
 .\Operations\deploy-webclient-iis.ps1
 ```
 
-Betik yalnızca `Default Web Site` üzerinde `cbs.ankara.bel.tr:443` HTTPS bağlamasını doğruladıktan sonra ilerler. Eski web dosyalarını `C:\inetpub\backups\kentrehberiumit\<zaman damgası>\` altına yedekler, derlenmiş statik dosyaları `C:\inetpub\wwwroot\kentrehberiumit\` içine kopyalar ve ASP.NET API havuzunu yeniden başlatmaz.
+Betik yalnızca `Default Web Site` üzerinde `cbs.ankara.bel.tr:443` HTTPS bağlamasını doğruladıktan sonra ilerler. Eski web dosyalarını `C:\\inetpub\\backups\\kentrehberiumit\\<zaman damgası>\\` altına yedekler ve derlenmiş statik dosyaları `C:\\inetpub\\wwwroot\\kentrehberiumit\\` içine kopyalar. Mevcut `kentrehberiumit` API uygulama havuzunu değiştirmez; alt-yol API için ayrı `kentrehberiumit-api` havuzu kullanılır. Yalnızca bu ayrı havuz önceden mevcut olup Standalone ayarı değişirse o havuz yeniden başlatılabilir.
 
 Önemli koruma: betik `robocopy /E` kullanır; `/MIR` veya `/PURGE` kullanmaz. Böylece mevcut `user` API klasörünün yanlışlıkla silinmesini önler. Gerekli IIS uygulamaları mevcut değilse:
 - `/kentrehberiumit` → `C:\inetpub\wwwroot\kentrehberiumit`, havuz `kentrehberiumit-webclient` (No Managed Code)
