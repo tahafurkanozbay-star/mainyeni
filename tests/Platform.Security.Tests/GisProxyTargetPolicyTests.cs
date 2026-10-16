@@ -43,6 +43,8 @@ public sealed class GisProxyTargetPolicyTests
     [InlineData("?https://parks.gissrv.org/0/%2E%2E/admin")]
     [InlineData("?https://parks.gissrv.org/0/%252e%252e/admin")]
     [InlineData("?https://parks.gissrv.org/0/%25252e%25252e/admin")]
+    [InlineData("?https://parks.gissrv.org/0/%2525252e%2525252e/admin")]
+    [InlineData("?https://parks.gissrv.org/0/%252525252e%252525252e/admin")]
     [InlineData("?https://parks.gissrv.org/0/%5c..%5cadmin")]
     [InlineData("?https://parks.gissrv.org/0/..%2fadmin")]
     public void PublicTarget_RejectsDirectAndRepeatedlyEncodedTraversal(string raw)
