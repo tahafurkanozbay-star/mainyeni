@@ -22,6 +22,11 @@ const DEFAULT_OCCLUDERS: readonly string[] = Object.freeze([
   '.experience-scene-controls',
   '.experience-map-mode-governed-overlay',
   '.experience-connectivity-notice',
+  '.common-query-window',
+  '.kr-lazy-window',
+  '.experience-workspace',
+  '.experience-utility',
+  '.esri-popup',
 ]);
 
 const asRect = (rect: DOMRect): MapWorkspaceRect => Object.freeze({
