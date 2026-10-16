@@ -345,4 +345,16 @@ describe('ArcGIS bounded feature snapshot session', () => {
     expect(Object.isFrozen(diagnostics)).toBe(true);
     expect(diagnostics).toMatchObject({ pages: 1, features: 1 });
   });
+
+  it('copies normalized limits so later caller mutation cannot expand or shrink an active budget', () => {
+    const supplied = { maxFeatures: 2 };
+    const session = new ArcGisFeatureSnapshotSession(supplied);
+    supplied.maxFeatures = 1;
+    const page = session.capturePage([
+      { attributes: { OBJECTID: 1 } },
+      { attributes: { OBJECTID: 2 } },
+    ]);
+    expect(page.featureCount).toBe(2);
+    expect(session.snapshot().features).toBe(2);
+  });
 });
