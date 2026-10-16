@@ -276,14 +276,14 @@ const retryableArcgisError = (error: unknown): boolean => {
 const stableSerialize = (value: unknown): string => {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
-  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'string') return JSON.stringify(value) ?? '""';
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : `number:${String(value)}`;
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
   if (isRecord(value)) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
   }
-  return JSON.stringify(String(value));
+  return JSON.stringify(String(value)) ?? '""';
 };
 
 const policyFingerprint = (value: unknown): string => {
