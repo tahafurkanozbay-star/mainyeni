@@ -302,17 +302,21 @@ export class ArcGisFeatureSnapshotSession {
       if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) {
         throw new ArcGisFeatureSnapshotError('INVALID_FEATURES', 'ArcGIS response feature count is invalid.');
       }
-      const inputKeys = Reflect.ownKeys(input);
-      if (inputKeys.length !== length + 1 || inputKeys.some((key) => key !== 'length' &&
-          (typeof key !== 'string' || !/^(0|[1-9][0-9]*)$/u.test(key) || Number(key) >= length))) {
-        throw new ArcGisFeatureSnapshotError('SPARSE_OR_EXTENDED_ARRAY', 'ArcGIS response contains a sparse or extended feature array.');
-      }
       const remaining = this.budget.maxFeatures - this.features;
       const limit = Math.min(maxPageFeatures, remaining);
       if (length > limit && !truncateExcess) {
         throw new ArcGisFeatureSnapshotError('FEATURE_BUDGET', 'ArcGIS response exceeds the page feature limit.');
       }
       const count = Math.min(length, limit);
+      // Avoid materializing every array key for an oversized server response when
+      // the caller explicitly accepts a bounded prefix. Only retained indexes are inspected.
+      if (length <= limit) {
+        const inputKeys = Reflect.ownKeys(input);
+        if (inputKeys.length !== length + 1 || inputKeys.some((key) => key !== 'length' &&
+            (typeof key !== 'string' || !/^(0|[1-9][0-9]*)$/u.test(key) || Number(key) >= length))) {
+          throw new ArcGisFeatureSnapshotError('SPARSE_OR_EXTENDED_ARRAY', 'ArcGIS response contains a sparse or extended feature array.');
+        }
+      }
       const state: TraversalState = {
         budget: this.budget,
         committedObjects: this.seenObjects,
