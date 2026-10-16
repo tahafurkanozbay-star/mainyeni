@@ -26,11 +26,17 @@ describe('ExperienceCommandCenterModern catalog', () => {
     expect(results.map(command => command.id)).toContain('measure');
   });
 
-  it('keeps settings and accessibility discoverable without utility buttons', () => {
+  it('keeps global settings and accessibility discoverable without utility buttons', () => {
     expect(filterExperienceCommands(EXPERIENCE_COMMANDS, 'çalışma alanı ayarları').map(command => command.id))
       .toContain('workspace-settings');
     expect(filterExperienceCommands(EXPERIENCE_COMMANDS, 'erişilebilirlik merkezi').map(command => command.id))
       .toContain('accessibility-center');
+
+    for (const id of ['help', 'workspace-settings', 'accessibility-center']) {
+      expect(EXPERIENCE_COMMANDS.find(command => command.id === id)?.scopes)
+        .toEqual(['map', 'analysis', 'services', 'help']);
+    }
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.shortcut).toBe('Shift+?');
   });
 });
 
