@@ -100,6 +100,10 @@ describe('ExperienceUXLayer', () => {
     expect(screen.getByRole('button', {
       name: 'Bildirim merkezini aç',
     })).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', {
+      name: /Kısayolları ve yardım bilgisini aç/i,
+    })).not.toBeInTheDocument();
   });
 
   test('routes search actions through the canonical window manager', () => {
