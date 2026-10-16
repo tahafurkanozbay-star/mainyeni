@@ -335,4 +335,39 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect(result.diagnostics.complete).toBe(true);
     runtime.destroy();
   });
+
+  it('redacts credentials from ArcGIS service and transport error diagnostics', async () => {
+    const serviceRuntime = createArcGisQueryRuntime(async () => ({
+      error: {
+        code: 498,
+        message: 'Invalid token access_token=service-secret&retry=false',
+        details: ['Bearer eyJabcdefghijk.abcdefghijk.abcdefghijk'],
+      },
+      features: [],
+    } as unknown as ArcGisQueryResponse), { queryLimits: limits });
+    let serviceError: unknown;
+    try {
+      await serviceRuntime.execute(metadata(), request);
+    } catch (error) {
+      serviceError = error;
+    }
+    expect(serviceError).toMatchObject({ name: 'ArcGisQueryRuntimeError', code: 'ARCGIS_SERVICE_ERROR' });
+    expect((serviceError as Error).message).not.toContain('service-secret');
+    expect((serviceError as Error).message).not.toContain('abcdefghijk');
+    serviceRuntime.destroy();
+
+    const transportRuntime = createArcGisQueryRuntime(async () => {
+      throw new Error('request failed https://example.invalid/query?token=transport-secret');
+    }, { queryLimits: limits, maxRetries: 1 });
+    let transportError: unknown;
+    try {
+      await transportRuntime.execute(metadata(), request);
+    } catch (error) {
+      transportError = error;
+    }
+    expect(transportError).toMatchObject({ name: 'ArcGisQueryRuntimeError', code: 'TRANSPORT_ERROR' });
+    expect((transportError as Error).message).not.toContain('transport-secret');
+    expect((transportError as { cause?: unknown }).cause).toBeUndefined();
+    transportRuntime.destroy();
+  });
 });
