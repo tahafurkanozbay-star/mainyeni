@@ -1,7 +1,18 @@
+/* The legacy absolute sidebar starts below the main header but used
+   height:100%, extending beneath the viewport and hiding its last buttons. */
+.kr-sidebar.sidebar-container {
+  box-sizing: border-box;
+  width: min(var(--sidebar-hover-width, 470px), 100dvw);
+  height: calc(100dvh - var(--mainbar-height, 64px));
+  max-height: calc(100dvh - var(--mainbar-height, 64px));
+  overflow: hidden;
+}
+
 .kr-sidebar {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -307,9 +318,8 @@
 
 .kr-sidebar--next .kr-sidebar__panel-head h2 {
   margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .kr-sidebar--next .kr-sidebar__context {
@@ -360,14 +370,14 @@
 .kr-sidebar__item-copy {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 3px;
 }
 
 .kr-sidebar__item-copy strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   font: inherit;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .kr-sidebar__item-copy small {
