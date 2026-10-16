@@ -99,13 +99,16 @@
 .experience-overlay-surface__title {
   flex: 1 1 auto;
   min-inline-size: 0;
+  max-block-size: min(5.5rem, 25dvh);
   margin: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   font-size: 1rem;
   font-weight: 700;
   line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  scrollbar-width: thin;
 }
 
 .experience-overlay-surface__close {

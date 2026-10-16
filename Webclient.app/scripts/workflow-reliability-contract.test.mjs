@@ -7,6 +7,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..');
 const WORKFLOWS = Object.freeze([
   '.github/workflows/webclient-quality.yml',
   '.github/workflows/release-evidence-contract.yml',
+  '.github/workflows/release-qa.yml',
 ]);
 
 function readWorkflow(relativePath) {
@@ -113,6 +114,29 @@ for (const workflow of WORKFLOWS) {
     assert.deepEqual(result.findings, [], `${workflow} changed runner provenance`);
   });
 }
+test('Release QA resolves all-zero first-push lint baselines from an ancestry-safe main merge-base', () => {
+  const workflow = readWorkflow('.github/workflows/release-qa.yml');
+  const start = workflow.indexOf('- name: Strict lint on changed Webclient sources');
+  const end = workflow.indexOf('- name: Full TypeScript diagnostic visibility', start);
+  assert.ok(start >= 0 && end > start, 'strict-lint step must remain explicitly identifiable');
+  const lintStep = workflow.slice(start, end);
+  const resolver = readWorkflow('Webclient.app/scripts/resolve-changed-lint-baseline.sh');
+  const typedStart = workflow.indexOf('typed-release-audit:');
+  const webclientStart = workflow.indexOf('webclient-release-validation:');
+  assert.ok(typedStart >= 0 && webclientStart > typedStart, 'typed release audit job must remain identifiable');
+  assert.ok(workflow.slice(typedStart, webclientStart).includes('fetch-depth: 0'), 'exact PR baseline checkout must fetch complete history');
+  assert.ok(lintStep.includes('bash scripts/resolve-changed-lint-baseline.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF"'));
+  assert.ok(lintStep.includes('test -n "$BASE_SHA"'));
+  assert.ok(resolver.includes('set -euo pipefail'));
+  assert.ok(resolver.includes('git -C .. fetch --no-tags --unshallow origin "$github_ref"'));
+  assert.ok(resolver.includes('git -C .. fetch --no-tags origin main'));
+  assert.ok(resolver.includes('git -C .. merge-base "$main_sha" HEAD'));
+  assert.ok(resolver.includes('git -C .. merge-base --is-ancestor'));
+  assert.ok(resolver.includes('npm run lint:strict --if-present >&2'));
+  assert.equal(resolver.includes('set +e'), false);
+  assert.equal(resolver.includes('exit 0'), false);
+});
+
 test('concurrency contract rejects a workflow without concurrency', () => {
   assert.equal(concurrencyContract('jobs:\n  quality:\n    runs-on: ubuntu-latest\n').reason, 'missing-concurrency');
 });

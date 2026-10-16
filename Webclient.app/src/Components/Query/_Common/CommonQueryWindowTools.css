@@ -172,6 +172,7 @@
 .common-query-window-tool-button {
   position: relative;
   display: inline-grid;
+  flex: 0 0 auto;
   place-items: center;
   padding: 0;
   background: transparent;
@@ -180,7 +181,10 @@
 }
 
 .common-query-window-tool-minimise-button {
-  display: none;
+  display: block;
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+  flex: 0 0 auto;
 }
 
 .common-query-window-tool-close-button {

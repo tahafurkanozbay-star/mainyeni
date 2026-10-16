@@ -134,8 +134,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            npm run lint:strict --if-present
-            exit 0
+            BASE_SHA="$(bash scripts/resolve-changed-lint-baseline.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF")"
+            test -n "$BASE_SHA"
           fi
           git -C .. fetch --no-tags --depth=1 origin "$BASE_SHA"
           mapfile -t changed_files < <(

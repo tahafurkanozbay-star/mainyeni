@@ -6,18 +6,16 @@ using Business.Extensions.Gis.Operations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using RestSharp;
 using System;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace CityWorks.UserApi.Gis
 {
     public class GisProxyController : _BaseUserApiController
     {
-        private const string ServiceHostSuffix = ".gissrv.org";
         private const int RequestTimeoutMs = 15_000;
         private const int TokenLifetimeMinutes = 30;
         private const long MaxRequestBodyBytes = 5 * 1024 * 1024;
@@ -27,10 +25,12 @@ namespace CityWorks.UserApi.Gis
         private readonly GisLayerOperations gisLayerOperations;
         private readonly GisBasemapLayerOperations gisBasemapLayerOperations;
         private readonly IMemoryCache memoryCache;
+        private readonly ILogger<GisProxyController> logger;
 
-        public GisProxyController(IMemoryCache memoryCache, BusinessContext context)
+        public GisProxyController(IMemoryCache memoryCache, BusinessContext context, ILogger<GisProxyController>? logger = null)
         {
             this.memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+            this.logger = logger ?? NullLogger<GisProxyController>.Instance;
             configServiceOperations = new GisConfigServiceOperations(context);
             gisLayerOperations = new GisLayerOperations(context);
             gisBasemapLayerOperations = new GisBasemapLayerOperations(context);
@@ -54,7 +54,7 @@ namespace CityWorks.UserApi.Gis
                     return StatusCode(StatusCodes.Status413PayloadTooLarge, "Proxy request body is too large.");
                 }
 
-                if (!TryParsePublicTarget(
+                if (!GisProxyTargetPolicy.TryParsePublicTarget(
                         HttpContext.Request.QueryString.Value,
                         out var publicTarget,
                         out var serviceId,
@@ -76,7 +76,7 @@ namespace CityWorks.UserApi.Gis
                     return NotFound();
                 }
 
-                var upstreamUri = BuildUpstreamUri(service.Url, publicTarget, forwardedQuery);
+                var upstreamUri = GisProxyTargetPolicy.BuildUpstreamUri(service.Url, publicTarget, forwardedQuery);
                 if (upstreamUri == null)
                 {
                     return BadRequest("Configured GIS service URL is invalid.");
@@ -89,7 +89,7 @@ namespace CityWorks.UserApi.Gis
                     {
                         return StatusCode(StatusCodes.Status502BadGateway, "GIS service authentication failed.");
                     }
-                    upstreamUri = AppendQueryParameter(upstreamUri, "token", token);
+                    upstreamUri = GisProxyTargetPolicy.SetQueryParameter(upstreamUri, "token", token);
                 }
 
                 var client = new RestClient(new RestClientOptions
@@ -132,14 +132,40 @@ namespace CityWorks.UserApi.Gis
                         "GIS service request failed.");
                 }
 
+                // External ArcGIS services must never become a same-origin
+                // HTML, SVG or script document via the authenticated proxy.
+                // API security headers intentionally omit their CSP for HTML.
+                if (GisProxyPayloadPolicy.IsActiveContentType(response.ContentType))
+                {
+                    return StatusCode(
+                        StatusCodes.Status502BadGateway,
+                        "GIS service returned an unsupported active content type.");
+                }
+
                 if (!string.IsNullOrWhiteSpace(response.ContentType) &&
-                    (response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-                     response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase)))
+                    response.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 {
                     return File(response.RawBytes ?? Array.Empty<byte>(), response.ContentType);
                 }
 
-                var responseType = NormalizeResponseContentType(response.ContentType);
+                if (!string.IsNullOrWhiteSpace(response.ContentType) &&
+                    response.ContentType.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase))
+                {
+                    return File(
+                        response.RawBytes ?? Array.Empty<byte>(),
+                        "application/octet-stream",
+                        "gis-response.bin");
+                }
+
+                var responseType = GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType);
+                if (string.Equals(responseType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Unknown media types are download-only; preserve binary bytes instead
+                    // of re-encoding RestSharp's decoded string representation.
+                    var bytes = response.RawBytes ??
+                        System.Text.Encoding.UTF8.GetBytes(response.Content ?? string.Empty);
+                    return File(bytes, responseType, "gis-response.bin");
+                }
                 return Content(response.Content ?? string.Empty, responseType);
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
@@ -148,104 +174,31 @@ namespace CityWorks.UserApi.Gis
             }
             catch (Exception ex)
             {
-                handleExceptionResult(ex);
+                LogSafeFailure("upstream request", ex);
                 return StatusCode(StatusCodes.Status502BadGateway, "GIS service is temporarily unavailable.");
             }
         }
 
-        private static bool TryParsePublicTarget(
-            string rawQueryString,
-            out Uri publicTarget,
-            out string serviceId,
-            out string forwardedQuery)
+        private void LogSafeFailure(string operation, Exception exception)
         {
-            publicTarget = null;
-            serviceId = null;
-            forwardedQuery = string.Empty;
-
-            var raw = (rawQueryString ?? string.Empty).TrimStart('?').Trim();
-            if (string.IsNullOrWhiteSpace(raw)) return false;
-
-            var querySeparator = raw.IndexOf('?');
-            var targetText = querySeparator >= 0 ? raw.Substring(0, querySeparator) : raw;
-            forwardedQuery = querySeparator >= 0 ? raw.Substring(querySeparator + 1) : string.Empty;
-
-            if (!Uri.TryCreate(targetText, UriKind.Absolute, out var target) ||
-                !string.Equals(target.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
-                !target.Host.EndsWith(ServiceHostSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            var hostPrefix = target.Host
-                .Substring(0, target.Host.Length - ServiceHostSuffix.Length)
-                .TrimEnd('.');
-            if (string.IsNullOrWhiteSpace(hostPrefix) || hostPrefix.Contains('.'))
-            {
-                return false;
-            }
-
-            var decodedPath = Uri.UnescapeDataString(target.AbsolutePath);
-            if (decodedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == ".."))
-            {
-                return false;
-            }
-
-            publicTarget = target;
-            serviceId = hostPrefix;
-            return true;
+            var requestId = ControllerContext?.HttpContext?.TraceIdentifier ?? string.Empty;
+            // Never log the exception object or message: upstream request URIs can
+            // contain short-lived ArcGIS tokens in their query strings.
+            logger.LogError(
+                "GIS proxy {Operation} failed. RequestId={RequestId}; ExceptionType={ExceptionType}",
+                operation,
+                requestId,
+                exception.GetType().Name);
         }
 
-        private static Uri BuildUpstreamUri(string configuredUrl, Uri publicTarget, string forwardedQuery)
+        private Task<string?> ReadBoundedBody()
         {
-            if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configured) ||
-                (configured.Scheme != Uri.UriSchemeHttps && configured.Scheme != Uri.UriSchemeHttp))
-            {
-                return null;
-            }
-
-            var builder = new UriBuilder(configured);
-            var basePath = builder.Path.TrimEnd('/');
-            var suffixPath = publicTarget.AbsolutePath;
-
-            // ArcGIS may append the layer id already present in a configured layer URL.
-            var baseLastSegment = basePath.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
-            var suffixSegments = suffixPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
-            if (suffixSegments.Count > 0 &&
-                int.TryParse(baseLastSegment, out _) &&
-                string.Equals(baseLastSegment, suffixSegments[0], StringComparison.Ordinal))
-            {
-                suffixSegments.RemoveAt(0);
-            }
-
-            builder.Path = suffixSegments.Count == 0
-                ? basePath
-                : basePath + "/" + string.Join('/', suffixSegments);
-
-            var existingQuery = builder.Query.TrimStart('?');
-            builder.Query = string.IsNullOrWhiteSpace(existingQuery)
-                ? forwardedQuery
-                : string.IsNullOrWhiteSpace(forwardedQuery)
-                    ? existingQuery
-                    : existingQuery + "&" + forwardedQuery;
-
-            return builder.Uri;
-        }
-
-        private static Uri AppendQueryParameter(Uri uri, string name, string value)
-        {
-            var builder = new UriBuilder(uri);
-            var existing = builder.Query.TrimStart('?');
-            var next = Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(value);
-            builder.Query = string.IsNullOrWhiteSpace(existing) ? next : existing + "&" + next;
-            return builder.Uri;
-        }
-
-        private async Task<string> ReadBoundedBody()
-        {
-            using var reader = new StreamReader(HttpContext.Request.Body);
-            var body = await reader.ReadToEndAsync();
-            return System.Text.Encoding.UTF8.GetByteCount(body) <= MaxRequestBodyBytes ? body : null;
+            // Content-Length is optional for chunked requests; limit bytes while
+            // consuming rather than materializing an unbounded request first.
+            return GisProxyPayloadPolicy.ReadBoundedUtf8BodyAsync(
+                HttpContext.Request.Body,
+                MaxRequestBodyBytes,
+                HttpContext.RequestAborted);
         }
 
         private static string NormalizeContentType(string contentType)
@@ -259,15 +212,6 @@ namespace CityWorks.UserApi.Gis
                 "text/plain" => "text/plain",
                 _ => "application/octet-stream"
             };
-        }
-
-        private static string NormalizeResponseContentType(string contentType)
-        {
-            if (string.IsNullOrWhiteSpace(contentType)) return "application/json; charset=utf-8";
-            return contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) ||
-                   contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
-                ? contentType
-                : "application/octet-stream";
         }
 
         private ProxyGisService GetService(string encryptedServiceId)
@@ -287,7 +231,7 @@ namespace CityWorks.UserApi.Gis
             }
             catch (Exception ex)
             {
-                handleExceptionResult(ex);
+                LogSafeFailure("service lookup", ex);
                 return null;
             }
         }
@@ -299,7 +243,8 @@ namespace CityWorks.UserApi.Gis
                 return null;
             }
 
-            var cacheKey = $"gis-token:{service.Url}";
+            var cacheKey = GisProxyTokenCacheKeyPolicy.Create(
+                service.Url, service.SCUserName, service.SCPassword);
             if (memoryCache.TryGetValue(cacheKey, out string cachedToken))
             {
                 return cachedToken;
@@ -312,10 +257,7 @@ namespace CityWorks.UserApi.Gis
                 return null;
             }
 
-            var tokenHostPrefix = service.Url.Contains("/webgis/", StringComparison.OrdinalIgnoreCase)
-                ? "webgis"
-                : "arcgis";
-            var tokenUrl = $"{serviceUri.Scheme}://{serviceUri.Host}/{tokenHostPrefix}/tokens/generateToken";
+            var tokenUrl = GisProxyTokenEndpointPolicy.Create(serviceUri).ToString();
 
             var tokenClient = new RestClient(new RestClientOptions
             {
@@ -333,22 +275,18 @@ namespace CityWorks.UserApi.Gis
                 return null;
             }
 
-            string token;
-            try
-            {
-                using var document = JsonDocument.Parse(response.Content);
-                token = document.RootElement.TryGetProperty("token", out var tokenElement)
-                    ? tokenElement.GetString()
-                    : null;
-            }
-            catch (JsonException)
+            if (!GisProxyTokenResponsePolicy.TryReadToken(
+                response.Content,
+                DateTimeOffset.UtcNow,
+                TimeSpan.FromMinutes(TokenLifetimeMinutes),
+                TimeSpan.FromMinutes(2),
+                out var token,
+                out var cacheLifetime))
             {
                 return null;
             }
 
-            if (string.IsNullOrWhiteSpace(token)) return null;
-
-            memoryCache.Set(cacheKey, token, TimeSpan.FromMinutes(TokenLifetimeMinutes - 2));
+            memoryCache.Set(cacheKey, token, cacheLifetime);
             return token;
         }
     }

@@ -208,14 +208,19 @@
   }
 }
 
-@media (max-width: 520px) {
+/* On compact screens the quick-navigation shell occupies the full bottom
+   edge. Dock the scrolling toolbar below the header instead of allowing its
+   bottom-pinned buttons to cover the shell's actions. Reserve at least 14rem
+   for the expanded shell; short landscape screens get a one-button scroller. */
+@media (max-width: 719px) {
   .toolbarwidget {
-    top: auto;
-    right: max(8px, env(safe-area-inset-right));
-    bottom: max(12px, env(safe-area-inset-bottom));
-    max-height: min(52dvh, 420px);
+    top: calc(var(--mainbar-height) + max(8px, env(safe-area-inset-top)));
+    bottom: auto;
+    max-height: max(48px, min(48dvh, calc(100dvh - var(--mainbar-height) - 14rem - env(safe-area-inset-bottom))));
   }
+}
 
+@media (max-width: 520px) {
   .toolbarwidget-button[data-tooltip]::after,
   .toolbarwidget .experience-toolbar__button[data-tooltip]::after {
     right: calc(100% + 8px);

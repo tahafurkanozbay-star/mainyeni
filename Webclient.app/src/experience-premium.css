@@ -164,7 +164,7 @@ html[data-experience-theme='dark'] {
   left: 0;
   top: 68px;
   width: var(--kr-premium-sidebar-width);
-  height: calc(100vh - 68px);
+  height: calc(100dvh - 68px);
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -207,6 +207,8 @@ html[data-experience-theme='dark'] {
 }
 .kr-sidebar__toggle:hover { color: var(--kr-premium-blue); background: color-mix(in srgb, var(--kr-premium-blue) 9%, var(--exp-surface)); border-color: color-mix(in srgb, var(--kr-premium-blue) 28%, var(--exp-border)); }
 .kr-sidebar.is-collapsed { width: 82px; border-radius: 0 16px 16px 0; box-shadow: 5px 0 20px rgba(17, 36, 59, .08); }
+/* Also override the equally-specific expanded width declared at 880px. */
+.sidebar-container.kr-sidebar.is-collapsed { width: 82px; }
 .kr-sidebar.is-collapsed .kr-sidebar__topline { justify-content: center; padding-inline: 10px; }
 .kr-sidebar.is-collapsed .kr-sidebar__title,
 .kr-sidebar.is-collapsed .kr-sidebar__panel { display: none; }
@@ -425,7 +427,7 @@ html[data-experience-theme='dark'] {
 }
 .common-query-window-right { left: auto; right: 82px; }
 .common-query-window-header { min-height: 58px; padding: 10px 14px; background: linear-gradient(180deg, color-mix(in srgb, var(--kr-premium-blue) 6%, var(--exp-surface)), var(--exp-surface)); }
-.common-query-window-header > span { color: var(--kr-premium-ink); font-size: 14px; font-weight: 800; }
+.common-query-window-header > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--kr-premium-ink); font-size: 14px; font-weight: 800; }
 .common-query-window-header-icon { width: 36px; height: 36px; border-radius: 11px; background: color-mix(in srgb, var(--kr-premium-blue) 10%, transparent); }
 .common-query-window-body { padding: 14px; }
 .kr-command { border-radius: 20px; box-shadow: 0 26px 80px rgba(7, 25, 44, .28); }
@@ -499,7 +501,7 @@ html[data-experience-theme='dark'] {
 @media (max-width: 880px) {
   .mainbar-container { height: 62px; min-height: 62px; padding-inline: 10px; }
   .mainbar-text { padding-inline: 11px; font-size: 15px; }
-  .sidebar-container.kr-sidebar { top: 62px; height: calc(100vh - 62px); width: min(340px, calc(100vw - 36px)); }
+  .sidebar-container.kr-sidebar { top: 62px; height: calc(100dvh - 62px); width: min(340px, calc(100vw - 36px)); }
   .toolbarwidget { top: 74px; right: 10px; }
   .experience-workspace { top: auto; right: 70px; bottom: 10px; left: auto; max-width: calc(100vw - 140px); }
   .common-query-window { top: 74px; left: 12px; max-width: min(520px, calc(100vw - 88px)); }
@@ -525,15 +527,17 @@ html[data-experience-theme='dark'] {
   .ns-input-group, .ns-input-group input { height: 40px; }
   .ns-input-group input { padding-left: 12px; border-radius: 12px; font-size: 12px; }
   .kr-search-submit { top: 3px; right: 4px; width: 34px; height: 34px; border-radius: 9px; }
-  .sidebar-container.kr-sidebar { top: 58px; width: min(358px, calc(100vw - 22px)); height: calc(100vh - 58px); border-radius: 0 18px 18px 0; }
+  .sidebar-container.kr-sidebar { top: 58px; width: min(358px, calc(100vw - 22px)); height: calc(100dvh - 58px); border-radius: 0 18px 18px 0; }
   .kr-sidebar__topline { min-height: 60px; padding: 9px 10px 8px 14px; }
-  .kr-sidebar.is-collapsed { width: 72px; }
+  .sidebar-container.kr-sidebar.is-collapsed { width: 72px; }
   #app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 72px; }
   .kr-sidebar__groups { padding: 10px; gap: 5px; }
   .kr-sidebar__group { min-height: 58px; padding: 6px; border-radius: 11px; }
   .kr-sidebar__group img { height: 28px; }
   .kr-sidebar__panel { padding: 16px 10px 14px; }
-  .toolbarwidget { top: auto; right: 10px; bottom: 10px; max-height: 54vh; }
+  /* Keep premium styling aligned with the responsive toolbar: never repin
+     tools over the full-width quick-navigation dock on small devices. */
+  .toolbarwidget { top: 66px; right: 10px; bottom: auto; max-height: max(48px, min(48dvh, calc(100dvh - 58px - 14rem - env(safe-area-inset-bottom)))); }
   .toolbarwidget::before { display: none; }
   .experience-workspace { right: 68px; bottom: 8px; max-width: calc(100vw - 136px); }
   .experience-workspace__status-group { display: none; }

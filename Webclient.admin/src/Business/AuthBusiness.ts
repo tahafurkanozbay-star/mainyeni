@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Constants } from '../Core/Constants';
 import { Global } from '../Core/Global';
 
-import { isValidAdminSession, type ValidAdminSession } from './AdminSessionValidation';
+import { snapshotValidAdminSession, type ValidAdminSession } from './AdminSessionValidation';
 import { purgeLegacyAdminStorage } from './AdminLegacyStorageCleanup';
 
 export type AdminSession = ValidAdminSession;
@@ -72,7 +72,7 @@ export const AuthBusiness = {
   // serialize a bearer token into any browser-persistent store.
   GetSessionFromLocalStorage: (): AdminSession | null => {
     purgeLegacyAdminStorage(getSessionKey());
-    if (activeSession !== null && !isValidAdminSession(activeSession)) {
+    if (activeSession !== null && snapshotValidAdminSession(activeSession) === null) {
       activeSession = null;
     }
     return activeSession;
@@ -80,16 +80,15 @@ export const AuthBusiness = {
 
   SetSessionInLocalStorage: (session: unknown): boolean => {
     purgeLegacyAdminStorage(getSessionKey());
-    if (!isValidAdminSession(session)) {
+    const safeSession = snapshotValidAdminSession(session);
+    if (safeSession === null) {
       clearSession();
       return false;
     }
-    // Only approved fields survive a login response. Do not keep arbitrary
-    // API payload objects, secrets or callbacks in the active session.
-    activeSession = Object.freeze({
-      accessToken: session.accessToken,
-      ...(session.userName === undefined ? {} : { userName: session.userName }),
-    });
+    // Only descriptor-validated primitives survive. Never read untrusted
+    // source properties again after validation: Proxy get traps may disagree
+    // with descriptors or throw during the second read.
+    activeSession = safeSession;
     return true;
   },
 
