@@ -25,3 +25,6 @@ Webclient.admin/.env
 
 # Compiled/downloadable release archives must not be committed to source
 Webclient.app/build*.rar
+
+# Historical exception dumps and generated documentation artifacts
+/Api.User/_docs/
