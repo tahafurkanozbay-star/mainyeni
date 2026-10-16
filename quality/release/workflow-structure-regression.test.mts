@@ -83,12 +83,14 @@ test('first-push strict lint baseline is ancestry-aware and fails closed to full
     resolve(process.cwd(), 'Webclient.app/scripts/resolve-changed-lint-baseline.sh'),
     'utf8',
   );
-  assert.match(step, /bash scripts\\/resolve-changed-lint-baseline\\.sh "\\$GITHUB_EVENT_NAME" "\\$GITHUB_REF"/u);
-  assert.match(baselineScript, /set -euo pipefail/u);
-  assert.match(baselineScript, /git -C \\.\\. fetch --no-tags --unshallow origin "\\$github_ref"/u);
-  assert.match(baselineScript, /git -C \\.\\. merge-base "\\$main_sha" HEAD/u);
-  assert.match(baselineScript, /git -C \\.\\. merge-base --is-ancestor/u);
-  assert.match(baselineScript, /npm run lint:strict --if-present >&2/u);
-  assert.match(baselineScript, /git -C \\.\\. rev-parse HEAD/u);
-  assert.doesNotMatch(baselineScript, /exit 0|set \\+e|\\|\\| true/u);
+  assert.ok(step.includes('bash scripts/resolve-changed-lint-baseline.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF"'));
+  assert.ok(baselineScript.includes('set -euo pipefail'));
+  assert.ok(baselineScript.includes('git -C .. fetch --no-tags --unshallow origin "$github_ref"'));
+  assert.ok(baselineScript.includes('git -C .. merge-base "$main_sha" HEAD'));
+  assert.ok(baselineScript.includes('git -C .. merge-base --is-ancestor'));
+  assert.ok(baselineScript.includes('npm run lint:strict --if-present >&2'));
+  assert.ok(baselineScript.includes('git -C .. rev-parse HEAD'));
+  assert.equal(baselineScript.includes('exit 0'), false);
+  assert.equal(baselineScript.includes('set +e'), false);
+  assert.equal(baselineScript.includes('|| true'), false);
 });
