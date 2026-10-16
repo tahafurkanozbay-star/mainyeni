@@ -428,3 +428,27 @@ html[data-experience-motion='reduced'] .map-workspace-shell-overlay__action {
     outline-color: Highlight;
   }
 }
+
+/* Runtime-only host: preserve F6/Shift+F6 landmark navigation and live announcements
+   without showing the quick-navigation panel or affecting map layout. */
+.map-workspace-shell-overlay--headless {
+  position: fixed !important;
+  inset: 0 auto auto 0 !important;
+  display: block !important;
+  inline-size: 1px !important;
+  min-inline-size: 0 !important;
+  max-inline-size: 1px !important;
+  block-size: 1px !important;
+  min-block-size: 0 !important;
+  max-block-size: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
