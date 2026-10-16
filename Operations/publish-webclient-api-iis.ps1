@@ -2,6 +2,8 @@
 param(
     [ValidateSet("Release", "Debug")]
     [string]$Configuration = "Release",
+    [ValidateSet("win-x64", "win-arm64")]
+    [string]$RuntimeIdentifier = "win-x64",
     [string]$OutputRoot = (Join-Path $PSScriptRoot "..\artifacts\iis-api-user")
 )
 $ErrorActionPreference = "Stop"
@@ -27,7 +29,7 @@ $previousNoLogo = $env:DOTNET_NOLOGO
 try {
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
     $env:DOTNET_NOLOGO = "1"
-    $arguments = @("publish", $projectPath, "--configuration", $Configuration, "--output", $publishDirectory, "--self-contained", "false")
+    $arguments = @("publish", $projectPath, "--configuration", $Configuration, "--runtime", $RuntimeIdentifier, "--output", $publishDirectory, "--self-contained", "false")
     Push-Location $repositoryRoot
     try {
         Write-Host "> dotnet $($arguments -join ' ')" -ForegroundColor Cyan

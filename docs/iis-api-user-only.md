@@ -9,7 +9,7 @@ The publishing script is deliberately separate from Operations/build.ps1 -Target
 
 ## Build a deployable package
 
-Requirements: Windows or PowerShell-compatible build host, .NET SDK pinned by global.json (10.0.401), and network access to restore NuGet packages.
+Requirements: Windows or PowerShell-compatible build host, .NET SDK pinned by global.json (10.0.401), and network access to restore NuGet packages. The default publish target is **Windows x64** (`win-x64`), suitable for a 64-bit IIS application pool. The output is framework-dependent, so the .NET 10 Hosting Bundle must be installed on the IIS server.
 
 From the repository root, run the following command:
 
@@ -21,7 +21,7 @@ Output:
 
 A separate **API.User IIS Bundle** GitHub Actions workflow runs this same publisher on relevant pull requests and pushes to main. Its ZIP is uploaded as the **api-user-iis-<commit-sha>** artifact for 14 days, so the built package can be downloaded from the workflow run without checking in generated binaries.
 
-The script checks the required User API assembly, generated IIS web.config, and appsettings.json; it also fails if the Admin API assembly appears in the output. Output cleanup is constrained to a child of this repository's ignored artifacts/ directory.
+The script checks the required User API assembly, generated IIS web.config, and appsettings.json; it also fails if the Admin API assembly appears in the output. RID-specific publishing keeps Linux/macOS native assets out of the default IIS package. For a Windows ARM64 server, run `.\\Operations\\publish-webclient-api-iis.ps1 -RuntimeIdentifier win-arm64`. Output cleanup is constrained to a child of this repository's ignored artifacts/ directory.
 
 ## Select the right runtime mode
 

@@ -1235,3 +1235,9 @@
 - RUNTIME MODE: the full client uses more than the anonymous PlanASKI GeoJSON endpoint; for example, it calls AppSettings and GIS configuration routes. Therefore the deployment guide explicitly warns against setting KentRehberiData__Standalone=true for the full frontend. Normal Api.User mode requires a secure ConnectionStrings__Primary value for database-backed application configuration while PlanASKI remains the Kent Rehberi source.
 - HOSTNAME/CORS: no DNS, TLS, production database connection, IIS site or wildcard CORS is created. The current frontend runtime only accepts same-origin API paths. After frontend hostname is known, prefer an IIS reverse proxy from frontend-origin /api/* (stripping the prefix) to the API subdomain so no cross-origin runtime-policy relaxation is needed.
 - VALIDATION: the dedicated API.User IIS Bundle workflow runs the publisher on Windows CI and uploads the ZIP artifact for 14 days after successful packaging. Live IIS deployment remains separate and requires host access, secure database settings, and the eventual hostname.
+
+
+## IIS package size optimization — 2026-10-16
+- FINDING: the first successfully verified User API archive contained native dependency assets for Linux, macOS, and multiple Windows architectures even though its deployment target is IIS on Windows x64.
+- CHANGE: default the API-only publish script to the .NET RID win-x64 (optionally win-arm64) while keeping framework-dependent deployment. This limits native runtime assets to the target architecture and preserves the .NET 10 Hosting Bundle requirement.
+- VALIDATION: re-run the Windows API.User IIS Bundle workflow and inspect the new archive for required User API/web.config/appsettings files, absence of Api.Admin.dll, and removal of foreign-OS runtime folders. No live IIS host, DNS, TLS, database secret or CORS setting is changed.
