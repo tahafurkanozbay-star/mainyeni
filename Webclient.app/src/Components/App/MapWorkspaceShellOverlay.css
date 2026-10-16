@@ -235,9 +235,21 @@
 }
 
 @media (max-width: 719px) {
+  /* The expanded service drawer already occupies the compact viewport.
+     Suppress this independent bottom dock while it is open rather than
+     drawing navigation buttons on top of the drawer's own controls. */
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay,
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-workspace,
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   .map-workspace-shell-overlay {
     inset-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
-    inset-block-end: max(8px, env(safe-area-inset-bottom));
+    /* The workspace and utility controls already occupy the bottom footer
+       zone. Leave an independent 5rem lane instead of covering their buttons. */
+    inset-block-end: calc(5rem + env(safe-area-inset-bottom));
     width: auto;
     max-width: none;
     border-radius: 14px;
