@@ -45,7 +45,7 @@ namespace CityWorks.UserApi.Gis
         /// Stop at the first excess byte; never call ReadToEndAsync on it.
         /// The existing proxy transports POST form/JSON data as UTF-8 text.
         /// </summary>
-        public static async Task<string> ReadBoundedUtf8BodyAsync(
+        public static async Task<string?> ReadBoundedUtf8BodyAsync(
             Stream input,
             long byteLimit,
             CancellationToken cancellationToken)
