@@ -121,16 +121,15 @@ test('Release QA resolves all-zero first-push lint baselines from an ancestry-sa
   assert.ok(start >= 0 && end > start, 'strict-lint step must remain explicitly identifiable');
   const lintStep = workflow.slice(start, end);
 
-  assert.match(workflow, /name: Checkout with ancestry for exact changed-file lint[\\s\\S]*?fetch-depth:\\s*0/);
-  assert.match(lintStep, /github\\.event\\.pull_request\\.base\\.sha \\|\\| github\\.event\\.before/);
+  assert.match(workflow, /name: Checkout with ancestry for exact changed-file lint[\s\S]*?fetch-depth:\s*0/);
+  assert.match(lintStep, /github\.event\.pull_request\.base\.sha \|\| github\.event\.before/);
   assert.match(lintStep, /GITHUB_EVENT_NAME.*push/);
   assert.match(lintStep, /git -C \.\. fetch --no-tags origin main/);
-  assert.match(lintStep, /git -C \.\. merge-base "\\$MAIN_SHA" HEAD/);
-  assert.match(lintStep, /merge-base --is-ancestor "\\$BASE_SHA" HEAD/);
+  assert.match(lintStep, /git -C \.\. merge-base "\$MAIN_SHA" HEAD/);
+  assert.match(lintStep, /merge-base --is-ancestor "\$BASE_SHA" HEAD/);
   assert.match(lintStep, /npm run lint:strict --if-present/);
-  assert.match(lintStep, /git -C \.\. diff --name-only "\\$BASE_SHA" HEAD/);
+  assert.match(lintStep, /git -C \.\. diff --name-only "\$BASE_SHA" HEAD/);
 });
-
 test('concurrency contract rejects a workflow without concurrency', () => {
   assert.equal(concurrencyContract('jobs:\n  quality:\n    runs-on: ubuntu-latest\n').reason, 'missing-concurrency');
 });
