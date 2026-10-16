@@ -170,25 +170,26 @@ function findClientLogCalls(text: string): readonly ClientLogCall[] {
 
 function riskReason(argument: string): string | null {
   const value = argument.trim();
+  const executable = privacyMask(argument);
   if (/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)$/.test(value) && !value.includes('${')) return null;
   if (SENSITIVE_DIRECT_IDENTIFIER.test(argument.trim())) return 'raw-record-or-query';
-  if (SENSITIVE_PATH.test(argument)) return 'address-path-label';
-  if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';
+  if (SENSITIVE_PATH.test(executable)) return 'address-path-label';
+  if (SENSITIVE_SERIALIZATION.test(executable)) return 'serialized-record-or-query';
   // Interpolated template payloads are expressions, not object-literal keys.
   // Prefer their privacy classification over static label text such as
   // `coordinates: ${mapPoint}` before inspecting object-key syntax.
   if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
-  if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(argument)) return 'sensitive-object-key';
+  if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(executable)) return 'sensitive-object-key';
   if (/\[\s*['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*\]/.test(argument)) return 'sensitive-bracket-property';
-  if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(argument)) return 'wrapped-location-value';
+  if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(executable)) return 'wrapped-location-value';
   if (/['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*:/.test(argument)) return 'sensitive-object-key';
-  if (SENSITIVE_PROPERTY.test(argument)) return 'sensitive-property';
+  if (SENSITIVE_PROPERTY.test(executable)) return 'sensitive-property';
   // Object shorthand ({ query }) is equivalent to { query: query }.
   // Mask inert comments/strings first so examples do not cause false findings.
-  if (SENSITIVE_OBJECT_SHORTHAND.test(privacyMask(argument))) return 'shorthand-sensitive-value';
+  if (SENSITIVE_OBJECT_SHORTHAND.test(executable)) return 'shorthand-sensitive-value';
   if (SENSITIVE_OBJECT_FIELD.test(argument)) return 'sensitive-object-key';
-  if (SENSITIVE_NESTED_VALUE.test(argument)) return 'nested-sensitive-value';
-  if (SENSITIVE_RUNTIME_SOURCE.test(argument)) return 'location-or-search-value';
+  if (SENSITIVE_NESTED_VALUE.test(executable)) return 'nested-sensitive-value';
+  if (SENSITIVE_RUNTIME_SOURCE.test(executable)) return 'location-or-search-value';
   return null;
 }
 
