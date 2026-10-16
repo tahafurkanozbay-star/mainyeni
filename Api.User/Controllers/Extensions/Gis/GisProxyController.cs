@@ -149,6 +149,14 @@ namespace CityWorks.UserApi.Gis
                 }
 
                 var responseType = GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType);
+                if (string.Equals(responseType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Unknown media types are download-only; preserve binary bytes instead
+                    // of re-encoding RestSharp's decoded string representation.
+                    var bytes = response.RawBytes ??
+                        System.Text.Encoding.UTF8.GetBytes(response.Content ?? string.Empty);
+                    return File(bytes, responseType);
+                }
                 return Content(response.Content ?? string.Empty, responseType);
             }
             catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
