@@ -42,6 +42,15 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(compact).toContain('pointer-events: none;');
   });
 
+  it('keeps a visible keyboard focus indicator on sidebar search inputs', () => {
+    const sidebar = css('./SidebarModern.css');
+    const normal = ruleBlock(sidebar, '.kr-sidebar__search input {', '.kr-sidebar__search input:focus-visible {');
+    expect(normal).not.toMatch(/outline\s*:\s*(?:0|none)\s*;/u);
+    const focus = ruleBlock(sidebar, '.kr-sidebar__search input:focus-visible {', '.kr-sidebar__search input::placeholder {');
+    expect(focus).toMatch(/outline:\s*2px solid/u);
+    expect(focus).toContain('outline-offset: -2px;');
+  });
+
   it('keeps long modal and service titles readable while retaining independent close/favorite buttons', () => {
     const overlays = css('../Common/experience-overlay-stack.css');
     const sidebar = css('./SidebarModern.css');
