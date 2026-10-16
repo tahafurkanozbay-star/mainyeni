@@ -79,7 +79,13 @@ test('first-push strict lint baseline is ancestry-aware and fails closed to full
   assert.ok(start >= 0 && end > start, 'strict lint workflow step must remain present');
   const step = workflow.slice(start, end);
 
-  assert.match(workflow, /Checkout with ancestry for exact changed-file lint[\s\S]*?fetch-depth: 0/u);
+  const checkoutStart = workflow.indexOf('name: Checkout with ancestry for exact changed-file lint');
+  const checkoutEnd = workflow.indexOf('\n      - name:', checkoutStart);
+  assert.ok(checkoutStart >= 0 && checkoutEnd > checkoutStart, 'checkout ancestry step must remain identifiable');
+  assert.ok(
+    workflow.slice(checkoutStart, checkoutEnd).includes('fetch-depth: 0'),
+    'strict-lint checkout must fetch complete ancestry',
+  );
   assert.match(step, /GITHUB_EVENT_NAME/u);
   assert.match(step, /git -C \.\. fetch --no-tags origin main/u);
   assert.match(step, /git -C \.\. merge-base "\$MAIN_SHA" HEAD/u);
