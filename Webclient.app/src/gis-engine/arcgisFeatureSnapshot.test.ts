@@ -15,7 +15,7 @@ const feature = (OBJECTID: number, label = 'parcel') => ({
 describe('ArcGIS bounded feature snapshot session', () => {
   it('deep-copies and freezes feature attributes, geometry and nested values', () => {
     const source = feature(1, 'before');
-    const [captured] = snapshotArcGisFeatures<typeof source>([source]);
+    const captured = snapshotArcGisFeatures<typeof source>([source]).features[0];
     source.attributes.label = 'after';
     source.attributes.nested.owner = 'changed';
     source.geometry.x = 999;
@@ -31,7 +31,7 @@ describe('ArcGIS bounded feature snapshot session', () => {
 
   it('preserves an own __proto__ data field without changing prototypes', () => {
     const source = JSON.parse('{"attributes":{"OBJECTID":2,"__proto__":{"polluted":true}}}') as object;
-    const [captured] = snapshotArcGisFeatures<Record<string, unknown>>([source]);
+    const captured = snapshotArcGisFeatures<Record<string, unknown>>([source]).features[0];
     const attributes = captured?.attributes as Record<string, unknown>;
     expect(Object.prototype.hasOwnProperty.call(attributes, '__proto__')).toBe(true);
     expect(Object.getPrototypeOf(attributes)).toBe(Object.prototype);
