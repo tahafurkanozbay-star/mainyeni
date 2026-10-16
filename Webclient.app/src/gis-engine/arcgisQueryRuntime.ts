@@ -229,10 +229,38 @@ const requestKey = (metadata: ArcGisMetadataContract, plan: QueryExecutionPlan):
 const featureIdentity = <TFeature extends ArcGisFeature>(
   feature: TFeature,
   objectIdField: string | null,
+  resourceUrl: string,
 ): string | number | undefined => {
-  if (!objectIdField || !feature.attributes) return undefined;
-  const value = feature.attributes[objectIdField];
-  return typeof value === 'string' || typeof value === 'number' ? value : undefined;
+  if (!objectIdField) return undefined;
+  const attributes = feature.attributes;
+  if (!attributes || typeof attributes !== 'object') {
+    throw new ArcGisQueryRuntimeError(
+      'ArcGIS paged response is missing its verified object identity.',
+      'INVALID_FEATURE_IDENTITY',
+      resourceUrl,
+    );
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(attributes, objectIdField);
+  if (!descriptor || !('value' in descriptor)) {
+    throw new ArcGisQueryRuntimeError(
+      'ArcGIS paged response is missing its verified object identity.',
+      'INVALID_FEATURE_IDENTITY',
+      resourceUrl,
+    );
+  }
+  const value: unknown = descriptor.value;
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (normalized.length > 0 && normalized.length <= 256 && !/[\\u0000-\\u001f\\u007f]/u.test(normalized)) {
+      return normalized;
+    }
+  }
+  throw new ArcGisQueryRuntimeError(
+    'ArcGIS paged response contains an invalid object identity.',
+    'INVALID_FEATURE_IDENTITY',
+    resourceUrl,
+  );
 };
 
 const cloneFeatureWithGeometry = <TFeature extends ArcGisFeature>(
@@ -454,7 +482,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
       pageSize: executionPlan.pageSize,
       maxFeatures: executionPlan.maxFeatures,
       maxPages: executionPlan.maxPages,
-      identity: (feature) => featureIdentity(feature, metadata.objectIdField),
+      identity: (feature) => featureIdentity(feature, metadata.objectIdField, metadata.resourceUrl),
       fetchPage: async (offset, limit, pageSignal) => {
         const pageIndex = Math.max(0, Math.floor((offset - executionPlan.initialOffset) / executionPlan.pageSize));
         const spec: ArcGisQuerySpec = Object.freeze({
