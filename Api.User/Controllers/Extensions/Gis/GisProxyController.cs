@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using RestSharp;
 using System;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -53,7 +52,7 @@ namespace CityWorks.UserApi.Gis
                     return StatusCode(StatusCodes.Status413PayloadTooLarge, "Proxy request body is too large.");
                 }
 
-                if (!TryParsePublicTarget(
+                if (!GisProxyTargetPolicy.TryParsePublicTarget(
                         HttpContext.Request.QueryString.Value,
                         out var publicTarget,
                         out var serviceId,
@@ -75,7 +74,7 @@ namespace CityWorks.UserApi.Gis
                     return NotFound();
                 }
 
-                var upstreamUri = BuildUpstreamUri(service.Url, publicTarget, forwardedQuery);
+                var upstreamUri = GisProxyTargetPolicy.BuildUpstreamUri(service.Url, publicTarget, forwardedQuery);
                 if (upstreamUri == null)
                 {
                     return BadRequest("Configured GIS service URL is invalid.");
@@ -88,7 +87,7 @@ namespace CityWorks.UserApi.Gis
                     {
                         return StatusCode(StatusCodes.Status502BadGateway, "GIS service authentication failed.");
                     }
-                    upstreamUri = AppendQueryParameter(upstreamUri, "token", token);
+                    upstreamUri = GisProxyTargetPolicy.AppendQueryParameter(upstreamUri, "token", token);
                 }
 
                 var client = new RestClient(new RestClientOptions
@@ -168,94 +167,6 @@ namespace CityWorks.UserApi.Gis
                 handleExceptionResult(ex);
                 return StatusCode(StatusCodes.Status502BadGateway, "GIS service is temporarily unavailable.");
             }
-        }
-
-        private static bool TryParsePublicTarget(
-            string rawQueryString,
-            out Uri publicTarget,
-            out string serviceId,
-            out string forwardedQuery)
-        {
-            publicTarget = null;
-            serviceId = null;
-            forwardedQuery = string.Empty;
-
-            var raw = (rawQueryString ?? string.Empty).TrimStart('?').Trim();
-            if (string.IsNullOrWhiteSpace(raw)) return false;
-
-            var querySeparator = raw.IndexOf('?');
-            var targetText = querySeparator >= 0 ? raw.Substring(0, querySeparator) : raw;
-            forwardedQuery = querySeparator >= 0 ? raw.Substring(querySeparator + 1) : string.Empty;
-
-            if (!Uri.TryCreate(targetText, UriKind.Absolute, out var target) ||
-                !string.Equals(target.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
-                !target.Host.EndsWith(ServiceHostSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            var hostPrefix = target.Host
-                .Substring(0, target.Host.Length - ServiceHostSuffix.Length)
-                .TrimEnd('.');
-            if (string.IsNullOrWhiteSpace(hostPrefix) || hostPrefix.Contains('.'))
-            {
-                return false;
-            }
-
-            var decodedPath = Uri.UnescapeDataString(target.AbsolutePath);
-            if (decodedPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == ".."))
-            {
-                return false;
-            }
-
-            publicTarget = target;
-            serviceId = hostPrefix;
-            return true;
-        }
-
-        private static Uri BuildUpstreamUri(string configuredUrl, Uri publicTarget, string forwardedQuery)
-        {
-            if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configured) ||
-                (configured.Scheme != Uri.UriSchemeHttps && configured.Scheme != Uri.UriSchemeHttp))
-            {
-                return null;
-            }
-
-            var builder = new UriBuilder(configured);
-            var basePath = builder.Path.TrimEnd('/');
-            var suffixPath = publicTarget.AbsolutePath;
-
-            // ArcGIS may append the layer id already present in a configured layer URL.
-            var baseLastSegment = basePath.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
-            var suffixSegments = suffixPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
-            if (suffixSegments.Count > 0 &&
-                int.TryParse(baseLastSegment, out _) &&
-                string.Equals(baseLastSegment, suffixSegments[0], StringComparison.Ordinal))
-            {
-                suffixSegments.RemoveAt(0);
-            }
-
-            builder.Path = suffixSegments.Count == 0
-                ? basePath
-                : basePath + "/" + string.Join('/', suffixSegments);
-
-            var existingQuery = builder.Query.TrimStart('?');
-            builder.Query = string.IsNullOrWhiteSpace(existingQuery)
-                ? forwardedQuery
-                : string.IsNullOrWhiteSpace(forwardedQuery)
-                    ? existingQuery
-                    : existingQuery + "&" + forwardedQuery;
-
-            return builder.Uri;
-        }
-
-        private static Uri AppendQueryParameter(Uri uri, string name, string value)
-        {
-            var builder = new UriBuilder(uri);
-            var existing = builder.Query.TrimStart('?');
-            var next = Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(value);
-            builder.Query = string.IsNullOrWhiteSpace(existing) ? next : existing + "&" + next;
-            return builder.Uri;
         }
 
         private Task<string?> ReadBoundedBody()
