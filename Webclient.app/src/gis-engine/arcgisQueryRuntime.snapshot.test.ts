@@ -370,4 +370,31 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     expect((transportError as { cause?: unknown }).cause).toBeUndefined();
     transportRuntime.destroy();
   });
+
+  it('does not cache geometry that was dropped by lenient validation', async () => {
+    let calls = 0;
+    const transport = vi.fn(async () => {
+      calls += 1;
+      return response([{
+        attributes: { OBJECTID: 1, NAME: 'Park' },
+        geometry: calls === 1 ? { unsupported: 'opaque' } : {
+          x: 32.8, y: 39.9, spatialReference: { wkid: 4326 },
+        },
+      }]);
+    });
+    const runtime = createArcGisQueryRuntime(transport, { queryLimits: limits });
+    const degraded = await runtime.execute(metadata(), { ...request, returnGeometry: true });
+    expect(degraded.diagnostics).toMatchObject({
+      invalidGeometryCount: 1, droppedInvalidGeometryCount: 1, cacheEligible: false,
+    });
+    expect(degraded.features[0]?.geometry).toBeNull();
+    const repaired = await runtime.execute(metadata(), { ...request, returnGeometry: true });
+    expect(repaired.diagnostics).toMatchObject({
+      invalidGeometryCount: 0, droppedInvalidGeometryCount: 0, cacheEligible: true,
+    });
+    expect(repaired.features[0]?.geometry).toMatchObject({ x: 32.8, y: 39.9 });
+    await runtime.execute(metadata(), { ...request, returnGeometry: true });
+    expect(calls).toBe(2);
+    runtime.destroy();
+  });
 });
