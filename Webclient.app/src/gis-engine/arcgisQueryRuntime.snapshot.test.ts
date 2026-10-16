@@ -438,7 +438,7 @@ describe('ArcGIS query runtime immutable response boundary', () => {
       thrown = error;
     }
     expect(thrown).toMatchObject({ name: 'ArcGisQueryRuntimeError', code: 'TRANSPORT_ERROR' });
-    expect((thrown as Error).message).toBe('ArcGIS transport failed.');
+    expect((thrown as Error).message).toBe('ArcGIS transport failed with an unreadable error value.');
     expect((thrown as Error).message).not.toContain('secret');
     expect((thrown as { cause?: unknown }).cause).toBeUndefined();
     runtime.destroy();
