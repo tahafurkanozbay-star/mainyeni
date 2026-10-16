@@ -48,6 +48,7 @@ const isWorkspacePhase = (value: string | undefined): value is MapWorkspaceShell
 
 export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false, headless = false }: MapWorkspaceShellOverlayProps) => {
   const rootRef = useRef<HTMLElement | null>(null);
+  const headlessRootRef = useRef<HTMLDivElement | null>(null);
   const model = useMemo(() => new MapWorkspaceShellModel({
     initialPhase: phase ?? 'booting',
     initialUtilityCollapsed: initialCollapsed,
@@ -156,7 +157,7 @@ export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false, head
   if (headless) {
     return (
       <div
-        ref={rootRef}
+        ref={headlessRootRef}
         className="map-workspace-shell-overlay map-workspace-shell-overlay--headless"
         data-viewport={snapshot.viewport}
         data-health={snapshot.healthTone}
