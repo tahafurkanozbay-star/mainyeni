@@ -84,7 +84,7 @@ public sealed class GisProxyPayloadPolicyTests
         var controller = File.ReadAllText(
             Path.Combine(root, "Api.User", "Controllers", "Extensions", "Gis", "GisProxyController.cs"));
         Assert.Contains("GisProxyPayloadPolicy.NormalizeResponseContentType(response.ContentType)", controller);
-        Assert.Contains("File(bytes, responseType)", controller);
+        Assert.Contains("File(bytes, responseType, \"gis-response.bin\")", controller);
         Assert.Contains("if (string.Equals(responseType, \"application/octet-stream\"", controller);
     }
 
