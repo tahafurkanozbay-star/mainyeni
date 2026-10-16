@@ -427,7 +427,7 @@ html[data-experience-theme='dark'] {
 }
 .common-query-window-right { left: auto; right: 82px; }
 .common-query-window-header { min-height: 58px; padding: 10px 14px; background: linear-gradient(180deg, color-mix(in srgb, var(--kr-premium-blue) 6%, var(--exp-surface)), var(--exp-surface)); }
-.common-query-window-header > span { color: var(--kr-premium-ink); font-size: 14px; font-weight: 800; }
+.common-query-window-header > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--kr-premium-ink); font-size: 14px; font-weight: 800; }
 .common-query-window-header-icon { width: 36px; height: 36px; border-radius: 11px; background: color-mix(in srgb, var(--kr-premium-blue) 10%, transparent); }
 .common-query-window-body { padding: 14px; }
 .kr-command { border-radius: 20px; box-shadow: 0 26px 80px rgba(7, 25, 44, .28); }
@@ -537,7 +537,7 @@ html[data-experience-theme='dark'] {
   .kr-sidebar__panel { padding: 16px 10px 14px; }
   /* Keep premium styling aligned with the responsive toolbar: never repin
      tools over the full-width quick-navigation dock on small devices. */
-  .toolbarwidget { top: 66px; right: 10px; bottom: auto; max-height: max(48px, min(48dvh, calc(100dvh - 58px - 12rem - env(safe-area-inset-bottom)))); }
+  .toolbarwidget { top: 66px; right: 10px; bottom: auto; max-height: max(48px, min(48dvh, calc(100dvh - 58px - 14rem - env(safe-area-inset-bottom)))); }
   .toolbarwidget::before { display: none; }
   .experience-workspace { right: 68px; bottom: 8px; max-width: calc(100vw - 136px); }
   .experience-workspace__status-group { display: none; }

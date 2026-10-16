@@ -18,9 +18,10 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(compact).toContain('top: calc(var(--mainbar-height)');
     expect(compact).toContain('bottom: auto;');
     expect(compact).toContain('max-height: max(48px, min(48dvh,');
-    expect(compact).toContain('12rem - env(safe-area-inset-bottom)');
+    expect(compact).toContain('14rem - env(safe-area-inset-bottom)');
     const premium = css('../../experience-premium.css');
     expect(premium).toContain('.toolbarwidget { top: 66px; right: 10px; bottom: auto;');
+    expect(premium).toContain('14rem - env(safe-area-inset-bottom)');
     expect(premium).not.toContain('.toolbarwidget { top: auto;');
     const phone = ruleBlock(toolbar, '@media (max-width: 520px) {', '@media (pointer: coarse) {');
     expect(phone).not.toMatch(/bottom:\s*max\(/u);
@@ -40,7 +41,13 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay');
     expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-workspace');
     expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility');
+    expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .common-query-window');
+    expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .kr-lazy-window');
+    expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .esri-popup');
+    expect(compact).toContain('#app-shell:has(.kr-sidebar.is-collapsed) .common-query-window');
+    expect(compact).toContain('left: calc(var(--kr-premium-sidebar-width, 82px) + 12px);');
     expect(compact).toContain('visibility: hidden;');
+    expect(compact).toContain('visibility: hidden !important;');
     expect(compact).toContain('pointer-events: none;');
     expect(compact).toContain('inset-block-end: calc(5rem + env(safe-area-inset-bottom));');
   });
@@ -52,6 +59,28 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     const focus = ruleBlock(sidebar, '.kr-sidebar__search input:focus-visible {', '.kr-sidebar__search input::placeholder {');
     expect(focus).toMatch(/outline:\s*2px solid/u);
     expect(focus).toContain('outline-offset: -2px;');
+  });
+
+  it('keeps query minimize/close buttons visible when a title is long', () => {
+    const tools = css('../Query/_Common/CommonQueryWindowTools.css');
+    const minimize = ruleBlock(
+      tools,
+      '.common-query-window-tool-minimise-button {',
+      '}\n\n.common-query-window-tool-close-button {',
+    );
+    expect(minimize).toContain('display: block;');
+    expect(minimize).toContain('inline-size: 1.35rem;');
+    expect(minimize).not.toContain('display: none;');
+
+    const premium = css('../../experience-premium.css');
+    const title = ruleBlock(
+      premium,
+      '.common-query-window-header > span {',
+      '.common-query-window-header-icon {',
+    );
+    expect(title).toContain('flex: 1 1 auto;');
+    expect(title).toContain('min-width: 0;');
+    expect(title).toContain('overflow-wrap: anywhere;');
   });
 
   it('keeps long modal and service titles readable while retaining independent close/favorite buttons', () => {
