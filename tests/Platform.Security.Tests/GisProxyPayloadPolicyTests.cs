@@ -16,11 +16,16 @@ public sealed class GisProxyPayloadPolicyTests
     [InlineData("TEXT/HTML; CHARSET=UTF-8")]
     [InlineData("application/xhtml+xml")]
     [InlineData("image/svg+xml")]
+    [InlineData("application/svg+xml")]
+    [InlineData("text/x-html")]
     [InlineData("image/svg+xml; charset=utf-8")]
     [InlineData("text/javascript")]
     [InlineData("application/javascript")]
+    [InlineData("text/x-javascript")]
+    [InlineData("application/x-javascript")]
     [InlineData("text/ecmascript")]
     [InlineData("application/ecmascript")]
+    [InlineData("application/x-ecmascript")]
     [InlineData("text/css")]
     [InlineData("application/xml")]
     [InlineData("text/xml")]
@@ -43,6 +48,30 @@ public sealed class GisProxyPayloadPolicyTests
     public void JsonRasterAndInertData_RemainAllowed(string mimeType)
     {
         Assert.False(GisProxyPayloadPolicy.IsActiveContentType(mimeType));
+    }
+
+    [Theory]
+    [InlineData("application/json", "application/json")]
+    [InlineData("application/json; charset=utf-8", "application/json; charset=utf-8")]
+    [InlineData("application/geo+json", "application/geo+json")]
+    [InlineData("application/problem+json", "application/problem+json")]
+    [InlineData("application/vnd.api+json", "application/vnd.api+json")]
+    [InlineData("application/json-seq", "application/json-seq")]
+    [InlineData("application/x-ndjson", "application/x-ndjson")]
+    [InlineData("text/plain; charset=utf-8", "text/plain; charset=utf-8")]
+    [InlineData("text/csv", "text/csv")]
+    [InlineData("text/tab-separated-values", "text/tab-separated-values")]
+    [InlineData("application/jsonp", "application/octet-stream")]
+    [InlineData("application/jsonx", "application/octet-stream")]
+    [InlineData("text/html", "application/octet-stream")]
+    [InlineData("text/javascript", "application/octet-stream")]
+    [InlineData("application/xml", "application/octet-stream")]
+    [InlineData("image/svg+xml", "application/octet-stream")]
+    [InlineData("image/png", "application/octet-stream")]
+    [InlineData("", "application/json; charset=utf-8")]
+    public void ResponseContentType_UsesExactSafeMediaTypeAllowlist(string input, string expected)
+    {
+        Assert.Equal(expected, GisProxyPayloadPolicy.NormalizeResponseContentType(input));
     }
 
     [Fact]
