@@ -259,7 +259,7 @@ function snapshotValue(value: unknown, depth: number, state: TraversalState): un
   const copy: Record<string, unknown> = {};
   for (const key of keys) {
     if (typeof key !== 'string' || key.length > state.budget.maxKeyLength ||
-        /[\u0000-\u001f\u007f]/u.test(key)) {
+        hasAsciiControlCharacters(key)) {
       throw new ArcGisFeatureSnapshotError('INVALID_OBJECT_KEY', 'ArcGIS feature contains an invalid property key.');
     }
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
