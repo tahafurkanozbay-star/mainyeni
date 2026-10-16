@@ -111,7 +111,7 @@ test('private shorthand after destructuring and renamed bindings remains unsafe'
     '  const { address: streetLabel } = record;',
     '  safeClientLog(LoggingBusiness, "Query", { streetLabel });',
     '}',
-  ].join('\\n');
+  ].join('\n');
   const result = audit(source(text));
   assert.equal(result.summary.flaggedCalls, 1);
   assert.equal(result.findings[0]?.location?.line, 3);
