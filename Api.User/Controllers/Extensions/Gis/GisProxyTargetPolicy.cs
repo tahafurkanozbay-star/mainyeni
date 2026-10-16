@@ -114,28 +114,38 @@ public static class GisProxyTargetPolicy
         if (pathStart < 0) return false;
 
         var decoded = targetText.Substring(pathStart);
-        for (var pass = 0; pass < 3; pass++)
+        // Nested percent encoding must not turn into a traversal segment after
+        // a later proxy/server decode. Bound work and fail closed if it never stabilizes.
+        for (var pass = 0; pass < 8; pass++)
         {
+            string next;
             try
             {
-                decoded = Uri.UnescapeDataString(decoded);
+                next = Uri.UnescapeDataString(decoded);
             }
             catch (UriFormatException)
             {
                 return true;
             }
 
-            if (decoded.Contains('\\'))
+            if (next.Contains('\\'))
             {
                 return true;
             }
 
-            if (decoded.Split('/').Any(segment => segment == ".."))
+            if (next.Split('/').Any(segment => segment == ".."))
             {
                 return true;
             }
+
+            if (string.Equals(next, decoded, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            decoded = next;
         }
 
-        return false;
+        return true;
     }
 }
