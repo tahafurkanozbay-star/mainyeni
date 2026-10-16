@@ -247,9 +247,9 @@ function riskReason(argument: string): string | null {
   // `coordinates: ${mapPoint}` before inspecting object-key syntax.
   if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
   if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(executable)) return 'sensitive-object-key';
-  if (/\[\s*['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*\]/.test(argument)) return 'sensitive-bracket-property';
+  if (hasSensitiveBracketProperty(argument)) return 'sensitive-bracket-property';
   if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(executable)) return 'wrapped-location-value';
-  if (/['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*:/.test(argument)) return 'sensitive-object-key';
+  if (hasSensitiveQuotedObjectField(argument)) return 'sensitive-object-key';
   if (SENSITIVE_PROPERTY.test(executable)) return 'sensitive-property';
   // Object shorthand ({ query }) is equivalent to { query: query }.
   // Mask inert comments/strings first so examples do not cause false findings.
@@ -257,7 +257,7 @@ function riskReason(argument: string): string | null {
   // Preserve the established value-origin reason when an object key is also
   // sensitive; key-only classification is a fallback for nonliteral fields.
   if (SENSITIVE_NESTED_VALUE.test(executable)) return 'nested-sensitive-value';
-  if (SENSITIVE_OBJECT_FIELD.test(executable) || hasSensitiveQuotedObjectField(argument)) return 'sensitive-object-key';
+  if (SENSITIVE_OBJECT_FIELD.test(executable)) return 'sensitive-object-key';
   if (SENSITIVE_RUNTIME_SOURCE.test(executable)) return 'location-or-search-value';
   return null;
 }
