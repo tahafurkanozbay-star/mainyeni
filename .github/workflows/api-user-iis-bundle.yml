@@ -59,7 +59,7 @@ jobs:
           dotnet --info
           $version = dotnet --version
           if ($LASTEXITCODE -ne 0) { throw "dotnet --version failed." }
-          if ($version -notmatch '^10\\.') { throw "Expected .NET 10 SDK but found $version." }
+          if ([int]($version.Split('.')[0]) -ne 10) { throw "Expected .NET 10 SDK but found $version." }
 
       - name: Publish and package only Api.User
         shell: pwsh
