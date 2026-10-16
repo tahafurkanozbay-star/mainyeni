@@ -288,13 +288,7 @@ export const MapWorkspaceShortcutHelpLauncher = () => {
     return () => window.removeEventListener('keydown', onHelpShortcut);
   }, []);
 
-  return (
-    <>
-      <button type="button" className="map-shortcut-help__launcher" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-        <span aria-hidden="true">?</span>
-        <span className="map-shortcut-help__launcher-label">Kısayollar</span>
-      </button>
-      <MapWorkspaceShortcutHelp open={open} onClose={() => setOpen(false)} />
-    </>
-  );
+  // The launcher button is intentionally omitted from the map chrome.
+  // The detailed help remains available through the Shift+? keyboard shortcut.
+  return <MapWorkspaceShortcutHelp open={open} onClose={() => setOpen(false)} />;
 };
