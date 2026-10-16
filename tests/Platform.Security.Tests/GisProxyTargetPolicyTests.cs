@@ -168,4 +168,38 @@ public sealed class GisProxyTargetPolicyTests
         Assert.Throws<ArgumentNullException>(() => GisProxyTargetPolicy.AppendQueryParameter(
             new Uri("https://internal.example.test/arcgis"), "token", null!));
     }
+
+    [Fact]
+    public void SetQueryParameter_ReplacesStaleAndEncodedTokenNamesOnly()
+    {
+        var uri = new Uri(
+            "https://internal.example.test/arcgis?token=stale&f=json&TOKEN=older&%74oken=encoded&tokenized=keep");
+        var result = GisProxyTargetPolicy.SetQueryParameter(uri, "token", "fresh + /?&");
+
+        Assert.Equal(
+            "f=json&tokenized=keep&token=fresh%20%2B%20%2F%3F%26",
+            result.Query.TrimStart('?'));
+    }
+
+    [Fact]
+    public void SetQueryParameter_AddsTokenWhenNoExistingQueryExists()
+    {
+        var result = GisProxyTargetPolicy.SetQueryParameter(
+            new Uri("https://internal.example.test/arcgis"),
+            "token",
+            "fresh-token");
+
+        Assert.Equal("?token=fresh-token", result.Query);
+    }
+
+    [Fact]
+    public void SetQueryParameter_RejectsMissingIdentityAndNullUriOrValue()
+    {
+        Assert.Throws<ArgumentException>(() => GisProxyTargetPolicy.SetQueryParameter(
+            new Uri("https://internal.example.test/arcgis"), "", "value"));
+        Assert.Throws<ArgumentNullException>(() => GisProxyTargetPolicy.SetQueryParameter(
+            null!, "token", "value"));
+        Assert.Throws<ArgumentNullException>(() => GisProxyTargetPolicy.SetQueryParameter(
+            new Uri("https://internal.example.test/arcgis"), "token", null!));
+    }
 }
