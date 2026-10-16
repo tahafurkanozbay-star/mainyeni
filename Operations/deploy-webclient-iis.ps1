@@ -126,9 +126,12 @@ else {
 $backupBase = "C:\inetpub\backups\kentrehberiumit"
 $backupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $backupRoot = Join-Path $backupBase $backupStamp
-$managedEntries = @("index.html", "assets", "images", "fonts", "web.config", ".vite")
-
-$existingEntries = @($managedEntries | Where-Object { Test-Path -LiteralPath (Join-Path $destinationRoot $_) })
+# Back up every existing top-level path that the build will copy over. Never
+# treat the co-located API folder as static client content.
+$buildEntries = @(Get-ChildItem -LiteralPath $buildRoot -Force |
+    Where-Object { -not [string]::Equals($_.Name, "user", [StringComparison]::OrdinalIgnoreCase) } |
+    Select-Object -ExpandProperty Name)
+$existingEntries = @($buildEntries | Where-Object { Test-Path -LiteralPath (Join-Path $destinationRoot $_) })
 if ($existingEntries.Count -gt 0) {
     New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
     foreach ($entry in $existingEntries) {
