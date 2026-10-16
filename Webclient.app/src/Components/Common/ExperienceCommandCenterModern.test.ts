@@ -32,10 +32,9 @@ describe('ExperienceCommandCenterModern catalog', () => {
     expect(filterExperienceCommands(EXPERIENCE_COMMANDS, 'erişilebilirlik merkezi').map(command => command.id))
       .toContain('accessibility-center');
 
-    for (const id of ['help', 'workspace-settings', 'accessibility-center']) {
-      expect(EXPERIENCE_COMMANDS.find(command => command.id === id)?.scopes)
-        .toEqual(['map', 'analysis', 'services', 'help']);
-    }
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.scopes).toEqual(['map', 'help']);
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'workspace-settings')?.scopes).toEqual(['map']);
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'accessibility-center')?.scopes).toEqual(['map']);
     expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.shortcut).toBe('Shift+?');
   });
 });
