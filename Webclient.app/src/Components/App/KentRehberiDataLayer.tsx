@@ -9,7 +9,7 @@ import { createSidebarLayerLoadController } from '../../shell/sidebarLayerLoadCo
 import './KentRehberiDataLayer.css';
 const DATA_LAYER_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
 
-/** Own the primary same-origin data layer independently of panel visibility. */
+/** Own the primary Kent Rehberi data layer independently of panel visibility. */
 export const KentRehberiDataLayer = ({ map }: { readonly map: KentRehberiMapLike }) => {
   const controller = useMemo(() => createSidebarLayerLoadController<KentRehberiLayerHandle>({
     serviceKeys: ['kent-rehberi'],
