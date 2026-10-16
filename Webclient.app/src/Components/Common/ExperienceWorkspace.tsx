@@ -451,6 +451,9 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
           data-viewport={viewport}
           data-online={online ? 'true' : 'false'}
         >
+          <span className="experience-sr-only" role="group" aria-label="Çalışma alanı durumu">
+            {online ? 'Bağlantı normal' : 'Bağlantı kesildi'}
+          </span>
           {mapModeControl}
           {!online ? (
             <p className="experience-sr-only" role="status">
