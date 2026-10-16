@@ -294,4 +294,19 @@ describe('ArcGIS bounded feature snapshot session', () => {
     expect(thrown).toMatchObject({ name: 'ArcGisFeatureSnapshotError', code: 'UNSAFE_OBJECT' });
     expect((thrown as Error).message).not.toContain('secret proxy payload');
   });
+
+  it('does not enumerate discarded response overflow when retaining a bounded prefix', () => {
+    let ownKeysCalls = 0;
+    const input = new Proxy([
+      { attributes: { OBJECTID: 1 } },
+      { attributes: { OBJECTID: 2 } },
+      { attributes: { OBJECTID: 3 } },
+    ], {
+      ownKeys() { ownKeysCalls += 1; throw new Error('overflow must not be enumerated'); },
+    });
+    const page = new ArcGisFeatureSnapshotSession({ maxFeatures: 1 }).capturePage(input, 1, true);
+    expect(page.features).toHaveLength(1);
+    expect(page.truncated).toBe(true);
+    expect(ownKeysCalls).toBe(0);
+  });
 });
