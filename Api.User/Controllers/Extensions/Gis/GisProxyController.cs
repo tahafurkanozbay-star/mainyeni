@@ -87,7 +87,7 @@ namespace CityWorks.UserApi.Gis
                     {
                         return StatusCode(StatusCodes.Status502BadGateway, "GIS service authentication failed.");
                     }
-                    upstreamUri = GisProxyTargetPolicy.AppendQueryParameter(upstreamUri, "token", token);
+                    upstreamUri = GisProxyTargetPolicy.SetQueryParameter(upstreamUri, "token", token);
                 }
 
                 var client = new RestClient(new RestClientOptions
