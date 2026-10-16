@@ -22,10 +22,15 @@ namespace CityWorks.UserApi.Gis
                 "text/html",
                 "application/xhtml+xml",
                 "image/svg+xml",
+                "application/svg+xml",
+                "text/x-html",
                 "text/javascript",
                 "application/javascript",
+                "text/x-javascript",
+                "application/x-javascript",
                 "text/ecmascript",
                 "application/ecmascript",
+                "application/x-ecmascript",
                 "text/css",
                 "text/xml",
                 "application/xml"
@@ -38,6 +43,31 @@ namespace CityWorks.UserApi.Gis
             var mediaType = (separator < 0 ? contentType : contentType.Substring(0, separator))
                 .Trim();
             return ActiveMediaTypes.Contains(mediaType);
+        }
+
+        /// <summary>
+        /// Only pass through explicitly inert text or structured JSON media types.
+        /// Prefix matching (for example application/jsonp) is unsafe because it
+        /// can mislabel executable content as JSON. Unknown types become downloads.
+        /// </summary>
+        public static string NormalizeResponseContentType(string contentType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType))
+                return "application/json; charset=utf-8";
+
+            var separator = contentType.IndexOf(';');
+            var mediaType = (separator < 0 ? contentType : contentType.Substring(0, separator))
+                .Trim();
+
+            var isJson = string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mediaType, "application/json-seq", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mediaType, "application/x-ndjson", StringComparison.OrdinalIgnoreCase)
+                || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
+            var isInertText = string.Equals(mediaType, "text/plain", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mediaType, "text/csv", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mediaType, "text/tab-separated-values", StringComparison.OrdinalIgnoreCase);
+
+            return isJson || isInertText ? contentType : "application/octet-stream";
         }
 
         /// <summary>
