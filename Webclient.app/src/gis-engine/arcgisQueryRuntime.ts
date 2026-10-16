@@ -658,7 +658,12 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
         let responseFeatures: unknown;
         let transferLimit: unknown;
         try {
-          responseError = readArcGisOwnDataProperty(response, 'error').value;
+          const errorField = readArcGisOwnDataProperty(response, 'error');
+          responseError = errorField.value;
+          if (errorField.found && responseError !== null && responseError !== undefined) {
+            // A non-null ArcGIS error must itself be a plain data object.
+            readArcGisOwnDataProperty(responseError, 'message');
+          }
           const featureField = readArcGisOwnDataProperty(response, 'features');
           if (!featureField.found || !Array.isArray(featureField.value)) {
             throw new ArcGisFeatureSnapshotError('INVALID_FEATURES', 'ArcGIS response features must be an array.');
