@@ -35,7 +35,7 @@ export interface ArcGisFeatureSnapshotDiagnostics {
   readonly estimatedBytes: number;
 }
 
-interface NormalizedBudget {
+export interface NormalizedArcGisFeatureSnapshotBudget {
   readonly maxFeatures: number;
   readonly maxPages: number;
   readonly maxNodesPerFeature: number;
@@ -48,7 +48,7 @@ interface NormalizedBudget {
 }
 
 interface TraversalState {
-  readonly budget: NormalizedBudget;
+  readonly budget: NormalizedArcGisFeatureSnapshotBudget;
   readonly committedObjects: WeakSet<object>;
   readonly pendingObjects: WeakSet<object>;
   readonly pendingObjectList: object[];
@@ -70,7 +70,7 @@ export class ArcGisFeatureSnapshotError extends Error {
   }
 }
 
-const DEFAULT_BUDGET: NormalizedBudget = Object.freeze({
+const DEFAULT_BUDGET: NormalizedArcGisFeatureSnapshotBudget = Object.freeze({
   maxFeatures: 100_000,
   maxPages: 10_000,
   maxNodesPerFeature: 200_000,
@@ -90,20 +90,34 @@ function positiveInteger(value: unknown, fallback: number, maximum: number, name
   return value;
 }
 
-function normalizeBudget(input: Partial<ArcGisFeatureSnapshotBudget>): NormalizedBudget {
-  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
-    throw new TypeError('ArcGIS feature snapshot budget must be an object');
+export function normalizeArcGisFeatureSnapshotBudget(
+  input: Partial<ArcGisFeatureSnapshotBudget> = {},
+): NormalizedArcGisFeatureSnapshotBudget {
+  const values: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  const allowed = new Set(Object.keys(DEFAULT_BUDGET));
+  try {
+    if (!plainRecord(input)) throw new Error('invalid-shape');
+    for (const key of Reflect.ownKeys(input)) {
+      if (typeof key !== 'string' || !allowed.has(key)) throw new Error('invalid-key');
+      const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (descriptor === undefined || !descriptor.enumerable || !('value' in descriptor)) {
+        throw new Error('invalid-property');
+      }
+      values[key] = descriptor.value;
+    }
+  } catch {
+    throw new TypeError('ArcGIS feature snapshot budget must contain only known plain data properties.');
   }
   const budget = Object.freeze({
-    maxFeatures: positiveInteger(input.maxFeatures, DEFAULT_BUDGET.maxFeatures, 5_000_000, 'maxFeatures'),
-    maxPages: positiveInteger(input.maxPages, DEFAULT_BUDGET.maxPages, 100_000, 'maxPages'),
-    maxNodesPerFeature: positiveInteger(input.maxNodesPerFeature, DEFAULT_BUDGET.maxNodesPerFeature, 2_000_000, 'maxNodesPerFeature'),
-    maxNodesPerQuery: positiveInteger(input.maxNodesPerQuery, DEFAULT_BUDGET.maxNodesPerQuery, 20_000_000, 'maxNodesPerQuery'),
-    maxBytesPerFeature: positiveInteger(input.maxBytesPerFeature, DEFAULT_BUDGET.maxBytesPerFeature, 128 * 1024 * 1024, 'maxBytesPerFeature'),
-    maxBytesPerQuery: positiveInteger(input.maxBytesPerQuery, DEFAULT_BUDGET.maxBytesPerQuery, 1024 * 1024 * 1024, 'maxBytesPerQuery'),
-    maxStringLength: positiveInteger(input.maxStringLength, DEFAULT_BUDGET.maxStringLength, 4_000_000, 'maxStringLength'),
-    maxKeyLength: positiveInteger(input.maxKeyLength, DEFAULT_BUDGET.maxKeyLength, 4096, 'maxKeyLength'),
-    maxDepth: positiveInteger(input.maxDepth, DEFAULT_BUDGET.maxDepth, 64, 'maxDepth'),
+    maxFeatures: positiveInteger(values.maxFeatures, DEFAULT_BUDGET.maxFeatures, 5_000_000, 'maxFeatures'),
+    maxPages: positiveInteger(values.maxPages, DEFAULT_BUDGET.maxPages, 100_000, 'maxPages'),
+    maxNodesPerFeature: positiveInteger(values.maxNodesPerFeature, DEFAULT_BUDGET.maxNodesPerFeature, 2_000_000, 'maxNodesPerFeature'),
+    maxNodesPerQuery: positiveInteger(values.maxNodesPerQuery, DEFAULT_BUDGET.maxNodesPerQuery, 20_000_000, 'maxNodesPerQuery'),
+    maxBytesPerFeature: positiveInteger(values.maxBytesPerFeature, DEFAULT_BUDGET.maxBytesPerFeature, 128 * 1024 * 1024, 'maxBytesPerFeature'),
+    maxBytesPerQuery: positiveInteger(values.maxBytesPerQuery, DEFAULT_BUDGET.maxBytesPerQuery, 1024 * 1024 * 1024, 'maxBytesPerQuery'),
+    maxStringLength: positiveInteger(values.maxStringLength, DEFAULT_BUDGET.maxStringLength, 4_000_000, 'maxStringLength'),
+    maxKeyLength: positiveInteger(values.maxKeyLength, DEFAULT_BUDGET.maxKeyLength, 4096, 'maxKeyLength'),
+    maxDepth: positiveInteger(values.maxDepth, DEFAULT_BUDGET.maxDepth, 64, 'maxDepth'),
   });
   if (budget.maxNodesPerFeature > budget.maxNodesPerQuery) {
     throw new RangeError('ArcGIS per-feature node budget exceeds query node budget');
@@ -131,15 +145,20 @@ export function readArcGisOwnDataProperty(
   if (typeof key !== 'string' || key.length === 0 || key.length > 256) {
     throw new ArcGisFeatureSnapshotError('INVALID_FIELD', 'ArcGIS response field name is invalid.');
   }
-  if (!plainRecord(input)) {
-    throw new ArcGisFeatureSnapshotError('INVALID_OBJECT', 'ArcGIS response must be a plain data object.');
+  try {
+    if (!plainRecord(input)) {
+      throw new ArcGisFeatureSnapshotError('INVALID_OBJECT', 'ArcGIS response must be a plain data object.');
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(input, key);
+    if (descriptor === undefined) return Object.freeze({ found: false, value: undefined });
+    if (!descriptor.enumerable || !('value' in descriptor)) {
+      throw new ArcGisFeatureSnapshotError('ACCESSOR_PROPERTY', 'ArcGIS response contains a non-data property.');
+    }
+    return Object.freeze({ found: true, value: descriptor.value });
+  } catch (error) {
+    if (error instanceof ArcGisFeatureSnapshotError) throw error;
+    throw new ArcGisFeatureSnapshotError('UNSAFE_OBJECT', 'ArcGIS response contains unsafe object behavior.');
   }
-  const descriptor = Object.getOwnPropertyDescriptor(input, key);
-  if (descriptor === undefined) return Object.freeze({ found: false, value: undefined });
-  if (!descriptor.enumerable || !('value' in descriptor)) {
-    throw new ArcGisFeatureSnapshotError('ACCESSOR_PROPERTY', 'ArcGIS response contains a non-data property.');
-  }
-  return Object.freeze({ found: true, value: descriptor.value });
 }
 
 function consume(state: TraversalState, bytes: number): void {
@@ -260,7 +279,7 @@ export class ArcGisFeatureSnapshotSession {
   private estimatedBytes = 0;
 
   constructor(budget: Partial<ArcGisFeatureSnapshotBudget> = {}) {
-    this.budget = normalizeBudget(budget);
+    this.budget = normalizeArcGisFeatureSnapshotBudget(budget);
   }
 
   capturePage<TFeature extends object>(
