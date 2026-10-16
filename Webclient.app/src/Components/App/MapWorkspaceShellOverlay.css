@@ -235,6 +235,14 @@
 }
 
 @media (max-width: 719px) {
+  /* The expanded service drawer already occupies the compact viewport.
+     Suppress this independent bottom dock while it is open rather than
+     drawing navigation buttons on top of the drawer's own controls. */
+  #app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   .map-workspace-shell-overlay {
     inset-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
     inset-block-end: max(8px, env(safe-area-inset-bottom));
