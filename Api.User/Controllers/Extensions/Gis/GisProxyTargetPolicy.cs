@@ -27,7 +27,9 @@ public static class GisProxyTargetPolicy
 
         var querySeparator = raw.IndexOf('?');
         var targetText = querySeparator >= 0 ? raw.Substring(0, querySeparator) : raw;
-        forwardedQuery = querySeparator >= 0 ? raw.Substring(querySeparator + 1) : string.Empty;
+        var forwardedQueryCandidate = querySeparator >= 0
+            ? raw.Substring(querySeparator + 1)
+            : string.Empty;
 
         if (!Uri.TryCreate(targetText, UriKind.Absolute, out var target) ||
             !string.Equals(target.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
@@ -50,6 +52,7 @@ public static class GisProxyTargetPolicy
 
         publicTarget = target;
         serviceId = hostPrefix;
+        forwardedQuery = forwardedQueryCandidate;
         return true;
     }
 
