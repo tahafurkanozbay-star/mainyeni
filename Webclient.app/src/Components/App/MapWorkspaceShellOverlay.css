@@ -234,10 +234,15 @@
   }
 }
 
-@media (max-width: 719px) {
-  /* The expanded service drawer already occupies the compact viewport.
-     Suppress this independent bottom dock while it is open rather than
-     drawing navigation buttons on top of the drawer's own controls. */
+@media (max-width: 880px) {
+  /* The sidebar rail is 82px on tablets. Do not leave the tablet's expanded
+     width in the shared custom property after the panel collapses. */
+  #app-shell:has(.kr-sidebar.is-collapsed) {
+    --kr-premium-sidebar-width: 82px;
+  }
+
+  /* An expanded drawer owns the compact viewport: keep map docks, utility
+     controls, independent windows and popups from sitting under its buttons. */
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay,
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-workspace,
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility,
@@ -247,16 +252,14 @@
     pointer-events: none;
   }
 
-  /* Query windows are React-managed and set visibility inline, so the
-     compact-sidebar exclusion must deliberately override that inline value. */
+  /* Query windows use inline visibility, so explicitly suppress them while
+     the full-width drawer is open rather than leaving a clickable hidden strip. */
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .common-query-window {
     visibility: hidden !important;
     pointer-events: none;
   }
 
-  /* When a service query is active, keep the collapsed rail visible while
-     giving the query window the remaining viewport instead of hiding its
-     left-side controls underneath the rail. */
+  /* Keep each visible query to the right of the actual collapsed rail. */
   #app-shell:has(.kr-sidebar.is-collapsed) .common-query-window {
     left: calc(var(--kr-premium-sidebar-width, 82px) + 12px);
     right: 8px;
@@ -264,6 +267,20 @@
     max-width: none;
   }
 
+  /* On compact viewports, an open query owns the foreground interaction.
+     Temporarily remove competing controls and map popups; they return when
+     the query is minimized or closed. The query's own header remains usable. */
+  #app-shell:has(.kr-sidebar.is-collapsed):has(.common-query-window[style*="visibility: visible"]) .map-workspace-shell-overlay,
+  #app-shell:has(.kr-sidebar.is-collapsed):has(.common-query-window[style*="visibility: visible"]) .experience-workspace,
+  #app-shell:has(.kr-sidebar.is-collapsed):has(.common-query-window[style*="visibility: visible"]) .experience-utility,
+  #app-shell:has(.kr-sidebar.is-collapsed):has(.common-query-window[style*="visibility: visible"]) .toolbarwidget,
+  #app-shell:has(.kr-sidebar.is-collapsed):has(.common-query-window[style*="visibility: visible"]) .esri-popup {
+    visibility: hidden !important;
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 719px) {
   .map-workspace-shell-overlay {
     inset-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
     /* The workspace and utility controls already occupy the bottom footer

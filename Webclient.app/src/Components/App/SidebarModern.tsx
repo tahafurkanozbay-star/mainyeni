@@ -283,17 +283,17 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     serviceButtonRefs.current.get(target.windowId)?.focus({ preventScroll: true });
   };
 
-  const isCompactViewport = (): boolean =>
-    typeof window !== 'undefined' && window.innerWidth <= 719;
+  const isConstrainedViewport = (): boolean =>
+    typeof window !== 'undefined' && window.innerWidth <= 880;
 
   const openWindow = (windowId: string): void => {
     navigationModel.recordRecent(windowId);
     preferenceStore.saveRecents(navigationModel.getSnapshot().recentIds);
 
-    // A full-width drawer and a query window cannot be used side-by-side on a
-    // phone. Keep the sidebar's rail, then let the query occupy the remaining
-    // width; the responsive CSS restores the query when the rail is collapsed.
-    if (isCompactViewport()) {
+    // A full drawer and a query window cannot be used side-by-side at compact
+    // phone/tablet widths. Keep the visible rail, then give the query the
+    // remaining viewport; responsive CSS coordinates competing fixed surfaces.
+    if (isConstrainedViewport()) {
       navigationModel.setCollapsed(true);
       sidebarToggleRef.current?.focus({ preventScroll: true });
     }
@@ -312,9 +312,9 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     event.preventDefault();
     if (result.activateWindowId !== null) {
       openWindow(result.activateWindowId);
-      // On compact screens openWindow moves focus to the visible sidebar rail
+      // On compact screens, openWindow moves focus to the visible sidebar rail
       // because the selected service button is hidden by the collapsed panel.
-      if (!isCompactViewport()) focusKeyboardTarget(result.focus);
+      if (!isConstrainedViewport()) focusKeyboardTarget(result.focus);
       return;
     }
     focusKeyboardTarget(result.focus);
