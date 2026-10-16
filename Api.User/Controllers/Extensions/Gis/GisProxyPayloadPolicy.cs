@@ -62,7 +62,8 @@ namespace CityWorks.UserApi.Gis
             var isJson = string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(mediaType, "application/json-seq", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(mediaType, "application/x-ndjson", StringComparison.OrdinalIgnoreCase)
-                || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
+                || (mediaType.StartsWith("application/", StringComparison.OrdinalIgnoreCase)
+                    && mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase));
             var isInertText = string.Equals(mediaType, "text/plain", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(mediaType, "text/csv", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(mediaType, "text/tab-separated-values", StringComparison.OrdinalIgnoreCase);
