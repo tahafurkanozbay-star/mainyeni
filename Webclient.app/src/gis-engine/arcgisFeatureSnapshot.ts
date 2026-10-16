@@ -134,6 +134,14 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+export function hasAsciiControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 /**
  * Reads an own data property without evaluating getters or inherited values.
  * Proxy traps are caught by callers at the response boundary.
