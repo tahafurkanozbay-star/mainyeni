@@ -24,8 +24,10 @@ public static class GisProxyTokenEndpointPolicy
 
         var pathSegments = serviceUri.AbsolutePath.Split(
             '/', StringSplitOptions.RemoveEmptyEntries);
-        var usesWebGis = pathSegments.Any(segment =>
-            string.Equals(segment, "webgis", StringComparison.OrdinalIgnoreCase));
+        // Only the root route identifies the portal flavor. A later service/layer
+        // segment named "webgis" must not switch the authentication endpoint.
+        var usesWebGis = pathSegments.Length > 0 &&
+            string.Equals(pathSegments[0], "webgis", StringComparison.OrdinalIgnoreCase);
         var tokenPath = usesWebGis
             ? "/webgis/tokens/generateToken"
             : "/arcgis/tokens/generateToken";
