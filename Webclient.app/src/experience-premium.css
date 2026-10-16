@@ -207,6 +207,8 @@ html[data-experience-theme='dark'] {
 }
 .kr-sidebar__toggle:hover { color: var(--kr-premium-blue); background: color-mix(in srgb, var(--kr-premium-blue) 9%, var(--exp-surface)); border-color: color-mix(in srgb, var(--kr-premium-blue) 28%, var(--exp-border)); }
 .kr-sidebar.is-collapsed { width: 82px; border-radius: 0 16px 16px 0; box-shadow: 5px 0 20px rgba(17, 36, 59, .08); }
+/* Also override the equally-specific expanded width declared at 880px. */
+.sidebar-container.kr-sidebar.is-collapsed { width: 82px; }
 .kr-sidebar.is-collapsed .kr-sidebar__topline { justify-content: center; padding-inline: 10px; }
 .kr-sidebar.is-collapsed .kr-sidebar__title,
 .kr-sidebar.is-collapsed .kr-sidebar__panel { display: none; }
@@ -527,7 +529,7 @@ html[data-experience-theme='dark'] {
   .kr-search-submit { top: 3px; right: 4px; width: 34px; height: 34px; border-radius: 9px; }
   .sidebar-container.kr-sidebar { top: 58px; width: min(358px, calc(100vw - 22px)); height: calc(100dvh - 58px); border-radius: 0 18px 18px 0; }
   .kr-sidebar__topline { min-height: 60px; padding: 9px 10px 8px 14px; }
-  .kr-sidebar.is-collapsed { width: 72px; }
+  .sidebar-container.kr-sidebar.is-collapsed { width: 72px; }
   #app-shell:has(.kr-sidebar.is-collapsed) { --kr-premium-sidebar-width: 72px; }
   .kr-sidebar__groups { padding: 10px; gap: 5px; }
   .kr-sidebar__group { min-height: 58px; padding: 6px; border-radius: 11px; }
