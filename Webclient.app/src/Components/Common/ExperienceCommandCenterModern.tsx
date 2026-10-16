@@ -67,6 +67,8 @@ const CORE_COMMANDS: readonly ExperienceCommand[] = Object.freeze([
   { id: 'sketch', label: 'Çizim aracını aç', group: 'Analiz', description: 'Harita üzerine çizim ekleyin', glyph: 'sketch', target: 'sketch-widget', scopes: ['analysis', 'map'] },
   { id: 'bookmark', label: 'Yer imlerini aç', group: 'Harita', description: 'Kayıtlı konumlara hızlı gidin', glyph: 'bookmark', target: 'bookmark-widget', scopes: ['map'] },
   { id: 'help', label: 'Klavye kısayollarını göster', group: 'Yardım', description: 'Hızlı kullanım rehberini açın', shortcut: '?', glyph: 'help', event: 'help', scopes: ['help'] },
+  { id: 'workspace-settings', label: 'Çalışma alanı ayarlarını aç', group: 'Arayüz', description: 'Tema, yoğunluk ve panel tercihlerini yönetin', glyph: 'service', event: 'settings', scopes: ['help'] },
+  { id: 'accessibility-center', label: 'Erişilebilirlik merkezini aç', group: 'Yardım', description: 'Klavye kullanımı, odak geçişleri ve görsel rehber tercihleri', glyph: 'help', event: 'accessibility', scopes: ['help'] },
 ]);
 
 const GROUP_LABELS = new Map<string, string>(
