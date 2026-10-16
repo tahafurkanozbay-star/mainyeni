@@ -34,7 +34,11 @@ const renderCenter = () => render(
   </WorkspaceAccessibilityProvider>,
 );
 
-const launcher = (): HTMLButtonElement => screen.getByRole('button', { name: /Erişilebilirlik(?:Hazır|Durum izleniyor|Dikkat gerekiyor)/i });
+const openCenter = (): void => {
+  act(() => {
+    window.dispatchEvent(new CustomEvent('kentrehberi:command', { detail: { name: 'accessibility' } }));
+  });
+};
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -52,15 +56,15 @@ afterEach(() => {
 });
 
 describe('WorkspaceAccessibilityCenter integration', () => {
-  it('renders a compact launcher while the center is closed', async () => {
+  it('does not render a persistent accessibility control while the center is closed', () => {
     renderCenter();
-    await waitFor(() => expect(launcher()).toHaveAttribute('aria-expanded', 'false'));
+    expect(screen.queryByRole('button', { name: /Erişilebilirlik(?:Hazır|Durum izleniyor|Dikkat gerekiyor)/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Erişilebilirlik merkezi' })).not.toBeInTheDocument();
   });
 
   it('opens a labelled region with status, focus actions, preferences and usage notes', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const region = await screen.findByRole('region', { name: 'Erişilebilirlik merkezi' });
     expect(region).toBeInTheDocument();
     expect(screen.getByText('Hızlı odak geçişleri')).toBeInTheDocument();
@@ -71,30 +75,30 @@ describe('WorkspaceAccessibilityCenter integration', () => {
 
   it('moves initial focus to the close button when opened', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const close = await screen.findByRole('button', { name: 'Erişilebilirlik merkezini kapat' });
     await waitFor(() => expect(document.activeElement).toBe(close));
   });
 
-  it('closes with Escape and restores focus to the launcher', async () => {
+  it('closes with Escape and restores focus to workspace controls', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     await screen.findByRole('region', { name: 'Erişilebilirlik merkezi' });
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Erişilebilirlik merkezi' })).not.toBeInTheDocument());
-    await waitFor(() => expect(document.activeElement).toBe(launcher()));
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('experience-workspace-controls')));
   });
 
   it('closes from the explicit done control', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     fireEvent.click(await screen.findByRole('button', { name: 'Tamam' }));
-    await waitFor(() => expect(launcher()).toHaveAttribute('aria-expanded', 'false'));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Erişilebilirlik merkezi' })).not.toBeInTheDocument());
   });
 
   it('moves focus to the map through the visible focus action', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const mapAction = await screen.findByRole('button', { name: /Harita.*Harita çalışma yüzeyine geçin/i });
     fireEvent.click(mapAction);
     const map = document.getElementById('esri-map-container');
@@ -104,7 +108,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
 
   it('moves focus to the tools landmark without changing GIS state', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const toolsAction = await screen.findByRole('button', { name: /Araçlar.*Katman ve harita araçları paneline geçin/i });
     fireEvent.click(toolsAction);
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('sidebar')));
@@ -115,7 +119,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
     act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     });
-    fireEvent.click(launcher());
+    openCenter();
     const mapAction = await screen.findByRole('button', { name: /Harita.*Harita çalışma yüzeyine geçin/i });
     fireEvent.click(mapAction);
     const map = document.getElementById('esri-map-container')!;
@@ -134,7 +138,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
 
   it('binds the keyboard-guide visual preference to the app shell', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const checkbox = await screen.findByRole('checkbox', { name: /Klavye rehberini göster/i });
     expect(checkbox).toBeChecked();
     fireEvent.click(checkbox);
@@ -143,7 +147,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
 
   it('persists visual preferences in bounded session storage', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const checkbox = await screen.findByRole('checkbox', { name: /Bağlantı kesilince merkezi aç/i });
     fireEvent.click(checkbox);
     await waitFor(() => expect(sessionStorage.getItem('kentrehberi:workspace-accessibility:v1')).not.toBeNull());
@@ -152,12 +156,12 @@ describe('WorkspaceAccessibilityCenter integration', () => {
 
   it('resets visual preferences without removing live-region infrastructure', async () => {
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     const keyboardGuide = await screen.findByRole('checkbox', { name: /Klavye rehberini göster/i });
     fireEvent.click(keyboardGuide);
     expect(keyboardGuide).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Görsel tercihleri sıfırla' }));
-    await waitFor(() => expect(launcher()).toHaveAttribute('aria-expanded', 'false'));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Erişilebilirlik merkezi' })).not.toBeInTheDocument());
     expect(document.getElementById('app-shell')).toHaveAttribute('data-workspace-keyboard-guide', 'true');
     expect(sessionStorage.getItem('kentrehberi:workspace-accessibility:v1')).toBeNull();
     expect(document.querySelectorAll('.workspace-accessibility-live')).toHaveLength(2);
@@ -189,7 +193,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
     act(() => {
       map.dataset.workspacePhase = 'updating';
     });
-    fireEvent.click(launcher());
+    openCenter();
     await waitFor(() => expect(screen.getByText('Güncelleniyor')).toBeInTheDocument());
   });
 
@@ -207,7 +211,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
         <WorkspaceAccessibilityCenter />
       </WorkspaceAccessibilityProvider>,
     );
-    fireEvent.click(launcher());
+    openCenter();
     await waitFor(() => expect(screen.getByText('Güncelleniyor')).toBeInTheDocument());
   });
 
@@ -217,7 +221,7 @@ describe('WorkspaceAccessibilityCenter integration', () => {
       value: vi.fn((query: string) => createMediaQuery(query.includes('reduced-motion') || query.includes('forced-colors'))),
     });
     renderCenter();
-    fireEvent.click(launcher());
+    openCenter();
     await waitFor(() => expect(screen.getByText('Azaltılmış hareket etkin')).toBeInTheDocument());
     expect(screen.getByText('Zorunlu renkler etkin')).toBeInTheDocument();
   });
@@ -227,6 +231,6 @@ describe('WorkspaceAccessibilityCenter integration', () => {
     const map = document.getElementById('esri-map-container')!;
     map.focus();
     expect(document.activeElement).toBe(map);
-    expect(launcher()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: 'Erişilebilirlik merkezi' })).not.toBeInTheDocument();
   });
 });
