@@ -79,17 +79,16 @@ test('first-push strict lint baseline is ancestry-aware and fails closed to full
   assert.ok(start >= 0 && end > start, 'strict lint workflow step must remain present');
   const step = workflow.slice(start, end);
 
-  const checkoutStart = workflow.indexOf('name: Checkout with ancestry for exact changed-file lint');
-  const checkoutEnd = workflow.indexOf('\n      - name:', checkoutStart);
-  assert.ok(checkoutStart >= 0 && checkoutEnd > checkoutStart, 'checkout ancestry step must remain identifiable');
-  assert.ok(
-    workflow.slice(checkoutStart, checkoutEnd).includes('fetch-depth: 0'),
-    'strict-lint checkout must fetch complete ancestry',
+  const baselineScript = readFileSync(
+    resolve(process.cwd(), 'Webclient.app/scripts/resolve-changed-lint-baseline.sh'),
+    'utf8',
   );
-  assert.match(step, /GITHUB_EVENT_NAME/u);
-  assert.match(step, /git -C \.\. fetch --no-tags origin main/u);
-  assert.match(step, /git -C \.\. merge-base "\$MAIN_SHA" HEAD/u);
-  assert.match(step, /git -C \.\. diff --name-only "\$BASE_SHA" HEAD/u);
-  assert.match(step, /npm run lint:strict --if-present/u);
-  assert.match(step, /No trustworthy ancestry baseline; running full strict lint/u);
+  assert.match(step, /bash scripts\\/resolve-changed-lint-baseline\\.sh "\\$GITHUB_EVENT_NAME" "\\$GITHUB_REF"/u);
+  assert.match(baselineScript, /set -euo pipefail/u);
+  assert.match(baselineScript, /git -C \\.\\. fetch --no-tags --unshallow origin "\\$github_ref"/u);
+  assert.match(baselineScript, /git -C \\.\\. merge-base "\\$main_sha" HEAD/u);
+  assert.match(baselineScript, /git -C \\.\\. merge-base --is-ancestor/u);
+  assert.match(baselineScript, /npm run lint:strict --if-present >&2/u);
+  assert.match(baselineScript, /git -C \\.\\. rev-parse HEAD/u);
+  assert.doesNotMatch(baselineScript, /exit 0|set \\+e|\\|\\| true/u);
 });
