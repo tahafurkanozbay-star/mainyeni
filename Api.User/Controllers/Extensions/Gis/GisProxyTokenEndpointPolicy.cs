@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 
 namespace CityWorks.UserApi.Gis;
 
@@ -24,10 +23,17 @@ public static class GisProxyTokenEndpointPolicy
 
         var pathSegments = serviceUri.AbsolutePath.Split(
             '/', StringSplitOptions.RemoveEmptyEntries);
-        // Only the root route identifies the portal flavor. A later service/layer
-        // segment named "webgis" must not switch the authentication endpoint.
-        var usesWebGis = pathSegments.Length > 0 &&
-            string.Equals(pathSegments[0], "webgis", StringComparison.OrdinalIgnoreCase);
+        // A tenant prefix may precede the WebGIS root, but a "webgis" segment
+        // inside /arcgis/rest/services/<service-name> is only a resource name.
+        var webGisIndex = Array.FindIndex(pathSegments, segment =>
+            string.Equals(segment, "webgis", StringComparison.OrdinalIgnoreCase));
+        var arcGisIndex = Array.FindIndex(pathSegments, segment =>
+            string.Equals(segment, "arcgis", StringComparison.OrdinalIgnoreCase));
+        var restIndex = Array.FindIndex(pathSegments, segment =>
+            string.Equals(segment, "rest", StringComparison.OrdinalIgnoreCase));
+        var usesWebGis = webGisIndex >= 0
+            && (arcGisIndex < 0 || webGisIndex < arcGisIndex)
+            && (restIndex < 0 || webGisIndex < restIndex);
         var tokenPath = usesWebGis
             ? "/webgis/tokens/generateToken"
             : "/arcgis/tokens/generateToken";
