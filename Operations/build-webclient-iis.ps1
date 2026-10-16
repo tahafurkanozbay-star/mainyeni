@@ -49,6 +49,14 @@ function Invoke-NpmChecked {
     }
 }
 
+function Invoke-NodeChecked {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+    & node @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "node $($Arguments -join ' ') başarısız oldu (kod $LASTEXITCODE)."
+    }
+}
+
 function Invoke-NpmDiagnostic {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
     & npm @Arguments
@@ -148,7 +156,7 @@ try {
 
     Write-Host "4/4 - Üretim paketi bütünlüğü ve derleme bütçesi doğrulanıyor..." -ForegroundColor Cyan
     Invoke-NpmChecked -Arguments @("run", "build:verify")
-    Invoke-NpmChecked -Arguments @("exec", "--", "node", "scripts/web-build-budget.mjs", "build", "--strict")
+    Invoke-NodeChecked -Arguments @("scripts/web-build-budget.mjs", "build", "--strict")
 
     $buildRoot = Join-Path $webclientRoot "build"
     $required = @(
