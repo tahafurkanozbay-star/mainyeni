@@ -15,6 +15,8 @@ import './MapWorkspaceShellOverlay.css';
 export interface MapWorkspaceShellOverlayProps {
   readonly phase?: MapWorkspaceShellPhase;
   readonly initialCollapsed?: boolean;
+  /** Keep keyboard landmark navigation active without rendering the visible quick-navigation panel. */
+  readonly headless?: boolean;
 }
 
 const PHASE_LABEL: Readonly<Record<MapWorkspaceShellPhase, string>> = Object.freeze({
@@ -44,7 +46,7 @@ const isWorkspacePhase = (value: string | undefined): value is MapWorkspaceShell
   value === 'booting' || value === 'ready' || value === 'updating' || value === 'error'
 );
 
-export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false }: MapWorkspaceShellOverlayProps) => {
+export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false, headless = false }: MapWorkspaceShellOverlayProps) => {
   const rootRef = useRef<HTMLElement | null>(null);
   const model = useMemo(() => new MapWorkspaceShellModel({
     initialPhase: phase ?? 'booting',
@@ -90,13 +92,15 @@ export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false }: Ma
   }, [model, phase]);
 
   useEffect(() => {
+    if (headless) return;
     const preference = sessionStore.read();
     if (preference) model.setUtilityCollapsed(preference.collapsed);
-  }, [model, sessionStore]);
+  }, [headless, model, sessionStore]);
 
   useEffect(() => {
+    if (headless) return;
     sessionStore.write({ collapsed: snapshot.utilityCollapsed });
-  }, [sessionStore, snapshot.utilityCollapsed]);
+  }, [headless, sessionStore, snapshot.utilityCollapsed]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
@@ -117,12 +121,13 @@ export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false }: Ma
   }, [model]);
 
   useEffect(() => {
+    if (headless) return undefined;
     const root = rootRef.current;
     if (!root || typeof window === 'undefined' || typeof document === 'undefined') return undefined;
     const placement = new MapWorkspaceShellPlacementRuntime(root);
     placement.start();
     return () => placement.dispose();
-  }, []);
+  }, [headless]);
 
   useEffect(() => () => model.dispose(), [model]);
 
@@ -147,6 +152,25 @@ export const MapWorkspaceShellOverlay = ({ phase, initialCollapsed = false }: Ma
     availableLandmarkCount: snapshot.availableLandmarkCount,
   });
   const statusId = 'map-workspace-shell-status';
+
+  if (headless) {
+    return (
+      <div
+        ref={rootRef}
+        className="map-workspace-shell-overlay map-workspace-shell-overlay--headless"
+        data-viewport={snapshot.viewport}
+        data-health={snapshot.healthTone}
+        data-input-modality={snapshot.inputModality}
+        data-coarse-pointer={String(snapshot.coarsePointer)}
+        data-reduced-motion={String(snapshot.reducedMotion)}
+        data-forced-colors={String(snapshot.forcedColors)}
+      >
+        <span className="experience-sr-only" aria-live="polite" aria-atomic="true">
+          {snapshot.announcement}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <aside
