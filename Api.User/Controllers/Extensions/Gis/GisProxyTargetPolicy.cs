@@ -105,6 +105,47 @@ public static class GisProxyTargetPolicy
         return builder.Uri;
     }
 
+    /// <summary>
+    /// Replace all existing instances of a credential parameter before adding
+    /// the fresh server-issued value. This avoids ambiguous duplicate token
+    /// parameters where an upstream server might honor a stale first value.
+    /// </summary>
+    public static Uri SetQueryParameter(Uri uri, string name, string value)
+    {
+        if (uri is null) throw new ArgumentNullException(nameof(uri));
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Query parameter name is required.", nameof(name));
+        if (value is null) throw new ArgumentNullException(nameof(value));
+
+        var builder = new UriBuilder(uri);
+        var existing = builder.Query.TrimStart('?');
+        var retained = existing
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(part =>
+            {
+                var separator = part.IndexOf('=');
+                var encodedName = separator < 0 ? part : part.Substring(0, separator);
+                string decodedName;
+                try
+                {
+                    decodedName = Uri.UnescapeDataString(encodedName);
+                }
+                catch (UriFormatException)
+                {
+                    // A malformed unrelated parameter is preserved rather than
+                    // accidentally deleting data while rotating the token.
+                    return true;
+                }
+
+                return !string.Equals(decodedName, name, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+
+        retained.Add(Uri.EscapeDataString(name) + "=" + Uri.EscapeDataString(value));
+        builder.Query = string.Join("&", retained);
+        return builder.Uri;
+    }
+
     private static bool HasTraversalSegment(string targetText)
     {
         var schemeSeparator = targetText.IndexOf("://", StringComparison.Ordinal);
