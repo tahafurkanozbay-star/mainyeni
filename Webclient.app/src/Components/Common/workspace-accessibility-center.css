@@ -12,12 +12,15 @@
 
 .workspace-accessibility-center {
   position: fixed;
-  inset-inline-end: max(16px, env(safe-area-inset-right));
-  inset-block-end: max(16px, env(safe-area-inset-bottom));
+  inset-inline-start: 50%;
+  inset-inline-end: auto;
+  inset-block-start: max(76px, calc(env(safe-area-inset-top) + 68px));
+  inset-block-end: auto;
   z-index: 1220;
   display: grid;
-  justify-items: end;
+  justify-items: center;
   gap: 10px;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -502,14 +505,17 @@
 
 @media (max-width: 720px) {
   .workspace-accessibility-center {
-    inset-inline: max(10px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-right));
-    inset-block-end: max(10px, env(safe-area-inset-bottom));
-    justify-items: stretch;
+    inset-inline-start: 50%;
+    inset-inline-end: auto;
+    inset-block-start: max(68px, calc(env(safe-area-inset-top) + 60px));
+    inset-block-end: auto;
+    inline-size: calc(100vw - max(20px, env(safe-area-inset-left) + env(safe-area-inset-right)));
+    justify-items: center;
+    transform: translateX(-50%);
   }
 
-  .workspace-accessibility-center__launcher {
-    justify-self: end;
-    min-inline-size: min(210px, 68vw);
+  .workspace-accessibility-center__panel {
+    inline-size: 100%;
   }
 
   .workspace-accessibility-center__panel {
