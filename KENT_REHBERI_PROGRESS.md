@@ -1218,3 +1218,12 @@
 - FIX: reconcile ResizeObserver targets on each scheduled placement refresh. Newly added occluders are observed, removed ones are unobserved, and dispose clears all tracked targets.
 - REGRESSION COVERAGE: add a deterministic observer test proving late query-window registration, resize-triggered refresh, removal cleanup and dispose cleanup.
 - SAFETY / SCOPE: placement runtime, its focused tests and this progress note only. No GIS endpoints, spatial data, API, database, authentication or deployment configuration changed.
+
+
+## Repository hygiene / stale artifact cleanup — 2026-10-16
+- REVIEW: inspected the solution/project references, application manifests, admin and GIS CI workflows, and the two web-client entrypoints before considering deletions.
+- ADMIN DECISION: keep `Webclient.admin`. It is an independently built Vite SPA with management routes and its own active quality workflow; `Api.Admin` also remains in the .NET solution and backend publish pipeline.
+- REMOVED: orphaned root `package-lock.json` (there is no root `package.json` or root npm app), four 2023 exception-log dumps under `Api.User/_docs/logs/`, and an obsolete duplicate `Api.User/_docs/user.api.xml` that predates the current generated `Api.User/user.api.xml`. The old dumps retained a local Windows source path and an obsolete database failure, and were not build inputs.
+- CLEANUP: replace the empty root README and outdated Create React App boilerplate in the admin README with current project layout, app purpose, and verification commands; ignore the retired `Api.User/_docs/` artifact directory to prevent reintroducing generated logs.
+- PRESERVED: progress archives, data/config inputs, backend projects, both active web clients, and standalone GIS sources whose future intent could not be ruled out by build/reference evidence alone.
+- VALIDATION: run exact-head admin, backend, Webclient, repository architecture and release checks before merge. No application/API behavior, endpoints, GIS data, database or deployment settings are changed.
