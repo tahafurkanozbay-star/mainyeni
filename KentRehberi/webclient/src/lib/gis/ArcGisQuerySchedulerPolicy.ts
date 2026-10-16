@@ -10,6 +10,8 @@ export interface ArcGisQuerySchedulerBudget {
   readonly maxRunMs: number
   readonly maxLayerIdLength: number
   readonly maxRequestIdLength: number
+  /** Maximum retained layer revision floors (default 4,096). */
+  readonly maxTrackedRevisionLayers?: number
 }
 
 export interface ArcGisQueryAdmission {
@@ -41,8 +43,11 @@ function integer(value: number, name: string, min: number, max: number): number 
 }
 
 function text(value: string, name: string, maxLength: number): string {
+  // Validate original input before trim(), which otherwise erases leading or
+  // trailing ASCII controls and aliases distinct service/query identities.
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`invalid-${name}`)
   const normalized = value.trim()
-  if (!normalized || normalized.length > maxLength || /[\u0000-\u001f\u007f]/.test(normalized)) throw new Error(`invalid-${name}`)
+  if (!normalized || normalized.length > maxLength) throw new Error(`invalid-${name}`)
   return normalized
 }
 
@@ -61,12 +66,19 @@ function priority(value: ArcGisQueryPriority): ArcGisQueryPriority {
  */
 export class ArcGisQuerySchedulerPolicy {
   private readonly budget: Readonly<ArcGisQuerySchedulerBudget>
+  private readonly revisionFloors = new Map<string, number>()
+  private readonly maxTrackedRevisionLayers: number
   private readonly queued = new Map<string, ArcGisQueryAdmission>()
   private readonly running = new Map<string, ArcGisQueryLease>()
   private runningBytes = 0
+  // Never allow a clock rollback to resurrect completed/expired query work.
+  private lastObservedMs = 0
   private disposed = false
 
   constructor(budget: ArcGisQuerySchedulerBudget) {
+    this.maxTrackedRevisionLayers = integer(
+      budget.maxTrackedRevisionLayers ?? 4_096, 'maxTrackedRevisionLayers', 1, 100_000,
+    )
     this.budget = Object.freeze({
       maxQueued: integer(budget.maxQueued, 'maxQueued', 1, 100_000),
       maxRunning: integer(budget.maxRunning, 'maxRunning', 1, 10_000),
@@ -99,6 +111,7 @@ export class ArcGisQuerySchedulerPolicy {
     const nowMs = integer(input.nowMs, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
     const waitMs = integer(input.waitMs, 'waitMs', 1, this.budget.maxWaitMs)
     if (nowMs > Number.MAX_SAFE_INTEGER - waitMs) throw new Error('query-deadline-overflow')
+    if (revision < (this.revisionFloors.get(layerId) ?? 0)) throw new Error('stale-query-revision')
     if (this.queued.has(requestId) || this.running.has(requestId)) throw new Error('duplicate-query-request')
     if (this.queued.size >= this.budget.maxQueued) throw new Error('query-queue-budget-exceeded')
     const admission = Object.freeze({ requestId, layerId, revision, priority: priority(input.priority), estimatedResponseBytes, enqueuedAtMs: nowMs, deadlineAtMs: nowMs + waitMs })
@@ -114,11 +127,13 @@ export class ArcGisQuerySchedulerPolicy {
 
   startNext(nowMsInput: number): ArcGisQueryLease | undefined {
     this.assertLive()
-    const nowMs = integer(nowMsInput, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
+    const nowMs = this.observeClock(nowMsInput)
+    // Fail before mutating queue or running state on impossible lease deadlines.
+    if (nowMs > Number.MAX_SAFE_INTEGER - this.budget.maxRunMs) throw new Error('query-lease-overflow')
     this.pruneExpiredQueued(nowMs)
     this.expireRunning(nowMs)
     if (this.running.size >= this.budget.maxRunning) return undefined
-    const candidates = [...this.queued.values()].sort((a, b) =>
+    const candidates = Array.from(this.queued.values()).sort((a, b) =>
       PRIORITY[a.priority] - PRIORITY[b.priority] ||
       a.deadlineAtMs - b.deadlineAtMs ||
       a.enqueuedAtMs - b.enqueuedAtMs ||
@@ -126,9 +141,10 @@ export class ArcGisQuerySchedulerPolicy {
       a.layerId.localeCompare(b.layerId),
     )
     for (const candidate of candidates) {
+      // A higher-priority future request must not bypass its actual enqueue time.
+      if (candidate.enqueuedAtMs > nowMs) continue
       if (this.runningForLayer(candidate.layerId) >= this.budget.maxPerLayerRunning) continue
       if (this.runningBytes + candidate.estimatedResponseBytes > this.budget.maxAggregateRunningBytes) continue
-      if (nowMs > Number.MAX_SAFE_INTEGER - this.budget.maxRunMs) throw new Error('query-lease-overflow')
       this.queued.delete(candidate.requestId)
       const lease = Object.freeze({ ...candidate, startedAtMs: nowMs, expiresAtMs: nowMs + this.budget.maxRunMs })
       this.running.set(lease.requestId, lease)
@@ -162,12 +178,19 @@ export class ArcGisQuerySchedulerPolicy {
     this.assertLive()
     const layerId = text(layerIdInput, 'layer-id', this.budget.maxLayerIdLength)
     const minimumRevision = integer(minimumRevisionInput, 'minimumRevision', 0, Number.MAX_SAFE_INTEGER)
-    let removed = 0
-    for (const admission of [...this.queued.values()]) {
-      if (admission.layerId === layerId && admission.revision < minimumRevision && this.queued.delete(admission.requestId)) removed += 1
+    const floor = Math.max(minimumRevision, this.revisionFloors.get(layerId) ?? 0)
+    if (floor > 0 && !this.revisionFloors.has(layerId)) {
+      if (this.revisionFloors.size >= this.maxTrackedRevisionLayers) {
+        throw new Error('query-revision-layer-budget-exceeded')
+      }
     }
-    for (const lease of [...this.running.values()]) {
-      if (lease.layerId === layerId && lease.revision < minimumRevision) {
+    if (floor > 0) this.revisionFloors.set(layerId, floor)
+    let removed = 0
+    for (const admission of this.queued.values()) {
+      if (admission.layerId === layerId && admission.revision < floor && this.queued.delete(admission.requestId)) removed += 1
+    }
+    for (const lease of this.running.values()) {
+      if (lease.layerId === layerId && lease.revision < floor) {
         this.release(lease)
         removed += 1
       }
@@ -175,16 +198,34 @@ export class ArcGisQuerySchedulerPolicy {
     return removed
   }
 
+  /** Release all transport-independent bookkeeping for a removed layer. */
+  releaseLayer(layerIdInput: string): number {
+    this.assertLive()
+    const layerId = text(layerIdInput, 'layer-id', this.budget.maxLayerIdLength)
+    let removed = 0
+    for (const admission of this.queued.values()) {
+      if (admission.layerId === layerId && this.queued.delete(admission.requestId)) removed += 1
+    }
+    for (const lease of this.running.values()) {
+      if (lease.layerId === layerId) {
+        this.release(lease)
+        removed += 1
+      }
+    }
+    this.revisionFloors.delete(layerId)
+    return removed
+  }
+
   tick(nowMsInput: number): { readonly queuedExpired: number; readonly runningExpired: number } {
     this.assertLive()
-    const nowMs = integer(nowMsInput, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
+    const nowMs = this.observeClock(nowMsInput)
     return Object.freeze({ queuedExpired: this.pruneExpiredQueued(nowMs), runningExpired: this.expireRunning(nowMs) })
   }
 
   snapshot(): ArcGisQuerySchedulerSnapshot {
     this.assertLive()
-    const queued = [...this.queued.values()].sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority] || a.deadlineAtMs - b.deadlineAtMs || a.requestId.localeCompare(b.requestId))
-    const running = [...this.running.values()].sort((a, b) => a.startedAtMs - b.startedAtMs || a.requestId.localeCompare(b.requestId))
+    const queued = Array.from(this.queued.values()).sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority] || a.deadlineAtMs - b.deadlineAtMs || a.requestId.localeCompare(b.requestId))
+    const running = Array.from(this.running.values()).sort((a, b) => a.startedAtMs - b.startedAtMs || a.requestId.localeCompare(b.requestId))
     return Object.freeze({ queued: Object.freeze(queued), running: Object.freeze(running), runningBytes: this.runningBytes })
   }
 
@@ -193,7 +234,15 @@ export class ArcGisQuerySchedulerPolicy {
     this.disposed = true
     this.queued.clear()
     this.running.clear()
+    this.revisionFloors.clear()
     this.runningBytes = 0
+    this.lastObservedMs = 0
+  }
+
+  private observeClock(nowMsInput: number): number {
+    const observed = integer(nowMsInput, 'nowMs', 0, Number.MAX_SAFE_INTEGER)
+    this.lastObservedMs = Math.max(this.lastObservedMs, observed)
+    return this.lastObservedMs
   }
 
   private runningForLayer(layerId: string): number {
@@ -204,13 +253,13 @@ export class ArcGisQuerySchedulerPolicy {
 
   private pruneExpiredQueued(nowMs: number): number {
     let removed = 0
-    for (const admission of [...this.queued.values()]) if (admission.deadlineAtMs <= nowMs && this.queued.delete(admission.requestId)) removed += 1
+    for (const admission of this.queued.values()) if (admission.deadlineAtMs <= nowMs && this.queued.delete(admission.requestId)) removed += 1
     return removed
   }
 
   private expireRunning(nowMs: number): number {
     let removed = 0
-    for (const lease of [...this.running.values()]) if (lease.expiresAtMs <= nowMs) { this.release(lease); removed += 1 }
+    for (const lease of this.running.values()) if (lease.expiresAtMs <= nowMs) { this.release(lease); removed += 1 }
     return removed
   }
 
