@@ -46,8 +46,11 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(premium).toContain('height: calc(100dvh - 62px);');
     expect(premium).toContain('height: calc(100dvh - 58px);');
     expect(premium).toContain('.sidebar-container.kr-sidebar.is-collapsed { width: 72px; }');
+    const tabletRail = ruleBlock(shell, '@media (max-width: 880px) and (min-width: 720px) {', '@media (max-width: 880px) {');
+    expect(tabletRail).toContain('--kr-premium-sidebar-width: 82px;');
+
     const constrained = ruleBlock(shell, '@media (max-width: 880px) {', '@media (max-width: 719px) {');
-    expect(constrained).toContain('--kr-premium-sidebar-width: 82px;');
+    expect(constrained).not.toContain('--kr-premium-sidebar-width: 82px;');
     expect(constrained).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay');
     expect(constrained).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-workspace');
     expect(constrained).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility');

@@ -234,13 +234,14 @@
   }
 }
 
-@media (max-width: 880px) {
-  /* The sidebar rail is 82px on tablets. Do not leave the tablet's expanded
-     width in the shared custom property after the panel collapses. */
+@media (max-width: 880px) and (min-width: 720px) {
+  /* The tablet rail is 82px; do not overwrite the phone's 72px override. */
   #app-shell:has(.kr-sidebar.is-collapsed) {
     --kr-premium-sidebar-width: 82px;
   }
+}
 
+@media (max-width: 880px) {
   /* An expanded drawer owns the compact viewport: keep map docks, utility
      controls, independent windows and popups from sitting under its buttons. */
   #app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay,
