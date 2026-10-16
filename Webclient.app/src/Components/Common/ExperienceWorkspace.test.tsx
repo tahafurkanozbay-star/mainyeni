@@ -52,8 +52,16 @@ describe("ExperienceWorkspace", () => {
         render(<ExperienceWorkspace />);
         expect(screen.getByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri")).toBeInTheDocument();
         expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimiçi");
+        expect(screen.queryByRole("button", { name: /Komutlar|Deneyim ayarları/i })).not.toBeInTheDocument();
         expect(screen.getByRole("button", { name: /2 boyutlu harita, etkin/i })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: /3 boyutlu sahne/i })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    test("keeps an externally supplied 2D/3D control outside the fixed status dock", () => {
+        render(<ExperienceWorkspace mapModeControl={<div data-testid="external-map-mode">2B / 3B</div>} />);
+        const modeControl = screen.getByTestId("external-map-mode");
+        expect(modeControl.closest(".experience-workspace")).toBeNull();
+        expect(modeControl.closest(".experience-map-mode-anchor")).toHaveAttribute("id", "experience-workspace-controls");
     });
 
     test("dispatches a map-mode command instead of mutating GIS state directly", () => {
