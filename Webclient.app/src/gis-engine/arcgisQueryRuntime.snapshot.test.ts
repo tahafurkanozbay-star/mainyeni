@@ -612,4 +612,17 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     permissive.destroy();
     restrictive.destroy();
   });
+
+  it('rejects a malformed non-object ArcGIS error envelope instead of ignoring it', async () => {
+    const runtime = createArcGisQueryRuntime(async () => ({
+      error: 'upstream error must not be ignored',
+      features: [feature(1)],
+      exceededTransferLimit: false,
+    } as unknown as ArcGisQueryResponse), { queryLimits: limits });
+    await expect(runtime.execute(metadata(), request)).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError', code: 'INVALID_QUERY_RESPONSE',
+    });
+    expect(runtime.snapshot().cacheEntries).toBe(0);
+    runtime.destroy();
+  });
 });
