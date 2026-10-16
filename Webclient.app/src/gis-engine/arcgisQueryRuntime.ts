@@ -185,15 +185,21 @@ const ownDataValue = (value: unknown, key: string): unknown => {
   }
 };
 
+const sanitizeArcGisDiagnosticText = (value: string): string => value
+  .replace(/(^|[?&\s,{;])(["']?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|apikey|client[_-]?secret|password|authorization|cookie)["']?\s*[:=]\s*["']?)[^"'&,\s}\]]+/giu, '$1$2[redacted]')
+  .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}/giu, 'Bearer [redacted]')
+  .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/gu, '[redacted-token]')
+  .slice(0, 2048);
+
 const arcgisErrorMessage = (value: unknown): string | null => {
   try {
     if (!isRecord(value)) return null;
     const rawMessage = ownDataValue(value, 'message');
-    const message = typeof rawMessage === 'string' ? rawMessage.trim().slice(0, 2048) : '';
+    const message = typeof rawMessage === 'string' ? sanitizeArcGisDiagnosticText(rawMessage.trim()) : '';
     const rawDetails = ownDataValue(value, 'details');
     const details = Array.isArray(rawDetails)
       ? rawDetails.filter((entry): entry is string => typeof entry === 'string').slice(0, 16)
-        .map((entry) => entry.slice(0, 1024)).join(' ')
+        .map((entry) => sanitizeArcGisDiagnosticText(entry.slice(0, 1024))).join(' ')
       : '';
     return [message, details].filter(Boolean).join(' ') || 'ArcGIS service returned an error object.';
   } catch {
@@ -608,10 +614,10 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
           continue;
         }
         throw new ArcGisQueryRuntimeError(
-          error instanceof Error ? error.message : 'ArcGIS transport failed.',
+          sanitizeArcGisDiagnosticText(error instanceof Error ? error.message : 'ArcGIS transport failed.'),
           'TRANSPORT_ERROR',
           metadata.resourceUrl,
-          { cause: error, pageIndex },
+          { pageIndex },
         );
       }
     }
