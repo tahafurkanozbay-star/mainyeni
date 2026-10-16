@@ -2,7 +2,6 @@ import {
   useEffect,
   useId,
   useRef,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import { useWorkspaceAccessibility } from './WorkspaceAccessibilityProvider';
@@ -51,9 +50,18 @@ export const WorkspaceAccessibilityCenter = (): ReactNode => {
   const panelId = useId();
   const headingId = useId();
   const descriptionId = useId();
-  const launcherRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const open = preferences.showStatusCenter;
+
+  useEffect(() => {
+    const onCommand = (event: Event): void => {
+      const detail = (event as CustomEvent<{ readonly name?: unknown }>).detail;
+      if (detail?.name === 'accessibility') updatePreferences({ showStatusCenter: true });
+    };
+    window.addEventListener('kentrehberi:command', onCommand);
+    return () => window.removeEventListener('kentrehberi:command', onCommand);
+  }, [updatePreferences]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -61,16 +69,19 @@ export const WorkspaceAccessibilityCenter = (): ReactNode => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      updatePreferences({ showStatusCenter: false });
-      requestAnimationFrame(() => launcherRef.current?.focus({ preventScroll: true }));
+      close();
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [open, updatePreferences]);
 
   const close = (): void => {
+    const restoreFocus = panelRef.current?.contains(document.activeElement) ?? false;
     updatePreferences({ showStatusCenter: false });
-    requestAnimationFrame(() => launcherRef.current?.focus({ preventScroll: true }));
+    if (!restoreFocus) return;
+    requestAnimationFrame(() => {
+      document.getElementById('experience-workspace-controls')?.focus({ preventScroll: true });
+    });
   };
 
   const handleFocusAction = (zone: WorkspaceFocusZone): void => {
@@ -78,24 +89,10 @@ export const WorkspaceAccessibilityCenter = (): ReactNode => {
     if (moved) close();
   };
 
-  const onLauncherKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>): void => {
-    if (event.key !== 'ArrowUp' && event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    updatePreferences({ showStatusCenter: true });
-  };
-
   return (
     <div className="workspace-accessibility-center" data-open={String(open)} data-online={String(snapshot.accessibility.online)} data-busy={String(snapshot.accessibility.mapBusy)} data-modality={snapshot.accessibility.modality}>
-      <button ref={launcherRef} type="button" className="workspace-accessibility-center__launcher" aria-expanded={open} aria-controls={panelId} onClick={() => updatePreferences({ showStatusCenter: !open })} onKeyDown={onLauncherKeyDown}>
-        <span className="workspace-accessibility-center__launcher-copy">
-          <strong>Erişilebilirlik</strong>
-          <span>{status.hasCriticalIssue ? 'Dikkat gerekiyor' : status.hasAttentionIssue ? 'Durum izleniyor' : 'Hazır'}</span>
-        </span>
-        <span className="workspace-accessibility-center__launcher-indicator" data-tone={status.hasCriticalIssue ? 'critical' : status.hasAttentionIssue ? 'attention' : 'positive'} aria-hidden="true" />
-      </button>
-
       {open && (
-        <aside id={panelId} className="workspace-accessibility-center__panel" role="region" aria-labelledby={headingId} aria-describedby={descriptionId}>
+        <aside ref={panelRef} id={panelId} className="workspace-accessibility-center__panel" role="region" aria-labelledby={headingId} aria-describedby={descriptionId}>
           <header className="workspace-accessibility-center__header">
             <div>
               <p className="workspace-accessibility-center__eyebrow">Çalışma alanı erişimi</p>
