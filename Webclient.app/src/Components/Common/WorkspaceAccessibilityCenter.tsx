@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -54,6 +55,15 @@ export const WorkspaceAccessibilityCenter = (): ReactNode => {
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const open = preferences.showStatusCenter;
 
+  const close = useCallback((): void => {
+    const restoreFocus = panelRef.current?.contains(document.activeElement) ?? false;
+    updatePreferences({ showStatusCenter: false });
+    if (!restoreFocus) return;
+    requestAnimationFrame(() => {
+      document.getElementById('experience-workspace-controls')?.focus({ preventScroll: true });
+    });
+  }, [updatePreferences]);
+
   useEffect(() => {
     const onCommand = (event: Event): void => {
       const detail = (event as CustomEvent<{ readonly name?: unknown }>).detail;
@@ -73,16 +83,7 @@ export const WorkspaceAccessibilityCenter = (): ReactNode => {
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [open, updatePreferences]);
-
-  const close = (): void => {
-    const restoreFocus = panelRef.current?.contains(document.activeElement) ?? false;
-    updatePreferences({ showStatusCenter: false });
-    if (!restoreFocus) return;
-    requestAnimationFrame(() => {
-      document.getElementById('experience-workspace-controls')?.focus({ preventScroll: true });
-    });
-  };
+  }, [close, open]);
 
   const handleFocusAction = (zone: WorkspaceFocusZone): void => {
     const moved = focusZone(zone, 'landmark-cycle');
