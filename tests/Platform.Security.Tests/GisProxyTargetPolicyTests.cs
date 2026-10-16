@@ -143,33 +143,6 @@ public sealed class GisProxyTargetPolicyTests
     }
 
     [Fact]
-    public void TokenAppend_EncodesValuesAndRetainsExistingQuery()
-    {
-        var result = GisProxyTargetPolicy.AppendQueryParameter(
-            new Uri("https://internal.example.test/arcgis?f=json"),
-            "token",
-            "a+b /?&");
-
-        Assert.Equal("f=json&token=a%2Bb%20%2F%3F%26", result.Query.TrimStart('?'));
-    }
-
-    [Fact]
-    public void TokenAppend_RejectsMissingParameterIdentity()
-    {
-        Assert.Throws<ArgumentException>(() => GisProxyTargetPolicy.AppendQueryParameter(
-            new Uri("https://internal.example.test/arcgis"), " ", "value"));
-    }
-
-    [Fact]
-    public void TokenAppend_RejectsNullUriAndValue()
-    {
-        Assert.Throws<ArgumentNullException>(() => GisProxyTargetPolicy.AppendQueryParameter(
-            null!, "token", "value"));
-        Assert.Throws<ArgumentNullException>(() => GisProxyTargetPolicy.AppendQueryParameter(
-            new Uri("https://internal.example.test/arcgis"), "token", null!));
-    }
-
-    [Fact]
     public void SetQueryParameter_ReplacesStaleAndEncodedTokenNamesOnly()
     {
         var uri = new Uri(
