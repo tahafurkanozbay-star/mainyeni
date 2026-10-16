@@ -38,8 +38,11 @@ describe('map tool, bottom dock and fixed panel collision contracts', () => {
     expect(premium).toContain('.sidebar-container.kr-sidebar.is-collapsed { width: 72px; }');
     const compact = ruleBlock(shell, '@media (max-width: 719px) {', '@media (max-width: 420px) {');
     expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .map-workspace-shell-overlay');
+    expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-workspace');
+    expect(compact).toContain('#app-shell:has(.kr-sidebar:not(.is-collapsed)) .experience-utility');
     expect(compact).toContain('visibility: hidden;');
     expect(compact).toContain('pointer-events: none;');
+    expect(compact).toContain('inset-block-end: calc(5rem + env(safe-area-inset-bottom));');
   });
 
   it('keeps a visible keyboard focus indicator on sidebar search inputs', () => {
