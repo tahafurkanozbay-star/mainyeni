@@ -27,15 +27,10 @@ const ensureServiceResult = <TData>(result: unknown): ServiceResult<TData> => {
   });
 };
 
-const publicBootstrapOptions = (
-  options: ConfigurationRequestOptions = {},
-): ConfigurationRequestOptions => ({
-  ...options,
-  cache: true,
-  dedupe: !options.signal,
-  cacheTtlMs: options.cacheTtlMs ?? 120_000,
-  ...(localBootstrapPreviewEnabled ? { timeout: options.timeout ?? 3_000, maxRetries: 0 } : {}),
-});
+export const resolvePublicMapOnlyMode = (configured: unknown): boolean => {
+  const normalized = String(configured ?? '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on', 'enabled'].includes(normalized);
+};
 
 export const resolveLocalBootstrapPreviewEnabled = (
   dev: unknown,
@@ -53,21 +48,48 @@ export const resolveLocalBootstrapPreviewEnabled = (
   return !['0', 'false', 'no', 'off', 'disabled'].includes(normalizedSetting);
 };
 
+const publicMapOnlyMode = resolvePublicMapOnlyMode(import.meta.env.VITE_PUBLIC_MAP_ONLY_MODE);
+
 const localBootstrapPreviewEnabled = resolveLocalBootstrapPreviewEnabled(
   import.meta.env.DEV,
   import.meta.env.MODE,
   import.meta.env.VITE_LOCAL_BOOTSTRAP_PREVIEW,
 );
 
-const localPreviewMapConfiguration = Object.freeze({
+const publicMapOnlyConfiguration = Object.freeze({
   Centerx: 32.854,
   Centery: 39.92,
   Zoom: 12,
 });
 
+const publicMapOnlyMapResult = (): ServiceResult<MapConfigurationPayload> => ({
+  isSuccess: true,
+  data: { configValue: JSON.stringify(publicMapOnlyConfiguration) },
+});
+
+const publicMapOnlyServicesResult = (): ServiceResult<readonly unknown[]> => ({
+  isSuccess: true,
+  data: [],
+});
+
+const publicBootstrapOptions = (
+  options: ConfigurationRequestOptions = {},
+): ConfigurationRequestOptions => ({
+  ...options,
+  cache: true,
+  dedupe: !options.signal,
+  cacheTtlMs: options.cacheTtlMs ?? 120_000,
+  ...(localBootstrapPreviewEnabled ? { timeout: options.timeout ?? 3_000, maxRetries: 0 } : {}),
+});
+
 const getMapConfiguration = async (
   options: ConfigurationRequestOptions = {},
 ): Promise<ServiceResult<MapConfigurationPayload>> => {
+  if (publicMapOnlyMode) {
+    options.signal?.throwIfAborted();
+    return publicMapOnlyMapResult();
+  }
+
   try {
     const result = ensureServiceResult<MapConfigurationPayload>(await apiClient.get<unknown>('/AppSettings/List', {
       ...publicBootstrapOptions(options),
@@ -79,7 +101,7 @@ const getMapConfiguration = async (
     if (!localBootstrapPreviewEnabled || options.signal?.aborted) throw error;
     return {
       isSuccess: true,
-      data: { configValue: JSON.stringify(localPreviewMapConfiguration) },
+      data: { configValue: JSON.stringify(publicMapOnlyConfiguration) },
     };
   }
 };
@@ -87,6 +109,11 @@ const getMapConfiguration = async (
 const getConfigServices = async (
   options: ConfigurationRequestOptions = {},
 ): Promise<ServiceResult<readonly unknown[]>> => {
+  if (publicMapOnlyMode) {
+    options.signal?.throwIfAborted();
+    return publicMapOnlyServicesResult();
+  }
+
   try {
     const result = ensureServiceResult<readonly unknown[]>(await apiClient.get<unknown>(
       '/Gis/ConfigService/List',
@@ -104,3 +131,4 @@ export const ConfigurationBusiness = Object.freeze({
   GetMapConfiguration: getMapConfiguration,
   GetConfigServices: getConfigServices,
 });
+
