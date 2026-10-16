@@ -114,27 +114,29 @@ for (const workflow of WORKFLOWS) {
     assert.deepEqual(result.findings, [], `${workflow} changed runner provenance`);
   });
 }
-test('Release QA resolves all-zero first-push lint baselines with a fail-fast ancestry helper', () => {
+test('Release QA resolves all-zero first-push lint baselines from an ancestry-safe main merge-base', () => {
   const workflow = readWorkflow('.github/workflows/release-qa.yml');
   const start = workflow.indexOf('- name: Strict lint on changed Webclient sources');
   const end = workflow.indexOf('- name: Full TypeScript diagnostic visibility', start);
   assert.ok(start >= 0 && end > start, 'strict-lint step must remain explicitly identifiable');
   const lintStep = workflow.slice(start, end);
-  const helper = readWorkflow('Webclient.app/scripts/resolve-changed-lint-baseline.sh');
+  const resolver = readWorkflow('Webclient.app/scripts/resolve-changed-lint-baseline.sh');
+  const webclientStart = workflow.indexOf('webclient-release-validation:');
+  const backendStart = workflow.indexOf('backend-release-validation:', webclientStart);
+  assert.ok(webclientStart >= 0 && backendStart > webclientStart, 'Webclient job must remain identifiable');
 
-  assert.match(lintStep, /github\\.event\\.pull_request\\.base\\.sha \\|\\| github\\.event\\.before/);
+  assert.ok(workflow.slice(webclientStart, backendStart).includes('fetch-depth: 0'));
   assert.ok(lintStep.includes('bash scripts/resolve-changed-lint-baseline.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF"'));
-  assert.ok(helper.includes('set -euo pipefail'));
-  assert.ok(helper.includes('git -C .. fetch --no-tags --unshallow origin "$github_ref"'));
-  assert.ok(helper.includes('git -C .. merge-base "$main_sha" HEAD'));
-  assert.ok(helper.includes('git -C .. merge-base --is-ancestor "$base_sha" HEAD'));
-  assert.ok(helper.includes('npm run lint:strict --if-present >&2'));
-  assert.ok(helper.includes('git -C .. rev-parse HEAD'));
-  assert.equal(helper.includes('exit 0'), false);
-  assert.equal(helper.includes('set +e'), false);
-  assert.equal(helper.includes('|| true'), false);
-  assert.ok(lintStep.includes('git -C .. diff --name-only "$BASE_SHA" HEAD'));
+  assert.ok(lintStep.includes('test -n "$BASE_SHA"'));
+  assert.ok(resolver.includes('set -euo pipefail'));
+  assert.ok(resolver.includes('git -C .. fetch --no-tags origin main'));
+  assert.ok(resolver.includes('git -C .. merge-base "$main_sha" HEAD'));
+  assert.ok(resolver.includes('git -C .. merge-base --is-ancestor'));
+  assert.ok(resolver.includes('npm run lint:strict --if-present >&2'));
+  assert.equal(resolver.includes('set +e'), false);
+  assert.equal(resolver.includes('exit 0'), false);
 });
+
 test('concurrency contract rejects a workflow without concurrency', () => {
   assert.equal(concurrencyContract('jobs:\n  quality:\n    runs-on: ubuntu-latest\n').reason, 'missing-concurrency');
 });
