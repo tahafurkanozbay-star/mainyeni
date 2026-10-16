@@ -168,6 +168,73 @@ function findClientLogCalls(text: string): readonly ClientLogCall[] {
   return calls;
 }
 
+
+const SENSITIVE_OBJECT_FIELD_NAME = /^(?:query|path|params|payload|record|item|selection|address|adres|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)$/i;
+const SENSITIVE_BRACKET_FIELD_NAME = /^(?:address|adres|latitude|longitude|coordinates|mahalle)$/i;
+
+function previousNonWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index >= 0 && /\s/.test(text[index] ?? '')) index -= 1;
+  return index;
+}
+
+function nextNonWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index < text.length && /\s/.test(text[index] ?? '')) index += 1;
+  return index;
+}
+
+/** Detect real quoted object keys without matching code-like text inside strings/comments. */
+function hasSensitiveQuotedObjectField(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === "'" || character === '"' || character === '`') {
+      const end = skipLiteral(text, index);
+      if (character !== '`' && end > index + 1) {
+        const key = text.slice(index + 1, end - 1);
+        const before = previousNonWhitespace(text, index - 1);
+        const after = nextNonWhitespace(text, end);
+        if ((text[before] === '{' || text[before] === ',')
+            && text[after] === ':'
+            && SENSITIVE_OBJECT_FIELD_NAME.test(key)) return true;
+      }
+      index = end - 1;
+      continue;
+    }
+    if (character === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
+      index = skipComment(text, index) - 1;
+    }
+  }
+  return false;
+}
+
+/** Detect computed private-field reads (record['address']), not inert array/string examples. */
+function hasSensitiveBracketProperty(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === "'" || character === '"' || character === '`') {
+      const end = skipLiteral(text, index);
+      if (character !== '`' && end > index + 1) {
+        const key = text.slice(index + 1, end - 1);
+        const before = previousNonWhitespace(text, index - 1);
+        const after = nextNonWhitespace(text, end);
+        if (text[before] === '[' && text[after] === ']'
+            && SENSITIVE_BRACKET_FIELD_NAME.test(key)) {
+          const receiverEnd = previousNonWhitespace(text, before - 1);
+          const receiver = text.slice(0, receiverEnd + 1).trimEnd();
+          if (/(?:[A-Za-z_$][\w$]*|[\])}]|\?\.)$/.test(receiver)) return true;
+        }
+      }
+      index = end - 1;
+      continue;
+    }
+    if (character === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
+      index = skipComment(text, index) - 1;
+    }
+  }
+  return false;
+}
+
 function riskReason(argument: string): string | null {
   const value = argument.trim();
   const executable = privacyMask(argument);
@@ -190,7 +257,7 @@ function riskReason(argument: string): string | null {
   // Preserve the established value-origin reason when an object key is also
   // sensitive; key-only classification is a fallback for nonliteral fields.
   if (SENSITIVE_NESTED_VALUE.test(executable)) return 'nested-sensitive-value';
-  if (SENSITIVE_OBJECT_FIELD.test(argument)) return 'sensitive-object-key';
+  if (SENSITIVE_OBJECT_FIELD.test(executable) || hasSensitiveQuotedObjectField(argument)) return 'sensitive-object-key';
   if (SENSITIVE_RUNTIME_SOURCE.test(executable)) return 'location-or-search-value';
   return null;
 }
