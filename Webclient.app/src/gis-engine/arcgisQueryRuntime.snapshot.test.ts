@@ -4,6 +4,7 @@ import {
   type ArcGisQueryResponse,
 } from './arcgisQueryRuntime';
 import type { ArcGisMetadataContract, ArcGisFieldContract } from './arcgisMetadataAdapter';
+import { createRequestCoordinator } from './requestCoordinator';
 
 const field = (name: string, type: ArcGisFieldContract['type']): ArcGisFieldContract => ({
   name,
@@ -559,5 +560,54 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     });
     expect(calls).toBe(0);
     runtime.destroy();
+  });
+
+  it('partitions a shared cache by geometry-validation mode and budget', async () => {
+    const coordinator = createRequestCoordinator();
+    const permissiveTransport = vi.fn(async () => response([{
+      attributes: { OBJECTID: 1, NAME: 'Park' },
+      geometry: { unsupported: 'opaque' },
+    }]));
+    const strictTransport = vi.fn(async () => response([{
+      attributes: { OBJECTID: 1, NAME: 'Park' },
+      geometry: { x: 32.8, y: 39.9, spatialReference: { wkid: 4326 } },
+    }]));
+    const permissive = createArcGisQueryRuntime(permissiveTransport, {
+      coordinator, queryLimits: limits,
+    });
+    const strict = createArcGisQueryRuntime(strictTransport, {
+      coordinator, queryLimits: limits,
+    });
+    const relaxed = await permissive.execute(metadata(), {
+      ...request, returnGeometry: true, validateGeometry: false,
+    });
+    expect(relaxed.diagnostics.cacheEligible).toBe(true);
+    const checked = await strict.execute(metadata(), {
+      ...request, returnGeometry: true, strictGeometry: true,
+    });
+    expect(checked.features[0]?.geometry).toMatchObject({ x: 32.8, y: 39.9 });
+    expect(strictTransport).toHaveBeenCalledTimes(1);
+    permissive.destroy();
+    strict.destroy();
+  });
+
+  it('partitions shared cached results by snapshot resource budgets', async () => {
+    const coordinator = createRequestCoordinator();
+    const payload = response([feature(1, 'a label longer than eight')]);
+    const permissiveTransport = vi.fn(async () => payload);
+    const restrictiveTransport = vi.fn(async () => payload);
+    const permissive = createArcGisQueryRuntime(permissiveTransport, {
+      coordinator, queryLimits: limits, featureSnapshotBudget: { maxStringLength: 64 },
+    });
+    const restrictive = createArcGisQueryRuntime(restrictiveTransport, {
+      coordinator, queryLimits: limits, featureSnapshotBudget: { maxStringLength: 8 },
+    });
+    await permissive.execute(metadata(), request);
+    await expect(restrictive.execute(metadata(), request)).rejects.toMatchObject({
+      name: 'ArcGisQueryRuntimeError', code: 'STRING_BUDGET',
+    });
+    expect(restrictiveTransport).toHaveBeenCalledTimes(1);
+    permissive.destroy();
+    restrictive.destroy();
   });
 });
