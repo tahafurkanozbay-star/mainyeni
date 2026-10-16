@@ -87,6 +87,45 @@ test('quoted shorthand examples, property names and safe counters are not classi
   }
 });
 
+
+test('inert object-like text inside strings and comments cannot trigger a privacy finding', () => {
+  const safePayloads = [
+    '{ label: "{ query: 3 }" }',
+    '{ label: "{ payload: record }" }',
+    '{ label: "record[\'address\']" }',
+    '{ note: "const item = { location: value }" }',
+    "['address']",
+  ];
+  for (const payload of safePayloads) {
+    const result = audit(
+      [
+        `safeClientLog(LoggingBusiness, "safe", ${payload});`,
+        `console.log(${payload});`,
+        `window.postMessage(${payload}, "*");`,
+      ].join('\\n'),
+      app,
+    );
+    assert.equal(result.log.summary.flaggedCalls, 0, payload);
+    assert.equal(result.console.summary.unsafeCalls, 0, payload);
+    assert.equal(result.browser.summary.sensitiveCalls, 0, payload);
+  }
+});
+
+test('quoted private keys and computed address fields remain detectable', () => {
+  const cases = [
+    `safeClientLog(LoggingBusiness, "query", { 'query': latestQuery });`,
+    `console.warn({ "payload": record });`,
+    `window.postMessage({ label: record['address'] }, "*");`,
+  ];
+  for (const source of cases) {
+    const result = audit(source, app);
+    assert.ok(
+      result.log.summary.flaggedCalls + result.console.summary.unsafeCalls + result.browser.summary.sensitiveCalls > 0,
+      source,
+    );
+  }
+});
+
 test('aliased sensitive shorthand retains provenance and source-free findings', () => {
   const source = [
     'const redactedLabel = record.address;',
