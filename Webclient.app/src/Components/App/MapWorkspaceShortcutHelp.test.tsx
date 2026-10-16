@@ -263,15 +263,15 @@ describe('MapWorkspaceShortcutHelpLauncher', () => {
     vi.clearAllMocks();
   });
 
-  it('opens and closes the help center from the launcher button', () => {
+  it('removes the visible launcher and keeps Shift+? help access', () => {
     render(<MapWorkspaceShortcutHelpLauncher />);
-    const launcher = screen.getByRole('button', { name: 'Kısayollar' });
-    expect(launcher).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(launcher);
-    expect(launcher).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByRole('button', { name: 'Kısayollar' })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '?', code: 'Slash', shiftKey: true });
     expect(screen.getByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Tamam' }));
-    expect(launcher).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).not.toBeInTheDocument();
   });
 
   it('opens on governed Shift+? using an act-wrapped testing-library event', () => {
