@@ -10,9 +10,11 @@ import { inspectGeometry, type GeometryBudget } from './geometryGuard';
 import {
   ArcGisFeatureSnapshotError,
   ArcGisFeatureSnapshotSession,
+  normalizeArcGisFeatureSnapshotBudget,
   readArcGisOwnDataProperty,
   type ArcGisFeatureSnapshotBudget,
   type ArcGisFeatureSnapshotPage,
+  type NormalizedArcGisFeatureSnapshotBudget,
 } from './arcgisFeatureSnapshot';
 import {
   createQueryExecutionPlan,
@@ -305,7 +307,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
   private readonly ownsCoordinator: boolean;
   private readonly queryLimits: QueryExecutionLimits;
   private readonly geometryBudget: GeometryBudget;
-  private readonly featureSnapshotBudget: Partial<ArcGisFeatureSnapshotBudget>;
+  private readonly featureSnapshotBudget: NormalizedArcGisFeatureSnapshotBudget;
   private readonly cacheTtlMs: number;
   private readonly maxRetries: number;
   private readonly retryBaseDelayMs: number;
@@ -323,8 +325,7 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
     this.ownsCoordinator = !options.coordinator;
     this.queryLimits = Object.freeze({ ...(options.queryLimits ?? {}) });
     this.geometryBudget = Object.freeze({ ...(options.geometryBudget ?? {}) });
-    this.featureSnapshotBudget = Object.freeze({ ...(options.featureSnapshotBudget ?? {}) });
-    new ArcGisFeatureSnapshotSession(this.featureSnapshotBudget);
+    this.featureSnapshotBudget = normalizeArcGisFeatureSnapshotBudget(options.featureSnapshotBudget ?? {});
     this.cacheTtlMs = positiveInteger(options.cacheTtlMs, 15_000, 600_000);
     this.maxRetries = positiveInteger(options.maxRetries, 2, 5);
     this.retryBaseDelayMs = positiveInteger(options.retryBaseDelayMs, 250, 10_000);
