@@ -107,12 +107,14 @@ describe('ArcGIS query runtime immutable response boundary', () => {
     source.geometry.x = 999;
     const retained = result.features[0];
     if (!retained) throw new Error('Expected a retained immutable feature snapshot.');
-    expect(retained.attributes?.NAME).toBe('before');
-    expect((retained.attributes?.nested as { owner: string }).owner).toBe('ABB');
+    const attributes = retained.attributes;
+    if (!attributes) throw new Error('Expected immutable feature attributes.');
+    expect(attributes.NAME).toBe('before');
+    expect((attributes.nested as { owner: string }).owner).toBe('ABB');
     expect((retained.geometry as { x: number }).x).toBe(32.8);
     expect(Object.isFrozen(retained)).toBe(true);
-    expect(Object.isFrozen(retained.attributes)).toBe(true);
-    expect(Object.isFrozen(retained.attributes?.nested)).toBe(true);
+    expect(Object.isFrozen(attributes)).toBe(true);
+    expect(Object.isFrozen(attributes.nested)).toBe(true);
     expect(Object.isFrozen(retained.geometry)).toBe(true);
     runtime.destroy();
   });
