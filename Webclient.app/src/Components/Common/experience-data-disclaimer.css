@@ -94,6 +94,7 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
 
 @media (max-width: 40rem) {
   .experience-data-disclaimer {
+    inset-block-end: calc(3.25rem + env(safe-area-inset-bottom));
     gap: 0.35rem;
     padding: 0.3rem 0.45rem;
   }
