@@ -237,10 +237,14 @@
   color: var(--exp-text, #172033);
   background: transparent;
   border: 0;
-  outline: 0;
   font: inherit;
   font-size: 12px;
   font-weight: 650;
+}
+
+.kr-sidebar__search input:focus-visible {
+  outline: 2px solid var(--kr-premium-blue, #0f566e);
+  outline-offset: -2px;
 }
 
 .kr-sidebar__search input::placeholder {
