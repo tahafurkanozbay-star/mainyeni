@@ -23,7 +23,9 @@ const SENSITIVE_SERIALIZATION = /\bJSON\s*\.\s*stringify\s*\(\s*(?:query|path|pa
 const SENSITIVE_PROPERTY = /\b[A-Za-z_$][A-Za-z0-9_$]*\s*(?:\?\.|\.)\s*(?:address|adres|latitude|longitude|coordinates|street|sokak|mahalle|door)\b/i;
 const SENSITIVE_RUNTIME_SOURCE = /\b(?:latestQuery|mapPoint|mapEvent\s*(?:\?\.|\.)\s*mapPoint|item\s*(?:\?\.|\.)\s*(?:Title|title)|(?:query|params|payload|record|item|selection)\s*(?:\?\.|\.)\s*(?:name|districtName|nbhoodName))\b/i;
 const SENSITIVE_TEMPLATE = /\$\{[^}]{0,150}\b(?:lat|lon|latitude|longitude|address|adres|street|sokak|mahalle|door|query|path|params|payload|record|item|selection|coordinates|location|geometry|mapPoint|searchText|queryText|latestQuery)\b[^}]*\}/i;
-const SENSITIVE_NESTED_VALUE = /(?:[,:\[]\s*|\.\.\.\s*)(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}\]]|$)/i;
+const SENSITIVE_NESTED_VALUE = /(?:[,:\[({]\s*|\.\.\.\s*)(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}\])]|$)/i;
+const SENSITIVE_OBJECT_FIELD = /(?:^|[{,])\s*(?:['"])?(?:query|path|params|payload|record|item|selection|address|adres|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)(?:['"])?\s*:/i;
+const SENSITIVE_OBJECT_SHORTHAND = /(?:^|[{,])\s*(?:query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)\s*(?=[,}])/i;
 
 export function isClientRuntimeSource(file: SourceFile): boolean {
   return RUNTIME_PATH.test(file.repositoryPath)
@@ -166,23 +168,97 @@ function findClientLogCalls(text: string): readonly ClientLogCall[] {
   return calls;
 }
 
+
+const SENSITIVE_OBJECT_FIELD_NAME = /^(?:query|path|params|payload|record|item|selection|address|adres|coordinates|location|geometry|mapPoint|latestQuery|searchText|queryText)$/i;
+const SENSITIVE_BRACKET_FIELD_NAME = /^(?:address|adres|latitude|longitude|coordinates|mahalle)$/i;
+
+function previousNonWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index >= 0 && /\s/.test(text[index] ?? '')) index -= 1;
+  return index;
+}
+
+function nextNonWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index < text.length && /\s/.test(text[index] ?? '')) index += 1;
+  return index;
+}
+
+/** Detect real quoted object keys without matching code-like text inside strings/comments. */
+function hasSensitiveQuotedObjectField(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === "'" || character === '"' || character === '`') {
+      const end = skipLiteral(text, index);
+      if (character !== '`' && end > index + 1) {
+        const key = text.slice(index + 1, end - 1);
+        const before = previousNonWhitespace(text, index - 1);
+        const after = nextNonWhitespace(text, end);
+        if ((text[before] === '{' || text[before] === ',')
+            && text[after] === ':'
+            && SENSITIVE_OBJECT_FIELD_NAME.test(key)) return true;
+      }
+      index = end - 1;
+      continue;
+    }
+    if (character === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
+      index = skipComment(text, index) - 1;
+    }
+  }
+  return false;
+}
+
+/** Detect computed private-field reads (record['address']), not inert array/string examples. */
+function hasSensitiveBracketProperty(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === "'" || character === '"' || character === '`') {
+      const end = skipLiteral(text, index);
+      if (character !== '`' && end > index + 1) {
+        const key = text.slice(index + 1, end - 1);
+        const before = previousNonWhitespace(text, index - 1);
+        const after = nextNonWhitespace(text, end);
+        if (text[before] === '[' && text[after] === ']'
+            && SENSITIVE_BRACKET_FIELD_NAME.test(key)) {
+          const receiverEnd = previousNonWhitespace(text, before - 1);
+          const receiver = text.slice(0, receiverEnd + 1).trimEnd();
+          if (/(?:[A-Za-z_$][\w$]*|[\])}]|\?\.)$/.test(receiver)) return true;
+        }
+      }
+      index = end - 1;
+      continue;
+    }
+    if (character === '/' && (text[index + 1] === '/' || text[index + 1] === '*')) {
+      index = skipComment(text, index) - 1;
+    }
+  }
+  return false;
+}
+
 function riskReason(argument: string): string | null {
   const value = argument.trim();
+  const executable = privacyMask(argument);
   if (/^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)$/.test(value) && !value.includes('${')) return null;
   if (SENSITIVE_DIRECT_IDENTIFIER.test(argument.trim())) return 'raw-record-or-query';
-  if (SENSITIVE_PATH.test(argument)) return 'address-path-label';
-  if (SENSITIVE_SERIALIZATION.test(argument)) return 'serialized-record-or-query';
+  if (SENSITIVE_PATH.test(executable)) return 'address-path-label';
+  if (SENSITIVE_SERIALIZATION.test(executable)) return 'serialized-record-or-query';
   // Interpolated template payloads are expressions, not object-literal keys.
   // Prefer their privacy classification over static label text such as
   // `coordinates: ${mapPoint}` before inspecting object-key syntax.
   if (SENSITIVE_TEMPLATE.test(argument)) return 'sensitive-template';
-  if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(argument)) return 'sensitive-object-key';
-  if (/\[\s*['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*\]/.test(argument)) return 'sensitive-bracket-property';
-  if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(argument)) return 'wrapped-location-value';
-  if (/['"](?:address|adres|latitude|longitude|coordinates|mahalle)['"]\s*:/.test(argument)) return 'sensitive-object-key';
-  if (SENSITIVE_PROPERTY.test(argument)) return 'sensitive-property';
-  if (SENSITIVE_NESTED_VALUE.test(argument)) return 'nested-sensitive-value';
-  if (SENSITIVE_RUNTIME_SOURCE.test(argument)) return 'location-or-search-value';
+  if (/\b(?:address|adres|latitude|longitude|coordinates|mahalle)\s*:/.test(executable)) return 'sensitive-object-key';
+  if (hasSensitiveBracketProperty(argument)) return 'sensitive-bracket-property';
+  if (/\b(?:String|Number|encodeURIComponent)\s*\(\s*(?:lat|lon|latitude|longitude|searchText|queryText|query|path|params|payload|record|item|selection|address|coordinates|location|geometry|mapPoint|latestQuery)\b/.test(executable)) return 'wrapped-location-value';
+  if (hasSensitiveQuotedObjectField(argument)) return 'sensitive-object-key';
+  if (SENSITIVE_PROPERTY.test(executable)) return 'sensitive-property';
+  // Object shorthand ({ query }) is equivalent to { query: query }.
+  // Mask inert comments/strings first so examples do not cause false findings.
+  if (SENSITIVE_OBJECT_SHORTHAND.test(executable)) return 'shorthand-sensitive-value';
+  // Preserve the established value-origin reason when an object key is also
+  // sensitive; key-only classification is a fallback for nonliteral fields.
+  if (SENSITIVE_NESTED_VALUE.test(executable)) return 'nested-sensitive-value';
+  if (SENSITIVE_OBJECT_FIELD.test(executable)) return 'sensitive-object-key';
+  if (SENSITIVE_RUNTIME_SOURCE.test(executable)) return 'location-or-search-value';
   return null;
 }
 

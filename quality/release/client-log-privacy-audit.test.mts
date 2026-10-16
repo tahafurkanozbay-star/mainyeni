@@ -72,3 +72,47 @@ test('reports deterministic line evidence for multiline expressions', () => {
   assert.deepEqual(first.findings, second.findings);
   assert.equal(first.findings[0]?.location?.line, 2);
 });
+
+
+test('rejects nested and shorthand private payload objects but accepts bounded counters', () => {
+  const cases = [
+    '{ query }',
+    '{query}',
+    '({ payload, resultCount })',
+    '{ metadata: { record } }',
+    '{ query: latestQuery }',
+    "{ 'address': streetLabel }",
+    '{ result: { coordinates } }',
+    '[{ geometry }]',
+    '{ ...query }',
+  ];
+  for (const value of cases) {
+    const result = audit(source(`safeClientLog(LoggingBusiness, "Query", ${value});`));
+    assert.equal(result.summary.clientLogCalls, 1, value);
+    assert.equal(result.summary.flaggedCalls, 1, value);
+    assert.equal(result.findings[0]?.severity, 'high', value);
+    assert.ok(!JSON.stringify(result.findings).includes('streetLabel'), value);
+  }
+
+  for (const value of [
+    '{ resultCount }',
+    '{ queryCount: 4 }',
+    '{ event: "query-submitted", count: resultCount }',
+    '[resultCount]',
+  ]) {
+    const result = audit(source(`safeClientLog(LoggingBusiness, "Count", ${value});`));
+    assert.equal(result.summary.flaggedCalls, 0, value);
+  }
+});
+
+test('private shorthand after destructuring and renamed bindings remains unsafe', () => {
+  const text = [
+    'function report(record: Record<string, unknown>) {',
+    '  const { address: streetLabel } = record;',
+    '  safeClientLog(LoggingBusiness, "Query", { streetLabel });',
+    '}',
+  ].join('\n');
+  const result = audit(source(text));
+  assert.equal(result.summary.flaggedCalls, 1);
+  assert.equal(result.findings[0]?.location?.line, 3);
+});
