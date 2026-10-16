@@ -70,7 +70,7 @@ Beklenen: Webclient HTTP 200; API sağlık `healthy`; Kent Rehberi sorgusunda `f
 
 ## Geri dönüş
 
-Yayın öncesindeki `index.html`, `assets`, `images`, `fonts`, `web.config` ve `.vite` öğeleri yedeklenir. Gerekirse ilgili yedek öğeleri aynı IIS klasörüne geri kopyalayın. `user` klasörüne, API yayın dosyalarına veya mevcut API uygulama havuzunun environment ayarlarına dokunulmaz.
+Yayın öncesindeki `index.html`, `assets`, `images`, `fonts`, `web.config` ve `.vite` öğeleri yedeklenir. Gerekirse ilgili yedek öğeleri aynı IIS klasörüne geri kopyalayın. `user` klasörünün içeriği değiştirilmez; mevcut API yayın dosyaları ve mevcut `kentrehberiumit` havuzunun environment ayarları korunur. Yalnızca alt-yol uygulaması için ayrı `kentrehberiumit-api` havuzu oluşturulur/denetlenir.
 
 ## Güvenlik notları
 
