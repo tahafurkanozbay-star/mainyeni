@@ -102,7 +102,7 @@ test('inert object-like text inside strings and comments cannot trigger a privac
         `safeClientLog(LoggingBusiness, "safe", ${payload});`,
         `console.log(${payload});`,
         `window.postMessage(${payload}, "*");`,
-      ].join('\\n'),
+      ].join('\n'),
       app,
     );
     assert.equal(result.log.summary.flaggedCalls, 0, payload);
