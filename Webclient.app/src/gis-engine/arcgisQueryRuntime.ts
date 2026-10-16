@@ -10,6 +10,7 @@ import { inspectGeometry, type GeometryBudget } from './geometryGuard';
 import {
   ArcGisFeatureSnapshotError,
   ArcGisFeatureSnapshotSession,
+  hasAsciiControlCharacters,
   normalizeArcGisFeatureSnapshotBudget,
   readArcGisOwnDataProperty,
   type ArcGisFeatureSnapshotBudget,
@@ -399,8 +400,8 @@ export class ArcGisQueryRuntime<TFeature extends ArcGisFeature = ArcGisFeature> 
     }
     this.coordinator = options.coordinator ?? createRequestCoordinator(options.coordinatorOptions);
     this.ownsCoordinator = !options.coordinator;
-    this.queryLimits = Object.freeze({ ...(options.queryLimits ?? {}) });
-    this.geometryBudget = Object.freeze({ ...(options.geometryBudget ?? {}) });
+    this.queryLimits = Object.freeze({ ...options.queryLimits });
+    this.geometryBudget = Object.freeze({ ...options.geometryBudget });
     this.featureSnapshotBudget = normalizeArcGisFeatureSnapshotBudget(options.featureSnapshotBudget ?? {});
     this.cacheTtlMs = positiveInteger(options.cacheTtlMs, 15_000, 600_000);
     this.maxRetries = positiveInteger(options.maxRetries, 2, 5);
