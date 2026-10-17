@@ -10,7 +10,6 @@ import './Components/Common/workspace-accessibility-guide-preference.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
 import { MapComponent } from './Components/App/MapComponent';
-import { MapWorkspaceShortcutHelpLauncher } from './Components/App/MapWorkspaceShortcutHelp';
 import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { MapModeExperienceControl } from './Components/App/MapModeExperienceControl';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
@@ -192,7 +191,6 @@ function App() {
             />
             <ExperienceNotificationTriage model={notificationCenter} />
             <ExperienceCommandCenter windowManager={windowManager} />
-            <MapWorkspaceShortcutHelpLauncher />
             <ExperienceConnectivityNotice notificationModel={notificationCenter} />
             <ExperienceDataDisclaimer />
           </ExperienceStartupBoundary>
