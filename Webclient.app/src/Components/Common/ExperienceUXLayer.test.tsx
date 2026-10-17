@@ -411,6 +411,8 @@ describe('ExperienceUXLayer', () => {
 
     dispatchHelpCommand();
     expect(document.body.style.overflow).toBe('hidden');
+    // Ignore the intentional command event used to open help; this spy checks cleanup.
+    listener.mockClear();
 
     unmount();
 
