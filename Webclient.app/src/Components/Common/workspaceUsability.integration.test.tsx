@@ -4,12 +4,15 @@ import { ExperienceDialog } from './ExperienceDialog';
 import { ExperienceWorkspace } from './ExperienceWorkspace';
 
 describe('workspace usability composition', () => {
-  it('renders the supplied governed mode control without a second mode selector', () => {
+  it('renders the supplied governed mode control without duplicate selectors or fixed settings buttons', async () => {
     render(<ExperienceWorkspace mapModeControl={<button type="button">Görünüm seçimi</button>} />);
     expect(screen.getByRole('button', { name: 'Görünüm seçimi' })).toBeVisible();
     expect(screen.queryByRole('group', { name: 'Harita görünümü' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Çalışma alanı durumu')).not.toHaveTextContent('2B harita');
-    expect(screen.getByRole('button', { name: 'Deneyim ayarları' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Deneyim ayarları' })).not.toBeInTheDocument();
+
+    fireEvent(window, new CustomEvent('kentrehberi:command', { detail: { name: 'settings' } }));
+    expect(await screen.findByRole('dialog', { name: 'Çalışma alanını kişiselleştir' })).toBeVisible();
   });
 
   it('mounts modal content outside the map stacking context and releases the portal', () => {
