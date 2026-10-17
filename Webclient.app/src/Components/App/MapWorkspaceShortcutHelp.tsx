@@ -284,8 +284,16 @@ export const MapWorkspaceShortcutHelpLauncher = () => {
       event.preventDefault();
       setOpen(true);
     };
+    const onCommand = (event: Event): void => {
+      const detail = (event as CustomEvent<{ readonly name?: unknown }>).detail;
+      if (detail?.name === 'workspace-help') setOpen(true);
+    };
     window.addEventListener('keydown', onHelpShortcut);
-    return () => window.removeEventListener('keydown', onHelpShortcut);
+    window.addEventListener('kentrehberi:command', onCommand);
+    return () => {
+      window.removeEventListener('keydown', onHelpShortcut);
+      window.removeEventListener('kentrehberi:command', onCommand);
+    };
   }, []);
 
   // The launcher button is intentionally omitted from the map chrome.
