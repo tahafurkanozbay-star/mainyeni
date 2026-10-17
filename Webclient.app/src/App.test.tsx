@@ -96,7 +96,7 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByRole('note', { name: /veri kullanım uyarısı/i })).toHaveTextContent(
-      'Sitede Gösterilen Veriler Bilgi Amaçlıdır. Resmî İşlemlerde KULLANILAMAZ!'
+      'Sitede Gösterilen Veriler Bilgi Amaçlıdır. RESMİ İŞLEMLERDE KULLANILAMAZ'
     );
     expect(screen.queryByRole('heading', { name: /kent rehberi hazırlanıyor/i })).not.toBeInTheDocument();
     expect(document.getElementById('experience-global-live-region')).toHaveAttribute('role', 'status');
