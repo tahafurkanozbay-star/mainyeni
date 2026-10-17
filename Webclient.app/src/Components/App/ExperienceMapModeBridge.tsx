@@ -576,7 +576,7 @@ export function ExperienceMapModeBridge({
           resizeObserver.observe(target);
           observedResizeTargets.add(target);
         }
-        if (mutationObserver && !observedMutationTargets.has(target)) {
+        if (mutationObserver && target !== mapRoot && target !== controls && !observedMutationTargets.has(target)) {
           mutationObserver.observe(target, {
             attributes: true,
             attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
