@@ -9,13 +9,11 @@ import './Components/Common/experience-data-ux.css';
 import './Components/Common/workspace-accessibility-guide-preference.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
-import './Components/App/MapWorkspaceShellPlacement.css';
-import './Components/App/MapWorkspaceShellDensity.css';
 import { MapComponent } from './Components/App/MapComponent';
+import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { MapModeExperienceControl } from './Components/App/MapModeExperienceControl';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
 import { ExperienceMapModeFocusBridge } from './Components/App/ExperienceMapModeFocusBridge';
-import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { AppConfig } from './Core/AppConfig';
 import Store from './Store/Store';
 import { installManagedWindowKeyboard } from './Components/Common/managedWindowKeyboard';
@@ -184,7 +182,7 @@ function App() {
           >
             <ExperienceSkipNavigation />
             <MapComponent windowManager={windowManager} />
-            <MapWorkspaceShellOverlay initialCollapsed />
+            <MapWorkspaceShellOverlay initialCollapsed headless />
             <ExperienceMapInteractionGuide />
             <ExperienceWorkspace mapModeControl={mapViewAvailable ? <MapModeExperienceControl /> : <span className="experience-sr-only">Harita hazırlanıyor</span>} />
             <ExperienceUXLayer

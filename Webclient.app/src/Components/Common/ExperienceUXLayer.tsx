@@ -65,7 +65,6 @@ const ManagedLayerListWidget = LayerListWidget as unknown as ForwardRefExoticCom
 
 const HELP_DIALOG_ID = 'experience-help';
 const NOTIFICATION_DIALOG_ID = 'experience-notification-center';
-const HELP_TRIGGER_ID = 'experience-utility-help';
 const NOTIFICATION_TRIGGER_ID = 'experience-utility-notifications';
 
 const reportUxRuntimeError = (
@@ -188,7 +187,7 @@ export function ExperienceUXLayer({
   }, [dialogStack]);
 
   const openHelp = useCallback((): void => {
-    openSurface(HELP_DIALOG_ID, 'modal', 'Hızlı kullanım', HELP_TRIGGER_ID);
+    openSurface(HELP_DIALOG_ID, 'modal', 'Hızlı kullanım', 'experience-utility');
   }, [openSurface]);
 
   const openNotifications = useCallback((): void => {
@@ -280,16 +279,11 @@ export function ExperienceUXLayer({
           allowInEditable: true,
           handler: () => dispatchExperienceCommand('command-palette'),
         },
-        {
-          id: 'help',
-          key: '?',
-          handler: openHelp,
-        },
       ],
     });
 
     return () => shortcuts.dispose();
-  }, [openHelp]);
+  }, []);
 
   const themeLabel = useMemo(
     () => theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç',
@@ -374,8 +368,10 @@ export function ExperienceUXLayer({
   return (
     <>
       <aside
+        id="experience-utility"
         className={`experience-utility ${collapsed ? 'is-collapsed' : ''}`}
         aria-label="Kent Rehberi yardımcı araçları"
+        tabIndex={-1}
       >
         <div className="experience-utility__brand">
           <span className="experience-utility__status" aria-hidden="true" />
@@ -426,18 +422,6 @@ export function ExperienceUXLayer({
           >
             <ActionIcon type="info" />
             {!collapsed ? <span>Bildirimler</span> : null}
-          </button>
-
-          <button
-            id={HELP_TRIGGER_ID}
-            className="experience-utility__button"
-            type="button"
-            onClick={openHelp}
-            aria-label="Kısayolları ve yardım bilgisini aç"
-            title="Kısayollar"
-          >
-            <ActionIcon type="keyboard" />
-            {!collapsed ? <span>Kısayollar</span> : null}
           </button>
 
           <button

@@ -51,9 +51,17 @@ describe("ExperienceWorkspace", () => {
     test("renders semantic status and 2B/3B controls", () => {
         render(<ExperienceWorkspace />);
         expect(screen.getByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri")).toBeInTheDocument();
-        expect(screen.getByLabelText("Çalışma alanı durumu")).toHaveTextContent("Çevrimiçi");
+        expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimiçi");
+        expect(screen.queryByRole("button", { name: /Komutlar|Deneyim ayarları/i })).not.toBeInTheDocument();
         expect(screen.getByRole("button", { name: /2 boyutlu harita, etkin/i })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: /3 boyutlu sahne/i })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    test("keeps an externally supplied 2D/3D control outside the fixed status dock", () => {
+        render(<ExperienceWorkspace mapModeControl={<div data-testid="external-map-mode">2B / 3B</div>} />);
+        const modeControl = screen.getByTestId("external-map-mode");
+        expect(modeControl.closest(".experience-workspace")).toBeNull();
+        expect(modeControl.closest(".experience-map-mode-anchor")).toHaveAttribute("id", "experience-workspace-controls");
     });
 
     test("dispatches a map-mode command instead of mutating GIS state directly", () => {
@@ -89,7 +97,7 @@ describe("ExperienceWorkspace", () => {
 
     test("opens an accessible settings dialog and persists theme changes", async () => {
         render(<ExperienceWorkspace />);
-        fireEvent.click(screen.getByRole("button", { name: "Deneyim ayarları" }));
+        fireEvent(window, new CustomEvent("kentrehberi:command", { detail: { name: "settings" } }));
 
         const dialog = screen.getByRole("dialog", { name: "Çalışma alanını kişiselleştir" });
         expect(dialog).toHaveAttribute("aria-modal", "true");
@@ -103,7 +111,7 @@ describe("ExperienceWorkspace", () => {
 
     test("persists accessibility switches through the shared preference store", async () => {
         render(<ExperienceWorkspace />);
-        fireEvent.click(screen.getByRole("button", { name: "Deneyim ayarları" }));
+        fireEvent(window, new CustomEvent("kentrehberi:command", { detail: { name: "settings" } }));
 
         const contrast = screen.getByRole("switch", { name: "Harita kontrollerinde yüksek kontrast" });
         expect(contrast).toHaveAttribute("aria-checked", "false");
@@ -125,7 +133,7 @@ describe("ExperienceWorkspace", () => {
             highContrastMapControls: true
         }));
         render(<ExperienceWorkspace />);
-        fireEvent.click(screen.getByRole("button", { name: "Deneyim ayarları" }));
+        fireEvent(window, new CustomEvent("kentrehberi:command", { detail: { name: "settings" } }));
         expect(screen.getByLabelText("Tema")).toHaveValue("dark");
 
         fireEvent.click(screen.getByRole("button", { name: "Varsayılanlara dön" }));
@@ -134,17 +142,20 @@ describe("ExperienceWorkspace", () => {
         expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
-    test("reacts to browser offline and online events", async () => {
+    test("tracks network state without a visible online/offline status button", async () => {
         render(<ExperienceWorkspace />);
-        expect(screen.getByLabelText("Çalışma alanı durumu")).toHaveTextContent("Çevrimiçi");
+        const workspace = screen.getByLabelText("Harita çalışma alanı durumu ve görünüm kontrolleri");
+        expect(workspace).toHaveAttribute("data-online", "true");
+        expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimiçi");
+        expect(screen.getByLabelText("Çalışma alanı durumu")).not.toHaveTextContent("Çevrimdışı");
 
         setOnline(false);
         fireEvent(window, new Event("offline"));
-        await waitFor(() => expect(screen.getByLabelText("Çalışma alanı durumu")).toHaveTextContent("Çevrimdışı"));
+        await waitFor(() => expect(workspace).toHaveAttribute("data-online", "false"));
 
         setOnline(true);
         fireEvent(window, new Event("online"));
-        await waitFor(() => expect(screen.getByLabelText("Çalışma alanı durumu")).toHaveTextContent("Çevrimiçi"));
+        await waitFor(() => expect(workspace).toHaveAttribute("data-online", "true"));
     });
 
     test("skip links move focus to the requested application region", () => {

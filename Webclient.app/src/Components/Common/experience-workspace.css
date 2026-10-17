@@ -956,3 +956,17 @@ html[data-experience-motion="reduced"] .experience-skip-links * {
     min-block-size: 48px;
   }
 }
+
+/* The map mode control is positioned independently from the fixed workspace dock.
+   Keep this rule after the baseline styles to avoid shifting existing audit anchors. */
+.experience-map-mode-anchor {
+  position: static;
+  color: var(--exp-text);
+  font-family: var(--exp-font-sans);
+}
+
+.experience-map-mode-anchor:focus-visible {
+  outline: 3px solid var(--exp-accent) !important;
+  outline-offset: 3px !important;
+  box-shadow: var(--exp-shadow-sm), var(--exp-focus) !important;
+}

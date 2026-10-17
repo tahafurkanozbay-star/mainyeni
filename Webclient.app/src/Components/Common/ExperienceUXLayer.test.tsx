@@ -2,6 +2,10 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { NotificationCenterModel } from '../../experience/notificationCenterModel';
 import { ExperienceUXLayer, dispatchExperienceCommand } from './ExperienceUXLayer';
 
+const dispatchHelpCommand = (): void => {
+  act(() => dispatchExperienceCommand('help'));
+};
+
 const mocks = vi.hoisted(() => ({
   layerOnShow: vi.fn(),
   toggleTheme: vi.fn(),
@@ -100,6 +104,10 @@ describe('ExperienceUXLayer', () => {
     expect(screen.getByRole('button', {
       name: 'Bildirim merkezini aç',
     })).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', {
+      name: /Kısayolları ve yardım bilgisini aç/i,
+    })).not.toBeInTheDocument();
   });
 
   test('routes search actions through the canonical window manager', () => {
@@ -174,9 +182,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchHelpCommand();
 
     const dialog = screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -227,7 +233,7 @@ describe('ExperienceUXLayer', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  test('opens help with the question-mark shortcut outside editable fields', () => {
+  test('does not open a second help dialog from the question-mark shortcut', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
@@ -235,12 +241,12 @@ describe('ExperienceUXLayer', () => {
       key: '?',
     });
 
-    expect(screen.getByRole('dialog', {
+    expect(screen.queryByRole('dialog', {
       name: 'Hızlı kullanım',
-    })).toBeInTheDocument();
+    })).not.toBeInTheDocument();
   });
 
-  test('does not open help while a user types in an editable field', () => {
+  test('does not create a duplicate help dialog while typing in an editable field', () => {
     const input = document.createElement('input');
     document.body.appendChild(input);
 
@@ -300,11 +306,10 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    const opener = screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    });
+    const opener = document.querySelector<HTMLElement>('.experience-utility');
+    if (!opener) throw new Error('Utility navigation was not rendered');
     opener.focus();
-    fireEvent.click(opener);
+    dispatchHelpCommand();
 
     expect(screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -328,9 +333,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchHelpCommand();
 
     const dialog = screen.getByRole('dialog', {
       name: 'Hızlı kullanım',
@@ -355,9 +358,7 @@ describe('ExperienceUXLayer', () => {
     const manager = createWindowManager();
     renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchHelpCommand();
     fireEvent.click(screen.getByRole('button', {
       name: /Katmanlar\s*Aç/i,
     }));
@@ -408,10 +409,10 @@ describe('ExperienceUXLayer', () => {
 
     const { unmount } = renderLayer(manager);
 
-    fireEvent.click(screen.getByRole('button', {
-      name: 'Kısayolları ve yardım bilgisini aç',
-    }));
+    dispatchHelpCommand();
     expect(document.body.style.overflow).toBe('hidden');
+    // Ignore the intentional command event used to open help; this spy checks cleanup.
+    listener.mockClear();
 
     unmount();
 

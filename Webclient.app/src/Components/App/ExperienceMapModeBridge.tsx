@@ -565,21 +565,10 @@ export function ExperienceMapModeBridge({
         </nav>
       )}
       {activeMode === '3d' && (
-        <output
-          className="experience-scene-health"
-          aria-live="polite"
-          aria-label={`3B görünüm durumu: ${sceneUi.statusLabel}, ${sceneUi.profileLabel}`}
-        >
-          <span className="experience-scene-health__mode">3B</span>
-          <span className="experience-scene-health__profile">{sceneUi.profileLabel}</span>
-          {sceneUi.p95FrameMs > 0 && (
-            <span className="experience-scene-health__metric" aria-hidden="true">
-              p95 {Math.round(sceneUi.p95FrameMs)} ms
-            </span>
-          )}
-          {sceneUi.recoveryAttempts > 0 && (
-            <span className="experience-scene-health__recovery">{sceneUi.statusLabel}</span>
-          )}
+        <output className="experience-sr-only" aria-live="polite">
+          3B görünüm durumu: {sceneUi.statusLabel}, {sceneUi.profileLabel}
+          {sceneUi.p95FrameMs > 0 ? `, kare süresi p95 ${Math.round(sceneUi.p95FrameMs)} ms` : ''}
+          {sceneUi.recoveryAttempts > 0 ? `, kurtarma durumu: ${sceneUi.statusLabel}` : ''}
         </output>
       )}
     </>

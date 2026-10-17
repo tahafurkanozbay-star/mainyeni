@@ -335,3 +335,18 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
     color: HighlightText;
   }
 }
+
+/* Reserve the lower-right corner for the persistent utility rail. The 3D-only
+   camera controls stack below the 2D/3D selector instead of covering that rail. */
+.experience-scene-controls {
+  top: max(132px, calc(env(safe-area-inset-top) + 126px));
+  bottom: auto;
+}
+
+@media (max-width: 640px) {
+  .experience-scene-controls {
+    top: max(124px, calc(env(safe-area-inset-top) + 116px));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: auto;
+  }
+}
