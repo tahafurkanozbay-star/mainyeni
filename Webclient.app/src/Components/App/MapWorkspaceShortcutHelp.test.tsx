@@ -274,6 +274,12 @@ describe('MapWorkspaceShortcutHelpLauncher', () => {
     expect(screen.queryByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).not.toBeInTheDocument();
   });
 
+  it('opens from the command-center help event', () => {
+    render(<MapWorkspaceShortcutHelpLauncher />);
+    fireEvent(window, new CustomEvent('kentrehberi:command', { detail: { name: 'workspace-help' } }));
+    expect(screen.getByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).toBeInTheDocument();
+  });
+
   it('opens on governed Shift+? using an act-wrapped testing-library event', () => {
     render(<MapWorkspaceShortcutHelpLauncher />);
     fireEvent.keyDown(window, { key: '?', code: 'Slash', shiftKey: true });
