@@ -336,17 +336,19 @@ html[data-experience-motion="reduced"] .experience-scene-controls button {
   }
 }
 
-/* Reserve the lower-right corner for the persistent utility rail. The 3D-only
-   camera controls stack below the 2D/3D selector instead of covering that rail. */
+/* A safe fallback before the collision-aware placer measures the visible overlays.
+   The runtime places the panel beside the 2D/3D selector and avoids the bottom dock. */
 .experience-scene-controls {
-  top: max(132px, calc(env(safe-area-inset-top) + 126px));
+  top: max(78px, calc(env(safe-area-inset-top) + 72px));
   bottom: auto;
 }
 
 @media (max-width: 640px) {
   .experience-scene-controls {
-    top: max(124px, calc(env(safe-area-inset-top) + 116px));
+    top: max(76px, calc(env(safe-area-inset-top) + 70px));
     right: max(10px, env(safe-area-inset-right));
     bottom: auto;
+    grid-template-columns: repeat(2, 44px);
+    width: auto;
   }
 }
