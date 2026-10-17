@@ -32,9 +32,10 @@ describe('ExperienceCommandCenterModern catalog', () => {
     expect(filterExperienceCommands(EXPERIENCE_COMMANDS, 'erişilebilirlik merkezi').map(command => command.id))
       .toContain('accessibility-center');
 
-    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.scopes).toEqual(['map', 'help']);
-    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'workspace-settings')?.scopes).toEqual(['map']);
-    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'accessibility-center')?.scopes).toEqual(['map']);
+    const globalScopes = ['map', 'analysis', 'services', 'help'];
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.scopes).toEqual(globalScopes);
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'workspace-settings')?.scopes).toEqual(globalScopes);
+    expect(EXPERIENCE_COMMANDS.find(command => command.id === 'accessibility-center')?.scopes).toEqual(globalScopes);
     expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.shortcut).toBe('Shift+?');
     expect(EXPERIENCE_COMMANDS.find(command => command.id === 'help')?.event).toBe('workspace-help');
   });

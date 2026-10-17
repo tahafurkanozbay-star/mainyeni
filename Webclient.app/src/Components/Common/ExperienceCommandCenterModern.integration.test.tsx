@@ -191,21 +191,29 @@ describe('ExperienceCommandCenterModern governed integration', () => {
     expect(screen.getByRole('option', { name: /Çizim aracını aç/i })).toBeInTheDocument();
   });
 
-  test('filters to city services without changing the transport contract', () => {
+  test('filters to city services while keeping global workspace commands available', () => {
     renderCenter();
     openCommandCenter();
     fireEvent.click(screen.getByRole('button', { name: /Hizmetler/i }));
     expect(screen.queryByRole('option', { name: /Ölçüm aracını aç/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('option').every(option => option.id.includes('service-'))).toBe(true);
+    expect(screen.getAllByRole('option').some(option => option.id.includes('service-'))).toBe(true);
+    expect(screen.getByRole('option', { name: /Klavye kısayollarını göster/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Çalışma alanı ayarlarını aç/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Erişilebilirlik merkezini aç/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('option').every(option => option.id.includes('service-') ||
+      ['kr-command-item-help', 'kr-command-item-workspace-settings', 'kr-command-item-accessibility-center'].includes(option.id))).toBe(true);
   });
 
-  test('returns to all scope with catalog counts intact', () => {
+  test('keeps global commands available in help scope and returns to all scope with catalog counts intact', () => {
     renderCenter();
     openCommandCenter();
     fireEvent.click(screen.getByRole('button', { name: /Yardım/i }));
-    expect(screen.getAllByRole('option')).toHaveLength(1);
+    expect(screen.getByRole('option', { name: /Klavye kısayollarını göster/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Çalışma alanı ayarlarını aç/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Erişilebilirlik merkezini aç/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(3);
     fireEvent.click(screen.getByRole('button', { name: /Tümü/i }));
-    expect(screen.getAllByRole('option').length).toBeGreaterThan(1);
+    expect(screen.getAllByRole('option').length).toBeGreaterThan(3);
   });
 
   test('updates active identity from pointer hover without executing', () => {
