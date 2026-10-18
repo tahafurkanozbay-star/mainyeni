@@ -20,7 +20,6 @@ import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
 import { FastAccessResultAccessibilityBridge } from './Components/Common/FastAccessResultAccessibilityBridge';
 import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
-import { ExperienceNotificationTriage } from './Components/Common/ExperienceNotificationTriage';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
 import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
@@ -182,7 +181,6 @@ function App() {
               windowManager={windowManager}
               notificationModel={notificationCenter}
             />
-            <ExperienceNotificationTriage model={notificationCenter} />
             <ExperienceDataDisclaimer />
           </ExperienceStartupBoundary>
         </div>
