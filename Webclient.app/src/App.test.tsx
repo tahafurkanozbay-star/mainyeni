@@ -95,6 +95,8 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
+    expect(document.querySelector('.experience-notification-triage')).toBeNull();
+    expect(document.querySelector('.map-workspace-shell-overlay:not(.map-workspace-shell-overlay--headless)')).toBeNull();
     expect(screen.queryByRole('button', { name: /Çevrimiçi|Komutlar|Kısayollar|Erişilebilir|Ayarlar|Gezin/i })).not.toBeInTheDocument();
     expect(screen.getByRole('note', { name: /veri kullanım uyarısı/i })).toHaveTextContent(
       'Sitede Gösterilen Veriler Bilgi Amaçlıdır. RESMİ İŞLEMLERDE KULLANILAMAZ'
