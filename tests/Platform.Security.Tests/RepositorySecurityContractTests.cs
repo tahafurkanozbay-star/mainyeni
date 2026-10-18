@@ -153,7 +153,7 @@ public sealed class RepositorySecurityContractTests
         Assert.Contains("dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj --configuration Release --no-build --no-restore", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet test CityWorks.NetCore.sln", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet publish Api.User/Api.User.csproj", workflow, StringComparison.Ordinal);
-        Assert.Contains("dotnet publish Api.Admin/Api.Admin.csproj", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet publish Api.Admin/Api.Admin.csproj", workflow, StringComparison.Ordinal);
     }
 
     [Fact]
