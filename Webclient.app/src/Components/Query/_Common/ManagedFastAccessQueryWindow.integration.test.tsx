@@ -152,19 +152,16 @@ describe('shared service result window ownership and usability', () => {
     expect(screen.getByRole('button', { name: 'Tekrar dene' })).toBeInTheDocument();
   });
 
-  it.each(['Haritada göster', 'Yol tarifi'])('ignores late %s details after close', async (label) => {
+  it('ignores late map-position details after close', async () => {
     const { ref, Query } = setup();
     await act(async () => { await ref.current!.OnShow(); });
     const late = deferred<FastAccessServiceResult>();
     Query.mockReturnValueOnce(late.promise);
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
+    fireEvent.click(screen.getByRole('button', { name: /Haritada göster/ }));
     expect(screen.getAllByRole('button', { name: /Merkez 1 —/ }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
     act(() => { ref.current!.OnClose(); });
     await act(async () => { late.resolve({ type: 10, data: [{ geometry: { latitude: 39.9, longitude: 32.8 } }] }); });
     expect(GisGraphicsHelper.ZoomToGeometry).not.toHaveBeenCalled();
-    expect(open).not.toHaveBeenCalled();
-    open.mockRestore();
   });
 
   it('contains async map navigation failure and restores the action controls', async () => {

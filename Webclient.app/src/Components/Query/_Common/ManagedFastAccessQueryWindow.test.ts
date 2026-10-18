@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildGoogleRouteUrl,
   filterFastAccessRecords,
   getFastAccessRecordKey,
   normalizeFastAccessRecord,
@@ -53,9 +52,5 @@ describe('ManagedFastAccessQueryWindow runtime helpers', () => {
     }))).toBe('abc-123');
   });
 
-  it('builds a safe HTTPS directions URL only for valid coordinates', () => {
-    expect(buildGoogleRouteUrl({ latitude: 39.92, longitude: 32.85 }))
-      .toContain('https://www.google.com.tr/maps?');
-    expect(buildGoogleRouteUrl({ latitude: 200, longitude: 32.85 })).toBeNull();
-  });
+
 });

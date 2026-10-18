@@ -10,7 +10,6 @@ import React, {
   type Ref,
   type RefAttributes,
 } from 'react';
-import { CommonBusiness } from '../../../Business/CommonBusiness';
 import { LoggingBusiness } from '../../../Business/LoggingBusiness';
 import { Constants_MessageType, Constants_ServiceResultType } from '../../../Core/Constants';
 import MapManager from '../../../Store/Managers/MapManager';
@@ -26,10 +25,8 @@ import { SharedGISIcon } from '../../Common/SharedGISIcon';
 import { createManagedWindowFocusLifecycle } from './ManagedWindowFocus';
 import { ServiceWindowActions } from './ServiceWindowActions';
 import {
-  buildGoogleDirectionsUrl,
   createLatestRequestGate,
   normalizeErrorMessage,
-  openExternalSafely,
   safeClientLog,
   type GeometryLike,
 } from './QueryInteractionRuntime';
@@ -218,10 +215,6 @@ export const filterFastAccessRecords = (
   ).includes(needle));
 };
 
-export const buildGoogleRouteUrl = (
-  geometry: GeometryLike | null | undefined,
-): string | null => buildGoogleDirectionsUrl(geometry);
-
 export const getFastAccessRecordKey = (
   record: FastAccessRecord | null | undefined,
   index = 0,
@@ -380,13 +373,6 @@ export function createManagedFastAccessQueryWindow({
           signal,
         );
         nextLayer = Object.freeze({ layerObj: layer as LayerLike });
-      } else {
-        nextLayer = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
-          serviceKey,
-          title,
-          query,
-          symbol,
-        ) as LayerEnvelope | null;
       }
 
       if (!mountedRef.current || signal.aborted || !requestGateRef.current.isCurrent(requestId) || !nextLayer?.layerObj) {
@@ -529,27 +515,6 @@ export function createManagedFastAccessQueryWindow({
       },
     ), [getItemDetails, id, logName, runItemAction, serviceKey, windowManager]);
 
-    const showRoute = useCallback((item: FastAccessRecord) => runItemAction(
-      item,
-      'route',
-      async (signal, isCurrent) => {
-        const detail = await getItemDetails(item, signal);
-        if (!isCurrent()) return null;
-        const routeUrl = buildGoogleDirectionsUrl(getFeatureGeometry(detail));
-        if (!routeUrl) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
-        if (!openExternalSafely(routeUrl)) {
-          throw new Error('Yol tarifi penceresi açılamadı.');
-        }
-
-        void safeClientLog(
-          LoggingBusiness,
-          logName + '/Yol Tarifi',
-          serviceKey,
-        );
-        return true;
-      },
-    ), [getItemDetails, logName, runItemAction, serviceKey]);
-
     useImperativeHandle(ref, () => ({
       id,
       visible,
@@ -682,7 +647,6 @@ export function createManagedFastAccessQueryWindow({
           {visibleRecords.map((item, index) => {
             const recordKey = getFastAccessRecordKey(item, index);
             const zoomKey = recordKey + '-zoom';
-            const routeKey = recordKey + '-route';
 
             return (
               <li className="result-item-container kr-fast-query__item" key={recordKey}>
@@ -706,14 +670,6 @@ export function createManagedFastAccessQueryWindow({
                     aria-label={item.title + ' — Haritada göster'}
                   >
                     {activeActionKey === zoomKey ? 'Açılıyor…' : 'Haritada göster'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { void showRoute(item); }}
-                    disabled={loading || Boolean(activeActionKey)}
-                    aria-label={item.title + ' — Yol tarifi (yeni pencere)'}
-                  >
-                    {activeActionKey === routeKey ? 'Açılıyor…' : 'Yol tarifi'}
                   </button>
                 </div>
               </li>
