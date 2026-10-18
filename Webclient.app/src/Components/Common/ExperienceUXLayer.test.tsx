@@ -262,28 +262,19 @@ describe('ExperienceUXLayer', () => {
     })).not.toBeInTheDocument();
   });
 
-  test('dispatches the command-palette shortcut from normal content', () => {
+  test('does not dispatch a command-palette event for Ctrl+K', () => {
     const manager = createWindowManager();
     const listener = vi.fn();
     window.addEventListener('kentrehberi:command', listener);
 
     renderLayer(manager);
+    fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true });
 
-    fireEvent.keyDown(document.body, {
-      key: 'k',
-      ctrlKey: true,
-    });
-
-    expect(listener).toHaveBeenCalledTimes(1);
-    const event = listener.mock.calls[0]?.[0] as CustomEvent | undefined;
-    expect(event?.detail).toEqual({
-      name: 'command-palette',
-    });
-
+    expect(listener).not.toHaveBeenCalled();
     window.removeEventListener('kentrehberi:command', listener);
   });
 
-  test('allows Ctrl/Cmd+K while focus is in a search field', () => {
+  test('does not dispatch a command-palette event for Cmd+K in a search field', () => {
     const input = document.createElement('input');
     input.type = 'search';
     document.body.appendChild(input);
@@ -293,12 +284,9 @@ describe('ExperienceUXLayer', () => {
     window.addEventListener('kentrehberi:command', listener);
 
     renderLayer(manager);
-    fireEvent.keyDown(input, {
-      key: 'k',
-      metaKey: true,
-    });
+    fireEvent.keyDown(input, { key: 'k', metaKey: true });
 
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).not.toHaveBeenCalled();
     window.removeEventListener('kentrehberi:command', listener);
   });
 
