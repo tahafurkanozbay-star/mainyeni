@@ -127,10 +127,10 @@ textarea:focus-visible,
   height: var(--exp-header-height);
   min-height: var(--exp-header-height);
   padding: 7px 12px;
-  background: color-mix(in srgb, var(--exp-surface) 94%, transparent);
+  background: var(--exp-surface);
   border-bottom: 1px solid var(--exp-border);
-  box-shadow: var(--exp-shadow-xs);
-  backdrop-filter: blur(12px);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+  backdrop-filter: none; isolation: isolate;
   z-index: 1000;
   color: var(--exp-text);
 }

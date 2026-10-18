@@ -273,6 +273,37 @@ describe('kentRehberiFastAccessRuntime', () => {
     expect(result?.data[0]?.attr.adi).toBe('Kuğulu Park');
   });
 
+  it('routes global search through the Kent Rehberi collection instead of a legacy GIS layer', async () => {
+    const fetchCollection = vi.fn(async (options?: { q?: string; limit?: number }) => {
+      expect(options?.limit).toBe(2000);
+      return collection([
+        feature(21, 5, 'Kızılay Parkı'),
+        feature(22, 5, 'Çankaya Meydanı'),
+      ]);
+    });
+    const runtime = createKentRehberiFastAccessRuntime({
+      fetchCollection: fetchCollection as never,
+      fetchTypeCatalog: emptyTypeCatalogFetch as never,
+      now: () => 100,
+      cacheTtlMs: 10_000,
+    });
+    const business = runtime.createBusiness('YeniGenelArama');
+
+    expect(business).not.toBeNull();
+    const kizilay = await business!.Query({ name: 'Kızılay' }, true);
+    expect(fetchCollection).toHaveBeenCalledWith(expect.objectContaining({ q: 'Kızılay', limit: 2000 }));
+    expect(kizilay.data.map((item) => item.attr.objectid)).toEqual([21]);
+    expect(kizilay.data[0]?.geometry).toMatchObject({ x: 32.85, y: 39.92 });
+    expect(kizilay.featureCollection.meta.serviceKey).toBe('YeniGenelArama');
+
+    // Repeating a search reuses its bounded cache; a different term gets its own result set.
+    await business!.Query({ name: 'Kızılay' }, false);
+    expect(fetchCollection).toHaveBeenCalledTimes(1);
+    const cankaya = await business!.Query({ name: 'Çankaya' }, false);
+    expect(cankaya.data.map((item) => item.attr.objectid)).toEqual([22]);
+    expect(fetchCollection).toHaveBeenCalledTimes(2);
+  });
+
   it('does not claim unrelated legacy service keys', () => {
     const runtime = createKentRehberiFastAccessRuntime();
     expect(runtime.createBusiness('PharmacyQueryUrl')).toBeNull();

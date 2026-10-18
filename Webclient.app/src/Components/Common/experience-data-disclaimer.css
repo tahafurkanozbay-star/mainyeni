@@ -94,21 +94,21 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
 
 @media (max-width: 780px) {
   .experience-data-disclaimer {
-    inset-block-end: calc(3.25rem + env(safe-area-inset-bottom));
+    inset-block-end: max(0px, env(safe-area-inset-bottom));
   }
 }
 
 @media (max-width: 40rem) {
   .experience-data-disclaimer {
-    inset-block-end: calc(3.25rem + env(safe-area-inset-bottom));
-    gap: 0.25rem;
-    padding: 0.2rem 0.3rem;
-    font-size: clamp(0.48rem, 2.4vw, 0.62rem);
+    inset-block-end: max(0px, env(safe-area-inset-bottom));
+    gap: 0.2rem;
+    padding: 0.12rem 0.25rem;
+    font-size: clamp(0.46rem, 2.1vw, 0.6rem);
   }
 
   .experience-data-disclaimer__icon {
-    inline-size: 1.1rem;
-    block-size: 1.1rem;
+    inline-size: 0.95rem;
+    block-size: 0.95rem;
   }
 
   .experience-data-disclaimer__copy {

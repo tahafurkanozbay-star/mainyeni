@@ -628,7 +628,8 @@ export const createKentRehberiFastAccessRuntime = (
     serviceKey: string,
   ): KentRehberiFastAccessBusiness | null => {
     const profile = getKentRehberiFastAccessProfile(serviceKey);
-    if (!profile) return null;
+    const isGeneralSearch = normalizeSearchText(serviceKey) === 'yenigenelarama';
+    if (!profile && !isGeneralSearch) return null;
 
     return Object.freeze({
       Query: async (
@@ -640,21 +641,45 @@ export const createKentRehberiFastAccessRuntime = (
         let collection: KentRehberiGeoJsonFeatureCollection;
 
         if (objectId !== null) {
-          const cachedFeature = findCachedFeature(profile.serviceKey, objectId, control);
+          const cachedFeature = findCachedFeature(serviceKey, objectId, control);
           const feature = cachedFeature ?? await fetchFeature(
             objectId,
             buildFetchOptions(control, { limit: 1 }),
           );
           collection = makeFeatureCollection(
             feature ? [feature] : [],
-            profile.serviceKey,
+            serviceKey,
           );
-        } else {
+        } else if (profile) {
           collection = filterByQueryName(
             await resolveCollection(profile, control),
             query,
             profile.serviceKey,
           );
+        } else {
+          // The navigation bar's global search is not a category-specific
+          // legacy GIS service. Query the same Kent Rehberi data source used
+          // by the map, across all categories, instead of relying on a
+          // "YeniGenelArama" layer to exist in the legacy service catalog.
+          const rawQuery = typeof query.name === 'string' ? query.name.trim() : '';
+          const needle = normalizeSearchText(rawQuery);
+
+          if (needle.length < 2) {
+            collection = makeFeatureCollection([], serviceKey);
+          } else {
+            const queryCacheKey = `${serviceKey.trim()}:global-search:${needle}`;
+            const cachedCollection = readCache(queryCacheKey, control);
+            if (cachedCollection) {
+              collection = cachedCollection;
+            } else {
+              const fetched = await fetchCollection(buildFetchOptions(control, {
+                limit: CATEGORY_LIMIT,
+                q: rawQuery,
+              }));
+              collection = filterByQueryName(fetched, query, serviceKey.trim());
+              writeCache(queryCacheKey, collection, control);
+            }
+          }
         }
 
         const data = Object.freeze(
