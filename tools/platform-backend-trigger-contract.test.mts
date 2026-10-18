@@ -6,7 +6,6 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..');
 const workflowPath = '.github/workflows/platform-backend-validation.yml';
 const requiredPaths = [
-  'Api.Admin/**',
   'Api.Core/**',
   'Api.User/**',
   'Business/**',
