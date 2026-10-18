@@ -9,10 +9,8 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { RiFocusLine, RiGoogleFill, RiInformationLine, RiRouteLine } from 'react-icons/ri';
+import { RiInformationLine } from 'react-icons/ri';
 import MapManager from '../../../Store/Managers/MapManager';
-import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
-import { GoogleMapsBusiness } from '../../../Business/GoogleMapsBusiness';
 import type { ManagedWindowHandle } from '../../../experience/contracts';
 import {
   ExperienceMenu,
@@ -22,8 +20,6 @@ import {
 import type { MapWidgetManagerLike } from '../_shared/MapWidgetSurface';
 import {
   clampContextMenuPosition,
-  normalizeMapPoint,
-  openExternalUrl,
   type ContextMenuPosition,
 } from '../_shared/MapWidgetRuntime';
 import './ContextMenuWidget.css';
@@ -77,38 +73,12 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
       (MapManager.GetMapClickEvent() as unknown as MapClickEventLike | null)?.mapPoint ?? null
     ), []);
 
-    const showVicinityQuery = useCallback((): void => {
-      const point = getClickedPoint();
-      if (!point) return;
-      windowManager.ShowWindow('vicinity-query-window');
-      close();
-      GisGraphicsHelper.ZoomToGeometry(MapManager.GetMapView(), point, 14);
-    }, [close, getClickedPoint, windowManager]);
-
     const showIdentify = useCallback((): void => {
       const point = getClickedPoint();
       if (!point) return;
       windowManager.ShowWindow('global-identify-widget');
       close();
     }, [close, getClickedPoint, windowManager]);
-
-    const showRoute = useCallback((): void => {
-      const point = getClickedPoint();
-      const normalized = normalizeMapPoint(point as never);
-      if (!point || !normalized) return;
-      close();
-      const target = new URL('https://www.google.com.tr/maps');
-      target.searchParams.set('saddr', 'My Location');
-      target.searchParams.set('daddr', `${normalized.latitude},${normalized.longitude}`);
-      openExternalUrl(target.toString());
-    }, [close, getClickedPoint]);
-
-    const showStreetView = useCallback((): void => {
-      const point = getClickedPoint();
-      if (!point) return;
-      openExternalUrl(GoogleMapsBusiness.CreateStreetViewUrlFromPoint(point));
-      close();
-    }, [close, getClickedPoint]);
 
     const actions = useMemo<readonly ExperienceMenuItem[]>(() => [
       {
@@ -118,28 +88,7 @@ export const ContextMenuWidget = forwardRef<ManagedWindowHandle, ContextMenuWidg
         icon: <RiInformationLine aria-hidden="true" />,
         onActivate: showIdentify,
       },
-      {
-        id: 'nearby',
-        label: 'Yakınımda Ara',
-        description: 'Seçilen noktanın çevresindeki hizmetleri arar.',
-        icon: <RiFocusLine aria-hidden="true" />,
-        onActivate: showVicinityQuery,
-      },
-      {
-        id: 'route',
-        label: 'Yol Tarifi Al',
-        description: 'Seçilen noktayı harici yol tarifi hedefi olarak açar.',
-        icon: <RiRouteLine aria-hidden="true" />,
-        onActivate: showRoute,
-      },
-      {
-        id: 'street-view',
-        label: 'Sokak Görünümü',
-        description: 'Seçilen noktayı desteklenen sokak görünümünde açar.',
-        icon: <RiGoogleFill aria-hidden="true" />,
-        onActivate: showStreetView,
-      },
-    ], [showIdentify, showRoute, showStreetView, showVicinityQuery]);
+    ], [showIdentify]);
 
     const positionMenuAt = useCallback((requested: ContextMenuPosition): void => {
       const menu = document.getElementById(id) as HTMLDivElement | null;
