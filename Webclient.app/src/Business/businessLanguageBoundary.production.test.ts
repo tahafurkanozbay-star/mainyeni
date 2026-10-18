@@ -40,10 +40,10 @@ describe('Business production language boundary', () => {
 
   it('keeps the major Business production surfaces TypeScript-only', () => {
     for (const runtime of [
-      'CommonBusiness',
-      'RouteQueryBusiness',
-      'NumberingQueryBusiness',
-      'TkgmQueryBusiness',
+      'ConfigurationBusiness',
+      'LoggingBusiness',
+      'createFastAccessQueryBusiness',
+      'kentRehberiFastAccessRuntime',
     ]) {
       expect(existsSync(resolve(businessRoot, `${runtime}.ts`))).toBe(true);
       expect(existsSync(resolve(businessRoot, `${runtime}.js`))).toBe(false);
