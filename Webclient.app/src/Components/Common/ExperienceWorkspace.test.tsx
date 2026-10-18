@@ -166,16 +166,16 @@ describe("ExperienceWorkspace", () => {
         expect(document.activeElement).toBe(map);
     });
 
-    test("Alt+M and Alt+S support keyboard-only region navigation", () => {
+    test("does not install Alt+M or Alt+S global navigation shortcuts", () => {
         render(<ExperienceWorkspace />);
         const map = document.querySelector("#esri-map-container");
         const sidebar = document.querySelector("#sidebar");
 
         fireEvent.keyDown(window, { key: "m", altKey: true });
-        expect(document.activeElement).toBe(map);
+        expect(document.activeElement).not.toBe(map);
 
         fireEvent.keyDown(window, { key: "s", altKey: true });
-        expect(document.activeElement).toBe(sidebar);
+        expect(document.activeElement).not.toBe(sidebar);
     });
 
     test("forced-colors state is surfaced as a user-visible status", () => {
