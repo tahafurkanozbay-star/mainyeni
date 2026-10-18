@@ -12,7 +12,6 @@ const base = () => [
   project('Business/Business.csproj', ['../Toolbox/Toolbox.csproj']),
   project('Api.Core/Api.Core.csproj', ['../Business/Business.csproj', '../Toolbox/Toolbox.csproj']),
   project('Api.User/Api.User.csproj', ['../Api.Core/Api.Core.csproj', '../Business/Business.csproj', '../Toolbox/Toolbox.csproj']),
-  project('Api.Admin/Api.Admin.csproj', ['../Api.Core/Api.Core.csproj', '../Business/Business.csproj', '../Toolbox/Toolbox.csproj']),
   project('tests/Platform.Security.Tests/Platform.Security.Tests.csproj', [
     '../../Api.Core/Api.Core.csproj', '../../Api.User/Api.User.csproj',
     '../../Business/Business.csproj', '../../Toolbox/Toolbox.csproj',
@@ -22,10 +21,10 @@ const evaluate = (projects = base(), requireComplete = true) =>
   evaluateDotnetLayerPolicy({ projects, requireComplete });
 const codes = report => report.findings.map(x => x.code);
 
-test('active six-project topology passes the explicit layer contract', () => {
+test('active five-project topology passes the explicit layer contract', () => {
   const report = evaluate();
   assert.equal(report.ok, true, JSON.stringify(report.findings));
-  assert.deepEqual(report.summary, { projects: 6, references: 13, violations: 0 });
+  assert.deepEqual(report.summary, { projects: 5, references: 10, violations: 0 });
   assert.equal(report.fingerprint.length, 64);
 });
 test('every expected project has a named explicit dependency policy', () => {
@@ -44,20 +43,15 @@ test('API composition cannot depend on a concrete executable host', () => {
   items[2] = project(items[2].path, ['../Api.User/Api.User.csproj']);
   assert.ok(codes(evaluate(items)).includes('layer-reference-forbidden'));
 });
-test('user and admin executable hosts cannot reference each other', () => {
+test('active API and test projects cannot depend on the retired Admin host', () => {
   const items = base();
   items[3] = project(items[3].path, ['../Api.Admin/Api.Admin.csproj']);
-  items[4] = project(items[4].path, ['../Api.User/Api.User.csproj']);
+  items[4] = project(items[4].path, ['../../Api.Admin/Api.Admin.csproj']);
   assert.equal(codes(evaluate(items)).filter(x => x === 'layer-reference-forbidden').length, 2);
 });
 test('production projects cannot depend on test assemblies', () => {
   const items = base();
   items[0] = project(items[0].path, ['../tests/Platform.Security.Tests/Platform.Security.Tests.csproj']);
-  assert.ok(codes(evaluate(items)).includes('layer-reference-forbidden'));
-});
-test('security test assembly cannot depend on the admin executable host', () => {
-  const items = base();
-  items[5] = project(items[5].path, ['../../Api.Admin/Api.Admin.csproj']);
   assert.ok(codes(evaluate(items)).includes('layer-reference-forbidden'));
 });
 test('unclassified new projects fail closed rather than silently widening layers', () => {

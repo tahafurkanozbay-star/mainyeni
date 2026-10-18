@@ -12,7 +12,6 @@ export const LAYER_EDGES = Object.freeze({
   'Business/Business.csproj': ['Toolbox/Toolbox.csproj'],
   'Api.Core/Api.Core.csproj': ['Business/Business.csproj', 'Toolbox/Toolbox.csproj'],
   'Api.User/Api.User.csproj': ['Api.Core/Api.Core.csproj', 'Business/Business.csproj', 'Toolbox/Toolbox.csproj'],
-  'Api.Admin/Api.Admin.csproj': ['Api.Core/Api.Core.csproj', 'Business/Business.csproj', 'Toolbox/Toolbox.csproj'],
   'tests/Platform.Security.Tests/Platform.Security.Tests.csproj': [
     'Api.Core/Api.Core.csproj', 'Api.User/Api.User.csproj',
     'Business/Business.csproj', 'Toolbox/Toolbox.csproj',
