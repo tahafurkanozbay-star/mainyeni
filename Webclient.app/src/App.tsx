@@ -19,7 +19,6 @@ import { installManagedWindowKeyboard } from './Components/Common/managedWindowK
 import { useWindowManager } from './Store/Managers/WindowManager';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
 import { FastAccessResultAccessibilityBridge } from './Components/Common/FastAccessResultAccessibilityBridge';
-import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
 import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
@@ -175,7 +174,6 @@ function App() {
           >
             <ExperienceSkipNavigation />
             <MapComponent windowManager={windowManager} />
-            <ExperienceMapInteractionGuide />
             <ExperienceWorkspace mapModeControl={mapViewAvailable ? <MapModeExperienceControl /> : <span className="experience-sr-only">Harita hazırlanıyor</span>} />
             <ExperienceUXLayer
               windowManager={windowManager}
