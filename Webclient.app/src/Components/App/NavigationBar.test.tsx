@@ -38,17 +38,6 @@ describe('NavigationBar', () => {
     expect(search).not.toHaveFocus();
   });
 
-  it('explains the slash shortcut accessibly without showing a confusing key badge', () => {
-    const { container } = render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
-    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
-
-    expect(search).toHaveAttribute('aria-keyshortcuts', '/');
-    expect(search).toHaveAttribute('title', expect.stringContaining('/'));
-    expect(search.getAttribute('aria-describedby')).toContain('kentrehberi-global-search-shortcut-hint');
-    expect(container.querySelector('.kr-search-hint')).toBeNull();
-    expect(screen.getByText('Odaklanabilir başka bir alan seçili değilken / tuşu arama kutusuna odaklanır.')).toHaveClass('experience-sr-only');
-  });
-
   it('preserves search text and focus when Escape belongs to an active IME composition', () => {
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
     const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
@@ -61,21 +50,23 @@ describe('NavigationBar', () => {
     expect(screen.getByText('Metin girişi sürüyor.')).toBeInTheDocument();
   });
 
-  it('focuses and selects global search with / from the shell', async () => {
+  it('does not wire / as a global search shortcut', async () => {
     const user = userEvent.setup();
     render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
     const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
-    await user.click(search);
-    await user.type(search, 'Çankaya');
-    search.blur();
-    expect(search).not.toHaveFocus();
-
-    await user.keyboard('/');
-
-    expect(search).toHaveFocus();
-    expect(search.selectionStart).toBe(0);
-    expect(search.selectionEnd).toBe(search.value.length);
-    expect(search).toHaveAttribute('aria-keyshortcuts', '/');
+    const otherButton = document.createElement('button');
+    otherButton.textContent = 'Other';
+    document.body.appendChild(otherButton);
+    try {
+      otherButton.focus();
+      await user.keyboard('/');
+      expect(otherButton).toHaveFocus();
+      expect(search).not.toHaveFocus();
+      expect(search).not.toHaveAttribute('aria-keyshortcuts');
+      expect(screen.queryByText(/tuşu arama kutusuna odaklanır/)).not.toBeInTheDocument();
+    } finally {
+      otherButton.remove();
+    }
   });
 
   it('does not steal / while another text field is being edited', async () => {
@@ -93,15 +84,6 @@ describe('NavigationBar', () => {
     } finally {
       auxiliary.remove();
     }
-  });
-
-  it('removes the global shortcut listener when the shell unmounts', async () => {
-    const user = userEvent.setup();
-    const view = render(<NavigationBar windowManager={{ ShowWindow: vi.fn() }} />);
-    const search = screen.getByLabelText<HTMLInputElement>('Adres, yer veya katman ara');
-    view.unmount();
-    await user.keyboard('/');
-    expect(search).not.toHaveFocus();
   });
 
   it('exposes CBS Başkent as a safe external link', () => {
