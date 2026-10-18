@@ -3,12 +3,8 @@ import { defineManagedWindow as defineWindow, type ManagedWindowDefinition } fro
 export type QueryWindowDefinition = ManagedWindowDefinition;
 
 export const QUERY_WINDOW_DEFINITIONS: readonly QueryWindowDefinition[] = Object.freeze([
-  defineWindow('assemblyarea-query-window', 'Toplanma alanları', () => import('../Query/AAQuery/AAQueryWindow'), 'AssemblyAreaQueryWindow'),
   defineWindow('baskentmarket-query-window', 'Başkent Market', () => import('../Query/BaskentMarketQuery/BaskentMarketQueryWindow'), 'BaskentMarketQueryWindow'),
-  defineWindow('cityblockparcel-query-window', 'Ada parsel sorgusu', () => import('../Query/CityBlockParcelQuery/CityBlockParcelQueryWindow'), 'CityBlockParcelQueryWindow'),
   defineWindow('culture-query-window', 'Kültür ve sanat', () => import('../Query/CultureQuery/CultureQueryWindow'), 'CultureQueryWindow'),
-  defineWindow('ego-query-window', 'EGO sorgusu', () => import('../Query/EgoQuery/EgoQueryWindow'), 'EgoQueryWindow'),
-  defineWindow('event-query-window', 'Etkinlikler', () => import('../Query/EventQuery/EventQueryWindow'), 'EventQueryWindow'),
   defineWindow('halkekmek-query-window', 'Halk Ekmek', () => import('../Query/HalkEkmekQuery/HalkEkmekQueryWindow'), 'HalkEkmekQueryWindow'),
   defineWindow('patidostu-query-window', 'Pati Dostu', () => import('../Query/PatiDostuQuery/PatiDostuQueryWindow'), 'PatiDostuQueryWindow'),
   defineWindow('teknolojimerkezi-query-window', 'Teknoloji merkezleri', () => import('../Query/TeknolojiMerkezleriQuery/TeknolojiMerkezleriQueryWindow'), 'TeknolojiMerkezleriQueryWindow'),
@@ -48,12 +44,6 @@ export const QUERY_WINDOW_DEFINITIONS: readonly QueryWindowDefinition[] = Object
   defineWindow('kadinlarlokali-query-window', 'Kadınlar lokali', () => import('../Query/KadinlarLokaliQuery/KadinlarLokaliQueryWindow'), 'KadinlarLokaliQueryWindow'),
   defineWindow('kadindanisma-query-window', 'Kadın danışma merkezi', () => import('../Query/KadinDanismaQuery/KadinDanismaQueryWindow'), 'KadinDanismaQueryWindow'),
   defineWindow('genelarama-query-window', 'Genel arama', () => import('../Query/GenelAramaQuery/GenelAramaQeryWindow'), 'GenelAramaQeryWindow'),
-  defineWindow('numbering-query-window', 'Numarataj sorgusu', () => import('../Query/NumberingQuery/NumberingQueryWindow'), 'NumberingQueryWindow'),
-  defineWindow('pod-query-window', 'POD sorgusu', () => import('../Query/PodQuery/PodQueryWindow'), 'PodQueryWindow'),
-  defineWindow('report-query-window', 'Rapor sorgusu', () => import('../Query/ReportQuery/ReportQueryWindow'), 'ReportQueryWindow'),
-  defineWindow('route-query-window', 'Rota sorgusu', () => import('../Query/RouteQuery/RouteQueryWindow'), 'RouteQueryWindow'),
-  defineWindow('taxi-query-window', 'Taksi sorgusu', () => import('../Query/TaxiQuery/TaxiQueryWindow'), 'TaxiQueryWindow'),
-  defineWindow('vicinity-query-window', 'Yakın çevre sorgusu', () => import('../Query/VicinityQuery/VicinityQueryWindow'), 'VicinityQueryWindow')
 ]);
 
 export const QUERY_WINDOW_IDS: readonly string[] = Object.freeze(QUERY_WINDOW_DEFINITIONS.map((item) => item.id));
