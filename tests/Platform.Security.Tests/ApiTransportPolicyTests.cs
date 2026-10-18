@@ -110,7 +110,8 @@ public sealed class ApiTransportPolicyTests
     {
         var text = File.ReadAllText(Path.Combine(
             RepositoryRoot(),
-            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            "Api.User",
+            "Program.cs"));
 
         Assert.Contains("ConfigureKentRehberiTransport(builder.Configuration)", text, StringComparison.Ordinal);
         Assert.Contains("AddServerHeader = false", text, StringComparison.Ordinal);
