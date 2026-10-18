@@ -42,7 +42,6 @@ import {
   useExperienceAnnouncements,
   useExperienceConnectivity,
   useExperienceDocumentContract,
-  useExperienceGlobalShortcuts,
   useExperienceMediaPreferences,
   useExperiencePreferences,
   useExperienceRuntimeSnapshot,
@@ -388,7 +387,6 @@ export const ExperienceWorkspace = ({ mapModeControl }: ExperienceWorkspaceProps
 
   useExperienceDocumentContract(presentation);
   useExperienceRuntimeSnapshot({ preferences, viewport, media, online });
-  useExperienceGlobalShortcuts();
 
   useEffect(() => {
     const release = experienceBus.on('kentrehberi:map-mode-changed', (detail) => {
