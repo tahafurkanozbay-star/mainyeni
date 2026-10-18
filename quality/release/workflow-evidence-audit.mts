@@ -808,7 +808,6 @@ function workflowSpecificFindings(workflow: WorkflowDocumentEvidence): Finding[]
       'Release build',
       'Run xUnit v3 tests through Microsoft.Testing.Platform',
       'Publish User API',
-      'Publish Admin API',
     ]));
     findings.push(...exactBaseFindings(workflow));
     return findings;
