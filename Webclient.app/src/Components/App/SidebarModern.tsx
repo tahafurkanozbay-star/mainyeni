@@ -8,18 +8,13 @@ import React, {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
-import { CommonBusiness } from '../../Business/CommonBusiness';
-import MapManager from '../../Store/Managers/MapManager';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
-import { createPictureMarkerSymbol } from '../../gis-engine/iconPresentation';
 import { createSidebarKeyboardController, type SidebarKeyboardFocusTarget } from '../../shell/sidebarKeyboardController';
-import { createSidebarLayerLoadController } from '../../shell/sidebarLayerLoadController';
 import { createSidebarNavigationModel, type SidebarNavigationView } from '../../shell/sidebarNavigationModel';
 import { createSidebarPreferenceStore } from '../../shell/sidebarPreferenceStore';
 import { SharedGISIcon } from '../Common/SharedGISIcon';
 import {
-  INITIAL_CITY_LAYER_SERVICE_KEYS,
   SIDEBAR_GROUPS,
   SIDEBAR_ITEMS,
   type SidebarGroup,
@@ -28,101 +23,17 @@ import {
 import './Sidebar.css';
 import './SidebarModern.css';
 import './SidebarInteraction.css';
-import './SidebarLayerStatus.css';
 
 interface SidebarProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
 }
 
-interface MapLayerCollection {
-  includes?: (layer: unknown) => boolean;
-}
-
-interface MapLike {
-  readonly layers?: MapLayerCollection;
-  readonly add: (layer: unknown) => void;
-  readonly remove: (layer: unknown) => void;
-}
-
-interface MapViewLike {
-  readonly zoom: number;
-  readonly map?: MapLike;
-}
-
-interface OperationalLayer {
-  load?: (options: { readonly signal: AbortSignal }) => Promise<unknown>;
-  cancelLoad?: () => void;
-  destroy?: () => void;
-}
-
-const disposeOperationalLayer = (layer: OperationalLayer): void => {
-  try { layer.cancelLoad?.(); } finally { layer.destroy?.(); }
-};
-
 const GROUPS = SIDEBAR_GROUPS as readonly SidebarGroup[];
 const ITEMS = SIDEBAR_ITEMS as readonly SidebarItem[];
-const SERVICE_KEYS = INITIAL_CITY_LAYER_SERVICE_KEYS as readonly string[];
 const MAX_RECENT_SERVICES = 6;
-const LAYER_LOAD_CONCURRENCY = 4;
-const LAYER_RETRY_POLICY = Object.freeze({ maxAttempts: 3 });
 const GROUP_IDS = Object.freeze(GROUPS.map((group) => group.id));
 const ITEM_IDS = Object.freeze(ITEMS.map((item) => item.windowId));
-
-const createInitialOperationalLayer = async (
-  mapView: MapViewLike,
-  serviceKey: string,
-  signal: AbortSignal,
-): Promise<OperationalLayer | null> => {
-  const item = ITEMS.find((entry) => entry.serviceKey === serviceKey);
-  const symbol = createPictureMarkerSymbol(
-    { type: item?.iconType ?? serviceKey, title: item?.label ?? serviceKey },
-    mapView.zoom,
-    { minSize: 25, maxSize: 25 },
-  );
-  const result = await CommonBusiness.Clustering.CreateLayerWithoutClustering(
-    serviceKey,
-    item?.label ?? 'Kent Rehberi',
-    {},
-    symbol,
-  );
-  const layer = result?.layerObj as OperationalLayer | null;
-  if (!layer) return null;
-  const cancelLoad = (): void => {
-    try { layer.cancelLoad?.(); } catch (error) { DebugHelper.Log(error); }
-  };
-  signal.addEventListener('abort', cancelLoad, { once: true });
-  try {
-    signal.throwIfAborted();
-    await layer.load?.({ signal });
-    signal.throwIfAborted();
-    return layer;
-  } catch (error) {
-    disposeOperationalLayer(layer);
-    throw error;
-  } finally {
-    signal.removeEventListener('abort', cancelLoad);
-  }
-};
-
-const addLayerSafely = (map: MapLike, layer: unknown): boolean => {
-  try {
-    if (map.layers?.includes?.(layer)) return true;
-    map.add(layer);
-    return true;
-  } catch (error) {
-    DebugHelper.Log(error);
-    return false;
-  }
-};
-
-const removeLayerSafely = (map: MapLike, layer: unknown): void => {
-  try {
-    if (!map.layers?.includes || map.layers.includes(layer)) map.remove(layer);
-  } catch (error) {
-    DebugHelper.Log(error);
-  }
-};
 
 const ServiceSearchGlyph = (): ReactNode => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -186,32 +97,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     pageSize: 6,
   }), [navigationModel]);
 
-  const mapViewRef = useRef<MapViewLike | null>(null);
-  const mountedOperationalLayers = useRef<unknown[]>([]);
-  const layerRetryAttemptsRef = useRef(0);
-  const configuredServiceKeys = useMemo(() => {
-    const services = MapManager.GetConfigurationServices?.();
-    if (!services) return SERVICE_KEYS;
-    const titles = new Set(services.map((service) => service.title ?? service.Title));
-    return SERVICE_KEYS.filter((serviceKey) => titles.has(serviceKey));
-  }, []);
-  const layerLoadController = useMemo(() => createSidebarLayerLoadController<OperationalLayer>({
-    serviceKeys: configuredServiceKeys,
-    concurrency: LAYER_LOAD_CONCURRENCY,
-    timeoutMs: 15_000,
-    disposeLayer: disposeOperationalLayer,
-    loadLayer: async (serviceKey, { signal }) => {
-      const mapView = mapViewRef.current;
-      if (!mapView?.map) return null;
-      return createInitialOperationalLayer(mapView, serviceKey, signal);
-    },
-  }), [configuredServiceKeys]);
-  const layerLoad = useSyncExternalStore(
-    layerLoadController.subscribe,
-    layerLoadController.getSnapshot,
-    layerLoadController.getSnapshot,
-  );
-
   const registrationRef = useRef<ManagedWindowHandle | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -239,36 +124,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     windowManager.RegisterWindow(registrationRef);
     return () => windowManager.UnregisterWindow?.(id, registrationRef);
   }, [id, windowManager]);
-
-  useEffect(() => {
-    const mapView = MapManager.GetMapView() as MapViewLike | null;
-    mapViewRef.current = mapView;
-    const map = mapView?.map;
-    if (!map) {
-      return () => {
-        mapViewRef.current = null;
-      };
-    }
-
-    void layerLoadController.start();
-
-    return () => {
-      layerLoadController.cancel();
-      for (const layer of mountedOperationalLayers.current) removeLayerSafely(map, layer);
-      mountedOperationalLayers.current = [];
-      layerLoadController.reset();
-      mapViewRef.current = null;
-    };
-  }, [layerLoadController]);
-
-  useEffect(() => {
-    const map = mapViewRef.current?.map;
-    if (!map) return;
-    for (const entry of layerLoad.loadedLayers) {
-      if (mountedOperationalLayers.current.includes(entry.layer)) continue;
-      if (addLayerSafely(map, entry.layer)) mountedOperationalLayers.current.push(entry.layer);
-    }
-  }, [layerLoad.loadedLayers]);
 
   const focusKeyboardTarget = (target: SidebarKeyboardFocusTarget): void => {
     if (target === null) return;
@@ -334,12 +189,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     focusKeyboardTarget(result.focus);
   };
 
-  const retryFailedLayers = (): void => {
-    if (!layerLoad.canRetry || layerRetryAttemptsRef.current >= LAYER_RETRY_POLICY.maxAttempts) return;
-    layerRetryAttemptsRef.current += 1;
-    void layerLoadController.retryFailed();
-  };
-
   if (!navigation.visible) return null;
 
   const panelTitle = navigation.view === 'favorites'
@@ -360,24 +209,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
         ? 'Açtığınız hizmetler burada en yeniden eskiye görünür.'
         : 'Başka bir kurum veya görünüm seçin.';
   const rovingGroupId = navigation.activeGroupId ?? GROUPS[0]?.id ?? null;
-  const layerProgressValue = layerLoad.totalCount === 0
-    ? 100
-    : Math.round((layerLoad.completedCount / layerLoad.totalCount) * 100);
-  const canRetryLayers = layerLoad.canRetry && layerRetryAttemptsRef.current < LAYER_RETRY_POLICY.maxAttempts;
-  const layerTitle = layerLoad.phase === 'loading'
-    ? 'Harita katmanları hazırlanıyor'
-    : layerLoad.phase === 'degraded'
-      ? 'Bazı harita katmanları hazırlanamadı'
-      : 'Harita katmanları hazır';
-  const layerDetail = layerLoad.phase === 'loading'
-    ? `${layerLoad.completedCount}/${layerLoad.totalCount} tamamlandı`
-    : layerLoad.phase === 'degraded'
-      ? canRetryLayers
-        ? `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} yeniden denenebilir`
-        : `${layerLoad.loadedCount} hazır · ${layerLoad.failedCount} katman için yeniden deneme sınırına ulaşıldı`
-      : `${layerLoad.loadedCount} katman kullanıma hazır`;
-  const showLayerStatus = layerLoad.totalCount > 0 && layerLoad.phase !== 'idle' && layerLoad.phase !== 'cancelled';
-
   return (
     <aside
       className={`sidebar-container kr-sidebar kr-sidebar--next kr-sidebar--governed ${navigation.collapsed ? 'is-collapsed' : ''}`}
@@ -474,41 +305,6 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
           </div>
           <span aria-hidden="true">{navigation.resultCount} hizmet</span>
         </header>
-
-        {showLayerStatus ? (
-          <div className="kr-sidebar__layer-load" data-phase={layerLoad.phase}>
-            <div className="kr-sidebar__layer-load-copy">
-              <span className="kr-sidebar__layer-load-dot" aria-hidden="true" />
-              <span>
-                <strong>{layerTitle}</strong>
-                <small>{layerDetail}</small>
-              </span>
-            </div>
-            {layerLoad.phase === 'loading' ? (
-              <progress
-                className="kr-sidebar__layer-progress"
-                max={100}
-                value={layerProgressValue}
-                aria-label="Harita katmanları hazırlama ilerlemesi"
-              >
-                %{layerProgressValue}
-              </progress>
-            ) : null}
-            {canRetryLayers ? (
-              <button
-                type="button"
-                className="kr-sidebar__layer-retry"
-                onClick={retryFailedLayers}
-                aria-label={`Başarısız harita katmanlarını yeniden dene, en fazla ${LAYER_RETRY_POLICY.maxAttempts} deneme`}
-              >
-                Yeniden dene
-              </button>
-            ) : null}
-            <span className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">
-              {layerLoad.announcement}
-            </span>
-          </div>
-        ) : null}
 
         <span id="kr-sidebar-keyboard-help" className="experience-sr-only">
           Hizmetler arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter hizmeti açar.
