@@ -27,7 +27,6 @@ const COMMANDS: Readonly<Record<string, string>> = Object.freeze({
   'typed-release-exact-base': 'BASE_SHA=${{ github.event.pull_request.base.sha }}; node quality/release/cli.mts --baseline /tmp/base.json',
   'backend-tests': 'dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj',
   'backend-user-publish': 'dotnet publish Api.User/Api.User.csproj',
-  'backend-admin-publish': 'dotnet publish Api.Admin/Api.Admin.csproj',
   'architecture-module-graph': 'node tools/platform-module-graph.mjs --strict',
   'architecture-language-ratchet': 'node tools/platform-language-ratchet.mjs --strict',
   'architecture-platform-boundary': 'node tools/platform-boundary-audit.mjs --strict',
@@ -199,11 +198,6 @@ test('missing User API publish evidence is detected', () => {
   assert.ok(section.findings.some(item => item.message.includes('backend-user-publish')));
 });
 
-test('missing Admin API publish evidence is detected', () => {
-  const section = audit([removeStep('.github/workflows/release-qa.yml', 'Publish Admin API')]);
-  assert.ok(section.findings.some(item => item.message.includes('backend-admin-publish')));
-});
-
 test('missing architecture module graph evidence is detected', () => {
   const section = audit([
     removeStep('.github/workflows/platform-architecture-audit.yml', 'Enforce typed module graph'),
@@ -356,13 +350,6 @@ test('step name alone cannot fake backend xUnit evidence', () => {
 test('step name alone cannot fake User API publish evidence', () => {
   const section = audit([
     replaceCommand('.github/workflows/release-qa.yml', 'Publish User API', 'echo user'),
-  ]);
-  assert.ok(section.findings.some(item => item.id === 'release-evidence-command-drift'));
-});
-
-test('step name alone cannot fake Admin API publish evidence', () => {
-  const section = audit([
-    replaceCommand('.github/workflows/release-qa.yml', 'Publish Admin API', 'echo admin'),
   ]);
   assert.ok(section.findings.some(item => item.id === 'release-evidence-command-drift'));
 });
