@@ -16,7 +16,6 @@ import {
   createLiveRegion,
   getMediaPreferenceSnapshot,
   installMediaPreferenceObserver,
-  shouldHandleGlobalShortcut,
   type LivePoliteness,
   type MediaPreferenceSnapshot,
 } from '../accessibilityRuntime';
@@ -146,30 +145,6 @@ export const focusExperienceTarget = (selector: string): boolean => {
   if (typeof document === 'undefined') return false;
   const target = document.querySelector(selector);
   return target instanceof HTMLElement ? activateSkipTarget(target) : false;
-};
-
-export const useExperienceGlobalShortcuts = (): void => {
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (!shouldHandleGlobalShortcut(event)) return;
-      const key = event.key.toLowerCase();
-
-      if (event.altKey && key === 'm') {
-        event.preventDefault();
-        focusExperienceTarget('#esri-map-container');
-        return;
-      }
-      if (event.altKey && key === 's') {
-        event.preventDefault();
-        focusExperienceTarget('#sidebar');
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
 };
 
 const setDataset = (root: HTMLElement, key: string, value: string): void => {
