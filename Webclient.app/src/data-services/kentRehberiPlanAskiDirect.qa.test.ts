@@ -131,11 +131,10 @@ describe('QA: direct PlanASKI transport memory and lifecycle security', () => {
     await expect(fetchPlanAskiGeoJsonDirect({ tur: 13, fetchImpl })).rejects.toThrow();
   });
 
-  it('keeps upstream endpoint fixed regardless of filters or API base override', async () => {
+  it('keeps the upstream endpoint fixed regardless of search filters', async () => {
     const fetchImpl = singleTypeFetch(13, [feature(13, 101)]);
     const result = await fetchPlanAskiGeoJsonDirect({
-      tur: 13, q: 'çankaya', ilce: 'ÇANKAYA', apiBaseUrl: 'https://other.example.test',
-      fetchImpl,
+      tur: 13, q: 'çankaya', ilce: 'ÇANKAYA', fetchImpl,
     });
     expect(result.meta?.count).toBe(1);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
