@@ -16,7 +16,6 @@ import {
   type DialogPresentation,
 } from '../../experience/dialogStackModel';
 import type { NotificationCenterModel } from '../../experience/notificationCenterModel';
-import { createShortcutRuntime } from '../../experience/shortcutRuntime';
 import './experience-ui.css';
 import './experience-ux-layer-modern.css';
 import { useExperienceTheme } from './ExperienceDesignSystem';
@@ -27,7 +26,6 @@ import { LayerListWidget } from '../Widget/LayerList/LayerListWidget';
 type ActionIconType =
   | 'sun'
   | 'moon'
-  | 'keyboard'
   | 'search'
   | 'layers'
   | 'legend'
@@ -104,13 +102,6 @@ const ActionIcon = ({
       );
     case 'moon':
       return <svg {...common}><path d="M20.5 15.6A8.5 8.5 0 0 1 8.4 3.5 8.5 8.5 0 1 0 20.5 15.6Z" /></svg>;
-    case 'keyboard':
-      return (
-        <svg {...common}>
-          <rect x="3" y="5" width="18" height="14" rx="2" />
-          <path d="M7 9h1M11 9h1M15 9h1M7 13h5M15 13h2" />
-        </svg>
-      );
     case 'search':
       return (
         <svg {...common}>
@@ -261,29 +252,6 @@ export function ExperienceUXLayer({
     window.addEventListener('kentrehberi:command', onCommand);
     return () => window.removeEventListener('kentrehberi:command', onCommand);
   }, [openHelp, openNotifications, windowManager]);
-
-  useEffect(() => {
-    const shortcuts = createShortcutRuntime({
-      document,
-      onHandlerError(error, shortcut) {
-        reportUxRuntimeError(
-          error,
-          `experience.ux-layer.shortcut.${shortcut.id}`,
-        );
-      },
-      shortcuts: [
-        {
-          id: 'command-palette',
-          key: 'k',
-          ctrlOrMeta: true,
-          allowInEditable: true,
-          handler: () => dispatchExperienceCommand('command-palette'),
-        },
-      ],
-    });
-
-    return () => shortcuts.dispose();
-  }, []);
 
   const themeLabel = useMemo(
     () => theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç',
