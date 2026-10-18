@@ -16,8 +16,6 @@ import { ExperienceMapModeBridge } from './ExperienceMapModeBridge';
 import { MapWorkspaceRecoverySurface } from './MapWorkspaceRecoverySurface';
 import { MapWorkspaceRecoveryModel } from './mapWorkspaceRecoveryModel';
 import { MapWorkspaceAccessibilityModel } from './mapWorkspaceAccessibility';
-import { MapWorkspaceShortcutHelpLauncher } from './MapWorkspaceShortcutHelp';
-import { handleMapWorkspaceKeyDown } from './mapWorkspaceShortcuts';
 import { loadArcgisModules } from '../../gis-engine/arcgisModuleRuntime';
 import type { ArcgisAccessorWatch } from '../../gis-engine/arcgisReactiveRuntime';
 import { createViewStateBridge } from '../../gis-engine/viewState';
@@ -76,7 +74,6 @@ const safeRemove = (handle: RemovableHandle | null | undefined): void => {
 
 export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const mapDiv = useRef<HTMLDivElement | null>(null);
-  const navigationLandmarkRef = useRef<HTMLElement | null>(null);
   const accessorWatchRef = useRef<ArcgisAccessorWatch | null>(null);
   const activeViewModeRef = useRef<ExperienceMapMode>('2d');
   const accessibilityModelRef = useRef<MapWorkspaceAccessibilityModel | null>(null);
@@ -94,18 +91,6 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
   const [mapView, setMapView] = useState<MapViewLike | null>(null);
   const sidebarRef = useRef<unknown>(null);
 
-
-  useEffect(() => {
-    const onWorkspaceKeyDown = (event: KeyboardEvent): void => {
-      handleMapWorkspaceKeyDown(event, {
-        mapElement: mapDiv.current,
-        navigationElement: navigationLandmarkRef.current,
-        windowManager,
-      });
-    };
-    window.addEventListener('keydown', onWorkspaceKeyDown);
-    return () => window.removeEventListener('keydown', onWorkspaceKeyDown);
-  }, [windowManager]);
 
   useEffect(() => {
     let disposed = false;
@@ -215,8 +200,7 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
       {mapView && <>
         {showOverviewPoints() ? <KentRehberiDataLayer map={mapView.map as KentRehberiMapLike} /> : null}
         <ExperienceMapModeBridge mapView={mapView as never} modeRef={activeViewModeRef} accessorWatch={accessorWatchRef.current ?? undefined} />
-        <div ref={(node) => { navigationLandmarkRef.current = node?.querySelector('header') ?? null; }}><NavigationBar id="mainbar" windowManager={windowManager} /></div>
-        <MapWorkspaceShortcutHelpLauncher />
+        <NavigationBar id="mainbar" windowManager={windowManager} />
         <LegacySidebar id="sidebar" windowManager={windowManager} ref={sidebarRef} />
         <ModernToolbarWidget id="toolbar-widget" windowManager={windowManager} accessorWatch={accessorWatchRef.current ?? undefined} />
         {WIDGET_WINDOW_DEFINITIONS.map((definition) => <LazyManagedWindow key={definition.id} {...definition} keepMounted windowManager={windowManager} />)}
