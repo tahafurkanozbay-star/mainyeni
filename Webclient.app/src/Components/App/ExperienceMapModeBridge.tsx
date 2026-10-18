@@ -539,7 +539,17 @@ export function ExperienceMapModeBridge({
       '.experience-utility',
       '.experience-data-disclaimer',
       '.experience-connectivity-notice',
+      '.experience-notification-center',
+      '.experience-notification-triage',
+      '.experience-settings',
+      '.experience-settings-backdrop',
       '.workspace-accessibility-center__panel',
+      '.experience-workspace',
+      '.map-workspace-shell-overlay:not(.map-workspace-shell-overlay--headless)',
+      '.experience-scene-health',
+      '.kr-lazy-window',
+      '.esri-popup__main-container',
+      '#layerlist-widget',
       '.sidebar-container',
       '.sidebar-container1',
       '#sidebar',
@@ -634,6 +644,18 @@ export function ExperienceMapModeBridge({
     const mutationObserver = typeof MutationObserver === 'undefined'
       ? null
       : new MutationObserver(schedulePlacement);
+    // Track panels that mount after the 3D scene is enabled (query windows,
+    // dialogs and toasts). Attribute-only observation of the initial DOM misses
+    // these late overlays and can leave camera controls layered on top of them.
+    const contentObserver = typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(() => {
+        syncObservedTargets();
+        schedulePlacement();
+      });
+    if (document.body) {
+      contentObserver?.observe(document.body, { childList: true, subtree: true });
+    }
 
     const onViewportChange = (): void => schedulePlacement();
     const onRuntimeCommand = (): void => schedulePlacement();
@@ -657,6 +679,7 @@ export function ExperienceMapModeBridge({
       if (frame !== null) window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
+      contentObserver?.disconnect();
       controls.style.removeProperty('left');
       controls.style.removeProperty('top');
       controls.style.removeProperty('right');

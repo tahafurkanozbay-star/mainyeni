@@ -1,6 +1,6 @@
 @font-face{font-family:'ankara';src:url('./AnkaraDisplay-Regular.ttf');font-display:swap;}
 :root{--mainbar-height:60px;--mainbar-background:var(--exp-surface,#fff);}
-.mainbar-container{position:absolute;top:0;left:0;width:100%;height:var(--mainbar-height);min-height:var(--mainbar-height);padding:6px 10px;background:color-mix(in srgb,var(--exp-surface) 94%,transparent);border-bottom:1px solid var(--exp-border);box-shadow:var(--exp-shadow-xs);backdrop-filter:blur(10px);z-index:1000;color:var(--exp-text);}
+.mainbar-container{position:absolute;top:0;left:0;width:100%;height:var(--mainbar-height);min-height:var(--mainbar-height);padding:6px 10px;background:var(--exp-surface,#fff);border-bottom:1px solid var(--exp-border);box-shadow:0 1px 2px rgb(15 23 42 / 5%);backdrop-filter:none;isolation:isolate;z-index:1000;color:var(--exp-text);}
 .mainbar{height:100%;display:flex;align-items:center;gap:8px;position:relative;}
 .mainbar-logo{display:flex;align-items:center;justify-content:center;width:60px;height:46px;flex:0 0 60px;}
 .mainbar-logo img{max-height:40px;width:auto;margin:0;}
@@ -15,9 +15,7 @@
 .kr-search-submit:hover{background:var(--exp-surface-3);color:var(--exp-text);}
 .kr-search-submit:focus-visible{outline:0;box-shadow:var(--exp-focus);}
 .kr-search-submit:disabled{cursor:not-allowed;opacity:.5;}
-.kr-search-hint{position:absolute;right:46px;top:8px;display:flex;gap:3px;align-items:center;color:var(--exp-text-muted);font-size:9px;pointer-events:none;}
-.kr-search-hint kbd,.kr-header-shortcut{font-family:var(--exp-font-mono,'Segoe UI Mono',monospace);}
-.kr-search-hint kbd{padding:2px 4px;border:1px solid var(--exp-border);border-bottom-color:var(--exp-border-strong);border-radius:4px;background:var(--exp-surface);font-size:9px;}
+.kr-header-shortcut{font-family:var(--exp-font-mono,'Segoe UI Mono',monospace);}
 .mainbar-right{margin-left:auto;display:flex;align-items:center;gap:5px;}
 .kr-header-shortcut{min-width:52px;min-height:38px;padding:0 9px;border:1px solid var(--exp-border);border-radius:9px;background:var(--exp-surface-2);color:var(--exp-text-soft);cursor:pointer;font-size:10px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;}
 .kr-header-shortcut:hover{background:var(--exp-surface-3);color:var(--exp-text);border-color:var(--exp-border-strong);}
