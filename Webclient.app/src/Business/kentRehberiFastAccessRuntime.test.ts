@@ -278,7 +278,7 @@ describe('kentRehberiFastAccessRuntime', () => {
       expect(options?.limit).toBe(2000);
       return collection([
         feature(21, 5, 'Kızılay Parkı'),
-        feature(22, 5, 'Çankaya Meydanı'),
+        feature(22, 5, 'Çankaya Meydanı', { mahalle: 'Söğütözü' }),
       ]);
     });
     const runtime = createKentRehberiFastAccessRuntime({

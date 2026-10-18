@@ -263,38 +263,14 @@ describe('MapWorkspaceShortcutHelpLauncher', () => {
     vi.clearAllMocks();
   });
 
-  it('removes the visible launcher and keeps Shift+? help access', () => {
+  it('does not mount a shortcut dialog or respond to former global launch events', () => {
     render(<MapWorkspaceShortcutHelpLauncher />);
-    expect(screen.queryByRole('button', { name: 'Kısayollar' })).not.toBeInTheDocument();
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: '?', code: 'Slash', shiftKey: true });
-    expect(screen.getByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Tamam' }));
-    expect(screen.queryByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).not.toBeInTheDocument();
-  });
-
-  it('opens from the command-center help event', () => {
-    render(<MapWorkspaceShortcutHelpLauncher />);
     fireEvent(window, new CustomEvent('kentrehberi:command', { detail: { name: 'workspace-help' } }));
-    expect(screen.getByRole('dialog', { name: 'Harita çalışma alanı yardımı' })).toBeInTheDocument();
-  });
 
-  it('opens on governed Shift+? using an act-wrapped testing-library event', () => {
-    render(<MapWorkspaceShortcutHelpLauncher />);
-    fireEvent.keyDown(window, { key: '?', code: 'Slash', shiftKey: true });
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('does not open from plain question-mark input', () => {
-    render(<MapWorkspaceShortcutHelpLauncher />);
-    fireEvent.keyDown(window, { key: '?', code: 'Slash' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('does not open while a text input owns the shortcut event', () => {
-    render(<><input aria-label="Metin" /><MapWorkspaceShortcutHelpLauncher /></>);
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Metin' }), { key: '?', code: 'Slash', shiftKey: true });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Kısayollar' })).not.toBeInTheDocument();
   });
 });

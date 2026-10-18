@@ -10,7 +10,6 @@ import './Components/Common/workspace-accessibility-guide-preference.css';
 import './experience/legacyPresentationModernization.css';
 import './Components/App/MapModeTransitionContinuity.css';
 import { MapComponent } from './Components/App/MapComponent';
-import { MapWorkspaceShellOverlay } from './Components/App/MapWorkspaceShellOverlay';
 import { MapModeExperienceControl } from './Components/App/MapModeExperienceControl';
 import { ExperienceMapModePreferenceBridge } from './Components/App/ExperienceMapModePreferenceBridge';
 import { ExperienceMapModeFocusBridge } from './Components/App/ExperienceMapModeFocusBridge';
@@ -18,22 +17,16 @@ import { AppConfig } from './Core/AppConfig';
 import Store from './Store/Store';
 import { installManagedWindowKeyboard } from './Components/Common/managedWindowKeyboard';
 import { useWindowManager } from './Store/Managers/WindowManager';
-import { ExperienceConnectivityNotice } from './Components/Common/ExperienceConnectivityNotice';
 import { ExperienceDataDisclaimer } from './Components/Common/ExperienceDataDisclaimer';
 import { FastAccessResultAccessibilityBridge } from './Components/Common/FastAccessResultAccessibilityBridge';
-import { ExperienceMapInteractionGuide } from './Components/Common/ExperienceMapInteractionGuide';
-import { ExperienceNotificationShortcutBridge } from './Components/Common/ExperienceNotificationShortcutBridge';
-import { ExperienceNotificationTriage } from './Components/Common/ExperienceNotificationTriage';
 import { ExperiencePresentationBridge } from './Components/Common/ExperiencePresentationBridge';
 import { ExperienceSettingsValidationBridge } from './Components/Common/ExperienceSettingsValidationBridge';
 import { ExperienceSkipNavigation } from './Components/Common/ExperienceSkipNavigation';
 import { ExperienceUXLayer } from './Components/Common/ExperienceUXLayer';
-import { ExperienceCommandCenterModern as ExperienceCommandCenter } from './Components/Common/ExperienceCommandCenterModern';
 import { ExperienceThemeProvider } from './Components/Common/ExperienceDesignSystem';
 import { ExperienceWorkspace } from './Components/Common/ExperienceWorkspace';
 import { ExperienceRuntimeBridge } from './Components/Common/ExperienceRuntimeBridge';
 import { ExperienceStartupBoundary } from './Components/Common/ExperienceStartupBoundary';
-import { WorkspaceAccessibilityCenter } from './Components/Common/WorkspaceAccessibilityCenter';
 import { WorkspaceAccessibilityProvider } from './Components/Common/WorkspaceAccessibilityProvider';
 import { NotificationCenterModel } from './experience/notificationCenterModel';
 import { createStartupExperienceModel } from './experience/startupExperienceModel';
@@ -173,7 +166,6 @@ function App() {
         <ExperienceSettingsValidationBridge />
         <ExperienceMapModePreferenceBridge />
         <ExperienceMapModeFocusBridge />
-        <ExperienceNotificationShortcutBridge />
         <FastAccessResultAccessibilityBridge />
         <div id="app-shell">
           <ExperienceStartupBoundary
@@ -182,19 +174,13 @@ function App() {
           >
             <ExperienceSkipNavigation />
             <MapComponent windowManager={windowManager} />
-            <MapWorkspaceShellOverlay initialCollapsed headless />
-            <ExperienceMapInteractionGuide />
             <ExperienceWorkspace mapModeControl={mapViewAvailable ? <MapModeExperienceControl /> : <span className="experience-sr-only">Harita hazırlanıyor</span>} />
             <ExperienceUXLayer
               windowManager={windowManager}
               notificationModel={notificationCenter}
             />
-            <ExperienceNotificationTriage model={notificationCenter} />
-            <ExperienceCommandCenter windowManager={windowManager} />
-            <ExperienceConnectivityNotice notificationModel={notificationCenter} />
             <ExperienceDataDisclaimer />
           </ExperienceStartupBoundary>
-          <WorkspaceAccessibilityCenter />
         </div>
       </WorkspaceAccessibilityProvider>
     </ExperienceThemeProvider>

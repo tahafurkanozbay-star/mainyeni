@@ -82,7 +82,7 @@ describe('App bootstrap lifecycle', () => {
     expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
   });
 
-  test('renders map, UX layer, command center and data disclaimer after bootstrap completes', async () => {
+  test('renders map, UX layer and data disclaimer without extra command/status controls after bootstrap completes', async () => {
     const operation = deferred();
     bootstrapApplication.mockReturnValue(operation.promise);
     render(<App />);
@@ -94,7 +94,12 @@ describe('App bootstrap lifecycle', () => {
 
     expect(screen.getByTestId('map-shell')).toHaveAttribute('data-manager-id', 'window-manager-1');
     expect(screen.getByTestId('experience-layer')).toHaveAttribute('data-manager-id', 'window-manager-1');
-    expect(screen.getByTestId('command-center')).toHaveAttribute('data-manager-id', 'window-manager-1');
+    expect(screen.queryByTestId('command-center')).not.toBeInTheDocument();
+    expect(document.querySelector('.experience-notification-triage')).toBeNull();
+    expect(document.querySelector('.experience-map-interaction-guide')).toBeNull();
+    expect(document.querySelector('.experience-connectivity-notice')).toBeNull();
+    expect(document.querySelector('.map-workspace-shell-overlay:not(.map-workspace-shell-overlay--headless)')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Çevrimiçi|Komutlar|Kısayollar|Erişilebilir|Ayarlar|Gezin/i })).not.toBeInTheDocument();
     expect(screen.getByRole('note', { name: /veri kullanım uyarısı/i })).toHaveTextContent(
       'Sitede Gösterilen Veriler Bilgi Amaçlıdır. RESMİ İŞLEMLERDE KULLANILAMAZ'
     );

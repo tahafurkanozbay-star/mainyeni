@@ -33,11 +33,14 @@ describe('App Experience integration contract', () => {
     expect(modernizationStyles).toBeGreaterThan(canonicalStyles);
   });
 
-  test('imports every recovered accessibility surface from its canonical module', () => {
+  test('keeps shared runtime imports and leaves optional keyboard guidance unmounted', () => {
     expectImport('./Components/Common/ExperienceDataDisclaimer');
-    expectImport('./Components/Common/ExperienceMapInteractionGuide');
     expectImport('./Components/Common/ExperiencePresentationBridge');
     expectImport('./Components/Common/ExperienceSkipNavigation');
+    expect(appSource).not.toContain("from './Components/Common/ExperienceMapInteractionGuide'");
+    expect(appSource).not.toContain("from './Components/Common/WorkspaceAccessibilityCenter'");
+    expect(appSource).not.toContain("from './Components/Common/ExperienceConnectivityNotice'");
+    expect(appSource).not.toContain("from './Components/Common/ExperienceNotificationTriage'");
   });
 
   test('mounts the presentation bridge inside the theme provider', () => {
@@ -59,15 +62,14 @@ describe('App Experience integration contract', () => {
       .toBeLessThan(indexOfRendered('MapComponent'));
   });
 
-  test('places map interaction guidance directly after the map surface', () => {
+  test('does not mount retired keyboard guidance or extra map status surfaces', () => {
     expectRendered('MapComponent');
-    expectRendered('ExperienceMapInteractionGuide');
     expectRendered('ExperienceWorkspace');
-
-    expect(indexOfRendered('ExperienceMapInteractionGuide'))
-      .toBeGreaterThan(indexOfRendered('MapComponent'));
-    expect(indexOfRendered('ExperienceMapInteractionGuide'))
-      .toBeLessThan(indexOfRendered('ExperienceWorkspace'));
+    expect(appSource).not.toContain('<ExperienceMapInteractionGuide');
+    expect(appSource).not.toContain('<MapWorkspaceShellOverlay');
+    expect(appSource).not.toContain('<ExperienceConnectivityNotice');
+    expect(appSource).not.toContain('<WorkspaceAccessibilityCenter');
+    expect(appSource).not.toContain('<ExperienceNotificationTriage');
   });
 
   test('uses the shared disclaimer instead of a duplicate inline disclaimer', () => {
@@ -76,27 +78,36 @@ describe('App Experience integration contract', () => {
     expect(appSource).not.toContain('<SiteDataDisclaimer');
   });
 
-  test('keeps recovered surfaces inside the startup boundary', () => {
+  test('keeps the remaining map workspace surfaces inside the startup boundary', () => {
     const boundaryStart = indexOfRendered('ExperienceStartupBoundary');
     const map = indexOfRendered('MapComponent');
-    const guide = indexOfRendered('ExperienceMapInteractionGuide');
     const workspace = indexOfRendered('ExperienceWorkspace');
     const disclaimer = indexOfRendered('ExperienceDataDisclaimer');
     const boundaryEnd = appSource.indexOf('</ExperienceStartupBoundary>');
 
     expect(boundaryEnd).toBeGreaterThan(boundaryStart);
-    for (const child of [map, guide, workspace, disclaimer]) {
+    for (const child of [map, workspace, disclaimer]) {
       expect(child).toBeGreaterThan(boundaryStart);
       expect(child).toBeLessThan(boundaryEnd);
     }
   });
 
-  test('preserves the existing GIS and runtime composition points', () => {
+  test('preserves core GIS/runtime composition and excludes retired control surfaces', () => {
     expectRendered('ExperienceRuntimeBridge');
     expectRendered('MapComponent');
     expectRendered('ExperienceWorkspace');
     expectRendered('ExperienceUXLayer');
-    expectRendered('ExperienceCommandCenter');
-    expectRendered('ExperienceConnectivityNotice');
+    for (const retiredSurface of [
+      'ExperienceCommandCenter',
+      'ExperienceConnectivityNotice',
+      'ExperienceMapInteractionGuide',
+      'ExperienceNotificationTriage',
+      'ExperienceNotificationShortcutBridge',
+      'WorkspaceAccessibilityCenter',
+      'MapWorkspaceShellOverlay',
+    ]) {
+      expect(appSource).not.toContain('<' + retiredSurface);
+      expect(appSource).not.toContain("from './Components/Common/" + retiredSurface + "'");
+    }
   });
 });
