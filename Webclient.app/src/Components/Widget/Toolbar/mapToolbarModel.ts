@@ -1,18 +1,10 @@
 import { isAbortLike } from '../../../platform/runtime/contracts';
 
-export type MapToolbarActionId =
-  | 'feedback'
-  | 'basemap'
-  | 'address'
-  | 'location'
-  | 'parcel'
-  | 'measure'
-  | 'streetview'
-  | 'home';
+export type MapToolbarActionId = 'basemap' | 'location' | 'measure' | 'home';
 
 export type MapToolbarGroupId = 'municipal' | 'analysis' | 'navigation';
 export type MapToolbarLocationPhase = 'idle' | 'locating' | 'success' | 'fallback' | 'error' | 'cancelled';
-export type MapToolbarActionKind = 'external' | 'window' | 'location' | 'home';
+export type MapToolbarActionKind = 'window' | 'location' | 'home';
 
 export interface MapToolbarPoint {
   readonly x: number;
@@ -76,60 +68,10 @@ export const MAP_TOOLBAR_GROUP_LABELS: Readonly<Record<MapToolbarGroupId, string
 });
 
 export const MAP_TOOLBAR_ACTIONS: readonly MapToolbarActionDefinition[] = Object.freeze([
-  Object.freeze({
-    id: 'feedback',
-    group: 'municipal',
-    kind: 'external',
-    label: 'Geri Bildirim (Başkent 153)',
-    target: 'https://ulakbell.ankara.bel.tr/WebForm/basket153basvuru#/',
-  }),
-  Object.freeze({
-    id: 'basemap',
-    group: 'municipal',
-    kind: 'window',
-    label: 'Altlık Haritalar',
-    target: 'basemap-widget',
-  }),
-  Object.freeze({
-    id: 'address',
-    group: 'analysis',
-    kind: 'window',
-    label: 'Adres Arama',
-    target: 'numbering-query-window',
-  }),
-  Object.freeze({
-    id: 'location',
-    group: 'analysis',
-    kind: 'location',
-    label: 'Konum Bul',
-  }),
-  Object.freeze({
-    id: 'parcel',
-    group: 'analysis',
-    kind: 'window',
-    label: 'Ada-Parsel Arama',
-    target: 'cityblockparcel-query-window',
-  }),
-  Object.freeze({
-    id: 'measure',
-    group: 'analysis',
-    kind: 'window',
-    label: 'Ölçüm Aracı',
-    target: 'measurement-widget',
-  }),
-  Object.freeze({
-    id: 'streetview',
-    group: 'analysis',
-    kind: 'window',
-    label: 'Sokak Görüntüsü',
-    target: 'streetview-widget',
-  }),
-  Object.freeze({
-    id: 'home',
-    group: 'navigation',
-    kind: 'home',
-    label: 'Başlangıç görünümüne dön',
-  }),
+  Object.freeze({ id: 'basemap', group: 'municipal', kind: 'window', label: 'Altlık Haritalar', target: 'basemap-widget' }),
+  Object.freeze({ id: 'location', group: 'analysis', kind: 'location', label: 'Konum Bul' }),
+  Object.freeze({ id: 'measure', group: 'analysis', kind: 'window', label: 'Ölçüm Aracı', target: 'measurement-widget' }),
+  Object.freeze({ id: 'home', group: 'navigation', kind: 'home', label: 'Başlangıç görünümüne dön' }),
 ]);
 
 const LOCATION_ANNOUNCEMENTS: Readonly<Record<MapToolbarLocationPhase, string>> = Object.freeze({
@@ -144,7 +86,7 @@ const LOCATION_ANNOUNCEMENTS: Readonly<Record<MapToolbarLocationPhase, string>> 
 const DEFAULT_MAX_LISTENERS = 24;
 const MAX_MAX_LISTENERS = 100;
 const VALID_GROUPS = new Set<MapToolbarGroupId>(['municipal', 'analysis', 'navigation']);
-const TARGET_REQUIRED_KINDS = new Set<MapToolbarActionKind>(['external', 'window']);
+const TARGET_REQUIRED_KINDS = new Set<MapToolbarActionKind>(['window']);
 
 const normalizeListenerLimit = (value: number | undefined): number => {
   if (!Number.isFinite(value)) return DEFAULT_MAX_LISTENERS;

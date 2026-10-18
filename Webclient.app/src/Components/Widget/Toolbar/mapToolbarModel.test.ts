@@ -15,14 +15,7 @@ describe('mapToolbarModel', () => {
   it('ships a deterministic catalog with unique actions and valid groups', () => {
     expect(auditMapToolbarCatalog()).toEqual([]);
     expect(MAP_TOOLBAR_ACTIONS.map((action) => action.id)).toEqual([
-      'feedback',
-      'basemap',
-      'address',
-      'location',
-      'parcel',
-      'measure',
-      'streetview',
-      'home',
+      'basemap', 'location', 'measure', 'home',
     ]);
     expect(Object.keys(MAP_TOOLBAR_GROUP_LABELS)).toEqual([
       'municipal',
@@ -51,10 +44,10 @@ describe('mapToolbarModel', () => {
 
   it('detects missing targets for target-based commands', () => {
     const actions = MAP_TOOLBAR_ACTIONS.map((action) => (
-      action.id === 'feedback' ? { ...action, target: '' } : action
+      action.id === 'basemap' ? { ...action, target: '' } : action
     ));
     expect(auditMapToolbarCatalog(actions).some((finding) => (
-      finding.code === 'missing-target' && finding.actionId === 'feedback'
+      finding.code === 'missing-target' && finding.actionId === 'basemap'
     ))).toBe(true);
   });
 
