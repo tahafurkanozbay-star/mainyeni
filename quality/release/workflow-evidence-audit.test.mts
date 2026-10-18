@@ -90,7 +90,6 @@ function cleanReleaseQa(): FixtureFileInput {
       + `      - name: Checkout\n        uses: actions/checkout@${CHECKOUT} # v7\n        with:\n          persist-credentials: false\n`
       + namedRun('Run xUnit v3 tests through Microsoft.Testing.Platform', 'dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj')
       + namedRun('Publish User API', 'dotnet publish Api.User/Api.User.csproj')
-      + namedRun('Publish Admin API', 'dotnet publish Api.Admin/Api.Admin.csproj'),
   };
 }
 
@@ -488,7 +487,7 @@ test('webclient build cannot move ahead of exact-base test evidence', () => {
 test('release QA publish commands classify as publish evidence', () => {
   const parsed = parseWorkflowEvidence(fixtureFile(cleanReleaseQa()));
   const publish = parsed.jobs.flatMap(job => job.steps).filter(step => step.kinds.includes('publish'));
-  assert.deepEqual(publish.map(step => step.name), ['Publish User API', 'Publish Admin API']);
+  assert.deepEqual(publish.map(step => step.name), ['Publish User API']);
 });
 
 test('release QA exact-base command classifies as baseline evidence', () => {

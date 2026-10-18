@@ -32,16 +32,15 @@ app.UseRequestTimeouts();
 `;
 const fixture = () => ({
   'Api.User/Program.cs': host(true),
-  'Api.Admin/Program.cs': host(),
   'Api.Core/Platform/ApiPlatformApplicationExtensions.cs': shared(),
 });
 const evaluate = values => evaluateApiStartupPipeline(values ?? fixture());
 const codes = report => report.findings.map(x => x.code);
 
-test('both API hosts and the shared middleware chain pass', () => {
+test('User API and shared middleware chain pass', () => {
   const report = evaluate();
   assert.equal(report.ok, true, JSON.stringify(report.findings));
-  assert.deepEqual(report.summary, { sources: 3, requiredSteps: 29, violations: 0 });
+  assert.deepEqual(report.summary, { sources: 2, requiredSteps: 19, violations: 0 });
 });
 test('host sequence requires platform configuration registration', () => {
   const files = fixture();
@@ -51,7 +50,7 @@ test('host sequence requires platform configuration registration', () => {
 });
 test('host sequence requires transport setup before build', () => {
   const files = fixture();
-  files['Api.Admin/Program.cs'] = files['Api.Admin/Program.cs']
+  files['Api.User/Program.cs'] = files['Api.User/Program.cs']
     .replace('builder.WebHost.ConfigureKentRehberiTransport(builder.Configuration);', '');
   assert.ok(codes(evaluate(files)).includes('api-pipeline-step-missing'));
 });
@@ -64,14 +63,14 @@ test('host sequence rejects routing before platform request guards', () => {
 });
 test('host sequence rejects post-routing policy before routing', () => {
   const files = fixture();
-  files['Api.Admin/Program.cs'] = files['Api.Admin/Program.cs']
+  files['Api.User/Program.cs'] = files['Api.User/Program.cs']
     .replace('app.UseRouting();\napp.UseKentRehberiPlatformAfterRouting();',
       'app.UseKentRehberiPlatformAfterRouting();\napp.UseRouting();');
   assert.ok(codes(evaluate(files)).includes('api-pipeline-step-out-of-order'));
 });
 test('host sequence requires authorization before controller mapping', () => {
   const files = fixture();
-  files['Api.Admin/Program.cs'] = files['Api.Admin/Program.cs'].replace('app.UseAuthorization();', '');
+  files['Api.User/Program.cs'] = files['Api.User/Program.cs'].replace('app.UseAuthorization();', '');
   assert.ok(codes(evaluate(files)).includes('api-pipeline-step-missing'));
 });
 test('host sequence rejects duplicated authorization registration', () => {
@@ -81,7 +80,7 @@ test('host sequence rejects duplicated authorization registration', () => {
 });
 test('host sequence rejects direct CORS bypass', () => {
   const files = fixture();
-  files['Api.Admin/Program.cs'] += '\napp.UseCors("*");';
+  files['Api.User/Program.cs'] += '\napp.UseCors("*");';
   assert.ok(codes(evaluate(files)).includes('api-host-cors-bypass'));
 });
 test('host sequence requires suppressed Kestrel server banner', () => {
@@ -101,7 +100,7 @@ test('GIS request-body limit is mandatory for User API only', () => {
   files['Api.User/Program.cs'] = files['Api.User/Program.cs']
     .replace('app.UseMiddleware<GisProxyRequestBodyLimitMiddleware>();', '');
   assert.ok(codes(evaluate(files)).includes('api-gis-body-limit-order'));
-  assert.equal(evaluate({ ...fixture(), 'Api.Admin/Program.cs': host() }).ok, true);
+  assert.equal(evaluate(fixture()).ok, true);
 });
 test('shared chain requires security headers before governance', () => {
   const files = fixture();
@@ -130,7 +129,7 @@ test('C# comments cannot forge missing pipeline calls', () => {
 });
 test('C# string literals cannot forge missing pipeline calls', () => {
   const files = fixture();
-  files['Api.Admin/Program.cs'] = files['Api.Admin/Program.cs']
+  files['Api.User/Program.cs'] = files['Api.User/Program.cs']
     .replace('app.MapControllers();', 'var fake = "app.MapControllers();";');
   assert.ok(codes(evaluate(files)).includes('api-pipeline-step-missing'));
 });
@@ -156,12 +155,12 @@ test('trivia removal preserves executable code and newlines', () => {
 });
 test('missing API source fails closed', () => {
   const files = fixture();
-  delete files['Api.Admin/Program.cs'];
+  delete files['Api.User/Program.cs'];
   assert.ok(codes(evaluate(files)).includes('api-pipeline-source-missing'));
 });
 test('report excludes raw startup source and secrets', () => {
   const files = fixture();
-  files['Api.Admin/Program.cs'] += '\nvar secret = "do-not-report-this-value";';
+  files['Api.User/Program.cs'] += '\nvar secret = "do-not-report-this-value";';
   const report = evaluate(files);
   assert.equal(JSON.stringify(report).includes('do-not-report-this-value'), false);
 });

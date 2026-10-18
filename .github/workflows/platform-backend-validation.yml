@@ -3,7 +3,6 @@ name: Platform Backend Validation
 on:
   pull_request:
     paths:
-      - 'Api.Admin/**'
       - 'Api.Core/**'
       - 'Api.User/**'
       - 'Business/**'
@@ -18,7 +17,6 @@ on:
     branches:
       - main
     paths:
-      - 'Api.Admin/**'
       - 'Api.Core/**'
       - 'Api.User/**'
       - 'Business/**'
@@ -126,5 +124,3 @@ jobs:
       - name: Publish User API
         run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output artifacts/api-user
 
-      - name: Publish Admin API
-        run: dotnet publish Api.Admin/Api.Admin.csproj --configuration Release --no-build --no-restore --output artifacts/api-admin

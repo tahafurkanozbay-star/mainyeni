@@ -243,5 +243,3 @@ jobs:
       - name: Publish User API
         run: dotnet publish Api.User/Api.User.csproj --configuration Release --no-build --no-restore --output /tmp/publish-user
 
-      - name: Publish Admin API
-        run: dotnet publish Api.Admin/Api.Admin.csproj --configuration Release --no-build --no-restore --output /tmp/publish-admin

@@ -7,7 +7,7 @@ param(
     [string]$OutputRoot = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) "artifacts"),
 
     [Parameter()]
-    [ValidateSet("User", "Admin", "All")]
+    [ValidateSet("User", "All")]
     [string]$Target = "All",
 
     [Parameter()]
@@ -126,7 +126,7 @@ $OutputRoot = (Resolve-Path $OutputRoot).Path
 
 Write-Host "Repository: $RepositoryRoot"
 Write-Host "Artifacts:  $OutputRoot"
-Write-Host "Target:     $Target"
+Write-Host "Target:     $Target (Webclient.app + Api.User only)"
 Write-Host "Config:     $Configuration"
 
 if ($Target -in @("User", "All")) {
@@ -134,9 +134,5 @@ if ($Target -in @("User", "All")) {
     Build-DotnetApi -ProjectFile "Api.User/Api.User.csproj" -ArtifactName "api-user"
 }
 
-if ($Target -in @("Admin", "All")) {
-    Build-WebClient -Folder "Webclient.admin" -ArtifactName "webclient-admin"
-    Build-DotnetApi -ProjectFile "Api.Admin/Api.Admin.csproj" -ArtifactName "api-admin"
-}
 
 Write-Host "Release packaging completed successfully." -ForegroundColor Green

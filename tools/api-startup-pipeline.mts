@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const HOSTS = Object.freeze(['Api.User/Program.cs', 'Api.Admin/Program.cs']);
+const HOSTS = Object.freeze(['Api.User/Program.cs']);
 const SHARED = 'Api.Core/Platform/ApiPlatformApplicationExtensions.cs';
 const HOST_SEQUENCE = Object.freeze([
   'builder.WebHost.ConfigureKentRehberiTransport',

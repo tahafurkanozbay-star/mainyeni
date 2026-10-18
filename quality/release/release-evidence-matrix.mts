@@ -241,15 +241,6 @@ export const RELEASE_EVIDENCE_REQUIREMENTS: readonly ReleaseEvidenceRequirement[
     purpose: 'User API release publishability evidence.',
   }),
   Object.freeze({
-    id: 'backend-admin-publish',
-    domain: 'backend',
-    workflow: '.github/workflows/release-qa.yml',
-    job: 'backend-release-validation',
-    step: 'Publish Admin API',
-    critical: true,
-    purpose: 'Admin API release publishability evidence.',
-  }),
-  Object.freeze({
     id: 'architecture-module-graph',
     domain: 'architecture',
     workflow: '.github/workflows/platform-architecture-audit.yml',
@@ -501,7 +492,6 @@ function commandEvidenceFindings(observations: readonly ReleaseEvidenceObservati
   commandRequired('typed-release-exact-base', /github\.event\.pull_request\.base\.sha/u, 'exact-base typed release regression comparison');
   commandRequired('backend-tests', /dotnet\s+run\b[^\n]*Platform\.Security\.Tests/u, '.NET security/regression test execution');
   commandRequired('backend-user-publish', /dotnet\s+publish\s+Api\.User/u, 'User API publishability');
-  commandRequired('backend-admin-publish', /dotnet\s+publish\s+Api\.Admin/u, 'Admin API publishability');
   return findings;
 }
 
