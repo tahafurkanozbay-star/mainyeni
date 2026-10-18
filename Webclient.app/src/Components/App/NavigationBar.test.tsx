@@ -46,7 +46,7 @@ describe('NavigationBar', () => {
     expect(search).toHaveAttribute('title', expect.stringContaining('/'));
     expect(search.getAttribute('aria-describedby')).toContain('kentrehberi-global-search-shortcut-hint');
     expect(container.querySelector('.kr-search-hint')).toBeNull();
-    expect(screen.getByText(/\/ tuşu arama kutusuna odaklanır/)).toHaveClass('experience-sr-only');
+    expect(screen.getByText('Odaklanabilir başka bir alan seçili değilken / tuşu arama kutusuna odaklanır.')).toHaveClass('experience-sr-only');
   });
 
   it('preserves search text and focus when Escape belongs to an active IME composition', () => {
