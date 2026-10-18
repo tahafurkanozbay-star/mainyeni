@@ -1,5 +1,4 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { chordMatches, createShortcutChord, evaluateShortcutPolicy } from './mapWorkspaceShortcutPolicy';
 import { MAP_WORKSPACE_SHORTCUTS } from './mapWorkspaceShortcuts';
 import { createMapWorkspaceDialogSession } from './mapWorkspaceDialogRuntime';
 import {
@@ -22,7 +21,6 @@ export interface MapWorkspaceShortcutHelpProps {
   readonly onClose: () => void;
 }
 
-const HELP_SHORTCUT = Object.freeze({ key: '?', shift: true });
 const ACTIVE_DESCENDANT_KEYS: Readonly<Partial<Record<string, MapShortcutHelpMove>>> = Object.freeze({
   ArrowDown: 'next',
   ArrowUp: 'previous',
@@ -274,29 +272,5 @@ export const MapWorkspaceShortcutHelp = ({ open, onClose }: MapWorkspaceShortcut
   );
 };
 
-export const MapWorkspaceShortcutHelpLauncher = () => {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const onHelpShortcut = (event: KeyboardEvent): void => {
-      if (!evaluateShortcutPolicy(event).allowed) return;
-      if (!chordMatches(createShortcutChord(event), HELP_SHORTCUT)) return;
-      event.preventDefault();
-      setOpen(true);
-    };
-    const onCommand = (event: Event): void => {
-      const detail = (event as CustomEvent<{ readonly name?: unknown }>).detail;
-      if (detail?.name === 'workspace-help') setOpen(true);
-    };
-    window.addEventListener('keydown', onHelpShortcut);
-    window.addEventListener('kentrehberi:command', onCommand);
-    return () => {
-      window.removeEventListener('keydown', onHelpShortcut);
-      window.removeEventListener('kentrehberi:command', onCommand);
-    };
-  }, []);
-
-  // The launcher button is intentionally omitted from the map chrome.
-  // The detailed help remains available through the Shift+? keyboard shortcut.
-  return <MapWorkspaceShortcutHelp open={open} onClose={() => setOpen(false)} />;
-};
+// Intentionally disabled: the map no longer exposes a shortcut/help launcher.
+export const MapWorkspaceShortcutHelpLauncher = (): null => null;
