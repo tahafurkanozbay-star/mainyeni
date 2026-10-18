@@ -1,13 +1,13 @@
 # Database-free PlanASKI public map API (opt-in)
 
-The standard `Api.User` and `Api.Admin` applications still require
-`ConnectionStrings__Primary`. **Do not set a dummy database connection.**
+The standard/full `Api.User` mode still requires `ConnectionStrings__Primary`.
+**Do not set a dummy database connection.**
 
 For map-only development, `Api.User` can run with the separate, explicitly
 enabled `KentRehberiData__Standalone=true` profile. In this mode it does not
 register `BusinessContext` or discover legacy controllers that depend on the
 application database. Only the existing anonymous `KentRehberiController`
-is routable; the Admin API is unchanged.
+is routable in this standalone profile.
 
 ## Run locally in PowerShell
 
@@ -47,7 +47,7 @@ Vite forwards `/api/*` to `/*` on the API. The public URLs are
   `https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi`.
   `tur` is constrained to 0 through 42, inclusive.
 - Only anonymous Kent Rehberi routes are discovered (search, single object,
-  nearby, types, capabilities). There are no AppSettings, admin, authentication
+  nearby, types, capabilities). There are no AppSettings, authentication
   or generic GIS proxy endpoints. The full frontend may still require those
   endpoints for functionality outside the map-only API.
 - The existing bounded PlanASKI fetch, URL validation, request deadlines,

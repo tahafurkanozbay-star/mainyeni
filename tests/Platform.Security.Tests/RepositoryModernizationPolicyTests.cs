@@ -127,7 +127,7 @@ public sealed class RepositoryModernizationPolicyTests
             .Select(path => Path.GetRelativePath(RepositoryRoot.Value, path).Replace('/', '\\'))
             .ToArray();
 
-        Assert.Equal(6, projectPaths.Length);
+        Assert.Equal(5, projectPaths.Length);
         foreach (var projectPath in projectPaths)
         {
             Assert.Contains(projectPath, solutionText, StringComparison.OrdinalIgnoreCase);
@@ -147,7 +147,6 @@ public sealed class RepositoryModernizationPolicyTests
             "Business/Business.csproj",
             "Toolbox/Toolbox.csproj",
             "Api.Core/Api.Core.csproj",
-            "Api.Admin/Api.Admin.csproj",
             "Api.User/Api.User.csproj",
             "tests/Platform.Security.Tests/Platform.Security.Tests.csproj"
         }

@@ -13,7 +13,6 @@ public sealed class RepositorySecurityContractTests
     private static readonly Lazy<string> RepositoryRoot = new(FindRepositoryRoot);
 
     [Theory]
-    [InlineData("Api.Admin/appsettings.json")]
     [InlineData("Api.User/appsettings.json")]
     public void AppSettings_AreValidJson_AndDoNotContainTrackedDatabaseCredentials(string relativePath)
     {
@@ -59,44 +58,7 @@ public sealed class RepositorySecurityContractTests
         Assert.DoesNotMatch(new Regex(@"(?:REACT_APP|VITE)_CLIENT_KEY\s*=", RegexOptions.IgnoreCase), envExample);
     }
 
-    [Fact]
-    public void AdminSessionStorage_DoesNotPersistBearerTokenAcrossBrowserSessions()
-    {
-        var authBusiness = Read("Webclient.admin/src/Business/AuthBusiness.ts");
-        var constants = Read("Webclient.admin/src/Core/Constants.ts");
-
-        // Stronger admission: the Admin bearer is volatile and is never
-        // serialized into either session or persistent browser storage.
-        Assert.Contains("activeSession", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("sessionStorage.getItem", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("sessionStorage.setItem", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("localStorage.getItem", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("localStorage.setItem", authBusiness, StringComparison.Ordinal);
-        var cleanup = Read("Webclient.admin/src/Business/AdminLegacyStorageCleanup.ts");
-        Assert.Contains("sessionStorage.removeItem", cleanup, StringComparison.Ordinal);
-        Assert.Contains("localStorage.removeItem", cleanup, StringComparison.Ordinal);
-        Assert.DoesNotContain("CryptoJS.AES", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("Session.Pk", authBusiness, StringComparison.Ordinal);
-        Assert.DoesNotContain("Pk:", constants, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AdminViteBuild_DoesNotRequireTrackedLegacyEnvironmentFile()
-    {
-        var localEnvPath = Path.Combine(RepositoryRoot.Value, "Webclient.admin", ".env");
-        var samplePath = Path.Combine(RepositoryRoot.Value, "Webclient.admin", ".env.example");
-        var viteConfig = Read("Webclient.admin/vite.config.ts");
-
-        Assert.False(File.Exists(localEnvPath),
-            "Admin .env must be ignored and provisioned locally, not committed.");
-        Assert.True(File.Exists(samplePath),
-            "Keep a documented Vite environment example for development.");
-        Assert.Contains("envPrefix: ['VITE_']", viteConfig, StringComparison.Ordinal);
-        Assert.DoesNotContain("REACT_APP_", Read("Webclient.admin/.env.example"), StringComparison.Ordinal);
-    }
-
     [Theory]
-    [InlineData("Api.Admin/Program.cs")]
     [InlineData("Api.User/Program.cs")]
     public void ApiCorsPolicies_DoNotAllowArbitraryOrigins(string relativePath)
     {
@@ -109,7 +71,6 @@ public sealed class RepositorySecurityContractTests
     }
 
     [Theory]
-    [InlineData("Api.Admin/Program.cs")]
     [InlineData("Api.User/Program.cs")]
     public void Kestrel_DoesNotUseLegacyThirtyMinuteKeepAlive(string relativePath)
     {
@@ -125,7 +86,6 @@ public sealed class RepositorySecurityContractTests
     [Fact]
     public void LegacyStartupHostingFiles_AreRemoved()
     {
-        Assert.False(File.Exists(Path.Combine(RepositoryRoot.Value, "Api.Admin", "Startup.cs")));
         Assert.False(File.Exists(Path.Combine(RepositoryRoot.Value, "Api.User", "Startup.cs")));
     }
 
@@ -150,7 +110,6 @@ public sealed class RepositorySecurityContractTests
 
         var projects = new[]
         {
-            "Api.Admin/Api.Admin.csproj",
             "Api.Core/Api.Core.csproj",
             "Api.User/Api.User.csproj",
             "Business/Business.csproj",
@@ -195,6 +154,23 @@ public sealed class RepositorySecurityContractTests
         Assert.DoesNotContain("dotnet test CityWorks.NetCore.sln", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet publish Api.User/Api.User.csproj", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet publish Api.Admin/Api.Admin.csproj", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RemovedAdminStack_IsNotPartOfTheActiveSolutionOrBuildPipelines()
+    {
+        Assert.False(Directory.Exists(Path.Combine(RepositoryRoot.Value, "Webclient.admin")));
+        Assert.False(Directory.Exists(Path.Combine(RepositoryRoot.Value, "Api.Admin")));
+
+        var solution = Read("CityWorks.NetCore.sln");
+        var backendWorkflow = Read(".github/workflows/platform-backend-validation.yml");
+        var releaseWorkflow = Read(".github/workflows/release-qa.yml");
+        var buildScript = Read("Operations/build.ps1");
+
+        Assert.DoesNotContain("Api.Admin", solution, StringComparison.Ordinal);
+        Assert.DoesNotContain("Webclient.admin", buildScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("Api.Admin/Api.Admin.csproj", backendWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("Api.Admin/Api.Admin.csproj", releaseWorkflow, StringComparison.Ordinal);
     }
 
     [Fact]
