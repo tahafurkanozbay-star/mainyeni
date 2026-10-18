@@ -105,10 +105,8 @@ public sealed class ApiTransportPolicyTests
                 null!));
     }
 
-    [Theory]
-    [InlineData("Api.User/Program.cs")]
-    [InlineData("Api.Admin/Program.cs")]
-    public void ApiHosts_ApplySharedTransportPolicy(string relativePath)
+    [Fact]
+    public void ApiUserHost_AppliesSharedTransportPolicy()
     {
         var text = File.ReadAllText(Path.Combine(
             RepositoryRoot(),

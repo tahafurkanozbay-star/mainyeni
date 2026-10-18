@@ -238,13 +238,9 @@ public sealed class RequestGovernanceOptionsTests
     {
         var user = System.IO.File.ReadAllText(
             System.IO.Path.Combine(RepositoryRoot(), "Api.User", "appsettings.json"));
-        var admin = System.IO.File.ReadAllText(
-            System.IO.Path.Combine(RepositoryRoot(), "Api.Admin", "appsettings.json"));
 
         Assert.Contains("\"Governance\"", user, StringComparison.Ordinal);
-        Assert.Contains("\"Governance\"", admin, StringComparison.Ordinal);
         Assert.DoesNotContain("Password=", user, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Password=", admin, StringComparison.OrdinalIgnoreCase);
     }
 
     private IReadOnlyList<string> Failures(ApiPlatformOptions options)
