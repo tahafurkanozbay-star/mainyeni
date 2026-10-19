@@ -89,7 +89,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     const highlightGraphicRef = useRef<unknown>(null);
 
     const clearHighlight = useCallback((): void => {
-      const view = MapManager.GetMapView() ?? mapView;
+      const view = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView() ?? mapView;
       if (view && highlightGraphicRef.current) {
         GisGraphicsHelper.RemoveGraphics(view, highlightGraphicRef.current);
         highlightGraphicRef.current = null;
@@ -104,7 +104,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
 
     const executeIdentify = useCallback(async (event: unknown): Promise<void> => {
       const generation = ++identifyGenerationRef.current;
-      const view = MapManager.GetMapView() ?? mapView;
+      const view = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView() ?? mapView;
       const eventWithPoint = event as { mapPoint?: unknown } | null;
       if (!view || !eventWithPoint?.mapPoint) {
         if (mountedRef.current) {
@@ -157,7 +157,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     useEffect(() => {
       mountedRef.current = true;
       windowManager.RegisterWindow(ref as RefObject<ManagedWindowHandle | null>);
-      setMapView(MapManager.GetMapView());
+      setMapView(MapManager.GetActiveMapView?.() ?? MapManager.GetMapView());
       const session = sessionRef.current;
 
       return () => {
@@ -174,7 +174,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
     }, [id, ref, windowManager]);
 
     const goToItem = useCallback(async (item: IdentifyFeatureResult): Promise<void> => {
-      const view = MapManager.GetMapView() ?? mapView;
+      const view = MapManager.GetActiveMapView?.() ?? MapManager.GetMapView() ?? mapView;
       const geometry = geometryOf(item);
       if (!view || !geometry) return;
 
