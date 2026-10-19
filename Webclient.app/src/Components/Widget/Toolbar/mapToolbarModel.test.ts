@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   MAP_TOOLBAR_ACTIONS,
-  MAP_TOOLBAR_FALLBACK_LOCATION,
   MAP_TOOLBAR_GROUP_LABELS,
   MapToolbarModel,
   auditMapToolbarCatalog,
@@ -120,7 +119,6 @@ describe('mapToolbarModel', () => {
     const pending = model.locate({
       requestPosition,
       showLocation: vi.fn(),
-      showSidebar: vi.fn(),
     });
     expect(model.getSnapshot()).toMatchObject({
       locationPhase: 'locating',
@@ -138,97 +136,76 @@ describe('mapToolbarModel', () => {
     const result = await model.locate({
       requestPosition: async () => ({ x: 32.81, y: 39.95 }),
       showLocation,
-      showSidebar,
     });
     expect(result).toBe('success');
     expect(showLocation).toHaveBeenCalledTimes(1);
     expect(showLocation).toHaveBeenCalledWith({ x: 32.81, y: 39.95 });
-    expect(showSidebar).not.toHaveBeenCalled();
     expect(model.getSnapshot()).toMatchObject({
       locationPhase: 'success',
       announcement: 'Konumunuz haritada gösterildi.',
     });
   });
 
-  it('uses the bounded Ankara fallback when geolocation rejects', async () => {
+  it('does not fabricate a location when browser geolocation rejects', async () => {
     const model = new MapToolbarModel();
     const showLocation = vi.fn(async () => undefined);
-    const showSidebar = vi.fn();
     const onError = vi.fn();
     const sourceError = new Error('permission denied');
     const result = await model.locate({
       requestPosition: async () => { throw sourceError; },
       showLocation,
-      showSidebar,
       onError,
     });
-    expect(result).toBe('fallback');
-    expect(showLocation).toHaveBeenCalledTimes(1);
-    expect(showLocation).toHaveBeenCalledWith(MAP_TOOLBAR_FALLBACK_LOCATION);
-    expect(showSidebar).toHaveBeenCalledTimes(1);
+    expect(result).toBe('error');
+    expect(showLocation).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(sourceError);
     expect(model.getSnapshot()).toMatchObject({
-      locationPhase: 'fallback',
-      announcement: 'Konum alınamadı. Ankara merkez konumu gösterildi.',
+      locationPhase: 'error',
+      announcement: 'Kesin konum alınamadı. Konum iznini ve cihaz ayarlarını kontrol edip yeniden deneyin.',
     });
   });
 
-  it('uses the fallback for invalid browser coordinates', async () => {
+  it('rejects invalid browser coordinates without navigating to a guessed position', async () => {
     const model = new MapToolbarModel();
     const showLocation = vi.fn(async () => undefined);
     const onError = vi.fn();
     const result = await model.locate({
       requestPosition: async () => ({ x: 999, y: 999 }),
       showLocation,
-      showSidebar: vi.fn(),
       onError,
     });
-    expect(result).toBe('fallback');
-    expect(showLocation).toHaveBeenCalledWith(MAP_TOOLBAR_FALLBACK_LOCATION);
+    expect(result).toBe('error');
+    expect(showLocation).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
-  it('publishes error when both requested and fallback rendering fail', async () => {
+  it('reports browser location failure once without trying a fabricated camera target', async () => {
     const model = new MapToolbarModel();
     const errors: unknown[] = [];
+    const showLocation = vi.fn(async () => undefined);
     const result = await model.locate({
       requestPosition: async () => { throw new Error('geolocation blocked'); },
-      showLocation: async () => { throw new Error('map unavailable'); },
-      showSidebar: vi.fn(),
-      onError: (error) => errors.push(error),
+      showLocation,
+      onError: error => errors.push(error),
     });
     expect(result).toBe('error');
-    expect(errors).toHaveLength(2);
+    expect(showLocation).not.toHaveBeenCalled();
+    expect(errors).toHaveLength(1);
     expect(model.getSnapshot()).toMatchObject({
       locationPhase: 'error',
-      announcement: 'Konum gösterilemedi. Harita araçlarını kullanmaya devam edebilirsiniz.',
+      announcement: 'Kesin konum alınamadı. Konum iznini ve cihaz ayarlarını kontrol edip yeniden deneyin.',
     });
   });
 
-  it('does not turn a rendered fallback into an error when sidebar restoration fails', async () => {
-    const model = new MapToolbarModel();
-    const onError = vi.fn();
-    const result = await model.locate({
-      requestPosition: async () => { throw new Error('denied'); },
-      showLocation: async () => undefined,
-      showSidebar: () => { throw new Error('sidebar unavailable'); },
-      onError,
-    });
-    expect(result).toBe('fallback');
-    expect(model.getSnapshot().locationPhase).toBe('fallback');
-    expect(onError).toHaveBeenCalledTimes(2);
-  });
-
-  it('isolates diagnostic reporter failures from fallback recovery', async () => {
+  it('does not leak diagnostic reporter failures to the location interaction', async () => {
     const model = new MapToolbarModel();
     const result = await model.locate({
       requestPosition: async () => { throw new Error('denied'); },
-      showLocation: async () => undefined,
-      showSidebar: vi.fn(),
+      showLocation: vi.fn(async () => undefined),
       onError: () => { throw new Error('reporter failed'); },
     });
-    expect(result).toBe('fallback');
-    expect(model.getSnapshot().locationPhase).toBe('fallback');
+    expect(result).toBe('error');
+    expect(model.getSnapshot().locationPhase).toBe('error');
   });
 
   it('coalesces a second locate request while one is active', async () => {
@@ -366,14 +343,20 @@ describe('mapToolbarModel', () => {
   it('does not navigate to fallback after a user-interrupted requested navigation', async () => {
     const model = new MapToolbarModel(); const onError = vi.fn();
     const showLocation = vi.fn(async () => { throw new DOMException('User navigation interrupted.', 'AbortError'); });
-    const sidebar = vi.fn();
-    expect(await model.locate({ requestPosition: async () => ({ x: 32.8, y: 39.9 }), showLocation, showSidebar: sidebar, onError })).toBe('cancelled');
-    expect(showLocation).toHaveBeenCalledTimes(1); expect(sidebar).not.toHaveBeenCalled(); expect(onError).not.toHaveBeenCalled();
+    expect(await model.locate({ requestPosition: async () => ({ x: 32.8, y: 39.9 }), showLocation, onError })).toBe('cancelled');
+    expect(showLocation).toHaveBeenCalledTimes(1); expect(onError).not.toHaveBeenCalled();
     expect(model.getSnapshot().announcement).toContain('Konum gösterimi durduruldu.');
   });
-  it('does not report a fallback camera interruption as a rendering error', async () => {
-    const model = new MapToolbarModel(); const onError = vi.fn();
-    expect(await model.locate({ requestPosition: async () => { throw new Error('Location unavailable.'); }, showLocation: async () => { throw new DOMException('User interruption.', 'AbortError'); }, showSidebar: vi.fn(), onError })).toBe('cancelled');
+  it('does not attempt a camera move when device geolocation fails', async () => {
+    const model = new MapToolbarModel();
+    const onError = vi.fn();
+    const showLocation = vi.fn(async () => undefined);
+    expect(await model.locate({
+      requestPosition: async () => { throw new Error('Location unavailable.'); },
+      showLocation,
+      onError,
+    })).toBe('error');
+    expect(showLocation).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
