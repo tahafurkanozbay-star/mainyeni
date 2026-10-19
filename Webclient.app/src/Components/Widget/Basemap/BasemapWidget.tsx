@@ -36,7 +36,51 @@ const BASEMAP_OPTIONS = Object.freeze([
   { id: 'topo-vector', label: 'Topoğrafya vektör', detail: 'Ayrıntılı arazi haritası', tone: 'terrain' },
   { id: 'streets-relief-vector', label: 'Yollar ve rölyef', detail: 'Arazi üzerinde yollar', tone: 'terrain' },
 ]);
-type BasemapOption = typeof BASEMAP_OPTIONS[number];
+type BasemapOption = typeof BASEMAP_OPTIONS[number] & { readonly previewUrl?: string };
+interface BasemapPreviewMetadata extends SelectableBasemap {
+  readonly thumbnailUrl?: unknown;
+  readonly portalItem?: { readonly thumbnailUrl?: unknown } | null;
+}
+
+const normalizeBasemapPreviewUrl = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const FALLBACK_PREVIEW_ART: Readonly<Record<string, ReactNode>> = Object.freeze({
+  topo: <><path d="M-5 10 Q8 -2 21 10 T47 10 T73 10" /><path d="M-5 17 Q8 5 21 17 T47 17 T73 17" /><path d="M-5 24 Q8 12 21 24 T47 24 T73 24" /><path d="M-5 31 Q8 19 21 31 T47 31 T73 31" /></>,
+  streets: <><path d="M-4 7 L64 31 M6 -4 L30 43 M34 -3 L58 42 M-5 30 L66 9" /><path d="M-4 22 L64 22" className="basemap-preview__minor-road" /></>,
+  satellite: <><path d="M0 3 11 0 19 8 14 17 4 16Z M30 0 41 3 38 13 26 11Z M4 25 20 18 28 31 13 40Z M38 21 60 18 64 31 48 39Z" className="basemap-preview__vegetation" /><path d="M-3 22 18 13 34 20 64 3" className="basemap-preview__satellite-road" /></>,
+  hybrid: <><path d="M0 3 11 0 19 8 14 17 4 16Z M30 0 41 3 38 13 26 11Z M4 25 20 18 28 31 13 40Z M38 21 60 18 64 31 48 39Z" className="basemap-preview__vegetation" /><path d="M-3 22 18 13 34 20 64 3 M0 33 L60 18" className="basemap-preview__satellite-road" /><path d="M8 6h5 M42 26h6 M29 8h5" className="basemap-preview__label" /></>,
+  'dark-gray': <><path d="M0 7 H60 M0 19 H60 M0 31 H60 M11 0 V38 M29 0 V38 M47 0 V38" className="basemap-preview__grid" /><path d="M-4 30 L18 19 30 23 64 4 M7 -4 L28 41" /></>,
+  gray: <><path d="M3 3h13v9H3z M24 4h12v12H24z M43 2h13v8H43z M7 25h12v10H7z M29 26h10v8H29z M47 23h12v12H47z" className="basemap-preview__blocks" /><path d="M-3 19 L63 19 M21 -3 L21 41 M41 -3 L41 41" /></>,
+  'national-geographic': <><path d="M-5 6 Q10 0 19 8 T43 8 T70 7 M-5 12 Q10 6 19 14 T43 14 T70 13 M-5 27 Q10 21 19 29 T43 29 T70 28" className="basemap-preview__contours" /><path d="M-3 35 L18 21 28 25 63 3" className="basemap-preview__highlight-road" /></>,
+  oceans: <><path d="M0 7 Q7 2 14 7 T28 7 T42 7 T56 7 T70 7 M0 17 Q7 12 14 17 T28 17 T42 17 T56 17 T70 17 M0 27 Q7 22 14 27 T28 27 T42 27 T56 27 T70 27" className="basemap-preview__waves" /><path d="M10 0 25 3 30 12 23 19 16 17 11 25 2 20 5 9Z M44 22 55 19 62 27 58 36 47 33Z" className="basemap-preview__landmass" /></>,
+  osm: <><path d="M0 5h14v8H0z M20 2h10v13H20z M39 3h16v9H39z M4 23h12v12H4z M25 24h13v9H25z M45 22h11v12H45z" className="basemap-preview__parks" /><path d="M-2 18 L62 18 M17 -3 L17 41 M36 -2 L36 41 M-3 32 L63 8" /></>,
+  terrain: <><path d="M0 0 14 3 23 0 33 6 44 2 60 7 V38 H0Z" className="basemap-preview__elevation" /><path d="M-3 10 Q8 1 18 10 T39 10 T65 10 M-3 19 Q8 10 18 19 T39 19 T65 19 M-3 28 Q8 19 18 28 T39 28 T65 28" className="basemap-preview__contours" /></>,
+  'dark-gray-vector': <><path d="M0 7 H60 M0 19 H60 M0 31 H60 M11 0 V38 M29 0 V38 M47 0 V38" className="basemap-preview__grid" /><path d="M-4 30 L18 19 30 23 64 4 M7 -4 L28 41" className="basemap-preview__vector-road" /></>,
+  'gray-vector': <><path d="M0 7 H60 M0 19 H60 M0 31 H60 M11 0 V38 M29 0 V38 M47 0 V38" className="basemap-preview__grid" /><path d="M-4 30 L18 19 30 23 64 4 M7 -4 L28 41" className="basemap-preview__vector-road" /></>,
+  'streets-vector': <><path d="M0 4 H60 M0 15 H60 M0 27 H60 M12 0 V38 M31 0 V38 M49 0 V38" className="basemap-preview__grid" /><path d="M-4 34 L18 19 30 22 64 1 M5 -4 L28 41" className="basemap-preview__vector-road" /><path d="M4 9h7 M37 21h9 M34 32h10" className="basemap-preview__label" /></>,
+  'streets-night-vector': <><path d="M0 4 H60 M0 15 H60 M0 27 H60 M12 0 V38 M31 0 V38 M49 0 V38" className="basemap-preview__grid" /><path d="M-4 34 L18 19 30 22 64 1 M5 -4 L28 41" className="basemap-preview__night-road" /><path d="M4 9h7 M37 21h9 M34 32h10" className="basemap-preview__night-label" /></>,
+  'streets-navigation-vector': <><path d="M0 4 H60 M0 15 H60 M0 27 H60 M12 0 V38 M31 0 V38 M49 0 V38" className="basemap-preview__grid" /><path d="M-4 34 L18 19 30 22 64 1" className="basemap-preview__route-casing" /><path d="M-4 34 L18 19 30 22 64 1" className="basemap-preview__route" /></>,
+  'topo-vector': <><path d="M-5 7 Q8 -3 21 7 T47 7 T73 7 M-5 14 Q8 4 21 14 T47 14 T73 14 M-5 22 Q8 12 21 22 T47 22 T73 22 M-5 30 Q8 20 21 30 T47 30 T73 30" className="basemap-preview__contours" /><path d="M-3 34 L18 21 28 25 63 3" className="basemap-preview__vector-road" /><path d="M9 7h5 M39 15h7 M43 29h5" className="basemap-preview__label" /></>,
+  'streets-relief-vector': <><path d="M-5 6 Q8 -4 21 6 T47 6 T73 6 M-5 14 Q8 4 21 14 T47 14 T73 14 M-5 25 Q8 15 21 25 T47 25 T73 25" className="basemap-preview__contours" /><path d="M-4 33 L18 18 30 22 64 2 M9 -4 L28 41" className="basemap-preview__vector-road" /></>,
+});
+
+const BasemapPreview = ({ option }: { readonly option: BasemapOption }): ReactNode => {
+  if (option.previewUrl) {
+    return <img className="basemap-picker__symbol basemap-picker__image" src={option.previewUrl} alt="" loading="lazy" decoding="async" />;
+  }
+  return <svg className={`basemap-picker__symbol basemap-picker__fallback basemap-picker__fallback--${option.id}`} data-preview-id={option.id} viewBox="0 0 60 38" aria-hidden="true">
+    <rect width="60" height="38" className="basemap-preview__background" />
+    {FALLBACK_PREVIEW_ART[option.id] ?? FALLBACK_PREVIEW_ART.streets}
+  </svg>;
+};
 interface BasemapConstructor { fromId: (id: string) => SelectableBasemap | null | undefined; }
 interface BasemapView { readonly map?: BasemapMap; }
 interface SelectionOwner {
@@ -102,14 +146,19 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
         if (!operation.isCurrent()) return;
         constructorRef.current = Basemap;
         watchRef.current = reactive.watch;
-        const available = BASEMAP_OPTIONS.filter((option) => {
+        const available = BASEMAP_OPTIONS.flatMap((option): BasemapOption[] => {
           let candidate: SelectableBasemap | null | undefined;
           try {
             candidate = Basemap.fromId(option.id);
-            return Boolean(candidate);
+            if (!candidate) return [];
+            const metadata = candidate as BasemapPreviewMetadata;
+            const previewUrl = normalizeBasemapPreviewUrl(
+              metadata.thumbnailUrl ?? metadata.portalItem?.thumbnailUrl,
+            );
+            return [{ ...option, ...(previewUrl ? { previewUrl } : {}) }];
           } catch (error) {
             reportCatalogFailure(error);
-            return false;
+            return [];
           } finally {
             try { candidate?.destroy?.(); } catch (error) { reportCatalogFailure(error); }
           }
@@ -302,7 +351,7 @@ export const BasemapWidget = forwardRef<ManagedWindowHandle, BasemapWidgetProps>
             className={`basemap-picker__option basemap-picker__option--${option.tone}`}
             aria-label={option.label} aria-description={option.detail} aria-pressed={selectedId === option.id}
             aria-busy={pendingId === option.id || undefined} onClick={() => void selectBasemap(option)}>
-            <svg className="basemap-picker__symbol" viewBox="0 0 60 38" aria-hidden="true"><path d="M0 0h60v38H0z" className="basemap-picker__land" /><path d="M0 24 18 19 28 2M27 38l5-18L60 8" className="basemap-picker__road" /><path d="m0 8 18 7 24 16 18 4" className="basemap-picker__water" /></svg>
+            <BasemapPreview option={option} />
             <span className="basemap-picker__copy"><strong>{option.label}</strong><span>{option.detail}</span>
               {pendingId === option.id ? <em>Yükleniyor</em> : selectedId === option.id ? <em>Etkin</em> : null}
             </span>
