@@ -48,7 +48,9 @@ test('typed bootstrap adapter remains the explicit application composition root'
   const bootstrap = path.join(PLATFORM, 'bootstrap', 'bootstrapApplication.ts');
   const source = await fs.readFile(bootstrap, 'utf8');
   assert.match(source, /Business\/ConfigurationBusiness/u);
-  assert.match(source, /Business\/CommonBusiness/u);
+  assert.doesNotMatch(source, /Business\/CommonBusiness/u);
+  assert.match(source, /const generateServiceUrl = \(_service: ConfigurationService\): null => null/u);
+  assert.match(source, /const addProxyRule = \(_url: string, _source: string\): void => undefined/u);
   assert.match(source, /Store\/Managers\/MapManager/u);
   assert.match(source, /type BootstrapDependencies/u);
   assert.match(source, /applicationBootstrapDependencies: BootstrapDependencies/u);
