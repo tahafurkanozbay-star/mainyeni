@@ -9,6 +9,7 @@ describe('ExperienceDataDisclaimer', () => {
     const note = screen.getByRole('note', { name: 'Veri kullanım uyarısı' });
     expect(note).toBeInTheDocument();
     expect(note).toHaveAttribute('data-compact', 'false');
+    expect(note).toHaveStyle({ bottom: '0px', insetBlockEnd: '0px' });
     expect(note).toHaveTextContent('Sitede Gösterilen Veriler Bilgi Amaçlıdır.');
     expect(note).toHaveTextContent('RESMİ İŞLEMLERDE KULLANILAMAZ');
   });

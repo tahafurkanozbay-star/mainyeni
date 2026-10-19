@@ -36,6 +36,7 @@ describe('NavigationBar', () => {
     const homeLink = screen.getByRole('link', { name: 'KENT REHBERİ ana sayfası' });
 
     expect(homeLink).toHaveAttribute('href', './');
+    expect(homeLink.closest('header')).toHaveStyle({ top: '0px', insetBlockStart: '0px' });
     expect(homeLink).toHaveTextContent('KENT REHBERİ');
   });
 
