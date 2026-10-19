@@ -390,7 +390,7 @@ describe('fetchTransport executeFetch', () => {
 describe('fetchTransport factory surface', () => {
   test('uses the application root rather than a guessed API route by default', () => {
     const transport = createFetchTransport({ fetchImpl: vi.fn() });
-    expect(transport.defaults.baseUrl).toBe('/');
+    expect(transport.defaults).toMatchObject({ baseUrl: '/' });
   });
 
   test('publishes immutable defaults', () => {
