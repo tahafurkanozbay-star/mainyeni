@@ -490,3 +490,13 @@
     transition: none;
   }
 }
+
+/* The sidebar owns one explicit clear button; suppress the browser's second X. */
+.kr-sidebar__search input[type='search']::-webkit-search-cancel-button,
+.kr-sidebar__search input[type='search']::-webkit-search-decoration,
+.kr-sidebar__search input[type='search']::-webkit-search-results-button,
+.kr-sidebar__search input[type='search']::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
