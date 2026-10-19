@@ -51,11 +51,10 @@ interface MapViewLike {
   readonly animation?: { readonly stop?: () => void } | null;
 }
 
-type HomePhase = 'idle' | 'restoring' | 'success' | 'error' | 'cancelled';
-const TOOLBAR_OPERATION_POLICY = Object.freeze({ positionMs: 10_000, navigationMs: 15_000 });
+type HomePhase = 'idle' | 'restoring' | 'error' | 'cancelled';
+const TOOLBAR_OPERATION_POLICY = Object.freeze({ positionMs: 25_000, navigationMs: 15_000 });
 const HOME_MESSAGES: Readonly<Record<HomePhase, string>> = Object.freeze({
   idle: '', restoring: 'Başlangıç görünümüne dönülüyor.',
-  success: 'Başlangıç görünümü gösterildi.',
   error: 'Başlangıç görünümü gösterilemedi. Yeniden deneyebilirsiniz.',
   cancelled: 'Görünüm değiştirme durduruldu. Haritayı kullanmaya devam edebilirsiniz.',
 });
@@ -125,9 +124,9 @@ const requestCurrentPosition = (): Promise<MapToolbarPoint> => new Promise((reso
     })),
     reject,
     {
-      enableHighAccuracy: false,
-      timeout: TOOLBAR_OPERATION_POLICY.positionMs,
-      maximumAge: 60000,
+      enableHighAccuracy: true,
+      timeout: Math.min(20_000, TOOLBAR_OPERATION_POLICY.positionMs),
+      maximumAge: 0,
     },
   );
 });
@@ -267,7 +266,7 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
       await awaitOwnedNavigation(view, signal, () => view.goTo?.(initialExtent.extent));
       assertCurrentView(view, signal);
     }, TOOLBAR_OPERATION_POLICY.navigationMs, owner.signal).then(() => {
-      if (mountedRef.current && homeOwnerRef.current === owner) setHomePhase('success');
+      if (mountedRef.current && homeOwnerRef.current === owner) setHomePhase('idle');
     }).catch((error: unknown) => {
       if (owner.signal.aborted || !mountedRef.current || homeOwnerRef.current !== owner) return;
       if (isAbortLike(error)) { setHomePhase('cancelled'); return; }
@@ -309,7 +308,7 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
   const announcement = homePhase === 'idle' ? snapshot.announcement : HOME_MESSAGES[homePhase];
   const busy = snapshot.locationPhase === 'locating' || homePhase === 'restoring';
   const failure = snapshot.locationPhase === 'error' || homePhase === 'error';
-  const fallback = homePhase === 'idle' && snapshot.locationPhase === 'fallback';
+
   const dismissNotice = (): void => {
     pendingFocusRef.current = homePhase === 'idle' ? 'location' : 'home';
     cancelLocation(); cancelHome();
@@ -340,14 +339,13 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
         tooltipPlacement="left"
         items={toolbarItems}
       />
-      <div id={`${toolbarId}-notice`} className="toolbarwidget-notice" data-visible={Boolean(announcement)} data-tone={failure ? 'danger' : fallback ? 'warning' : 'info'}>
+      <div id={`${toolbarId}-notice`} className="toolbarwidget-notice" data-visible={Boolean(announcement)} data-tone={failure ? 'danger' : 'info'}>
         <p className={announcement ? 'toolbarwidget-notice__message' : 'toolbarwidget-status'} role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
         {announcement ? <>
           {busy ? <p className="toolbarwidget-notice__detail">{homePhase === 'restoring' ? 'Harita hazırlanıyor. İşlemi iptal edebilirsiniz.' : 'Tarayıcınız sorarsa konum iznini seçin. Bu işlem biraz zaman alabilir.'}</p> : null}
-          {fallback ? <p className="toolbarwidget-notice__detail">Bu nokta cihazınızın konumu değildir. Konum izninizi kontrol edip yeniden deneyebilirsiniz.</p> : null}
           <div className="toolbarwidget-notice__actions">
             {busy ? <button ref={captureCancelButton} type="button" data-notice-action="cancel" onClick={() => { dismissNotice(); removeLocationGraphic(); }}>İptal et</button> : <>
-              {failure || fallback ? <button type="button" onClick={homePhase === 'error' ? gotoInitialView : locateUser}>Yeniden dene</button> : null}
+              {failure ? <button type="button" onClick={homePhase === 'error' ? gotoInitialView : locateUser}>Yeniden dene</button> : null}
               <button type="button" onClick={dismissNotice}>Mesajı kapat</button>
             </>}
           </div>
