@@ -241,6 +241,18 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     event: ReactKeyboardEvent<HTMLButtonElement>,
     currentIndex: number,
   ): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (navigation.query) {
+        navigationModel.clearQuery();
+        searchInputRef.current?.focus({ preventScroll: true });
+      } else if (!navigation.collapsed) {
+        setSidebarCollapsed(true);
+        sidebarToggleRef.current?.focus({ preventScroll: true });
+      }
+      return;
+    }
+
     let targetIndex = currentIndex;
     if (event.key === 'ArrowDown') targetIndex = (currentIndex + 1) % pointSearchResults.items.length;
     else if (event.key === 'ArrowUp') targetIndex = (currentIndex - 1 + pointSearchResults.items.length) % pointSearchResults.items.length;
