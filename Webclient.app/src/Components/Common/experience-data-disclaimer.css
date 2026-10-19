@@ -1,7 +1,7 @@
 .experience-data-disclaimer {
   position: fixed;
   inset-inline-start: max(0.5rem, env(safe-area-inset-left));
-  inset-block-end: max(0px, env(safe-area-inset-bottom));
+  inset-block-end: 0;
   z-index: 2100;
   display: flex;
   align-items: center;
@@ -99,13 +99,13 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
 
 @media (max-width: 780px) {
   .experience-data-disclaimer {
-    inset-block-end: max(0px, env(safe-area-inset-bottom));
+    inset-block-end: 0;
   }
 }
 
 @media (max-width: 40rem) {
   .experience-data-disclaimer {
-    inset-block-end: max(0px, env(safe-area-inset-bottom));
+    inset-block-end: 0;
     gap: 0.3rem;
     padding: 0.45rem 0.45rem 0.22rem;
     font-size: clamp(0.62rem, 2.25vw, 0.72rem);
@@ -127,6 +127,16 @@ html[data-exp-motion='reduced'] .experience-data-disclaimer {
   .experience-data-disclaimer__copy > span,
   .experience-data-disclaimer__copy > strong {
     white-space: normal;
+  }
+}
+
+@media screen {
+  /* The notice must meet the viewport bottom, including on compact screens. */
+  #app-shell .experience-data-disclaimer {
+    position: fixed;
+    bottom: 0;
+    inset-block-end: 0;
+    margin-block-end: 0;
   }
 }
 

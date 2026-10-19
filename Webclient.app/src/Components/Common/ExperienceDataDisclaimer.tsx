@@ -11,6 +11,7 @@ export const ExperienceDataDisclaimer = ({
   <aside
     aria-label="Veri kullanım uyarısı"
     className="experience-data-disclaimer"
+    style={{ bottom: 0, insetBlockEnd: 0 }}
     data-compact={compact ? 'true' : 'false'}
     role="note"
   >
