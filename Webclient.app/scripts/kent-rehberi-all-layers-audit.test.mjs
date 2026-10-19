@@ -16,6 +16,7 @@ const PATHS = Object.freeze({
   businessFactory: 'src/Business/createFastAccessQueryBusiness.ts',
   runtime: 'src/Business/kentRehberiFastAccessRuntime.ts',
   transport: 'src/data-services/kentRehberiGeoJsonLayer.ts',
+  directSource: 'src/data-services/kentRehberiPlanAskiDirect.ts',
   icons: 'src/gis-engine/iconRegistry.json',
   vite: 'vite.config.ts',
   localProxy: 'tooling/localApiProxy.ts',
@@ -115,27 +116,28 @@ const validFixture = () => {
     `,
     [PATHS.icons]: iconSource(items),
     [PATHS.vite]: `
-      const apiProxyTarget = resolveLocalApiProxyTarget(process.env.VITE_API_PROXY_TARGET);
       export default {
-        server: {
-          proxy: {
-            '/api': {
-              target: apiProxyTarget,
-            },
-          },
-        },
+        server: { host: '0.0.0.0', port: 3000 },
       };
     `,
     [PATHS.localProxy]: `
       const allowedHosts = new Set(['localhost', '127.0.0.1']);
       const DEFAULT_LOCAL_API_PROXY_TARGET = 'https://localhost:3003';
     `,
+    [PATHS.directSource]: `
+      const SOURCE_URL = 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi';
+      const request = { mode: 'cors', credentials: 'omit', cache: 'no-store' };
+      export const fetchPlanAskiGeoJsonDirect = () => fetch(SOURCE_URL, request);
+    `,
     [PATHS.configurationBusiness]: `
-      export const resolveLocalBootstrapPreviewEnabled = () => true;
+      const DEFAULT_PUBLIC_MAP_CONFIGURATION = { Centerx: 32.854, Centery: 39.92, Zoom: 12 };
+      export const ConfigurationBusiness = {
+        GetMapConfiguration: () => ({ isSuccess: true, data: { configValue: JSON.stringify(DEFAULT_PUBLIC_MAP_CONFIGURATION) } }),
+        GetConfigServices: () => ({ isSuccess: true, data: [] }),
+      };
     `,
     [PATHS.envExample]: `
-      VITE_API_PROXY_TARGET=https://localhost:3003
-      VITE_LOCAL_BOOTSTRAP_PREVIEW=true
+      VITE_KENT_REHBERI_SOURCE=planaski
     `,
     [PATHS.package]: JSON.stringify({
       scripts: {
@@ -428,7 +430,7 @@ describe('Kent Rehberi all-layer release contract', () => {
     assert.equal(ids.has('missing-bounded-category-limit'), true);
   });
 
-  test('requires same-origin bounded abortable frontend transport', () => {
+  test('requires same-origin bounded abortable compatibility transport', () => {
     const files = validFixture();
     files[PATHS.transport] = `
       const path = '/kent-rehberi';
@@ -441,6 +443,19 @@ describe('Kent Rehberi all-layer release contract', () => {
     assert.equal(ids.has('missing-type-catalog-path'), true);
     assert.equal(ids.has('missing-payload-budget'), true);
     assert.equal(ids.has('missing-request-abort'), true);
+  });
+
+  test('requires direct browser transport to use the official bounded PlanASKI endpoint', () => {
+    const files = validFixture();
+    files[PATHS.directSource] = `export const fetchPlanAskiGeoJsonDirect = () => fetch('/local');`;
+
+    const result = auditKentRehberiAllLayersSources(files);
+    const ids = new Set(result.errors.map((entry) => entry.id));
+
+    assert.equal(ids.has('missing-official-planaski-endpoint'), true);
+    assert.equal(ids.has('missing-browser-cors-mode'), true);
+    assert.equal(ids.has('missing-omitted-credentials'), true);
+    assert.equal(ids.has('missing-no-store-cache'), true);
   });
 
   test('rejects local synthetic data middleware in Vite', () => {
@@ -458,34 +473,33 @@ describe('Kent Rehberi all-layer release contract', () => {
     );
   });
 
-  test('requires Vite to use the validated local Api.User proxy target', () => {
+  test('rejects a private /api proxy in the public Vite client', () => {
     const files = validFixture();
     files[PATHS.vite] = `
-      const config = { target: 'https://planaski.ankara.bel.tr' };
+      export default { server: { proxy: { '/api': { target: 'https://localhost:3003' } } } };
     `;
 
     const result = auditKentRehberiAllLayersSources(files);
 
     assert.equal(
-      result.errors.some((entry) => entry.id === 'insecure-or-missing-dev-api-proxy'),
+      result.errors.some((entry) => entry.id === 'private-api-proxy-present'),
       true,
     );
   });
 
-  test('requires local proxy validation and bootstrap env defaults', () => {
+  test('requires local map defaults and direct PlanASKI environment configuration', () => {
     const files = validFixture();
-    files[PATHS.localProxy] = 'export const target = "https://planaski.ankara.bel.tr";';
-    files[PATHS.configurationBusiness] = 'export const ConfigurationBusiness = {};';
+    files[PATHS.configurationBusiness] = "import { apiClient } from '../platform/http/httpClient'; export const ConfigurationBusiness = {};";
     files[PATHS.envExample] = 'VITE_API_URL=/api';
 
     const result = auditKentRehberiAllLayersSources(files);
     const ids = new Set(result.errors.map((entry) => entry.id));
 
-    assert.equal(ids.has('missing-default-local-api-target'), true);
-    assert.equal(ids.has('missing-local-proxy-host-allowlist'), true);
-    assert.equal(ids.has('missing-local-bootstrap-preview-policy'), true);
-    assert.equal(ids.has('missing-local-api-proxy-env'), true);
-    assert.equal(ids.has('missing-local-bootstrap-preview-env'), true);
+    assert.equal(ids.has('missing-local-map-defaults'), true);
+    assert.equal(ids.has('private-api-client-in-bootstrap'), true);
+    assert.equal(ids.has('missing-empty-service-catalog'), true);
+    assert.equal(ids.has('missing-planaski-source-env'), true);
+    assert.equal(ids.has('legacy-api-env-present'), true);
   });
 
   test('requires IIS Express and project launch profiles to share Api.User ports', () => {
