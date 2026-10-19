@@ -1,4 +1,5 @@
 import { runtimeConfig } from '../config/runtimeConfig';
+import { AppError } from '../errors/appError';
 import { createFetchTransport } from './fetchTransport';
 import type { FetchImplementation } from './fetchTransport';
 import { createNetworkDiagnostics } from './networkDiagnostics';
@@ -21,15 +22,15 @@ import {
   createRuntimeTuningProfile
 } from './runtimeCapabilities';
 
-interface ApiRuntimeConfig {
-  apiBaseUrl: string;
+interface HttpRuntimeConfig {
+  baseUrl: string;
   requestTimeoutMs: number;
   maxRetries: number;
   cacheTtlMs: number;
 }
 
 interface ApiClientOptions {
-  runtimeConfig?: ApiRuntimeConfig;
+  runtimeConfig?: HttpRuntimeConfig;
   diagnostics?: ReturnType<typeof createNetworkDiagnostics>;
   diagnosticCapacity?: number;
   transport?: RequestTransport;
@@ -131,7 +132,12 @@ const recordRuntimeProfile = (
 };
 
 export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient => {
-  const config = options.runtimeConfig || runtimeConfig;
+  const config: HttpRuntimeConfig = options.runtimeConfig ?? {
+    baseUrl: '/',
+    requestTimeoutMs: runtimeConfig.requestTimeoutMs,
+    maxRetries: runtimeConfig.maxRetries,
+    cacheTtlMs: runtimeConfig.cacheTtlMs,
+  };
   const capabilityReport = options.capabilityReport || createRuntimeCapabilityReport(
     options.runtime as Record<string, unknown> | undefined
   );
@@ -151,7 +157,7 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
 
   const hooks = createTransportDiagnosticHooks(diagnostics);
   const transport = options.transport || createFetchTransport({
-    baseUrl: config.apiBaseUrl,
+    baseUrl: config.baseUrl,
     timeoutMs: config.requestTimeoutMs,
     maxRetries: config.maxRetries,
     cacheTtlMs: config.cacheTtlMs,
@@ -187,7 +193,16 @@ export const createApiClient = (options: ApiClientOptions = {}): ModernApiClient
   }) as ModernApiClient;
 };
 
-export const apiClient = createApiClient();
+const disabledStaticClientFetch: FetchImplementation = async () => {
+  throw new AppError('The static PlanASKI client has no application API endpoint.', {
+    code: 'APPLICATION_API_DISABLED',
+    retryable: false,
+  });
+};
+
+// Keep the legacy facade shape for compatibility, but fail closed: the static
+// application must never silently issue requests to a guessed same-origin API.
+export const apiClient = createApiClient({ fetchImpl: disabledStaticClientFetch });
 
 export const clearApiClientRuntime = (): void => {
   apiClient.clearCache();

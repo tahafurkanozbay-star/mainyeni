@@ -1,6 +1,3 @@
-import { normalizeApplicationPath } from '../network/endpointPolicy';
-
-const DEFAULT_API_BASE_URL = '/api';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 2;
@@ -10,7 +7,6 @@ const DEFAULT_ESRI_API_VERSION = '5.1.24';
 const DEFAULT_TKGM_CITY_ID = '';
 
 export const RUNTIME_CONFIG_DEFAULTS = Object.freeze({
-  apiBaseUrl: DEFAULT_API_BASE_URL,
   requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
   cacheTtlMs: DEFAULT_CACHE_TTL_MS,
   maxRetries: DEFAULT_MAX_RETRIES,
@@ -40,7 +36,6 @@ export interface RuntimeFeatureFlags {
 }
 
 export interface RuntimeConfig {
-  readonly apiBaseUrl: string;
   readonly requestTimeoutMs: number;
   readonly cacheTtlMs: number;
   readonly maxRetries: number;
@@ -53,7 +48,6 @@ export interface RuntimeConfig {
 }
 
 export type RuntimeConfigFieldId =
-  | 'apiBaseUrl'
   | 'requestTimeoutMs'
   | 'cacheTtlMs'
   | 'maxRetries'
@@ -125,26 +119,19 @@ interface ResolvedValue<T> {
   readonly evidence: RuntimeConfigFieldEvidence;
 }
 
-const API_KEYS = Object.freeze([
-  'VITE_API_URL',
-  'VITE_API_BASE_URL',
-  'REACT_APP_API_URL',
-  'REACT_APP_API_BASE_URL',
-] as const);
-
 const TIMEOUT_KEYS = Object.freeze([
-  'VITE_API_TIMEOUT_MS',
-  'REACT_APP_API_TIMEOUT_MS',
+  'VITE_REQUEST_TIMEOUT_MS',
+  'REACT_APP_REQUEST_TIMEOUT_MS',
 ] as const);
 
 const CACHE_TTL_KEYS = Object.freeze([
-  'VITE_API_CACHE_TTL_MS',
-  'REACT_APP_API_CACHE_TTL_MS',
+  'VITE_CACHE_TTL_MS',
+  'REACT_APP_CACHE_TTL_MS',
 ] as const);
 
 const RETRY_KEYS = Object.freeze([
-  'VITE_API_MAX_RETRIES',
-  'REACT_APP_API_MAX_RETRIES',
+  'VITE_MAX_RETRIES',
+  'REACT_APP_MAX_RETRIES',
 ] as const);
 
 const ENVIRONMENT_KEYS = Object.freeze([
@@ -196,7 +183,6 @@ const STRICT_ENDPOINT_KEYS = Object.freeze([
 ] as const);
 
 export const RUNTIME_CONFIG_SOURCE_KEYS = Object.freeze({
-  apiBaseUrl: API_KEYS,
   requestTimeoutMs: TIMEOUT_KEYS,
   cacheTtlMs: CACHE_TTL_KEYS,
   maxRetries: RETRY_KEYS,
@@ -237,10 +223,14 @@ const isConfigured = (value: unknown): boolean =>
   && value !== null
   && String(value).trim() !== '';
 
+const isRetiredApiConfigurationKey = (key: string): boolean =>
+  key.startsWith('VITE_API_') || key.startsWith('REACT_APP_API_');
+
 export const classifyRuntimeConfigSourceKey = (
   key: string,
 ): RuntimeConfigSourceKind => {
   if (VITE_BUILTIN_KEYS.has(key)) return 'vite-builtin';
+  if (isRetiredApiConfigurationKey(key)) return 'derived';
   if (key.startsWith('VITE_')) return 'vite';
   if (key.startsWith('REACT_APP_')) return 'legacy-cra';
   return 'derived';
@@ -307,57 +297,6 @@ const safeText = (value: unknown, fallback: string, maxLength = 120): string => 
   return (normalized || fallback).slice(0, maxLength);
 };
 
-const containsControlCharacter = (value: string): boolean => {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 31 || code === 127) return true;
-  }
-  return false;
-};
-
-const normalizeRelativeApiPath = (value: string): string | null => {
-  if (containsControlCharacter(value)) return null;
-  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return null;
-  try {
-    const normalized = normalizeApplicationPath(value, {
-      allowQuery: false,
-      allowHash: false,
-    });
-    return normalized.replace(/\/$/, '') || '/';
-  } catch {
-    return null;
-  }
-};
-
-export const normalizeApiBaseUrl = (value: unknown): string => {
-  const raw = String(value || RUNTIME_CONFIG_DEFAULTS.apiBaseUrl);
-  if (containsControlCharacter(raw)) return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
-  const candidate = raw.trim();
-
-  const relative = normalizeRelativeApiPath(candidate);
-  if (relative) return relative;
-  if (candidate.startsWith('/')) return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
-
-  try {
-    const origin = typeof window !== 'undefined' ? window.location.origin : null;
-    if (!origin) return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
-    const parsed = new URL(candidate, origin);
-    if (
-      parsed.origin !== origin
-      || parsed.username
-      || parsed.password
-      || parsed.hash
-      || parsed.search
-    ) {
-      return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
-    }
-    return normalizeRelativeApiPath(parsed.pathname)
-      ?? RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
-  } catch {
-    return RUNTIME_CONFIG_DEFAULTS.apiBaseUrl;
-  }
-};
-
 /**
  * @arcgis/core is bundled at build time, so runtime configuration must never
  * claim a different SDK version than the package pinned in the lockfile.
@@ -372,11 +311,11 @@ export const normalizeEsriApiVersion = (value: unknown): string => {
 const detectBuildMode = (
   source: RuntimeEnvironmentSource,
 ): RuntimeConfig['buildMode'] => {
-  const keys = Object.keys(source);
-  const hasVite = keys.some((key) => key.startsWith('VITE_'))
+  const knownKeys = Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat();
+  const hasVite = knownKeys.some((key) => key.startsWith('VITE_') && key in source)
     || ['MODE', 'DEV', 'PROD', 'SSR', 'BASE_URL'].some((key) => key in source);
   if (hasVite) return 'vite-ready';
-  const hasCra = keys.some((key) => key.startsWith('REACT_APP_'));
+  const hasCra = knownKeys.some((key) => key.startsWith('REACT_APP_') && key in source);
   if (hasCra) return 'legacy-cra';
   return 'unknown';
 };
@@ -386,9 +325,12 @@ const buildModeEvidence = (
   mode: RuntimeConfig['buildMode'],
 ): RuntimeConfigFieldEvidence => {
   if (mode === 'vite-ready') {
+    const supportedKeys = new Set<string>(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
       .filter(
-        (candidate) => candidate.startsWith('VITE_') || VITE_BUILTIN_KEYS.has(candidate),
+        (candidate) =>
+          (candidate.startsWith('VITE_') && supportedKeys.has(candidate))
+          || VITE_BUILTIN_KEYS.has(candidate),
       )
       .sort()[0];
     return evidence(
@@ -403,8 +345,9 @@ const buildModeEvidence = (
     );
   }
   if (mode === 'legacy-cra') {
+    const supportedKeys = new Set<string>(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
-      .filter((candidate) => candidate.startsWith('REACT_APP_'))
+      .filter((candidate) => supportedKeys.has(candidate) && candidate.startsWith('REACT_APP_'))
       .sort()[0];
     return evidence(
       'buildMode',
@@ -530,33 +473,6 @@ const resolveText = (
   });
 };
 
-const resolveApiBase = (
-  source: RuntimeEnvironmentSource,
-): ResolvedValue<string> => {
-  const selected = selectSource(source, API_KEYS);
-  if (!selected.configured) {
-    return Object.freeze({
-      value: RUNTIME_CONFIG_DEFAULTS.apiBaseUrl,
-      evidence: evidence('apiBaseUrl', selected, 'defaulted'),
-    });
-  }
-
-  const raw = String(selected.value ?? '');
-  const value = normalizeApiBaseUrl(selected.value);
-  const trimmed = raw.trim();
-  const safeCandidate = normalizeRelativeApiPath(trimmed);
-  const disposition: RuntimeConfigResolutionDisposition = safeCandidate === value
-    ? (trimmed === value ? 'accepted' : 'normalized')
-    : value === RUNTIME_CONFIG_DEFAULTS.apiBaseUrl
-      ? 'invalid-fallback'
-      : 'normalized';
-
-  return Object.freeze({
-    value,
-    evidence: evidence('apiBaseUrl', selected, disposition),
-  });
-};
-
 const resolveEsriVersion = (
   source: RuntimeEnvironmentSource,
 ): ResolvedValue<string> => {
@@ -616,7 +532,6 @@ const fnv1a = (value: string): string => {
 export const runtimeConfigFingerprint = (
   config: RuntimeConfig = runtimeConfig,
 ): string => fnv1a([
-  config.apiBaseUrl,
   config.requestTimeoutMs,
   config.cacheTtlMs,
   config.maxRetries,
@@ -652,7 +567,6 @@ export const resolveRuntimeConfig = (
   source: RuntimeEnvironmentSource = getDefaultEnvironmentSource(),
 ): RuntimeConfigResolution => {
   const env = source || {};
-  const apiBaseUrl = resolveApiBase(env);
   const requestTimeoutMs = resolveInteger(
     'requestTimeoutMs',
     env,
@@ -733,7 +647,6 @@ export const resolveRuntimeConfig = (
   const buildMode = detectBuildMode(env);
 
   const config: RuntimeConfig = Object.freeze({
-    apiBaseUrl: apiBaseUrl.value,
     requestTimeoutMs: requestTimeoutMs.value,
     cacheTtlMs: cacheTtlMs.value,
     maxRetries: maxRetries.value,
@@ -752,7 +665,6 @@ export const resolveRuntimeConfig = (
   });
 
   const evidenceValues = Object.freeze([
-    apiBaseUrl.evidence,
     requestTimeoutMs.evidence,
     cacheTtlMs.evidence,
     maxRetries.evidence,
@@ -782,18 +694,14 @@ export const createRuntimeConfig = (
 ): RuntimeConfig => resolveRuntimeConfig(source).config;
 
 export const assertSafeRuntimeConfig = (config: RuntimeConfig): true => {
-  const normalizedApi = normalizeApiBaseUrl(config.apiBaseUrl);
-  if (normalizedApi !== config.apiBaseUrl) {
-    throw new Error('API base URL must be a canonical same-origin relative path');
-  }
   if (config.requestTimeoutMs < 1_000 || config.requestTimeoutMs > 60_000) {
-    throw new Error('API timeout is outside the supported range');
+    throw new Error('Request timeout is outside the supported range');
   }
   if (config.cacheTtlMs < 0 || config.cacheTtlMs > 600_000) {
-    throw new Error('API cache TTL is outside the supported range');
+    throw new Error('Cache TTL is outside the supported range');
   }
   if (config.maxRetries < 0 || config.maxRetries > 4) {
-    throw new Error('API retry count is outside the supported range');
+    throw new Error('Retry count is outside the supported range');
   }
   if (config.esriApiVersion !== RUNTIME_CONFIG_DEFAULTS.esriApiVersion) {
     throw new Error(
@@ -811,7 +719,6 @@ assertSafeRuntimeConfig(runtimeConfig);
 export const describeRuntimeConfig = (
   config: RuntimeConfig = runtimeConfig,
 ): Readonly<Record<string, unknown>> => Object.freeze({
-  apiBaseUrl: config.apiBaseUrl,
   requestTimeoutMs: config.requestTimeoutMs,
   cacheTtlMs: config.cacheTtlMs,
   maxRetries: config.maxRetries,

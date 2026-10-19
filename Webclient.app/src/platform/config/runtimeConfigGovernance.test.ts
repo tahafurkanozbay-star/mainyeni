@@ -14,7 +14,6 @@ import {
 describe('runtime config governance healthy baseline', () => {
   test('modern Vite production config can be healthy', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_URL: '/api',
       VITE_ENV: 'production',
       VITE_RELEASE: '2026.09.21',
       VITE_TYPED_BOOTSTRAP: 'true',
@@ -62,7 +61,7 @@ describe('runtime config governance healthy baseline', () => {
 describe('runtime config governance source migration risks', () => {
   test('single legacy field degrades by default', () => {
     const resolution = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
     });
@@ -78,10 +77,10 @@ describe('runtime config governance source migration risks', () => {
 
   test('many legacy fields become critical', () => {
     const resolution = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
-      REACT_APP_API_TIMEOUT_MS: '5000',
-      REACT_APP_API_CACHE_TTL_MS: '1000',
-      REACT_APP_API_MAX_RETRIES: '2',
+      REACT_APP_TKGM_CITY_ID: '28',
+      REACT_APP_REQUEST_TIMEOUT_MS: '5000',
+      REACT_APP_CACHE_TTL_MS: '1000',
+      REACT_APP_MAX_RETRIES: '2',
       REACT_APP_ENV: 'production',
       REACT_APP_RELEASE: 'r1',
       REACT_APP_ADAPTIVE_RUNTIME: 'true',
@@ -94,10 +93,10 @@ describe('runtime config governance source migration risks', () => {
     }));
   });
 
-  test('shadowed alias degrades', () => {
+  test('shadowed generic timeout alias degrades', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_URL: '/api',
-      REACT_APP_API_URL: '/legacy',
+      VITE_REQUEST_TIMEOUT_MS: '5000',
+      REACT_APP_REQUEST_TIMEOUT_MS: '7000',
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
     });
@@ -106,17 +105,15 @@ describe('runtime config governance source migration risks', () => {
     expect(health.risks).toContainEqual(expect.objectContaining({
       code: 'shadowed-source',
       status: 'degraded',
-      affectedFields: ['apiBaseUrl'],
+      affectedFields: ['requestTimeoutMs'],
     }));
   });
 
   test('multiple shadowed aliases can become critical', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_URL: '/api',
-      VITE_API_BASE_URL: '/api2',
-      REACT_APP_API_URL: '/legacy',
-      REACT_APP_API_BASE_URL: '/legacy2',
+      VITE_VERSION: 'v2',
       VITE_RELEASE: 'r1',
+      REACT_APP_VERSION: 'legacy-v1',
       REACT_APP_RELEASE: 'legacy-r1',
       VITE_ENV: 'staging',
       REACT_APP_ENV: 'legacy',
@@ -165,7 +162,7 @@ describe('runtime config governance source migration risks', () => {
 describe('runtime config governance parser risks', () => {
   test('invalid numeric fallback degrades', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_TIMEOUT_MS: 'never',
+      VITE_REQUEST_TIMEOUT_MS: 'never',
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
     });
@@ -180,9 +177,9 @@ describe('runtime config governance parser risks', () => {
 
   test('many invalid fields become critical', () => {
     const resolution = resolveRuntimeConfig({
-      VITE_API_TIMEOUT_MS: 'never',
-      VITE_API_CACHE_TTL_MS: 'never',
-      VITE_API_MAX_RETRIES: 'never',
+      VITE_REQUEST_TIMEOUT_MS: 'never',
+      VITE_CACHE_TTL_MS: 'never',
+      VITE_MAX_RETRIES: 'never',
       VITE_ENV_DEBUG: 'perhaps',
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
@@ -208,10 +205,10 @@ describe('runtime config governance parser risks', () => {
 
   test('risk entry count is bounded', () => {
     const resolution = resolveRuntimeConfig({
-      REACT_APP_API_URL: 'https://evil.example',
-      REACT_APP_API_TIMEOUT_MS: 'bad',
-      REACT_APP_API_CACHE_TTL_MS: 'bad',
-      REACT_APP_API_MAX_RETRIES: 'bad',
+      REACT_APP_TKGM_CITY_ID: '28',
+      REACT_APP_REQUEST_TIMEOUT_MS: 'bad',
+      REACT_APP_CACHE_TTL_MS: 'bad',
+      REACT_APP_MAX_RETRIES: 'bad',
       REACT_APP_ENV: 'production',
       REACT_APP_RELEASE: 'local',
       REACT_APP_ENV_DEBUG: 'true',
@@ -462,7 +459,7 @@ describe('runtime config admission quantitative budgets', () => {
     const result = assessRuntimeConfigAdmission(resolveRuntimeConfig({
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
-      VITE_API_TIMEOUT_MS: 'bad',
+      VITE_REQUEST_TIMEOUT_MS: 'bad',
     }));
     expect(result.violations).toContainEqual(expect.objectContaining({
       code: 'too-many-rejected-fields',
@@ -475,7 +472,7 @@ describe('runtime config admission quantitative budgets', () => {
     const result = assessRuntimeConfigAdmission(resolveRuntimeConfig({
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
-      VITE_API_TIMEOUT_MS: 'bad',
+      VITE_REQUEST_TIMEOUT_MS: 'bad',
     }), {
       maxRejectedFields: 1,
     });
@@ -485,10 +482,10 @@ describe('runtime config admission quantitative budgets', () => {
   test('rejects legacy source budget overflow', () => {
     const result = assessRuntimeConfigAdmission(resolveRuntimeConfig({
       VITE_RELEASE: 'r1',
-      REACT_APP_API_URL: '/api',
-      REACT_APP_API_TIMEOUT_MS: '5000',
-      REACT_APP_API_CACHE_TTL_MS: '1000',
-      REACT_APP_API_MAX_RETRIES: '2',
+      REACT_APP_TKGM_CITY_ID: '28',
+      REACT_APP_REQUEST_TIMEOUT_MS: '5000',
+      REACT_APP_CACHE_TTL_MS: '1000',
+      REACT_APP_MAX_RETRIES: '2',
       REACT_APP_ADAPTIVE_RUNTIME: 'true',
     }), {
       allowLegacyBuildMode: true,
@@ -505,8 +502,8 @@ describe('runtime config admission quantitative budgets', () => {
       REACT_APP_ENV: 'legacy',
       VITE_RELEASE: 'r1',
       REACT_APP_RELEASE: 'legacy-r1',
-      VITE_API_URL: '/api',
-      REACT_APP_API_URL: '/legacy',
+      VITE_REQUEST_TIMEOUT_MS: '5000',
+      REACT_APP_REQUEST_TIMEOUT_MS: '7000',
     }), {
       maxShadowedSourceCount: 1,
     });
@@ -523,7 +520,7 @@ describe('runtime config admission quantitative budgets', () => {
       REACT_APP_ENV_DEBUG: 'true',
       REACT_APP_TYPED_BOOTSTRAP: 'false',
       REACT_APP_STRICT_ENDPOINT_POLICY: 'false',
-      REACT_APP_API_TIMEOUT_MS: 'bad',
+      REACT_APP_REQUEST_TIMEOUT_MS: 'bad',
     }), {
       allowLegacyBuildMode: false,
       maxLegacySourceFields: 0,
@@ -574,27 +571,22 @@ describe('assertRuntimeConfigAdmissible', () => {
 
 describe('privacy-safe runtime config change comparison', () => {
   test('reports no change for equal canonical config', () => {
-    const before = resolveRuntimeConfig({ VITE_API_URL: '/api/' });
-    const after = resolveRuntimeConfig({ VITE_API_URL: '/api' });
+    const before = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
+    const after = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
     const changes = compareRuntimeConfigResolutions(before, after);
     expect(changes.changed).toBe(false);
     expect(changes.count).toBe(0);
     expect(changes.changes).toEqual([]);
   });
 
-  test('reports network boundary change without exposing values', () => {
-    const before = resolveRuntimeConfig({ VITE_API_URL: '/api' });
-    const after = resolveRuntimeConfig({ VITE_API_URL: '/gateway' });
-    const changes = compareRuntimeConfigResolutions(before, after);
-    expect(changes.changes).toEqual([
-      {
-        fieldId: 'apiBaseUrl',
-        changeClass: 'network-boundary',
-        sensitive: false,
-      },
-    ]);
-    expect(JSON.stringify(changes)).not.toContain('/gateway');
-    expect(JSON.stringify(changes)).not.toContain('/api');
+  test('ignores retired API URL keys in comparison', () => {
+    const before = resolveRuntimeConfig({});
+    const after = resolveRuntimeConfig({
+      VITE_API_URL: '/retired-api',
+      REACT_APP_API_URL: '/retired-legacy-api',
+    });
+    expect(compareRuntimeConfigResolutions(before, after).changed).toBe(false);
+    expect(after.config).not.toHaveProperty('apiBaseUrl');
   });
 
   test('marks TKGM identity change sensitive', () => {
@@ -602,48 +594,37 @@ describe('privacy-safe runtime config change comparison', () => {
     const after = resolveRuntimeConfig({ VITE_TKGM_CITY_ID: 'city-b' });
     const changes = compareRuntimeConfigResolutions(before, after);
     expect(changes.changes).toEqual([
-      {
-        fieldId: 'tkgmCityId',
-        changeClass: 'identity',
-        sensitive: true,
-      },
+      { fieldId: 'tkgmCityId', changeClass: 'identity', sensitive: true },
     ]);
-    const serialized = JSON.stringify(changes);
-    expect(serialized).not.toContain('city-a');
-    expect(serialized).not.toContain('city-b');
+    expect(JSON.stringify(changes)).not.toContain('city-a');
+    expect(JSON.stringify(changes)).not.toContain('city-b');
   });
 
   test('classifies security feature change', () => {
-    const before = resolveRuntimeConfig({
-      VITE_STRICT_ENDPOINT_POLICY: 'true',
+    const before = resolveRuntimeConfig({ VITE_STRICT_ENDPOINT_POLICY: 'true' });
+    const after = resolveRuntimeConfig({ VITE_STRICT_ENDPOINT_POLICY: 'false' });
+    expect(compareRuntimeConfigResolutions(before, after).changes).toContainEqual({
+      fieldId: 'features.strictEndpointPolicy',
+      changeClass: 'security-boundary',
+      sensitive: false,
     });
-    const after = resolveRuntimeConfig({
-      VITE_STRICT_ENDPOINT_POLICY: 'false',
-    });
-    expect(compareRuntimeConfigResolutions(before, after).changes)
-      .toContainEqual({
-        fieldId: 'features.strictEndpointPolicy',
-        changeClass: 'security-boundary',
-        sensitive: false,
-      });
   });
 
   test('classifies retry change as resilience', () => {
-    const before = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '1' });
-    const after = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '2' });
-    expect(compareRuntimeConfigResolutions(before, after).changes)
-      .toContainEqual({
-        fieldId: 'maxRetries',
-        changeClass: 'resilience',
-        sensitive: false,
-      });
+    const before = resolveRuntimeConfig({ VITE_MAX_RETRIES: '1' });
+    const after = resolveRuntimeConfig({ VITE_MAX_RETRIES: '2' });
+    expect(compareRuntimeConfigResolutions(before, after).changes).toContainEqual({
+      fieldId: 'maxRetries',
+      changeClass: 'resilience',
+      sensitive: false,
+    });
   });
 
   test('change fingerprint is stable for equivalent change sets', () => {
-    const beforeA = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '1' });
-    const afterA = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '2' });
-    const beforeB = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '1' });
-    const afterB = resolveRuntimeConfig({ VITE_API_MAX_RETRIES: '2' });
+    const beforeA = resolveRuntimeConfig({ VITE_MAX_RETRIES: '1' });
+    const afterA = resolveRuntimeConfig({ VITE_MAX_RETRIES: '2' });
+    const beforeB = resolveRuntimeConfig({ VITE_MAX_RETRIES: '1' });
+    const afterB = resolveRuntimeConfig({ VITE_MAX_RETRIES: '2' });
     expect(compareRuntimeConfigResolutions(beforeA, afterA).fingerprint)
       .toBe(compareRuntimeConfigResolutions(beforeB, afterB).fingerprint);
   });
@@ -652,7 +633,6 @@ describe('privacy-safe runtime config change comparison', () => {
 describe('runtime config migration plan', () => {
   test('returns empty plan for modern Vite config', () => {
     const plan = createRuntimeConfigMigrationPlan(resolveRuntimeConfig({
-      VITE_API_URL: '/api',
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
     }));
@@ -661,16 +641,12 @@ describe('runtime config migration plan', () => {
     expect(plan.steps).toEqual([]);
   });
 
-  test('maps legacy API key to primary Vite replacement', () => {
+  test('does not create migration steps from retired API URL environment values', () => {
     const plan = createRuntimeConfigMigrationPlan(resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
+      REACT_APP_API_URL: '/retired-api',
     }));
-    expect(plan.steps).toContainEqual({
-      fieldId: 'apiBaseUrl',
-      legacyKey: 'REACT_APP_API_URL',
-      replacementKey: 'VITE_API_URL',
-      shadowed: false,
-    });
+    expect(plan.required).toBe(false);
+    expect(plan.steps).toEqual([]);
   });
 
   test('maps legacy release key to Vite replacement', () => {
@@ -692,27 +668,27 @@ describe('runtime config migration plan', () => {
     expect(plan.steps.some((step) => step.fieldId === 'buildMode')).toBe(false);
   });
 
-  test('sorts migration steps deterministically', () => {
+  test('sorts generic migration steps deterministically', () => {
     const plan = createRuntimeConfigMigrationPlan(resolveRuntimeConfig({
       REACT_APP_TYPED_BOOTSTRAP: 'true',
-      REACT_APP_API_URL: '/api',
+      REACT_APP_REQUEST_TIMEOUT_MS: '5000',
       REACT_APP_RELEASE: 'r1',
     }));
     expect(plan.steps.map((step) => step.fieldId)).toEqual([
-      'apiBaseUrl',
       'features.typedBootstrap',
       'release',
+      'requestTimeoutMs',
     ]);
   });
 
   test('migration fingerprint is deterministic', () => {
     const first = createRuntimeConfigMigrationPlan(resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
       REACT_APP_RELEASE: 'r1',
+      REACT_APP_REQUEST_TIMEOUT_MS: '5000',
     }));
     const second = createRuntimeConfigMigrationPlan(resolveRuntimeConfig({
+      REACT_APP_REQUEST_TIMEOUT_MS: '5000',
       REACT_APP_RELEASE: 'r1',
-      REACT_APP_API_URL: '/api',
     }));
     expect(second.fingerprint).toBe(first.fingerprint);
   });
@@ -722,7 +698,6 @@ describe('runtime config security field catalog', () => {
   test('contains only config field identities', () => {
     const fields = runtimeConfigSecurityFields();
     expect(fields).toEqual([
-      'apiBaseUrl',
       'features.debugLogging',
       'features.strictEndpointPolicy',
       'features.typedBootstrap',

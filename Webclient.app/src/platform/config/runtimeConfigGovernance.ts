@@ -93,7 +93,6 @@ export interface RuntimeConfigAdmissionResult {
 }
 
 export type RuntimeConfigChangeClass =
-  | 'network-boundary'
   | 'resilience'
   | 'identity'
   | 'release'
@@ -238,7 +237,6 @@ const STATUS_RANK: Readonly<Record<RuntimeConfigGovernanceStatus, number>> =
   });
 
 const SECURITY_FIELDS = new Set<RuntimeConfigFieldId>([
-  'apiBaseUrl',
   'features.debugLogging',
   'features.typedBootstrap',
   'features.strictEndpointPolicy',
@@ -246,7 +244,6 @@ const SECURITY_FIELDS = new Set<RuntimeConfigFieldId>([
 
 const FIELD_CLASS: Readonly<Record<RuntimeConfigFieldId, RuntimeConfigChangeClass>> =
   Object.freeze({
-    apiBaseUrl: 'network-boundary',
     requestTimeoutMs: 'resilience',
     cacheTtlMs: 'resilience',
     maxRetries: 'resilience',
@@ -263,7 +260,6 @@ const FIELD_CLASS: Readonly<Record<RuntimeConfigFieldId, RuntimeConfigChangeClas
   });
 
 const FIELDS: readonly RuntimeConfigFieldId[] = Object.freeze([
-  'apiBaseUrl',
   'requestTimeoutMs',
   'cacheTtlMs',
   'maxRetries',
@@ -728,8 +724,6 @@ const configValue = (
   fieldId: RuntimeConfigFieldId,
 ): string | number | boolean => {
   switch (fieldId) {
-    case 'apiBaseUrl':
-      return config.apiBaseUrl;
     case 'requestTimeoutMs':
       return config.requestTimeoutMs;
     case 'cacheTtlMs':

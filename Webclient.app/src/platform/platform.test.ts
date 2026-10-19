@@ -6,26 +6,41 @@ import { stableSerialize } from './http/httpClient';
 import { assertApplicationEndpoint, isSameOriginPath, normalizeApplicationPath } from './network/endpointPolicy';
 
 describe('platform runtime configuration', () => {
-  test('defaults to a same-origin API boundary', () => {
+  test('exposes generic browser runtime defaults without an application API URL', () => {
     const config = createRuntimeConfig({});
-    expect(config.apiBaseUrl).toBe('/api');
     expect(config.requestTimeoutMs).toBe(15000);
     expect(config.maxRetries).toBe(2);
+    expect(config.cacheTtlMs).toBe(30000);
+    expect(config).not.toHaveProperty('apiBaseUrl');
   });
 
-  test('accepts normalized relative API paths', () => {
-    const config = createRuntimeConfig({ REACT_APP_API_URL: '/gateway/', REACT_APP_API_TIMEOUT_MS: '5000', REACT_APP_API_MAX_RETRIES: '3' });
-    expect(config.apiBaseUrl).toBe('/gateway');
+  test('uses generic request settings while ignoring retired API URL aliases', () => {
+    const config = createRuntimeConfig({
+      VITE_REQUEST_TIMEOUT_MS: '5000',
+      VITE_MAX_RETRIES: '3',
+      VITE_API_URL: '/retired-api',
+      REACT_APP_API_URL: '/legacy-api',
+    });
     expect(config.requestTimeoutMs).toBe(5000);
     expect(config.maxRetries).toBe(3);
+    expect(config).not.toHaveProperty('apiBaseUrl');
   });
 
-  test('rejects an external build-time API origin by falling back', () => {
-    expect(createRuntimeConfig({ REACT_APP_API_URL: 'https://attacker.invalid/api' }).apiBaseUrl).toBe('/api');
+  test('ignores a retired external API origin rather than treating it as runtime configuration', () => {
+    const defaults = createRuntimeConfig({});
+    const ignored = createRuntimeConfig({
+      VITE_API_URL: 'https://attacker.invalid/api',
+      REACT_APP_API_URL: 'https://legacy.invalid/api',
+    });
+    expect(ignored).toEqual(defaults);
+    expect(ignored).not.toHaveProperty('apiBaseUrl');
   });
 
-  test('clamps unsafe timeout and retry values', () => {
-    const config = createRuntimeConfig({ REACT_APP_API_TIMEOUT_MS: '999999', REACT_APP_API_MAX_RETRIES: '99' });
+  test('clamps unsafe generic timeout and retry values', () => {
+    const config = createRuntimeConfig({
+      VITE_REQUEST_TIMEOUT_MS: '999999',
+      VITE_MAX_RETRIES: '99',
+    });
     expect(config.requestTimeoutMs).toBe(60000);
     expect(config.maxRetries).toBe(4);
   });

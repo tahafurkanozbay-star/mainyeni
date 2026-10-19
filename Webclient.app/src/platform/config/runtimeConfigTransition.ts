@@ -11,7 +11,6 @@ import type {
 
 export type RuntimeConfigTransitionViolationCode =
   | 'change-budget-exceeded'
-  | 'network-boundary-change'
   | 'security-boundary-change'
   | 'sensitive-identity-change'
   | 'environment-change'
@@ -23,7 +22,6 @@ export type RuntimeConfigTransitionViolationCode =
 
 export interface RuntimeConfigTransitionPolicy {
   readonly maxChangedFields: number;
-  readonly allowNetworkBoundaryChange: boolean;
   readonly allowSecurityBoundaryChange: boolean;
   readonly allowSensitiveIdentityChange: boolean;
   readonly allowEnvironmentChange: boolean;
@@ -68,7 +66,6 @@ export class RuntimeConfigTransitionError extends Error {
 
 const DEFAULT_POLICY: RuntimeConfigTransitionPolicy = Object.freeze({
   maxChangedFields: 6,
-  allowNetworkBoundaryChange: false,
   allowSecurityBoundaryChange: false,
   allowSensitiveIdentityChange: true,
   allowEnvironmentChange: false,
@@ -103,8 +100,6 @@ const createPolicy = (
     0,
     100,
   ),
-  allowNetworkBoundaryChange:
-    overrides.allowNetworkBoundaryChange ?? DEFAULT_POLICY.allowNetworkBoundaryChange,
   allowSecurityBoundaryChange:
     overrides.allowSecurityBoundaryChange ?? DEFAULT_POLICY.allowSecurityBoundaryChange,
   allowSensitiveIdentityChange:
@@ -206,11 +201,6 @@ export const assessRuntimeConfigTransition = (
       changes.count,
       policy.maxChangedFields,
     ));
-  }
-
-  const networkFields = fieldsByClass(changes.changes, 'network-boundary');
-  if (!policy.allowNetworkBoundaryChange && networkFields.length > 0) {
-    violations.push(violation('network-boundary-change', networkFields));
   }
 
   const securityFields = fieldsByClass(changes.changes, 'security-boundary');

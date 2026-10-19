@@ -59,7 +59,7 @@ const firstFetchInit = (fetchImpl: FetchMock): RequestInit => {
 };
 
 const defaults = {
-  baseUrl: '/api',
+  baseUrl: '/',
   timeoutMs: 5000,
   maxRetries: 2,
   cacheTtlMs: 30000
@@ -330,9 +330,9 @@ describe('fetchTransport executeFetch', () => {
     await executeFetch({ method: 'get', url: '/items' }, {
       defaults, fetchImpl, clock, onStart, onSuccess
     });
-    expect(onStart).toHaveBeenCalledWith({ method: 'get', url: '/api/items', timeout: 5000 });
+    expect(onStart).toHaveBeenCalledWith({ method: 'get', url: '/items', timeout: 5000 });
     expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'get', url: '/api/items', status: 200, durationMs: 25
+      method: 'get', url: '/items', status: 200, durationMs: 25
     }));
   });
 
@@ -388,6 +388,11 @@ describe('fetchTransport executeFetch', () => {
 });
 
 describe('fetchTransport factory surface', () => {
+  test('uses the application root rather than a guessed API route by default', () => {
+    const transport = createFetchTransport({ fetchImpl: vi.fn() });
+    expect(transport.defaults).toMatchObject({ baseUrl: '/' });
+  });
+
   test('publishes immutable defaults', () => {
     const transport = createFetchTransport({
       baseUrl: '/api', timeoutMs: 7000, maxRetries: 3, cacheTtlMs: 9000, fetchImpl: vi.fn()

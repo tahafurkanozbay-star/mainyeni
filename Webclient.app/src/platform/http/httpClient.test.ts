@@ -1,10 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AppError } from '../errors/appError';
 import { apiClient, clearApiClientRuntime, createApiClient, getApiClientDiagnosticSummary, getApiClientDiagnostics } from './httpClient';
-import type { RuntimeConfig } from '../config/runtimeConfig';
 import type { HttpResponseEnvelope, HttpTransport } from './contracts';
 
-const runtime: RuntimeConfig = Object.freeze({ apiBaseUrl: '/api', requestTimeoutMs: 5000, maxRetries: 2, cacheTtlMs: 30000 });
+const runtime = Object.freeze({ baseUrl: '/api', requestTimeoutMs: 5000, maxRetries: 2, cacheTtlMs: 30000 });
 
 const envelope = <T>(data: T): HttpResponseEnvelope<T> => ({
   data,
@@ -29,6 +28,18 @@ describe('httpClient public facade', () => {
     clearApiClientRuntime();
     expect(getApiClientDiagnostics()).toEqual([]);
     expect(getApiClientDiagnosticSummary()).toMatchObject({ retainedEvents: 0, totalRecorded: 0, droppedEvents: 0 });
+  });
+
+  test('static application facade fails closed instead of guessing an API endpoint', async () => {
+    await expect(apiClient.get('/health'))
+      .rejects.toMatchObject({ code: 'APPLICATION_API_DISABLED' });
+  });
+
+  test('default singleton fails closed because the static app has no application API', async () => {
+    await expect(apiClient.get('/items')).rejects.toMatchObject({
+      code: 'APPLICATION_API_DISABLED',
+      retryable: false,
+    });
   });
 });
 

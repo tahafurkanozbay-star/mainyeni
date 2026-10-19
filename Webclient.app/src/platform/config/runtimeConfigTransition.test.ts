@@ -10,7 +10,7 @@ import {
 const modern = (
   overrides: Record<string, unknown> = {},
 ) => resolveRuntimeConfig({
-  VITE_API_URL: '/api',
+  VITE_REQUEST_TIMEOUT_MS: '15000',
   VITE_ENV: 'staging',
   VITE_RELEASE: 'r1',
   VITE_TYPED_BOOTSTRAP: 'true',
@@ -30,16 +30,8 @@ describe('runtime config transition no-op behavior', () => {
   });
 
   test('allows provenance-only change with identical canonical config', () => {
-    const before = resolveRuntimeConfig({
-      VITE_API_URL: '/api',
-      VITE_ENV: 'staging',
-      VITE_RELEASE: 'r1',
-    });
-    const after = resolveRuntimeConfig({
-      VITE_API_URL: '/api/',
-      VITE_ENV: 'staging',
-      VITE_RELEASE: 'r1',
-    });
+    const before = resolveRuntimeConfig({ VITE_RELEASE: 'r1' });
+    const after = resolveRuntimeConfig({ VITE_RELEASE: ' r1 ' });
     const assessment = assessRuntimeConfigTransition(before, after);
     expect(assessment.allowed).toBe(true);
     expect(assessment.changes.count).toBe(0);
@@ -71,11 +63,11 @@ describe('runtime config transition no-op behavior', () => {
       modern(),
       modern({ VITE_RELEASE: 'r2' }),
     );
-    const network = assessRuntimeConfigTransition(
+    const security = assessRuntimeConfigTransition(
       modern(),
-      modern({ VITE_API_URL: '/gateway' }),
+      modern({ VITE_STRICT_ENDPOINT_POLICY: 'false' }),
     );
-    expect(network.fingerprint).not.toBe(release.fingerprint);
+    expect(security.fingerprint).not.toBe(release.fingerprint);
   });
 });
 
@@ -98,9 +90,9 @@ describe('runtime config transition change budget', () => {
       modern(),
       modern({
         VITE_RELEASE: 'r2',
-        VITE_API_TIMEOUT_MS: '5000',
-        VITE_API_CACHE_TTL_MS: '1000',
-        VITE_API_MAX_RETRIES: '4',
+        VITE_REQUEST_TIMEOUT_MS: '5000',
+        VITE_CACHE_TTL_MS: '1000',
+        VITE_MAX_RETRIES: '4',
       }),
       { maxChangedFields: 2 },
     );
@@ -129,44 +121,6 @@ describe('runtime config transition change budget', () => {
       actualCount: 1,
       threshold: 0,
     }));
-  });
-});
-
-describe('runtime config network boundary transition', () => {
-  test('rejects API base change by default', () => {
-    const assessment = assessRuntimeConfigTransition(
-      modern(),
-      modern({ VITE_API_URL: '/gateway' }),
-    );
-    expect(assessment.allowed).toBe(false);
-    expect(assessment.violations).toContainEqual({
-      code: 'network-boundary-change',
-      affectedFields: ['apiBaseUrl'],
-    });
-  });
-
-  test('allows API base change only with explicit override', () => {
-    const assessment = assessRuntimeConfigTransition(
-      modern(),
-      modern({ VITE_API_URL: '/gateway' }),
-      { allowNetworkBoundaryChange: true },
-    );
-    expect(assessment.allowed).toBe(true);
-  });
-
-  test('does not leak API paths into assessment', () => {
-    const before = modern({ VITE_API_URL: '/private-before' });
-    const after = modern({ VITE_API_URL: '/private-after' });
-    const assessment = assessRuntimeConfigTransition(before, after);
-    const serialized = JSON.stringify(assessment);
-    expect(serialized).not.toContain('/private-before');
-    expect(serialized).not.toContain('/private-after');
-  });
-
-  test('normalized equivalent API path does not count as network change', () => {
-    const before = modern({ VITE_API_URL: '/api/' });
-    const after = modern({ VITE_API_URL: '/api' });
-    expect(assessRuntimeConfigTransition(before, after).allowed).toBe(true);
   });
 });
 
@@ -313,12 +267,11 @@ describe('runtime config build mode regression', () => {
   test('rejects Vite to legacy build mode regression', () => {
     const before = modern();
     const after = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_ENV: 'staging',
       REACT_APP_RELEASE: 'r1',
     });
     const assessment = assessRuntimeConfigTransition(before, after, {
-      allowNetworkBoundaryChange: true,
       allowEnvironmentChange: true,
       maxLegacySourceIncrease: 20,
     });
@@ -331,7 +284,7 @@ describe('runtime config build mode regression', () => {
   test('allows build mode regression only explicitly', () => {
     const before = modern();
     const after = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_ENV: 'staging',
       REACT_APP_RELEASE: 'r1',
     });
@@ -346,7 +299,7 @@ describe('runtime config build mode regression', () => {
 
   test('legacy to Vite migration is not a regression', () => {
     const before = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_ENV: 'staging',
       REACT_APP_RELEASE: 'r1',
     });
@@ -364,7 +317,6 @@ describe('runtime config build mode regression', () => {
     const assessment = assessRuntimeConfigTransition(before, after, {
       maxChangedFields: 20,
       allowEnvironmentChange: true,
-      allowNetworkBoundaryChange: true,
     });
     expect(assessment.violations.some((item) =>
       item.code === 'build-mode-regression')).toBe(false);
@@ -377,7 +329,7 @@ describe('runtime config legacy-source regression budget', () => {
     const after = resolveRuntimeConfig({
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
     });
     const assessment = assessRuntimeConfigTransition(before, after, {
       maxChangedFields: 20,
@@ -394,7 +346,7 @@ describe('runtime config legacy-source regression budget', () => {
     const after = resolveRuntimeConfig({
       VITE_ENV: 'staging',
       VITE_RELEASE: 'r1',
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
     });
     const assessment = assessRuntimeConfigTransition(before, after, {
       maxLegacySourceIncrease: 1,
@@ -406,7 +358,7 @@ describe('runtime config legacy-source regression budget', () => {
 
   test('reducing legacy source usage is allowed', () => {
     const before = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/api',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_ENV: 'staging',
       REACT_APP_RELEASE: 'r1',
     });
@@ -422,7 +374,7 @@ describe('runtime config legacy-source regression budget', () => {
 describe('runtime config rejected-field regression budget', () => {
   test('rejects new invalid fallback by default', () => {
     const before = modern();
-    const after = modern({ VITE_API_TIMEOUT_MS: 'bad' });
+    const after = modern({ VITE_REQUEST_TIMEOUT_MS: 'bad' });
     const assessment = assessRuntimeConfigTransition(before, after);
     expect(assessment.violations).toContainEqual(expect.objectContaining({
       code: 'rejected-field-regression',
@@ -434,7 +386,7 @@ describe('runtime config rejected-field regression budget', () => {
 
   test('can budget one rejected field explicitly', () => {
     const before = modern();
-    const after = modern({ VITE_API_TIMEOUT_MS: 'bad' });
+    const after = modern({ VITE_REQUEST_TIMEOUT_MS: 'bad' });
     const assessment = assessRuntimeConfigTransition(before, after, {
       maxRejectedFieldIncrease: 1,
     });
@@ -443,8 +395,8 @@ describe('runtime config rejected-field regression budget', () => {
   });
 
   test('fixing rejected parser input is allowed', () => {
-    const before = modern({ VITE_API_TIMEOUT_MS: 'bad' });
-    const after = modern({ VITE_API_TIMEOUT_MS: '5000' });
+    const before = modern({ VITE_REQUEST_TIMEOUT_MS: 'bad' });
+    const after = modern({ VITE_REQUEST_TIMEOUT_MS: '5000' });
     const assessment = assessRuntimeConfigTransition(before, after);
     expect(assessment.violations.some((item) =>
       item.code === 'rejected-field-regression')).toBe(false);
@@ -454,11 +406,11 @@ describe('runtime config rejected-field regression budget', () => {
 describe('runtime config shadowed-source regression budget', () => {
   test('rejects new shadowed alias by default', () => {
     const before = modern();
-    const after = modern({ REACT_APP_API_URL: '/legacy' });
+    const after = modern({ REACT_APP_REQUEST_TIMEOUT_MS: '8000' });
     const assessment = assessRuntimeConfigTransition(before, after);
     expect(assessment.violations).toContainEqual(expect.objectContaining({
       code: 'shadowed-source-regression',
-      affectedFields: ['apiBaseUrl'],
+      affectedFields: ['requestTimeoutMs'],
       actualCount: 1,
       threshold: 0,
     }));
@@ -466,7 +418,7 @@ describe('runtime config shadowed-source regression budget', () => {
 
   test('can budget one shadowed alias explicitly', () => {
     const before = modern();
-    const after = modern({ REACT_APP_API_URL: '/legacy' });
+    const after = modern({ REACT_APP_REQUEST_TIMEOUT_MS: '8000' });
     const assessment = assessRuntimeConfigTransition(before, after, {
       maxShadowedSourceIncrease: 1,
     });
@@ -475,7 +427,7 @@ describe('runtime config shadowed-source regression budget', () => {
   });
 
   test('removing shadowed alias is allowed', () => {
-    const before = modern({ REACT_APP_API_URL: '/legacy' });
+    const before = modern({ REACT_APP_REQUEST_TIMEOUT_MS: '8000' });
     const after = modern();
     const assessment = assessRuntimeConfigTransition(before, after);
     expect(assessment.violations.some((item) =>
@@ -487,7 +439,7 @@ describe('runtime config transition mixed changes', () => {
   test('returns multiple independent violations for unsafe deployment', () => {
     const before = modern();
     const after = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/gateway',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_ENV: 'production',
       REACT_APP_RELEASE: 'r2',
       REACT_APP_ENV_DEBUG: 'true',
@@ -497,7 +449,6 @@ describe('runtime config transition mixed changes', () => {
       maxChangedFields: 20,
     });
     const codes = assessment.violations.map((item) => item.code);
-    expect(codes).toContain('network-boundary-change');
     expect(codes).toContain('security-boundary-change');
     expect(codes).toContain('environment-change');
     expect(codes).toContain('build-mode-regression');
@@ -507,12 +458,12 @@ describe('runtime config transition mixed changes', () => {
   test('bounds mixed transition violations', () => {
     const before = modern();
     const after = resolveRuntimeConfig({
-      REACT_APP_API_URL: '/gateway',
+      REACT_APP_TKGM_CITY_ID: '28',
       REACT_APP_ENV: 'production',
       REACT_APP_RELEASE: 'r2',
       REACT_APP_ENV_DEBUG: 'true',
       REACT_APP_STRICT_ENDPOINT_POLICY: 'false',
-      REACT_APP_API_TIMEOUT_MS: 'bad',
+      REACT_APP_REQUEST_TIMEOUT_MS: 'bad',
     });
     const assessment = assessRuntimeConfigTransition(before, after, {
       maxChangedFields: 1,
@@ -522,13 +473,15 @@ describe('runtime config transition mixed changes', () => {
   });
 
   test('violation records expose field ids but not config values', () => {
-    const before = modern({ VITE_API_URL: '/private-a' });
-    const after = modern({ VITE_API_URL: '/private-b' });
-    const assessment = assessRuntimeConfigTransition(before, after);
+    const before = modern({ VITE_RELEASE: 'private-a' });
+    const after = modern({ VITE_RELEASE: 'private-b' });
+    const assessment = assessRuntimeConfigTransition(before, after, {
+      maxChangedFields: 0,
+    });
     const serialized = JSON.stringify(assessment.violations);
-    expect(serialized).toContain('apiBaseUrl');
-    expect(serialized).not.toContain('/private-a');
-    expect(serialized).not.toContain('/private-b');
+    expect(serialized).toContain('release');
+    expect(serialized).not.toContain('private-a');
+    expect(serialized).not.toContain('private-b');
   });
 });
 
@@ -550,7 +503,6 @@ describe('runtime config transition policy validation', () => {
     expect(Object.isFrozen(policy)).toBe(true);
     expect(policy).toMatchObject({
       maxChangedFields: 6,
-      allowNetworkBoundaryChange: false,
       allowSecurityBoundaryChange: false,
       allowSensitiveIdentityChange: true,
       allowEnvironmentChange: false,
@@ -571,11 +523,11 @@ describe('assertRuntimeConfigTransitionSafe', () => {
     )).toBe(true);
   });
 
-  test('throws typed error for unsafe network transition', () => {
+  test('throws a typed error for unsafe security-policy transition', () => {
     try {
       assertRuntimeConfigTransitionSafe(
         modern(),
-        modern({ VITE_API_URL: '/gateway' }),
+        modern({ VITE_STRICT_ENDPOINT_POLICY: 'false' }),
       );
       throw new Error('expected transition rejection');
     } catch (error) {
@@ -584,10 +536,9 @@ describe('assertRuntimeConfigTransitionSafe', () => {
       expect(typed.code).toBe('RUNTIME_CONFIG_TRANSITION_REJECTED');
       expect(typed.assessment.allowed).toBe(false);
       expect(typed.assessment.violations).toContainEqual({
-        code: 'network-boundary-change',
-        affectedFields: ['apiBaseUrl'],
+        code: 'security-boundary-change',
+        affectedFields: ['features.strictEndpointPolicy'],
       });
-      expect(typed.message).not.toContain('/gateway');
     }
   });
 
@@ -595,13 +546,11 @@ describe('assertRuntimeConfigTransitionSafe', () => {
     expect(assertRuntimeConfigTransitionSafe(
       modern(),
       modern({
-        VITE_API_URL: '/gateway',
         VITE_ENV: 'production',
         VITE_ENV_DEBUG: 'true',
       }),
       {
-        allowNetworkBoundaryChange: true,
-        allowEnvironmentChange: true,
+          allowEnvironmentChange: true,
         allowSecurityBoundaryChange: true,
         maxChangedFields: 20,
       },
