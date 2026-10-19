@@ -52,14 +52,14 @@ const sidebarIconAliases = Object.freeze(
       const aliases = [...new Set([entry.id, entry.type, ...(Array.isArray(entry.aliases) ? entry.aliases : [])]
         .filter((alias): alias is string => typeof alias === 'string' && alias.trim())
         .map(normalizeIconKey)
-        .filter(Boolean))];
+        .filter((alias) => alias.length >= 4))];
       return aliases.map((alias) => Object.freeze({ id, alias }));
     })
     .sort((left, right) => right.alias.length - left.alias.length),
 );
 
 const resolveSidebarIconKey = (item: SidebarItem): string => {
-  const title = normalizeIconKey([item.iconType, item.label, item.serviceKey].join(' '));
+  const title = normalizeIconKey([item.iconType, item.serviceKey].join(' '));
   const match = sidebarIconAliases.find(({ alias }) => (
     title === alias
     || title.startsWith(`${alias} `)
