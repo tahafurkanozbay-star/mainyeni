@@ -165,7 +165,7 @@ export const GlobalIdentifyWidget = forwardRef<ManagedWindowHandle, GlobalIdenti
         mountedRef.current = false;
         identifyGenerationRef.current += 1;
         session.cancel();
-        const view = MapManager.GetMapView();
+        const view = getActiveMapView(MapManager.GetMapView());
         if (view && highlightGraphicRef.current) {
           GisGraphicsHelper.RemoveGraphics(view, highlightGraphicRef.current);
           highlightGraphicRef.current = null;
