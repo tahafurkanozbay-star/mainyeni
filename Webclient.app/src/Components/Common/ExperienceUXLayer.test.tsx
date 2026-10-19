@@ -103,7 +103,7 @@ describe('ExperienceUXLayer', () => {
   test('keeps notification drawers available through explicit commands without a floating trigger', () => {
     const manager = createWindowManager();
     renderLayer(manager);
-    dispatchExperienceCommand('notifications');
+    act(() => dispatchExperienceCommand('notifications'));
     expect(screen.getByRole('dialog', { name: 'Bildirim merkezi' })).toBeInTheDocument();
   });
 
