@@ -76,7 +76,23 @@ vi.mock('../../gis-engine/sceneRuntime', () => ({
   waitForSceneContainer: vi.fn(async () => undefined),
 }));
 
-vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({ loadArcgisModule: harness.loadBasemapModule }));
+vi.mock('../../gis-engine/arcgisModuleRuntime', () => ({
+  loadArcgisModule: harness.loadBasemapModule,
+  loadArcgisModules: vi.fn(async () => {
+    class Basemap {
+      id?: string;
+      title?: string;
+      baseLayers?: unknown[];
+      load = vi.fn(async () => undefined);
+      destroy = vi.fn();
+      constructor(properties: Record<string, unknown>) {
+        Object.assign(this, properties);
+      }
+    }
+    class OpenStreetMapLayer {}
+    return [Basemap, OpenStreetMapLayer];
+  }),
+}));
 
 vi.mock('../../gis-engine/osm3DBuildingsRuntime', () => ({
   OSM3DBuildingsRuntime: vi.fn(() => harness.osmBuildingsRuntime),
