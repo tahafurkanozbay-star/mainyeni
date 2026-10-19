@@ -276,7 +276,7 @@ describe('createApiClient runtime intelligence', () => {
 
     const client = createApiClient({
       runtimeConfig: {
-        apiBaseUrl: '/api',
+        baseUrl: '/api',
         requestTimeoutMs: 10000,
         maxRetries: 1,
         cacheTtlMs: 1000
@@ -303,7 +303,7 @@ describe('createApiClient runtime intelligence', () => {
 
     const client = createApiClient({
       runtimeConfig: {
-        apiBaseUrl: '/api',
+        baseUrl: '/api',
         requestTimeoutMs: 10000,
         maxRetries: 0,
         cacheTtlMs: 0
@@ -333,7 +333,7 @@ describe('createApiClient runtime intelligence', () => {
 
     expect(() => createApiClient({
       runtimeConfig: {
-        apiBaseUrl: '/api',
+        baseUrl: '/api',
         requestTimeoutMs: 10000,
         maxRetries: 0,
         cacheTtlMs: 0
@@ -352,7 +352,7 @@ describe('createApiClient runtime intelligence', () => {
 
     expect(() => createApiClient({
       runtimeConfig: {
-        apiBaseUrl: '/api',
+        baseUrl: '/api',
         requestTimeoutMs: 10000,
         maxRetries: 0,
         cacheTtlMs: 0
@@ -372,7 +372,7 @@ describe('createApiClient runtime intelligence', () => {
 
     const client = createApiClient({
       runtimeConfig: {
-        apiBaseUrl: '/api',
+        baseUrl: '/api',
         requestTimeoutMs: 10000,
         maxRetries: 0,
         cacheTtlMs: 0
