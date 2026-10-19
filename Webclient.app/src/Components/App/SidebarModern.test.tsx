@@ -94,6 +94,23 @@ describe('SidebarModern governed interaction integration', () => {
     expect(groups[0]).toHaveAttribute('title', 'Ankara Büyükşehir Belediyesi');
   });
 
+  it('resolves institution logos relative to the configured app base path', () => {
+    renderSidebar();
+    const nav = screen.getByRole('navigation', { name: 'Kurum kategorileri' });
+    const logoSources = Array.from(
+      nav.querySelectorAll('img'),
+      (image) => image.getAttribute('src'),
+    );
+
+    expect(logoSources).toEqual([
+      `${import.meta.env.BASE_URL}images/abbbuton.svg`,
+      `${import.meta.env.BASE_URL}images/egobuton.svg`,
+      `${import.meta.env.BASE_URL}images/askibuton.svg`,
+      `${import.meta.env.BASE_URL}images/istiraklerbuton.svg`,
+    ]);
+    expect(logoSources.every((source) => source !== null && !source.startsWith('/') && !source.startsWith('../'))).toBe(true);
+  });
+
   it('filters services using Turkish accent-tolerant search', async () => {
     const user = userEvent.setup();
     renderSidebar();

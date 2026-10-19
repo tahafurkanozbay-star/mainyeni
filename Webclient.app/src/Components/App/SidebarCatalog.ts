@@ -15,11 +15,13 @@ export interface SidebarItem {
   readonly serviceKey: string;
 }
 
+const sidebarLogo = (fileName: string): string => `${import.meta.env.BASE_URL}images/${fileName}`;
+
 export const SIDEBAR_GROUPS: readonly SidebarGroup[] = Object.freeze([
-  { id: 'ABB', shortLabel: 'ABB', label: 'Ankara Büyükşehir Belediyesi', logo: '../images/abbbuton.svg' },
-  { id: 'EGO', shortLabel: 'EGO', label: 'EGO Genel Müdürlüğü', logo: '../images/egobuton.svg' },
-  { id: 'ASKI', shortLabel: 'ASKİ', label: 'ASKİ Genel Müdürlüğü', logo: '../images/askibuton.svg' },
-  { id: 'ISTIRAK', shortLabel: 'İştirak', label: 'Belediye iştirakleri', logo: '../images/istiraklerbuton.svg' }
+  { id: 'ABB', shortLabel: 'ABB', label: 'Ankara Büyükşehir Belediyesi', logo: sidebarLogo('abbbuton.svg') },
+  { id: 'EGO', shortLabel: 'EGO', label: 'EGO Genel Müdürlüğü', logo: sidebarLogo('egobuton.svg') },
+  { id: 'ASKI', shortLabel: 'ASKİ', label: 'ASKİ Genel Müdürlüğü', logo: sidebarLogo('askibuton.svg') },
+  { id: 'ISTIRAK', shortLabel: 'İştirak', label: 'Belediye iştirakleri', logo: sidebarLogo('istiraklerbuton.svg') }
 ]);
 
 export const SIDEBAR_ITEMS: readonly SidebarItem[] = Object.freeze([
