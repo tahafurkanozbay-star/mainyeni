@@ -11,6 +11,7 @@ import {
   type DialogPresentation,
 } from '../../experience/dialogStackModel';
 import type { NotificationCenterModel } from '../../experience/notificationCenterModel';
+import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import './experience-ui.css';
 import './experience-ux-layer-modern.css';
 import { ExperienceNotificationCenter } from './ExperienceNotificationCenter';
@@ -18,6 +19,7 @@ import { ExperienceOverlayStack } from './ExperienceOverlayStack';
 
 interface ExperienceUXLayerProps {
   readonly notificationModel: NotificationCenterModel;
+  readonly windowManager?: WindowManagerApi;
 }
 
 interface ExperienceCommandDetail {
@@ -67,7 +69,11 @@ export const dispatchExperienceCommand = (
 
 export function ExperienceUXLayer({
   notificationModel,
+  windowManager,
 }: ExperienceUXLayerProps): ReactNode {
+  // Keep the shared manager contract for shell lifecycle and consuming tests;
+  // this layer intentionally no longer renders the retired floating utility dock.
+  void windowManager;
   const dialogStack = useMemo(() => new DialogStackModel({
     onObserverError: error => reportUxRuntimeError(
       error,
