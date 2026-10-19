@@ -82,6 +82,67 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
     handle.dispose();
   });
 
+  test('popup shows only the address plus Google Maps directions and Street View', async () => {
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: () => 'blob:popup-test' });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    const layer = { load: vi.fn(async () => undefined), destroy: vi.fn() };
+    const captured: { options: Record<string, unknown> | null } = { options: null };
+    const Layer = vi.fn(function (options: Record<string, unknown>) {
+      captured.options = options;
+      return layer;
+    });
+
+    await createKentRehberiGeoJsonLayer(demoGeoJson, (async () => Layer) as never);
+    const template = captured.options?.popupTemplate as {
+      title?: string;
+      returnGeometry?: boolean;
+      content?: (feature: { graphic: {
+        attributes: Record<string, unknown>;
+        geometry: { longitude: number; latitude: number };
+      } }) => HTMLElement;
+    };
+    expect(template.title).toBe('{adi}');
+    expect(template.returnGeometry).toBe(true);
+    expect(typeof template.content).toBe('function');
+
+    const content = template.content?.({
+      graphic: {
+        attributes: {
+          adi: 'Yerel Demo Noktası',
+          adres: 'Kocatepe Mahallesi, Ankara',
+          objectid: 101,
+          ilce: 'Çankaya',
+          mahalle: 'Kızılay',
+          tur: 13,
+          durakNo: 'D-101',
+        },
+        geometry: { longitude: 32.854, latitude: 39.92 },
+      },
+    });
+    expect(content?.querySelector('.kent-rehberi-popup__address')?.textContent)
+      .toBe('Kocatepe Mahallesi, Ankara');
+    expect(content?.textContent).not.toContain('Adres:');
+    expect(content?.textContent).not.toContain('Çankaya');
+    expect(content?.textContent).not.toContain('D-101');
+
+    const links = Array.from(content?.querySelectorAll('a') ?? []);
+    expect(links.map((link) => link.textContent)).toEqual(['Yol tarifi al', 'Sokak görünümü al']);
+    expect(links.every((link) => link.target === '_blank' && link.rel.includes('noopener'))).toBe(true);
+
+    const directions = new URL(links[0].href);
+    expect(directions.origin).toBe('https://www.google.com');
+    expect(directions.pathname).toBe('/maps/dir/');
+    expect(directions.searchParams.get('api')).toBe('1');
+    expect(directions.searchParams.get('destination')).toBe('39.92,32.854');
+
+    const streetView = new URL(links[1].href);
+    expect(streetView.origin).toBe('https://www.google.com');
+    expect(streetView.pathname).toBe('/maps/@');
+    expect(streetView.searchParams.get('api')).toBe('1');
+    expect(streetView.searchParams.get('map_action')).toBe('pano');
+    expect(streetView.searchParams.get('viewpoint')).toBe('39.92,32.854');
+  });
+
   test('always fetches the official PlanASKI endpoint, even if a legacy API flag is present', async () => {
     vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
