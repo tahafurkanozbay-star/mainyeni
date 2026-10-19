@@ -25,6 +25,7 @@ import './MapModeExperienceControl.css';
 export interface MapModeExperienceControlProps {
   readonly model?: MapModeExperienceModel;
   readonly requestTimeoutMs?: number;
+  readonly embedded?: boolean;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 8_000;
@@ -84,6 +85,7 @@ const transitionDetail = (snapshot: MapModeExperienceSnapshot): string => {
 export function MapModeExperienceControl({
   model: suppliedModel,
   requestTimeoutMs,
+  embedded = false,
 }: MapModeExperienceControlProps): ReactNode {
   const ownedModel = useMemo(() => suppliedModel ?? new MapModeExperienceModel({
     onObserverError(error) {
@@ -171,6 +173,7 @@ export function MapModeExperienceControl({
     if (event.key === 'End') move = 'last';
     if (!move) return;
     event.preventDefault();
+    event.stopPropagation();
     const next = focusModel.move(move);
     focusModeButton(next);
     if (next !== snapshot.currentMode) requestMode(model, next);
@@ -178,7 +181,8 @@ export function MapModeExperienceControl({
 
   return (
     <section
-      className="map-mode-experience"
+      role={embedded ? 'group' : 'region'}
+      className={`map-mode-experience${embedded ? ' map-mode-experience--embedded' : ''}`}
       aria-label="Harita görünüm modu"
       data-phase={snapshot.phase}
       data-current-mode={snapshot.currentMode}
