@@ -18,6 +18,8 @@ Tarayıcı tarafında özel `/api` proxy'si veya kimlik bilgisi iletimi yoktur. 
 - `Operations/` — statik IIS paketini üreten ve yayımlayan PowerShell betikleri.
 - `docs/` — mimari, veri kaynağı ve dağıtım belgeleri.
 - `progress/` — kısa güncel görev/devam kaydı; ayrıntılı eski kayıtlar `progress/archive/` altındadır.
+- `_docs/` — derlemeye girmeyen tarihsel görsel referansı; canlı uygulama varlıkları `Webclient.app/public/` altındadır.
+- `database/archive/` — kaldırılan API mimarisine ait tarihsel SQL referansı; aktif yayın girdisi değildir.
 - `quality/` ve `tools/` — sürüm kalite denetimleri, mimari sözleşmeler ve CI araçları.
 - `KentRehberi/webclient/` — ayrı GIS çekirdek modülünün test ve kalite iş akışı; ana statik SPA ile aynı dağıtım paketi değildir.
 - `WebClient/` — ayrı tutulan GIS deneyim/politika kaynakları; üretim SPA'sının giriş noktası olarak kullanılmaz ve bağımsız kalite/bağımlılık kanıtı olmadan aktif uygulamaya taşınmamalıdır.
