@@ -31,6 +31,11 @@ interface ToolbarWidgetModernProps {
   readonly id?: string;
   readonly accessorWatch?: ArcgisAccessorWatch;
   readonly windowManager: Pick<WindowManagerLike, 'ShowWindow'>;
+  readonly trafficEnabled?: boolean;
+  readonly trafficConfigured?: boolean;
+  readonly trafficStatus?: string;
+  readonly onTrafficToggle?: () => void;
+  readonly onClearTrafficStatus?: () => void;
 }
 
 interface RemovableHandle {
@@ -113,6 +118,14 @@ const ToolbarGlyph = ({ name }: { readonly name: MapToolbarActionId }) => {
   }
 };
 
+const TrafficGlyph = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 20 9 4" stroke="#16a34a" strokeWidth="3" />
+    <path d="M12 20 14 4" stroke="#eab308" strokeWidth="3" />
+    <path d="M19 20 19 4" stroke="#dc2626" strokeWidth="3" />
+  </svg>
+);
+
 const requestCurrentPosition = (): Promise<MapToolbarPoint> => new Promise((resolve, reject) => {
   if (!navigator.geolocation) {
     reject(new Error('Geolocation is unavailable.'));
@@ -132,7 +145,16 @@ const requestCurrentPosition = (): Promise<MapToolbarPoint> => new Promise((reso
   );
 });
 
-export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: ToolbarWidgetModernProps) => {
+export const ToolbarWidgetModern = ({
+  id,
+  windowManager,
+  accessorWatch,
+  trafficEnabled = false,
+  trafficConfigured = false,
+  trafficStatus = '',
+  onTrafficToggle,
+  onClearTrafficStatus,
+}: ToolbarWidgetModernProps) => {
   const initialExtentRef = useRef<{ view: MapViewLike; extent: ExtentLike } | null>(null);
   const locationOwnerRef = useRef<AbortController | null>(null);
   const homeOwnerRef = useRef<AbortController | null>(null);
@@ -291,25 +313,49 @@ export const ToolbarWidgetModern = ({ id, windowManager, accessorWatch }: Toolba
     }
   };
 
-  const toolbarItems: readonly ExperienceToolbarItem[] = snapshot.actions.map((action, index) => {
-    const isGroupStart = index === 0 || snapshot.actions[index - 1]?.group !== action.group;
-    return {
-      id: action.id,
-      label: action.label,
-      icon: <ToolbarGlyph name={action.id} />,
-      busy: action.busy || (action.id === 'home' && homePhase === 'restoring'),
-      disabled: action.disabled || (action.id === 'home' && homePhase === 'restoring'),
-      tooltip: action.tooltip,
-      group: action.group,
-      ...(isGroupStart ? { groupLabel: MAP_TOOLBAR_GROUP_LABELS[action.group] } : {}),
-      onActivate: () => activateToolbarAction(action.id),
-    };
-  });
-  const announcement = homePhase === 'idle' ? snapshot.announcement : HOME_MESSAGES[homePhase];
+  const toolbarItems: readonly ExperienceToolbarItem[] = [
+    ...snapshot.actions.map((action, index) => {
+      const isGroupStart = index === 0 || snapshot.actions[index - 1]?.group !== action.group;
+      return {
+        id: action.id,
+        label: action.label,
+        icon: <ToolbarGlyph name={action.id} />,
+        busy: action.busy || (action.id === 'home' && homePhase === 'restoring'),
+        disabled: action.disabled || (action.id === 'home' && homePhase === 'restoring'),
+        tooltip: action.tooltip,
+        group: action.group,
+        ...(isGroupStart ? { groupLabel: MAP_TOOLBAR_GROUP_LABELS[action.group] } : {}),
+        onActivate: () => {
+          onClearTrafficStatus?.();
+          activateToolbarAction(action.id);
+        },
+      };
+    }),
+    {
+      id: 'traffic',
+      label: trafficEnabled ? 'Trafiği kapat' : 'Trafik',
+      icon: <TrafficGlyph />,
+      tooltip: !trafficConfigured
+        ? 'Trafik servisi API anahtarı bekliyor'
+        : trafficEnabled ? 'Trafik yoğunluğunu kapat' : 'Gerçek zamanlı trafik yoğunluğunu aç',
+      pressed: trafficEnabled,
+      className: trafficEnabled ? 'toolbarwidget-traffic is-active' : 'toolbarwidget-traffic',
+      group: 'traffic',
+      groupLabel: 'Trafik yoğunluğu',
+      onActivate: () => {
+        onTrafficToggle?.();
+      },
+    },
+  ];
+  const announcement = homePhase === 'idle'
+    ? (trafficStatus || snapshot.announcement)
+    : HOME_MESSAGES[homePhase];
   const busy = snapshot.locationPhase === 'locating' || homePhase === 'restoring';
-  const failure = snapshot.locationPhase === 'error' || homePhase === 'error';
+  const failure = snapshot.locationPhase === 'error' || homePhase === 'error'
+    || /açılamadı|yapılandırılmalı|yetkisiz|kotası/iu.test(trafficStatus);
   const dismissNotice = (): void => {
     pendingFocusRef.current = homePhase === 'idle' ? 'location' : 'home';
+    onClearTrafficStatus?.();
     cancelLocation(); cancelHome();
   };
   useEffect(() => {
