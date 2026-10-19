@@ -1,6 +1,7 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { publishKentRehberiPoiSearchIndex } from '../../data-services/kentRehberiPoiSearchIndex';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { SidebarModern } from './SidebarModern';
 
@@ -51,9 +52,27 @@ const serviceButton = (name: string): HTMLButtonElement =>
 const favoriteButton = (name: string): HTMLButtonElement =>
   screen.getByRole<HTMLButtonElement>('button', { name: `${name} favorilere ekle` });
 
+let clearPoiIndex: (() => void) | null = null;
+
 beforeEach(() => {
+  clearPoiIndex?.();
+  clearPoiIndex = null;
   window.localStorage.clear();
 });
+
+afterEach(() => {
+  clearPoiIndex?.();
+  clearPoiIndex = null;
+});
+
+const seedPoiIndex = (records: Parameters<typeof publishKentRehberiPoiSearchIndex>[0] = [
+  { id: 101, name: 'Seğmen Su Satış Noktası', address: 'Kızılay, Çankaya', district: 'Çankaya', neighborhood: 'Kızılay', longitude: 32.854, latitude: 39.920, iconKey: 'segmen su' },
+  { id: 102, name: 'Seğmen Su Fabrikası', address: 'Gölbaşı', district: 'Gölbaşı', neighborhood: '', longitude: 32.802, latitude: 39.791, iconKey: 'segmen su' },
+  { id: 103, name: 'Ulus Metro Durağı', address: 'Altındağ', district: 'Altındağ', neighborhood: 'Ulus', longitude: 32.860, latitude: 39.941, iconKey: 'metro' },
+]) => {
+  clearPoiIndex?.();
+  clearPoiIndex = publishKentRehberiPoiSearchIndex(records);
+};
 
 describe('SidebarModern governed interaction integration', () => {
   it('registers a managed window handle on mount and unregisters on unmount', () => {
@@ -111,20 +130,24 @@ describe('SidebarModern governed interaction integration', () => {
     expect(logoSources.every((source) => source !== null && !source.startsWith('/') && !source.startsWith('../'))).toBe(true);
   });
 
-  it('filters services using Turkish accent-tolerant search', async () => {
+  it('searches point names across all institutions with Turkish accent tolerance', async () => {
+    seedPoiIndex();
     const user = userEvent.setup();
     renderSidebar();
-    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Kent servislerinde ara' });
-    await user.type(search, 'kutuphane');
-    expect(serviceButton('Kütüphaneler')).toBeInTheDocument();
+    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Harita noktalarında ara' });
+    expect(search).toHaveAttribute('placeholder', 'Nokta adı ara…');
+    await user.type(search, 'segmen su');
+    expect(screen.getByRole('button', { name: 'Seğmen Su Satış Noktası noktasına git' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Seğmen Su Fabrikası noktasına git' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ulus Metro Durağı noktasına git' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Parklar sorgusunu aç' })).not.toBeInTheDocument();
-    expect(screen.getByText('1 hizmet')).toBeInTheDocument();
+    expect(screen.getByText('2 nokta')).toBeInTheDocument();
   });
 
   it('clears search with the explicit clear button', async () => {
     const user = userEvent.setup();
     renderSidebar();
-    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Kent servislerinde ara' });
+    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Harita noktalarında ara' });
     await user.type(search, 'metro');
     expect(screen.getByRole('button', { name: 'Hizmet aramasını temizle' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Hizmet aramasını temizle' }));
@@ -135,7 +158,7 @@ describe('SidebarModern governed interaction integration', () => {
   it('moves from search to the first service with ArrowDown', async () => {
     const user = userEvent.setup();
     renderSidebar();
-    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Kent servislerinde ara' });
+    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Harita noktalarında ara' });
     search.focus();
     await user.keyboard('{ArrowDown}');
     expect(serviceButton('Kadın Danışma Merkezleri')).toHaveFocus();
@@ -144,7 +167,7 @@ describe('SidebarModern governed interaction integration', () => {
   it('moves from search to the last service with ArrowUp', async () => {
     const user = userEvent.setup();
     renderSidebar();
-    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Kent servislerinde ara' });
+    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Harita noktalarında ara' });
     search.focus();
     await user.keyboard('{ArrowUp}');
     expect(serviceButton('Halk Ekmek Satış Noktaları')).toHaveFocus();
@@ -327,12 +350,13 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.getByText('Açtığınız hizmetler burada en yeniden eskiye görünür.')).toBeInTheDocument();
   });
 
-  it('renders a distinct no-search-results state', async () => {
+  it('renders a distinct no-point-name-results state', async () => {
+    seedPoiIndex([]);
     const user = userEvent.setup();
     renderSidebar();
-    await user.type(screen.getByRole('searchbox', { name: 'Kent servislerinde ara' }), 'eşleşmeyen servis');
-    expect(screen.getByText('Hizmet bulunamadı')).toBeInTheDocument();
-    expect(screen.getByText('Arama ifadenizi değiştirin veya filtreyi temizleyin.')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: 'Harita noktalarında ara' }), 'eşleşmeyen nokta');
+    expect(screen.getByText('Nokta bulunamadı')).toBeInTheDocument();
+    expect(screen.getByText('Başka bir nokta adı deneyin veya aramayı temizleyin.')).toBeInTheDocument();
   });
 
   it('filters to an institution group and updates contextual counts', async () => {
@@ -393,26 +417,29 @@ describe('SidebarModern governed interaction integration', () => {
     expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).toHaveClass('is-collapsed');
   });
 
-  it('clears an active service search before collapsing on Escape', async () => {
+  it('clears an active point-name search before collapsing on Escape', async () => {
+    seedPoiIndex([{ id: 104, name: 'Park ve Bahçeler', address: 'Çankaya', district: 'Çankaya', neighborhood: '', longitude: 32.85, latitude: 39.92 }]);
     const user = userEvent.setup();
     renderSidebar();
-    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Kent servislerinde ara' });
+    const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Harita noktalarında ara' });
     await user.type(search, 'park');
-    serviceButton('Parklar').focus();
+    const point = screen.getByRole('button', { name: 'Park ve Bahçeler noktasına git' });
+    point.focus();
     await user.keyboard('{Escape}');
     expect(search).toHaveValue('');
     expect(screen.getByRole('complementary', { name: 'Kent Rehberi hizmet kategorileri' })).not.toHaveClass('is-collapsed');
     expect(search).toHaveFocus();
   });
 
-  it('announces result-count changes through a polite atomic status', async () => {
+  it('announces point-name result counts through a polite atomic status', async () => {
+    seedPoiIndex([{ id: 105, name: 'Kütüphane Gençlik Merkezi', address: 'Çankaya', district: 'Çankaya', neighborhood: 'Kızılay', longitude: 32.85, latitude: 39.92 }]);
     const user = userEvent.setup();
     renderSidebar();
     const status = screen.getByRole('status', { hidden: true });
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status).toHaveAttribute('aria-atomic', 'true');
-    await user.type(screen.getByRole('searchbox', { name: 'Kent servislerinde ara' }), 'kutuphane');
-    expect(status).toHaveTextContent('1 hizmet gösteriliyor.');
+    await user.type(screen.getByRole('searchbox', { name: 'Harita noktalarında ara' }), 'kutuphane');
+    expect(status).toHaveTextContent('1 nokta bulundu.');
   });
 
   it('hydrates malformed stored preferences as empty without breaking the surface', () => {
@@ -466,7 +493,7 @@ describe('SidebarModern governed interaction integration', () => {
 
   it('describes keyboard interaction from the search field', () => {
     renderSidebar();
-    const search = screen.getByRole('searchbox', { name: 'Kent servislerinde ara' });
+    const search = screen.getByRole('searchbox', { name: 'Harita noktalarında ara' });
     expect(search).toHaveAttribute('aria-describedby', expect.stringContaining('kr-sidebar-keyboard-help'));
     expect(screen.getByText(/Hizmetler arasında yukarı ve aşağı okları/u)).toHaveClass('experience-sr-only');
   });
