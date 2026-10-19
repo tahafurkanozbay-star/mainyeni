@@ -1,4 +1,4 @@
-import { loadArcgisModules } from './arcgisModuleRuntime';
+import { loadArcgisModule, loadArcgisModules } from './arcgisModuleRuntime';
 import { runtimeDiagnostics } from '../platform/runtime/runtimeDiagnostics';
 
 export const OSM_OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
@@ -61,7 +61,22 @@ export interface OSM3DSceneViewLike {
 
 type ArcgisConstructor<T = unknown> = new (properties?: Record<string, unknown>) => T;
 type LoadArcgisModules = () => Promise<readonly [ArcgisConstructor<OSMSceneLayerLike>, ArcgisConstructor<unknown>]>;
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+interface ArcgisRequestOptions {
+  readonly method: 'post';
+  readonly body: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly responseType: 'json';
+  readonly signal: AbortSignal;
+  readonly timeout: number;
+  readonly authMode: 'anonymous';
+}
+interface ArcgisRequestResponse {
+  readonly data?: unknown;
+  readonly httpStatus?: unknown;
+  readonly status?: unknown;
+}
+type ArcgisRequest = (url: string, options: ArcgisRequestOptions) => Promise<ArcgisRequestResponse>;
+type LoadArcgisRequest = () => Promise<ArcgisRequest>;
 interface SceneCell {
   readonly key: string;
   readonly bounds: OSMBounds;
@@ -195,9 +210,11 @@ const defaultLoadModules: LoadArcgisModules = () => loadArcgisModules<
   readonly [ArcgisConstructor<OSMSceneLayerLike>, ArcgisConstructor<unknown>]
 >(['esri/layers/GraphicsLayer', 'esri/Graphic']);
 
+const defaultLoadArcgisRequest: LoadArcgisRequest = () => loadArcgisModule<ArcgisRequest>('esri/request');
+
 export interface OSM3DBuildingsRuntimeOptions {
   readonly loadModules?: LoadArcgisModules;
-  readonly fetcher?: FetchLike;
+  readonly loadRequest?: LoadArcgisRequest;
 }
 
 /**
@@ -206,8 +223,9 @@ export interface OSM3DBuildingsRuntimeOptions {
  * extruded in SceneView; areas without mapped OSM buildings remain unmodeled.
  */
 export class OSM3DBuildingsRuntime {
-  readonly #loadModules: LoadArcgisModules;
-  readonly #fetcher: FetchLike;
+  readonly #loadGisModules: LoadArcgisModules;
+  readonly #loadRequest: LoadArcgisRequest;
+  #requester: ArcgisRequest | null = null;
   #view: OSM3DSceneViewLike | null = null;
   #map: OSMSceneMapLike | null = null;
   #layer: OSMSceneLayerLike | null = null;
@@ -223,8 +241,8 @@ export class OSM3DBuildingsRuntime {
   #lastRequestAt = 0;
 
   constructor(options: OSM3DBuildingsRuntimeOptions = {}) {
-    this.#loadModules = options.loadModules ?? defaultLoadModules;
-    this.#fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
+    this.#loadGisModules = options.loadModules ?? defaultLoadModules;
+    this.#loadRequest = options.loadRequest ?? defaultLoadArcgisRequest;
   }
 
   async activate(view: OSM3DSceneViewLike): Promise<void> {
@@ -238,8 +256,9 @@ export class OSM3DBuildingsRuntime {
     this.deactivate();
     const generation = this.#generation;
     this.#view = view;
-    const [GraphicsLayer, Graphic] = await this.#loadModules();
+    const [[GraphicsLayer, Graphic], requester] = await Promise.all([this.#loadGisModules(), this.#loadRequest()]);
     if (generation !== this.#generation || this.#view !== view) return;
+    this.#requester = requester;
 
     if (this.#map !== map) {
       if (this.#map && this.#layer) {
@@ -320,7 +339,8 @@ export class OSM3DBuildingsRuntime {
     const view = this.#view;
     const layer = this.#layer;
     const Graphic = this.#Graphic;
-    if (!view || !layer || !Graphic) return;
+    const requester = this.#requester;
+    if (!view || !layer || !Graphic || !requester) return;
     const position = positionForView(view);
     if (!position || !cameraIsCloseEnough(view, position)) {
       if (this.#requestController) this.#requestController.abort();
@@ -368,17 +388,21 @@ export class OSM3DBuildingsRuntime {
     const requestTimeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     this.#requestTimeout = requestTimeout;
     try {
-      const response = await this.#fetcher(OSM_OVERPASS_ENDPOINT, {
-        method: 'POST',
+      const response = await requester(OSM_OVERPASS_ENDPOINT, {
+        method: 'post',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
         body: `data=${encodeURIComponent(createBuildingQuery(cell.bounds))}`,
+        responseType: 'json',
         signal: controller.signal,
+        timeout: REQUEST_TIMEOUT_MS,
+        authMode: 'anonymous',
       });
-      if (!response.ok) {
-        if (response.status === 429 || response.status >= 500) this.#cooldownUntil = Date.now() + 30_000;
-        throw new Error(`Overpass API HTTP ${response.status}`);
+      const responseStatus = finiteNumber(response.httpStatus ?? response.status);
+      if (responseStatus !== null && responseStatus >= 400) {
+        if (responseStatus === 429 || responseStatus >= 500) this.#cooldownUntil = Date.now() + 30_000;
+        throw new Error(`Overpass API HTTP ${responseStatus}`);
       }
-      const footprints = parseOverpassBuildings(await response.json());
+      const footprints = parseOverpassBuildings(response.data);
       if (generation !== this.#generation || controller.signal.aborted || this.#view !== view) return;
       this.#cache.set(cell.key, footprints);
       while (this.#cache.size > MAX_CACHED_CELLS) {
@@ -393,6 +417,14 @@ export class OSM3DBuildingsRuntime {
       if (latestCell?.key === cell.key && this.#layer === layer) this.#showBuildings(layer, Graphic, footprints);
     } catch (error) {
       if (!controller.signal.aborted) {
+        const details = error && typeof error === 'object'
+          ? (error as { details?: unknown }).details
+          : undefined;
+        const status = details && typeof details === 'object'
+          ? finiteNumber((details as { httpStatus?: unknown; status?: unknown }).httpStatus
+            ?? (details as { status?: unknown }).status)
+          : null;
+        if (status === 429 || (status !== null && status >= 500)) this.#cooldownUntil = Date.now() + 30_000;
         runtimeDiagnostics.captureError(error, { source: 'gis.osm-buildings.overpass', cell: cell.key }, 'warn');
       }
     } finally {

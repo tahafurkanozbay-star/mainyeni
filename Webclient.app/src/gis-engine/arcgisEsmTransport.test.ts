@@ -154,6 +154,8 @@ describe('arcgisEsmTransport', () => {
     expect(specifiers).toContain('@arcgis/core/views/MapView.js');
     expect(specifiers).toContain('@arcgis/core/views/SceneView.js');
     expect(specifiers).toContain('@arcgis/core/rest/query.js');
+    expect(specifiers).toContain('@arcgis/core/request.js');
+    expect(specifiers).toContain('@arcgis/core/layers/OpenStreetMapLayer.js');
     expect(specifiers).toContain('@arcgis/core/core/reactiveUtils.js');
     expect(specifiers).toContain('@arcgis/core/geometry/operators/projectOperator.js');
   });
