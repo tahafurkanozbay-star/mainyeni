@@ -132,7 +132,6 @@ describe('mapToolbarModel', () => {
   it('renders the requested position and publishes success', async () => {
     const model = new MapToolbarModel();
     const showLocation = vi.fn(async () => undefined);
-    const showSidebar = vi.fn();
     const result = await model.locate({
       requestPosition: async () => ({ x: 32.81, y: 39.95 }),
       showLocation,
@@ -218,7 +217,6 @@ describe('mapToolbarModel', () => {
     const dependencies = {
       requestPosition,
       showLocation,
-      showSidebar: vi.fn(),
     };
     const first = model.locate(dependencies);
     const second = await model.locate(dependencies);
@@ -236,7 +234,6 @@ describe('mapToolbarModel', () => {
         resolvePosition = resolve;
       }),
       showLocation: vi.fn(async () => undefined),
-      showSidebar: vi.fn(),
     });
     model.resetLocation();
     const revisionAfterReset = model.getSnapshot().revision;
@@ -258,7 +255,6 @@ describe('mapToolbarModel', () => {
         resolvePosition = resolve;
       }),
       showLocation: vi.fn(async () => undefined),
-      showSidebar: vi.fn(),
     });
     expect(listener).toHaveBeenCalledTimes(1);
     model.dispose();
@@ -322,7 +318,6 @@ describe('mapToolbarModel', () => {
     const result = await model.locate({
       requestPosition,
       showLocation: vi.fn(),
-      showSidebar: vi.fn(),
     });
     expect(requestPosition).not.toHaveBeenCalled();
     expect(result).toBe('idle');
@@ -334,7 +329,6 @@ describe('mapToolbarModel', () => {
     await model.locate({
       requestPosition: async () => ({ x: 32.8, y: 39.9 }),
       showLocation: async () => undefined,
-      showSidebar: vi.fn(),
     });
     expect(model.getSnapshot()).toMatchObject({ revision: 2, locationPhase: 'success' });
     model.resetLocation();
