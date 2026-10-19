@@ -66,7 +66,7 @@ export class SceneBasemapRuntime {
     if (!sceneBasemap) throw new Error(`ArcGIS 3D altlığı kullanılamıyor: ${this.#basemapId}`);
 
     try {
-      await withTimeout(() => sceneBasemap.load?.({ signal }), 15_000, signal);
+      await withTimeout((timeoutSignal) => sceneBasemap.load?.({ signal: timeoutSignal }), 15_000, signal);
       throwIfAborted(signal);
       if (map.basemap !== previousBasemap) {
         throw new DOMException('Altlık yüklenirken harita altlığı değişti.', 'AbortError');
