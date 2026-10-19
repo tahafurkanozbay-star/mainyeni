@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// The production client has a single live data dependency: direct browser
+// requests to the official PlanASKI Kent Rehberi endpoint. This audit guards
+// the complete category/profile/icon contract without requiring a local API.
 const REQUIRED_PATHS = Object.freeze({
   sidebar: 'src/Components/App/SidebarCatalog.ts',
   windows: 'src/Components/Common/QueryWindowRegistry.tsx',
@@ -9,109 +12,72 @@ const REQUIRED_PATHS = Object.freeze({
   businessFactory: 'src/Business/createFastAccessQueryBusiness.ts',
   runtime: 'src/Business/kentRehberiFastAccessRuntime.ts',
   transport: 'src/data-services/kentRehberiGeoJsonLayer.ts',
+  directTransport: 'src/data-services/kentRehberiPlanAskiDirect.ts',
   icons: 'src/gis-engine/iconRegistry.json',
   vite: 'vite.config.ts',
-  localProxy: 'tooling/localApiProxy.ts',
   configurationBusiness: 'src/Business/ConfigurationBusiness.ts',
   envExample: '.env.example',
   package: 'package.json',
   qualityWorkflow: '../.github/workflows/webclient-quality.yml',
   releaseWorkflow: '../.github/workflows/release-qa.yml',
-  backendController: '../Api.User/Controllers/KentRehberiController.cs',
-  backendRepository: '../Api.User/KentRehberi/KentRehberiRepository.cs',
-  backendPlanAskiSource: '../Api.User/KentRehberi/KentRehberiPlanAskiSource.cs',
-  backendPlanAskiRepository: '../Api.User/KentRehberi/KentRehberiPlanAskiRepository.cs',
-  backendRegistration: '../Api.User/KentRehberi/KentRehberiServiceCollectionExtensions.cs',
-  backendOptions: '../Api.User/KentRehberi/KentRehberiOptions.cs',
-  backendSettings: '../Api.User/appsettings.json',
-  backendLaunchSettings: '../Api.User/Properties/launchSettings.json',
 });
 
-const EXPECTED_GROUP_COUNTS = Object.freeze({
-  ABB: 17,
-  EGO: 8,
-  ASKI: 6,
-  ISTIRAK: 9,
-});
+const EXPECTED_GROUP_COUNTS = Object.freeze({ ABB: 17, EGO: 8, ASKI: 6, ISTIRAK: 9 });
+const EXPECTED_ITEM_COUNT = Object.values(EXPECTED_GROUP_COUNTS).reduce((total, value) => total + value, 0);
 
-const EXPECTED_ITEM_COUNT = Object.values(EXPECTED_GROUP_COUNTS)
-  .reduce((total, value) => total + value, 0);
-
-const finding = (id, file, message) => Object.freeze({
-  severity: 'error',
-  id,
-  file,
-  message,
-});
+const finding = (id, file, message) => Object.freeze({ severity: 'error', id, file, message });
 
 const readRequired = (files, file, errors) => {
   const source = files[file];
   if (typeof source === 'string') return source;
-  errors.push(finding(
-    'missing-file',
-    file,
-    `required Kent Rehberi all-layer contract file is missing: ${file}`,
-  ));
+  errors.push(finding('missing-file', file, `required PlanASKI-only contract file is missing: ${file}`));
   return '';
 };
 
 const parseJson = (source, file, errors) => {
   try {
-    return JSON.parse(source.replace(/^\uFEFF/u, ''));
+    return JSON.parse(source.replace(/^\\uFEFF/u, ''));
   } catch (error) {
-    errors.push(finding(
-      'invalid-json',
-      file,
-      `${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-    ));
+    errors.push(finding('invalid-json', file, `${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`));
     return null;
   }
 };
 
 export const parseSidebarItems = (source) => {
-  const pattern = /\{\s*group:\s*'([^']+)'\s*,\s*label:\s*'([^']+)'\s*,\s*windowId:\s*'([^']+)'\s*,\s*iconType:\s*'([^']+)'\s*,\s*serviceKey:\s*'([^']+)'\s*\}/gu;
+  const pattern = /\\{\\s*group:\\s*'([^']+)'\\s*,\\s*label:\\s*'([^']+)'\\s*,\\s*windowId:\\s*'([^']+)'\\s*,\\s*iconType:\\s*'([^']+)'\\s*,\\s*serviceKey:\\s*'([^']+)'\\s*\\}/gu;
   return Object.freeze([...source.matchAll(pattern)].map((match) => Object.freeze({
-    group: match[1],
-    label: match[2],
-    windowId: match[3],
-    iconType: match[4],
-    serviceKey: match[5],
+    group: match[1], label: match[2], windowId: match[3], iconType: match[4], serviceKey: match[5],
   })));
 };
 
 export const parseQueryWindowIds = (source) => Object.freeze(
-  [...source.matchAll(/defineWindow\(\s*'([^']+)'/gu)]
-    .map((match) => match[1]),
+  [...source.matchAll(/defineWindow\\(\\s*'([^']+)'/gu)].map((match) => match[1]),
 );
 
-const parseQuotedArray = (source) => Object.freeze(
-  [...source.matchAll(/'([^']+)'/gu)]
-    .map((match) => match[1]),
-);
+const parseQuotedArray = (source) => Object.freeze([...source.matchAll(/'([^']+)'/gu)].map((match) => match[1]));
 
 export const parseFastAccessProfiles = (source) => {
-  const pattern = /freezeProfile\(\{\s*serviceKey:\s*'([^']+)'\s*,\s*title:\s*'([^']+)'\s*,\s*probes:\s*\[([^\]]*)\][\s\S]*?mode:\s*'(first|union)'\s*,\s*\}\)/gu;
+  const pattern = /freezeProfile\\(\\{\\s*serviceKey:\\s*'([^']+)'\\s*,\\s*title:\\s*'([^']+)'\\s*,\\s*probes:\\s*\\[([^\\]]*)\\][\\s\\S]*?mode:\\s*'(first|union)'\\s*,\\s*\\}\\)/gu;
   return Object.freeze([...source.matchAll(pattern)].map((match) => Object.freeze({
-    serviceKey: match[1],
-    title: match[2],
-    probes: parseQuotedArray(match[3]),
-    mode: match[4],
+    serviceKey: match[1], title: match[2], probes: parseQuotedArray(match[3]), mode: match[4],
   })));
 };
 
 export const parseIconServiceAliases = (source, errors = []) => {
-  const parsed = parseJson(source, REQUIRED_PATHS.icons, errors);
+  let parsed;
+  try {
+    parsed = JSON.parse(source.replace(/^\\uFEFF/u, ''));
+  } catch (error) {
+    errors.push(finding('invalid-json', REQUIRED_PATHS.icons, `icon registry JSON is invalid: ${error instanceof Error ? error.message : String(error)}`));
+    return new Map();
+  }
   if (!Array.isArray(parsed)) return new Map();
-
   const aliases = new Map();
   for (const entry of parsed) {
-    if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
-    if (!Array.isArray(entry.aliases)) continue;
+    if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' || !Array.isArray(entry.aliases)) continue;
     for (const alias of entry.aliases) {
       if (typeof alias !== 'string' || !alias.startsWith('Yeni')) continue;
-      const existing = aliases.get(alias) ?? [];
-      existing.push(entry.id);
-      aliases.set(alias, existing);
+      aliases.set(alias, [...(aliases.get(alias) ?? []), entry.id]);
     }
   }
   return aliases;
@@ -130,64 +96,30 @@ const duplicateValues = (values) => {
 const checkSidebarInventory = (files, errors) => {
   const source = readRequired(files, REQUIRED_PATHS.sidebar, errors);
   if (!source) return [];
-
   const items = parseSidebarItems(source);
   if (items.length !== EXPECTED_ITEM_COUNT) {
-    errors.push(finding(
-      'sidebar-item-count',
-      REQUIRED_PATHS.sidebar,
-      `expected ${EXPECTED_ITEM_COUNT} service-bound sidebar items, found ${items.length}`,
-    ));
+    errors.push(finding('sidebar-item-count', REQUIRED_PATHS.sidebar, `expected ${EXPECTED_ITEM_COUNT} service-bound sidebar items, found ${items.length}`));
   }
-
   const groupCounts = new Map();
   for (const item of items) {
     groupCounts.set(item.group, (groupCounts.get(item.group) ?? 0) + 1);
-    if (!item.serviceKey.startsWith('Yeni')) {
-      errors.push(finding(
-        'sidebar-service-key-shape',
-        REQUIRED_PATHS.sidebar,
-        `sidebar service key must use the Yeni* fast-access identity: ${item.serviceKey}`,
-      ));
-    }
+    if (!item.serviceKey.startsWith('Yeni')) errors.push(finding(
+      'sidebar-service-key-shape', REQUIRED_PATHS.sidebar, `sidebar service key must use the Yeni* identity: ${item.serviceKey}`,
+    ));
   }
-
   for (const [group, expected] of Object.entries(EXPECTED_GROUP_COUNTS)) {
     const actual = groupCounts.get(group) ?? 0;
-    if (actual !== expected) {
-      errors.push(finding(
-        'sidebar-group-count',
-        REQUIRED_PATHS.sidebar,
-        `${group} must contain ${expected} fast-access items, found ${actual}`,
-      ));
-    }
+    if (actual !== expected) errors.push(finding('sidebar-group-count', REQUIRED_PATHS.sidebar, `${group} must contain ${expected} items, found ${actual}`));
   }
-
-  for (const unknown of [...groupCounts.keys()].filter(
-    (group) => !Object.prototype.hasOwnProperty.call(EXPECTED_GROUP_COUNTS, group),
-  )) {
-    errors.push(finding(
-      'sidebar-unknown-group',
-      REQUIRED_PATHS.sidebar,
-      `unexpected all-layer sidebar group: ${unknown}`,
-    ));
+  for (const unknown of [...groupCounts.keys()].filter((group) => !Object.hasOwn(EXPECTED_GROUP_COUNTS, group))) {
+    errors.push(finding('sidebar-unknown-group', REQUIRED_PATHS.sidebar, `unexpected sidebar group: ${unknown}`));
   }
-
-  for (const duplicate of duplicateValues(items.map((item) => item.windowId))) {
-    errors.push(finding(
-      'duplicate-window-id',
-      REQUIRED_PATHS.sidebar,
-      `sidebar window id must be unique: ${duplicate}`,
-    ));
-  }
-  for (const duplicate of duplicateValues(items.map((item) => item.serviceKey))) {
-    errors.push(finding(
-      'duplicate-service-key',
-      REQUIRED_PATHS.sidebar,
-      `sidebar service key must be unique: ${duplicate}`,
-    ));
-  }
-
+  for (const duplicate of duplicateValues(items.map((item) => item.windowId))) errors.push(finding(
+    'duplicate-window-id', REQUIRED_PATHS.sidebar, `sidebar window id must be unique: ${duplicate}`,
+  ));
+  for (const duplicate of duplicateValues(items.map((item) => item.serviceKey))) errors.push(finding(
+    'duplicate-service-key', REQUIRED_PATHS.sidebar, `sidebar service key must be unique: ${duplicate}`,
+  ));
   return items;
 };
 
@@ -196,23 +128,12 @@ const checkWindowCoverage = (files, items, errors) => {
   if (!source) return;
   const windows = parseQueryWindowIds(source);
   const windowSet = new Set(windows);
-
-  for (const item of items) {
-    if (windowSet.has(item.windowId)) continue;
-    errors.push(finding(
-      'missing-query-window',
-      REQUIRED_PATHS.windows,
-      `sidebar item ${item.label} has no registered query window: ${item.windowId}`,
-    ));
-  }
-
-  for (const duplicate of duplicateValues(windows)) {
-    errors.push(finding(
-      'duplicate-query-window',
-      REQUIRED_PATHS.windows,
-      `query window registry contains duplicate id: ${duplicate}`,
-    ));
-  }
+  for (const item of items) if (!windowSet.has(item.windowId)) errors.push(finding(
+    'missing-query-window', REQUIRED_PATHS.windows, `sidebar item ${item.label} has no registered query window: ${item.windowId}`,
+  ));
+  for (const duplicate of duplicateValues(windows)) errors.push(finding(
+    'duplicate-query-window', REQUIRED_PATHS.windows, `query registry contains duplicate id: ${duplicate}`,
+  ));
 };
 
 const checkProfileCoverage = (files, items, errors) => {
@@ -221,455 +142,111 @@ const checkProfileCoverage = (files, items, errors) => {
   const profiles = parseFastAccessProfiles(source);
   const itemKeys = new Set(items.map((item) => item.serviceKey));
   const profileKeys = new Set(profiles.map((profile) => profile.serviceKey));
-
-  if (profiles.length !== EXPECTED_ITEM_COUNT) {
-    errors.push(finding(
-      'profile-count',
-      REQUIRED_PATHS.profiles,
-      `expected ${EXPECTED_ITEM_COUNT} fast-access profiles, found ${profiles.length}`,
-    ));
-  }
-
-  for (const item of items) {
-    if (profileKeys.has(item.serviceKey)) continue;
-    errors.push(finding(
-      'missing-profile',
-      REQUIRED_PATHS.profiles,
-      `sidebar service key has no Kent Rehberi fast-access profile: ${item.serviceKey}`,
-    ));
-  }
-
+  if (profiles.length !== EXPECTED_ITEM_COUNT) errors.push(finding(
+    'profile-count', REQUIRED_PATHS.profiles, `expected ${EXPECTED_ITEM_COUNT} fast-access profiles, found ${profiles.length}`,
+  ));
+  for (const item of items) if (!profileKeys.has(item.serviceKey)) errors.push(finding(
+    'missing-profile', REQUIRED_PATHS.profiles, `sidebar key has no PlanASKI profile: ${item.serviceKey}`,
+  ));
   for (const profile of profiles) {
-    if (!itemKeys.has(profile.serviceKey)) {
-      errors.push(finding(
-        'orphan-profile',
-        REQUIRED_PATHS.profiles,
-        `fast-access profile is not represented in the sidebar catalog: ${profile.serviceKey}`,
-      ));
-    }
-    if (profile.probes.length === 0) {
-      errors.push(finding(
-        'empty-profile-probes',
-        REQUIRED_PATHS.profiles,
-        `fast-access profile requires at least one bounded discovery term: ${profile.serviceKey}`,
-      ));
-    }
-    if (profile.title.trim().length < 3) {
-      errors.push(finding(
-        'invalid-profile-title',
-        REQUIRED_PATHS.profiles,
-        `fast-access profile title is too short: ${profile.serviceKey}`,
-      ));
-    }
-  }
-
-  for (const duplicate of duplicateValues(profiles.map((profile) => profile.serviceKey))) {
-    errors.push(finding(
-      'duplicate-profile',
-      REQUIRED_PATHS.profiles,
-      `fast-access profile service key must be unique: ${duplicate}`,
+    if (!itemKeys.has(profile.serviceKey)) errors.push(finding(
+      'orphan-profile', REQUIRED_PATHS.profiles, `profile is not represented in sidebar: ${profile.serviceKey}`,
+    ));
+    if (profile.probes.length === 0) errors.push(finding(
+      'empty-profile-probes', REQUIRED_PATHS.profiles, `profile requires a discovery term: ${profile.serviceKey}`,
+    ));
+    if (profile.title.trim().length < 3) errors.push(finding(
+      'invalid-profile-title', REQUIRED_PATHS.profiles, `profile title is too short: ${profile.serviceKey}`,
     ));
   }
+  for (const duplicate of duplicateValues(profiles.map((profile) => profile.serviceKey))) errors.push(finding(
+    'duplicate-profile', REQUIRED_PATHS.profiles, `profile service key must be unique: ${duplicate}`,
+  ));
 };
 
 const checkIconCoverage = (files, items, errors) => {
   const source = readRequired(files, REQUIRED_PATHS.icons, errors);
   if (!source) return;
   const aliases = parseIconServiceAliases(source, errors);
-
   for (const item of items) {
     const owners = aliases.get(item.serviceKey) ?? [];
     if (owners.length === 1) continue;
     errors.push(finding(
       owners.length === 0 ? 'missing-service-icon' : 'ambiguous-service-icon',
       REQUIRED_PATHS.icons,
-      owners.length === 0
-        ? `service key has no deterministic icon alias: ${item.serviceKey}`
-        : `service key resolves to multiple icon entries: ${item.serviceKey} -> ${owners.join(', ')}`,
+      owners.length === 0 ? `service key has no deterministic icon: ${item.serviceKey}` : `service key resolves to multiple icons: ${item.serviceKey} -> ${owners.join(', ')}`,
     ));
   }
 };
 
 const requirePatterns = (files, file, contracts, errors) => {
   const source = readRequired(files, file, errors);
-  if (!source) return;
+  if (!source) return '';
   for (const contract of contracts) {
     if (contract.pattern.test(source)) continue;
-    errors.push(finding(
-      contract.id,
-      file,
-      contract.message,
-    ));
+    errors.push(finding(contract.id, file, contract.message));
   }
+  return source;
 };
 
-const checkFrontendRuntimeContracts = (files, errors) => {
-  requirePatterns(files, REQUIRED_PATHS.businessFactory, [
-    {
-      id: 'missing-kent-rehberi-business-route',
-      pattern: /createKentRehberiFastAccessBusiness\(serviceKey\)/u,
-      message: 'fast-access business factory must route supported layers through Kent Rehberi runtime',
-    },
-    {
-      id: 'missing-legacy-fallback',
-      pattern: /kentRehberiBusiness\s*\?\s*null\s*:\s*createFastAccessBusiness\(serviceKey\)/u,
-      message: 'legacy fast-access transport must remain only as an explicit fallback for unmapped services',
-    },
+const checkPlanAskiOnlyContracts = (files, errors) => {
+  const factory = requirePatterns(files, REQUIRED_PATHS.businessFactory, [
+    { id: 'missing-kent-rehberi-business-route', pattern: /createKentRehberiFastAccessBusiness\\(serviceKey\\)/u, message: 'all supported fast-access queries must route through the PlanASKI runtime' },
+    { id: 'missing-unsupported-profile-guard', pattern: /if\\s*\\(!business\\)\\s*\\{/u, message: 'unknown services must fail closed instead of falling back to another API' },
+    { id: 'missing-unsupported-profile-error', pattern: /No PlanASKI Kent Rehberi profile is registered/u, message: 'unsupported service failures must clearly identify missing PlanASKI profiles' },
   ], errors);
+  if (/createFastAccessBusiness|legacyBusiness|FastAccessQueryBusiness\\.QueryFastAccessService/u.test(factory)) {
+    errors.push(finding('legacy-fast-access-fallback', REQUIRED_PATHS.businessFactory, 'legacy API fallback must not be reachable from the active client'));
+  }
 
   requirePatterns(files, REQUIRED_PATHS.runtime, [
-    {
-      id: 'missing-type-catalog-fetch',
-      pattern: /fetchKentRehberiTypeCatalog/u,
-      message: 'all-layer runtime must load the bounded backend type catalog',
-    },
-    {
-      id: 'missing-catalog-classifier',
-      pattern: /resolveKentRehberiTypesFromCatalog/u,
-      message: 'all-layer runtime must classify service profiles against bounded catalog samples',
-    },
-    {
-      id: 'missing-catalog-first-resolution',
-      pattern: /await\s+resolveCatalogTypes\(profile,\s*control\)/u,
-      message: 'category resolution must prefer the type catalog before probe fallback',
-    },
-    {
-      id: 'missing-bounded-category-limit',
-      pattern: /const\s+CATEGORY_LIMIT\s*=\s*2000/u,
-      message: 'category fetches must remain bounded to the public API maximum',
-    },
-    {
-      id: 'missing-fast-access-source-tag',
-      pattern: /KENT_REHBERI_FAST_ACCESS_SOURCE\s*=\s*'kent-rehberi'/u,
-      message: 'Kent Rehberi-backed results must retain a stable source tag',
-    },
+    { id: 'missing-type-catalog-fetch', pattern: /fetchKentRehberiTypeCatalog/u, message: 'fast-access resolution must use the bounded PlanASKI type catalog' },
+    { id: 'missing-catalog-classifier', pattern: /resolveKentRehberiTypesFromCatalog/u, message: 'profiles must be classified against PlanASKI catalog samples' },
+    { id: 'missing-catalog-first-resolution', pattern: /await\\s+resolveCatalogTypes\\(profile,\\s*control\\)/u, message: 'type catalog must be queried before bounded text probes' },
+    { id: 'missing-bounded-category-limit', pattern: /const\\s+CATEGORY_LIMIT\\s*=\\s*2000/u, message: 'category requests must remain bounded to 2000 records' },
+    { id: 'missing-fast-access-source-tag', pattern: /KENT_REHBERI_FAST_ACCESS_SOURCE\\s*=\\s*'kent-rehberi'/u, message: 'PlanASKI results must retain a stable source tag' },
   ], errors);
 
-  requirePatterns(files, REQUIRED_PATHS.transport, [
-    {
-      id: 'missing-same-origin-credentials',
-      pattern: /credentials:\s*'same-origin'/u,
-      message: 'Kent Rehberi browser requests must remain same-origin',
-    },
-    {
-      id: 'missing-type-catalog-path',
-      pattern: /kent-rehberi\/types/u,
-      message: 'frontend transport must use the bounded type catalog endpoint',
-    },
-    {
-      id: 'missing-payload-budget',
-      pattern: /maxPayloadBytes/u,
-      message: 'frontend transport must enforce response payload budgets',
-    },
-    {
-      id: 'missing-request-abort',
-      pattern: /AbortController/u,
-      message: 'frontend transport must support cancellation and timeouts',
-    },
+  const transport = requirePatterns(files, REQUIRED_PATHS.transport, [
+    { id: 'missing-planaski-geojson-direct', pattern: /fetchPlanAskiGeoJsonDirect/u, message: 'GeoJSON data must load directly from PlanASKI' },
+    { id: 'missing-planaski-feature-direct', pattern: /fetchPlanAskiFeatureDirect/u, message: 'feature details must load directly from PlanASKI' },
+    { id: 'missing-planaski-catalog-direct', pattern: /fetchPlanAskiTypeCatalogDirect/u, message: 'type catalog must load directly from PlanASKI' },
+    { id: 'missing-response-budget', pattern: /maxPayloadBytes/u, message: 'the browser transport must keep a response-size budget' },
+    { id: 'missing-abort-controller', pattern: /AbortController/u, message: 'the browser transport must support abort/timeout cancellation' },
   ], errors);
-
-  const vite = readRequired(files, REQUIRED_PATHS.vite, errors);
-  if (vite) {
-    if (
-      !/resolveLocalApiProxyTarget/u.test(vite)
-      || !/target:\s*apiProxyTarget/u.test(vite)
-    ) {
-      errors.push(finding(
-        'insecure-or-missing-dev-api-proxy',
-        REQUIRED_PATHS.vite,
-        'local Vite /api proxy must use the validated localhost Api.User target',
-      ));
-    }
-    for (const marker of [
-      'localKentRehberiDemo',
-      'x-kent-rehberi-demo',
-      'Yerel Demo — Kent Rehberi',
-    ]) {
-      if (!vite.includes(marker)) continue;
-      errors.push(finding(
-        'forbidden-local-demo-source',
-        REQUIRED_PATHS.vite,
-        `local demo data source must not replace the real backend contract: ${marker}`,
-      ));
-    }
+  if (/runtimeConfig|apiBaseUrl|credentials:\\s*['"]same-origin|\\/kent-rehberi\\/types|buildKentRehberiRequestPath/u.test(transport)) {
+    errors.push(finding('legacy-kent-rehberi-transport', REQUIRED_PATHS.transport, 'Kent Rehberi transport must not retain same-origin API/proxy fallbacks'));
   }
 
-  requirePatterns(files, REQUIRED_PATHS.localProxy, [
-    {
-      id: 'missing-default-local-api-target',
-      pattern: /https:\/\/localhost:3003/u,
-      message: 'local Api.User proxy must default to HTTPS localhost:3003',
-    },
-    {
-      id: 'missing-local-proxy-host-allowlist',
-      pattern: /allowedHosts/u,
-      message: 'local Api.User proxy target must be restricted to localhost origins',
-    },
+  requirePatterns(files, REQUIRED_PATHS.directTransport, [
+    { id: 'missing-fixed-planaski-host', pattern: /https:\\/\\/planaski\\.ankara\\.bel\\.tr\\/kentrehberiapi\\/api\\/kentrehberi/u, message: 'browser endpoint must be pinned to the official PlanASKI host and path' },
+    { id: 'missing-tur-range', pattern: /const\\s+MIN_TYPE\\s*=\\s*0[\\s\\S]*const\\s+MAX_TYPE\\s*=\\s*42/u, message: 'PlanASKI tur values must remain bounded to 0..42' },
+    { id: 'missing-tur-query', pattern: /\\?tur=/u, message: 'all direct source requests must select an explicit tur category' },
+    { id: 'missing-upstream-byte-budget', pattern: /MAX_BYTES_PER_TYPE/u, message: 'response bytes per category must be bounded' },
+    { id: 'missing-upstream-concurrency', pattern: /MAX_IN_FLIGHT/u, message: 'concurrent upstream category requests must be limited' },
+    { id: 'missing-upstream-abort', pattern: /AbortController/u, message: 'upstream fetch and catalog collection must support cancellation' },
   ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.configurationBusiness, [
-    {
-      id: 'missing-local-bootstrap-preview-policy',
-      pattern: /resolveLocalBootstrapPreviewEnabled/u,
-      message: 'local bootstrap must have an explicit development preview policy',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.envExample, [
-    {
-      id: 'missing-local-api-proxy-env',
-      pattern: /VITE_API_PROXY_TARGET=https:\/\/localhost:3003/u,
-      message: 'local env template must align Vite with Api.User HTTPS port 3003',
-    },
-    {
-      id: 'missing-local-bootstrap-preview-env',
-      pattern: /VITE_LOCAL_BOOTSTRAP_PREVIEW=true/u,
-      message: 'local env template must explicitly enable safe bootstrap preview',
-    },
-  ], errors);
-};
-
-const checkBackendContracts = (files, errors) => {
-  requirePatterns(files, REQUIRED_PATHS.backendController, [
-    {
-      id: 'missing-types-endpoint',
-      pattern: /\[HttpGet\("types"\)\]/u,
-      message: 'User API must expose the bounded Kent Rehberi type catalog',
-    },
-    {
-      id: 'missing-types-service',
-      pattern: /IKentRehberiTypeCatalogService/u,
-      message: 'type catalog endpoint must execute through the governed catalog service',
-    },
-    {
-      id: 'missing-types-cache-control',
-      pattern: /TypeCatalogCacheTtlSeconds/u,
-      message: 'type catalog endpoint must emit bounded cache policy',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.backendPlanAskiSource, [
-    {
-      id: 'missing-official-planaski-host',
-      pattern: /planaski\.ankara\.bel\.tr/u,
-      message: 'primary upstream source must be pinned to the official PlanASKI host',
-    },
-    {
-      id: 'missing-planaski-path',
-      pattern: /kentrehberiapi\/api\/kentrehberi/u,
-      message: 'primary upstream source must use the official Kent Rehberi path',
-    },
-    {
-      id: 'missing-planaski-tur-query',
-      pattern: /"tur="\s*\+/u,
-      message: 'PlanASKI source must issue bounded tur queries',
-    },
-    {
-      id: 'missing-planaski-byte-budget',
-      pattern: /PlanAskiMaxResponseBytesPerType/u,
-      message: 'PlanASKI source must bound response bytes per type',
-    },
-    {
-      id: 'missing-planaski-record-budget',
-      pattern: /PlanAskiMaxRecordsPerType/u,
-      message: 'PlanASKI source must bound records per type',
-    },
-    {
-      id: 'missing-planaski-concurrency',
-      pattern: /SemaphoreSlim/u,
-      message: 'PlanASKI source must bound upstream concurrency',
-    },
-    {
-      id: 'missing-planaski-cache',
-      pattern: /PlanAskiCacheTtlSeconds/u,
-      message: 'PlanASKI source must cache successful type responses',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.backendPlanAskiRepository, [
-    {
-      id: 'missing-planaski-all-types',
-      pattern: /GetAllTypesAsync/u,
-      message: 'PlanASKI repository must support the configured inclusive type catalog',
-    },
-    {
-      id: 'missing-planaski-single-type',
-      pattern: /GetTypeAsync/u,
-      message: 'PlanASKI repository must fetch a requested category without loading unrelated types',
-    },
-    {
-      id: 'missing-planaski-catalog',
-      pattern: /GetTypeCatalogAsync/u,
-      message: 'PlanASKI repository must expose the bounded type catalog',
-    },
-    {
-      id: 'missing-planaski-nearby',
-      pattern: /HaversineMeters/u,
-      message: 'PlanASKI repository must preserve nearby-query behavior',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.backendRegistration, [
-    {
-      id: 'missing-planaski-http-client',
-      pattern: /AddHttpClient/u,
-      message: 'User API must own the PlanASKI HTTP transport server-side',
-    },
-    {
-      id: 'missing-planaski-no-redirect',
-      pattern: /AllowAutoRedirect\s*=\s*false/u,
-      message: 'PlanASKI HTTP transport must not follow redirects',
-    },
-    {
-      id: 'missing-planaski-source-selection',
-      pattern: /KentRehberiOptions\.PlanAskiSource/u,
-      message: 'repository selection must honor the configured PlanASKI source',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.backendRepository, [
-    {
-      id: 'missing-postgis-fallback-table',
-      pattern: /kent_rehberi\.kent_rehberi_tumu_pggeom/u,
-      message: 'PostGIS compatibility repository must retain its server-owned fixed table',
-    },
-    {
-      id: 'missing-postgis-parameterization',
-      pattern: /AddWithValue/u,
-      message: 'PostGIS fallback must continue parameterizing user input',
-    },
-  ], errors);
-
-  requirePatterns(files, REQUIRED_PATHS.backendOptions, [
-    {
-      id: 'missing-planaski-source-option',
-      pattern: /PlanAskiSource/u,
-      message: 'backend options must expose the reviewed PlanASKI source mode',
-    },
-    {
-      id: 'missing-planaski-range-options',
-      pattern: /PlanAskiMinTur[\s\S]*PlanAskiMaxTur/u,
-      message: 'backend options must bound the official PlanASKI tur range',
-    },
-    {
-      id: 'missing-planaski-url-validation',
-      pattern: /planaski\.ankara\.bel\.tr/u,
-      message: 'backend options must pin the upstream to the official PlanASKI host',
-    },
-    {
-      id: 'missing-type-budget-option',
-      pattern: /TypeCatalogMaxTypes/u,
-      message: 'backend options must bound type catalog cardinality',
-    },
-    {
-      id: 'missing-sample-budget-option',
-      pattern: /TypeCatalogSamplesPerType/u,
-      message: 'backend options must bound catalog samples per type',
-    },
-    {
-      id: 'missing-catalog-byte-budget',
-      pattern: /TypeCatalogMaxResponseBytes/u,
-      message: 'backend options must bound serialized catalog size',
-    },
-  ], errors);
-
-  const settingsSource = readRequired(files, REQUIRED_PATHS.backendSettings, errors);
-  if (!settingsSource) return;
-  const settings = parseJson(settingsSource, REQUIRED_PATHS.backendSettings, errors);
-  const config = settings?.KentRehberiData;
-  if (!config || typeof config !== 'object') {
-    errors.push(finding(
-      'missing-backend-settings',
-      REQUIRED_PATHS.backendSettings,
-      'KentRehberiData configuration is required',
-    ));
-    return;
+  if (/VITE_API_URL|VITE_API_BASE_URL|VITE_API_PROXY_TARGET|VITE_LOCAL_BOOTSTRAP_PREVIEW|VITE_PUBLIC_MAP_ONLY_MODE/u.test(files[REQUIRED_PATHS.envExample] ?? '')) {
+    errors.push(finding('legacy-api-env-keys', REQUIRED_PATHS.envExample, 'static-only release must not configure API, proxy or preview flags'));
   }
 
-  const expected = {
-    Source: 'PlanAski',
-    PlanAskiBaseUri: 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi',
-    PlanAskiMinTur: 0,
-    PlanAskiMaxTur: 42,
-    PlanAskiRequestTimeoutSeconds: 10,
-    PlanAskiCacheTtlSeconds: 300,
-    PlanAskiMaxConcurrentRequests: 6,
-    PlanAskiMaxRecordsPerType: 20000,
-    PlanAskiMaxResponseBytesPerType: 8388608,
-    TypeCatalogMaxTypes: 43,
-    TypeCatalogSamplesPerType: 16,
-    TypeCatalogCacheTtlSeconds: 300,
-    TypeCatalogMaxTextLength: 240,
-    TypeCatalogMaxResponseBytes: 1048576,
-  };
-  for (const [key, value] of Object.entries(expected)) {
-    if (config[key] === value) continue;
-    errors.push(finding(
-      'backend-setting-drift',
-      REQUIRED_PATHS.backendSettings,
-      `KentRehberiData:${key} must remain at the reviewed bounded default ${value}`,
-    ));
+  const vite = requirePatterns(files, REQUIRED_PATHS.vite, [
+    { id: 'missing-planaski-only-vite-mode', pattern: /envPrefix:\\s*\\[\\s*['"]VITE_['"]\\s*\\]/u, message: 'Vite must expose only public VITE environment values' },
+  ], errors);
+  if (/resolveLocalApiProxyTarget|apiProxyTarget|['"]\\/api['"]|target:\\s*apiProxyTarget/u.test(vite)) {
+    errors.push(finding('legacy-local-api-proxy', REQUIRED_PATHS.vite, 'Vite must not proxy requests to a local User API'));
   }
 
-  const launchSource = readRequired(
-    files,
-    REQUIRED_PATHS.backendLaunchSettings,
-    errors,
-  );
-  if (!launchSource) return;
-
-  const launch = parseJson(
-    launchSource,
-    REQUIRED_PATHS.backendLaunchSettings,
-    errors,
-  );
-  const iis = launch?.iisSettings?.iisExpress;
-  const project = launch?.profiles?.['api.user'];
-  const iisProfile = launch?.profiles?.['IIS Express'];
-
-  const expectedLocalHttpOrigin = ['http:', '//localhost:3002'].join('');
-  const expectedProjectOrigins =
-    `https://localhost:3003;${expectedLocalHttpOrigin}`;
-
-  if (
-    iis?.applicationUrl !== expectedLocalHttpOrigin
-    || iis?.sslPort !== 3003
-  ) {
-    errors.push(finding(
-      'local-api-profile-port-drift',
-      REQUIRED_PATHS.backendLaunchSettings,
-      'IIS Express must use the same local Api.User ports as the project profile: HTTPS 3003 / HTTP 3002',
-    ));
+  const configuration = requirePatterns(files, REQUIRED_PATHS.configurationBusiness, [
+    { id: 'missing-static-map-configuration', pattern: /STATIC_MAP_CONFIGURATION/u, message: 'initial map configuration must be local and deterministic' },
+    { id: 'missing-empty-legacy-service-list', pattern: /GetConfigServices[\\s\\S]*?Object\\.freeze\\(\\[\\]\\)/u, message: 'legacy GIS service catalogue must remain empty' },
+  ], errors);
+  if (/apiClient|AppSettings\\/List|Gis\\/ConfigService\\/List|resolveLocalBootstrapPreviewEnabled/u.test(configuration)) {
+    errors.push(finding('legacy-configuration-api', REQUIRED_PATHS.configurationBusiness, 'startup configuration must not call an API or use preview fallback flags'));
   }
-
-  if (
-    project?.applicationUrl !== expectedProjectOrigins
-  ) {
-    errors.push(finding(
-      'local-api-project-port-drift',
-      REQUIRED_PATHS.backendLaunchSettings,
-      'api.user project profile must listen on HTTPS 3003 / HTTP 3002',
-    ));
-  }
-
-  for (const [profileName, profile] of [
-    ['api.user', project],
-    ['IIS Express', iisProfile],
-  ]) {
-    const environment = profile?.environmentVariables;
-    if (
-      environment?.KentRehberiData__Source !== 'PlanAski'
-      || environment?.KentRehberiData__PlanAskiBaseUri
-        !== 'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi'
-      || environment?.KentRehberiData__PlanAskiMinTur !== '0'
-      || environment?.KentRehberiData__PlanAskiMaxTur !== '42'
-    ) {
-      errors.push(finding(
-        'local-api-planaski-profile-drift',
-        REQUIRED_PATHS.backendLaunchSettings,
-        `${profileName} must explicitly run the official PlanASKI tur=0..42 source profile`,
-      ));
-    }
+  const env = files[REQUIRED_PATHS.envExample] ?? '';
+  if (!/VITE_KENT_REHBERI_SOURCE=planaski/u.test(env)) {
+    errors.push(finding('missing-planaski-source-env', REQUIRED_PATHS.envExample, 'local environment template must pin the direct PlanASKI source'));
   }
 };
 
@@ -678,56 +255,23 @@ const checkReleaseIntegration = (files, errors) => {
   if (packageSource) {
     const manifest = parseJson(packageSource, REQUIRED_PATHS.package, errors);
     const scripts = manifest?.scripts;
-    const quality = scripts?.['quality:kent-rehberi-all-layers'];
-    if (
-      typeof quality !== 'string'
-      || !quality.includes('kent-rehberi-all-layers-audit.mjs')
-      || !quality.includes('--strict')
-    ) {
-      errors.push(finding(
-        'missing-package-quality-gate',
-        REQUIRED_PATHS.package,
-        'package.json must expose strict quality:kent-rehberi-all-layers',
-      ));
+    if (typeof scripts?.['quality:kent-rehberi-all-layers'] !== 'string'
+        || !scripts['quality:kent-rehberi-all-layers'].includes('kent-rehberi-all-layers-audit.mjs')
+        || !scripts['quality:kent-rehberi-all-layers'].includes('--strict')) {
+      errors.push(finding('missing-package-quality-gate', REQUIRED_PATHS.package, 'package.json must expose a strict all-layer quality gate'));
     }
-
-    const tooling = scripts?.['test:tooling'];
-    if (
-      typeof tooling !== 'string'
-      || !tooling.includes('kent-rehberi-all-layers-audit.test.mjs')
-    ) {
-      errors.push(finding(
-        'missing-audit-unit-test',
-        REQUIRED_PATHS.package,
-        'test:tooling must execute the all-layer audit regression suite',
-      ));
+    if (typeof scripts?.['test:tooling'] !== 'string' || !scripts['test:tooling'].includes('kent-rehberi-all-layers-audit.test.mjs')) {
+      errors.push(finding('missing-audit-unit-test', REQUIRED_PATHS.package, 'test:tooling must execute all-layer contract tests'));
     }
-
-    const verify = scripts?.verify;
-    if (
-      typeof verify !== 'string'
-      || !verify.includes('quality:kent-rehberi-all-layers')
-    ) {
-      errors.push(finding(
-        'missing-verify-quality-gate',
-        REQUIRED_PATHS.package,
-        'verify must execute the all-layer contract audit',
-      ));
+    if (typeof scripts?.verify !== 'string' || !scripts.verify.includes('quality:kent-rehberi-all-layers')) {
+      errors.push(finding('missing-verify-quality-gate', REQUIRED_PATHS.package, 'verify must execute the all-layer contract audit'));
     }
   }
-
-  for (const workflow of [
-    REQUIRED_PATHS.qualityWorkflow,
-    REQUIRED_PATHS.releaseWorkflow,
-  ]) {
+  for (const workflow of [REQUIRED_PATHS.qualityWorkflow, REQUIRED_PATHS.releaseWorkflow]) {
     const source = readRequired(files, workflow, errors);
-    if (!source) continue;
-    if (/npm\s+run\s+quality:kent-rehberi-all-layers/u.test(source)) continue;
-    errors.push(finding(
-      'missing-workflow-quality-gate',
-      workflow,
-      'workflow must execute quality:kent-rehberi-all-layers',
-    ));
+    if (source && !/npm\\s+run\\s+quality:kent-rehberi-all-layers/u.test(source)) {
+      errors.push(finding('missing-workflow-quality-gate', workflow, 'workflow must execute quality:kent-rehberi-all-layers'));
+    }
   }
 };
 
@@ -737,10 +281,8 @@ export const auditKentRehberiAllLayersSources = (files) => {
   checkWindowCoverage(files, items, errors);
   checkProfileCoverage(files, items, errors);
   checkIconCoverage(files, items, errors);
-  checkFrontendRuntimeContracts(files, errors);
-  checkBackendContracts(files, errors);
+  checkPlanAskiOnlyContracts(files, errors);
   checkReleaseIntegration(files, errors);
-
   return Object.freeze({
     ok: errors.length === 0,
     errors: Object.freeze(errors),
@@ -753,37 +295,24 @@ const repositoryFiles = (root) => {
   const files = {};
   for (const file of Object.values(REQUIRED_PATHS)) {
     const absolute = path.resolve(root, file);
-    if (!fs.existsSync(absolute)) continue;
-    files[file] = fs.readFileSync(absolute, 'utf8');
+    if (fs.existsSync(absolute)) files[file] = fs.readFileSync(absolute, 'utf8');
   }
   return files;
 };
 
-export const auditKentRehberiAllLayersRepository = (
-  root = process.cwd(),
-) => auditKentRehberiAllLayersSources(repositoryFiles(root));
+export const auditKentRehberiAllLayersRepository = (root = process.cwd()) =>
+  auditKentRehberiAllLayersSources(repositoryFiles(root));
 
-const isEntrypoint = (
-  import.meta.url === new URL(`file://${process.argv[1] ?? ''}`).href
-  || fileURLToPath(import.meta.url) === path.resolve(process.argv[1] ?? '')
-);
+const isEntrypoint = import.meta.url === new URL(`file://${process.argv[1] ?? ''}`).href
+  || fileURLToPath(import.meta.url) === path.resolve(process.argv[1] ?? '');
 
 if (isEntrypoint) {
   const args = new Set(process.argv.slice(2));
   const result = auditKentRehberiAllLayersRepository();
-
-  if (args.has('--json')) {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  } else {
-    for (const error of result.errors) {
-      process.stderr.write(
-        `ERROR [${error.id}] ${error.file}: ${error.message}\n`,
-      );
-    }
-    process.stdout.write(
-      `Kent Rehberi all-layer audit checked ${result.checkedFiles.length} files and ${result.sidebarItems} sidebar layers: ${result.errors.length} error(s).\n`,
-    );
+  if (args.has('--json')) process.stdout.write(`${JSON.stringify(result, null, 2)}\\n`);
+  else {
+    for (const error of result.errors) process.stderr.write(`ERROR [${error.id}] ${error.file}: ${error.message}\\n`);
+    process.stdout.write(`Kent Rehberi all-layer audit checked ${result.checkedFiles.length} files and ${result.sidebarItems} sidebar layers: ${result.errors.length} error(s).\\n`);
   }
-
   if (args.has('--strict') && !result.ok) process.exit(1);
 }
