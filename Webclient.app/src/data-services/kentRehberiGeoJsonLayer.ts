@@ -4,6 +4,7 @@ import { normalizeIconKey } from '../gis-engine/iconResolver';
 import {
   fetchPlanAskiFeatureDirect,
   fetchPlanAskiGeoJsonDirect,
+  fetchPlanAskiSvgOverviewDirect,
   fetchPlanAskiTypeCatalogDirect,
 } from './kentRehberiPlanAskiDirect';
 
@@ -51,7 +52,13 @@ const overviewSvgAliasMatches = Object.freeze(overviewSvgIcons
 export const resolveKentRehberiOverviewIconKey = (
   properties: Readonly<Record<string, unknown>>,
 ): string => {
-  const title = normalizeIconKey(properties.adi ?? properties.name ?? '');
+  const title = normalizeIconKey([
+    properties.adi,
+    properties.name,
+    properties.adres,
+    properties.webSayfasi,
+    properties.durakNo,
+  ].filter((value) => typeof value === 'string' && value.trim()).join(' '));
   if (!title) return 'default';
   const compactTitle = title.replace(/\s+/g, '');
   const match = overviewSvgAliasMatches.find(({ alias }) =>
@@ -422,6 +429,34 @@ export const fetchKentRehberiGeoJson = async (
   }
 };
 
+/**
+ * Loads every upstream category, keeps records with a registered SVG icon, and
+ * applies a separate fixed result cap. The ordinary query API remains limited
+ * to 2,000 results per call.
+ */
+export const fetchKentRehberiSvgOverviewGeoJson = async (
+  options: KentRehberiFetchOptions = {},
+): Promise<KentRehberiGeoJsonFeatureCollection> => {
+  const timeoutMs = normalizePositiveInteger(options.timeoutMs, 30_000, 60_000);
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('Fetch API is unavailable for the Kent Rehberi overview layer.');
+  }
+
+  const request = createRequestSignal(options.signal, timeoutMs);
+  try {
+    return validateKentRehberiFeatureCollection(
+      await fetchPlanAskiSvgOverviewDirect(
+        { ...options, signal: request.signal },
+        resolveKentRehberiOverviewIconKey,
+      ),
+      20_000,
+    );
+  } finally {
+    request.dispose();
+  }
+};
+
 export const fetchKentRehberiFeature = async (
   objectId: number,
   options: KentRehberiFetchOptions = {},
@@ -551,23 +586,19 @@ export const attachKentRehberiGeoJsonLayer = async (
     throw new TypeError('Kent Rehberi layer requires an ArcGIS map with add/remove support.');
   }
 
-  const geojson = await fetchKentRehberiGeoJson(options);
+  const isSvgOverview = options.tur === undefined
+    && !options.q
+    && !options.ilce
+    && !options.mahalle;
+  const geojson = isSvgOverview
+    ? await fetchKentRehberiSvgOverviewGeoJson(options)
+    : await fetchKentRehberiGeoJson(options);
   if (options.signal?.aborted) throw createAbortError();
 
-  const overviewGeoJson: KentRehberiGeoJsonFeatureCollection = Object.freeze({
-    ...geojson,
-    features: Object.freeze(geojson.features.map((feature) => Object.freeze({
-      ...feature,
-      properties: Object.freeze({
-        ...feature.properties,
-        iconKey: resolveKentRehberiOverviewIconKey(feature.properties),
-      }),
-    }))),
-  });
   const layer = await createKentRehberiGeoJsonLayer(
-    overviewGeoJson,
+    geojson,
     options.moduleLoader ?? loadArcgisModule,
-    { id: LAYER_ID, title: LAYER_TITLE, renderer: overviewSvgRenderer },
+    isSvgOverview ? { id: LAYER_ID, title: LAYER_TITLE, renderer: overviewSvgRenderer } : {},
     options.signal,
   );
   if (options.signal?.aborted) {
