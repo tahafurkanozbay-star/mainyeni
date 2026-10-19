@@ -50,7 +50,7 @@ const sidebarIconAliases = Object.freeze(
       const id = typeof entry.id === 'string' ? entry.id.trim() : '';
       if (!id) return [];
       const aliases = [...new Set([entry.id, entry.type, ...(Array.isArray(entry.aliases) ? entry.aliases : [])]
-        .filter((alias): alias is string => typeof alias === 'string' && alias.trim())
+        .filter((alias): alias is string => typeof alias === 'string' && Boolean(alias.trim()))
         .map(normalizeIconKey)
         .filter((alias) => alias.length >= 4))];
       return aliases.map((alias) => Object.freeze({ id, alias }));
