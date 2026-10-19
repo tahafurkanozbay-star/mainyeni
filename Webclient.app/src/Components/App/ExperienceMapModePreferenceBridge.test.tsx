@@ -39,15 +39,16 @@ describe('ExperienceMapModePreferenceBridge', () => {
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener);
   });
 
-  it('does not restore when persisted mode already matches runtime', async () => {
+  it('forces 3D startup when the saved preference is 2D', async () => {
     window.localStorage.setItem(EXPERIENCE_STORAGE_KEY, JSON.stringify({ lastMapMode: '2d' }));
-    const command = vi.fn();
-    window.addEventListener(EXPERIENCE_COMMAND_EVENT, command);
+    const commands: unknown[] = [];
+    const listener = (event: Event): void => { commands.push((event as CustomEvent).detail); };
+    window.addEventListener(EXPERIENCE_COMMAND_EVENT, listener);
     render(<ExperienceMapModePreferenceBridge />);
     act(() => dispatchMode('2d', 'map-runtime-ready'));
-    await Promise.resolve();
-    expect(command).not.toHaveBeenCalled();
-    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, command);
+    await waitFor(() => expect(commands).toHaveLength(1));
+    expect(commands[0]).toMatchObject({ name: 'map-mode', mode: '3d', source: 'experience-preference-restore' });
+    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener);
   });
 
   it('persists a successful 3B runtime event', () => {
@@ -79,15 +80,15 @@ describe('ExperienceMapModePreferenceBridge', () => {
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener);
   });
 
-  it('applies an explicit preference event after runtime mode is known', async () => {
+  it('applies an explicit mode preference change after runtime mode is known', async () => {
     const commands: unknown[] = [];
     const listener = (event: Event): void => { commands.push((event as CustomEvent).detail); };
     window.addEventListener(EXPERIENCE_COMMAND_EVENT, listener);
     render(<ExperienceMapModePreferenceBridge />);
-    act(() => dispatchMode('2d', 'map-runtime-ready'));
-    act(() => dispatchPreferences('3d'));
+    act(() => dispatchMode('3d', 'map-runtime-ready'));
+    act(() => dispatchPreferences('2d'));
     await waitFor(() => expect(commands).toHaveLength(1));
-    expect(commands[0]).toMatchObject({ mode: '3d', source: 'experience-preference-change' });
+    expect(commands[0]).toMatchObject({ mode: '2d', source: 'experience-preference-change' });
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener);
   });
 
@@ -104,22 +105,38 @@ describe('ExperienceMapModePreferenceBridge', () => {
     const command = vi.fn();
     window.addEventListener(EXPERIENCE_COMMAND_EVENT, command);
     render(<ExperienceMapModePreferenceBridge />);
-    act(() => dispatchMode('2d', 'map-runtime-ready'));
-    act(() => dispatchPreferences('2d'));
+    act(() => dispatchMode('3d', 'map-runtime-ready'));
+    act(() => dispatchPreferences('3d'));
     expect(command).not.toHaveBeenCalled();
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, command);
+  });
+
+  it('does not switch back to a stale saved 2D value after 3D startup', async () => {
+    window.localStorage.setItem(EXPERIENCE_STORAGE_KEY, JSON.stringify({ lastMapMode: '2d', theme: 'dark' }));
+    const commands: unknown[] = [];
+    const listener = (event: Event): void => { commands.push((event as CustomEvent).detail); };
+    window.addEventListener(EXPERIENCE_COMMAND_EVENT, listener);
+    render(<ExperienceMapModePreferenceBridge />);
+    act(() => dispatchMode('2d', 'map-runtime-ready'));
+    await waitFor(() => expect(commands).toHaveLength(1));
+    expect(commands[0]).toMatchObject({ mode: '3d', source: 'experience-preference-restore' });
+    act(() => dispatchMode('3d', 'map-runtime'));
+    act(() => dispatchPreferences('2d'));
+    expect(commands).toHaveLength(1);
+    window.removeEventListener(EXPERIENCE_COMMAND_EVENT, listener);
   });
 
   it('normalizes partial preference event payloads', () => {
     const command = vi.fn();
     window.addEventListener(EXPERIENCE_COMMAND_EVENT, command);
     render(<ExperienceMapModePreferenceBridge />);
-    act(() => dispatchMode('3d', 'map-runtime'));
+    window.localStorage.setItem(EXPERIENCE_STORAGE_KEY, JSON.stringify({ lastMapMode: '2d' }));
+    act(() => dispatchMode('2d', 'map-runtime'));
     act(() => {
       window.dispatchEvent(new CustomEvent(EXPERIENCE_PREFERENCE_EVENT, { detail: { lastMapMode: 'invalid' } }));
     });
     expect(command).toHaveBeenCalledTimes(1);
-    expect((command.mock.calls[0]![0] as CustomEvent).detail).toMatchObject({ mode: '2d' });
+    expect((command.mock.calls[0]![0] as CustomEvent).detail).toMatchObject({ mode: '3d' });
     window.removeEventListener(EXPERIENCE_COMMAND_EVENT, command);
   });
 
