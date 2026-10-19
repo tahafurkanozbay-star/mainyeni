@@ -230,6 +230,8 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
     try {
       // The SceneView must initialize and become visible on the first load.
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(1));
+      expect((mapView.map.basemap as { id?: string }).id).toBe('streets-3d');
+      expect(harness.bridge?.getState().basemapId).toBe('streets-3d');
       expect(harness.views).toHaveLength(1);
       const host = container.querySelector('.experience-scene-host');
       expect(host).not.toBeNull();
@@ -238,9 +240,12 @@ describe('ExperienceMapModeBridge 2B/3B lifecycle', () => {
 
       await act(async () => { dispatchMode('2d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '2d')).toHaveLength(1));
+      expect((mapView.map.basemap as { id?: string }).id).toBe('osm');
+      expect(harness.bridge?.getState().basemapId).toBe('osm');
 
       await act(async () => { dispatchMode('3d'); });
       await waitFor(() => expect(changedModes.filter((mode) => mode === '3d')).toHaveLength(2));
+      expect((mapView.map.basemap as { id?: string }).id).toBe('streets-3d');
 
       // Keep the same WebGL host attached across 3B → 2B → 3B transitions.
       // Setting container=null can strand SceneView's renderer on a blank frame.
