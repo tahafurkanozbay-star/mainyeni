@@ -28,6 +28,7 @@ import {
   type GeometryLike,
 } from '../_Common/QueryInteractionRuntime';
 import {
+  isTechnicalCategoryLabel,
   normalizeSearchCollection,
   type NormalizedSearchRecord,
   type SearchRecordInput,
@@ -383,7 +384,7 @@ export const GenelAramaQeryWindow = forwardRef<
           <span className="result-item-info-title">
             {renderHighlightSegments(item.titleSegments, record.title)}
           </span>
-          {record.category && record.category !== 'Diğer' ? (
+          {record.category && record.category !== 'Diğer' && !isTechnicalCategoryLabel(record.category) ? (
             <span className="genel-arama-result-category">{record.category}</span>
           ) : null}
           {record.address ? (
