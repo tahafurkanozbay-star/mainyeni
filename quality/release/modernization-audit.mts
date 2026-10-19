@@ -24,14 +24,10 @@ export interface ModernizationTarget {
 export interface ModernizationSummary {
   readonly javascriptFiles: number;
   readonly typescriptFiles: number;
-  readonly csharpFiles: number;
   readonly typescriptRatio: number;
   readonly reactVersion: string | null;
   readonly reactScriptsVersion: string | null;
   readonly viteDetected: boolean;
-  readonly targetFramework: string | null;
-  readonly languageVersion: string | null;
-  readonly nullableMode: string | null;
   readonly targets: readonly ModernizationTarget[];
   readonly platformGovernance: ModernizationPlatformSummary;
   readonly findings: readonly Finding[];
@@ -55,11 +51,6 @@ function dependencyVersion(manifest: Record<string, unknown> | null, name: strin
   return null;
 }
 
-function xmlValue(text: string, tag: string): string | null {
-  const match = text.match(new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`, 'i'));
-  return match?.[1]?.trim() ?? null;
-}
-
 function calculateTypeScriptRatio(javascriptFiles: number, typescriptFiles: number): number {
   const total = javascriptFiles + typescriptFiles;
   return total === 0 ? 0 : typescriptFiles / total;
@@ -69,8 +60,6 @@ function targets(
   reactVersion: string | null,
   reactScriptsVersion: string | null,
   viteDetected: boolean,
-  targetFramework: string | null,
-  languageVersion: string | null,
   typescriptRatio: number,
 ): ModernizationTarget[] {
   return [
@@ -113,17 +102,6 @@ function targets(
         're-run GIS widget lifecycle and accessibility smoke tests',
       ],
     },
-    {
-      area: 'backend-runtime',
-      current: `${targetFramework ?? 'unknown framework'} / C# ${languageVersion ?? 'unknown'}`,
-      target: 'net10.0 + stable current C# language features',
-      strategy: targetFramework === 'net10.0' ? 'keep' : 'incremental',
-      rationale: 'The backend is already on a modern runtime; focus should be nullability, analyzers, resilience and measurable hot-path improvements.',
-      prerequisites: [
-        'restore/build/test/publish remain green',
-        'enable stricter compiler features project-by-project',
-      ],
-    },
   ];
 }
 
@@ -131,8 +109,6 @@ function buildFindings(
   reactVersion: string | null,
   reactScriptsVersion: string | null,
   viteDetected: boolean,
-  targetFramework: string | null,
-  nullableMode: string | null,
   typescriptRatio: number,
 ): Finding[] {
   const findings: Finding[] = [];
@@ -173,31 +149,6 @@ function buildFindings(
       tags: ['react'],
     });
   }
-  if (targetFramework && targetFramework !== 'net10.0') {
-    findings.push({
-      id: 'modernization-dotnet-target',
-      domain: 'architecture',
-      severity: 'medium',
-      title: 'Backend target framework review',
-      message: `Backend target framework is ${targetFramework}, not the repository modernization baseline net10.0.`,
-      location: { file: 'Directory.Build.props', line: 1 },
-      evidence: { value: targetFramework },
-      remediation: 'Move to net10.0 only after package/API compatibility is verified.',
-    });
-  }
-  if (nullableMode?.toLowerCase() === 'disable') {
-    findings.push({
-      id: 'modernization-csharp-nullable-disabled',
-      domain: 'architecture',
-      severity: 'medium',
-      title: 'C# nullable analysis disabled globally',
-      message: 'Global nullable disable leaves a large class of contract/null-reference regressions outside compiler analysis.',
-      location: { file: 'Directory.Build.props', line: 1 },
-      evidence: { value: nullableMode },
-      remediation: 'Enable nullable incrementally by project/namespace and fix warnings; do not flip the entire solution without a remediation pass.',
-      tags: ['csharp', 'nullability'],
-    });
-  }
   return findings;
 }
 
@@ -205,7 +156,6 @@ export function auditModernization(inventory: RepositoryInventory): AuditSection
   const start = performance.now();
   const javascriptFiles = inventory.languageStats.find(stat => stat.kind === 'javascript')?.files ?? 0;
   const typescriptFiles = inventory.languageStats.find(stat => stat.kind === 'typescript')?.files ?? 0;
-  const csharpFiles = inventory.languageStats.find(stat => stat.kind === 'csharp')?.files ?? 0;
   const typescriptRatio = calculateTypeScriptRatio(javascriptFiles, typescriptFiles);
   const webManifest = packageJson(inventory, 'Webclient.app/package.json');
   const reactVersion = dependencyVersion(webManifest, 'react');
@@ -213,19 +163,13 @@ export function auditModernization(inventory: RepositoryInventory): AuditSection
   const manifestInventory = collectManifestInventory(inventory);
   const viteDetected = manifestInventory.configFiles.some(file => /vite\.config\.[cm]?[jt]s$/.test(file.repositoryPath))
     || dependencyVersion(webManifest, 'vite') !== null;
-  const buildProps = findFile(inventory, 'Directory.Build.props');
-  const targetFramework = buildProps ? xmlValue(buildProps.text, 'TargetFramework') : null;
-  const languageVersion = buildProps ? xmlValue(buildProps.text, 'LangVersion') : null;
-  const nullableMode = buildProps ? xmlValue(buildProps.text, 'Nullable') : null;
-  const migrationTargets = targets(reactVersion, reactScriptsVersion, viteDetected, targetFramework, languageVersion, typescriptRatio);
+  const migrationTargets = targets(reactVersion, reactScriptsVersion, viteDetected, typescriptRatio);
   const platformGovernance = auditModernizationPlatform(inventory);
   const findings = stableSortFindings([
     ...buildFindings(
       reactVersion,
       reactScriptsVersion,
       viteDetected,
-      targetFramework,
-      nullableMode,
       typescriptRatio,
     ),
     ...platformGovernance.findings,
@@ -237,14 +181,10 @@ export function auditModernization(inventory: RepositoryInventory): AuditSection
     summary: {
       javascriptFiles,
       typescriptFiles,
-      csharpFiles,
       typescriptRatio,
       reactVersion,
       reactScriptsVersion,
       viteDetected,
-      targetFramework,
-      languageVersion,
-      nullableMode,
       targets: migrationTargets,
       platformGovernance: platformGovernance.summary,
       findings,

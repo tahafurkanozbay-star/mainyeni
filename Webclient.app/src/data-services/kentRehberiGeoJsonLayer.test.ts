@@ -1,41 +1,55 @@
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   attachKentRehberiGeoJsonLayer,
-  buildKentRehberiFeaturePath,
-  buildKentRehberiRequestPath,
-  buildKentRehberiTypeCatalogPath,
   createKentRehberiGeoJsonLayer,
   fetchKentRehberiFeature,
   fetchKentRehberiGeoJson,
   fetchKentRehberiTypeCatalog,
-  validateKentRehberiFeatureCollection,
-  validateKentRehberiTypeCatalog,
   type KentRehberiGeoJsonFeatureCollection,
 } from './kentRehberiGeoJsonLayer';
 
 const demoGeoJson: KentRehberiGeoJsonFeatureCollection = {
   type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      id: 101,
-      geometry: { type: 'Point', coordinates: [32.854, 39.92] },
-      properties: {
-        objectid: 101,
-        adi: 'Yerel Demo Noktası',
-        adres: 'Ankara',
-        ilce: 'Çankaya',
-        mahalle: 'Kızılay',
-        tur: 1,
-        yapan: null,
-        webSayfasi: null,
-        durakNo: null,
-      },
+  features: [{
+    type: 'Feature',
+    id: 101,
+    geometry: { type: 'Point', coordinates: [32.854, 39.92] },
+    properties: {
+      objectid: 101, adi: 'Yerel Demo Noktası', adres: 'Ankara',
+      ilce: 'Çankaya', mahalle: 'Kızılay', tur: 13, yapan: null,
+      webSayfasi: null, durakNo: null,
     },
-  ],
+  }],
   meta: { count: 1, limit: 500, hasMore: false },
 };
 
-describe('kentRehberiGeoJsonLayer', () => {
+const response = (rows: readonly unknown[]): Response => new Response(JSON.stringify(rows), {
+  headers: { 'content-type': 'application/json; charset=utf-8' },
+});
+
+const row = (tur: number, objectId: number) => ({
+  objectId, adi: 'Kent Rehberi kaydı', adres: 'Ankara',
+  ilce: 'Çankaya', mahalle: 'Kızılay', x: 32.854, y: 39.92,
+  tur, yapan: null, webSayfasi: null, durakNo: null,
+});
+
+describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  test('always fetches the official PlanASKI endpoint, even if a legacy API flag is present', async () => {
+    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=13');
+      expect(init?.credentials).toBe('omit');
+      expect(init?.mode).toBe('cors');
+      return response([row(13, 101)]);
+    }) as typeof fetch;
+
+    const result = await fetchKentRehberiGeoJson({ tur: 13, limit: 10, fetchImpl });
+    expect(result.features.map(feature => feature.id)).toEqual([101]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   test('cancels a stalled SDK load and releases the layer and Blob URL immediately', async () => {
     const abort = new AbortController();
     const revoke = vi.fn();
@@ -62,388 +76,24 @@ describe('kentRehberiGeoJsonLayer', () => {
     await expect(attachKentRehberiGeoJsonLayer({
       map: { add: () => { throw error; }, remove: vi.fn() },
       moduleLoader: (async () => Layer) as never,
-      fetchImpl: (async () => new Response(JSON.stringify(demoGeoJson), { headers: { 'content-type': 'application/geo+json' } })) as typeof fetch,
+      fetchImpl: (async () => response([row(13, 101)])) as typeof fetch,
+      tur: 13,
     })).rejects.toBe(error);
     expect(layer.destroy).toHaveBeenCalledOnce();
   });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
 
-  test('bounds same-origin GeoJSON streaming before attempting full JSON parsing', async () => {
-    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
-    const fetchImpl = vi.fn(async () => new Response('x'.repeat(1025), {
-      headers: { 'content-type': 'application/geo+json' },
-    })) as typeof fetch;
-    try {
-      await expect(fetchKentRehberiGeoJson({
-        limit: 10,
-        maxPayloadBytes: 1024,
-        fetchImpl,
-      })).rejects.toThrow('payload budget');
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  test('builds only canonical same-origin API paths and enforces the public limit', () => {
-    expect(buildKentRehberiRequestPath('/api', 500)).toBe('/api/kent-rehberi?limit=500');
-    expect(() => buildKentRehberiRequestPath('https://evil.example/api', 500)).toThrow(/same-origin/i);
-    expect(() => buildKentRehberiRequestPath('/api', 0)).toThrow(/between 1 and 2000/i);
-    expect(() => buildKentRehberiRequestPath('/api', 2001)).toThrow(/between 1 and 2000/i);
-  });
-
-  test('validates the FeatureCollection contract before ArcGIS sees the payload', () => {
-    const validated = validateKentRehberiFeatureCollection(demoGeoJson);
-    expect(validated.features).toHaveLength(1);
-    expect(validated.features[0]?.properties.objectid).toBe(101);
-
-    expect(() => validateKentRehberiFeatureCollection({ type: 'FeatureCollection', features: [
-      { type: 'Feature', geometry: null, properties: { objectid: 0 } },
-    ] })).toThrow(/valid objectid/i);
-
-    expect(() => validateKentRehberiFeatureCollection({ type: 'FeatureCollection', features: Array.from({ length: 2001 }, () => ({
-      type: 'Feature',
-      geometry: null,
-      properties: { objectid: 1 },
-    })) })).toThrow(/bounded feature limit/i);
-  });
-
-  test.each([
-    { label: 'polygon geometry', geometry: { type: 'Polygon', coordinates: [] } },
-    { label: 'missing point coordinates', geometry: { type: 'Point' } },
-    { label: 'three-dimensional point', geometry: { type: 'Point', coordinates: [32.854, 39.92, 100] } },
-    { label: 'string longitude', geometry: { type: 'Point', coordinates: ['32.854', 39.92] } },
-    { label: 'out-of-range longitude', geometry: { type: 'Point', coordinates: [181, 39.92] } },
-    { label: 'out-of-range latitude', geometry: { type: 'Point', coordinates: [32.854, -91] } },
-    { label: 'invalid object geometry', geometry: {} },
-    { label: 'missing geometry property', geometry: undefined },
-  ])('rejects $label before loading a map layer', ({ geometry }) => {
-    expect(() => validateKentRehberiFeatureCollection({
-      type: 'FeatureCollection',
-      features: [{ ...demoGeoJson.features[0], geometry }],
-    })).toThrow(/geometry|coordinates/i);
-  });
-
-  test('accepts valid point/null geometries but rejects inconsistent GeoJSON identities', () => {
-    const feature = demoGeoJson.features[0]!;
-    expect(() => validateKentRehberiFeatureCollection({
-      type: 'FeatureCollection',
-      features: [{ ...feature, geometry: null, id: '101' }],
-    })).not.toThrow();
-
-    expect(() => validateKentRehberiFeatureCollection({
-      type: 'FeatureCollection',
-      features: [{ ...feature, id: 102 }],
-    })).toThrow(/mismatched id/i);
-
-    expect(() => validateKentRehberiFeatureCollection({
-      type: 'FeatureCollection',
-      features: [{ ...feature, id: { unexpected: true } }],
-    })).toThrow(/mismatched id/i);
-
-    expect(() => validateKentRehberiFeatureCollection({
-      type: 'FeatureCollection',
-      features: [{ ...feature, properties: { objectid: Number.MAX_SAFE_INTEGER + 1 } }],
-    })).toThrow(/valid objectid/i);
-
-    expect(() => validateKentRehberiFeatureCollection({
-      type: 'FeatureCollection',
-      features: [feature, { ...feature, id: 101 }],
-    })).toThrow(/duplicate objectid/i);
-  });
-
-  test('rejects misleading MIME types even if the response body looks like GeoJSON', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(demoGeoJson), {
-      headers: { 'content-type': 'text/plain; note=application/json' },
-    })) as typeof fetch;
-
-    await expect(fetchKentRehberiGeoJson({
-      apiBaseUrl: '/api',
-      limit: 10,
-      fetchImpl,
-    })).rejects.toThrow(/unexpected content type/i);
-    expect(fetchImpl).toHaveBeenCalledOnce();
-  });
-
-  test('fetches the same-origin endpoint with the GeoJSON accept contract', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(input).toBe('/api/kent-rehberi?limit=250');
-      expect(init?.credentials).toBe('same-origin');
-      expect(new Headers(init?.headers).get('Accept')).toContain('application/geo+json');
-      expect(init?.signal).toBeInstanceOf(AbortSignal);
-      return new Response(JSON.stringify(demoGeoJson), {
-        status: 200,
-        headers: { 'content-type': 'application/geo+json; charset=utf-8' },
-      });
-    });
-
-    const result = await fetchKentRehberiGeoJson({
-      apiBaseUrl: '/api',
-      limit: 250,
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    });
-
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(result.features[0]?.id).toBe(101);
-  });
-
-  test('does not reflect server error bodies into the client error', async () => {
-    const fetchImpl = vi.fn(async () => new Response(
-      'internal host=private-db; password=should-never-surface',
-      { status: 503, headers: { 'content-type': 'text/plain' } },
-    ));
-
-    await expect(fetchKentRehberiGeoJson({
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    })).rejects.toThrow('Kent Rehberi endpoint returned HTTP 503.');
-
-    await expect(fetchKentRehberiGeoJson({
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    })).rejects.not.toThrow(/private-db|password/i);
-  });
-
-  test('creates, attaches and deterministically disposes the loaded GeoJSONLayer', async () => {
-    const createObjectURL = vi.fn(() => 'blob:https://local.test/kent-rehberi');
-    const revokeObjectURL = vi.fn(() => undefined);
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
-
-    const load = vi.fn(async () => undefined);
-    const destroy = vi.fn();
-    const layer = { load, destroy };
-    const GeoJSONLayer = vi.fn(function GeoJSONLayerMock(options: Record<string, unknown>) {
-      Object.assign(layer, options);
-      return layer;
-    });
-    const moduleLoader = vi.fn(async () => GeoJSONLayer);
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(demoGeoJson), {
-      status: 200,
-      headers: { 'content-type': 'application/geo+json' },
-    }));
-    const map = { add: vi.fn(), remove: vi.fn() };
-
-    const handle = await attachKentRehberiGeoJsonLayer({
-      map,
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-      moduleLoader: moduleLoader as never,
-    });
-
-    expect(moduleLoader).toHaveBeenCalledWith('esri/layers/GeoJSONLayer');
-    expect(GeoJSONLayer).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'kent-rehberi-postgis',
-      title: 'Kent Rehberi',
-      url: 'blob:https://local.test/kent-rehberi',
-      objectIdField: 'objectid',
-      fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'objectid', type: 'oid' }),
-        expect.objectContaining({ name: 'adi', type: 'string' }),
-      ]),
-    }));
-    expect(load).toHaveBeenCalledTimes(1);
-    expect(map.add).toHaveBeenCalledWith(layer);
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:https://local.test/kent-rehberi');
-    expect(handle.featureCount).toBe(1);
-
-    handle.dispose();
-    handle.dispose();
-
-    expect(map.remove).toHaveBeenCalledTimes(1);
-    expect(map.remove).toHaveBeenCalledWith(layer);
-    expect(destroy).toHaveBeenCalledTimes(1);
-  });
-
-  test('encodes bounded backend filters and object-detail paths', () => {
-    expect(buildKentRehberiRequestPath('/api', 100, {
-      q: 'kadın danışma',
-      tur: 12,
-      ilce: 'Çankaya',
-      mahalle: 'Kızılay',
-    })).toBe(
-      '/api/kent-rehberi?limit=100&q=kad%C4%B1n+dan%C4%B1%C5%9Fma&ilce=%C3%87ankaya&mahalle=K%C4%B1z%C4%B1lay&tur=12',
-    );
-    expect(buildKentRehberiFeaturePath('/api', 42)).toBe('/api/kent-rehberi/42');
-    expect(() => buildKentRehberiFeaturePath('/api', 0)).toThrow(/positive integer/i);
-    expect(() => buildKentRehberiRequestPath('/api', 100, { q: 'x' })).toThrow(/between 2 and 120/i);
-  });
-
-  test('fetches one backend feature and treats 404 as a normal miss', async () => {
+  test('individual feature and type-catalog helpers keep the same direct upstream boundary', async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).endsWith('/404')) {
-        return new Response('', { status: 404 });
-      }
-      expect(input).toBe('/api/kent-rehberi/101');
-      return new Response(JSON.stringify(demoGeoJson.features[0]), {
-        status: 200,
-        headers: { 'content-type': 'application/geo+json' },
-      });
-    });
+      const url = new URL(String(input));
+      expect(url.origin).toBe('https://planaski.ankara.bel.tr');
+      expect(url.pathname).toBe('/kentrehberiapi/api/kentrehberi');
+      const tur = Number(url.searchParams.get('tur'));
+      return response(tur === 13 ? [row(13, 101)] : []);
+    }) as typeof fetch;
 
-    const found = await fetchKentRehberiFeature(101, {
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    });
-    const missing = await fetchKentRehberiFeature(404, {
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    });
-
-    expect(found?.properties.objectid).toBe(101);
-    expect(missing).toBeNull();
+    const catalog = await fetchKentRehberiTypeCatalog({ fetchImpl });
+    expect(catalog.types).toHaveLength(43);
+    expect((await fetchKentRehberiFeature(101, { fetchImpl }))?.id).toBe(101);
+    expect(fetchImpl.mock.calls.every(([input]) => String(input).startsWith('https://planaski.ankara.bel.tr/'))).toBe(true);
   });
-
-  test('supports a category-specific renderer without changing the shared GeoJSON contract', async () => {
-    const createObjectURL = vi.fn(() => 'blob:https://local.test/category');
-    const revokeObjectURL = vi.fn(() => undefined);
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
-
-    const load = vi.fn(async () => undefined);
-    const destroy = vi.fn();
-    const layer = { load, destroy };
-    const GeoJSONLayer = vi.fn(function GeoJSONLayerMock(options: Record<string, unknown>) {
-      Object.assign(layer, options);
-      return layer;
-    });
-    const moduleLoader = vi.fn(async () => GeoJSONLayer);
-    const renderer = Object.freeze({
-      type: 'simple',
-      symbol: Object.freeze({ type: 'picture-marker', url: 'images/icons/map/ABB/parklar.svg' }),
-    });
-
-    await createKentRehberiGeoJsonLayer(
-      demoGeoJson,
-      moduleLoader as never,
-      {
-        id: 'kent-rehberi-parks',
-        title: 'Parklar',
-        renderer,
-      },
-    );
-
-    expect(GeoJSONLayer).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'kent-rehberi-parks',
-      title: 'Parklar',
-      renderer,
-    }));
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:https://local.test/category');
-  });
-
-
-  test('builds a same-origin type catalog path', () => {
-    expect(buildKentRehberiTypeCatalogPath('/api')).toBe('/api/kent-rehberi/types');
-    expect(() => buildKentRehberiTypeCatalogPath('https://evil.example/api'))
-      .toThrow(/same-origin/i);
-  });
-
-  test('validates bounded type catalog payloads before classification', () => {
-    const catalog = validateKentRehberiTypeCatalog({
-      types: [
-        {
-          tur: 12,
-          count: 2,
-          samples: [
-            {
-              objectid: 101,
-              adi: 'Kadın Danışma Merkezi',
-              adres: 'Çankaya',
-              durakNo: null,
-            },
-            {
-              objectid: 102,
-              adi: 'Kadın Dayanışma Merkezi',
-              adres: 'Sincan',
-              durakNo: null,
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(catalog.types[0]).toMatchObject({ tur: 12, count: 2 });
-    expect(Object.isFrozen(catalog)).toBe(true);
-    expect(Object.isFrozen(catalog.types)).toBe(true);
-    expect(Object.isFrozen(catalog.types[0]?.samples)).toBe(true);
-
-    expect(() => validateKentRehberiTypeCatalog({
-      types: [
-        { tur: 12, count: 1, samples: [] },
-        { tur: 12, count: 1, samples: [] },
-      ],
-    })).toThrow(/duplicate tur/i);
-
-    expect(() => validateKentRehberiTypeCatalog({
-      types: [
-        {
-          tur: 12,
-          count: 1,
-          samples: [
-            { objectid: 0, adi: 'invalid', adres: null, durakNo: null },
-          ],
-        },
-      ],
-    })).toThrow(/objectid/i);
-  });
-
-  test('fetches the bounded type catalog from the real same-origin API contract', async () => {
-    const payload = {
-      types: [
-        {
-          tur: 5,
-          count: 1,
-          samples: [
-            { objectid: 7, adi: 'Park', adres: 'Ankara', durakNo: null },
-          ],
-        },
-      ],
-    };
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(input).toBe('/api/kent-rehberi/types');
-      expect(init?.credentials).toBe('same-origin');
-      expect(new Headers(init?.headers).get('Accept')).toBe('application/json');
-      return new Response(JSON.stringify(payload), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    });
-
-    const result = await fetchKentRehberiTypeCatalog({
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    });
-
-    expect(result.types[0]?.tur).toBe(5);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-  });
-
-  test('does not reflect type catalog server bodies into errors', async () => {
-    const fetchImpl = vi.fn(async () => new Response(
-      'Host=private-db;Password=secret',
-      { status: 503, headers: { 'content-type': 'text/plain' } },
-    ));
-
-    await expect(fetchKentRehberiTypeCatalog({
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    })).rejects.toThrow('Kent Rehberi type catalog endpoint returned HTTP 503.');
-
-    await expect(fetchKentRehberiTypeCatalog({
-      apiBaseUrl: '/api',
-      timeoutMs: 1000,
-      fetchImpl: fetchImpl as typeof fetch,
-    })).rejects.not.toThrow(/private-db|password/i);
-  });
-
 });

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { auditModernization } from './modernization-audit.mts';
 import {
-  directoryBuildProps,
   fixtureInventory,
   type FixtureFileInput,
 } from './test-helpers.mts';
@@ -61,7 +60,6 @@ function base(extra: readonly FixtureFileInput[] = []) {
   return fixtureInventory([
     manifest(),
     tsconfig(),
-    directoryBuildProps('enable'),
     ...extra,
   ]);
 }
@@ -111,31 +109,14 @@ test('canonical modernization findings propagate browser dependency authority fa
   assert.equal(finding.blocking, true);
 });
 
-test('canonical modernization keeps package dependency authority isolated', () => {
+test('canonical modernization keeps the active frontend dependency authority isolated', () => {
   const result = auditModernization(fixtureInventory([
     manifest({ '@public/runtime': '1.0.0' }),
     tsconfig(),
-    directoryBuildProps('enable'),
     source('public.ts', "import runtime from '@public/runtime';\nexport { runtime };\n"),
-    {
-      path: 'Webclient.admin/AdminWebClientFrontend/package.json',
-      text: JSON.stringify({
-        name: 'admin-web',
-        type: 'module',
-        packageManager: 'npm@11.6.1',
-        engines: { node: '>=24', npm: '>=11' },
-        dependencies: {},
-        devDependencies: {},
-      }),
-    },
-    {
-      path: 'Webclient.admin/AdminWebClientFrontend/src/admin.ts',
-      text: "import runtime from '@public/runtime';\nexport { runtime };\n",
-    },
   ]));
 
-  assert.ok(result.findings.some(item => item.id === 'modernization-browser-undeclared-dependency'
-    && item.location?.file === 'Webclient.admin/AdminWebClientFrontend/src/admin.ts'));
+  assert.equal(result.findings.some(item => item.id === 'modernization-browser-undeclared-dependency'), false);
 });
 
 test('canonical modernization ordering stays deterministic after aggregation', () => {

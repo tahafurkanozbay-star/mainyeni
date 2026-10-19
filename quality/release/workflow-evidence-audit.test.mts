@@ -85,11 +85,7 @@ function cleanReleaseQa(): FixtureFileInput {
       + checkoutSteps()
       + namedRun('Dependency and lockfile contract', 'npm run dependency:verify')
       + namedRun('Production dependency audit', 'npm audit --omit=dev --audit-level=high')
-      + namedRun('Release build', 'npm run build')
-      + jobStart('backend-release-validation', 30)
-      + `      - name: Checkout\n        uses: actions/checkout@${CHECKOUT} # v7\n        with:\n          persist-credentials: false\n`
-      + namedRun('Run xUnit v3 tests through Microsoft.Testing.Platform', 'dotnet run --project tests/Platform.Security.Tests/Platform.Security.Tests.csproj')
-      + namedRun('Publish User API', 'dotnet publish Api.User/Api.User.csproj')
+      + namedRun('Production build and integrity manifest', 'npm run build')
   };
 }
 
@@ -170,7 +166,7 @@ test('clean release workflow evidence passes', () => {
   const section = auditWorkflowEvidence(cleanInventory());
   assert.deepEqual(section.findings, []);
   assert.equal(section.summary.workflowCount, 5);
-  assert.ok(section.summary.jobCount >= 7);
+  assert.ok(section.summary.jobCount >= 6);
   assert.ok(section.summary.stepCount >= 35);
   assert.equal(section.summary.actionCount, section.summary.immutableActionCount);
   assert.ok(section.summary.exactBaseEvidenceCount >= 2);
@@ -278,12 +274,6 @@ test('self-hosted runner drift is reported', () => {
   const overrides = replaceFixture('.github/workflows/webclient-quality.yml', text =>
     text.replace('runs-on: ubuntu-latest', 'runs-on: self-hosted'));
   assert.ok(findingIds(overrides).includes('release-job-runner-drift'));
-});
-
-test('ubuntu-24.04 backend runner is accepted', () => {
-  const overrides = replaceFixture('.github/workflows/release-qa.yml', text =>
-    text.replace('  backend-release-validation:\n    runs-on: ubuntu-latest', '  backend-release-validation:\n    runs-on: ubuntu-24.04'));
-  assert.equal(findingIds(overrides).filter(id => id === 'release-job-runner-drift').length, 0);
 });
 
 test('missing job timeout is reported', () => {
@@ -484,10 +474,10 @@ test('webclient build cannot move ahead of exact-base test evidence', () => {
   assert.ok(findingIds({ '.github/workflows/webclient-quality.yml': moved }).includes('release-webclient-gate-order'));
 });
 
-test('release QA publish commands classify as publish evidence', () => {
+test('PlanASKI-only release QA does not require a server publish step', () => {
   const parsed = parseWorkflowEvidence(fixtureFile(cleanReleaseQa()));
   const publish = parsed.jobs.flatMap(job => job.steps).filter(step => step.kinds.includes('publish'));
-  assert.deepEqual(publish.map(step => step.name), ['Publish User API']);
+  assert.deepEqual(publish, []);
 });
 
 test('release QA exact-base command classifies as baseline evidence', () => {

@@ -4,8 +4,7 @@
 param(
     [string]$BuildPath = (Join-Path (Split-Path -Parent $PSScriptRoot) "Webclient.app\build"),
     [string]$Destination = "C:\inetpub\wwwroot\kentrehberiumit",
-    [string]$SiteName = "Default Web Site",
-    [string]$ApiApplicationPool = "kentrehberiumit-api"
+    [string]$SiteName = "Default Web Site"
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,17 +12,18 @@ Import-Module WebAdministration
 
 $buildRoot = [IO.Path]::GetFullPath($BuildPath)
 $destinationRoot = [IO.Path]::GetFullPath($Destination)
-$apiRoot = Join-Path $destinationRoot "user"
+$frontPoolName = "kentrehberiumit-webclient"
 
-if (-not (Test-Path -LiteralPath (Join-Path $buildRoot "index.html") -PathType Leaf)) {
-    throw "Derlenmiş index.html bulunamadı: $buildRoot. Önce Operations\build-webclient-iis.ps1 çalıştırılmalı."
+foreach ($requiredFile in @("index.html", "web.config")) {
+    $path = Join-Path $buildRoot $requiredFile
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Üretim paketi dosyası bulunamadı: $path. Önce Operations\build-webclient-iis.ps1 çalıştırılmalı."
+    }
 }
-if (-not (Test-Path -LiteralPath (Join-Path $buildRoot "web.config") -PathType Leaf)) {
-    throw "Derlenmiş web.config bulunamadı: $buildRoot"
-}
-if (-not (Test-Path -LiteralPath (Join-Path $apiRoot "ankara-rehber-api-user.dll") -PathType Leaf) -or
-    -not (Test-Path -LiteralPath (Join-Path $apiRoot "web.config") -PathType Leaf)) {
-    throw "Mevcut User API yayın dosyaları bulunamadı: $apiRoot. API klasörü değiştirilmedi."
+$assetRoot = Join-Path $buildRoot "assets"
+if (-not (Test-Path -LiteralPath $assetRoot -PathType Container) -or
+    -not (Get-ChildItem -LiteralPath $assetRoot -File -Recurse | Select-Object -First 1)) {
+    throw "Üretim paketi assets klasörü boş veya yok: $assetRoot"
 }
 
 $site = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
@@ -40,13 +40,8 @@ if ($bindings.Count -eq 0) {
     throw "Default Web Site üzerinde https *:443:cbs.ankara.bel.tr bağlaması doğrulanamadı. IIS bağlamasını otomatik değiştirmedim."
 }
 
-$frontPoolName = "kentrehberiumit-webclient"
 $apps = @(Get-WebApplication -Site $SiteName)
 $front = $apps | Where-Object { $_.Path -eq "/kentrehberiumit" } | Select-Object -First 1
-$apiApp = $apps | Where-Object { $_.Path -eq "/kentrehberiumit/api" } | Select-Object -First 1
-
-# Validate all existing mappings before creating pools, changing environment variables,
-# or replacing the current client files.
 if ($null -ne $front) {
     $frontPhysical = [Environment]::ExpandEnvironmentVariables([string]$front.PhysicalPath).TrimEnd("\")
     if (-not [string]::Equals($frontPhysical, $destinationRoot.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
@@ -56,55 +51,9 @@ if ($null -ne $front) {
         throw "IIS /kentrehberiumit mevcut uygulama havuzu '$($front.ApplicationPool)'. Otomatik değiştirmedim; önce bu eşleşmeyi inceleyin."
     }
 }
-if ($null -ne $apiApp) {
-    $apiPhysical = [Environment]::ExpandEnvironmentVariables([string]$apiApp.PhysicalPath).TrimEnd("\")
-    if (-not [string]::Equals($apiPhysical, $apiRoot.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "IIS /kentrehberiumit/api başka bir fiziksel yola işaret ediyor ($apiPhysical). Otomatik değiştirmedim."
-    }
-    if ($apiApp.ApplicationPool -ne $ApiApplicationPool) {
-        throw "IIS /kentrehberiumit/api havuzu '$($apiApp.ApplicationPool)'. Otomatik değiştirmedim."
-    }
-}
 
-$apiPoolPath = "IIS:\AppPools\$ApiApplicationPool"
-$apiPoolCreated = $false
-if (-not (Test-Path -LiteralPath $apiPoolPath)) {
-    New-WebAppPool -Name $ApiApplicationPool | Out-Null
-    Set-ItemProperty -LiteralPath $apiPoolPath -Name managedRuntimeVersion -Value ""
-    Set-ItemProperty -LiteralPath $apiPoolPath -Name managedPipelineMode -Value "Integrated"
-    Set-ItemProperty -LiteralPath $apiPoolPath -Name enable32BitAppOnWin64 -Value $false
-    $apiPoolCreated = $true
-}
-else {
-    $configuredApiPool = Get-Item -LiteralPath $apiPoolPath
-    if ([string]$configuredApiPool.managedRuntimeVersion -ne "" -or $configuredApiPool.enable32BitAppOnWin64) {
-        throw "API havuzu $ApiApplicationPool, .NET CLR=No Managed Code ve 64-bit yapılandırmasına sahip değil. Otomatik değiştirmedim."
-    }
-}
-
-# Use a new pool for the CBS subpath mapping. The existing working
-# 'kentrehberiumit' site/pool is deliberately not recycled or repointed.
-$poolEnvPath = "MACHINE/WEBROOT/APPHOST"
-$standaloneKey = "KentRehberiData__Standalone"
-$standaloneBase = "system.applicationHost/applicationPools/add[@name='$ApiApplicationPool']/environmentVariables"
-$standaloneFilter = "$standaloneBase/add[@name='$standaloneKey']"
-$existingStandalone = Get-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneFilter -Name "value" -ErrorAction SilentlyContinue
-$standaloneChanged = $false
-if ($null -eq $existingStandalone -or "$existingStandalone" -eq "") {
-    Add-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneBase -Name "." -Value @{ name = $standaloneKey; value = "true" }
-    $standaloneChanged = $true
-}
-elseif ("$existingStandalone".Trim().ToLowerInvariant() -ne "true") {
-    Set-WebConfigurationProperty -PSPath $poolEnvPath -Filter $standaloneFilter -Name "value" -Value "true"
-    $standaloneChanged = $true
-}
-if ($standaloneChanged -and -not $apiPoolCreated) {
-    $apiPoolState = (Get-WebAppPoolState -Name $ApiApplicationPool).Value
-    if ($apiPoolState -eq "Started") {
-        Restart-WebAppPool -Name $ApiApplicationPool
-    }
-}
-
+# Keep deployment bounded to the existing static frontend app. No API app pool,
+# API child application, credentials, API binaries or service configuration are created.
 if (-not (Test-Path -LiteralPath $destinationRoot -PathType Container)) {
     New-Item -ItemType Directory -Path $destinationRoot -Force | Out-Null
 }
@@ -126,22 +75,18 @@ else {
 $backupBase = "C:\inetpub\backups\kentrehberiumit"
 $backupStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $backupRoot = Join-Path $backupBase $backupStamp
-# Back up every existing top-level path that the build will copy over. Never
-# treat the co-located API folder as static client content.
-$buildEntries = @(Get-ChildItem -LiteralPath $buildRoot -Force |
-    Where-Object { -not [string]::Equals($_.Name, "user", [StringComparison]::OrdinalIgnoreCase) } |
-    Select-Object -ExpandProperty Name)
+$buildEntries = @(Get-ChildItem -LiteralPath $buildRoot -Force | Select-Object -ExpandProperty Name)
 $existingEntries = @($buildEntries | Where-Object { Test-Path -LiteralPath (Join-Path $destinationRoot $_) })
 if ($existingEntries.Count -gt 0) {
     New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
     foreach ($entry in $existingEntries) {
         Copy-Item -LiteralPath (Join-Path $destinationRoot $entry) -Destination $backupRoot -Recurse -Force
     }
-    Write-Host "Mevcut web dosyalarının yedeği: $backupRoot" -ForegroundColor Yellow
+    Write-Host "Mevcut statik web dosyalarının yedeği: $backupRoot" -ForegroundColor Yellow
 }
 
-# Remove only the generated, fingerprinted client asset directory. Do not use
-# /MIR or /PURGE: the co-located User API directory must be preserved.
+# Replace the generated asset directory, then copy the new static client.
+# Never use /MIR or /PURGE: unrelated existing paths at the IIS root are preserved.
 $oldAssets = Join-Path $destinationRoot "assets"
 if (Test-Path -LiteralPath $oldAssets -PathType Container) {
     Remove-Item -LiteralPath $oldAssets -Recurse -Force
@@ -150,27 +95,20 @@ if (Test-Path -LiteralPath $oldAssets -PathType Container) {
 & robocopy $buildRoot $destinationRoot /E /COPY:DAT /R:2 /W:2
 $copyCode = $LASTEXITCODE
 if ($copyCode -ge 8) {
-    throw "Robocopy dağıtımı başarısız oldu (kod $copyCode). API klasörüne /MIR veya /PURGE uygulanmadı."
+    throw "Statik webclient kopyalaması başarısız oldu (kod $copyCode)."
 }
 
 if ($null -eq $front) {
     New-WebApplication -Site $SiteName -Name "kentrehberiumit" -PhysicalPath $destinationRoot -ApplicationPool $frontPoolName | Out-Null
     Write-Host "IIS uygulaması eklendi: /kentrehberiumit -> $destinationRoot"
 }
-if ($null -eq $apiApp) {
-    New-WebApplication -Site $SiteName -Name "kentrehberiumit/api" -PhysicalPath $apiRoot -ApplicationPool $ApiApplicationPool | Out-Null
-    Write-Host "IIS API uygulaması eklendi: /kentrehberiumit/api -> $apiRoot"
-}
 
 if ((Get-WebAppPoolState -Name $frontPoolName).Value -ne "Started") {
     Start-WebAppPool -Name $frontPoolName
 }
-if ((Get-WebAppPoolState -Name $ApiApplicationPool).Value -ne "Started") {
-    Start-WebAppPool -Name $ApiApplicationPool
-}
+
 Write-Host ""
-Write-Host "Dosyalar kopyalandı; API klasörü silinmedi." -ForegroundColor Green
+Write-Host "Statik webclient dağıtımı tamamlandı." -ForegroundColor Green
 Write-Host "Webclient URL: https://cbs.ankara.bel.tr/kentrehberiumit/"
-Write-Host "API canlılık: https://cbs.ankara.bel.tr/kentrehberiumit/api/health/live"
-Write-Host "Kent Rehberi verisi: https://cbs.ankara.bel.tr/kentrehberiumit/api/kent-rehberi?tur=42&limit=5"
-Write-Host "Not: Bu betik API kodunu değiştirmez ve mevcut kentrehberiumit API havuzunu yeniden başlatmaz."
+Write-Host "Kent Rehberi kaynağı: doğrudan https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur="
+Write-Host "Uygulama API'si yayımlanmadı; bu betik mevcut IIS /api eşlemesini veya user klasörünü değiştirmez."

@@ -1,5 +1,4 @@
 import {
-  buildGoogleRouteUrl,
   filterFastAccessRecords,
   getFastAccessRecordKey,
   normalizeFastAccessRecord
@@ -73,21 +72,6 @@ describe("ManagedFastAccessQueryWindow helpers", () => {
     const records = [{ title: "A" }, { title: "B" }];
     expect(filterFastAccessRecords(records, "")).toBe(records);
     expect(filterFastAccessRecords(records, "   ")).toBe(records);
-  });
-
-  test("creates a route only for finite coordinates", () => {
-    expect(buildGoogleRouteUrl({ latitude: 39.92, longitude: 32.85 })).toContain("39.92%2C32.85");
-    expect(buildGoogleRouteUrl({})).toBeNull();
-  });
-
-  test("creates a route for x/y point geometry", () => {
-    expect(buildGoogleRouteUrl({ x: 32.85, y: 39.92 })).toContain("39.92%2C32.85");
-  });
-
-  test("creates a route for non-point geometry using extent center", () => {
-    expect(buildGoogleRouteUrl({
-      extent: { center: { x: 32.7, y: 39.8 } }
-    })).toContain("39.8%2C32.7");
   });
 
   describe("stable record keys", () => {

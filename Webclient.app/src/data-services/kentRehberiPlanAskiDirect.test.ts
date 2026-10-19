@@ -72,27 +72,14 @@ describe('direct PlanASKI browser transport', () => {
     });
   });
 
-  it('connects existing React request functions to the direct upstream only when enabled', async () => {
-    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'planaski');
+  it('connects existing React request functions directly to PlanASKI regardless of legacy flags', async () => {
+    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
     const { requests, fetchImpl } = mockTypes({ 13: [row(13, 201)] });
     const result = await fetchKentRehberiGeoJson({ tur: 13, limit: 10, fetchImpl });
     expect(result.features).toHaveLength(1);
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).not.toContain('localhost');
-  });
-
-  it('retains same-origin API mode if not explicitly selected', async () => {
-    vi.stubEnv('VITE_KENT_REHBERI_SOURCE', 'api');
-    const fetchImpl = vi.fn(async () => makeResponse({
-      type: 'FeatureCollection',
-      features: [],
-      meta: { count: 0, limit: 10, hasMore: false },
-    })) as typeof fetch;
-    await fetchKentRehberiGeoJson({ limit: 10, fetchImpl });
-    expect(fetchImpl).toHaveBeenCalledWith(
-      '/api/kent-rehberi?limit=10',
-      expect.objectContaining({ credentials: 'same-origin' }),
-    );
+    expect(requests).toEqual([
+      'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=13',
+    ]);
   });
 
   it('fetches all 43 types for catalog and supports exact category matching', async () => {

@@ -786,7 +786,7 @@ function workflowSpecificFindings(workflow: WorkflowDocumentEvidence): Finding[]
   if (workflow.file === '.github/workflows/release-qa.yml') {
     const jobNames = new Set(workflow.jobs.map(job => job.name));
     const findings: Finding[] = [];
-    for (const name of ['typed-release-audit', 'webclient-release-validation', 'backend-release-validation']) {
+    for (const name of ['typed-release-audit', 'webclient-release-validation']) {
       if (jobNames.has(name)) continue;
       findings.push(releaseFinding(
         'release-lane-missing',
@@ -795,7 +795,7 @@ function workflowSpecificFindings(workflow: WorkflowDocumentEvidence): Finding[]
         1,
         'Release QA is missing a required validation lane',
         `Release QA must contain the ${name} job.`,
-        'Restore independent typed, webclient and backend release validation lanes.',
+        'Restore independent typed-release and Webclient validation lanes.',
       ));
     }
     findings.push(...requiredStepFindings(workflow, [
@@ -805,9 +805,7 @@ function workflowSpecificFindings(workflow: WorkflowDocumentEvidence): Finding[]
       'Enforce exact-base PR regression gate',
       'Dependency and lockfile contract',
       'Production dependency audit',
-      'Release build',
-      'Run xUnit v3 tests through Microsoft.Testing.Platform',
-      'Publish User API',
+      'Production build and integrity manifest',
     ]));
     findings.push(...exactBaseFindings(workflow));
     return findings;

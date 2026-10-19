@@ -5,7 +5,6 @@ import { NavigationBar } from './NavigationBar';
 import { SidebarModern } from './SidebarModern';
 import MapManager from '../../Store/Managers/MapManager';
 import { ToolbarWidgetModern } from '../Widget/Toolbar/ToolbarWidgetModern';
-import { GoogleMapsBusiness } from '../../Business/GoogleMapsBusiness';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
 import { LazyManagedWindow } from '../Common/LazyManagedWindow';
 import { QUERY_WINDOW_DEFINITIONS } from '../Common/QueryWindowRegistry';
@@ -27,7 +26,6 @@ import {
 } from '../../gis-engine/viewRuntime';
 import type { ExperienceMapMode } from '../../experience/experienceRuntime';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
-import { openExternalUrl } from '../Widget/_shared/MapWidgetRuntime';
 import type { KentRehberiMapLike } from '../../data-services/kentRehberiGeoJsonLayer';
 import { KentRehberiDataLayer } from './KentRehberiDataLayer';
 import './MapComponent.css';
@@ -129,13 +127,6 @@ export const MapComponent = ({ windowManager }: MapComponentProps) => {
         watchUtils.whenTrue(view, 'updating', () => { windowManager.SetMapUpdating(true); accessibilityModel.markUpdating(true); }),
         watchUtils.whenFalse(view, 'updating', () => { windowManager.SetMapUpdating(false); accessibilityModel.markUpdating(false); }),
       );
-      const popupHandle = view.popup.on?.('trigger-action', (event) => {
-        const feature = view?.popup.selectedFeature;
-        if (!feature?.geometry) return;
-        if (event.action?.id === 'show-on-google') openExternalUrl(GoogleMapsBusiness.CreateRoutesUrlFromPoint(feature.geometry));
-        if (event.action?.id === 'show-on-streetview' || event.action?.id === 'show-details') openExternalUrl(GoogleMapsBusiness.CreateStreetViewUrlFromPoint(feature.geometry));
-      });
-      if (popupHandle) handles.push(popupHandle);
       const clickHandle = view.on?.('click', (event) => {
         if (event.button === 2 || MapManager.GetMobileRightClick?.()) {
           MapManager.SetMapClickEvent?.(event); windowManager.ShowWindow('context-menu-widget');

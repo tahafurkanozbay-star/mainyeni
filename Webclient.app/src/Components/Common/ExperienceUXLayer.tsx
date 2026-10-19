@@ -2,11 +2,8 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
-  type ForwardRefExoticComponent,
   type ReactNode,
-  type RefAttributes,
 } from 'react';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
 import { runtimeDiagnostics } from '../../platform/runtime/runtimeDiagnostics';
@@ -21,14 +18,11 @@ import './experience-ux-layer-modern.css';
 import { useExperienceTheme } from './ExperienceDesignSystem';
 import { ExperienceNotificationCenter } from './ExperienceNotificationCenter';
 import { ExperienceOverlayStack } from './ExperienceOverlayStack';
-import { LayerListWidget } from '../Widget/LayerList/LayerListWidget';
 
 type ActionIconType =
   | 'sun'
   | 'moon'
   | 'search'
-  | 'layers'
-  | 'legend'
   | 'info';
 
 interface ActionIconProps {
@@ -44,22 +38,6 @@ interface ExperienceUXLayerProps {
 interface ExperienceCommandDetail {
   readonly name?: string;
 }
-
-interface LayerListHandle {
-  readonly OnShow?: (mode?: 'layers' | 'legend') => void;
-}
-
-interface LayerListProps {
-  readonly id: string;
-  readonly windowManager: Pick<
-    WindowManagerApi,
-    'RegisterWindow' | 'ShowWindow' | 'UnregisterWindow'
-  >;
-}
-
-const ManagedLayerListWidget = LayerListWidget as unknown as ForwardRefExoticComponent<
-  LayerListProps & RefAttributes<LayerListHandle>
->;
 
 const HELP_DIALOG_ID = 'experience-help';
 const NOTIFICATION_DIALOG_ID = 'experience-notification-center';
@@ -109,21 +87,6 @@ const ActionIcon = ({
           <path d="m16 16 4.2 4.2" />
         </svg>
       );
-    case 'layers':
-      return (
-        <svg {...common}>
-          <path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z" />
-          <path d="m4 12 8 4.5 8-4.5M4 16.5 12 21l8-4.5" />
-        </svg>
-      );
-    case 'legend':
-      return (
-        <svg {...common}>
-          <path d="M4 5h16M4 12h10M4 19h7" />
-          <circle cx="18" cy="12" r="2" />
-          <circle cx="15" cy="19" r="2" />
-        </svg>
-      );
     case 'info':
       return (
         <svg {...common}>
@@ -149,7 +112,6 @@ export function ExperienceUXLayer({
 }: ExperienceUXLayerProps): ReactNode {
   const { theme, toggleTheme } = useExperienceTheme();
   const [collapsed, setCollapsed] = useState(false);
-  const layerListRef = useRef<LayerListHandle | null>(null);
   const dialogStack = useMemo(() => new DialogStackModel({
     onObserverError: error => reportUxRuntimeError(
       error,
@@ -239,11 +201,6 @@ export function ExperienceUXLayer({
         return;
       }
 
-      if (name === 'layers' || name === 'legend') {
-        windowManager.ShowWindow('layerlist-widget', { mode: name });
-        return;
-      }
-
       if (name === 'search') {
         windowManager.ShowWindow('genelarama-query-window');
       }
@@ -257,14 +214,6 @@ export function ExperienceUXLayer({
     () => theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç',
     [theme],
   );
-
-  const closeSurfaceAndDispatch = useCallback((
-    dialogId: string,
-    command: 'layers' | 'legend',
-  ): void => {
-    dialogStack.close(dialogId);
-    dispatchExperienceCommand(command);
-  }, [dialogStack]);
 
   const renderOverlayContent = useCallback((dialog: DialogPresentation): ReactNode => {
     if (dialog.id === NOTIFICATION_DIALOG_ID) {
@@ -281,37 +230,20 @@ export function ExperienceUXLayer({
     return (
       <div className="experience-help__stack-content">
         <p className="experience-help__intro">
-          Adres, katman ve harita araçlarına komut merkezinden ulaşın.
-          Düğmeler arasında Tab ile ilerleyin; seçtiğiniz aracı Enter ile açın.
+          Kent Rehberi hizmetlerini soldaki kurum kategorilerinden seçin. Kayıtları üst arama alanından bulun.
+          Kent Rehberi kayıtları doğrudan resmi PlanASKI hizmetinden alınır.
         </p>
         <div className="experience-help__grid">
-          <div className="experience-shortcut">
-            <span>Komut merkezi</span>
-            <kbd>Ctrl / ⌘</kbd><b>+</b><kbd>K</kbd>
-          </div>
-          <div className="experience-shortcut">
-            <span>Yardım</span><kbd>?</kbd>
-          </div>
-          <div className="experience-shortcut">
-            <span>Pencereyi kapat</span><kbd>Esc</kbd>
-          </div>
-
           <button
             className="experience-shortcut experience-shortcut--action"
             type="button"
-            onClick={() => closeSurfaceAndDispatch(dialog.id, 'layers')}
+            onClick={() => {
+              dialogStack.close(dialog.id);
+              windowManager.ShowWindow('genelarama-query-window');
+            }}
           >
-            <span>Katmanlar</span><strong>Aç</strong>
+            <span>Genel arama</span><strong>Aç</strong>
           </button>
-
-          <button
-            className="experience-shortcut experience-shortcut--action"
-            type="button"
-            onClick={() => closeSurfaceAndDispatch(dialog.id, 'legend')}
-          >
-            <span>Lejand</span><strong>Aç</strong>
-          </button>
-
           <button
             className="experience-shortcut experience-shortcut--action"
             type="button"
@@ -321,17 +253,15 @@ export function ExperienceUXLayer({
             <strong>{theme === 'dark' ? 'Açık' : 'Koyu'}</strong>
           </button>
         </div>
-
         <footer className="experience-help__footer">
           <ActionIcon type="info" size={16} />
           <span>
-            Katmanlar haritada gösterilen verileri, lejand ise renk ve simgelerin
-            anlamını gösterir. Esc ile bu pencereyi kapatıp haritaya dönebilirsiniz.
+            Bu sürüm eski API üzerinden gelen katman kataloğu ve lejand özelliklerini kullanmaz.
           </span>
         </footer>
       </div>
     );
-  }, [closeSurfaceAndDispatch, notificationModel, theme, toggleThemeWithFeedback]);
+  }, [dialogStack, notificationModel, theme, toggleThemeWithFeedback, windowManager]);
 
   return (
     <>
@@ -356,28 +286,6 @@ export function ExperienceUXLayer({
           >
             <ActionIcon type="search" />
             {!collapsed ? <span>Arama</span> : null}
-          </button>
-
-          <button
-            className="experience-utility__button"
-            type="button"
-            onClick={() => dispatchExperienceCommand('layers')}
-            aria-label="Katman yönetimini aç"
-            title="Katmanlar"
-          >
-            <ActionIcon type="layers" />
-            {!collapsed ? <span>Katmanlar</span> : null}
-          </button>
-
-          <button
-            className="experience-utility__button"
-            type="button"
-            onClick={() => dispatchExperienceCommand('legend')}
-            aria-label="Lejandı aç"
-            title="Lejand"
-          >
-            <ActionIcon type="legend" />
-            {!collapsed ? <span>Lejand</span> : null}
           </button>
 
           <button
@@ -421,12 +329,6 @@ export function ExperienceUXLayer({
           <span aria-hidden="true">{collapsed ? '›' : '‹'}</span>
         </button>
       </aside>
-
-      <ManagedLayerListWidget
-        id="layerlist-widget"
-        windowManager={windowManager as LayerListProps['windowManager']}
-        ref={layerListRef}
-      />
 
       <ExperienceNotificationCenter
         model={notificationModel}

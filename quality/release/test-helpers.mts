@@ -83,13 +83,6 @@ export function webLock(dependencies: Record<string, string>): FixtureFileInput 
   };
 }
 
-export function directoryBuildProps(nullable = 'disable'): FixtureFileInput {
-  return {
-    path: 'Directory.Build.props',
-    text: `<Project>\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <LangVersion>latest</LangVersion>\n    <Nullable>${nullable}</Nullable>\n  </PropertyGroup>\n</Project>\n`,
-  };
-}
-
 export function minimalIconRegistry(rows?: unknown[]): FixtureFileInput {
   return {
     path: 'Webclient.app/src/gis-engine/iconRegistry.json',
@@ -143,14 +136,12 @@ export function requiredTestFiles(): FixtureFileInput[] {
     'Webclient.app/src/Components/Query/_Common/ManagedFastAccessQueryWindow.test.js',
     'Webclient.app/src/Business/ConfigurationBusiness.test.js',
     'Webclient.app/src/Business/LoggingBusiness.test.js',
-    'Api.Core.Tests/PlatformResilienceTests.cs',
   ].map(path => ({ path, text: 'test("contract", () => {});\n' }));
 }
 
 export function fullFixtureInventory(extra: readonly FixtureFileInput[] = []): RepositoryInventory {
   return fixtureInventory([
     webManifest(),
-    directoryBuildProps(),
     minimalIconRegistry(),
     ...requiredGisRuntimeFiles(),
     ...requiredTestFiles(),

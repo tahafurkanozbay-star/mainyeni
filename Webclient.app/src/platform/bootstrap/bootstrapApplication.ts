@@ -1,5 +1,4 @@
 import { ConfigurationBusiness } from '../../Business/ConfigurationBusiness';
-import { CommonBusiness } from '../../Business/CommonBusiness';
 import MapManager from '../../Store/Managers/MapManager';
 import { runtimeConfigResolution } from '../config/runtimeConfig';
 import {
@@ -23,9 +22,8 @@ import {
 /**
  * Typed application composition root for the configuration bootstrap pipeline.
  *
- * This adapter deliberately owns no transport policy of its own. Network access
- * remains behind ConfigurationBusiness, proxy registration remains behind
- * CommonBusiness, and committed state remains behind MapManager. Keeping those
+ * This adapter deliberately owns no transport policy of its own. Bootstrap configuration is local, Kent Rehberi data is fetched directly from PlanASKI,
+ * and committed state remains behind MapManager. Keeping those
  * boundaries explicit lets bootstrapCore stay deterministic and independently
  * testable while preventing a second fetch/cache/resilience implementation here.
  */
@@ -52,11 +50,10 @@ const loadConfigurationServices = (
 ): Promise<ServiceResult> | ServiceResult =>
   ConfigurationBusiness.GetConfigServices(options) as Promise<ServiceResult> | ServiceResult;
 
-const generateServiceUrl = (service: ConfigurationService): unknown =>
-  CommonBusiness.GenerateUrl(service);
+const generateServiceUrl = (_service: ConfigurationService): null => null;
 
-const addProxyRule = (url: string, _source: string): Promise<unknown> | unknown =>
-  CommonBusiness.AddProxyRule(url);
+// The direct PlanASKI browser client has no same-origin GIS proxy requirement.
+const addProxyRule = (_url: string, _source: string): void => undefined;
 
 const setMapConfiguration = (configuration: MapConfiguration): Promise<unknown> | unknown =>
   MapManager.SetMapConfiguration(configuration);

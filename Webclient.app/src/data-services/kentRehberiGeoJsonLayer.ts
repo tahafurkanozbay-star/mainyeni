@@ -1,16 +1,12 @@
 import { loadArcgisModule } from '../gis-engine/arcgisModuleRuntime';
-import { readBoundedResponseText } from './boundedResponseText';
-import { normalizeApiBaseUrl, runtimeConfig } from '../platform/config/runtimeConfig';
 import {
   fetchPlanAskiFeatureDirect,
   fetchPlanAskiGeoJsonDirect,
   fetchPlanAskiTypeCatalogDirect,
-  isDirectPlanAskiSource,
 } from './kentRehberiPlanAskiDirect';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
-const DEFAULT_MAX_PAYLOAD_BYTES = 8 * 1024 * 1024;
 const LAYER_ID = 'kent-rehberi-postgis';
 const LAYER_TITLE = 'Kent Rehberi';
 
@@ -54,7 +50,6 @@ export interface KentRehberiRequestFilters {
 }
 
 export interface KentRehberiFetchOptions extends KentRehberiRequestFilters {
-  readonly apiBaseUrl?: string;
   readonly limit?: number;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
@@ -123,79 +118,6 @@ const normalizePositiveInteger = (value: number | undefined, fallback: number, m
     throw new RangeError(`Kent Rehberi numeric option must be between 1 and ${maximum}.`);
   }
   return candidate;
-};
-
-const normalizeRequestText = (
-  value: unknown,
-  name: string,
-  minimumLength: number,
-  maximumLength: number,
-): string | null => {
-  if (value === null || value === undefined) return null;
-  const normalized = String(value).trim();
-  if (!normalized) return null;
-  if (normalized.length < minimumLength || normalized.length > maximumLength) {
-    throw new RangeError(`${name} must be between ${minimumLength} and ${maximumLength} characters.`);
-  }
-  return normalized;
-};
-
-const normalizeTur = (value: unknown): number | null => {
-  if (value === null || value === undefined || value === '') return null;
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric < -32768 || numeric > 32767) {
-    throw new RangeError('tur must be a valid 16-bit integer.');
-  }
-  return numeric;
-};
-
-export const buildKentRehberiRequestPath = (
-  apiBaseUrl: string = runtimeConfig.apiBaseUrl,
-  limit: number = DEFAULT_LIMIT,
-  filters: KentRehberiRequestFilters = {},
-): string => {
-  const rawBase = String(apiBaseUrl).trim().replace(/\/+$/u, '');
-  const normalizedBase = normalizeApiBaseUrl(rawBase);
-  if (normalizedBase !== rawBase) {
-    throw new Error('Kent Rehberi API base URL must be a canonical same-origin relative path.');
-  }
-
-  const search = new URLSearchParams({ limit: String(normalizeLimit(limit)) });
-  const query = normalizeRequestText(filters.q, 'q', 2, 120);
-  const district = normalizeRequestText(filters.ilce, 'ilce', 1, 50);
-  const neighborhood = normalizeRequestText(filters.mahalle, 'mahalle', 1, 50);
-  const tur = normalizeTur(filters.tur);
-  if (query) search.set('q', query);
-  if (district) search.set('ilce', district);
-  if (neighborhood) search.set('mahalle', neighborhood);
-  if (tur !== null) search.set('tur', String(tur));
-  return `${normalizedBase}/kent-rehberi?${search.toString()}`;
-};
-
-export const buildKentRehberiFeaturePath = (
-  apiBaseUrl: string = runtimeConfig.apiBaseUrl,
-  objectId: number,
-): string => {
-  const rawBase = String(apiBaseUrl).trim().replace(/\/+$/u, '');
-  const normalizedBase = normalizeApiBaseUrl(rawBase);
-  if (normalizedBase !== rawBase) {
-    throw new Error('Kent Rehberi API base URL must be a canonical same-origin relative path.');
-  }
-  if (!Number.isSafeInteger(objectId) || objectId <= 0) {
-    throw new RangeError('Kent Rehberi objectId must be a positive integer.');
-  }
-  return `${normalizedBase}/kent-rehberi/${objectId}`;
-};
-
-export const buildKentRehberiTypeCatalogPath = (
-  apiBaseUrl: string = runtimeConfig.apiBaseUrl,
-): string => {
-  const rawBase = String(apiBaseUrl).trim().replace(/\/+$/u, '');
-  const normalizedBase = normalizeApiBaseUrl(rawBase);
-  if (normalizedBase !== rawBase) {
-    throw new Error('Kent Rehberi API base URL must be a canonical same-origin relative path.');
-  }
-  return `${normalizedBase}/kent-rehberi/types`;
 };
 
 // This dataset is an EPSG:4326 point layer, not an arbitrary GeoJSON
@@ -408,79 +330,19 @@ const createRequestSignal = (
   };
 };
 
-const readBoundedJsonResponse = async (
-  response: Response,
-  maxPayloadBytes: number,
-): Promise<unknown> => {
-  const advertisedLength = Number.parseInt(response.headers.get('content-length') ?? '', 10);
-  if (Number.isFinite(advertisedLength) && advertisedLength > maxPayloadBytes) {
-    throw new RangeError('Kent Rehberi response exceeded the payload budget.');
-  }
-
-  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-  // Match the actual MIME type, not a token hidden inside text/html parameters
-  // or a misleading application/json-suffix.
-  if (contentType && !/^application\/(?:geo\+)?json(?:\s*;|$)/u.test(contentType.trim())) {
-    throw new TypeError('Kent Rehberi endpoint returned an unexpected content type.');
-  }
-
-  const body = await readBoundedResponseText(response, maxPayloadBytes, 'Kent Rehberi');
-
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    throw new TypeError('Kent Rehberi endpoint returned malformed JSON.');
-  }
-};
-
-const parseBoundedResponse = async (
-  response: Response,
-  maxPayloadBytes: number,
-): Promise<KentRehberiGeoJsonFeatureCollection> =>
-  validateKentRehberiFeatureCollection(
-    await readBoundedJsonResponse(response, maxPayloadBytes),
-  );
-
 export const fetchKentRehberiGeoJson = async (
   options: KentRehberiFetchOptions = {},
 ): Promise<KentRehberiGeoJsonFeatureCollection> => {
   const limit = normalizeLimit(options.limit);
-  const timeoutMs = normalizePositiveInteger(
-    options.timeoutMs,
-    isDirectPlanAskiSource() ? 30_000 : Math.min(runtimeConfig.requestTimeoutMs, 10_000),
-    60_000,
-  );
-  const maxPayloadBytes = normalizePositiveInteger(
-    options.maxPayloadBytes,
-    DEFAULT_MAX_PAYLOAD_BYTES,
-    32 * 1024 * 1024,
-  );
+  const timeoutMs = normalizePositiveInteger(options.timeoutMs, 30_000, 60_000);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  if (typeof fetchImpl !== 'function') {
-    throw new Error('Fetch API is unavailable for the Kent Rehberi layer.');
-  }
+  if (typeof fetchImpl !== 'function') throw new Error('Fetch API is unavailable for the Kent Rehberi layer.');
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
-    if (isDirectPlanAskiSource()) {
-      return validateKentRehberiFeatureCollection(
-        await fetchPlanAskiGeoJsonDirect({ ...options, limit, signal: request.signal }),
-      );
-    }
-    const response = await fetchImpl(
-      buildKentRehberiRequestPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, limit, options),
-      {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { Accept: 'application/geo+json, application/json;q=0.9' },
-        signal: request.signal,
-      },
+    return validateKentRehberiFeatureCollection(
+      await fetchPlanAskiGeoJsonDirect({ ...options, limit, signal: request.signal }),
     );
-
-    if (!response.ok) {
-      throw new Error(`Kent Rehberi endpoint returned HTTP ${response.status}.`);
-    }
-    return await parseBoundedResponse(response, maxPayloadBytes);
   } finally {
     request.dispose();
   }
@@ -490,43 +352,14 @@ export const fetchKentRehberiFeature = async (
   objectId: number,
   options: KentRehberiFetchOptions = {},
 ): Promise<KentRehberiGeoJsonFeature | null> => {
-  const timeoutMs = normalizePositiveInteger(
-    options.timeoutMs,
-    isDirectPlanAskiSource() ? 30_000 : Math.min(runtimeConfig.requestTimeoutMs, 10_000),
-    60_000,
-  );
-  const maxPayloadBytes = normalizePositiveInteger(
-    options.maxPayloadBytes,
-    Math.min(DEFAULT_MAX_PAYLOAD_BYTES, 1024 * 1024),
-    8 * 1024 * 1024,
-  );
+  const timeoutMs = normalizePositiveInteger(options.timeoutMs, 30_000, 60_000);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  if (typeof fetchImpl !== 'function') {
-    throw new Error('Fetch API is unavailable for the Kent Rehberi layer.');
-  }
+  if (typeof fetchImpl !== 'function') throw new Error('Fetch API is unavailable for the Kent Rehberi layer.');
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
-    if (isDirectPlanAskiSource()) {
-      const feature = await fetchPlanAskiFeatureDirect(objectId, { ...options, signal: request.signal });
-      return feature === null ? null : validateKentRehberiFeature(feature);
-    }
-    const response = await fetchImpl(
-      buildKentRehberiFeaturePath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl, objectId),
-      {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { Accept: 'application/geo+json, application/json;q=0.9' },
-        signal: request.signal,
-      },
-    );
-    if (response.status === 404) return null;
-    if (!response.ok) {
-      throw new Error(`Kent Rehberi endpoint returned HTTP ${response.status}.`);
-    }
-    return validateKentRehberiFeature(
-      await readBoundedJsonResponse(response, maxPayloadBytes),
-    );
+    const feature = await fetchPlanAskiFeatureDirect(objectId, { ...options, signal: request.signal });
+    return feature === null ? null : validateKentRehberiFeature(feature);
   } finally {
     request.dispose();
   }
@@ -535,42 +368,14 @@ export const fetchKentRehberiFeature = async (
 export const fetchKentRehberiTypeCatalog = async (
   options: KentRehberiFetchOptions = {},
 ): Promise<KentRehberiTypeCatalog> => {
-  const timeoutMs = normalizePositiveInteger(
-    options.timeoutMs,
-    isDirectPlanAskiSource() ? 30_000 : Math.min(runtimeConfig.requestTimeoutMs, 10_000),
-    60_000,
-  );
-  const maxPayloadBytes = normalizePositiveInteger(
-    options.maxPayloadBytes,
-    512 * 1024,
-    4 * 1024 * 1024,
-  );
+  const timeoutMs = normalizePositiveInteger(options.timeoutMs, 30_000, 60_000);
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  if (typeof fetchImpl !== 'function') {
-    throw new Error('Fetch API is unavailable for the Kent Rehberi type catalog.');
-  }
+  if (typeof fetchImpl !== 'function') throw new Error('Fetch API is unavailable for the Kent Rehberi type catalog.');
 
   const request = createRequestSignal(options.signal, timeoutMs);
   try {
-    if (isDirectPlanAskiSource()) {
-      return validateKentRehberiTypeCatalog(
-        await fetchPlanAskiTypeCatalogDirect({ ...options, signal: request.signal }),
-      );
-    }
-    const response = await fetchImpl(
-      buildKentRehberiTypeCatalogPath(options.apiBaseUrl ?? runtimeConfig.apiBaseUrl),
-      {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' },
-        signal: request.signal,
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`Kent Rehberi type catalog endpoint returned HTTP ${response.status}.`);
-    }
     return validateKentRehberiTypeCatalog(
-      await readBoundedJsonResponse(response, maxPayloadBytes),
+      await fetchPlanAskiTypeCatalogDirect({ ...options, signal: request.signal }),
     );
   } finally {
     request.dispose();

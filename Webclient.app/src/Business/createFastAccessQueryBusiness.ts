@@ -3,7 +3,6 @@ import type {
   QueryExecutionControl,
   UnknownRecord,
 } from './contracts';
-import { createFastAccessBusiness } from './fastAccessRuntime';
 import { createKentRehberiFastAccessBusiness } from './kentRehberiFastAccessRuntime';
 
 interface FastAccessGeometryResult {
@@ -47,11 +46,9 @@ const asFastAccessServiceResult = (value: unknown): FastAccessServiceResult => {
 };
 
 export const createFastAccessQueryBusiness = (serviceKey: string): FastAccessQueryBusiness => {
-  const kentRehberiBusiness = createKentRehberiFastAccessBusiness(serviceKey);
-  const legacyBusiness = kentRehberiBusiness ? null : createFastAccessBusiness(serviceKey);
-  const business = kentRehberiBusiness ?? legacyBusiness;
+  const business = createKentRehberiFastAccessBusiness(serviceKey);
   if (!business) {
-    throw new Error(`Fast-access business could not be created for ${serviceKey}.`);
+    throw new Error(`No PlanASKI Kent Rehberi profile is registered for ${serviceKey}.`);
   }
 
   return Object.freeze({

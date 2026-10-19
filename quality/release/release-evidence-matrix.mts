@@ -16,7 +16,6 @@ export type ReleaseEvidenceDomain =
   | 'testing'
   | 'regression'
   | 'build'
-  | 'backend'
   | 'architecture'
   | 'security';
 
@@ -220,25 +219,7 @@ export const RELEASE_EVIDENCE_REQUIREMENTS: readonly ReleaseEvidenceRequirement[
     job: 'webclient-release-validation',
     step: 'Dependency and lockfile contract',
     critical: true,
-    purpose: 'Independent Release QA Webclient lane proves dependency and lockfile policy separately from typed and backend validation.',
-  }),
-  Object.freeze({
-    id: 'backend-tests',
-    domain: 'backend',
-    workflow: '.github/workflows/release-qa.yml',
-    job: 'backend-release-validation',
-    step: 'Run xUnit v3 tests through Microsoft.Testing.Platform',
-    critical: true,
-    purpose: '.NET 10 backend security and regression test execution.',
-  }),
-  Object.freeze({
-    id: 'backend-user-publish',
-    domain: 'backend',
-    workflow: '.github/workflows/release-qa.yml',
-    job: 'backend-release-validation',
-    step: 'Publish User API',
-    critical: true,
-    purpose: 'User API release publishability evidence.',
+    purpose: 'Independent Release QA Webclient lane proves dependency and lockfile policy separately from typed release validation.',
   }),
   Object.freeze({
     id: 'architecture-module-graph',
@@ -440,7 +421,7 @@ function laneSummaries(observations: readonly ReleaseEvidenceObservation[]): rea
 function separationFindings(workflows: readonly WorkflowDocumentEvidence[]): Finding[] {
   const release = workflows.find(workflow => workflow.file === '.github/workflows/release-qa.yml');
   if (!release) return [];
-  const requiredJobs = ['typed-release-audit', 'webclient-release-validation', 'backend-release-validation'];
+  const requiredJobs = ['typed-release-audit', 'webclient-release-validation'];
   const present = new Set(release.jobs.map(job => job.name));
   const findings: Finding[] = [];
   for (const job of requiredJobs) {
@@ -450,7 +431,7 @@ function separationFindings(workflows: readonly WorkflowDocumentEvidence[]): Fin
       domain: 'release',
       severity: 'high',
       title: 'Release validation lane separation is incomplete',
-      message: `Release QA is missing independent ${job} execution. Typed, Webclient and backend evidence must not collapse into a single failure domain.`,
+      message: `Release QA is missing independent ${job} execution. Typed release and Webclient evidence must remain separate failure domains.`,
       location: { file: release.file, line: 1 },
       remediation: 'Restore the missing independent release validation job with its own bounded timeout and read-only checkout.',
       tags: Object.freeze(['release', 'evidence-matrix', 'isolation']),
@@ -490,8 +471,6 @@ function commandEvidenceFindings(observations: readonly ReleaseEvidenceObservati
   commandRequired('typed-release-tests', /node\s+--test\s+quality\/release/u, 'typed release test execution');
   commandRequired('typed-release-scorecard', /quality\/release\/cli\.mts/u, 'whole-repository typed release scorecard generation');
   commandRequired('typed-release-exact-base', /github\.event\.pull_request\.base\.sha/u, 'exact-base typed release regression comparison');
-  commandRequired('backend-tests', /dotnet\s+run\b[^\n]*Platform\.Security\.Tests/u, '.NET security/regression test execution');
-  commandRequired('backend-user-publish', /dotnet\s+publish\s+Api\.User/u, 'User API publishability');
   return findings;
 }
 

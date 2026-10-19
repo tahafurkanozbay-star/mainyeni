@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { auditAsyncResourceLifecycle } from './async-resource-lifecycle-audit.mts';
-import { auditCSharpModernizationContracts } from './csharp-modernization-contract-audit.mts';
 import { auditModuleGraphModernization } from './module-graph-modernization-audit.mts';
 import {
   MIN_MEANINGFUL_ADDITIONS,
@@ -205,32 +204,6 @@ test('modern typed product graph remains acyclic and legacy-free', () => {
   assert.equal(result.summary.unresolvedRelativeImports, 0);
   assert.equal(result.summary.cycles.length, 0);
   assert.equal(result.findings.length, 0);
-});
-
-test('modern CSharp fixture keeps async and transport ownership compiler-visible', () => {
-  const inventory = fixtureInventory([
-    {
-      path: 'Directory.Build.props',
-      text: '<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework><LangVersion>14.0</LangVersion><Nullable>annotations</Nullable><EnableNETAnalyzers>true</EnableNETAnalyzers><AnalysisLevel>latest</AnalysisLevel><Deterministic>true</Deterministic><RestoreAuditMode>all</RestoreAuditMode><RestoreAuditLevel>moderate</RestoreAuditLevel></PropertyGroup></Project>',
-    },
-    {
-      path: 'Business/QueryService.cs',
-      text: `
-        public sealed class QueryService {
-          private readonly IHttpClientFactory factory;
-          public QueryService(IHttpClientFactory factory) => this.factory = factory;
-          public async Task<string> RunAsync(CancellationToken cancellationToken) {
-            using var client = factory.CreateClient("query");
-            return await client.GetStringAsync("/api/query", cancellationToken);
-          }
-        }
-      `,
-    },
-  ]);
-  const result = auditCSharpModernizationContracts(inventory);
-  assert.equal(result.findings.length, 0);
-  assert.equal(result.summary.compiler.targetFramework, 'net10.0');
-  assert.equal(result.summary.compiler.languageVersion, '14.0');
 });
 
 test('legacy tooling ratchet accepts typed compatibility shims but not new policy code', () => {

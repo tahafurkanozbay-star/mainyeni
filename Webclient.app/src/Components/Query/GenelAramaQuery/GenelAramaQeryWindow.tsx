@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type MouseEvent,
   type ReactNode,
 } from 'react';
 import { FiFilter, FiMapPin, FiPhone, FiSearch, FiX } from 'react-icons/fi';
@@ -22,11 +21,9 @@ import { GisGraphicsHelper } from '../../../Toolbox/GisGraphicsHelper';
 import { ButtonLoading, NoResultsFound } from '../../Common/Loading';
 import { CommonQueryResultItemTools } from '../_Common/CommonQueryResultItemTools';
 import {
-  buildGoogleDirectionsUrl,
   createLatestRequestGate,
   isSmallViewport,
   normalizeErrorMessage,
-  openExternalSafely,
   safeClientLog,
   type GeometryLike,
 } from '../_Common/QueryInteractionRuntime';
@@ -324,39 +321,6 @@ export const GenelAramaQeryWindow = forwardRef<
     }
   }, [getItemDetails, id, windowManager]);
 
-  const showRoute = useCallback(async (
-    event: MouseEvent<HTMLElement>,
-    item: NormalizedSearchRecord,
-  ): Promise<void> => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    setDetailLoadingKey(item.key);
-    setErrorMessage('');
-    void safeClientLog(
-      LoggingBusiness,
-      'Genel Arama/Yol Tarifi',
-      'general-search-route-action',
-    );
-
-    try {
-      const itemDetails = await getItemDetails(item);
-      if (!itemDetails?.geometry) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
-
-      const url = buildGoogleDirectionsUrl(itemDetails.geometry);
-      if (!url) throw new Error('Yol tarifi için konum bilgisi bulunamadı.');
-      if (!openExternalSafely(url)) {
-        throw new Error('Tarayıcı yol tarifi penceresini açmayı engelledi.');
-      }
-    } catch (error) {
-      const message = normalizeErrorMessage(error, 'Yol tarifi alınamadı.');
-      setErrorMessage(message);
-      windowManager.ShowMessage(Constants_MessageType.Error, message);
-    } finally {
-      if (mountedRef.current) setDetailLoadingKey(null);
-    }
-  }, [getItemDetails, windowManager]);
-
   const backToSidebar = useCallback((): void => {
     queryGateRef.current.invalidate();
     detailGateRef.current.invalidate();
@@ -444,14 +408,10 @@ export const GenelAramaQeryWindow = forwardRef<
             applyPresentation(runtime.setActiveIdentity(item.identity));
             void showItemOnMap(record);
           }}
-          showRouteCallback={(event) => {
-            applyPresentation(runtime.setActiveIdentity(item.identity));
-            void showRoute(event, record);
-          }}
         />
       </article>
     );
-  }, [applyPresentation, detailLoadingKey, id, runtime, showItemOnMap, showRoute]);
+  }, [applyPresentation, detailLoadingKey, id, runtime, showItemOnMap]);
 
   const queryLabel = String(query.name || query.searchText || '').trim();
   const activeDomId = presentation.visibleItems.find(item => item.active);

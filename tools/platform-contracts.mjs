@@ -76,11 +76,6 @@ const firstNumericMajor = (value) => {
   return match ? Number.parseInt(match[1], 10) : Number.NaN;
 };
 
-const xmlValue = (text, tag) => {
-  const match = text.match(new RegExp(`<${tag}>([^<]+)</${tag}>`, 'i'));
-  return match?.[1]?.trim() ?? null;
-};
-
 const addFinding = (report, severity, code, message, file = null, detail = null) => {
   report.findings.push(Object.freeze({ severity, code, message, file, detail }));
 };
@@ -391,109 +386,6 @@ const validateWebclient = async (root, report) => {
   await validateTypeScriptProjects(root, webRoot, packageJson, report);
 };
 
-const validateDotnet = async (root, report) => {
-  const globalJsonFile = path.join(root, 'global.json');
-  const buildPropsFile = path.join(root, 'Directory.Build.props');
-  const packagePropsFile = path.join(root, 'Directory.Packages.props');
-
-  if (!await exists(globalJsonFile)) {
-    addFinding(report, 'error', 'dotnet-global-json-missing', 'global.json is required to pin the .NET SDK.', 'global.json');
-  } else {
-    try {
-      const globalJson = await readJson(globalJsonFile);
-      const sdk = globalJson.sdk || {};
-      if (firstNumericMajor(sdk.version) < 10) {
-        addFinding(report, 'error', 'dotnet-sdk-version', '.NET SDK must remain on major version 10 or newer.', 'global.json', { declared: sdk.version ?? null });
-      }
-      if (sdk.allowPrerelease !== false) {
-        addFinding(report, 'error', 'dotnet-sdk-prerelease', '.NET SDK prerelease resolution must remain disabled.', 'global.json');
-      }
-      if (sdk.rollForward !== 'latestPatch') {
-        addFinding(report, 'warning', 'dotnet-sdk-rollforward', 'SDK rollForward should stay latestPatch for deterministic servicing updates.', 'global.json', { declared: sdk.rollForward ?? null });
-      }
-      if (globalJson.test?.runner !== 'Microsoft.Testing.Platform') {
-        addFinding(report, 'error', 'dotnet-test-runner', 'global.json must use Microsoft.Testing.Platform.', 'global.json');
-      }
-    } catch (error) {
-      addFinding(report, 'error', 'dotnet-global-json-invalid', 'global.json must be valid JSON.', 'global.json', { error: error instanceof Error ? error.message : String(error) });
-    }
-  }
-
-  if (!await exists(buildPropsFile)) {
-    addFinding(report, 'error', 'dotnet-build-props-missing', 'Directory.Build.props is required for the shared backend baseline.', 'Directory.Build.props');
-  } else {
-    const text = await readText(buildPropsFile);
-    const targetFramework = xmlValue(text, 'TargetFramework');
-    const langVersion = xmlValue(text, 'LangVersion');
-    const nullable = String(xmlValue(text, 'Nullable') || '').toLowerCase();
-    const analyzers = String(xmlValue(text, 'EnableNETAnalyzers') || '').toLowerCase();
-    const analysisLevel = String(xmlValue(text, 'AnalysisLevel') || '').toLowerCase();
-    const deterministic = String(xmlValue(text, 'Deterministic') || '').toLowerCase();
-    const restoreAuditMode = String(xmlValue(text, 'RestoreAuditMode') || '').toLowerCase();
-    const restoreAuditLevel = String(xmlValue(text, 'RestoreAuditLevel') || '').toLowerCase();
-    const warningsAsErrors = xmlValue(text, 'WarningsAsErrors') || '';
-
-    if (targetFramework !== 'net10.0') {
-      addFinding(report, 'error', 'dotnet-target-framework', 'Shared backend target must remain net10.0.', 'Directory.Build.props', { declared: targetFramework });
-    }
-    if (firstNumericMajor(langVersion) < 14) {
-      addFinding(report, 'error', 'dotnet-language-version', 'Shared backend language baseline must remain C# 14 or newer.', 'Directory.Build.props', { declared: langVersion });
-    }
-    if (!['annotations', 'enable'].includes(nullable)) {
-      addFinding(
-        report,
-        'error',
-        'dotnet-nullable-disabled',
-        'Nullable annotations must be enabled globally as the staged path toward full nullable analysis.',
-        'Directory.Build.props',
-        { declared: nullable || null },
-      );
-    }
-    if (nullable === 'annotations') {
-      addFinding(
-        report,
-        'warning',
-        'dotnet-nullable-staged',
-        'Nullable annotations are enabled but warnings remain staged; migrate projects to nullable=enable incrementally.',
-        'Directory.Build.props',
-      );
-    }
-    if (analyzers !== 'true') {
-      addFinding(report, 'error', 'dotnet-analyzers', '.NET analyzers must remain enabled.', 'Directory.Build.props');
-    }
-    if (analysisLevel !== 'latest') {
-      addFinding(report, 'error', 'dotnet-analysis-level', '.NET analyzer level must remain latest.', 'Directory.Build.props', { declared: analysisLevel || null });
-    }
-    if (deterministic !== 'true') {
-      addFinding(report, 'error', 'dotnet-deterministic', 'Deterministic builds must remain enabled.', 'Directory.Build.props');
-    }
-    if (restoreAuditMode !== 'all' || !['low', 'moderate'].includes(restoreAuditLevel)) {
-      addFinding(
-        report,
-        'error',
-        'dotnet-restore-audit',
-        'NuGet restore audit must cover all dependencies at moderate-or-stricter severity.',
-        'Directory.Build.props',
-        { mode: restoreAuditMode || null, level: restoreAuditLevel || null },
-      );
-    }
-    for (const code of ['NU1903', 'NU1904']) {
-      if (!warningsAsErrors.includes(code)) {
-        addFinding(report, 'error', 'dotnet-vulnerability-gate', `${code} must remain a build error.`, 'Directory.Build.props');
-      }
-    }
-  }
-
-  if (!await exists(packagePropsFile)) {
-    addFinding(report, 'error', 'dotnet-package-props-missing', 'Directory.Packages.props is required for central package management.', 'Directory.Packages.props');
-  } else {
-    const text = await readText(packagePropsFile);
-    if (String(xmlValue(text, 'ManagePackageVersionsCentrally') || '').toLowerCase() !== 'true') {
-      addFinding(report, 'error', 'dotnet-central-package-management', 'Central package management must remain enabled.', 'Directory.Packages.props');
-    }
-  }
-};
-
 const summarize = (report) => {
   const counts = { error: 0, warning: 0, info: 0 };
   for (const finding of report.findings) counts[finding.severity] = (counts[finding.severity] || 0) + 1;
@@ -520,7 +412,7 @@ const markdown = (report) => {
     `## Findings\n\n| Severity | Code | File | Message |\n| --- | --- | --- | --- |\n${rows}\n\n` +
     `## Contract scope\n\n` +
     `This gate validates the modern Vite/React/TypeScript toolchain, strict TypeScript project wiring, ` +
-    `.NET 10 / C# 14 SDK and analyzer posture, centralized package management, and vulnerability-audit build gates. ` +
+    `direct PlanASKI source integration, and frontend vulnerability-audit build gates. ` +
     `It intentionally does not introduce WMS/WFS or alter product behavior.\n`;
 };
 
@@ -528,7 +420,6 @@ export async function runPlatformContracts(root = DEFAULT_ROOT) {
   const resolvedRoot = path.resolve(root);
   const report = { findings: [] };
   await validateWebclient(resolvedRoot, report);
-  await validateDotnet(resolvedRoot, report);
   report.findings.sort((left, right) =>
     left.severity.localeCompare(right.severity) ||
     String(left.file || '').localeCompare(String(right.file || '')) ||
