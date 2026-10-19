@@ -41,6 +41,7 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
     expect(resolveKentRehberiOverviewIconKey({ adi: 'Seğmen Su Fabrikası' })).toBe('segmen');
     expect(resolveKentRehberiOverviewIconKey({ adi: 'Kütüphane' })).toBe('kutuphane');
     expect(resolveKentRehberiOverviewIconKey({ adi: 'Bilinmeyen bir nokta' })).toBe('default');
+    expect(resolveKentRehberiOverviewIconKey({ adi: 'Otopark' })).toBe('default');
   });
 
   test('attaches the overview with an SVG unique-value renderer', async () => {
@@ -59,8 +60,6 @@ describe('PlanASKI-only Kent Rehberi GeoJSON layer', () => {
       map,
       moduleLoader: (async () => Layer) as never,
       fetchImpl,
-      tur: 13,
-      limit: 10,
     });
 
     const renderer = captured.options?.renderer as {
