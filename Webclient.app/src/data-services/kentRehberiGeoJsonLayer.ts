@@ -8,7 +8,7 @@ import {
 } from './kentRehberiPlanAskiDirect';
 
 const DEFAULT_LIMIT = 500;
-const MAX_LIMIT = 20_000;
+const MAX_LIMIT = 2000;
 const LAYER_ID = 'kent-rehberi-postgis';
 const LAYER_TITLE = 'Kent Rehberi';
 
