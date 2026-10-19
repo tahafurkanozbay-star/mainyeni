@@ -64,12 +64,27 @@ describe("MapManager GIS state ownership", () => {
         });
         MapManager.ClearViewStateBridge();
         MapManager.ClearViewPerformanceMonitor();
+        MapManager.ClearActiveMapView();
     });
 
     test("exposes current map view and configuration without mutation", () => {
         expect(MapManager.GetMapView()).toBe(mockState.Map.MapView);
         expect(MapManager.GetMapConfiguration()).toEqual({ Centerx: 32.85, Centery: 39.93 });
         expect(MapManager.GetConfigurationServices()).toEqual([]);
+    });
+
+    test("tracks the active scene view separately from the base map view", () => {
+        const mapView = mockState.Map.MapView;
+        const sceneView = { id: "scene-view" };
+
+        expect(MapManager.SetActiveMapView(sceneView)).toBe(sceneView);
+        expect(MapManager.GetActiveMapView()).toBe(sceneView);
+        expect(MapManager.GetMapView()).toBe(mapView);
+
+        expect(MapManager.ClearActiveMapView(mapView)).toBe(false);
+        expect(MapManager.GetActiveMapView()).toBe(sceneView);
+        expect(MapManager.ClearActiveMapView(sceneView)).toBe(true);
+        expect(MapManager.GetActiveMapView()).toBe(mapView);
     });
 
     test("dispatches map click state", () => {
