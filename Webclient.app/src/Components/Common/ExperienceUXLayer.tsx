@@ -2,7 +2,6 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react';
 import type { WindowManagerApi } from '../../Store/Managers/WindowManager';
@@ -41,7 +40,7 @@ interface ExperienceCommandDetail {
 
 const HELP_DIALOG_ID = 'experience-help';
 const NOTIFICATION_DIALOG_ID = 'experience-notification-center';
-const NOTIFICATION_TRIGGER_ID = 'experience-utility-notifications';
+const THEME_TRIGGER_ID = 'mainbar-theme-toggle';
 
 const reportUxRuntimeError = (
   error: unknown,
@@ -111,7 +110,6 @@ export function ExperienceUXLayer({
   notificationModel,
 }: ExperienceUXLayerProps): ReactNode {
   const { theme, toggleTheme } = useExperienceTheme();
-  const [collapsed, setCollapsed] = useState(false);
   const dialogStack = useMemo(() => new DialogStackModel({
     onObserverError: error => reportUxRuntimeError(
       error,
@@ -140,7 +138,7 @@ export function ExperienceUXLayer({
   }, [dialogStack]);
 
   const openHelp = useCallback((): void => {
-    openSurface(HELP_DIALOG_ID, 'modal', 'Hızlı kullanım', 'experience-utility');
+    openSurface(HELP_DIALOG_ID, 'modal', 'Hızlı kullanım', THEME_TRIGGER_ID);
   }, [openSurface]);
 
   const openNotifications = useCallback((): void => {
@@ -148,21 +146,9 @@ export function ExperienceUXLayer({
       NOTIFICATION_DIALOG_ID,
       'drawer',
       'Bildirim merkezi',
-      NOTIFICATION_TRIGGER_ID,
+      THEME_TRIGGER_ID,
     );
   }, [openSurface]);
-
-  const toggleThemeWithFeedback = useCallback((): void => {
-    toggleTheme();
-    notificationModel.push({
-      id: 'experience-theme-feedback',
-      dedupeKey: 'experience-theme-feedback',
-      title: theme === 'dark' ? 'Açık tema seçildi' : 'Koyu tema seçildi',
-      message: 'Arayüz tercihiniz bu tarayıcı için güncellendi.',
-      category: 'Görünüm',
-      expiresAt: Date.now() + 7_000,
-    });
-  }, [notificationModel, theme, toggleTheme]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return undefined;
@@ -201,6 +187,11 @@ export function ExperienceUXLayer({
         return;
       }
 
+      if (name === 'theme-toggle') {
+        toggleTheme();
+        return;
+      }
+
       if (name === 'search') {
         windowManager.ShowWindow('genelarama-query-window');
       }
@@ -208,12 +199,7 @@ export function ExperienceUXLayer({
 
     window.addEventListener('kentrehberi:command', onCommand);
     return () => window.removeEventListener('kentrehberi:command', onCommand);
-  }, [openHelp, openNotifications, windowManager]);
-
-  const themeLabel = useMemo(
-    () => theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç',
-    [theme],
-  );
+  }, [openHelp, openNotifications, toggleTheme, windowManager]);
 
   const renderOverlayContent = useCallback((dialog: DialogPresentation): ReactNode => {
     if (dialog.id === NOTIFICATION_DIALOG_ID) {
@@ -247,7 +233,7 @@ export function ExperienceUXLayer({
           <button
             className="experience-shortcut experience-shortcut--action"
             type="button"
-            onClick={toggleThemeWithFeedback}
+            onClick={toggleTheme}
           >
             <span>Tema</span>
             <strong>{theme === 'dark' ? 'Açık' : 'Koyu'}</strong>
@@ -261,80 +247,16 @@ export function ExperienceUXLayer({
         </footer>
       </div>
     );
-  }, [dialogStack, notificationModel, theme, toggleThemeWithFeedback, windowManager]);
+  }, [dialogStack, notificationModel, theme, toggleTheme, windowManager]);
 
   return (
     <>
-      <aside
-        id="experience-utility"
-        className={`experience-utility ${collapsed ? 'is-collapsed' : ''}`}
-        aria-label="Kent Rehberi yardımcı araçları"
-        tabIndex={-1}
-      >
-        <div className="experience-utility__brand">
-          <span className="experience-utility__status" aria-hidden="true" />
-          {!collapsed ? <span>Çalışma alanı</span> : null}
-        </div>
-
-        <nav className="experience-utility__actions" aria-label="Hızlı araçlar">
-          <button
-            className="experience-utility__button"
-            type="button"
-            onClick={() => dispatchExperienceCommand('search')}
-            aria-label="Genel aramayı aç"
-            title="Genel arama"
-          >
-            <ActionIcon type="search" />
-            {!collapsed ? <span>Arama</span> : null}
-          </button>
-
-          <button
-            id={NOTIFICATION_TRIGGER_ID}
-            className="experience-utility__button"
-            type="button"
-            onClick={openNotifications}
-            aria-label="Bildirim merkezini aç"
-            title="Bildirimler"
-          >
-            <ActionIcon type="info" />
-            {!collapsed ? <span>Bildirimler</span> : null}
-          </button>
-
-          <button
-            className="experience-utility__button"
-            type="button"
-            onClick={toggleThemeWithFeedback}
-            aria-label={themeLabel}
-            title={themeLabel}
-          >
-            <ActionIcon type={theme === 'dark' ? 'sun' : 'moon'} />
-            {!collapsed ? (
-              <span>{theme === 'dark' ? 'Açık tema' : 'Koyu tema'}</span>
-            ) : null}
-          </button>
-        </nav>
-
-        <button
-          className="experience-utility__collapse"
-          type="button"
-          onClick={() => setCollapsed(value => !value)}
-          aria-expanded={!collapsed}
-          aria-label={
-            collapsed
-              ? 'Yardımcı araçları genişlet'
-              : 'Yardımcı araçları daralt'
-          }
-          title={collapsed ? 'Genişlet' : 'Daralt'}
-        >
-          <span aria-hidden="true">{collapsed ? '›' : '‹'}</span>
-        </button>
-      </aside>
 
       <ExperienceNotificationCenter
         model={notificationModel}
         mode="toasts"
         label="Anlık bildirimler"
-        returnFocusId={NOTIFICATION_TRIGGER_ID}
+        returnFocusId={THEME_TRIGGER_ID}
         onOpenCenter={openNotifications}
       />
 
