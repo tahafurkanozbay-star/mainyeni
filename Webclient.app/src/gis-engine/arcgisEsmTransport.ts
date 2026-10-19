@@ -292,7 +292,7 @@ const readConfiguredApiKey = (): string => {
   const environment = (import.meta as ImportMeta & {
     readonly env?: Readonly<Record<string, unknown>>;
   }).env;
-  return normalizeApiKey(environment?.VITE_ARCGIS_API_KEY);
+  return normalizeApiKey(environment?.VITE_ESRI_BASEMAP_CREDENTIAL);
 };
 
 export const createDefaultArcgisEsmTransport = (): ArcgisModuleTransport =>
