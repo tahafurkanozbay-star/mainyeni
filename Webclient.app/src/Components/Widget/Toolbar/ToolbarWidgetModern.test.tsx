@@ -35,6 +35,7 @@ interface WindowManagerStub {
 
 interface GeolocationHarness {
   readonly getCurrentPosition: ReturnType<typeof vi.fn>;
+  options: () => PositionOptions | undefined;
   resolve: (longitude: number, latitude: number) => void;
   reject: (error?: unknown) => void;
 }
@@ -46,12 +47,15 @@ const createWindowManager = (): WindowManagerStub => ({
 const installGeolocationHarness = (): GeolocationHarness => {
   let successCallback: PositionCallback | undefined;
   let errorCallback: PositionErrorCallback | undefined;
+  let requestedOptions: PositionOptions | undefined;
   const getCurrentPosition = vi.fn((
     success: PositionCallback,
     error?: PositionErrorCallback | null,
+    options?: PositionOptions,
   ) => {
     successCallback = success;
     errorCallback = error ?? undefined;
+    requestedOptions = options;
   });
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
@@ -59,6 +63,7 @@ const installGeolocationHarness = (): GeolocationHarness => {
   });
   return {
     getCurrentPosition,
+    options: () => requestedOptions,
     resolve(longitude, latitude) {
       successCallback?.({
         coords: {
@@ -189,7 +194,7 @@ describe('ToolbarWidgetModern', () => {
     render(<ToolbarWidgetModern windowManager={manager} />);
     fireEvent.click(screen.getByRole('button', { name: 'Konum Bul' }));
     await waitFor(() => expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
-    expect(geolocation.getCurrentPosition.mock.calls[0]?.[2]).toMatchObject({
+    expect(geolocation.options()).toMatchObject({
       enableHighAccuracy: true,
       timeout: 25_000,
       maximumAge: 0,
