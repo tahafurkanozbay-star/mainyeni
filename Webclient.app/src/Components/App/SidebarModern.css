@@ -359,6 +359,19 @@
   transform: none;
 }
 
+.kr-sidebar__service--poi .kr-sidebar__item.ns-card {
+  padding-right: 12px;
+}
+
+.kr-sidebar__service--poi .kr-sidebar__item-arrow {
+  display: block;
+}
+
+.kr-sidebar__service--poi .kr-sidebar__item-copy small {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .kr-sidebar__service .kr-sidebar__item.ns-card:hover {
   transform: translateY(-2px);
 }

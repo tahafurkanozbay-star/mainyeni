@@ -9,6 +9,13 @@ import React, {
   type ReactNode,
 } from 'react';
 import { DebugHelper } from '../../Toolbox/DebugHelper';
+import { MapManager } from '../../Store/Managers/MapManager';
+import {
+  getKentRehberiPoiSearchSnapshot,
+  searchKentRehberiPoiPoints,
+  subscribeKentRehberiPoiSearchIndex,
+  type KentRehberiPoiSearchPoint,
+} from '../../data-services/kentRehberiPoiSearchIndex';
 import type { ManagedWindowHandle, WindowManagerLike } from '../../experience/contracts';
 import { createSidebarKeyboardController, type SidebarKeyboardFocusTarget } from '../../shell/sidebarKeyboardController';
 import { createSidebarNavigationModel, type SidebarNavigationView } from '../../shell/sidebarNavigationModel';
@@ -27,6 +34,14 @@ import './SidebarInteraction.css';
 interface SidebarProps {
   readonly id: string;
   readonly windowManager: WindowManagerLike;
+}
+
+interface PointSearchMapViewLike {
+  readonly destroyed?: boolean;
+  goTo?: (target: unknown, options?: unknown) => PromiseLike<unknown> | unknown;
+  popup?: {
+    open?: (options: unknown) => void;
+  };
 }
 
 const GROUPS = SIDEBAR_GROUPS as readonly SidebarGroup[];
@@ -91,6 +106,17 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
     navigationModel.getSnapshot,
   );
 
+  const pointSearchSnapshot = useSyncExternalStore(
+    subscribeKentRehberiPoiSearchIndex,
+    getKentRehberiPoiSearchSnapshot,
+    getKentRehberiPoiSearchSnapshot,
+  );
+  const pointSearchActive = navigation.normalizedQuery.length > 0;
+  const pointSearchResults = useMemo(
+    () => searchKentRehberiPoiPoints(pointSearchSnapshot, navigation.query, 100),
+    [pointSearchSnapshot, navigation.query],
+  );
+
   const keyboardController = useMemo(() => createSidebarKeyboardController({
     model: navigationModel,
     groupIds: GROUP_IDS,
@@ -102,6 +128,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const groupButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const serviceButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pointButtonRefs = useRef(new Map<number, HTMLButtonElement>());
 
   const createManagedWindowHandle = (): ManagedWindowHandle => ({
     id,
@@ -194,10 +221,90 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   };
 
   const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
+    if (pointSearchActive && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      if (pointSearchResults.items.length === 0) return;
+      event.preventDefault();
+      const point = event.key === 'ArrowDown'
+        ? pointSearchResults.items[0]
+        : pointSearchResults.items[pointSearchResults.items.length - 1];
+      if (point) pointButtonRefs.current.get(point.id)?.focus({ preventScroll: true });
+      return;
+    }
+
     const result = keyboardController.handleSearchKey(event);
     if (!result.handled) return;
     event.preventDefault();
     focusKeyboardTarget(result.focus);
+  };
+
+  const handlePointResultKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (navigation.query) {
+        navigationModel.clearQuery();
+        searchInputRef.current?.focus({ preventScroll: true });
+      } else if (!navigation.collapsed) {
+        setSidebarCollapsed(true);
+        sidebarToggleRef.current?.focus({ preventScroll: true });
+      }
+      return;
+    }
+
+    let targetIndex = currentIndex;
+    if (event.key === 'ArrowDown') targetIndex = (currentIndex + 1) % pointSearchResults.items.length;
+    else if (event.key === 'ArrowUp') targetIndex = (currentIndex - 1 + pointSearchResults.items.length) % pointSearchResults.items.length;
+    else if (event.key === 'Home') targetIndex = 0;
+    else if (event.key === 'End') targetIndex = pointSearchResults.items.length - 1;
+    else return;
+
+    event.preventDefault();
+    const target = pointSearchResults.items[targetIndex];
+    if (target) pointButtonRefs.current.get(target.id)?.focus({ preventScroll: true });
+  };
+
+  const focusPointResult = (point: KentRehberiPoiSearchPoint): void => {
+    const view = MapManager.GetMapView() as PointSearchMapViewLike | null;
+    if (!view || view.destroyed) return;
+
+    const openPointPopup = (): void => {
+      if (MapManager.GetMapView() !== view || view.destroyed) return;
+
+      // Render upstream text through textContent rather than treating it as
+      // popup markup. The public dataset can contain arbitrary address/name text.
+      const content = document.createElement('div');
+      const heading = document.createElement('strong');
+      heading.textContent = point.name;
+      content.append(heading);
+
+      const detailsText = point.address
+        || [point.district, point.neighborhood].filter(Boolean).join(' · ')
+        || 'Kent Rehberi noktası';
+      const details = document.createElement('p');
+      details.textContent = detailsText;
+      content.append(details);
+
+      view.popup?.open?.({
+        location: { longitude: point.longitude, latitude: point.latitude },
+        title: 'Nokta arama sonucu',
+        content,
+      });
+    };
+
+    try {
+      if (typeof view.goTo !== 'function') {
+        openPointPopup();
+        return;
+      }
+      void Promise.resolve(view.goTo({
+        center: [point.longitude, point.latitude],
+        zoom: 17,
+      }, { duration: 650 })).then(openPointPopup).catch((error: unknown) => DebugHelper.Log(error));
+    } catch (error) {
+      DebugHelper.Log(error);
+    }
   };
 
   const handleGroupKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, groupId: string): void => {
@@ -209,23 +316,43 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
 
   if (!navigation.visible) return null;
 
-  const panelTitle = navigation.view === 'favorites'
-    ? 'Favorilerim'
-    : navigation.view === 'recent'
-      ? 'Son kullanılanlar'
-      : navigation.activeGroup?.label ?? 'Tüm kent servisleri';
-  const emptyTitle = navigation.emptyReason === 'no-favorites'
-    ? 'Henüz favori yok'
-    : navigation.emptyReason === 'no-recents'
-      ? 'Henüz geçmiş yok'
-      : 'Hizmet bulunamadı';
-  const emptyDescription = navigation.normalizedQuery
-    ? 'Arama ifadenizi değiştirin veya filtreyi temizleyin.'
+  const panelTitle = pointSearchActive
+    ? 'Harita noktaları'
+    : navigation.view === 'favorites'
+      ? 'Favorilerim'
+      : navigation.view === 'recent'
+        ? 'Son kullanılanlar'
+        : navigation.activeGroup?.label ?? 'Tüm kent servisleri';
+  const emptyTitle = pointSearchActive
+    ? pointSearchSnapshot.phase === 'ready' ? 'Nokta bulunamadı' : 'Noktalar yükleniyor'
     : navigation.emptyReason === 'no-favorites'
-      ? 'Sık kullandığınız bir hizmeti yıldızlayın.'
+      ? 'Henüz favori yok'
       : navigation.emptyReason === 'no-recents'
-        ? 'Açtığınız hizmetler burada en yeniden eskiye görünür.'
-        : 'Başka bir kurum veya görünüm seçin.';
+        ? 'Henüz geçmiş yok'
+        : 'Hizmet bulunamadı';
+  const emptyDescription = pointSearchActive
+    ? pointSearchSnapshot.phase === 'ready'
+      ? 'Başka bir nokta adı deneyin veya aramayı temizleyin.'
+      : 'Harita noktaları yükleniyor. Birkaç saniye sonra tekrar deneyin.'
+    : navigation.normalizedQuery
+      ? 'Arama ifadenizi değiştirin veya filtreyi temizleyin.'
+      : navigation.emptyReason === 'no-favorites'
+        ? 'Sık kullandığınız bir hizmeti yıldızlayın.'
+        : navigation.emptyReason === 'no-recents'
+          ? 'Açtığınız hizmetler burada en yeniden eskiye görünür.'
+          : 'Başka bir kurum veya görünüm seçin.';
+  const countLabel = pointSearchActive
+    ? pointSearchSnapshot.phase !== 'ready'
+      ? 'Yükleniyor'
+      : pointSearchResults.truncated
+        ? `${pointSearchResults.items.length} / ${pointSearchResults.totalCount} nokta`
+        : `${pointSearchResults.totalCount} nokta`
+    : `${navigation.resultCount} hizmet`;
+  const liveAnnouncement = pointSearchActive
+    ? pointSearchSnapshot.phase === 'ready'
+      ? `${pointSearchResults.totalCount} nokta bulundu.`
+      : 'Harita noktaları yükleniyor.'
+    : navigation.announcement;
   const rovingGroupId = navigation.activeGroupId ?? GROUPS[0]?.id ?? null;
   return (
     <aside
@@ -281,7 +408,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
       <section id="kr-sidebar-services" className="kr-sidebar__panel" aria-labelledby="kr-sidebar-panel-title">
         <div className="kr-sidebar__discovery">
           <label className="kr-sidebar__search">
-            <span className="experience-sr-only">Kent servislerinde ara</span>
+            <span className="experience-sr-only">Harita noktalarında ara</span>
             <ServiceSearchGlyph />
             <input
               ref={searchInputRef}
@@ -289,49 +416,93 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
               value={navigation.query}
               onChange={event => navigationModel.setQuery(event.target.value)}
               onKeyDown={handleSearchKeyDown}
-              placeholder="Hizmet ara…"
+              placeholder="Nokta adı ara…"
               autoComplete="off"
               enterKeyHint="search"
-              aria-label="Kent servislerinde ara"
+              aria-label="Harita noktalarında ara"
               aria-controls="kr-sidebar-service-list"
               aria-describedby="kr-sidebar-live-status kr-sidebar-keyboard-help"
             />
             {navigation.query ? (
-              <button type="button" onClick={() => navigationModel.clearQuery()} aria-label="Hizmet aramasını temizle">×</button>
+              <button type="button" onClick={() => navigationModel.clearQuery()} aria-label="Aramayı temizle">×</button>
             ) : null}
           </label>
-          <div className="kr-sidebar__views" role="group" aria-label="Hizmet görünümü">
-            {(['all', 'favorites', 'recent'] as const).map(value => (
-              <button
-                key={value}
-                type="button"
-                className={navigation.view === value ? 'is-active' : ''}
-                onClick={() => navigationModel.setView(value)}
-                aria-pressed={navigation.view === value}
-                aria-label={`${viewLabel(value)} ${navigation.counts[value]}`}
-              >
-                <span>{viewLabel(value)}</span><small>{navigation.counts[value]}</small>
-              </button>
-            ))}
-          </div>
+          {!pointSearchActive ? (
+            <div className="kr-sidebar__views" role="group" aria-label="Hizmet görünümü">
+              {(['all', 'favorites', 'recent'] as const).map(value => (
+                <button
+                  key={value}
+                  type="button"
+                  className={navigation.view === value ? 'is-active' : ''}
+                  onClick={() => navigationModel.setView(value)}
+                  aria-pressed={navigation.view === value}
+                  aria-label={`${viewLabel(value)} ${navigation.counts[value]}`}
+                >
+                  <span>{viewLabel(value)}</span><small>{navigation.counts[value]}</small>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <header className="kr-sidebar__panel-head">
           <div>
-            <span className="kr-sidebar__context">{navigation.normalizedQuery ? 'ARAMA SONUÇLARI' : 'KENT SERVİSLERİ'}</span>
+            <span className="kr-sidebar__context">{pointSearchActive ? 'NOKTA ARAMASI' : 'KENT SERVİSLERİ'}</span>
             <h2 id="kr-sidebar-panel-title">{panelTitle}</h2>
           </div>
-          <span aria-hidden="true">{navigation.resultCount} hizmet</span>
+          <span aria-hidden="true">{countLabel}</span>
         </header>
 
         <span id="kr-sidebar-keyboard-help" className="experience-sr-only">
-          Hizmetler arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter hizmeti açar.
+          {pointSearchActive
+            ? 'Noktalar arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter seçili noktaya gider.'
+            : 'Hizmetler arasında yukarı ve aşağı okları, ilk ve son öğe için Home ve End tuşlarını kullanın. Enter hizmeti açar.'}
         </span>
         <span id="kr-sidebar-live-status" className="experience-sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {navigation.announcement}
+          {liveAnnouncement}
         </span>
 
-        {navigation.resultCount > 0 ? (
+        {pointSearchActive && pointSearchSnapshot.phase === 'ready' && pointSearchResults.items.length > 0 ? (
+          <ul id="kr-sidebar-service-list" className="ns-sidebar-container kr-sidebar__items" aria-label="Harita noktası arama sonuçları">
+            {pointSearchResults.items.map((point, index) => {
+              const secondary = [point.district, point.neighborhood].filter(Boolean).join(' · ')
+                || point.address
+                || 'Kent noktası';
+              return (
+                <li
+                  className="kr-sidebar__service kr-sidebar__service--poi"
+                  key={`point-${point.id}`}
+                  aria-posinset={index + 1}
+                  aria-setsize={pointSearchResults.totalCount}
+                >
+                  <button
+                    ref={(node) => {
+                      if (node) pointButtonRefs.current.set(point.id, node);
+                      else pointButtonRefs.current.delete(point.id);
+                    }}
+                    type="button"
+                    className="ns-card kr-sidebar__item"
+                    onClick={() => focusPointResult(point)}
+                    onKeyDown={(event) => handlePointResultKeyDown(event, index)}
+                    aria-label={`${point.name} noktasına git`}
+                    tabIndex={index === 0 ? 0 : -1}
+                  >
+                    <SharedGISIcon
+                      record={{ type: point.iconKey || point.name, title: point.name }}
+                      size={32}
+                      className="kr-sidebar__item-icon"
+                    />
+                    <span className="kr-sidebar__item-copy">
+                      <strong>{point.name}</strong>
+                      <small>{secondary}</small>
+                    </span>
+                    <span className="kr-sidebar__item-arrow" aria-hidden="true">↗</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : !pointSearchActive && navigation.resultCount > 0 ? (
           <ul id="kr-sidebar-service-list" className="ns-sidebar-container kr-sidebar__items" aria-label={`${panelTitle} hizmet listesi`}>
             {navigation.visibleItems.map((item, index) => {
               const favorite = navigation.favoriteIds.includes(item.windowId);
