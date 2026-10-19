@@ -68,26 +68,6 @@ export const SIDEBAR_ITEMS: readonly SidebarItem[] = Object.freeze([
   { group: 'ISTIRAK', label: 'Halk Ekmek Satış Noktaları', windowId: 'halkekmek-query-window', iconType: 'halk ekmek', serviceKey: 'YeniHalkEkmekSatisNoktalariQeryUrl' }
 ]);
 
-export const INITIAL_CITY_LAYER_SERVICE_KEYS: readonly string[] = Object.freeze([
-  'YeniYasliDostuQueryUrl',
-  'YeniSosyalHizmetlerQueryUrl',
-  'YeniTeknolojiMerkezleriQueryUrl',
-  'YeniPatiDostuQeryUrl',
-  'YeniBelmekBeltekQeryUrl',
-  'YeniKadinDanismaQueryUrl',
-  'YeniKadinlarLokaliQeryUrl',
-  'YeniAileYasamMerkezleriQeryUrl',
-  'YeniCocukEtkinlikMerkezleriQeryUrl',
-  'YeniEngelliCocukQueryUrl',
-  'YeniEngelliBireyQeryUrl',
-  'YeniSporTesisleriQeryUrl',
-  'YeniGazilerMerkeziQeyUrl',
-  'YeniKültürSanatQueryUrl',
-  'YeniKutuphanelerQueryUrl',
-  'YeniParklarQeryUrl',
-  'YeniWifiNoktalariQeryUrl'
-]);
-
 export const SIDEBAR_CATALOG_RUNTIME = createSidebarCatalogRuntime({
   groups: SIDEBAR_GROUPS,
   items: SIDEBAR_ITEMS,
