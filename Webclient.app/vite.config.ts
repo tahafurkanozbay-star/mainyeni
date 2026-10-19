@@ -1,11 +1,10 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { moduleResolutionGuardPlugin } from './tooling/moduleResolutionGuard.ts';
 import {
   legacyEnvironmentGuardPlugin,
   legacyPresentationCleanupPlugin,
 } from './tooling/sourceTransforms.ts';
-import { resolveLocalApiProxyTarget } from './tooling/localApiProxy.ts';
 
 const arcgisLeafChunk = (id: string, prefix: string, chunkPrefix: string): string | undefined => {
   const marker = `/@arcgis/core/${prefix}/`;
@@ -25,9 +24,7 @@ const manualChunk = (id: string): string | undefined => {
   if (id.includes('/react-icons/')) return 'icons-vendor';
 
   // ArcGIS is capability-loaded. Keep cache identities deterministic while
-  // splitting the two SDK responsibility buckets that exceed the release
-  // transfer ceiling. Leaf boundaries are derived from stable SDK paths, not
-  // application call sites, so a feature route does not perturb chunk names.
+  // splitting SDK responsibility buckets into stable, path-derived chunks.
   if (id.includes('/@arcgis/core/')) {
     if (id.includes('/@arcgis/core/views/2d/')) return arcgisLeafChunk(id, 'views/2d', 'arcgis-views-2d');
     if (id.includes('/@arcgis/core/views/3d/')) return arcgisLeafChunk(id, 'views/3d', 'arcgis-views-3d');
@@ -52,13 +49,7 @@ const manualChunk = (id: string): string | undefined => {
   return undefined;
 };
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', 'VITE_');
-  const apiProxyTarget = resolveLocalApiProxyTarget(
-    env.VITE_API_PROXY_TARGET,
-  );
-
-  return {
+export default defineConfig({
   base: './',
   envPrefix: ['VITE_'],
   define: {
@@ -84,19 +75,11 @@ export default defineConfig(({ mode }) => {
     chunkSizeWarningLimit: 900,
     rolldownOptions: { output: { manualChunks: manualChunk } },
   },
+  // No local /api proxy: the public SPA loads Kent Rehberi directly from PlanASKI.
   server: {
     host: '0.0.0.0',
     port: 3000,
     strictPort: false,
-    proxy: {
-      '/api': {
-        target: apiProxyTarget,
-        changeOrigin: false,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/u, ''),
-      },
-    },
   },
   preview: { host: '0.0.0.0', port: 4173 },
-  };
 });
