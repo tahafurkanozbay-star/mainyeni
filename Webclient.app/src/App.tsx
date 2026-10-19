@@ -81,7 +81,7 @@ function App() {
 
     const rawArcgisApiKey = (import.meta as ImportMeta & {
       readonly env?: Readonly<Record<string, unknown>>;
-    }).env?.VITE_ARCGIS_API_KEY;
+    }).env?.VITE_ESRI_BASEMAP_CREDENTIAL;
     const arcgisApiKey = typeof rawArcgisApiKey === 'string' ? rawArcgisApiKey.trim() : '';
     const arcgisRuntime = configureArcgisModuleRuntime({
       ...(arcgisApiKey ? { apiKey: arcgisApiKey } : {}),
