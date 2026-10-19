@@ -266,7 +266,7 @@ export const SidebarModern = forwardRef<ManagedWindowHandle, SidebarProps>(funct
   };
 
   const focusPointResult = (point: KentRehberiPoiSearchPoint): void => {
-    const view = MapManager.GetMapView() as PointSearchMapViewLike | null;
+    const view = (MapManager.GetActiveMapView?.() ?? MapManager.GetMapView()) as PointSearchMapViewLike | null;
     if (!view || view.destroyed) return;
 
     const openPointPopup = (): void => {
