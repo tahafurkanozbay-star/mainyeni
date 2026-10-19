@@ -11,7 +11,6 @@ const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 20_000;
 const LAYER_ID = 'kent-rehberi-postgis';
 const LAYER_TITLE = 'Kent Rehberi';
-const DEFAULT_OVERVIEW_MARKER_URL = 'images/icons/map/pictureMarker.png';
 
 interface OverviewIconRegistryEntry {
   readonly id?: unknown;
@@ -74,11 +73,14 @@ const overviewSvgRenderer = Object.freeze({
       height: '32px',
     }),
   }))),
+  // Keep unclassified records from falling back to generic orange markers.
+  // Only registry entries with real SVG assets are painted on the overview.
   defaultSymbol: Object.freeze({
-    type: 'picture-marker',
-    url: DEFAULT_OVERVIEW_MARKER_URL,
-    width: '28px',
-    height: '32px',
+    type: 'simple-marker',
+    style: 'circle',
+    color: [0, 0, 0, 0],
+    size: 1,
+    outline: Object.freeze({ color: [0, 0, 0, 0], width: 0 }),
   }),
 });
 
@@ -506,10 +508,10 @@ export const createKentRehberiGeoJsonLayer = async (
       objectIdField: 'objectid',
       fields: kentRehberiFields,
       popupEnabled: true,
-      outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo'],
+      outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo', 'iconKey'],
       popupTemplate: {
         title: '{adi}',
-        outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo'],
+        outFields: ['objectid', 'adi', 'adres', 'ilce', 'mahalle', 'tur', 'yapan', 'webSayfasi', 'durakNo', 'iconKey'],
         content: [{ type: 'fields', fieldInfos: popupFieldInfos }],
       },
       ...(presentation.renderer ? { renderer: presentation.renderer } : {}),
