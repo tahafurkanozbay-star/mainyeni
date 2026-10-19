@@ -32,7 +32,7 @@ const overviewSvgIcons: readonly OverviewSvgIcon[] = Object.freeze(
   (iconEntries as readonly OverviewIconRegistryEntry[]).flatMap((entry): OverviewSvgIcon[] => {
     const id = typeof entry.id === 'string' ? entry.id.trim() : '';
     const url = [entry.icon, entry.url, entry.src].find(
-      (candidate): candidate is string => typeof candidate === 'string' && /\\.svg(?:[?#].*)?$/i.test(candidate),
+      (candidate): candidate is string => typeof candidate === 'string' && /\.svg(?:[?#].*)?$/i.test(candidate),
     );
     if (!id || !url) return [];
     const rawAliases = [entry.id, entry.type, ...(Array.isArray(entry.aliases) ? entry.aliases : [])];
@@ -54,9 +54,9 @@ export const resolveKentRehberiOverviewIconKey = (
 ): string => {
   const title = normalizeIconKey(properties.adi ?? properties.name ?? '');
   if (!title) return 'default';
-  const compactTitle = title.replace(/\\s+/g, '');
+  const compactTitle = title.replace(/\s+/g, '');
   const match = overviewSvgAliasMatches.find(({ alias }) =>
-    title.includes(alias) || compactTitle.includes(alias.replace(/\\s+/g, '')),
+    title.includes(alias) || compactTitle.includes(alias.replace(/\s+/g, '')),
   );
   return match?.id ?? 'default';
 };
