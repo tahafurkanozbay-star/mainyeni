@@ -475,11 +475,13 @@ describe('runtime config transition mixed changes', () => {
   test('violation records expose field ids but not config values', () => {
     const before = modern({ VITE_RELEASE: 'private-a' });
     const after = modern({ VITE_RELEASE: 'private-b' });
-    const assessment = assessRuntimeConfigTransition(before, after);
+    const assessment = assessRuntimeConfigTransition(before, after, {
+      maxChangedFields: 0,
+    });
     const serialized = JSON.stringify(assessment.violations);
     expect(serialized).toContain('release');
-    expect(serialized).not.toContain('/private-a');
-    expect(serialized).not.toContain('/private-b');
+    expect(serialized).not.toContain('private-a');
+    expect(serialized).not.toContain('private-b');
   });
 });
 
