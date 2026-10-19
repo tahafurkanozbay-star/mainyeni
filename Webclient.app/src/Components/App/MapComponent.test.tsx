@@ -53,16 +53,9 @@ beforeEach(() => {
   ]);
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
-describe('map overview marker opt-in', () => {
-  it('does not load the all-city orange markers on initial map startup', async () => {
+describe('SVG overview markers', () => {
+  it('loads the all-city point layer on initial map startup, even when the old opt-in flag is false', async () => {
     vi.stubEnv('VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP', 'false');
-    setup();
-    await screen.findByText('Araçlar hazır');
-    expect(screen.queryByTestId('all-city-overview-layer')).not.toBeInTheDocument();
-  });
-
-  it('allows a deliberate opt-in without changing selected-service layers', async () => {
-    vi.stubEnv('VITE_KENT_REHBERI_OVERVIEW_ON_STARTUP', 'true');
     setup();
     await screen.findByText('Araçlar hazır');
     expect(screen.getByTestId('all-city-overview-layer')).toBeInTheDocument();
