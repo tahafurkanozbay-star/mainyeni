@@ -190,8 +190,8 @@ describe('SidebarModern governed interaction integration', () => {
     renderSidebar();
     const search = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Harita noktalarında ara' });
     await user.type(search, 'metro');
-    expect(screen.getByRole('button', { name: 'Hizmet aramasını temizle' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Hizmet aramasını temizle' }));
+    expect(screen.getByRole('button', { name: 'Aramayı temizle' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Aramayı temizle' }));
     expect(search).toHaveValue('');
     expect(screen.getByText('40 hizmet')).toBeInTheDocument();
   });
