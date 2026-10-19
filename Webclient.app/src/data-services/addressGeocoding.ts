@@ -88,7 +88,7 @@ const reserveRequestSlot = (signal?: AbortSignal): Promise<void> => {
 
 const normalizeDisplayName = (value: unknown): string => {
   if (typeof value !== 'string') return '';
-  return value.replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 320);
+  return value.replace(/\p{Cc}/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, 320);
 };
 
 const toCoordinate = (value: unknown, minimum: number, maximum: number): number | null => {
