@@ -20,6 +20,17 @@ const mobileModeBlock = (): string => {
 };
 
 describe('map experience layout collision contract', () => {
+  it('keeps Keşfet out of the generic tool-panel stacking rule so opened subcategory panels can sit in front', () => {
+    expect(mapCss).toMatch(
+      /\.esri-map > \.sidebar-container:not\(\.kr-sidebar\),\s*\.esri-map > \.sidebar-container1:not\(\.kr-sidebar\)\s*\{\s*position:\s*relative;\s*z-index:\s*20;/u,
+    );
+    expect(mapCss).not.toMatch(
+      /\.esri-map > \.sidebar-container,\s*\.esri-map > \.sidebar-container1\s*\{\s*position:\s*relative;\s*z-index:\s*20;/u,
+    );
+    expect(mapCss).toContain('z-index: var(--experience-z-panel, 30);');
+  });
+
+
   it('anchors the compact mode switcher below the top safe area instead of the 3B bottom controls', () => {
     const mobile = mobileModeBlock();
 
