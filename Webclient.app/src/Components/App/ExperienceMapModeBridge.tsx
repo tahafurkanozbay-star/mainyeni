@@ -354,7 +354,6 @@ export function ExperienceMapModeBridge({
       const sceneState = normalizeSceneStateFromMap(mapView, bridge);
       if (modeRef) modeRef.current = '3d';
       activeModeRef.current = '3d';
-      MapManager.SetActiveMapView?.(scene.view);
       bridge.setState(sceneState);
 
       await applyViewStateToSceneView(scene.view, sceneState, {
@@ -459,7 +458,6 @@ export function ExperienceMapModeBridge({
       sceneExperienceRef.current?.setActive(false);
       activeModeRef.current = '2d';
       if (modeRef) modeRef.current = '2d';
-      MapManager.SetActiveMapView?.(mapView);
       bridge?.setState?.(mapState);
 
       await applyViewStateToMapView(mapView as never, mapState, {
