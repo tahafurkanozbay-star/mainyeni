@@ -95,6 +95,19 @@ describe('direct PlanASKI browser transport', () => {
     expect(directCatalog.types[13]?.samples[0]?.adi).toBe('Kadin Danisma Merkezi');
   });
 
+  it('scopes object-ID lookup to tur when the caller knows the POI category', async () => {
+    const { requests, fetchImpl } = mockTypes({
+      13: [row(13, 202)],
+    });
+
+    const result = await fetchPlanAskiFeatureDirect(202, { tur: 13, fetchImpl });
+
+    expect(result?.properties.tur).toBe(13);
+    expect(requests).toEqual([
+      'https://planaski.ankara.bel.tr/kentrehberiapi/api/kentrehberi?tur=13',
+    ]);
+  });
+
   it('searches directly across categories and finds individual records', async () => {
     const { fetchImpl } = mockTypes({
       10: [row(10, 201)],
