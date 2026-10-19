@@ -60,10 +60,12 @@ export const resolveKentRehberiOverviewIconKey = (
     properties.durakNo,
   ].filter((value) => typeof value === 'string' && value.trim()).join(' '));
   if (!title) return 'default';
-  const compactTitle = title.replace(/\s+/g, '');
-  const match = overviewSvgAliasMatches.find(({ alias }) =>
-    title.includes(alias) || compactTitle.includes(alias.replace(/\s+/g, '')),
-  );
+  const hasWholeAlias = (alias: string): boolean =>
+    title === alias
+    || title.startsWith(`${alias} `)
+    || title.endsWith(` ${alias}`)
+    || title.includes(` ${alias} `);
+  const match = overviewSvgAliasMatches.find(({ alias }) => hasWholeAlias(alias));
   return match?.id ?? 'default';
 };
 
