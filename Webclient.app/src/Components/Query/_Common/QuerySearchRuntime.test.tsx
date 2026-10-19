@@ -95,6 +95,19 @@ describe("QuerySearchRuntime", () => {
             expect(getRecordPhone({})).toBe("");
             expect(getRecordCategory({})).toBe("Diğer");
         });
+
+        test("uses the address when a result has only a numeric category title", () => {
+            const record = { attr: { adi: "Kategori 34", adres: "Kızılay Mahallesi, Çankaya" }, type: "34" };
+            expect(getRecordTitle(record)).toBe("Kızılay Mahallesi, Çankaya");
+            expect(getRecordTitle({ attr: { adi: "Kategori 34" } })).toBe("İsimsiz kayıt");
+            expect(getRecordCategory(record)).toBe("Diğer");
+        });
+
+        test("keeps descriptive types but does not expose technical category codes", () => {
+            expect(getRecordCategory({ type: "Kategori 34" })).toBe("Diğer");
+            expect(getRecordCategory({ attr: { kategori: "Kategori 34" } })).toBe("Diğer");
+            expect(getRecordCategory({ type: "Kültür tesisi" })).toBe("Kültür tesisi");
+        });
     });
 
     describe("stable result keys", () => {
