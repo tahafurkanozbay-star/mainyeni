@@ -223,10 +223,14 @@ const isConfigured = (value: unknown): boolean =>
   && value !== null
   && String(value).trim() !== '';
 
+const isRetiredApiConfigurationKey = (key: string): boolean =>
+  key.startsWith('VITE_API_') || key.startsWith('REACT_APP_API_');
+
 export const classifyRuntimeConfigSourceKey = (
   key: string,
 ): RuntimeConfigSourceKind => {
   if (VITE_BUILTIN_KEYS.has(key)) return 'vite-builtin';
+  if (isRetiredApiConfigurationKey(key)) return 'derived';
   if (key.startsWith('VITE_')) return 'vite';
   if (key.startsWith('REACT_APP_')) return 'legacy-cra';
   return 'derived';
@@ -321,9 +325,10 @@ const buildModeEvidence = (
   mode: RuntimeConfig['buildMode'],
 ): RuntimeConfigFieldEvidence => {
   if (mode === 'vite-ready') {
+    const supportedKeys = new Set(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
       .filter(
-        (candidate) => candidate.startsWith('VITE_') || VITE_BUILTIN_KEYS.has(candidate),
+        (candidate) => supportedKeys.has(candidate) || VITE_BUILTIN_KEYS.has(candidate),
       )
       .sort()[0];
     return evidence(
@@ -338,8 +343,9 @@ const buildModeEvidence = (
     );
   }
   if (mode === 'legacy-cra') {
+    const supportedKeys = new Set(Object.values(RUNTIME_CONFIG_SOURCE_KEYS).flat());
     const key = Object.keys(source)
-      .filter((candidate) => candidate.startsWith('REACT_APP_'))
+      .filter((candidate) => supportedKeys.has(candidate) && candidate.startsWith('REACT_APP_'))
       .sort()[0];
     return evidence(
       'buildMode',
