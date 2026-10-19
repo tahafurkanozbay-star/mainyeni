@@ -88,7 +88,7 @@ export function NavigationBar({ id, onAddressSearch }: NavigationBarProps) {
               <img src="images/abblogo.svg" alt="Ankara Büyükşehir Belediyesi" title={'v' + AppConfig.App.Version} decoding="async" />
             </a>
           </div>
-          <a href="./" aria-label="Kent Rehberi ana sayfası"><span className="mainbar-text">KENT REHBERİ</span></a>
+          <a href="./" aria-label="3D Altyapı / Üstyapı ana sayfası"><span className="mainbar-text">3D ALTYAPI / ÜSTYAPI</span></a>
         </div>
 
         <form
