@@ -161,7 +161,7 @@ describe('SidebarModern governed interaction integration', () => {
       longitude: 32.854,
       latitude: 39.920,
     }]);
-    const popupOpen = vi.fn();
+    const popupOpen = vi.fn((options: unknown) => { void options; });
     const goTo = vi.fn().mockResolvedValue(undefined);
     vi.mocked(MapManager.GetMapView).mockReturnValue({
       destroyed: false,
