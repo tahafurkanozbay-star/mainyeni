@@ -433,8 +433,12 @@ const filterByQueryName = (
 ): KentRehberiGeoJsonFeatureCollection => {
   const needle = normalizeSearchText(query.name);
   if (!needle) return collection;
+  const terms = needle.split(/\s+/u).filter(Boolean);
   return makeFeatureCollection(
-    collection.features.filter((feature) => featureSearchText(feature).includes(needle)),
+    collection.features.filter((feature) => {
+      const searchableText = featureSearchText(feature);
+      return terms.every((term) => searchableText.includes(term));
+    }),
     serviceKey,
   );
 };
