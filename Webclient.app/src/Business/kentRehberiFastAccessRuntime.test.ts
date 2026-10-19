@@ -419,6 +419,14 @@ describe('kentRehberiFastAccessRuntime', () => {
     const cankaya = await business!.Query({ name: 'Çankaya' }, false);
     expect(cankaya.data.map((item) => item.attr.objectid)).toEqual([22]);
     expect(fetchCollection).toHaveBeenCalledTimes(2);
+
+    // Search terms may occur in different fields of the same place record.
+    const combinedAddress = await business!.Query({ name: 'Söğütözü Çankaya' }, false);
+    expect(combinedAddress.data.map((item) => item.attr.objectid)).toEqual([22]);
+    expect(fetchCollection).toHaveBeenCalledWith(expect.objectContaining({
+      q: 'Söğütözü Çankaya',
+      limit: 2000,
+    }));
   });
 
   it('does not claim unrelated legacy service keys', () => {
